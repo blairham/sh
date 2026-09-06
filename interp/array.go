@@ -827,6 +827,15 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if e.Index == nil {
 		return nil, false
 	}
+	if e.IndexFlags != nil {
+		// Before the associative reading and before the target is chosen: a
+		// flag group decides how the subscript is *read*, so a name whose
+		// attribute would take it as a key has to be told the group is there
+		// rather than handed `(re)value` to look up.
+		if v, handled := r.flaggedSubscript(e); handled {
+			return v, true
+		}
+	}
 	if a, ok := r.AssocArrays[e.Name]; ok {
 		// The attribute decides the subscript's reading before anything is
 		// looked up: a declared name takes it as a key, an undeclared one
@@ -837,9 +846,8 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if !ok {
 		return nil, true
 	}
-	idx := r.subscriptText(e.Index)
-	switch idx {
-	case "@", "*":
+	idx := r.subscriptText(e.Subscript())
+	if r.wholeArrayIndex(e) {
 		return elems, true
 	}
 	if lo, hi, isRange := splitSubscriptRange(idx); isRange {
@@ -1140,7 +1148,7 @@ func (r *Runner) subscriptIsARange(e *syntax.ParamExpr) bool {
 	if e.Index == nil {
 		return false
 	}
-	if _, _, ok := splitSubscriptRange(r.subscriptText(e.Index)); !ok {
+	if _, _, ok := splitSubscriptRange(r.subscriptText(e.Subscript())); !ok {
 		return false
 	}
 	return r.sem().SubscriptCommaIsARange == Yes
@@ -1202,11 +1210,18 @@ func (r *Runner) elemAt(name string, elems []string, n int) (string, bool) {
 //
 // A subscript written as a plain literal is taken as written. Anything else —
 // `${a[$i]}`, `${a[i+1]}` — still expands, because it has to.
+//
+// Expanded but never *matched*: a subscript is an expression or a key and is
+// nothing a directory holds, so the pathname step has no business here. It
+// used to run, and a subscript carrying a metacharacter across more than one
+// span therefore reported `no matches found` and abandoned the word —
+// reachable as soon as a subscript could hold a group, since `(` is a
+// metacharacter in the grammar that has both.
 func (r *Runner) subscriptText(w *syntax.Word) string {
 	if w != nil && len(w.Spans) == 1 && w.Spans[0].Kind == syntax.Literal {
 		return strings.TrimSpace(w.Spans[0].Value)
 	}
-	return strings.TrimSpace(r.joinWord(w))
+	return strings.TrimSpace(strings.Join(r.expandWordNoSplit(w), ""))
 }
 
 // subscriptValue evaluates a subscript, which is an arithmetic expression and
@@ -1309,7 +1324,7 @@ func (r *Runner) subscriptYieldsAList(e *syntax.ParamExpr) bool {
 	if e.Index == nil {
 		return false
 	}
-	if wholeArraySubscript(r.subscriptText(e.Index)) {
+	if r.wholeArrayIndex(e) {
 		return true
 	}
 	if !r.subscriptIsARange(e) {
@@ -1334,5 +1349,5 @@ func (r *Runner) subscriptJoinsElements(e *syntax.ParamExpr) bool {
 		// range, so it already falls through to one field each.
 		return false
 	}
-	return r.subscriptText(e.Index) == "*" || r.subscriptIsARange(e)
+	return r.joinedArrayIndex(e) || r.subscriptIsARange(e)
 }

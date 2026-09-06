@@ -192,6 +192,12 @@ type ParamExpr struct {
 	// node carries the position and Src carries the text.
 	FlagsErrPos int
 
+	// IndexFlags is the parenthesized flag group the subscript opened with,
+	// nil when there was none. Index keeps the subscript as written, and the
+	// operand behind the group is IndexFlags.Arg — see Subscript, which is
+	// what a reading should use.
+	IndexFlags *SubscriptFlags
+
 	// TildeFlags is how many `~` characters were written between the `${`
 	// and the rest of the expansion — `${~x}` carries 1 and `${~~x}` carries
 	// 2. Zero is the ordinary expansion.
@@ -345,7 +351,18 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	if p.dialect.ArraySubscript && strings.HasPrefix(s, "[") &&
 		(e.Inner != nil || p.subscriptableName(e.Name)) {
 		if i := closingBracket(s); i > 0 {
-			e.Index = p.wordFrom(s[1:i], start)
+			inner := s[1:i]
+			e.Index = p.wordFrom(inner, start)
+			if p.dialect.ArraySubscriptFlags {
+				if g, rest, isGroup := scanSubscriptFlags(inner); isGroup {
+					// The operand is lexed as a word of its own, so a
+					// substitution inside it is performed exactly as one in
+					// the subscript would be: `${path[(re)${ZPFX}/bin]}` is
+					// the whole of why this construct is worth having.
+					g.Arg = p.wordFrom(rest, start)
+					e.IndexFlags = g
+				}
+			}
 			s = s[i+1:]
 		}
 	}

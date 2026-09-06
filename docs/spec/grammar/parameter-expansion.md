@@ -1186,6 +1186,204 @@ subscript instead and reports `invalid subscript` at run time — for the
 unclosed unquoted form and for `"$a[" ]` alike; the shape fails either
 way, and the difference is the wording.
 
+## A subscript's own flag group — zsh only
+
+A subscript may open with a parenthesized group of flags of its own,
+`${a[(re)value]}`, which makes the subscript a **search** rather than a
+count. It is not the `${(flags)name}` group above in a second position;
+the two are different constructs that happen to share a punctuation.
+
+Measured 2026-09-06 with `a=(alpha beta gamma beta delta)`:
+
+| shell | `echo "[${a[(r)beta]}]"` |
+| --- | --- |
+| zsh 5.9.2 | `[beta]` |
+| bash 5.3.15 | `(r)beta: arithmetic syntax error in expression (error token is "beta")` |
+| bash-as-sh | the same, naming the invocation instead of the script |
+| bash 3.2.57 | `(r)beta: syntax error in expression (error token is "beta")` |
+| ksh93u+ | `(r)beta: arithmetic syntax error` |
+| dash | `Syntax error: "("` — at `a=( … )`, having no arrays to subscript |
+
+One shell has it and the rest read the same characters as arithmetic, so
+it is an **additive** grammar flag rather than a semantics axis. The
+evidence for "additive" is stronger than the usual four-against-one,
+because the shell that has the construct *also* reads the arithmetic:
+`${a[(z)2]}` is `bad math expression: operator expected at `2'` in zsh
+and an arithmetic failure in each of the others. There is no text this
+flag gives a second meaning to. It gives a meaning to text that had none.
+
+### The whole flag set, measured by exhaustion
+
+Every ASCII letter was asked twice — bare, `${a[(X)2]}`, and with an
+argument, `${a[(X:1:)2]}` — and the ones that did not fall back to
+arithmetic are the flag set. There are thirteen and no others:
+
+    w f p e i I r R k K        no argument
+    b n s                      an argument, in any delimiter pair
+
+Four of them select, and they are mutually exclusive — the **last one
+written** wins, `${a[(ri)be*]}` being `2` and `${a[(ir)be*]}` being
+`beta`:
+
+| written | is |
+| --- | --- |
+| `${a[(r)pat]}` | the first element the pattern matches, or nothing |
+| `${a[(R)pat]}` | the last such element |
+| `${a[(i)pat]}` | the index of the first match, or one past the last element |
+| `${a[(I)pat]}` | the index of the last match, or one before the first |
+
+and three modify the search:
+
+| written | is |
+| --- | --- |
+| `${a[(e)…]}` | the operand is a plain string, not a pattern |
+| `${a[(n:expr:)…]}` | the expr'th match rather than the first |
+| `${a[(b:expr:)…]}` | the search starts at element expr rather than at the end |
+
+`(re)` is the combination the scripts use: the first element **equal**
+to the operand. With `[[ -z … ]]` in front of it that is the idiom for
+"is this directory already on the path", which is what
+`~/.zi/bin/zi.zsh:161-193` is doing six times.
+
+### A group that selects nothing changes nothing
+
+`${a[()2]}` and `${a[(e)2]}` are both the second element. A group with
+no `r`, `R`, `i` or `I` in it says how a search would have run and no
+search was asked for, so the subscript behind it is read exactly as a
+subscript without a group: arithmetic, `@`, `*`, a range, or an
+associative key. `(e)` alone is the sharpest case — `${a[(e)beta]}` is
+**empty**, because `beta` is still an arithmetic expression there and an
+unset name is zero.
+
+### What the operand is: the text as written, and there is no quoting
+
+A pattern, unless `(e)`. What it is a pattern *of* is the subscript's
+text with its substitutions performed and **nothing else touched** — a
+subscript is not a quoting context at all, and the quote characters in
+one are ordinary characters. Measured three ways, with
+`b=('"beta"' beta)` — the first element's value is six characters:
+
+| written | is | so |
+| --- | --- | --- |
+| `${b[(r)"beta"]}` | `"beta"` | the quotes are matched, not removed |
+| `${b[(r)"$h"]}`, `h=beta` | `"beta"` | the value was substituted *inside* them |
+| `${b[(re)"beta"]}` | `"beta"` | and exact matching sees them too |
+
+That single rule explains the pattern half without an axis of its own:
+a substituted value's metacharacters are simply live, because nothing
+escaped them.
+
+    g='be*'; ${a[(r)$g]}   # beta
+    ${(@)a:#$g}            # removes nothing, in the same shell
+
+The second line is the dialect's ordinary answer for the result of an
+expansion. The first is not an override of it — it is a position where
+the question never arises.
+
+It is never matched against the *filesystem*: `${a[(re)be*]}` in a
+directory with no `be*` in it is empty rather than `no matches found`.
+
+### `n` and `b`, measured
+
+Both arguments are arithmetic expressions rather than numerals, and
+neither is parameter-expanded: `(rn:1+1:)` is the second match, `(rn:k:)`
+with `k` unset is the first, and `(rb:$one:)` fails in the arithmetic on
+the `$`.
+
+- `n` below one is one: `(rn:0:)` is the first match.
+- `n` past the last match answers the no-match value — `(rn:9:)` empty,
+  `(in:9:)` one past the end, `(In:9:)` zero.
+- `b` names an element in the array's own base, and a negative one counts
+  back from the end: with five elements `b:-1:` is the fifth and `b:-5:`
+  the first.
+- `b` **outside** the array is not clamped to its nearest end. With five
+  elements `${a[(Ib:6:)*a]}` is `0` and `${a[(ib:6:)*a]}` is `6`: neither
+  direction searches at all, where clamping would have found element 5.
+- Forward searches (`r`, `i`) run from `b` upward; reverse ones (`R`,
+  `I`) run from `b` downward, so `${a[(Rb:3:)*a]}` is `gamma`.
+
+### A name that holds nothing, and an array that holds nothing
+
+They are different. `${nosucharray[(i)x]}` is **empty**, while a declared
+but empty array answers `${b[(i)x]}` with `1` and `${b[(I)x]}` with `0`.
+An unset name is not searched at all.
+
+### Grammar
+
+Grammar flag `ArraySubscriptFlags`. The group is read by the **parser**,
+where the subscript's text is still text — `ParamExpr.IndexFlags` carries
+it and `ParamExpr.Subscript()` is the operand behind it, so every reading
+of a subscript asks one accessor and none of them sees the group.
+`ParamExpr.Index` keeps the subscript as written, which is what a
+diagnostic naming `a[(re)x]` needs.
+
+Malformed is not an error. A character the group cannot carry, an
+argument-taking flag with no argument, an argument with no closing
+delimiter and a group with no closing parenthesis all mean the
+parentheses were never a group — the subscript stands as written and is
+read as arithmetic. That is measured (`${a[(z)2]}`, `${a[(n)2]}` and
+`${a[(n:2)x]}` are all `bad math expression`) and it is what makes the
+flag purely additive: with the flag off, nothing reads differently.
+
+The **lexer** needs it too, for the brace-less spelling: `(` ends a word,
+so `$a[(r)b]` was a syntax error naming the parenthesis — which is worse
+than a wrong answer, because it takes the whole file with it. A group the
+grammar can read is stepped over as a unit and nothing else about where a
+bare subscript ends changes.
+
+### What this implementation carries, and what it refuses by name
+
+`r R i I e n b` are carried, for an ordinary array and for the positional
+parameters.
+
+`w f p k K s` are read by the grammar and **refused by name** when the
+subscript is reached — `${a[(w)x]}: the (w) subscript flag is not
+implemented` — for the reason the expansion flags are: a subscript flag
+answered wrong returns a plausible element at status 0, which is the one
+failure this repository exists to avoid.
+
+Two more refusals are about the *target* rather than the letter, and both
+replace a silent wrong answer:
+
+- On an **associative array** a search reads keys for `i` and `I` and
+  values for `r` and `R`, and `I` and `R` there answer with *every* match
+  rather than one, in the hash's order. A different construct wearing the
+  same letters. Before this, `${h[(r)v1]}` looked up a key literally
+  called `(r)v1` and quietly found nothing.
+- On a **scalar** a search is a search for a substring and what comes
+  back is a character position: `s="one two three"; ${s[(r)two]}` is `t`.
+
+`a[(r)y]=Q` — a flag group on the left of an **assignment** — is a
+parse error here and an element replacement in zsh. The group is read
+from a subscript's text and an assignment's subscript is cut by the lexer
+before there is any text to read, so it needs its own change rather than
+this one.
+
+An index reported by `(i)` or `(I)` is the base plus the element's
+*position*, which is the same number only while the array has no gaps.
+It has none in the shell that has this construct — `a=(x); a[5]=y` there
+leaves five elements and `${a[(i)y]}` is 5 — so the two readings agree
+everywhere this can be written today.
+
+### What this implementation does not match
+
+A backslash before an **ordinary** character. zsh keeps both characters —
+with an element whose value is the four characters `bet\a`,
+`${a[(r)bet\a]}` finds it and does *not* find `beta` — where the pattern
+language this implementation shares between `case`, `[[ ]]` and pathname
+expansion reads `\a` as an escaped `a`. A backslash before a
+metacharacter agrees: `${a[(r)be\*]}` finds an element whose value is
+`be*` in both. The disagreement is one character wide and belongs to
+patterns.md rather than to this construct, which is why it is recorded
+here and not worked around here.
+
+### What the corpus pins
+
+`array/a-subscript-takes-its-own-flag-group` (the six-shell split),
+`array/a-subscript-flag-group-searches-both-ways`, `-exact-matching`,
+`-unknown-flag-is-arithmetic`, `-operand-is-text-as-written`,
+`-that-selects-nothing` and `-counts-matches-and-moves-the-start`.
+
 ## Choosing elements: `:#`, `:|` and `:*` — zsh only
 
 Three operators that change **which elements** a value has, where the
@@ -1338,6 +1536,8 @@ implemented` are what they say instead.
     ParamTildeFlag         ${~x}, the tilde-and-filename flag — zsh only
     ParamElementSelection  ${a:#pat} ${a:|b} ${a:*b} — zsh only
     BareSubscript          $a[1] and $#a, written without braces — zsh only
+    ArraySubscriptFlags    ${a[(re)v]}, a flag group inside the brackets
+                           — zsh only
     SpecialParamSubscript  ${@[1]}, ${1[2]}, ${?[1]} — a subscript on a
                            parameter that is not a name — zsh only
     ProcessSubstitutionInParamOperand
@@ -1354,7 +1554,9 @@ both, and for the same reason as `ParamExpansionFlags`: one shell reads
 those characters that way and three read them as text.
 `SpecialParamSubscript` is false for both as well, and its evidence is
 stronger still: every other member of the panel refuses the expansion
-outright. `NestedParamExpansion` is false for both on the same evidence:
+outright. `ArraySubscriptFlags` is false for both on evidence stronger
+again: the four shells that lack it read `${a[(r)v]}` as arithmetic, and
+so does the shell that has it whenever the group is not one it knows. `NestedParamExpansion` is false for both on the same evidence:
 the other five columns refuse it, in three different wordings.
 
 ## What this does not cover

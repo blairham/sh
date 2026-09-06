@@ -587,7 +587,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 	// element dropped, which is no field at all. The corpus caught that.
 	if e.Index != nil && e.Inner == nil && !e.Length &&
 		(e.Op == syntax.ParamNone ||
-			(r.listShapedOp(e) && wholeArraySubscript(r.subscriptText(e.Index)))) {
+			(r.listShapedOp(e) && r.wholeArrayIndex(e))) {
 		if elems, ok := r.arraySubscript(e); ok {
 			if e.Indirect {
 				// `${!a[@]}` is the array's *subscripts*, not its elements —
@@ -643,7 +643,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 				for i, el := range elems {
 					mapped[i] = apply(el)
 				}
-				if r.subscriptText(e.Index) == "*" && s.Quoting != syntax.Unquoted {
+				if r.joinedArrayIndex(e) && s.Quoting != syntax.Unquoted {
 					// `"${a[*]#p}"` splits the panel: two shells trim each
 					// element and join what is left, the third joins first
 					// and trims the joined string once. Asked only when the
@@ -712,7 +712,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 			}
 			if s.Quoting != syntax.Unquoted {
 				if len(elems) == 0 && e.Op == syntax.ParamNone {
-					if !wholeArraySubscript(r.subscriptText(e.Index)) {
+					if !r.wholeArrayIndex(e) {
 						// A subscript naming *one* element is one field
 						// whatever the element turned out to be, exactly as
 						// `"$unset"` is one empty field. Quoting is the whole
@@ -1223,7 +1223,7 @@ func (r *Runner) badSubstitutionSubject(e *syntax.ParamExpr) string {
 // are both nothing to transform, measured, where an empty *string* is a value
 // and is refused. So the two spellings cannot share one test.
 func (r *Runner) transformHasValue(e *syntax.ParamExpr) bool {
-	if e.Index != nil && wholeArraySubscript(r.subscriptText(e.Index)) {
+	if e.Index != nil && r.wholeArrayIndex(e) {
 		elems, ok := r.arraySubscript(e)
 		return ok && len(elems) > 0
 	}
@@ -1448,7 +1448,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 // that the panel does not answer alike, and guessing at it would be worse than
 // leaving it alone.
 func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
-	idx := r.subscriptText(e.Index)
+	idx := r.subscriptText(e.Subscript())
 	if wholeArraySubscript(idx) {
 		// The rule above, made explicit for the associative path too — and
 		// re-measured there: one shell stores a literal `@` key and another
@@ -1625,6 +1625,31 @@ func opReadsTheList(op syntax.ParamOp) bool {
 
 func wholeArraySubscript(idx string) bool { return idx == "@" || idx == "*" }
 
+// wholeArrayIndex is the same question asked of a node, which is where a flag
+// group can be seen.
+//
+// A group takes the two whole-array spellings away: measured,
+// `${a[()@]}` and `${a[(e)*]}` are `bad math expression: operand expected`
+// in the grammar that has groups, where `${a[@]}` is the array. So `@` and
+// `*` are the whole array only in a subscript nothing opened, and every
+// reading that asks has to ask about the node rather than about the text —
+// asking about the text is how `${a[(r)@]}` came to be shaped like a list
+// while answering with one element.
+func (r *Runner) wholeArrayIndex(e *syntax.ParamExpr) bool {
+	return e.IndexFlags == nil && wholeArraySubscript(r.subscriptText(e.Subscript()))
+}
+
+// joinedArrayIndex is `[*]`, the spelling that joins, asked the same way.
+func (r *Runner) joinedArrayIndex(e *syntax.ParamExpr) bool {
+	return e.IndexFlags == nil && r.subscriptText(e.Subscript()) == "*"
+}
+
+// atArrayIndex is `[@]`, the spelling that keeps its fields, asked the same
+// way.
+func (r *Runner) atArrayIndex(e *syntax.ParamExpr) bool {
+	return e.IndexFlags == nil && r.subscriptText(e.Subscript()) == "@"
+}
+
 // elementOp reports the operators that apply to each element when the
 // subscript names the whole array: the trims, the replacements, and the case
 // changes. `${a[@]#p}` trims every element — unanimous in the three shells
@@ -1799,6 +1824,9 @@ func (r *Runner) paramSubject(e *syntax.ParamExpr) string {
 	if e.Index == nil {
 		return e.Name
 	}
+	// The subscript as it was *written*, flag group included: a diagnostic
+	// about `${a[(re)x]}` that named `a[x]` would name a subscript the
+	// script does not contain.
 	return e.Name + "[" + r.subscriptText(e.Index) + "]"
 }
 

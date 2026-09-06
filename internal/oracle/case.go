@@ -3257,6 +3257,41 @@ echo "st=$?"`,
 		Why:     "how far the no-brace length form reaches, measured at the two edges at once: zsh takes a name and takes `@`, and does *not* take `#` — `$##` is the positional count and then a literal `#` there exactly as it is in bash. So the parameter after the `#` is drawn from a set with holes in it rather than from every parameter, and a dialect that read one more character than the shell does would differ only on the shapes nothing tests",
 	},
 	{
+		ID: "array/a-subscript-takes-its-own-flag-group", Category: "expansion",
+		Snippet: `a=(alpha beta gamma); printf "[%s]" "${a[(r)beta]}"; echo`,
+		Why:     "a parenthesized flag group inside the brackets makes the subscript a search: zsh answers with the first element the operand matches, and the other four read the same characters as arithmetic and fail there — bash 5.3 and ksh93 naming the token, bash 3.2 with its older wording, and dash at the array literal it has no grammar for. `~/.zi/bin/zi.zsh` has sixty-four of them and six stand between the plugin manager and its first definition",
+	},
+	{
+		ID: "array/a-subscript-flag-group-searches-both-ways", Category: "expansion",
+		Snippet: `a=(alpha beta gamma beta delta); printf "[%s]" "${a[(r)*a]}" "${a[(R)*a]}" "${a[(i)be*]}" "${a[(I)be*]}" "${a[(i)zz]}" "${a[(I)zz]}"; echo`,
+		Why:     "the four selecting flags in one row, with their two no-match answers: `r` and `R` are the first and last matching element, `i` and `I` their indices, and a search that matches nothing is one *past* the last element for `i` and one *before* the first for `I` — which is what makes `a[(i)new]=v` an append. A row that pinned only the hits would pass with the misses answering an empty string",
+	},
+	{
+		ID: "array/a-subscript-flag-group-exact-matching", Category: "expansion",
+		Snippet: `a=(alpha beta gamma); printf "[%s]" "${a[(r)be*]}" "${a[(re)be*]}" "${a[(re)beta]}"; echo`,
+		Why:     "`(e)` is what turns the operand from a pattern into a string, and `(re)` — the combination every real script writes — is \"the first element *equal* to this\". The three together are the whole difference: without the `e` the pattern matches, with it the same text matches nothing, and the literal spelling still finds its element",
+	},
+	{
+		ID: "array/a-subscript-flag-group-unknown-flag-is-arithmetic", Category: "expansion",
+		Snippet: `a=(alpha beta gamma); printf "[%s]" "${a[(z)2]}"; echo`,
+		Why:     "the row that makes this an *additive* grammar flag rather than a semantics axis: a group the shell cannot read is no group at all, so the subscript stands as written and is read as arithmetic — and the shell that has the construct fails here exactly as the four without it do. There is no text the flag gives a second meaning to",
+	},
+	{
+		ID: "array/a-subscript-flag-group-operand-is-text-as-written", Category: "expansion",
+		Snippet: `b=('"beta"' beta); printf "[%s]" "${b[(r)be*]}" "${b[(r)"beta"]}"; echo`,
+		Why:     "a subscript is not a quoting context: the first element's value is the six characters `\"beta\"`, and the quoted operand finds *it* rather than the four-character one — the quotes were matched, not removed. The unquoted half is on the same row because it is the same rule read the other way: nothing escaped the `*`, so it is a live pattern, which is why a substituted value's metacharacters are live here while the same shell's `${(@)a:#$g}` leaves them alone",
+	},
+	{
+		ID: "array/a-subscript-flag-group-that-selects-nothing", Category: "expansion",
+		Snippet: `a=(alpha beta gamma); printf "[%s]" "${a[()2]}" "${a[(e)2]}" "${a[(e)beta]}"; echo`,
+		Why:     "a group with none of the four selecting flags in it leaves the subscript read exactly as it would have been without a group: an empty group and a bare `(e)` are both the second element, and `(e)beta` is *empty* rather than the element called beta, because the subscript behind the group is still arithmetic and an unset name is zero there",
+	},
+	{
+		ID: "array/a-subscript-flag-group-counts-matches-and-moves-the-start", Category: "expansion",
+		Snippet: `a=(alpha beta gamma beta delta); printf "[%s]" "${a[(rn:2:)*a]}" "${a[(rb:3:)*a]}" "${a[(Rb:3:)*a]}" "${a[(ib:6:)*a]}"; echo`,
+		Why:     "`n` asks for the nth match rather than the first and `b` moves where the search starts, forwards for `r` and backwards for `R`. The last of the four is the one worth a row of its own: a start past the end is *not* clamped to the end, so a reverse search from 6 over five elements finds nothing rather than finding the fifth",
+	},
+	{
 		ID: "array/a-subscript-pair-is-a-range", Category: "expansion",
 		Snippet: `a=(w x y z); echo "[${a[1,3]}]"`,
 		Why:     "the comma in a subscript, which is two readings of one spelling: zsh separates a range and gives `w x y`, while bash 5.3, bash 3.2, bash as sh and ksh93 read the whole text as arithmetic, take the comma operator's right operand and name element 3 alone. Both answer and neither reports, so a script cannot tell which shell it is on except by the value — the definition of a semantics axis rather than a construct one grammar has",

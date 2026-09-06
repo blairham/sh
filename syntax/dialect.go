@@ -910,6 +910,27 @@ type Dialect struct {
 	// indirection, so there is nowhere to write them down.
 	SpecialParamSubscript bool
 
+	// ArraySubscriptFlags enables a parenthesized flag group at the front of
+	// a *subscript* — `${a[(re)value]}`, the first element equal to the
+	// operand — which is a different construct from the flag group
+	// ParamExpansionFlags enables and not the same one moved. The three
+	// differences are set out at the head of subscriptflags.go, and the
+	// character sets are separate for the first of them.
+	//
+	// Additive rather than a semantics axis, and measured rather than
+	// argued: the grammar that has the group falls back to arithmetic for
+	// any group it cannot read, which is exactly what the four grammars
+	// without it do with every group — `${a[(z)2]}` is an arithmetic failure
+	// in all six shells on the panel and only `${a[(r)beta]}` divides them.
+	// So there is no text this flag gives a *second* reading to; it gives a
+	// reading to text that had none.
+	//
+	// It rides on ArraySubscript, which is what makes the brackets a
+	// subscript in the first place, and on BareSubscript for the unbraced
+	// form. A grammar with this and neither of those has nowhere to put a
+	// group.
+	ArraySubscriptFlags bool
+
 	// BareSubscript lets a parameter written without braces carry a
 	// subscript, and lets `$#name` mean that parameter's length: `$a[1]` is
 	// an element and `$#a` is a count, where a grammar without the flag

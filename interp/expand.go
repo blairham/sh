@@ -676,9 +676,9 @@ func (r *Runner) elementFields(elems []string, sp splitPolicy) []string {
 			// given — including where it is wrong: with a *non-whitespace*
 			// IFS the three shells that split keep the empty field and
 			// answer `[x][][y]` for `IFS=:; set -- x "" y; printf "[%s]" $@`
-			// where this gives `[x][y]`. That is its own disagreement, it
-			// predates this and is unchanged by it, and it is filed
-			// separately rather than settled here on the way past.
+			// where this gives `[x][y]`. That is its own disagreement — it
+			// predates this and is unchanged by it — and it is #1013 rather
+			// than something to settle here on the way past.
 			continue
 		}
 		doSplit := false

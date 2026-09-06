@@ -5248,6 +5248,21 @@ echo "st=$?"`,
 		Why:     "the flag decides the *option's* question and not the context's, so a context that never splits is not overridden: an assignment's value and a `case` subject are the value unchanged, spaces and all. The two halves in one row because an implementation that forced the split everywhere would still print the right thing for one of them",
 	},
 	{
+		ID: "param/the-set-test-flag-is-one-dialects", Category: "parameter expansion",
+		Snippet: `v=1; e=; printf "[%s]" ${+v} ${+e} ${+NOPE}; echo`,
+		Why:     "a `+` between the `${` and the parameter asks whether it is set and answers 1 or 0 without ever failing: zsh counts where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading with the `+` named. The empty-but-set name is in the row because set-ness is not emptiness — an implementation that answered like `${v:+1}` would get two of the three right",
+	},
+	{
+		ID: "param/the-set-test-flag-does-not-trip-nounset", Category: "parameter expansion",
+		Snippet: `set -u; printf "[%s]" ${+NOPE}; printf "[alive]"; echo`,
+		Why:     "asking without tripping nounset is the whole of what the construct is for: it is the guard a script writes in front of everything else, so a shell that made it fatal would turn every guard into a stop. The `alive` is the half that matters — a `0` printed by a shell that then gave up looks the same without it",
+	},
+	{
+		ID: "param/the-set-test-flag-has-no-effect-beside-an-operator", Category: "parameter expansion",
+		Snippet: `v=abc; printf "[%s]" ${+v#a} ${+v:-x} ${+nope:-D}; echo`,
+		Why:     "measured, and not what a flag suggests: with an operator written the `+` is neither the answer nor a refusal — the expansion is exactly what it would have been without it. Three rows because the first is the value trimmed, the second the value where the count would have been 1, and the third the default where the count would have been 0",
+	},
+	{
 		ID: "param/expansion-flags-split-and-join", Category: "parameter expansion",
 		Snippet: `x=a:b:c; printf "[%s]" ${(s.:.)x}; a=(1 2); printf "<%s>" "${(j.,.)a}"`,
 		Why:     "the s flag splits a scalar at its separator into real fields and j joins an array with its own — string-to-list and list-to-string, which no operator the other shells have can say",

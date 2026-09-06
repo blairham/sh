@@ -615,6 +615,32 @@ type Dialect struct {
 	// the construct.
 	ParamSplitFlag bool
 
+	// ParamSetTestFlag enables a `+` written between the `${` and the
+	// parameter: `${+name}`, which substitutes `1` when the parameter is set
+	// and `0` when it is not, and never fails. zsh alone has it; to the
+	// other four a leading `+` is not a name and the whole expansion is
+	// unreadable, which BadSubstitutionAtParseTime already splits into a
+	// parse-time refusal for ksh93 (`` `+' unexpected ``) and a deferred
+	// runtime error for the rest.
+	//
+	// A grammar flag rather than a semantics axis, for the reason
+	// ParamTildeFlag is one: without it there is no parameter at the front
+	// of `${+name}` at all, so the expansion is unreadable rather than
+	// differently read, and there is nothing for a value to switch between.
+	//
+	// A bool rather than a count, which is the one place this differs from
+	// ParamTildeFlag and is measured rather than assumed: `${++x}` is a bad
+	// substitution, so there is no second `+` for a parity to be about. It
+	// asks a question rather than setting a mode, and asking it twice is not
+	// a spelling the grammar has.
+	//
+	// Unlike ParamTildeFlag it does *not* relax the name: `${+}` is a bad
+	// substitution where `${~}` is the empty string, and so are `${(U)+}`
+	// and `${~+}`. The name it takes is a name or a positional — `${+@}`,
+	// `${+?}`, `${+#}`, `${+$}`, `${+!}`, `${+-}` and `${+*}` are all bad
+	// substitutions, while `${+0}` and `${+10}` read.
+	ParamSetTestFlag bool
+
 	// ParamElementSelection enables the three operators that choose which
 	// *elements* of a value survive: `${a:#pattern}` drops the ones a
 	// pattern matches, `${a:|other}` the ones another array holds, and

@@ -224,6 +224,20 @@ type ParamExpr struct {
 	// counted on its own for parity to mean anything.
 	SplitFlags int
 
+	// SetTest marks a `+` written between the `${` and the parameter —
+	// `${+name}` — which asks whether the parameter is set and substitutes
+	// `1` or `0` rather than its value.
+	//
+	// A bool and not a count, where TildeFlags is a count: `${++x}` is a bad
+	// substitution, measured, so there is no doubled spelling for a parity
+	// to be about.
+	//
+	// It is only the answer when the expansion carries no operator.
+	// Measured: `${+v#a}` on `abc` is `bc`, `${+v:-x}` on an unset `v` is
+	// `x`, and `${+v=w}` assigns — with an operator written the `+` has no
+	// effect at all rather than being refused.
+	SetTest bool
+
 	// Bad marks an expansion whose operator the grammar did not recognize,
 	// in a dialect that diagnoses that when the expansion is reached rather
 	// than when it is read. Src holds the inside of the braces for the
@@ -307,6 +321,26 @@ scan:
 			break scan
 		}
 		s = s[1:]
+	}
+
+	// A `+` stands after that run and in front of everything else: measured,
+	// `${~+x}` reads and `${+~x}` does not, `${(t)+x}` reads and `${+#x}`
+	// does not — and `${#+x}` is not this construct at all but the `$#`
+	// parameter with an alternate word.
+	//
+	// What may follow it is a name or a positional and nothing else, which
+	// is checked here rather than after the name scan: `${+#v}` would
+	// otherwise be read as a length over a set test, and the shell that has
+	// the construct calls it a bad substitution. Deferred to the run like
+	// every other unreadable expansion in this grammar — measured, `${+?}`
+	// inside a branch never taken is no error at all.
+	if p.dialect.ParamSetTestFlag && strings.HasPrefix(s, "+") {
+		e.SetTest = true
+		s = s[1:]
+		if !setTestNameStarts(s) {
+			e.Bad, e.Src = true, src
+			return e
+		}
 	}
 
 	switch {
@@ -576,6 +610,17 @@ func matchingFlagDelimiter(open byte) byte {
 
 // scanParamName reads the parameter, which is either a name or one of the
 // single characters that are parameters in their own right.
+// setTestNameStarts reports whether s begins the only thing `${+` may be
+// followed by: a name, or a positional parameter's digits.
+//
+// Every other parameter is refused, which is measured and is not what the
+// name "is it set" suggests — `${+@}`, `${+*}`, `${+#}`, `${+?}`, `${+$}`,
+// `${+!}` and `${+-}` are bad substitutions in the shell that has the
+// construct, and so is `${+}` with nothing after it at all.
+func setTestNameStarts(s string) bool {
+	return s != "" && (isNameStart(s[0]) || (s[0] >= '0' && s[0] <= '9'))
+}
+
 func scanParamName(s string) (name, rest string) {
 	if s == "" {
 		return "", ""

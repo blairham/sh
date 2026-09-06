@@ -2548,6 +2548,11 @@ echo "st=$?"`,
 		Why:     "the letter takes an argument, which is the half that has to be right in a shell that means to ignore the value: bash asks for the argument it is missing where the four that do not have the letter refuse it as one they never heard of, in the same words they use with a value after it",
 	},
 	{
+		ID: "read/a-prompt-is-for-a-terminal-and-not-a-character-device", Category: "builtins",
+		Snippet: `read -p 'PROMPT-42 ' v < /dev/urandom; echo "st=$?"`,
+		Why:     "a character device is not a terminal, and this is the device that says so rather than /dev/null: the read *succeeds* here, so there is every reason to have prompted and no shell prompts. Testing a character device instead of asking the kernel printed `PROMPT-42 ` into something nobody was reading (#525). ksh93 and zsh spell `-p` as the coprocess flag and refuse it, which is the same row saying that too",
+	},
+	{
 		ID: "redir/a-target-that-is-not-one-word", Category: "redirection",
 		Snippet: `e="a b"; echo hi > $e; echo "st=$?"`,
 		Why:     "a redirection target is expanded and then, in three of the four, neither split nor matched — so `> $e` writes to a file called `a b`. bash expands it as an ordinary word and refuses anything that is not exactly one, naming the target *as written*. Doing bash's expansion and taking the first field is the answer nobody gives, and it wrote to `a`",

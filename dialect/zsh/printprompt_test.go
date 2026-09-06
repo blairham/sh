@@ -125,7 +125,7 @@ print -r -- "st=$?"`)
 // not be caught here, and a mutant that sets it survives. The rule the code
 // states is still the right one and the reason is not this test: nothing is
 // being expanded, and the builtin's own status is the answer. What this
-// pins is the behaviour a reader would want to check first, which is that
+// pins is the behavior a reader would want to check first, which is that
 // one refusal does not disarm the next.
 func TestTheBuiltinsRefusalDoesNotDisarmTheNextExpansionFailure(t *testing.T) {
 	// The second refusal is written before the redirection on its own line

@@ -89,6 +89,17 @@ func TestANumericRangeMatchesTheValueAndNotTheText(t *testing.T) {
 		{`[[ 1 = <1-99999999999999999999> ]] && echo hit || echo miss`, "miss\n"},
 		// A reversed range matches nothing rather than being an error.
 		{`[[ 3 = <5-1> ]] && echo hit || echo miss`, "miss\n"},
+		// Zero is a bound like any other, and the pair below is what says
+		// so: an omitted bound cannot be represented by a zero, because a
+		// written zero means zero. `<0-0>` is the number 0 and nothing
+		// else, and `<1-0>` is a reversed range that matches nothing —
+		// both measured. A mutant that spelled "no bound" as 0 passed every
+		// other line in this file.
+		{`[[ 0 = <0-0> ]] && echo hit || echo miss`, "hit\n"},
+		{`[[ 5 = <0-0> ]] && echo hit || echo miss`, "miss\n"},
+		{`[[ 5 = <1-0> ]] && echo hit || echo miss`, "miss\n"},
+		{`[[ 0 = <0-> ]] && echo hit || echo miss`, "hit\n"},
+		{`[[ 5 = <0-> ]] && echo hit || echo miss`, "hit\n"},
 		// A `case` arm reads the same pattern.
 		{`case 42 in <->) echo num;; *) echo other;; esac`, "num\n"},
 		{`case abc in <->) echo num;; *) echo other;; esac`, "other\n"},

@@ -443,3 +443,27 @@ func TestPrintfBEscapesAreKshs(t *testing.T) {
 		}
 	}
 }
+
+// `shift` here reads *every* dash word as an option, digits and all, which is
+// what makes the marker load-bearing: `-1` is an option this shell does not
+// have and `-- -1` is a count below zero, worded the same way a count above
+// `$#` is. Both end the script, as a failed special builtin does here.
+func TestShiftReadsEveryDashWordAsAnOption(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		src  string
+		want string
+		st   int
+	}{
+		{`set -- a b c; shift -- 2; echo "st=$? rest=[$*]"`, "st=0 rest=[c]\n", 0},
+		{`set -- a b c; shift --; echo "st=$? rest=[$*]"`, "st=0 rest=[b c]\n", 0},
+		{`set -- a b c; shift -1; echo "st=$? n=$#"`, "ksh: shift: -1: unknown option\nUsage: shift [ options ] [n]\n", 2},
+		{`set -- a b c; shift -0; echo "st=$? n=$#"`, "ksh: shift: -0: unknown option\nUsage: shift [ options ] [n]\n", 2},
+		{`set -- a b c; shift -- -1; echo "st=$? n=$#"`, "ksh: shift: -1: bad number\n", 1},
+		{`set -- a b c; shift +1; echo "st=$? rest=[$*]"`, "st=0 rest=[b c]\n", 0},
+	} {
+		if out, st := runKsh(t, dir, tc.src+"\n"); out != tc.want || st != tc.st {
+			t.Errorf("%s: said %q status %d, want %q and %d", tc.src, out, st, tc.want, tc.st)
+		}
+	}
+}

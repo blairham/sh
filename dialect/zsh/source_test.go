@@ -483,3 +483,26 @@ func TestPrintfBEscapesAreZshs(t *testing.T) {
 		}
 	}
 }
+
+// `shift` here reads a dash word as an option unless it is all digits, which
+// is the reading between bash's and ksh93's: `-x` is a bad option and `-1` is
+// a count it refuses for being below zero, in a sentence of its own.
+func TestShiftReadsOnlyNonNumericDashWordsAsOptions(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		src  string
+		want string
+		st   int
+	}{
+		{`set -- a b c; shift -- 2; echo "st=$? rest=[$*]"`, "st=0 rest=[c]\n", 0},
+		{`set -- a b c; shift --; echo "st=$? rest=[$*]"`, "st=0 rest=[b c]\n", 0},
+		{`set -- a b c; shift -1; echo "st=$? n=$#"`, "zsh:shift:1: argument to shift must be non-negative\nst=1 n=3\n", 0},
+		{`set -- a b c; shift -- -1; echo "st=$? n=$#"`, "zsh:shift:1: argument to shift must be non-negative\nst=1 n=3\n", 0},
+		{`set -- a b c; shift -0; echo "st=$? rest=[$*]"`, "st=0 rest=[a b c]\n", 0},
+		{`set -- a b c; shift -x; echo "st=$? n=$#"`, "zsh:shift:1: bad option: -x\nst=1 n=3\n", 0},
+	} {
+		if out, st := runZsh(t, dir, tc.src+"\n"); out != tc.want || st != tc.st {
+			t.Errorf("%s: said %q status %d, want %q and %d", tc.src, out, st, tc.want, tc.st)
+		}
+	}
+}

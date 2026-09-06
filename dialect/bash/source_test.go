@@ -542,3 +542,27 @@ func TestPrintfBEscapesAreBashs(t *testing.T) {
 		}
 	}
 }
+
+// `shift` here reads no dash word as an option — `-x` is a count that is not
+// a number and `-1` is a count that is out of range — and honors the
+// end-of-options marker all the same, which is why those are two questions.
+func TestShiftReadsNoOptionsAndStillTakesTheMarker(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		src  string
+		want string
+		st   int
+	}{
+		{`set -- a b c; shift -- 2; echo "st=$? rest=[$*]"`, "st=0 rest=[c]\n", 0},
+		{`set -- a b c; shift --; echo "st=$? rest=[$*]"`, "st=0 rest=[b c]\n", 0},
+		{`set -- a b c; shift +1; echo "st=$? rest=[$*]"`, "st=0 rest=[b c]\n", 0},
+		{`set -- a b c; shift -0; echo "st=$? rest=[$*]"`, "st=0 rest=[a b c]\n", 0},
+		{`set -- a b c; shift -1; echo "st=$? n=$#"`, "bash: line 1: shift: -1: shift count out of range\nst=1 n=3\n", 0},
+		{`set -- a b c; shift -- -1; echo "st=$? n=$#"`, "bash: line 1: shift: -1: shift count out of range\nst=1 n=3\n", 0},
+		{`set -- a b c; shift -x; echo "st=$? n=$#"`, "bash: line 1: shift: -x: numeric argument required\nst=2 n=3\n", 0},
+	} {
+		if out, st := runBash(t, dir, tc.src+"\n"); out != tc.want || st != tc.st {
+			t.Errorf("%s: said %q status %d, want %q and %d", tc.src, out, st, tc.want, tc.st)
+		}
+	}
+}

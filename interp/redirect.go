@@ -448,6 +448,30 @@ func (r *Runner) redirectTarget(rd *syntax.Redirect) (string, bool) {
 	return "", true
 }
 
+// atoiSigned reads a decimal integer that may carry a sign, which atoi does
+// not: a descriptor number never has one and a `shift` count may.
+//
+// The sign is unanimous where it is read at all — `shift +1` moves one in all
+// six shells in the panel — and a `-` in front of the digits is what makes a
+// count out of range rather than a word that is not a number.
+func atoiSigned(s string) (int, bool) {
+	neg := false
+	switch {
+	case strings.HasPrefix(s, "-"):
+		neg, s = true, s[1:]
+	case strings.HasPrefix(s, "+"):
+		s = s[1:]
+	}
+	n, ok := atoi(s)
+	if !ok {
+		return 0, false
+	}
+	if neg {
+		return -n, true
+	}
+	return n, true
+}
+
 func atoi(s string) (int, bool) {
 	if s == "" {
 		return 0, false

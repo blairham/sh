@@ -5805,18 +5805,76 @@ apart.
 Ends a non-interactive shell when `shift` runs off the end. True in dash
 and ksh93.
 
-**`ShiftReadsOptions`** — bash no · dash no · ksh93 yes · zsh yes
+**`ShiftOptionWords`** — bash none · dash none · ksh93 every dash word · zsh an option unless it is all digits
 
-Reads a leading `-` word that is not a number as an option rather than
-as the count.
+Which leading-`-` words `shift` reads as options rather than as its
+count. Three answers rather than a presence, because the panel splits on
+*which* dash words and not on whether there are any:
 
-ksh93 and zsh do, and refuse it as one; bash and dash read it as the
-count and complain about the number. Same input, two different kinds of
-complaint — and both are fatal in the dialects where a special builtin's
-failure is, which `shift` is.
+    shift -x   bash `-x: numeric argument required`   dash `Illegal number: -x`
+               ksh93 `-x: unknown option` and a usage line
+               zsh `bad option: -x`
+    shift -1   bash `-1: shift count out of range`    dash `Illegal number: -1`
+               ksh93 `-1: unknown option` and a usage line
+               zsh `argument to shift must be non-negative`
+    shift -0   bash, dash, zsh  shift nothing, status 0
+               ksh93 `-0: unknown option` and a usage line
 
-**Three `shift` shapes measured in the sweep of #500**, none of them
-needing a new axis and all three now pinned:
+zsh is what makes it three: it refuses `-x` as an option and reads `-1`
+as a count. A bool could say "reads options" or "does not", and neither
+describes zsh. `-0` is the sharpest row — ksh93 alone against the rest.
+
+A lone `-` is not a dash word in any of the readings and reaches the
+count everywhere here, which is bash's and dash's answer for it; ksh93
+and zsh diverge on that one word (`more tokens expected`, and zsh
+consumes it and shifts one) and are not modeled.
+
+**`ShiftDoubleDashEndsOptions`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Takes `--` as the end-of-options marker and reads what follows as the
+count.
+
+    shift -- 2    bash, ksh93, zsh  shift two
+                  dash `Illegal number: --`
+    shift --      bash, ksh93, zsh  the count falls back to one
+                  dash `Illegal number: --`
+    shift -- -1   bash `-1: shift count out of range`
+                  ksh93 `-1: bad number`
+                  zsh `argument to shift must be non-negative`
+                  dash `Illegal number: --`
+
+It is **not** `ShiftOptionWords`: bash reads no dash word as an option
+and honors the marker anyway, so one shell answers the two differently
+and one axis cannot hold both. What is past the marker is an operand and
+not an option, which is where ksh93's two answers to `-1` come from.
+Only the *first* `--` is the marker — `shift -- --` complains about the
+second in all three that take one.
+
+**`ShiftNegativeIsOutOfRange`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Reads a count below zero as a number that is out of range rather than as
+a word that is not a number.
+
+It is the other end of `ShiftTooMany` — one count, out of range in two
+directions — so the same `ShiftPastEndFatal` decides whether it ends the
+script, and it does: fatal in dash and ksh93, survivable in bash and zsh,
+with `$#` untouched either way and status 1 where it is survived. Only
+the wording differs by direction, which is why `Diagnostics` has a field
+for each: bash is silent above `$#` and says `shift count out of range`
+below zero, zsh has a sentence for each end, and ksh93 reuses `bad
+number` for both. dash answers no and calls a negative count an illegal
+number, which is the same complaint it makes about `-x`.
+
+In ksh93 a negative count is only reachable *after* the marker, because
+a bare `-1` is an option there.
+
+A count may also carry a `+`, which is unanimous and asks nothing:
+`shift +1` moves one in all six. The count reader had no sign at all
+before #779, which is how `shift -1` reached a slice bound and panicked
+in the two dialects that evaluate the operand as an expression.
+
+**The `shift` shapes measured in the sweep of #500**, and where they
+landed:
 
 - **Past the end with a count**, `set -- a b; shift 5`. Prior work of our
   own had this as "moves nothing and answers 1", measured against bash.
@@ -5826,13 +5884,24 @@ needing a new axis and all three now pinned:
   out of range` as `sh`, so the diagnostic belongs to argv[0] and not to
   the build (`shift/past-the-end-with-a-count`).
 - **A negative count** divides them on what kind of word it is before it
-  divides them on the answer: ksh93 reads `-1` as an option and refuses
-  it as one, dash calls it an illegal number, bash and zsh call it a
-  count out of range. Nothing moves anywhere
-  (`shift/a-negative-count`).
+  divides them on the answer, which is why it took two axes rather than
+  the one #779 expected: `ShiftOptionWords` says whether `-1` is even a
+  count, and `ShiftNegativeIsOutOfRange` says what a count below zero
+  is (`shift/a-negative-count`,
+  `shift/a-negative-count-after-the-marker`).
 - **`shift -- 2`** shifts two in five of the six; dash calls `--` an
-  illegal number, having no option parsing here for it to end
-  (`shift/a-double-dash-before-the-count`).
+  illegal number, having no option parsing here for it to end. #779 read
+  this as belonging to the option axis; bash answers the two differently
+  in one binary, so it is its own
+  (`shift/a-double-dash-before-the-count`,
+  `shift/a-double-dash-alone-still-shifts-one`).
+
+One thing measured here and **not** modeled: a word of nothing but
+dashes. `shift ---` is `---: more tokens expected` in ksh93 and
+`bad option: --` in zsh, where the shared bundle reader names `----` —
+`firstOptionLetter` has no letter to find and hands back the whole word,
+which then gets a dash put in front of it. It is the bundle reader's
+question rather than `shift`'s and no case pins it.
 
 **`TimesRejectsArguments`** — bash no · dash no · ksh93 no · zsh yes
 

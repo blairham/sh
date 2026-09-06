@@ -160,7 +160,12 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskWhoAloneSetsIt = interp.Yes
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
-	s.ShiftReadsOptions = interp.Yes
+	// Every dash word is an option here, digits and all: `shift -1` and
+	// `shift -0` are both refused as options this shell does not have, which
+	// is why a negative count is only reachable after the marker.
+	s.ShiftOptionWords = interp.ShiftOptionWordsAny
+	s.ShiftDoubleDashEndsOptions = interp.Yes
+	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.Yes
 	// Job specs by command text, a second match taken rather than refused.
 	// A `wait` whose spec names nothing says nothing at all and reports 0;
@@ -596,8 +601,11 @@ func Diagnostics() interp.Diagnostics {
 		ReadonlyVariable:            "%s: is read only",
 		// A warning rather than an error, in so many words, and the only
 		// member of the panel that says so.
-		UnsetReadonly:        "unset: warning: %s: is read only",
-		ShiftTooMany:         "shift: %[2]s: bad number",
+		UnsetReadonly: "unset: warning: %s: is read only",
+		ShiftTooMany:  "shift: %[2]s: bad number",
+		// The same sentence for a count below zero, which is only reachable
+		// here after the end-of-options marker.
+		ShiftNegativeCount:   "shift: %[2]s: bad number",
 		StdinBuiltinLocation: interp.LocationBracketLine,
 		ArithError:           "%[1]s: %[2]s",
 		DivisionByZero:       "divide by zero",

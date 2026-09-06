@@ -179,7 +179,11 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
-	s.ShiftReadsOptions = interp.No
+	// No dash word is an option: `shift -x` complains about a number and
+	// `shift -1` is a count out of range. The marker is honored all the same.
+	s.ShiftOptionWords = interp.ShiftOptionWordsNone
+	s.ShiftDoubleDashEndsOptions = interp.Yes
+	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.Yes
 	// Job specs by command text, with a second match refused as ambiguous;
 	// `wait` complains about a spec that names nothing, has -n, and
@@ -514,6 +518,9 @@ func Diagnostics() interp.Diagnostics {
 		// The target as it was written, not as it expanded.
 		AmbiguousRedirect: "%[1]s: ambiguous redirect",
 		JobStarted:        "[%[1]d] %[2]d",
+		// Silent for a count above `$#` — there is no ShiftTooMany here —
+		// and a sentence for one below zero, naming the word as written.
+		ShiftNegativeCount: "shift: %[2]s: shift count out of range",
 		// Measured from a terminal: `[1]+` then two spaces, the state in a
 		// 27-wide column, then the command — with the `&` back on it while
 		// the job runs and gone once it has ended.

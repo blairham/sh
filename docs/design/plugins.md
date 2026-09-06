@@ -841,7 +841,7 @@ garbage on its output, one that ignores a cancel.
       host.go           launch, the gate consultation, lifetime, shutdown
       command.go        the command role → interp.Register
       observer.go       the observer role → interp.Sink
-      testdata/         eighteen plugins, every one a POSIX shell script
+      testdata/         the fixtures, every one a POSIX shell script
     cmd/sh              -plugin PATH, repeatable — plugin.go
 
 The extraction is the first thing to do and it is worth doing rather

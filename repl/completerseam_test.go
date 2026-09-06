@@ -270,3 +270,28 @@ func TestACompletionEscapesALiteralNameForTheWordItReplaces(t *testing.T) {
 		})
 	}
 }
+
+// The editor a session builds is given the shell's directory and the shell's
+// completers, and this is the assertion that a field dropped in newEditor is a
+// failure.
+//
+// The editor exists only where there is a terminal, so everything carried
+// across that wiring is invisible to a reader-driven test of the editor and
+// invisible to a test of the Shell: a dropped field looks exactly like a
+// caller that said nothing. driver's own frontEnd has the same note on it,
+// having lost two mutations to exactly this.
+func TestTheEditorIsBuiltWithTheDirectoryAndTheCompleters(t *testing.T) {
+	r := newTestRunner(nil)
+	r.Dir = "/carried/across"
+	mine := &recordingCompleter{answer: []string{"mine"}}
+	e := Shell{Runner: r, Completers: []Completer{mine}}.newEditor()
+
+	if got := e.dir(); got != "/carried/across" {
+		t.Errorf("the editor reports the directory %q, want %q", got, "/carried/across")
+	}
+	e.line, e.pos = []rune("m"), 1
+	e.complete(e.comp)
+	if got := string(e.line); got != "mine " {
+		t.Errorf("the line is %q, want %q — the caller's completer did not reach the editor", got, "mine ")
+	}
+}

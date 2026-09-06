@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -48,10 +49,18 @@ const tripwireHome = "SH_TEST_REPL_HOME"
 // `sleep` and `cat` and a shell that cannot find them is not testing job
 // control; TMPDIR because t.TempDir reads it; GO because the test binary's own
 // machinery does.
+// SH_TEST_ is this file's own channel to a re-executed copy of the test
+// binary: the only way to ask what the guard does when it trips is to run a
+// suite that trips it, and a child that lost the variable would run the test
+// again instead of being the run under examination.
 var (
 	keptExactly  = []string{"PATH", "TMPDIR"}
-	keptPrefixes = []string{"GO"}
+	keptPrefixes = []string{"GO", "SH_TEST_"}
 )
+
+// touchHomeVar asks a re-executed copy of this binary to write into the home
+// it is given, so the guard can be observed tripping.
+const touchHomeVar = "SH_TEST_TOUCH_HOME"
 
 func TestMain(m *testing.M) { os.Exit(runIsolated(m)) }
 
@@ -234,5 +243,45 @@ func TestTheHomeCheckSeesWhatWasLeftBehind(t *testing.T) {
 	}
 	if got := entriesUnder(dir); strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// TestTheHomeCheckFailsTheRun is the assertion the two above cannot make.
+//
+// A check whose evidence is that nothing failed proves nothing, and the end of
+// the run is the one place a test inside the run cannot look at: by the time
+// entriesUnder is called the suite is over. So the suite is run again, as a
+// child, with one test in it that writes into the home it was handed — and the
+// claim is that the child fails and says why.
+//
+// This is the mutant that survived the first pass. Blanking the check in
+// runIsolated left every test green, which is exactly the shape #890 describes
+// having lived with for a day.
+func TestTheHomeCheckFailsTheRun(t *testing.T) {
+	if os.Getenv(touchHomeVar) != "" {
+		// The child. Reach into the home the suite handed out, the way a
+		// session that was never isolated would.
+		dir := filepath.Join(os.Getenv("HOME"), ".local", "state", "sh")
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "index.jsonl"), []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestTheHomeCheckFailsTheRun$")
+	cmd.Env = append(os.Environ(), touchHomeVar+"=1")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("a run that wrote into its home passed:\n%s", out)
+	}
+	for _, want := range []string{
+		"something wrote into the home directory",
+		".local/state/sh/index.jsonl",
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("the failure does not mention %q:\n%s", want, out)
+		}
 	}
 }

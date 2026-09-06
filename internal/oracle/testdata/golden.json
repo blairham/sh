@@ -53890,6 +53890,156 @@
         "TimedOut": false
       }
     },
+    "signal-death/a-brace-group-does-not-outlive-the-signal": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      }
+    },
+    "signal-death/a-command-substitution-that-signaled-the-shell": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      }
+    },
+    "signal-death/a-function-body-does-not-outlive-the-signal": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      }
+    },
     "signal-death/a-handled-signal-is-not-a-death": {
       "bash": {
         "Stdout": "caught~after",
@@ -53983,6 +54133,56 @@
         "TimedOut": false
       }
     },
+    "signal-death/a-loop-body-does-not-outlive-the-signal": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      }
+    },
     "signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too": {
       "bash": {
         "Stdout": "",
@@ -54030,6 +54230,56 @@
         "Status": -1,
         "Signal": 30,
         "SignalName": "user defined signal 1",
+        "TimedOut": false
+      }
+    },
+    "signal-death/a-subshell-that-signaled-the-shell": {
+      "bash": {
+        "Stdout": "inner",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "inner",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "inner",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "inner",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "inner",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 15,
+        "SignalName": "terminated",
         "TimedOut": false
       }
     },

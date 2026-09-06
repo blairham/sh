@@ -44,6 +44,11 @@ func killSem() Semantics {
 	s.ExitTrapRunsOnSignalDeath = Yes
 	s.TrapBodyRunsWhatParsed = Yes
 	s.SIGPrefixAccepted = Yes
+	// The majority's shape for what a subshell does after signaling the
+	// shell, which is what these cases are written against: the subshell
+	// finishes its body and the parent stops afterwards. The other answer
+	// has cases of its own.
+	s.SubshellRunsOnAfterSignalingTheShell = Yes
 	return s
 }
 

@@ -473,6 +473,10 @@ func Semantics() interp.Semantics {
 	// same, which is what keeps this question and MonitorNeedsATerminal
 	// apart.
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
+	// A subshell is a process of its own here — measured, a child started
+	// inside one reports the subshell rather than the shell as its parent —
+	// so a signal aimed at `$$` never reaches it and it finishes its body.
+	s.SubshellRunsOnAfterSignalingTheShell = interp.Yes
 	// And bash is the one member of the panel that announces nothing on
 	// this route. Measured on `-i script.sh` through a pseudo-terminal:
 	// 5.3.15, 3.2.57 and 3.2 run as `sh` all print neither the start nor

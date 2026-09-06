@@ -480,6 +480,81 @@ bash 5.3 still ignores the signal and zsh dies by it. Not modeled — POSIX
 says `trap -` restores the disposition the shell *inherited*, which makes
 both defensible, and nothing in the corpus asks yet.
 
+## A subshell that kills the shell, and where the process went
+
+    (kill -TERM $$; echo inner); echo outer
+
+    bash 5.3  → inner, killed by SIGTERM     dash   → inner, killed by SIGTERM
+    bash 3.2  → inner, killed by SIGTERM     ksh93  → nothing, killed by SIGTERM
+    bash as sh → inner, killed by SIGTERM    zsh    → inner, killed by SIGTERM
+
+`Semantics.SubshellRunsOnAfterSignalingTheShell` — bash yes · dash yes ·
+ksh93 no · zsh yes, preset yes.
+
+**The shell ends either way, and that half is unanimous.** All six are
+killed by the signal and `outer` prints in none of them. What splits is
+the one echo between the `kill` and the end of the subshell.
+
+**It is not a race.** The same answer on twenty-five runs of each with the
+machine under load, and a `sleep 0.3` between the kill and the echo does
+not change it either — nor does a second echo: `(kill -TERM $$; echo one;
+echo two)` prints both in the five and neither in ksh93.
+
+### The reason is the opposite of the obvious one
+
+The obvious reading is that ksh93 forks a real subshell, so `$$` names
+the parent and the whole process goes. Measured, that is backwards.
+
+Start a child inside the subshell and read its parent process id — with a
+command after the subshell, so no shell can exec its last command in
+place:
+
+    echo "shell=$$"; ( /bin/sh -c 'echo "in=$PPID"'; : ); echo tail
+
+    bash 5.3   in ≠ shell     dash   in ≠ shell
+    bash 3.2   in ≠ shell     ksh93  in = shell
+    bash as sh in ≠ shell     zsh    in ≠ shell
+
+**bash, dash and zsh give the subshell a process of its own. ksh93 does
+not.** So the five that keep going are the five that forked: the signal
+was aimed at the parent, the child never received it, and it finished its
+body while the parent died. ksh93 runs the subshell in the shell's own
+process, so `kill -TERM $$` is a self-signal landing on the very process
+that was about to run `echo inner`.
+
+`$$` itself is not the difference. It is the parent's pid inside a
+subshell in all six — `echo "$$"; (echo "$$")` prints the same number
+twice everywhere — which is what POSIX requires and what makes `$$`
+usable as a lock name.
+
+### Only a subshell
+
+The same signal at the top level, in a brace group, in a function body and
+in a `while` body stops all six at once and prints nothing. A command
+substitution is silent everywhere too, for its own reason: what the child
+wrote went into the assignment rather than to the output. So there is no
+question to ask anywhere but `( )`, and the axis is about being a separate
+*process* rather than about being a separate scope.
+
+### Why it is an axis here rather than a consequence
+
+Nothing in this implementation forks for a subshell — `docs/spec/core.md`
+and AGENTS.md both say so — which is structurally ksh93's arrangement. So
+the majority answer is not something the architecture hands us; it is a
+choice to behave like the shells that fork, and the minority answer is a
+choice to behave like the one that does not. That is exactly what a
+semantics field is for.
+
+The preset says yes: POSIX has `( )` execute "in a subshell environment"
+and describes that environment as a copy, which is the forking reading,
+and it is five of the six.
+
+Read with `ask` rather than read plainly, unlike the startup axes: this is
+reached while the script is running, and only by a `kill` at the shell's
+own pid from inside a subshell, so an unanswered preset refuses there and
+nowhere else.
+
+
 ## The other fatal signal, which is fatal without being a death
 
     kill -HUP $$; echo after

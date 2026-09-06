@@ -112,7 +112,13 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 			continue
 		}
 		ifs, set := r.ifs()
-		parts := splitFields(text, ifs, set)
+		// The `${~spec}` flag's tilde half reaches each field the value
+		// split into, not only the head of the value: measured under
+		// `SH_WORD_SPLIT`, `v='~/zz ~/qq'; ${~v}` is *both* directories in
+		// the shell that has the construct. Splitting runs first and every
+		// field it produced is at the head of a word of its own, exactly as
+		// the elements of a list are.
+		parts := r.tildeFlagElements(s, head, splitFields(text, ifs, set))
 		if len(parts) == 0 {
 			// An unquoted expansion of an empty value produces no field at
 			// all, so nothing is appended and nothing is started.
@@ -519,6 +525,26 @@ func (r *Runner) expandColonTildes(w *syntax.Word) {
 // through tildeFlagElements: only the first of them can be denied a head, the
 // rest are fields of their own.
 func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, bool) {
+	if parts, ok := r.expandAtList(s, sp, head); ok {
+		return r.splitFlagFields(s, sp, parts), true
+	}
+	if !splitFlagOn(s, sp) {
+		return nil, false
+	}
+	// A `${=spec}` on one of the scalar shapes. It is answered here rather
+	// than by the word loop because the loop splits an unquoted result only,
+	// and this flag reaches through the quotes: `"${=v}"` on `a b` is two
+	// fields. The value itself is the scalar path's, unchanged — expandSpan
+	// is exactly the call the loop would have made — so the flag adds the
+	// splitting and nothing else.
+	text, _ := r.expandSpan(s, sp, head)
+	return r.tildeFlagElements(s, head, r.splitFlagFields(s, sp, []string{text})), true
+}
+
+// expandAtList answers the expansions that yield a list of fields on their
+// own. See expandAt, which is the entry point and applies `${=spec}` to
+// whatever this returns.
+func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]string, bool) {
 	if s.Kind != syntax.ParamExp || s.Param == nil {
 		return nil, false
 	}
@@ -537,7 +563,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 	// A flag group changes what the whole expansion yields — how many
 	// fields, joined with what — so a node that carries one is answered by
 	// its own pipeline, before any of the shapes below are considered.
-	if fields, ok := r.expandFlagged(s, head); ok {
+	if fields, ok := r.expandFlagged(s, sp, head); ok {
 		return fields, true
 	}
 	e := s.Param
@@ -1047,7 +1073,8 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 	case syntax.ParamExp:
 		v := r.expandParam(s.Param)
 		text, split := r.expansionResult(v, unquoted, r.globSubstAnswer(s),
-			sp.answer(r.sem().SplitParamExpansion), "splitting an unquoted parameter expansion")
+			splitFlagAnswer(s, sp, r.sem().SplitParamExpansion),
+			"splitting an unquoted parameter expansion")
 		// Before the split, which is measured: `${~v}` on `~/zz ~/qq` is the
 		// head expanded and the second tilde left alone, so the value's head
 		// is what the flag reaches and not each field's.
@@ -1248,7 +1275,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// word must result — a pattern operand, say — which is the manual's
 		// final rule: the words are rejoined with the first character of
 		// IFS.
-		words, _, ok := r.flaggedWords(e, false)
+		words, _, ok := r.flaggedWords(e, splitNever, false)
 		if !ok {
 			return ""
 		}
@@ -2179,16 +2206,29 @@ func splitFields(s string, ifs string, ifsSet bool) []string {
 // separating one are the same byte, so only a mask can still tell them
 // apart. A nil mask exempts nothing.
 func splitFieldsLiteral(s string, literal []bool, ifs string, ifsSet bool) []string {
+	return splitFieldsEdges(s, literal, ifs, ifsSet, false)
+}
+
+// splitFieldsEdges is splitFieldsLiteral with the discarding of the outermost
+// delimiters made a parameter.
+//
+// keepEdges false is the ordinary rule above. keepEdges true says a delimiter
+// at either end of the value still separates, so n delimiters always give
+// n+1 fields: `' a '` is three fields and `”` is one empty one. That is what
+// a quoted `${=spec}` measures — see interp/splitflag.go — and it is a
+// parameter here rather than a splitter of its own, because everything else
+// about the two is the same rule and a copy of it would drift.
+func splitFieldsEdges(s string, literal []bool, ifs string, ifsSet, keepEdges bool) []string {
 	if ifsSet && ifs == "" {
 		// Set and empty disables the stage entirely, which is a different
 		// state from unset rather than a degree of it.
 		if s == "" {
-			return nil
+			return emptyFields(keepEdges)
 		}
 		return []string{s}
 	}
 	if s == "" {
-		return nil
+		return emptyFields(keepEdges)
 	}
 
 	isWS := func(i int) bool {
@@ -2202,7 +2242,7 @@ func splitFieldsLiteral(s string, literal []bool, ifs string, ifsSet bool) []str
 
 	var out []string
 	i := 0
-	for i < len(s) && isWS(i) { // leading IFS whitespace is discarded
+	for !keepEdges && i < len(s) && isWS(i) { // leading IFS whitespace is discarded
 		i++
 	}
 	for i < len(s) {
@@ -2230,9 +2270,23 @@ func splitFieldsLiteral(s string, literal []bool, ifs string, ifsSet bool) []str
 		}
 		// A trailing delimiter is absorbed and does not produce a final
 		// empty field; a leading one is not, which the loop above already
-		// handled by reading an empty field before consuming it.
+		// handled by reading an empty field before consuming it. Under
+		// keepEdges neither is absorbed, so the field behind the last
+		// delimiter is written out here.
+		if keepEdges && i >= len(s) {
+			out = append(out, "")
+		}
 	}
 	return out
+}
+
+// emptyFields is what splitting nothing comes to: no field at all, or the one
+// empty field the edge-keeping rule leaves behind.
+func emptyFields(keepEdges bool) []string {
+	if keepEdges {
+		return []string{""}
+	}
+	return nil
 }
 
 // itoa writes an integer.

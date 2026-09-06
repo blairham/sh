@@ -106,6 +106,15 @@ func Dialect() syntax.Dialect {
 	// refuses it while reading. `~/.zi/bin/zi.zsh` uses it eighteen times in
 	// nineteen lines, and a refusal there leaves eighteen variables empty.
 	d.ParamTildeFlag = true
+	// An `=` in the same slot, which splits the result of the substitution
+	// into words on IFS whatever SH_WORD_SPLIT says. This shell alone:
+	// measured 2026-09-06, bash 5.3, bash 3.2, bash-as-sh and dash all
+	// answer `bad substitution` when the expansion is reached and ksh93
+	// refuses it while reading with the `=` named. `is-at-least`, the
+	// version predicate in this shell's own function library, is `${=1}`
+	// and `${=2:-$ZSH_VERSION}` on lines 27 and 28 — refused, both version
+	// arrays are empty and the comparison answers true for every version.
+	d.ParamSplitFlag = true
 	// A subscript's own parenthesized flag group: `${a[(re)value]}`, the
 	// first element equal to the operand. This shell alone — measured
 	// 2026-09-06, bash 5.3, bash 3.2, bash-as-sh and ksh93 all read the same

@@ -5897,6 +5897,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/the-tilde-flag-doubled-turns-it-off` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${~g}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${~g}: bad substitution` *(status 127)* | **2>** `<shell>: ${~g}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `~' unexpected` *(status 3)* | `[inn1][inn2][inn*][inn1][inn2]` |
 | `param/the-tilde-flag-expands-a-tilde` | `~/zz` **2>** `<shell>: 1: Bad substitution` | `~/zz` **2>** `<shell>: line 1: ${~t}: bad substitution` | `~/zz` **2>** `<shell>: line 1: ${~t}: bad substitution` | `~/zz` **2>** `<shell>: ${~t}: bad substitution` | **2>** `<shell>: syntax error at line 1: `~' unexpected` *(status 3)* | `H/zz~~/zz` |
 | `param/the-tilde-flag-marks-a-pattern-operand` | **2>** `<shell>: 2: Bad substitution` *(status 2)* | `hit` **2>** `<shell>: line 2: ${~p}: bad substitution~<shell>: line 5: ${~p}: bad substitution` | **2>** `<shell>: line 2: ${~p}: bad substitution` *(status 127)* | `hit` **2>** `<shell>: line 1: ${~p}: bad substitution~<shell>: line 4: ${~p}: bad substitution` | **2>** `<shell>: syntax error at line 2: `~' unexpected` *(status 3)* | `hitmiss[bc][abc]` |
+| `param/the-split-flag-is-one-dialects` | `3:[a][b][c]` **2>** `<shell>: 1: Bad substitution` *(status 2)* | `3:[a][b][c]` **2>** `<shell>: line 1: ${=v}: bad substitution` *(status 1)* | `3:[a][b][c]` **2>** `<shell>: line 1: ${=v}: bad substitution` *(status 127)* | `3:[a][b][c]` **2>** `<shell>: ${=v}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `=' unexpected` *(status 3)* | `1:[a b c]3:[a][b][c]` |
+| `param/the-split-flag-reaches-through-quotes` | `1:[ a ]` **2>** `<shell>: 1: Bad substitution` *(status 2)* | `1:[ a ]` **2>** `<shell>: line 1: ${=v}: bad substitution` *(status 1)* | `1:[ a ]` **2>** `<shell>: line 1: ${=v}: bad substitution` *(status 127)* | `1:[ a ]` **2>** `<shell>: ${=v}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `=' unexpected` *(status 3)* | `1:[ a ]3:[][a][]1:[a]` |
+| `param/the-split-flag-doubled-turns-it-off` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${=v}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${=v}: bad substitution` *(status 127)* | **2>** `<shell>: ${=v}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `=' unexpected` *(status 3)* | `3:1:3:` |
+| `param/the-split-flag-does-not-reach-an-assignment` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${=v}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${=v}: bad substitution` *(status 127)* | **2>** `<shell>: ${=v}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `=' unexpected` *(status 3)* | `[ a  b ]joined` |
 | `param/expansion-flags-split-and-join` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(s.:.)x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(s.:.)x}: bad substitution` *(status 127)* | **2>** `<shell>: ${(s.:.)x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `[a][b][c]<1,2>` |
 | `param/prompt-percent-names-the-script` | **2>** `<script>: 1: Bad substitution` *(status 2)* | **2>** `<script>: line 1: ${(%):-%x}: bad substitution` *(status 1)* | **2>** `<script>: line 1: ${(%):-%x}: bad substitution` *(status 1)* | **2>** `<script>: line 1: ${(%):-%x}: bad substitution` *(status 1)* | **2>** `<script>: line 1: syntax error at line 1: `:-%x}' unexpected` *(status 3)* | `<script>` |
 | `param/prompt-percent-names-the-user` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(%):-%n}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(%):-%n}: bad substitution` *(status 127)* | **2>** `<shell>: ${(%):-%n}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `:-%n}' unexpected` *(status 3)* | `matches-the-login-name` |
@@ -6271,6 +6275,22 @@ grades it and nothing drift-checks it either, for the same reason.
   v=abc
   printf "[%s]" "${v#${~p}}" "${v#${p}}"
   echo
+  ```
+- `param/the-split-flag-is-one-dialects` — an `=` between the `${` and the parameter splits the substituted value into words on IFS: zsh answers one field then three where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading with the `=` named — the same three-way split every unreadable expansion follows. Both readings in one row, because the field *count* is the whole of the behavior and a row printing only the text would read the same either way. `is-at-least`, the version predicate in zsh's own function library, is `${=1}` and `${=2:-$ZSH_VERSION}`, and a refusal there answers "at least" for every version at status 0
+  ```sh
+  f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; v="a b c"; f ${v}; f ${=v}; echo
+  ```
+- `param/the-split-flag-reaches-through-quotes` — quoting does *not* suppress this flag, which is where it parts company with its sibling `${~spec}`: the quoted form splits, and it keeps the empty fields at the edges of the value that the unquoted form discards — one, three and one field. A fix that made the quoted form the value unchanged would look right beside the tilde flag and be wrong here
+  ```sh
+  f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; v=" a "; f "${v}"; f "${=v}"; f ${=v}; echo
+  ```
+- `param/the-split-flag-doubled-turns-it-off` — the count is parity and not a toggle of the option: one `=` is on, two are off, three on again, and measured under SH_WORD_SPLIT both ways the answer is the same — `${==name}` is how a nested use says "not here"
+  ```sh
+  f(){ printf "%d:" "$#"; }; v="a b c"; f ${=v}; f ${==v}; f ${===v}; echo
+  ```
+- `param/the-split-flag-does-not-reach-an-assignment` — the flag decides the *option's* question and not the context's, so a context that never splits is not overridden: an assignment's value and a `case` subject are the value unchanged, spaces and all. The two halves in one row because an implementation that forced the split everywhere would still print the right thing for one of them
+  ```sh
+  v=" a  b "; x=${=v}; printf "[%s]" "$x"; case ${=v} in " a  b ") printf joined;; a) printf first;; esac; echo
   ```
 - `param/expansion-flags-split-and-join` — the s flag splits a scalar at its separator into real fields and j joins an array with its own — string-to-list and list-to-string, which no operator the other shells have can say
   ```sh

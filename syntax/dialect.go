@@ -587,6 +587,34 @@ type Dialect struct {
 	// and this one precedes it.
 	ParamTildeFlag bool
 
+	// ParamSplitFlag enables an `=` written between the `${` and the
+	// parameter: `${=name}`, which splits the *result* of the substitution
+	// into words on `IFS` whatever the `SH_WORD_SPLIT` option says. zsh
+	// alone has it; to the other four a leading `=` is not a name and the
+	// whole expansion is unreadable, which BadSubstitutionAtParseTime
+	// already splits into a parse-time refusal for ksh93 (`` `=' unexpected
+	// ``) and a deferred runtime error for the rest.
+	//
+	// The sibling of ParamTildeFlag in every structural respect, and a
+	// grammar flag for the same reason: without it there is no parameter at
+	// the front of `${=name}` at all, so the expansion is unreadable rather
+	// than differently read.
+	//
+	// The node carries the *count*, because parity is the meaning here too:
+	// measured under `SH_WORD_SPLIT` both ways, one `=` splits and two do
+	// not, from either starting point.
+	//
+	// It cannot collide with ParamAssign, the `${x=word}` that assigns a
+	// default: that `=` follows a name and this one precedes it, so the
+	// two are told apart by position before either is read. `${#=word}` is
+	// the assignment on `$#` in zsh, and it stays one here, because the
+	// run is read in front of the `#` and not behind it.
+	//
+	// The flag also relaxes the name, the way ParamExpansionFlags and
+	// ParamTildeFlag do: `${=}` is the empty string in the shell that has
+	// the construct.
+	ParamSplitFlag bool
+
 	// ParamElementSelection enables the three operators that choose which
 	// *elements* of a value survive: `${a:#pattern}` drops the ones a
 	// pattern matches, `${a:|other}` the ones another array holds, and

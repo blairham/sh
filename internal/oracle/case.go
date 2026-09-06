@@ -5228,6 +5228,26 @@ echo "st=$?"`,
 		Why:     "the pattern half is not about the filesystem: it is the same question that decides whether a `case` subject and a `${x#$p}` operand read a value's metacharacters as live, so the flag reaches all three or the implementation has three copies of one rule. One statement per *line* on purpose — a bad substitution abandons the rest of the line, so writing them with semicolons made the row about that abandonment instead, which two other rows already pin",
 	},
 	{
+		ID: "param/the-split-flag-is-one-dialects", Category: "parameter expansion",
+		Snippet: `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; v="a b c"; f ${v}; f ${=v}; echo`,
+		Why:     "an `=` between the `${` and the parameter splits the substituted value into words on IFS: zsh answers one field then three where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading with the `=` named — the same three-way split every unreadable expansion follows. Both readings in one row, because the field *count* is the whole of the behavior and a row printing only the text would read the same either way. `is-at-least`, the version predicate in zsh's own function library, is `${=1}` and `${=2:-$ZSH_VERSION}`, and a refusal there answers \"at least\" for every version at status 0",
+	},
+	{
+		ID: "param/the-split-flag-reaches-through-quotes", Category: "parameter expansion",
+		Snippet: `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; v=" a "; f "${v}"; f "${=v}"; f ${=v}; echo`,
+		Why:     "quoting does *not* suppress this flag, which is where it parts company with its sibling `${~spec}`: the quoted form splits, and it keeps the empty fields at the edges of the value that the unquoted form discards — one, three and one field. A fix that made the quoted form the value unchanged would look right beside the tilde flag and be wrong here",
+	},
+	{
+		ID: "param/the-split-flag-doubled-turns-it-off", Category: "parameter expansion",
+		Snippet: `f(){ printf "%d:" "$#"; }; v="a b c"; f ${=v}; f ${==v}; f ${===v}; echo`,
+		Why:     "the count is parity and not a toggle of the option: one `=` is on, two are off, three on again, and measured under SH_WORD_SPLIT both ways the answer is the same — `${==name}` is how a nested use says \"not here\"",
+	},
+	{
+		ID: "param/the-split-flag-does-not-reach-an-assignment", Category: "parameter expansion",
+		Snippet: `v=" a  b "; x=${=v}; printf "[%s]" "$x"; case ${=v} in " a  b ") printf joined;; a) printf first;; esac; echo`,
+		Why:     "the flag decides the *option's* question and not the context's, so a context that never splits is not overridden: an assignment's value and a `case` subject are the value unchanged, spaces and all. The two halves in one row because an implementation that forced the split everywhere would still print the right thing for one of them",
+	},
+	{
 		ID: "param/expansion-flags-split-and-join", Category: "parameter expansion",
 		Snippet: `x=a:b:c; printf "[%s]" ${(s.:.)x}; a=(1 2); printf "<%s>" "${(j.,.)a}"`,
 		Why:     "the s flag splits a scalar at its separator into real fields and j joins an array with its own — string-to-list and list-to-string, which no operator the other shells have can say",

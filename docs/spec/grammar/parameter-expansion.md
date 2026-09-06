@@ -1040,14 +1040,18 @@ and nowhere else:
 
     v='~/*'      →  every entry of HOME
     v='a:~/zz'   →  `a:~/zz`, the tilde is not at the head
-    v='~/zz ~/qq' unquoted → `HOME/zz` and `~/qq`: the head expanded,
-                             then the value split, and the second tilde
-                             was never at a head
+    v='~/zz ~/qq' split   → *both* directories: the value split first and
+                             every field it produced is at the head of a
+                             word of its own
 
 A list expands elementwise, and each element is the head of its own word:
 `a=('~/zz' '~/qq'); ${~a[@]}` is both expanded, while `X${~a[@]}` is
 `X~/zz` and `HOME/qq` — the prefix took the first element out of head
-position and left the second in it.
+position and left the second in it. **Field splitting makes the same
+list**, which is measured and was recorded here the other way round until
+it was: `setopt shwordsplit; v='~/zz ~/qq'; ${~v}` is both directories, and
+`${=~v}` is both without the option. Splitting runs first and the fields it
+made are the heads, so the two spellings of a list agree.
 
 `~user` and a named directory (`hash -d`) both resolve in zsh; this
 implementation leaves `~user` as written, the same limit its literal tilde
@@ -1108,6 +1112,166 @@ substitution` here, and `${+x}` — the is-it-set count — is unread. `${~}`
 is right because the tilde relaxes the empty-name rule the way a flag group
 does; the two plain forms are gaps of their own and `${~+x}` inherits the
 second of them.
+
+## An equals at the front: `${=spec}` — zsh only
+
+An `=` written between the `${` and the parameter splits the *result* of the
+substitution into words on `IFS`, whatever the `SH_WORD_SPLIT` option is set
+to. zsh alone has it. The other four call the whole expansion unreadable, in
+the same three-way split every unreadable expansion follows: bash 5.3, bash
+3.2, bash-as-sh and dash say `bad substitution` when the expansion is
+reached, ksh93 refuses it while reading (`` `=' unexpected ``) — which
+`BadSubstitutionAtParseTime` already records.
+
+Found in the wild, and this is why the construct is here rather than on a
+list: `is-at-least`, the version predicate in zsh's own function library,
+splits both of its operands with it —
+
+    argv1=(${=1})
+    argv2=(${=2:-$ZSH_VERSION})
+
+— so a shell that refuses the substitution leaves both version arrays
+**empty**, compares nothing, and answers "at least" for *every* version, at
+status 0 and with no diagnostic. `~/.zi/bin/zi.zsh:205` branches on exactly
+that call. A refusal names itself; this does not, and the wrongness travels.
+
+All measurements below are of zsh 5.9.2 (Homebrew, arm64), taken 2026-09-06.
+
+### What it does, measured
+
+With `v='a b c'` and a function reporting `$#` and each field:
+
+| written | fields |
+| --- | --- |
+| `${v}` | 1: `a b c` — the value, unchanged |
+| `${=v}` | 3: `a`, `b`, `c` |
+| `"${=v}"` | 3: `a`, `b`, `c` — **quoting does not suppress it** |
+| `x${=v}y` | 3: `xa`, `b`, `cy` — the fields join the text around them |
+| `${=v//b/x y}` | 4 — the operator runs first and the flag splits what it left |
+| `${=#v}` | 1: `5` — a length is a number, which holds no separator |
+| `${=a[@]}`, `${=@}` | the elements, each split |
+
+Three behaviors carry the construct and each is asserted rather than
+inferred from the absence of an error — the bug this replaces returned a
+plausible value at status 0:
+
+- **Quoting does not suppress it.** This is where the flag parts company
+  with its sibling `${~spec}`, whose whole construct quoting turns off.
+- **`${==v}` turns it back off**, which is how a nested use says "not here".
+- **A context that never splits is not overridden.** `x=${=v}` is the value
+  unchanged, and so are `[[ ${=v} = "a b" ]]`, a `case` subject and a
+  here-document body.
+
+### The count is parity, and it overrides the option
+
+`SH_WORD_SPLIT` is the option that makes *every* unquoted expansion's result
+split. The written `=` characters do not toggle it — they decide the answer
+outright, on the parity of how many were written, measured under the option
+both ways:
+
+| written | `unsetopt shwordsplit` | `setopt shwordsplit` |
+| --- | --- | --- |
+| `${v}` | 1 field | 3 fields |
+| `${=v}` | 3 | 3 |
+| `${==v}` | 1 | 1 |
+| `${===v}` | 3 | 3 |
+| `${====v}` | 1 | 1 |
+
+So one `=` is "yes" and two are "no" from either starting point, and only a
+`spec` with no `=` at all consults the option. The zero-`=` row is the
+dialect's `SplitParamExpansion` answer.
+
+### Where the `=` may be written
+
+The same slot the tilde flag uses, and the two are interchangeable within
+it. Measured:
+
+| written | zsh |
+| --- | --- |
+| `${(U)=v}` | flags then `=`: read, uppercased, split |
+| `${=(U)v}` | `bad substitution` — the group may not follow the run |
+| `${=#v}` | the *length*, so the run precedes `#` as well |
+| `${=~v}`, `${~=v}` | the same expansion: both flags, in either order |
+| `${=}` | the empty string, no error — as `${~}` is |
+| `${#=v}` | **not this flag**: `${#=word}` is `$#` with a default assigned to it, so `set -- p q` makes it `2`. A gap here either way |
+
+### It is one string that is split, not each element
+
+A list is joined on `IFS`'s first character and the join is what splits,
+which is measured and is the difference a per-element implementation gets
+wrong:
+
+    a=(' x ' y); "${=a[@]}"   → 3 fields: ``, `x`, `y`
+                                (splitting each element would give 4)
+    a=(); "${=a[@]}"          → one empty field, where `"${a[@]}"` is none
+
+That is `UnquotedListJoinsOnIFS` reached from the other side: the flag says
+"read this as one value and split it", and what a list comes to as one value
+is already answered.
+
+### The edges, quoted and unquoted
+
+The split is field splitting on `IFS`, with one difference between the two
+quotings — quoted, a delimiter at either end of the value still separates:
+
+| `v` | `${=v}` | `"${=v}"` |
+| --- | --- | --- |
+| `a b` | 2: `a`, `b` | 2: `a`, `b` |
+| `a  b` | 2 | 2 — a run of whitespace is one delimiter either way |
+| `' a '` | 1: `a` | 3: ``, `a`, `` |
+| `'  '` | 0 fields | 2, both empty |
+| `''` | 0 fields | 1, empty |
+| `a::b` with `IFS=:` | 3: `a`, ``, `b` | 3, the same |
+
+`IFS` set and empty disables the stage entirely, as it does everywhere else:
+`IFS=; ${=v}` is the value.
+
+### Beside a flag group it is a step *inside* the group
+
+`${(U)=v}` does not split what the group produced — it splits at the group's
+own splitting rule, which runs before the ordering, the prompt escapes, the
+quoting and the case conversion. Three measurements fix it there:
+
+    v='c a b'; ${(o)=v}   →  a b c    the sort sorts fields, not one word
+    v='a b';   ${(q)=v}   →  a, b     the quoting ran after the split
+    v=' a ';   "${(U)=v}" →  ``, A, `` the fields survive the quotes
+
+`(f)` and `(s)` *are* that rule with a separator of their own, so an `=`
+beside either adds nothing: `v='a b'; ${(s.,.)=v}` is one field, and
+`${(s.,.)==v}` still splits — the group decides and the parity is never
+consulted.
+
+### Grammar
+
+The `=` run is read only when the dialect's `ParamSplitFlag` is on;
+elsewhere a leading `=` is not a name and the expansion follows the
+bad-substitution split above. The parsed node carries `SplitFlags`, the
+number written, so parity is the interpreter's to take and the printer keeps
+writing the span back raw — the construct round-trips as source text.
+
+It cannot collide with the `${x=word}` assignment: that `=` follows a name
+and this one precedes it, so position tells them apart before either is
+read.
+
+### What the corpus pins
+
+`param/the-split-flag-is-one-dialects` (the three-way split),
+`-reaches-through-quotes`, `-doubled-turns-it-off` and
+`-does-not-reach-an-assignment`.
+
+### What this implementation does not match
+
+- **A trailing non-whitespace separator.** `IFS=:; v='a:'; ${=v}` is two
+  fields in zsh, the second empty, and one here. That is not this flag: it
+  is the splitter, which absorbs a trailing delimiter the way POSIX, bash,
+  ksh93 and dash all do and zsh alone does not — `setopt shwordsplit;
+  IFS=:; $v` divides the panel the same way. An axis of its own, and the
+  quoted form above is right because the edge-keeping rule is written here.
+- `GLOB_SUBST` is recorded-and-inert, so `setopt globsubst; ${=g}` splits
+  but does not then match — which the tilde flag's section already records
+  for its own half.
+- `${v::=word}`, the always-assign operator, is unread, so `${=v::=p q}` is
+  too.
 
 ## A subscript without braces — zsh only
 
@@ -1534,6 +1698,7 @@ implemented` are what they say instead.
     ParamTransformations   ${x@Q} and its letter family — bash only
     ParamExpansionFlags    ${(U)x}           — zsh only
     ParamTildeFlag         ${~x}, the tilde-and-filename flag — zsh only
+    ParamSplitFlag         ${=x}, the split-into-words flag — zsh only
     ParamElementSelection  ${a:#pat} ${a:|b} ${a:*b} — zsh only
     BareSubscript          $a[1] and $#a, written without braces — zsh only
     ArraySubscriptFlags    ${a[(re)v]}, a flag group inside the brackets
@@ -1546,7 +1711,8 @@ implemented` are what they say instead.
                            — zsh only
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
-`ParamTransformations`, `ParamExpansionFlags`, `ParamTildeFlag` and
+`ParamTransformations`, `ParamExpansionFlags`, `ParamTildeFlag`,
+`ParamSplitFlag` and
 `ParamElementSelection` are false for `core`:
 the first and the last two are one shell's, and the `!` family is two
 shells' — neither is a common denominator. `BareSubscript` is false for

@@ -11,11 +11,27 @@ import (
 // associations a script can read.
 //
 // Measured 2026-09-06 against zsh 5.9.2 with a scratch HOME and no startup
-// files. Five of the module's thirty-three parameters are here — the five a
-// real plugin manager reads, counted in `~/.zi/bin/zi.zsh`: `functions` 46
-// times, `options` 24, `commands` 3, `builtins` 2 and `aliases` 1. The other
-// twenty-eight are absent, so `zmodload zsh/parameter` still refuses and
-// still says how many; see the note on the module rule below.
+// files. Five of the module's thirty-three parameters are **implemented** —
+// the five a real plugin manager reads, counted in `~/.zi/bin/zi.zsh`:
+// `functions` 46 times, `options` 24, `commands` 3, `builtins` 2 and
+// `aliases` 1. The other twenty-eight are sorted into two kinds, and which
+// kind a parameter is in is a statement about this shell rather than about
+// how far along it is:
+//
+//   - **Ten are empty, and that is the right answer.** Each reports on
+//     something that cannot happen here, and the thing that cannot happen
+//     refuses by name where it is asked for — `alias -g`, `alias -s`,
+//     `disable -p` and `hash -d` are `bad option`, and `disable -a`, `-f`
+//     and `-r` are `not implemented yet`. Nothing is disabled, there are no
+//     global or suffix aliases and no named directories, so an empty table
+//     is *true*, and it starts reporting by itself the day one of those
+//     letters lands. See zshEmptyParams, whose second column is what each is
+//     waiting on and which the tests hold to it.
+//   - **Eighteen are absent**, and they refuse by name when a script reads
+//     one — `jobstates: parameter not implemented yet`, at the expansion
+//     that asked. None of them reads as empty, which is the whole reason
+//     the module can load without them; see the note on the module rule in
+//     zmodload.go and [interp.Runner.SetAbsentParameter].
 //
 // **Every one of them is a view and not a snapshot**, and that is the whole
 // of what this file has to get right. A table filled in once would be correct
@@ -36,7 +52,8 @@ import (
 // in zsh, and `commands` refuses a write by name because this shell has no
 // command hash to put an entry in.
 
-// registerParameterModule installs the five.
+// registerParameterModule installs all thirty-three: five as views, ten as
+// empty views, and eighteen as refusals.
 func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssoc("functions", zshFunctionsView)
 	r.SetDynamicAssocWriter("functions", writeZshFunction)
@@ -58,6 +75,136 @@ func registerParameterModule(r *interp.Runner) {
 	r.MarkHidden("builtins")
 	r.SetDynamicAssoc("aliases", zshAliasesView)
 	r.SetDynamicAssocWriter("aliases", writeZshAlias)
+	registerEmptyParameters(r)
+	registerAbsentParameters(r)
+}
+
+// zshEmptyParams are the ten parameters of the module that are empty in this
+// shell and *right* to be, each with the thing it reports on.
+//
+// Not stubs. A stub is a value nobody produced standing in for one nobody can;
+// these are answers. `$galiases` is every global alias, `alias -g` is
+// `bad option` here, so there are none and the table is empty — the same
+// sentence a real zsh writes with none defined. Measured against zsh 5.9.2:
+// all ten are empty in a fresh shell there too.
+//
+// `nameddirs` is the tenth and #1137's survey had it in the wrong column —
+// filed as needing `hash -d`, which is true and is the point: `hash -d` is
+// `bad option` here, so no named directory can exist, so the empty table is
+// the answer rather than a gap. Measured both ways in zsh 5.9.2:
+// `hash -d foo=/tmp` takes `${#nameddirs}` from 0 to 1, and nothing else
+// does — `setopt autonamedirs` with a variable holding a path leaves it at 0.
+//
+// The second column is what each is waiting on, and it is load-bearing rather
+// than a comment: the tests run that exact line and require it to still
+// refuse. The day `alias -g` works, `$galiases` is silently wrong and nothing
+// else in this file would have noticed — so the test fails instead, at the
+// name of the parameter that has to move with it (#1137).
+//
+// zsh's own types decide the rest. Eight are associations and two are arrays,
+// and `dis_functions_source`, `dis_patchars` and `dis_reswords` are readonly
+// there — which is also what keeps a produced table from being shadowed by a
+// write, the way `builtins` is.
+var zshEmptyParams = []struct {
+	name     string
+	waitsFor string
+	array    bool
+	readonly bool
+}{
+	{name: "dis_aliases", waitsFor: "disable -a"},
+	{name: "dis_functions", waitsFor: "disable -f"},
+	{name: "dis_functions_source", waitsFor: "disable -f", readonly: true},
+	{name: "dis_galiases", waitsFor: "alias -g"},
+	{name: "dis_patchars", waitsFor: "disable -p", array: true, readonly: true},
+	{name: "dis_reswords", waitsFor: "disable -r", array: true, readonly: true},
+	{name: "dis_saliases", waitsFor: "alias -s"},
+	{name: "galiases", waitsFor: "alias -g"},
+	{name: "nameddirs", waitsFor: "hash -d"},
+	{name: "saliases", waitsFor: "alias -s"},
+}
+
+// registerEmptyParameters installs the ten as *views* that happen to be
+// empty rather than as empty tables.
+//
+// A view rather than a stored table for the reason every other one here is:
+// a stored table is what a read finds first, so a name given one has stopped
+// answering for anything from that moment. These produce nothing today
+// because there is nothing to produce, and the producer is where the answer
+// goes when there is.
+func registerEmptyParameters(r *interp.Runner) {
+	for _, p := range zshEmptyParams {
+		if p.array {
+			r.SetDynamicArray(p.name, func(*interp.Runner) []string { return nil })
+		} else {
+			r.SetDynamicAssoc(p.name, func(*interp.Runner) interp.AssocArray { return nil })
+		}
+		if p.readonly {
+			// zsh's own attribute, and the same pair `builtins` needs: a
+			// produced table with neither a writer nor this would take an
+			// assignment into a stored table and shadow itself, and readonly
+			// alone would put the name in the tables a listing walks.
+			r.MarkReadonly(p.name)
+			r.MarkHidden(p.name)
+			continue
+		}
+		r.SetDynamicAssocWriter(p.name, refuseEmptyParameterWrite(p.name, p.waitsFor))
+	}
+}
+
+// refuseEmptyParameterWrite is `galiases[x]=ls` — which in zsh defines a
+// global alias, and here has nothing to define it with.
+//
+// Refused by the name of the letter that is missing, so the sentence is a
+// to-do rather than a wall: `galiases[x]: alias -g is not implemented yet`.
+// Silence would be worse than a wall — a caller that believes it has arranged
+// for a global alias and reads the table back empty is told nothing at either
+// end.
+func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, string, string, bool) {
+	return func(r *interp.Runner, key, _ string, _ bool) {
+		r.Diagnosef("%s[%s]: %s is not implemented yet\n", name, key, waitsFor)
+	}
+}
+
+// zshAbsentParams are the eighteen this shell has not got at all.
+//
+// Every one of them is non-empty, or can be, in a shell that has it: `$modules`
+// is 14 entries in a fresh zsh, `$parameters` 214, `$reswords` 31, `$patchars`
+// 15, `$usergroups` 16, and the job and history tables fill as a session runs.
+// So none of them can be answered with an empty table the way the nine above
+// are — an empty `$reswords` is not "no reserved words", it is "nobody asked
+// the shell" — and each refuses by name instead.
+//
+// What each would cost is surveyed in #1137: eight are answerable from a table
+// this shell already keeps and ten need a seam that does not exist. Neither is
+// a distinction a script can see, so it is not one this file makes; both kinds
+// refuse identically until they are implemented.
+//
+// Two of them are worth naming, because each looks like it belongs with the
+// empty ten and does not. `dirstack` would be empty if nothing could push a
+// directory, and `pushd` and `dirs` both work here, so an empty stack is a
+// claim and not an answer. `userdirs` fills as `~user` is expanded, and
+// `~root` here does not expand — but it does not *refuse* either, it stays
+// literal, so there is no line to hold an honesty check against and no way to
+// tell "no users looked up yet" from "this shell cannot look one up".
+var zshAbsentParams = []string{
+	"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
+	"funcstack", "functions_source", "functrace", "history", "historywords",
+	"jobdirs", "jobstates", "jobtexts", "modules", "parameters",
+	"patchars", "reswords", "userdirs", "usergroups",
+}
+
+// registerAbsentParameters makes each of them refuse by name when it is read.
+//
+// The parameter's own call site, which is what a builtin has had all along —
+// see [interp.Runner.SetAbsentParameter]. `zregexparse` is the shape: nothing
+// is registered under the name, `whence -w zregexparse` says `none`, and the
+// line that calls it is where a script finds out. A parameter had no such
+// line until this, which is why one absent parameter used to hold thirty-two
+// others shut.
+func registerAbsentParameters(r *interp.Runner) {
+	for _, name := range zshAbsentParams {
+		r.SetAbsentParameter(name, "parameter not implemented yet")
+	}
 }
 
 // zshFunctionsView is `$functions`: every function the script has defined, to

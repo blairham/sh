@@ -40,9 +40,12 @@ import (
 // features that are missing, which is the same line a person would have to
 // find anyway.
 //
-// **A missing feature holds a module shut when it is a parameter, and does
-// not when it is a builtin.** That split is measured rather than tidy, and it
-// is this project's worst-failure-mode rule applied to modules (#1058).
+// **A missing feature holds a module shut when nothing would tell a script it
+// was missing.** That is the rule, and it is a refinement of the one this
+// file was written with (#1058, #1146). The first version said the kind
+// decided it — a builtin never held, a parameter always did — and the
+// reasoning was right while the wording was not, because what it was reaching
+// for was never *presence*. It was **legibility**.
 //
 // A missing *builtin* fails loudly, by name, at its own call site:
 // `command not found: zregexparse`, on the line that wrote it. Nothing is
@@ -53,15 +56,31 @@ import (
 // on this machine: `zi.zsh` names `zparseopts` and `zformat` five times
 // between them and `zregexparse` not once.
 //
-// A missing *parameter* fails silently. `${#functions}` on a shell without
-// `$functions` is `0` at status 0, which is a plausible answer to a different
-// question and reaches the caller as data rather than as a diagnostic. That is
-// exactly the failure this builtin was written to prevent, so a module short
-// of a parameter still refuses and still says which.
+// A missing *parameter* had no such call site, and that was the whole of the
+// difference: `${#functions}` on a shell without `$functions` is `0` at status
+// 0, a plausible answer to a different question, reaching the caller as data
+// rather than as a diagnostic. So a module short of one refused.
+//
+// **A parameter can have a call site too**, and now does — see
+// [interp.Runner.SetAbsentParameter]. A parameter this shell has not got is
+// registered as absent rather than left undefined, and reading it is
+// `jobstates: parameter not implemented yet` at the expansion that asked,
+// with the command not run. That is the same three things `command not found`
+// does, so the same answer follows: the module loads, and the script finds out
+// at the line that depends on it.
+//
+// Which leaves the rule as one sentence about what a script is told rather
+// than two about kinds of feature: **a module loads when everything it names
+// is either implemented or refuses by name on access, and nothing it names
+// may read as empty when it is absent.** Applied to `zsh/parameter`, five of
+// the thirty-three are implemented, ten are empty and right to be, eighteen
+// refuse — and the module loads. Applied to `zsh/zutil` it is the answer that
+// file already gave.
 //
 // The other three kinds — a condition, a function and a math function — have
-// no registry to ask, so they are treated as a parameter is: missing until
-// something can answer for them.
+// no registry to ask and no call site to refuse at, so they still hold: a
+// module counted as loaded on the strength of a feature nobody can find is
+// the silent success this builtin exists to avoid.
 //
 // It also means the gate opens by itself. The day a module's parameters
 // exist, `zmodload` starts succeeding for it with no change here — because
@@ -156,15 +175,29 @@ func zmodloadHasFeature(r *interp.Runner, feature string) bool {
 // zmodloadHolds reports whether a feature's absence should keep its module
 // from loading.
 //
-// A builtin's does not and everything else's does — see the note at the top of
-// this file. The question is deliberately about the *kind* of feature and not
-// about which ones happen to be implemented today, because the reason is about
-// how each kind fails and not about how far along the shell is: a builtin
-// nobody has written is `command not found` on the line that calls it however
-// many of its neighbors exist, and a parameter nobody has written is `0`.
-func zmodloadHolds(feature string) bool {
-	kind, _, ok := strings.Cut(feature, ":")
-	return !ok || kind != "b"
+// One question, asked of the feature rather than of the shell's progress:
+// **would a script that depended on this be told?** A builtin is told by
+// `command not found` at the word that ran it, so a missing one never holds —
+// however many of its neighbors exist. A parameter is told when it has been
+// registered as absent, and is not when it has not: an unregistered one reads
+// `0` at status 0 and holds its module shut, which is the case the rule was
+// written for and the only one left in it.
+//
+// The runner is asked rather than a list consulted, so the gate opens by
+// itself the day a dialect names one — the same property the implemented half
+// has through zmodloadHasFeature.
+func zmodloadHolds(r *interp.Runner, feature string) bool {
+	kind, name, ok := strings.Cut(feature, ":")
+	if !ok {
+		return true
+	}
+	switch kind {
+	case "b":
+		return false
+	case "p":
+		return !r.AbsentParameter(name)
+	}
+	return true
 }
 
 // zmodloadMissing is the features of a module this shell does not have *and
@@ -176,11 +209,13 @@ func zmodloadHolds(feature string) bool {
 // still absent from the shell: `zmodload zsh/zutil` succeeds and
 // `zregexparse` is `command not found` on the line that calls it. The two
 // statements are consistent because the second one is the loud half — see
-// zmodloadHolds.
+// zmodloadHolds. A parameter registered as absent is out of this list for the
+// same reason and by the same test, and `$jobstates` refuses at the expansion
+// that reads it.
 func zmodloadMissing(r *interp.Runner, module string) []string {
 	var missing []string
 	for _, f := range zmodloadFeatures[module] {
-		if zmodloadHolds(f) && !zmodloadHasFeature(r, f) {
+		if zmodloadHolds(r, f) && !zmodloadHasFeature(r, f) {
 			_, name, _ := strings.Cut(f, ":")
 			missing = append(missing, name)
 		}
@@ -497,9 +532,18 @@ func zmodloadShortfall(missing []string, total int) string {
 //
 // Six, measured against the table: every module this shell has *part* of
 // names four or fewer — `zsh/zutil` four, `zsh/zle` three, `zsh/terminfo`
-// and `zsh/termcap` two — so a module with a gap is always named in full,
-// and only the wholly absent large ones (`zsh/parameter` at thirty-three,
-// `zsh/system` at nine, `zsh/computil` at eight) reach the count.
+// and `zsh/termcap` two — so a module with a gap is always named in full.
+//
+// **Nothing in the table reaches the count today**, and that is worth writing
+// down rather than deleting the branch over. `zsh/parameter` was the one that
+// did — twenty-eight missing parameters on one line is not something anyone
+// can read — and since #1146 those twenty-eight refuse by name instead, so it
+// loads and is short of nothing. The rule it settles is still the right one
+// for the next large module, and dropping it would mean rediscovering that a
+// thirty-name refusal is unreadable. A mutant that lowers this number
+// survives; that is the shape of a rule with nothing left to apply it to, and
+// it is noted rather than papered over — the same call zmodloadLoaded's sort
+// makes a few lines up.
 const zmodloadNamedShortfall = 6
 
 // joinNames writes a list of names the way a sentence does: commas between

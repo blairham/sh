@@ -288,17 +288,196 @@ func TestAProducedAssociationIsReadThroughInsideASubshell(t *testing.T) {
 	}
 }
 
-// `zsh/parameter` still refuses, and the count is what says how far off it is:
-// five of thirty-three exist and twenty-eight do not. A module must not load
-// while a parameter it provides is missing, because an absent one reads empty
-// at status 0 — which is the whole reason the rule is not the one builtins get.
-func TestTheParameterModuleStillRefusesAndSaysHowFarOff(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `zmodload zsh/parameter 2>&1
-print -r -- "st=$?"`)
-	want := "zsh:1: failed to load module `zsh/parameter': " +
-		"28 of its 33 features are not implemented yet\nst=1\n"
+// **An absent parameter refuses by name on every route that reads one**, and
+// the routes are the point: a test of `$jobstates` alone passes against a
+// shell that loses `${jobstates[x]}`, which is the spelling a plugin manager
+// actually writes — `${functions[name]}` is 57 of zinit's uses.
+//
+// Each row asserts two things and needs both. That the parameter is *named*,
+// because a status alone passes against the exact bug this exists to prevent:
+// a shell that expanded to nothing and set 1 would satisfy a status check and
+// still be handing a caller an empty value. And that nothing was written on
+// standard output, because "reads as empty" is precisely what an unnamed
+// absence looks like from the caller's side.
+func TestAnAbsentParameterRefusesByNameOnEveryReadRoute(t *testing.T) {
+	for _, tc := range []struct{ name, snippet string }{
+		{"a bare name", `print -r -- "[$jobstates]"`},
+		{"a subscript", `print -r -- "[${jobstates[running]}]"`},
+		{"the whole array", `print -r -- "[${jobstates[@]}]"`},
+		{"a length", `print -r -- "[${#jobstates}]"`},
+		{"a flag group", `print -r -- "[${(k)jobstates}]"`},
+		{"an unquoted word", `print -r -- ${jobstates[x]}`},
+		{"a condition", `[[ -n $jobstates ]]`},
+		// A pattern rather than a value, which is where an empty read is
+		// least visible of all: an unrefused one matches nothing, takes
+		// the `*` branch, and looks exactly like a script whose input did
+		// not match.
+		{"a case pattern", `case x in $jobstates) print -r -- matched;; *) print -r -- fell-through;; esac`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.snippet+"\nprint -r -- UNREACHED")
+			if !strings.Contains(out, "jobstates: parameter not implemented yet") {
+				t.Errorf("%s = %q (status %d), want the parameter named", tc.snippet, out, st)
+			}
+			if strings.Contains(out, "[") || strings.Contains(out, "UNREACHED") {
+				t.Errorf("%s = %q, want no value handed to the caller", tc.snippet, out)
+			}
+			if st == 0 {
+				t.Errorf("%s = status 0, want a failure", tc.snippet)
+			}
+		})
+	}
+}
+
+// **A here-document is the one place a refused value still lands**, and it does
+// so for an ordinary unset name under `set -u` in exactly the same way.
+//
+// It is also the route that proves the refusal is asked in *two* places and
+// not one. Every spelling in the table above is answered by the list path,
+// which reaches its own test; a here-document body is expanded span by span
+// down the scalar path alone, and a mutant that deleted the scalar site
+// survived every other test in this file and failed only this one.
+//
+// The body is expanded as the redirection is arranged, so the file is written and
+// the command is reached before the failed expansion stops anything: run with
+// `cat` on PATH, both print `[]`.
+//
+// Asserted as a *parity* rather than as a behavior worth having, which is the
+// only honest way to write it down: this is the substrate's here-document
+// route and not this parameter's, and a refusal that behaved differently here
+// would be a second answer to a question already answered. The diagnostic
+// still names the parameter, which is the part this change is responsible for.
+func TestAHereDocumentNamesAnAbsentParameterTheWayItNamesAnUnsetOne(t *testing.T) {
+	absent, ast := runZsh(t, t.TempDir(), "cat <<E\n[$jobstates]\nE\n")
+	unset, ust := runZsh(t, t.TempDir(), "set -u\ncat <<E\n[$nosuchvar]\nE\n")
+	if !strings.Contains(absent, "jobstates: parameter not implemented yet") {
+		t.Errorf("a here-document reading an absent parameter = %q (status %d), want it named", absent, ast)
+	}
+	if !strings.Contains(unset, "nosuchvar: parameter not set") {
+		t.Errorf("a here-document reading an unset name under set -u = %q (status %d), want it named", unset, ust)
+	}
+	// And the parity itself: in both, the command the here-document was for
+	// is still *reached* — the redirection was arranged before the expansion
+	// failed. `cat` is not on this test's PATH, so what says it ran is the
+	// shell's own complaint about it, and it is the same complaint in both.
+	if !strings.HasSuffix(absent, "command not found: cat\n") ||
+		!strings.HasSuffix(unset, "command not found: cat\n") {
+		t.Errorf("the two here-documents differ in shape: absent %q, unset %q", absent, unset)
+	}
+}
+
+// Arithmetic is deliberately left alone, and that is measured rather than
+// overlooked: `$(( jobstates + 1 ))` in a real zsh with the module loaded is
+// `1`, because an association read as a number is 0 there. A refusal here
+// would be this shell inventing a diagnostic the shell it models does not
+// write, over a spelling that means nothing in either.
+func TestArithmeticReadsAnAbsentParameterAsZeroLikeTheRealThing(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `print -r -- "n=$(( jobstates + 1 ))"`)
+	if want := "n=1\n"; out != want || st != 0 {
+		t.Errorf("arithmetic on an absent parameter = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The refusal is about reading something absent and not about owning a
+// spelling: a script that gave the name a value of its own gets it back, the
+// way it would in a shell where the module was never loaded. And the four
+// conditional operators are a script saying what to do when there is no value,
+// which is the same exemption `set -u` makes — being told is what they are
+// for, and `${p+x}` answering "no" is an answer where `${p}` answering empty
+// is not.
+func TestAnAbsentParameterYieldsToTheScriptsOwnAnswer(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `print -r -- "default=[${jobstates-d}]"
+print -r -- "alternate=[${jobstates+set}]"
+jobstates=(a b)
+print -r -- "own=[$jobstates] [${jobstates[1]}] [${#jobstates}]"`)
+	want := "default=[d]\nalternate=[]\nown=[a b] [a] [2]\n"
 	if out != want || st != 0 {
-		t.Errorf("zmodload zsh/parameter = %q (status %d), want %q", out, st, want)
+		t.Errorf("a script's own answers = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// **The ten that are empty read empty and say nothing**, and that is an
+// answer rather than a stub: each reports on something this shell cannot do,
+// so "none" is true. A real zsh with none of them defined says the same.
+func TestTheEmptyParametersReadEmptyAndSayNothing(t *testing.T) {
+	for _, name := range emptyModuleParams() {
+		t.Run(name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(),
+				`print -r -- "n=${#`+name+`} one=[${`+name+`[x]}]"`)
+			want := "n=0 one=[]\n"
+			if out != want || st != 0 {
+				t.Errorf("$%s = %q (status %d), want %q", name, out, st, want)
+			}
+		})
+	}
+}
+
+// **And they stay honest.** Each of the ten is empty *because* something else
+// refuses, and this runs that something else and requires it to still refuse.
+//
+// Not a restatement of the implementation. It is the alarm: the day `alias -g`
+// works there are global aliases, `$galiases` is silently wrong, and nothing
+// in the parameter itself would have noticed — an empty association is exactly
+// as plausible then as it is now. This fails instead, at the name of the
+// parameter that has to move with it (#1137).
+func TestTheEmptyParametersStayHonest(t *testing.T) {
+	for _, tc := range []struct{ param, waitsFor string }{
+		{"dis_aliases", "disable -a nosuch"},
+		{"dis_functions", "disable -f nosuch"},
+		{"dis_functions_source", "disable -f nosuch"},
+		{"dis_galiases", "alias -g nosuch=x"},
+		{"dis_patchars", "disable -p nosuch"},
+		{"dis_reswords", "disable -r nosuch"},
+		{"dis_saliases", "alias -s nosuch=x"},
+		{"galiases", "alias -g nosuch=x"},
+		{"nameddirs", "hash -d nosuch=/tmp"},
+		{"saliases", "alias -s nosuch=x"},
+	} {
+		t.Run(tc.param, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.waitsFor+` 2>&1
+print -r -- "st=$?"`)
+			if strings.Contains(out, "st=0") {
+				t.Errorf("`%s` succeeded (%q, status %d) — so $%s is no longer honestly empty and needs implementing",
+					tc.waitsFor, out, st, tc.param)
+			}
+			if !strings.Contains(out, "not implemented yet") && !strings.Contains(out, "bad option") {
+				t.Errorf("`%s` = %q, want a refusal that names the letter", tc.waitsFor, out)
+			}
+		})
+	}
+}
+
+// A write to one of the ten is refused by the name of the letter that is
+// missing, which is a to-do rather than a wall — and it is also what keeps the
+// view a view. A produced association with no writer takes the assignment into
+// a stored table, and a stored table is what a read finds first, so one
+// `galiases[x]=ls` would freeze the parameter at that instant with nothing
+// said at either end. The three zsh marks readonly refuse in zsh's own words
+// instead, which does the same job.
+func TestWritingToAnEmptyParameterIsRefusedByName(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `galiases[x]=ls 2>&1
+print -r -- "after=${#galiases}"
+dis_functions[f]=x 2>&1
+print -r -- "after=${#dis_functions}"
+dis_reswords=(x) 2>&1
+print -r -- "unreached"`)
+	want := "zsh:1: galiases[x]: alias -g is not implemented yet\nafter=0\n" +
+		"zsh:3: dis_functions[f]: disable -f is not implemented yet\nafter=0\n" +
+		"zsh:5: read-only variable: dis_reswords\n"
+	if out != want || st != 1 {
+		t.Errorf("writes to the empty nine = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// emptyModuleParams is the ten of `zsh/parameter` that are empty here and
+// right to be. Spelled out rather than read from the package, because a test
+// that asked the implementation which parameters it thought were empty would
+// agree with it whatever it said.
+func emptyModuleParams() []string {
+	return []string{
+		"dis_aliases", "dis_functions", "dis_functions_source", "dis_galiases",
+		"dis_patchars", "dis_reswords", "dis_saliases", "galiases", "nameddirs",
+		"saliases",
 	}
 }
 

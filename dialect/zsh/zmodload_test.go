@@ -35,9 +35,10 @@ print -r -- "both=$?"`)
 	}
 }
 
-// **A missing builtin does not hold a module shut; a missing parameter does.**
-// The two halves of that rule, side by side, because each on its own is
-// indistinguishable from a shell that simply had the rule the other way round.
+// **A feature holds a module shut when nothing would tell a script it was
+// missing.** The two halves of that rule, side by side, because each on its
+// own is indistinguishable from a shell that simply had the rule the other way
+// round.
 //
 // `zsh/zutil` is four builtins and no parameters. This shell has three of them
 // — `zstyle`, `zparseopts` and `zformat` — and not `zregexparse`, and it
@@ -51,9 +52,12 @@ print -r -- "both=$?"`)
 //
 // `zsh/terminfo` is one builtin and one parameter, and this shell has neither.
 // It refuses, and it names **`terminfo` alone**: the parameter, not `echoti`
-// beside it. A missing parameter reads `0` at status 0 and reaches a caller as
-// data rather than as a diagnostic, which is the failure this builtin was
-// written to prevent.
+// beside it. `terminfo` is absent in the sense that has no call site — nothing
+// is registered for it, so `${terminfo[colors]}` would read empty at status 0
+// and reach a caller as data rather than as a diagnostic. That is the failure
+// this builtin was written to prevent, and the one case still left in the rule
+// after #1146: a parameter that *does* refuse by name no longer holds
+// anything, which the `zsh/parameter` test below is the other side of.
 func TestAMissingBuiltinDoesNotHoldAModuleShutAndAMissingParameterDoes(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil 2>&1
 print -r -- "zutil=$?"
@@ -70,18 +74,32 @@ print -r -- "terminfo=$?"`)
 	}
 }
 
-// A module this shell has only *part* of counts instead of naming: twenty-eight
-// missing parameters on one line is not something anyone can read, and the two
-// numbers together are what say how far off it is. Five of `zsh/parameter`'s
-// thirty-three are here (#1060) and the module still refuses, which is the
-// rule for a parameter: an absent one reads empty at status 0 and reaches a
-// caller as data rather than as a diagnostic.
-func TestZmodloadCountsTheFeaturesOfAModuleItHasMostOfMissing(t *testing.T) {
+// **`zsh/parameter` loads, and the twenty-eight it has not got are still not
+// there.** This is the whole of #1146 in one shell, and the two halves have to
+// be read together or either one alone is a shell that lies.
+//
+// Five of the thirty-three are implemented (#1060). Ten more are empty and
+// right to be. The other eighteen refuse by name at the expansion that reads
+// one — which is what lets the module load at all, and it is why the second
+// line here is not `n=0`. A shell that loaded the module *and* answered `0`
+// for `$jobstates` would be exactly the silent success the module rule was
+// written to prevent; a shell that refuses the module over a parameter no
+// script in the file touches stops a plugin manager at its second line.
+//
+// The count is checked with `$functions` rather than assumed, because "the
+// module loads" is worth nothing if the five that made it worth loading
+// stopped answering.
+func TestZmodloadLoadsAModuleWhoseAbsencesRefuseByName(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/parameter 2>&1
-print -r -- "st=$?"`)
-	want := "zsh:1: failed to load module `zsh/parameter': " +
-		"28 of its 33 features are not implemented yet\nst=1\n"
-	if out != want || st != 0 {
+print -r -- "st=$?"
+g(){ :; }
+print -r -- "functions=${#functions}"
+print -r -- "galiases=${#galiases}"
+print -r -- "jobstates=${#jobstates}"
+print -r -- "after=$?"`)
+	want := "st=0\nfunctions=1\ngaliases=0\n" +
+		"zsh:6: jobstates: parameter not implemented yet\n"
+	if out != want || st != 1 {
 		t.Errorf("zmodload zsh/parameter = %q (status %d), want %q", out, st, want)
 	}
 }
@@ -123,7 +141,7 @@ print -r -- "opt=$?"`)
 // silenced and the status is still 1. A shell that answered 0 here sends a
 // plugin manager on to call a builtin the module was supposed to bring.
 func TestZmodloadDashSIsSilentAndStillFails(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `zmodload -s zsh/parameter 2>&1
+	out, st := runZsh(t, t.TempDir(), `zmodload -s zsh/terminfo 2>&1
 print -r -- "st=$?"`)
 	want := "st=1\n"
 	if out != want || st != 0 {
@@ -216,12 +234,13 @@ print -r -- "X=$?"`)
 // `command not found: zmodload`, which is not something that script can act
 // on at all.
 //
-// `zsh/parameter` rather than `zsh/zutil`, because `zsh/zutil` loads now — and
-// that is the other half of the same story: the plugin manager's line 231 goes
-// through and its line 232 is the one that still stops it.
+// `zsh/terminfo` rather than `zsh/zutil` or `zsh/parameter`, because both of
+// those load now — the plugin manager's lines 231 and 232 go through, and the
+// line after them is `zmodload zsh/terminfo 2>/dev/null`, written with exactly
+// this shape by a file that expects it to fail on plenty of real terminals.
 func TestZmodloadRefusalReachesTheScriptsOwnBranch(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
-		`zmodload zsh/parameter 2>/dev/null || { print -r -- "aborting"; }
+		`zmodload zsh/terminfo 2>/dev/null || { print -r -- "aborting"; }
 print -r -- "st=$?"`)
 	want := "aborting\nst=0\n"
 	if out != want || st != 0 {

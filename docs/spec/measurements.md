@@ -9714,6 +9714,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `parameter/builtins-is-readonly` | `st=127` **2>** `<shell>: 1: builtins[x]=y: not found` | `st=0` | `st=0` | `st=0` | `st=0` | **2>** `<shell>:1: read-only variable: builtins` *(status 1)* |
 | `parameter/aliases-is-a-view-of-the-alias-table` | `b=[[q]]` **2>** `<shell>: 1: Bad substitution` *(status 2)* | `b=[[q]]~c=[ABSENT]` **2>** `<shell>: line 1: alias: zz: not found` *(status 1)* | `b=[[q]]~c=[ABSENT]` **2>** `<shell>: line 1: alias: zz: not found` *(status 1)* | `b=[[q]]~c=[ABSENT]` **2>** `<shell>: line 0: alias: zz: not found` *(status 1)* | `b=[[q]]~c=[ABSENT]` **2>** `zz: alias not found` *(status 1)* | `b=[ls]~c=[ABSENT]~zz='echo z'` |
 | `parameter/commands-is-a-view-of-the-path-search` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `absent=[ABSENT]~a=[ABSENT]~b=[ABSENT]` | `absent=[ABSENT]~a=[ABSENT]~b=[ABSENT]` | `absent=[ABSENT]~a=[ABSENT]~b=[ABSENT]` | `absent=[ABSENT]~a=[ABSENT]~b=[ABSENT]` | `absent=[ABSENT]~a=[/bin/ls]~b=[ABSENT]` |
+| `parameter/loading-the-module-is-silent-and-zero` | `st=127~n=0` **2>** `<shell>: 1: zmodload: not found` | `st=127~n=0` **2>** `<shell>: line 1: zmodload: command not found` | `st=127~n=0` **2>** `<shell>: line 1: zmodload: command not found` | `st=127~n=0` **2>** `<shell>: zmodload: command not found` | `st=127~n=0` **2>** `<shell>: zmodload: not found` | `st=0~n=0` |
+| `parameter/a-parameter-of-the-module-nothing-here-provides` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=0 one=[]~after=0` | `n=0 one=[]~after=0` | `n=0 one=[]~after=0` | `n=0 one=[]~after=0` | `n=0 one=[]~after=0` **2>** `<shell>:1: job not found: x` |
 
 - `parameter/functions-is-a-view-of-the-function-table` — three reads around two mutations, which is the shape a snapshot cannot satisfy at any instant: absent, then the body with its leading tab and a count of one, then absent again. A parameter filled in once and never updated answers the first pair three times and looks perfectly reasonable doing it. Nobody else has the module
   ```sh
@@ -9754,6 +9756,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `parameter/commands-is-a-view-of-the-path-search` — the association follows PATH, which is the property that makes it a view rather than a table filled in at startup: the same name resolves and then does not, in one shell, with nothing between the two reads but an assignment to PATH
   ```sh
   zmodload zsh/parameter 2>/dev/null; echo "absent=[${commands[definitelynotacommand]:-ABSENT}]"; PATH=/bin; echo "a=[${commands[ls]:-ABSENT}]"; PATH=/nonexistent; echo "b=[${commands[ls]:-ABSENT}]"
+  ```
+- `parameter/loading-the-module-is-silent-and-zero` — the line a plugin manager writes second, and the one that decides whether the rest of the file runs at all. Silence and 0 in zsh. This shell answered 1 for four merges over twenty-eight parameters the caller never touches, so the row is what pins the agreement rather than the refusal
+  ```sh
+  zmodload zsh/parameter; echo "st=$?"; echo "n=${#functions}"
+  ```
+- `parameter/a-parameter-of-the-module-nothing-here-provides` — **a recorded divergence, and the one this module's rule turns on.** zsh has the parameter and writes `n=0 one=[]`, which is the truth there — no jobs. This shell has not got it, and answering the same `0` would hand a caller an empty value for a question nobody answered, at status 0, in the spelling a plugin manager writes most (`${p[k]}` reaches no unset check at all). So it refuses by name at the expansion instead, and the row records the difference rather than leaving it to be discovered
+  ```sh
+  zmodload zsh/parameter 2>/dev/null; echo "n=${#jobstates} one=[${jobstates[x]}]"; echo "after=$?"
   ```
 
 ## harness invocation

@@ -5563,6 +5563,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | --- | --- | --- | --- | --- | --- | --- |
 | `cond/a-newline-continues-a-condition` | **2>** `<shell>: 1: [[: not found` *(status 127)* | `yes` | `yes` | `yes` | `yes` | `yes` |
 | `cond/a-newline-at-every-point` | **2>** `<shell>: 1: [[: not found~<shell>: 2: 1: not found~<shell>: 4: ]]: not found` *(status 127)* | `yes` | `yes` | `yes` | `yes` | `yes` |
+| `cond/a-newline-before-the-operator` | **2>** `<shell>: 1: [[: not found~<shell>: 2: Syntax error: "&&" unexpected` *(status 2)* | `yes` | `yes` | `yes` | `yes` | `yes` |
+| `cond/a-newline-before-the-operator-indented` | **2>** `<shell>: 1: [[: not found~<shell>: 2: Syntax error: "&&" unexpected` *(status 2)* | `yes` | `yes` | `yes` | `yes` | `yes` |
+| `cond/a-newline-before-a-second-operand-is-refused` | **2>** `<shell>: 1: [[: not found~<shell>: 2: -z: not found` *(status 127)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `-z'~<shell>: -c: line 2: syntax error near `-z'~<shell>: -c: line 2: `-z "" ]] && echo yes'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `-z'~<shell>: -c: line 2: syntax error near `-z'~<shell>: -c: line 2: `-z "" ]] && echo yes'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error in conditional expression~<shell>: -c: line 1: syntax error near `-z'~<shell>: -c: line 1: `-z "" ]] && echo yes'` *(status 2)* | **2>** `<shell>: syntax error at line 2: `-z' unexpected` *(status 3)* | **2>** `<shell>:1: unknown condition: -n` *(status 2)* |
 | `pat/star-matches-dot-in-case` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` |
 | `pat/star-skips-leading-dot-in-glob` | `[vis]` | `[vis]` | `[vis]` | `[vis]` | `[vis]` | `[vis]` |
 | `pat/star-matches-slash-in-case` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` |
@@ -5604,6 +5607,21 @@ grades it and nothing drift-checks it either, for the same reason.
   1 == 1 &&
   2 == 2
   ]] && echo yes
+  ```
+- `cond/a-newline-before-the-operator` — the other side of the operator, and the one the list of structural points was missing: the condition is complete at the end of the line and the operator leads the continuation. It is how a real prompt theme is written, and at the newline it is not yet known whether an operator or the `]]` follows
+  ```sh
+  [[ -n x
+  && -z "" ]] && echo yes
+  ```
+- `cond/a-newline-before-the-operator-indented` — the same with the continuation indented, which is the form in the wild — the leading whitespace is not what makes it work, and the case exists so that a fix keyed on a line beginning with the operator would fail here
+  ```sh
+  [[ -n x
+        && -z "" ]] && echo yes
+  ```
+- `cond/a-newline-before-a-second-operand-is-refused` — the boundary: skipping a newline before an operator must not become skipping one before anything at all. Every shell that has `[[ ]]` refuses two conditions with only a line between them, and each blames a different token on a different line
+  ```sh
+  [[ -n x
+  -z "" ]] && echo yes
   ```
 - `pat/star-matches-dot-in-case` — in case there is no filesystem, so nothing restricts the star
   ```sh

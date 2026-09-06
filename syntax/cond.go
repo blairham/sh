@@ -124,9 +124,17 @@ func (p *Parser) parseTestClause() Command {
 	p.next()
 	// A newline inside `[[ ]]` continues the condition rather than ending a
 	// command, so it is skipped wherever the grammar is still waiting for
-	// something. Unanimous across the three shells that have `[[ ]]`, at
-	// every structural point: after `[[`, after `&&`, `||` and `!`, on both
-	// sides of a group's parentheses, and before `]]`.
+	// something. Unanimous across the shells that have `[[ ]]`, at every
+	// structural point: after `[[`, after `&&`, `||` and `!`, on both sides
+	// of a group's parentheses, before `]]`, and — the one this list was
+	// missing — *before* `&&` and `||`, where the condition so far is
+	// complete and an operator may still follow.
+	//
+	// That last one cannot be a point at all, because at the newline it is
+	// not yet known whether an operator or the `]]` comes next; condOr and
+	// condAnd skip speculatively instead. Skipping there is safe precisely
+	// because the two places a complete condition may end — an operator and
+	// the `]]` — both tolerate newlines in front of them.
 	//
 	// Not after a *binary operator* — `[[ 1 ==` then a newline is an error in
 	// bash and ksh93, and only zsh takes it. That one is left refused, which
@@ -149,7 +157,15 @@ func (p *Parser) parseTestClause() Command {
 
 func (p *Parser) condOr() CondExpr {
 	x := p.condAnd()
-	for x != nil && p.at(TokOrOr) && p.err == nil {
+	for x != nil && p.err == nil {
+		// Speculatively, per parseTestClause: the operator may be on the next
+		// line. What is skipped here is given back by the caller, which skips
+		// newlines before the `]]` anyway — and a word that is neither
+		// operator nor closer is refused either way, only a line later.
+		p.skipNewlines()
+		if !p.at(TokOrOr) {
+			break
+		}
 		p.next()
 		p.skipNewlines()
 		y := p.condAnd()
@@ -164,7 +180,11 @@ func (p *Parser) condOr() CondExpr {
 
 func (p *Parser) condAnd() CondExpr {
 	x := p.condPrimary()
-	for x != nil && p.at(TokAndAnd) && p.err == nil {
+	for x != nil && p.err == nil {
+		p.skipNewlines()
+		if !p.at(TokAndAnd) {
+			break
+		}
 		p.next()
 		p.skipNewlines()
 		y := p.condPrimary()

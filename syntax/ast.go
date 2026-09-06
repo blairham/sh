@@ -377,7 +377,16 @@ func (c *LoopClause) commandNode() {}
 
 // ForClause is `for name [in words] do … done`.
 type ForClause struct {
-	Name string
+	// Names is the loop's variables, and there is always at least one. More
+	// than one is zsh's — see [Dialect.ForMultipleNames] — and the loop then
+	// takes that many words from the list on every pass, so the count is the
+	// stride and not a decoration.
+	//
+	// A slice rather than a name and a tail, because a `for` binds a *list*
+	// of names and one of them being first is not a fact about the language.
+	// Two fields would have been two things to keep in step, and every reader
+	// would have had to ask which it wanted.
+	Names []string
 	// Items is the word list. HasItems is what distinguishes an absent list
 	// from an empty one, which is a real difference and not a nicety: with
 	// `in` omitted the loop iterates the positional parameters, and with `in`

@@ -697,7 +697,7 @@ func printNode(w io.Writer, n syntax.Node, depth int) {
 			}
 			items = "in " + strings.Join(ws, " ")
 		}
-		printf(w, "%s%-8s for %s %s\n", pad, x.Pos(), x.Name, items)
+		printf(w, "%s%-8s for %s %s\n", pad, x.Pos(), strings.Join(x.Names, " "), items)
 		printBranch(w, "do", x.Body, depth+1)
 		printRedirs(w, x.Redirs, pad, depth)
 	case *syntax.CaseClause:

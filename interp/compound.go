@@ -212,12 +212,36 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 		// preceded the loop — and a reset written up here printed 0 twice.
 		defer r.enteringLoop()()
 		body := 0
-		for _, it := range items {
-			r.setVar(c.Name, it)
-			// After the assignment, because zsh traces the assignment
-			// itself, and before the body, because bash's header is the
+		// The name count is the stride: a loop with two names takes two words
+		// on every pass, which is zsh's `for key value ( a 1 b 2 )`. One name
+		// is every other shell and every other loop, and the arithmetic is
+		// the same for it.
+		//
+		// Guarded rather than assumed, because a Runner can be handed a tree
+		// nobody parsed and a stride of zero is an endless loop rather than a
+		// wrong answer.
+		stride := len(c.Names)
+		if stride == 0 {
+			return nil
+		}
+		for i := 0; i < len(items); i += stride {
+			// A final pass with fewer words than names leaves the names it
+			// did not reach **empty rather than unset** — measured 2026-09-06
+			// in zsh 5.9.2, `for a b ( 1 2 3 ) { … }` reads `[3][]` on its
+			// second pass and `${b-U}` is `[]` there, not `U`. The body still
+			// runs for that pass; an empty list runs it no times at all.
+			for j, name := range c.Names {
+				it := ""
+				if i+j < len(items) {
+					it = items[i+j]
+				}
+				r.setVar(name, it)
+			}
+			// After the assignments, because zsh traces the assignments
+			// themselves — one line per name, measured `a=1` then `b=2` then
+			// the body — and before the body, because bash's header is the
 			// line that introduces the iteration.
-			r.traceForIteration(c.Header, c.Name, it)
+			r.traceForNames(c.Header, c.Names, items, i)
 			if err := r.runList(ctx, c.Body); err != nil {
 				return err
 			}

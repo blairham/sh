@@ -57,6 +57,11 @@ func Dialect() syntax.Dialect {
 	// $i; i=$((i+1)) }` counts up without stopping here, which is what says
 	// so.
 	d.ShortForm = true
+	// `for key value ( a 1 b 2 ) { … }`: the loop takes one word per name on
+	// every pass, and a short final pass leaves the names it did not reach
+	// empty. Independent of the two flags above, measured over all four
+	// combinations.
+	d.ForMultipleNames = true
 	d.Repeat = true
 	d.Foreach = true
 	d.AnonymousFunction = true

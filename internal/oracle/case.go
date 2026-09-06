@@ -1197,6 +1197,36 @@ var Corpus = []Case{
 		Why:     "the short `for`, in both its body spellings. The parentheses say what `in` says and end the header as `in` does not, which is why this one takes a brace body with nothing between where `for i in a b { … }` cannot. One shell parses it and four call the `(` a syntax error",
 	},
 	{
+		ID: "core/a-for-with-more-than-one-name", Category: "command language", SyntaxError: true,
+		Snippet: `for key value ( a 1 b 2 ) { echo "$key=$value" }`,
+		Why:     "a loop that names two variables takes two words from its list on every pass, so a flat list is walked as pairs — one shell has it and four call the second name or the `(` a syntax error. It is how a script reads a serialized key/value table, and it is what stopped a real zsh library's own parse. Both of the halves it could be confused with are already pinned: the parenthesized list is `core/a-for-over-a-parenthesized-list` and the brace body is `core/a-list-for-with-a-brace-body`, and this row is the *name count* and nothing else",
+	},
+	{
+		ID: "core/a-for-with-more-than-one-name-and-a-do-body", Category: "command language", SyntaxError: true,
+		Snippet: `for key value in a 1 b 2; do echo "$key=$value"; done`,
+		Why:     "the same name count with the body and the list spelled the way every shell spells them, which is what says the three are independent rather than one feature arriving together. Measured over all four combinations before it was built: the shell that has the name count accepts it with `in` and with parentheses, with `do … done` and with braces, and with no list at all. Ours read the first name and refused at `do`",
+	},
+	{
+		ID: "core/a-for-with-more-than-one-name-and-a-short-last-pass", Category: "command language", SyntaxError: true,
+		Snippet: `for a b ( 1 2 3 ) { echo "[${a-U}][${b-U}]" }; echo "after=[${a-U}][${b-U}]"`,
+		Why:     "where the binding rule is actually decided: a list whose length is not a multiple of the name count still runs the short pass, and the names it did not reach are **empty rather than unset** — `[3][]`, not `[3][U]` and not `[3][2]`. The three plausible wrong answers all agree with the right one on a list that divides, which is why the row is written with three items and not four. The names keep those values after the loop",
+	},
+	{
+		ID: "core/a-for-with-more-than-one-name-and-no-list", Category: "command language", SyntaxError: true,
+		Snippet: `set -- p q r s; for a b; do echo "[$a][$b]"; done`,
+		Why:     "with no list the loop walks the positional parameters, and it walks them in groups of the same size — so the absent list and the empty one stay the different questions ForClause.HasItems draws them as. The separator is what ends the header here, and it has to: without one the next word would be another name",
+	},
+	{
+		ID: "core/a-short-for-body-may-not-follow-the-names", Category: "command language", SyntaxError: true,
+		Snippet: `set -- p q; for a print -r -- "[$a]"`,
+		Why:     "the subtractive half of the name count, and the one a shell without it gets wrong in the permissive direction: every word after the first is another name until the header ends, so `print` is a name and `-r` is not one — a parse error in the only shell that has any of this. We accepted it as a short body and ran the loop. `core/a-for-header-that-ends-itself-needs-no-body` and the parenthesized rows are the shapes that still take a short body, and they are what this must not break",
+	},
+	{
+		ID: "core/a-select-takes-one-name", Category: "command language", SyntaxError: true,
+		Snippet: `select a b ( x y ) { echo "[$a]"; break }`,
+		Why:     "the menu loop's header is a for-loop's in every other respect and parts company over exactly this: the one shell that gives `for` more than one name refuses to give `select` more than one. Recorded because sharing the header is the obvious way to implement it and would have been wrong in the one place a test written from the `for` side would not look",
+	},
+	{
 		ID: "core/a-for-header-that-ends-itself-needs-no-body", Category: "command language", SyntaxError: true,
 		Snippet: `if true; then for i (a b); fi; echo no-body; for j (p q) echo body`,
 		Why:     "the body left out of a `for`, which is legal exactly where the header closed itself. Reaching it needs something the body cannot be, because anything that could be one *is* one — hence the `fi`, a word no command may start with. The second loop is the contrast in the same line: the same header with a command after it runs that command per item, so `no-body` prints once and `body` twice. `for i in a b` with nothing after it is a syntax error in the same shell, so this is a property of the header rather than of the loop",

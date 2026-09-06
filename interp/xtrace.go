@@ -115,6 +115,32 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string) {
 // It does not go through traceLine: zsh appends a space to an assignment that
 // stands alone as a command and does not append one here, and this records
 // that rather than tidying it away.
+// traceForNames is traceForIteration for a loop that may bind more than one
+// name on a pass.
+//
+// The two wordings differ in how many lines a pass is worth, which is why this
+// is here rather than a call in a loop: the shell that quotes the *header*
+// writes it once per pass however many names were bound, and the shell that
+// writes the assignments writes one line each — measured, `set -x; for a b (
+// 1 2 3 4 ) { : }` in zsh 5.9.2 gives `a=1`, `b=2`, `:`, `a=3`, `b=4`, `:`.
+// Calling the single-name form per name would have repeated the header.
+func (r *Runner) traceForNames(header string, names, items []string, at int) {
+	if !r.xtrace {
+		return
+	}
+	if r.diag().TraceForHeader == TraceForSource {
+		r.traceForIteration(header, "", "")
+		return
+	}
+	for j, name := range names {
+		value := ""
+		if at+j < len(items) {
+			value = items[at+j]
+		}
+		r.traceForIteration(header, name, value)
+	}
+}
+
 func (r *Runner) traceForIteration(header, name, value string) {
 	if !r.xtrace {
 		return

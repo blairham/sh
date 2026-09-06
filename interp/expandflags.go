@@ -22,7 +22,7 @@ import (
 // else the grammar accepted is refused *by name* when the expansion is
 // reached, because the only thing worse than refusing a flag is answering it
 // wrong with status 0.
-const implementedParamFlags = "ULfsj@kvP%qM"
+const implementedParamFlags = "ULfsj@kvP%qMuoOni"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -161,6 +161,12 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, quoted bool) (words []string,
 				words[i] = r.convertCase(w, c == 'U')
 			}
 		}
+	}
+	// After the case conversion above and before the quoting below, which is
+	// where measurement puts it rather than where the rule numbers suggest:
+	// `${(@oU)a}` on `(B a)` is `A B`, so the conversion has already run.
+	if orderApplies(e) {
+		words = orderWords(e, words)
 	}
 	if strings.ContainsRune(e.Flags, '%') {
 		for i, w := range words {

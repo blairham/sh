@@ -624,8 +624,34 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(v)` | with `(k)`: key and value pairs | `${(kv)m}` | `k1 v1` interleaved |
 | `(%)` | expand prompt `%` escapes | `${(%):-%x}` | see below |
 | `(M)` | substitute what the pattern took | `v=hello; ${(M)v#h*l}` | `hel` |
+| `(o)` / `(O)` | sort a list up / down | `a=(c a b); ${(@o)a}` | `a b c` |
+| `(n)` | sort by the numbers in the words | `a=(10 9 1); ${(@n)a}` | `1 9 10` |
+| `(i)` | sort with case folded away | `a=(B a); ${(@i)a}` | `a B` |
+| `(u)` | keep the first of each repeat | `a=(b a b); ${(@u)a}` | `b a` |
 
 Details, each measured:
+
+- **The ordering flags are one step, and `u` is not a sort.** `o` and `O`
+  order a list up and down, `n` reads each run of digits in a word as a
+  number — `x1 x9 x10`, and `a1b a2b a10b`, so the digits need not be the
+  whole word — and `i` folds case, which makes ties reachable and they
+  keep the order the elements were written in. `i` sorts on its own.
+  `u` keeps the first of each repeat, folds nothing, and leaves the order
+  alone; with a sort beside it either order of the two agrees, and only
+  `u` written alone says which runs first.
+
+  **The locale decides what `o` means.** Under `LC_ALL=C`, which is what
+  the corpus runs in, it is byte order and `(B a C b)` comes back
+  `B C a b`. Under a UTF-8 locale the same shell orders by the collation
+  and answers `a b B C`. This implementation is byte order in both, so a
+  non-C locale's collation is a **measured gap** rather than a claim.
+
+  Where the step sits is measured rather than read off the rule numbers,
+  and it is later than the name suggests: after the operator
+  (`a=(zb ya); ${(@o)a#z}` is `b ya`), after the case conversion
+  (`a=(B a); ${(@oU)a}` is `A B`), after splitting, and after joining —
+  so `${(oj.-.)a}` is `c-a-b` unsorted, one word being already in order,
+  and so is `"${(o)a}"`, which the quoted join has already made one word.
 
 - **`(M)` reads a match from the other side, and reaches exactly two
   operators.** On the four trims it substitutes the part the pattern *took*

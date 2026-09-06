@@ -108,6 +108,10 @@ func (r *Runner) storeArray(name string, a Array) {
 	} else {
 		r.setVar(name, "")
 	}
+	// And the tied scalar, if this array is half of a tie — the *other*
+	// name, which the line above is not: that one keeps `$a` answering for
+	// `a` itself. See tiedscalar.go.
+	r.mirrorArrayToScalar(name, r.readArray(a))
 }
 
 // uniqueElems is what `typeset -U` leaves of an array: the first occurrence

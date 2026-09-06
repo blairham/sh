@@ -103,6 +103,15 @@ type declaration struct {
 	// lists back as `typeset -H h=v` there. Hiding in those forms would be
 	// output no shell in the panel produces.
 	hidden bool
+	// tied is the tie this name is half of — `typeset -T` — and holds when
+	// either half is being listed. The entry is not the ordinary one: it
+	// names *both* parameters, always writes the array's elements as the
+	// value whichever half was asked for, and ends with the separator where
+	// that is not the default. Measured: `typeset -T SCA sca=( p q )` for
+	// the scalar and `typeset -aT SCA sca=( p q )` for the array, and
+	// `typeset -T C1 c1=( 1 2 ) '#'` when the separator is not `:`.
+	tied   tie
+	hasTie bool
 	// unique is `typeset -U`, which the one shell with the attribute writes
 	// back as a letter — last of them all, after export.
 	//
@@ -130,6 +139,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		hidden:   r.hidden[name],
 		unique:   r.unique[name],
 	}
+	d.tied, d.hasTie = r.tieOf(name)
 	attributed := d.integer || d.readonly || d.exported || d.lower || d.upper ||
 		d.hidden || d.unique
 	if r.removed[name] {
@@ -375,9 +385,10 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	word := "typeset"
 	// This engine slots the case letters between the integer letter and the
 	// readonly one, where the clustered engine puts them after export —
-	// measured from the same state in both. `U` comes last of all,
-	// measured: `typeset -arxU`, `export -iU`, `typeset -lU`.
-	flags := d.letters("aAilurxU")
+	// measured from the same state in both. `U` comes after export and `T`
+	// after that, measured: `typeset -arxU`, `export -iU`, `typeset -lU`,
+	// `export -UT`, `typeset -aUT`, `typeset -arT`.
+	flags := d.letters("aAilurxUT")
 	if d.exported && !d.isArr && !d.isAssoc {
 		// Only a scalar earns the `export` spelling; an exported array keeps
 		// the word and the letter.
@@ -393,6 +404,23 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		head += " -" + flags
 	}
 	head += " " + d.name
+	if d.hasTie {
+		// Both names, and then the array's own elements whichever half was
+		// asked for — the value a tie has is one value. The separator
+		// follows where it is not the default, quoted the way a listed value
+		// is: `'#'`, `' '`, `''`, and a bare `-`.
+		head = strings.TrimSuffix(head, " "+d.name) + " " + d.tied.scalar
+		elems, _ := r.arrayElems(d.tied.array)
+		quoted := make([]string, len(elems))
+		for i, v := range elems {
+			quoted[i] = r.declareQuoted(v)
+		}
+		out := head + " " + d.tied.array + "=( " + strings.Join(quoted, " ") + " )"
+		if d.tied.sep != defaultTieSeparator {
+			out += " " + r.declareQuoted(d.tied.sep)
+		}
+		return out
+	}
 	if d.hidden {
 		// The whole of what `-H` does: the attributes still speak, the value
 		// does not — a scalar's, an array's and a table's alike. Measured
@@ -533,6 +561,8 @@ func (d declaration) letters(order string) string {
 			on = d.upper
 		case 'U':
 			on = d.unique
+		case 'T':
+			on = d.hasTie
 		}
 		if on {
 			b.WriteRune(c)

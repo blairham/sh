@@ -772,6 +772,21 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 // entered the builtin by different doors and would otherwise have been two
 // copies of this, which is how one of them ends up forgetting a table.
 func (r *Runner) unsetName(name string) {
+	if t, tied := r.tieOf(name); tied {
+		// Half a tie is not a state this shell has: `unset SCA` leaves `sca`
+		// with no elements *and* unset, and `unset sca` leaves `$SCA`
+		// unset. Measured, and the tie itself goes too — a later `SCA=a:b`
+		// is a plain scalar and `${#sca}` stays 0.
+		//
+		// Untied first, so the two calls below do not mirror into each
+		// other, and only the *other* name is recursed into.
+		r.untie(name)
+		other := t.scalar
+		if name == t.scalar {
+			other = t.array
+		}
+		r.unsetName(other)
+	}
 	delete(r.Vars, name)
 	delete(r.exported, name)
 	delete(r.Arrays, name)

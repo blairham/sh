@@ -237,7 +237,10 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	// refusal, so a file the policy withholds is reported the way a file the
 	// kernel withholds is — same wording shape, same fatality axis.
 	action := r.act(Action{Kind: ActionOpen, Path: path})
-	if r.openQuietlyDenied(action) {
+	// Not for a pipe this shell made for a substitution in this command:
+	// `. <(cmd)` names a path the interpreter chose, so refusing it refuses
+	// the construct. See ownPipe.
+	if !r.ownPipe(path) && r.openQuietlyDenied(action) {
 		return r.dotFailed(args[0], errRefused)
 	}
 	b, err := r.readFileGated(ctx, action, path)

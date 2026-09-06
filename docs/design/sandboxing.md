@@ -252,6 +252,57 @@ Open, by construction and not by omission:
 - **Platforms other than Darwin and Linux**, where there is no way to
   ask the kernel and the gate matches the name alone, as it always did.
 
+### The shell's own scaffolding is recorded, never refused
+
+A process substitution runs a command with one end of a pipe and expands
+to a path the other end can be opened by. That path is a FIFO under a
+directory the interpreter makes for itself, named by the operating
+system: a script writes `<(cmd)` and can never write
+`<TMPDIR>/sh-procsubNNNNNNNN/sub1`, because it does not know the name
+and the name is different every time.
+
+So the gate is not asked about it. `ActionOpen` already said the
+scaffolding around the pipe — the directory, the `mkfifo`, the removal —
+is outside the boundary, for the reason that gating a path the script
+could not have named lets **a policy refuse the mechanism while believing
+it refused an access**. The pipe is on that side of the line and was on
+the other one, which is what the corpus measurement above found. An
+operator wrote `default deny write`, got a shell whose process
+substitutions had stopped working, and was shown a diagnostic naming a
+path they had never seen.
+
+Every place in the shell that can open one is covered, because there is
+more than one: the substitution's own end, a redirect that names the pipe
+(`cmd > >(inner)`, `read x < <(inner)`), and `. <(inner)`. Only the
+shell's own opens — an *external* command that opens the path is a child
+process and outside the boundary entirely, as every child is.
+
+**What is still refused is everything worth refusing.** The inner command
+is an `exec` the gate is asked about, before it runs. It executes in a
+`Runner` of its own whose every access passes the gate, so `<(cat
+/etc/secret)` is refused at the read, under the rule about `/etc`, and the
+refusal names that file. What crosses the pipe is that command's output
+and nothing else.
+
+**And it is still recorded.** The open reaches the event stream as an
+`EventAccess` naming the pipe, so an audit trail says the shell made one
+and when. Recorded always, asked never, which is the shape `ActionInherit`
+already has.
+
+**The exemption is the command's, not the shell's.** A pipe is in the set
+from the moment the word expands until the command that named it ends,
+which is what keeps this from being something a script can aim at:
+`p=$(echo <(true))` prints a path and lets its command end, so `> "$p"`
+afterwards is an ordinary open of an ordinary path and the gate is asked
+about it. A subshell starts with an empty set.
+
+Probes are deliberately not included. `[ -f <(cmd) ]` is a stat, which a
+policy refuses quietly by answering the way a missing path answers — so a
+policy hiding the temporary directory makes that test false rather than
+making the construct fail. Widening a suppression to the loudest oracle
+the filesystem has, to fix a wrong answer nobody asks for, is a trade this
+does not make.
+
 **A compatibility consequence worth stating plainly.** Under a policy, a
 path reached through a link is now checked under the kernel's name for
 it, so a rule naming a directory that happens to be a symbolic link
@@ -814,8 +865,8 @@ The scratch directory is named rather than assumed, because it is
 `/var/folders/…` on a Mac and `/tmp` on Linux, so the file is generated
 per run rather than committed.
 
-**Measured, that policy moves 18 of 1408 cases, 3 of them in more than
-the wording**, and the split is why the report has two headings:
+**Measured, that policy moves 15 of 1475 cases, none of them in more
+than the wording**, and the split is why the report has two headings:
 
 - **15 differ only in the wording of a diagnostic.** Each is a case that
   redirects to a path that does not exist — `/nope/x` — to pin what a
@@ -825,15 +876,14 @@ the wording**, and the split is why the report has two headings:
   standard output, same status. This is the design working: a gate that
   let the kernel answer first would be leaking whether a denied path
   exists.
-- **3 differ in what happened**, and all three are process
-  substitution. They are the finding, and they are recorded as one:
+- **None differ in more than the wording**, and that number used to be
+  three. All three were process substitution, and they were the finding:
   `<(cmd)` opens a FIFO the *interpreter* chose the path of, under the
-  shell's own temporary directory, and that open passes the gate. A
-  policy confining writes therefore refuses the mechanism rather than an
-  access the script asked for — which is exactly what `ActionOpen`'s
-  scaffolding exemption exists to prevent, applied to everything around
-  the pipe but not to the pipe. Left as it is and reported, because the
-  fix is a decision about the boundary and not about the harness.
+  shell's own temporary directory, so a policy confining writes refused
+  the mechanism rather than an access the script asked for — which is
+  exactly what `ActionOpen`'s scaffolding exemption exists to prevent,
+  applied to everything around the pipe but not to the pipe. Closed by
+  extending the exemption to the pipe, in the section below.
 
 ### `make wild-run-contained` — every script on the machine
 

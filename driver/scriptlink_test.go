@@ -109,6 +109,15 @@ func TestAScriptOperandThroughALinkIsCheckedOnWhatItReached(t *testing.T) {
 	// sentence — "a refusal comes back as a permission error" is the claim
 	// driver.readFile is written for, and the operating system is the oracle
 	// for what one of those reads like.
+	// Stated outright as well, because the run below is only an oracle for a
+	// process that is not root, and a root test run would skip it silently.
+	// EACCES is "permission denied" on both platforms this test runs on; the
+	// dialect here is Core, whose wording for an unreadable script is the
+	// errno's own.
+	if !strings.Contains(errs, "Permission denied") {
+		t.Errorf("the refusal reads %q, want a permission error", errs)
+	}
+
 	unreadable := filepath.Join(dir, "unreadable.sh")
 	if err := os.WriteFile(unreadable, []byte("echo ran\n"), 0o000); err != nil {
 		t.Fatal(err)

@@ -1185,9 +1185,18 @@ func spanRange(spans []Span, from, fromOff, to, toOff int) []Span {
 // isName reports whether s is a shell name: the production the grammar spells
 // `name`, which POSIX defines as an identifier. `for 1 in …` is rejected by
 // every shell for this reason.
-// isFuncName is isName with the punctuation a dialect's function names may
-// carry: `-` and `.`, per the flag. `=` stays excluded everywhere — an array
-// assignment is a parenthesis after a word too.
+// funcNamePunctuation is the punctuation a function name may carry where the
+// dialect allows any, and it is measured rather than chosen — see
+// [Dialect.FunctionNamePunctuation] for the run and for what was left out.
+//
+// `=` is not here and cannot be: an array assignment is a parenthesis after a
+// word too, so admitting it would read `a=()` as a definition of a function
+// called `a=`.
+const funcNamePunctuation = "!#%+,-./:@]^"
+
+// isFuncName is isName with that punctuation, per the flag, and with the bytes
+// above ASCII — a name written in another script is a name to every shell that
+// has punctuated ones at all.
 func isFuncName(s string, punctuation bool) bool {
 	if isName(s) {
 		return true
@@ -1197,9 +1206,10 @@ func isFuncName(s string, punctuation bool) bool {
 	}
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		ok := c == '_' || c == '-' || c == '.' ||
+		ok := c >= 0x80 || c == '_' ||
 			(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9')
+			(c >= '0' && c <= '9') ||
+			strings.IndexByte(funcNamePunctuation, c) >= 0
 		if !ok {
 			return false
 		}

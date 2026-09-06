@@ -2464,6 +2464,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/function-parens-then-end-of-input` | **2>** `<shell>: 1: Syntax error: end of file unexpected` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `end of file' unexpected` *(status 3)* | **2>** `<shell>: parse error near `()'` *(status 1)* |
 | `cmd/function-name-with-a-dash` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | **2>** `<shell>: f-g: invalid function name` *(status 1)* | `ok~after` |
 | `cmd/function-name-with-a-dot` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | **2>** `<shell>: a.b: invalid discipline function` *(status 1)* | `ok~after` |
+| `cmd/function-name-with-a-colon` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | **2>** `<shell>: :f: invalid function name` *(status 1)* | `ok~after` |
+| `cmd/function-name-with-a-plus` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | **2>** `<shell>: f+g: invalid function name` *(status 1)* | `ok~after` |
+| `cmd/function-name-with-a-percent` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | **2>** `<shell>: a%b: invalid function name` *(status 1)* | `ok~after` |
+| `cmd/function-name-with-a-star` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `after` | `after` | `after` | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: no matches found: f*g` *(status 1)* |
+| `cmd/function-keyword-name-with-punctuation` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | **2>** `<shell>: :f: invalid function name` *(status 1)* | `ok~after` |
 | `cmd/function-posix-form` | `posix` | `posix` | `posix` | `posix` | `posix` | `posix` |
 | `cmd/function-keyword-form` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `kw` | `kw` | `kw` | `kw` | `kw` |
 | `cmd/function-keyword-and-parens` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `both` | `both` | `both` | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `both` |
@@ -2787,6 +2792,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cmd/function-name-with-a-dot` — the dot is its own sentence in ksh93 — an invalid discipline function — and the same split everywhere else
   ```sh
   a.b(){ echo ok; }; a.b; echo after
+  ```
+- `cmd/function-name-with-a-colon` — the leading colon a plugin manager's whole namespace is written with — `:zi-reload-and-run` — and the same four answers as the dash: bash and zsh define and run it, dash refuses the name at parse time, ksh93 parses and stops the script at the definition
+  ```sh
+  :f(){ echo ok; }; :f; echo after
+  ```
+- `cmd/function-name-with-a-plus` — the second mark of the measured class, and the one that says this is not about `-` and `.`: the punctuation a function name may carry is a character class, and a dialect either has it or refuses every member
+  ```sh
+  f+g(){ echo ok; }; f+g; echo after
+  ```
+- `cmd/function-name-with-a-percent` — the third, and the one nearest a job specification — `%` is a job only where a job may stand, and in a name it is a name
+  ```sh
+  a%b(){ echo ok; }; a%b; echo after
+  ```
+- `cmd/function-name-with-a-star` — the boundary from the other side: bash and zsh parse a pattern character in a name and ksh93 refuses it at the parens, which is why `*` is outside the class the flag carries while `]` — measured the same way and unanimous — is inside it. The call is left off, because running it would be asking a glob question rather than a name one
+  ```sh
+  f*g(){ echo ok; }; echo after
+  ```
+- `cmd/function-keyword-name-with-punctuation` — the same name in the keyword form, which is a separate production and had to be measured separately; dash has no keyword at all, so its refusal here is a different sentence from the one it gives the parens
+  ```sh
+  function :f { echo ok; }; :f; echo after
   ```
 - `cmd/function-posix-form` — the universal definition form
   ```sh

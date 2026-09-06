@@ -227,12 +227,41 @@ type Dialect struct {
 	EmptyParensAreOneToken bool
 
 	// FunctionNamePunctuation lets a POSIX-form or keyword-form function
-	// name carry `-` and `.` — `f-g()` and `a.b()` — which bash, ksh93 and
-	// zsh all parse. dash refuses the name outright (`Bad function name`),
-	// and what a shell that parsed one *does* with it is the interpreter's
-	// question: ksh93 refuses at definition time. bash's commit-at-paren
-	// reading accepts still more (`f+x()`, `@weird()`), which that flag
-	// already covers without this one.
+	// name carry punctuation — `f-g()`, `a.b()`, `:zi-reload-and-run()` —
+	// which every panel shell but dash parses. dash refuses the name
+	// outright (`Bad function name`), and what a shell that parsed one
+	// *does* with it is the interpreter's question: ksh93 parses every name
+	// below and stops the script at the definition.
+	//
+	// The characters are `!#%+,-./:@]^`, plus every byte above ASCII, and
+	// the set is measured rather than chosen. Each of the ninety-three
+	// printable ASCII punctuation marks was put at the front, the middle and
+	// the end of a name, in both definition forms, in a *file* read with
+	// `-n` — a command string is the wrong instrument here, because a `-c`
+	// argument that begins with `-` never reaches the grammar at all. Those
+	// twelve are the ones all five of bash 5.3, bash 3.2, bash-as-sh, ksh93
+	// and zsh accept in every position.
+	//
+	// What was left out, and why, because the omissions are the interesting
+	// half:
+	//
+	//   - `=` is excluded everywhere and by everyone, above.
+	//   - `$`, `\`, `'`, `"` and a backquote are quoting or expansion
+	//     operators, so the word they appear in is not one literal span and
+	//     never reaches this test.
+	//   - `*`, `?`, `[`, `{` and `~` split the panel: bash and zsh parse
+	//     them and ksh93 refuses. `]` does not split, which is the shape of
+	//     the disagreement — it is the *opening* of a pattern that ksh93
+	//     will not have in a name.
+	//   - `}` splits the other way: zsh alone refuses `f}`, because a close
+	//     brace is reserved wherever a word may stand there — the same fact
+	//     [Dialect.CloseBraceAlwaysReserved] records.
+	//   - A leading `#` never arrives, being a comment, though `f#g` is
+	//     unanimous and is in the set.
+	//
+	// Position turned out not to matter to any shell once the invocation
+	// artifact above was removed, so this is a character class and not a
+	// grammar of names.
 	FunctionNamePunctuation bool
 
 	// TimeKeyword makes `time` a reserved word at the start of a pipeline,

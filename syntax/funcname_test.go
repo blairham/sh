@@ -51,6 +51,54 @@ func TestPunctuatedFunctionNamesFollowTheFlag(t *testing.T) {
 	}
 }
 
+// TestTheFunctionNamePunctuationIsTheMeasuredSet — the flag is a character
+// class, not a list of the two marks that happened to be needed first.
+//
+// The twelve here are the punctuation every panel shell but dash parses in a
+// function name in every position, in both definition forms; the ones below
+// them split the panel and are deliberately outside the class. Asserted as
+// whole names rather than as a set of bytes, because what the parser is asked
+// is whether a name is one.
+func TestTheFunctionNamePunctuationIsTheMeasuredSet(t *testing.T) {
+	allow := Core()
+	for _, name := range []string{
+		"f!g", "f#g", "f%g", "f+g", "f,g", "f-g", "f.g", "f/g", "f:g",
+		"f@g", "f]g", "f^g",
+		// Every position, and a name that is nothing but the mark.
+		":f", "f:", ":", "+f", "f+", "-f", "f-", "@f", "f@",
+		// The one the daily driver needs, and a name outside ASCII.
+		":zi-reload-and-run", "\u00e9f", "\u276ex\u276f",
+	} {
+		for _, src := range []string{name + `(){ echo ok; }`, `function ` + name + ` { echo ok; }`} {
+			if _, err := Parse(src, allow); err != nil {
+				t.Errorf("%s: refused where the flag allows: %v", src, err)
+			}
+		}
+	}
+	// Outside the class: the panel splits on these, so the flag does not
+	// carry them and the word stays an ordinary command.
+	for _, name := range []string{"f*g", "f?g", "f[g", "f{g", "f}g", "f~g"} {
+		if _, err := Parse(name+`(){ echo ok; }`, allow); err == nil {
+			t.Errorf("%s: accepted a mark the panel disagrees about", name)
+		}
+	}
+	// And `=` is excluded whatever the flag says, or an empty array becomes
+	// a definition of a function whose name ends in one.
+	if _, err := Parse(`a=()`, allow); err != nil {
+		t.Errorf("an empty array read as a function: %v", err)
+	}
+	if _, err := Parse(`f=g(){ echo ok; }`, allow); err == nil {
+		t.Error("a name carrying `=` was accepted")
+	}
+	// The flag is what decides: none of it parses without one.
+	posix := POSIX()
+	for _, name := range []string{":f", "f+g", "a%b", "f-g", "a.b"} {
+		if _, err := Parse(name+`(){ echo ok; }`, posix); err == nil {
+			t.Errorf("%s: POSIX accepted a name it does not have", name)
+		}
+	}
+}
+
 // TestASimpleCommandBodyFollowsTheFlag — one grammar refuses `f() echo hi`
 // and three read it as a one-command body; the flag says which this is.
 func TestASimpleCommandBodyFollowsTheFlag(t *testing.T) {

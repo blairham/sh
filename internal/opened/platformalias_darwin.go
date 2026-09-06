@@ -9,7 +9,9 @@ package opened
 // present on every installation, owned by root, and not something a script can
 // change. `ls -l /` shows them and has since OS X.
 //
-// They are here because the kernel answers F_GETPATH with the physical path,
+// They are here because a resolution answers with the physical path —
+// the walk follows /var and /tmp as the links they are, and F_GETPATH answered
+// the same way before it —
 // so on a Mac *every* access under `/tmp`, `/var` or `/etc` — which is to say
 // every temporary file any script writes — comes back spelled differently
 // from the name that was asked about. Without this, Elsewhere would report

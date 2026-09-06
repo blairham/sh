@@ -37,14 +37,14 @@ import (
 // below reports the name as written, in the wording an ordinary refusal
 // already uses — a script cannot tell the two apart, which is the same
 // property a denied stat has for the same reason.
-func (r *Runner) verifyOpened(ctx context.Context, a *Action, f *os.File) bool {
+func (r *Runner) verifyOpened(ctx context.Context, a *Action, reached opened.Reached) bool {
 	if r.Gate == nil {
 		return true
 	}
-	actual, elsewhere := opened.Elsewhere(f, a.Path)
+	actual, elsewhere := opened.Elsewhere(reached, a.Path)
 	if !elsewhere {
 		// The object has no name a rule could be speaking about, or the name
-		// the script wrote is the kernel's own name for what it reached, or
+		// the script wrote is the path the open went through, or
 		// the two are the operating system's own two names for one place.
 		// In each case the decision already made is the decision about this
 		// object.
@@ -87,8 +87,8 @@ func (r *Runner) openGated(ctx context.Context, a *Action, path string, flags in
 	if r.Gate == nil {
 		return os.OpenFile(path, flags, 0o666)
 	}
-	return opened.Verified(path, flags, 0o666, func(f *os.File) error {
-		if !r.verifyOpened(ctx, a, f) {
+	return opened.Verified(path, flags, 0o666, func(reached opened.Reached) error {
+		if !r.verifyOpened(ctx, a, reached) {
 			return errRefused
 		}
 		return nil
@@ -104,13 +104,21 @@ func (r *Runner) readFileGated(ctx context.Context, a *Action, path string) ([]b
 	if r.Gate == nil {
 		return os.ReadFile(path)
 	}
-	f, err := os.Open(path)
+	// Through Verified rather than os.Open, so that this open is resolved the
+	// same way a redirect's is. It was a plain os.Open while the verification
+	// read the answer back off the descriptor, because then the open itself
+	// did not have to be the checked one. Now it does: the walk is what makes
+	// the name honest, and a second door that opened files any other way would
+	// be the #942 defect again in a smaller room.
+	f, err := opened.Verified(path, os.O_RDONLY, 0, func(reached opened.Reached) error {
+		if !r.verifyOpened(ctx, a, reached) {
+			return errRefused
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
-	if !r.verifyOpened(ctx, a, f) {
-		return nil, errRefused
-	}
 	return io.ReadAll(f)
 }

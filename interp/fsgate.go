@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+
+	"github.com/blairham/sh/internal/opened"
 )
 
 // Every stat, link read and directory read in the interpreter comes through
@@ -108,7 +110,7 @@ func (r *Runner) readDir(path string) ([]os.DirEntry, error) {
 		r.emit(r.ctx, Event{Kind: EventAccess, Action: action})
 		return os.ReadDir(path)
 	}
-	f, err := os.Open(path)
+	reached, err := opened.Open(path, os.O_RDONLY, 0)
 	if err != nil {
 		// The attempt is the auditable act — a directory that is not there is
 		// the ordinary case for a glob — so it is recorded, and there was no
@@ -116,8 +118,9 @@ func (r *Runner) readDir(path string) ([]os.DirEntry, error) {
 		r.emit(r.ctx, Event{Kind: EventAccess, Action: action})
 		return nil, err
 	}
+	f := reached.File
 	defer func() { _ = f.Close() }()
-	if !r.verifyOpened(r.ctx, &action, f) {
+	if !r.verifyOpened(r.ctx, &action, reached) {
 		return nil, &fs.PathError{Op: "readdirent", Path: path, Err: syscall.ENOENT}
 	}
 	// Recorded here rather than beside the consultation above, unlike this

@@ -160,8 +160,8 @@ func (b Boundary) open(ctx context.Context, a *interp.Action, f File) (*os.File,
 		// refuse, so the standard library's own call stands.
 		return os.OpenFile(f.Path, f.Flags, f.Perm)
 	}
-	return opened.Verified(f.Path, f.Flags, f.Perm, func(file *os.File) error {
-		if !b.reached(ctx, a, file) {
+	return opened.Verified(f.Path, f.Flags, f.Perm, func(r opened.Reached) error {
+		if !b.reached(ctx, a, r) {
 			return ErrRefused
 		}
 		return nil
@@ -205,8 +205,8 @@ func (b Boundary) WriteFile(ctx context.Context, f File, data []byte) error {
 // the same access — a consumer joining the two records sees one open whose
 // name resolved elsewhere, not two opens. It is the same promise interp keeps
 // on its side of the boundary, made here in the same words on purpose.
-func (b Boundary) reached(ctx context.Context, a *interp.Action, f *os.File) bool {
-	actual, elsewhere := opened.Elsewhere(f, a.Path)
+func (b Boundary) reached(ctx context.Context, a *interp.Action, r opened.Reached) bool {
+	actual, elsewhere := opened.Elsewhere(r, a.Path)
 	if !elsewhere {
 		return true
 	}
@@ -286,8 +286,8 @@ func (b Boundary) ReadDir(ctx context.Context, path string) ([]os.DirEntry, erro
 		b.emit(ctx, interp.Event{Kind: interp.EventAccess, Action: a})
 		return os.ReadDir(path)
 	}
-	f, err := opened.Verified(path, os.O_RDONLY, 0, func(file *os.File) error {
-		if !b.reached(ctx, &a, file) {
+	f, err := opened.Verified(path, os.O_RDONLY, 0, func(r opened.Reached) error {
+		if !b.reached(ctx, &a, r) {
 			return ErrRefused
 		}
 		return nil

@@ -7,7 +7,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -288,45 +287,29 @@ func TestWritingToADeviceUnderAGate(t *testing.T) {
 	}
 }
 
-// TestAHardLinkIsNotReliablyCovered records the scope decision as something
-// that runs — and records, since #1029, that on one platform the scope is not
-// a decision anybody made.
+// TestAHardLinkIsNotCovered records the scope decision as something that runs,
+// and since #1114 it records it as *one* answer rather than a coin.
 //
 // A hard link has no link to follow and no second name to notice: both names
-// are real names for one inode. #922 recorded that as out of scope on the
-// grounds that "the kernel answers with whichever name the descriptor was
-// opened by", so the second consultation is handed the name the script wrote
-// and the limit is simply open. On Linux that premise is exact: /proc answers
-// from the dentry the descriptor was opened through, one dentry per name, and
-// nothing afterwards moves it.
+// are real names for one inode, so a rule allowing the place this one is in
+// allows it, and the walk names the path the open went through — which is the
+// name the script wrote. Closing this means matching on identity rather than on
+// paths, and docs/design/sandboxing.md says why that is a different piece of
+// work and not this one.
 //
-// On Darwin it is false. F_GETPATH answers from the vnode, which carries one
-// name for an object however many the filesystem holds, and a lookup of any
-// of them re-stamps it — so which of an inode's names comes back is not a
-// property of the descriptor at all. The consequence here is that this test's
-// subject is inherently a coin: the limit needs one allowed name and one
-// denied name for the same object, which is exactly the configuration whose
-// answer Darwin does not fix. Measured on 25.5.0: the open is refused 18 runs
-// in 3000 with no load and no -race, which is what made #1029 a red required
-// check on unrelated pull requests, and 0.12% through a bare open of the same
-// fixture. No layout removes it — two names in one directory measures 0.06%,
-// which is half of nothing rather than none.
+// It was TestAHardLinkIsNotReliablyCovered, and the "reliably" was #1029: the
+// check asked the platform what the descriptor held, and on Darwin that answer
+// is one of an object's names picked at the kernel's convenience, so this very
+// fixture — one allowed name and one denied name for one object — was refused
+// 18 runs in 3000 and turned into a red required check on unrelated pull
+// requests. The test that replaced it asserted only the half that did not
+// depend on the coin, which meant it passed whether the open was allowed or
+// refused. That is a test tolerant of both answers, and for a boundary it
+// asserts nothing; it was the best that could be done while the answer moved.
 //
-// So the limit is asserted where it is determinate and nowhere else.
-// internal/opened's TestTwoNamesForOneObjectAndWhetherTheAnswerHolds pins the
-// mechanism at 500 out of 500 on Darwin and 500 out of 500 the other way on
-// Linux, and it is the test a future change closing this gap will fail.
-// docs/design/sandboxing.md carries what it costs — including the direction
-// that is not a flake, where a second hard link in an allowed place reopens
-// the #703 symbolic-link bypass this file exists to have closed.
-//
-// What is asserted on Darwin is the half that does not depend on the coin,
-// and it is the half about the boundary: whichever name the gate judged, it
-// was a real name of the object, the operator's record says which, and the
-// script was told only the name it wrote. A refusal that named the target
-// would hand a script the one fact the rule exists to withhold, and it would
-// do so on the 0.6% of runs nobody is watching.
-func TestAHardLinkIsNotReliablyCovered(t *testing.T) {
+// The walk does not ask, so there is no coin. Both platforms allow this, every
+// time, and the assertion is the single one #922 originally recorded.
+func TestAHardLinkIsNotCovered(t *testing.T) {
 	secret, _ := linkFarm(t)
 	hard := filepath.Join(filepath.Dir(filepath.Dir(secret)), "work", "hard")
 	if err := os.Link(secret, hard); err != nil {
@@ -335,51 +318,12 @@ func TestAHardLinkIsNotReliablyCovered(t *testing.T) {
 	var denied []Action
 	out, st := run(t, "cat <"+hard, hidesSecrets(&denied))
 
-	if runtime.GOOS != "darwin" {
-		// The premise #922 recorded, asserted as the single answer it is.
-		if out != "classified\n" || st != 0 {
-			t.Errorf("got %q status %d — a hard link is a recorded limit, and this now behaves differently", out, st)
-		}
-		if len(denied) != 0 {
-			t.Errorf("the gate was consulted a second time about %+v; the name the script wrote reaches this object", denied)
-		}
-		return
+	if out != "classified\n" || st != 0 {
+		t.Errorf("got %q status %d — a hard link is a recorded limit, and this now behaves differently", out, st)
 	}
-
-	if st == 0 {
-		if out != "classified\n" {
-			t.Errorf("got %q with status 0, want the file read through the link", out)
-		}
-		if len(denied) != 0 {
-			t.Errorf("an allowed open recorded a denial: %+v", denied)
-		}
-		return
-	}
-	// The kernel named the object by its other name, so the gate judged the
-	// name it was given and refused. Every part of that has to hold.
-	if !strings.Contains(out, "refused") {
-		t.Errorf("a non-zero status must be reported as a refusal, got %q", out)
-	}
-	if strings.Contains(out, "classified") {
-		t.Errorf("a refused open returned the contents anyway: %q", out)
-	}
-	if strings.Contains(out, "/secret/") {
-		t.Errorf("the refusal told the script where the name went: %q", out)
-	}
-	if !strings.Contains(out, hard) {
-		t.Errorf("the refusal must name the path as written, got %q", out)
-	}
-	if len(denied) != 1 {
-		t.Fatalf("want exactly one recorded denial, got %+v", denied)
-	}
-	if !strings.HasSuffix(denied[0].Resolved, string(filepath.Separator)+
-		filepath.Join("secret", "data")) {
-		t.Errorf("the operator's record resolved to %q, want the object's other real name",
-			denied[0].Resolved)
-	}
-	if denied[0].Path != denied[0].Resolved {
-		t.Errorf("the second consultation carried Path %q and Resolved %q, want the object in both",
-			denied[0].Path, denied[0].Resolved)
+	if len(denied) != 0 {
+		t.Errorf("the gate was consulted a second time about %+v; the name the script wrote is "+
+			"the path the open went through", denied)
 	}
 }
 

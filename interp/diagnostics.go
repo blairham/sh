@@ -1135,6 +1135,32 @@ type Diagnostics struct {
 	// ksh93 follows it with the usage line it keeps in BuiltinUsage.
 	SetInvalidOptionName string
 
+	// SetImmovableOptionName is a long `set -o` name this shell *has* and
+	// will not move. One verb: the name, as the script spelled it.
+	//
+	//	default   set: chaselinks: not implemented
+	//	zsh       set: can't change option: chaselinks
+	//
+	// Not the same answer as SetInvalidOptionName, and the difference is the
+	// one a script can act on: the first is a shell that is missing
+	// something and the second is a typo. The default is this
+	// implementation's own words rather than a shell's, because the shells
+	// that reach it are answering about a name they have and we do not do —
+	// there is no borrowed sentence for that.
+	//
+	// Only a dialect with an option table of its own (SetOptionTable) can
+	// reach the *spoken* form of this: without one, a name outside the
+	// substrate's table is an invalid name instead. zsh says it about the
+	// five options that are about being interactive — `interactive`,
+	// `monitor`, `shinstdin`, `singlecommand` and `zle` — measured in a
+	// non-interactive `-c` run, and about nothing else in the other 180.
+	//
+	// Its status and whether it ends the script are SetInvalidOptionStatus
+	// and Semantics.BadSetOptionNameFatal, the same two the invalid name
+	// uses: measured, zsh answers `set -o onecmd` and `set -o zzznosuch`
+	// with the same 1 and stops the script at both.
+	SetImmovableOptionName string
+
 	// SetInvalidOptionLetter is an option letter this shell does not have.
 	// Two verbs: the letter as the script spelled it, sign and all, and the
 	// letter on its own.

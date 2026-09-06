@@ -877,6 +877,13 @@ type Runner struct {
 	// `set -o` names and nothing more, which is where `[[ -o ]]` falls back
 	// to those. Installed through SetOptionNamespace; see extend.go.
 	optionNamespace func(name string) (on, known bool)
+	// optionListing and optionMover are the same namespace reached by
+	// `set -o`: the rows a listing writes, and what moving one name does.
+	// Nil in a shell whose `set -o` names are the substrate's own, which is
+	// three of the four presets. Installed together through SetOptionTable;
+	// see extend.go.
+	optionListing func() []ListedOption
+	optionMover   func(name string, on bool) (moved, known bool)
 	// lineBase is how far into the script the input being run starts.
 	//
 	// A command substitution's body is parsed on its own, so its positions

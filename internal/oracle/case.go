@@ -7429,6 +7429,31 @@ echo unreachable`,
 		Why:     "+o writes re-inputtable set commands in three shells; ksh93's one line names only what is on, --default first",
 	},
 	{
+		ID: "opt/set-plus-o-writes-the-shells-own-vocabulary", Category: "shell options",
+		Snippet: `set +o | grep -cE '^set [-+]o (autocd|autopushd|extendedglob)$'`,
+		Why:     "whether the `+o` listing is written in the vocabulary of the shell that produced it. Three names one shell in the panel has and no other does: it counts 3 and everybody else counts 0, at 0 either way, which is what a re-inputtable capture depends on. Ours wrote the substrate's shared two dozen under that shell — 23 names against its own 185 — so this counted 0, silently and at status 0, and a caller sourcing the file back got a shell it had never described (#1080). A named slice rather than the table's length, because the length is a fact about the build",
+	},
+	{
+		ID: "opt/set-plus-o-does-not-borrow-another-shells-vocabulary", Category: "shell options",
+		Snippet: `set +o | grep -cE '^set [-+]o (braceexpand|onecmd|histexpand)$'`,
+		Why:     "the same question from the other side, and the half that a shell answering with somebody else's table passes without it. Three names the bash columns have and write: they count 3, and the other three count 0 — including the shell that *accepts* two of them as input and lists its own spellings instead, which is why a listing has to be graded on what it writes rather than on what it takes",
+	},
+	{
+		ID: "opt/set-o-takes-a-name-only-this-shell-has", Category: "shell options",
+		Snippet: `set -o autocd; echo "st=$?"`,
+		Why:     "the setting half of the same namespace, and four refusals against one acceptance. `autocd` is one shell's own: it takes it at 0, and the rest split every way a refused `set -o` name can — bash 5.3 says `invalid option name` at 2 and carries on, bash 3.2 says the same at 1, dash writes `Illegal option -o autocd` and stops, and ksh93 says `bad option(s)` with its usage line and stops. A shell listing 185 names it would then refuse would be writing a capture it could not read back",
+	},
+	{
+		ID: "opt/set-o-and-the-listing-are-one-namespace", Category: "shell options",
+		Snippet: `set -o extendedglob 2>/dev/null; set +o | grep -cE '^set -o extendedglob$'`,
+		Why:     "written through `set -o` and read back through `set +o`, which is what makes the two rows above facts about one namespace rather than about two tables that happen to differ. One shell counts 1; the two bash columns refuse the name and count 0; dash and ksh93 stop at the refusal, so the second command never runs and the case records their exit rather than a count",
+	},
+	{
+		ID: "opt/set-o-a-name-this-shell-has-and-will-not-move", Category: "shell options",
+		Snippet: "set -o onecmd\necho \"st=$?\"\necho after\n",
+		Why:     "a name a shell *has* and refuses to change, which is a third answer beside taking it and never having heard of it. The bash columns have `onecmd` and set it silently at 0; dash and ksh93 have no such name and stop; zsh has it — as a borrowed spelling for its own `singlecommand` — and refuses it with `can't change option`, fatally, which is a different sentence from the `no such option` it gives a name it does not have. Ours said `not implemented` and carried on, which was neither",
+	},
+	{
 		ID: "opt/set-o-noexec-reads-and-never-runs", Category: "shell options",
 		Snippet: "echo before\nset -o noexec\necho after\n",
 		Why:     "the long spelling of `set -n`, and it behaves identically in all four: everything after it is read and never run, and the script still ends at 0 — the same option under its other name, which was refused as unimplemented here while the letter worked",

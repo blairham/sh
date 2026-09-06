@@ -227,6 +227,50 @@ scanner rather than about the operator.
 
 Grammar flag: `ArithCharacterCode` — core: off; `zsh`: on.
 
+## `$[expr]` — the older spelling
+
+`$[ … ]` is arithmetic in four of the six and nothing at all in the other
+two. Measured 2026-09-06:
+
+| probe | dash | bash 5.3 | bash 3.2 | bash-as-sh | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `echo $[1+1]` | `$[1+1]` | 2 | 2 | 2 | `$[1+1]` | 2 |
+| `echo $[2**10]` | `$[2**10]` | 1024 | 1024 | 1024 | `$[2**10]` | 1024 |
+| `echo "$[2+3]"` | `$[2+3]` | 5 | 5 | 5 | `$[2+3]` | 5 |
+| `echo '$[1+1]'` | `$[1+1]` | `$[1+1]` | `$[1+1]` | `$[1+1]` | `$[1+1]` | `$[1+1]` |
+
+Where it is not read the `$` is literal and the brackets are a pattern, so
+the word stands as its own text when nothing on the filesystem matches —
+no diagnostic, in dash and ksh93 alike. That is what makes this the
+**additive** kind of difference and therefore a grammar flag: nobody means
+something else by the same characters.
+
+Grammar flag: `DollarBracketArith` — core: off; `bash` and `zsh`: on.
+
+Off in the core because the core is the intersection and two members of
+the panel do not have it. **Both bash builds have it**, which was worth
+measuring rather than assuming: bash's manual has called the form
+deprecated for years, and the two builds are separate panel members
+precisely so a removal would show up as a split. It has not happened yet.
+
+The construct is arithmetic and nothing else. The expression inside is the
+same grammar `$(( … ))` holds — `$[2**10]`, `$[1,2]`, `$[i++]`, a
+`base#digits` literal — and a bad one earns the same diagnostic, word for
+word and error token for error token
+(`arith/a-dollar-bracket-refuses-like-the-other`). It is read wherever a
+substitution is read: in a word, inside double quotes, in a `${…}`
+operand, and in an unquoted here-document body, and not in single quotes.
+
+Two details of the *scan* rather than of the meaning. The closing `]` is
+found past nesting, because a subscript is arithmetic too and `$[a[1]+1]`
+answers in both shells that have the form — and it is found past quotes
+and backslashes, which is what bash's own diagnostic reports when it
+blames `']'+1` for the whole text between the brackets. And the spelling
+is carried on the span (`Span.Bracketed`) so that printing writes back
+what was read: the two forms are one node to everything that evaluates
+them, and normalizing `$[1+1]` into `$((1+1))` would be editing a script
+rather than printing it — the same reason `Span.Backquoted` exists.
+
 ## Errors
 
 Division by zero is an error in every shell, unanimously, and it is a

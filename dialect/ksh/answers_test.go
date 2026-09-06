@@ -198,3 +198,16 @@ func TestATypesetLocalDoesNotCarryTheExportAttribute(t *testing.T) {
 		t.Errorf("got %q, want nothing inside and the outer value after", out)
 	}
 }
+
+// `$[expr]` is not arithmetic here, which is the half of #900 that says the
+// spelling is a grammar flag rather than something the core has.
+//
+// Measured 2026-09-06: ksh93u+ leaves the text alone — the `$` is literal and
+// the brackets are a pattern, so with nothing on the filesystem to match, the
+// word stands as written. bash and zsh both read it as arithmetic.
+func TestTheOlderArithmeticSpellingIsNotRead(t *testing.T) {
+	out, st := answersRun(t, `x=5; echo "[$[1+1]][$[x*2]]"`)
+	if want := "[$[1+1]][$[x*2]]\n"; out != want || st != 0 {
+		t.Errorf("got %q at %d, want %q at 0", out, st, want)
+	}
+}

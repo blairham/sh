@@ -271,3 +271,29 @@ func TestAHangupEndsTheShellWithoutKillingIt(t *testing.T) {
 		t.Errorf("status %d, want 143", st)
 	}
 }
+
+// `$[expr]`, this shell's other arithmetic spelling and the older one.
+//
+// Measured 2026-09-06: `echo $[1+1]` is 2 here and in bash 5.3, bash 3.2 and
+// bash as `sh`, and the same text is the literal `$[1+1]` in ksh93 and dash.
+// Reading it as a glob is what made the failure `no matches found`, which
+// points a person at globbing rather than at arithmetic (#900).
+func TestTheOtherArithmeticSpelling(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a sum", `echo $[1+1]`, "2\n"},
+		{"a name", `x=5; echo $[x*2]`, "10\n"},
+		{"in double quotes", `echo "[$[2+3]]"`, "[5]\n"},
+		{"joined to a word", `echo a$[4+4]b`, "a8b\n"},
+		{"a subscript inside", `a=(7 8 9); echo $[a[1]+1]`, "8\n"},
+		{"nested in itself", `echo $[$[2+2]*2]`, "8\n"},
+		{"in an operand", `echo ${p:-$[3*3]}`, "9\n"},
+		{"single quotes make it text", `echo '$[1+1]'`, "$[1+1]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s gave %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

@@ -15,6 +15,12 @@ import (
 // Dialect is what bash 5 parses.
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
+	// `$[expr]`, the older spelling of `$((expr))`. Measured
+	// 2026-09-06: `echo $[1+1]` is 2 here and in the 3.2 macOS ships,
+	// and the same text is the literal `$[1+1]` in ksh93 and dash.
+	// bash has documented it as deprecated for years and both builds
+	// in the panel still take it (#900).
+	d.DollarBracketArith = true
 	// bash expands them interactively and needs `shopt -s expand_aliases`
 	// otherwise, which is not modeled yet — so no route, rather than a route
 	// this shell only takes with an option set. Measured on all three.

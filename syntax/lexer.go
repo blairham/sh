@@ -1196,6 +1196,9 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		}
 	}
 
+	// Where the loop stopped, kept before anything below moves the cursor.
+	stop := l.off
+
 	if holdsCommands(kind) {
 		// Counting found the end, which for a command substitution means the
 		// read above could not — and the commonest reason is the shape #785
@@ -1239,6 +1242,17 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// silently made that nested shape parse again.
 		l.remarks = append(l.remarks, remarks...)
 		if bodyRanOut && depth == 0 && !l.dialect.HeredocEndsAtClosingParen {
+			// The body took the `)` and everything after it, so that is
+			// where the cursor belongs: the input ran out inside this
+			// construct and there is nothing left for anyone to read.
+			//
+			// Not bookkeeping. The line a refusal is located on is the line
+			// the input ended on, and both shells that refuse this name it —
+			// leaving the cursor at the `)` blamed the delimiter's line and
+			// every one of the six corpus rows said so.
+			for !l.eof() {
+				l.advance()
+			}
 			l.ranOut(openingOf(kind))
 			if kind == CommandSubst {
 				l.failUnmatched(open, "$(", ")", "unterminated command substitution")
@@ -1248,7 +1262,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		}
 	}
 	// Trim the closing delimiters the loop consumed.
-	end := l.off
+	end := stop
 	for n := 1; n <= closers(kind) && end > start && l.src[end-1] == ')'; n++ {
 		end--
 	}

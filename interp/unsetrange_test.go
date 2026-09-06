@@ -229,3 +229,51 @@ func TestAPairWhoseEndsAreTheSameSubscriptAsksNothing(t *testing.T) {
 		t.Errorf("status %d, want the unanswered axis refused", st)
 	}
 }
+
+func TestARangeEndpointThatWillNotEvaluateIsReported(t *testing.T) {
+	// Each end is an expression and each is reported where it fails, with
+	// nothing done to the array — the same answer the single subscript gives,
+	// and it has to be given at both ends rather than at whichever one is
+	// read first.
+	for _, sub := range []string{"x+,2", "1,x+"} {
+		out, st := rangeUnsetRun(t, `a=(x y z); unset "a[`+sub+`]"`+showArray,
+			func(s *Semantics) { s.BadSubscriptToUnsetFatal = No })
+		if st != 0 || out != "sh: x+: operand expected\nst=1 [x][y][z] n=3\n" {
+			t.Errorf("a[%s]: got %q status %d, want the expression reported and the array whole", sub, out, st)
+		}
+	}
+}
+
+func TestASubscriptThatIsNotAPairAsksTheRangeAxisNothing(t *testing.T) {
+	// Even one that will not evaluate: it is not a range, so the failure is
+	// the subscript's own and not an unanswered axis. Read with the axis
+	// unanswered, which is the only way to tell the two reports apart.
+	out, st := runGrammar(t, `a=(x y z); unset "a[x+]"`+showArray, nil, func(r *Runner) {
+		sem := *r.Semantics
+		sem.UnsetTakesASubscript = Yes
+		sem.SubscriptCommaIsARange = Unspecified
+		sem.ArrayBaseIsZero = No
+		sem.UnsetArraySpan = UnsetArraySpanLeavesOneEmptyElement
+		sem.BadSubscriptToUnsetFatal = No
+		r.Semantics = &sem
+	})
+	if st != 0 || out != "sh: x+: operand expected\nst=1 [x][y][z] n=3\n" {
+		t.Errorf("got %q status %d, want the subscript reported rather than the axis", out, st)
+	}
+}
+
+func TestARangeOverANameHoldingNothingIsQuiet(t *testing.T) {
+	// No element and no character for a span to reach, whichever reading is
+	// in force and whatever the dialect does about a subscript on a scalar.
+	for _, sub := range []string{"0,1", "2,3", "1,0"} {
+		out, st := rangeUnsetRun(t, `unset b; unset "b[`+sub+`]"; echo "st=$? [${b-UNSET}]"`,
+			func(s *Semantics) {
+				s.ScalarSubscriptIsACharacter = No
+				s.ArrayBaseIsZero = Yes
+				s.UnsetSubscriptOnAScalarIsAnError = Yes
+			})
+		if st != 0 || out != "st=0 [UNSET]\n" {
+			t.Errorf("b[%s]: got %q status %d, want nothing said and nothing done", sub, out, st)
+		}
+	}
+}

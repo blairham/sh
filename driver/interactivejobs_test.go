@@ -28,9 +28,15 @@ import (
 // The pid goes to a file rather than to the output, so the expected
 // announcement can be built with the number actually in it and the whole
 // rendered line asserted rather than a fragment of one.
+//
+// And it is read *after* the wait, which is deliberate: by then the job has
+// ended and its notice has been written, so this also pins that `$!` outlives
+// both. It did not — the notice dropped the job and `$!` read the job — and
+// the first run of this test on a machine fast enough to finish `sleep 0`
+// before the next line is what found it.
 const jobProbe = `sleep 0 &
-echo "$!" > %s
 wait
+echo "$!" > %s
 echo end
 `
 

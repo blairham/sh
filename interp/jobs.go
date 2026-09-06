@@ -166,7 +166,7 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	r.jobs = append(r.jobs, job)
 	// `$!` is the most recent background job, which is how a script waits for
 	// a specific one.
-	r.lastJob = job
+	r.setLastJob(job)
 	r.announceJob(job)
 	// Starting a job succeeds even when the job will not.
 	r.status = 0
@@ -505,7 +505,7 @@ func (r *Runner) addStoppedJob(pid int, argv []string, sig syscall.Signal) {
 	}
 	job.markReady()
 	r.jobs = append(r.jobs, job)
-	r.lastJob = job
+	r.setLastJob(job)
 	r.announceStopped(job)
 }
 
@@ -652,6 +652,15 @@ func (r *Runner) HoldsExitForStoppedJobs() bool {
 // proxy for it, and one that stopped being true the moment `fg` and `bg` could
 // work at all.
 func (r *Runner) LastCommandWasInterrupted() bool { return r.diedOfSig == syscall.SIGINT }
+
+// setLastJob makes a job the current one and records its pid as `$!`.
+//
+// Two fields written together, and read apart. The job pointer is what `%%`
+// and a bare `fg` follow and is dropped when the job leaves the table; the pid
+// is `$!` and is never dropped, because no shell in the panel empties it.
+func (r *Runner) setLastJob(j *Job) {
+	r.lastJob, r.lastJobPID, r.lastJobPIDSet = j, j.PID, true
+}
 
 // Jobs is what this shell is keeping track of, oldest first.
 //

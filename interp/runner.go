@@ -729,6 +729,26 @@ type Runner struct {
 	// jobs are the background commands started by this shell.
 	jobs    []*Job
 	lastJob *Job
+	// lastJobPID is `$!`, which is a *value* and not a reference to a job.
+	//
+	// Separate from lastJob because the two stop being the same thing the
+	// moment the job ends. lastJob is the *current* job — what `%%` names and
+	// what a bare `fg` picks — so it has to go when the job leaves the table,
+	// or those two would name something that is not there. `$!` does not:
+	// measured unanimous 2026-09-05, `sleep 0 & wait; echo "[$!]"` reports the
+	// pid in bash 5.3.15, bash 3.2.57, bash 3.2 as `sh`, dash, ksh93u+ and
+	// zsh 5.9.2, and so does the same script under `-i` on a pseudo-terminal
+	// where the `Done` notice has already been printed and the job forgotten.
+	//
+	// It was one field, and the notice forgetting the job emptied `$!` with
+	// it. That only showed on a route where something asks for the notices
+	// between commands, which until now was the prompt alone.
+	// Zero is a real answer here and not an absence — a background builtin
+	// runs in this process and its job carries no pid of its own — so whether
+	// one has ever been started is a fact of its own rather than a value the
+	// number can carry.
+	lastJobPID    int
+	lastJobPIDSet bool
 	// toldOfStoppedJobs says the chunk *before* this one showed the person
 	// the jobs that are stopped, so the shell will not hold its exit for them
 	// again; tellingOfStoppedJobs is this chunk saying so, and becomes the

@@ -135,3 +135,42 @@ func notices(t *testing.T, src string, jobControl bool, announces Answer, dg Dia
 	}
 	return out
 }
+
+// `$!` survives the job it names — the job ending, the notice reporting it,
+// and the table forgetting it.
+//
+// Measured unanimous 2026-09-05: `sleep 0 & wait; echo "[$!]"` reports the pid
+// in bash 5.3.15, bash 3.2.57, bash 3.2 run as `sh`, dash, ksh93u+ and zsh
+// 5.9.2, and so does the same script under `-i script.sh` on a pseudo-terminal
+// where the `Done` row has already been printed.
+//
+// It did not, and the reason is the shape rather than the rule: `$!` read the
+// *current job*, which the notice has to drop because `%%` and a bare `fg`
+// would otherwise name a job that is no longer in the table. Two questions,
+// so two fields.
+func TestTheLastBackgroundPidSurvivesTheNotice(t *testing.T) {
+	var r *Runner
+	out := notices(t, `true & sleep 0.05`, true, No, Diagnostics{}, &r)
+	if st := strings.TrimSpace(out); st != "" {
+		t.Fatalf("out = %q, want nothing before the notice is asked for", out)
+	}
+	before := bang(t, r)
+	if before == "" {
+		t.Fatal("`$!` was empty before the notice — the job was never recorded")
+	}
+	if lines := r.FinishedJobNotices(); len(lines) != 1 {
+		t.Fatalf("notices = %v, want the finished job reported once", lines)
+	}
+	if n := len(r.Jobs()); n != 0 {
+		t.Fatalf("%d jobs left, want the reported one forgotten", n)
+	}
+	if after := bang(t, r); after != before {
+		t.Errorf("`$!` = %q after the notice, want %q — the pid outlives the job", after, before)
+	}
+}
+
+// bang is what this runner expands `$!` to, read the way a script reads it.
+func bang(t *testing.T, r *Runner) string {
+	t.Helper()
+	return r.Expand("$!")
+}

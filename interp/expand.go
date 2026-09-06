@@ -1619,10 +1619,14 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		// id is already the right one.
 		return itoa(os.Getpid()), true
 	case "!":
-		if r.lastJob == nil {
+		// The recorded pid rather than the current job, and the two are not
+		// the same once the job has ended: a finished job is forgotten by
+		// the notice that reports it, and `$!` still names the process
+		// afterwards in every shell in the panel. See Runner.lastJobPID.
+		if !r.lastJobPIDSet {
 			return "", true
 		}
-		return itoa(r.lastJob.PID), true
+		return itoa(r.lastJobPID), true
 	case "0":
 		// zsh reports the *function's* name inside a function where every
 		// other shell reports the shell's.

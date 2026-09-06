@@ -79,6 +79,7 @@ func TestSemantics(t *testing.T) {
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.Yes},
 		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.No},
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.No},
+		{"ArrayNameWithoutSubscriptIsTheList", s.ArrayNameWithoutSubscriptIsTheList, interp.No},
 		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.No},
 		{"SelectEofIsSuccess", s.SelectEofIsSuccess, interp.No},
 		{"SelectTakesUnterminatedReply", s.SelectTakesUnterminatedReply, interp.No},

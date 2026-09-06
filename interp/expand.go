@@ -90,7 +90,7 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 		// stays open for whatever follows — which is why `x$@y` attaches its
 		// literal text to the first and last fields rather than becoming
 		// words of its own.
-		if parts, ok := r.expandAt(s); ok {
+		if parts, ok := r.expandAt(s, splitByDialect); ok {
 			if len(parts) == 0 {
 				continue
 			}
@@ -167,7 +167,7 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 			break
 		}
 		r.expandingSpan = i
-		if parts, ok := r.expandAt(s); ok {
+		if parts, ok := r.expandAt(s, splitNever); ok {
 			b.WriteString(strings.Join(parts, " "))
 			continue
 		}
@@ -204,7 +204,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 	var b strings.Builder
 
 	for _, s := range w.Spans {
-		if parts, ok := r.expandAt(s); ok {
+		if parts, ok := r.expandAt(s, splitAlways); ok {
 			b.WriteString(strings.Join(parts, " "))
 			if len(parts) == 0 {
 				continue
@@ -428,7 +428,7 @@ func (r *Runner) expandColonTildes(w *syntax.Word) {
 // itself. Quoted, it is one field per parameter, each keeping its own spaces;
 // with no parameters it is *zero* fields, which is why `set -- "$@"` is safe
 // on an empty list and `set -- "$*"` is not.
-func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
+func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 	if s.Kind != syntax.ParamExp || s.Param == nil {
 		return nil, false
 	}
@@ -451,6 +451,12 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 		return fields, true
 	}
 	e := s.Param
+	// A bare array name is the *array* in one dialect, so the node is given
+	// the subscript that says so and the array path below answers it. See
+	// bareArrayAsList for why that is a rewrite rather than a path of its own.
+	if listed, ok := r.bareArrayAsList(e, s, sp); ok {
+		e = listed
+	}
 	// `${!prefix@}` and `${!prefix*}` yield the *names* that begin with the
 	// prefix, and the two spellings differ exactly as `$@` and `$*` do.
 	if e.Prefix != 0 {
@@ -491,9 +497,7 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	// element dropped, which is no field at all. The corpus caught that.
 	if e.Index != nil && e.Inner == nil && !e.Length &&
 		(e.Op == syntax.ParamNone ||
-			((e.Op == syntax.ParamSubstring || e.Op == syntax.ParamTransform ||
-				selectsElements(e.Op) || elementOp(e.Op) || r.yieldsTheArray(e)) &&
-				wholeArraySubscript(r.subscriptText(e.Index)))) {
+			(r.listShapedOp(e) && wholeArraySubscript(r.subscriptText(e.Index)))) {
 		if elems, ok := r.arraySubscript(e); ok {
 			if e.Indirect {
 				// `${!a[@]}` is the array's *subscripts*, not its elements —
@@ -1087,6 +1091,119 @@ func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
 // wholeArraySubscript reports whether a subscript names the whole array rather
 // than one element, which is what decides whether `:` slices a list or takes a
 // substring of a single value.
+// listShapedOp reports whether the array path answers this operator with the
+// *elements* when the subject is the whole array — one output per element,
+// or a selection among them — rather than with one joined value.
+//
+// Named rather than written inline because two callers must agree on it: the
+// array branch, which uses it to decide whether `${a[@]…}` keeps its fields,
+// and bareArrayAsList, which uses it to decide whether rewriting a bare name
+// to that subscript would reach the branch at all.
+//
+// The rewrite is local to expandAt — a node the branch declines is answered
+// from the untouched original — so a second, drifting copy of this list would
+// not produce a wrong *value*. It would produce a wrong *question*: the axis
+// would be asked for an expansion whose answer is then thrown away, and an
+// unanswered axis is a diagnostic rather than a shrug, so a core that has
+// chosen no shell would refuse `a=(x y); echo ${a:=d}` over a reading it
+// never used. Mutation says so — dropping the test here refuses all three of
+// `${a:=d}`, `${a:?e}` and `${a=d}`.
+//
+// ParamNone is not here: the branch takes it under *any* subscript, because
+// `${a[0]}` is one element and still comes from this path.
+func (r *Runner) listShapedOp(e *syntax.ParamExpr) bool {
+	return e.Op == syntax.ParamSubstring || e.Op == syntax.ParamTransform ||
+		selectsElements(e.Op) || elementOp(e.Op) || r.yieldsTheArray(e)
+}
+
+// bareArrayAsList gives a bare array name the `[@]` subscript one dialect
+// reads it with, and reports whether it did.
+//
+// `$a` is the elements there — one field each, a slice slicing the *list* and
+// `:#` filtering it — exactly as `${a[@]}` is, where bash and ksh93 read the
+// bare name as one element and dash has no arrays to ask about. Answering it
+// by rewriting the node is what keeps the two spellings from drifting:
+// everything `${a[@]}` already gets right, `$a` gets right for the same
+// reason and by the same code, and a later fix to one is a fix to both.
+//
+// Only where the reading can be seen, which is three conditions:
+//
+//   - Unquoted. Quoted, both readings are one field holding the joined value
+//     — that is ArrayScalarIsTheWholeArray's question and it is already
+//     answered — so `"$a"` must stay on the scalar path.
+//   - In a context that splits. Measured, an unquoted bare name in a context
+//     that does not split is the joined value in zsh too: `IFS=-; v=$a` is
+//     `x-y-z`, and so are `[[ $a = x-y-z ]]`, `case $a`, and a here-document
+//     body. splitNever is exactly those contexts.
+//   - More than one element, or an operator whose answer depends on the
+//     subject being a list even at one. A one-element array is that element
+//     under either reading and every value-to-value operator agrees on it;
+//     `${a:1}` and the element-selecting three do not, because a slice takes
+//     elements where a substring takes characters and a filter can drop the
+//     only element there is. An empty array is no field under either reading.
+//
+// Every one of those is a guard on the *question*, not on the answer: the
+// rewrite is local to expandAt, so a node it declines is answered from the
+// untouched original either way. What asking too widely costs is the core —
+// an unanswered axis is a diagnostic, so a question asked where the readings
+// agree turns `a=(x); echo $a` into a refusal.
+func (r *Runner) bareArrayAsList(e *syntax.ParamExpr, s syntax.Span, sp splitPolicy) (*syntax.ParamExpr, bool) {
+	// A subscript is already the question this answers. `${#a}` is
+	// ArrayLengthWithoutSubscriptIsCount's, and asking this one as well
+	// refuses it on a core that has chosen no shell — measured by mutation.
+	// The indirection and the prefix are here for a reading rather than for a
+	// question: `${!a}` reads the value as a *name*, and the same node
+	// subscripted is the array's *subscripts*, which the branch below would
+	// duly answer with. No grammar reaches that pairing today — the two that
+	// spell `${!…}` at all answer this axis no — so no test can tell the
+	// guard from its absence, and it stays because the reading it prevents is
+	// a different construct rather than a different field count.
+	//
+	// A flag group needs no clause: expandFlagged answers every node carrying
+	// one and returns before this is reached.
+	if e.Index != nil || e.Length || e.Indirect || e.Prefix != 0 {
+		return nil, false
+	}
+	if s.Quoting != syntax.Unquoted || sp == splitNever {
+		return nil, false
+	}
+	if e.Op != syntax.ParamNone && !r.listShapedOp(e) {
+		return nil, false
+	}
+	// arrayElementCount reports zero for a name that is not an array at all,
+	// so the count is the whole test: a scalar and an empty array both stop
+	// here, and neither has a reading the two answers differ on.
+	n, _ := r.arrayElementCount(e.Name)
+	if n == 0 || (n == 1 && !opReadsTheList(e.Op)) {
+		return nil, false
+	}
+	if !r.ask(r.sem().ArrayNameWithoutSubscriptIsTheList,
+		"a bare array name being its elements") {
+		return nil, false
+	}
+	listed := *e
+	listed.Index = &syntax.Word{Spans: []syntax.Span{{Kind: syntax.Literal, Value: "@"}}}
+	return &listed, true
+}
+
+// opReadsTheList reports whether an operator still tells the two readings
+// apart when the array holds exactly one element.
+//
+// The slice alone does: `a=(abcdef); ${a:1}` is nothing at all where the name
+// is the list — one element with the first dropped — and `bcdef` where it is
+// that element's characters. The offset counts elements in one reading and
+// characters in the other, and one element is enough for those to diverge.
+//
+// The three element-selecting operators look like they belong here and do
+// not, which mutation is what settled: `${a:#p}` on a one-element list keeps
+// that element or drops it, and on the scalar it is the same element tested
+// against the same pattern, so the two readings coincide — and `:|` and `:*`
+// coincide for the same reason. Every other operator maps a value to a value
+// and gives the same answer whichever way the single element was reached.
+func opReadsTheList(op syntax.ParamOp) bool {
+	return op == syntax.ParamSubstring
+}
+
 func wholeArraySubscript(idx string) bool { return idx == "@" || idx == "*" }
 
 // elementOp reports the operators that apply to each element when the
@@ -2268,10 +2385,15 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set bool) {
 	// taken out, and it keeps the fields that expandAt yields rather than
 	// joining them the way expandWordNoSplit does. Which of the two a nested
 	// expansion is, is the whole question below.
+	//
+	// splitByDialect, the ordinary word's policy, because this position keeps
+	// fields: a bare array name is the list here exactly as it is on a
+	// command line, so `${${a}}` reaches the same answer `${${a[@]}}` does
+	// rather than a joined string that looks like one field on purpose.
 	defer r.inWord(e.Inner)()
 	r.expandingSpan = 0
 	span := e.Inner.Spans[0]
-	if parts, ok := r.expandAt(span); ok {
+	if parts, ok := r.expandAt(span, splitByDialect); ok {
 		words = parts
 	} else {
 		text, _ := r.expandSpan(span, splitNever)

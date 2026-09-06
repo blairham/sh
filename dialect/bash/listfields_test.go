@@ -50,6 +50,18 @@ func TestAnUnquotedListSplitsAndGlobsItsElements(t *testing.T) {
 			"an empty element is no field",
 			"a=(\"\" x)\nset -- ${a[@]}\necho \"n=$# [$1]\"", "n=1 [x]\n",
 		},
+		{
+			// The contexts that split in no shell, where this one's yes must
+			// not reach: the element keeps its separator and the context
+			// joins what it was given.
+			"an assignment's value is not split",
+			"IFS=-\na=(\"p-q\" r)\nv=${a[@]}\necho \"[$v]\"", "[p-q r]\n",
+		},
+		{
+			"a case subject is not split",
+			"IFS=-\na=(\"p-q\" r)\ncase ${a[@]} in \"p-q r\") echo whole;; \"p q r\") echo split;; *) echo other;; esac",
+			"whole\n",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runBash(t, dir, tc.src)

@@ -195,3 +195,33 @@ func TestUnquotedListEscapesBeforeItSplits(t *testing.T) {
 		t.Errorf("scalar: got %q, want the same order the list path takes", scalarGot)
 	}
 }
+
+// TestAListInAContextThatNeverSplitsIsNotSplit: the splitting axis is asked
+// through the context's policy, not straight off the semantics vector.
+//
+// An assignment's value, a `case` subject, a `[[ ]]` operand and a
+// here-document body split in no shell, and that exemption is unanimous
+// rather than a dialect's — which is why the policy exists and why asking the
+// axis directly would be wrong even for a shell that answers yes to it. The
+// elements arrive here as they do everywhere else and the context joins them,
+// so an element holding a separator would come apart on the way and the
+// joined result would silently lose the boundary.
+func TestAListInAContextThatNeverSplitsIsNotSplit(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{"an assignment's value", `IFS=-; a=("p-q" r); v=${a[@]}; printf "[%s]" "$v"`, "[p-q r]"},
+		{"the positional parameters", `IFS=-; set -- "p-q" r; v=$@; printf "[%s]" "$v"`, "[p-q r]"},
+		{
+			"a case subject",
+			`IFS=-; a=("p-q" r); case ${a[@]} in "p-q r") printf whole;; "p q r") printf split;; *) printf other;; esac`,
+			"whole",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// Under the answer that splits, which is the only one that can
+			// tell the policy from the axis.
+			if got, _ := fieldsRun(t, c.src, Yes, Yes); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}

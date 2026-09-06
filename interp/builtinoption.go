@@ -201,7 +201,15 @@ func (r *Runner) badOption(word, known string) (byte, string) {
 	if r.diag().BadOptionNaming == BadOptionWholeWord && strings.HasPrefix(word, "--") {
 		return letter, word
 	}
-	return letter, "-" + string(letter)
+	// The sign the word was written with, not a `-` assumed. `declare` and
+	// `typeset` are the one place a shell spells an option with a plus, and
+	// all four panel shells say `+q` back for `typeset +q v` — a refusal
+	// that renamed it `-q` was pointing at a word the script never wrote.
+	sign := "-"
+	if strings.HasPrefix(word, "+") {
+		sign = "+"
+	}
+	return letter, sign + string(letter)
 }
 
 func (r *Runner) badBuiltinOption(name, opt string) int {

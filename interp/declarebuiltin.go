@@ -37,6 +37,7 @@ type declareFlags struct {
 	lower     bool
 	upper     bool
 	global    bool
+	hidden    bool
 	function  bool
 	funcNames bool
 	remove    bool
@@ -94,6 +95,15 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// Global rather than local: the assignment reaches the
 				// global cell however deep the function stack is.
 				f.global = true
+			case 'H':
+				// Hide the value from listings. The name is declared, holds
+				// what it holds and reads back exactly as it would without
+				// the letter — only a listing that would have written
+				// `=value` writes the bare name instead. Recorded rather
+				// than acted on at declaration time, because it is a
+				// property of the name that a later listing consults, the
+				// same shape `-i` has.
+				f.hidden = true
 			case 'f':
 				f.function = true
 			case 'F':
@@ -172,6 +182,16 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 			// global cell and no shadow is taken, so `declare -g x=new`
 			// inside a function survives its return even where a `local x`
 			// is standing in front of the name.
+			if f.assoc && !f.remove {
+				// And `-A` still has to be recorded on that global cell.
+				// It was not, and the two letters together are a common
+				// spelling: `typeset -gA t` declared nothing associative,
+				// so the very next `t[k]=v` was an *indexed* array being
+				// given a non-numeric subscript and was refused. The
+				// non-global path below has always marked it; this one
+				// returned before reaching that line.
+				r.markAssoc(name)
+			}
 			if hasValue {
 				r.setGlobalVar(name, value)
 				if r.unspecified || r.ctl == controlExit {
@@ -186,7 +206,7 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		// Declaring inside a function declares a local, which is unanimous
 		// among the three shells that have the name — subject to ksh93's
 		// rule about which functions have a scope at all.
-		r.shadowTypeset(name)
+		fresh := r.shadowTypeset(name)
 		r.localExportAttribute(name, f.export)
 		if r.unspecified {
 			// See biLocal: an unanswered axis refuses the declaration
@@ -214,7 +234,7 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		default:
-			r.declareEmpty(name)
+			r.declareEmpty(name, fresh)
 		}
 		if f.readonly && !f.remove {
 			r.markReadonly(name)
@@ -272,6 +292,19 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		} else {
 			r.uppered[name] = true
 			delete(r.lowered, name)
+		}
+	}
+	if f.hidden {
+		if r.hidden == nil {
+			r.hidden = map[string]bool{}
+		}
+		if f.remove {
+			// `+H` takes the value back out of hiding and leaves everything
+			// else alone: measured, `typeset -iH n=5` lists as `typeset -i n`
+			// and `typeset +H n` lists as `typeset -i n=5`.
+			delete(r.hidden, name)
+		} else {
+			r.hidden[name] = true
 		}
 	}
 }
@@ -395,8 +428,34 @@ func (r *Runner) integerValue(text string) (string, bool) {
 // The name is now local, or attributed, or both — but whether it also *exists*
 // is a dialect's answer, so this is the one place that decides it and both
 // `local` and `typeset` come through here.
-func (r *Runner) declareEmpty(name string) {
+func (r *Runner) declareEmpty(name string, fresh bool) {
 	if r.ask(r.sem().DeclaredNameWithoutValueIsEmpty, "a declaration without a value setting the name") {
+		if !fresh && r.declaredNameHolds(name) {
+			// The axis is about a name the declaration *creates*, not about
+			// one that is already there: `typeset -x v` on a `v=abc` leaves
+			// `abc` alone in all four shells that spell the builtin, and so
+			// does `typeset -H h` on an `h=hid`. Emptying it here made a
+			// declaration that only meant to add an attribute destroy the
+			// value it was adding it to. Inside a function the cell the
+			// shadow just made is new whatever the caller held, which is
+			// what fresh says — measured `in=[0]` for `typeset -i v` under
+			// an outer `v=5`, against `[5]` for the same line at the top.
+			//
+			// What it keeps is read back through the attribute that has
+			// just arrived, which is not the same as leaving it untouched:
+			// `a=5+2; typeset -i a` is 7 and `d=MiXeD; typeset -u d` is
+			// MIXED. A scalar only — an array keeps its elements as they
+			// are under both case letters, measured `a b` from
+			// `arr=(a b); typeset -u arr`. Not an assignment either, so a
+			// readonly name is re-read rather than refused: measured
+			// `typeset -r r=1; typeset -i r` as 1 with status 0.
+			if v, ok := r.Vars[name]; ok {
+				if folded, ok := r.attributeFolded(name, v); ok {
+					r.Vars[name] = folded
+				}
+			}
+			return
+		}
 		r.setVar(name, "")
 		// Set by a declaration and not by an assignment, which the shell's
 		// own reads cannot tell apart and a child can: see
@@ -459,6 +518,26 @@ func (r *Runner) declarationAssignmentExport(name string, namesTheAttribute bool
 		r.exported = map[string]bool{}
 	}
 	r.exported[name] = false
+}
+
+// declaredNameHolds reports whether the name already has something to lose:
+// a scalar, either array, or a value it was born with in the environment.
+// A name `unset` took away holds nothing, however many attributes survive it.
+func (r *Runner) declaredNameHolds(name string) bool {
+	if r.removed[name] {
+		return false
+	}
+	if _, ok := r.AssocArrays[name]; ok {
+		return true
+	}
+	if _, ok := r.Arrays[name]; ok {
+		return true
+	}
+	if _, ok := r.Vars[name]; ok {
+		return true
+	}
+	_, ok := r.inheritedValue(name)
+	return ok
 }
 
 // localExportAttribute answers whether the local a declaration just took
@@ -588,25 +667,34 @@ func (r *Runner) hideVar(name string) {
 // one, and in a POSIX-style function the assignment is ordinary and reaches
 // the caller. The axis is asked only when the two answers differ — inside a
 // keyword-defined function they do not, so that case needs no dialect.
-func (r *Runner) shadowTypeset(name string) {
+//
+// The result reports whether this call is what took the scope's copy — see
+// shadow, and declareEmpty, which is the one caller that needs to know.
+func (r *Runner) shadowTypeset(name string) (fresh bool) {
 	if len(r.scopes) == 0 {
-		return
+		return false
 	}
 	if !r.scopes[len(r.scopes)-1].keyword &&
 		r.ask(r.sem().TypesetLocalNeedsKeywordFunction, "`typeset` needing a keyword-defined function to declare a local") {
-		return
+		return false
 	}
-	r.shadow(name)
+	return r.shadow(name)
 }
 
 // shadow saves a name in the innermost scope so the function's exit puts it
 // back, which is what makes a declaration local.
-func (r *Runner) shadow(name string) {
+//
+// The result reports whether the copy was taken *here*: with it, the cell the
+// declaration is about to write is new and holds nothing, whatever the outer
+// name held. A second declaration of the same name in the same scope finds
+// the copy already made and is writing over a cell that is its own.
+func (r *Runner) shadow(name string) (fresh bool) {
 	if len(r.scopes) == 0 {
-		return
+		return false
 	}
 	sc := r.scopes[len(r.scopes)-1]
 	if _, seen := sc.saved[name]; !seen {
+		fresh = true
 		old, existed := r.Vars[name]
 		sc.saved[name] = old
 		sc.existed[name] = existed
@@ -658,6 +746,7 @@ func (r *Runner) shadow(name string) {
 		sc.savedAssoc[name] = old
 		sc.assocExisted[name] = existed
 	}
+	return fresh
 }
 
 // declarationUtilities are the commands whose `name=value` arguments are

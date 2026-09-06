@@ -5823,9 +5823,54 @@ echo unreachable`,
 		Why:     "the other direction of the same attribute, unanimous among the shells that have typeset",
 	},
 	{
+		ID: "declare/hide-attribute-keeps-the-value", Category: "declarations",
+		Snippet: `typeset -H h=hid; echo "[$h] st=$?"`,
+		Why:     "the letter two shells have and split over. In zsh `-H` hides a name's value from listings and changes nothing about a read; in ksh93 the same letter is a wholly different attribute — file name mapping — and hides nothing at all. This row is the half they agree on: the name holds `hid` and `$h` says so in both, so nothing downstream of the declaration can tell them apart. bash refuses the letter under `typeset` and under `declare`, with the usage line and 2, and dash has no such builtin",
+	},
+	{
+		ID: "declare/hide-attribute-keeps-the-value-out-of-a-listing", Category: "declarations",
+		Snippet: `typeset -H h=hid; typeset -p h; echo "st=$?"`,
+		Why:     "and the half they disagree on, which is the whole of what the letter does in zsh: `typeset h` there, with no `=hid` after it, against ksh93's `typeset -H h=hid`, which writes the value *and* the letter back. So the attribute cannot be read as one thing with two spellings — one shell expresses it by omitting the value and the other by naming the flag, and a listing is the only place either of them says anything",
+	},
+	{
+		ID: "declare/hide-attribute-removed", Category: "declarations",
+		Snippet: `typeset -H h=hid; typeset +H h; typeset -p h; echo "st=$?"`,
+		Why:     "`+H` puts the value back in the listing, which is the tell that the value was there all along — and it is also the tell that a second declaration of a name that already holds one must not empty it, because a shell that re-declared `h` here would answer `typeset h=''` and look like it had merely un-hidden an empty name",
+	},
+	{
+		ID: "declare/hide-attribute-on-a-table", Category: "declarations",
+		Snippet: `typeset -AH m; m[k]=v; echo "[${m[k]}]"; typeset -p m; echo "st=$?"`,
+		Why:     "the spelling scripts actually use: the hiding letter bundled with the table letter, where the element still reads back and only the listing is short of it — `typeset -A m` in zsh against ksh93's `typeset -A -H m=([k]=v)`. bash 3.2 has no `-A` either, so the panel splits three ways over one word",
+	},
+	{
+		ID: "declare/global-letter-with-the-table-attribute", Category: "declarations",
+		Snippet: `typeset -gA m; m[k]=v; echo "[${m[k]}] st=$?"`,
+		Why:     "the two letters together, which is not the sum of the rows that have each alone: the global letter says where the declaration lands and the table letter says what it is, and a shell that reads the first and drops the second leaves `m` an *indexed* array, so the very next `m[k]=v` is a non-numeric subscript and is refused. bash and zsh have both letters; ksh93 has no `-g` at all and, because its `typeset` is special, the refusal ends the script",
+	},
+	{
+		ID: "declare/integer-attribute-added-to-a-name-with-a-value", Category: "declarations",
+		Snippet: `v=5+2; typeset -i v; echo "[$v] st=$?"`,
+		Why:     "the attribute arriving *after* the value, which is a different question from the two rows above it: bash leaves the four characters alone, while ksh93 and zsh read what the name already holds back through the attribute that just arrived and store 7. Either way the value survives — the answer no shell gives is the empty string, which is what a declaration that treated `typeset -i v` as `typeset -i v=` would produce",
+	},
+	{
+		ID: "declare/case-attribute-added-to-a-name-with-a-value", Category: "declarations",
+		Snippet: `d=MiXeD; typeset -u d; echo "[$d] st=$?"`,
+		Why:     "the same question of a case letter, and the same split — `MIXED` in ksh93 and zsh, `MiXeD` in bash — which is what makes it a rule about attributes rather than about arithmetic. bash 3.2 has no `-u` at all and answers 2 while leaving the value where it is",
+	},
+	{
+		ID: "set/bare-set-and-a-hidden-value", Category: "builtins",
+		Snippet: `typeset -H zzh=hid; zzv=plain; set | grep '^zz'; echo "st=$?"`,
+		Why:     "the hiding letter reaches the other listing too: zsh writes the bare name `zzh` where every other shell writes `zzh=hid` or nothing, and the ordinary `zzv=plain` on the next line is what proves the listing ran rather than failing. Filtered to two names the script invents, because the rest of a bare `set` is the machine's",
+	},
+	{
 		ID: "declare/an-option-typeset-does-not-have", Category: "declarations",
 		Snippet: `typeset -q v=1; echo "st=$?"`,
 		Why:     "the refusal splits three ways: reported with a usage line and status 2, reported bare with 1, and fatal with the usage lines in the shell whose typeset failures end the script",
+	},
+	{
+		ID: "declare/an-option-written-with-a-plus", Category: "declarations",
+		Snippet: `typeset +q v; echo "st=$?"`,
+		Why:     "the sign a refusal names is the one the word was written with — `+q` in all four shells that have the builtin, each in its own words and its own status. It is the only place a shell spells an option with a plus, so it is the only place the question can be asked, and a refusal that normalized the word to `-q` would be pointing at a word the script never wrote",
 	},
 	{
 		ID: "declare/an-option-local-does-not-have", Category: "declarations",

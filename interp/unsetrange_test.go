@@ -83,6 +83,11 @@ func TestAReversedRangeInsertsAnEmptyElement(t *testing.T) {
 		{"2,1", "st=0 [x][][y][z] n=4\n"},
 		{"3,2", "st=0 [x][y][][z] n=4\n"},
 		{"0,-4", "st=0 [][x][y][z] n=4\n"},
+		// Reversed by more than one: the span is still empty *at the start*
+		// and nothing between the two ends is disturbed, which a tail taken
+		// from the end alone would have duplicated.
+		{"3,1", "st=0 [x][y][][z] n=4\n"},
+		{"-1,-3", "st=0 [x][y][][z] n=4\n"},
 	} {
 		out, st := rangeUnsetRun(t, `a=(x y z); unset "a[`+tc.sub+`]"`+showArray, nil)
 		if st != 0 || out != tc.want {

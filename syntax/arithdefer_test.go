@@ -46,10 +46,22 @@ func TestAnUnreadableExpressionDoesNotRefuseTheFile(t *testing.T) {
 			why:  "the same span kind, so one line covers both spellings",
 		},
 		{
-			name: "a C-style for header",
+			name: "a C-style for header's init part",
 			src:  "for ((echo hi;;)); do :; done",
 			text: "echo hi",
 			why:  "bash, ksh93 and zsh all take this under -n and all reach past one in a branch that never runs",
+		},
+		{
+			name: "a C-style for header's condition",
+			src:  "for ((;echo hi;)); do :; done",
+			text: "echo hi",
+			why:  "the header has three parts and each is read separately, so one covered part says nothing about the other two — a mutation of exactly this survived until the case existed",
+		},
+		{
+			name: "a C-style for header's post part",
+			src:  "for ((;;echo hi)); do :; done",
+			text: "echo hi",
+			why:  "the third part, measured to defer with the other two: `bash -n` takes it and `false && for ((;;echo hi))` reaches past it",
 		},
 		{
 			name: "a float where the dialect has none",
@@ -129,7 +141,17 @@ func arithNodeOf(t *testing.T, f *File) (string, ArithExpr) {
 			case *ArithCmdClause:
 				return x.Expr, x.Parsed
 			case *ForArithClause:
-				return x.InitText, x.Init
+				// Whichever of the three parts was written, so one helper
+				// serves all three: a header carries at most one of them in
+				// these cases.
+				switch {
+				case x.InitText != "":
+					return x.InitText, x.Init
+				case x.CondText != "":
+					return x.CondText, x.Cond
+				default:
+					return x.PostText, x.Post
+				}
 			case *SimpleCmd:
 				for _, w := range x.Args {
 					for _, s := range w.Spans {

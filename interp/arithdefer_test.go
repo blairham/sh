@@ -40,9 +40,19 @@ func TestAnExpressionInABranchThatNeverRunsIsNeverRead(t *testing.T) {
 			why:  "the substitution form, reached through a word rather than through a command",
 		},
 		{
-			name: "a C-style for header",
+			name: "a C-style for header's init part",
 			src:  `false && for ((echo hi;;)); do :; done; echo "reached st=$?"`,
-			why:  "the header's three parts, which are read where the loop starts",
+			why:  "the header's parts are read where the loop starts",
+		},
+		{
+			name: "a C-style for header's condition",
+			src:  `false && for ((;echo hi;)); do :; done; echo "reached st=$?"`,
+			why:  "each of the three parts is read separately, so covering one says nothing about the others — a mutation of exactly this survived until the case existed",
+		},
+		{
+			name: "a C-style for header's post part",
+			src:  `false && for ((;;echo hi)); do :; done; echo "reached st=$?"`,
+			why:  "the third part, measured to defer with the other two in bash, bash 3.2, ksh93 and zsh",
 		},
 		{
 			name: "an arithmetic command with an operand missing",

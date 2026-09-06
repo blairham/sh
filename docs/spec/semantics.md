@@ -3444,8 +3444,12 @@ What was built, all through the extension seam — registered builtins in each
 
   Note that `repl.PromptStyle` is a *second* table of these escapes, the
   one the prompt drawer reads, and it is far larger — colors, visual
-  attributes, the clock. The two have not been unified and should be; see
-  the issue filed from this work.
+  attributes, the clock. So this shell already answers `%F{196}` when
+  drawing a prompt and refuses it when a script writes `print -P
+  '%F{196}…'`. The two are not unified because the visual entries are the
+  *dialect's* measured byte sequences and `interp` cannot read `repl`;
+  hard-coding ANSI here would trade a missing answer for a wrong one. See
+  #1090.
 - **bash `caller`** (dialect/bash/caller.go): the stack the three
   `BASH_*` arrays already name, one step up, `NULL` and `main` where bash
   puts them.

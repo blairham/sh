@@ -4547,6 +4547,19 @@ echo "st=$?"`,
 		Why: "the boundary: skipping a newline before an operator must not become skipping one before anything at all. Every shell that has `[[ ]]` refuses two conditions with only a line between them, and each blames a different token on a different line",
 	},
 	{
+		ID: "cond/a-semicolon-inside-a-condition", Category: "pattern matching",
+		SyntaxError: true,
+		Snippet:     `[[ -n x ; ]]; echo "st=$?"`,
+		Why:         "a `;` where the condition wanted an operator or its `]]`, and the row that says a refusal names the *offending* token rather than what was wanted. Each of the three shells with `[[ ]]` words it in its own way and all three name the `;`. The `|` spelling of the same question is deliberately not a row beside it: dash has no `[[ ]]`, so there the words are a *pipeline* of two commands that do not exist, and which of the two `not found` lines arrives first is a race. bash writes two lines and the second is not the sentence it gives a stray token anywhere else — `syntax error near` without the words `unexpected token` — which is measurable only because it keeps them everywhere else",
+	},
+	{
+		ID: "cond/a-condition-opened-on-one-line-and-refused-on-another", Category: "pattern matching",
+		SyntaxError: true,
+		Snippet: `[[ -n x
+ ; ]]; echo "st=$?"`,
+		Why: "and the reason bash's extra line carries a location of its own: the construct is named at the `[[`'s line and the token at the token's, so a condition opened on line 1 and refused on line 2 names both. One line would have looked right in every single-line case above",
+	},
+	{
 		ID: "decl/an-array-assignment-as-an-operand", Category: "parameter expansion",
 		// `typeset` rather than `local`, and at the top level rather than in
 		// a function, only to keep the case about this: dash adds an

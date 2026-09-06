@@ -3,6 +3,8 @@
 
 package syntax
 
+import "errors"
+
 // The condition tree for `[[ … ]]`, from docs/spec/grammar/conditions.md.
 //
 // It has its own node types rather than reusing the command ones because
@@ -150,11 +152,53 @@ func (p *Parser) parseTestClause() Command {
 	c.Stop = p.tok.End
 	p.lex.inCondition = false
 	if !p.atWord("]]") {
-		p.fail("expected ]]")
+		// The token, not what we wanted. `expected ]]` was one sentence for
+		// every way a condition can be malformed — a second operand with no
+		// operator, a `;`, a `|` — and every shell in the panel names the
+		// *offending* token instead. Routed through the ordinary
+		// unexpected-token path so each dialect words it the way it words
+		// any other, rather than through a message of this construct's own.
+		//
+		// Marked as being inside the condition, because one dialect words a
+		// token refused *there* differently from one refused anywhere else
+		// and prints a line about the construct in front of it — at the
+		// `[[`'s line rather than the token's, which is why the construct's
+		// position travels with the error.
+		p.failUnexpected("]]")
+		p.blameCondition(c.Start)
 		return c
 	}
 	p.next()
 	return c
+}
+
+// condWord is a word standing as an operand, which an unquoted `]]` is not.
+//
+// Without this the closing `]]` was read as an operand and the failure landed
+// on whatever followed the condition: `[[ -n ]]` blamed the `;` after it
+// rather than the `]]` in front of it, which is what every shell in the panel
+// names. A quoted one is an ordinary word — `[[ -n "]]" ]]` tests a
+// two-character string — so the check is on the spelling and not on the text.
+func (p *Parser) condWord() *Word {
+	if p.atWord("]]") && !p.tok.IsQuoted() {
+		return nil
+	}
+	return p.word()
+}
+
+// blameCondition marks the failure just recorded as one the `[[` was open
+// over, and records where the `[[` was.
+//
+// Set after the failure rather than passed into it: every route to a refused
+// token inside a condition goes through the ordinary helpers, and threading a
+// position through each of them would be paying for one dialect's extra line
+// in five signatures.
+func (p *Parser) blameCondition(start Pos) {
+	var se *Error
+	if !errors.As(p.err, &se) || se.Kind != ErrUnexpected {
+		return
+	}
+	se.Construct, se.ConstructLine = "[[", start.Line
 }
 
 func (p *Parser) condOr() CondExpr {
@@ -239,7 +283,7 @@ func (p *Parser) condPrimary() CondExpr {
 	case p.tok.Kind == TokWord && !p.tok.IsQuoted() && condUnaryOps[p.tok.Literal()]:
 		op, start := p.tok.Literal(), p.tok.Pos
 		p.next()
-		x := p.word()
+		x := p.condWord()
 		if x == nil {
 			p.failCondOperand(op, "unary")
 			return nil
@@ -247,7 +291,7 @@ func (p *Parser) condPrimary() CondExpr {
 		return &CondUnary{Op: op, X: x, Start: start}
 	}
 
-	left := p.word()
+	left := p.condWord()
 	if left == nil {
 		return nil
 	}
@@ -256,7 +300,7 @@ func (p *Parser) condPrimary() CondExpr {
 		// A bare word is a test for non-emptiness.
 		return &CondUnary{Op: "-n", X: left, Start: left.Pos()}
 	}
-	right := p.word()
+	right := p.condWord()
 	if right == nil {
 		p.failCondOperand(op, "binary")
 		return nil

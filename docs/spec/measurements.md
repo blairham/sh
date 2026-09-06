@@ -6101,6 +6101,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cond/a-newline-before-the-operator` | **2>** `<shell>: 1: [[: not found~<shell>: 2: Syntax error: "&&" unexpected` *(status 2)* | `yes` | `yes` | `yes` | `yes` | `yes` |
 | `cond/a-newline-before-the-operator-indented` | **2>** `<shell>: 1: [[: not found~<shell>: 2: Syntax error: "&&" unexpected` *(status 2)* | `yes` | `yes` | `yes` | `yes` | `yes` |
 | `cond/a-newline-before-a-second-operand-is-refused` | **2>** `<shell>: 1: [[: not found~<shell>: 2: -z: not found` *(status 127)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `-z'~<shell>: -c: line 2: syntax error near `-z'~<shell>: -c: line 2: `-z "" ]] && echo yes'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `-z'~<shell>: -c: line 2: syntax error near `-z'~<shell>: -c: line 2: `-z "" ]] && echo yes'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error in conditional expression~<shell>: -c: line 1: syntax error near `-z'~<shell>: -c: line 1: `-z "" ]] && echo yes'` *(status 2)* | **2>** `<shell>: syntax error at line 2: `-z' unexpected` *(status 3)* | **2>** `<shell>:1: unknown condition: -n` *(status 2)* |
+| `cond/a-semicolon-inside-a-condition` | `st=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: ]]: not found` | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `;'~<shell>: -c: line 1: syntax error near `;'~<shell>: -c: line 1: `[[ -n x ; ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `;'~<shell>: -c: line 1: syntax error near `;'~<shell>: -c: line 1: `[[ -n x ; ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `;'~<shell>: -c: line 0: syntax error near `;'~<shell>: -c: line 0: `[[ -n x ; ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `;'` *(status 1)* |
+| `cond/a-condition-opened-on-one-line-and-refused-on-another` | **2>** `<shell>: 1: [[: not found~<shell>: 2: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `;'~<shell>: -c: line 2: syntax error near `;'~<shell>: -c: line 2: ` ; ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `;'~<shell>: -c: line 2: syntax error near `;'~<shell>: -c: line 2: ` ; ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `;'~<shell>: -c: line 1: syntax error near `;'~<shell>: -c: line 1: ` ; ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: syntax error at line 2: `;' unexpected` *(status 3)* | **2>** `<shell>:2: parse error near `;'` *(status 1)* |
 | `pat/star-matches-dot-in-case` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` |
 | `pat/star-skips-leading-dot-in-glob` | `[vis]` | `[vis]` | `[vis]` | `[vis]` | `[vis]` | `[vis]` |
 | `pat/star-matches-slash-in-case` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` |
@@ -6181,6 +6183,15 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   [[ -n x
   -z "" ]] && echo yes
+  ```
+- `cond/a-semicolon-inside-a-condition` — a `;` where the condition wanted an operator or its `]]`, and the row that says a refusal names the *offending* token rather than what was wanted. Each of the three shells with `[[ ]]` words it in its own way and all three name the `;`. The `|` spelling of the same question is deliberately not a row beside it: dash has no `[[ ]]`, so there the words are a *pipeline* of two commands that do not exist, and which of the two `not found` lines arrives first is a race. bash writes two lines and the second is not the sentence it gives a stray token anywhere else — `syntax error near` without the words `unexpected token` — which is measurable only because it keeps them everywhere else
+  ```sh
+  [[ -n x ; ]]; echo "st=$?"
+  ```
+- `cond/a-condition-opened-on-one-line-and-refused-on-another` — and the reason bash's extra line carries a location of its own: the construct is named at the `[[`'s line and the token at the token's, so a condition opened on line 1 and refused on line 2 names both. One line would have looked right in every single-line case above
+  ```sh
+  [[ -n x
+   ; ]]; echo "st=$?"
   ```
 - `pat/star-matches-dot-in-case` — in case there is no filesystem, so nothing restricts the star
   ```sh

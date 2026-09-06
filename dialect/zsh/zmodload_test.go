@@ -106,16 +106,22 @@ print -r -- "st=$?"`)
 }
 
 // Every module named is attempted, and one that will not load does not stop
-// the ones after it. Status 1 for the whole command because one failed.
+// the ones after it — which is measured in zsh, where a middle module that
+// fails leaves the one after it loaded. Two failures are what shows it here:
+// a shell that returned at the first would write one line, and a module that
+// was already loaded cannot show it at all, because becoming loaded twice
+// looks the same as not being reached.
 func TestZmodloadAttemptsEveryModuleNamed(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `zmodload zsh/nosuchmodule zsh/main 2>&1
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/nosuchmodule zsh/zutil zsh/main 2>&1
 print -r -- "st=$?"
 zmodload -e zsh/main
 print -r -- "main-still=$?"`)
-	want := "zsh:1: failed to load module `zsh/nosuchmodule': not implemented yet\nst=1\n" +
-		"main-still=0\n"
+	want := "zsh:1: failed to load module `zsh/nosuchmodule': not implemented yet\n" +
+		"zsh:1: failed to load module `zsh/zutil': " +
+		"zformat, zparseopts and zregexparse are not implemented yet\n" +
+		"st=1\nmain-still=0\n"
 	if out != want || st != 0 {
-		t.Errorf("two modules = %q (status %d), want %q", out, st, want)
+		t.Errorf("three modules = %q (status %d), want %q", out, st, want)
 	}
 }
 

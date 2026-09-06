@@ -159,6 +159,12 @@ func zmodloadLoaded(r *interp.Runner) []string {
 		return []string{zmodloadAlwaysLoaded}
 	}
 	out := append([]string(nil), stored...)
+	// Sorted because that is the order zsh's listing is in, and *not*
+	// because a test can see it: only a module with no features loads in
+	// this shell and there is exactly one of those, so no script can get two
+	// names into this list. Kept rather than dropped so the order is right
+	// the day a second module can load — see the surviving mutant noted in
+	// the pull request rather than left for somebody to rediscover.
 	sort.Strings(out)
 	return out
 }

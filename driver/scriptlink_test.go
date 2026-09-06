@@ -81,4 +81,24 @@ func TestAScriptOperandThroughALinkIsCheckedOnWhatItReached(t *testing.T) {
 	if !opened(rec, interp.EventDenied, object) {
 		t.Errorf("no denial naming %q reached the event stream", object)
 	}
+
+	// And the indistinguishability, stated exactly rather than by inspection:
+	// a script refused *by name* produces the same sentence with the same
+	// status, so the two differ in nothing but the path each was given.
+	plain := filepath.Join(dir, "plain.sh")
+	if err := os.WriteFile(plain, []byte("echo ran\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	byName := &recorder{deny: denyPath(plain)}
+	shByName := shell()
+	shByName.Gate, shByName.Events = byName, byName
+	_, plainErrs, plainCode := runArgs(t, shByName, "testsh", plain)
+
+	if want := strings.Replace(plainErrs, plain, link, 1); errs != want {
+		t.Errorf("a refusal through a link reads\n\t%q\nand one by name reads\n\t%q\n"+
+			"want them to differ only in the path", errs, want)
+	}
+	if plainCode != code {
+		t.Errorf("a refusal by name exits %d and one through a link exits %d", plainCode, code)
+	}
 }

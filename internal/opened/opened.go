@@ -29,9 +29,11 @@
 //     and its open the name is free to mean something else.
 //
 //     The descriptor does not pin the object's *name*, and a rule matches
-//     names. For an object with one name there is nothing in that gap; for an
-//     object with two, Darwin will answer with either — see Path, and the
-//     hard-link subsection of docs/design/sandboxing.md for what it costs.
+//     names. That gap is not empty, and measuring it is what #1050 was: for
+//     an object with two names Darwin will answer with either, and for an
+//     object with *one* a rename moves the answer on both platforms. See
+//     Path, and the two subsections on it in docs/design/sandboxing.md for
+//     what each costs.
 //
 // # What this is not
 //
@@ -47,8 +49,14 @@
 // which of an object's names comes back is not fixed, so a hard link is
 // sometimes caught and — the direction that is not merely a flake — a hard
 // link in an allowed place sometimes carries an *other* name past the check,
-// symbolic links included. The design page has the numbers and says why the
-// fix is a decision about what a Gate is asked rather than a change here.
+// symbolic links included.
+//
+// And on both platforms the scope is not held against a rename, which #1050
+// measured and TestARenameMovesTheAnswerForADescriptorThatHasNotMoved asserts:
+// an object parked under an allowed name for the length of one consultation
+// is judged there and read where it was. Neither is repaired by trusting the
+// platform call harder; the design page has the numbers and says what a
+// resolution nothing can move under would cost.
 //
 // Nor does it reach a child process: an allowed exec makes its own system
 // calls and nothing here sees them.
@@ -92,15 +100,24 @@ import (
 // Path is the kernel's name for the object behind an open descriptor, and
 // whether there is one at all.
 //
-// *A* name, not *the* name, and the distinction is a platform's rather than
-// this function's. An object with one name has one answer everywhere. An
-// object with several has one answer on Linux — the name the descriptor was
-// opened through, which /proc holds per descriptor — and on Darwin any of
-// them, because F_GETPATH reads a single name off the vnode and any lookup
-// re-stamps it. So on Darwin this can answer differently for a descriptor
-// that has not moved, and a caller comparing the answer to a name must not
-// read a difference as "the name went elsewhere" for an object it knows to
-// have more than one. Measured both ways in the test named above.
+// *A* name, not *the* name, and *now*, not for as long as the descriptor
+// lives. The distinction is a platform's rather than this function's, and it
+// has two parts.
+//
+// An object with several names has one answer on Linux — the name the
+// descriptor was opened through, which /proc holds per descriptor — and on
+// Darwin any of them, because F_GETPATH reads a single name off the vnode and
+// any lookup re-stamps it. So on Darwin this can answer differently for a
+// descriptor that has not moved, and a caller comparing the answer to a name
+// must not read a difference as "the name went elsewhere" for an object it
+// knows to have more than one.
+//
+// An object with *one* name is not safe either, and that part is neither
+// Darwin's nor about links: a rename moves the answer on both platforms,
+// because Linux's dentry is moved by it and Darwin's vnode name is re-stamped
+// by it. A descriptor pins an object, never a name.
+//
+// Measured every way in the two tests named above.
 //
 // The false return is not a failure to be feared: it means the object has no
 // name in the filesystem — a pipe, a socket, a device the kernel does not

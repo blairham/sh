@@ -277,6 +277,14 @@ Open, by construction and not by omission:
   system backend below. On Linux the gap is exactly this shape and no
   worse. On Darwin it is worse, it is not a decision anybody made, and
   the subsection below is what it actually costs.
+- **A name, while the check is being made.** A descriptor pins an
+  object and it does not pin a name — and a rule matches names. So the
+  answer this section is built on can move between the open and the
+  question, and the two subsections below are the two ways it does:
+  a second name on Darwin, and a *rename* on either platform. Both are
+  reachable through an ordinary allowed open rather than by naming the
+  link, which is the part that makes them escapes rather than
+  limitations, and neither needs a privilege the opener does not have.
 - **`stat`, `[ -f x ]` and the rest of the probes.** A probe is answered
   without opening anything, and opening a path in order to check a
   question about it would be a heavier access than the one asked about:
@@ -338,11 +346,154 @@ Two consequences, and the second is the one that is not a flake:
   runs. `internal/boundary` shares `internal/opened` and so shares
   this.
 
-Closing it means the identity matching this page already points at, and
-that is a decision about what a `Gate` is asked rather than a fix to
-make here: an object the kernel cannot name unambiguously is a third
-answer, and neither allowing nor refusing it silently is right. Filed
-separately rather than settled in a flake fix.
+**What bounds it, measured rather than assumed.** The answer that comes
+back is always one of the object's *real* names and never a third path,
+so the gate is never told about an object it did not get — the
+limitation is exactly "which of this object's names", and every shape
+below was measured with that in view. What the escape needs, on Darwin
+25.5.0:
+
+| | rate |
+| --- | --- |
+| a second name in a place a rule allows, and a concurrent lookup of it | 170 / 600 |
+| the same, both names in **one** directory and the rule naming the file | 539 / 600 |
+| the same, the lookup coming from one **separate unprivileged process** | 39 / 600 |
+| the concurrent lookup being an `lstat` — an `ls -l`, a `find`, a backup walk | 121 / 600 |
+| a bare `readdir` of the allowed directory, and nothing else | 0 / 1000 |
+| one lookup immediately before the open rather than a loop | 0 / 600 |
+| no lookup of the second name at all | 0 / 600 |
+| the second name in a place the *same* rule denies | 0 / 600 |
+
+So: the *mechanism* needs only a second name anywhere and one lookup of
+it — with the second name under the same denial the answer flips to it
+204 times in 600 and the open is refused, which is #1029 and is
+harmless. The *escape* needs the second name to be somewhere a rule
+allows, and it needs the lookup to land between the open and the
+question, which is why a single lookup is 0 and a loop is a third. The
+lookup does not have to be hostile: `lstat` re-stamps and an ordinary
+directory walk does one per entry. And it is not confined to reads —
+`cat <` leaks 71 times in 200 through the whole interpreter, `.`
+sourcing 50 in 200, and `>` destroys the denied file 56 in 200, since
+the held-back truncation runs once the check has passed. The front end
+shares `internal/opened` and so shares this: `Boundary.ReadFile`
+through a parsed policy, 69 in 400.
+
+Out of reach, and for a reason rather than by luck: **directories**,
+because `link` on one is `EPERM` to an unprivileged process on both
+platforms, so `ActionReadDir` has no second name to be judged by; and
+**`exec`**, which is consulted about a name and never opens the
+program, so there is no descriptor whose answer could move.
+
+On Linux 6.8, every shape in that table is **0**, measured at 3000 each
+on overlayfs and at 5000 each on `ext4` and `tmpfs` and again under
+four-way CPU load — 0 out of 78,000 in total, and 0 out of 600 through
+the interpreter. /proc keeps a dentry per name and answers from the one
+the descriptor was opened through.
+
+#### A rename moves the answer, on both platforms
+
+The premise fails a second way, and this one is not about hard links
+and not about one platform. A descriptor pins an object; the *name* it
+was opened by is a property of the filesystem, and moving the name
+moves the answer:
+
+- Linux answers from the dentry the descriptor was opened through, and
+  a rename **moves that dentry**. /proc reports where it is now.
+- Darwin answers from the vnode's single name, and a rename re-stamps
+  it.
+
+Open a file, rename it, ask: the answer is the new name **2000 times
+out of 2000** on Darwin 25.5.0 and 4000 out of 4000 on Linux 6.8 across
+two filesystems. There is no race in that and no second name — it is
+one `rename` by the ordinary call, needing no privilege the opener does
+not have. `internal/opened`'s
+`TestARenameMovesTheAnswerForADescriptorThatHasNotMoved` is it made to
+run, on both platforms, in the direction each one behaves.
+
+The escape follows from it. Park a denied object under a name no rule
+speaks about for the length of one consultation and put the name back:
+the open reaches the object, the check is made about the parked name,
+and the bytes come back while the object's only name is the denied one.
+A loop doing nothing but `rename` back and forth hits that window in
+**129 runs of 600 on Linux** — 48% of the runs where the file was there
+to be opened — and 91 of 600 on Darwin, through the whole interpreter,
+under `deny read **/secret/**`. Under `-race` the Linux read figure is
+57 in 600, so the window is not an artifact of speed.
+
+The destructive direction is **120 in 2000 on Linux** and 19 in 600 on
+Darwin, and how it is counted is worth stating because the obvious way
+is wrong. `>` creates, so a run that made a fresh file at the denied
+name while the original was parked elsewhere must not be counted as the
+original being destroyed — and identifying the original by inode number
+does not separate the two, because an unlinked inode is reused
+immediately on ext4 and the new file carries the old number. Counted
+that way Linux reads 213 in 2000 where the truth is 120. So the
+original is held open across the run and read back through that
+descriptor, which no rename and no reuse can confuse.
+
+`internal/opened`'s
+`TestARenameInTheCheckWindowCarriesADeniedObjectPastTheGate` records
+that as something that runs the same way every time, and it records it
+at the only layer where it can be: the window is between the open and
+the question, and the check callback *is* that window. So the rename is
+performed inside it, which states the fact once instead of sampling it,
+and states it identically on both platforms. Neither `interp` nor
+`internal/boundary` can be hooked there, which is exactly why an
+end-to-end version is a race and measures a fifth of its runs rather
+than all of them.
+
+It asserts the escape **happens** — that a gate would be consulted about
+the parked name while the descriptor holds the denied object, and that
+the object's contents are readable through it. That is the
+uncomfortable direction and it is the point: a test tolerant of a
+refusal would pass whether or not the gate held.
+
+And the audit record carries the same defect, for the same reason: it
+resolves to the parked name, which is where the object was for an
+instant and nowhere it can be found afterwards. An operator reading the
+stream is told a path that never described the filesystem they can
+inspect.
+
+#### What closing either one would take
+
+Both are one defect: the check matches a name that nothing holds still.
+So neither is fixed by making `F_GETPATH` more trusted, and the three
+cheap repairs are each wrong in a way worth writing down.
+
+- **Distrust the kernel's answer when the object has more than one link
+  and fall back to the name the caller wrote.** Determinate, and makes
+  the hard-link escape 100% rather than 31%. Does nothing at all about
+  a rename.
+- **Confirm by identity — compare `dev` and `ino` between the requested
+  name and the descriptor.** This is the one that looks right and is
+  not. `stat` of the requested name *follows symbolic links*, so for
+  the #703 bypass it answers "same object" and concludes the caller's
+  name reaches it — which reopens the bypass completely rather than
+  narrowing it. `lstat` instead compares a symbolic link's own inode
+  and never matches. Either way it also absorbs a symlinked *directory*
+  component, which today is consulted: `deny read /mnt/**` with
+  `/srv/data -> /mnt/vol1` stops being asked about `/srv/data/x`.
+- **Deny any multiply-linked object under a gate.** Fail-closed and
+  determinate for hard links, silent about renames, and a
+  platform-divergent policy that refuses ordinary hard-linked files on
+  Darwin only.
+
+What would actually hold is a resolution nothing can move under:
+resolve the path a component at a time with `openat` and `O_NOFOLLOW`,
+reading each symbolic link explicitly and continuing the walk from a
+descriptor already held, so the name the gate is asked about is the
+sequence of components the walk actually traversed and the final
+`openat` lands on a directory descriptor that has been pinned since it
+was checked. That is a real path resolver — `..`, `ELOOP`, mount
+boundaries, symlink limits — and O(depth) syscalls per open instead of
+one. It is a change inside `internal/opened`: what a policy means does
+not change, `Gate` does not change, and `Action.Resolved` does not
+change, which is worth saying plainly because the identity matching
+this page points at elsewhere *would* change all three.
+
+Filed rather than settled here, because the choice between stating the
+limitation and building the resolver is not one a documentation change
+gets to make.
 
 ### The shell's own scaffolding is recorded, never refused
 

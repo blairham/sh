@@ -5286,6 +5286,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/set-f-turns-off-pathname-expansion` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `a.txt b.txt` |
 | `opt/set-o-lists-the-table` | `errexit         off` | `errexit        	off` | `errexit        	off` | `errexit        	off` | `errexit                  off` | `errexit               off` |
 | `opt/set-plus-o-writes-input-back` | `set +o errexit` | `set +o allexport` | `set +o allexport` | `set +o allexport` | `set --default --braceexpand --multiline --trackall --viraw` | `set +o noaliases` |
+| `opt/set-plus-o-writes-the-shells-own-vocabulary` | `0` *(status 1)* | `0` *(status 1)* | `0` *(status 1)* | `0` *(status 1)* | `0` *(status 1)* | `3` |
+| `opt/set-plus-o-does-not-borrow-another-shells-vocabulary` | `0` *(status 1)* | `3` | `3` | `3` | `0` *(status 1)* | `0` *(status 1)* |
+| `opt/set-o-takes-a-name-only-this-shell-has` | **2>** `<shell>: 1: set: Illegal option -o autocd` *(status 2)* | `st=2` **2>** `<shell>: line 1: set: autocd: invalid option name` | **2>** `<shell>: line 1: set: autocd: invalid option name` *(status 2)* | `st=1` **2>** `<shell>: line 0: set: autocd: invalid option name` | **2>** `<shell>: set: autocd: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `st=0` |
+| `opt/set-o-and-the-listing-are-one-namespace` | *(no output, status 2)* | `0` *(status 1)* | *(no output, status 2)* | `0` *(status 1)* | *(no output, status 2)* | `1` |
+| `opt/set-o-a-name-this-shell-has-and-will-not-move` | **2>** `<shell>: 1: set: Illegal option -o onecmd` *(status 2)* | `st=0~after` | `st=0~after` | `st=0~after` | **2>** `<shell>: set: onecmd: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: can't change option: onecmd` *(status 1)* |
 | `opt/set-o-noexec-reads-and-never-runs` | `before` | `before` | `before` | `before` | `before` | `before` |
 | `opt/set-v-echoes-a-here-document-with-its-command` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` |
 | `opt/set-v-echoes-the-tail-after-the-last-command` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` |
@@ -5487,6 +5492,28 @@ grades it and nothing drift-checks it either, for the same reason.
 - `opt/set-plus-o-writes-input-back` — +o writes re-inputtable set commands in three shells; ksh93's one line names only what is on, --default first
   ```sh
   set +o | head -1
+  ```
+- `opt/set-plus-o-writes-the-shells-own-vocabulary` — whether the `+o` listing is written in the vocabulary of the shell that produced it. Three names one shell in the panel has and no other does: it counts 3 and everybody else counts 0, at 0 either way, which is what a re-inputtable capture depends on. Ours wrote the substrate's shared two dozen under that shell — 23 names against its own 185 — so this counted 0, silently and at status 0, and a caller sourcing the file back got a shell it had never described (#1080). A named slice rather than the table's length, because the length is a fact about the build
+  ```sh
+  set +o | grep -cE '^set [-+]o (autocd|autopushd|extendedglob)$'
+  ```
+- `opt/set-plus-o-does-not-borrow-another-shells-vocabulary` — the same question from the other side, and the half that a shell answering with somebody else's table passes without it. Three names the bash columns have and write: they count 3, and the other three count 0 — including the shell that *accepts* two of them as input and lists its own spellings instead, which is why a listing has to be graded on what it writes rather than on what it takes
+  ```sh
+  set +o | grep -cE '^set [-+]o (braceexpand|onecmd|histexpand)$'
+  ```
+- `opt/set-o-takes-a-name-only-this-shell-has` — the setting half of the same namespace, and four refusals against one acceptance. `autocd` is one shell's own: it takes it at 0, and the rest split every way a refused `set -o` name can — bash 5.3 says `invalid option name` at 2 and carries on, bash 3.2 says the same at 1 and carries on, the same 5.3 binary under an `argv[0]` of `sh` says it and **stops**, and dash and ksh93 each have wording of their own and stop too. A shell listing 185 names it would then refuse would be writing a capture it could not read back
+  ```sh
+  set -o autocd; echo "st=$?"
+  ```
+- `opt/set-o-and-the-listing-are-one-namespace` — written through `set -o` and read back through `set +o`, which is what makes the two rows above facts about one namespace rather than about two tables that happen to differ. One shell counts 1; bash 5.3 and bash 3.2 refuse the name, carry on and count 0; and the three that treat a refused `set -o` as fatal — bash-as-`sh`, dash and ksh93 — never reach the second command, so the case records their exit rather than a count
+  ```sh
+  set -o extendedglob 2>/dev/null; set +o | grep -cE '^set -o extendedglob$'
+  ```
+- `opt/set-o-a-name-this-shell-has-and-will-not-move` — a name a shell *has* and refuses to change, which is a third answer beside taking it and never having heard of it. The bash columns have `onecmd` and set it silently at 0; dash and ksh93 have no such name and stop; zsh has it — as a borrowed spelling for its own `singlecommand` — and refuses it with `can't change option`, fatally, which is a different sentence from the `no such option` it gives a name it does not have. Ours said `not implemented` and carried on, which was neither
+  ```sh
+  set -o onecmd
+  echo "st=$?"
+  echo after
   ```
 - `opt/set-o-noexec-reads-and-never-runs` — the long spelling of `set -n`, and it behaves identically in all four: everything after it is read and never run, and the script still ends at 0 — the same option under its other name, which was refused as unimplemented here while the letter worked
   ```sh

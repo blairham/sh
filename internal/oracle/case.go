@@ -7441,12 +7441,12 @@ echo unreachable`,
 	{
 		ID: "opt/set-o-takes-a-name-only-this-shell-has", Category: "shell options",
 		Snippet: `set -o autocd; echo "st=$?"`,
-		Why:     "the setting half of the same namespace, and four refusals against one acceptance. `autocd` is one shell's own: it takes it at 0, and the rest split every way a refused `set -o` name can — bash 5.3 says `invalid option name` at 2 and carries on, bash 3.2 says the same at 1, dash writes `Illegal option -o autocd` and stops, and ksh93 says `bad option(s)` with its usage line and stops. A shell listing 185 names it would then refuse would be writing a capture it could not read back",
+		Why:     "the setting half of the same namespace, and four refusals against one acceptance. `autocd` is one shell's own: it takes it at 0, and the rest split every way a refused `set -o` name can — bash 5.3 says `invalid option name` at 2 and carries on, bash 3.2 says the same at 1 and carries on, the same 5.3 binary under an `argv[0]` of `sh` says it and **stops**, and dash and ksh93 each have wording of their own and stop too. A shell listing 185 names it would then refuse would be writing a capture it could not read back",
 	},
 	{
 		ID: "opt/set-o-and-the-listing-are-one-namespace", Category: "shell options",
 		Snippet: `set -o extendedglob 2>/dev/null; set +o | grep -cE '^set -o extendedglob$'`,
-		Why:     "written through `set -o` and read back through `set +o`, which is what makes the two rows above facts about one namespace rather than about two tables that happen to differ. One shell counts 1; the two bash columns refuse the name and count 0; dash and ksh93 stop at the refusal, so the second command never runs and the case records their exit rather than a count",
+		Why:     "written through `set -o` and read back through `set +o`, which is what makes the two rows above facts about one namespace rather than about two tables that happen to differ. One shell counts 1; bash 5.3 and bash 3.2 refuse the name, carry on and count 0; and the three that treat a refused `set -o` as fatal — bash-as-`sh`, dash and ksh93 — never reach the second command, so the case records their exit rather than a count",
 	},
 	{
 		ID: "opt/set-o-a-name-this-shell-has-and-will-not-move", Category: "shell options",

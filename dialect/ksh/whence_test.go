@@ -125,6 +125,12 @@ func TestWhenceCarriesOnPastAMiss(t *testing.T) {
 func TestWhenceAListsEveryResolution(t *testing.T) {
 	dir := t.TempDir()
 	path := toolOnPath(t, dir)
+	// A file named after a builtin, which is the only way to reach the
+	// builtin-and-on-PATH pair from a scratch PATH.
+	echoOnPath := filepath.Join(dir, "echo")
+	if err := os.WriteFile(echoOnPath, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	for _, c := range []struct {
 		name, src, want string
 		st              int
@@ -132,6 +138,17 @@ func TestWhenceAListsEveryResolution(t *testing.T) {
 		{
 			"a builtin with no file on PATH is one line",
 			"whence -a whence", "whence is a shell builtin\n", 0,
+		},
+		{
+			// The case the whole rule exists for, and the one a temp PATH
+			// has to be built to reach: a builtin that is *also* a file on
+			// PATH earns the plain path line and the undefined-function line
+			// after it. Verified byte for byte against ksh93u+ with the same
+			// directory on its PATH.
+			"a builtin that is also on PATH",
+			"whence -a echo",
+			"echo is a shell builtin\necho is " + echoOnPath + "\n" +
+				"echo is an undefined function\n", 0,
 		},
 		{
 			"a PATH hit standing alone keeps the tracked-alias sentence",

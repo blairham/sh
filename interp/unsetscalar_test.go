@@ -175,3 +175,23 @@ func TestACharacterSubscriptCountsCharactersAndNotBytes(t *testing.T) {
 		t.Errorf("got %q status %d, want the character removed rather than a byte", out, st)
 	}
 }
+
+func TestAnEmptyArrayIsStillAnArray(t *testing.T) {
+	// The scalar path is for a name the array table does not hold at all, not
+	// for one it holds empty: an array with no elements has no element for a
+	// subscript to name, and the *name* is not a string for a subscript to
+	// name a character of either. Read through the listing, because the
+	// difference between an empty array and no name at all is invisible to
+	// an expansion.
+	for _, sub := range []string{"0", "1", "9"} {
+		out, st := scalarUnsetRun(t,
+			`a=(); unset "a[`+sub+`]"; echo "st=$?"; typeset -p a`,
+			func(s *Semantics) {
+				elementsFromZero(s)
+				s.UnsetSubscriptOnAScalarIsAnError = Yes
+			})
+		if st != 0 || out != "st=0\ndeclare -a a=()\n" {
+			t.Errorf("a[%s]: got %q status %d, want the empty array still declared", sub, out, st)
+		}
+	}
+}

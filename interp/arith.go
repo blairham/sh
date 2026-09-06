@@ -82,8 +82,6 @@ func arithToken(e syntax.ArithExpr) string {
 		return x.Text
 	case *syntax.ArithVar:
 		return x.Name
-	case *syntax.ArithCharCode:
-		return x.Op + x.Src
 	case *syntax.ArithUnary:
 		// A signed operand is blamed on its leaf: `2**-1` names the `1`,
 		// which is measured — the shell that names error tokens reads the

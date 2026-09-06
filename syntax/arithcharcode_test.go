@@ -52,6 +52,7 @@ func TestTheCharacterCodeOperatorReadsItsOperand(t *testing.T) {
 		{"an escape", `echo $((##\n))`, "##", "", `\n`, false},
 		{"a hex escape", `echo $((##\x41))`, "##", "", `\x41`, false},
 		{"an octal escape", `echo $((##\101))`, "##", "", `\101`, false},
+		{"a unicode escape", `echo $((##\u0041))`, "##", "", `\u0041`, false},
 		{"a long unicode escape", `echo $((##\U00000041))`, "##", "", `\U00000041`, false},
 		{"a multi-byte character", "echo $((##é))", "##", "", "é", false},
 		{"one hash before a backslash", `echo $((#\A))`, "#", "", `\A`, false},
@@ -74,6 +75,7 @@ func TestTheCharacterCodeOperatorReadsItsOperand(t *testing.T) {
 func TestTheCharacterCodeOperatorTakesOneCharacter(t *testing.T) {
 	for _, src := range []string{
 		"echo $((##ab))", "echo $((###a))", `echo $((##\x41x))`, `echo $((##\0101))`,
+		`echo $((##\u00410))`, `echo $((##\U000000410))`, `echo $((#\x41))`,
 	} {
 		if _, err := syntax.Parse(src, charCode(true)); err == nil {
 			t.Errorf("parse %q: accepted, want the leftover refused", src)

@@ -791,7 +791,10 @@ func arithString(e syntax.ArithExpr) string {
 	case *syntax.ArithVar:
 		return x.Name
 	case *syntax.ArithCharCode:
-		return x.Op + x.Src
+		if x.Subscripted {
+			return x.Op + x.Name + "[…]"
+		}
+		return x.Op + x.Name + x.Char
 	case *syntax.ArithUnary:
 		if x.Postfix {
 			return "(" + arithString(x.X) + x.Op + ")"

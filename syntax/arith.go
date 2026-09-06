@@ -75,10 +75,8 @@ type ArithCharCode struct {
 	// however `${a[1]}` reads — measured, and a fact about that shell rather
 	// than a rule anything derives.
 	Subscripted bool
-	// Src is the operand as written, subscript included.
-	Src   string
-	Start Pos
-	Stop  Pos
+	Start       Pos
+	Stop        Pos
 }
 
 func (n *ArithCharCode) Pos() Pos   { return n.Start }
@@ -675,7 +673,6 @@ func (a *arithParser) charCode(start Pos) ArithExpr {
 			}
 		}
 	}
-	n.Src = a.src[begin:a.off]
 	n.Stop = start
 	return n
 }

@@ -58,6 +58,7 @@ func TestTheCharacterCodeOperatorOnACharacter(t *testing.T) {
 		{"an escape nothing claims", `echo $((##\q))`, "113\n"},
 		{"hexadecimal", `echo $((##\x41))`, "65\n"},
 		{"octal", `echo $((##\101)) $((##\047))`, "65 39\n"},
+		{"a unicode escape", `echo $((##\u0041))`, "65\n"},
 		{"a wide unicode escape", `echo $((##\U00000041))`, "65\n"},
 		{"one hash before a backslash is literal", `echo $((#\A)) $((#\n)) $((#\ ))`, "65 110 32\n"},
 	} {
@@ -82,6 +83,9 @@ func TestTheCharacterCodeOperatorRefusals(t *testing.T) {
 		// is left over — where the doubled spelling reads the whole of it.
 		{`echo $((#\x41))`, "bad math expression: operator expected at `41'"},
 		{`echo $((#\101))`, "bad math expression: operator expected at `01'"},
+		// Four hex digits for the narrow escape and eight for the wide one,
+		// so a fifth is left over here and a ninth would be there.
+		{`echo $((##\u00410))`, "bad math expression: operator expected at `0'"},
 		{`echo $((# b))`, "bad math expression: operator expected at `b'"},
 	} {
 		_, err := syntax.Parse(tc.src, zsh.Dialect())

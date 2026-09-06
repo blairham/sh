@@ -421,3 +421,90 @@ func TestTheCoverageNoticeSaysWhichHalfOfThePolicyApplied(t *testing.T) {
 		})
 	}
 }
+
+// What a person sees when an agent is driven and will not open a session.
+//
+// This is the closing criterion for #493, as amended: all three agents are
+// driven, and any that cannot complete a session **reports exactly why, with
+// its advertised methods**. Gemini CLI is the agent that criterion exists for,
+// and it reaches this path twice over — once with no method named, and once
+// having accepted `gemini-api-key` and refused a session anyway.
+//
+// The message is a test rather than a shape somebody eyeballed once, because
+// it is the whole of what the release ships for that agent.
+func TestASessionRefusedForAuthenticationSaysExactlyWhy(t *testing.T) {
+	// What Gemini CLI 0.58.0 actually advertises, in the order it sends it.
+	gemini := []acp.AuthMethod{
+		{ID: "oauth-personal", Name: "Log in with Google", Description: "Log in with your Google account"},
+		{ID: "gemini-api-key", Name: "Gemini API key", Description: "Use an API key with Gemini Developer API"},
+		{ID: "vertex-ai", Name: "Vertex AI", Description: "Use an API key with Vertex AI GenAI API"},
+		{ID: "gateway", Name: "AI API Gateway", Description: "Use a custom AI API Gateway"},
+	}
+	// And the error it answers session/new with, which is the specific half:
+	// a credential is missing, not a protocol we do not speak.
+	refusal := errors.New("jsonrpc -32000: Gemini API key is missing or not configured.")
+
+	t.Run("with no method named, the list is a menu", func(t *testing.T) {
+		var out strings.Builder
+		refusedASession(&out, "gemini-cli 0.58.0", "", gemini, refusal)
+		got := out.String()
+		for _, want := range []string{
+			"gemini-cli 0.58.0",
+			"needs authenticating first",
+			"API key is missing or not configured",
+			"oauth-personal", "gemini-api-key", "vertex-ai", "gateway",
+			"choose one with -acp-auth oauth-personal",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("the diagnostic does not contain %q:\n%s", want, got)
+			}
+		}
+	})
+
+	t.Run("with a method accepted, it is the credential and not the choice", func(t *testing.T) {
+		var out strings.Builder
+		refusedASession(&out, "gemini-cli 0.58.0", "gemini-api-key", gemini, refusal)
+		got := out.String()
+		// The false thing it used to say. A person who named a method and had
+		// it accepted did authenticate, and being told to do it first is what
+		// sends them round the same flag again.
+		if strings.Contains(got, "needs authenticating first") {
+			t.Errorf("it still says authentication was skipped after it was accepted:\n%s", got)
+		}
+		for _, want := range []string{
+			"accepted -acp-auth gemini-api-key",
+			"still refuses a session",
+			"API key is missing or not configured",
+			"the credential behind it",
+			"<- the one -acp-auth named",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("the diagnostic does not contain %q:\n%s", want, got)
+			}
+		}
+		// And it must not hand back the method that was just used.
+		if strings.Contains(got, "choose one with -acp-auth gemini-api-key") {
+			t.Errorf("it suggests the method that was already settled:\n%s", got)
+		}
+		if !strings.Contains(got, "choose one with -acp-auth oauth-personal") {
+			t.Errorf("it suggests nothing else to try:\n%s", got)
+		}
+	})
+
+	t.Run("one method, already tried, leaves nothing to suggest", func(t *testing.T) {
+		var out strings.Builder
+		only := []acp.AuthMethod{{ID: "terminal-login", Type: acp.AuthTerminal, Name: "Log in"}}
+		refusedASession(&out, "an-agent 1.0", "terminal-login", only, refusal)
+		if got := out.String(); strings.Contains(got, "choose one with") {
+			t.Errorf("it offers a choice where there is none:\n%s", got)
+		}
+	})
+
+	t.Run("an agent that advertises none says so", func(t *testing.T) {
+		var out strings.Builder
+		refusedASession(&out, "an-agent 1.0", "", nil, refusal)
+		if got := out.String(); !strings.Contains(got, "advertised no authentication methods") {
+			t.Errorf("an empty list is reported as %q", got)
+		}
+	})
+}

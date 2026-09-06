@@ -156,7 +156,15 @@ func TestTheGateSeesTheProbes(t *testing.T) {
 // opens what it reads, and a process substitution opens its own end of the
 // pipe. The main table above already proves the *inner* commands are seen,
 // which is exactly what masked these two.
-func TestTheGateSeesTheFilesBehindReentry(t *testing.T) {
+//
+// Observed on the event stream rather than at the gate, because the two rows
+// answer differently there and the difference is a decision. `.` reads a path
+// the script wrote and is put to the gate. A substitution's pipe is a path the
+// *interpreter* chose — the script wrote `<(cmd)` and could not have written
+// the pipe's name — so it is recorded and never refused; Runner.ownPipe
+// carries that argument, and the `asked` column below is what keeps the two
+// from drifting into each other.
+func TestTheBoundarySeesTheFilesBehindReentry(t *testing.T) {
 	dir := t.TempDir()
 	sourced := filepath.Join(dir, "sourced.sh")
 	if err := os.WriteFile(sourced, []byte("/bin/echo from-source\n"), 0o600); err != nil {
@@ -165,19 +173,20 @@ func TestTheGateSeesTheFilesBehindReentry(t *testing.T) {
 	for _, tc := range []struct {
 		name, src string
 		match     func(Action) bool
+		asked     bool
 	}{
 		{". opens the file it reads", ". " + sourced, func(a Action) bool {
 			return a.Kind == ActionOpen && a.Path == sourced && !a.Write
-		}},
+		}, true},
 		{"a process substitution opens its pipe", "/bin/cat <(/bin/echo hi)", func(a Action) bool {
 			// The path is one the shell just made for itself; the write is
 			// the shell's own end, feeding the inner command's output in.
 			return a.Kind == ActionOpen && a.Write && strings.Contains(a.Path, "sh-procsub")
-		}},
+		}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var mu sync.Mutex
-			var seen bool
+			var recorded, consulted bool
 			sem := PosixSemantics()
 			r := newTestRunner(t, &Runner{
 				Semantics: &sem,
@@ -186,9 +195,16 @@ func TestTheGateSeesTheFilesBehindReentry(t *testing.T) {
 					mu.Lock()
 					defer mu.Unlock()
 					if tc.match(a) {
-						seen = true
+						consulted = true
 					}
 					return Allow
+				}),
+				Events: SinkFunc(func(_ context.Context, e Event) {
+					mu.Lock()
+					defer mu.Unlock()
+					if e.Kind == EventAccess && tc.match(e.Action) {
+						recorded = true
+					}
 				}),
 			})
 			f, err := syntax.Parse(tc.src, syntax.Core())
@@ -201,8 +217,12 @@ func TestTheGateSeesTheFilesBehindReentry(t *testing.T) {
 			r.CleanUp()
 			mu.Lock()
 			defer mu.Unlock()
-			if !seen {
-				t.Errorf("the gate never saw the file action behind %q", tc.src)
+			if !recorded {
+				t.Errorf("the event stream never carried the file action behind %q", tc.src)
+			}
+			if consulted != tc.asked {
+				t.Errorf("the gate was consulted = %v for %q, want %v — see ownPipe for why "+
+					"a substitution's own pipe is recorded and not refused", consulted, tc.src, tc.asked)
 			}
 		})
 	}

@@ -271,7 +271,12 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			path = filepath.Join(r.Dir, path)
 		}
 		action := r.act(Action{Kind: ActionOpen, Path: path, Write: flags != os.O_RDONLY})
-		if !r.allowed(ctx, action) {
+		// Unless the path is a pipe this shell made for a substitution in
+		// this very command: `cmd > >(inner)` redirects to a name the
+		// interpreter chose, so a policy refusing it refuses the construct
+		// rather than an access the script asked for. ownPipe carries the
+		// argument. The open still happens and is still recorded below.
+		if !r.ownPipe(path) && !r.allowed(ctx, action) {
 			// A refused open is an open that did not happen, and the command
 			// must not run without it. Returning quietly let it run with the
 			// stream it was redirecting *away from*: `echo x > denied` wrote

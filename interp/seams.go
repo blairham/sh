@@ -37,11 +37,21 @@ const (
 	//
 	// Not every file the interpreter touches is an open the gate sees. The
 	// scaffolding a process substitution stands on — the temporary directory
-	// made for its pipes, the mkfifo that creates one, their removal — is
-	// deliberately outside the boundary: those paths are chosen by the
-	// interpreter, never by the script, and gating them would let a policy
-	// refuse the mechanism while believing it refused an access. The access
-	// is the open of the pipe, and that is what passes the gate.
+	// made for its pipes, the mkfifo that creates one, the pipe itself,
+	// their removal — is deliberately outside the boundary: those paths are
+	// chosen by the interpreter, never by the script, and gating them would
+	// let a policy refuse the mechanism while believing it refused an
+	// access.
+	//
+	// The pipe was on the wrong side of that sentence until #941, and the
+	// rule's own words are what put it right: a script writes `<(cmd)` and
+	// can never write the pipe's name, because the directory is made per
+	// shell with a name the operating system picks. So it is recorded — an
+	// EventAccess naming it, wherever in the shell the open happens — and
+	// never refused. Runner.ownPipe is the recognition and carries the whole
+	// argument, including what is still refused, which is everything worth
+	// refusing: the inner command is an ActionExec, and it runs in a Runner
+	// of its own whose every access passes the gate.
 	ActionOpen
 	// ActionStat asks whether a path exists and what it is: a `test -f`, a
 	// `[[ -d ]]`, `cd`'s check of where it is going, each candidate a PATH

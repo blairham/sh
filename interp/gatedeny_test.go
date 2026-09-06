@@ -253,12 +253,29 @@ func TestADeniedSourceReadFailsLikeAnUnreadableFile(t *testing.T) {
 	}
 }
 
-// A denied process substitution aborts the command that named it, the way a
-// refused redirect aborts its command: before the inner command exists.
-func TestADeniedProcessSubstitutionAbortsTheCommand(t *testing.T) {
+// A policy that denies every open no longer stops a process substitution's own
+// pipe, and that is the decision #941 made rather than a regression.
+//
+// This test used to assert the opposite — that a denied open aborted the
+// command the way a refused redirect does — and the behavior it was asserting
+// was the bug. The pipe's path is chosen by the interpreter and can never be
+// named by the script, so refusing it refuses `<(cmd)` itself while believing
+// it refused an access; ActionOpen's own scaffolding rule says the shell's
+// plumbing is outside the boundary and stopped one line short of the pipe.
+// See Runner.ownPipe.
+//
+// What a `deny open` policy still stops is asserted here beside it, because
+// that is the half worth keeping: an ordinary file the script names is
+// refused, and both execs are still put to the gate.
+func TestDenyingEveryOpenDoesNotStopASubstitutionsOwnPipe(t *testing.T) {
 	var out, errs strings.Builder
 	var mu sync.Mutex
 	var execs []string
+	dir := t.TempDir()
+	ordinary := filepath.Join(dir, "ordinary")
+	if err := os.WriteFile(ordinary, []byte("nope\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	sem := PosixSemantics()
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Stdout: &out, Stderr: &errs,
@@ -274,28 +291,28 @@ func TestADeniedProcessSubstitutionAbortsTheCommand(t *testing.T) {
 			return Allow
 		}),
 	})
-	f, err := syntax.Parse("/bin/cat <(/bin/echo hi)", syntax.Core())
+	f, err := syntax.Parse("/bin/cat <(/bin/echo hi)\ncat < "+ordinary+"\n", syntax.Core())
 	if err != nil {
 		t.Fatal(err)
 	}
-	status, err := r.Run(context.Background(), f)
-	if err != nil {
+	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
 	r.CleanUp()
-	if out.String() != "" {
-		t.Errorf("out = %q, want nothing — the substitution was refused", out.String())
+	if out.String() != "hi\n" {
+		t.Errorf("out = %q, want the substitution to have run: its pipe is the shell's own", out.String())
 	}
-	if status == 0 {
-		t.Error("a command whose substitution was refused reported success")
+	if strings.Contains(out.String(), "nope") {
+		t.Error("an ordinary file the script named was read under a policy denying every open")
 	}
-	if !strings.Contains(errs.String(), "refused") {
-		t.Errorf("said %q, want the refusal reported", errs.String())
+	if !strings.Contains(errs.String(), ordinary) {
+		t.Errorf("said %q, want the ordinary open refused and named", errs.String())
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(execs) != 0 {
-		t.Errorf("execs asked about: %v, want none — neither the inner command nor the outer ran", execs)
+	// Both of them: the substitution is not a way to run something unasked.
+	if len(execs) < 2 {
+		t.Errorf("execs asked about: %v, want the inner command and the outer one", execs)
 	}
 }
 

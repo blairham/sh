@@ -57,19 +57,13 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 		r.expandErr = true
 		return "", false
 	}
-	// The shell's own end of the pipe is an open, and the gate is asked here
-	// — on the calling goroutine, before anything is spawned — rather than
-	// beside the blocking open below, so a denial never races anything and
-	// aborts the substitution the way a refused redirect aborts its command:
-	// before the inner command exists. The scaffolding around the open — the
-	// temporary directory, the mkfifo, their removal — is deliberately not
-	// gated; ActionOpen's comment in seams.go is the decision.
+	// The shell's own end of the pipe is an open and is recorded as one. It
+	// is not put to the gate, and that is the recognition #941 asked for:
+	// this path is the shell's own scaffolding, on the same side of the line
+	// as the temporary directory and the mkfifo that made it. See ownPipe,
+	// which carries the argument and which the two other places an open of
+	// this path can happen consult.
 	action := r.act(Action{Kind: ActionOpen, Path: path, Write: kind != syntax.ProcSubstOut})
-	if !r.allowed(ctx, action) {
-		_ = os.Remove(path)
-		r.expandErr = true
-		return "", false
-	}
 
 	sub := r.clone()
 	sub.inheritJobs(jobBoundarySubstitution)
@@ -174,6 +168,70 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 
 	r.procSubs = append(r.procSubs, procSubPipe{path: path, hold: hold})
 	return path, true
+}
+
+// ownPipe reports whether path names one of the pipes this shell made for a
+// process substitution in the command it is running.
+//
+// It is the recognition #941 asked for, and the rule it enforces is
+// ActionOpen's own, quoted here because the pipe is the one thing the rule
+// reached and stopped one line short of:
+//
+//	The scaffolding a process substitution stands on — the temporary
+//	directory made for its pipes, the mkfifo that creates one, their removal
+//	— is deliberately outside the boundary: those paths are chosen by the
+//	interpreter, never by the script, and gating them would let a policy
+//	refuse the mechanism while believing it refused an access.
+//
+// The pipe is chosen by the interpreter too. A script writes `<(cmd)` and
+// never writes `<TMPDIR>/sh-procsubNNNNNNNN/sub1`; it cannot, because the
+// directory is made per shell with a name the operating system picks and the
+// pipe is numbered inside it. So a policy that refuses this open refuses
+// `<(cmd)` itself, and there is nothing in the policy file that says so — an
+// operator reads `default deny write` and gets a shell whose process
+// substitutions have stopped working, with a diagnostic naming a path they
+// have never seen. Measured: that is 6 of the 1426 corpus cases under the
+// containment posture, and every case in `make conformance-gated` that
+// differed in more than the wording of a diagnostic.
+//
+// # What is not exempted, which is everything worth refusing
+//
+// The inner command is an ActionExec the gate is asked about, in the ordinary
+// way and before it runs. It executes in a Runner of its own whose every
+// access passes the gate, so `<(cat /etc/secret)` is refused at the read,
+// where the rule about /etc can see it and name it. What crosses this pipe is
+// that command's output and nothing else — no path is reached through it that
+// was not reached, and recorded, on the other side.
+//
+// Nor does this stop being recorded. The open still reaches the event stream
+// as an EventAccess naming the pipe, so an audit trail says the shell made
+// one and when. This is the shape ActionInherit already has and is documented
+// for: recorded always, asked never, because a veto there would be a promise
+// the boundary cannot keep.
+//
+// # Why the set is the command's and not the shell's
+//
+// A pipe is in it from the moment the word expands until removeProcSubs takes
+// it away, at the end of the command that named it — which is what keeps this
+// from being an exemption a script could aim at. `p=$(echo <(true))` prints a
+// path and then lets its command end, so the name it captured is in nothing
+// and reaches nothing; `> "$p"` afterwards is an ordinary open of an ordinary
+// path and the gate is asked about it. And clone() empties the set, so a
+// subshell does not inherit its parent's exemptions.
+//
+// Probes are deliberately not included. `[ -f <(cmd) ]` is a stat, refused
+// quietly and answered the way a path that is not there is answered, so a
+// policy hiding the temporary directory makes it false rather than making the
+// construct fail — a wrong answer to a question nobody asks rather than a
+// mechanism that stopped working. Widening the suppression to the loudest
+// oracle the filesystem has, for that, is a trade this does not make.
+func (r *Runner) ownPipe(path string) bool {
+	for _, p := range r.procSubs {
+		if p.path == path {
+			return true
+		}
+	}
+	return false
 }
 
 // newFifo makes a named pipe in this shell's own directory.

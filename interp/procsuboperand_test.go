@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
 	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -99,7 +98,7 @@ func TestAProcessSubstitutionInAConditionIsAnAxis(t *testing.T) {
 		tmp := t.TempDir()
 		out, st := runGrammar(t, `[[ x == <(:) ]] && printf "[hit]" || printf "[miss]"`,
 			procsubPlain, func(r *Runner) {
-				sem := bashSemanticsForProcsub()
+				sem := testSemantics()
 				sem.ProcessSubstitutionInCondition = Yes
 				r.Semantics = &sem
 				r.Env = append(withoutTMPDIR(r.Env), "TMPDIR="+tmp)
@@ -117,7 +116,7 @@ func TestAProcessSubstitutionInAConditionIsAnAxis(t *testing.T) {
 		tmp := t.TempDir()
 		out, st := runGrammar(t, `[[ x == <(:) ]] && printf "[hit]" || printf "[miss]"; printf "[after]"`,
 			procsubPlain, func(r *Runner) {
-				sem := bashSemanticsForProcsub()
+				sem := testSemantics()
 				sem.ProcessSubstitutionInCondition = No
 				sem.FatalErrorStatusIsOne = No
 				d := Diagnostics{ProcessSubstitutionNotInCondition: "no substitution here: %[1]s"}
@@ -155,10 +154,6 @@ func TestAProcessSubstitutionInAConditionIsAnAxis(t *testing.T) {
 		}
 	})
 }
-
-// bashSemanticsForProcsub is the ordinary answers these tests run under, so
-// only the axis under test is left to decide anything.
-func bashSemanticsForProcsub() Semantics { return bash.Semantics() }
 
 // tellTheRunner hands the same grammar to the Runner that the parser was
 // given. The parser decides what the source *is* and the runner decides what

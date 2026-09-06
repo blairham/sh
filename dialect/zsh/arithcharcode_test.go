@@ -78,6 +78,10 @@ func TestTheCharacterCodeOperatorRefusals(t *testing.T) {
 		{`echo $((##))`, "bad math expression: character missing after ##"},
 		{`echo $((##ab))`, "bad math expression: operator expected at `b'"},
 		{`echo $((##\x41x))`, "bad math expression: operator expected at `x'"},
+		// A single `#` has no escapes, so `\x` is the letter x and the `41`
+		// is left over — where the doubled spelling reads the whole of it.
+		{`echo $((#\x41))`, "bad math expression: operator expected at `41'"},
+		{`echo $((#\101))`, "bad math expression: operator expected at `01'"},
 		{`echo $((# b))`, "bad math expression: operator expected at `b'"},
 	} {
 		_, err := syntax.Parse(tc.src, zsh.Dialect())

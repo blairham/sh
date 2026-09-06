@@ -79,6 +79,15 @@ type Shell struct {
 	// in the substrate's own wording and records everything.
 	HistoryStyle repl.HistoryStyle
 
+	// Highlighter colors the line as an interactive session types it. Nil is
+	// every dialect binary, because measured, no real shell colors a line as
+	// it is typed.
+	//
+	// Here for the reason PromptProviders is: this is where a binary composes
+	// a shell, and a highlighter is a code path rather than a table of values,
+	// so no dialect package can hold one.
+	Highlighter repl.Highlighter
+
 	// PromptProviders contribute text to every prompt an interactive session
 	// draws, before the prompt parameter's own text. Nil is the common case
 	// and is what every dialect binary is: a prompt is a prompt parameter.

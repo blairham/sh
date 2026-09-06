@@ -77,6 +77,7 @@ first word that is not one of them belongs to the shell.
 	-acp-connect CMD ...   drive an ACP agent, under the same policy
 	-acp-allow             answer the agent's permission requests with yes
 	-acp-auth METHOD       sign in with one of the methods the agent offers
+	-highlight             color a quotation left open, while it is typed
 
 Everything else — -c, -i, -s, a lone -, set options like -e — is read by the
 shared front end, exactly as each dialect binary reads it.

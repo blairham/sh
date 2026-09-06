@@ -64,6 +64,11 @@ type editor struct {
 	// a session with nothing to ask — the editor is usable without a Runner.
 	workingDir func() string
 
+	// highlighter colors the line as it is typed, and nil draws it plainly —
+	// which is what every real shell does. Asked on every redraw; see
+	// highlight.go for why that is affordable and why it is never a plugin.
+	highlighter Highlighter
+
 	// interrupt is what marks a line abandoned with ^C. Empty draws nothing,
 	// which is what two of the four dialects do.
 	interrupt string
@@ -445,7 +450,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		var b strings.Builder
 		b.WriteString("\r\x1b[K")
 		b.WriteString(prompt.text)
-		b.WriteString(string(e.line))
+		b.WriteString(e.styled())
 		// Cells to come back over, not characters: the cursor moves by
 		// columns, and one `日` to the right of it is two of them.
 		if back := cells(e.line[e.pos:]); back > 0 {
@@ -474,7 +479,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	// first leaves the rest of the old line below the new one.
 	b.WriteString("\x1b[J")
 	b.WriteString(prompt.text)
-	b.WriteString(string(e.line))
+	b.WriteString(e.styled())
 
 	curRow, curCol, endRow, endCol := place(prompt.cells, e.line, e.pos, cols)
 	if endCol == cols {

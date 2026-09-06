@@ -311,6 +311,35 @@ type Dialect struct {
 	// Herestring enables `<<<`. Absent from dash.
 	Herestring bool
 
+	// HeredocEndsAtClosingParen lets a here-document's body end at the
+	// closing parenthesis of the construct it sits inside, so that the
+	// delimiter is a delimiter even with the `)` written onto its line:
+	//
+	//	v=$(cat <<EOF
+	//	a
+	//	EOF)
+	//
+	// Where it is set — bash and ksh93 — the parentheses are found first and
+	// the body is read from what is between them, so `EOF)` is the last line
+	// the body could have had and the document ends there. Where it is not —
+	// dash and zsh, and so the core — a body is read from the whole input,
+	// takes the `)` with it, and the construct is left unclosed. Neither of
+	// those two needs new wording for that: the complaint is the one each
+	// already makes for a plainly unterminated `(`, word for word, which is
+	// what the control `v=$(echo hi` shows.
+	//
+	// It is not a question about `$( )`. Any parentheses holding a program
+	// are the same shape, and real zsh refuses `cat <(cat <<EOF` … `EOF)`
+	// with the same complaint pointing at the `<(`. Backquotes are not: a
+	// body cannot contain the mark that closes them, so all six shells take
+	// `` v=`cat <<E ... E` `` and there is nothing to ask.
+	//
+	// The one place it is *not* additive is where the body's delimiter also
+	// appears further down the file. The document then ends there rather
+	// than at end of input — but the `)` was inside the body either way, so
+	// the construct is unclosed all the same and the answer does not change.
+	HeredocEndsAtClosingParen bool
+
 	// ArithCommand enables `(( expr ))` as a command. Consumed by the lexer,
 	// which scans the expression as raw text: what is inside is an arithmetic
 	// expression rather than a command list, so the token stream would lose

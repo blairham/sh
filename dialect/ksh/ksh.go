@@ -44,6 +44,11 @@ func Dialect() syntax.Dialect {
 	// so that what it assigns survives. The space after the brace is the
 	// whole of the grammar: `${x}` is a parameter and `${ x}` is not.
 	d.CurrentShellSubstitution = true
+	// A here-document inside parentheses that hold a program ends at the
+	// closing one: `v=$(cat <<EOF` / `a` / `EOF)` is accepted and `v` is `a`.
+	// dash and zsh read the body from the whole input instead, so the `)`
+	// goes into it and the construct is never closed (#963).
+	d.HeredocEndsAtClosingParen = true
 	// The measured ksh93 is 93u+ 2012, which has no `&>`. Later ksh93u+m
 	// does, twelve years apart under the same name — which is the divergence
 	// syntax.Dialect's own comment names as the reason its fields are called

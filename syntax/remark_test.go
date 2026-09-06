@@ -16,7 +16,14 @@ import (
 
 func remarksOf(t *testing.T, src string) []syntax.Remark {
 	t.Helper()
-	p := syntax.NewParser(src, syntax.Core())
+	// Every case below is a here-document whose delimiter carries the closing
+	// parenthesis, and whether that is a program at all is a dialect question
+	// (#963). A grammar that refuses it has a refusal to make and nothing to
+	// remark on, so the remarks are only reachable — and only meaningful —
+	// through the grammar that reads it.
+	d := syntax.Core()
+	d.HeredocEndsAtClosingParen = true
+	p := syntax.NewParser(src, d)
 	p.Parse()
 	return p.Remarks()
 }
@@ -163,6 +170,10 @@ func TestEachSubstitutionIsRemarkedOnOnce(t *testing.T) {
 func TestAProcessSubstitutionIsReadTheSameWay(t *testing.T) {
 	d := syntax.Core()
 	d.ProcessSubstitution = true
+	// And whether these parentheses end the body is the same dialect question
+	// the `$( )` spelling asks, so the grammar that reads one reads the other
+	// (#963).
+	d.HeredocEndsAtClosingParen = true
 	p := syntax.NewParser("cat <(cat <<EOF\na\nEOF)\necho done\n", d)
 	p.Parse()
 	rs := p.Remarks()

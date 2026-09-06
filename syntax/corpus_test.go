@@ -33,6 +33,11 @@ func corpusDialect() syntax.Dialect {
 	// records what that costs.
 	d.Coproc = true
 	d.CoprocName = true
+	// `v=$(cat <<EOF` / `a` / `EOF)` — the here-document cases whose delimiter
+	// carries the closing parenthesis. Two of the six shells refuse them and
+	// the corpus records both answers, so the grammar that has to *read* every
+	// case is the one that takes them.
+	d.HeredocEndsAtClosingParen = true
 	return d
 }
 

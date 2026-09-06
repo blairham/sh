@@ -350,7 +350,11 @@ func (p *printer) command(c Command) {
 		}
 		p.redirs(x.Redirs)
 	case *ForClause:
-		p.str("for " + x.Name)
+		// Every name, and there is normally one. A loop with more than one
+		// is zsh's, and no other dialect has a spelling for it — so the
+		// printer writes what the construct is rather than something
+		// portable it is not.
+		p.str("for " + strings.Join(x.Names, " "))
 		if len(x.Body) == 0 {
 			p.parenItems(x.HasItems, x.Items)
 			p.redirs(x.Redirs)

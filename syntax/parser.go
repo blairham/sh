@@ -2043,9 +2043,10 @@ func (p *Parser) parseFor() Command {
 		}
 		return c
 	}
-	c.Name = p.tok.Literal()
+	c.Names = []string{p.tok.Literal()}
 	nameEnd := p.tok.End
 	p.next()
+	nameEnd = p.moreForNames(c, nameEnd, "for")
 	p.skipNewlines()
 
 	end := nameEnd
@@ -2093,6 +2094,60 @@ func (p *Parser) parseFor() Command {
 	c.Stop = p.tok.End
 	p.expectWord("done")
 	return c
+}
+
+// moreForNames reads the names after the first, where the dialect lets a loop
+// have more than one. It returns where the last of them ends.
+//
+// **Greedy, and that is the whole of the ambiguity.** Every word after the
+// first is another name until the header ends — at `in`, at `(`, at a
+// separator, at `do`, or at `{` — so nothing else may stand there. Measured
+// 2026-09-06 in zsh 5.9.2, the only shell with the form:
+// `set -- p q; for a print -r -- "[$a]"` is a parse error near `-r`, because
+// `print` was taken as a second name and `-r` is not a name; and
+// `set -- p q; for a echo; print "[$a][$echo]"` prints `[p][q]`, which is the
+// same reading seen from the side where it succeeds — `echo` was read as a
+// name and bound to `q`.
+//
+// So the flag narrows what the dialect accepts as well as widening it: a short
+// body may no longer follow the names *directly*. It still follows a header
+// that ended itself, which is every spelling anyone writes —
+// `for a b ( 1 2 ) print "$a$b"` and `for a b; print "$a$b"` both run.
+//
+// A name is a plain unquoted name and is not expanded: `for a "b" ( … )` and
+// `for a $n ( … )` are parse errors in zsh, so anything that is not one is
+// refused where it stands rather than quietly becoming a body.
+//
+// The source is compared with the token's literal to say so, because the
+// literal alone cannot: a `$n` word reports `n`, so `isName` is satisfied by a
+// word that names nothing yet. The *first* name has the same hole and it is
+// not closed here — `for $n in a b` is refused by all five shells in the panel
+// and accepted by every dialect of ours, which is a core bug of its own with
+// five wordings to get right (#1076).
+//
+// `select` never calls this. Measured, `select a b (x y) { … }` is a parse
+// error in the shell that accepts every other spelling here, so the loop whose
+// header is otherwise a for-loop's parts company over exactly this.
+func (p *Parser) moreForNames(c *ForClause, end Pos, word string) Pos {
+	if !p.dialect.ForMultipleNames {
+		return end
+	}
+	for p.tok.Kind == TokWord && !p.atStopWord() && !p.atWord("in") && !p.atWord("{") {
+		if p.tok.IsQuoted() || !isName(p.tok.Literal()) || p.slice(p.tok.Pos, p.tok.End) != p.tok.Literal() {
+			if p.err == nil {
+				p.err = &Error{
+					Pos: p.tok.Pos, Kind: ErrForName,
+					Token: p.tokenLiteral(), Class: p.tokenClass(false),
+					Msg: "expected a name after `" + word + "`",
+				}
+			}
+			return end
+		}
+		c.Names = append(c.Names, p.tok.Literal())
+		end = p.tok.End
+		p.next()
+	}
+	return end
 }
 
 // shortItemsFollow reports whether a `for` or `select` header's word list is
@@ -2203,9 +2258,10 @@ func (p *Parser) parseForeach() Command {
 		}
 		return c
 	}
-	c.Name = p.tok.Literal()
+	c.Names = []string{p.tok.Literal()}
 	end := p.tok.End
 	p.next()
+	end = p.moreForNames(c, end, "foreach")
 	p.skipNewlines()
 	switch {
 	case p.at(TokLeftParen):

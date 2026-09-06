@@ -70,6 +70,36 @@ type Dialect struct {
 	// follows it is a syntax error.
 	Select bool
 
+	// ForMultipleNames lets a `for` or `foreach` name more than one variable,
+	// so the loop takes that many words from its list on every pass:
+	// `for key value ( a 1 b 2 ) { … }` runs twice with the pairs. zsh alone
+	// has it, and it is how a script walks a serialized key/value table.
+	//
+	// Separate from ForBraceBody and from ShortForm, and measured that way
+	// rather than assumed: all four combinations of the name count and the
+	// body spelling parse in zsh independently. `for a b in x 1 y 2; do … done`
+	// works, so does `for a b ( … ) { … }`, so does `for a b ( … ); do … done`,
+	// and so does `for a b` with no list at all, which walks the positional
+	// parameters in groups. This flag is the name count and nothing else.
+	//
+	// `select` does **not** take it — measured, `select a b (x y) { … }` is a
+	// parse error in the shell that has every other spelling — so the loop
+	// whose header is a `for`'s parts company here. `foreach` does take it.
+	//
+	// **Names are taken greedily, and that is subtractive.** Every word after
+	// the first is another name until the header ends: at `in`, at `(`, at a
+	// separator, at `do` or at `{`. So a short body may not follow the names
+	// directly — `for a print -r -- "[$a]"` is a parse error near `-r` in
+	// zsh, because `print` was read as a second name — where a header that
+	// ended itself still takes one: `for a b ( 1 2 ) print "$a$b"` runs. A
+	// dialect with ShortForm and not this flag keeps the older, wider
+	// reading, in which a word after the name begins the body.
+	//
+	// A name must be a plain unquoted name. `for a "b" ( … )` and
+	// `for a $n ( … )` are parse errors in zsh, so the words are not
+	// expanded and not unquoted before being read as names.
+	ForMultipleNames bool
+
 	// ForBraceBody lets a `for` or `select` loop take a brace group where
 	// `do … done` stands: `for ((;;)) { echo hi; break; }`, and equally
 	// `for i in a b; { echo "$i"; }`. Absent from dash, which is the only

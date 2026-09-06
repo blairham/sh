@@ -742,6 +742,75 @@ they are separate questions: a shell could spell a `repeat` body only as
 `do … done`, and the words `repeat`, `foreach`, `end` and `()` are
 constructs rather than body spellings.
 
+## A `for` with more than one name
+
+The same shell lets a `for` or a `foreach` name more than one variable,
+and the loop then takes that many words from its list on every pass:
+
+    for key value ( a 1 b 2 ) { print -r -- "$key=$value" }   →   a=1  b=2
+
+Measured 2026-09-06 (panel and machine as `../oracle.md`), `env -i` with
+a scratch `HOME`, from a file and through `-c` alike. bash 5.3, bash as
+`sh`, bash 3.2, ksh93 and dash all refuse the second name.
+
+Grammar flag: `ForMultipleNames` — off in the core, on for `zsh` alone.
+
+**Three features, not one, and the four combinations were measured
+before any of them was built.** The name count, the parenthesized list
+and the brace body are independent in that shell:
+
+| probe | zsh |
+| --- | --- |
+| `for a b in x 1 y 2; do … done` | **runs** |
+| `for a b ( x 1 y 2 ) { … }` | **runs** |
+| `for a b ( x 1 y 2 ); do … done` | **runs** |
+| `for a b in x 1 y 2; { … }` | **runs** |
+| `for a b { … }` | **runs** — no list, the positional parameters in groups |
+| `for a b; do … done` | **runs** — the same |
+| `foreach a b ( 1 2 3 4 ) … end` | **runs** |
+| `select a b ( x y ) { … }` | **error** |
+
+So `select` does not take it, however much of the header it shares with
+`for`, and this is the one place the two part company.
+
+**The names are taken greedily, and that is subtractive.** Every word
+after the first is another name until the header ends — at `in`, at `(`,
+at a separator, at `do`, or at `{`. A short body therefore may **not**
+stand directly after the names:
+
+    set -- p q; for a print -r -- "[$a]"        →  parse error near `-r'
+    set -- p q; for a echo; print "[$a][$echo]" →  [p][q]
+
+The second line is the same reading seen from the side where it
+succeeds: `echo` was read as a name and bound to `q`. A header that has
+ended still takes a short body — `for a b ( 1 2 ) print "$a$b"` runs —
+which is every spelling anyone writes.
+
+`in` is a keyword only *after* the first word. A loop must have a name,
+so the word right after `for` is one whatever it spells:
+`for in ( 1 2 ) { print $in }` prints 1 and 2.
+
+A name is a plain unquoted name and is not expanded. `for a "b" ( … )`
+and `for a $n ( … )` are both parse errors, so the words are not
+unquoted or expanded before being read as names.
+
+**A list that does not divide still runs its short last pass, and the
+names it did not reach are empty rather than unset.** This is where the
+binding rule is actually decided, and the three plausible wrong answers
+— stop early, leave the previous pass's word standing, leave the name
+unset — all agree with the right one on a list whose length divides:
+
+    for a b ( 1 2 3 ) { print -r -- "[${a-U}][${b-U}]" }   →  [1][2]  then  [3][]
+    for a b ( ) { print ran }                              →  nothing at all
+
+The names keep their last values after the loop, as one name does. A
+repeated name is not special and not refused: each is written in turn, so
+`for a a ( 1 2 3 4 )` reads `2` and then `4`.
+
+`ForClause.Names` is a slice for this reason, rather than a name and a
+tail: a `for` binds a *list* of names, and the count is the loop's
+stride rather than a decoration.
+
 It was `ShortLoop`, and the name is why this section's coverage stopped
 where it did. The rule it stands for says nothing about looping.
 

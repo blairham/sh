@@ -75,7 +75,7 @@ func dump(n Node) string {
 			}
 			items = "in(" + strings.Join(ws, ",") + ")"
 		}
-		return "for " + x.Name + " " + items + " do[" + join(stmts(x.Body)) + "]" + redirStr(x.Redirs)
+		return "for " + strings.Join(x.Names, " ") + " " + items + " do[" + join(stmts(x.Body)) + "]" + redirStr(x.Redirs)
 	case *SelectClause:
 		items := "no-list"
 		if x.HasItems {

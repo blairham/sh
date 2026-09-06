@@ -431,9 +431,9 @@ func TestPrintingAnOmittedBodyThatRedirects(t *testing.T) {
 	if !ok {
 		t.Fatal("did not read back as a for")
 	}
-	if back.Name != "i" || len(back.Items) != 2 || len(back.Body) != 1 {
-		t.Errorf("read back as %q over %d items with %d body statements, want i, 2 and 1",
-			back.Name, len(back.Items), len(back.Body))
+	if len(back.Names) != 1 || back.Names[0] != "i" || len(back.Items) != 2 || len(back.Body) != 1 {
+		t.Errorf("read back as %q over %d items with %d body statements, want [i], 2 and 1",
+			back.Names, len(back.Items), len(back.Body))
 	}
 	if len(back.Body) == 1 {
 		if got := syntax.PrintCommand(back.Body[0].Expr.(*syntax.Pipeline).Cmds[0]); got != " > /dev/null" {

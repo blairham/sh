@@ -436,8 +436,10 @@ what each difference is.
 under test may write only in the directory its run was given. That is what
 turns the sweep's containment from a statement about the *arrangement*
 into a statement about the *shell* — and the first run of it found the old
-argument was not true, since `/usr/bin/imptrace` writes to a temporary
-file it names itself, outside the directory the sweep gave it.
+argument was not true. "A directory of its own" is where a script is
+*started*, not where it can write: three of the 252 scripts on this
+machine write to a temporary file they name themselves, and the policy is
+what catches them.
 
 `make conformance-dialects` grades all four dialect binaries against the
 shells they claim to be. Each scores exactly what `make conformance` scores

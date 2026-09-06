@@ -835,12 +835,20 @@ which is the asymmetry the comparison lives with, and the reason the
 posture is printed on the line with the numbers.
 
 **The first run of it found that the old containment argument was not
-true.** Over `/usr/bin`, `/usr/bin/imptrace` writes to
-`/tmp/imptrace.XXXXXX` — a temporary file it names itself, outside the
-directory the sweep gave it — on both of its probes. Under the old
-arrangement it wrote there and nothing noticed; under the policy the
-shell refuses and says which path. Nothing else in that directory writes
-outside its own run.
+true.** Over the default scope — 252 scripts, 501 runs — three write
+outside the directory the sweep gave them, on every probe:
+
+| script | writes to |
+| --- | --- |
+| `/usr/bin/imptrace` | `/tmp/imptrace.XXXXXX` |
+| `/usr/libexec/locate.mklocatedb` | `/tmp/mklocateXXXXXX/_mklocatedbNNNNN.list` |
+| `/opt/homebrew/bin/check_commit_msg.sh` | a `mktemp` file under the system temporary directory |
+
+Under the old arrangement all three wrote there and nothing noticed —
+"a directory of its own" is where a script is *started*, not where it
+can write. Under the policy the shell refuses and the diagnostic names
+the path. That is three files a `--help` left on the machine per sweep,
+found by the boundary and not by reading anything.
 
 ## Consequences a user meets immediately
 

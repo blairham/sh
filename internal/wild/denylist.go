@@ -88,15 +88,14 @@ var foreignTestDirs = map[string]bool{"testdir": true, "testdata": true, "tests"
 // bash-upgrade or tests is not inside anyone's source tree, and shell
 // distributions ship as directories, not loose files.
 //
-// own, when non-empty, is the root of the working tree the sweep runs from,
-// and nothing under it is denied: this project's testdata is generated from
-// oracle runs and is ours to read, so the test-directory rule marks only
-// someone else's tree as off-limits.
+// own, when non-empty, is the root of the working tree the sweep runs from.
+// Inside it the rules narrow rather than stop; see deniedInOurOwnTree.
 func Denied(path, own string) string {
+	dir := filepath.Dir(path)
 	if own != "" && underDir(path, own) {
-		return ""
+		return deniedInOurOwnTree(dir, own)
 	}
-	return deniedSegments(filepath.Dir(path))
+	return deniedSegments(dir)
 }
 
 // DeniedDir reports why CLEANROOM.md forbids descending into the directory at
@@ -108,9 +107,53 @@ func Denied(path, own string) string {
 // itself, and nothing inside it needs to be looked at to know that.
 func DeniedDir(path, own string) string {
 	if own != "" && underDir(path, own) {
-		return ""
+		return deniedInOurOwnTree(path, own)
 	}
 	return deniedSegments(path)
+}
+
+// deniedInOurOwnTree reports why a path inside this project's own working tree
+// may still not be opened, or "" when it may be read.
+//
+// The two rules above are not equally ours to stand down, and until this they
+// both stood down together. The test-directory rule marks *someone else's*
+// suite; this project's own testdata is generated from oracle runs and is ours
+// to read, which is the entire reason own exists. The shell-source rule is a
+// different claim: nothing in this repository is another shell's distribution
+// unless something put it there, and there is exactly one thing that would.
+//
+// A third-party suite that must be run is fetched at test time and never
+// committed — CLEANROOM.md says so, AGENTS.md repeats it, and #498 is the
+// issue that would do it. It lands under the gitignored build directory, which
+// is inside the working tree, which is where the blanket exemption turned this
+// guard off. Measured before it was changed: `bash-5.3/tests/case.sub` is
+// refused as another shell's source tree anywhere on the machine *except*
+// inside the checkout, which is the one place a fetch puts it. A rule with a
+// carve-out that swallows the case it exists for reads as protection and is
+// none, and this repository has lost more to a defective instrument than to
+// defective code.
+//
+// Only the segments below own are examined. The path *above* a checkout is
+// somebody's own directory names — a worktree called `bash-fix` is not bash —
+// and judging those would refuse a tree for what its parent happened to be
+// called.
+func deniedInOurOwnTree(dir, own string) string {
+	rel, err := filepath.Rel(own, dir)
+	if err != nil {
+		// Not expressible as a path relative to own, so the claim that it is
+		// inside our tree cannot be checked. Judged as anyone else's.
+		return deniedSegments(dir)
+	}
+	segs := strings.Split(filepath.ToSlash(rel), "/")
+	for i, seg := range segs {
+		if seg == "." {
+			continue
+		}
+		if shellTree(segs, i) {
+			return ReasonShellSource
+		}
+	}
+	return ""
 }
 
 // deniedSegments scans a directory path for a segment that names someone
@@ -118,12 +161,7 @@ func DeniedDir(path, own string) string {
 func deniedSegments(dir string) string {
 	segs := strings.Split(filepath.ToSlash(dir), "/")
 	for i, seg := range segs {
-		for _, marker := range shellTreeMarkers {
-			if strings.HasPrefix(seg, marker) {
-				return ReasonShellSource
-			}
-		}
-		if shellDistribution(segs, i) {
+		if shellTree(segs, i) {
 			return ReasonShellSource
 		}
 		if foreignTestDirs[seg] {
@@ -131,6 +169,22 @@ func deniedSegments(dir string) string {
 		}
 	}
 	return ""
+}
+
+// shellTree reports whether the segment at i names a shell implementation's
+// own tree — an unpacked distribution by its directory name, or an installed
+// one by where it sits.
+//
+// Factored out because it is asked in two places now and the two must not
+// drift: inside this project's tree it is the only rule that still applies,
+// and a copy of it there would be a second answer to one question.
+func shellTree(segs []string, i int) bool {
+	for _, marker := range shellTreeMarkers {
+		if strings.HasPrefix(segs[i], marker) {
+			return true
+		}
+	}
+	return shellDistribution(segs, i)
 }
 
 // underDir reports whether path is dir itself or lies inside it.

@@ -1187,6 +1187,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `emulate/resets-the-options` | `reached` **2>** `<shell>: 1: setopt: not found~<shell>: 1: emulate: not found` | `reached` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found` | `reached` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found` | `reached` **2>** `<shell>: setopt: command not found~<shell>: emulate: command not found` | `reached` **2>** `<shell>: setopt: not found~<shell>: emulate: not found` | `reached` |
 | `emulate/dash-c-restores-after` | `x*~st=0` **2>** `<shell>: 1: setopt: not found~<shell>: 1: emulate: not found` | `x*~st=0` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found` | `x*~st=0` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found` | `x*~st=0` **2>** `<shell>: setopt: command not found~<shell>: emulate: command not found` | `x*~st=0` **2>** `<shell>: setopt: not found~<shell>: emulate: not found` | `inner~x*~st=0` |
 | `emulate/an-unknown-mode-is-passed-over` | `st=127` **2>** `<shell>: 1: emulate: not found~<shell>: 1: emulate: not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` *(status 127)* | `st=127` **2>** `<shell>: emulate: command not found~<shell>: emulate: command not found` *(status 127)* | `st=127` **2>** `<shell>: emulate: not found~<shell>: emulate: not found` *(status 127)* | `st=0~zsh` |
+| `emulate/dash-o-sets-an-option` | `st=127~on=127~off=127` **2>** `<shell>: 1: emulate: not found~<shell>: 1: [[: not found~<shell>: 1: emulate: not found~<shell>: 1: [[: not found` | `st=127~on=1~off=1` **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` | `st=127~on=1~off=1` **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` | `st=127~on=1~off=1` **2>** `<shell>: emulate: command not found~<shell>: emulate: command not found` | `st=127~on=1~off=1` **2>** `<shell>: emulate: not found~<shell>: emulate: not found` | `st=0~on=0~off=1` |
+| `emulate/dash-l-lasts-as-long-as-the-function` | `in=127~out=127` **2>** `<shell>: 1: emulate: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `in=1~out=1` **2>** `<shell>: line 1: emulate: command not found` | `in=1~out=1` **2>** `<shell>: line 1: emulate: command not found` | `in=1~out=1` **2>** `<shell>: emulate: command not found` | `in=1~out=1` **2>** `<shell>: emulate: not found` | `in=0~out=1` |
+| `emulate/dash-l-covers-a-later-setopt` | `in=127~out=127` **2>** `<shell>: 1: emulate: not found~<shell>: 1: setopt: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `in=1~out=1` **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: setopt: command not found` | `in=1~out=1` **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: setopt: command not found` | `in=1~out=1` **2>** `<shell>: emulate: command not found~<shell>: setopt: command not found` | `in=1~out=1` **2>** `<shell>: emulate: not found~<shell>: setopt: not found` | `in=0~out=1` |
+| `setopt/no-aliases-stops-the-expansion` | `expanded~expanded~expanded` **2>** `<script>: 3: setopt: not found~<script>: 5: setopt: not found` | **2>** `<script>: line 2: hi: command not found~<script>: line 3: setopt: command not found~<script>: line 4: hi: command not found~<script>: line 5: setopt: command not found~<script>: line 6: hi: command not found` *(status 127)* | `expanded~expanded~expanded` **2>** `<script>: line 3: setopt: command not found~<script>: line 5: setopt: command not found` | **2>** `<script>: line 2: hi: command not found~<script>: line 3: setopt: command not found~<script>: line 4: hi: command not found~<script>: line 5: setopt: command not found~<script>: line 6: hi: command not found` *(status 127)* | `expanded~expanded~expanded` **2>** `<script>: line 3: setopt: not found~<script>: line 5: setopt: not found` | `expanded~expanded` **2>** `<script>:4: command not found: hi` |
 | `whence/bare-is-the-resolution` | `st=127` **2>** `<shell>: 1: whence: not found~<shell>: 1: whence: not found~<shell>: 1: whence: not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` *(status 127)* | `st=127` **2>** `<shell>: whence: command not found~<shell>: whence: command not found~<shell>: whence: command not found` *(status 127)* | `echo~st=0~if~f` | `echo~st=0~if~f` |
 | `whence/v-is-the-sentence` | `st=127` **2>** `<shell>: 1: whence: not found` | `st=127` **2>** `<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: whence: command not found` | `echo is a shell builtin~st=0` | `echo is a shell builtin~st=0` |
 | `whence/a-name-that-resolves-to-nothing` | `st=127~st=127` **2>** `<shell>: 1: whence: not found~<shell>: 1: whence: not found` | `st=127~st=127` **2>** `<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` | `st=127~st=127` **2>** `<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` | `st=127~st=127` **2>** `<shell>: whence: command not found~<shell>: whence: command not found` | `st=1~st=1` **2>** `<shell>: whence: nosuchcmd431: not found` | `st=1~nosuchcmd431 not found~st=1` |
@@ -1963,6 +1967,27 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   emulate fish; echo "st=$?"; emulate
   ```
+- `emulate/dash-o-sets-an-option` — `{+|-}o name` names an option for the emulation to apply after it has placed its own defaults, which is the form a prompt theme opens every one of its functions with. The name is `setopt`'s and takes `setopt`'s spellings, underscores and all; `+o` is the same request the other way
+  ```sh
+  emulate zsh -o extendedglob; echo "st=$?"; [[ -o extendedglob ]]; echo "on=$?"; emulate zsh +o extendedglob; [[ -o extendedglob ]]; echo "off=$?"
+  ```
+- `emulate/dash-l-lasts-as-long-as-the-function` — `-L` is LOCAL_OPTIONS: the emulation and everything moved after it last as long as the call. Written as a function on purpose — outside one the letter changes nothing, measured, so a case at the top level would pass with the letter ignored
+  ```sh
+  f() { emulate -L zsh -o extendedglob; [[ -o extendedglob ]]; echo "in=$?"; }; f; [[ -o extendedglob ]]; echo "out=$?"
+  ```
+- `emulate/dash-l-covers-a-later-setopt` — and it is the *call* that is restored rather than the emulation's own changes: an option set later in the same function goes back too, which is the whole of what the option is for and the half a snapshot taken after the emulation would miss
+  ```sh
+  f() { emulate -L zsh; setopt err_exit; [[ -o err_exit ]]; echo "in=$?"; }; f; [[ -o err_exit ]]; echo "out=$?"
+  ```
+- `setopt/no-aliases-stops-the-expansion` — `no_aliases` is an option a script throws to protect its own code from a user's aliases, and it reaches the *parser*: the second `hi` is a command that does not exist. Run from a file because that is the route this shell expands on at all — under `-c` it never does, while `[[ -o aliases ]]` still reads on there, which is what makes the option and the route two questions
+  ```sh
+  alias hi='echo expanded'
+  hi
+  setopt no_aliases
+  hi
+  setopt aliases
+  hi
+  ```
 - `whence/bare-is-the-resolution` — ksh93's own question about a name, answered bare: a builtin, keyword or function is its own name and nothing more. zsh has a whence too — the same ancestry — and bash and dash have none
   ```sh
   whence echo; echo "st=$?"; whence if; f() { :; }; whence f
@@ -2454,6 +2479,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/append-to-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` |
 | `core/array-star-joins` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` |
 | `unset/takes-away-an-environment-name` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` |
+| `unset/the-m-option-unsets-by-pattern` | **2>** `<shell>: 1: unset: Illegal option -m` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` | **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 0: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]` | **2>** `<shell>: unset: -m: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `st=0 [gone][gone][3]` |
+| `unset/the-n-option-splits-the-panel` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=0` | `st=0` | `st=2` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=0` | `st=1` **2>** `<shell>:unset:1: bad option: -n` |
 | `special/lineno-in-a-function-diverges` | `2` | `2` | `2` | `2` | `2` | `1` |
 
 - `special/ifs-has-a-default` — space, tab and newline in three of them and a NUL as well in zsh — and read as bytes because whitespace is what it is made of. Splitting worked here while `$IFS` was empty, so a script could neither read it nor tell it had been changed
@@ -2519,6 +2546,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `unset/takes-away-an-environment-name` — a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both
   ```sh
   unset HOME; echo "[${HOME-gone}]"
+  ```
+- `unset/the-m-option-unsets-by-pattern` — `unset -m` reads its operands as patterns rather than as names, and is one shell's alone — a prompt theme clears its whole namespace with it. The three values are what says the pattern is anchored at both ends of the *name*: `x*` takes `x` and `xy` and leaves `z`. The other four refuse the letter, in four wordings and at three statuses, and two of them print a usage line after it
+  ```sh
+  x=1 xy=2 z=3; unset -m "x*"; echo "st=$? [${x-gone}][${xy-gone}][${z-gone}]"
+  ```
+- `unset/the-n-option-splits-the-panel` — the letter beside it, and the row that says `unset`'s options are the dialect's rather than one set: bash 5.3 and ksh93 take `-n` where bash 3.2, bash-as-`sh`, dash and zsh refuse it, at three statuses and in four wordings. The *value* is deliberately not printed: what `-n` then does to a name that is not a reference splits the two shells that have the letter — bash removes nothing at all and ksh93 removes the variable — which is a second question, and one this shell does not yet answer
+  ```sh
+  x=1; unset -n x; echo "st=$?"
   ```
 - `special/lineno-in-a-function-diverges` — zsh numbers a function's lines from the line the function was written on; the other three count from the file
   ```sh

@@ -98,7 +98,8 @@ func TestEmulateRefusals(t *testing.T) {
 		{`emulate sh -c`, "string expected after -c", 1},
 		{`emulate zsh sh`, "unknown argument sh", 1},
 		{`emulate -R`, "not enough arguments", 1},
-		{`emulate -L sh`, "-L is not implemented yet", 2},
+		{`emulate zsh -o nosuchopt`, "no such option: nosuchopt", 1},
+		{`emulate zsh -o`, "string expected after -o", 1},
 	} {
 		out, st := runZsh(t, t.TempDir(), tc.src)
 		if st != tc.status || !strings.Contains(out, tc.want) {
@@ -113,5 +114,101 @@ func TestEmulateStaysInItsSubshell(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `(emulate sh); emulate; x="a b"; set -- $x; echo n=$#`)
 	if st != 0 || out != "zsh\nn=1\n" {
 		t.Errorf("out %q status %d, want the parent untouched", out, st)
+	}
+}
+
+// TestEmulateTakesAnOptionByName — `{+|-}o name` names an option for the
+// emulation to apply after its own defaults are in place. It is the form a
+// real prompt theme opens every one of its functions with, and the name is
+// `setopt`'s: underscores and all, and refused by `setopt`'s sentence when it
+// is not a name at all.
+func TestEmulateTakesAnOptionByName(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		src  string
+		want string
+		st   int
+	}{
+		{`emulate zsh -o extendedglob; [[ -o extendedglob ]]; echo on=$?`, "on=0\n", 0},
+		// The same option written with an underscore, which is the spelling
+		// the theme uses.
+		{`emulate zsh -o extended_glob; [[ -o extendedglob ]]; echo on=$?`, "on=0\n", 0},
+		// `+o` is the same request the other way.
+		{`setopt extendedglob; emulate zsh +o extendedglob; [[ -o extendedglob ]]; echo off=$?`, "off=1\n", 0},
+		// Applied *after* the emulation's own reset, which is the ordering
+		// that matters: a plain emulation puts every option back to its
+		// default, so an option placed first would be undone.
+		{`emulate zsh -o err_exit; [[ -o err_exit ]]; echo on=$?`, "on=0\n", 0},
+	} {
+		if out, st := runZsh(t, dir, tc.src); out != tc.want || st != tc.st {
+			t.Errorf("%s: out %q status %d, want %q status %d", tc.src, out, st, tc.want, tc.st)
+		}
+	}
+}
+
+// TestEmulateRefusesAnOptionItCannotName — the two ways `-o` goes wrong, each
+// asserted on the whole rendered line, because what is being pinned is the
+// sentence and not only the status.
+func TestEmulateRefusesAnOptionItCannotName(t *testing.T) {
+	dir := t.TempDir()
+	out, st := runZsh(t, dir, `emulate zsh -o nosuchopt; echo st=$?`)
+	if !strings.Contains(out, "emulate:1: no such option: nosuchopt\n") || !strings.Contains(out, "st=1\n") {
+		t.Errorf("out %q status %d, want the option named and 1", out, st)
+	}
+	out, _ = runZsh(t, dir, `emulate zsh -o; echo st=$?`)
+	if !strings.Contains(out, "emulate:1: string expected after -o\n") || !strings.Contains(out, "st=1\n") {
+		t.Errorf("out %q, want the missing argument named", out)
+	}
+	// An option with no emulation to apply it to. Measured: real zsh answers
+	// `bad option: -o` here rather than complaining about the count.
+	out, _ = runZsh(t, dir, `emulate -o extendedglob; echo st=$?`)
+	if !strings.Contains(out, "emulate:1: bad option: -o\n") || !strings.Contains(out, "st=1\n") {
+		t.Errorf("out %q, want the letter refused where nothing is being emulated", out)
+	}
+}
+
+// TestEmulateDashLLastsAsLongAsTheFunction — `-L` is LOCAL_OPTIONS: the
+// emulation and every option moved after it are put back when the call
+// unwinds.
+//
+// Written as a function on purpose. Outside one the letter changes nothing —
+// measured, `emulate -L zsh -o extendedglob` at the top level leaves the
+// option on afterwards — so a test at the top level would pass with the
+// letter ignored, which is what it did before.
+func TestEmulateDashLLastsAsLongAsTheFunction(t *testing.T) {
+	dir := t.TempDir()
+	out, st := runZsh(t, dir,
+		`f() { emulate -L zsh -o extendedglob; [[ -o extendedglob ]]; echo in=$?; }; f; `+
+			`[[ -o extendedglob ]]; echo out=$?`)
+	if out != "in=0\nout=1\n" || st != 0 {
+		t.Errorf("out %q status %d, want the option on inside and off after", out, st)
+	}
+	// The *call* is what is restored rather than the emulation's own
+	// changes: an option set later in the same function goes back too, which
+	// is the whole of what the option is for.
+	out, _ = runZsh(t, dir,
+		`f() { emulate -L zsh; setopt err_exit; [[ -o err_exit ]]; echo in=$?; }; f; `+
+			`[[ -o err_exit ]]; echo out=$?`)
+	if out != "in=0\nout=1\n" {
+		t.Errorf("out %q, want a later setopt restored as well", out)
+	}
+	// And the mode itself.
+	out, _ = runZsh(t, dir, `f() { emulate -L sh; emulate; }; f; emulate`)
+	if out != "sh\nzsh\n" {
+		t.Errorf("out %q, want the mode local to the call", out)
+	}
+	// An anonymous function is a function, which is the shape the theme
+	// actually uses.
+	out, _ = runZsh(t, dir,
+		`(){ emulate -L zsh -o extendedglob; [[ -o extendedglob ]]; echo in=$?; }; `+
+			`[[ -o extendedglob ]]; echo out=$?`)
+	if out != "in=0\nout=1\n" {
+		t.Errorf("out %q, want an anonymous function to be a scope too", out)
+	}
+	// Outside a function the letter changes nothing, and that is measured
+	// rather than a convenience: nothing to restore to is not a failure.
+	out, st = runZsh(t, dir, `emulate -L zsh -o extendedglob; [[ -o extendedglob ]]; echo top=$?`)
+	if out != "top=0\n" || st != 0 {
+		t.Errorf("out %q status %d, want the option left on at the top level", out, st)
 	}
 }

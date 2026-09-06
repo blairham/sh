@@ -25,6 +25,7 @@ var preset = dialecttest.Preset{
 	Semantics:   ksh.Semantics,
 	Diagnostics: ksh.Diagnostics,
 	Apply:       ksh.Apply,
+	Prelude:     ksh.Prelude,
 }
 
 // presetDialect is a fresh, addressable copy of this dialect's grammar, for

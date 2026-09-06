@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -32,6 +33,33 @@ func runZsh(t *testing.T, dir, src string) (string, int) {
 		t.Fatalf("run %q: %v", src, err)
 	}
 	return out, st
+}
+
+// runZshPrelude runs src with the dialect's prelude installed the way the front
+// end installs it. See the same helper under dialect/bash for why pasting the
+// prelude on the front of the snippet is a different — and wrong — thing.
+func runZshPrelude(t *testing.T, dir, src string) (string, int) {
+	t.Helper()
+	out, st, err := preset.CombinedWithPrelude(t, dialecttest.Base{
+		Dir: dir, Vars: map[string]string{"PATH": dir},
+	}, src)
+	if err != nil {
+		t.Fatalf("run %q: %v", src, err)
+	}
+	return out, st
+}
+
+// wantWholeLines fails unless each named line appears in the output entire —
+// the location included, which a Contains check on the sentence alone cannot
+// see.
+func wantWholeLines(t *testing.T, out string, want ...string) {
+	t.Helper()
+	lines := strings.Split(out, "\n")
+	for _, w := range want {
+		if !slices.Contains(lines, w) {
+			t.Errorf("output = %q, want the whole line %q in it", out, w)
+		}
+	}
 }
 
 func TestSourceIsASynonymForDot(t *testing.T) {

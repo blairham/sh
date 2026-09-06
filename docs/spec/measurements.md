@@ -1118,14 +1118,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `dirstack/push-list-pop` | `p=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: dirs: not found~<shell>: 1: popd: not found` | `/tmp ~~/tmp ~~~~p=0` | `/tmp ~~/tmp ~~~~p=0` | `/tmp ~~/tmp ~~~~p=0` | `p=127` **2>** `<shell>: pushd: not found~<shell>: dirs: not found~<shell>: popd: not found` | `/tmp ~~p=0` |
 | `dirstack/rotate-to-an-entry-counted-from-the-front` | `pwd=/` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: dirs: not found` | `/tmp / /usr~/tmp / /usr~pwd=/tmp` | `/tmp / /usr~/tmp / /usr~pwd=/tmp` | `/tmp / /usr~/tmp / /usr~pwd=/tmp` | `pwd=/` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: pushd: not found~<shell>: dirs: not found` | `/tmp / /usr~pwd=/tmp` |
 | `dirstack/rotate-to-an-entry-counted-from-the-back` | `pwd=/` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: dirs: not found` | `/ /usr /tmp~/ /usr /tmp~pwd=/` | `/ /usr /tmp~/ /usr /tmp~pwd=/` | `/ /usr /tmp~/ /usr /tmp~pwd=/` | `pwd=/` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: pushd: not found~<shell>: dirs: not found` | `/ /usr /tmp~pwd=/` |
-| `dirstack/rotate-past-the-end-of-the-stack` | `st=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: dirs: not found` *(status 127)* | `st=1~/tmp /` | `st=1~/tmp /` | `st=1~/tmp /` | `st=127` **2>** `<shell>: pushd: not found~<shell>: dirs: not found` *(status 127)* | `st=1~/tmp /` |
-| `dirstack/rotate-with-nothing-pushed` | `st=127` | `st=1` | `st=1` | `st=1` | `st=127` | `st=1` |
+| `dirstack/rotate-past-the-end-of-the-stack` | `st=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: dirs: not found` *(status 127)* | `st=1~/tmp /` **2>** `<shell>: line 1: pushd: +9: directory stack index out of range` | `st=1~/tmp /` **2>** `<shell>: line 1: pushd: +9: directory stack index out of range` | `st=1~/tmp /` **2>** `<shell>: line 0: pushd: +9: directory stack index out of range` | `st=127` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: dirs: not found` *(status 127)* | `st=1~/tmp /` **2>** `<shell>:pushd:1: no such entry in dir stack` |
+| `dirstack/rotate-with-nothing-pushed` | `st=127` **2>** `<shell>: 1: pushd: not found` | `st=1` **2>** `<shell>: line 1: pushd: directory stack empty` | `st=1` **2>** `<shell>: line 1: pushd: directory stack empty` | `st=1` **2>** `<shell>: line 0: pushd: directory stack empty` | `st=127` **2>** `<shell>: pushd: not found` | `st=1` **2>** `<shell>:pushd:1: no such entry in dir stack` |
 | `dirstack/popd-an-entry-that-is-not-the-top` | `pwd=/` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: popd: not found~<shell>: 1: dirs: not found` | `/usr /~/usr /~pwd=/usr` | `/usr /~/usr /~pwd=/usr` | `/usr /~/usr /~pwd=/usr` | `pwd=/` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: popd: not found~<shell>: dirs: not found` | `/usr /~pwd=/usr` |
-| `dirstack/popd-with-nothing-pushed` | `st=127` | `st=1` | `st=1` | `st=1` | `st=127` | `st=1` |
-| `dirstack/clear-the-stack` | `st=127~p=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: dirs: not found~<shell>: 1: dirs: not found` | `st=0~/usr~p=1` | `st=0~/usr~p=1` | `st=0~/usr~p=1` | `st=127~p=127` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: dirs: not found~<shell>: dirs: not found` | `st=0~/usr~p=1` |
+| `dirstack/popd-with-nothing-pushed` | `st=127` **2>** `<shell>: 1: popd: not found` | `st=1` **2>** `<shell>: line 1: popd: directory stack empty` | `st=1` **2>** `<shell>: line 1: popd: directory stack empty` | `st=1` **2>** `<shell>: line 0: popd: directory stack empty` | `st=127` **2>** `<shell>: popd: not found` | `st=1` **2>** `<shell>:popd:1: directory stack empty` |
+| `dirstack/clear-the-stack` | `st=127~p=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: dirs: not found~<shell>: 1: dirs: not found~<shell>: 1: popd: not found` | `st=0~/usr~p=1` **2>** `<shell>: line 1: popd: directory stack empty` | `st=0~/usr~p=1` **2>** `<shell>: line 1: popd: directory stack empty` | `st=0~/usr~p=1` **2>** `<shell>: line 0: popd: directory stack empty` | `st=127~p=127` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: dirs: not found~<shell>: dirs: not found~<shell>: popd: not found` | `st=0~/usr~p=1` **2>** `<shell>:popd:1: directory stack empty` |
 | `dirstack/dirs-one-to-a-line-and-numbered` | `--` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: dirs: not found~<shell>: 1: dirs: not found` *(status 127)* | `/usr~/tmp~/~--~ 0  /usr~ 1  /tmp~ 2  /` | `/usr~/tmp~/~--~ 0  /usr~ 1  /tmp~ 2  /` | `/usr~/tmp~/~--~ 0  /usr~ 1  /tmp~ 2  /` | `--` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: dirs: not found~<shell>: dirs: not found` *(status 127)* | `/usr~/tmp~/~--~0	/usr~1	/tmp~2	/` |
 | `dirstack/dirs-unabbreviated` | `--` **2>** `<shell>: 1: pushd: not found~<shell>: 1: dirs: not found~<shell>: 1: dirs: not found` *(status 127)* | `/ ~~--~/ <tmp>` | `/ ~~--~/ <tmp>` | `/ ~~--~/ <tmp>` | `--` **2>** `<shell>: pushd: not found~<shell>: dirs: not found~<shell>: dirs: not found` *(status 127)* | `/ ~~--~/ <tmp>` |
-| `dirstack/dirs-a-letter-it-does-not-have` | `st=127` | `st=2` | `st=2` | `st=1` | `st=127` | `st=1` |
+| `dirstack/pushd-into-a-directory-that-is-not-there` | `st=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: dirs: not found` *(status 127)* | `st=1~/` **2>** `<shell>: line 1: pushd: /no/such-xyz: No such file or directory` | `st=1~/` **2>** `<shell>: line 1: pushd: /no/such-xyz: No such file or directory` | `st=1~/` **2>** `<shell>: line 0: pushd: /no/such-xyz: No such file or directory` | `st=127` **2>** `<shell>: pushd: not found~<shell>: dirs: not found` *(status 127)* | `st=1~/` **2>** `<shell>:pushd:1: no such file or directory: /no/such-xyz` |
+| `dirstack/dirs-a-letter-it-does-not-have` | `st=127` **2>** `<shell>: 1: dirs: not found` | `st=2` **2>** `<shell>: line 1: dirs: -q: invalid number~dirs: usage: dirs [-clpv] [+N] [-N]` | `st=2` **2>** `<shell>: line 1: dirs: -q: invalid number~dirs: usage: dirs [-clpv] [+N] [-N]` | `st=1` **2>** `<shell>: line 0: dirs: -q: invalid number~dirs: usage: dirs [-clpv] [+N] [-N]` | `st=127` **2>** `<shell>: dirs: not found` | `st=1` **2>** `<shell>:dirs:1: bad option: -q` |
 | `type/f-skips-or-prints-the-function` | `-f: not found~f is a shell function~st=127` | `st=1` **2>** `<shell>: line 1: type: f: not found` | `st=1` **2>** `<shell>: line 1: type: f: not found` | `st=1` **2>** `<shell>: line 0: type: f: not found` | `f is an undefined function~st=0` | `f () {~	:~}~st=0` |
 | `type/a-lists-a-keyword` | `-a: not found~if is a shell keyword~st=127` | `if is a shell keyword~st=0` | `if is a shell keyword~st=0` | `if is a shell keyword~st=0` | `if is a keyword~st=0` | `if is a reserved word~st=0` |
 | `type/p-on-a-name-that-is-nothing` | `-p: not found~nosuchzz_qq: not found~st=127` | `st=1` | `st=1` | `st=1` | `st=1` | `nosuchzz_qq not found~st=1` |
@@ -1720,13 +1721,13 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   cd /; pushd /tmp >/dev/null; pushd /usr >/dev/null; pushd -0; dirs; echo "pwd=$PWD"
   ```
-- `dirstack/rotate-past-the-end-of-the-stack` — an index there is no entry for: refused, at 1, with the stack left alone. The complaint itself is discarded here and pinned in the dialect tests instead — this engine's stack is a prelude function, and a shell function cannot reach the location prefix (`<shell>: line 1:`) the real builtin writes in front of it
+- `dirstack/rotate-past-the-end-of-the-stack` — an index there is no entry for: refused, at 1, with the stack left alone, and the complaint compared rather than discarded (#603) — a different sentence in each of the two shells that have the builtin, both carrying the location the shell puts in front of its own refusals
   ```sh
-  cd /; pushd /tmp >/dev/null; pushd +9 2>/dev/null; echo "st=$?"; dirs
+  cd /; pushd /tmp >/dev/null; pushd +9; echo "st=$?"; dirs
   ```
-- `dirstack/rotate-with-nothing-pushed` — the same refusal against a stack with nothing in it — a different sentence in both shells, and the same status. The wording is the dialect tests' to pin, for the location reason above
+- `dirstack/rotate-with-nothing-pushed` — the same refusal against a stack with nothing in it: one shell has a second sentence for it and the other reuses the one above, and both are compared whole
   ```sh
-  cd /; pushd +1 2>/dev/null; echo "st=$?"
+  cd /; pushd +1; echo "st=$?"
   ```
 - `dirstack/popd-an-entry-that-is-not-the-top` — `popd +N` takes an entry out where it stands and leaves the shell where it is — the current directory only moves when N picks the entry the shell is in, which is what a bare `popd` does
   ```sh
@@ -1734,11 +1735,11 @@ grades it and nothing drift-checks it either, for the same reason.
   ```
 - `dirstack/popd-with-nothing-pushed` — the underflow, which is 1 in both shells that have `popd` and 127 in the two that do not have the name at all — absence rather than divergence, and the case says which by the status
   ```sh
-  cd /; popd 2>/dev/null; echo "st=$?"
+  cd /; popd; echo "st=$?"
   ```
 - `dirstack/clear-the-stack` — `dirs -c` empties the stack in silence, and what is left is the current directory alone — which `dirs` still prints, because it reads $PWD rather than an entry. A `popd` after it is the underflow
   ```sh
-  cd /; pushd /tmp >/dev/null; pushd /usr >/dev/null; dirs -c; echo "st=$?"; dirs; popd 2>/dev/null; echo "p=$?"
+  cd /; pushd /tmp >/dev/null; pushd /usr >/dev/null; dirs -c; echo "st=$?"; dirs; popd; echo "p=$?"
   ```
 - `dirstack/dirs-one-to-a-line-and-numbered` — `-p` writes one entry to a line and `-v` numbers them, and the numbering is the whole difference between the two shells: a right-aligned two-column number and two spaces against a bare number and a tab
   ```sh
@@ -1748,9 +1749,13 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   cd; pushd / >/dev/null; dirs; echo "--"; dirs -l
   ```
-- `dirstack/dirs-a-letter-it-does-not-have` — the shape of the option parser, by its status alone: 2 where a bad letter is an invalid *number* with a usage line after it, 1 where it is a bad option, 127 where there is no `dirs`. The same split decides whether `dirs -lv` is two letters or one malformed index
+- `dirstack/pushd-into-a-directory-that-is-not-there` — whose complaint it is. The directory change is what fails, and neither shell blames `cd`: the word the script wrote is the word the refusal carries, and the stack is left alone. The case that showed a prelude function could not say either (#603)
   ```sh
-  dirs -q 2>/dev/null; echo "st=$?"
+  cd /; pushd /no/such-xyz; echo "st=$?"; dirs
+  ```
+- `dirstack/dirs-a-letter-it-does-not-have` — the shape of the option parser: 2 where a bad letter is an invalid *number* with an unlocated usage line after it, 1 where it is a bad option, 127 where there is no `dirs`. The same split decides whether `dirs -lv` is two letters or one malformed index
+  ```sh
+  dirs -q; echo "st=$?"
   ```
 - `type/f-skips-or-prints-the-function` — one letter, two opposite meanings: two shells use -f to leave functions out of the search — so a name that is only a function is not found — and one turns it around and prints the definition. The fourth has no options and answers -f as a name
   ```sh

@@ -151,12 +151,11 @@ func TestUlimitListing(t *testing.T) {
 }
 
 // The directory stack: pushd prints the stack, a bare pushd swaps, popd
-// pops and the empty stack refuses — the sentence bare, a shell function
-// having no way to reach the engine's location prefix.
+// pops and the empty stack refuses — located and named the way bash locates
+// and names a builtin's refusal, because to the script that is what it is.
 func TestDirectoryStack(t *testing.T) {
 	home := t.TempDir()
-	out, _ := runBash(t, home, bash.Prelude()+`
-HOME=`+home+`
+	out, _ := runBashPrelude(t, home, `HOME=`+home+`
 cd
 pushd /tmp; echo st=$?
 pushd; echo sw=$?
@@ -168,7 +167,7 @@ popd; echo p2=$?`)
 		"~ /tmp\nsw=0\n",
 		"~ /tmp\n",
 		"/tmp\np=0\n",
-		"popd: directory stack empty\np2=1\n",
+		"bash: line 7: popd: directory stack empty\np2=1\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("got %q, want %q in it", out, want)
@@ -240,8 +239,7 @@ func TestJobsStateFiltersLastLetterWins(t *testing.T) {
 // out and leaves the shell where it is.
 func TestDirectoryStackRotates(t *testing.T) {
 	home := t.TempDir()
-	out, _ := runBash(t, home, bash.Prelude()+`
-HOME=`+home+`
+	out, _ := runBashPrelude(t, home, `HOME=`+home+`
 cd /
 pushd /tmp >/dev/null; pushd /usr >/dev/null
 pushd +1; echo "pwd=$PWD"
@@ -258,13 +256,13 @@ popd +1; echo "pwd=$PWD"`)
 	}
 }
 
-// The refusals, which the corpus cannot pin: this shell's stack is a prelude
-// function and a function cannot reach the engine's location prefix, so the
-// corpus records the status and these record the words.
+// The refusals, whole: the sentence, the name in front of it, and the location
+// in front of that. Every one is a line bash writes verbatim, and the location
+// is the half no shell function could reach before #603 — which is why the
+// comparison is by whole line rather than by a fragment of one.
 func TestDirectoryStackRefusals(t *testing.T) {
 	home := t.TempDir()
-	out, _ := runBash(t, home, bash.Prelude()+`
-HOME=`+home+`
+	out, _ := runBashPrelude(t, home, `HOME=`+home+`
 cd /
 pushd /tmp >/dev/null
 pushd +9; echo "r=$?"
@@ -273,22 +271,32 @@ dirs +9; echo "d=$?"
 popd >/dev/null; pushd +1; echo "e=$?"
 dirs -q; echo "q=$?"
 pushd -n /etc; echo "n=$?"
-popd foo; echo "a=$?"`)
-	for _, want := range []string{
-		"pushd: +9: directory stack index out of range\nr=1\n",
-		"popd: -9: directory stack index out of range\no=1\n",
+popd foo; echo "a=$?"
+pushd /no/such/dir-xyz; echo "c=$?"`)
+	wantWholeLines(t, out,
+		"bash: line 4: pushd: +9: directory stack index out of range",
+		"bash: line 5: popd: -9: directory stack index out of range",
 		// `dirs` drops the sign where `pushd` and `popd` keep it.
-		"dirs: 9: directory stack index out of range\nd=1\n",
+		"bash: line 6: dirs: 9: directory stack index out of range",
 		// A stack with nothing in it is a different sentence from an index
 		// that is merely too big.
-		"pushd: directory stack empty\ne=1\n",
-		"dirs: -q: invalid number\ndirs: usage: dirs [-clpv] [+N] [-N]\nq=2\n",
+		"bash: line 7: pushd: directory stack empty",
+		"bash: line 8: dirs: -q: invalid number",
+		// The usage line that follows carries no location, which is bash's
+		// own shape: only the first line of a refusal is placed.
+		"dirs: usage: dirs [-clpv] [+N] [-N]",
 		// Refused by name rather than read as a directory called `-n`.
-		"pushd: -n is not implemented yet\nn=2\n",
+		"bash: line 9: pushd: -n is not implemented yet",
 		// And a third wording for a word that is neither an index nor an
 		// option, which `popd` alone has.
-		"popd: foo: invalid argument\npopd: usage: popd [-n] [+N | -N]\na=2\n",
-	} {
+		"bash: line 10: popd: foo: invalid argument",
+		"popd: usage: popd [-n] [+N | -N]",
+		// The complaint a builtin *inside* the function raised. `cd` did the
+		// work and no shell in the panel says so: the name the script used is
+		// the name the refusal carries.
+		"bash: line 11: pushd: /no/such/dir-xyz: No such file or directory",
+	)
+	for _, want := range []string{"r=1\n", "o=1\n", "d=1\n", "e=1\n", "q=2\n", "n=2\n", "a=2\n", "c=1\n"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("got %q, want %q in it", out, want)
 		}
@@ -299,8 +307,7 @@ popd foo; echo "a=$?"`)
 // not two options — and `-c` empties the stack in silence.
 func TestDirsLetters(t *testing.T) {
 	home := t.TempDir()
-	out, _ := runBash(t, home, bash.Prelude()+`
-HOME=`+home+`
+	out, _ := runBashPrelude(t, home, `HOME=`+home+`
 cd
 pushd / >/dev/null; pushd /tmp >/dev/null
 dirs -p; echo "--"
@@ -314,7 +321,7 @@ dirs -c; dirs; echo "c=$?"`)
 		" 0  /tmp\n 1  /\n 2  ~\n--\n",
 		"/tmp / " + home + "\n--\n",
 		"/\n--\n",
-		"dirs: -lv: invalid number\n",
+		"bash: line 8: dirs: -lv: invalid number\n",
 		"/tmp\nc=0\n",
 	} {
 		if !strings.Contains(out, want) {

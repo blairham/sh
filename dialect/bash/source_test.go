@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -29,6 +30,42 @@ func runBash(t *testing.T, dir, src string) (string, int) {
 		t.Fatalf("run %q: %v", src, err)
 	}
 	return out, st
+}
+
+// runBashPrelude runs src with the dialect's prelude installed the way the
+// front end installs it, rather than pasted on the front of the snippet.
+//
+// The difference is the whole of what these directory-stack tests assert.
+// Pasted on, `pushd` and `popd` arrive as the *script's* functions: they speak
+// with no location in front of them, and the line a diagnostic names is a line
+// of the prelude. Installed, they are the shell's, and what they say is what
+// bash says down to the `bash: line N: ` (#603).
+func runBashPrelude(t *testing.T, dir, src string) (string, int) {
+	t.Helper()
+	out, st, err := preset.CombinedWithPrelude(t, dialecttest.Base{
+		Dir: dir, Vars: map[string]string{"PATH": dir},
+	}, src)
+	if err != nil {
+		t.Fatalf("run %q: %v", src, err)
+	}
+	return out, st
+}
+
+// wantWholeLines fails unless each named line appears in the output entire.
+//
+// Not strings.Contains of a fragment, which is what let these cases pass while
+// the location in front of every one of them was missing: a prefix added
+// *before* the text a Contains check names is invisible to it. The line is
+// compared from its start, so `bash: line 5: ` is part of the assertion rather
+// than something the assertion cannot see.
+func wantWholeLines(t *testing.T, out string, want ...string) {
+	t.Helper()
+	lines := strings.Split(out, "\n")
+	for _, w := range want {
+		if !slices.Contains(lines, w) {
+			t.Errorf("output = %q, want the whole line %q in it", out, w)
+		}
+	}
 }
 
 func TestSourceIsASynonymForDot(t *testing.T) {

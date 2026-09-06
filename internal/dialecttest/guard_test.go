@@ -62,6 +62,15 @@ func TestEveryRunnerUnderDialectIsToldWhichShellItIs(t *testing.T) {
 				"\tSet Dialect, or build the runner with dialecttest.Preset.Runner.",
 				rel, fset.Position(pos).Line)
 		}
+		for _, pos := range preludesPastedOnto(f) {
+			rel, _ := filepath.Rel(root, path)
+			t.Errorf("dialect/%s:%d pastes Prelude() onto a snippet.\n"+
+				"\tThe functions then arrive as the *script's*, so they speak with no\n"+
+				"\tlocation in front of them and cannot reach the seam that gives them one —\n"+
+				"\tand the line a diagnostic names is a line of the prelude (#603).\n"+
+				"\tUse dialecttest.Preset.CombinedWithPrelude, which installs it as a front end does.",
+				rel, fset.Position(pos).Line)
+		}
 		return nil
 	})
 	if err != nil {
@@ -128,6 +137,67 @@ func runnersMissingDialect(f *ast.File) []token.Pos {
 		return true
 	})
 	return missing
+}
+
+// preludesPastedOnto reports every `Prelude() + …` in f.
+//
+// Concatenation is the tell and the whole of the check: a prelude *installed*
+// goes through a helper and is never an operand of `+`. Matched on the method
+// name rather than on the package, because each dialect package spells the
+// package differently and all four have the function.
+func preludesPastedOnto(f *ast.File) []token.Pos {
+	var found []token.Pos
+	ast.Inspect(f, func(n ast.Node) bool {
+		bin, ok := n.(*ast.BinaryExpr)
+		if !ok || bin.Op != token.ADD {
+			return true
+		}
+		for _, side := range []ast.Expr{bin.X, bin.Y} {
+			call, ok := side.(*ast.CallExpr)
+			if !ok || len(call.Args) != 0 {
+				continue
+			}
+			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Prelude" {
+				found = append(found, call.Lparen)
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// TestTheGuardCatchesAPastedPrelude is the other half of that one: a detector
+// nothing has ever been shown to catch is indistinguishable from a clean tree.
+func TestTheGuardCatchesAPastedPrelude(t *testing.T) {
+	t.Parallel()
+	const src = `package x
+
+func f() {
+	_ = run(bash.Prelude() + "echo hi")             // line 4: pasted
+	_ = runWithPrelude("echo hi")                   // fine: installed
+	_ = preset.CombinedWithPrelude(t, base, "hi")   // fine
+	_ = "x" + zsh.Prelude()                         // line 7: the other side
+	_ = bash.Prelude()                              // fine: not concatenated
+}
+`
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "x.go", src, parser.SkipObjectResolution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []int
+	for _, pos := range preludesPastedOnto(f) {
+		lines = append(lines, fset.Position(pos).Line)
+	}
+	want := []int{4, 7}
+	if len(lines) != len(want) {
+		t.Fatalf("reported lines %v, want %v", lines, want)
+	}
+	for i, l := range lines {
+		if l != want[i] {
+			t.Errorf("reported line %d, want %d", l, want[i])
+		}
+	}
 }
 
 // TestTheGuardCatchesADeliberateOmission hands the detector a violation and

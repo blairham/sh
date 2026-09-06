@@ -25,6 +25,7 @@ var preset = dialecttest.Preset{
 	Semantics:   bash.Semantics,
 	Diagnostics: bash.Diagnostics,
 	Apply:       bash.Apply,
+	Prelude:     bash.Prelude,
 }
 
 // presetDialect is a fresh, addressable copy of this dialect's grammar, for

@@ -3771,10 +3771,8 @@ pushes and prints the stack (silently, in zsh), a bare `pushd` exchanges
 the top entry with the current directory, `popd` pops, and `dirs` prints
 everything on one line, current directory first, `$HOME` as `~`, read
 from `$PWD` at print time so a plain `cd` never leaves it stale. Two
-divergences are deliberate: the empty-stack refusals are bare sentences
-(a shell function cannot reach the engine's location machinery), and
-`DIRSTACK` holds only the pushed entries where bash's also mirrors the
-current directory.
+divergence is deliberate: `DIRSTACK` holds only the pushed entries where
+bash's also mirrors the current directory.
 
 **Rotation and `dirs`' letters** are the half that landed behind that
 single success-path pin and were therefore never exercised (#468).
@@ -3817,14 +3815,43 @@ work and stay where they are. Recorded and not implemented: zsh's
 a printing letter, which that engine measures as doing nothing at all;
 and bash's `DIRSTACK` as an assignable variable.
 
-One divergence the rotation work made visible rather than caused: a
-`pushd` whose directory does not exist reports `cd`'s complaint, located
-inside the prelude, where the real shell says
-`pushd: /nope: No such file or directory`. The status and the untouched
-stack are right; the sentence is the function's. The corpus rows
-therefore pin the *status* of every refusal and discard the text, and
-the wordings are pinned in `dialect/bash` and `dialect/zsh` instead,
-where a location prefix is not part of the comparison.
+**How a prelude function says where it is** (#603). The rotation work
+made this visible rather than causing it: a `pushd` whose directory does
+not exist used to report `cd`'s complaint, located inside the prelude,
+where both shells that have the builtin say
+`pushd: /nope: No such file or directory` at the caller's line. The
+status and the untouched stack were right and the sentence was the
+function's, so five corpus rows pinned the status and discarded the text.
+
+Two rules close it, and they are one fact seen from two sides.
+
+- **A function the prelude defined is the shell speaking.** While one
+  runs, every diagnostic raised inside it is located where the *script*
+  called it and named after it — whatever raised it. So `cd`'s refusal
+  arrives as `pushd`'s, which is what both shells print, and the name is
+  the one the script wrote: a prelude helper another prelude function
+  calls does not take it over. Remembered by declaration rather than by
+  name, so a script redefining `pushd` gets the ordinary treatment of a
+  function that shadows a builtin — `cd`, at the line in its own body.
+- **`diagnose` is how it raises one of its own.** One line in the
+  prelude, `diagnose "directory stack empty"`, renders as
+  `sh: line 3: popd: directory stack empty` under one dialect's location
+  style and `sh:popd:3: directory stack empty` under the other's, with
+  the shell text saying neither. It is the only command in `interp` that
+  exists for a prelude rather than for a script, and the lookup answers
+  it only while a prelude function is on the stack — a script running the
+  word gets the `command not found` the dialect it is written for would
+  give it, so a dialect gains no builtin by having a prelude.
+
+A second line of a refusal is still a plain `echo`, which is measured
+rather than a shortcut: bash locates only the first line, so
+`dirs: usage: dirs [-clpv] [+N] [-N]` follows the located complaint with
+no prefix of its own.
+
+What this does not do is make such a function a builtin in any other
+respect. `type pushd` still answers `function`, because it is one; the
+question the seam answers is whose diagnostic it is, which is the
+question a location already asks.
 
 ### Out of scope, recorded rather than silent: newgrp
 

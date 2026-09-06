@@ -31,9 +31,11 @@ func Prelude() string { return identity() + functions }
 // after pushing, a bare `pushd` exchanges the top entry with the current
 // directory, `popd` prints what remains, and `dirs` writes everything on one
 // line, current directory first, each entry with $HOME abbreviated to `~`.
-// An empty stack refuses `popd` with status 1; the real engine locates that
-// complaint the way it locates any message, which a shell function cannot,
-// so ours is the bare sentence.
+// An empty stack refuses `popd` with status 1, located and named the way the
+// real engine locates and names it: a function here *is* the shell, so
+// `diagnose` hands the sentence over and the engine puts the rest in front of
+// it (#603, interp/prelude.go). A second line — the usage line — stays a
+// plain `echo`, because bash locates only the first.
 //
 // The rotating forms are the half that was missing (#468). `pushd +N` and
 // `pushd -N` turn the stack — counting the *current* directory as entry 0,
@@ -66,12 +68,12 @@ dirs() {
 			# A word that looks like an index and is not one, against a
 			# word that is neither an index nor an option: two complaints,
 			# and this shell says which of the two it met.
-			echo "dirs: $1: invalid number" >&2
+			diagnose "$1: invalid number"
 			echo "dirs: usage: dirs [-clpv] [+N] [-N]" >&2
 			return 2
 			;;
 		*)
-			echo "dirs: $1: invalid option" >&2
+			diagnose "$1: invalid option"
 			echo "dirs: usage: dirs [-clpv] [+N] [-N]" >&2
 			return 2
 			;;
@@ -89,7 +91,7 @@ dirs() {
 		*)  __i=$(( $# - 1 - ${__n#-} )) ;;
 		esac
 		if [ "$__i" -lt 0 ] || [ "$__i" -ge $# ]; then
-			echo "dirs: ${__n#[-+]}: directory stack index out of range" >&2
+			diagnose "${__n#[-+]}: directory stack index out of range"
 			return 1
 		fi
 		while [ "$__i" -gt 0 ]; do
@@ -120,7 +122,7 @@ dirs() {
 	fi
 }
 __dirs_rotate() {
-	local __name=$1 __spec=$2 __i __new
+	local __spec=$1 __i __new
 	set -- "$PWD" "${DIRSTACK[@]}"
 	case $__spec in
 	+*) __i=${__spec#+} ;;
@@ -130,9 +132,9 @@ __dirs_rotate() {
 		# An empty stack is its own complaint, and not the same one: with
 		# nothing pushed there is no index that could have been in range.
 		if [ $# -eq 1 ]; then
-			echo "$__name: directory stack empty" >&2
+			diagnose "directory stack empty"
 		else
-			echo "$__name: $__spec: directory stack index out of range" >&2
+			diagnose "$__spec: directory stack index out of range"
 		fi
 		return 1
 	fi
@@ -151,7 +153,7 @@ pushd() {
 	while [ $# -gt 0 ]; do
 		case $1 in
 		-n)
-			echo "pushd: -n is not implemented yet" >&2
+			diagnose "-n is not implemented yet"
 			return 2
 			;;
 		+[0-9]*|-[0-9]*) __spec=$1; shift ;;
@@ -160,10 +162,10 @@ pushd() {
 		esac
 	done
 	if [ -n "$__spec" ]; then
-		__dirs_rotate pushd "$__spec" || return 1
+		__dirs_rotate "$__spec" || return 1
 	elif [ $# -eq 0 ]; then
 		if [ ${#DIRSTACK[@]} -eq 0 ]; then
-			echo "pushd: no other directory" >&2
+			diagnose "no other directory"
 			return 1
 		fi
 		cd "${DIRSTACK[0]}" || return 1
@@ -179,26 +181,26 @@ popd() {
 	while [ $# -gt 0 ]; do
 		case $1 in
 		-n)
-			echo "popd: -n is not implemented yet" >&2
+			diagnose "-n is not implemented yet"
 			return 2
 			;;
 		+[0-9]*|-[0-9]*) __spec=$1; shift ;;
 		-*|+*)
-			echo "popd: $1: invalid number" >&2
+			diagnose "$1: invalid number"
 			echo "popd: usage: popd [-n] [+N | -N]" >&2
 			return 2
 			;;
 		*)
 			# Not an index and not an option: popd takes no directory, and
 			# says so with a third wording of its own.
-			echo "popd: $1: invalid argument" >&2
+			diagnose "$1: invalid argument"
 			echo "popd: usage: popd [-n] [+N | -N]" >&2
 			return 2
 			;;
 		esac
 	done
 	if [ ${#DIRSTACK[@]} -eq 0 ]; then
-		echo "popd: directory stack empty" >&2
+		diagnose "directory stack empty"
 		return 1
 	fi
 	set -- "$PWD" "${DIRSTACK[@]}"
@@ -209,7 +211,7 @@ popd() {
 		*)  __i=$(( $# - 1 - ${__spec#-} )) ;;
 		esac
 		if [ "$__i" -lt 0 ] || [ "$__i" -ge $# ]; then
-			echo "popd: $__spec: directory stack index out of range" >&2
+			diagnose "$__spec: directory stack index out of range"
 			return 1
 		fi
 	fi

@@ -1511,6 +1511,12 @@ func (sh Shell) sayVerboseRest(src string, at verbosePos, echo bool) {
 // A prelude that fails is the dialect being broken rather than the script, so
 // it is reported plainly and never through the dialect's script wording.
 func (sh Shell) source(r *interp.Runner, name string) int {
+	// What follows is the dialect rather than a script, and the runner has to
+	// know: a function defined here speaks for the shell, so its refusals
+	// carry the location and the name a builtin's would. See
+	// interp.Runner.SourcingPrelude.
+	r.SourcingPrelude(true)
+	defer r.SourcingPrelude(false)
 	f, err := syntax.Parse(sh.Prelude, sh.Dialect)
 	if err == nil {
 		_, err = r.Run(context.Background(), f)

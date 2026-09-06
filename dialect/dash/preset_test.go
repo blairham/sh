@@ -25,6 +25,7 @@ var preset = dialecttest.Preset{
 	Semantics:   dash.Semantics,
 	Diagnostics: dash.Diagnostics,
 	Apply:       dash.Apply,
+	Prelude:     dash.Prelude,
 }
 
 // presetDialect is a fresh, addressable copy of this dialect's grammar, for

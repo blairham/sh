@@ -56,6 +56,22 @@ const (
 )
 
 type Diagnostics struct {
+	// TiedNamesRequired, TieToItself, AlreadyTiedScalar and TieWithAValue are
+	// what `typeset -T` says when it cannot make a tie — see tiedscalar.go.
+	//
+	// One shell in the panel has the letter with this meaning, so its words
+	// are the defaults and no dialect overrides them: bash refuses `-T`
+	// outright and ksh93's `-T` declares a *type*, which is a different
+	// builtin's worth of thing and stays refused by name. The fields are
+	// here rather than inline so that a dialect which grows the letter has
+	// somewhere to say it, which is the rule every other refusal follows.
+	TiedNamesRequired string
+	TieToItself       string
+	AlreadyTiedScalar string
+	// TieSecondMustBeArray is a scalar value on the array half:
+	// `typeset -T S s=plain`.
+	TieSecondMustBeArray string
+
 	// SyntaxErrorStatus is the exit status of a script that did not parse.
 	//
 	// Measured across eight distinct syntax errors — a stray `}`, `echo (`,

@@ -671,7 +671,13 @@ func Semantics() interp.Semantics {
 	// `-U` under both spellings, and ksh93 does not have the letter at all,
 	// answering `typeset: -U: unknown option`. Its own `-u` — uppercase —
 	// is a different letter and stays what it was.
-	s.DeclareOptions = "aAfFgHilpruUx"
+	//
+	// `-T SCALAR array [sep]` ties a scalar to an array, each reflecting the
+	// other — which is how this shell's own `PATH` and `path` are the same
+	// value. This shell's letter alone with that meaning: bash refuses `-T`
+	// outright, and ksh93's `-T` declares a *type*, which is a different
+	// builtin's worth of thing and stays refused by name there.
+	s.DeclareOptions = "aAfFgHilpruUTx"
 	// `-F` is a float's precision here rather than bash's function listing,
 	// and this engine has no float attribute to record it in. Taken in
 	// silence at 0, which is what real zsh answers to every shape of it —
@@ -679,7 +685,7 @@ func Semantics() interp.Semantics {
 	// is what a caller enumerating functions with `declare -F` used to get
 	// from a shell that has nothing to say to it (#1037).
 	s.DeclareOptionsWithoutEffect = "F"
-	s.LocalOptions = "aAHilpruUx"
+	s.LocalOptions = "aAHilpruUTx"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
 	// `typeset -g x=new` with a `local x` in front assigns the *local* —
@@ -865,18 +871,18 @@ func Diagnostics() interp.Diagnostics {
 			// no ReadBadFileDescriptor wording appears here.
 			"read": "kqeEzcl",
 			// typeset's letters this engine does not hold: floats (-E -F),
-			// namerefs (-n), padding and alignment (-L -R -Z), ties and the
+			// namerefs (-n), padding and alignment (-L -R -Z), and the
 			// rest. The same set under both names, and for `local` too.
-			// `-H` and `-U` have left this list — they are implemented, in
-			// DeclareOptions above.
-			"typeset": "bcEhkLmnRtTZ",
+			// `-H`, `-U` and `-T` have left this list — they are
+			// implemented, in DeclareOptions above.
+			"typeset": "bcEhkLmnRtZ",
 			"type":    "mvwsS",
 			// jobs' letters that are zsh's own: -d names the directory the
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.
 			"jobs":    "dzZ",
-			"declare": "bcEhkLmnRtTZ",
-			"local":   "bcEFhkLmnRtTZ",
+			"declare": "bcEhkLmnRtZ",
+			"local":   "bcEFhkLmnRtZ",
 		},
 		// The builtin's name is stripped to the location prefix as ever:
 		// `zsh:read:1: -p: no coprocess`, measured with no coprocess to
@@ -1023,6 +1029,13 @@ func Diagnostics() interp.Diagnostics {
 			"readonly": "not valid in this context: %[2]s",
 			"unset":    "%[2]s: invalid parameter name",
 			"local":    "not valid in this context: %[2]s",
+			// `typeset` says the same as `local`, measured — and it is
+			// reached only from `typeset -T`, which is the one shape of the
+			// builtin that checks its operands are names. A bare
+			// `typeset ':'` is refused in this shell and taken here; see the
+			// issue filed from #1045.
+			"typeset": "not valid in this context: %[2]s",
+			"declare": "not valid in this context: %[2]s",
 		},
 		// An operand that starts with a digit is a different complaint, for
 		// the two that have one. `unset` says the same to both.
@@ -1030,6 +1043,8 @@ func Diagnostics() interp.Diagnostics {
 			"export":   "not an identifier: %[2]s",
 			"readonly": "not an identifier: %[2]s",
 			"local":    "not an identifier: %[2]s",
+			"typeset":  "not an identifier: %[2]s",
+			"declare":  "not an identifier: %[2]s",
 		},
 		BuiltinBadOptionStatus:    1,
 		PrintfUsage:               "not enough arguments",

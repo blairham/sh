@@ -38,6 +38,7 @@ type declareFlags struct {
 	global    bool
 	hidden    bool
 	unique    bool
+	tie       bool
 	function  bool
 	funcNames bool
 	remove    bool
@@ -110,6 +111,12 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// Global rather than local: the assignment reaches the
 				// global cell however deep the function stack is.
 				f.global = true
+			case 'T':
+				// The tie: the operands are a scalar, an array and an
+				// optional separator rather than a list of names. Recorded
+				// here and read by biDeclare, which takes its own path for
+				// them.
+				f.tie = true
 			case 'U':
 				// Keep only the first occurrence of each element. Like
 				// `-i` and the case attributes it is a property of the
@@ -186,6 +193,23 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		return r.bareDeclarationListing()
 	}
 
+	if f.tie && !f.remove && len(args) == 0 {
+		// `typeset -T` with nothing to tie lists the ties there are, both
+		// halves of each — measured, and it is the only filtered listing
+		// this builtin has: every other attribute letter with no names is a
+		// filter this engine does not build. This one is built because a
+		// tie is the one attribute whose *listing* is how a script finds the
+		// pairs at all.
+		return r.tieListing()
+	}
+	if f.tie && !f.remove && len(args) > 0 {
+		// The operands of `-T` are not a list of names: they are a scalar,
+		// an array and — where a third is given — the separator. Ahead of
+		// `-p` because `typeset -pT` with names is not a shape any shell
+		// measured has, and behind the bare listing because `typeset -T`
+		// alone *is* a listing there.
+		return r.declareTie(name, args, f)
+	}
 	if f.print {
 		// The other letters are accepted alongside `-p` and decide nothing:
 		// the shells that have them use an attribute letter to *filter* the

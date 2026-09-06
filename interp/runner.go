@@ -1139,6 +1139,12 @@ type Runner struct {
 	// refuses it and ksh93 does not have it, so the dialect decides who may
 	// set it — see Semantics.DeclareOptions.
 	unique map[string]bool
+	// tied holds the ties `typeset -T` made — see tiedscalar.go — under
+	// both of each tie's names, so either half finds it.
+	tied map[string]tie
+	// mirroring says a tie is already writing the other half, which is what
+	// keeps the two mirrors from calling each other forever.
+	mirroring bool
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
 	// depth bounds function recursion, because a shell script can recurse
@@ -3011,6 +3017,9 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// calling here, which is what lets one function do both.
 	delete(r.declaredEmpty, name)
 	r.Vars[name] = value
+	// And the other half of a tie, if this name is one. After the store, so
+	// that the mirror's own read of this name sees the new value.
+	r.mirrorScalarToArray(name, value)
 }
 
 // ensurePWD gives `$PWD` a value before the first command runs.

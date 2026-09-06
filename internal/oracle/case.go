@@ -6637,6 +6637,46 @@ echo unreachable`,
 		Why:     "the same question of a case letter, and the same split — `MIXED` in ksh93 and zsh, `MiXeD` in bash — which is what makes it a rule about attributes rather than about arithmetic. bash 3.2 has no `-u` at all and answers 2 while leaving the value where it is",
 	},
 	{
+		ID: "declare/tie-mirrors-a-scalar-and-an-array", Category: "declarations",
+		Snippet: `typeset -T TS ts; TS=a:b:c; echo "n=${#ts[@]} [${ts[*]}] st=$?"`,
+		Why:     "the letter one shell in the panel has with this meaning: zsh ties a scalar to an array so each reflects the other, splitting the scalar on `:`. bash refuses `-T` with its usage line and 2. **ksh93 is the interesting column**: `typeset -T tname` declares a *type* there, so it takes this line without a word and answers `n=0 []` — the same letter, silently doing something else, which is why it must be refused by name in that dialect rather than shared as one attribute with two readings",
+	},
+	{
+		ID: "declare/tie-mirrors-the-other-way-too", Category: "declarations",
+		Snippet: `typeset -T TS ts; ts=(x y z); echo "TS=[$TS] st=$?"`,
+		Why:     "the same tie from the array end — `x:y:z` — which is the half a one-directional mirror gets wrong while passing the row above. Both directions are needed or neither is measured",
+	},
+	{
+		ID: "declare/tie-joins-a-later-append", Category: "declarations",
+		Snippet: `typeset -T TS ts; ts=(x y); ts+=(w); echo "TS=[$TS] st=$?"`,
+		Why:     "the tie is a property of the *pair* and not of the one assignment that made it, so an append rejoins: `x:y:w`. This is the row that separates a tie from a one-off split, and it is what makes `path=( new \"${path[@]}\" )` reach `PATH` at all",
+	},
+	{
+		ID: "declare/tie-uses-the-separator-it-was-given", Category: "declarations",
+		Snippet: `typeset -T TS ts '#'; TS=a#b#c; echo "n=${#ts[@]} [${ts[*]}] st=$?"`,
+		Why:     "the third operand is the separator, not another name — three fields on `#` where the default would have found one. Worth a row because an implementation reading the third operand as a name would look right on every line that omits it",
+	},
+	{
+		ID: "declare/unsetting-half-a-tie-unsets-all-of-it", Category: "declarations",
+		Snippet: `typeset -T TS ts; TS=a:b; unset TS; echo "n=${#ts[@]} ts=[${ts[@]-UNSET}] st=$?"`,
+		Why:     "half a tie is not a state this shell has: unsetting the scalar leaves the array unset too, not merely empty. The `-UNSET` default is what tells those apart, and an implementation that deleted one name and left the other would answer `n=0 ts=[]`",
+	},
+	{
+		ID: "declare/a-tie-over-a-standing-value", Category: "declarations",
+		Snippet: `TV=one:two:three; typeset -T TV tv; echo "n=${#tv[@]} [${tv[*]}] st=$?"`,
+		Why:     "the tie arriving *after* the value, which is the question the integer and case rows ask of their attributes: zsh reads what the scalar already holds back through the tie and fills the array. The answer no shell gives is an empty pair, which is what a tie that treated the declaration as an assignment would leave — and it is exactly what a tie made over `PATH` would then have done to `PATH`",
+	},
+	{
+		ID: "declare/tying-a-name-to-itself", Category: "declarations",
+		Snippet: `typeset -T TZ TZ; echo "st=$?"`,
+		Why:     "`can't tie a variable to itself` in zsh, and it ends the script — where `can't tie already tied scalar` and `second argument of tie must be array` are both reported and run on. That split is this shell's own and the row is what records it rather than letting one fatality rule be assumed for all three",
+	},
+	{
+		ID: "declare/tie-listed-back", Category: "declarations",
+		Snippet: `typeset -T TL tl; tl=(1 2); typeset -p TL; echo "st=$?"`,
+		Why:     "where a tie is said back: `typeset -T TL tl=( 1 2 )` in zsh — both names, the *array's* elements as the value whichever half was asked for, and the `T` letter last of all of them. Narrowed to one name the case invents, because a whole listing is the machine's",
+	},
+	{
 		ID: "declare/unique-attribute-dedupes-an-array", Category: "declarations",
 		Snippet: `typeset -U a=(1 1 2 2 3 1); echo "a=[${a[*]}] st=$?"`,
 		Why:     "the letter one shell in the panel has: zsh keeps the first occurrence of each element and answers `1 2 3`. bash refuses `-U` with its usage line and 2, ksh93 answers `unknown option` with its own usage line, and because its `typeset` is special the refusal ends the script — so the row also records that this is a letter to refuse by name rather than an axis to answer",

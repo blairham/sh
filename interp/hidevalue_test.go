@@ -128,10 +128,10 @@ typeset -p m`, withHiding, Diagnostics{})
 // already holds a value kept the letter and threw the value away, which made
 // `typeset -H h` on an existing `h` destroy what it meant to hide.
 //
-// What survives is re-read through the attribute that has just arrived, so
-// the integer letter evaluates it and the case letters fold it: that is a
-// property of the name being applied, not an assignment, and a readonly name
-// meets no refusal on the way.
+// Whether what survives is also *re-read* through the attribute that has just
+// arrived is a separate question with a separate answer — see
+// AttributeRereadsTheValueItFinds and the test below — so the letter asked
+// about here is one that says nothing about a value.
 func TestAValuelessDeclarationKeepsAValueTheNameAlreadyHas(t *testing.T) {
 	set := func(s *Semantics) {
 		withHiding(s)
@@ -140,8 +140,24 @@ func TestAValuelessDeclarationKeepsAValueTheNameAlreadyHas(t *testing.T) {
 	out, errs, st := declRun(t, `h=hid
 typeset -H h
 typeset +H h
-typeset -p h
-a=5+2
+typeset -p h`, set, Diagnostics{})
+	want := "typeset h=hid\n"
+	if out != want || st != 0 || errs != "" {
+		t.Errorf("an attribute added to a name with a value = %q (stderr %q, status %d), want %q",
+			out, errs, st, want)
+	}
+}
+
+// An attribute that *does* speak to a value either re-reads what the name
+// already holds or waits for the next assignment, and both answers lose
+// something: one destroys text that is not an expression, the other leaves a
+// name declared integer holding text that is not a number. Both sides
+// asserted, because asserting one asserts a default.
+//
+// Not an assignment either way, so a readonly name is re-read rather than
+// refused — `typeset -r r=1; typeset -i r` is 1 at status 0 under both.
+func TestAnAttributeRereadingAStandingValueIsAnAxis(t *testing.T) {
+	const src = `a=5+2
 typeset -i a
 echo "a=[$a]"
 d=MiXeD
@@ -149,11 +165,41 @@ typeset -u d
 echo "d=[$d]"
 typeset -r r=1
 typeset -i r
-echo "r=[$r]"`, set, Diagnostics{})
-	want := "typeset h=hid\na=[7]\nd=[MIXED]\nr=[1]\n"
-	if out != want || st != 0 || errs != "" {
-		t.Errorf("an attribute added to a name with a value = %q (stderr %q, status %d), want %q",
-			out, errs, st, want)
+echo "r=[$r]"`
+	for _, tc := range []struct {
+		answer Answer
+		want   string
+	}{
+		{Yes, "a=[7]\nd=[MIXED]\nr=[1]\n"},
+		{No, "a=[5+2]\nd=[MiXeD]\nr=[1]\n"},
+	} {
+		set := func(s *Semantics) {
+			withHiding(s)
+			s.DeclaredNameWithoutValueIsEmpty = Yes
+			s.AttributeRereadsTheValueItFinds = tc.answer
+		}
+		out, errs, st := declRun(t, src, set, Diagnostics{})
+		if out != tc.want || st != 0 || errs != "" {
+			t.Errorf("%v: got %q (stderr %q, status %d), want %q", tc.answer, out, errs, st, tc.want)
+		}
+	}
+}
+
+// The evaluation must not happen at all where the dialect says the attribute
+// waits, because this engine's evaluation complains out loud and the shell
+// that waits says nothing. `08` is the shape that separates the two: a bad
+// octal digit under `-i`, and bash reads `08` back in silence at 0.
+func TestAnAttributeThatWaitsDoesNotEvaluateTheStandingValue(t *testing.T) {
+	set := func(s *Semantics) {
+		withHiding(s)
+		s.DeclaredNameWithoutValueIsEmpty = Yes
+		s.AttributeRereadsTheValueItFinds = No
+	}
+	out, errs, st := declRun(t, `FOO=08
+typeset -i FOO
+echo "read=[$FOO]"`, set, Diagnostics{})
+	if want := "read=[08]\n"; out != want || st != 0 || errs != "" {
+		t.Errorf("got %q (stderr %q, status %d), want %q and nothing said", out, errs, st, want)
 	}
 }
 

@@ -245,6 +245,11 @@ func Semantics() interp.Semantics {
 	s.TerminalTestRequiresANumber = interp.No
 	s.ArithNameValueRecurses = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	// But an attribute added to a name that already holds a value re-reads
+	// that value at once: `FOO=bar; typeset -i FOO` stores 0 over the text,
+	// and `d=MiXeD; typeset -u d` stores MIXED. bash waits for the next
+	// assignment.
+	s.AttributeRereadsTheValueItFinds = interp.Yes
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
 	// \x does not.
 	s.EchoOptions = "ne"

@@ -1306,6 +1306,47 @@ type Semantics struct {
 	// `${u-UNSET}` is empty there and UNSET in bash and ksh93 — the name
 	// exists in all three, but only zsh considers it set.
 	DeclaredNameWithoutValueIsEmpty Answer
+	// AttributeRereadsTheValueItFinds makes an attribute a declaration adds
+	// re-read the value the name already holds, on the spot, rather than
+	// waiting for the next assignment. `typeset -i FOO` on a `FOO=bar`
+	// stores 0, and `typeset -u d` on a `d=MiXeD` stores MIXED.
+	//
+	//	FOO=bar; typeset -i FOO; echo "[$FOO]"
+	//
+	//	bash 5.3, bash as sh, bash 3.2   [bar]   the text stands
+	//	ksh93u+, zsh 5.9.2               [0]     re-read as an expression
+	//
+	// **One of the two answers loses data whichever way it is chosen**, and
+	// that is the reason this is a field and not a rule: the shells that
+	// re-read destroy `bar` — an expression made of an unset name is 0, and
+	// 0 is what is left — and the shells that do not leave a name declared
+	// integer holding text that is not a number. There is no reading under
+	// which both are satisfied, so a dialect has to say which shell it is.
+	//
+	// It is one question over every attribute that has something to say
+	// about a value, not one per letter: the shells that re-read `-i` also
+	// fold `-u` and `-l` on the spot, and the shells that do not, do not.
+	// `-x`, `-r` and `-a` say nothing about a value and reach this nowhere.
+	//
+	// Asked only where a name is *already* holding something in the cell
+	// being declared. A declaration that creates the name has nothing to
+	// re-read, and inside a function the cell a shadow just made is new
+	// whatever the caller held — measured, `v=5; function f { typeset -i v;
+	// echo "[${v-UNSET}]"; }` reads UNSET in bash and ksh93 and `0` in zsh,
+	// which is DeclaredNameWithoutValueIsEmpty and not this. Nor is it asked
+	// where the two readings agree, so `a=7; typeset -i a` is 7 without a
+	// dialect.
+	//
+	// The *next* assignment is unanimous and is no part of this: `typeset -i
+	// a; a=3+4` is 7 and `typeset -u d; d=again` is AGAIN in every shell
+	// that spells the letter. What is being asked is only whether the
+	// attribute reaches backwards.
+	//
+	// Not an assignment, so it does not meet the readonly refusal: measured,
+	// `typeset -r r=1; typeset -i r` is 1 at status 0 in the shells that
+	// re-read.
+	AttributeRereadsTheValueItFinds Answer
+
 	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
 	// hide any outer `u` — the local exists unset, so `${u-UNSET}` fires the
 	// default even when the caller had a value. Reached only when

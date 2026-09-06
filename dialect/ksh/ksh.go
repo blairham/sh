@@ -409,6 +409,11 @@ func Semantics() interp.Semantics {
 	// arithmetic expression as they do everywhere else, `@` is not one, and
 	// the operand is reported as a bad subscript with the array left as it
 	// was — the only shell in the panel that does not clear it.
+	// A subscript naming no element of a name that is no array is quiet here:
+	// `a=v; unset "a[1]"` says nothing and succeeds, where bash refuses it.
+	// `a[0]` names the string — a scalar is the one element at the base — and
+	// takes the whole name away, which both shells that read elements do.
+	s.UnsetSubscriptOnAScalarIsAnError = interp.No
 	s.UnsetArraySpan = interp.UnsetArraySpanIsAnExpression
 	// And the complaint is the builtin's: `unset` reports 1 and the script
 	// goes on, which is what makes `unset a[@]` survivable here.

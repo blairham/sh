@@ -3003,6 +3003,38 @@ type Semantics struct {
 	// a[1]` needs no answer from anyone.
 	BadSubscriptToUnsetFatal Answer
 
+	// UnsetSubscriptOnAScalarIsAnError refuses `unset "a[1]"` where `a`
+	// holds a string, rather than leaving the name alone without a word.
+	// bash says `unset: a: not an array variable` and fails; ksh93 says
+	// nothing and succeeds.
+	//
+	// Reached only through the *element* reading of a subscripted name — the
+	// shell that reads `a[1]` as a character of the string takes that
+	// character out and never gets here, so this is ScalarSubscriptIsACharacter's
+	// consequence rather than a second decision about the same shape.
+	//
+	// Asked only where the subscript names *no* element. A scalar is the one
+	// element at the base, so `unset "a[0]"` where the base is 0 takes the
+	// whole name away in both shells and asks nothing; and a name holding
+	// nothing at all has no element for any subscript to name and is left
+	// alone everywhere, which is why `unset "b[0]"` on an unset `b` is quiet
+	// in all four.
+	//
+	// Nor is it about arrays with a gap: `a=(x y z); unset "a[9]"` is silent
+	// and succeeds in every shell measured. What the refusing shell objects
+	// to is the *name* not being an array, which is what its wording says.
+	//
+	// The preset is no. POSIX has `unset` remove what is there and say
+	// nothing about what is not — `unset nosuchname` is a success everywhere
+	// — and the silent reading is that sentence applied to a subscript.
+	//
+	// bash 3.2 refuses the base subscript too, so a corpus case here splits
+	// the `bash` and `bash32` columns on purpose: that build reads `${a[0]}`
+	// as the whole string for an *expansion* and still refuses to unset
+	// through it, which is a disagreement within one shell rather than
+	// between two.
+	UnsetSubscriptOnAScalarIsAnError Answer
+
 	// UnsetArraySpan is what `unset` does to the elements a subscript names,
 	// and the panel gives three answers rather than two — see
 	// UnsetArraySpanPolicy.
@@ -3376,6 +3408,10 @@ func PosixSemantics() Semantics {
 		// rather than an element, which is bash's and dash's answer.
 		DeclarationTakesASubscript: No,
 		UnsetTakesASubscript:       Yes,
+		// And `unset` says nothing about what is not there: the standard has
+		// it remove what it finds and succeed either way, which read over a
+		// subscript is the quiet answer.
+		UnsetSubscriptOnAScalarIsAnError: No,
 		// POSIX has `set` write each variable as an assignment "in a format
 		// that can be reused as input", and dash — its closest reading —
 		// single-quotes every value and lists no functions. The standard

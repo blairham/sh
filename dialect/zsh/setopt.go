@@ -57,12 +57,22 @@ import (
 //     they are the five about being interactive — `interactive`, `monitor`,
 //     `shinstdin`, `singlecommand` and `zle`. Every other name it takes, in
 //     both directions, which is measured and is what says the rest belong in
-//     one of the other three kinds rather than in a refusal;
+//     one of the other kinds rather than in a refusal;
+//   - backed by the store a recorded name uses, and read by the front end
+//     rather than by anything in this package: `histignorespace` alone, whose
+//     state the line editor asks for through this namespace before it records
+//     a line. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 150 of the 185
+//     typing a directory name still does not change directory. 149 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
+//
+// Two names moved out of "recorded" when the front end learned to read them:
+// `histignorespace` above, and `histignoredups`, which was already a `set -o`
+// backed switch whose state nothing consulted. Both now decide what a session
+// writes to its history file, so both are implemented rather than remembered.
+// Nothing else about the split moved, and 149 is still most of the table.
 //
 // Recording is worth doing and is not the same as implementing. A real rc
 // file opens with a dozen `setopt` lines about completion, correction and
@@ -224,8 +234,12 @@ var zshOptions = []zshOption{
 	recorded("histfcntllock", false),
 	recorded("histfindnodups", false),
 	recorded("histignorealldups", false),
+	// Not recorded, and no longer unread: this is the switch a session asks
+	// before deciding whether a line repeating the one before it goes into the
+	// history file. `set -o`-backed because zsh's `set -h` abbreviates it, so
+	// the substrate carried the state already.
 	setOptBacked("histignoredups", false, "histignoredups", false),
-	recorded("histignorespace", false),
+	storeBacked("histignorespace", false),
 	recorded("histlexwords", false),
 	recorded("histnofunctions", false),
 	recorded("histnostore", false),
@@ -465,6 +479,25 @@ func recorded(base string, def bool) zshOption {
 			return 0
 		},
 	}
+}
+
+// storeBacked keeps its state in the same store a recorded name does and is
+// not recorded, because something reads it.
+//
+// The one name in this table with that shape today is `histignorespace`. The
+// state has nowhere better to live — the substrate has no `set -o` name for
+// it, unlike `histignoredups`, which zsh's `set -h` abbreviates and which is
+// therefore a switch this shell's own option machinery already carries — but
+// the front end reads it through this dialect's namespace every time it
+// accepts a line, so calling it recorded would be claiming less than it does.
+// See HistoryStyle in this package.
+//
+// The distinction is the point: `recorded` means remembered and not acted on,
+// and an option that has moved out of that set must stop saying it is in it.
+func storeBacked(base string, def bool) zshOption {
+	o := recorded(base, def)
+	o.recorded = false
+	return o
 }
 
 // zshRecordedStore is where the recorded options live: the canonical names

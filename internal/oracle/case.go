@@ -7386,6 +7386,21 @@ exit 7`,
 		Why:     "zsh spells `set -u` as `unsetopt unset`, and it is one switch rather than two: an unset parameter ends the run exactly as `set -u` makes it, which is the pairing that says the dialect's own builtin has to reach the substrate's table",
 	},
 	{
+		ID: "setopt/hist-ignore-space-moves-and-is-read-back", Category: "builtins",
+		Snippet: `setopt hist_ignore_space; echo "st=$?"; [[ -o histignorespace ]] && echo on; unsetopt hist_ignore_space; [[ -o hist_ignore_space ]] || echo off`,
+		Why:     "the option an interactive session reads before it records a line, asked of the shell a script can see: the state moves in both directions and reads back under either spelling. A script has no history for it to govern, which is exactly why the state has to be pinned here rather than inferred from a session",
+	},
+	{
+		ID: "setopt/hist-ignore-dups-is-the-set-h-switch", Category: "builtins",
+		Snippet: `set -h; [[ -o histignoredups ]] && echo on; setopt no_hist_ignore_dups; [[ -o histignoredups ]] || echo off`,
+		Why:     "zsh's `set -h` is histignoredups and not command hashing, which is what bash and ksh93 spell with the same letter — one switch reached by two words, and the row that says the dialect builtin and the substrate's option table are not two states that drift",
+	},
+	{
+		ID: "setopt/an-option-and-a-variable-are-two-namespaces", Category: "builtins",
+		Snippet: `setopt hist_ignore_space HISTORY_IGNORE; echo "st=$?"; HISTORY_IGNORE=x; echo "v=$HISTORY_IGNORE"`,
+		Why:     "zsh keeps two of its history knobs as options and one as a variable, and they are not spellings of one namespace: `setopt HISTORY_IGNORE` is `no such option` at 1 even though the variable by that name is real and settable in the same breath",
+	},
+	{
 		ID: "emulate/names-the-current-mode", Category: "builtins",
 		Snippet: `emulate; emulate sh; emulate`,
 		Why:     "a bare emulate answers which shell zsh is currently being — zsh until something changes it, and the word that changed it after",

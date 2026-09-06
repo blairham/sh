@@ -24,25 +24,39 @@ import "github.com/blairham/sh/repl"
 // colon-separated list of them — the colon is not a separator here, and
 // reading it as one would break a pattern that contains a path.
 //
-// An ignored line stays in the session, which is the conflict with bash on
-// identical intent. Measured: with `HISTORY_IGNORE='ls*'` set, `ls -d .` runs,
-// is absent from the file afterwards, and is what the up arrow recalls at the
-// very next prompt. bash's answer to the same request is to forget it
-// entirely.
+// A line `HISTORY_IGNORE` rejected stays in the session, which is the conflict
+// with bash on identical intent. Measured: with `HISTORY_IGNORE='ls*'` set,
+// `ls -d .` runs, is absent from the file afterwards, and is what the up arrow
+// recalls at the very next prompt. bash's answer to the same request is to
+// forget it entirely.
 //
 // `HIST_IGNORE_SPACE` and `HIST_IGNORE_DUPS` are zsh's spelling of the two
-// rules bash keeps in HISTCONTROL, and they are `setopt` names rather than
-// variables — a different startup surface, and one this shell does not yet
-// have a place to hold. They are measured and recorded in
-// docs/spec/history.md, and left unimplemented rather than approximated with a
-// variable zsh does not have.
+// rules bash keeps in HISTCONTROL, and they are option names rather than
+// variables — a different namespace, which is why they are separate fields
+// from Control rather than a value put into it. They are read through the
+// dialect's own option namespace, so the folding `setopt` does applies here
+// too and `hist_ignore_space` reaches the same option this name does.
+//
+// And they do *not* take the axis above, which was re-measured on 2026-09-06
+// because implementing them was the first time anything asked. zsh answers the
+// question both ways in one shell:
+//
+//	HISTORY_IGNORE='echo hidden'   `fc -l` lists `echo hidden`, the file does not
+//	setopt HIST_IGNORE_SPACE       `fc -l` does not list ` echo hidden`
+//	setopt HIST_IGNORE_DUPS        `fc -l` does not list the repeated line
+//
+// So zsh agrees with bash about a blank and a repeat and disagrees only about
+// a pattern. docs/spec/history.md and #571 both had the "kept" observation
+// filed against HIST_IGNORE_SPACE, which is the knob it is not true of.
 func HistoryStyle() repl.HistoryStyle {
 	return repl.HistoryStyle{
-		SearchPrompt:          "bck-i-search: %s_",
-		SearchFailedPrompt:    "failing bck-i-search: %s_",
-		SearchBelowTheLine:    true,
-		Ignore:                "HISTORY_IGNORE",
-		IgnoreIsOnePattern:    true,
-		IgnoredStaysInSession: true,
+		SearchPrompt:                 "bck-i-search: %s_",
+		SearchFailedPrompt:           "failing bck-i-search: %s_",
+		SearchBelowTheLine:           true,
+		IgnoreSpaceOption:            "HIST_IGNORE_SPACE",
+		IgnoreDupsOption:             "HIST_IGNORE_DUPS",
+		Ignore:                       "HISTORY_IGNORE",
+		IgnoreIsOnePattern:           true,
+		PatternIgnoredStaysInSession: true,
 	}
 }

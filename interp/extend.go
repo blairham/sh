@@ -424,6 +424,29 @@ func (r *Runner) SetOptionNamespace(lookup func(name string) (on, known bool)) {
 	r.optionNamespace = lookup
 }
 
+// DialectOption reads one option name through this shell's own option
+// namespace: the names `setopt` and `[[ -o ]]` take where a dialect has
+// installed one, and the `set -o` names where it has not.
+//
+// For a front end holding a *setting* a shell spells as an option rather than
+// as a variable — zsh's HIST_IGNORE_SPACE is the case this was added for. Its
+// sibling MatchPattern exists for the same reason and answers the same shape
+// of question: the settings a session reads are the shell's own, and a front
+// end that brought its own answer would be a second shell disagreeing with
+// the first about what it was told.
+//
+// The name is asked for exactly as the caller spells it, because folding is
+// the namespace's business and not the caller's: `HIST_IGNORE_SPACE`,
+// `hist_ignore_space` and `histignorespace` are one question in zsh and three
+// unknown names in a dialect that installed nothing.
+//
+// The second result says whether this shell has the name at all, so a caller
+// can tell a name that is off from a name nobody has — which is the whole
+// difference between a knob turned down and a knob that is not there.
+func (r *Runner) DialectOption(name string) (on, known bool) {
+	return r.conditionOption(name)
+}
+
 // conditionOption reads one option name the way `[[ -o ]]` asks for it:
 // through the dialect's namespace where it has one, and through the `set -o`
 // names otherwise.

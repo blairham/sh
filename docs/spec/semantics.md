@@ -2486,14 +2486,26 @@ the canonical names, and each compat spelling was identified by flipping it
 alone and reading which canonical entry moved with it.
 
 **Recognizing, recording and implementing are three claims, and only the
-first is unanimous across the table.** Every name is one of four kinds:
+first is unanimous across the table.** Every name is one of five kinds:
 
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 11 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e` |
 | axis- or matcher-backed | 6 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`) |
 | fixed | 18 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted |
-| **recorded** | 150 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| store-backed, read by the front end | 1 | `histignorespace`: kept where a recorded name is kept, and read by the line editor before it records a line |
+| **recorded** | 149 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+
+**Two names moved out of "recorded" when the history knobs were built**
+(#571). `histignorespace` is the fifth row above: its state has nowhere
+better to live, because the substrate has no `set -o` name for it, but an
+interactive session reads it through this namespace every time it accepts
+a line. `histignoredups` was already substrate-backed — zsh's `set -h`
+abbreviates it — and was a switch whose state nothing consulted; it is now
+consulted too. Both decide what a session writes to its history file, so
+neither is recorded any more. Nothing else about the split moved: 149 of
+185 is still most of the table, and the count above is the one produced by
+counting the constructors in `dialect/zsh/setopt.go`.
 
 The recorded kind is the change of position, and it is deliberate. A real
 `~/.zshrc` opens with a dozen `setopt` lines about completion, correction,
@@ -3480,8 +3492,10 @@ than missing:
   the chain rather than the last; `-x` sets the tab width of a printed body.
   Each is refused as not implemented rather than as unknown, the same
   distinction `compgen` draws between an action a shell lacks and a typo.
-- zsh `setopt` names of the **recorded** kind: 157 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 149 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
+  (This line read 157 while the table above read 150; neither was the count
+  the table produces. It is now counted from the constructors.)
 - zsh `emulate -L`: function-local emulation needs a restore-on-return seam
   the runner does not have; refused out loud rather than silently made
   global. `emulate csh` records the mode and changes nothing it could —

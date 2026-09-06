@@ -5,6 +5,7 @@ package interp_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -59,6 +60,37 @@ func (w *callersWriter) String() string {
 // comment rules out, arrived at from the other side. bytes.Buffer.ReadFrom
 // grows the buffer before it reads, so a child that writes *nothing* still
 // races.
+//
+// # Why every round is bounded
+//
+// This case has a second failure mode that is not a failure: under scheduling
+// pressure the first subtest *stops* rather than answering, and an unbounded
+// run then reports it as `panic: test timed out after 10m0s` with the package
+// name and nothing else (#1066). The bound turns that into a named subtest, a
+// round number and a sentence, in twenty seconds. It is not there to let a
+// slow run pass — a healthy round is milliseconds.
+//
+// What the stop actually is, measured rather than assumed, because the issue's
+// first reading was that the goroutine draining the child was blocked on a
+// write and the lock was involved. It is neither. Reproduced at
+// `GOMAXPROCS=1`, around one run in three of 1,500 rounds, with a goroutine
+// dump and `lsof` and `sample` on the child:
+//
+//   - the shell is in `cmd.Wait`, in `wait4` on the `cat` it started;
+//   - both of os/exec's drain goroutines are in `poll.Read`, waiting on
+//     `cat`'s output pipes — no write is blocked and no mutex is held;
+//   - `cat` holds the substitution's fifo open for reading, has taken the
+//     four bytes the substitution wrote, and is asleep in `read`.
+//
+// So the substituted command is waiting for an end-of-file that never comes.
+// A probe at the moment of the stop settles who is at fault: opening the
+// fifo's write end succeeds *immediately* — so nothing else holds one — and
+// closing it again releases `cat` at once. The pipe therefore had **no writer
+// and a reader that was never woken**: the shell's own close of the write end
+// did not deliver the end-of-file, and a later one did.
+//
+// That is a defect in the shell rather than in this test — `cat <(cmd)` can
+// hang a script — and it is #1079. This test's job is to stop hiding it.
 func TestAChildsStreamTakesTheLockTheShellPutsOverACallersWriter(t *testing.T) {
 	for _, tc := range []struct{ name, src string }{
 		{"a process substitution beside a child", `cat <(echo sub; echo noise >&2)`},
@@ -78,17 +110,22 @@ func TestAChildsStreamTakesTheLockTheShellPutsOverACallersWriter(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for range 20 {
+			for round := range 20 {
 				w := &callersWriter{}
 				sem := testSemantics()
 				dg := PosixDiagnostics()
 				r := newTestRunner(t, &Runner{
 					Stdout: w, Stderr: w, Semantics: &sem, Diagnostics: &dg, Env: testPATH(),
 				})
-				if _, err := r.Run(context.Background(), f); err != nil {
-					t.Fatal(err)
-				}
-				settle(r)
+				// Bounded, one round at a time, because this case does not
+				// fail when it goes wrong — it stops (#1066). See below.
+				deadline(t, fmt.Sprintf("%s, round %d of 20", tc.name, round), func() {
+					if _, err := r.Run(context.Background(), f); err != nil {
+						t.Error(err)
+						return
+					}
+					settle(r)
+				})
 			}
 		})
 	}

@@ -34,6 +34,7 @@ func TestTheCharacterCodeOperator(t *testing.T) {
 		{"inside parentheses", `b=zebra; echo $(( ( #b ) ))`, "122\n"},
 		{"as an arithmetic command", `b=zebra; (( x = #b )); echo $x`, "122\n"},
 		{"a multi-byte value", `b=é; echo $((#b))`, "233\n"},
+		{"a value beginning with no character", `b=$'\x80'; echo $((#b))`, "128\n"},
 		{"the integer attribute is still text", `typeset -i n=65; echo $((#n))`, "54\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -53,6 +54,9 @@ func TestTheCharacterCodeOperatorOnACharacter(t *testing.T) {
 		{"a letter", `echo $((##a)) $((##A)) $((##0))`, "97 65 48\n"},
 		{"a space", `echo $((## ))`, "32\n"},
 		{"a multi-byte character", `echo $((##é))`, "233\n"},
+		// A byte that is no character in this encoding is its own value, not
+		// the replacement rune: measured, a lone 0x80 is 128 and 0xff is 255.
+		{"a byte that is no character", `echo $((##\x80)) $((##\xff))`, "128 255\n"},
 		{"the named escapes", `echo $((##\n)) $((##\t)) $((##\e))`, "10 9 27\n"},
 		{"a backslash", `echo $((##\\))`, "92\n"},
 		{"an escape nothing claims", `echo $((##\q))`, "113\n"},

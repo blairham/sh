@@ -234,11 +234,7 @@ func (r *Runner) charCode(x *syntax.ArithCharCode) int {
 		} else {
 			text = strings.TrimPrefix(text, `\`)
 		}
-		c, _ := utf8.DecodeRuneInString(text)
-		if c == utf8.RuneError {
-			return 0
-		}
-		return int(c)
+		return firstCharCode(text)
 	}
 	if x.Name == "" || x.Subscripted {
 		return 0
@@ -247,9 +243,24 @@ func (r *Runner) charCode(x *syntax.ArithCharCode) int {
 	if !ok {
 		v, _ = r.specialParam(&syntax.ParamExpr{Name: x.Name})
 	}
-	c, _ := utf8.DecodeRuneInString(v)
-	if v == "" || c == utf8.RuneError {
+	return firstCharCode(v)
+}
+
+// firstCharCode is the code of the first character of a string, and 0 for a
+// string with no first character.
+//
+// A character and not a byte where the text holds one: `é` is 233 rather than
+// the 195 its first byte is. But a byte that is no character at all is its own
+// value — measured, a lone 0x80 is 128 — rather than the replacement rune,
+// which is a number no shell produces and which the decoder would otherwise
+// hand back for every high byte a `\x` escape can write.
+func firstCharCode(s string) int {
+	if s == "" {
 		return 0
+	}
+	c, size := utf8.DecodeRuneInString(s)
+	if c == utf8.RuneError && size <= 1 {
+		return int(s[0])
 	}
 	return int(c)
 }

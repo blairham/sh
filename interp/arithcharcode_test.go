@@ -41,6 +41,7 @@ func TestTheCharacterCodeOperatorReadsItsOperand(t *testing.T) {
 		{"an escape the quoting decodes", `printf "%s %s" $((##\n)) $((##\x41))`, "10 65"},
 		{"a backslash under one hash is literal", `printf "%s %s" $((#\n)) $((#\A))`, "110 65"},
 		{"a character and not a byte", `b=é; printf "%s %s" $((#b)) $((##é))`, "233 233"},
+		{"a byte that is no character", `printf "%s %s" $((##\x80)) $((##\xff))`, "128 255"},
 		{"it composes like any value", `b=zebra; printf "%s %s" $((#b + 1)) $(( -#b ))`, "123 -122"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -196,7 +196,10 @@ Two spellings, and the operand is read differently by each:
 
 Exactly one character: `$((##ab))` is the code of `a` with a `b` left
 over, which is then refused as text where an operator belonged. And the
-character is a character, not a byte — `$((##é))` is 233.
+character is a character, not a byte — `$((##é))` is 233. A byte that is
+no character at all is its own value, though: `$((##\x80))` is 128 and
+`$((##\xff))` is 255, which is also what a parameter holding such a byte
+gives.
 
 Everything with no answer is **zero and quiet**: a name never set, a name
 holding the empty string, a `#` with no operand at all, and a name written

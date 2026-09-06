@@ -6,6 +6,7 @@ package zsh
 
 import (
 	"os"
+	"os/user"
 	"strconv"
 
 	"github.com/blairham/sh/interp"
@@ -916,6 +917,15 @@ func Apply(r *interp.Runner) {
 	// $UID has no other source. Same class as $$, which .golangci.yml has
 	// blessed since it was written.
 	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
+	// The login name for that same uid, for the `%n` prompt escape. Read
+	// here for the reason the uid above is: nothing a script does changes
+	// it, two shells in one program genuinely have the same one, and it has
+	// no other source. Measured as a fact about the *process* rather than
+	// about the environment — `%n` ignores `$USER`, `$LOGNAME` and
+	// `$USERNAME` however they are set — so it is not read out of a variable.
+	if u, err := user.Current(); err == nil {
+		r.SetPromptUser(u.Username)
+	}
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {

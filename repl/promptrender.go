@@ -256,6 +256,19 @@ func (s Shell) field(f PromptField) string {
 //
 // USER and LOGNAME first, because a session that set one has said who it is;
 // the process's own answer only if neither is there.
+//
+// **That is not what the panel does, and the difference is recorded rather
+// than fixed here.** Measured on zsh 5.9.2 and bash 5.3.15: `%n` and `\u`
+// both ignore USER, LOGNAME and USERNAME entirely — assigned inside the shell
+// or injected before it starts — and name the login name for the real uid, so
+// `env USER=someone-else zsh` still draws the real person. This resolution
+// draws `someone-else`.
+//
+// It is left standing because the variables are also how a prompt is *tested*
+// without process state, which is the whole shape of this package's tests.
+// Closing it means an injectable seam for the system's own answer, which is a
+// change to argue for on its own; `${(%):-%n}` took the other route and is
+// told who the user is (interp.Runner.SetPromptUser).
 func (s Shell) userName() string {
 	if v := s.varOr("USER", ""); v != "" {
 		return v

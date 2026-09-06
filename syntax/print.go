@@ -1088,5 +1088,49 @@ func escapeBare(s string) string {
 	if s == "" {
 		return "''"
 	}
-	return escapeIn(s, " \t\n\"'\\$`|&;<>()")
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		// A numeric range is pattern text and not a pair of redirections,
+		// so it goes back as it came. It is here for the same reason `*` is
+		// left alone above: escaping it would leave the tree identical and
+		// the meaning gone — `echo \<-\>` parses, and prints a literal
+		// `<->` where the source globbed. The shape is the only thing that
+		// says so, since a span carries no note of having been a pattern,
+		// and the shape is narrow enough that nothing else wears it.
+		if n, ok := numericRangeIn(s[i:]); ok {
+			b.WriteString(s[i : i+n])
+			i += n
+			continue
+		}
+		if strings.IndexByte(" \t\n\"'\\$`|&;<>()", s[i]) >= 0 {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(s[i])
+		i++
+	}
+	return b.String()
+}
+
+// numericRangeIn is the length of the numeric range at the start of s, or
+// false. The lexer's [Lexer.numericRangeAt] reads the same shape off the
+// input; this reads it back off a span.
+func numericRangeIn(s string) (int, bool) {
+	if s == "" || s[0] != '<' {
+		return 0, false
+	}
+	i := 1
+	for i < len(s) && isDigitByte(s[i]) {
+		i++
+	}
+	if i >= len(s) || s[i] != '-' {
+		return 0, false
+	}
+	i++
+	for i < len(s) && isDigitByte(s[i]) {
+		i++
+	}
+	if i >= len(s) || s[i] != '>' {
+		return 0, false
+	}
+	return i + 1, true
 }

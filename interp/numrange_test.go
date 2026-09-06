@@ -129,6 +129,21 @@ func TestQuotingDecidesWhetherARangeIsARange(t *testing.T) {
 	if got, _ := runRangeSem(t, "", fromAVariable, func(s *Semantics) { s.GlobExpansionResults = Yes }); got != "hit\n" {
 		t.Errorf("%s: got %q, want %q with the expansion re-read", fromAVariable, got, "hit\n")
 	}
+	// And the matcher follows the dialect flag rather than reading a range
+	// wherever one is written: with the flag off and the expansion re-read
+	// as a pattern, `<->` is four ordinary characters. This is the only
+	// route that can ask the question, because a dialect without the flag
+	// has no grammar that would let a bare `<->` reach a pattern at all.
+	off, _ := runGrammar(t, fromAVariable, nil, func(r *Runner) {
+		d := syntax.Core()
+		r.Dialect = &d
+		sem := *r.Semantics
+		sem.GlobExpansionResults = Yes
+		r.Semantics = &sem
+	})
+	if off != "miss\n" {
+		t.Errorf("%s: got %q without the flag, want %q", fromAVariable, off, "miss\n")
+	}
 }
 
 // TestANumericRangeNamesNumberedFiles — against the filesystem it is a

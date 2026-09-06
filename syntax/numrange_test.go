@@ -157,3 +157,49 @@ func onlySimpleCommand(t *testing.T, f *File, src string) *SimpleCmd {
 	}
 	return cmd
 }
+
+// TestANumericRangePrintsBackAsAPattern — the printer's promise is that
+// printed source *means* the same thing, and escaping a range's `<` breaks it
+// silently: `echo \\<-\\>` parses and prints three characters where the source
+// named every numbered file. The same rule `*` and `{1..3}` already have.
+//
+// It cannot be caught by the corpus's round trip, because every case that
+// writes a bare range is a syntax error under the dialect that round trip
+// uses. Asserted here on the whole printed line.
+func TestANumericRangePrintsBackAsAPattern(t *testing.T) {
+	on := numRange()
+	for _, tc := range []struct{ src, want string }{
+		{`echo <->`, "echo <->"},
+		{`echo <1-9>`, "echo <1-9>"},
+		{`echo 2<->`, "echo 2<->"},
+		{`echo a<->b`, "echo a<->b"},
+		{`[[ 1 = <-> ]]`, "[[ 1 = <-> ]]"},
+		// Quoting survives too, and means the printed form is quoted: a
+		// quoted range is ordinary text and has to stay ordinary text.
+		{`echo "<->"`, `echo "<->"`},
+		{`echo '<->'`, `echo '<->'`},
+		// And the shapes that are not ranges keep the escaping they need:
+		// `<` is a redirection operator, so a literal one in a word is not
+		// safe bare.
+		{`echo "<-"`, `echo "<-"`},
+		{`echo "a<b"`, `echo "a<b"`},
+	} {
+		got := Print(parsed(t, tc.src, on))
+		if got != tc.want {
+			t.Errorf("%s: printed %q, want %q", tc.src, got, tc.want)
+		}
+		if _, err := Parse(got, on); err != nil {
+			t.Errorf("%s: printed %q, which does not parse: %v", tc.src, got, err)
+		}
+	}
+	// The one that says the escaping is still there when it is needed: a
+	// literal `<` that is not part of a range comes back escaped, so the
+	// printed word is still one word.
+	f := &File{Stmts: []*Stmt{{Expr: &Pipeline{Cmds: []Command{&SimpleCmd{Args: []*Word{
+		{Spans: []Span{{Kind: Literal, Value: "echo"}}},
+		{Spans: []Span{{Kind: Literal, Value: "a<b"}}},
+	}}}}}}}
+	if got := Print(f); got != `echo a\<b` {
+		t.Errorf("a bare `<` printed as %q, want %q", got, `echo a\<b`)
+	}
+}

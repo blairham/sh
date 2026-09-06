@@ -206,9 +206,7 @@ Measured: `pat/a-numeric-range-is-any-number`,
 `pat/a-numeric-range-compares-values-not-text`,
 `pat/a-quoted-numeric-range-is-four-characters`,
 `pat/a-numeric-range-in-a-case-arm`,
-`pat/a-numeric-range-names-numbered-files`,
-`pat/digits-in-front-of-a-numeric-range-are-not-a-descriptor`,
-`pat/a-numeric-range-that-matches-nothing`.
+`pat/a-numeric-range-against-the-filesystem`.
 
 ## Run-time switches over the language
 

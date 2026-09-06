@@ -33,9 +33,24 @@ func init() {
 
 // compgenActions are the actions this shell can generate, by the name
 // `-A` gives them and by the letter that is short for the same thing.
+//
+// `function` asks the *script's* functions and not every function defined,
+// which is the third caller of #603's rule and the one that took longest to
+// find (#1081). A completion generator asking what functions exist is asking
+// the question `declare -F` asks, so it gets the same answer: a dialect
+// written as shell had `__dirs_rotate`, `dirs`, `popd` and `pushd` in the
+// list, at status 0, and `compgen -A function pu` turned bash's "no matches"
+// into a match. Both are the silent kind — a plausible list, and nothing
+// said.
+//
+// The exported [Runner.FuncNames] is deliberately *not* what is asked here,
+// and that is the whole of why #1035 could not reach this. It is every
+// function callable, which is what the line editor completes from, and
+// narrowing it would cost `pushd` its completion at a prompt. Two callers,
+// two sets, and one predicate behind both — see [Runner.speaksForTheShell].
 var compgenActions = map[string]func(r *Runner) []string{
 	"builtin":  (*Runner).BuiltinNames,
-	"function": (*Runner).FuncNames,
+	"function": (*Runner).scriptFuncNames,
 }
 
 // compgenActionLetters are the short spellings of those actions.

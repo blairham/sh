@@ -4436,11 +4436,56 @@ two answers to one question; answering it as a name the script does not
 have is one answer, and it is the one every shell in the panel behaves
 as though it had given.
 
-Still leaking, measured and not fixed here: `compgen -A function`
-enumerates through the public `Runner.FuncNames`, which is also what the
-line editor completes from — so narrowing it there would cost `pushd`
-its completion, and the two callers want different sets. Real bash
-answers `compgen -A function pu` with nothing.
+**Whose function a completion generator is offered** (#1081). The last
+of the four, and the one that took longest to find, because it does not
+walk the runner's table: `compgen -A function` generated through the public
+`Runner.FuncNames`, which is also what the line editor completes from.
+Narrowing *that* would cost `pushd` its completion at a prompt, since
+`BuiltinNames` does not name it either.
+
+Measured against real bash 5.3:
+
+| snippet | real bash | ours before |
+| --- | --- | --- |
+| `f(){ :; }; compgen -A function` | `f`, 0 | four more names, 0 |
+| `compgen -A function pu` | nothing, 1 | `pushd`, 0 |
+| `compgen -A function pushd` | nothing, 1 | `pushd`, 0 |
+| `pushd(){ :; }; compgen -A function pu` | `pushd`, 0 | `pushd`, 0 |
+
+The middle two are the silent kind: a completer asks whether there is
+anything to offer, and it was told yes and handed a name the person
+never defined.
+
+- **A generated function listing is the script's own.** The answer is
+  two sets and one predicate, not a filter added to one accessor:
+  `Runner.FuncNames` stays every function *callable*, which is what an
+  embedder's line editor wants, and every *listing* — `declare -f`,
+  `declare -F`, the function half of a bare `set`, and now
+  `compgen -A function` — asks the script's own. Both come from
+  `speaksForTheShell`, so there is still one notion of whose a function
+  is. The last row is the whole of why: the word is a prefix filter over
+  the listing, so a redefinition is offered again, and a fix that
+  suppressed the three names outright would pass the second row and fail
+  the fourth.
+- **The word is a filter and not a named operand.** `compgen -A function
+  pushd` answers nothing where `declare -f pushd` answers the body, and
+  real bash draws the same line from the other side — it refuses
+  `declare -f pushd` with 1 *and* answers the `compgen` with nothing,
+  both meaning "no function called pushd". "A name asked for is still
+  answered" is about an operand naming one thing, not about a prefix
+  that happens to spell one.
+
+Measured and deliberately **not** changed: `compgen -A builtin pushd`
+answers `pushd` at 0 in real bash and nothing at 1 here, and
+`compgen -A builtin` names `dirs`, `popd` and `pushd` there and none of
+them here. Adding them would match bash on that row and give this shell
+two answers to whether `pushd` is a builtin, since `type pushd` says
+`function` — which is the one thing the rule above exists to prevent. A
+miss at 1 is `compgen`'s own "nothing to offer" rather than a fabricated
+name, and the divergence is the same one `type` already carries. Whether
+a dialect should instead hold a table of the names it *presents* as
+builtins — which would move `type` too, and is therefore not a local
+change — is left open.
 
 ### Out of scope, recorded rather than silent: newgrp
 

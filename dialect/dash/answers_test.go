@@ -85,7 +85,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.Yes},
 		{"InteractiveMonitorNeedsATerminal", s.InteractiveMonitorNeedsATerminal, interp.Yes},
 		{"InteractiveScriptAnnouncesJobs", s.InteractiveScriptAnnouncesJobs, interp.Yes},
-		{"SubshellRunsOnAfterSignallingTheShell", s.SubshellRunsOnAfterSignallingTheShell, interp.Yes},
+		{"SubshellRunsOnAfterSignalingTheShell", s.SubshellRunsOnAfterSignalingTheShell, interp.Yes},
 		{"UnsetReadonlyFatal", s.UnsetReadonlyFatal, interp.Yes},
 		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.No},

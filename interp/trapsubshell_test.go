@@ -29,7 +29,7 @@ func trapSem() Semantics {
 	s.BackgroundJobKeepsTrapListing = No
 	s.KeptTrapListingIncludesExit = Yes
 	s.SubshellHidesInheritedIgnoredTraps = No
-	s.SubshellRunsOnAfterSignallingTheShell = Yes
+	s.SubshellRunsOnAfterSignalingTheShell = Yes
 	return s
 }
 
@@ -235,7 +235,7 @@ func TestSubshellSelfKillReachesTheParent(t *testing.T) {
 // forks either, which is why the answer has to be chosen.
 func TestASubshellMayStopWhereItSignalledTheShell(t *testing.T) {
 	s := trapSem()
-	s.SubshellRunsOnAfterSignallingTheShell = No
+	s.SubshellRunsOnAfterSignalingTheShell = No
 	got, st := run(t, `(kill -INT $$; echo sub); echo done`, withSem(s))
 	if got != "" || st != 130 {
 		t.Errorf("got %q status %d, want no output and status 130 — ksh93's shape", got, st)
@@ -249,13 +249,26 @@ echo done`, withSem(s))
 	}
 }
 
+// And the preset's own answer is the majority's, read from the preset rather
+// than written into the case.
+//
+// POSIX has `( )` execute "in a subshell environment" and describes that
+// environment as a copy, which is the forking reading — and the shells that
+// fork are the five that keep going.
+func TestThePresetLetsASubshellRunOnAfterSignalingTheShell(t *testing.T) {
+	got, st := run(t, `(kill -INT $$; echo sub); echo done`, withSem(PosixSemantics()))
+	if got != "sub\n" || st != 130 {
+		t.Errorf("got %q status %d, want %q status 130 — the preset's answer", got, st, "sub\n")
+	}
+}
+
 // An unanswered axis is refused rather than guessed at, which is the rule for
 // every axis read while the script is running: this one is reached only by a
 // `kill` at the shell's own pid from inside a subshell, so nothing else pays
 // for it.
 func TestAnUnansweredSubshellSignalAxisIsRefused(t *testing.T) {
 	s := trapSem()
-	s.SubshellRunsOnAfterSignallingTheShell = Unspecified
+	s.SubshellRunsOnAfterSignalingTheShell = Unspecified
 	got, _ := run(t, `(kill -INT $$; echo sub); echo done`, withSem(s))
 	if !strings.Contains(got, "no dialect was chosen") {
 		t.Errorf("got %q, want the axis refused", got)

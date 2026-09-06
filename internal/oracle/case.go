@@ -1741,9 +1741,9 @@ var Corpus = []Case{
 		Why:     "what says the row above is an exit and not merely a different number. zsh does not run the EXIT trap when a signal kills it — `trap 'echo bye' EXIT; kill -TERM $$` prints nothing there — and it prints bye here, so SIGHUP produced no death for that question to be asked about. bash and ksh93 print bye because dying counts as exiting for them, and dash prints nothing for either signal, which is why the trap alone cannot tell the two apart and the status beside it can",
 	},
 	{
-		ID: "signal-death/a-subshell-that-signalled-the-shell", Category: "traps and exit",
+		ID: "signal-death/a-subshell-that-signaled-the-shell", Category: "traps and exit",
 		Snippet: `(kill -TERM $$; echo inner); echo outer`,
-		Why:     "the whole of what a subshell changes about a fatal self-signal, and the one place in the grammar that changes anything. The shell ends by the signal in all six and `outer` prints in none of them, so what splits is `inner`: bash 5.3.15, bash 3.2.57, bash 3.2 as `sh`, dash and zsh print it and ksh93 does not. Not a delivery race — the same answer on twenty-five runs of each under load, and unchanged by a `sleep 0.3` between the kill and the echo. The reason is the opposite of the obvious one: measured with a child started inside the subshell and its parent process id read back, the five that keep going are the five that gave the subshell a **process of its own**, so the signal aimed at `$$` never reached it; ksh93 runs the subshell in the shell's own process and the signal lands on the thing that was about to run the echo. Semantics.SubshellRunsOnAfterSignallingTheShell",
+		Why:     "the whole of what a subshell changes about a fatal self-signal, and the one place in the grammar that changes anything. The shell ends by the signal in all six and `outer` prints in none of them, so what splits is `inner`: bash 5.3.15, bash 3.2.57, bash 3.2 as `sh`, dash and zsh print it and ksh93 does not. Not a delivery race — the same answer on twenty-five runs of each under load, and unchanged by a `sleep 0.3` between the kill and the echo. The reason is the opposite of the obvious one: measured with a child started inside the subshell and its parent process id read back, the five that keep going are the five that gave the subshell a **process of its own**, so the signal aimed at `$$` never reached it; ksh93 runs the subshell in the shell's own process and the signal lands on the thing that was about to run the echo. Semantics.SubshellRunsOnAfterSignalingTheShell",
 	},
 	{
 		ID: "signal-death/a-brace-group-does-not-outlive-the-signal", Category: "traps and exit",
@@ -1761,7 +1761,7 @@ var Corpus = []Case{
 		Why:     "the third control, and the one that asks whether a shell checks for its own death only between *top-level* commands. It does not: all six stop inside the loop body, printing neither the echo after the kill nor anything after the loop",
 	},
 	{
-		ID: "signal-death/a-command-substitution-that-signalled-the-shell", Category: "traps and exit",
+		ID: "signal-death/a-command-substitution-that-signaled-the-shell", Category: "traps and exit",
 		Snippet: `x=$(kill -TERM $$; echo inner); echo "outer x=$x"`,
 		Why:     "the other subshell environment, and it does not divide the panel the way `( )` does: all six print nothing and die, because whatever the child wrote went into the assignment rather than to the output and the shell never reached the echo that would have shown it. Here so that the `( )` row is not read as a claim about every subshell environment",
 	},

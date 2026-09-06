@@ -53192,7 +53192,7 @@
         "TimedOut": false
       }
     },
-    "signal-death/a-command-substitution-that-signalled-the-shell": {
+    "signal-death/a-command-substitution-that-signaled-the-shell": {
       "bash": {
         "Stdout": "",
         "Stderr": "",
@@ -53485,7 +53485,7 @@
         "TimedOut": false
       }
     },
-    "signal-death/a-subshell-that-signalled-the-shell": {
+    "signal-death/a-subshell-that-signaled-the-shell": {
       "bash": {
         "Stdout": "inner",
         "Stderr": "",

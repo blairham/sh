@@ -488,7 +488,7 @@ both defensible, and nothing in the corpus asks yet.
     bash 3.2  → inner, killed by SIGTERM     ksh93  → nothing, killed by SIGTERM
     bash as sh → inner, killed by SIGTERM    zsh    → inner, killed by SIGTERM
 
-`Semantics.SubshellRunsOnAfterSignallingTheShell` — bash yes · dash yes ·
+`Semantics.SubshellRunsOnAfterSignalingTheShell` — bash yes · dash yes ·
 ksh93 no · zsh yes, preset yes.
 
 **The shell ends either way, and that half is unanimous.** All six are

@@ -412,7 +412,7 @@ type Semantics struct {
 	// dies by it.
 	QuitIgnoredWhenNotInteractive Answer
 
-	// SubshellRunsOnAfterSignallingTheShell lets the rest of a subshell's
+	// SubshellRunsOnAfterSignalingTheShell lets the rest of a subshell's
 	// body run after something inside it has sent the whole shell a fatal
 	// signal — `(kill -TERM $$; echo inner)`. True in bash, dash and zsh;
 	// false in ksh93.
@@ -448,7 +448,7 @@ type Semantics struct {
 	// The preset says yes. POSIX has `( )` execute "in a subshell
 	// environment" and describes that environment as a copy, which is the
 	// forking reading, and it is five of the six.
-	SubshellRunsOnAfterSignallingTheShell Answer
+	SubshellRunsOnAfterSignalingTheShell Answer
 
 	// HangupIsAnOrderlyExit makes an untrapped SIGHUP end the shell the way
 	// `exit 1` would rather than by the signal's default action.
@@ -3380,7 +3380,7 @@ func PosixSemantics() Semantics {
 		// environment as a copy, which is the forking reading: the copy is
 		// not the process the signal was aimed at, so it finishes its body.
 		// Five of the six as well.
-		SubshellRunsOnAfterSignallingTheShell: Yes,
+		SubshellRunsOnAfterSignalingTheShell: Yes,
 		// The standard describes `exit` as exiting and says nothing about a
 		// job left stopped, so the base leaves; bash and zsh, which stay and
 		// warn, override.

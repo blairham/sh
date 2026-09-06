@@ -128,7 +128,7 @@ func Semantics() interp.Semantics {
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
 	// The same, and zsh is worth stating rather than assuming: it forks for
 	// a `( )` that has a command after it, which is where this was measured.
-	s.SubshellRunsOnAfterSignallingTheShell = interp.Yes
+	s.SubshellRunsOnAfterSignalingTheShell = interp.Yes
 	// And it announces both ends of a job on that route: measured on
 	// `-i script.sh` through a pseudo-terminal, `[1] <pid>` as the job
 	// starts and `[1]  + done       sleep 0.3` as it ends.

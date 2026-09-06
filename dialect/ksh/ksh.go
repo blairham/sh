@@ -436,7 +436,7 @@ func Semantics() interp.Semantics {
 	// at the shell from inside one lands on the thing that was about to run
 	// the next command. Measured: `(kill -TERM $$; echo inner)` prints
 	// nothing at all, where the five that fork print `inner` and then die.
-	s.SubshellRunsOnAfterSignallingTheShell = interp.No
+	s.SubshellRunsOnAfterSignalingTheShell = interp.No
 	// And it announces both ends of a job on that route: measured on
 	// `-i script.sh` through a pseudo-terminal, `[1]\t<pid>` as the job
 	// starts and `[1] +  Done  sleep 0.3 &` as it ends.

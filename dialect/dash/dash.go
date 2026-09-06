@@ -58,7 +58,7 @@ func Semantics() interp.Semantics {
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
 	// The same, and measured the same way: dash forks for `( )`, so the
 	// subshell outlives the signal its `kill` sent the shell.
-	s.SubshellRunsOnAfterSignallingTheShell = interp.Yes
+	s.SubshellRunsOnAfterSignalingTheShell = interp.Yes
 	// dash has somebody to tell on this route, and tells them exactly one
 	// thing: measured on `-i script.sh` through a pseudo-terminal it writes
 	// `[1] + Done sleep 0.3` and never the line that starts the job. The

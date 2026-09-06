@@ -414,9 +414,9 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 			// shell's own process, so the signal lands on the very thing
 			// that was about to run the next command — and nothing here
 			// forks either, which is what makes this a choice rather than a
-			// consequence. See Semantics.SubshellRunsOnAfterSignallingTheShell.
-			if !r.ask(r.sem().SubshellRunsOnAfterSignallingTheShell,
-				"whether a subshell runs on after signalling the shell") {
+			// consequence. See Semantics.SubshellRunsOnAfterSignalingTheShell.
+			if !r.ask(r.sem().SubshellRunsOnAfterSignalingTheShell,
+				"whether a subshell runs on after signaling the shell") {
 				// Only the subshell stops here. The death is already
 				// recorded, so the parent takes it at the next sequence
 				// point and ends by the signal exactly as it would have.

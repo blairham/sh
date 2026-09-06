@@ -5541,6 +5541,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `heredoc/the-delimiter-is-the-whole-line` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` |
 | `heredoc/a-delimiter-that-closes-a-command-substitution` | **2>** `<script>: 6: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `v=[a] st=0` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `v=[a] st=0` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `v=[a] st=0` | `v=[a] st=0` | **2>** `<script>:6: parse error near `v=$(cat <<EOF'` *(status 1)* |
 | `heredoc/a-substitutions-delimiter-is-remarked-on-before-it-runs` | **2>** `<script>: 6: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `done` | `done` | **2>** `<script>:6: parse error near `v=$(cat <<EOF'` *(status 1)* |
+| `heredoc/a-second-delimiter-closes-the-substitution` | **2>** `<script>: 9: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `v=[x~y]` **2>** `<script>: line 6: warning: here-document at line 4 delimited by end-of-file (wanted `B')` | `v=[x~y]` **2>** `<script>: line 6: warning: here-document at line 4 delimited by end-of-file (wanted `B')` | `v=[x~y]` | `v=[x~y]` | **2>** `<script>:9: parse error near `v=$(cat <<A'` *(status 1)* |
+| `heredoc/a-delimiter-closes-two-substitutions` | **2>** `<script>: 6: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `v=[z]` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `E')` | `v=[z]` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `E')` | `v=[z]` | `v=[z]` | **2>** `<script>:6: parse error near `v=$(echo $(cat <<E'` *(status 1)* |
+| `heredoc/backquotes-cannot-be-taken-into-a-body` | `v=[q]` | `v=[q]` | `v=[q]` | `v=[q]` | `v=[q]` | `v=[q]` |
 | `heredoc/a-substitution-that-is-not-a-dollar-sign` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `a~done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `a~done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `a~done` | `a~done` | **2>** `<script>:6: parse error near `<(cat <<EOF'` *(status 1)* |
 | `heredoc/a-delimiter-that-never-matches` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` |
 | `redir/open-failure-wording` | `st=2` **2>** `<shell>: 1: cannot open nosuchfile: No such file` | `st=1` **2>** `<shell>: line 1: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: line 1: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: nosuchfile: cannot open [No such file or directory]` | `st=1` **2>** `<shell>:1: no such file or directory: nosuchfile` |
@@ -5691,6 +5694,30 @@ grades it and nothing drift-checks it either, for the same reason.
   a
   EOF)
   echo done
+  ```
+- `heredoc/a-second-delimiter-closes-the-substitution` — the same shape reached through the *second* here-document: the first is delimited on a line of its own and the one whose delimiter carries the `)` is the one after it. The four that read a body from between the parentheses take it and `v` is both bodies; the two that read it from the whole input refuse the construct exactly as they refuse the single-document row. It is what tells a rule about the first document in a construct apart from a rule about each of them
+  ```sh
+  v=$(cat <<A
+  x
+  A
+  cat <<B
+  y
+  B)
+  echo "v=[$v]"
+  ```
+- `heredoc/a-delimiter-closes-two-substitutions` — `E))` closes both, so the body would have to take two parentheses with it rather than one. Same split, which is what says the question is asked of every construct the body reaches rather than of the innermost one
+  ```sh
+  v=$(echo $(cat <<E
+  z
+  E))
+  echo "v=[$v]"
+  ```
+- `heredoc/backquotes-cannot-be-taken-into-a-body` — the control that says the question is about parentheses. A backquoted substitution ends at a mark a here-document body cannot contain, so the body never takes the closing delimiter and there is nothing to decide — all six run it and `v` is `q`, where the same three lines written with `$( )` and `E)` split the panel four to two
+  ```sh
+  v=`cat <<E
+  q
+  E`
+  echo "v=[$v]"
   ```
 - `heredoc/a-substitution-that-is-not-a-dollar-sign` — the same shape spelled the other way. What decides the remark is that the parentheses hold a *program*, not which sigil opened them — bash 5.3 says the same thing here as for `$( )`, bash 3.2 and ksh93 stay silent as they do there, and the two that have no process substitution refuse the line outright. The counter-case is arithmetic: `$(( a << b ))` is a shift and reading it as a program would invent a here-document
   ```sh

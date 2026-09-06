@@ -104,6 +104,11 @@ func corpusGrammar() syntax.Dialect {
 	d.ParamTransformations = true
 	d.RegexTakesAlternation = true
 	d.TimePosixFlag = true
+	// A here-document whose delimiter carries the `)` that closes the
+	// construct it is in. Three cases are written that way and two of the six
+	// shells refuse them, so this is one of the flags the corpus cannot be
+	// read without.
+	d.HeredocEndsAtClosingParen = true
 	// `declare` beside the four the core already reads as declarations, so a
 	// snippet using it keeps the assignment rule when it is printed back.
 	d.DeclarationUtilities = map[string]bool{

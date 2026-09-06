@@ -1196,6 +1196,15 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		}
 	}
 
+	// Where the loop stopped, kept before anything below moves the cursor.
+	//
+	// Only the refusal moves it, and a refused span is nobody's to read
+	// today — a mutant taking the span from the moved cursor is
+	// indistinguishable end to end. The span is still cut here, because the
+	// alternative is a Value that silently becomes the rest of the file for
+	// the first caller that reads a tree after a parse failure.
+	stop := l.off
+
 	if holdsCommands(kind) {
 		// Counting found the end, which for a command substitution means the
 		// read above could not — and the commonest reason is the shape #785
@@ -1212,10 +1221,58 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// text would say the opposite — `EOF` alone is the delimiter, so
 		// there would be nothing to remark on, which is also why the
 		// substitution itself runs and yields `a`.
-		l.takeRemarks(l.src[start:l.off], open.Line)
+		remarks, bodyRanOut := l.takeRemarks(l.src[start:l.off], open.Line)
+		// And whether that read is an answer at all is a dialect question,
+		// which nothing here used to ask. Counting the parentheses finds the
+		// `)` whatever shell this is, so all four dialects accepted a program
+		// dash and zsh refuse.
+		//
+		// Reading the body from between the parentheses is one answer to
+		// where it ends and reading it from the whole input is the other.
+		// Under the second, the `)` counting just found is a line of the
+		// body, nothing ever closed the construct, and the right complaint
+		// is the one an unterminated `(` already gets — which is exactly
+		// what dash and zsh say here, word for word.
+		//
+		// `depth == 0` because the loop above may have run out of input
+		// instead of finding the `)`, which is already reported and is not
+		// this. Nothing can observe the difference — ranOut keeps the first
+		// call and the fail helpers keep the first error, so the second pass
+		// would change nothing — and a mutant without it is byte-identical
+		// across every unterminated shape in all four dialects. It stays
+		// because "already reported" is the reason, not the idempotence.
+		//
+		// The remark is kept either way, and deliberately. It is what says a
+		// body reached the end of this text, so the nesting depends on it:
+		// `$(echo $(cat <<E` … `E))` is refused only because the inner
+		// construct's remark reaches the outer one's read. It cannot be seen
+		// where it is refused — a dialect that reads a body from the whole
+		// input has no wording for a here-document at end of file, so there
+		// is nothing to print beside the complaint — and suppressing it here
+		// silently made that nested shape parse again.
+		l.remarks = append(l.remarks, remarks...)
+		if bodyRanOut && depth == 0 && !l.dialect.HeredocEndsAtClosingParen {
+			// The body took the `)` and everything after it, so that is
+			// where the cursor belongs: the input ran out inside this
+			// construct and there is nothing left for anyone to read.
+			//
+			// Not bookkeeping. The line a refusal is located on is the line
+			// the input ended on, and both shells that refuse this name it —
+			// leaving the cursor at the `)` blamed the delimiter's line and
+			// every one of the six corpus rows said so.
+			for !l.eof() {
+				l.advance()
+			}
+			l.ranOut(openingOf(kind))
+			if kind == CommandSubst {
+				l.failUnmatched(open, "$(", ")", "unterminated command substitution")
+			} else {
+				l.fail(open, "unterminated %s", kind)
+			}
+		}
 	}
 	// Trim the closing delimiters the loop consumed.
-	end := l.off
+	end := stop
 	for n := 1; n <= closers(kind) && end > start && l.src[end-1] == ')'; n++ {
 		end--
 	}
@@ -1299,10 +1356,23 @@ func (l *Lexer) scanBracket(q Quoting) Span {
 //
 // Only remarks are taken. Whatever else the read found — an error, a tree — is
 // the caller's own business and it has already decided what to do about it.
-func (l *Lexer) takeRemarks(text string, from int) {
+//
+// The remarks are returned rather than kept, because whether they are the
+// caller's to keep is now a question: a here-document that ran to the end of
+// this text is a body that would have run straight past the parentheses had
+// it been read from the whole input, and in a dialect that reads it that way
+// the construct is refused instead of remarked on. See
+// Dialect.HeredocEndsAtClosingParen. The second return says which of those it
+// was.
+func (l *Lexer) takeRemarks(text string, from int) ([]Remark, bool) {
 	sub := NewParserAt(text, l.dialect, from)
 	sub.parseList()
-	l.remarks = append(l.remarks, sub.lex.remarks...)
+	for _, r := range sub.lex.remarks {
+		if r.Kind == RemarkHeredocAtEOF {
+			return sub.lex.remarks, true
+		}
+	}
+	return sub.lex.remarks, false
 }
 
 func (l *Lexer) parseToClose(from int) (int, bool) {

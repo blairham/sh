@@ -3635,6 +3635,26 @@ EOF
 		Why:        "the remark about the same shape is a fact about *reading* rather than about running: the substitution is on the right of a `&&` that never reaches it, and the one shell that says anything still says it. Which is what makes it the parser's to produce and not the interpreter's",
 	},
 	{
+		ID: "heredoc/a-second-delimiter-closes-the-substitution", Category: "redirection",
+		Script:     true,
+		Unfinished: true,
+		Snippet:    "v=$(cat <<A\nx\nA\ncat <<B\ny\nB)\necho \"v=[$v]\"\n",
+		Why:        "the same shape reached through the *second* here-document: the first is delimited on a line of its own and the one whose delimiter carries the `)` is the one after it. The four that read a body from between the parentheses take it and `v` is both bodies; the two that read it from the whole input refuse the construct exactly as they refuse the single-document row. It is what tells a rule about the first document in a construct apart from a rule about each of them",
+	},
+	{
+		ID: "heredoc/a-delimiter-closes-two-substitutions", Category: "redirection",
+		Script:     true,
+		Unfinished: true,
+		Snippet:    "v=$(echo $(cat <<E\nz\nE))\necho \"v=[$v]\"\n",
+		Why:        "`E))` closes both, so the body would have to take two parentheses with it rather than one. Same split, which is what says the question is asked of every construct the body reaches rather than of the innermost one",
+	},
+	{
+		ID: "heredoc/backquotes-cannot-be-taken-into-a-body", Category: "redirection",
+		Script:  true,
+		Snippet: "v=`cat <<E\nq\nE`\necho \"v=[$v]\"\n",
+		Why:     "the control that says the question is about parentheses. A backquoted substitution ends at a mark a here-document body cannot contain, so the body never takes the closing delimiter and there is nothing to decide — all six run it and `v` is `q`, where the same three lines written with `$( )` and `E)` split the panel four to two",
+	},
+	{
 		ID: "heredoc/a-substitution-that-is-not-a-dollar-sign", Category: "redirection",
 		Script:     true,
 		Unfinished: true,

@@ -62,6 +62,12 @@ func Dialect() syntax.Dialect {
 	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a
 	// literal `@` followed by a group here rather than an extended pattern.
 	d.PatternAlternation = true
+	// `<->` is a number and `<1-9>` a bounded one, where every other panel
+	// shell reads the `<` as a redirection. Measured 2026-09-05 on zsh
+	// 5.9.2: `[[ 1 = <-> ]]` is 0 here and a syntax error in bash 5.3, bash
+	// 3.2, bash-as-sh and ksh93, and dash — which has no `[[ ]]` — tries to
+	// open a file called `-`.
+	d.NumericRangePattern = true
 	// The parenthesized flag group an expansion may open with — `${(U)x}`,
 	// `${(%):-%x}` — which is this dialect's alone: the other three call
 	// the whole expansion a bad substitution.

@@ -3845,9 +3845,10 @@ func (r *Runner) caretNegates(pattern string) bool {
 // different rules from a `case` pattern.
 func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 	o := patternOpts{
-		caret:      r.caretNegates(pattern),
-		group:      r.dialect().PatternAlternation,
-		quantified: r.readsQuantifiedGroups(condition),
+		caret:        r.caretNegates(pattern),
+		group:        r.dialect().PatternAlternation,
+		quantified:   r.readsQuantifiedGroups(condition),
+		numericRange: r.dialect().NumericRangePattern,
 		// The run-time option folds exactly the two consumers this function
 		// serves — `case` and `[[ ]]` — and neither of the others: pathname
 		// expansion has a fold of its own, and parameter expansion stays

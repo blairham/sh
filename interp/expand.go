@@ -785,7 +785,7 @@ func (r *Runner) expansionResult(v string, unquoted bool, split Answer, axis str
 	if ifs, _ := r.ifs(); containsAnyOf(v, ifs) {
 		doSplit = r.ask(split, axis)
 	}
-	if hasUnescapedMeta(v) &&
+	if hasUnescapedMeta(v, r.dialect().NumericRangePattern) &&
 		!r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion") {
 		// zsh does not treat the result of an expansion as a pattern. The
 		// same rule decides `[[ abc == $p ]]`, which is one behavior

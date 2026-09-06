@@ -514,6 +514,29 @@ type Dialect struct {
 	// extended pattern — the same text, read by a different rule.
 	PatternAlternation bool
 
+	// NumericRangePattern reads `<n-m>` in a word as a pattern matching a
+	// run of digits whose *value* falls in the range, rather than as a
+	// redirection: `<->` is any number, `<1-9>` a bounded one, and `<2->`
+	// and `<-9>` are bounded on one side. zsh alone has it, and it is what
+	// makes `[[ $1 = <-> ]]` a test rather than a parse error there.
+	//
+	// It reaches the lexer because `<` is a redirection operator everywhere
+	// else, and the shape is the whole of the disambiguation — measured
+	// 2026-09-05 on zsh 5.9.2, `<` then digits then `-` then digits then
+	// `>`, and nothing else. `echo <1` reads the file `1`, `echo <a-b>` is a
+	// redirection followed by a parse error at the `>`, and `<1-2-3>` and
+	// `<-->` are parse errors too. Only the exact shape is a pattern.
+	//
+	// The digits in front of a redirection stop being a descriptor when the
+	// operator turns out to be one of these: `echo 2<->` is one word there
+	// and not a redirection of descriptor 2, and `{a}<->` is a word rather
+	// than a descriptor the shell would pick.
+	//
+	// The matcher's half of the flag is read from here as well, the way
+	// [Dialect.PatternAlternation] is: what a `<n-m>` matches is not a
+	// grammar question, but which dialects have one to match is.
+	NumericRangePattern bool
+
 	// DeclarationUtilities are the commands that may be given an array
 	// assignment as an operand: `local a=(x y)`, `typeset -a b=()`.
 	//

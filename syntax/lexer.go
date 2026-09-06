@@ -281,6 +281,13 @@ func (l *Lexer) Next() Token {
 		return l.scanWord(start)
 	}
 
+	// `<->` and its bounded spellings begin a *word* rather than a
+	// redirection, and like `<(` they have to be seen before the operator
+	// table takes the `<`.
+	if l.startsNumericRange() {
+		return l.scanWord(start)
+	}
+
 	if k, ok := l.matchOperator(); ok {
 		s := text[k]
 		for range s {
@@ -305,6 +312,45 @@ func (l *Lexer) startsProcSubst() bool {
 	c := l.peek()
 	return (c == '<' || c == '>') && l.peekAt(1) == '('
 }
+
+// startsNumericRange reports whether the cursor is on a numeric range
+// pattern — `<->`, `<1-9>`, `<2->`, `<-9>` — in a dialect that has one.
+func (l *Lexer) startsNumericRange() bool {
+	_, ok := l.numericRangeAt(0)
+	return ok
+}
+
+// numericRangeAt measures a numeric range starting n bytes ahead of the
+// cursor, reporting how many bytes it spans.
+//
+// The shape is the entire disambiguation and it is exact: `<`, digits, `-`,
+// digits, `>`, with either run of digits allowed to be empty. Anything else
+// and the `<` is the redirection it is everywhere else — which is why this
+// answers a width rather than a bool for the scanner, and a bool for the two
+// places that only need to know a redirection is not starting here.
+func (l *Lexer) numericRangeAt(n int) (int, bool) {
+	if !l.dialect.NumericRangePattern || l.peekAt(n) != '<' {
+		return 0, false
+	}
+	i := n + 1
+	for isDigitByte(l.peekAt(i)) {
+		i++
+	}
+	if l.peekAt(i) != '-' {
+		return 0, false
+	}
+	i++
+	for isDigitByte(l.peekAt(i)) {
+		i++
+	}
+	if l.peekAt(i) != '>' {
+		return 0, false
+	}
+	return i + 1 - n, true
+}
+
+// isDigitByte is the ASCII digit test the range shape is written in.
+func isDigitByte(c byte) bool { return c >= '0' && c <= '9' }
 
 // skipBlanksAndComments consumes what separates tokens: blanks, line
 // continuations, and comments.
@@ -345,6 +391,13 @@ func (l *Lexer) tryIONumber() (Token, bool) {
 	// Strict adjacency: anything but a redirection here and these digits are
 	// an ordinary word.
 	if c := l.peekAt(n); c != '<' && c != '>' {
+		return Token{}, false
+	}
+	// And the `<` has to be one. Where the dialect has numeric ranges the
+	// operator these digits would attach to may be a pattern instead, and
+	// then the digits belong to the word in front of it: `echo 2<->` is one
+	// word rather than a redirection of descriptor 2.
+	if _, ok := l.numericRangeAt(n); ok {
 		return Token{}, false
 	}
 	// And width, where the dialect reads only one digit as a number. The
@@ -407,6 +460,11 @@ func (l *Lexer) tryFdVariable() (Token, bool) {
 	// The same strict adjacency an IO number has: anything but a
 	// redirection after the brace and this is an ordinary word.
 	if c := l.peekAt(n + 1); c != '<' && c != '>' {
+		return Token{}, false
+	}
+	// And the same exception: `{a}<->` is a word, not a descriptor the shell
+	// would pick.
+	if _, ok := l.numericRangeAt(n + 1); ok {
 		return Token{}, false
 	}
 	start := l.pos()
@@ -528,6 +586,11 @@ func (l *Lexer) endsWord(c byte) bool {
 	// at all where Next has just decided a word starts here, which is not a
 	// wrong answer so much as no answer: the cursor never moves.
 	if l.startsProcSubst() {
+		return false
+	}
+	// A numeric range does too, which is what keeps `<->\" \"<->` one word:
+	// the pattern a real prompt theme compares a terminal size against.
+	if l.startsNumericRange() {
 		return false
 	}
 	if l.inRegex {
@@ -662,6 +725,18 @@ func (l *Lexer) scanWord(start Pos) Token {
 				litPos = l.pos()
 			}
 			lit.WriteString(l.scanPatternGroup())
+
+		case c == '<' && l.startsNumericRange():
+			// Taken whole, because the `>` that ends it would otherwise end
+			// the word: the range is literal pattern text and the matcher
+			// reads it later.
+			if lit.Len() == 0 {
+				litPos = l.pos()
+			}
+			width, _ := l.numericRangeAt(0)
+			for range width {
+				lit.WriteByte(l.advance())
+			}
 
 		case c == '(' && l.opensPatternGroup():
 			// A parenthesised group belongs to the word rather than ending

@@ -165,6 +165,51 @@ Grammar flag: `ExtendedPattern` — core: off; `ksh`: on. bash's narrower
 `ExtendedPatternInCondition` turns them on inside `[[ ]]` and nowhere
 else, which is where bash reads them.
 
+## A numeric range is one dialect's, and it reaches the lexer
+
+    <->      any number
+    <n-m>    a number from n to m
+    <n->     from n upward
+    <-m>     up to m
+
+zsh alone has them. They match a run of digits whose **value** falls in
+the range, so leading zeros belong to the run and not to the number:
+`[[ 007 = <1-10> ]]` matches, because 007 is 7.
+
+| probe | dash | bash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `[[ 1 = <-> ]]` | no `[[ ]]`; opens `-` | error | error | `0` |
+| `case 42 in <->)` | error | error | error | `num` |
+| `echo <->` | redirection | error | opens `-` | the numbered files |
+
+This is the one pattern construct that cannot be left to the matcher.
+`<` is a redirection operator everywhere a word may stand, so the *lexer*
+has to decide, and the shape is the whole of the disambiguation —
+measured 2026-09-05 on zsh 5.9.2, `<` then digits then `-` then digits
+then `>` and nothing else. `echo <1` reads the file `1` there;
+`echo <a-b>`, `echo <1-2-3>` and `echo <-->` are parse errors. Digits in
+front stop being a descriptor when the operator turns out to be a
+pattern: `echo 2<->` is one word, not a redirection of descriptor 2.
+
+Once the word has parsed the range is expansion like any other — an
+unmatched `<->` gets the same `no matches found` an unmatched `*` gets —
+and quoting still decides whether it is a pattern at all: `"<->"` is
+four ordinary characters, and so is a `<->` that arrived from an
+expansion, since this is also the shell that does not re-read an
+expansion's result as a pattern.
+
+Grammar flag: `NumericRangePattern` — core: off; `zsh`: on. The matcher
+reads the same flag, the way it reads `PatternAlternation`: what a range
+matches is not a grammar question, but which dialects have one is.
+Measured: `pat/a-numeric-range-is-any-number`,
+`pat/a-numeric-range-has-four-shapes`,
+`pat/a-numeric-range-compares-values-not-text`,
+`pat/a-quoted-numeric-range-is-four-characters`,
+`pat/a-numeric-range-in-a-case-arm`,
+`pat/a-numeric-range-names-numbered-files`,
+`pat/digits-in-front-of-a-numeric-range-are-not-a-descriptor`,
+`pat/a-numeric-range-that-matches-nothing`.
+
 ## Run-time switches over the language
 
 bash lets a script move some of these rules at run time, through `shopt`

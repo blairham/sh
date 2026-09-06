@@ -15,10 +15,13 @@ import (
 // quoting is what decides whether text is a pattern at all — `$p` globs and
 // `"$p"` does not. The fields expansion produces are therefore in this escaped
 // form and are unescaped once globbing has had its look.
+// `<` is in the set for the dialect that has numeric ranges, and marking it
+// where nothing reads one costs nothing: an escaped ordinary character is
+// that character, so `\<` and `<` match the same text everywhere else.
 func globEscape(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
-		if strings.IndexByte(`*?[\`, s[i]) >= 0 {
+		if strings.IndexByte(`*?[\<`, s[i]) >= 0 {
 			b.WriteByte('\\')
 		}
 		b.WriteByte(s[i])
@@ -39,10 +42,21 @@ func globUnescape(s string) string {
 }
 
 // hasUnescapedMeta reports whether a field is a pattern at all.
-func hasUnescapedMeta(s string) bool {
+//
+// numericRange says the dialect reads `<n-m>`, which is the one construct
+// here whose being a metacharacter is a dialect question rather than a
+// universal: a `<` is an ordinary character in a field everywhere else, and
+// in the four shells without ranges one never reaches a pattern at all.
+func hasUnescapedMeta(s string, numericRange bool) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\\' {
 			i++
+			continue
+		}
+		if s[i] == '<' && numericRange {
+			if _, ok := numericRangeWidth(s[i:]); ok {
+				return true
+			}
 			continue
 		}
 		if s[i] == '[' {
@@ -67,6 +81,17 @@ func hasUnescapedMeta(s string) bool {
 		}
 	}
 	return false
+}
+
+// numericRangeWidth is the length of the numeric range at the start of s, for
+// the caller that needs to know one is there rather than what it means.
+// splitNumericRange is the reading of it; this is only the shape.
+func numericRangeWidth(s string) (int, bool) {
+	_, _, rest, ok := splitNumericRange(s, patternOpts{numericRange: true})
+	if !ok {
+		return 0, false
+	}
+	return len(s) - len(rest), true
 }
 
 // closesBracket reports whether the bracket expression opened at i is closed.
@@ -126,7 +151,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		r.fatalPattern(field, 1)
 		return nil, false
 	}
-	if !hasUnescapedMeta(field) {
+	if !hasUnescapedMeta(field, r.dialect().NumericRangePattern) {
 		return nil, false
 	}
 	defer func() {

@@ -5849,6 +5849,46 @@ echo unreachable`,
 		Why:     "one operand, one expansion, however many elements it is applied to: the mark file holds a single x in every shell with arrays. The alternative reading is not visible in the fields — both spellings print the same two — and shows only in how many times the word's side effects fired, which is what makes it worth a file rather than an assertion about output",
 	},
 	{
+		ID: "pat/a-numeric-range-is-any-number", Category: "pattern matching", SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `[[ 1 = <-> ]]; echo "st=$?"; [[ x = <-> ]]; echo "st=$?"`,
+		Why:     "the gate a plugin manager's whole file sits behind — `[[ $1 = <-> && … ]]` — and a `<` where four of the panel read only a redirection. It matches a run of digits and nothing else, so the second half is what says it is a pattern rather than a truth. Graded on the refusal because the four that decline decline in four wordings, and dash — which has no `[[ ]]` at all — tries to open a file called `-`",
+	},
+	{
+		ID: "pat/a-numeric-range-has-four-shapes", Category: "pattern matching", SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `[[ 42 = <1-100> ]]; echo "st=$?"; [[ 200 = <1-100> ]]; echo "st=$?"; [[ 5 = <6-> ]]; echo "st=$?"; [[ 5 = <-4> ]]; echo "st=$?"`,
+		Why:     "`<n-m>`, `<n->`, `<-m>` and the bare `<->` are one operator with either bound left out, and the comparison is on the *value*: the range is the whole of what distinguishes it from four ordinary characters",
+	},
+	{
+		ID: "pat/a-numeric-range-compares-values-not-text", Category: "pattern matching", SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `[[ 007 = <1-10> ]]; echo "st=$?"; [[ 100 = <1-10>0 ]]; echo "st=$?"; [[ 12 = <-><-> ]]; echo "st=$?"`,
+		Why:     "leading zeros belong to the run of digits and not to the number, so `007` is 7; and the run's length is decided by what follows it, which is why `<1-10>0` matches `100` and two ranges in a row split `12` between them. A matcher that took the longest run it could would fail both",
+	},
+	{
+		ID: "pat/a-quoted-numeric-range-is-four-characters", Category: "pattern matching",
+		Snippet: `[[ 1 = "<->" ]] && echo hit || echo miss; [[ "<->" = "<->" ]] && echo hit || echo miss; p="<->"; [[ 1 = $p ]] && echo hit || echo miss`,
+		Why:     "the same per-span quoting that decides whether `a*` is a pattern decides whether a range is one, and the shell that has ranges is also the one that does not re-read an expansion as a pattern — so the third answer is `miss` there for a reason unrelated to the first two. This is the case that keeps the fix from being `a `<` is always a range`",
+	},
+	{
+		ID: "pat/a-numeric-range-in-a-case-arm", Category: "pattern matching", SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `case 42 in <->) echo num;; *) echo other;; esac; case abc in <->) echo num;; *) echo other;; esac`,
+		Why:     "the same pattern where a `case` arm stands, which is a different production from the condition's operand and had to be measured on its own — dash reports a word where it wanted `)` and the rest report the `<`",
+	},
+	{
+		ID: "pat/a-numeric-range-names-numbered-files", Category: "pattern matching", SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `touch 1 2 10 007 abc; echo <->; echo <2-9>`,
+		Why:     "against the filesystem it is a pattern like any other, matched per component and sorted with the rest — which is what says the range is expansion rather than grammar once the word has parsed",
+	},
+	{
+		ID: "pat/digits-in-front-of-a-numeric-range-are-not-a-descriptor", Category: "pattern matching", SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `touch 21 22 2x; echo 2<->`,
+		Why:     "the boundary against the redirection the `<` is everywhere else: digits with no gap before a `<` are a file descriptor, and stop being one when the operator turns out to be a pattern. `2<->` is one word here and `2<` plus a redirection in the four that have no ranges",
+	},
+	{
+		ID: "pat/a-numeric-range-that-matches-nothing", Category: "pattern matching", SyntaxError: true, GradedOnRefusal: true,
+		Snippet: `touch abc; echo <->`,
+		Why:     "and what it does with no match is the ordinary unmatched-pattern answer rather than anything of its own — the same `no matches found` a `*` gets in the shell that makes a miss fatal, which is what puts the range on the expansion side of the line. Nothing runs after it, because the four without ranges have no line to run: the `>` reaches the end of the input and every one of them refuses the whole command",
+	},
+	{
 		ID: "exec/lines-run-as-they-are-read", Category: "command language", SyntaxError: true,
 		Script:  true,
 		Snippet: "echo one\n{ fi; }\necho three\n",

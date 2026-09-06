@@ -3976,15 +3976,43 @@ each of the two choke points — `setVarAs` and `storeArray` — mirroring
 into the other under a re-entrancy guard, because the mirrors would
 otherwise call each other forever.
 
-What is **not** here: zsh's own built-in ties. `PATH`/`path`,
-`FPATH`/`fpath`, `CDPATH`/`cdpath`, `MANPATH`/`manpath`,
-`MAILPATH`/`mailpath`, `MODULE_PATH`/`module_path`, `PSVAR`/`psvar` and
-`FIGNORE`/`fignore` are ties in that shell and are not made here, so
-`$path` is an ordinary array and writing it does not reach `PATH`. That is
-a startup-state change with its own blast radius and its own measurements;
-this is the machinery it needs. Corpus: `declare/tie-*`,
+**The eight ties this shell arrives with** are made from the same
+machinery, before a script says anything — `dialect/zsh/builtintie.go`,
+through `interp.Runner.Tie`, which is `typeset -T` without the flags, the
+scope or the refusals a builtin needs. Measured under `env -i` with a
+scratch HOME and no startup files, one pair at a time:
+
+    export -T PATH path            typeset -T MANPATH manpath
+    typeset -T FPATH fpath         typeset -T MAILPATH mailpath
+    typeset -T CDPATH cdpath       typeset -T MODULE_PATH module_path
+    typeset -T PSVAR psvar         typeset -T FIGNORE fignore
+
+Every one of them joined on `:`. This is what makes `$path` an array at
+all, and what makes `path=( /new "${path[@]}" )` — the line every rc file
+in the world writes — reach `PATH` and the command lookup that follows it.
+Before, it wrote an ordinary array nothing read, **silently**.
+
+**The export attribute is inherited, never conferred.** `PATH` lists as
+`export -T` when the environment supplied it and as plain `typeset -T`
+when it did not — measured both ways under `env -i` — and writing
+`cdpath` never puts `CDPATH` into a child's environment. So the tie
+carries whatever the scalar already was.
+
+Two things are deliberately absent. `ZSH_EVAL_CONTEXT`/
+`zsh_eval_context` is listed among that shell's ties but is a *produced*
+parameter — `typeset -p ZSH_EVAL_CONTEXT` writes nothing there — and a
+produced parameter is a different mechanism. And **no default value**:
+zsh fills `FPATH` with its own function directories and `MODULE_PATH`
+with its module directory when the environment names neither, and those
+are that installation's files. Inventing them here would point this
+shell's `autoload` at another shell's function library, so a pair the
+environment says nothing about starts empty — which is what the same
+shell does for `CDPATH`.
+
+Corpus: `declare/tie-*`,
 `declare/unsetting-half-a-tie-unsets-all-of-it`,
-`declare/a-tie-over-a-standing-value`, `declare/tying-a-name-to-itself`.
+`declare/a-tie-over-a-standing-value`, `declare/tying-a-name-to-itself`,
+`tie/*`.
 
 **An attribute added to a name that already holds a value keeps it, and
 re-reads it.** A separate rule from the one above, and the one that

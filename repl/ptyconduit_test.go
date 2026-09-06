@@ -229,6 +229,19 @@ func (s *capturingSession) finish() {
 		return
 	}
 	s.finished = true
+	// The prompt first, and this is #635 rather than caution. A command runs
+	// with the terminal in its own line discipline and the editor puts it back
+	// into raw mode afterwards, and that transition drops what is queued but
+	// unread — so a ^D sent while the shell is between disciplines goes
+	// nowhere and the session never ends.
+	//
+	// Waiting on the command's *output* is not the same thing and is what this
+	// did at first: output arrives before the prompt is redrawn, so the ^D was
+	// racing the transition. It won on macOS and lost on Linux, where three of
+	// these tests failed with "the shell did not exit on ^D" after passing
+	// locally. The rule internal/smoke states is to synchronize on the next
+	// prompt, never on output.
+	s.waitForOutput("$ ", "the prompt, before the end of input is sent")
 	if _, err := s.control.WriteString("\x04"); err != nil {
 		s.t.Fatal(err)
 	}

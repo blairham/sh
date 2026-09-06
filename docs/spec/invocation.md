@@ -231,22 +231,87 @@ member that counts, as it is everywhere else.
 
 #### `m` is not in the field, and must not be
 
-**ksh93 is the only shell that turns the monitor on for `-i script.sh`**, and
-it really turns it on: `set -o` reports `monitor on` there, and off in bash and
-zsh. Every shell in the panel that reports `m` reports it *because* the monitor
-is running — `set -m; echo $-` shows the letter in bash and ksh93 alike.
+Every shell in the panel that reports `m` reports it *because* the monitor is
+running — `set -m; echo $-` shows the letter in bash and ksh93 alike — so the
+letter has to come from `Runner.monitor` or not at all. Writing it into a
+startup string would report a monitor that is not there, and being interactive
+and having job control would stop being separate facts, which is exactly why
+`Interactive` and `JobControl` are separate fields.
 
-So the letter has to come from `Runner.monitor` or not at all. Writing it into
-a startup string would report a monitor that is not there, and being
-interactive and having job control would stop being separate facts — which is
-exactly why `Interactive` and `JobControl` are separate fields.
+The table above is measured **without a terminal**, and that turns out to be
+half the question. See below.
 
-**Measured and not modeled:** the front end sets `JobControl` for a prompt and
-not for `-i script.sh`, which follows three of the four, so our ksh answers
-`iBE` there where the real one answers `imBE`. Turning job control on for an
-interactive shell with a script to run is one shell against three and a change
-to what the shell *does* rather than to what it says about itself, so it is a
-question of its own.
+### An interactive shell runs the monitor, and one shell needs no terminal to
+
+**The rule, and it is a rule.** `-i script.sh` **through a pseudo-terminal**
+turns the monitor on in every shell in the panel. Measured 2026-09-05 with a
+scratch `HOME` and a scratch `HISTFILE`:
+
+| shell | no terminal anywhere | through a pseudo-terminal |
+| --- | --- | --- |
+| bash 5.3 | off, `hiBH` | **on**, `himBH` |
+| dash | off, `i` | **on**, `mi` |
+| ksh93 | **on**, `imBE` | **on**, `imBE` |
+| zsh | off, `569XZi` | `m` in `$-` — `569XZim` — and jobs announced, while its own `set -o` still lists `monitor off` |
+
+So the earlier reading — that ksh93 is *the only shell* that turns the monitor
+on here, and that this is therefore one shell against three and an axis rather
+than a rule — was an artifact of measuring only the terminal-less case. Every
+shell does it. **ksh93 is unique only in not needing a terminal to do it.**
+
+That is `Semantics.InteractiveMonitorNeedsATerminal`: bash yes · dash yes ·
+ksh93 no · zsh yes. The preset says **yes**, and this is the rarer case where
+the text does not decide: XCU enables `-m` by default for interactive shells
+and puts no terminal in that sentence, but defines job control throughout in
+terms of a controlling terminal, so the sentence is silent about having none
+rather than permissive about it. Silent text gets the answer that claims less
+— a shell with no terminal does not report a monitor — which is three of the
+four as well.
+
+**It is not `MonitorNeedsATerminal` asked twice**, and bash separates them in
+one binary: `bash -c 'set -m'` with no terminal turns the monitor on, and
+`bash -i script.sh` with no terminal leaves it off. An explicit request from a
+script and the automatic one an interactive shell makes for itself are two
+questions, and one shell answers them differently.
+
+#### Which terminal counts
+
+**A terminal on any one of the three standard streams**, and that is measured
+rather than chosen. A pseudo-terminal on standard input alone, on standard
+output alone, and on standard error alone each turn the monitor on in bash,
+dash and zsh. A *controlling* terminal with all three redirected elsewhere does
+**not** — all three report it off.
+
+So the question the front end has to answer is about the descriptors it was
+handed, which is the only question it could have answered: `interp` may not ask
+the process what it holds, and `driver.Shell.hasTerminal` is where the answer
+is established. It is a different question from `Interactively`, which asks
+only about standard input because a prompt is drawn on the stream the lines
+come from.
+
+#### What is *not* claimed here
+
+Two things measured on the same route and deliberately left alone, because each
+is a question of its own.
+
+**The announcement.** With a terminal, ksh93 and zsh announce a background job
+as it starts and bash and dash do not — though bash announces one at a prompt.
+That is `Runner.JobControl` rather than the monitor, and the two split
+differently on this route, so turning both on together would give bash an
+announcement no bash makes. The front end sets the monitor here and leaves
+`JobControl` to the prompt.
+
+**The remark.** bash and dash both say something when an interactive shell
+cannot have job control — bash `cannot set terminal process group (…):
+Inappropriate ioctl for device` and `no job control in this shell`, dash
+`can't access tty; job control turned off` — and zsh and ksh93 say nothing.
+Not reproduced: bash's line carries a pid, which is also why none of this can
+be a corpus case.
+
+**zsh disagrees with itself** and what is recorded is the state its other two
+readers report. With a terminal it puts `m` in `$-` and announces its jobs
+while `set -o` still lists `monitor off`. Ours is consistent across all three
+readers, which matches zsh on two of them.
 
 #### What the corpus cannot say about this
 

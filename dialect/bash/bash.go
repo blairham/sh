@@ -432,6 +432,12 @@ func Semantics() interp.Semantics {
 	// the only shell in the panel with the letter.
 	s.ExportTakesTheAttributeOff = interp.Yes
 	s.AnnouncesBackgroundJob = interp.Yes
+	// bash 5.3 leaves the monitor off under `-i script.sh` with no terminal,
+	// and says so twice — `cannot set terminal process group` and `no job
+	// control in this shell`. It grants an explicit `set -m` there all the
+	// same, which is what keeps this question and MonitorNeedsATerminal
+	// apart.
+	s.InteractiveMonitorNeedsATerminal = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.No

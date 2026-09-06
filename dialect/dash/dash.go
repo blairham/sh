@@ -47,6 +47,10 @@ func Semantics() interp.Semantics {
 	// `can't access tty; job control turned off` — a remark, measured, not
 	// a failure: the option stays off and `set` still reports 0.
 	s.MonitorNeedsATerminal = interp.Yes
+	// dash leaves it off with no terminal too, remarking `can't access tty;
+	// job control turned off` — the same sentence its `set -m` refusal uses,
+	// from the same shell, about two different questions.
+	s.InteractiveMonitorNeedsATerminal = interp.Yes
 	// DefaultOptionLetters stays empty on purpose: measured, dash's `$-`
 	// starts blank however it is invoked, save the `s` of the
 	// standard-input route, which is unanimous and comes from Runner.Route.

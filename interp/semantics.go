@@ -2139,6 +2139,59 @@ type Semantics struct {
 	// only without one. Turning the option *off* is granted everywhere.
 	MonitorNeedsATerminal Answer
 
+	// InteractiveMonitorNeedsATerminal ties the monitor an *interactive*
+	// shell turns on for itself to having a terminal, which is a different
+	// question from the one above: that one is a script asking with `set -m`,
+	// and this one is nobody asking at all.
+	//
+	// The rule the answer qualifies is unanimous and is not an axis. Measured
+	// 2026-09-05 on `-i script.sh` with a scratch HOME and a pseudo-terminal:
+	// bash 5.3.15, dash, ksh93u+ and zsh 5.9.2 all report `monitor on` and
+	// all four put `m` in `$-`. So an interactive shell runs the monitor, and
+	// a front end that leaves it off is wrong on every route rather than in
+	// one dialect.
+	//
+	// What splits is the same invocation with no terminal anywhere: ksh93
+	// still reports `monitor on` and `imBE`, and bash, dash and zsh all
+	// report it off and leave `m` out. True in bash, dash and zsh; false in
+	// ksh93.
+	//
+	// The terminal that counts is a terminal on any of the three standard
+	// streams, and that is measured rather than assumed. A controlling
+	// terminal with all three redirected elsewhere is *not* enough — bash,
+	// dash and zsh all report the monitor off there — and a pseudo-terminal
+	// on any one of the three alone is enough for all three of them. So the
+	// question the front end has to answer is about the descriptors it was
+	// handed, which is the one it can answer.
+	//
+	// It is not MonitorNeedsATerminal read a second time, and bash is what
+	// separates them: `bash -c 'set -m'` with no terminal turns the monitor
+	// on, and `bash -i script.sh` with no terminal leaves it off. One shell,
+	// two answers, so an explicit request and an automatic one are two
+	// questions.
+	//
+	// The preset says a terminal *is* needed, and this is the rarer case
+	// where the text does not decide. XCU says of `-m` that it "shall be
+	// enabled by default for interactive shells" and puts no terminal in
+	// that sentence, but it also defines job control throughout in terms of
+	// a controlling terminal, so the sentence is silent about having none
+	// rather than permissive about it. Silent text gets the answer that
+	// claims less — a shell with no terminal does not report a monitor —
+	// which is three of the four as well.
+	//
+	// Read rather than `ask`ed, exactly as InteractiveOptionLetters is: the
+	// answer is wanted once at startup, before the program has run a line, so
+	// refusing over an unanswered field would put "the shells disagree here"
+	// ahead of every `-i script.sh` under a preset that has not chosen. An
+	// unanswered field reads as Yes — a terminal is needed and the monitor
+	// stays off, which is the majority and the quiet answer.
+	//
+	// zsh is worth knowing about and is not this axis. With a terminal it
+	// puts `m` in `$-` and announces its jobs while its own `set -o` still
+	// lists `monitor off` — it disagrees with itself, and what is recorded
+	// here is the state the other two readers report.
+	InteractiveMonitorNeedsATerminal Answer
+
 	// PunctuatedFunctionNameIsRefused stops the script when a function
 	// whose name carries `-` or `.` is defined. ksh93 alone: bash and zsh
 	// define and run it, and dash never parses the definition at all.
@@ -3060,9 +3113,18 @@ func PosixSemantics() Semantics {
 		SetHLetterTracksCommands: Yes,
 		// POSIX ties -m to process groups and job notices, not to a
 		// terminal; the two shells that want one override.
-		MonitorNeedsATerminal:           No,
-		TildePlusMinusExpands:           No,
-		UnderscoreTracksTheLastArgument: No,
+		MonitorNeedsATerminal: No,
+		// The standard does not answer this one. XCU says `-m` "shall be
+		// enabled by default for interactive shells" and names no terminal
+		// in that sentence, but it also defines job control throughout in
+		// terms of a controlling terminal — so the sentence is silent about
+		// the case where there is none rather than permissive about it.
+		// Where the text is silent the preset takes the answer that claims
+		// less: a shell with no terminal does not say it is running a
+		// monitor. It is also three of the four.
+		InteractiveMonitorNeedsATerminal: Yes,
+		TildePlusMinusExpands:            No,
+		UnderscoreTracksTheLastArgument:  No,
 		// POSIX has no `$_`, so nothing is written at startup and a name
 		// the environment carried is an ordinary variable that shows
 		// through — which is also the majority, five of the six.

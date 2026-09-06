@@ -5,6 +5,7 @@ package driver
 
 import (
 	"context"
+	"io"
 	"os"
 
 	"github.com/blairham/sh/internal/panicguard"
@@ -69,6 +70,12 @@ func (sh Shell) session(argv []string, in source) int {
 	// answer different questions, and ksh93 is alone in turning the monitor
 	// on for `-i script.sh`.
 	r.Interactive = true
+	// And an interactive shell runs the monitor. Unanimous with a terminal —
+	// bash, dash, ksh93 and zsh all report `monitor on` and put `m` in `$-`
+	// — and a prompt has one by definition on every route but `-i` with
+	// nothing to read, which is why the question is still asked rather than
+	// assumed. One member of the panel does not need one at all.
+	r.SetInteractiveMonitor(sh.hasTerminal())
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code
@@ -130,6 +137,33 @@ func (sh Shell) keyBindings(r *interp.Runner) func() map[string]repl.Widget {
 		return nil
 	}
 	return func() map[string]repl.Widget { return sh.KeyBindings(r) }
+}
+
+// hasTerminal reports whether any of this shell's three standard streams is a
+// terminal, which is what an interactive shell reads to decide whether to run
+// the monitor.
+//
+// Any of the three, and that is measured rather than chosen: a pseudo-terminal
+// on standard input alone, on standard output alone, or on standard error
+// alone all make bash 5.3.15, dash and zsh 5.9.2 report `monitor on` under
+// `-i script.sh`. A *controlling* terminal with all three redirected
+// elsewhere does not — all three report it off — so the question is about the
+// descriptors this front end was handed and not about the process's terminal,
+// which is the question interp could not have asked anyway.
+//
+// Different from Interactively, which asks only about standard input: that one
+// decides whether to draw a prompt, and a prompt is drawn on the stream the
+// lines come from.
+func (sh Shell) hasTerminal() bool {
+	if repl.IsTerminal(sh.Stdin) {
+		return true
+	}
+	for _, w := range []io.Writer{sh.Stdout, sh.Stderr} {
+		if f, ok := w.(*os.File); ok && repl.IsTerminal(f) {
+			return true
+		}
+	}
+	return false
 }
 
 // Interactively reports whether this shell should offer a prompt: nothing to

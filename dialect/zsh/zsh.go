@@ -108,6 +108,11 @@ func Semantics() interp.Semantics {
 	// `can't change option: -m`, at 1, fatally like every `set` failure
 	// here. Measured; bash and ksh93 grant the same request silently.
 	s.MonitorNeedsATerminal = interp.Yes
+	// zsh leaves it off with no terminal, silently. With one it puts `m` in
+	// `$-` and announces its jobs while its own `set -o` still lists
+	// `monitor off` — zsh disagreeing with itself rather than an answer to
+	// this.
+	s.InteractiveMonitorNeedsATerminal = interp.Yes
 	// Measured: `echo $-` reports `569X` under -c, a script file and
 	// standard input alike — letters from zsh's own single-letter option
 	// namespace, which shares almost nothing with the other shells'. The

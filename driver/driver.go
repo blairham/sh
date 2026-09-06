@@ -1114,6 +1114,23 @@ func (sh Shell) runInput(in source) int {
 	// whether anyone is watching. `$-` reports it as `i`, which is measured
 	// unanimous for `-i` on every route.
 	r.Interactive = in.interactive
+	if in.interactive {
+		// `sh -i script.sh` is interactive while it runs, and an interactive
+		// shell runs the monitor: measured, bash 5.3.15, dash, ksh93u+ and
+		// zsh 5.9.2 all report `monitor on` and put `m` in `$-` on this
+		// route with a terminal. With none, ksh93 alone still does, which is
+		// Semantics.InteractiveMonitorNeedsATerminal and the whole of what
+		// the panel disagrees about here.
+		//
+		// The monitor and not JobControl. They answer different questions —
+		// that one says there is somebody to *announce* a job to — and the
+		// panel splits on the second where it agrees on the first: with a
+		// terminal on this route ksh93 and zsh announce a background job and
+		// bash and dash do not, though bash announces one at a prompt. So
+		// turning both on here would give bash an announcement no bash
+		// makes.
+		r.SetInteractiveMonitor(sh.hasTerminal())
+	}
 	r.SetScriptFile(in.file)
 	pr := wholeProgram(src, sh.Dialect)
 	if in.onStdin {

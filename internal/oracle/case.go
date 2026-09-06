@@ -5877,6 +5877,26 @@ echo unreachable`,
 		Snippet: `x=abc; printf "[%s]" "$((x+1))"`,
 		Why:     "three answers: dash and ksh93 error differently, while bash and zsh re-evaluate the value as an expression and reach 0",
 	},
+	{
+		ID: "arith/increment-through-a-subscript", Category: "arithmetic",
+		Snippet: `a=(3 4 5); (( a[1]++ )); printf "[%s]" "${a[1]}"`,
+		Why:     "`++` took a bare name and nothing else, so this was `++ needs a variable` in every dialect while `(( a[1] += 1 ))` on the same element was fine. A name that can be assigned to can be incremented; the three shells with arrays all say so, and they differ here only by where the first element is",
+	},
+	{
+		ID: "arith/increment-through-a-key", Category: "arithmetic",
+		Snippet: `typeset -A m; m[k]=1; (( m[k]++ )); printf "[%s]" "${m[k]}"`,
+		Why:     "the spelling a real script reached — a counter kept in an association, incremented in place. The declared attribute makes the subscript a key on the way in *and* on the way out, so the operator has to know which kind of array it is writing to; dash and bash 3.2 have no `-A` and split the panel",
+	},
+	{
+		ID: "arith/a-key-is-not-an-index-in-an-expression", Category: "arithmetic",
+		Snippet: `typeset -A m; m[k]=7; m[0]=99; k=0; printf "[%s]" "$(( m[k] ))"`,
+		Why:     "the case that tells the two readings apart, and the reason it was worth a row of its own: evaluating the subscript answered 99 with no diagnostic at all, which is a wrong value a script cannot see. The three shells with the attribute all read the key",
+	},
+	{
+		ID: "arith/an-element-holding-a-name-is-chased", Category: "arithmetic",
+		Snippet: `y=5; a=(y); printf "[%s]" "$(( a[0] ))"`,
+		Why:     "the chase a bare name already got, asked of an element: the storage an operand came out of is not what decides how it reads. bash and ksh93 reach 5 here and zsh counts from 1 so its element 0 is nothing, which is the same split `${a[0]}` shows and not a second rule",
+	},
 	// --- conditions -----------------------------------------------------------
 	{
 		ID: "cond/no-field-splitting-inside", Category: "conditions",

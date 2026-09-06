@@ -27,10 +27,16 @@ package boundary
 
 import (
 	"context"
+	"errors"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/blairham/sh/internal/event"
+	"github.com/blairham/sh/internal/opened"
 	"github.com/blairham/sh/interp"
 )
 
@@ -50,14 +56,151 @@ type Boundary struct {
 	Session string
 }
 
-// Open reports whether the front end may open path, recording it either way.
+// ErrRefused is what a refused open comes back as, and it is the whole of what
+// this package says about one.
 //
-// A refusal is reported to the sink as EventDenied and nothing else happens:
-// what a denied open *means* is the caller's, because the two callers mean
-// different things by it. A script the shell cannot read is a failure it names
-// and exits over; a startup file it cannot read is not a failure at all.
-func (b Boundary) Open(ctx context.Context, path string, write bool) bool {
-	return b.ask(ctx, interp.Action{ID: b.id(), Kind: interp.ActionOpen, Path: path, Write: write})
+// What a denied open *means* stays the caller's, because the callers mean
+// different things by it: a script the shell cannot read is a failure it names
+// and exits over, a history file it cannot read is a session that starts
+// empty, and a file an agent asked for is answered on the wire as a path that
+// is not there. Each of them tests for this and says its own sentence.
+//
+// A refusal from the *second* consultation — the name reached an object the
+// gate will not have — is this same error, deliberately. The two are
+// indistinguishable to whoever asked, which is the property the diagnostic
+// split in internal/opened exists to keep: a caller that could tell "the name
+// is denied" from "the name reached a denied object" has been told where the
+// name went.
+var ErrRefused = errors.New("refused")
+
+// File is one open a front end wants to make.
+//
+// Flags and Perm are os.OpenFile's, so the zero value is a read of a file that
+// must already exist, which is what most of these are.
+type File struct {
+	Path  string
+	Flags int
+	Perm  fs.FileMode
+
+	// Parents makes the directory the file goes in, at 0700, when the open may
+	// create the file.
+	//
+	// It happens *after* the gate has allowed the path and before the open, so
+	// a policy that refuses the write does not get a directory tree made for
+	// it under a denied path — which is what reordering it to the caller would
+	// have cost, since the caller has to run before it can call this. 0700
+	// because what goes in these is a record of what somebody typed and what
+	// it printed; the history file already sets that bar.
+	//
+	// Only the three stores the shell keeps for itself want this. An agent
+	// writing a file over ACP deliberately does not: `os.WriteFile` to a
+	// directory that is not there is an error, and quietly creating the tree
+	// would be this package inventing a capability the protocol never gave it.
+	Parents bool
+}
+
+// write reports whether this open is one a policy should see as a write.
+//
+// Derived from the flags rather than declared beside them, because a field
+// that can disagree with the flags eventually does, and the disagreement that
+// matters is the one where the flags write and the field says read.
+func (f File) write() bool { return f.Flags&(os.O_WRONLY|os.O_RDWR) != 0 }
+
+// OpenFile opens a path on the front end's behalf: consult the gate, open,
+// ask the kernel what the open reached, and consult again if that is somewhere
+// else.
+//
+// This package used to answer a bool and leave the open to the caller, and
+// that was the hole #942 names. Nine call sites each did their own os.Open,
+// os.ReadFile or os.WriteFile afterwards, so the gate decided about the *name*
+// and nothing ever looked at the object — the exact defect #703 closed for
+// everything a script does, still open for everything the shell does for
+// itself, with HISTFILE the one a script can aim. A shell that verifies a
+// script's opens and not its own is a gate with a door beside it.
+//
+// So the descriptor is made here rather than by the caller. Not because that
+// is tidier: because it is the only arrangement in which the check cannot be
+// forgotten. There is no longer a way to ask this package's permission and
+// then open something else.
+//
+// A shell with no gate takes the plain os.OpenFile, flags included, so a run
+// nobody is watching makes exactly the calls it always made.
+func (b Boundary) OpenFile(ctx context.Context, f File) (*os.File, error) {
+	a := interp.Action{ID: b.id(), Kind: interp.ActionOpen, Path: f.Path, Write: f.write()}
+	if !b.ask(ctx, a) {
+		return nil, ErrRefused
+	}
+	if f.Parents {
+		if err := os.MkdirAll(filepath.Dir(f.Path), 0o700); err != nil {
+			return nil, err
+		}
+	}
+	if b.Gate == nil {
+		// Watching without gating: there is nothing a verification could
+		// refuse, so the standard library's own call stands. The record of the
+		// access is already emitted.
+		return os.OpenFile(f.Path, f.Flags, f.Perm)
+	}
+	return opened.Verified(f.Path, f.Flags, f.Perm, func(file *os.File) error {
+		if !b.reached(ctx, a, file) {
+			return ErrRefused
+		}
+		return nil
+	})
+}
+
+// ReadFile is os.ReadFile through the gate, verified.
+func (b Boundary) ReadFile(ctx context.Context, path string) ([]byte, error) {
+	f, err := b.OpenFile(ctx, File{Path: path})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	return io.ReadAll(f)
+}
+
+// WriteFile is os.WriteFile through the gate, verified.
+//
+// The flags are os.WriteFile's own, O_TRUNC included, and the truncation is
+// the reason this cannot be os.WriteFile after a bool: the kernel empties the
+// file as part of the open, so a write refused because the name reached a
+// denied object would already have destroyed it. internal/opened holds the
+// flag back until the verification has passed.
+func (b Boundary) WriteFile(ctx context.Context, f File, data []byte) error {
+	f.Flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+	file, err := b.OpenFile(ctx, f)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}
+
+// reached is the second consultation: the gate asked again, about the kernel's
+// name for what the open actually got.
+//
+// The action carries the same ID as the one already asked about, because it is
+// the same access — a consumer joining the two records sees one open whose
+// name resolved elsewhere, not two opens. It is the same promise interp keeps
+// on its side of the boundary, made here in the same words on purpose.
+func (b Boundary) reached(ctx context.Context, a interp.Action, f *os.File) bool {
+	actual, elsewhere := opened.Elsewhere(f, a.Path)
+	if !elsewhere {
+		return true
+	}
+	a.Path = actual
+	if b.Gate.Allow(ctx, a) == interp.Deny {
+		// With the resolved path on it, which is the half of the split that
+		// belongs to whoever wrote the policy: the record has to say what was
+		// actually reached or it cannot be acted on. The caller reports the
+		// name as written.
+		b.emit(ctx, interp.Event{Kind: interp.EventDenied, Action: a})
+		return false
+	}
+	return true
 }
 
 // Exec reports whether the front end may run a program, recording it either

@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-// In-package, because the subjects are the two halves the seam is built from
-// and neither is exported: what the kernel says a descriptor holds, and when
-// two spellings of a name are one place.
-package interp
+// In-package, because two of the three subjects are unexported halves of the
+// seam: when two spellings of a name are one place, and the table of links the
+// operating system itself installs.
+package opened
 
 import (
 	"os"
@@ -13,11 +13,11 @@ import (
 	"testing"
 )
 
-// TestOpenedPathAnswersForAFileAndNotForAPipe is the platform helper on its
+// TestPathAnswersForAFileAndNotForAPipe is the platform helper on its
 // own, because the two answers it gives are read very differently by its
 // caller: a path is checked and a pipe is waved through, and a pipe that
 // answered with a path would deny every process substitution a shell makes.
-func TestOpenedPathAnswersForAFileAndNotForAPipe(t *testing.T) {
+func TestPathAnswersForAFileAndNotForAPipe(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "file")
 	if err := os.WriteFile(target, nil, 0o600); err != nil {
@@ -32,18 +32,18 @@ func TestOpenedPathAnswersForAFileAndNotForAPipe(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = f.Close() }()
-	got, ok := openedPath(f)
+	got, ok := Path(f)
 	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
 		if ok {
-			t.Fatalf("openedPath answered %q on a platform with no way to ask", got)
+			t.Fatalf("Path answered %q on a platform with no way to ask", got)
 		}
 		return
 	}
 	if !ok {
-		t.Fatal("openedPath had no answer for an ordinary file")
+		t.Fatal("Path had no answer for an ordinary file")
 	}
 	if filepath.Base(got) != "file" {
-		t.Errorf("openedPath = %q, want the link's target", got)
+		t.Errorf("Path = %q, want the link's target", got)
 	}
 	reader, writer, err := os.Pipe()
 	if err != nil {
@@ -51,8 +51,8 @@ func TestOpenedPathAnswersForAFileAndNotForAPipe(t *testing.T) {
 	}
 	defer func() { _ = reader.Close() }()
 	defer func() { _ = writer.Close() }()
-	if got, ok := openedPath(reader); ok {
-		t.Errorf("openedPath = %q for a pipe, want no name at all", got)
+	if got, ok := Path(reader); ok {
+		t.Errorf("Path = %q for a pipe, want no name at all", got)
 	}
 }
 

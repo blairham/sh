@@ -114,7 +114,8 @@ func TestEveryInboundMethodDeclaresWhatItDoesAboutTheBoundary(t *testing.T) {
 			if len(got) == 0 {
 				t.Errorf("%s is declared gated — %s — and %s reaches no boundary call.\n"+
 					"\tAn agent's request that opens, starts or signals anything is an\n"+
-					"\tinterp.Action first. Call c.Boundary.Open, .Exec or .Signal and\n"+
+					"\tinterp.Action first. Call c.Boundary.OpenFile, .ReadFile, .WriteFile,\n"+
+					"\t.Exec or .Signal and\n"+
 					"\trefuse when it answers no.", m, want.why, served[m])
 			}
 			if len(got) == 1 && got[0] == "Record" {
@@ -266,10 +267,11 @@ func (c *Client) Handle(method string) any {
 }
 
 func (c *Client) readFile() any {
-	if !c.Boundary.Open(ctx, path, false) {
+	b, err := c.Boundary.ReadFile(ctx, path)
+	if err != nil {
 		return nil
 	}
-	return os.ReadFile(path)
+	return b
 }
 
 func (c *Client) listDirectory() any { return os.ReadDir(path) }
@@ -278,8 +280,8 @@ func (c *Client) listDirectory() any { return os.ReadDir(path) }
 	if served["MethodListDirectory"] != "listDirectory" {
 		t.Fatalf("the dispatch read as %v; the detector is not reading cases at all", served)
 	}
-	if got := boundaryCalls(pkg, "readFile"); !contains(got, "Open") {
-		t.Errorf("the gated handler reads as reaching %v, want Open: the detector is blind", got)
+	if got := boundaryCalls(pkg, "readFile"); !contains(got, "ReadFile") {
+		t.Errorf("the gated handler reads as reaching %v, want ReadFile: the detector is blind", got)
 	}
 	if got := boundaryCalls(pkg, "listDirectory"); len(got) != 0 {
 		t.Errorf("the handler that forgets reads as reaching %v, want nothing", got)

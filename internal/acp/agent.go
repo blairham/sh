@@ -185,7 +185,7 @@ func (a *Agent) newSession(params json.RawMessage) (any, error) {
 	s.out = &chunker{emit: func(text string) { s.chunk(text, StreamStdout) }}
 	s.errs = &chunker{emit: func(text string) { s.chunk(text, StreamStderr) }}
 	sh.Stdout, sh.Stderr = s.out, s.errs
-	// A read gets end of file, and it must get it from a descriptor of our
+	// A read gets end of file, and it must get it from something of our
 	// choosing rather than by being left nil: the front end fills a nil
 	// standard input in with the *process's*, which here is the protocol
 	// stream, and a script's `read` would then eat the client's next message.
@@ -195,10 +195,18 @@ func (a *Agent) newSession(params json.RawMessage) (any, error) {
 	// it, and gating it would let a policy turn a shell's empty input into
 	// the connection.
 	//
+	// A *file* and not an in-process empty reader, which the field would take
+	// now that it is an io.Reader (#787). The session's input is inherited by
+	// every external command it runs, and os/exec connects a child straight to
+	// an *os.File and builds a pipe with a copying goroutine for anything
+	// else. One descriptor for the session beats a pipe for every command in
+	// it.
+	//
 	// ACP is non-interactive on this side. The protocol is on the descriptors
 	// a prompt would need, there is no terminal, and where a script genuinely
-	// needs a person the protocol has elicitation — a feature rather than
-	// this one.
+	// needs a person the protocol has elicitation — which this side still does
+	// not reach, for a reason that is now one level below this field and is
+	// written down in docs/design/acp.md.
 	empty, err := os.Open(os.DevNull)
 	if err != nil {
 		return nil, Errorf(CodeInternalError, "no empty input for the session: %v", err)

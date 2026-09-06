@@ -177,6 +177,14 @@ session hands the runner writers of its own and each write becomes a
 Standard input is empty; a `read` gets end of file. That is the
 deliberate answer to the interactive question below.
 
+It is `os.DevNull` and not an in-process empty reader, which is a choice
+rather than a leftover now that `driver.Shell.Stdin` is an `io.Reader`
+(#787). A session's shell hands its standard input to every external
+command it runs, and `os/exec` connects a child straight to an `*os.File`
+and builds a pipe for anything else. A file costs the session one
+descriptor; a reader costs every command in it a pipe and a copying
+goroutine.
+
 ## The shell as Client
 
 The shell launches an agent and provides its world. This is the half
@@ -479,21 +487,52 @@ The **agent** side of this shell remains strictly non-interactive, and
 `elicitation/create` does not change that today, although it is the right route
 eventually.
 
-The reason is mechanical rather than philosophical. A session's standard input
-is `os.DevNull`, so a script's `read` gets end of file; making it reach a
-person means making that reader *demand-driven* — the question is only worth
-asking when a script actually reads. `driver.Shell.Stdin` is an `*os.File`, so
-there is nowhere to put a reader that calls out over the connection: an
-`os.Pipe` fed by a goroutine cannot know when somebody reads the other end, so
-it would have to elicit eagerly, which asks a person a question no script ever
-asked.
+The reason is mechanical rather than philosophical, and it has moved once.
 
-Widening that field to an `io.Reader` is a `driver` change with its own blast
-radius — every route, every dialect binary, and the terminal detection that
-decides to prompt, which needs an `*os.File` to ask about. It is worth doing on
-purpose rather than as a side effect of this, so it is written down here rather
-than bodged: **a script's `read` under `sh -acp` will reach a person when
-`driver.Shell.Stdin` becomes an `io.Reader`, and not before.**
+**It used to be the field.** A session's standard input is `os.DevNull`, so a
+script's `read` gets end of file; making it reach a person means making that
+reader *demand-driven* — the question is only worth asking when a script
+actually reads. `driver.Shell.Stdin` was an `*os.File`, so there was nowhere to
+put a reader that calls out over the connection: an `os.Pipe` fed by a
+goroutine cannot know when somebody reads the other end, so it would have to
+elicit eagerly, which asks a person a question no script ever asked.
+
+**That field is now an `io.Reader`** — #787, done on purpose rather than as a
+side effect of this, with the terminal checks and `repl.Shell.In` widened
+alongside it. A reader that performs a round trip fits the field. It is still
+not enough, and the obstacle one level down was measured rather than guessed:
+
+> **A shell's standard input is inherited by every external command it runs,
+> and `os/exec` reads a non-file one on the child's behalf whether or not the
+> child ever reads it.** It connects a child directly to an `*os.File` and
+> builds a pipe for anything else, filled by a copying goroutine that starts
+> when the command does. `/bin/echo hi`, which reads nothing, causes one
+> `Read`.
+
+So a reader that asks a person would be asked **once per external command**,
+not once per `read` — which is the eager question the original argument was
+against, arriving through a different door. The tripwire for it is
+`TestAReaderIsReadOnAChildsBehalfWhetherOrNotTheChildReads` in `driver`: if
+`os/exec` ever stops copying an untouched stdin, that test goes red and this
+paragraph is out of date.
+
+**Two routes are open and neither is taken here**, because both are somebody
+else's decision to make:
+
+1. **Let interp say what a child inherits.** The eliciting reader would be the
+   shell's own input and a child would keep `os.DevNull`, which is what every
+   child in a session gets today — so nothing regresses and `read` gains a
+   person. It needs a field on `interp.Runner`, and a second meaning for "the
+   shell's input" is a change to what a shell *is*, not a plumbing detail.
+2. **Elicit from the `read` builtin rather than from the stream.** Narrower and
+   more honest about what is being asked — a `read` is the only thing in a
+   shell that wants a line from a person — but it is a seam in `interp` whose
+   only caller would be this package, which is the shape this repository
+   already declines to build on speculation.
+
+Until one of them is chosen: **a script's `read` under `sh -acp` gets end of
+file, and the agent side does not ask.** Widening the field was necessary and
+is not sufficient, and that is the whole of the change in this paragraph.
 
 ## The event stream becomes session updates
 

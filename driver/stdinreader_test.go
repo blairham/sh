@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"io"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/blairham/sh/driver"
@@ -132,3 +133,48 @@ func TestAReaderIsNotATerminal(t *testing.T) {
 type unseekable struct{ r io.Reader }
 
 func (u unseekable) Read(p []byte) (int, error) { return u.r.Read(p) }
+
+// What the widening costs at the other end, measured rather than assumed: a
+// reader that is not a file is read *on a child's behalf*, whether or not the
+// child ever reads it.
+//
+// os/exec connects a child straight to an *os.File and builds a pipe for
+// anything else, and it fills that pipe from a goroutine that starts copying
+// as soon as the command does. So one Read arrives for `/bin/echo`, which
+// reads nothing.
+//
+// This is the fact #787 asked to have thought about — "anything that needs a
+// descriptor number to hand to a child" — and it is the reason a reader that
+// asks a *person* something cannot simply be dropped into this field: it would
+// be asked once per external command rather than once per `read`. See
+// docs/design/acp.md.
+func TestAReaderIsReadOnAChildsBehalfWhetherOrNotTheChildReads(t *testing.T) {
+	in := &countingReader{}
+	sh := shell()
+	sh.Semantics = interp.PosixSemantics()
+	sh.Stdin = in
+	var o, e bytes.Buffer
+	sh.Stdout, sh.Stderr = &o, &e
+	if code := driver.MainArgs(sh, []string{"testsh", "-c", "/bin/echo hi"}); code != 0 {
+		t.Fatalf("status %d, stderr %q", code, e.String())
+	}
+	if o.String() != "hi\n" {
+		t.Fatalf("output %q, want %q", o.String(), "hi\n")
+	}
+	// A tripwire rather than an assertion about something we want. If this
+	// ever reads zero, os/exec has stopped copying a stdin the child never
+	// touched, and the paragraph in docs/design/acp.md that says an eliciting
+	// reader cannot be a shell's standard input is out of date.
+	if in.reads.Load() == 0 {
+		t.Error("a child that reads nothing no longer causes a Read: " +
+			"docs/design/acp.md's reason for not eliciting from standard input has expired")
+	}
+}
+
+// countingReader is empty and counts who asked.
+type countingReader struct{ reads atomic.Int64 }
+
+func (c *countingReader) Read([]byte) (int, error) {
+	c.reads.Add(1)
+	return 0, io.EOF
+}

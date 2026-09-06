@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/internal/dialecttest"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -24,22 +25,13 @@ func parseZsh(src string) (*syntax.File, error) {
 
 func runZsh(t *testing.T, dir, src string) (string, int) {
 	t.Helper()
-	f, err := syntax.Parse(src, zsh.Dialect())
+	out, st, err := preset.Combined(t, dialecttest.Base{
+		Dir: dir, Vars: map[string]string{"PATH": dir},
+	}, src)
 	if err != nil {
-		t.Fatalf("parse %q: %v", src, err)
+		t.Fatalf("run %q: %v", src, err)
 	}
-	var buf bytes.Buffer
-	sem, diag := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{
-		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
-		Dir: dir, Name: "zsh", Vars: map[string]string{"PATH": dir},
-	}
-	zsh.Apply(r)
-	st, rerr := r.Run(context.Background(), f)
-	if rerr != nil {
-		t.Fatalf("run %q: %v", src, rerr)
-	}
-	return buf.String(), st
+	return out, st
 }
 
 func TestSourceIsASynonymForDot(t *testing.T) {
@@ -337,7 +329,7 @@ func TestUmask(t *testing.T) {
 		var buf bytes.Buffer
 		sem, dg := zsh.Semantics(), zsh.Diagnostics()
 		held := 0o022
-		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "zsh"}
+		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "zsh", Dialect: presetDialect()}
 		r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
 		zsh.Apply(r)
 		st, rerr := r.Run(context.Background(), f)
@@ -394,7 +386,7 @@ func TestUlimit(t *testing.T) {
 		}
 		var buf bytes.Buffer
 		sem, dg := zsh.Semantics(), zsh.Diagnostics()
-		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "zsh"}
+		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "zsh", Dialect: presetDialect()}
 		r.GetRlimit = func(res interp.Resource) (int64, int64, error) { p := held[res]; return p[0], p[1], nil }
 		r.SetRlimit = func(res interp.Resource, soft, hard int64) error { held[res] = [2]int64{soft, hard}; return nil }
 		zsh.Apply(r)

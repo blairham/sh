@@ -12,28 +12,20 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/ksh"
+	"github.com/blairham/sh/internal/dialecttest"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
 
 func runKsh(t *testing.T, dir, src string) (string, int) {
 	t.Helper()
-	f, err := syntax.Parse(src, ksh.Dialect())
+	out, st, err := preset.Combined(t, dialecttest.Base{
+		Dir: dir, Vars: map[string]string{"PATH": dir},
+	}, src)
 	if err != nil {
-		t.Fatalf("parse %q: %v", src, err)
+		t.Fatalf("run %q: %v", src, err)
 	}
-	var buf bytes.Buffer
-	sem, diag := ksh.Semantics(), ksh.Diagnostics()
-	r := &interp.Runner{
-		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
-		Dir: dir, Name: "ksh", Vars: map[string]string{"PATH": dir},
-	}
-	ksh.Apply(r)
-	st, rerr := r.Run(context.Background(), f)
-	if rerr != nil {
-		t.Fatalf("run %q: %v", src, rerr)
-	}
-	return buf.String(), st
+	return out, st
 }
 
 // TestApplyAddsSourceAndStillRemovesLocal covers both halves of Apply, because
@@ -293,7 +285,7 @@ func TestUmask(t *testing.T) {
 		var buf bytes.Buffer
 		sem, dg := ksh.Semantics(), ksh.Diagnostics()
 		held := 0o022
-		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "ksh"}
+		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "ksh", Dialect: presetDialect()}
 		r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
 		ksh.Apply(r)
 		st, rerr := r.Run(context.Background(), f)
@@ -350,7 +342,7 @@ func TestUlimit(t *testing.T) {
 		}
 		var buf bytes.Buffer
 		sem, dg := ksh.Semantics(), ksh.Diagnostics()
-		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "ksh"}
+		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "ksh", Dialect: presetDialect()}
 		r.GetRlimit = func(res interp.Resource) (int64, int64, error) { p := held[res]; return p[0], p[1], nil }
 		r.SetRlimit = func(res interp.Resource, soft, hard int64) error { held[res] = [2]int64{soft, hard}; return nil }
 		ksh.Apply(r)

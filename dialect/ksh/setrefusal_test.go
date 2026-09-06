@@ -9,38 +9,31 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/ksh"
+	"github.com/blairham/sh/internal/dialecttest"
 	"github.com/blairham/sh/interp"
-	"github.com/blairham/sh/syntax"
 )
 
+// refuseInScript runs src and reports what reached standard error.
 func refuseInScript(t *testing.T, src string) string {
 	t.Helper()
-	f, err := syntax.Parse(src, ksh.Dialect())
-	if err != nil {
-		t.Fatalf("parse %q: %v", src, err)
-	}
+	f := preset.Parse(t, src)
 	var errs strings.Builder
-	sem, diag := ksh.Semantics(), ksh.Diagnostics()
-	r := &interp.Runner{
-		Stdout: &strings.Builder{}, Stderr: &errs,
-		Semantics: &sem, Diagnostics: &diag, Name: "/bin/ksh",
-	}
-	ksh.Apply(r)
+	r := preset.Runner(dialecttest.Base{Stdout: &strings.Builder{}, Stderr: &errs, Name: "/bin/ksh"})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
 	}
 	return errs.String()
 }
 
+// refuseAtInvocation is the other route: the front end applying an option the
+// shell was started with, before anything has been read.
+// The name is the path, because this shell writes `$0` as it was invoked
+// and these cases are about the exact sentence.
+
 func refuseAtInvocation(t *testing.T, apply func(*interp.Runner)) string {
 	t.Helper()
 	var errs strings.Builder
-	sem, diag := ksh.Semantics(), ksh.Diagnostics()
-	r := &interp.Runner{
-		Stdout: &strings.Builder{}, Stderr: &errs,
-		Semantics: &sem, Diagnostics: &diag, Name: "/bin/ksh",
-	}
-	ksh.Apply(r)
+	r := preset.Runner(dialecttest.Base{Stdout: &strings.Builder{}, Stderr: &errs, Name: "/bin/ksh"})
 	apply(r)
 	return errs.String()
 }

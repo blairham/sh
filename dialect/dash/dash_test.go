@@ -84,7 +84,7 @@ func TestSignalNamesHaveNoSIGPrefix(t *testing.T) {
 		}
 		var errs bytes.Buffer
 		sem, dg := dash.Semantics(), dash.Diagnostics()
-		r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "dash"}
+		r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "dash", Dialect: presetDialect()}
 		st, err := r.Run(context.Background(), f)
 		if err != nil {
 			t.Fatalf("run %q: %v", tc.src, err)
@@ -268,7 +268,7 @@ func TestArithmeticFailuresAreDashsOwnShape(t *testing.T) {
 	}
 	var errs bytes.Buffer
 	sem, dg := dash.Semantics(), dash.Diagnostics()
-	r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "dash"}
+	r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "dash", Dialect: presetDialect()}
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -325,7 +325,7 @@ func TestDashSpellsItsOwnReasons(t *testing.T) {
 			}
 			var errs bytes.Buffer
 			sem, dg := dash.Semantics(), dash.Diagnostics()
-			r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "dash", Dir: dir}
+			r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "dash", Dir: dir, Dialect: presetDialect()}
 			if _, err := r.Run(context.Background(), f); err != nil {
 				t.Fatalf("run: %v", err)
 			}
@@ -412,7 +412,7 @@ func TestParametersDashDoesNotProvide(t *testing.T) {
 		}
 		var out bytes.Buffer
 		sem := dash.Semantics()
-		r := &interp.Runner{Stdout: &out, Semantics: &sem}
+		r := &interp.Runner{Stdout: &out, Semantics: &sem, Dialect: presetDialect()}
 		dash.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -433,7 +433,7 @@ func TestDashHasNeitherDeclarationName(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := dash.Semantics(), dash.Diagnostics()
-		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 		dash.Apply(r)
 		status, err := r.Run(context.Background(), f)
 		if err != nil {

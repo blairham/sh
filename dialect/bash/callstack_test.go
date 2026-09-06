@@ -69,7 +69,7 @@ func runWithScriptFile(t *testing.T, src, file string) string {
 	}
 	var out bytes.Buffer
 	sem, dg := bash.Semantics(), bash.Diagnostics()
-	r := &interp.Runner{Semantics: &sem, Diagnostics: &dg, Stdout: &out, Stderr: &out, Name: "testsh"}
+	r := &interp.Runner{Semantics: &sem, Diagnostics: &dg, Stdout: &out, Stderr: &out, Name: "testsh", Dialect: presetDialect()}
 	bash.Apply(r)
 	if file != "" {
 		r.SetScriptFile(file)

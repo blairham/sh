@@ -282,6 +282,7 @@ func bindkeyRunner(t *testing.T, src string) *interp.Runner {
 	r := &interp.Runner{
 		Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &diag,
 		Dir: dir, Name: "zsh", Vars: map[string]string{"PATH": dir},
+		Dialect: presetDialect(),
 	}
 	zsh.Apply(r)
 	if _, err := r.Run(t.Context(), f); err != nil {

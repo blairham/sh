@@ -44,6 +44,7 @@ func TestADescriptorNumberOverTheLimitIsRefusedInThisShellsWords(t *testing.T) {
 			}
 			return 6, 6, nil
 		},
+		Dialect: presetDialect(),
 	}
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/internal/dialecttest"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -21,22 +22,13 @@ import (
 
 func runBash(t *testing.T, dir, src string) (string, int) {
 	t.Helper()
-	f, err := syntax.Parse(src, bash.Dialect())
+	out, st, err := preset.Combined(t, dialecttest.Base{
+		Dir: dir, Vars: map[string]string{"PATH": dir},
+	}, src)
 	if err != nil {
-		t.Fatalf("parse %q: %v", src, err)
+		t.Fatalf("run %q: %v", src, err)
 	}
-	var buf bytes.Buffer
-	sem, diag := bash.Semantics(), bash.Diagnostics()
-	r := &interp.Runner{
-		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
-		Dir: dir, Name: "bash", Vars: map[string]string{"PATH": dir},
-	}
-	bash.Apply(r)
-	st, rerr := r.Run(context.Background(), f)
-	if rerr != nil {
-		t.Fatalf("run %q: %v", src, rerr)
-	}
-	return buf.String(), st
+	return out, st
 }
 
 func TestSourceIsASynonymForDot(t *testing.T) {
@@ -136,7 +128,8 @@ func TestDotFindsAFileInTheCurrentDirectory(t *testing.T) {
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
 		Dir: dir, Name: "bash",
 		// PATH deliberately cannot reach it, so only the fallback can.
-		Vars: map[string]string{"PATH": t.TempDir()},
+		Vars:    map[string]string{"PATH": t.TempDir()},
+		Dialect: presetDialect(),
 	}
 	bash.Apply(r)
 	if _, err := r.Run(context.Background(), f); err != nil {
@@ -366,7 +359,7 @@ func TestUmask(t *testing.T) {
 		var buf bytes.Buffer
 		sem, dg := bash.Semantics(), bash.Diagnostics()
 		held := 0o022
-		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "bash"}
+		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "bash", Dialect: presetDialect()}
 		r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
 		bash.Apply(r)
 		st, rerr := r.Run(context.Background(), f)
@@ -423,7 +416,7 @@ func TestUlimit(t *testing.T) {
 		}
 		var buf bytes.Buffer
 		sem, dg := bash.Semantics(), bash.Diagnostics()
-		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "bash"}
+		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "bash", Dialect: presetDialect()}
 		r.GetRlimit = func(res interp.Resource) (int64, int64, error) { p := held[res]; return p[0], p[1], nil }
 		r.SetRlimit = func(res interp.Resource, soft, hard int64) error { held[res] = [2]int64{soft, hard}; return nil }
 		bash.Apply(r)

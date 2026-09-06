@@ -510,7 +510,7 @@ func biFg(r *Runner, _ context.Context, args []string) int {
 		// too: the one `fg` with no operand would pick is the one that just
 		// stopped.
 		j.Stopped, j.StopSig = true, int(w.Signal)
-		r.lastJob = j
+		r.setLastJob(j)
 		r.announceStopped(j)
 		return status
 	}

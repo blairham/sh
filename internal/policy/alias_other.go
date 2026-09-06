@@ -14,6 +14,7 @@ package policy
 // deliberately not here — it is a *distribution's* arrangement rather than the
 // platform's, it is absent on machines that predate it or decline it, and a
 // table that assumed it would make one policy file mean two things with nothing
-// in the file to say so. An ordinary symbolic link, wherever it came from,
-// stays the recorded limit: see alias.go.
+// in the file to say so. An ordinary symbolic link, wherever it came from, is
+// not this file's business at all: it is caught at the open rather than at the
+// rule — see alias.go, and interp/verifyopen.go.
 var platformAliases []alias

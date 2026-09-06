@@ -692,7 +692,7 @@ func (p *Parser) wordFrom(text string, at Pos) *Word {
 	p.depth++
 	defer func() { p.depth-- }()
 
-	sub := NewLexer(text, p.dialect)
+	sub := NewLexer(text, p.operandDialect())
 	w := &Word{Start: at, Stop: at}
 	// Whatever the lexer stepped over between two tokens is text here, not a
 	// separator: `${u:-a b}` is the two words `a b` and not `ab`. A lexer
@@ -736,4 +736,20 @@ func firstRune(s string) string {
 		return string(r)
 	}
 	return ""
+}
+
+// operandDialect is the grammar an expansion's operand is read under.
+//
+// It is the dialect itself but for one question: whether `<(cmd)` opens a
+// process substitution here. bash says yes and ksh93, zsh and dash say no —
+// measured, and the three that say no have process substitution everywhere
+// else — so the answer belongs to the position and is applied by handing the
+// operand's lexer a grammar that has been told.
+func (p *Parser) operandDialect() Dialect {
+	if p.dialect.ProcessSubstitutionInParamOperand {
+		return p.dialect
+	}
+	d := p.dialect
+	d.ProcessSubstitution = false
+	return d
 }

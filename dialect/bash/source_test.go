@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -29,6 +30,42 @@ func runBash(t *testing.T, dir, src string) (string, int) {
 		t.Fatalf("run %q: %v", src, err)
 	}
 	return out, st
+}
+
+// runBashPrelude runs src with the dialect's prelude installed the way the
+// front end installs it, rather than pasted on the front of the snippet.
+//
+// The difference is the whole of what these directory-stack tests assert.
+// Pasted on, `pushd` and `popd` arrive as the *script's* functions: they speak
+// with no location in front of them, and the line a diagnostic names is a line
+// of the prelude. Installed, they are the shell's, and what they say is what
+// bash says down to the `bash: line N: ` (#603).
+func runBashPrelude(t *testing.T, dir, src string) (string, int) {
+	t.Helper()
+	out, st, err := preset.CombinedWithPrelude(t, dialecttest.Base{
+		Dir: dir, Vars: map[string]string{"PATH": dir},
+	}, src)
+	if err != nil {
+		t.Fatalf("run %q: %v", src, err)
+	}
+	return out, st
+}
+
+// wantWholeLines fails unless each named line appears in the output entire.
+//
+// Not strings.Contains of a fragment, which is what let these cases pass while
+// the location in front of every one of them was missing: a prefix added
+// *before* the text a Contains check names is invisible to it. The line is
+// compared from its start, so `bash: line 5: ` is part of the assertion rather
+// than something the assertion cannot see.
+func wantWholeLines(t *testing.T, out string, want ...string) {
+	t.Helper()
+	lines := strings.Split(out, "\n")
+	for _, w := range want {
+		if !slices.Contains(lines, w) {
+			t.Errorf("output = %q, want the whole line %q in it", out, w)
+		}
+	}
 }
 
 func TestSourceIsASynonymForDot(t *testing.T) {
@@ -560,6 +597,50 @@ func TestShiftReadsNoOptionsAndStillTakesTheMarker(t *testing.T) {
 		{`set -- a b c; shift -1; echo "st=$? n=$#"`, "bash: line 1: shift: -1: shift count out of range\nst=1 n=3\n", 0},
 		{`set -- a b c; shift -- -1; echo "st=$? n=$#"`, "bash: line 1: shift: -1: shift count out of range\nst=1 n=3\n", 0},
 		{`set -- a b c; shift -x; echo "st=$? n=$#"`, "bash: line 1: shift: -x: numeric argument required\nst=2 n=3\n", 0},
+	} {
+		if out, st := runBash(t, dir, tc.src+"\n"); out != tc.want || st != tc.st {
+			t.Errorf("%s: said %q status %d, want %q and %d", tc.src, out, st, tc.want, tc.st)
+		}
+	}
+}
+
+// `read -i` takes its argument and does nothing with it. The seed is the text
+// a line editor opens with, so it has an effect only where there is a
+// terminal and an editor on it, and `-e` — the letter that would open one —
+// is refused here as unimplemented. bash answers the same way wherever its
+// own input is not a terminal.
+//
+// The seed is not a *default* for an empty line, which is the reading of the
+// manual that looks right and is not: an empty line leaves the variable
+// empty.
+func TestReadInitialValueIsTakenAndIgnored(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		src  string
+		want string
+		st   int
+	}{
+		{`printf "x\n" | { l=keep; read -i pre -r l; echo "st=$? l=[$l]"; }`, "st=0 l=[x]\n", 0},
+		{`printf "\n" | { l=keep; read -i pre -r l; echo "st=$? l=[$l]"; }`, "st=0 l=[]\n", 0},
+		{`printf "x\n" | { l=keep; read -ipre -r l; echo "st=$? l=[$l]"; }`, "st=0 l=[x]\n", 0},
+		{
+			// The argument is consumed, so the word after it is not the
+			// variable name: without that `pre` would be assigned to.
+			`printf "x\n" | { pre=keep; read -i pre -r l; echo "pre=[$pre] l=[$l]"; }`,
+			"pre=[keep] l=[x]\n", 0,
+		},
+		{
+			`printf "x\n" | { read -i; echo "st=$?"; }`,
+			"bash: line 1: read: -i: option requires an argument\n" +
+				"read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]\n" +
+				"st=2\n", 0,
+		},
+		{
+			// The editor itself is still refused by name, which is what
+			// keeps the seed from ever having somewhere to go.
+			`printf "x\n" | { read -e -r l; echo "st=$?"; }`,
+			"bash: line 1: read: -e is not implemented yet\nst=2\n", 0,
+		},
 	} {
 		if out, st := runBash(t, dir, tc.src+"\n"); out != tc.want || st != tc.st {
 			t.Errorf("%s: said %q status %d, want %q and %d", tc.src, out, st, tc.want, tc.st)

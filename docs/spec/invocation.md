@@ -289,29 +289,186 @@ is established. It is a different question from `Interactively`, which asks
 only about standard input because a prompt is drawn on the stream the lines
 come from.
 
-#### What is *not* claimed here
+#### One shell disagrees with itself
 
-Two things measured on the same route and deliberately left alone, because each
-is a question of its own.
-
-**The announcement.** With a terminal, ksh93 and zsh announce a background job
-as it starts and bash and dash do not — though bash announces one at a prompt.
-That is `Runner.JobControl` rather than the monitor, and the two split
-differently on this route, so turning both on together would give bash an
-announcement no bash makes. The front end sets the monitor here and leaves
-`JobControl` to the prompt.
-
-**The remark.** bash and dash both say something when an interactive shell
-cannot have job control — bash `cannot set terminal process group (…):
-Inappropriate ioctl for device` and `no job control in this shell`, dash
-`can't access tty; job control turned off` — and zsh and ksh93 say nothing.
-Not reproduced: bash's line carries a pid, which is also why none of this can
-be a corpus case.
+The announcement and the remark were measured on this route too, and each has
+a section of its own below. What is left here is neither.
 
 **zsh disagrees with itself** and what is recorded is the state its other two
 readers report. With a terminal it puts `m` in `$-` and announces its jobs
 while `set -o` still lists `monitor off`. Ours is consistent across all three
 readers, which matches zsh on two of them.
+
+### An interactive shell that cannot have job control says so, in two of the six
+
+The monitor an interactive shell turns on for itself is one it can be denied,
+and two shells remark when they are.
+
+Measured 2026-09-05 with **no terminal on any of the three standard streams**,
+scratch `HOME` and scratch `HISTFILE`:
+
+| shell | what it says before the program runs |
+| --- | --- |
+| bash 5.3.15 | `bash: cannot set terminal process group (11143): Inappropriate ioctl for device` **and then** `bash: no job control in this shell` |
+| bash 3.2.57 | `bash: no job control in this shell` — that line **alone** |
+| bash 3.2 as `sh` | `sh: no job control in this shell` — that line alone, with its own name |
+| dash | `<name>: 0: can't access tty; job control turned off` |
+| ksh93u+ | nothing — it needs no terminal and runs the monitor anyway |
+| zsh 5.9.2 | nothing — it drops the monitor without a word |
+
+That is `Diagnostics.NoJobControlAtStartup`, empty for the two that stay quiet
+and empty in the base: the standard does not have the shell remark on this.
+
+**When it is said** is the same question the monitor answers, one step on: an
+interactive shell wanted the monitor and had no terminal to run one on, which
+is `Semantics.InteractiveMonitorNeedsATerminal` saying yes with no terminal
+anywhere. So it is written where that decision is made, and the two shells
+that stay quiet are the one that needs no terminal and the one that simply
+drops it.
+
+**On every interactive route and on none of the others.** Measured: the same
+line comes out of `-i script.sh`, `-i -c` and `-i -s` alike, and out of a plain
+script or a plain `-c` never.
+
+#### Who is named, which is not the same answer twice
+
+| shell | `-i script.sh` | `-i -c` and `-i -s` |
+| --- | --- | --- |
+| bash (all three) | its own name | its own name |
+| dash | the **script's** path | its own name |
+
+dash is naming `$0` on both, and bash is naming itself on both. That is
+`Diagnostics.NoJobControlAtStartupNamesTheScript`, dash alone — a field rather
+than a reading of `InvocationNamesTheUnreadLine`, which dash is also the only
+shell to set. One shell answering two questions the same way is not evidence
+that they are one question.
+
+Note that bash writes its name two ways in the same area: `bash` here, and the
+whole path it was invoked by for a script it could not open — `/opt/homebrew/bin/bash: /nonesuch/s.sh: No such file or directory`. This
+shell writes what it was invoked by throughout, which is the convention
+everywhere else in it and not a decision taken here.
+
+#### The pid line is not reproduced, and that is a decision
+
+bash 5.3.15 writes a line above the remark that carries its own process id:
+`bash: cannot set terminal process group (11143): Inappropriate ioctl for
+device`. It is left out, for three reasons in order of weight.
+
+1. **Two of the three bash members do not write it.** bash 3.2.57 and bash 3.2
+   run as `sh` write the second line alone. So it is one version's extra line
+   rather than bash's wording, and reproducing it would make this shell agree
+   with one member of the panel and disagree with two.
+2. **There is nothing here whose failure it would describe.** It is bash
+   reporting a `tcsetpgrp` that returned `ENOTTY`. This shell makes no such
+   call on this path, so the line would be a report of an event that did not
+   happen.
+3. **It carries a pid**, which no script can act on — it is the shell's own —
+   and which means no recording of it is the same twice.
+
+#### What the corpus cannot say about this
+
+Nothing, and the third reason above is why: the corpus runs bash 5.3.15, whose
+first line has a different number in it every run. `docs/spec/invocation.md`
+already records that as the reason none of the `-i script.sh` grid is a corpus
+case. The evidence is the table above, the per-dialect wordings in
+`dialect/*/`, and a driver test that runs the front end with files on all three
+streams and asserts the whole line.
+
+### The announcement splits where the monitor does not
+
+The monitor is unanimous on `-i script.sh` with a terminal. **What the shell
+says about the job is not**, and this is where the panel comes apart.
+
+Measured 2026-09-05 through a pseudo-terminal, scratch `HOME` and scratch
+`HISTFILE`, on `sh -i script.sh` running
+
+```
+echo one
+sleep 0.3 &
+echo two
+sleep 1.2
+echo three
+```
+
+| shell | the job starting | the job ending |
+| --- | --- | --- |
+| bash 5.3.15 | — | — |
+| bash 3.2.57 | — | — |
+| bash 3.2 as `sh` | — | — |
+| dash | — | `[1] + Done                       sleep 0.3` |
+| ksh93u+ | `[1]	<pid>` | `[1] +  Done                    sleep 0.3 &` |
+| zsh 5.9.2 | `[1] <pid>` | `[1]  + done       sleep 0.3` |
+
+So `Runner.JobControl` cannot follow the monitor here: three shells have
+somebody to tell on this route and bash has nobody. That is
+`Semantics.InteractiveScriptAnnouncesJobs` — bash no · dash yes · ksh93 yes ·
+zsh yes — and dash's blank first column is the *other* axis,
+`AnnouncesBackgroundJob`, which it alone answers no. Both are read, and dash is
+why they are two fields.
+
+#### It is not about where the commands come from
+
+The obvious reading of bash's silence — that a shell announces a job only to
+somebody typing at it — is wrong, and the grid is what rules it out. The same
+script on four interactive routes, same panel, same date, `$-` read from
+inside:
+
+| shell | `-i script.sh` | `-i` at a terminal | `-i < script` | `-i -c` |
+| --- | --- | --- | --- | --- |
+| bash 5.3.15 | — · — <br> `himBH` | start · end <br> `himBHs` | start · end <br> `himBHs` | start · — <br> `himBHc` |
+| bash 3.2.57 | — · — <br> `himB` | start · end <br> `himBH` | start · end <br> `himBH` | start · end <br> `himBHc` |
+| bash 3.2 as `sh` | — · — <br> `himB` | start · end <br> `himBH` | start · end <br> `himBH` | start · end <br> `himBHc` |
+| dash | — · end <br> `mi` | — · end <br> `smi` | — · end <br> `smi` | — · — <br> `mi` |
+| ksh93u+ | start · end <br> `imBE` | start · end <br> `imsBE` | start · end <br> `imsBE` | start · end <br> `icmsBE` |
+| zsh 5.9.2 | start · end <br> `569XZim` | start · end <br> `569XZims` | — | start · end <br> `569XZim` |
+
+`-i < script` puts the program on a **pipe**: there is no terminal to read
+commands from, and bash announces both anyway. `-i -c` draws no prompt at all,
+and bash announces the start there too. bash is quiet on exactly one
+interactive route, the one whose program is a **named file**, which is why the
+axis names the route rather than the terminal.
+
+The `-i -c` column is a different split — bash, ksh93 and zsh announce and dash
+does not — and so it is a different axis, deliberately not taken here. The zsh
+`-i < script` cell is empty because that invocation does not finish: zsh draws
+its prompt and waits, and nothing was measured rather than something guessed
+at.
+
+#### The notice rides on the monitor
+
+Measured on the same route with **no terminal anywhere**, so the monitor is
+off in every shell but one:
+
+| shell | monitor | the job starting | the job ending |
+| --- | --- | --- | --- |
+| bash 5.3.15 | off | — | — |
+| bash 3.2.57 | off | — | — |
+| bash 3.2 as `sh` | off | — | — |
+| dash | off | — | — |
+| ksh93u+ | **on** | `[1]	<pid>` | `[1] +  Done                    sleep 0.3 &` |
+| zsh 5.9.2 | off | — | — |
+
+dash and zsh, which say something about the job *with* a terminal, say nothing
+without one; ksh93, which needs no terminal for the monitor, announces both
+ends without one. So the notice is not a second question about the terminal —
+it is gated on the monitor the shell is already running, and the axis exists
+for the one dialect that runs a monitor and stays quiet anyway.
+
+That is why `Runner.SetInteractiveJobNotices` reads the monitor rather than
+taking a terminal, and why it has to be called after `SetInteractiveMonitor`.
+
+#### Where the notice goes, and when
+
+**To standard error, between commands.** Measured on the same route with the
+two writable streams separated: dash and ksh93 both write the `Done` row to
+standard error and neither writes anything to standard output — the stream a
+prompt already writes its own notices to.
+
+It lands between the command the job outlived and the command after it, and
+**also after the last command when there is none**: `sleep 0.3 &` followed by
+`sleep 1.2` and nothing else still prints the row in dash, ksh93 and zsh. So
+the front end reports after each line rather than before the next one, which
+is the only placement that has a last time.
 
 #### What the corpus cannot say about this
 
@@ -565,6 +722,31 @@ not saved.
 The front end is where this lives, and it has to be: the runner knows only
 whether the option is on, and the raw text belongs to whatever read it.
 
+### Which standard error it writes to
+
+**The rule.** Descriptor 2 **as the script has pointed it**, read at the moment
+of the echo — not the stream the shell was started with. Measured 2026-09-05
+from a script file, unanimous across dash, bash 3.2, bash 5.3, bash-as-`sh`,
+ksh93 and zsh:
+
+| the script says | where the echo goes |
+| --- | --- |
+| `exec 2>&1` | the output, and standard error is left empty |
+| `exec 2>/dev/null` | nowhere, until something points it back |
+| a redirection on a *command* — `echo one 2>&1` | standard error, unmoved |
+| the `exec` line itself | the descriptor it is about to replace |
+
+The last two rows are the same fact as the first and need no rule of their own.
+The echo happens when the line is *read*, and both a per-command redirection
+and the `exec`'s own effect arrive when the line is *run*, which is later.
+
+It matters beyond tidiness: with the two streams apart, the position of a
+here-document's terminator against the body the command wrote is invisible, and
+joining them is how a script asks. A front end holding its own stream loses the
+echo out of the joined text, so the question could not be asked at all — which
+is why the corpus row that asks it had to put the here-document body on
+descriptor 2 instead (#582), a workaround for exactly this (#771).
+
 ### It walks the text once, and used to walk it once per line
 
 The echo has to find the text of the lines it has not written yet. Recovering
@@ -593,7 +775,11 @@ being asked for help (#580).
 
 ### Where it lives
 
-`driver`'s `sayVerbose`, and the position it carries. The position is a line
+`driver`'s `sayVerbose`, the writer it is handed, and the position it carries.
+The writer is `interp.Runner.Err` — the runner's own descriptor 2 — read afresh
+at every call, which is the whole of the rule above; `Shell.errf` is the other
+thing and is where a *diagnostic* goes, however the script has arranged its
+descriptors. The position is a line
 number **and a byte offset**: the number is what the parser reports and the
 offset is what makes the walk one pass, and neither can be derived from the
 other once the text is growing a line at a time. Lines read while the option is

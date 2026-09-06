@@ -213,6 +213,16 @@ func TestDiagnostics(t *testing.T) {
 	if got := dash.Diagnostics().MonitorDeniedStatus; got != 0 {
 		t.Errorf("MonitorDeniedStatus = %d, want 0 — a remark, not an error", got)
 	}
+	// And the same sentence with nothing in front of it, for the shell
+	// deciding at startup rather than a builtin being refused: measured with
+	// no terminal on any stream, `<name>: 0: can't access tty; job control
+	// turned off` on `-i script.sh`, `-i -c` and `-i -s` alike.
+	if got, want := dash.Diagnostics().NoJobControlAtStartup, "can't access tty; job control turned off"; got != want {
+		t.Errorf("NoJobControlAtStartup = %q, want %q", got, want)
+	}
+	if !dash.Diagnostics().NoJobControlAtStartupNamesTheScript {
+		t.Error("NoJobControlAtStartupNamesTheScript = false, want true — dash names the script it was handed")
+	}
 }
 
 // TestDerivesFromTheStandardNotFromASibling is the property the package

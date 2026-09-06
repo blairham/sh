@@ -29,6 +29,13 @@ func Dialect() syntax.Dialect {
 		"export": true, "readonly": true,
 	}
 	d.CaseContinue = true
+	// A `${…}` operand may carry a process substitution here, and only here.
+	// Measured 2026-09-05 across the panel: `${u:-<(:)}` is a path in bash
+	// 3.2 and 5.3 and the five characters `<(:)` in ksh93, zsh and dash —
+	// which is not for want of the construct, since ksh93 and zsh both have
+	// it in an ordinary word. So it is a question about the position, and
+	// bash is the only column that answers yes.
+	d.ProcessSubstitutionInParamOperand = true
 	d.ParamCaseChange = true
 	// `${x@Q}` and the rest of the letter family, which no other shell in
 	// the panel has: the others report a bad substitution when the
@@ -214,11 +221,11 @@ func Semantics() interp.Semantics {
 	s.EchoExpandsHexEscapes = interp.Yes
 	s.EchoExpandsEscEscape = interp.Yes
 	// read takes -r and -s plus the argument letters: -a names the array in
-	// the option's argument, -d a delimiter, -n and -N the two counts, -p a
-	// prompt for when the input is a terminal, -t a timeout and -u a
-	// descriptor. A short -n keeps its text and reports 1; a short -N keeps
-	// its text too.
-	s.ReadOptions = "rsa:d:n:N:p:t:u:"
+	// the option's argument, -d a delimiter, -i the text a line editor would
+	// be seeded with, -n and -N the two counts, -p a prompt for when the
+	// input is a terminal, -t a timeout and -u a descriptor. A short -n
+	// keeps its text and reports 1; a short -N keeps its text too.
+	s.ReadOptions = "rsa:d:i:n:N:p:t:u:"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
@@ -256,6 +263,11 @@ func Semantics() interp.Semantics {
 	s.BraceRangeNegativeStepReverses = interp.No
 	s.BracketCaretNegates = interp.Yes
 	s.RegexQuotingMakesLiteral = interp.Yes
+	// A process substitution may stand as a condition's operand here, and is
+	// performed there: `[[ $v == <(cmd) ]]` runs cmd and matches against the
+	// path, which is false for anything a script would have written down.
+	// This shell alone — zsh refuses the word and ksh93 will not read it.
+	s.ProcessSubstitutionInCondition = interp.Yes
 	s.ShiftPastEndFatal = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// `local u` hides the caller's `u` — the local exists unset.
@@ -451,6 +463,12 @@ func Semantics() interp.Semantics {
 	// same, which is what keeps this question and MonitorNeedsATerminal
 	// apart.
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
+	// And bash is the one member of the panel that announces nothing on
+	// this route. Measured on `-i script.sh` through a pseudo-terminal:
+	// 5.3.15, 3.2.57 and 3.2 run as `sh` all print neither the start nor
+	// the `Done` row, where the other three print at least one. It is the
+	// route and not the terminal — `bash -i < script` announces both.
+	s.InteractiveScriptAnnouncesJobs = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.No
@@ -518,6 +536,13 @@ func Diagnostics() interp.Diagnostics {
 		// The target as it was written, not as it expanded.
 		AmbiguousRedirect: "%[1]s: ambiguous redirect",
 		JobStarted:        "[%[1]d] %[2]d",
+		// The one line all three members of the panel's bash write when an
+		// interactive shell has no terminal to run the monitor on: 5.3.15 and
+		// 3.2.57 as `bash`, and 3.2 run as `sh`, which writes it with its own
+		// name in front. 5.3.15 writes a further line above it about the
+		// terminal process group, and it is not reproduced — see
+		// Diagnostics.NoJobControlAtStartup.
+		NoJobControlAtStartup: "no job control in this shell",
 		// Silent for a count above `$#` — there is no ShiftTooMany here —
 		// and a sentence for one below zero, naming the word as written.
 		ShiftNegativeCount: "shift: %[2]s: shift count out of range",
@@ -765,11 +790,15 @@ func Diagnostics() interp.Diagnostics {
 			// command with the job specs in its arguments replaced by
 			// process ids.
 			"jobs": "nx",
-			// What is left of read's letters: readline editing and the text
-			// -i seeds it with — about a line editor this runner does not
-			// hold. The -p prompt is implemented: parsed always, printed
-			// only to a terminal, which is the measured whole of it.
-			"read": "Eei",
+			// What is left of read's letters: readline editing, which is a
+			// line editor this runner does not hold. -i is off this list
+			// because there is nothing left for it to do — it seeds the
+			// editor -e opens, and with -e refused here there is never one
+			// to seed, which is also bash's own answer wherever the input
+			// is not a terminal. The -p prompt is implemented: parsed
+			// always, printed only to a terminal, which is the measured
+			// whole of it.
+			"read": "Ee",
 			// The nameref and trace attributes, under both of the builtin's
 			// names — and `local`'s extras: the same two, `-I` inheritance,
 			// and the function letters, which this shell takes and ignores

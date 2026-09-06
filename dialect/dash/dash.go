@@ -41,6 +41,11 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// The panel's only shell with no multibyte decoder: `s=héllo; echo
+	// ${#s}` is 6 here in every locale, where bash, ksh93 and zsh answer 6
+	// under `LC_ALL=C` and 5 under a UTF-8 one. Measured 2026-09-05 across
+	// LC_ALL, LC_CTYPE and LANG, and dash does not move for any of them.
+	s.MultibyteEncodingIsHonored = interp.No
 	// The one shell that refuses the -h letter POSIX names.
 	s.SetHasTheHLetter = interp.No
 	// Job control wants the tty: with none, `set -m` earns the remark
@@ -51,6 +56,12 @@ func Semantics() interp.Semantics {
 	// job control turned off` — the same sentence its `set -m` refusal uses,
 	// from the same shell, about two different questions.
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
+	// dash has somebody to tell on this route, and tells them exactly one
+	// thing: measured on `-i script.sh` through a pseudo-terminal it writes
+	// `[1] + Done sleep 0.3` and never the line that starts the job. The
+	// start is AnnouncesBackgroundJob, which dash answers No, and the two
+	// fields are separate because of exactly this shell.
+	s.InteractiveScriptAnnouncesJobs = interp.Yes
 	// DefaultOptionLetters stays empty on purpose: measured, dash's `$-`
 	// starts blank however it is invoked, save the `s` of the
 	// standard-input route, which is unanimous and comes from Runner.Route.
@@ -354,6 +365,17 @@ func Diagnostics() interp.Diagnostics {
 		// the field's default, is what makes it a remark rather than an
 		// error.
 		MonitorDenied: "set: can't access tty; job control turned off",
+		// The same sentence without `set: ` in front of it, because nothing
+		// asked: this one is the shell's own decision at startup rather than a
+		// builtin refusing. It is located, like every other dash diagnostic —
+		// `<name>: 0: …`, at the line it has not reached yet, which
+		// InvocationNamesTheUnreadLine already spells.
+		NoJobControlAtStartup: "can't access tty; job control turned off",
+		// And it names the script it was handed rather than itself, which is
+		// `$0` — measured, `-i script.sh` writes the script's path here and
+		// `-i -c` and `-i -s` write dash's own. bash writes its own name on
+		// all three.
+		NoJobControlAtStartupNamesTheScript: true,
 		// Backticks alone: this shell numbers a `$( … )` body from the file
 		// like the other three, and a backquoted one from one.
 		BackquotedSubstitutionRestartsLines: true,

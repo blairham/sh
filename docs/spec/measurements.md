@@ -252,6 +252,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/a-subscript-pair-is-counted-as-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[3]` | `[3]` | `[3]` | `[3]` | `[2]` |
 | `array/a-subscript-on-a-string` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[hello][][][]` **2>** `<shell>: line 1: s: bad array subscript` | `[hello][][][]` **2>** `<shell>: line 1: s: bad array subscript` | `[hello][][][]` **2>** `<shell>: s: bad array subscript` | `[hello][][][]` | `[][h][e][o]` |
 | `array/a-string-subscript-pair` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][]` | `[][]` | `[][]` | `[][]` | `[ell][he]` |
+| `array/a-string-subscript-in-a-single-byte-locale` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][]` | `[][]` | `[][]` | `[][]` | `[é][l]` |
+| `array/a-string-subscript-in-a-utf8-locale` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][]` | `[][]` | `[][]` | `[][]` | `[él][l]` |
+| `array/a-string-subscript-of-an-invalid-byte` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `differs` | `differs` | `differs` | `differs` | `same` |
 | `array/a-subscript-on-the-positional-list` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${@[1]}][${*[2]}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${@[1]}][${*[2]}]: bad substitution` *(status 127)* | **2>** `<shell>: [${@[1]}][${*[2]}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `[' unexpected` *(status 3)* | `[a][b]` |
 | `array/a-subscript-on-a-positional-parameter` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${1[2]}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${1[2]}]: bad substitution` *(status 127)* | **2>** `<shell>: [${1[2]}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `[' unexpected` *(status 3)* | `[b]` |
 | `array/a-quoted-subscript-pair-joins` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=1 [z]~n=3 [x]` | `n=1 [z]~n=3 [x]` | `n=1 [z]~n=3 [x]` | `n=1 [z]~n=3 [x]` | `n=1 [x y]~n=3 [x]` |
@@ -621,6 +624,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/a-string-subscript-pair` — the two readings of a subscript meeting on one string: a range of characters is a substring, and a start counted back past the first character is *clamped* here where the same reach on an array is empty. The asymmetry is measured rather than derived, and it is the half a shared range helper would flatten
   ```sh
   s=hello; echo "[${s[2,4]}][${s[-6,2]}]"
+  ```
+- `array/a-string-subscript-in-a-single-byte-locale` — the character reading of a subscript is the *locale's* character: under the fixed locale zsh's `${s[2,3]}` is two bytes that happen to spell one character and `${s[4]}` is the byte after them. Reading runes unconditionally, which is what #854 shipped, answered `él` and `o` here — right for a UTF-8 locale and wrong for this one
+  ```sh
+  s=héllo; echo "[${s[2,3]}][${s[4]}]"
+  ```
+- `array/a-string-subscript-in-a-utf8-locale` — the same subscripts with the codeset changed: `él` and `l`, two characters and the one after them. Paired with the case above so that `${s[N]}` and `${#s}` are held to the same reading of what a character is — they were two answers in one shell before #899
+  ```sh
+  s=héllo; echo "[${s[2,3]}][${s[4]}]"
+  ```
+- `array/a-string-subscript-of-an-invalid-byte` — the undecodable byte reached by a subscript rather than by a length, compared against itself rather than printed, so the record stays text. zsh answers with the byte; the shells with no character reading answer with nothing and so say `differs`, which is the same statement about them the plain string case makes
+  ```sh
+  s=$(printf 'a\200b'); b=$(printf '\200'); [ "${s[2]}" = "$b" ] && echo same || echo differs
   ```
 - `array/a-subscript-on-the-positional-list` — whether the positional parameters are a list a subscript reaches into. zsh says yes; every other member of the panel refuses the expansion outright — bash calls it a bad substitution when it is reached, ksh93 refuses the bracket while reading, dash says `Bad substitution`. Five refusals and one reading, with nobody meaning something else by it, which is what makes it a grammar flag rather than an axis. Expanding it to nothing at status 0 was the silent middle answer nobody gives
   ```sh
@@ -1043,6 +1058,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `read/a-count-that-stops-at-the-delimiter` | `st=2 []` **2>** `<shell>: 1: read: Illegal option -n` | `st=0 [ab]` | `st=0 [ab]` | `st=0 [ab]` | `st=0 [ab]` | `st=0 []` |
 | `read/a-count-that-crosses-the-delimiter` | `st=2 []` **2>** `<shell>: 1: read: Illegal option -N` | `st=0 [ab~c]` | `st=0 [ab~c]` | `st=2 []` **2>** `<shell>: line 0: read: -N: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]` | `st=0 [ab~c]` | `st=1 []` **2>** `<shell>:read:1: bad option: -N` |
 | `read/an-initial-value-for-the-line` | `st=2 l=[keep]` **2>** `<shell>: 1: read: Illegal option -i` | `st=0 l=[x]` | `st=0 l=[x]` | `st=2 l=[keep]` **2>** `<shell>: line 0: read: -i: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]` | `st=2 l=[keep]` **2>** `<shell>: read: -i: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]` | `st=1 l=[keep]` **2>** `<shell>:read:1: bad option: -i` |
+| `read/an-initial-value-is-not-a-default` | `st=2 l=[keep]` **2>** `<shell>: 1: read: Illegal option -i` | `st=0 l=[]` | `st=0 l=[]` | `st=2 l=[keep]` **2>** `<shell>: line 0: read: -i: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]` | `st=2 l=[keep]` **2>** `<shell>: read: -i: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]` | `st=1 l=[keep]` **2>** `<shell>:read:1: bad option: -i` |
+| `read/an-initial-value-with-nothing-after-it` | `st=2 l=[keep]` **2>** `<shell>: 1: read: Illegal option -i` | `st=2 l=[keep]` **2>** `<shell>: line 1: read: -i: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]` | `st=2 l=[keep]` **2>** `<shell>: line 1: read: -i: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]` | `st=2 l=[keep]` **2>** `<shell>: line 0: read: -i: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]` | `st=2 l=[keep]` **2>** `<shell>: read: -i: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]` | `st=1 l=[keep]` **2>** `<shell>:read:1: bad option: -i` |
 | `name/unset-f-on-a-name-no-function-could-have` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>: unset: 1x: invalid function name` | `st=1` **2>** `<shell>:unset:1: no such hash table element: 1x` |
 | `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>:unset:1: no such hash table element: nosuch` |
 | `name/a-lone-dash-given-to-a-builtin` | `st=1` **2>** `unalias: - not found` | `st=1` **2>** `<shell>: line 1: unalias: -: not found` | `st=1` **2>** `<shell>: line 1: unalias: -: not found` | `st=1` **2>** `<shell>: line 0: unalias: -: not found` | `st=1` | `st=1` **2>** `<shell>:unalias:1: not enough arguments` |
@@ -1122,14 +1139,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `dirstack/push-list-pop` | `p=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: dirs: not found~<shell>: 1: popd: not found` | `/tmp ~~/tmp ~~~~p=0` | `/tmp ~~/tmp ~~~~p=0` | `/tmp ~~/tmp ~~~~p=0` | `p=127` **2>** `<shell>: pushd: not found~<shell>: dirs: not found~<shell>: popd: not found` | `/tmp ~~p=0` |
 | `dirstack/rotate-to-an-entry-counted-from-the-front` | `pwd=/` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: dirs: not found` | `/tmp / /usr~/tmp / /usr~pwd=/tmp` | `/tmp / /usr~/tmp / /usr~pwd=/tmp` | `/tmp / /usr~/tmp / /usr~pwd=/tmp` | `pwd=/` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: pushd: not found~<shell>: dirs: not found` | `/tmp / /usr~pwd=/tmp` |
 | `dirstack/rotate-to-an-entry-counted-from-the-back` | `pwd=/` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: dirs: not found` | `/ /usr /tmp~/ /usr /tmp~pwd=/` | `/ /usr /tmp~/ /usr /tmp~pwd=/` | `/ /usr /tmp~/ /usr /tmp~pwd=/` | `pwd=/` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: pushd: not found~<shell>: dirs: not found` | `/ /usr /tmp~pwd=/` |
-| `dirstack/rotate-past-the-end-of-the-stack` | `st=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: dirs: not found` *(status 127)* | `st=1~/tmp /` | `st=1~/tmp /` | `st=1~/tmp /` | `st=127` **2>** `<shell>: pushd: not found~<shell>: dirs: not found` *(status 127)* | `st=1~/tmp /` |
-| `dirstack/rotate-with-nothing-pushed` | `st=127` | `st=1` | `st=1` | `st=1` | `st=127` | `st=1` |
+| `dirstack/rotate-past-the-end-of-the-stack` | `st=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: dirs: not found` *(status 127)* | `st=1~/tmp /` **2>** `<shell>: line 1: pushd: +9: directory stack index out of range` | `st=1~/tmp /` **2>** `<shell>: line 1: pushd: +9: directory stack index out of range` | `st=1~/tmp /` **2>** `<shell>: line 0: pushd: +9: directory stack index out of range` | `st=127` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: dirs: not found` *(status 127)* | `st=1~/tmp /` **2>** `<shell>:pushd:1: no such entry in dir stack` |
+| `dirstack/rotate-with-nothing-pushed` | `st=127` **2>** `<shell>: 1: pushd: not found` | `st=1` **2>** `<shell>: line 1: pushd: directory stack empty` | `st=1` **2>** `<shell>: line 1: pushd: directory stack empty` | `st=1` **2>** `<shell>: line 0: pushd: directory stack empty` | `st=127` **2>** `<shell>: pushd: not found` | `st=1` **2>** `<shell>:pushd:1: no such entry in dir stack` |
 | `dirstack/popd-an-entry-that-is-not-the-top` | `pwd=/` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: popd: not found~<shell>: 1: dirs: not found` | `/usr /~/usr /~pwd=/usr` | `/usr /~/usr /~pwd=/usr` | `/usr /~/usr /~pwd=/usr` | `pwd=/` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: popd: not found~<shell>: dirs: not found` | `/usr /~pwd=/usr` |
-| `dirstack/popd-with-nothing-pushed` | `st=127` | `st=1` | `st=1` | `st=1` | `st=127` | `st=1` |
-| `dirstack/clear-the-stack` | `st=127~p=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: dirs: not found~<shell>: 1: dirs: not found` | `st=0~/usr~p=1` | `st=0~/usr~p=1` | `st=0~/usr~p=1` | `st=127~p=127` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: dirs: not found~<shell>: dirs: not found` | `st=0~/usr~p=1` |
+| `dirstack/popd-with-nothing-pushed` | `st=127` **2>** `<shell>: 1: popd: not found` | `st=1` **2>** `<shell>: line 1: popd: directory stack empty` | `st=1` **2>** `<shell>: line 1: popd: directory stack empty` | `st=1` **2>** `<shell>: line 0: popd: directory stack empty` | `st=127` **2>** `<shell>: popd: not found` | `st=1` **2>** `<shell>:popd:1: directory stack empty` |
+| `dirstack/clear-the-stack` | `st=127~p=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: dirs: not found~<shell>: 1: dirs: not found~<shell>: 1: popd: not found` | `st=0~/usr~p=1` **2>** `<shell>: line 1: popd: directory stack empty` | `st=0~/usr~p=1` **2>** `<shell>: line 1: popd: directory stack empty` | `st=0~/usr~p=1` **2>** `<shell>: line 0: popd: directory stack empty` | `st=127~p=127` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: dirs: not found~<shell>: dirs: not found~<shell>: popd: not found` | `st=0~/usr~p=1` **2>** `<shell>:popd:1: directory stack empty` |
 | `dirstack/dirs-one-to-a-line-and-numbered` | `--` **2>** `<shell>: 1: pushd: not found~<shell>: 1: pushd: not found~<shell>: 1: dirs: not found~<shell>: 1: dirs: not found` *(status 127)* | `/usr~/tmp~/~--~ 0  /usr~ 1  /tmp~ 2  /` | `/usr~/tmp~/~--~ 0  /usr~ 1  /tmp~ 2  /` | `/usr~/tmp~/~--~ 0  /usr~ 1  /tmp~ 2  /` | `--` **2>** `<shell>: pushd: not found~<shell>: pushd: not found~<shell>: dirs: not found~<shell>: dirs: not found` *(status 127)* | `/usr~/tmp~/~--~0	/usr~1	/tmp~2	/` |
 | `dirstack/dirs-unabbreviated` | `--` **2>** `<shell>: 1: pushd: not found~<shell>: 1: dirs: not found~<shell>: 1: dirs: not found` *(status 127)* | `/ ~~--~/ <tmp>` | `/ ~~--~/ <tmp>` | `/ ~~--~/ <tmp>` | `--` **2>** `<shell>: pushd: not found~<shell>: dirs: not found~<shell>: dirs: not found` *(status 127)* | `/ ~~--~/ <tmp>` |
-| `dirstack/dirs-a-letter-it-does-not-have` | `st=127` | `st=2` | `st=2` | `st=1` | `st=127` | `st=1` |
+| `dirstack/pushd-into-a-directory-that-is-not-there` | `st=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: dirs: not found` *(status 127)* | `st=1~/` **2>** `<shell>: line 1: pushd: /no/such-xyz: No such file or directory` | `st=1~/` **2>** `<shell>: line 1: pushd: /no/such-xyz: No such file or directory` | `st=1~/` **2>** `<shell>: line 0: pushd: /no/such-xyz: No such file or directory` | `st=127` **2>** `<shell>: pushd: not found~<shell>: dirs: not found` *(status 127)* | `st=1~/` **2>** `<shell>:pushd:1: no such file or directory: /no/such-xyz` |
+| `dirstack/dirs-a-letter-it-does-not-have` | `st=127` **2>** `<shell>: 1: dirs: not found` | `st=2` **2>** `<shell>: line 1: dirs: -q: invalid number~dirs: usage: dirs [-clpv] [+N] [-N]` | `st=2` **2>** `<shell>: line 1: dirs: -q: invalid number~dirs: usage: dirs [-clpv] [+N] [-N]` | `st=1` **2>** `<shell>: line 0: dirs: -q: invalid number~dirs: usage: dirs [-clpv] [+N] [-N]` | `st=127` **2>** `<shell>: dirs: not found` | `st=1` **2>** `<shell>:dirs:1: bad option: -q` |
 | `type/f-skips-or-prints-the-function` | `-f: not found~f is a shell function~st=127` | `st=1` **2>** `<shell>: line 1: type: f: not found` | `st=1` **2>** `<shell>: line 1: type: f: not found` | `st=1` **2>** `<shell>: line 0: type: f: not found` | `f is an undefined function~st=0` | `f () {~	:~}~st=0` |
 | `type/a-lists-a-keyword` | `-a: not found~if is a shell keyword~st=127` | `if is a shell keyword~st=0` | `if is a shell keyword~st=0` | `if is a shell keyword~st=0` | `if is a keyword~st=0` | `if is a reserved word~st=0` |
 | `type/p-on-a-name-that-is-nothing` | `-p: not found~nosuchzz_qq: not found~st=127` | `st=1` | `st=1` | `st=1` | `st=1` | `nosuchzz_qq not found~st=1` |
@@ -1182,6 +1200,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `whence/w-is-the-bare-kind` | `st=127` **2>** `<shell>: 1: whence: not found~<shell>: 1: whence: not found~<shell>: 1: whence: not found~<shell>: 1: whence: not found~<shell>: 1: whence: not found~<shell>: 1: whence: not found` | `st=127` **2>** `<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: whence: command not found~<shell>: whence: command not found~<shell>: whence: command not found~<shell>: whence: command not found~<shell>: whence: command not found~<shell>: whence: command not found` | `st=2` **2>** `<shell>: whence: -w: unknown option~Usage: whence [-afpqv] name  ...~<shell>: whence: -w: unknown option~Usage: whence [-afpqv] name  ...~<shell>: whence: -w: unknown option~Usage: whence [-afpqv] name  ...~<shell>: whence: -w: unknown option~Usage: whence [-afpqv] name  ...~<shell>: whence: -w: unknown option~Usage: whence [-afpqv] name  ...~<shell>: whence: -w: unknown option~Usage: whence [-afpqv] name  ...` | `ll: alias~f: function~echo: builtin~if: reserved~ls: command~nosuchcmd431: none~st=1` |
 | `whence/where-is-whence-with-c-and-a` | `st=127` **2>** `<shell>: 1: where: not found~<shell>: 1: where: not found~<shell>: 1: where: not found` | `st=127` **2>** `<shell>: line 1: where: command not found~<shell>: line 1: where: command not found~<shell>: line 1: where: command not found` | `st=127` **2>** `<shell>: line 1: where: command not found~<shell>: line 1: where: command not found~<shell>: line 1: where: command not found` | `st=127` **2>** `<shell>: where: command not found~<shell>: where: command not found~<shell>: where: command not found` | `st=127` **2>** `<shell>: where: not found~<shell>: where: not found~<shell>: where: not found` | `echo: shell built-in command~/bin/echo~ll: aliased to ls -l~nosuchcmd431 not found~st=1` |
 | `whence/where-takes-no-options` | `st=127` **2>** `<shell>: 1: where: not found` | `st=127` **2>** `<shell>: line 1: where: command not found` | `st=127` **2>** `<shell>: line 1: where: command not found` | `st=127` **2>** `<shell>: where: command not found` | `st=127` **2>** `<shell>: where: not found` | `st=1` **2>** `<shell>:where:1: bad option: -v` |
+| `whence/which-is-whence-with-c` | `/bin/echo~st=1` | `/bin/echo~st=1` | `/bin/echo~st=1` | `/bin/echo~st=1` | `/bin/echo~st=1` | `echo: shell built-in command~ll: aliased to ls -l~nosuchcmd431 not found~st=1` |
+| `whence/which-refuses-the-letters-its-preset-decided` | `st=1~st=1` **2>** `which: illegal option -- c~usage: which [-as] program ...~which: illegal option -- v~usage: which [-as] program ...` | `st=1~st=1` **2>** `which: illegal option -- c~usage: which [-as] program ...~which: illegal option -- v~usage: which [-as] program ...` | `st=1~st=1` **2>** `which: illegal option -- c~usage: which [-as] program ...~which: illegal option -- v~usage: which [-as] program ...` | `st=1~st=1` **2>** `which: illegal option -- c~usage: which [-as] program ...~which: illegal option -- v~usage: which [-as] program ...` | `st=1~st=1` **2>** `which: illegal option -- c~usage: which [-as] program ...~which: illegal option -- v~usage: which [-as] program ...` | `st=1~st=1` **2>** `<shell>:which:1: bad option: -c~<shell>:which:1: bad option: -v` |
+| `whence/where-takes-the-letters-its-preset-left` | `st=127` **2>** `<shell>: 1: where: not found~<shell>: 1: where: not found` | `st=127` **2>** `<shell>: line 1: where: command not found~<shell>: line 1: where: command not found` | `st=127` **2>** `<shell>: line 1: where: command not found~<shell>: line 1: where: command not found` | `st=127` **2>** `<shell>: where: command not found~<shell>: where: command not found` | `st=127` **2>** `<shell>: where: not found~<shell>: where: not found` | `/bin/echo~echo: builtin~echo: command~st=0` |
+| `whence/a-on-a-name-that-is-only-on-path` | `st=127` **2>** `<shell>: 1: whence: not found` | `st=127` **2>** `<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: whence: command not found` | `ls is a tracked alias for /bin/ls~st=0` | `/bin/ls~st=0` |
 | `whence/nothing-to-ask-about` | `st=127` **2>** `<shell>: 1: whence: not found` | `st=127` **2>** `<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: whence: command not found` | `st=2` **2>** `Usage: whence [-afpqv] name  ...` | `st=1` |
 | `zstyle/stores-and-lists-what-it-is-given` | `st=127` **2>** `<shell>: 1: zstyle: not found~<shell>: 1: zstyle: not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found` *(status 127)* | `st=127` **2>** `<shell>: zstyle: command not found~<shell>: zstyle: command not found` *(status 127)* | `st=127` **2>** `<shell>: zstyle: not found~<shell>: zstyle: not found` *(status 127)* | `st=0~zstyle ':completion:*' verbose yes` |
 | `zstyle/more-components-sort-first` | **2>** `<shell>: 1: zstyle: not found~<shell>: 1: zstyle: not found~<shell>: 1: zstyle: not found~<shell>: 1: zstyle: not found` *(status 127)* | **2>** `<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found` *(status 127)* | **2>** `<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found` *(status 127)* | **2>** `<shell>: zstyle: command not found~<shell>: zstyle: command not found~<shell>: zstyle: command not found~<shell>: zstyle: command not found` *(status 127)* | **2>** `<shell>: zstyle: not found~<shell>: zstyle: not found~<shell>: zstyle: not found~<shell>: zstyle: not found` *(status 127)* | `zstyle ':a:b:c:d:*' v 1~zstyle ':m:n:*' v 3~zstyle ':q:*' v 2` |
@@ -1414,6 +1436,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `read/an-initial-value-for-the-line` — -i seeds the line editor and is therefore about a terminal, and this is what it does when there is not one: bash takes the option, ignores the seed, and reads the line — three others refuse the letter in three wordings, and only one of them refuses at 1. Worth pinning because the tempting reading of the manual is that the seed is a *default* for an empty line, and no shell here does that
   ```sh
   printf "x\n" | { l=keep; read -i pre -r l; echo "st=$? l=[$l]"; }
+  ```
+- `read/an-initial-value-is-not-a-default` — the reading of the manual that is wrong: an empty line leaves the variable empty in the one shell that takes the letter, not holding the seed. The seed is what a line editor opens with and nothing else, so with no terminal it has no effect at all — this is the row that says so, where `read/an-initial-value-for-the-line` only says the option is taken
+  ```sh
+  printf "\n" | { l=keep; read -i pre -r l; echo "st=$? l=[$l]"; }
+  ```
+- `read/an-initial-value-with-nothing-after-it` — the letter takes an argument, which is the half that has to be right in a shell that means to ignore the value: bash asks for the argument it is missing where the four that do not have the letter refuse it as one they never heard of, in the same words they use with a value after it
+  ```sh
+  printf "x\n" | { l=keep; read -i; echo "st=$? l=[$l]"; }
   ```
 - `name/unset-f-on-a-name-no-function-could-have` — two of the panel are quiet here and two are not, and the two that speak are not answering the same question — one is judging the name, which `1x` could never be, and the other is reporting that its table holds nothing under it. The case next to this one is what tells them apart
   ```sh
@@ -1743,13 +1773,13 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   cd /; pushd /tmp >/dev/null; pushd /usr >/dev/null; pushd -0; dirs; echo "pwd=$PWD"
   ```
-- `dirstack/rotate-past-the-end-of-the-stack` — an index there is no entry for: refused, at 1, with the stack left alone. The complaint itself is discarded here and pinned in the dialect tests instead — this engine's stack is a prelude function, and a shell function cannot reach the location prefix (`<shell>: line 1:`) the real builtin writes in front of it
+- `dirstack/rotate-past-the-end-of-the-stack` — an index there is no entry for: refused, at 1, with the stack left alone, and the complaint compared rather than discarded (#603) — a different sentence in each of the two shells that have the builtin, both carrying the location the shell puts in front of its own refusals
   ```sh
-  cd /; pushd /tmp >/dev/null; pushd +9 2>/dev/null; echo "st=$?"; dirs
+  cd /; pushd /tmp >/dev/null; pushd +9; echo "st=$?"; dirs
   ```
-- `dirstack/rotate-with-nothing-pushed` — the same refusal against a stack with nothing in it — a different sentence in both shells, and the same status. The wording is the dialect tests' to pin, for the location reason above
+- `dirstack/rotate-with-nothing-pushed` — the same refusal against a stack with nothing in it: one shell has a second sentence for it and the other reuses the one above, and both are compared whole
   ```sh
-  cd /; pushd +1 2>/dev/null; echo "st=$?"
+  cd /; pushd +1; echo "st=$?"
   ```
 - `dirstack/popd-an-entry-that-is-not-the-top` — `popd +N` takes an entry out where it stands and leaves the shell where it is — the current directory only moves when N picks the entry the shell is in, which is what a bare `popd` does
   ```sh
@@ -1757,11 +1787,11 @@ grades it and nothing drift-checks it either, for the same reason.
   ```
 - `dirstack/popd-with-nothing-pushed` — the underflow, which is 1 in both shells that have `popd` and 127 in the two that do not have the name at all — absence rather than divergence, and the case says which by the status
   ```sh
-  cd /; popd 2>/dev/null; echo "st=$?"
+  cd /; popd; echo "st=$?"
   ```
 - `dirstack/clear-the-stack` — `dirs -c` empties the stack in silence, and what is left is the current directory alone — which `dirs` still prints, because it reads $PWD rather than an entry. A `popd` after it is the underflow
   ```sh
-  cd /; pushd /tmp >/dev/null; pushd /usr >/dev/null; dirs -c; echo "st=$?"; dirs; popd 2>/dev/null; echo "p=$?"
+  cd /; pushd /tmp >/dev/null; pushd /usr >/dev/null; dirs -c; echo "st=$?"; dirs; popd; echo "p=$?"
   ```
 - `dirstack/dirs-one-to-a-line-and-numbered` — `-p` writes one entry to a line and `-v` numbers them, and the numbering is the whole difference between the two shells: a right-aligned two-column number and two spaces against a bare number and a tab
   ```sh
@@ -1771,9 +1801,13 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   cd; pushd / >/dev/null; dirs; echo "--"; dirs -l
   ```
-- `dirstack/dirs-a-letter-it-does-not-have` — the shape of the option parser, by its status alone: 2 where a bad letter is an invalid *number* with a usage line after it, 1 where it is a bad option, 127 where there is no `dirs`. The same split decides whether `dirs -lv` is two letters or one malformed index
+- `dirstack/pushd-into-a-directory-that-is-not-there` — whose complaint it is. The directory change is what fails, and neither shell blames `cd`: the word the script wrote is the word the refusal carries, and the stack is left alone. The case that showed a prelude function could not say either (#603)
   ```sh
-  dirs -q 2>/dev/null; echo "st=$?"
+  cd /; pushd /no/such-xyz; echo "st=$?"; dirs
+  ```
+- `dirstack/dirs-a-letter-it-does-not-have` — the shape of the option parser: 2 where a bad letter is an invalid *number* with an unlocated usage line after it, 1 where it is a bad option, 127 where there is no `dirs`. The same split decides whether `dirs -lv` is two letters or one malformed index
+  ```sh
+  dirs -q; echo "st=$?"
   ```
 - `type/f-skips-or-prints-the-function` — one letter, two opposite meanings: two shells use -f to leave functions out of the search — so a name that is only a function is not found — and one turns it around and prints the definition. The fourth has no options and answers -f as a name
   ```sh
@@ -1982,6 +2016,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `whence/where-takes-no-options` — and it is a name rather than a synonym with flags: `where -v` is a bad option, not the sentence `whence -v` writes. A shell that implemented it by handing its arguments to whence would pass every other row here and fail this one
   ```sh
   where -v echo; echo "st=$?"
+  ```
+- `whence/which-is-whence-with-c` — zsh has `which` as a builtin and it is `whence -c`, so it answers for an alias and for a builtin and says `not found` for neither. The other five have no such builtin and reach /usr/bin/which, which knows only PATH — the same word, two entirely different questions, and the reason a dialect that leaves it out is not this shell
+  ```sh
+  alias ll="ls -l"; which echo; which ll; which nosuchcmd431; echo "st=$?"
+  ```
+- `whence/which-refuses-the-letters-its-preset-decided` — and it is not `whence` with a flag set: the letters `-c` already decided are no longer on offer, so `which -c` and `which -v` are bad options where `which -a`, `-p` and `-w` are taken. A shell that implemented it by handing its arguments to whence would pass the row above and fail this one
+  ```sh
+  which -c echo; echo "st=$?"; which -v echo; echo "st=$?"
+  ```
+- `whence/where-takes-the-letters-its-preset-left` — the same rule from the other end: `where` is `whence -ca`, so `-c` and `-a` are gone and `-p` and `-w` remain — two letters it does answer, beside the `-v` that `whence/where-takes-no-options` shows it refuses. Refusing every dash word passes that row and fails this one
+  ```sh
+  where -p echo; where -w echo; echo "st=$?"
+  ```
+- `whence/a-on-a-name-that-is-only-on-path` — the PATH hit standing alone keeps the sentence `-v` gives it — ksh93 says `tracked alias for` here and plain `N is <path>` when a builtin or function line came first, which is the difference `whence -a echo` cannot show. zsh, whose `-a` has no sentences at all, just prints the path
+  ```sh
+  whence -a ls; echo "st=$?"
   ```
 - `whence/nothing-to-ask-about` — the two shells with the builtin part company over an empty operand list: zsh says nothing and reports 1, ksh93 prints its usage line and reports 2. The quiet one is the trap — a script testing the status sees a plain miss
   ```sh
@@ -4305,6 +4355,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/set-o-noexec-reads-and-never-runs` | `before` | `before` | `before` | `before` | `before` | `before` |
 | `opt/set-v-echoes-a-here-document-with-its-command` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` |
 | `opt/set-v-echoes-the-tail-after-the-last-command` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` |
+| `opt/set-v-writes-to-the-descriptor-the-script-points` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` |
+| `opt/set-v-follows-a-descriptor-that-moves` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` |
 | `opt/set-o-verbose-echoes-what-is-read` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` |
 | `opt/pipefail-appears-in-the-plus-o-listing` | *(no output, status 0)* | `pipefail` | `pipefail` | `pipefail` | *(no output, status 0)* | `pipefail` |
 | `opt/pipefail-turned-on-is-listed-on` | *(no output, status 0)* | `pipefail` | `pipefail` | `pipefail` | `pipefail` | `pipefail` |
@@ -4516,6 +4568,23 @@ grades it and nothing drift-checks it either, for the same reason.
 
   # the end
   ```
+- `opt/set-v-writes-to-the-descriptor-the-script-points` — the echo goes to descriptor 2 as the *script* has pointed it, not to the stream the shell started with: after `exec 2>&1` every echoed line joins the output and standard error is empty. Unanimous. Written this way rather than with the body on descriptor 2, which is the workaround the same question had to use while a front end held its own stream (#771)
+  ```sh
+  exec 2>&1
+  set -v
+  cat <<END >&2
+  body
+  END
+  echo after
+  ```
+- `opt/set-v-follows-a-descriptor-that-moves` — the descriptor is read at the moment of the echo, which decides three things at once: the line holding the `exec` goes to the descriptor it is about to replace, the lines after it disappear into what it was pointed at, and only the line after the restore comes back. Unanimous. The snippet ends without a newline because the harness adds one, and a trailing blank line is not the same question: one shell reads ahead in blocks and echoes that line *before* running the command above it
+  ```sh
+  set -v
+  exec 2>/dev/null
+  echo gone
+  exec 2>&1
+  echo back
+  ```
 - `opt/set-o-verbose-echoes-what-is-read` — the long spelling of `set -v`: input is written back to stderr as it is read, and never the line that turned it on. From a file all four agree; a -c string is read differently — bash echoes it where dash and zsh do not — so the case pins the route every script uses
   ```sh
   echo before
@@ -4652,6 +4721,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/an-empty-array-quoted-at` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1` | `n=0` |
 | `param/a-negative-substring-length` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[bcd]` | `[bcd]` | **2>** `<shell>: -2: substring expression < 0` *(status 1)* | `[]` | `[bcd]` |
 | `param/substring` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` |
+| `param/a-length-in-a-single-byte-locale` | `[6][9]` | `[6][9]` | `[6][9]` | `[6][9]` | `[6][9]` | `[6][9]` |
+| `param/a-length-in-a-utf8-locale` | `[6][9]` | `[5][3]` | `[5][3]` | `[5][3]` | `[5][3]` | `[5][3]` |
+| `param/a-length-counts-an-invalid-byte-as-one` | `[3]` | `[3]` | `[3]` | `[3]` | `[3]` | `[3]` |
+| `param/a-substring-in-a-single-byte-locale` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[é][llo]` | `[é][llo]` | `[é][llo]` | `[é][llo]` | `[é][llo]` |
+| `param/a-substring-in-a-utf8-locale` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[él][lo]` | `[él][lo]` | `[él][lo]` | `[él][lo]` | `[él][lo]` |
+| `param/a-substring-from-the-end-in-a-utf8-locale` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[éllo][él][éll]` | `[éllo][él][éll]` | **2>** `<shell>: -1: substring expression < 0` *(status 1)* | `[éllo][él][]` | `[éllo][él][éll]` |
+| `param/a-length-of-an-array-element-in-a-utf8-locale` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[2][5][3]` | `[2][5][3]` | `[2][5][3]` | `[2][5][3]` | `[2][0][5]` |
+| `param/a-pattern-trims-the-same-either-way` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` |
+| `param/a-pattern-trims-characters-in-a-utf8-locale` | `[hél][llo]` | `[hél][lo]` | `[hél][lo]` | `[hél][lo]` | `[hél][lo]` | `[hél][lo]` |
 | `param/case-change-is-bash-only` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ABC][abc]` | `[ABC][abc]` | **2>** `<shell>: ${x^^}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/case-toggle-is-newer-bash-still` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ABc][AbC][ABc]` | `[ABc][AbC][ABc]` | **2>** `<shell>: ${x~}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `~' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/indirection-diverges-four-ways` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[V]` | `[V]` | `[V]` | `[x]` | **2>** `<shell>:1: bad substitution` *(status 1)* |
@@ -4868,6 +4946,42 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/substring` — offset with and without a length; absent from dash
   ```sh
   x=abcdef; printf "[%s]" "${x:1:3}" "${x:2}"
+  ```
+- `param/a-length-in-a-single-byte-locale` — the length of a string holding characters wider than a byte, under the locale every case here runs in. Unanimous at the byte count — 6 and 9 — dash and the four multibyte shells alike, which is the half of #899 that makes the other half readable: the panel does not divide over whether a character is a byte, it divides over whether the locale is consulted
+  ```sh
+  s=héllo; t=日本語; echo "[${#s}][${#t}]"
+  ```
+- `param/a-length-in-a-utf8-locale` — the same snippet with the codeset changed and nothing else, which is where the panel divides: bash, ksh93 and zsh count characters — 5 and 3 — and dash counts bytes in every locale there is, having no multibyte decoder. Silent on both sides, since either answer is a plausible number. The `MultibyteEncodingIsHonored` axis; the locale itself is runtime state and not a second axis, which the pair of these two cases is what shows
+  ```sh
+  s=héllo; t=日本語; echo "[${#s}][${#t}]"
+  ```
+- `param/a-length-counts-an-invalid-byte-as-one` — a byte that begins no valid sequence, under the locale that decodes: 3 unanimously, so an undecodable byte is one character of its own rather than an error, a skipped byte or a replacement character. The trap is real in both directions — a decoder that folded it into U+FFFD would answer 3 with a value nothing put there, and one that rejected the replacement rune answered 0 for `$((##\x80))` in #855
+  ```sh
+  s=$(printf 'a\200b'); echo "[${#s}]"
+  ```
+- `param/a-substring-in-a-single-byte-locale` — a substring's offset and length count the same units its shell's `${#s}` does, so under the fixed locale they are bytes and `${s:1:2}` is the two bytes of one character. Written to keep both halves valid text on either side of the axis, which `${s:2}` would not be
+  ```sh
+  s=héllo; echo "[${s:1:2}][${s:3}]"
+  ```
+- `param/a-substring-in-a-utf8-locale` — the same offsets over characters: `él` and `lo` where the byte reading gives `é` and `llo`. The pair is what pins that the offset moves with the length rather than being a separate decision — a fix that counted `${#s}` in characters and indexed the string in bytes would pass the length case and cut this one in half
+  ```sh
+  s=héllo; echo "[${s:1:2}][${s:3}]"
+  ```
+- `param/a-substring-from-the-end-in-a-utf8-locale` — the negative offset and the negative length counted in characters, which is where an implementation that converts one end and not the other comes apart: a negative offset added to a byte length lands in the middle of a character. ksh93 keeps its own answer for a negative *length* — nothing — under any locale, so this also holds `SubstringNegativeLengthIsEmpty` still where it was
+  ```sh
+  s=héllo; echo "[${s: -4}][${s: -4:2}][${s:1:-1}]"
+  ```
+- `param/a-length-of-an-array-element-in-a-utf8-locale` — the count and the width in one line: `${#a[@]}` is 2 in every shell with arrays whatever the locale, and `${#a[N]}` is the length of one element and moves with the codeset. The two questions share a spelling and one of them is not a length at all, so a change to the length machinery has to leave the count alone
+  ```sh
+  a=(héllo 日本語); echo "[${#a[@]}][${#a[0]}][${#a[1]}]"
+  ```
+- `param/a-pattern-trims-the-same-either-way` — the suffix probe #899 cites as evidence that pattern matching is already rune-aware, pinned so that it stays where it is. It is unanimous, and it is also *not* discriminating: `héllo` ends in two ASCII characters, so two bytes and two characters off the end leave the same four bytes. `${s#???}` from the other end separates them and ours gives dash's answer — #905
+  ```sh
+  s=héllo; echo "[${s%??}][${s%%?}]"
+  ```
+- `param/a-pattern-trims-characters-in-a-utf8-locale` — the suffix probe beside the prefix one that separates the readings. Two characters off the end is the same four bytes either way, so `${s%??}` agrees with everyone; three off the front is `lo` under a UTF-8 locale and `llo` under a single-byte one, and dash gives `llo` in both. We give dash's answer, which is #905 — the length machinery reads the locale after #899 and the pattern matcher still walks bytes
+  ```sh
+  s=héllo; echo "[${s%??}][${s#???}]"
   ```
 - `param/case-change-is-bash-only` — bash alone: ksh93 reports a syntax error and zsh a bad substitution, so it belongs to the bash dialect rather than the core
   ```sh
@@ -5845,6 +5959,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pat/a-subshell-is-not-a-group` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `pat/an-empty-group-is-a-function` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `pat/an-array-literal-is-not-a-group` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x y]` | `[x y]` | `[x y]` | `[x y]` | `[x y]` |
+| `procsub/an-operand-of-an-expansion` | `[<(:)]` | `pathy` | `pathy` | `pathy` | `[<(:)]` | `[<(:)]` |
+| `procsub/an-operand-that-is-a-pattern` | `[<:]~[:]` | `[<:]~[:]` | `[<:]~[:]` | `[<:]~[:]` | `[]~[:]` | `[]~[:]` |
 | `pat/an-operand-out-of-a-command-substitution` | `[cd]` | `[cd]` | `[cd]` | `[cd]` | `[cd]` | `[cd]` |
 | `pat/an-operand-out-of-a-backquoted-substitution` | `[cd]` | `[cd]` | `[cd]` | `[cd]` | `[cd]` | `[cd]` |
 | `pat/an-expanded-operands-metacharacter` | `[bcd]` | `[bcd]` | `[bcd]` | `[bcd]` | `[bcd]` | `[abcdabcd]` |
@@ -6005,6 +6121,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pat/an-array-literal-is-not-a-group` — and the case that keeps it from eating an array literal: a `(` straight after `=` opens one, never a group — `a=(b|c)` is a parse error in that shell rather than a pattern
   ```sh
   a=(x y); echo "[${a[@]}]"
+  ```
+- `procsub/an-operand-of-an-expansion` — whether `<(cmd)` opens a process substitution *inside* a `${…}` operand, which is a question about the position rather than about the shell: bash answers with a path and ksh93, zsh and dash with the five characters — and the last two have process substitution everywhere else, so this is not the construct being absent. The operand is a word here rather than a pattern, because a path is only visible in a value: as a pattern it merely fails to match, which the literal reading does too
+  ```sh
+  unset u; p=${u:-<(:)}; case "$p" in /*) echo pathy;; *) echo "[$p]";; esac
+  ```
+- `procsub/an-operand-that-is-a-pattern` — and the same question where the wrong answer is silent. Where the characters are not a substitution they are pattern text — a `<` and, in the two shells with bare groups, the group `(:)` — so the first line strips in ksh93 and zsh and leaves the value standing in bash and dash. The second line is the one that caught the bug: a reading that took the substitution's *inner* text as the pattern trimmed a bare `:` from `:`, which no column here does
+  ```sh
+  v='<:'; echo "[${v#<(:)}]"; v=':'; echo "[${v#<(:)}]"
   ```
 - `pat/an-operand-out-of-a-command-substitution` — a pattern operand is a word and is expanded like one, unanimously across the panel — the row that was missing while `${v#$(echo ab)}` answered `abcd` here, stripping the five characters `echo ab` from a string that does not begin with them. No diagnostic, no status, a plausible string: exactly the shape the corpus exists to catch, and a variable holding the same pattern worked, which is what hid it
   ```sh

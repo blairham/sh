@@ -25,6 +25,7 @@ var preset = dialecttest.Preset{
 	Semantics:   zsh.Semantics,
 	Diagnostics: zsh.Diagnostics,
 	Apply:       zsh.Apply,
+	Prelude:     zsh.Prelude,
 }
 
 // presetDialect is a fresh, addressable copy of this dialect's grammar, for

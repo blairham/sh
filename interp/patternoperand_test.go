@@ -140,54 +140,43 @@ func TestAnExpandedPatternWithoutAMetacharacterAsksNothing(t *testing.T) {
 	}
 }
 
-// A process substitution in a pattern operand is not performed, and pinning
-// that is the point rather than a gap left open.
+// A process substitution in a pattern operand is performed, and the *path* is
+// the pattern.
 //
-// Measured, and the panel does not agree: in `${v#<(cmd)}` only bash runs the
-// command; in a `case` arm bash and zsh both do and ksh93 and dash cannot
-// parse it; in `[[ ]]` bash runs it where zsh refuses the word outright. There
-// is no intersection, so the core does not invent one — and the test asserts
-// the command did not run, which is the half a change here would break
-// silently. The divergence itself is #902.
-func TestAProcessSubstitutionInAPatternIsNotPerformed(t *testing.T) {
-	// The subject is the value coming back whole, and the evidence that
-	// nothing ran is the scratch directory: a substitution that is performed
-	// makes an `sh-procsub…` directory under the Runner's TMPDIR to hold its
-	// pipe. Asserting on a variable the command sets would prove nothing —
-	// the command runs in a child, so an assignment it makes never comes
-	// back either way.
-	//
-	// The arm is where the word carries a process substitution at all: inside
-	// `${…}` the `<(` is ordinary text and never becomes one, so a test
-	// written there would assert about a branch it does not reach.
+// It used to hand the matcher the substitution's inner text, so
+// `case x in <(x))` matched — which no shell in the panel does, because the
+// pattern there is a path nothing a script writes down is equal to. The
+// comment that stood here said the `<(` inside `${…}` was ordinary text and
+// never became a span; that was measured wrong, and the mutant that proved it
+// is the reason this file now asserts on the scratch directory (#902).
+func TestAProcessSubstitutionInAPatternIsPerformed(t *testing.T) {
 	tmp := t.TempDir()
 	out, st := runGrammar(t, `case abc in <(:)) printf "[hit]";; *) printf "[miss]";; esac`,
 		patternGrammar, func(r *Runner) { r.Env = append(withoutTMPDIR(r.Env), "TMPDIR="+tmp) })
-	// A miss either way — bash and zsh match `abc` against the path they made
-	// and do not match it either — so the outcome is the panel's and the
-	// question this pins is the one beside it.
 	if want := "[miss]"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
 	}
+	// The directory a substitution makes to hold its pipe is the evidence
+	// that one was made. Asserting on a variable the command sets would
+	// prove nothing: the command runs in a child.
 	made, err := filepath.Glob(filepath.Join(tmp, "sh-procsub*"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(made) != 0 {
-		t.Errorf("a process substitution ran: %v", made)
+	if len(made) == 0 {
+		t.Error("no process substitution ran")
 	}
 }
 
-// runPatternAxis runs src with one answer for GlobExpansionResults and the
-// core's answers for everything else, so the axis under test is the only one
-// that can decide anything.
-func runPatternAxis(t *testing.T, glob Answer, src string) (out string, status int) {
-	t.Helper()
-	return runGrammar(t, src, patternGrammar, func(r *Runner) {
-		sem := CoreSemantics()
-		sem.GlobExpansionResults = glob
-		r.Semantics = &sem
-	})
+// And the arm does not match the text inside the substitution, which is the
+// wrong answer this replaced: `case x in <(x))` hit where every shell in the
+// panel that can read the arm at all misses.
+func TestAProcessSubstitutionsInnerTextIsNotThePattern(t *testing.T) {
+	out, st := runGrammar(t, `case x in <(x)) printf "[hit]";; *) printf "[miss]";; esac`,
+		patternGrammar, nil)
+	if want := "[miss]"; out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
+	}
 }
 
 // withoutTMPDIR drops the scratch directory the test helper supplies, so a
@@ -201,4 +190,16 @@ func withoutTMPDIR(env []string) []string {
 		}
 	}
 	return out
+}
+
+// runPatternAxis runs src with one answer for GlobExpansionResults and the
+// core's answers for everything else, so the axis under test is the only one
+// that can decide anything.
+func runPatternAxis(t *testing.T, glob Answer, src string) (out string, status int) {
+	t.Helper()
+	return runGrammar(t, src, patternGrammar, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.GlobExpansionResults = glob
+		r.Semantics = &sem
+	})
 }

@@ -547,6 +547,22 @@ type Runner struct {
 	// deliberately cleared by `.` and `eval` while they run borrowed text:
 	// what a sourced script reports is the script's, not the builtin's.
 	inBuiltin string
+	// speaker is the prelude function the script called, whose name and
+	// whose caller's line every diagnostic raised inside it carries. Empty
+	// while a script's own text runs, which is every other moment. See
+	// prelude.go for the rule and for why the *outermost* such call owns it.
+	speaker string
+	// speakerLine is where the script called that function — a builtin has
+	// no lines of its own, so the location names the call rather than the
+	// body.
+	speakerLine int
+	// sourcingPrelude is on while the dialect's own shell text is being read,
+	// which is what tells a function it defines from one a script does.
+	sourcingPrelude bool
+	// preludeFuncs are the declarations the prelude made, by name. Compared
+	// by declaration rather than by name alone, so a script redefining one
+	// takes the shell's voice away with it.
+	preludeFuncs map[string]*syntax.FuncDecl
 	// disabledBuiltins are the names `enable -n` has switched off. Kept
 	// apart from custom so that switching one on again gets back whatever
 	// was registered rather than the core's.
@@ -732,6 +748,26 @@ type Runner struct {
 	// jobs are the background commands started by this shell.
 	jobs    []*Job
 	lastJob *Job
+	// lastJobPID is `$!`, which is a *value* and not a reference to a job.
+	//
+	// Separate from lastJob because the two stop being the same thing the
+	// moment the job ends. lastJob is the *current* job — what `%%` names and
+	// what a bare `fg` picks — so it has to go when the job leaves the table,
+	// or those two would name something that is not there. `$!` does not:
+	// measured unanimous 2026-09-05, `sleep 0 & wait; echo "[$!]"` reports the
+	// pid in bash 5.3.15, bash 3.2.57, bash 3.2 as `sh`, dash, ksh93u+ and
+	// zsh 5.9.2, and so does the same script under `-i` on a pseudo-terminal
+	// where the `Done` notice has already been printed and the job forgotten.
+	//
+	// It was one field, and the notice forgetting the job emptied `$!` with
+	// it. That only showed on a route where something asks for the notices
+	// between commands, which until now was the prompt alone.
+	// Zero is a real answer here and not an absence — a background builtin
+	// runs in this process and its job carries no pid of its own — so whether
+	// one has ever been started is a fact of its own rather than a value the
+	// number can carry.
+	lastJobPID    int
+	lastJobPIDSet bool
 	// toldOfStoppedJobs says the chunk *before* this one showed the person
 	// the jobs that are stopped, so the shell will not hold its exit for them
 	// again; tellingOfStoppedJobs is this chunk saying so, and becomes the
@@ -1206,7 +1242,17 @@ func (r *Runner) diagf(format string, args ...any) {
 // is the same wherever it lands.
 func (r *Runner) diagLine(format string, args ...any) string {
 	msg := fmt.Sprintf(format, args...)
-	if r.inBuiltin != "" && r.diag().NamesBuiltinInLocation {
+	if r.speaker != "" && r.inBuiltin != "" && r.inBuiltin != r.speaker {
+		// A builtin the dialect's own function called. The complaint reaches
+		// the script as that function's — `pushd /nope` is `pushd: /nope: …`
+		// in every shell that has the builtin — so the name the message opens
+		// with is *replaced* rather than nested. That `cd` did the work is an
+		// implementation detail of this prelude and of no other shell's.
+		if rest, cut := strings.CutPrefix(msg, r.inBuiltin+": "); cut {
+			msg = r.speaker + ": " + rest
+		}
+	}
+	if name := r.speaking(); name != "" && r.diag().NamesBuiltinInLocation {
 		// The builtin's name belongs in exactly one place. Most dialects put it
 		// at the front of the message — `cd: /x: no such directory` — and this
 		// one puts it in the location instead, so a message that also opens with
@@ -1215,7 +1261,7 @@ func (r *Runner) diagLine(format string, args ...any) string {
 		// Stripping it here rather than at each of the sixteen sites that write
 		// one keeps the rule in a single place, and keeps those messages readable
 		// as the sentence every other dialect prints.
-		msg = strings.TrimPrefix(msg, r.inBuiltin+": ")
+		msg = strings.TrimPrefix(msg, name+": ")
 	}
 	return r.locationPrefix() + msg
 }
@@ -1237,7 +1283,7 @@ func (r *Runner) lineOf(p syntax.Pos) int {
 // builtin, because the two dialects that ask want different answers for a
 // failed redirection: ksh93 counts it as the builtin's and zsh does not.
 func (r *Runner) builtinIsSpeaking() bool {
-	return r.inBuiltin != "" || r.redirectForBuiltin != ""
+	return r.speaking() != "" || r.redirectForBuiltin != ""
 }
 
 // locationPrefix is what goes in front of a diagnostic.
@@ -1249,7 +1295,11 @@ func (r *Runner) builtinIsSpeaking() bool {
 // is offset zero and the number is left out entirely.
 func (r *Runner) locationPrefix() string {
 	d := r.diag()
-	if r.inFunc == "" || !d.LocationNamesTheFunction {
+	// The dialect's own function is located the way a builtin is: at the line
+	// the script called it on, and never as a function — the dialect that
+	// names a function in place of a file names the builtin there instead,
+	// because to the script there is no function to name.
+	if r.inFunc == "" || r.speaker != "" || !d.LocationNamesTheFunction {
 		name := r.name()
 		if d.LocationNamesTheCurrentFile {
 			// The file the failing line was read from: the sourced file while
@@ -1262,7 +1312,11 @@ func (r *Runner) locationPrefix() string {
 				name = f
 			}
 		}
-		return d.prefix(name, r.inBuiltin, r.builtinIsSpeaking(), r.line)
+		line := r.line
+		if r.speaker != "" {
+			line = r.speakerLine
+		}
+		return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line)
 	}
 	if n := r.line - r.funcLine; n > 0 {
 		return d.prefix(r.inFunc, r.inBuiltin, r.builtinIsSpeaking(), n)
@@ -1341,7 +1395,7 @@ func (r *Runner) allowed(ctx context.Context, a Action) bool {
 		return true
 	}
 	r.emit(ctx, Event{Kind: EventDenied, Action: a})
-	r.diagf("%s: refused: %s\n", a.Kind, a.Path)
+	r.reportRefusal(a)
 	r.status = 126
 	return false
 }

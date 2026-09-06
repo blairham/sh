@@ -138,12 +138,22 @@ func TestAnArrayIsNotReadAsCharacters(t *testing.T) {
 	}
 }
 
-// A character is a character and not a byte, which is what the shell that
-// reads a string this way counts.
+// A character is a character and not a byte where the locale names a
+// multibyte encoding, and a byte where it does not — the two halves of
+// MultibyteEncodingIsHonored, on the subscript that indexes them.
 func TestAStringSubscriptCountsCharacters(t *testing.T) {
-	out, st := runReading(t, No, Yes, Yes, `s=héllo; printf "[%s][%s]" "${s[2]}" "${s[2,3]}"`)
+	out, st := runReading(t, No, Yes, Yes,
+		`LC_ALL=en_US.UTF-8; s=héllo; printf "[%s][%s]" "${s[2]}" "${s[2,3]}"`)
 	if out != "[é][él]" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "[é][él]")
+	}
+	// The same subscript in a single-byte locale names the second *byte*,
+	// which is half of the two-byte character and is not valid UTF-8 on its
+	// own — the answer the whole panel gives under LC_ALL=C.
+	out, st = runReading(t, No, Yes, Yes,
+		`LC_ALL=C; s=héllo; printf "[%s][%s]" "${s[2]}" "${s[2,3]}"`)
+	if out != "[\xc3][é]" || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, "[\xc3][é]")
 	}
 }
 

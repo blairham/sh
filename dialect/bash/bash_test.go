@@ -726,3 +726,24 @@ func TestDollarDashInteractiveStartupLetters(t *testing.T) {
 		t.Errorf("InteractiveOptionLetters = %q, want %q", got, want)
 	}
 }
+
+// The startup remark, which is the whole of what bash reproduces here.
+//
+// Measured 2026-09-05 with no terminal on any of the three standard streams:
+// `bash: no job control in this shell` in 5.3.15 and 3.2.57, and `sh: no job
+// control in this shell` in 3.2 run as `sh` — its own name, on `-i script.sh`
+// as well as on `-i -c` and `-i -s`, and never the script's.
+//
+// 5.3.15 writes one line more, above it: `bash: cannot set terminal process
+// group (11143): Inappropriate ioctl for device`. It is deliberately not
+// reproduced, and the reason that settles it is that the other two members do
+// not write it at all — it is one version's extra line and not bash's
+// wording. See interp.Diagnostics.NoJobControlAtStartup.
+func TestTheStartupRemarkAboutJobControl(t *testing.T) {
+	if got, want := bash.Diagnostics().NoJobControlAtStartup, "no job control in this shell"; got != want {
+		t.Errorf("NoJobControlAtStartup = %q, want %q", got, want)
+	}
+	if bash.Diagnostics().NoJobControlAtStartupNamesTheScript {
+		t.Error("NoJobControlAtStartupNamesTheScript = true, want false — bash names itself, not the script")
+	}
+}

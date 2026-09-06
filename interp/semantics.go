@@ -770,6 +770,20 @@ type Semantics struct {
 	// `**`, which is why dash leaves it unanswered.
 	ArithNegativeExponentIsError Answer
 
+	// ProcessSubstitutionInCondition lets `<(cmd)` stand as a condition's
+	// operand — `[[ $v == <(cmd) ]]` — and be performed there.
+	//
+	// bash alone. zsh reads the word and then refuses it, at status 2 and in
+	// a sentence of its own; ksh93 refuses earlier still, while reading, and
+	// dash has no `[[ ]]` to refuse it in. So the answer is no for three of
+	// the four, and what differs between them is only when and in what words
+	// — which is exactly the split between this axis and Diagnostics.
+	//
+	// It is asked *before* the substitution is performed. A shell that
+	// refuses the word must not have started the command first, and that is
+	// observable: the command has side effects.
+	ProcessSubstitutionInCondition Answer
+
 	// RegexQuotingMakesLiteral treats a quoted right operand of `=~` as a
 	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
 	// quoting a regex is unportable in either direction.
@@ -1606,6 +1620,34 @@ type Semantics struct {
 	// the dialect's first subscript is itself under either reading.
 	ScalarSubscriptIsACharacter Answer
 
+	// MultibyteEncodingIsHonored decodes the locale's character encoding, so
+	// that `${#s}`, `${s:off:len}` and a subscript on a scalar count
+	// characters rather than bytes.
+	//
+	// Measured 2026-09-05 with `s=héllo; echo ${#s}` under
+	// `LC_ALL=en_US.UTF-8`: bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93u+
+	// and zsh 5.9.2 all answer 5, and dash answers 6. Under `LC_ALL=C` every
+	// one of them answers 6, dash included — so this is not "four shells
+	// count characters", it is "four shells honor the encoding the locale
+	// names and one has no multibyte decoder at all". `s=日本語; echo ${#s}`
+	// separates them further: 3 against 9.
+	//
+	// Which encoding is in force is **not** a second axis. It is state read
+	// off the runner's own variables, exactly as PATH and IFS are, and it
+	// moves inside a running shell: `LC_ALL=C; s=héllo; echo ${#s}` gives 6
+	// in every panel member with nothing exported. See interp/multibyte.go
+	// for the precedence and the codesets, and driver/startup.go for the
+	// same reasoning applied to POSIX mode (#691, #733).
+	//
+	// Silent either way, which is why it is an axis and not a bug in one
+	// place: both answers are plausible numbers and neither shell reports
+	// anything.
+	//
+	// Asked only where the two readings differ — a value whose bytes are all
+	// ASCII is the same length and has the same positions under both — so a
+	// shell that never sees a non-ASCII byte never needs an answer.
+	MultibyteEncodingIsHonored Answer
+
 	// NegativeSubscriptPastTheStartInserts places a new element in front of
 	// every other when a negative subscript counts back past the first one:
 	// `a=(p q); a[-3]=x` leaves three elements with `x` at the head, however
@@ -2278,6 +2320,62 @@ type Semantics struct {
 	// lists `monitor off` — it disagrees with itself, and what is recorded
 	// here is the state the other two readers report.
 	InteractiveMonitorNeedsATerminal Answer
+
+	// InteractiveScriptAnnouncesJobs gives an interactive shell running a
+	// *named script file* somebody to tell about its jobs: the job number
+	// and pid as one starts, and the `Done` row as one ends. True in dash,
+	// ksh93 and zsh; false in bash.
+	//
+	// A different question from AnnouncesBackgroundJob, which asks whether
+	// the *start* is announced at all and is answered No by dash alone. Both
+	// are read on this route, and dash is why they cannot be one field: it
+	// announces the end of a job here and never the beginning.
+	//
+	// Measured 2026-09-05 through a pseudo-terminal, scratch HOME and scratch
+	// HISTFILE, on `sh -i script.sh` running `sleep 0.3 &` between two
+	// echoes:
+	//
+	//	bash 5.3.15   nothing         bash 3.2.57  nothing
+	//	bash as `sh`  nothing         dash         the `Done` row, no start
+	//	ksh93u+       both            zsh 5.9.2    both
+	//
+	// It is not the monitor asked a second time. The monitor is unanimous on
+	// this route with a terminal — InteractiveMonitorNeedsATerminal records
+	// that — and this is not, so a front end that turned both on together
+	// would give bash an announcement no bash makes.
+	//
+	// It is however *gated* on the monitor, which is measured: with no
+	// terminal anywhere, dash and zsh leave the monitor off and say nothing
+	// about the job either, and ksh93 runs the monitor without one and
+	// announces both ends. So the notice rides on the monitor and this axis
+	// is what the one dialect that runs a monitor and stays quiet anyway is
+	// for.
+	//
+	// And bash's silence is not about where the commands come from, which is
+	// the reading the grid rules out: `bash -i < script` with the program on
+	// a *pipe* announces both, and so does `bash -i -c`. Measured, bash is
+	// silent on exactly one interactive route, the one whose program is a
+	// named file — which is why this axis names the route rather than the
+	// terminal.
+	//
+	// The preset says no. XCU has nothing to say about a notice on this
+	// route, and where the text is silent the preset takes the answer that
+	// claims less: a shell that has not been asked for a job report does not
+	// write one. It is also the intersection — the whole panel is quiet on
+	// this route only if bash is — and the core is the intersection rather
+	// than the majority.
+	//
+	// Read rather than `ask`ed, exactly as InteractiveMonitorNeedsATerminal
+	// is and for the same reason: the answer is wanted once at startup,
+	// before the program has run a line, so an unanswered field would put
+	// "the shells disagree here" ahead of every `-i script.sh` under a preset
+	// that has not chosen — including scripts that never mention a job.
+	//
+	// `-i -c` is a separate question and is deliberately not this one. On
+	// that route bash, ksh93 and zsh announce and dash does not, which is a
+	// different split and therefore a different axis; `docs/spec/invocation.md`
+	// has the grid.
+	InteractiveScriptAnnouncesJobs Answer
 
 	// PunctuatedFunctionNameIsRefused stops the script when a function
 	// whose name carries `-` or `.` is defined. ksh93 alone: bash and zsh
@@ -3023,6 +3121,7 @@ func PosixSemantics() Semantics {
 		CommandStringShowsSInDollarDash:            No,
 		ArithInvalidOctalDigitIsError:              Yes,
 		RegexQuotingMakesLiteral:                   No,
+		ProcessSubstitutionInCondition:             No,
 		LastPipelineElementInCurrentShell:          No,
 		ShiftPastEndFatal:                          Yes,
 		ReadonlyReassignmentFatal:                  Yes,
@@ -3033,8 +3132,13 @@ func PosixSemantics() Semantics {
 		// have is its arithmetic: a comma there is the operator whose value
 		// is its right operand, and a string is not a sequence a subscript
 		// reaches into. Both are also what every panel member but one does.
-		SubscriptCommaIsARange:             No,
-		ScalarSubscriptIsACharacter:        No,
+		SubscriptCommaIsARange:      No,
+		ScalarSubscriptIsACharacter: No,
+		// XCU defines ${#parameter} as the length of the value "in
+		// characters", and defines a character as what the locale's
+		// LC_CTYPE category says one is. So the standard's answer is yes,
+		// and it is also what every panel member but dash does.
+		MultibyteEncodingIsHonored:         Yes,
 		DollarZeroInFunctionIsFunctionName: No,
 		// A special builtin's failure is fatal to a non-interactive shell,
 		// which the standard states outright. dash is the only member of the
@@ -3210,8 +3314,14 @@ func PosixSemantics() Semantics {
 		// less: a shell with no terminal does not say it is running a
 		// monitor. It is also three of the four.
 		InteractiveMonitorNeedsATerminal: Yes,
-		TildePlusMinusExpands:            No,
-		UnderscoreTracksTheLastArgument:  No,
+		// The standard says nothing about announcing a job to a shell that
+		// was handed a script to run, so the preset claims less and says
+		// nothing. It is the intersection as well: bash is silent here and
+		// the other three are not, and a core made of what they all do is
+		// the quiet one.
+		InteractiveScriptAnnouncesJobs:  No,
+		TildePlusMinusExpands:           No,
+		UnderscoreTracksTheLastArgument: No,
 		// POSIX has no `$_`, so nothing is written at startup and a name
 		// the environment carried is an ordinary variable that shows
 		// through — which is also the majority, five of the six.

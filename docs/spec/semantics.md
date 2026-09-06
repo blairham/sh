@@ -1165,11 +1165,12 @@ the site matters — and `PrintfHexEscape` is put to a format and never to a
 ### The escapes a `%b` argument expands
 
 `%b` and a format are two escape tables, not one table read twice, and
-every shell in the panel means it. Measured with `/bin/bash` 3.2.57,
-`/opt/homebrew/bin/bash` 5.3.15, `/bin/bash` as `sh`, `/bin/ksh` 93u+
-2012-08-01, `/opt/homebrew/bin/zsh` 5.9.2 and `/bin/dash`, reading bytes
-with `od -An -tx1` (macOS, 2026-09-05). The three bash columns agree
-throughout except where noted, so they are one column here:
+every shell in the panel means it. Measured with `/opt/homebrew/bin/bash`
+5.3.15 (as `bash` and as `sh` — the corpus's `bash` and `bash-as-sh`),
+`/bin/bash` 3.2.57 (`bash32`), `/bin/ksh` 93u+ 2012-08-01,
+`/opt/homebrew/bin/zsh` 5.9.2 and `/bin/dash`, reading bytes with
+`od -An -tx1` (macOS, 2026-09-05). All three bash columns agree throughout
+except where noted, so they are one column here:
 
     printf '%b' 'a\0101Z'  bash 61 41 5a  ksh93 61 41 5a  zsh 61 41 5a
                            dash 61 41 5a
@@ -1186,8 +1187,10 @@ code point: `\0300` is `c0` and `\0400` is `00`.
 
 A `%b` and an `echo` argument are close but are not the same table either,
 and the panel says so twice over. bash 3.2 writes `61 1b 5a` for a `%b`
-argument's `\e` and `61 5c 65 5a` for an `echo` argument's, so one shell
-answers the two sites differently; and the bare octal below splits the two
+argument's `\e` and `61 5c 65 5a` for an `echo` argument's — that is
+`/bin/bash` 3.2.57, the corpus's `bash32` column, and not `bash-as-sh`,
+which is the 5.3 build under another name — so one shell answers the two
+sites differently; and the bare octal below splits the two
 sites for every bash. The four dialects modeled here happen to give the
 same answer at both sites for `\e`, `\E` and `\x` — bash 3.2 is a version
 and not a dialect — but they are separate questions and are asked
@@ -1238,10 +1241,11 @@ Two things measured here and **not** modeled.
 
 `\uHHHH` and `\UHHHHHHHH` are escapes in bash 5.3 and zsh at both sites,
 and in ksh93's *format* only. `printf '%b' 'a\u0041Z'` is `61 41 5a` in
-bash 5.3 and zsh and the characters as written in bash 3.2, bash as `sh`,
-dash and ksh93; `printf 'a\u0041Z'` moves ksh93 into the first group.
-Nothing here decodes them at either site, which is a gap the change for
-#798 left exactly where it found it.
+bash 5.3 — as `bash` and as `sh` alike, so this is a bash *version* and
+not a posix-mode question — and in zsh, and it is the characters as
+written in bash 3.2, dash and ksh93; `printf 'a\u0041Z'` moves ksh93 into
+the first group. Nothing here decodes them at either site, which is a gap
+the change for #798 left exactly where it found it.
 
 One more divergence is measured and not modeled, in the corner where the
 stop meets a field width. Five of the six pad and truncate the text a `\c`
@@ -2855,7 +2859,7 @@ Corpus: `help/a-builtin-answers-the-help-option`,
 whose argument follows it. Measured (oracle runs, 2026-09-04, bash 5.3 and
 3.2 agreeing throughout except where 3.2 lacks a letter):
 
-    bash   rsa:d:n:N:p:t:u:    plus -e -E -i, unimplemented here
+    bash   rsa:d:i:n:N:p:t:u:  plus -e -E, unimplemented here
     ksh93  rspAd:n:N:t:u:      plus -C -S -v and --version, unimplemented
     zsh    rsnpAd:t:u:         plus -e -E -k -q -z -c -l, unimplemented
     dash   rp:
@@ -2896,6 +2900,29 @@ The letters themselves diverge before the behaviors do:
   (`a\:b` to `:` is `a:b`) and still folds a backslash-newline away;
   ksh93 and zsh fold the escaped delimiter pair away entirely and keep a
   backslash-newline (both not modeled — the substrate follows bash here).
+- **The seed.** `-i text` is the text a *line editor* opens with, so it
+  has an effect only where there is a terminal with an editor on it.
+  bash's own answer with no terminal is to take the option, consume its
+  argument, and read the line as though the letter were not there:
+
+      printf "x\n"  | { l=keep; read -i pre -r l; ... }   bash  st=0 l=[x]
+      printf "\n"   | { l=keep; read -i pre -r l; ... }   bash  st=0 l=[]
+      read -i                                            bash  `-i: option
+                                                               requires an
+                                                               argument`, st=2
+
+  The second line is the reading that looks right and is not: the seed is
+  **not** a default for an empty line, in bash or in anything else. bash
+  3.2, bash as `sh`, dash, ksh93 and zsh have no such letter at all and
+  refuse it in four wordings at two statuses — bash 3.2 and dash and
+  ksh93 at 2, zsh alone at 1 — which the shared bad-option reader already
+  produces from each dialect's own words.
+
+  So the letter is implemented here as bash's no-terminal behavior, and
+  what stops that from being an option that lies is the *other* letter:
+  `-e`, which opens the editor a seed would go into, is still refused by
+  name as unimplemented. There is never an editor here for the seed to
+  reach (#761).
 - **The counts.** `-n N` reads at most N characters, the delimiter still
   ending it early, and the text splits as any read's does. Without -r the
   count is of characters as *delivered* in bash — `a\tbcd` under `-n 3` is
@@ -3196,14 +3223,58 @@ What was built, all through the extension seam — registered builtins in each
   three measured axes above and reset the option table to the emulation's
   defaults, `-c` runs a string under the emulation and restores everything
   after, and a bare `emulate` names the mode.
-- **ksh93 `whence`** (dialect/ksh/whence.go): bare, `-v`, `-p`, `-q` — the
-  bare mode delegating to the same lookup `command -v` uses, `-v` to the
+- **ksh93 `whence`** (dialect/ksh/whence.go): bare, `-v`, `-p`, `-q`, `-a` —
+  the bare mode delegating to the same lookup `command -v` uses, `-v` to the
   core `type`, whose ksh wording was already `whence`'s, and aliases spoken
   for in the dialect because the core's lookup cannot see them.
-- **zsh `whence` and `where`** (dialect/zsh/whence.go): bare, `-v`, `-c`,
-  `-a`, `-p`, `-w`, `-f`, and `where` as `whence -ca` under a name that
-  parses no options at all. **Not ksh93's builtin under the same
-  spelling** — it is measured separately and differs in every part that
+
+  `-a` is every resolution rather than the first, always in `-v`'s
+  sentences, in this order:
+
+      alias, if any            N is an alias for V
+      keyword, if any          N is a keyword
+      function, if any         N is a function
+      builtin, if any and no   N is a shell builtin
+        function shadows it
+      every PATH hit           N is <path>, or `N is a tracked alias for
+                               <path>` when the PATH hit is the only line
+      the FPATH candidate      N is an undefined function
+
+  A defined function hides the builtin of the same name — which is what the
+  shell would run — and an alias hides nothing.
+
+  The last line is what #633 recorded as needing FPATH machinery this
+  substrate does not have, and the measurement says it does not. It appears
+  exactly when the name had a **builtin or function** resolution *and* a
+  **PATH hit**, and it appears with FPATH unset, set to an empty directory,
+  or exported: `whence -a whence` and `whence -a typeset` — builtins with no
+  file on PATH — do not print it, while `whence -a alias` and a function
+  named after a PATH command do. So it is a PATH search, which this
+  substrate has.
+- **zsh `whence`, `which` and `where`** (dialect/zsh/whence.go): bare, `-v`,
+  `-c`, `-a`, `-p`, `-w`, `-f`, with `which` as `whence -c` and `where` as
+  `whence -ca` under names of their own. Each name **stops offering the
+  letters its preset already decided**, which is a rule and not a
+  coincidence — measured letter by letter, zsh 5.9.2, 2026-09-05:
+
+      whence  -v -p -c -a -w -f      and -m -s -x -S
+      which      -p    -a -w         and -m -s -x -S   (-c -v -f refused)
+      where      -p       -w         and -m -s -x -S   (-a -c -v -f refused)
+
+  `-c` is already on in both, so it cannot be asked for; `-a` is already on
+  in `where`; and `-v` and `-f` are the two shapes `-c` displaces. `where`
+  used to refuse *every* dash word, which is right for `-v` and wrong for
+  `-p` and `-w`, both of which this shell answers.
+
+  `which` is registered even though /usr/bin/which exists: a builtin
+  shadowing a PATH command is what this shell does, and the five shells
+  without the builtin reach the external, which knows only PATH — the same
+  word asking two different questions, which is the corpus row
+  `whence/which-is-whence-with-c`. #572 left it out on the grounds that
+  shadowing was not what it had been asked for; #633 is that decision going
+  the other way.
+
+  **Not ksh93's builtin under the same spelling** — it is measured separately and differs in every part that
   could differ, which is the whole reason it is a second implementation
   rather than a registration of the first:
 
@@ -3324,14 +3395,15 @@ than missing:
   and wording (`bad file number: 9` where ksh93 brackets the errno). Its
   `whence` is built now, above; `print` stays command-not-found, visible in
   the corpus's `print/` cases as the recorded difference.
-- zsh `whence -m`, `-s` and `-x`: `-m` reads the operands as *patterns* and
-  matches them against every name the shell could run, PATH included — the
-  answer on the measuring machine was sixty-four lines of /usr/bin, and
-  nothing here walks PATH; `-s` resolves a symlink, which would be the bare
-  answer for every name that is not one and silently wrong for one that is;
-  `-x` sets the tab width of a printed body. Each is refused as not
-  implemented rather than as unknown, the same distinction `compgen` draws
-  between an action a shell lacks and a typo.
+- zsh `whence -m`, `-s`, `-S` and `-x`, under all three of its names: `-m`
+  reads the operands as *patterns* and matches them against every name the
+  shell could run, PATH included — the answer on the measuring machine was
+  sixty-four lines of /usr/bin, and nothing here walks PATH; `-s` resolves a
+  symlink, which would be the bare answer for every name that is not one and
+  silently wrong for one that is, and `-S` is `-s` reporting every step of
+  the chain rather than the last; `-x` sets the tab width of a printed body.
+  Each is refused as not implemented rather than as unknown, the same
+  distinction `compgen` draws between an action a shell lacks and a typo.
 - zsh `setopt` names of the **recorded** kind: 149 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150; neither was the count
@@ -3340,9 +3412,17 @@ than missing:
   the runner does not have; refused out loud rather than silently made
   global. `emulate csh` records the mode and changes nothing it could —
   csh's differences are not modeled anywhere else either.
-- ksh93 `print -v`/`-C` and `whence -a`/`-f`: value quoting, compound
-  output, the all-resolutions walk and the function skip; each is refused
-  as not implemented rather than unknown, which would be the worse answer.
+- ksh93 `print -v`/`-C` and `whence -f`: value quoting, compound output and
+  the function skip; each is refused as not implemented rather than unknown,
+  which would be the worse answer. `whence -a` was on this list and is
+  built now, above.
+
+  Two divergences it inherits rather than introduces, both visible at
+  `whence -v` and `whence` already: this shell's builtin set is not ksh93's
+  (`sleep` is a builtin there and a PATH command here, so `whence -a sleep`
+  is one line rather than three), and `type`/`whence -v` says `is a shell
+  builtin` where ksh93 says `is a special shell builtin` for the special
+  ones. Neither is `-a`'s to fix.
 - ksh93 `hist`: interactive history editing, and there is no history.
 - bash `bind`: readline's. The seam zsh's `bindkey` reaches the editor
   through is the core's rather than zsh's, so this is now a matter of
@@ -3785,10 +3865,8 @@ pushes and prints the stack (silently, in zsh), a bare `pushd` exchanges
 the top entry with the current directory, `popd` pops, and `dirs` prints
 everything on one line, current directory first, `$HOME` as `~`, read
 from `$PWD` at print time so a plain `cd` never leaves it stale. Two
-divergences are deliberate: the empty-stack refusals are bare sentences
-(a shell function cannot reach the engine's location machinery), and
-`DIRSTACK` holds only the pushed entries where bash's also mirrors the
-current directory.
+divergence is deliberate: `DIRSTACK` holds only the pushed entries where
+bash's also mirrors the current directory.
 
 **Rotation and `dirs`' letters** are the half that landed behind that
 single success-path pin and were therefore never exercised (#468).
@@ -3831,14 +3909,43 @@ work and stay where they are. Recorded and not implemented: zsh's
 a printing letter, which that engine measures as doing nothing at all;
 and bash's `DIRSTACK` as an assignable variable.
 
-One divergence the rotation work made visible rather than caused: a
-`pushd` whose directory does not exist reports `cd`'s complaint, located
-inside the prelude, where the real shell says
-`pushd: /nope: No such file or directory`. The status and the untouched
-stack are right; the sentence is the function's. The corpus rows
-therefore pin the *status* of every refusal and discard the text, and
-the wordings are pinned in `dialect/bash` and `dialect/zsh` instead,
-where a location prefix is not part of the comparison.
+**How a prelude function says where it is** (#603). The rotation work
+made this visible rather than causing it: a `pushd` whose directory does
+not exist used to report `cd`'s complaint, located inside the prelude,
+where both shells that have the builtin say
+`pushd: /nope: No such file or directory` at the caller's line. The
+status and the untouched stack were right and the sentence was the
+function's, so five corpus rows pinned the status and discarded the text.
+
+Two rules close it, and they are one fact seen from two sides.
+
+- **A function the prelude defined is the shell speaking.** While one
+  runs, every diagnostic raised inside it is located where the *script*
+  called it and named after it — whatever raised it. So `cd`'s refusal
+  arrives as `pushd`'s, which is what both shells print, and the name is
+  the one the script wrote: a prelude helper another prelude function
+  calls does not take it over. Remembered by declaration rather than by
+  name, so a script redefining `pushd` gets the ordinary treatment of a
+  function that shadows a builtin — `cd`, at the line in its own body.
+- **`diagnose` is how it raises one of its own.** One line in the
+  prelude, `diagnose "directory stack empty"`, renders as
+  `sh: line 3: popd: directory stack empty` under one dialect's location
+  style and `sh:popd:3: directory stack empty` under the other's, with
+  the shell text saying neither. It is the only command in `interp` that
+  exists for a prelude rather than for a script, and the lookup answers
+  it only while a prelude function is on the stack — a script running the
+  word gets the `command not found` the dialect it is written for would
+  give it, so a dialect gains no builtin by having a prelude.
+
+A second line of a refusal is still a plain `echo`, which is measured
+rather than a shortcut: bash locates only the first line, so
+`dirs: usage: dirs [-clpv] [+N] [-N]` follows the located complaint with
+no prefix of its own.
+
+What this does not do is make such a function a builtin in any other
+respect. `type pushd` still answers `function`, because it is one; the
+question the seam answers is whose diagnostic it is, which is the
+question a location already asks.
 
 ### Out of scope, recorded rather than silent: newgrp
 
@@ -4990,6 +5097,57 @@ that has not chosen. Unanswered reads as yes, which leaves the monitor
 off — the majority and the quiet answer.
 
 
+**`InteractiveScriptAnnouncesJobs`** — bash no · dash yes · ksh93 yes · zsh yes
+
+Gives an interactive shell running a **named script file** somebody to
+tell about its jobs: the job number and pid as one starts, the `Done` row
+as one ends.
+
+Measured 2026-09-05 through a pseudo-terminal, scratch `HOME` and scratch
+`HISTFILE`, on `sh -i script.sh` running `sleep 0.3 &` between two echoes:
+bash 5.3.15, bash 3.2.57 and bash 3.2 run as `sh` print nothing at all;
+dash prints the `Done` row and never the start; ksh93u+ and zsh print
+both.
+
+**It is not the monitor read a second time.** The monitor is unanimous on
+this route with a terminal and this is not, so a front end that turned
+both on together would give bash an announcement no bash makes. That is
+why #793 turned the monitor on here and left this alone.
+
+**It is however gated on the monitor.** Measured with no terminal
+anywhere: dash and zsh leave the monitor off there and say nothing about
+the job either, while ksh93 runs the monitor without one and announces
+both ends. So the notice rides on the monitor, and this axis is what the
+one dialect that runs a monitor and stays quiet anyway is for.
+
+**It is not about where the commands come from either**, which is the
+reading the grid rules out: `bash -i < script`, with the program on a
+pipe and no terminal to read commands from, announces both — and so does
+`bash -i -c`. bash is silent on exactly one interactive route, the one
+whose program is a named file, so the axis names the route.
+
+Separate from `AnnouncesBackgroundJob`, which asks whether the *start* is
+announced at all and which dash alone answers no. Both are read here, and
+dash is why they cannot be one field: it announces the end of a job on
+this route and never the beginning.
+
+The preset says no. XCU has nothing to say about a notice on this route,
+and where the text is silent the preset takes the answer that claims less
+— a shell that has not been asked for a job report does not write one. It
+is the intersection as well: the panel is quiet here only if bash is, and
+the core is the intersection rather than the majority.
+
+Read rather than `ask`ed, exactly as `InteractiveMonitorNeedsATerminal`
+is and for the same reason: the answer is wanted once at startup, so an
+unanswered field would put "the shells disagree here" ahead of every
+`-i script.sh` under a preset that has not chosen, including the scripts
+that never start a job.
+
+`-i -c` is a different split — bash, ksh93 and zsh announce there and dash
+does not — and is therefore a different axis, not yet taken. See
+docs/spec/invocation.md for the whole grid.
+
+
 **`WaitReadsOptions`** — bash yes · dash yes · ksh93 yes · zsh no
 
 Reads a leading `-` word as an option rather than as a job to wait for.
@@ -5391,6 +5549,65 @@ nor ksh93 says anything about `${s[2]}`, and both give status 0.
 A range and a character go together — `${s[2,4]}` is `ell` in the shell
 that reads characters — but they are two axes, because `${a[1,3]}` on an
 *array* is a range with no character in it.
+
+**`MultibyteEncodingIsHonored`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Decodes the character encoding the locale names, so that `${#s}`,
+`${s:off:len}` and a subscript on a scalar count characters rather than
+bytes.
+
+Measured 2026-09-05 on bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93u+,
+zsh 5.9.2 and dash:
+
+    s=héllo; echo ${#s}     LC_ALL=C          → 6 in all six
+                            LC_ALL=C.UTF-8    → 5 in all but dash, which says 6
+    s=日本語; echo ${#s}     LC_ALL=C.UTF-8    → 3 in all but dash, which says 9
+
+So the panel does **not** divide over whether a character is a byte. It
+divides over whether the locale is consulted at all: dash has no
+multibyte decoder and gives the byte count in every locale there is,
+while the other four give the byte count too whenever the locale names a
+single-byte encoding. Silent either way — both answers are plausible
+numbers, and nothing is reported.
+
+**The locale is not a second axis.** Which encoding is in force is
+runtime state, read off the runner's own variables the way `PATH` and
+`IFS` are, and it moves inside a running shell: `LC_ALL=C; s=héllo; echo
+${#s}` gives 6 in every panel member with nothing exported. An axis keyed
+on it would record the machine the measurement was taken on rather than
+the rule — the same reasoning `driver/startup.go` writes down for POSIX
+mode being read off the runner (#691, #733).
+
+The precedence is measured rather than assumed: a non-empty `LC_ALL`
+beats a non-empty `LC_CTYPE` beats `LANG`, and an *empty* one of the
+first two is skipped rather than being an answer of its own, so
+`LC_ALL= LANG=C.UTF-8` counts characters. A locale name with no codeset
+in it — `LC_ALL=UTF-8`, which is not a locale name — is single-byte
+here; the panel splits on it, and refusing it is what ksh93, zsh and
+dash do.
+
+This implementation decodes UTF-8 and nothing else. The single-byte
+encodings are right by that rule (`C`, `POSIX` and `en_US.ISO8859-1` all
+measure as bytes across the panel); `eucJP` and the other multibyte
+codesets would each be a decoder, and are a known limit rather than an
+answer.
+
+Asked only where the two readings differ — a value whose bytes are all
+ASCII is the same length and has its positions in the same places under
+both — so the core, which refuses nearly every axis, still answers
+`${#x}` on ordinary text.
+
+An undecodable byte is one character of one byte and is handed back as
+itself, which is unanimous: `s=$(printf 'a\200b')` has length 3 in every
+panel member, and zsh's `${s[2]}` is that byte rather than a replacement
+character.
+
+**Pattern matching does not yet follow.** `?`, `[…]` and the character
+classes still walk bytes here, so `${s#???}` on `héllo` is `llo` where
+bash, ksh93 and zsh give `lo` under a UTF-8 locale. That is the same
+axis reached through a different code path and is #905; the corpus
+records both the probe that separates the two readings and the
+`${s%??}` one that cannot.
 
 **`NegativeSubscriptPastTheStartInserts`** — bash no · dash unspecified · ksh93 no · zsh yes
 

@@ -291,6 +291,13 @@ func (c *Client) createTerminal(ctx context.Context, params json.RawMessage) (an
 	if req.Command == "" {
 		return nil, Errorf(CodeInvalidParams, "%s: no command", MethodCreateTerminal)
 	}
+	// Counted here rather than after the gate, because the count is about the
+	// *route* and not about the outcome: an agent that asks and is refused
+	// took the route, and a refusal is already a record of its own. See
+	// Client.Commands.
+	c.mu.Lock()
+	c.asked++
+	c.mu.Unlock()
 	argv := append([]string{req.Command}, req.Args...)
 	if !c.Boundary.Exec(ctx, req.Command, argv) {
 		// A refused create is a command that never started, and the agent is

@@ -114,7 +114,12 @@ core, not forked from it — and there are exactly three ways to do that:
 3. **Source a prelude.** Everything else. Functions shadow builtins and
    external commands alike, so a dialect can define, replace or wrap
    anything the core provides without touching it — portably, testably, and
-   without any way to break the substrate.
+   without any way to break the substrate. A function it defines *is* the
+   shell: what it reports is located where the script called it and named
+   after it, and `diagnose` is how it raises a complaint of its own. See
+   `interp/prelude.go` — before that, a prelude builtin's refusals were
+   silently mislabeled, and a test that pasted the prelude on the front of
+   its snippet could not see it (#603).
 
 `interp/extend_test.go` builds a miniature dialect with all three, as a
 working example rather than as prose.
@@ -217,8 +222,9 @@ what a binary meant to be liftable into its own repository must not need.
 not pre-commit — it is too slow for every commit. When in doubt run
 `make check` *and* `make lint`.
 
-The report targets are `conformance`, `conformance-dialects`, `wild`,
-`wild-run` and `smoke`. None of them gates; each is described below.
+The report targets are `conformance`, `conformance-gated`,
+`conformance-dialects`, `wild`, `wild-run`, `wild-run-contained` and
+`smoke`. None of them gates; each is described below.
 
 ## Installing, and the name collision
 
@@ -411,6 +417,29 @@ records what six real shells do, so pointing it at our binary turns every
 case into a conformance test with no new expectations to maintain. Add
 `ARGS=-v` to list what does not match — the passing set is a number and the
 failing set is the work.
+
+`make conformance-gated` runs the same corpus twice through the same binary
+— once plain, once under a sandbox policy — and reports the cases that
+answer differently. It is how the boundary gets exercised by fourteen
+hundred cases written for other reasons entirely, rather than only by unit
+tests written by somebody who already knew where the boundary was.
+
+The policy confines *writes* to the scratch directory each case is given
+and leaves reads and execs alone, because an allowed program is outside
+the boundary the moment it starts and a policy refusing reads while
+permitting programs is telling itself a story. A stricter one is a
+`-policy` flag away; deny-everything moves a third of the corpus and is a
+wall rather than a signal. `docs/design/sandboxing.md` has the numbers and
+what each difference is.
+
+`make wild-run-contained` is `wild-run` with the same posture: the shell
+under test may write only in the directory its run was given. That is what
+turns the sweep's containment from a statement about the *arrangement*
+into a statement about the *shell* — and the first run of it found the old
+argument was not true. "A directory of its own" is where a script is
+*started*, not where it can write: three of the 252 scripts on this
+machine write to a temporary file they name themselves, and the policy is
+what catches them.
 
 `make conformance-dialects` grades all four dialect binaries against the
 shells they claim to be. Each scores exactly what `make conformance` scores

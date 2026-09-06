@@ -724,6 +724,25 @@ type Dialect struct {
 	// docs/spec/shell-matrix.md.
 	ProcessSubstitution bool
 
+	// ProcessSubstitutionInParamOperand says a `${…}` operand may carry one.
+	//
+	// Separate from ProcessSubstitution because the panel separates them:
+	// measured, `${u:-<(:)}` is a path in bash and the five characters
+	// `<(:)` in ksh93, zsh and dash — and ksh93 and zsh both have process
+	// substitution everywhere else. So whether `<(` opens one is a question
+	// about *where the word stands*, not only about the dialect, and every
+	// operand of an expansion is on the same side of it: the pattern of
+	// `${v#…}`, the replacement of `${v/…/…}` and the word of `${v:-…}` all
+	// answer alike.
+	//
+	// It matters most where the operand is a pattern, because there the
+	// wrong answer is silent. The text is pattern text in the shells that
+	// say no, so `${v#<(x)}` is a `<` and — where the grammar has bare
+	// groups — the group `(x)`, which matches `<x`; a reading that took the
+	// substitution's *inner* text instead matched a bare `x`, which no shell
+	// in the panel does, and answered with the subject quietly trimmed.
+	ProcessSubstitutionInParamOperand bool
+
 	// FdVariableRedirections is `{name}>file` and its family: the shell
 	// picks the descriptor and the variable receives its number. Consumed
 	// by the lexer, because the adjacency to the operator is the whole

@@ -187,17 +187,24 @@ own. Containing what a command does once it is running is the job of an
 OS sandbox backend, which sits above this and is what a real `Gate`
 implementation would reach for.
 
-**The gate also contains a name rather than a file.** It is asked about
-the path the interpreter holds, and the interpreter does not resolve
-links — so two names for one file are two questions to it, and a rule
-about one of them says nothing about the other. That is a limit for an
-ordinary symlink, which can change under a running shell and could only
-be resolved by reading the filesystem from inside the boundary the
-policy is enforcing. It is *not* a limit for a name the platform fixes:
-`/tmp` is `/private/tmp` on every macOS machine, so a policy expands
-that one when the rule is read, once, and matches either spelling.
+**The gate is asked about a name, and a name is not a file.** It is
+handed the path the interpreter holds, and the interpreter does not
+resolve links — so two names for one file are two questions to it, and a
+rule about one says nothing about the other. There are three answers to
+that, not one, and they act at three different times.
+
+A name the *platform* fixes is answered when the rule is read: `/tmp` is
+`/private/tmp` on every macOS machine, so a policy expands that one
+once, at parse time, and matches either spelling. An ordinary symlink is
+answered at the *open*, by asking the kernel what the descriptor it just
+returned actually holds — which reads nothing the gate was not already
+given, and has no time-of-check race in it, because a descriptor pins an
+object. And two *real* names for one object — a hard link, a bind mount
+— are not answered here at all, because that needs matching on identity
+rather than on paths, which is the OS backend above.
+
 This paragraph exists because it is the second thing a reader of the
-seam has had to rediscover; `design/sandboxing.md` has both halves.
+seam has had to rediscover; `design/sandboxing.md` has all three.
 
 [design/sandboxing.md](design/sandboxing.md) is the shipped policy that
 fills the seam: the policy format, the default posture, what a refusal

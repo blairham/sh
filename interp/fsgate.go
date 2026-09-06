@@ -7,6 +7,8 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"slices"
+	"strings"
 	"syscall"
 )
 
@@ -79,14 +81,45 @@ func (r *Runner) readLink(path string) (string, error) {
 // readDir is os.ReadDir through the gate. A denied directory reads as empty,
 // which is what the error below means to every caller: nothing to descend
 // into, nothing to match.
+//
+// Unlike its neighbors it opens the directory itself rather than handing the
+// path to os.ReadDir, and the reason is the one verifyopen.go sets out: a
+// name is not an object, so the listing is taken from a descriptor whose
+// object the gate has agreed to. `echo link/*` enumerating a denied directory
+// through a link is the bug that closes, and it is worth closing here because
+// a listing is the loudest oracle the filesystem has.
+//
+// A refusal at that second point is the quiet one the first is, for the same
+// reason and with the same error: to a glob a directory the policy hides is a
+// directory that is not there, and it must not be able to tell the two apart
+// by whether a link was involved.
 func (r *Runner) readDir(path string) ([]os.DirEntry, error) {
 	if r.Gate == nil && r.Events == nil {
 		return os.ReadDir(path)
 	}
-	if r.probeDenied(r.act(Action{Kind: ActionReadDir, Path: path})) {
+	action := r.act(Action{Kind: ActionReadDir, Path: path})
+	if r.probeDenied(action) {
 		return nil, &fs.PathError{Op: "readdirent", Path: path, Err: syscall.ENOENT}
 	}
-	return os.ReadDir(path)
+	if r.Gate == nil {
+		// Watching without gating: there is nothing a verification could
+		// refuse, so the standard library's one-call form stands.
+		return os.ReadDir(path)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	if !r.verifyOpened(r.ctx, action, f) {
+		return nil, &fs.PathError{Op: "readdirent", Path: path, Err: syscall.ENOENT}
+	}
+	entries, err := f.ReadDir(-1)
+	// Sorted, because os.ReadDir sorts and every caller here was written
+	// against that: a glob's expansion is in name order and would otherwise
+	// come out in whatever order the directory happens to be stored in.
+	slices.SortFunc(entries, func(a, b os.DirEntry) int { return strings.Compare(a.Name(), b.Name()) })
+	return entries, err
 }
 
 // probeDenied consults the gate about a probe and emits the record either

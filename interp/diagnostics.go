@@ -219,6 +219,10 @@ type Diagnostics struct {
 	TestIntegerExpected string
 	// TestOperandExpected is an operator with nothing after it. No verbs.
 	TestOperandExpected string
+	// ProcessSubstitutionNotInCondition is a `<(cmd)` standing as a
+	// condition's operand in a dialect that does not allow one there. One
+	// verb: the substitution as it was written, `<(cmd)` and not its inside.
+	ProcessSubstitutionNotInCondition string
 	// TestTooManyArguments is a well-formed expression with words left over.
 	// No verbs.
 	TestTooManyArguments string
@@ -1802,6 +1806,51 @@ type Diagnostics struct {
 	// that say so before anything else. One verb: the builtin's name.
 	NoJobControl string
 
+	// NoJobControlAtStartup is what an *interactive* shell says because it
+	// wanted the monitor and had no terminal to run one on. No verbs.
+	//
+	// A different sentence from NoJobControl, which is a builtin refusing an
+	// operand. This one is nobody asking: the shell decided for itself at
+	// startup and is reporting what it could not have.
+	//
+	// Measured 2026-09-05 with no terminal on any of the three standard
+	// streams, scratch HOME and scratch HISTFILE, on `-i script.sh`, `-i -c`
+	// and `-i -s` alike — the same line on all three, and on none of the
+	// non-interactive routes:
+	//
+	//	bash 5.3.15   bash: no job control in this shell
+	//	bash 3.2.57   bash: no job control in this shell
+	//	bash as `sh`  sh: no job control in this shell
+	//	dash          <name>: 0: can't access tty; job control turned off
+	//	ksh93u+       nothing — it runs the monitor without a terminal
+	//	zsh 5.9.2     nothing
+	//
+	// Empty says nothing, which is two of the four and is the base's answer:
+	// the standard does not have the shell remark on it.
+	//
+	// bash 5.3.15 writes a *second* line above this one — `bash: cannot set
+	// terminal process group (11143): Inappropriate ioctl for device` — and
+	// it is deliberately not reproduced. Three reasons, and the first is the
+	// one that settles it: bash 3.2.57 and bash 3.2 run as `sh` do not write
+	// it at all, so it is one version's extra line rather than bash's
+	// wording. It is also that shell reporting the failure of an ioctl this
+	// shell never makes, and there is nothing here whose failure it would be
+	// describing. And it carries the shell's own pid, which no script can act
+	// on and which no recording of would be the same twice.
+	NoJobControlAtStartup string
+
+	// NoJobControlAtStartupNamesTheScript puts `$0` in front of that remark
+	// rather than the shell's own name. dash and only dash, of the two that
+	// say anything: it writes `<script>: 0: can't access tty; job control
+	// turned off` on `-i script.sh` and `/bin/dash: 0: …` on `-i -c` and
+	// `-i -s`, which is `$0` on all three. bash writes its own name on all
+	// three, `-i script.sh` included, and never the script's.
+	//
+	// A field rather than a reading of InvocationNamesTheUnreadLine, which
+	// dash is also the only one to set. One shell answering two questions the
+	// same way is not evidence that they are one question.
+	NoJobControlAtStartupNamesTheScript bool
+
 	// FcNoSuchEvent is `fc` with no history, in the dialect that reports
 	// it. No verbs.
 	FcNoSuchEvent string
@@ -2507,6 +2556,24 @@ func (d Diagnostics) ScriptDiagnostic(shell, path string, err error) string {
 	}
 	msg := Wording(format, "%[1]s: %[2]s", path, d.openReason(err, false))
 	return d.invocationPrefix(shell) + msg + "\n"
+}
+
+// JobControlDiagnostic is the whole line an interactive shell writes because
+// it wanted the monitor and had no terminal — with the trailing newline on it,
+// and empty for the dialects that say nothing.
+//
+// Rendered here for the reason ScriptDiagnostic is: which words a shell uses,
+// and whether it writes a line it has not reached, are the dialect's answers.
+// The caller owns only the fact that there was no terminal.
+//
+// shell is what the shell calls itself, which on the script route is the
+// script — measured, dash names the script here and names itself everywhere
+// else, which is the same rule its other invocation diagnostics follow.
+func (d Diagnostics) JobControlDiagnostic(shell string) string {
+	if d.NoJobControlAtStartup == "" {
+		return ""
+	}
+	return d.invocationPrefix(shell) + d.NoJobControlAtStartup + "\n"
 }
 
 // ScriptStatus is what a shell exits with when the script operand would not

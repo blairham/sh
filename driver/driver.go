@@ -350,6 +350,20 @@ func RunScript(sh Shell, src, path string) int {
 // One place, so the ignored error is ignored once and on purpose: there is
 // nothing a shell can usefully do about a failed write to stderr except try to
 // report it to stderr. interp's own errf exists for the same reason.
+// reportFinishedJobs writes what has ended since it was last asked, which is
+// the same notice a prompt writes before drawing itself and is worded in the
+// same place — interp holds the rendering because it holds the wording.
+//
+// To the error stream, which is where two of the panel put it: measured on
+// `-i script.sh` with the two writable streams separated, dash and ksh93 both
+// write the `Done` row to standard error and neither writes anything to
+// standard output. The same stream the prompt route already uses.
+func (sh Shell) reportFinishedJobs(r *interp.Runner) {
+	for _, line := range r.FinishedJobNotices() {
+		sh.errf("%s\n", line)
+	}
+}
+
 func (sh Shell) errf(format string, args ...any) {
 	_, _ = fmt.Fprintf(sh.Stderr, format, args...)
 }
@@ -1181,6 +1195,18 @@ func (sh Shell) runInput(in source) int {
 		// turning both on here would give bash an announcement no bash
 		// makes.
 		r.SetInteractiveMonitor(sh.hasTerminal())
+		// And whether there is anybody to *tell* about a job, which splits
+		// where the monitor does not: measured through a pseudo-terminal on
+		// `-i script.sh`, ksh93 and zsh announce a job starting and ending,
+		// dash announces only the ending, and all three bash members say
+		// nothing at all. So this is asked and the monitor is not, and the
+		// answer is Semantics.InteractiveScriptAnnouncesJobs.
+		//
+		// bash's silence is about the route and not about the terminal:
+		// `bash -i < script`, with the program on a pipe and no terminal to
+		// read commands from, announces both. Only a named script file is
+		// quiet.
+		r.SetInteractiveJobNotices()
 	}
 	r.SetScriptFile(in.file)
 	pr := wholeProgram(src, sh.Dialect)
@@ -1416,7 +1442,7 @@ func (sh Shell) executeLines(
 			// reads. Blank lines and comments *between* commands come out
 			// with the line after them; the ones after the last command have
 			// no line after them and were dropped outright.
-			sh.sayVerboseRest(pr.text(), echoed, r.Verbose())
+			sh.sayVerboseRest(r.Err(), pr.text(), echoed, r.Verbose())
 			break
 		}
 		if err := pr.err(); err != nil {
@@ -1439,13 +1465,26 @@ func (sh Shell) executeLines(
 		// spent, not saved — the line that says `set -v` is not echoed by the
 		// shell it turns on — and the line after it can only be found once
 		// every line before it has been walked past.
-		echoed = sh.sayVerbose(pr.text(), line.Last.Line, echoed, r.Verbose())
+		echoed = sh.sayVerbose(r.Err(), pr.text(), line.Last.Line, echoed, r.Verbose())
 		if err := r.RunPart(ctx, line); err != nil {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.
 			sh.errf("%s", in.dg.Report(in.diagName(), 1, err.Error()+"\n"))
 			return usageStatus, endingRefused
 		}
+		// What ended while that line was running, said before the next line
+		// starts. That is where the panel puts it and it is measured rather
+		// than assumed: on `-i script.sh` dash, ksh93 and zsh all write the
+		// `Done` row between the command the job outlived and the command
+		// after it — and all three write it after the *last* command too,
+		// when there is no command after it, which is why this is here
+		// rather than at the top of the loop.
+		//
+		// Nothing at all for a shell with nobody to tell. This is the route
+		// a plain script takes as well, and FinishedJobNotices answers with
+		// nothing while JobControl is off — which is every route but the
+		// interactive one, in every dialect but the three that announce.
+		sh.reportFinishedJobs(r)
 		if r.Exited() {
 			break
 		}
@@ -1480,7 +1519,19 @@ type verbosePos struct {
 // sayVerbose accounts for the physical lines up to and including upTo,
 // resuming where it left off and reporting how far it got. It writes them when
 // echo says to and passes over them silently when it does not.
-func (sh Shell) sayVerbose(src string, upTo int, at verbosePos, echo bool) verbosePos {
+//
+// w is descriptor 2 **as the script has pointed it** rather than the front
+// end's own stream, which is the whole of #771: `set -v` writes to the
+// shell's standard error, and a script that has moved it takes the echo with
+// it. Measured unanimous across the panel — after `exec 2>&1` the echo joins
+// the output, after `exec 2>/dev/null` it disappears, and `exec 2>&3` brings
+// it back.
+//
+// Read afresh at each call, and that is what makes the line holding the
+// redirection come out on the *old* descriptor: the echo happens when the
+// line is read and the `exec` has not run yet. A per-command redirect never
+// captures it at all, for the same reason and without needing a rule.
+func (sh Shell) sayVerbose(w io.Writer, src string, upTo int, at verbosePos, echo bool) verbosePos {
 	if upTo <= at.line {
 		return at
 	}
@@ -1496,7 +1547,7 @@ func (sh Shell) sayVerbose(src string, upTo int, at verbosePos, echo bool) verbo
 			at.off = len(src) + 1
 		}
 		if echo {
-			sh.errf("%s\n", text)
+			echoLine(w, text)
 		}
 		at.line++
 	}
@@ -1519,7 +1570,7 @@ func (sh Shell) sayVerbose(src string, upTo int, at verbosePos, echo bool) verbo
 // Not called where the shell stopped early. A script that runs `exit` is done
 // reading, and three of the four echo nothing after it; a line that failed to
 // parse is a separate question with its own answer.
-func (sh Shell) sayVerboseRest(src string, at verbosePos, echo bool) {
+func (sh Shell) sayVerboseRest(w io.Writer, src string, at verbosePos, echo bool) {
 	for at.off < len(src) {
 		rest := src[at.off:]
 		text := rest
@@ -1531,9 +1582,21 @@ func (sh Shell) sayVerboseRest(src string, at verbosePos, echo bool) {
 			at.off = len(src) + 1
 		}
 		if echo {
-			sh.errf("%s\n", text)
+			echoLine(w, text)
 		}
 	}
+}
+
+// echoLine writes one line of the input back, for `set -v`.
+//
+// Not Shell.errf, and the difference is the point rather than a detail: errf
+// holds the front end's own stream, which is where a *diagnostic* goes however
+// the script has arranged its descriptors, and this goes to the descriptor the
+// script has arranged. The ignored error is ignored for the same reason errf
+// ignores its own — there is nowhere left to report a failed write to standard
+// error.
+func echoLine(w io.Writer, text string) {
+	_, _ = fmt.Fprintf(w, "%s\n", text)
 }
 
 // source runs the prelude on an existing runner, which is how a prelude is
@@ -1542,6 +1605,12 @@ func (sh Shell) sayVerboseRest(src string, at verbosePos, echo bool) {
 // A prelude that fails is the dialect being broken rather than the script, so
 // it is reported plainly and never through the dialect's script wording.
 func (sh Shell) source(r *interp.Runner, name string) int {
+	// What follows is the dialect rather than a script, and the runner has to
+	// know: a function defined here speaks for the shell, so its refusals
+	// carry the location and the name a builtin's would. See
+	// interp.Runner.SourcingPrelude.
+	r.SourcingPrelude(true)
+	defer r.SourcingPrelude(false)
 	f, err := syntax.Parse(sh.Prelude, sh.Dialect)
 	if err == nil {
 		_, err = r.Run(context.Background(), f)

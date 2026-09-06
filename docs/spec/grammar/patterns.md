@@ -135,13 +135,25 @@ stood does not change the answer:
 and `abcdabcd` in zsh — the same split as `p='a*a'; ${v##$p}` and as
 `x='et*'; echo $x`. One axis, observed in three places.
 
-**Process substitution is the exception, and the panel does not agree
-about it.** In `${v#<(cmd)}` only bash runs the command; in a `case` arm
-bash and zsh both do, and ksh93 and dash cannot parse it; in `[[ ]]` bash
-runs it where zsh refuses the word outright — `process substitution
-<(cmd) cannot be used here`. There is no intersection, so the core does
-not perform one in a pattern operand. The corpus row
-`pat/a-process-substitution-in-an-operand` records the position.
+**Process substitution is three questions, not one**, and the panel
+splits differently on each. The rules are in `parameter-expansion.md` and
+`conditions.md`; in short:
+
+| where | bash | ksh93 | zsh | dash |
+| --- | --- | --- | --- | --- |
+| a `${…}` operand | a substitution | text | text | text |
+| a `case` arm | a substitution | no parse | a substitution | no parse |
+| a condition's operand | a substitution | no parse | refused, at 2 | no `[[ ]]` |
+
+Where it *is* a substitution, the path is the pattern — which never
+matches anything a script would have written down, and that is the
+measured answer rather than a shortcut. Where it is not, the characters
+are pattern text: `<(x)` is a `<` followed by the group `(x)`, so it
+matches `<x` in the two shells that read a bare group.
+
+What it is never, anywhere, is the text *inside* the substitution. That
+reading made `case x in <(x))` match and `${v#<(x)}` trim a bare `x`,
+neither of which any column does, and both silently (#902).
 
 ## Extended patterns are not core
 

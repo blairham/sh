@@ -262,6 +262,61 @@ func (r *Runner) SetInteractiveMonitor(hasTerminal bool) {
 	// that a terminal is needed and the monitor stays off.
 	if hasTerminal || r.sem().InteractiveMonitorNeedsATerminal == No {
 		r.monitor = true
+		return
+	}
+	// And an interactive shell that wanted the monitor and has no terminal
+	// says so, in two of the four. Here rather than in the front end because
+	// this is where the decision is, and because the two front-end routes
+	// that reach it — a prompt and `-i` with something to run — would
+	// otherwise each have to remember: measured, the same line comes out of
+	// `-i script.sh`, `-i -c` and `-i -s` alike, and out of no
+	// non-interactive route at all.
+	// Who is named is the dialect's: one of the two that speak names the
+	// script it was handed and the other names itself, and the Runner is
+	// holding both — `Name` is `$0` and `Invocation` is argv[0].
+	name := r.Invocation
+	if name == "" || r.diag().NoJobControlAtStartupNamesTheScript {
+		name = r.name()
+	}
+	r.errf("%s", r.diag().JobControlDiagnostic(name))
+}
+
+// SetInteractiveJobNotices gives this shell somebody to tell about its jobs
+// because it is an interactive one, which is what a front end that has read
+// `-i` says on a route that draws no prompt.
+//
+// Exported for the front end and separate from JobControl for the reason
+// SetInteractiveMonitor is separate from setMonitor: the field is a fact the
+// front end states, and this is a question the dialect answers. A prompt
+// still sets JobControl outright — every shell in the panel announces a job
+// to a person typing at it, so there is nothing there to ask.
+//
+// Only ever turns it on, and only on the one route it was measured for, and
+// only where the monitor is already running. The route and the monitor are
+// both the Runner's own, so nothing has to be handed in: the front end has
+// already said where the program came from and already asked for the monitor.
+//
+// Call it after SetInteractiveMonitor, which is what settles the gate.
+//
+// Whether `-i -c` announces is a separate question with a different split and
+// is not decided here — see Semantics.InteractiveScriptAnnouncesJobs.
+func (r *Runner) SetInteractiveJobNotices() {
+	// Read rather than `ask`ed, for the reason the monitor's answer is read:
+	// this runs once at startup, so an unanswered axis would complain ahead
+	// of every `-i script.sh` under a preset that has not chosen, including
+	// the scripts that never start a job. An unanswered field reads as the
+	// quiet answer, which is the intersection here.
+	// The monitor first, and it is a gate rather than a coincidence. Measured
+	// on `-i script.sh` with no terminal anywhere: dash and zsh, which leave
+	// the monitor off there, say nothing about the job either, and ksh93,
+	// which runs it without one, still announces both ends. So the notice
+	// rides on the monitor, and the axis is what the one dialect that runs a
+	// monitor and stays quiet anyway is for.
+	if !r.monitor {
+		return
+	}
+	if r.Route == RouteScriptFile && r.sem().InteractiveScriptAnnouncesJobs == Yes {
+		r.JobControl = true
 	}
 }
 

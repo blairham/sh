@@ -92,7 +92,7 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	<-job.ready
 
 	r.jobs = append(r.jobs, job)
-	r.lastJob = job
+	r.setLastJob(job)
 
 	// The near ends go into the descriptor table the way `exec {fd}>f`
 	// would put them there: numbered from ten up, for keeps.

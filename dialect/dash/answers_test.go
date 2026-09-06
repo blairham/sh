@@ -84,6 +84,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.Yes},
 		{"InteractiveMonitorNeedsATerminal", s.InteractiveMonitorNeedsATerminal, interp.Yes},
+		{"InteractiveScriptAnnouncesJobs", s.InteractiveScriptAnnouncesJobs, interp.Yes},
 		{"UnsetReadonlyFatal", s.UnsetReadonlyFatal, interp.Yes},
 		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.No},
@@ -236,5 +237,23 @@ func TestAWideDuplicationTargetIsRefused(t *testing.T) {
 	}
 	if !strings.Contains(out, "after") || st != 0 {
 		t.Errorf("out %q status %d, want the script to have carried on", out, st)
+	}
+}
+
+// The one shell in the panel with no multibyte decoder: a length is bytes
+// here whatever the locale names, where bash, ksh93 and zsh switch on it.
+//
+// Asserted under a UTF-8 locale, because that is the only one the answer is
+// visible in — under `LC_ALL=C` every panel member counts bytes and this
+// preset's answer changes nothing. Measured 2026-09-05: dash gives 6 for
+// `s=héllo; echo ${#s}` under LC_ALL, LC_CTYPE and LANG alike, and 9 for
+// `s=日本語`.
+func TestALengthIsBytesInEveryLocale(t *testing.T) {
+	for _, locale := range []string{"C", "C.UTF-8", "en_US.UTF-8"} {
+		src := "LC_ALL=" + locale + `; s=héllo; t=日本語; printf "[%s][%s]" "${#s}" "${#t}"`
+		out, st := answersRun(t, src)
+		if out != "[6][9]" || st != 0 {
+			t.Errorf("under %s: out %q status %d, want %q at 0", locale, out, st, "[6][9]")
+		}
 	}
 }

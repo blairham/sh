@@ -2206,6 +2206,11 @@ echo "st=$?"`,
 		Why:     "the other half of the same rule, and why the status cannot simply be set before the right-hand sides run: an assignment reports what a substitution in it reported, and reports success when there is none — even where a failing command came first",
 	},
 	{
+		ID: "jobs/a-disowned-job-is-not-in-the-listing", Category: "builtins", SyntaxError: true,
+		Snippet: `sleep 0.4 &| jobs >j.txt; echo "n=$(grep -c . j.txt)"`,
+		Why:     "`&|` starts a job in the background and lets go of it, so nothing lists it — one shell's, and the only shape of it a record can hold. The sibling spelling `&!` cannot be recorded at all: bash 5.3 and ksh93 read those two characters as `&` and the `!` that negates a pipeline, and what they then do with a bare `!` is a divergence of its own (#948), so a row about the disowning would carry four unrelated ones beside it. `&|` has no such second reading in bash or dash, which both refuse it outright. ksh93's cell is the exception and is not this change's: it parses `&|` and means something else again — `echo hi &| echo done` prints only `done` there. Counted rather than printed, because what a listing looks like is four other rows' question",
+	},
+	{
 		ID: "jobs/a-running-background-job", Category: "builtins",
 		Snippet: `sleep 0.4 & jobs`,
 		Why:     "one line of a `jobs` listing, and four shells write it four ways — the marker spacing, the width of the state column, the case of the word, and whether the command is there at all. dash shows an empty column and ksh93 `<command unknown>`, because neither kept the text; bash puts the `&` back on",

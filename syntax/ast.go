@@ -50,7 +50,7 @@ type Stmt struct {
 	// third state of the first. A dialect without the operators never sets
 	// it.
 	Disown bool
-	Semi       Pos
+	Semi   Pos
 
 	// Text is the source this statement was written as, and is recorded only
 	// for a background one.

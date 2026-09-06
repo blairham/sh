@@ -32,27 +32,45 @@ const (
 var reach = map[string]struct {
 	how, why string
 }{
-	"MethodReadTextFile": {gated,
-		"a path the agent chose, opened by us: ActionOpen with Write false"},
-	"MethodWriteTextFile": {gated,
-		"a path the agent chose, written by us: ActionOpen with Write true"},
-	"MethodCreateTerminal": {gated,
-		"a program the agent chose, started by us: ActionExec with the argv"},
-	"MethodKillTerminal": {gated,
-		"the agent reaching a running process it chose: ActionSignal"},
-	"MethodReleaseTerminal": {recorded,
+	"MethodReadTextFile": {
+		gated,
+		"a path the agent chose, opened by us: ActionOpen with Write false",
+	},
+	"MethodWriteTextFile": {
+		gated,
+		"a path the agent chose, written by us: ActionOpen with Write true",
+	},
+	"MethodCreateTerminal": {
+		gated,
+		"a program the agent chose, started by us: ActionExec with the argv",
+	},
+	"MethodKillTerminal": {
+		gated,
+		"the agent reaching a running process it chose: ActionSignal",
+	},
+	"MethodReleaseTerminal": {
+		recorded,
 		"the client ending something the client started — the protocol's only " +
 			"way for an agent to say it is finished, and refusing it would leave " +
-			"this client holding the process forever"},
-	"MethodRequestPermission": {inside,
+			"this client holding the process forever",
+	},
+	"MethodRequestPermission": {
+		inside,
 		"the agent asking about something it will do in its own process, which " +
-			"our boundary does not cover: this is a person's answer, not a policy's"},
-	"MethodCreateElicitation": {inside,
-		"a question put to a person; nothing is opened, started or signaled"},
-	"MethodTerminalOutput": {inside,
-		"what a command we already started has written, out of our own buffer"},
-	"MethodWaitForExit": {inside,
-		"waiting for a command we already started, which was gated when it started"},
+			"our boundary does not cover: this is a person's answer, not a policy's",
+	},
+	"MethodCreateElicitation": {
+		inside,
+		"a question put to a person; nothing is opened, started or signaled",
+	},
+	"MethodTerminalOutput": {
+		inside,
+		"what a command we already started has written, out of our own buffer",
+	},
+	"MethodWaitForExit": {
+		inside,
+		"waiting for a command we already started, which was gated when it started",
+	},
 }
 
 // TestEveryInboundMethodDeclaresWhatItDoesAboutTheBoundary is the half of #786

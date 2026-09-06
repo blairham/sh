@@ -1218,7 +1218,21 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// The contents of `$( )` are the contents of a subshell, so the
 		// answer is the one the parser already knows: read a list, and stop
 		// where it stops.
-		if end, ok := l.parseToClose(start); ok {
+		if end, remarks, ok := l.parseToClose(start); ok {
+			// What that read had to say comes back with it. A parse inside a
+			// parse otherwise says nothing — the reason takeRemarks exists
+			// below — and this is the *other* route into a substitution's
+			// contents, reached when the grammar does find the `)`.
+			//
+			// Which is what a nested substitution looks like: the inner one
+			// swallows the here-document and leaves a `)` for the outer one,
+			// so the outer read succeeds where the un-nested shape's fails,
+			// and the remark the innermost lexer raised was dropped with the
+			// parser that noticed it (#1024). Only the dialects that read a
+			// body as ending at the closing parenthesis get here at all: in
+			// the others the inner construct is refused, this read fails
+			// with it, and the refusal is the whole answer.
+			l.remarks = append(l.remarks, remarks...)
 			for l.off < end {
 				l.advance()
 			}
@@ -1443,13 +1457,21 @@ func (l *Lexer) takeRemarks(text string, from int) ([]Remark, bool) {
 	return sub.lex.remarks, false
 }
 
-func (l *Lexer) parseToClose(from int) (int, bool) {
-	sub := NewParser(l.src[from:], l.dialect)
+// It also returns what the read had to say about input it accepted, for the
+// same reason takeRemarks does: a remark is the one thing a parser produces
+// that its caller cannot recover from the tree or the error.
+//
+// The sub-parse is told which line it starts on, so those remarks name a line
+// of the program rather than of the substitution. `$(` holds no newline, so
+// the lexer's current line is the opener's, and the offsets the caller uses
+// are untouched by it.
+func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
+	sub := NewParserAt(l.src[from:], l.dialect, l.line)
 	sub.parseList()
 	if sub.err != nil || !sub.at(TokRightParen) {
-		return 0, false
+		return 0, nil, false
 	}
-	return from + sub.tok.Pos.Offset, true
+	return from + sub.tok.Pos.Offset, sub.lex.remarks, true
 }
 
 // procSubstKind says which end of the pipe the word will name.

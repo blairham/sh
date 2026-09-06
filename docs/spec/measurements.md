@@ -3532,6 +3532,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/a-substitution-inside-an-expansion-brings-its-own-quoting` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` |
 | `core/a-swallowed-quote-changes-the-program-rather-than-refusing-it` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` |
 | `core/what-a-nested-substitution-holds-is-not-a-delimiter` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` |
+| `core/the-older-substitution-spelling-brings-its-own-quoting-too` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` |
 
 - `core/dollar-single-expands-escapes` — read as bytes, because the failure mode was a literal backslash-t that looks almost right in a terminal — the quoting was recorded and nothing decoded it
   ```sh
@@ -3581,9 +3582,13 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf '[%s]' "${x:-"$( echo 'a"b' )"}" "${y:-"$( echo "c'd" )"}"; echo
   ```
-- `core/what-a-nested-substitution-holds-is-not-a-delimiter` — the two neighbours the fix has to reach as well: the arithmetic spelling, which nests a `$( )` of its own, and a single-quoted `)` that closes nothing. Both are unanimous. They are here because the counting scanner got the `)` and the `}` right already when they stood at the body's own level — `${x:-"$( echo ')' )"}` parsed on either side of the change — so a case built only from those two characters measures nothing, and only the `"` inside the substitution tells the two readings apart
+- `core/what-a-nested-substitution-holds-is-not-a-delimiter` — the two neighbors the fix has to reach as well: the arithmetic spelling, which nests a `$( )` of its own, and a single-quoted `)` that closes nothing. Both are unanimous. They are here because the counting scanner got the `)` and the `}` right already when they stood at the body's own level — `${x:-"$( echo ')' )"}` parsed on either side of the change — so a case built only from those two characters measures nothing, and only the `"` inside the substitution tells the two readings apart
   ```sh
   printf '[%s]' "${x:-"$(( 1 + $( printf %s '"' | wc -c ) ))"}" "${y:-"$( echo 'a")b' )"}"; echo
+  ```
+- `core/the-older-substitution-spelling-brings-its-own-quoting-too` — the backquoted spelling of the same rule, and it is here as a measurement rather than as a symmetry: ksh93 refuses a single quote inside backquotes inside a double quote when the word stands on its own — `a="`echo 'e"f'`"` is a syntax error there — and accepts it inside a `${ }` body, so all six agree on this row and only on this row. A fix written for `$( )` alone leaves the older spelling refused in all four dialects while the un-nested one is accepted, which is one construct answered two ways
+  ```sh
+  printf '[%s]\n' "${x:-"`echo 'e"f'`"}"
   ```
 
 ## command language

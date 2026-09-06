@@ -115,7 +115,7 @@ func TestASwallowedQuoteDoesNotEndTheWordEarly(t *testing.T) {
 	}
 }
 
-// The neighbours the change must not move.
+// The neighbors the change must not move.
 //
 // Skipping a nested substitution whole is a way of *finding* a delimiter, so
 // what it must not do is find one that is not there. Input that really does
@@ -175,6 +175,106 @@ func TestAnExpansionWithNothingNestedIsUnchanged(t *testing.T) {
 		}
 		if se.LastToken != c.near {
 			t.Errorf("%q: near %q, want %q", c.src, se.LastToken, c.near)
+		}
+	}
+}
+
+// The nesting the skip has to count rather than take the first `)` of.
+//
+// These are the rows a first pass of the fix passed by luck. A skip that
+// stopped one parenthesis early left the leftover `)` for the enclosing
+// double-quoted run, which advanced over it and closed in the right place —
+// so `"${x:-"$(( 1 + 2 ))"}"` reads the same either way and measures
+// nothing. What tells them apart is text *after* the arithmetic that the
+// substitution still owns: with the skip one short, the `"` in `'a"b'` is
+// reached by the run rather than by the program, and the word ends there.
+func TestTheSkipCountsTheNestingRatherThanTakingTheFirstCloser(t *testing.T) {
+	for _, c := range []struct{ src, body, inner string }{
+		// `$(( ))` closes with two parentheses, and the single-quoted `"`
+		// after it is inside the substitution, not after it.
+		{
+			`echo "${x:-"$( echo $(( 1 + 2 )) 'a"b' )"}"`,
+			`x:-"$( echo $(( 1 + 2 )) 'a"b' )"`,
+			` echo $(( 1 + 2 )) 'a"b' `,
+		},
+		// A subshell's parentheses are nesting too, and nothing marks them
+		// as belonging to a substitution.
+		{
+			`echo "${x:-"$( ( echo a ) ; echo 'p"q' )"}"`,
+			`x:-"$( ( echo a ) ; echo 'p"q' )"`,
+			` ( echo a ) ; echo 'p"q' `,
+		},
+		// The older spelling, which all six of the panel accept in this
+		// position — including the one that refuses it when the word stands
+		// on its own.
+		{
+			"echo \"${x:-\"`echo 'e\"f'`\"}\"",
+			"x:-\"`echo 'e\"f'`\"",
+			"echo 'e\"f'",
+		},
+	} {
+		f, err := Parse(c.src, Core())
+		if err != nil {
+			t.Errorf("%s: %v", c.src, err)
+			continue
+		}
+		sc := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+		if len(sc.Args) != 2 {
+			t.Errorf("%s: %d words, want 2", c.src, len(sc.Args))
+			continue
+		}
+		span := sc.Args[1].Spans[0]
+		if span.Kind != ParamExp || span.Value != c.body {
+			t.Errorf("%s: body is %v %q, want a parameter expansion %q", c.src, span.Kind, span.Value, c.body)
+			continue
+		}
+		operand := span.Param.Arg
+		if operand == nil || len(operand.Spans) != 1 {
+			t.Errorf("%s: operand is %v, want one span", c.src, operand)
+			continue
+		}
+		if got := operand.Spans[0]; got.Kind != CommandSubst || got.Value != c.inner {
+			t.Errorf("%s: operand span is %v %q, want a command substitution %q", c.src, got.Kind, got.Value, c.inner)
+		}
+	}
+}
+
+// The boundary of the change, and it is a boundary rather than a claim.
+//
+// Only a *double-quoted* run steps over a nested substitution. A single
+// quote has no specification beyond "nothing inside is special", so the run
+// it opens is taken literally to the next `'` and a `$(` inside it is two
+// ordinary bytes.
+//
+// That is what this shell does on both sides of the change, and it is not
+// what the panel does: all four of bash, dash, ksh93 and zsh refuse
+// `"${x:-'a$(b'}"` and `"${x:-'a` + "`" + `b'}"` — the `${ }` body is where they
+// look inside single quotes and this shell does not. The divergence is
+// pre-existing and unanimous, so it is a bug of its own rather than a part
+// of this one; the assertion here is that removing the guard is a change,
+// so that it cannot be removed as tidying while the answer to that bug is
+// still open.
+func TestASingleQuotedRunIsTakenLiterally(t *testing.T) {
+	for _, c := range []struct{ src, body string }{
+		{`echo "${x:-'a$(b'}"`, `x:-'a$(b'`},
+		{"echo \"${x:-'a`b'}\"", "x:-'a`b'"},
+		// And the balanced spellings, where taking it literally and looking
+		// inside it happen to end in the same place.
+		{`echo "${x:-'a$(b)c'}"`, `x:-'a$(b)c'`},
+	} {
+		f, err := Parse(c.src, Core())
+		if err != nil {
+			t.Errorf("%s: %v", c.src, err)
+			continue
+		}
+		sc := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+		if len(sc.Args) != 2 {
+			t.Errorf("%s: %d words, want 2", c.src, len(sc.Args))
+			continue
+		}
+		span := sc.Args[1].Spans[0]
+		if span.Kind != ParamExp || span.Value != c.body {
+			t.Errorf("%s: body is %v %q, want a parameter expansion %q", c.src, span.Kind, span.Value, c.body)
 		}
 	}
 }

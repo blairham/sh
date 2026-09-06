@@ -1024,7 +1024,12 @@ var Corpus = []Case{
 	{
 		ID: "core/what-a-nested-substitution-holds-is-not-a-delimiter", Category: "quoting",
 		Snippet: `printf '[%s]' "${x:-"$(( 1 + $( printf %s '"' | wc -c ) ))"}" "${y:-"$( echo 'a")b' )"}"; echo`,
-		Why:     "the two neighbours the fix has to reach as well: the arithmetic spelling, which nests a `$( )` of its own, and a single-quoted `)` that closes nothing. Both are unanimous. They are here because the counting scanner got the `)` and the `}` right already when they stood at the body's own level — `${x:-\"$( echo ')' )\"}` parsed on either side of the change — so a case built only from those two characters measures nothing, and only the `\"` inside the substitution tells the two readings apart",
+		Why:     "the two neighbors the fix has to reach as well: the arithmetic spelling, which nests a `$( )` of its own, and a single-quoted `)` that closes nothing. Both are unanimous. They are here because the counting scanner got the `)` and the `}` right already when they stood at the body's own level — `${x:-\"$( echo ')' )\"}` parsed on either side of the change — so a case built only from those two characters measures nothing, and only the `\"` inside the substitution tells the two readings apart",
+	},
+	{
+		ID: "core/the-older-substitution-spelling-brings-its-own-quoting-too", Category: "quoting",
+		Snippet: "printf '[%s]\\n' \"${x:-\"`echo 'e\"f'`\"}\"",
+		Why:     "the backquoted spelling of the same rule, and it is here as a measurement rather than as a symmetry: ksh93 refuses a single quote inside backquotes inside a double quote when the word stands on its own — `a=\"`echo 'e\"f'`\"` is a syntax error there — and accepts it inside a `${ }` body, so all six agree on this row and only on this row. A fix written for `$( )` alone leaves the older spelling refused in all four dialects while the un-nested one is accepted, which is one construct answered two ways",
 	},
 	{
 		ID: "core/append-assignment", Category: "parameters",

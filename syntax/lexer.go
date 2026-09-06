@@ -1762,6 +1762,13 @@ func (l *Lexer) skipSubstitution() bool {
 // and it stops at end of input rather than complaining: whoever called it is
 // inside a construct of its own and already has the unterminated one to
 // report.
+//
+// It does not call skipSubstitution on the way, and that is not an omission:
+// a nested `$( )` reached from here is already counted correctly — the `$`
+// is an ordinary byte and the parentheses balance — and `$(( ))` contributes
+// the same two as the nested call's own depth of two. Recurring was tried
+// and every mutant of it read the same, in all four dialects and across the
+// corpus, because it can only arrive at the state counting arrives at.
 func (l *Lexer) skipToDepth(depth int) {
 	for depth > 0 && !l.eof() {
 		switch c := l.peek(); c {
@@ -1783,9 +1790,7 @@ func (l *Lexer) skipToDepth(depth int) {
 			depth--
 			l.advance()
 		default:
-			if !l.skipSubstitution() {
-				l.advance()
-			}
+			l.advance()
 		}
 	}
 }

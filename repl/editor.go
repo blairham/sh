@@ -56,8 +56,13 @@ type editor struct {
 	// comp answers what a prefix could become, and lastTab says the previous
 	// keystroke was already a Tab — which is what makes the second one list
 	// the matches rather than repeat a completion that changed nothing.
-	comp    completer
+	comp    Completer
 	lastTab bool
+
+	// workingDir is the shell's own directory, asked when a completion is
+	// built rather than held, because `cd` moves it under the editor. Nil is
+	// a session with nothing to ask — the editor is usable without a Runner.
+	workingDir func() string
 
 	// interrupt is what marks a line abandoned with ^C. Empty draws nothing,
 	// which is what two of the four dialects do.

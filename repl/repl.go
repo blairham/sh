@@ -73,6 +73,28 @@ type Shell struct {
 	// substrate's own wording and filters nothing.
 	History HistoryStyle
 
+	// Completers are what answers Tab before this shell's own completion
+	// does, in order. Nil is a session that completes the way the substrate
+	// does, which is what a front end that has not said gets.
+	//
+	// Consulted in order, and **the first one with anything to say is the
+	// whole answer** — the lists are not merged, and this shell's own
+	// completer is last. See completers, where the rule is measured against
+	// both shells that have a completion system.
+	//
+	// Not part of a dialect, and that is the substrate rule rather than a
+	// preference. A dialect is a table of values, re-read as execution
+	// proceeds; a completer is a code path, and a dialect that carried one
+	// would be a dialect that could not be written as data. What a dialect
+	// *does* say about completion stays where it is and stays a value —
+	// EditorStyle.CompletionMatchesHiddenFiles is the shape that question has
+	// to take. This field is the front end's, for the same reason `-plugin`
+	// is cmd/sh's: it is a program's composition and not a shell's grammar.
+	//
+	// Called on the keystroke path. Read the note at the top of completer.go
+	// before writing one that does I/O.
+	Completers []Completer
+
 	// Clock is what a prompt with the time in it reads. Nil is the real one.
 	Clock func() time.Time
 
@@ -604,17 +626,28 @@ func (s Shell) historyFile() historyFile {
 	return h
 }
 
-// completer answers Tab from this shell: its builtins, its functions, what is
-// on its PATH and the files in its working directory.
+// completer answers Tab from this shell: whatever the caller contributed, and
+// then this shell's own builtins, functions, PATH and files.
+//
+// The shell's own goes last, which is the whole of what "extending completion"
+// means here — a caller that answers takes the word, and one that does not
+// leaves the substrate's answer standing. Nothing is merged; see completers.
 //
 // Built once per session rather than per keystroke for the names, which do not
 // move; PATH and the directory are read each time because `cd` and an
 // assignment both change them under it.
-func (s Shell) completer() completer {
-	if s.Runner == nil {
+func (s Shell) completer() Completer {
+	var all completers
+	all = append(all, s.Completers...)
+	if s.Runner != nil {
+		all = append(all, runnerCompleter{r: s.Runner, hidden: s.Editor.CompletionMatchesHiddenFiles})
+	}
+	if len(all) == 0 {
+		// A nil interface rather than an empty list, because the editor's
+		// check is against nil and a typed nil would pass it.
 		return nil
 	}
-	return runnerCompleter{r: s.Runner, hidden: s.Editor.CompletionMatchesHiddenFiles}
+	return all
 }
 
 // runnerCompleter reads the shell's state at the moment Tab is pressed.
@@ -645,13 +678,30 @@ func (c runnerCompleter) shell() shellCompleter {
 	}
 }
 
-func (c runnerCompleter) commands(prefix string) []string { return c.shell().commands(prefix) }
-func (c runnerCompleter) files(prefix string) []string    { return c.shell().files(prefix) }
+// Complete answers the word this shell would answer with, which is a command
+// where a command belongs and a filename everywhere else.
+//
+// The branch is on the request rather than on the line, because where a word
+// sits is the editor's rule and this is one of two callers of it. See
+// Completion.Command.
+func (c runnerCompleter) Complete(req Completion) []string { return c.shell().Complete(req) }
 
 // reservedWords is the grammar's own vocabulary, which no builtin table holds.
 var reservedWords = []string{
 	"case", "do", "done", "elif", "else", "esac", "fi", "for",
 	"function", "if", "in", "select", "then", "until", "while",
+}
+
+// workingDir is the shell's directory, as a completer is told it.
+//
+// Nil-safe and a method rather than a closure over the Runner, so a Shell
+// without one still builds an editor: the editor asks per keystroke and a
+// session with nothing to ask gets the empty answer rather than a panic.
+func (s Shell) workingDir() string {
+	if s.Runner == nil {
+		return ""
+	}
+	return s.Runner.Dir
 }
 
 func (s Shell) status() int { return s.Runner.ExitStatus() }
@@ -790,6 +840,10 @@ func (s Shell) historyRules() historyRules {
 func (s Shell) newEditor() *editor {
 	return &editor{
 		in: s.In, out: s.Out, comp: s.completer(),
+		// The shell's directory, not the process's, and asked fresh: a
+		// completer is handed it in every Completion and `cd` moves it
+		// between one keystroke and the next.
+		workingDir: s.workingDir,
 		// What this dialect marks an abandoned line with, which is `^C` in
 		// two of the four and nothing in the other two.
 		interrupt:       s.Editor.Interrupt,

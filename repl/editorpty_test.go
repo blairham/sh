@@ -41,7 +41,15 @@ type session struct {
 	prompt  int
 }
 
-func newSession(t *testing.T) *session {
+func newSession(t *testing.T) *session { return newSessionWith(t, nil) }
+
+// newSessionWith is the same terminal with one more thing said about the
+// shell, for a test whose subject is a field the wiring carries across.
+//
+// A hook rather than a second copy of the setup: the pty, the runner and the
+// prompt that counts commands are what make these tests reliable, and a second
+// copy of them is a second thing to keep right.
+func newSessionWith(t *testing.T, configure func(*Shell)) *session {
 	t.Helper()
 	control, tty, err := pty.Open()
 	if err != nil {
@@ -60,6 +68,9 @@ func newSession(t *testing.T) *session {
 	s := Shell{
 		Runner: r, In: tty, Out: screen, Err: errs, Name: "sh",
 		Style: PromptStyle{Escape: '\\', Codes: map[rune]PromptField{'#': FieldCommandNumber}},
+	}
+	if configure != nil {
+		configure(&s)
 	}
 	se := &session{
 		t: t, control: control, screen: screen, ran: ran, errs: errs,

@@ -205,15 +205,26 @@ writes it owns its timeout, and owns the consequences of it.
 
 ### Completions are excluded, for a different reason
 
-There is no public completion seam to remote. `repl`'s `completer` is an
-unexported two-method interface, and building a plugin surface for it
-would mean designing the in-process seam and the wire protocol in one
-change — which is how a seam ends up shaped by its first remote consumer
-rather than by its callers. Completion also happens per keystroke, which
-is the hot-path exclusion above.
+The in-process seam now exists — `repl.Completer`, `repl.Completion` and
+`Shell.Completers`, landed on its own merits so that it would be shaped
+by its in-process callers rather than by a wire protocol. That was the
+prerequisite this section used to be waiting on, and it removes the
+first half of the objection. **It does not remove the second.**
 
-When a public completion seam lands in `repl`, this protocol gains a
-third role additively. That is what the version rules below are for.
+Completion happens per keystroke, which is the hot-path exclusion above,
+and the seam is synchronous on the editor's own goroutine: a completer
+that blocks blocks the person typing. `repl/completer.go` writes down why
+there is no deadline and no goroutine behind it — a deadline reports
+something other than what happened (#493), and abandoning a slow
+completer leaks one goroutine per Tab (#690) — and that reasoning is
+exactly what a remote completer would have to answer for.
+
+So the third role is still not taken, and what it needs is now
+statable rather than vague. A remote completer must carry a cancel
+notification, must be droppable when it stops answering, and must not be
+consulted on the keystroke path without one of those two. None of that
+changes `repl.Completer`, which is the point of having landed it first:
+the role is additive, per the version rules below.
 
 ## Security
 
@@ -683,8 +694,9 @@ is genuinely the maintainer's to reverse.
 7. **Registrations are fixed for the plugin's life.**
 8. **A plugin that fails to launch is fatal to the invocation**, status
    2, rather than a warning.
-9. **Completions are excluded** until there is a public in-process
-   completion seam, which should land on its own merits first.
+9. **Completions are excluded** while completion is on the keystroke
+   path, and the in-process seam landing first (`repl.Completer`) is
+   what makes the remaining objection a statable one.
 10. **Plugins start eagerly at startup** rather than on first use.
 
 ## Staging

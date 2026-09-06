@@ -20,36 +20,18 @@ import (
 // the line — offering `/etc/passwd` where a command belongs is worse than
 // offering nothing.
 
-// completer answers what a prefix could become.
-//
-// An interface rather than the Runner directly, so the editor can be tested
-// without one and so a caller can offer its own — which is what a shell built
-// on this would want anyway.
-type completer interface {
-	// commands are the names that could run, given a prefix.
-	commands(prefix string) []string
-	// files are the paths that could follow, given a prefix.
-	files(prefix string) []string
-}
-
 // complete replaces the word under the cursor with what it could become, and
 // reports the matches when it cannot decide.
 //
 // Returning the matches rather than printing them: the editor owns the screen,
 // and deciding *when* to list is its business — the second Tab, not the first.
-func (e *editor) complete(c completer) []string {
+func (e *editor) complete(c Completer) []string {
 	if c == nil {
 		return nil
 	}
 	start := wordStart(e.line, e.pos)
 	word := string(e.line[start:e.pos])
-
-	var matches []string
-	if commandPosition(e.line, start) {
-		matches = c.commands(word)
-	} else {
-		matches = c.files(word)
-	}
+	matches := c.Complete(e.completion(start))
 	if len(matches) == 0 {
 		return nil
 	}
@@ -64,6 +46,36 @@ func (e *editor) complete(c completer) []string {
 		return nil
 	}
 	return displayNames(matches, word)
+}
+
+// completion is the question this keystroke asks, as the seam states it.
+//
+// Built here rather than in each completer because every fact in it is one the
+// editor already holds and nobody outside can recompute: where a word begins
+// is this package's own escaping rule, and whether it is a command is decided
+// by the operator before it. A completer that had to work those out from the
+// line would be a second copy of two rules that have to agree.
+//
+// The rune-to-byte conversion happens once, here. Line is a string because
+// that is what a caller wants to slice, and the editor holds runes because a
+// cursor sits between characters.
+func (e *editor) completion(start int) Completion {
+	return Completion{
+		Line:    string(e.line),
+		Point:   len(string(e.line[:e.pos])),
+		Start:   len(string(e.line[:start])),
+		Word:    string(e.line[start:e.pos]),
+		Command: commandPosition(e.line, start),
+		Dir:     e.dir(),
+	}
+}
+
+// dir is the shell's working directory, or empty when there is nothing to ask.
+func (e *editor) dir() string {
+	if e.workingDir == nil {
+		return ""
+	}
+	return e.workingDir()
 }
 
 // displayNames are the matches as a listing shows them: without the directory
@@ -230,6 +242,20 @@ func (s shellCompleter) commands(word string) []string {
 
 // files are the paths that could follow.
 func (s shellCompleter) files(word string) []string { return s.paths(word, nil) }
+
+// Complete is this shell's own answer, and the substrate's implementation of
+// the public seam.
+//
+// The two kinds are chosen by where the word sits, which the request already
+// says. One place decides it — the editor, when it builds the Completion — so
+// a caller's completer and this one are looking at the same fact rather than
+// each deciding for itself.
+func (s shellCompleter) Complete(c Completion) []string {
+	if c.Command {
+		return s.commands(c.Word)
+	}
+	return s.files(c.Word)
+}
 
 // resolve reads a path the way the shell would, against its working directory
 // rather than the process's — which are not the same once `cd` has run.

@@ -273,6 +273,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expansion/element-exclusion-on-a-bare-array-name` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: #2: arithmetic syntax error: operand expected (error token is "#2")` *(status 1)* | **2>** `<shell>: line 1: a: #2: arithmetic syntax error: operand expected (error token is "#2")` *(status 1)* | **2>** `<shell>: a: #2: syntax error: operand expected (error token is "#2")` *(status 1)* | `[1]` | `[1][3]` |
 | `expansion/element-exclusion-on-a-bare-array-name-by-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: #ba*: arithmetic syntax error: operand expected (error token is "#ba*")` *(status 1)* | **2>** `<shell>: line 1: a: #ba*: arithmetic syntax error: operand expected (error token is "#ba*")` *(status 1)* | **2>** `<shell>: a: #ba*: syntax error: operand expected (error token is "#ba*")` *(status 1)* | `[foo]` | `[foo]` |
 | `expansion/a-bare-array-name-with-a-default` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one]` | `[one]` | `[one]` | `[one]` | `[one][two]` |
+| `expansion/unquoted-array-elements-keep-their-separators` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[b][2][c]` | `[b][2][c]` | `[b][2][c]` | `[b][2][c]` | `[b 2][c]` |
+| `expansion/unquoted-positional-parameters-keep-their-separators` | `[p][q][r]` | `[p][q][r]` | `[p][q][r]` | `[p][q][r]` | `[p][q][r]` | `[p q][r]` |
+| `expansion/unquoted-array-elements-under-a-changed-ifs` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y][z]` | `[x][y][z]` | `[x][y][z]` | `[x][y][z]` | `[x-y][z]` |
+| `expansion/an-unquoted-array-element-that-looks-like-a-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[zz1][other]` | `[zz1][other]` | `[zz1][other]` | `[zz1][other]` | `[zz*][other]` |
+| `expansion/a-bare-array-name-with-a-separator-in-an-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[b][2]` | `[b][2]` | `[b][2]` | `[b][2]` | `[b 2][c]` |
+| `expansion/an-unquoted-star-subscript-does-not-always-join` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y][z]` | `[x][y][z]` | `[x][y][z]` | `[x][y][z]` | `[x y][z]` |
 | `expansion/element-exclusion-without-a-flag-group` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: #two: arithmetic syntax error: operand expected (error token is "#two")` *(status 1)* | **2>** `<shell>: line 1: a: #two: arithmetic syntax error: operand expected (error token is "#two")` *(status 1)* | **2>** `<shell>: a: #two: syntax error: operand expected (error token is "#two")` *(status 1)* | `[one]` | `[one two three]` |
 | `expansion/element-exclusion-empty-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#}' unexpected` *(status 3)* | `[one]` |
 | `expansion/element-exclusion-pattern-out-of-a-parameter` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#$p}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#$p}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#$p}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#$p}""' unexpected` *(status 3)* | `[one][two]` |
@@ -733,6 +739,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expansion/a-bare-array-name-with-a-default` — the `-` test came to the parameter rather than to the word, so what it yields is the parameter under this shell's reading of it: the elements in zsh, the first alone in bash and ksh93. The row exists because the word side is already pinned elsewhere and the two must not be confused — a substitution that fires takes its fields from the *word*, and this one does not fire
   ```sh
   a=(one two); printf "[%s]" ${a:-d}; echo
+  ```
+- `expansion/unquoted-array-elements-keep-their-separators` — what an unquoted whole-array expansion does to an element holding a separator, which is the same question an unquoted scalar asks and had never been asked here: bash and ksh93 split it into two fields, zsh leaves it whole. Silent in the direction that hurts — a filename with a space in it becomes two arguments and the status is 0 either way
+  ```sh
+  a=("b 2" c); printf "[%s]" ${a[@]}; echo
+  ```
+- `expansion/unquoted-positional-parameters-keep-their-separators` — the same question on the construct scripts write most: `cmd $@` and `for f in $@` are everywhere, and in the shell that does not split an unquoted expansion every argument holding a separator survives whole. The `[*]` spelling is a different row because joining is a different question from splitting
+  ```sh
+  set -- "p q" r; printf "[%s]" $@; echo
+  ```
+- `expansion/unquoted-array-elements-under-a-changed-ifs` — the row that says the split is asked against the *actual* separators rather than a guess at whitespace: with IFS a dash, an element holding a dash is two fields where the shells split and one where they do not. A reading hardcoded to spaces answers the previous row correctly and this one wrongly
+  ```sh
+  IFS=-; a=("x-y" z); printf "[%s]" ${a[@]}; echo
+  ```
+- `expansion/an-unquoted-array-element-that-looks-like-a-pattern` — the second of the two stages an expansion's result goes through, on the same path: bash and ksh93 read what came out as a pattern and hand back the file that matched, zsh hands back the text. The element decides what the command receives from the state of the directory, which is the quietest failure in the family — nothing is written and nothing fails
+  ```sh
+  : > zz1; a=("zz*" other); printf "[%s]" ${a[@]}; echo
+  ```
+- `expansion/a-bare-array-name-with-a-separator-in-an-element` — the bare name inherits both stages, because it *is* the whole-array expansion in the shell that reads it as a list. The rows that made the bare name a list avoid separators inside elements and so pass under either reading; this one does not, and it is where `for f in $files` stops being right for a filename with a space in it
+  ```sh
+  a=("b 2" c); printf "[%s]" $a; echo
+  ```
+- `expansion/an-unquoted-star-subscript-does-not-always-join` — the neighbor of the `[@]` rows and a question of its own: bash and ksh93 join the elements on IFS and split the result, which is why they answer three fields, while zsh does not join an *unquoted* `[*]` at all and answers two — the same two `${a[@]}` gives it. Quoted, all three join. So whether an unquoted `[*]` joins is not decided by whether the shell splits, and no arrangement of the splitting answer produces zsh's reading here
+  ```sh
+  a=("x y" z); printf "[%s]" ${a[*]}; echo
   ```
 - `expansion/element-exclusion-without-a-flag-group` — the same operator with no `(@)` in front and inside quotes, where the array joins to one string first: the pattern is then matched against `one two three` as a whole, matches nothing, and the value is left standing. Not a no-op by accident — `${a:#*}` on the same array is empty — and it is what says the operator asks about *elements*, of which a joined scalar has one. ksh93 answers `one` from the same characters, which is `${a#two}` against a scalar that is only the first element, so the two shells agree on neither the operator nor what `$a` names
   ```sh

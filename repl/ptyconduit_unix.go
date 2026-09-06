@@ -222,9 +222,15 @@ func (c *ptyConduit) forward(out io.Writer, b []byte) []byte {
 
 // partialSuffix is how many trailing bytes of b could still become a mark.
 //
-// The longest is taken, not the first found: a stream ending in the mark's
-// first two bytes twice over must hold back the longer run, or the second copy
-// is written to the terminal and the mark that follows it never matches.
+// The longest is taken rather than the first found. With the mark newConduitMark
+// builds, the two cannot differ, and that is a property of the mark rather than
+// luck: two lengths both matching would need the mark to hold a NUL somewhere
+// between its first byte and its last, and it holds hex digits there. A test
+// asserts that shape, because it is what makes this scan unambiguous and a
+// later change to the mark could take it away without anything else noticing.
+//
+// Written the general way anyway, so the scan stays correct for a mark that
+// does not have it.
 func partialSuffix(b, mark []byte) int {
 	longest := min(len(mark)-1, len(b))
 	for n := longest; n > 0; n-- {

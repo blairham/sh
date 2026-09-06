@@ -711,3 +711,63 @@ func TestClosingWaitsForWhatIsStillInTheConduit(t *testing.T) {
 	// then deferred a close as well must not wait for a pump that has gone.
 	conduit.close()
 }
+
+// What is held back when the stream ends is written, not dropped.
+//
+// The carry is the longest tail of the stream that could still become a mark,
+// and at end of stream it is one of two things: the start of a mark whose rest
+// never came, which is the shell's own and worth nothing, or genuine output
+// that happens to begin like one — a command printing a NUL as its last byte.
+// The second is real and the first is not reachable in practice, since the
+// shell closes the conduit only when it has stopped writing to it, so the carry
+// is written. Losing a byte of somebody's output is the worse mistake.
+func TestOutputEndingLikeAMarkIsNotSwallowed(t *testing.T) {
+	sink := &syncBuffer{}
+	conduit := newTestConduit(t, sink)
+
+	// Ends with the mark's first byte, so it is held back as a possible mark
+	// and only the end of the stream decides what it was.
+	payload := append([]byte("tail"), conduit.mark[0])
+	if _, err := conduit.Stream().Write(payload); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, sink, "tail", "the bytes before the held-back one")
+	conduit.close()
+
+	if got, want := sink.String(), string(payload); got != want {
+		t.Errorf("the terminal saw %q, want %q — the held-back byte was dropped", got, want)
+	}
+}
+
+// The mark's shape, because the scan depends on it.
+//
+// Its only NUL bytes are the first and the last, which is what makes "could
+// this tail still become a mark" have one answer instead of several: two
+// lengths both matching would need a NUL somewhere in between. A mutation run
+// found that taking the shortest match instead of the longest changes nothing
+// here, and the reason is this shape rather than the search — so the shape is
+// what gets asserted.
+//
+// The bracketing NULs are also why nothing a line discipline rewrites is in
+// it: the middle is hex digits, which no discipline touches.
+func TestTheMarkHasAShapeTheScanCanTrust(t *testing.T) {
+	for range 8 {
+		mark := newConduitMark()
+		if len(mark) < 3 {
+			t.Fatalf("mark %q is too short to bracket anything", mark)
+		}
+		if mark[0] != 0 || mark[len(mark)-1] != 0 {
+			t.Errorf("mark %q is not bracketed by NULs", mark)
+		}
+		for i, c := range mark[1 : len(mark)-1] {
+			if !strings.ContainsRune("0123456789abcdef", rune(c)) {
+				t.Fatalf("mark %q has %q at %d, which is not a hex digit", mark, c, i+1)
+			}
+		}
+		// And it is this session's own: a fixed mark would be stripped out of
+		// a command that printed it.
+		if other := newConduitMark(); bytes.Equal(mark, other) {
+			t.Errorf("two marks came back the same: %q", mark)
+		}
+	}
+}

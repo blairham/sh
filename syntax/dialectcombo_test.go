@@ -28,11 +28,11 @@ import (
 // there are 2^67 of them.
 //
 // So this file parses under combinations rather than under presets. It cannot
-// be exhaustive, and it does not try; it takes the three edges of the lattice
-// that a bug of this shape has to sit on to be interesting — every flag, every
-// flag but one, and one flag alone is the presets' own neighborhood — plus a
-// fixed spread of mixtures. The generator reads the struct by reflection, so a
-// flag added tomorrow is covered by having been declared.
+// be exhaustive — there are 2^67 vectors — and it does not try. It takes the
+// two edges of the lattice a bug of this shape has to sit on to be
+// interesting, every flag and every flag but one, plus a fixed spread of
+// mixtures across the middle. The generator reads the struct by reflection, so
+// a flag added tomorrow is covered by having been declared.
 
 // dialectBoolFields is the position of every exported bool in
 // [syntax.Dialect]. The non-bool fields are left at their zero value: an alias
@@ -58,10 +58,14 @@ type namedDialect struct {
 // combinationVectors is the flag vectors every input below is parsed under.
 //
 // The named ones are deliberate: `every-flag-but-X` is the sweep that found
-// #911 by hand, and `only-X` is the other edge — a core that has learned one
-// construct and nothing that construct usually travels with. The mixtures are
-// seeded from a fixed generator so a failure is reproducible; math/rand/v2's
-// PCG is documented to be stable, which a test that names a seed relies on.
+// #911 by hand, one flag at a time, and `every-flag` and `no-flag` are the
+// ends it sweeps between. The mixtures are seeded from a fixed generator so a
+// failure is reproducible; math/rand/v2's PCG is documented to be stable,
+// which a test that names a seed relies on.
+//
+// A vector per flag is 67 subtests over the whole corpus, which is why they
+// run in parallel: the sweep is seconds of wall time that way and a minute
+// serially, and a test nobody wants to wait for is a test somebody skips.
 func combinationVectors() []namedDialect {
 	fields := dialectBoolFields()
 	typ := reflect.TypeOf(syntax.Dialect{})

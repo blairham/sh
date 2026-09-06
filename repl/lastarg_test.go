@@ -20,7 +20,7 @@ import (
 func typedAfter(t *testing.T, style EditorStyle, history []string, keys string) string {
 	t.Helper()
 	var out strings.Builder
-	e := Shell{Editor: style}.newEditor()
+	e := Shell{Editor: style}.newEditor(t.Context())
 	e.in, e.out = strings.NewReader(keys), &out
 	e.history = history
 	line, err := e.readLine(drawPrompt("$ "))

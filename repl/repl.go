@@ -285,7 +285,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	s.Runner.TakeInterrupt = sig.take
 	defer func() { s.Runner.TakeInterrupt = nil }()
 
-	ed := s.newEditor()
+	ed := s.newEditor(ctx)
 	ed.history = earlier
 	// What this session will write, which is not the same list as what it can
 	// recall. The two used to be one — the new tail of the editor's history —
@@ -779,11 +779,19 @@ func (s Shell) historyFile() historyFile {
 // Built once per session rather than per keystroke for the names, which do not
 // move; PATH and the directory are read each time because `cd` and an
 // assignment both change them under it.
-func (s Shell) completer() Completer {
+func (s Shell) completer(ctx context.Context) Completer {
 	var all completers
 	all = append(all, s.Completers...)
 	if s.Runner != nil {
-		all = append(all, runnerCompleter{r: s.Runner, hidden: s.Editor.CompletionMatchesHiddenFiles})
+		all = append(all, runnerCompleter{
+			r: s.Runner, hidden: s.Editor.CompletionMatchesHiddenFiles,
+			// The session's boundary and the session's context, so a
+			// directory listed to answer Tab is asked about the same way one
+			// listed by a glob is. The history file above is handed the same
+			// pair for the same reason.
+			bound: boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session},
+			ctx:   ctx,
+		})
 	}
 	if len(all) == 0 {
 		// A nil interface rather than an empty list, because the editor's
@@ -799,6 +807,12 @@ type runnerCompleter struct {
 	// hidden is the dialect's answer and not the shell's, so it is settled
 	// once when the session starts rather than read again per keystroke.
 	hidden bool
+
+	// bound and ctx are the session's gate, sink and context. Held here
+	// because the Completer seam carries neither and cannot be widened to;
+	// shellCompleter.ctx has the argument.
+	bound boundary.Boundary
+	ctx   context.Context
 }
 
 func (c runnerCompleter) names() []string {
@@ -818,6 +832,7 @@ func (c runnerCompleter) shell() shellCompleter {
 	return shellCompleter{
 		names: c.names(), path: path, dir: c.r.Dir,
 		home: home, hidden: c.hidden,
+		bound: c.bound, ctx: c.ctx,
 	}
 }
 
@@ -1060,9 +1075,14 @@ func (s Shell) historyRules() historyRules {
 // reaches the editor is something a test can look at: the editor itself is
 // only built where there is a terminal, and a dialect's answer dropped on the
 // way looks exactly like a dialect that did not answer.
-func (s Shell) newEditor() *editor {
+//
+// The context is the session's and is here for one reason: completion reads
+// directories, those reads go through the gate, and the seam a completer
+// answers through carries no context to consult it with. See
+// shellCompleter.ctx.
+func (s Shell) newEditor(ctx context.Context) *editor {
 	return &editor{
-		in: s.In, out: s.Out, comp: s.completer(),
+		in: s.In, out: s.Out, comp: s.completer(ctx),
 		// The shell's directory, not the process's, and asked fresh: a
 		// completer is handed it in every Completion and `cd` moves it
 		// between one keystroke and the next.

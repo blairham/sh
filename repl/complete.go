@@ -4,11 +4,13 @@
 package repl
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/blairham/sh/internal/boundary"
 )
 
 // Completing the word under the cursor.
@@ -188,6 +190,34 @@ type shellCompleter struct {
 	// passwd is where account names are read from; empty is /etc/passwd. A
 	// field so a test can ask about names that are not on the machine.
 	passwd string
+
+	// bound is the session's gate and sink, so a directory listed to answer
+	// Tab is asked about the way one listed by a glob is. The zero value
+	// allows everything and records nothing, which is what a shell without a
+	// policy is.
+	bound boundary.Boundary
+
+	// ctx is the session's, because the seam a completer answers through
+	// cannot carry one: Completer.Complete takes a Completion and nothing
+	// else, and widening a published interface so that this package can reach
+	// its own gate would make every caller's completer pay for it. So the
+	// context is captured where the session begins — Shell.Run has it — and
+	// held here for the length of the session, which is exactly the lifetime
+	// of the editor that asks.
+	//
+	// Nil is normal: a completer built without one is a completer with no gate
+	// and no sink, and context() is where that is turned into a usable value
+	// rather than at each of the two call sites.
+	ctx context.Context
+}
+
+// context is the session's context, or a background one where a completer was
+// built without a session — which is every completer with nothing watching it.
+func (s shellCompleter) context() context.Context {
+	if s.ctx == nil {
+		return context.Background()
+	}
+	return s.ctx
 }
 
 // commands are the names that could run.
@@ -215,7 +245,11 @@ func (s shellCompleter) commands(word string) []string {
 			// rule PATH lookup follows.
 			dir = "."
 		}
-		entries, err := os.ReadDir(s.resolve(dir))
+		// The same listing through the same boundary. A directory a policy
+		// hides contributes no names, exactly as one that is not on the disk
+		// contributes none — which is already what this loop does with every
+		// other reason a PATH entry cannot be read.
+		entries, err := s.bound.ReadDir(s.context(), s.resolve(dir))
 		if err != nil {
 			continue
 		}

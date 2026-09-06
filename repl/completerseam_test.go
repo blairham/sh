@@ -146,7 +146,7 @@ func TestACallersCompleterAnswersBeforeTheShellsOwn(t *testing.T) {
 	s := Shell{Runner: newTestRunner(nil), Completers: []Completer{mine}}
 
 	e := &editor{line: []rune("ech"), pos: 3, workingDir: s.workingDir}
-	e.complete(s.completer())
+	e.complete(s.completer(t.Context()))
 
 	if got := string(e.line); got != "echoed-by-the-caller " {
 		t.Errorf("the line is %q, want %q", got, "echoed-by-the-caller ")
@@ -159,7 +159,7 @@ func TestTheShellsOwnCompleterAnswersWhenTheCallersDoNot(t *testing.T) {
 	s := Shell{Runner: newTestRunner(nil), Completers: []Completer{quiet}}
 
 	e := &editor{line: []rune("ech"), pos: 3, workingDir: s.workingDir}
-	e.complete(s.completer())
+	e.complete(s.completer(t.Context()))
 
 	if got := string(e.line); got != "echo " {
 		t.Errorf("the line is %q, want %q", got, "echo ")
@@ -172,7 +172,7 @@ func TestTheShellsOwnCompleterAnswersWhenTheCallersDoNot(t *testing.T) {
 // A shell with neither a Runner nor a completer of the caller's has none, and
 // the editor's nil check has to see a nil interface rather than a typed one.
 func TestAShellWithNothingToCompleteWithHasNoCompleter(t *testing.T) {
-	if c := (Shell{}).completer(); c != nil {
+	if c := (Shell{}).completer(t.Context()); c != nil {
 		t.Errorf("an empty shell has a completer: %#v", c)
 	}
 }
@@ -284,7 +284,7 @@ func TestTheEditorIsBuiltWithTheDirectoryAndTheCompleters(t *testing.T) {
 	r := newTestRunner(nil)
 	r.Dir = "/carried/across"
 	mine := &recordingCompleter{answer: []string{"mine"}}
-	e := Shell{Runner: r, Completers: []Completer{mine}}.newEditor()
+	e := Shell{Runner: r, Completers: []Completer{mine}}.newEditor(t.Context())
 
 	if got := e.dir(); got != "/carried/across" {
 		t.Errorf("the editor reports the directory %q, want %q", got, "/carried/across")

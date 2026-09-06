@@ -351,6 +351,90 @@ assumed it would make one policy file mean two things. The fix is the
 posture this page already recommends — name the subtree you control —
 and the audit record says which name was refused.
 
+### Tab completion reads directories, and a person chose the path
+
+A shell lists directories to answer Tab, and until #951 it listed them
+through the `os` package. The rule for what is inside the boundary is
+who chose the path — the sentence `internal/boundary` opens with — and
+there is no reading of it on which a script's `echo /srv/*` is inside
+and a person's `/srv/<Tab>` is outside. The person at the prompt is the
+policy's subject at least as much as the script is; `HISTFILE` is
+already inside on exactly that argument.
+
+The result was an inconsistency somebody could see:
+
+```
+deny read /srv/**
+echo /srv/*      ->  enumerates nothing   (gated, as ActionReadDir)
+/srv/<Tab>       ->  enumerated it        (went to the os package)
+```
+
+Both listings now go through the gate as the same `ActionReadDir`,
+through `Boundary.ReadDir`, which consults the gate, opens the
+directory, asks the kernel what the open reached, consults again if that
+is somewhere else, and takes the entries from that descriptor. It
+returns the *entries* rather than the descriptor, which is the property
+`OpenFile` has and is the point of both: there is no way to ask this
+package's permission and then list something else. A `~name` completion
+still reads the account file directly, and that exemption is written
+down in `TestEveryFrontEndOpenGoesThroughTheBoundaryOrSaysWhyNot` with
+the reason — the path is fixed, and gating it would hide the prefix
+listing while leaving `~name` itself resolving through `user.Lookup`,
+which is a library call no gate is on.
+
+The issue left two questions open. Both are answered here rather than in
+silence, because silence is what the exemption list exists to prevent.
+
+**A refusal shows nothing, and it is refused quietly.** Tab either
+offers something or does not, so a denied listing is no completions —
+which is exactly what a person already sees for a directory that is not
+there, and is the deny semantics `ActionReadDir` has always documented.
+No diagnostic, no refusal of its own, nothing that would let somebody
+map a hidden tree by watching which prefixes refuse differently from
+which are absent. The reason to be quiet is *stronger* here than for a
+script: a completion list is read by a person, so a refusal that
+identified itself would be an oracle with a human running it. This is
+the choice #941 made for probes, in the same words — answer the way a
+missing path answers rather than break the construct.
+
+**A gate is not asked to prompt mid-Tab, and nothing had to be invented
+for that.** The objection was that a gate which stops to ask a person
+something would ask it in the middle of a keystroke-driven completion.
+It does not arise. `internal/acp` holds the only gate in this tree that
+asks anybody anything, and its `Escalates` already answers false for
+every read — a stat, a non-writing open, and a directory listing —
+because a prompt arriving at the rate a `PATH` search or a glob
+generates them is one people click through, which is a worse boundary
+than an honest record. Completion raises the same `ActionReadDir` a glob
+raises, so there is nothing here for an escalation rule to learn about;
+an embedder whose own gate chose to prompt on a listing would already be
+prompting once per directory of every glob a script writes. Giving
+completion an action of its own so that such a gate could tell the two
+apart would be inventing a distinction nothing has asked for, and it
+would also be the wrong distinction: a policy that hides a directory
+should hide it from both.
+
+**The listing is recorded, and neither suppressed nor coarsened.** The
+issue asked whether a record per keystroke would flood the sink. The
+cost was counted rather than guessed, on this machine:
+
+| what | records |
+| --- | --- |
+| one Tab in the file position | 1 |
+| one Tab in the command position, 30-entry `PATH` | 30 |
+| `ls \| grep x` — one line of script | 21, before either command starts |
+| `echo /usr/share/doc/**` | 11 read-dir |
+
+Completion runs on **Tab and on nothing else** — the editor completes on
+a key, not on every character — so a long prefix costs nothing until it
+is asked to complete one. The command position costs one record per
+`PATH` entry, which is the same shape the shell already pays per
+*command*, since a `PATH` search stats a candidate in every directory
+`PATH` names. A person exploring the filesystem from the prompt is
+precisely what an audit trail is for, and a stream holding every
+directory a glob descended into and none of the ones a person looked at
+by hand would be a strange thing to hand a reviewer.
+
 ### Platform aliases are expanded once, when the rule is read
 
 One case looks like the section above and is answered somewhere else

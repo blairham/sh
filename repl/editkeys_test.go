@@ -49,7 +49,7 @@ var (
 func typedStyled(t *testing.T, style EditorStyle, keys string) string {
 	t.Helper()
 	var out strings.Builder
-	e := Shell{Editor: style}.newEditor()
+	e := Shell{Editor: style}.newEditor(t.Context())
 	e.in, e.out = strings.NewReader(keys), &out
 	line, err := e.readLine(drawPrompt("$ "))
 	if err != nil {
@@ -291,7 +291,7 @@ func TestWhatIsKilledCanBePutBack(t *testing.T) {
 // each of two lines is two pieces rather than one.
 func TestAKillSurvivesTheLineItCameFrom(t *testing.T) {
 	var out strings.Builder
-	e := Shell{Editor: zeroAnswers}.newEditor()
+	e := Shell{Editor: zeroAnswers}.newEditor(t.Context())
 	e.out = &out
 
 	e.in = strings.NewReader("echo one two\x17\r")
@@ -358,7 +358,7 @@ func TestWordsMadeOfWideCharacters(t *testing.T) {
 // would jump the line out from under a finger that meant to select text.
 func TestAModifiedUpArrowIsNotTheUpArrow(t *testing.T) {
 	var out strings.Builder
-	e := Shell{}.newEditor()
+	e := Shell{}.newEditor(t.Context())
 	e.out = &out
 	e.remember("earlier")
 

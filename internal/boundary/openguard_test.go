@@ -40,8 +40,13 @@ var frontEnd = []string{"../../driver", "../../repl", "../acp", "../blocks", "..
 // Not os.Stat and its neighbors: a probe is answered without opening anything
 // and is a metadata disclosure rather than a content one, which is the split
 // docs/design/sandboxing.md already argues under "What this closes, and what
-// it does not". Completion's directory listing is on that side of the line and
-// is recorded in exempt below rather than passed over in silence.
+// it does not".
+//
+// os.ReadDir is on the list and is not a probe. A listing is the loudest
+// oracle the filesystem has — it enumerates rather than answering one question
+// — which is why ActionReadDir exists and why completion's two listings, which
+// were the whole of #951, went through Boundary.ReadDir rather than staying
+// written down here.
 var openers = map[string]bool{
 	"Open": true, "OpenFile": true, "Create": true, "CreateTemp": true,
 	"ReadFile": true, "WriteFile": true, "ReadDir": true,
@@ -64,11 +69,13 @@ var exempt = map[string]string{
 	"repl.lookupTerminal": "/dev, listed to name this session's terminal. A fixed path, and " +
 		"no content is read.",
 	"repl.userHomes": "the account file, read to answer `~name` completion. A fixed path the " +
-		"front end chose, and the standard library has no call that enumerates accounts.",
-	"repl.paths": "completion listing a directory a person is typing into — a listing on a " +
-		"path the policy's subject chose, which the rule above would put inside. Left outside " +
-		"pending #951, which is where the argument is.",
-	"repl.commands": "the same listing over $PATH, for the command position. #951.",
+		"front end chose — the person types a prefix, never the path — and the standard " +
+		"library has no call that enumerates accounts. It is the last of the three #951 " +
+		"named and the one #951 did not close: gating this read would hide the prefix " +
+		"listing while leaving `~name` itself resolving, because expandTilde falls back to " +
+		"user.Lookup for a name the file does not hold and that is a library call no gate is " +
+		"on. Closing it means gating account lookup as a whole, which is a different " +
+		"question from a directory listing.",
 	"repl.trim": "the history file's rewrite, on the path the append already passed the gate " +
 		"on, through a temporary in the same directory. The shell's own scaffolding, which " +
 		"ActionOpen's rule places outside the boundary.",

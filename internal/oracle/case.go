@@ -4572,7 +4572,27 @@ echo "st=$?"`,
 	{
 		ID: "arith/two-parens-at-command-position-are-not-a-subshell", Category: "arithmetic",
 		Snippet: `((echo hi)); echo "st=$?"`,
-		Why:     "outside a condition the distinction really is textual: with no space the three shells that have (( )) read an arithmetic command and fail on `echo`, while dash runs the nested subshell and prints hi. Marked a syntax error because *we* refuse it while reading, where all three refuse it while running — `bash -n` takes the file and `false && ((echo hi))` reaches the echo after it in every one of them",
+		Why:     "outside a condition the distinction really is textual: with no space the three shells that have (( )) read an arithmetic command and fail on `echo`, while dash runs the nested subshell and prints hi. It is not a syntax error in any of them — the expression is read when the command runs, so the failing one is a failed command and the script goes on to print its status (#865)",
+	},
+	{
+		ID: "arith/a-command-in-a-branch-that-never-runs", Category: "arithmetic",
+		Snippet: `false && ((echo hi)); echo "reached st=$?"`,
+		Why:     "the consequence of *when* the expression is read, rather than of when a message arrives: on the right of a `&&` that never reaches it, so nothing ever reads it. All six print `reached st=1` — including dash, whose two subshells are equally unreached — which is what makes reading it while reading the file a program taken down for a command it was never going to run (#865)",
+	},
+	{
+		ID: "arith/a-substitution-in-a-branch-that-never-runs", Category: "arithmetic",
+		Snippet: `false && echo "$((echo hi))"; echo "reached st=$?"`,
+		Why:     "the same, through the spelling dash has as well — so the row is unanimous for one reason rather than for two. `$(( ))` is in every shell in the panel and none of them reads the expression before the command that carries it runs",
+	},
+	{
+		ID: "arith/a-for-header-in-a-branch-that-never-runs", Category: "arithmetic",
+		Snippet: `false && for ((echo hi;;)); do :; done; echo "reached st=$?"`,
+		Why:     "the third construct that carries an expression, and it defers too: bash, bash 3.2, ksh93 and zsh all print `reached st=1`. dash has no C-style `for` and refuses the line where the `(` is, which is the same answer it gives for the construct anywhere",
+	},
+	{
+		ID: "arith/a-substitution-that-will-not-read-is-fatal", Category: "arithmetic",
+		Snippet: `echo "$((echo hi))"; echo "reached st=$?"`,
+		Why:     "and when it is reached, the two spellings part on how far the damage goes: a failed *expansion* ends the script in bash, ksh93 and zsh alike, so the line after it never runs, where the row above's failed arithmetic *command* is one failed command and the script carries on. dash reports its own wording and stops at 2",
 	},
 	{
 		ID: "cmd/a-subshell-that-opens-with-a-subshell", Category: "command language",

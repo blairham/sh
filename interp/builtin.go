@@ -1439,6 +1439,19 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// nothing in every shell that has the letter, terminal or none, and
 	// skipping the word instead once let a password echo (#321).
 
+	// -i is parsed and does nothing, which is not the same as ignoring it.
+	// It is the text a *line editor* opens with, so it has an effect only
+	// where there is a terminal and an editor on it — and this runner's
+	// `read` never opens one, because the letter that would (`-e`) is
+	// refused by name as unimplemented. bash answers the same way wherever
+	// its own input is not a terminal: `printf x | read -i pre -r l` sets l
+	// to `x`, seed and all. The reading that would be wrong is treating the
+	// seed as a *default* for an empty line — `printf '\n' | read -i pre l`
+	// leaves l empty in bash, not `pre`, and in no shell in the panel does
+	// it do otherwise (#761). The letter still consumes its argument, which
+	// is the half that has to be right either way: without it `read -i pre
+	// -r l` would read `pre` as the variable name.
+
 	// -p rides the optstring's shape the way -n does: `p:` takes a prompt,
 	// handled once the stream is known, and a bare `p` names the coprocess
 	// as the source. With one running the letter reads from its near end;

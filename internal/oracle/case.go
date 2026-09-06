@@ -2458,6 +2458,16 @@ echo "st=$?"`,
 		Why:     "-i seeds the line editor and is therefore about a terminal, and this is what it does when there is not one: bash takes the option, ignores the seed, and reads the line — three others refuse the letter in three wordings, and only one of them refuses at 1. Worth pinning because the tempting reading of the manual is that the seed is a *default* for an empty line, and no shell here does that",
 	},
 	{
+		ID: "read/an-initial-value-is-not-a-default", Category: "builtins",
+		Snippet: `printf "\n" | { l=keep; read -i pre -r l; echo "st=$? l=[$l]"; }`,
+		Why:     "the reading of the manual that is wrong: an empty line leaves the variable empty in the one shell that takes the letter, not holding the seed. The seed is what a line editor opens with and nothing else, so with no terminal it has no effect at all — this is the row that says so, where `read/an-initial-value-for-the-line` only says the option is taken",
+	},
+	{
+		ID: "read/an-initial-value-with-nothing-after-it", Category: "builtins",
+		Snippet: `printf "x\n" | { l=keep; read -i; echo "st=$? l=[$l]"; }`,
+		Why:     "the letter takes an argument, which is the half that has to be right in a shell that means to ignore the value: bash asks for the argument it is missing where the four that do not have the letter refuse it as one they never heard of, in the same words they use with a value after it",
+	},
+	{
 		ID: "redir/a-target-that-is-not-one-word", Category: "redirection",
 		Snippet: `e="a b"; echo hi > $e; echo "st=$?"`,
 		Why:     "a redirection target is expanded and then, in three of the four, neither split nor matched — so `> $e` writes to a file called `a b`. bash expands it as an ordinary word and refuses anything that is not exactly one, naming the target *as written*. Doing bash's expansion and taking the first field is the answer nobody gives, and it wrote to `a`",

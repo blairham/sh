@@ -3845,6 +3845,20 @@ EOF
 		Why:     "the control that says the question is about parentheses. A backquoted substitution ends at a mark a here-document body cannot contain, so the body never takes the closing delimiter and there is nothing to decide — all six run it and `v` is `q`, where the same three lines written with `$( )` and `E)` split the panel four to two",
 	},
 	{
+		ID: "heredoc/a-nested-delimiter-names-the-programs-lines", Category: "redirection",
+		Script:     true,
+		Unfinished: true,
+		Snippet:    "echo pad\necho pad\nset -- $(echo $(cat <<E\nz\nE))\necho \"v=[$1]\"\n",
+		Why:        "the nested shape moved down the file, which is the only way to see whether the remark's two lines survive being read by a parser of the *substitution's* text rather than of the program. Every un-nested row begins on line 1, where a relative line and an absolute one are the same number and a sub-parse that started counting at 1 looks right. No assignment prefix, so the one shell that quotes the offending word quotes the same word we do and this row measures the nesting and nothing else",
+	},
+	{
+		ID: "heredoc/a-delimiter-closes-three-substitutions", Category: "redirection",
+		Script:     true,
+		Unfinished: true,
+		Snippet:    "set -- $(: $(: $(cat <<E\nz\nE)))\necho \"n=$# after\"\n",
+		Why:        "a third level, because the remark has to travel one parse further to be seen and a carry that goes exactly one level would pass the two-level row. Each enclosing read succeeds where the innermost one failed, so the depth of the nesting is the depth of the carry. `:` rather than `echo` keeps the word short enough that the shell which truncates a quoted word at twenty characters does not, which is a different question",
+	},
+	{
 		ID: "heredoc/a-substitution-that-is-not-a-dollar-sign", Category: "redirection",
 		Script:     true,
 		Unfinished: true,

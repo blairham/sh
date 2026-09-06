@@ -5812,6 +5812,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `heredoc/a-second-delimiter-closes-the-substitution` | **2>** `<script>: 9: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `v=[x~y]` **2>** `<script>: line 6: warning: here-document at line 4 delimited by end-of-file (wanted `B')` | `v=[x~y]` **2>** `<script>: line 6: warning: here-document at line 4 delimited by end-of-file (wanted `B')` | `v=[x~y]` | `v=[x~y]` | **2>** `<script>:9: parse error near `v=$(cat <<A'` *(status 1)* |
 | `heredoc/a-delimiter-closes-two-substitutions` | **2>** `<script>: 6: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `v=[z]` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `E')` | `v=[z]` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `E')` | `v=[z]` | `v=[z]` | **2>** `<script>:6: parse error near `v=$(echo $(cat <<E'` *(status 1)* |
 | `heredoc/backquotes-cannot-be-taken-into-a-body` | `v=[q]` | `v=[q]` | `v=[q]` | `v=[q]` | `v=[q]` | `v=[q]` |
+| `heredoc/a-nested-delimiter-names-the-programs-lines` | `pad~pad` **2>** `<script>: 8: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `pad~pad~v=[z]` **2>** `<script>: line 5: warning: here-document at line 3 delimited by end-of-file (wanted `E')` | `pad~pad~v=[z]` **2>** `<script>: line 5: warning: here-document at line 3 delimited by end-of-file (wanted `E')` | `pad~pad~v=[z]` | `pad~pad~v=[z]` | `pad~pad` **2>** `<script>:8: parse error near `$(echo $(cat <<E'` *(status 1)* |
+| `heredoc/a-delimiter-closes-three-substitutions` | **2>** `<script>: 6: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `n=0 after` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `E')` | `n=0 after` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `E')` | `n=0 after` | `n=0 after` | **2>** `<script>:6: parse error near `$(: $(: $(cat <<E'` *(status 1)* |
 | `heredoc/a-substitution-that-is-not-a-dollar-sign` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `a~done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `a~done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `a~done` | `a~done` | **2>** `<script>:6: parse error near `<(cat <<EOF'` *(status 1)* |
 | `heredoc/a-delimiter-that-never-matches` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` |
 | `redir/open-failure-wording` | `st=2` **2>** `<shell>: 1: cannot open nosuchfile: No such file` | `st=1` **2>** `<shell>: line 1: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: line 1: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: nosuchfile: cannot open [No such file or directory]` | `st=1` **2>** `<shell>:1: no such file or directory: nosuchfile` |
@@ -5986,6 +5988,22 @@ grades it and nothing drift-checks it either, for the same reason.
   q
   E`
   echo "v=[$v]"
+  ```
+- `heredoc/a-nested-delimiter-names-the-programs-lines` — the nested shape moved down the file, which is the only way to see whether the remark's two lines survive being read by a parser of the *substitution's* text rather than of the program. Every un-nested row begins on line 1, where a relative line and an absolute one are the same number and a sub-parse that started counting at 1 looks right. No assignment prefix, so the one shell that quotes the offending word quotes the same word we do and this row measures the nesting and nothing else
+  ```sh
+  echo pad
+  echo pad
+  set -- $(echo $(cat <<E
+  z
+  E))
+  echo "v=[$1]"
+  ```
+- `heredoc/a-delimiter-closes-three-substitutions` — a third level, because the remark has to travel one parse further to be seen and a carry that goes exactly one level would pass the two-level row. Each enclosing read succeeds where the innermost one failed, so the depth of the nesting is the depth of the carry. `:` rather than `echo` keeps the word short enough that the shell which truncates a quoted word at twenty characters does not, which is a different question
+  ```sh
+  set -- $(: $(: $(cat <<E
+  z
+  E)))
+  echo "n=$# after"
   ```
 - `heredoc/a-substitution-that-is-not-a-dollar-sign` — the same shape spelled the other way. What decides the remark is that the parentheses hold a *program*, not which sigil opened them — bash 5.3 says the same thing here as for `$( )`, bash 3.2 and ksh93 stay silent as they do there, and the two that have no process substitution refuse the line outright. The counter-case is arithmetic: `$(( a << b ))` is a shift and reading it as a program would invent a here-document
   ```sh

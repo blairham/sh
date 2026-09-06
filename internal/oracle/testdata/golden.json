@@ -32279,6 +32279,50 @@
         "TimedOut": false
       }
     },
+    "heredoc/a-delimiter-closes-three-substitutions": {
+      "bash": {
+        "Stdout": "n=0 after",
+        "Stderr": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `E')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=0 after",
+        "Stderr": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `E')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "n=0 after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 6: Syntax error: end of file unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "n=0 after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:6: parse error near `$(: $(: $(cat \u003c\u003cE'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "heredoc/a-delimiter-closes-two-substitutions": {
       "bash": {
         "Stdout": "v=[z]",
@@ -32407,6 +32451,50 @@
         "Stdout": "[a)~ EOF]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/a-nested-delimiter-names-the-programs-lines": {
+      "bash": {
+        "Stdout": "pad~pad~v=[z]",
+        "Stderr": "\u003cscript\u003e: line 5: warning: here-document at line 3 delimited by end-of-file (wanted `E')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "pad~pad~v=[z]",
+        "Stderr": "\u003cscript\u003e: line 5: warning: here-document at line 3 delimited by end-of-file (wanted `E')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "pad~pad~v=[z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pad~pad",
+        "Stderr": "\u003cscript\u003e: 8: Syntax error: end of file unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pad~pad~v=[z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pad~pad",
+        "Stderr": "\u003cscript\u003e:8: parse error near `$(echo $(cat \u003c\u003cE'",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

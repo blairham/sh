@@ -206,3 +206,117 @@ func TestAnArithmeticSubstitutionIsNotAProgram(t *testing.T) {
 		}
 	}
 }
+
+// TestARemarkFromANestedSubstitutionSurvives is #1024, and it is the *other*
+// read.
+//
+// A substitution's contents reach a parser of their own by two routes. An
+// un-nested `v=$(cat <<EOF` … `EOF)` takes the counting one, because its
+// contents do not parse — the body swallows the `)` and there is none left to
+// stop at — and `takeRemarks` carries what that read said. A **nested** one
+// parses: the inner substitution swallows the document and leaves a `)` for
+// the outer, so the outer read succeeds and takes the grammar route, which
+// carried nothing at all. The warning went missing for exactly one shape, and
+// only the shell that says anything here could have shown it.
+func TestARemarkFromANestedSubstitutionSurvives(t *testing.T) {
+	rs := remarksOf(t, "v=$(echo $(cat <<E\nz\nE))\necho \"v=[$v]\"\n")
+	if len(rs) != 1 {
+		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
+	}
+	if rs[0].At.Line != 1 || rs[0].Pos.Line != 3 || rs[0].Token != "E" {
+		t.Errorf("remark = %+v, want E opened at line 1 and run out at line 3", rs[0])
+	}
+}
+
+// TestANestedRemarksLinesAreTheProgramsWhereverItBegins is the same
+// constraint the un-nested shape has, one parse deeper. Each read is told
+// which line its text starts on, so a fragment read inside a fragment still
+// names the file's lines; a read that started counting at 1 gets both of them
+// wrong together and only a program with something in front of it can tell.
+func TestANestedRemarksLinesAreTheProgramsWhereverItBegins(t *testing.T) {
+	rs := remarksOf(t, "echo pad\necho pad\nv=$(echo $(cat <<E\nz\nE))\necho after\n")
+	if len(rs) != 1 {
+		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
+	}
+	if rs[0].At.Line != 3 || rs[0].Pos.Line != 5 {
+		t.Errorf("lines %d and %d, want run out at 5 and opened at 3", rs[0].Pos.Line, rs[0].At.Line)
+	}
+}
+
+// TestTheCarryIsAsDeepAsTheNesting: every enclosing read succeeds where the
+// innermost one failed, so a carry that goes exactly one level would pass the
+// two-level case and lose this one.
+func TestTheCarryIsAsDeepAsTheNesting(t *testing.T) {
+	rs := remarksOf(t, "v=$(: $(: $(cat <<E\nz\nE)))\necho after\n")
+	if len(rs) != 1 {
+		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
+	}
+	if rs[0].At.Line != 1 || rs[0].Pos.Line != 3 || rs[0].Token != "E" {
+		t.Errorf("remark = %+v, want E opened at line 1 and run out at line 3", rs[0])
+	}
+}
+
+// TestEveryRemarkInANestIsCarriedInOrder, because a carry that kept the first
+// or the last would pass every case above. Two documents inside one nest, and
+// bash names both — line 1 for `A` and line 3 for `B`.
+func TestEveryRemarkInANestIsCarriedInOrder(t *testing.T) {
+	rs := remarksOf(t, "v=$(echo $(cat <<A\na\nA) $(cat <<B\nb\nB))\necho after\n")
+	if len(rs) != 2 {
+		t.Fatalf("got %d remarks, want 2: %+v", len(rs), rs)
+	}
+	if rs[0].Token != "A" || rs[1].Token != "B" {
+		t.Errorf("tokens %q and %q, want A and B in order", rs[0].Token, rs[1].Token)
+	}
+	if rs[0].At.Line != 1 || rs[1].At.Line != 3 {
+		t.Errorf("At lines %d and %d, want 1 and 3", rs[0].At.Line, rs[1].At.Line)
+	}
+}
+
+// TestANestedSubstitutionThatClosesCleanlySaysNothing is the control for all
+// four above: the nesting is not what produces a remark, the runaway
+// delimiter is. Without it a carry that appended something unconditionally
+// would pass.
+func TestANestedSubstitutionThatClosesCleanlySaysNothing(t *testing.T) {
+	if rs := remarksOf(t, "v=$(echo $(cat <<E\nz\nE\n))\necho ok\n"); len(rs) != 0 {
+		t.Errorf("got %+v, want nothing said", rs)
+	}
+}
+
+// TestANestedSubstitutionIsRefusedWhereABodyDoesNotStopAtTheParen is the other
+// half of the dialect flag, and the remark is *still* raised — which is not
+// what it looks like and is the reason it is written down.
+//
+// Where a body is not read as ending at the closing parenthesis, the body
+// takes the `)` with it, nothing ever closes the construct, and the answer is
+// the refusal an unterminated `(` already gets. But the remark is what says a
+// body reached the end of this text, so it is what the refusal is decided
+// *from*, at every level: suppressing it made the nested shape parse again.
+// It is never seen, because a dialect that reads a body that way has no
+// wording for a here-document at end of file and prints nothing beside the
+// complaint.
+//
+// So the split is in the failure and not in the remark, and the nested route
+// this file is otherwise about is not even reached: the inner construct is
+// refused, the read that would have carried anything fails with it, and the
+// counting route answers instead.
+func TestANestedSubstitutionIsRefusedWhereABodyDoesNotStopAtTheParen(t *testing.T) {
+	for _, src := range []string{
+		"v=$(cat <<E\nz\nE)\n",
+		"v=$(echo $(cat <<E\nz\nE))\n",
+		"v=$(: $(: $(cat <<E\nz\nE)))\n",
+	} {
+		p := syntax.NewParser(src, syntax.Core())
+		p.Parse()
+		if p.Err() == nil {
+			t.Errorf("%q parsed, want a syntax error", src)
+		}
+		rs := p.Remarks()
+		if len(rs) != 1 {
+			t.Errorf("%q: got %d remarks, want the one the refusal is decided from: %+v", src, len(rs), rs)
+			continue
+		}
+		if rs[0].At.Line != 1 || rs[0].Pos.Line != 3 || rs[0].Token != "E" {
+			t.Errorf("%q: remark = %+v, want E opened at line 1 and run out at line 3", src, rs[0])
+		}
+	}
+}

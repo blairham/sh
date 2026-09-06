@@ -3010,10 +3010,11 @@ func (r *Runner) getVar(name string) (string, bool) {
 			return f(r), true
 		}
 	}
-	if a, ok := r.Arrays[name]; ok && len(a) > 1 && !r.removed[name] {
-		// Ahead of Vars, which holds the first element: with more than one
-		// element the two views differ and the dialect decides.
-		return r.arrayScalar(r.readArray(a)), true
+	if a, ok := r.Arrays[name]; ok && !r.removed[name] {
+		// Ahead of Vars, which holds a copy of one element: the array is the
+		// store, and both what a bare name reads and whether it is set at all
+		// are read off it rather than off the copy.
+		return r.arrayBareName(a)
 	}
 	if a, ok := r.AssocArrays[name]; ok && !r.removed[name] {
 		// The associative table answers alone rather than falling through:

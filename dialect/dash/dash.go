@@ -239,6 +239,11 @@ func Semantics() interp.Semantics {
 	// word has expanded to one. It words it as a syntax error and stops.
 	s.MultiDigitDuplicationTargetIsAnError = interp.Yes
 	s.RedirectErrorOnSpecialBuiltinFatal = interp.Yes
+	// dash refuses the word while parsing — `Syntax error: Bad fd number`,
+	// and nothing in the line runs. The grammar takes it here, so the
+	// refusal is this axis and the wording is the ordinary one.
+	s.GreatAmpTarget = interp.GreatAmpTargetIsADescriptor
+	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.No
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.Yes
 	// A special builtin's failure is fatal, and a bad name is one — for all

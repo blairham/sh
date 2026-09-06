@@ -3849,6 +3849,41 @@ echo "st=$?"`,
 		Why:     "a duplication prefixed to one command does not outlive it — only `exec`'s do",
 	},
 	{
+		ID: "redir/great-amp-names-a-file", Category: "redirection",
+		Snippet: `echo hi >&qq; echo "st=$? [$(cat qq 2>/dev/null)]"`,
+		Why:     "the csh spelling four of the six kept: an unnumbered `>&` whose word is not a descriptor opens the word as a file. bash 5.3, bash 3.2 and bash-as-`sh` write `hi` into `qq` and report 0; zsh does the same; ksh93 refuses the word as a bad file unit number and makes nothing; dash refuses it while parsing, so not even the first command runs",
+	},
+	{
+		ID: "redir/great-amp-names-a-file-takes-both-streams", Category: "redirection",
+		Snippet: `sh -c 'echo O; echo E >&2' >&qq; printf "[%s]" "$(cat qq 2>/dev/null)"`,
+		Why:     "and it is `&>` exactly, not `>`: the shells that open the file put *both* output streams in it, which is the half a reading of `>&` as a plain redirect would get wrong and nothing else in the corpus would notice",
+	},
+	{
+		ID: "redir/great-amp-with-a-number-in-front-is-not-a-file", Category: "redirection",
+		Snippet: `echo hi 2>&qq; echo "st=$? [$(cat qq 2>/dev/null)]"`,
+		Why:     "the leading number is the whole of the question. bash writes the file for the bare spelling and calls this one an ambiguous redirect; zsh takes it as a redirect of that one stream; ksh93 refuses it the same way it refuses the bare one",
+	},
+	{
+		ID: "redir/less-amp-is-never-a-file", Category: "redirection",
+		Snippet: `echo x > qq; cat <&qq; echo "st=$?"`,
+		Why:     "the reading side of the same operator, which no shell opens as a file — and three sentences for one refusal: bash calls the redirect ambiguous, ksh93 calls the unit number bad, zsh says a file number was expected and names nobody",
+	},
+	{
+		ID: "redir/an-amp-target-that-came-to-nothing", Category: "redirection",
+		Snippet: `echo hi >&""; cat <&""; echo "st=$?"`,
+		Why:     "what a script reaches when it writes `>&\"${COPROC[1]}\"` in a shell with no such array, and where the two shells that open a file part company: zsh takes the empty word as a name and fails on the empty path, bash takes it as a descriptor and calls it bad — naming the target as it was *written*, quotation marks and all, where bash 3.2 names the descriptor number instead",
+	},
+	{
+		ID: "redir/an-amp-target-that-came-to-nothing-on-a-builtin", Category: "redirection",
+		Snippet: `read -r l <&""; echo "after st=$?"`,
+		Why:     "the same refusal on a command that runs *in* the shell, which is where zsh alone stops: nothing after it runs. The external command in the row above survives it there, so the boundary is the command and not the redirection",
+	},
+	{
+		ID: "redir/noclobber-refuses-both-streams-to-one-file", Category: "redirection",
+		Snippet: `set -C; : > qq; true &>qq; echo "st=$?"`,
+		Why:     "`set -C` refuses this truncation exactly as it refuses a plain `>`, unanimously and each in its own words — and unlike `>` there is no override spelling to exempt, because `>|&` is a syntax error in all six. A command with no output on purpose: the two shells that have no `&>` read the line as a background `true` and a bare `>qq`, and anything the job printed would arrive against the clock",
+	},
+	{
 		ID: "redir/merge-then-file", Category: "redirection",
 		Snippet: `{ echo out; echo err >&2; } >f 2>&1; printf "[%s]" "$(cat f)"`,
 		Why:     "both streams reach the file: stdout is redirected first, then stderr is pointed at where stdout now goes",
@@ -5882,6 +5917,11 @@ echo unreachable`,
 		ID: "declare/bare-local-lists-the-locals", Category: "declarations",
 		Snippet: `f() { local x=1 y; local; }; f | grep -c '^declare'; echo "st=$?"`,
 		Why:     "a bare `local` writes the running function's locals as clustered declarations in exactly one shell — counted through grep because another lists its whole parameter table there, which is a fact about that engine rather than about the script",
+	},
+	{
+		ID: "declare/bare-typeset-is-a-listing-of-its-own", Category: "declarations",
+		Snippet: `f() { local x=1; typeset; }; f | grep -c "^local x=1$"; echo "st=$?"`,
+		Why:     "a bare `typeset` is a listing too, and not the one a bare `local` is in every shell that has both: one shell writes the same parameter table for either word — the line counted here is the attribute words and the assignment — while bash writes every variable it holds and ksh93 its own attribute listing, neither of which is the other's answer",
 	},
 	{
 		ID: "declare/global-letter-declares-a-global", Category: "declarations",

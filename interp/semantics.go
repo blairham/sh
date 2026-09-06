@@ -1404,6 +1404,18 @@ type Semantics struct {
 	// rather than a flag. See BareLocalListingForm.
 	BareLocalListing BareLocalListingForm
 
+	// BareTypesetListing is what `typeset` or `declare` with no operands
+	// and no letters writes.
+	//
+	// An axis of its own even though it shares the form type with
+	// BareLocalListing, because the
+	// shells that have both words do not answer the two the same: zsh writes
+	// the identical parameter table either way, and bash's bare `declare` is
+	// every variable the shell holds rather than the running function's
+	// locals. Only zsh's answer is a value this form already carries, so the
+	// others stay unanswered and are refused by name rather than guessed at.
+	BareTypesetListing BareLocalListingForm
+
 	// SetListing is what `set` with no arguments writes — see
 	// SetListingForm. All four list, but not the same things: one follows
 	// the variables with every defined function, and one lists special
@@ -2884,6 +2896,30 @@ type Semantics struct {
 	// nobody's question.
 	MultiDigitDuplicationTargetIsAnError Answer
 
+	// GreatAmpTarget is what `>&word` does with a word that is not a
+	// descriptor number — refuse it, or open it as a file for both output
+	// streams, which is the csh spelling of `&>word`. A form rather than a
+	// flag because two of the shells that keep the form disagree about a
+	// word that expanded to nothing; see GreatAmpTargetForm.
+	GreatAmpTarget GreatAmpTargetForm
+
+	// DuplicationTargetErrorOnABuiltinIsFatal ends a non-interactive shell
+	// when `<&word` names something that is not a descriptor and the command
+	// it is written on runs *in* the shell.
+	//
+	// zsh alone, and the boundary is the command rather than the redirection.
+	// Measured 2026-09-06: `cat <&""` and `/bin/echo hi <&""` complain and
+	// carry on, while `read x <&""`, `echo hi <&""`, `true <&""` and `: <&""`
+	// end the shell — the same word, the same complaint, and a builtin on the
+	// left.
+	//
+	// Not RedirectErrorOnSpecialBuiltinFatal, which zsh answers No and which
+	// would not reach `read` or `echo` in any case. Nor is it redirection
+	// failure in general: an ordinary one on a zsh builtin — `read x
+	// 3>/nope/x`, `read x <&9` — complains and carries on there too. It is
+	// this refusal, on a builtin.
+	DuplicationTargetErrorOnABuiltinIsFatal Answer
+
 	// RedirectErrorOnSpecialBuiltinFatal ends a non-interactive shell when a
 	// redirection written on a *special* builtin cannot be made — a file that
 	// will not open, a descriptor that is not there, a number the open-file
@@ -3326,7 +3362,9 @@ func PosixSemantics() Semantics {
 		// as well, and the standard names it in so many words. Three of the
 		// five follow it, and the two that do not both reach this answer as
 		// soon as their own posix mode is on.
-		RedirectErrorOnSpecialBuiltinFatal: Yes,
+		RedirectErrorOnSpecialBuiltinFatal:      Yes,
+		GreatAmpTarget:                          GreatAmpTargetIsADescriptor,
+		DuplicationTargetErrorOnABuiltinIsFatal: No,
 		// A bad name is a special builtin's failure too, and the standard
 		// makes no exception for `unset`.
 		BadNameToDeclarationFatal: Yes,

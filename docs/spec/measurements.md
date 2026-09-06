@@ -5578,6 +5578,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/a-closed-stdin-is-closed-for-a-replacement` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
 | `redir/an-inherited-descriptor-keeps-its-number` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
 | `redir/a-dup-prefix-is-that-commands-alone` | `st=2` **2>** `<shell>: 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 6: bad file descriptor` |
+| `redir/great-amp-names-a-file` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=0 [hi]` | `st=0 [hi]` | `st=0 [hi]` | `st=1 []` **2>** `<shell>: qq: bad file unit number` | `st=0 [hi]` |
+| `redir/great-amp-names-a-file-takes-both-streams` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `[O~E]` | `[O~E]` | `[O~E]` | `[]` **2>** `<shell>: qq: bad file unit number` | `[O~E]` |
+| `redir/great-amp-with-a-number-in-front-is-not-a-file` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1 []` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1 []` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1 []` **2>** `<shell>: qq: ambiguous redirect` | `st=1 []` **2>** `<shell>: qq: bad file unit number` | `hi~st=0 []` |
+| `redir/less-amp-is-never-a-file` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1` **2>** `<shell>: qq: ambiguous redirect` | `st=1` **2>** `<shell>: qq: bad file unit number` | `st=1` **2>** `<shell>:1: file number expected` |
+| `redir/an-amp-target-that-came-to-nothing` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1` **2>** `<shell>: line 1: "": Bad file descriptor~<shell>: line 1: "": Bad file descriptor` | `st=1` **2>** `<shell>: line 1: "": Bad file descriptor~<shell>: line 1: "": Bad file descriptor` | `st=1` **2>** `<shell>: 1: Bad file descriptor~<shell>: 0: Bad file descriptor` | `st=1` **2>** `<shell>: : cannot open~<shell>: : cannot open` | `st=1` **2>** `<shell>:1: no such file or directory: ~<shell>:1: file number expected` |
+| `redir/an-amp-target-that-came-to-nothing-on-a-builtin` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `after st=1` **2>** `<shell>: line 1: "": Bad file descriptor` | `after st=1` **2>** `<shell>: line 1: "": Bad file descriptor` | `after st=1` **2>** `<shell>: 0: Bad file descriptor` | `after st=1` **2>** `<shell>: : cannot open` | **2>** `<shell>:1: file number expected` *(status 1)* |
+| `redir/noclobber-refuses-both-streams-to-one-file` | `st=2` **2>** `<shell>: 1: cannot create qq: File exists` | `st=1` **2>** `<shell>: line 1: qq: cannot overwrite existing file` | `st=1` **2>** `<shell>: line 1: qq: cannot overwrite existing file` | `st=1` **2>** `<shell>: qq: cannot overwrite existing file` | `st=1` **2>** `<shell>: qq: file already exists [File exists]` | `st=1` **2>** `<shell>:1: file exists: qq` |
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
 | `redir/file-then-merge` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` |
 | `redir/multios-is-zsh-only` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[x][x]` |
@@ -5847,6 +5854,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/a-dup-prefix-is-that-commands-alone` — a duplication prefixed to one command does not outlive it — only `exec`'s do
   ```sh
   true 6>&1; echo hi >&6; echo "st=$?"
+  ```
+- `redir/great-amp-names-a-file` — the csh spelling four of the six kept: an unnumbered `>&` whose word is not a descriptor opens the word as a file. bash 5.3, bash 3.2 and bash-as-`sh` write `hi` into `qq` and report 0; zsh does the same; ksh93 refuses the word as a bad file unit number and makes nothing; dash refuses it while parsing, so not even the first command runs
+  ```sh
+  echo hi >&qq; echo "st=$? [$(cat qq 2>/dev/null)]"
+  ```
+- `redir/great-amp-names-a-file-takes-both-streams` — and it is `&>` exactly, not `>`: the shells that open the file put *both* output streams in it, which is the half a reading of `>&` as a plain redirect would get wrong and nothing else in the corpus would notice
+  ```sh
+  sh -c 'echo O; echo E >&2' >&qq; printf "[%s]" "$(cat qq 2>/dev/null)"
+  ```
+- `redir/great-amp-with-a-number-in-front-is-not-a-file` — the leading number is the whole of the question. bash writes the file for the bare spelling and calls this one an ambiguous redirect; zsh takes it as a redirect of that one stream; ksh93 refuses it the same way it refuses the bare one
+  ```sh
+  echo hi 2>&qq; echo "st=$? [$(cat qq 2>/dev/null)]"
+  ```
+- `redir/less-amp-is-never-a-file` — the reading side of the same operator, which no shell opens as a file — and three sentences for one refusal: bash calls the redirect ambiguous, ksh93 calls the unit number bad, zsh says a file number was expected and names nobody
+  ```sh
+  echo x > qq; cat <&qq; echo "st=$?"
+  ```
+- `redir/an-amp-target-that-came-to-nothing` — what a script reaches when it writes `>&"${COPROC[1]}"` in a shell with no such array, and where the two shells that open a file part company: zsh takes the empty word as a name and fails on the empty path, bash takes it as a descriptor and calls it bad — naming the target as it was *written*, quotation marks and all, where bash 3.2 names the descriptor number instead
+  ```sh
+  echo hi >&""; cat <&""; echo "st=$?"
+  ```
+- `redir/an-amp-target-that-came-to-nothing-on-a-builtin` — the same refusal on a command that runs *in* the shell, which is where zsh alone stops: nothing after it runs. The external command in the row above survives it there, so the boundary is the command and not the redirection
+  ```sh
+  read -r l <&""; echo "after st=$?"
+  ```
+- `redir/noclobber-refuses-both-streams-to-one-file` — `set -C` refuses this truncation exactly as it refuses a plain `>`, unanimously and each in its own words — and unlike `>` there is no override spelling to exempt, because `>|&` is a syntax error in all six. A command with no output on purpose: the two shells that have no `&>` read the line as a background `true` and a bare `>qq`, and anything the job printed would arrive against the clock
+  ```sh
+  set -C; : > qq; true &>qq; echo "st=$?"
   ```
 - `redir/merge-then-file` — both streams reach the file: stdout is redirected first, then stderr is pointed at where stdout now goes
   ```sh
@@ -7281,6 +7316,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/local-readonly-letter` | **2>** `<shell>: 1: local: -r: bad variable name` *(status 2)* | **2>** `<shell>: line 1: ro: readonly variable` *(status 1)* | **2>** `<shell>: line 1: ro: readonly variable` *(status 127)* | **2>** `<shell>: ro: readonly variable` *(status 1)* | `unreached~after` **2>** `<shell>: local: not found` | **2>** `f: read-only variable: ro` *(status 1)* |
 | `declare/local-bad-name` | `in=ok` **2>** `<shell>: 1: 1x: bad variable name` *(status 2)* | `in=ok~st=0` **2>** `<shell>: line 1: local: `1x=5': not a valid identifier` | `in=ok~st=0` **2>** `<shell>: line 1: local: `1x=5': not a valid identifier` | `in=ok~st=0` **2>** `<shell>: line 0: local: `1x=5': not a valid identifier` | `in=ok~st=0` **2>** `<shell>: local: not found` | **2>** `f:local: not an identifier: 1x` *(status 1)* |
 | `declare/bare-local-lists-the-locals` | `0~st=1` | `2~st=0` | `2~st=0` | `0~st=1` | `0~st=1` **2>** `<shell>: local: not found~<shell>: local: not found` | `0~st=1` |
+| `declare/bare-typeset-is-a-listing-of-its-own` | `0~st=1` **2>** `<shell>: 1: typeset: not found` | `0~st=1` | `0~st=1` | `0~st=1` | `0~st=1` **2>** `<shell>: local: not found` | `1~st=0` |
 | `declare/global-letter-declares-a-global` | `gv= st=127` **2>** `<shell>: 1: typeset: not found` | `gv=7 st=0` | `gv=7 st=0` | `gv= st=2` **2>** `<shell>: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `gv=7 st=0` |
 | `declare/global-letter-against-a-local` | `in=in~out=out` **2>** `<shell>: 1: typeset: not found` | `in=in~out=new` | `in=in~out=new` | `in=in~out=out` **2>** `<shell>: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: local: not found~<shell>: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `in=new~out=out` |
 | `declare/lower-case-attribute` | `v=~v2=DEF` **2>** `<shell>: 1: typeset: not found` | `v=abc~v2=def` | `v=abc~v2=def` | `v=~v2=DEF` **2>** `<shell>: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `v=abc~v2=def` | `v=abc~v2=def` |
@@ -7451,6 +7487,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/bare-local-lists-the-locals` — a bare `local` writes the running function's locals as clustered declarations in exactly one shell — counted through grep because another lists its whole parameter table there, which is a fact about that engine rather than about the script
   ```sh
   f() { local x=1 y; local; }; f | grep -c '^declare'; echo "st=$?"
+  ```
+- `declare/bare-typeset-is-a-listing-of-its-own` — a bare `typeset` is a listing too, and not the one a bare `local` is in every shell that has both: one shell writes the same parameter table for either word — the line counted here is the attribute words and the assignment — while bash writes every variable it holds and ksh93 its own attribute listing, neither of which is the other's answer
+  ```sh
+  f() { local x=1; typeset; }; f | grep -c "^local x=1$"; echo "st=$?"
   ```
 - `declare/global-letter-declares-a-global` — `-g` reaches the global table from inside a function in the two shells that spell it; the third refuses it with its usage lines and stops — typeset is one of its own special builtins — and the fourth has no typeset at all
   ```sh

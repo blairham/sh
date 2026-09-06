@@ -808,6 +808,13 @@ type Runner struct {
 	// not run: a redirect that could not be applied would otherwise send its
 	// output to the terminal, which is the loudest possible wrong answer.
 	redirErr bool
+
+	// badDupTarget records that the redirection which failed was `<&word` or
+	// `>&word` naming something that is not a descriptor, rather than an open
+	// that did not work. One dialect ends the shell over the first and not
+	// the second, and only on a command that runs in the shell, so the
+	// distinction has to reach the place that knows which command it was.
+	badDupTarget bool
 	// writeFailed records a builtin's output write that failed — into a
 	// descriptor closed with `>&-`, most plainly. The write already
 	// happened and went nowhere, so there is nothing to retry; the question
@@ -2178,6 +2185,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// ask about `true 3>/nope/x`.
 		if specialBuiltins[argv[0]] &&
 			r.ask(r.sem().RedirectErrorOnSpecialBuiltinFatal, "a failed redirection on a special builtin ending the script") {
+			r.fatalQuiet()
+			return nil
+		}
+		// One dialect ends the shell over a `<&word` that named something
+		// other than a descriptor, and the boundary is the *command*: the
+		// same word on an external command complains and carries on there.
+		// A function is not a builtin here — the redirection is the caller's
+		// and the shell it would end is the same one either way, and no
+		// measurement puts a function on the fatal side.
+		_, isBuiltin := r.lookupBuiltin(argv[0])
+		_, isFunc := r.funcs[argv[0]]
+		if r.badDupTarget && !isFunc && isBuiltin &&
+			r.ask(r.sem().DuplicationTargetErrorOnABuiltinIsFatal,
+				"a duplication target that is not a descriptor ending the script on a builtin") {
 			r.fatalQuiet()
 		}
 		return nil

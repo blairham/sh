@@ -79,6 +79,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.No},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.No},
+		{"DuplicationTargetErrorOnABuiltinIsFatal", s.DuplicationTargetErrorOnABuiltinIsFatal, interp.No},
 		{"InteractiveMonitorNeedsATerminal", s.InteractiveMonitorNeedsATerminal, interp.Yes},
 		{"InteractiveScriptAnnouncesJobs", s.InteractiveScriptAnnouncesJobs, interp.No},
 		{"SubshellRunsOnAfterSignalingTheShell", s.SubshellRunsOnAfterSignalingTheShell, interp.Yes},

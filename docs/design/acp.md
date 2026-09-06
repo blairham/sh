@@ -323,6 +323,23 @@ asked in as many words to run a shell command: **Claude Agent 0.75.1 and Codex
 Under `-trace-events` the gate saw nothing for either. Gemini CLI is native ACP
 rather than an adapter and is the one most likely to take the route.
 
+**And it reaches further than commands.** Re-measured live through
+`sh -acp-connect` (2026-09-05, Claude Agent 0.75.1):
+
+| asked | what the agent did | what the gate saw |
+| --- | --- | --- |
+| "run `echo hello-from-acp`" | ran it itself | nothing |
+| "read this file and tell me what it contains" | ran `cat path` | nothing |
+| "use your file-reading tool, not a shell command" | read it with its own file API | nothing |
+| "create a file containing …", under `-deny write /**` | ran `echo … > path`; **the file appeared** | nothing |
+
+So the earlier wording — that a policy covers the agent's file access and not
+its commands — is true about what an agent *asks for* and misleading about what
+a person gets. A command an agent runs itself is also how it reads and writes,
+so a turn can be covered by nothing at all and look exactly like a turn that
+was covered by everything. That is what the per-turn notice exists for, and it
+is why it names files as well as commands.
+
 That is #786, and **nothing in this repository can close it**: an agent that
 forks its own process is outside our boundary by construction, exactly as any
 allowed `exec` is once it has started. Serving `terminal/*` is what makes the

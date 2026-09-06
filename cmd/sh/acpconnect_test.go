@@ -409,6 +409,15 @@ func TestTheCoverageNoticeSaysWhichHalfOfThePolicyApplied(t *testing.T) {
 			if !strings.Contains(got, "passes no gate") {
 				t.Errorf("said %q, and it has to say what the gap is", got)
 			}
+			// And the sharp half of it, which the live measurement forced: a
+			// command an agent runs itself is also how it reads and writes
+			// files, so a notice naming only "commands" would leave a person
+			// believing -deny still covered their files. It did not: measured,
+			// `-deny write /**` did not stop a file being created, because the
+			// agent ran `echo … > path` rather than asking us to write.
+			if !strings.Contains(got, "reads and writes") {
+				t.Errorf("said %q, and it has to say that files go the same way", got)
+			}
 		})
 	}
 }

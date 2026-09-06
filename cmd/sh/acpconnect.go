@@ -286,11 +286,17 @@ func talk(ctx context.Context, client *acp.Client, authMethod string, in *bufio.
 // our boundary is outside it in exactly the way any allowed exec is once it
 // has started.
 //
-// What can change is whether anyone is told. Measured against the published
-// adapters, two of the three run commands themselves and call no client method
-// at all, so this is the ordinary case rather than the corner: a person who
-// read "under the same policy" and got file access alone should not have to
-// find that out by reading a trace.
+// What can change is whether anyone is told, and the measurement says it must
+// be. Against Claude Agent 0.75.1, `-deny write /**` did not stop
+// `create a file … containing …`: the agent ran `echo … > path` in its own
+// process, the file appeared, and `-trace-events` printed nothing at all. The
+// same agent read a file by running `cat`. So the gap is not only "the
+// commands it runs" — a command an agent runs itself is also how it reads and
+// writes, which means a policy can cover *nothing* in a turn and look exactly
+// like one that covered everything.
+//
+// A person who read "under the same policy" should not have to discover that
+// from an absence in a trace.
 //
 // Both numbers are things this client saw, and neither is inferred from the
 // other — there is no id joining an agent's tool call to a terminal it asked
@@ -305,12 +311,14 @@ func commandCoverage(asked, announced int) string {
 	if asked == 0 {
 		return fmt.Sprintf(
 			"sh: the agent reported %d command(s) this turn and asked this shell to run none.\n"+
-				"sh: what an agent runs in its own process passes no gate — the policy covered\n"+
-				"sh: the files it asked for, and not the commands it ran.\n", announced)
+				"sh: a command an agent runs in its own process passes no gate — nor do the\n"+
+				"sh: files that command reads and writes. The policy covered what it asked for.\n",
+			announced)
 	}
 	return fmt.Sprintf(
 		"sh: the agent reported %d command(s) this turn and asked this shell to run %d.\n"+
-			"sh: what an agent runs in its own process passes no gate.\n", announced, asked)
+			"sh: a command an agent runs in its own process passes no gate — nor do the\n"+
+			"sh: files that command reads and writes.\n", announced, asked)
 }
 
 // fixedAnswer settles every permission request the same way.

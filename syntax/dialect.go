@@ -509,6 +509,61 @@ type Dialect struct {
 	// `${a:-x}` is still a default for the same reason.
 	ParamElementSelection bool
 
+	// ParamColonBeforeTrimIsIgnored reads a colon written before a trim as
+	// nothing at all: `${v:#p}` is `${v#p}`, and so are `${v:##p}`,
+	// `${v:%p}` and `${v:%%p}`. One shell in the panel does this.
+	//
+	// The third of the three readings ParamElementSelection's note names,
+	// and the one that had no answer behind it: those six characters are an
+	// exclusion in zsh, an arithmetic offset beginning `#p` in bash — a
+	// refusal — and the plain trim in ksh93. So this is the flag that says
+	// which grammar is being read, exactly as that one is, and for the same
+	// reason it is a grammar flag rather than a semantics axis: the shells
+	// do not disagree about what the characters mean, they cut the word in
+	// different places.
+	//
+	// The colon is *ignored* rather than recorded, so the node is the trim
+	// it would have been without it and everything downstream — the
+	// per-element mapping under `[@]`, the pattern coming out of a word —
+	// works because it is the same node. ParamExpr.Colon stays false: a
+	// trim has no unset-or-empty test for it to extend, and setting it
+	// would put a flag on the node that nothing reads and that a later
+	// reader would have to guess the meaning of.
+	//
+	// Only the four trims. Measured on ksh93u+ 2012-08-01: `${v:/l/L}`,
+	// `${v:^^}` and a colon with a space after it stay arithmetic errors
+	// there, `${v:2}` is still an offset, and `${v:#}` is `${v#}` — an
+	// empty pattern that trims nothing rather than a special case.
+	//
+	// No shell in the panel sets this and ParamElementSelection together,
+	// and the parser takes them in that order so the pair has a defined
+	// reading rather than depending on which case came first in the file.
+	ParamColonBeforeTrimIsIgnored bool
+
+	// ParamLengthTakesAnOperator lets `${#name}` carry an operator as well:
+	// `${#v#a}` is the length of what the trim leaves. One shell in the
+	// panel accepts it; the other four call the whole expansion a bad
+	// substitution.
+	//
+	// A grammar flag, because the disagreement is over whether the text is a
+	// construct at all rather than over what it means — `${#v#a}` is not a
+	// number bash computes differently, it is a refusal there. Modeling it
+	// as a semantics answer would mean building a node four grammars cannot
+	// read and then declining to evaluate it, which puts the refusal a stage
+	// later than the shells put it.
+	//
+	// Only with an operator. `${#v}`, `${#a[@]}`, `${#@}` and `${#*}` are
+	// unanimous and are not this flag's business.
+	//
+	// The refusal is *deferred* in every dialect, including the one that
+	// otherwise refuses an unknown operator while reading. Measured
+	// 2026-09-06: `if false; then echo ${#v#a}; fi` runs clean in bash 5.3,
+	// bash 3.2, bash as `sh`, dash and ksh93 alike, so none of them decides
+	// this before the expansion is reached — which is why the node is marked
+	// rather than failed here. The issue this came from expected dash to
+	// refuse while reading; it does not.
+	ParamLengthTakesAnOperator bool
+
 	// NestedParamExpansion enables an expansion to stand where a parameter
 	// name would: `${${v}}` applies one expansion to the result of another,
 	// and `${${v}#a}` applies the outer operator to what the inner came to.

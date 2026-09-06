@@ -44,6 +44,11 @@ func Semantics() interp.Semantics {
 	// disappears under: `IFS=:; set -- x "" y` is two fields here and three
 	// in bash.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// POSIX makes an unquoted `$@` behave as `$*` where nothing is split,
+	// and this shell complies: `IFS=-; set -- x y z; v=${@}` is `x-y-z`
+	// here and in zsh, against `x y z` in bash and ksh93. It has no arrays,
+	// so the positional spelling is the whole of the question here.
+	s.UnsplitAtListJoinsOnIFS = interp.Yes
 	s.CommandNotFoundStatusIsNotFound = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// The panel's only shell with no multibyte decoder: `s=héllo; echo

@@ -82,6 +82,10 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.No},
+		// POSIX makes an unquoted `$@` behave as `$*` where nothing is
+		// split, and this shell complies: `IFS=-; set -- x y z; v=${@}` is
+		// `x-y-z` here and in zsh, against `x y z` in bash and ksh93.
+		{"UnsplitAtListJoinsOnIFS", s.UnsplitAtListJoinsOnIFS, interp.Yes},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},

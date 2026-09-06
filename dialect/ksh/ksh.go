@@ -28,6 +28,13 @@ func Dialect() syntax.Dialect {
 		"typeset": true, "export": true, "readonly": true,
 	}
 	d.ParamIndirection = true
+	// A colon written before a trim is ignored here: `${v:#hel*}` is
+	// `${v#hel*}` and comes to `lo`, where zsh reads the same six characters
+	// as an element exclusion and bash refuses them as arithmetic. All four
+	// trims, measured — `:#`, `:##`, `:%` and `:%%` — and nothing else: the
+	// replacement, the case changes and a colon with a space after it stay
+	// arithmetic errors, and `${v:2}` is still an offset.
+	d.ParamColonBeforeTrimIsIgnored = true
 	// A function body that is not compound may carry no redirection here:
 	// `f() echo hi` runs and `f() >out`, `f() echo hi >out` and `f() x=1
 	// >out` are all a syntax error at the operator. A braced body is not
@@ -87,6 +94,11 @@ func Semantics() interp.Semantics {
 	// join: `IFS=:; set -- "x:" y; printf "[%s]" $@` is `[x][y]` here and
 	// `[x][][y]` in bash, which joins to `x::y` first.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// bash's answer on the other join, against its own on the one above:
+	// `IFS=-; a=(x y z); v=${a[@]}` is `x y z` here where zsh gives
+	// `x-y-z`. The two axes partition the panel differently, which is why
+	// neither can stand in for the other.
+	s.UnsplitAtListJoinsOnIFS = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD

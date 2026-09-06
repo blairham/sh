@@ -37,6 +37,16 @@ func fieldsRun(t *testing.T, src string, split, glob Answer) (string, int) {
 		s.GlobExpansionResults = glob
 		s.ArrayScalarIsTheWholeArray = No
 		s.UnquotedListJoinsOnIFS = No
+		// The character a list is joined with when the context keeps no
+		// fields is its own axis (#983), and No — the hard space — is the
+		// answer these rows need rather than merely a value to fill in.
+		// Under the IFS join, `IFS=-; a=("p-q" r)` comes to `p-q-r` whether
+		// the element survived whole or came apart into `p` and `q`, so the
+		// row below could no longer tell the splitting policy from the axis
+		// it exists to distinguish. The join itself is covered in
+		// unsplitjoin_test.go, on elements holding no separator, where the
+		// two readings *are* distinguishable.
+		s.UnsplitAtListJoinsOnIFS = No
 	})
 }
 

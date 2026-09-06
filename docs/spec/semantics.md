@@ -6828,6 +6828,60 @@ The reading is the *indexed* array's alone. With the keyed attribute on,
 three shells that have the attribute — including the two that clear an
 indexed array through the same spelling.
 
+**A subscript written as a range** reaches this axis too, in the one
+dialect that reads the comma that way (`SubscriptCommaIsARange`). What
+the span *becomes* is the answer above; what a range adds is that a span
+can be written down. Measured on zsh 5.9.2 with `a=(x y z)`:
+
+    a[1,2]    [][z]        the span becomes one empty element
+    a[1,3]    []           every element, and one is left
+    a[0,1]    [][y][z]     a start below the first is the first
+    a[3,4]    [x][y][]     an end past the last is the last
+    a[4,5]    [x][y][z]    a start past the last names nothing
+    a[2,1]    [x][][y][z]  a span with nothing in it is an empty
+                           element *inserted* where it would have begun
+    a[-1,-1]  [x][y][]     the last element
+    a[-2,-1]  [x][y][z]    a negative start other than -1 acts on nothing
+    a[0,0]    refused      the whole span is below the first element
+
+Two of those would not have been guessed. The reversed range *inserts*,
+which is the strongest evidence anywhere that this reading replaces a
+span rather than removing subscripts — an empty span still becomes one
+element. And a range's negative start takes the same "only `-1` acts"
+rule this shell's single subscript already takes, so `[-2,-1]` leaves the
+array whole where `[-1,-1]` blanks the last element.
+
+Over a *string* the same span names characters, and the two halves part
+exactly where the single subscript's do: every negative within reach acts
+(`a=hello; unset "a[-2,-1]"` is `hel`), and a reversed range is invisible
+because an empty character put where the span would have begun leaves the
+string as it was.
+
+**The below-the-first-element refusal is a rule about the span**, and
+that is what tells `a[0]` from `a[0,1]`. A range that begins out of reach
+and ends inside is not refused — the start is the first element — and one
+that lies wholly out of reach is. A single subscript is that span with
+one end, so `array/unsetting-below-the-first-element` and
+`array/unsetting-a-range-below-the-first-element` are one rule seen at
+two widths, and `interp.Runner.spanIsBelowTheFirstElement` is the one
+place it is written. A negative end never counts as below: it is counted
+back from the end and reaches nothing rather than reaching before the
+start.
+
+A pair whose ends are the same subscript is that subscript under either
+reading, so `unset "a[2,2]"` asks the comma axis nothing and a runner
+with no dialect still answers it — the same discipline `${a[2,2]}`
+follows.
+
+Two shapes are recorded rather than modeled. zsh reports a range whose
+*end* will not evaluate and then acts as though it were 0 — `unset
+"a[1,x+]"` on three elements complains and comes back with four — where
+the same failure at the *start* is reported and nothing is done; we
+report and do nothing in both, which is what the single subscript already
+does. And no dialect reads a range while removing rather than blanking, so
+the removing answer read over a span — take every element the span names
+— is the two answers composed rather than a measured column.
+
 A single subscript is the same axis at a span of one, which is why there
 is one field and not two:
 

@@ -129,24 +129,22 @@ func reachedPlacement(where string) {
 // avoid it: the script asked for its file on descriptor 5 and that is where
 // it has to go.
 //
-// Which number the runtime holds is not luck, either, and it is the part
-// worth knowing. Measured, this shell's own startup creates it: opening the
-// script leaves 3 and 4 briefly free, and the poller lands immediately after
-// on 5 — the number a script is most likely to park on after 3 and 4.
+// Which number the runtime holds is not luck, either, and it is the part that
+// turned out to matter. Measured, this shell's own startup created it: opening
+// the script left 3 and 4 briefly free, and the poller landed immediately
+// after on 5 — the number a script is most likely to park on after 3 and 4.
 //
 //	openat("s.sh", O_RDONLY|O_CLOEXEC) = 4
 //	epoll_create1(EPOLL_CLOEXEC)       = 5
 //	eventfd2(0, EFD_CLOEXEC|EFD_NONBLOCK) = 6
 //
-// So the collision is between two low numbers, both chosen by accident. The
-// direction that would actually close it is to stop the runtime taking a
-// number a script can reach — reserving the low descriptors until the poller
-// exists, which is #731 option 2 and is a change to how the shell starts
-// rather than to how it execs. It is not made here.
-//
-// Until then a replacement that dies this way has not answered the question a
-// test asked, and the tests retry it rather than report it — loudly, and
-// counting every attempt. See replacementAttempts in replacefds_test.go.
+// So the collision was between two low numbers, both chosen by accident — and
+// that is what is fixed, since the window itself cannot be. driver/lowfds_unix.go
+// holds the low numbers before the runtime has taken any of them, makes it
+// open everything it opens lazily above them, and hands them straight back:
+// the window is still there and there is no longer anything in it to hit. The
+// interval this function is careful about is what keeps the cost of that a
+// startup detail rather than a second line of defense.
 func replaceProcess(path string, argv, env []string, files []*os.File) error {
 	prev := debug.SetGCPercent(-1)
 	// Before the table is touched, because this is the part that allocates.

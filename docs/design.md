@@ -219,6 +219,48 @@ control, signal delivery, terminal ownership or `set -m`, and cannot
 place a sandbox boundary or a permission gate around a process group
 that does not exist. Retrofitting it means rewriting execution.
 
+## The runtime's descriptors are kept out of a script's reach
+
+A shell written in Go shares its descriptor table with a runtime that
+opens descriptors of its own and does not say which. A script names
+numbers — `exec 5>f` — and `exec cmd` has to put that file on that
+number before the `execve`. When the number is one the runtime holds,
+the process does not misbehave, it dies: `netpoll failed` on Linux,
+where the poller's epoll descriptor was overwritten, and `signal_recv:
+inconsistent state` on macOS, where the signal pipe was.
+
+It is not bad luck, and that is the part that made it fixable. Opening
+the script leaves the low numbers briefly free, so the poller lands on
+5 — which is the number a script parks on next after 3 and 4. Two low
+numbers, both chosen by accident, colliding by construction.
+
+So the shell takes those numbers first. Before anything else runs,
+`driver` holds every descriptor from 3 to 99, makes the runtime open
+everything it opens lazily — the poller, and on macOS the signal pipe
+— and hands the range straight back. The runtime ends up above 99,
+where nothing a script names can reach it, and the hold is over before
+`main`: measured at 50µs on macOS and 37µs on Linux, an order of
+magnitude below the run-to-run spread of the startup measurement in
+[design/startup.md](design/startup.md).
+
+The window between placing a descriptor and the `execve` is still
+there. It cannot be closed — `execve` on a multithreaded process kills
+the other threads inside the call, and until it has they are running
+against a table that has already changed. What is fixed is that there
+is no longer anything in the window to hit.
+
+**The limit, recorded rather than claimed away.** The ceiling is 99
+because that is where a hand-written descriptor number stops. Only bash
+can *name* a descriptor above 9 at all — dash, ksh93 and zsh read `exec
+20>f` as a command called `20` — the automatic form `exec {v}>f`
+allocates a number the kernel has just said is free and so cannot
+collide by construction, and 424 shell scripts shipped on a developer
+machine name nothing above 5. A bash script that names a descriptor
+just above the ceiling by hand does still meet the runtime's own. It no
+longer dies of it: the shell knows those numbers and leaves them alone,
+so the command runs with that one descriptor missing, which is what
+every other unplaceable number already costs it.
+
 ## What is deliberately not here
 
 - **fish.** fish is not a Bourne descendant and shares no grammar below

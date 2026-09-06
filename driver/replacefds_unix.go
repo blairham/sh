@@ -48,6 +48,11 @@ import (
 // and are not close-on-exec, so a nil there closes them, which is what `exec
 // >&-; exec cmd` means in every shell measured.
 //
+// The one number that is left alone is one the Go runtime holds. That is not
+// a descriptor this process may hand back, and overwriting it is fatal rather
+// than reportable — see runtimeDescriptors, and lowfds_unix.go for why there
+// is almost never one in reach.
+//
 // Errors are dropped rather than reported. Every one of these calls fails only
 // for a descriptor that is not there to place, and the caller execs regardless
 // — a command missing one number of its table is a smaller failure than a
@@ -89,6 +94,17 @@ func placeFiles(files []*os.File) {
 	}
 
 	for fd, src := range sources {
+		if heldByTheRuntime(fd) {
+			// A number the Go runtime answered for at startup, and the one
+			// thing this must not do is write over it: the runtime finding
+			// its poller or its signal pipe replaced by a script's file is a
+			// fatal error rather than a reportable one, and the shell dies
+			// where it was about to become the command. The command loses the
+			// descriptor instead, which is what every other unplaceable
+			// number costs it. lowfds_unix.go is why this is rare enough to
+			// be worth a line rather than a design.
+			continue
+		}
 		switch {
 		case src < 0:
 			if !closeOnExec(fd) {

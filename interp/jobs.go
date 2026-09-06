@@ -51,10 +51,34 @@ type Job struct {
 	// so starting the job cannot return before this is settled.
 	ready     chan struct{}
 	readyOnce sync.Once
+	// pidOnce keeps the PID a job's *first* process and not its latest. See
+	// setPID.
+	pidOnce sync.Once
 }
 
 // markReady says the job's PID is now final, one way or the other.
 func (j *Job) markReady() { j.readyOnce.Do(func() { close(j.ready) }) }
+
+// setPID records the process this job is answered by, and does it once.
+//
+// Once is the whole point, and it was a data race before: a job that runs more
+// than one external command — `(sleep 0.1; sleep 0.1) &`, a loop, anything
+// compound — reached this on each of them, while the shell that started the
+// job had already read the field through setLastJob after `<-j.ready` released
+// it. The first write is synchronized by that channel and every later one is
+// not. `go test -race` finds it; a person finds a `$!` that changed under them.
+//
+// The first process wins, which is also the better answer. This shell has no
+// subshell process to name — a real shell forks and `$!` is the fork — so the
+// PID here is an approximation either way, and one that stays put is worth
+// more than one that tracks whichever command the job is running now. It is
+// what `kill %1` and `jobs -l` are reading.
+func (j *Job) setPID(pid int) {
+	j.pidOnce.Do(func() {
+		j.PID = pid
+		j.markReady()
+	})
+}
 
 // Finished reports whether the job has ended, without waiting for it.
 //

@@ -3959,6 +3959,81 @@ would send `kill` at the whole process group. And ksh93 alone finishes
 with a job after `jobs -p`, where dash and bash keep it for the next
 listing; the engine follows the two that agree.
 
+### A background job and the end of the shell
+
+**A job whose remaining work is this process's does not survive this
+process ending.** #519, decided rather than fixed, and the decision is
+here because it is a limit of the engine's shape rather than a bug with
+a patch.
+
+Measured 2026-09-06, each line run as `-c` and the file read a second
+later:
+
+| the job | bash 5.3 · 3.2 · dash · ksh93 · zsh | this shell |
+| --- | --- | --- |
+| `sh -c '…' &` — one external command | survives | **survives** |
+| `echo … > f &` — a builtin, finished at once | survives | **survives** |
+| `( … ) &` — a subshell | survives | **lost** |
+| `a && b &` — an and-list | survives | lost |
+| `{ …; } &` — a brace group | survives | lost |
+| `f &` — a function | survives | lost |
+| any of them with `wait` before the end | survives | **survives** |
+
+A real shell forks, so a job is a process that outlives its parent by
+construction. Here a job is a goroutine on a cloned Runner in *this*
+process, so the parts of it that are the shell's own work end when the
+process does. A job that is one external command is already a real
+child and already survives — which is why the row above it and the row
+below it are the pair that matters: the difference is about the shell
+logic in a job, not about `&`.
+
+**The failure is half-done rather than absent, which is the sharp
+version.** Measured: after `(sleep 3; echo LATE > out) &` and the shell
+exiting, the `sleep` is reparented to init, runs its full three seconds
+and exits — and the `echo` after it never runs. A process is left
+behind *and* the work is lost.
+
+**The shell does not wait, and that is right.** Measured, both this
+shell and bash return in 0.02s from `-c '(sleep 0.4; …) &'`. Waiting for
+outstanding jobs at `Finish` would stop losing the work and is cheap,
+and it is what the issue lists first — but no shell in the panel waits,
+and a shell that took four seconds to exit after `sleep 4 &` would be
+wrong in a way a person notices every time.
+
+**Detaching the external process is already done.** That is the issue's
+second option, and measuring it is what removed it from the list: the
+common `cmd &` shape needs nothing, because it is already a process of
+its own that the shell neither waits for nor kills.
+
+So what is left is the third option, taken here: say so. Fixing it
+needs a job to *be* a process, which needs a fork this runtime cannot
+safely do or a re-exec of a shell binary — and `interp` is a library,
+so there is no binary it may assume it is. That is a front end's change
+if it is anyone's, and it is not one to make blind.
+
+**A related bug found while measuring this, and fixed here.** A job's process
+id was its *latest* process rather than its first: a job running more than one
+external command reached the assignment again, while the shell that started it
+had already read the field — `background` releases on `<-job.ready`, which the
+first write closes, and every later write was unsynchronized. `go test -race`
+reports it. The first process wins now, which is also the better answer: this
+shell has no subshell process to name, so the id is an approximation either
+way, and one that stays put is worth more to `kill %1` and `jobs -l` than one
+that tracks whichever command the job has reached.
+
+**And one it did not fix, filed as #1003.** `&` does not return at all when the
+job blocks *before* starting any external command — `(read x < a-fifo; :) &`
+never reaches the next command. `background` waits for the process id to settle
+and it never does. That is a different defect from this one and its fix is a
+restructuring rather than a line, so it is its own issue.
+
+Three corpus rows ask the question, where none did before:
+`jobs/a-background-job-outlives-the-shell` records the difference,
+`jobs/a-background-external-command-outlives-the-shell` records the
+half that already works, and
+`jobs/wait-brings-a-background-job-back-before-the-shell-ends` records
+the workaround a script has.
+
 **`wait -n`** is bash's: block until whichever job finishes first, report
 its status, 127 in silence with no jobs at all
 (`WaitNWaitsForTheNextJob`). dash refuses the option, ksh93 refuses it

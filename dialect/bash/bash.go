@@ -369,6 +369,12 @@ func Semantics() interp.Semantics {
 	// are, and carries on with a status of 1.
 	s.BadNameToDeclarationFatal = interp.No
 	s.BadNameToUnsetFatal = interp.No
+	// The refusal to unset a readonly name is reported and not fatal — and
+	// this is the one of bash's `unset` answers that POSIX mode moves, which
+	// is why it is not BadNameToUnsetFatal read twice. `set -o posix` makes
+	// bash 5.3 stop here and changes nothing about `unset 1x`. bash 3.2 is
+	// fatal in neither mode; this preset is bash 5's.
+	s.UnsetReadonlyFatal = interp.No
 	s.DeclarationNameOperands = interp.PlainNamesOnly
 	// bash 5.3's bare `unset` checks nothing — `unset 1x`, `unset "a b"` and
 	// `unset -- -` are all quiet — while `unset -v 1x` refuses. bash 3.2

@@ -208,6 +208,8 @@ func Semantics() interp.Semantics {
 	// three of them.
 	s.BadNameToDeclarationFatal = interp.Yes
 	s.BadNameToUnsetFatal = interp.Yes
+	// And so is a readonly name it is asked to remove.
+	s.UnsetReadonlyFatal = interp.Yes
 	s.DeclarationNameOperands = interp.PlainNamesOnly
 	s.UnsetNameOperands = interp.PlainNamesOnly
 	s.DeclarationTakesASubscript = interp.No
@@ -397,6 +399,7 @@ func Diagnostics() interp.Diagnostics {
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
 		ReadonlyRefusalNamesBuiltin:   map[string]bool{"export": true, "readonly": true},
 		ReadonlyVariable:              "%s: is read only",
+		UnsetReadonly:                 "unset: %s: is read only",
 		InvalidNumber:                 "Illegal number: %s",
 		NumericArgument:               "%[1]s: Illegal number: %[2]s",
 		ArithError:                    "arithmetic expression: %[2]s: \"%[1]s\"",

@@ -1239,6 +1239,37 @@ var Corpus = []Case{
 		Why:     "`cd -` prints where it went in three of the four; zsh alone moves silently, so a script that pipes it gets an extra line everywhere but there",
 	},
 	{
+		// The refusal itself is the core answer: every shell in the panel
+		// says something, keeps the value, and reports 1 where the report can
+		// be read. What follows splits — dash, zsh and bash-as-`sh` end the
+		// script and print nothing more — and the split is not the one a
+		// failed special builtin usually makes, which is why the case records
+		// the whole line rather than only the status.
+		ID: "unset/a-readonly-name-is-refused", Category: "semantics axes",
+		Snippet: `readonly x=1; unset x; echo "st=$? [${x-gone}]"; echo after`,
+		Why:     "`unset` of a readonly name is refused by every shell in the panel: all six print a complaint and leave the value standing, which makes the refusal and the survival core. Three carry on and report 1 — bash, bash 3.2 and ksh93, and ksh93 calls it a *warning* in so many words — while dash, zsh and bash invoked as `sh` end the script there, at dash's 2 and the others' 1. No two of the four wordings agree",
+	},
+	{
+		ID: "unset/a-readonly-name-refused-alongside-another", Category: "semantics axes",
+		Snippet: `readonly x=1; y=2; unset x y; echo "st=$? [${x-gone}][${y-gone}]"; echo after`,
+		Why:     "the refusal is one name's and not the builtin's: the shells that carry on go on to remove `y`, so a single readonly operand does not save the rest. The status is still 1, which says the builtin reports the failure rather than the last name it managed",
+	},
+	{
+		ID: "unset/a-readonly-name-with-no-value-is-refused-too", Category: "semantics axes",
+		Snippet: `readonly y; unset y; echo "st=$? [${y-gone}]"; echo after`,
+		Why:     "the attribute is what is refused and not the value: `readonly y` with nothing assigned leaves a name that is unset and unremovable, and every shell in the panel complains about removing it. The `gone` here is the name never having had a value, not the unset succeeding",
+	},
+	{
+		ID: "unset/a-readonly-name-under-v-is-refused", Category: "semantics axes",
+		Snippet: `readonly x=1; unset -v x; echo "st=$? [${x-gone}]"; echo after`,
+		Why:     "the letter that says the operand is a variable changes nothing here, which is worth pinning because it changes the *name* rules in bash — `unset 1x` is quiet there and `unset -v 1x` is refused, so the two routes into the builtin are not the same code in every shell",
+	},
+	{
+		ID: "unset/a-readonly-name-behind-a-subscript-is-refused", Category: "semantics axes",
+		Snippet: `readonly a=1; unset a[0]; echo "st=$? [${a-gone}]"; echo after`,
+		Why:     "a subscripted operand is refused by the variable the subscript indexes, and the shells that reach the check name the base — `a`, not `a[0]` — so the refusal stands ahead of the element path and the subscript is never evaluated. Only bash and ksh93 get that far: dash refuses `a[0]` as a bad variable name first and zsh reads the brackets as a pattern that matches nothing, so this row records three different complaints for one line and is the reason the wording is worth reading rather than the status alone",
+	},
+	{
 		ID: "unset/takes-away-an-environment-name", Category: "parameters",
 		Snippet: `unset HOME; echo "[${HOME-gone}]"`,
 		Why:     "a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both",

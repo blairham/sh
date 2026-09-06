@@ -193,13 +193,21 @@ func (r *Runner) SetPosixMode(on bool) {
 	if on == r.posixMode {
 		return
 	}
-	restore := r.posixSaved
+	redir, unsetRO := r.posixSaved, r.posixSavedUnsetReadonly
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
-		restore = Yes
+		r.posixSavedUnsetReadonly = r.sem().UnsetReadonlyFatal
+		redir, unsetRO = Yes, Yes
 	}
 	r.swapSemantics(func(s *Semantics) {
-		s.RedirectErrorOnSpecialBuiltinFatal = restore
+		s.RedirectErrorOnSpecialBuiltinFatal = redir
+		// The second axis the mode moves, and measured the same way: `set -o
+		// posix` makes bash 5.3 stop on `readonly x=1; unset x` and `set +o
+		// posix` makes bash invoked as `sh` carry on past it. It needs a
+		// saved answer of its own because the two axes do not agree — zsh
+		// carries on past a failed redirection and stops here — so one
+		// remembered value could not put both back.
+		s.UnsetReadonlyFatal = unsetRO
 	})
 	r.posixMode = on
 }

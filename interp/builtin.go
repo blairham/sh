@@ -510,6 +510,47 @@ func (r *Runner) badSubscriptToUnset(sub string, err error) int {
 	return 1
 }
 
+// unsetReadonly refuses to remove a readonly name, reporting 0 when there was
+// nothing to refuse.
+//
+// Every shell in the panel refuses, says so, and leaves the value standing —
+// `readonly x=1; unset x; echo "${x-gone}"` prints 1 in all six — so the
+// refusal is the core answer and only what follows it splits. dash and zsh end
+// the script; bash and ksh93 report and carry on, and go on to the *rest* of
+// the operands: `readonly x=1; y=2; unset x y` leaves x standing and removes
+// y, which is why this reports per name rather than giving up the builtin.
+//
+// The status is 1 wherever it can be seen, which is the three that carry on;
+// the shell that stops carries FatalErrorStatusIsOne's, as every fatal error
+// does, so there is no status of this error's own.
+func (r *Runner) unsetReadonly(name string) int {
+	if !r.readonly[name] {
+		return 0
+	}
+	// The builtin has been named in the sentence by three of the four
+	// dialects, so it must not be named in the *location* by the one that
+	// puts every other builtin's name there: zsh writes `zsh:1: read-only
+	// variable: x` here and `zsh:unset:1: 1x: invalid parameter name` for a
+	// bad name, from the same builtin. It is the same care setVarAs takes for
+	// the assignment this refusal is the twin of.
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	msg := Wording(r.diag().UnsetReadonly, "unset: %s: cannot unset: readonly variable", name)
+	if r.ask(r.sem().UnsetReadonlyFatal, "unsetting a readonly name ending the script") {
+		// fatal carries FatalErrorStatusIsOne's number, which is the whole of
+		// the status question here — dash exits 2 and zsh 1, and neither is
+		// this error's own.
+		r.fatal("%s\n", msg)
+		return r.status
+	}
+	if r.unspecified {
+		return 2
+	}
+	r.diagf("%s\n", msg)
+	return 1
+}
+
 func biUnset(r *Runner, _ context.Context, args []string) int {
 	args, opts, code := r.builtinOptions("unset", args, "vfn")
 	if code != 0 {
@@ -535,7 +576,24 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		return status
 	}
 	for _, name := range args {
-		if base, sub, ok := r.subscriptOperand(name); ok {
+		base, sub, subscripted := r.subscriptOperand(name)
+		if !subscripted {
+			base = name
+		}
+		// Before the subscript is read, and named by the *base*: `unset a[0]`
+		// against a readonly `a` is refused by the variable the subscript
+		// indexes, and the two shells with arrays that refuse it say `a`
+		// rather than `a[0]`. The element is never reached, so the subscript
+		// is not evaluated either — which is why this stands ahead of the
+		// whole subscripted branch rather than inside it.
+		if code := r.unsetReadonly(base); code != 0 {
+			status = code
+			if r.ctl == controlExit {
+				return status
+			}
+			continue
+		}
+		if subscripted {
 			// `unset a[1]` is about one element and not about the array.
 			// The subscript was read as part of the name, so the whole thing
 			// was deleted from a table it was never in and nothing happened

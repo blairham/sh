@@ -3696,12 +3696,12 @@ spelling `ReadOptions` uses — `Semantics.DeclareOptions` and
 
     declare/typeset
       bash   aAfFgilprux   plus -I -n -t, unimplemented here
-      zsh    aAfgHilprux   plus floats, padding, ties…, unimplemented
+      zsh    aAfgHilpruUx  plus floats, padding, ties…, unimplemented
       ksh93  aAilprux      plus -f -F -b -n… and its own -H, unimplemented
       dash   —             no typeset at all
     local
       bash   aAgilprux     plus -f -F -I -n -t, unimplemented
-      zsh    aAHilprux
+      zsh    aAHilpruUx
       dash   (none)        `local -r x` declares a name `-r`, then refuses
                            it: `local: -r: bad variable name`, fatal
       ksh93  —             no local at all
@@ -3739,6 +3739,41 @@ alike, with its usage line and 2; dash has no such builtin. There is
 therefore no axis — only a letter one dialect has, in
 `Semantics.DeclareOptions` and `LocalOptions`. Corpus:
 `declare/hide-attribute-*`, `set/bare-set-and-a-hidden-value`.
+
+**`-U` keeps the first occurrence of each element, and it is one shell's
+letter.** Measured 2026-09-06 against zsh 5.9.2. `typeset -U a=(1 1 2 2 3
+1)` reads back `1 2 3`, and because the attribute belongs to the *name*
+rather than to that assignment, `a+=(2 4 4)` reads back `1 2 3 4` — the
+append is deduped against what is already there, which is the whole
+reason `path=( new "${path[@]}" )` in an rc file does not grow a copy of
+`new` every time it runs. `+U` takes the attribute away and leaves the
+elements standing, so a later `c+=(1)` keeps its duplicate: the dedupe
+happens when a value is written, not when one is read.
+
+Which of two equal elements survives is measurable, and it is the
+earlier one, where it stands: `b=(1 2 3); b=(3 "${b[@]}")` is `3 1 2`,
+not `1 2 3`. Applying the letter reaches a value the name already holds
+— `b=(1 1 2); typeset -U b` is `1 2` — the same rule the integer and
+case letters follow. A scalar takes the letter and nothing happens to
+it: `typeset -U s=a:b:a` is `a:b:a` unchanged, which matters because the
+letter is used almost entirely on `path` and `fpath`, whose scalar
+halves *are* colon lists. And the array is deduped in the reading the
+dialect gives it and stored back dense, which is what a gap shows:
+`typeset -U f=(1 2); f[5]=1` leaves three elements — `1`, `2` and one
+empty, the two the gap made having deduped to one and the trailing
+duplicate gone — where the same two lines without the letter leave five.
+
+There is no axis. bash refuses `-U` under `declare` and `typeset` alike
+with its usage line and 2, and ksh93u+ has no such letter at all:
+`typeset: -U: unknown option`, and because its `typeset` is special the
+refusal ends the script. Its own lower-case `-u` is a different
+attribute and stays what it was. So the letter lives in
+`Semantics.DeclareOptions` and `LocalOptions` — `local -U u=(1 1 2)`
+dedupes too — and the attribute is recorded against the name and
+consulted at the one place an array goes back into the store. It is said
+back on a listing last of all the letters, after export: `typeset -arxU
+A1=( 1 2 )`, `export -iU n1=5`. Corpus:
+`declare/unique-attribute-*`.
 
 **An attribute added to a name that already holds a value keeps it, and
 re-reads it.** A separate rule from the one above, and the one that

@@ -38,6 +38,7 @@ type declareFlags struct {
 	upper     bool
 	global    bool
 	hidden    bool
+	unique    bool
 	function  bool
 	funcNames bool
 	remove    bool
@@ -95,6 +96,12 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// Global rather than local: the assignment reaches the
 				// global cell however deep the function stack is.
 				f.global = true
+			case 'U':
+				// Keep only the first occurrence of each element. Like
+				// `-i` and the case attributes it is a property of the
+				// *name* rather than of this assignment, so it is
+				// recorded and consulted by every later write.
+				f.unique = true
 			case 'H':
 				// Hide the value from listings. The name is declared, holds
 				// what it holds and reads back exactly as it would without
@@ -304,6 +311,28 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		} else {
 			r.uppered[name] = true
 			delete(r.lowered, name)
+		}
+	}
+	if f.unique {
+		if r.unique == nil {
+			r.unique = map[string]bool{}
+		}
+		if f.remove {
+			// `+U` drops the attribute and leaves the elements that are
+			// there alone: measured, `typeset -U c=(1 2 3 2)` is `1 2 3`,
+			// and `typeset +U c; c+=(1)` is `1 2 3 1` — the duplicate the
+			// append brought stands.
+			delete(r.unique, name)
+		} else {
+			r.unique[name] = true
+			// The attribute applies to what the name already holds, not
+			// only to what is written next: measured, `b=(1 1 2)` followed
+			// by `typeset -U b` reads back `1 2`. A declaration that also
+			// assigns has already stored its value by the time this runs,
+			// so this one line covers both spellings.
+			if a, ok := r.Arrays[name]; ok {
+				r.storeArray(name, a)
+			}
 		}
 	}
 	if f.hidden {

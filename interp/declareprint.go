@@ -103,6 +103,17 @@ type declaration struct {
 	// lists back as `typeset -H h=v` there. Hiding in those forms would be
 	// output no shell in the panel produces.
 	hidden bool
+	// unique is `typeset -U`, which the one shell with the attribute writes
+	// back as a letter — last of them all, after export.
+	//
+	// Only the ExportSpelled form writes it, which is where that shell's
+	// `typeset -p` and `readonly -p` land. Its `export -p` writes letters
+	// too — `export -i n=5` — but the CommandWord form this engine gives
+	// that builtin writes none at all, for `-i` as much as for `-U`, so
+	// spelling `U` there alone would be one letter of a listing that is
+	// missing the rest. Clustered and BareAssignments are the shells with
+	// no such attribute.
+	unique bool
 }
 
 // declarationOf gathers what the runner knows about a name. The second result
@@ -117,8 +128,10 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		lower:    r.lowered[name],
 		upper:    r.uppered[name],
 		hidden:   r.hidden[name],
+		unique:   r.unique[name],
 	}
-	attributed := d.integer || d.readonly || d.exported || d.lower || d.upper || d.hidden
+	attributed := d.integer || d.readonly || d.exported || d.lower || d.upper ||
+		d.hidden || d.unique
 	if r.removed[name] {
 		// `unset` took the value away; only a surviving attribute keeps the
 		// name listable.
@@ -184,6 +197,9 @@ func (r *Runner) declarableNames() []string {
 	for name := range r.hidden {
 		seen[name] = true
 	}
+	for name := range r.unique {
+		seen[name] = true
+	}
 	for k := range r.inheritedEnv {
 		// isNameLike keeps the entries that are variables: an exported
 		// function travels in the environment under a decorated name no
@@ -195,7 +211,7 @@ func (r *Runner) declarableNames() []string {
 	for name := range seen {
 		if r.removed[name] && !r.readonly[name] && !r.integer[name] &&
 			!r.exported[name] && !r.lowered[name] && !r.uppered[name] &&
-			!r.hidden[name] {
+			!r.hidden[name] && !r.unique[name] {
 			delete(seen, name)
 		}
 	}
@@ -359,13 +375,18 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	word := "typeset"
 	// This engine slots the case letters between the integer letter and the
 	// readonly one, where the clustered engine puts them after export —
-	// measured from the same state in both.
-	flags := d.letters("aAilurx")
+	// measured from the same state in both. `U` comes last of all,
+	// measured: `typeset -arxU`, `export -iU`, `typeset -lU`.
+	flags := d.letters("aAilurxU")
 	if d.exported && !d.isArr && !d.isAssoc {
 		// Only a scalar earns the `export` spelling; an exported array keeps
 		// the word and the letter.
+		//
+		// The letter goes from wherever it stands rather than off the end:
+		// `U` is written after it, so `export -U x1=v` was coming out
+		// `export -xU x1=v` while `x` was the last letter there was.
 		word = "export"
-		flags = strings.TrimSuffix(flags, "x")
+		flags = strings.ReplaceAll(flags, "x", "")
 	}
 	head := word
 	if flags != "" {
@@ -510,6 +531,8 @@ func (d declaration) letters(order string) string {
 			on = d.lower
 		case 'u':
 			on = d.upper
+		case 'U':
+			on = d.unique
 		}
 		if on {
 			b.WriteRune(c)

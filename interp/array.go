@@ -82,6 +82,15 @@ func (r *Runner) storeArray(name string, a Array) {
 	if r.Arrays == nil {
 		r.Arrays = map[string]Array{}
 	}
+	// The unique attribute is applied here rather than at each of the
+	// half-dozen callers, because it is a property of the name that holds
+	// for every write there is: measured, `typeset -U a=(1 1 2)` dedupes,
+	// `a+=(2 4 4)` dedupes, and `a[2]=3` dedupes the whole array and not
+	// only the element written. One choke point is what makes those one
+	// rule instead of three that can drift apart.
+	if r.unique[name] {
+		a = r.uniqueElems(a)
+	}
 	r.Arrays[name] = a
 	// A plain `$a` has to keep working. The first element is stored rather
 	// than the scalar view, because *which* view it is depends on a dialect
@@ -99,6 +108,39 @@ func (r *Runner) storeArray(name string, a Array) {
 	} else {
 		r.setVar(name, "")
 	}
+}
+
+// uniqueElems is what `typeset -U` leaves of an array: the first occurrence
+// of each value, in the order the first occurrences stand.
+//
+// Measured against zsh 5.9.2, which is the one shell in the panel with the
+// letter. The *first* occurrence is the one kept and it does not move:
+// `b=(1 2 3); b=(3 $b)` reads back `3 1 2`, so the new leading `3` stays
+// where it was written and the old one is the copy that goes. Dedupe happens
+// at write time and not at read: `typeset -U c=(1 2 3 2)` already reads `1 2
+// 3` with the attribute removed afterwards.
+//
+// The array is read the way the dialect reads it and stored back dense,
+// because that is what the measurement says: `typeset -U f=(1 2); f[5]=1`
+// leaves three elements — `1`, `2` and one empty — where the same lines
+// without the letter leave five. The two empties the gap made are elements
+// like any others and dedupe to one, and the trailing `1` is the copy that
+// goes. Reading first is what makes that true; deduping the store's
+// subscripts instead would have left two elements and no empty at all.
+func (r *Runner) uniqueElems(a Array) Array {
+	elems := r.readArray(a)
+	out := make(Array, len(elems))
+	seen := make(map[string]bool, len(elems))
+	pos := 0
+	for _, e := range elems {
+		if seen[e] {
+			continue
+		}
+		seen[e] = true
+		out[pos] = e
+		pos++
+	}
+	return out
 }
 
 // elemPos resolves a subscript as written to a position in the store.

@@ -1114,6 +1114,14 @@ type Runner struct {
 	// the same letter for a different attribute that does *not* hide, which
 	// is why the dialect decides who may set it — see Semantics.DeclareOptions.
 	hidden map[string]bool
+	// unique names keep only the first occurrence of each element —
+	// `typeset -U`. A property of the name like the others, consulted by
+	// every write rather than by the one declaration that set it, which is
+	// what makes `path=( new "${path[@]}" )` drop the copy of `new` that
+	// was already there. One shell in the panel spells the letter: bash
+	// refuses it and ksh93 does not have it, so the dialect decides who may
+	// set it — see Semantics.DeclareOptions.
+	unique map[string]bool
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
 	// depth bounds function recursion, because a shell script can recurse

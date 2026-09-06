@@ -615,8 +615,15 @@ func Semantics() interp.Semantics {
 	// `typeset`, and ksh93's `-H` is a wholly different attribute — file
 	// name mapping — that does not hide, listing back as `typeset -H h=v`.
 	// So there is no axis here, only a letter one dialect has.
-	s.DeclareOptions = "aAfgHilprux"
-	s.LocalOptions = "aAHilprux"
+	//
+	// `-U` keeps only the first occurrence of each element of an array, on
+	// the declaration itself and on every later write — see
+	// Runner.uniqueArrays. It is this shell's letter alone: bash refuses
+	// `-U` under both spellings, and ksh93 does not have the letter at all,
+	// answering `typeset: -U: unknown option`. Its own `-u` — uppercase —
+	// is a different letter and stays what it was.
+	s.DeclareOptions = "aAfgHilpruUx"
+	s.LocalOptions = "aAHilpruUx"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
 	// `typeset -g x=new` with a `local x` in front assigns the *local* —
@@ -802,18 +809,18 @@ func Diagnostics() interp.Diagnostics {
 			// no ReadBadFileDescriptor wording appears here.
 			"read": "kqeEzcl",
 			// typeset's letters this engine does not hold: floats (-E -F),
-			// namerefs (-n), padding and alignment (-L -R -Z), uniqueness,
-			// ties and the rest. The same set under both names, and for
-			// `local` too. `-H` has left this list — it is implemented, in
+			// namerefs (-n), padding and alignment (-L -R -Z), ties and the
+			// rest. The same set under both names, and for `local` too.
+			// `-H` and `-U` have left this list — they are implemented, in
 			// DeclareOptions above.
-			"typeset": "bcEFhkLmnRtTUZ",
+			"typeset": "bcEFhkLmnRtTZ",
 			"type":    "mvwsS",
 			// jobs' letters that are zsh's own: -d names the directory the
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.
 			"jobs":    "dzZ",
-			"declare": "bcEFhkLmnRtTUZ",
-			"local":   "bcEFhkLmnRtTUZ",
+			"declare": "bcEFhkLmnRtTZ",
+			"local":   "bcEFhkLmnRtTZ",
 		},
 		// The builtin's name is stripped to the location prefix as ever:
 		// `zsh:read:1: -p: no coprocess`, measured with no coprocess to

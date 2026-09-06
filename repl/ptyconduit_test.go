@@ -771,3 +771,45 @@ func TestTheMarkHasAShapeTheScanCanTrust(t *testing.T) {
 		}
 	}
 }
+
+// A terminal that will not say how big it is leaves the inner one as it was.
+//
+// Zero by zero is a real answer from the ioctl and it means "do not know" — the
+// same reading terminalWidth already takes of it. Passing it on would tell a
+// full-screen program already running that its terminal has no size, which is
+// worse than the size it had a moment ago. So the last good answer stands.
+//
+// Reachable rather than theoretical: the outer terminal can go away while the
+// conduit is still alive, and a SIGWINCH can arrive after it has.
+func TestATerminalThatWillNotSaySizeLeavesTheInnerOneAlone(t *testing.T) {
+	sink := &syncBuffer{}
+	control, tty, err := pty.Open()
+	if err != nil {
+		t.Skipf("no pseudo-terminal: %v", err)
+	}
+	defer func() { _ = control.Close() }()
+	if err := pty.SetSize(tty, 40, 200); err != nil {
+		t.Fatal(err)
+	}
+	conduit, err := newPtyConduit(tty, sink, func(w io.Writer) io.Writer { return w })
+	if err != nil {
+		t.Skipf("no conduit: %v", err)
+	}
+	defer conduit.close()
+	if rows, cols := terminalSize(conduit.Stream()); rows != 40 || cols != 200 {
+		t.Fatalf("the inner terminal opened at %dx%d, want 40x200", rows, cols)
+	}
+
+	// The outer terminal goes away, so the ioctl fails and the size reads as
+	// zero by zero.
+	_ = tty.Close()
+	if rows, cols := terminalSize(tty); rows != 0 || cols != 0 {
+		t.Fatalf("a closed terminal reported %dx%d; this test needs one that will not say", rows, cols)
+	}
+	conduit.resize()
+
+	if rows, cols := terminalSize(conduit.Stream()); rows != 40 || cols != 200 {
+		t.Errorf("the inner terminal is %dx%d, want the 40x200 it had — a refusal was written through as a size",
+			rows, cols)
+	}
+}

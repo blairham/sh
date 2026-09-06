@@ -3231,6 +3231,17 @@ echo "st=$?"`,
 		Why:             "and the boundary, refused by every shell in the panel including the one that has the construct: the inner expansion is the whole of the name position, so text in front of it is not a longer name and `${${v}x}` is not a name with a suffix. Graded on the refusal because five shells decline the same characters in five wordings, which is what the Diagnostics vector is for",
 	},
 	{
+		ID: "param/a-quoted-substitution-in-the-name-position", Category: "parameter expansion",
+		Snippet: `printf "[%s]" ${(@f)"$(printf "a b\nc")"}; echo`,
+		Why:     "`${(@f)\"$(cmd)\"}` is *the* way to split a command's output into an array by line in the shell with the grammar, and it appears throughout real configuration. The quotes are not decoration: quoted, the inner comes to one field and `(f)` splits that on newlines; the same characters *without* them are a different program — `${(@f)$(printf \"a b\\nc\")}` is three fields there, because an unquoted inner is split on IFS before the flag sees it. That spelling has no row of its own: this shell does not split an unquoted inner yet, which is #883's remaining half and is filed, and a row for it would record that gap rather than this one",
+	},
+	{
+		ID: "param/a-quoted-non-substitution-is-not-a-name", Category: "parameter expansion",
+		GradedOnRefusal: true,
+		Snippet:         `v=abc; echo "${\"abc\"}"`,
+		Why:             "the boundary the quotes do not move: what may stand in the name position is a *substitution*, and quoting a string does not make it one. Refused by every shell in the panel, including the one that reads a quoted `${\"${v}\"}` two characters away — so the quotes are a wrapper on the shape rather than a shape of their own",
+	},
+	{
 		ID: "param/a-nested-expansions-value-is-what-the-outer-operator-tests", Category: "parameter expansion",
 		Snippet: `v=; echo "[${${v}:-d}]"; v=abc; echo "[${${v}:-d}]"; echo "[${${v}:+y}]"`,
 		Why:     "the conditional operators test what the inner expansion came to rather than whether some name is set, which is the whole reason the idiom exists: `${${0:#$ZSH_ARGZERO}:-${(%):-%N}}`, out of a plugin manager on this machine, is a default over the *result* of a pattern exclusion. An empty inner fires the colon test and a set one does not",

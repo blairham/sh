@@ -272,7 +272,12 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 		s = s[1:]
 	}
 
-	if p.dialect.NestedParamExpansion && strings.HasPrefix(s, "$") {
+	// What may stand here is decided in one place, and it is not this one:
+	// scanNestedExpansion returns false for anything that is not a
+	// substitution. A prefix test here as well was a second copy of the same
+	// rule, and mutants that widened *this* one were unobservable because
+	// the other still refused — which is how the duplication was found.
+	if p.dialect.NestedParamExpansion {
 		if inner, rest, ok := p.scanNestedExpansion(s, start); ok {
 			// Src as well as the node: a diagnostic about a nested expansion
 			// names the text it was written as, and there is no parameter
@@ -805,13 +810,32 @@ func (p *Parser) scanNestedExpansion(s string, at Pos) (inner *Word, rest string
 	// the parameter named `$`, which is not this at all. `${$'x'}` opens with
 	// a dollar and is not a substitution either: the quoting carries it, and
 	// the span is literal text.
-	if !strings.HasPrefix(s, "${") && !strings.HasPrefix(s, "$(") {
+	// Or the same substitution in double quotes, which is what `${(@f)"$(cmd)"}`
+	// is written with and is a *different program* from the unquoted one:
+	// quoted, the inner comes to one field and the outer flags split that;
+	// unquoted, it is split on IFS first and the flags then see several.
+	// Measured on zsh 5.9.2 — `${(@f)"$(printf "a b\nc")"}` is two fields
+	// and `${(@f)$(printf "a b\nc")}` is three.
+	//
+	// Only double quotes, and only around a substitution: `${"abc"}`,
+	// `${'$(cmd)'}` and `${"$v"}` are all a bad substitution there, so what
+	// the quotes may hold is exactly what they may hold without them.
+	quoted := strings.HasPrefix(s, `"`)
+	body := s
+	if quoted {
+		body = s[1:]
+	}
+	if !strings.HasPrefix(body, "${") && !strings.HasPrefix(body, "$(") {
 		return nil, "", false
 	}
-	// Which is also the whole of the test. A kind check on the span behind it
-	// could not be reached: those two prefixes lex to a substitution and
-	// nothing else does, so a guard on the kind was a branch no mutation
-	// could tell from its absence.
+	// Which is also the whole of the test, for the quoted spelling as much as
+	// the bare one. A kind check on the span behind it could not be reached:
+	// those two prefixes lex to a substitution and nothing else does, so a
+	// guard on the kind was a branch no mutation could tell from its absence
+	// — and a check that the span came back *double*-quoted is unreachable
+	// for the same reason, because the only quote stripped above is a `"`.
+	// The single-quoted spelling is refused by that strip and by nothing
+	// else, which is where to look if `${(@f)'$(cmd)'}` ever starts parsing.
 	t := NewLexer(s, p.dialect).Next()
 	if t.Kind != TokWord || len(t.Spans) == 0 {
 		return nil, "", false

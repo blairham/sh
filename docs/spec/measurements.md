@@ -3162,6 +3162,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/hex-escape-four-digits-is-a-code-point` | ` 5b 5c 78 30 30 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 41 5d ` | ` 5b 00 34 31 5d ` |
 | `printf/hex-escape-with-no-digits` | ` 61 5c 78 5a ` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 0: printf: missing hex digit for \x` | ` 61 00 5a ` | ` 61 00 5a ` |
 | `printf/hex-escape-is-not-a-b-escape` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` |
+| `printf/an-octal-in-a-b-escape-is-not-the-formats` | ` 61 41 5a ~~ 61 08 31 5a ` | ` 61 41 5a ~~ 61 08 31 5a ` | ` 61 41 5a ~~ 61 08 31 5a ` | ` 61 41 5a ~~ 61 08 31 5a ` | ` 61 41 5a ~~ 61 08 31 5a ` | ` 61 41 5a ~~ 61 08 31 5a ` |
+| `printf/a-b-escape-octal-is-a-byte` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
+| `printf/a-b-escape-octal-without-the-zero-diverges` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 5c 31 30 31 5a ` | ` 61 5c 31 30 31 5a ` |
+| `printf/a-b-escape-splits-esc-from-capital-esc` | ` 61 5c 65 5a 3a 61 5c 45 5a ` | ` 61 1b 5a 3a 61 1b 5a ` | ` 61 1b 5a 3a 61 1b 5a ` | ` 61 1b 5a 3a 61 1b 5a ` | ` 61 5c 65 5a 3a 61 1b 5a ` | ` 61 1b 5a 3a 61 5c 45 5a ` |
+| `printf/a-b-escape-hex-with-no-digits` | ` 61 5c 78 5a ` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 0: printf: missing hex digit for \x` | ` 61 5c 78 5a ` | ` 61 00 5a ` |
+| `printf/backslash-c-in-a-b-escape-always-stops` | ` 61 ` | ` 61 ` | ` 61 ` | ` 61 ` | ` 61 ` | ` 61 ` |
+| `printf/backslash-c-in-a-b-escape-ends-the-whole-printf` | `[aEND` | `[aEND` | `[aEND` | `[aEND` | `[aEND` | `[aEND` |
 | `printf/an-octal-escape-is-a-byte-and-not-a-code-point` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
 | `printf/a-quoted-escape-used-as-a-format` | ` 24 61 5c 78 63 30 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
 | `printf/a-c-conversion-writes-one-byte` | ` 24 ` | ` c0 ` | ` c0 ` | ` c0 ` | ` c0 ` | ` c0 ` |
@@ -3329,6 +3336,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `printf/hex-escape-is-not-a-b-escape` — the site matters and not only the shell: ksh93 reads \x41 in a format and leaves it as written in a %b argument, which expands the set echo expands. bash and zsh have it in both and dash in neither, so ksh93 alone separates the two tables
   ```sh
   printf '%b' 'a\x41Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/an-octal-in-a-b-escape-is-not-the-formats` — the two escape tables in one line, and unanimous in both halves: a %b reads \0 and up to three octal digits after it, so \0101 is an A, where a format reads up to three digits with the zero optional, so the same text is a backspace and a 1. Reading a %b the format's way gives neither answer
+  ```sh
+  printf '%b' 'a\0101Z' | od -An -tx1 | tr -s " "; printf 'a\0101Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-b-escape-octal-is-a-byte` — the same byte-and-not-a-code-point rule a format's octal follows, asked at the other site: 0300 is the one byte 0xc0 in all six and never the two UTF-8 spells U+00C0 with
+  ```sh
+  printf '%b' 'a\0300Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-b-escape-octal-without-the-zero-diverges` — whether the \0 is required: bash and dash read a bare \101 as an A, ksh93 and zsh write the four characters. Not the same grouping as the same text in an echo argument, where dash alone reads it — which is what makes this an axis of its own rather than echo's answer reused
+  ```sh
+  printf '%b' 'a\101Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-b-escape-splits-esc-from-capital-esc` — the two spellings of the escape character are two questions, because the two shells that split them split them in opposite directions: ksh93 has \E and not \e, zsh has \e and not \E, bash has both and dash neither. One answer for both letters is wrong for half the panel
+  ```sh
+  printf '%b' 'a\eZ:a\EZ' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-b-escape-hex-with-no-digits` — the empty digit run at the %b site rather than the format's: bash leaves the escape standing and warns without failing, zsh reads the run as a zero and writes a NUL, and ksh93 and dash have no \x here at all — so ksh93's answer is the one that differs from its own format's
+  ```sh
+  printf '%b' 'a\xZ' | od -An -tx1 | tr -s " "
+  ```
+- `printf/backslash-c-in-a-b-escape-always-stops` — the one place the two tables converge where the format's diverges: \c ends the output in all six here, where the same two characters in a format are literal in bash and dash, control-X in ksh93 and a full stop in zsh
+  ```sh
+  printf '%b' 'a\cbZ' | od -An -tx1 | tr -s " "
+  ```
+- `printf/backslash-c-in-a-b-escape-ends-the-whole-printf` — the stop is not confined to the conversion that read it: the format is abandoned where it stands, the operands after it go unused, and the reused format does not run again — unanimous, and the half of \c that a case reading only one conversion cannot see
+  ```sh
+  printf '[%b][%s]' 'a\cb' x; echo END
   ```
 - `printf/an-octal-escape-is-a-byte-and-not-a-code-point` — unanimous, and worth pinning as bytes: \300 is the single byte 0xc0 in all six, never the two bytes UTF-8 gives the code point of the same number
   ```sh

@@ -995,6 +995,41 @@ func hexValue(c byte) int {
 	}
 }
 
+// xsiEscape is the escape table POSIX's XSI `echo` defines with one letter,
+// and it is the one part of the subject nothing in the panel argues about: an
+// `echo` argument, a `printf` format and a `%b` argument all read these eight
+// the same way, in all six shells measured.
+//
+// It is written once because the three sites that read escapes disagree about
+// everything *else* — `\c`, `\e`, `\x` and the octal forms each split the
+// panel differently, and each split falls in a different place per site — so
+// the eight that never move are the thing to hold still, rather than the
+// thing to copy three times.
+//
+// ok is false for a character no entry claims, which leaves what to do with
+// the backslash to the caller: the sites do not agree about that either.
+func xsiEscape(c byte) (byte, bool) {
+	switch c {
+	case 'a':
+		return '\a', true
+	case 'b':
+		return '\b', true
+	case 'f':
+		return '\f', true
+	case 'n':
+		return '\n', true
+	case 'r':
+		return '\r', true
+	case 't':
+		return '\t', true
+	case 'v':
+		return '\v', true
+	case '\\':
+		return '\\', true
+	}
+	return 0, false
+}
+
 // expandEchoEscapes interprets the escapes `echo` expands where the dialect
 // says it does: the XSI set, with `\xHH` and `\e` admitted per dialect.
 // stopped reports a `\c`, which discards the rest of the output and the
@@ -1007,25 +1042,13 @@ func expandEchoEscapes(s string, hex, esc bool) (expanded string, stopped bool) 
 			continue
 		}
 		i++
+		if e, ok := xsiEscape(s[i]); ok {
+			b.WriteByte(e)
+			continue
+		}
 		switch s[i] {
-		case 'a':
-			b.WriteByte('\a')
-		case 'b':
-			b.WriteByte('\b')
 		case 'c':
 			return b.String(), true
-		case 'f':
-			b.WriteByte('\f')
-		case 'n':
-			b.WriteByte('\n')
-		case 'r':
-			b.WriteByte('\r')
-		case 't':
-			b.WriteByte('\t')
-		case 'v':
-			b.WriteByte('\v')
-		case '\\':
-			b.WriteByte('\\')
 		case 'e', 'E':
 			if !esc {
 				b.WriteByte('\\')

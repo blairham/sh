@@ -422,3 +422,25 @@ func TestPrintfHasNoHexEscape(t *testing.T) {
 		t.Errorf("said %q, want the escape as written", out)
 	}
 }
+
+// The `%b` escape table this shell answers for. dash has no `\x` and neither
+// spelling of the escape character at either site, and it reads a bare
+// `\101` as an `A` — the one thing it and bash agree on that ksh93 and zsh
+// do not. `\c` ends the output here where a format writes the characters.
+func TestPrintfBEscapesAreDashs(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf '%b' 'a\0101Z'`, "aAZ"},
+		{`printf '%b' 'a\0300Z'`, "a\xc0Z"},
+		{`printf '%b' 'a\101Z'`, "aAZ"},
+		{`printf '%b' 'a\eZ:a\EZ'`, `a\eZ:a\EZ`},
+		{`printf '%b' 'a\x41Z'`, `a\x41Z`},
+		{`printf '%b' 'a\cbZ'`, "a"},
+		{`printf 'a\0101Z'`, "a\b1Z"},
+		{`printf 'a\cbZ'`, `a\cbZ`},
+	} {
+		if out, st := runDash(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
+			t.Errorf("%s: said % x status %d, want % x and 0", tc.src, out, st, tc.want)
+		}
+	}
+}

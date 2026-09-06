@@ -427,3 +427,27 @@ func TestPrintfHexEscapeReadsACodePoint(t *testing.T) {
 		}
 	}
 }
+
+// The `%b` escape table this shell answers for, and it is the reason every
+// one of these is a per-site axis: the format reads `\x41` as an `A` and the
+// `%b` writes the four characters, the format reads `\cb` as control-B and
+// the `%b` stops, and `\E` is the escape character where `\e` is two
+// ordinary ones — the opposite of zsh.
+func TestPrintfBEscapesAreKshs(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf '%b' 'a\0101Z'`, "aAZ"},
+		{`printf '%b' 'a\0300Z'`, "a\xc0Z"},
+		{`printf '%b' 'a\101Z'`, `a\101Z`},
+		{`printf '%b' 'a\eZ:a\EZ'`, "a\\eZ:a\x1bZ"},
+		{`printf '%b' 'a\x41Z'`, `a\x41Z`},
+		{`printf '%b' 'a\cbZ'`, "a"},
+		{`printf 'a\0101Z'`, "a\b1Z"},
+		{`printf 'a\x41Z'`, "aAZ"},
+		{`printf 'a\cbZ'`, "a\x02Z"},
+	} {
+		if out, st := runKsh(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
+			t.Errorf("%s: said % x status %d, want % x and 0", tc.src, out, st, tc.want)
+		}
+	}
+}

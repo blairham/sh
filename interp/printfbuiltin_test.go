@@ -21,6 +21,10 @@ func printfSem() Semantics {
 	s.PrintfLengthModifiers = PrintfLengthModifiersAbsent
 	s.PrintfUnfinishedConversionIsAPercent = No
 	s.PrintfHexEscape = PrintfHexEscapeAbsent
+	s.PrintfBHexEscape = PrintfHexEscapeAbsent
+	s.PrintfBEscEscape = No
+	s.PrintfBCapitalEscEscape = No
+	s.PrintfBOctalWithoutZero = No
 	return s
 }
 
@@ -88,16 +92,55 @@ func TestPrintfHexEscapeIsAskedOnlyWhenOneIsThere(t *testing.T) {
 	}
 }
 
-// `%b` expands the escape set `echo` expands, which is not the format's: the
-// question a format answers about `\x` is not put to a `%b` argument, so the
-// axis is not asked there and the escape stays as written.
-func TestPrintfHexEscapeIsNotAskedOfABArgument(t *testing.T) {
-	sem := printfSem()
-	sem.PrintfHexEscape = PrintfHexEscapeUnspecified
-	out, st := run(t, `printf '%b' 'a\x41Z'`, func(r *Runner) { r.Semantics = &sem })
-	if out != `a\x41Z` || st != 0 {
-		t.Errorf("got %q status %d, want the escape as written and 0", out, st)
-	}
+// A `%b` argument and a format are two escape tables, so `\x` is two
+// questions: the format's axis is never put to a `%b` argument and the `%b`
+// axis is never put to a format. ksh93 is what makes the distinction real —
+// it reads `\x41` in a format and writes the four characters in a `%b`.
+func TestPrintfHexEscapeIsAskedPerSite(t *testing.T) {
+	t.Run("a %b argument does not ask the format's axis", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfHexEscape = PrintfHexEscapeUnspecified
+		sem.PrintfBHexEscape = PrintfHexEscapeByte
+		out, st := run(t, `printf '%b' 'a\x41Z'`, func(r *Runner) { r.Semantics = &sem })
+		if out != "aAZ" || st != 0 {
+			t.Errorf("got %q status %d, want %q and 0", out, st, "aAZ")
+		}
+	})
+	t.Run("a format does not ask the %b axis", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfHexEscape = PrintfHexEscapeByte
+		sem.PrintfBHexEscape = PrintfHexEscapeUnspecified
+		out, st := run(t, `printf 'a\x41Z'`, func(r *Runner) { r.Semantics = &sem })
+		if out != "aAZ" || st != 0 {
+			t.Errorf("got %q status %d, want %q and 0", out, st, "aAZ")
+		}
+	})
+	t.Run("ksh93's split: a format has the escape and a %b does not", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfHexEscape = PrintfHexEscapeCodePoint
+		sem.PrintfBHexEscape = PrintfHexEscapeAbsent
+		out, st := run(t, `printf 'a\x41Z'; printf '%b' 'a\x41Z'`, func(r *Runner) { r.Semantics = &sem })
+		if out != `aAZa\x41Z` || st != 0 {
+			t.Errorf("got %q status %d, want %q and 0", out, st, `aAZa\x41Z`)
+		}
+	})
+	t.Run("a %b with no hex escape asks nothing", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfBHexEscape = PrintfHexEscapeUnspecified
+		out, st := run(t, `printf '%b' 'a\tZ'`, func(r *Runner) { r.Semantics = &sem })
+		if out != "a\tZ" || st != 0 {
+			t.Errorf("got %q status %d, want a tab between the letters and 0", out, st)
+		}
+	})
+	t.Run("a %b with one and no answer is refused", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfBHexEscape = PrintfHexEscapeUnspecified
+		out, st := run(t, `printf '%b' 'a\x41Z'`, func(r *Runner) { r.Semantics = &sem })
+		want := "sh: printf: \\x in a %b argument: the shells disagree here and no dialect was chosen\na\\x41Z"
+		if out != want || st != 2 {
+			t.Errorf("got %q status %d, want %q and 2", out, st, want)
+		}
+	})
 }
 
 // A format is a byte string. Every route from the format to the output writes
@@ -447,6 +490,192 @@ func TestPrintfOutputPrecedesComplaintIsAnAxis(t *testing.T) {
 			out, _ := run(t, `printf "[%d]" abc`, func(r *Runner) { r.Semantics = &sem })
 			if out != tc.want {
 				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// A `%b` argument's escapes are their own table, unanimous where the panel
+// agrees and four axes where it does not.
+//
+// The unanimous half is the point of #798: reading a `%b` with the format's
+// reader made `\0101` a backspace and a `1` where all six shells write an
+// `A`, and made `\c` three different things where all six stop.
+func TestPrintfBEscapeTableIsNotTheFormats(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"the XSI eight", `printf '%b' 'a\a\b\f\n\r\t\v\\Z'`, "a\a\b\f\n\r\t\v\\Z"},
+		{"an octal introduced by a zero", `printf '%b' 'a\0101Z'`, "aAZ"},
+		{"and at most three digits after it", `printf '%b' 'a\01011Z'`, "aA1Z"},
+		{"the value is a byte", `printf '%b' 'a\0300Z'`, "a\xc0Z"},
+		{"a value past a byte wraps", `printf '%b' 'a\0400Z'`, "a\x00Z"},
+		{"a lone zero is a NUL", `printf '%b' 'a\0Z'`, "a\x00Z"},
+		{"a digit outside octal ends the run", `printf '%b' 'a\08Z'`, "a\x008Z"},
+		{"a backslash at the end is a backslash", `printf '%b' 'a\'`, `a\`},
+		{"a character no escape claims keeps its backslash", `printf '%b' 'a\qZ'`, `a\qZ`},
+		{"the format's octal reading is not used here", `printf 'a\0101Z'`, "a\b1Z"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// `\c` in a `%b` argument ends the output, in every shell in the panel — so
+// it asks nothing, where the same two characters in a *format* are literal in
+// bash and dash, control-X in ksh93 and a full stop in zsh.
+func TestPrintfBackslashCInABArgumentAlwaysStops(t *testing.T) {
+	for _, policy := range []PrintfBackslashCPolicy{
+		PrintfBackslashCUnspecified,
+		PrintfBackslashCLiteral,
+		PrintfBackslashCControl,
+		PrintfBackslashCStops,
+	} {
+		t.Run(policy.String(), func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfBackslashC = policy
+			out, st := run(t, `printf '%b' 'a\cbZ'`, func(r *Runner) { r.Semantics = &sem })
+			if out != "a" || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, "a")
+			}
+		})
+	}
+}
+
+// The four axes a `%b` argument does ask, each asked only where its escape is
+// there and each refused by name when no dialect has answered it.
+func TestPrintfBEscapeAxes(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		answer  func(*Semantics)
+		src     string
+		want    string
+		refused string
+	}{
+		{
+			name: "an octal with no zero, taken", src: `printf '%b' 'a\101Z'`, want: "aAZ",
+			answer: func(s *Semantics) { s.PrintfBOctalWithoutZero = Yes },
+		},
+		{
+			name: "an octal with no zero, three digits at most", src: `printf '%b' 'a\1011Z'`, want: "aA1Z",
+			answer: func(s *Semantics) { s.PrintfBOctalWithoutZero = Yes },
+		},
+		{
+			name: "an octal with no zero, declined", src: `printf '%b' 'a\101Z'`, want: `a\101Z`,
+			answer: func(s *Semantics) { s.PrintfBOctalWithoutZero = No },
+		},
+		{
+			name: "an octal with no zero, unanswered", src: `printf '%b' 'a\101Z'`, want: `a\101Z`,
+			answer:  func(s *Semantics) { s.PrintfBOctalWithoutZero = Unspecified },
+			refused: `printf: \nnn in a %b argument`,
+		},
+		{
+			name: "esc, taken", src: `printf '%b' 'a\eZ'`, want: "a\x1bZ",
+			answer: func(s *Semantics) { s.PrintfBEscEscape = Yes },
+		},
+		{
+			name: "esc, declined", src: `printf '%b' 'a\eZ'`, want: `a\eZ`,
+			answer: func(s *Semantics) { s.PrintfBEscEscape = No },
+		},
+		{
+			name: "esc, unanswered", src: `printf '%b' 'a\eZ'`, want: `a\eZ`,
+			answer:  func(s *Semantics) { s.PrintfBEscEscape = Unspecified },
+			refused: `printf: \e in a %b argument`,
+		},
+		{
+			name: "capital esc, taken", src: `printf '%b' 'a\EZ'`, want: "a\x1bZ",
+			answer: func(s *Semantics) { s.PrintfBCapitalEscEscape = Yes },
+		},
+		{
+			name: "capital esc, declined", src: `printf '%b' 'a\EZ'`, want: `a\EZ`,
+			answer: func(s *Semantics) { s.PrintfBCapitalEscEscape = No },
+		},
+		{
+			name: "capital esc, unanswered", src: `printf '%b' 'a\EZ'`, want: `a\EZ`,
+			answer:  func(s *Semantics) { s.PrintfBCapitalEscEscape = Unspecified },
+			refused: `printf: \E in a %b argument`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			tc.answer(&sem)
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if tc.refused != "" {
+				// The refusal names the axis and the escape still stands,
+				// which is the same shape `\x` takes: an unanswered axis
+				// reports and leaves the text alone rather than guessing.
+				want := "sh: " + tc.refused + ": the shells disagree here and no dialect was chosen\n" + tc.want
+				if out != want || st != 2 {
+					t.Errorf("got %q status %d, want %q and 2", out, st, want)
+				}
+				return
+			}
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The two spellings of the escape character are two axes, because ksh93 and
+// zsh answer them in opposite directions: one answer for both letters is
+// wrong for half the panel.
+func TestPrintfBEscAndCapitalEscAreTwoQuestions(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		esc, capes Answer
+		want       string
+	}{
+		{"bash has both", Yes, Yes, "a\x1bZ:a\x1bZ"},
+		{"dash has neither", No, No, `a\eZ:a\EZ`},
+		{"ksh93 has the capital alone", No, Yes, "a\\eZ:a\x1bZ"},
+		{"zsh has the small alone", Yes, No, "a\x1bZ:a\\EZ"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfBEscEscape = tc.esc
+			sem.PrintfBCapitalEscEscape = tc.capes
+			out, st := run(t, `printf '%b' 'a\eZ:a\EZ'`, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// An axis is asked only where its escape is actually in the argument, so a
+// `%b` that carries none of them needs no dialect at all.
+func TestPrintfBEscapeAxesAreAskedOnlyWhenTheEscapeIsThere(t *testing.T) {
+	sem := CoreSemantics()
+	out, st := run(t, `printf '%b' 'a\t\0101\cZ'`, func(r *Runner) { r.Semantics = &sem })
+	if out != "a\tA" || st != 0 {
+		t.Errorf("got %q status %d, want %q and 0", out, st, "a\tA")
+	}
+}
+
+// A `\c` in a `%b` argument ends the whole `printf` and not only the
+// conversion that read it: the rest of the format is abandoned, the operands
+// after it go unused, and the format does not run again. Unanimous, and
+// invisible to a case that reads one conversion.
+func TestPrintfBackslashCInABArgumentEndsTheWholePrintf(t *testing.T) {
+	sem := printfSem()
+	for _, tc := range []struct{ name, src, want string }{
+		{"the rest of the format", `printf '[%b][%s]' 'a\cb' x`, "[a"},
+		{"the format is not reused", `printf '[%b]' 'a\cb' yy`, "[a"},
+		{"a literal after the conversion", `printf '%b\n' 'a\cb'`, "a"},
+		{"width still applies to what was produced", `printf '[%5b]' 'a\cb'`, "[    a"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
 			}
 		})
 	}

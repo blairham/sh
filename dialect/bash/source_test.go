@@ -527,3 +527,25 @@ func TestPrintfHexEscapeIsAByte(t *testing.T) {
 		t.Errorf("said %q status %d, want the warning and a zero status", out, st)
 	}
 }
+
+// The `%b` escape table this shell answers for, which is not its format's:
+// `\0101` is an `A` here and a backspace and a `1` in a format, `\101` is an
+// `A` too, both spellings of the escape character are 0x1b, `\x41` is an `A`,
+// and `\c` ends the output where a format writes the two characters.
+func TestPrintfBEscapesAreBashs(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf '%b' 'a\0101Z'`, "aAZ"},
+		{`printf '%b' 'a\0300Z'`, "a\xc0Z"},
+		{`printf '%b' 'a\101Z'`, "aAZ"},
+		{`printf '%b' 'a\eZ:a\EZ'`, "a\x1bZ:a\x1bZ"},
+		{`printf '%b' 'a\x41Z'`, "aAZ"},
+		{`printf '%b' 'a\cbZ'`, "a"},
+		{`printf 'a\0101Z'`, "a\b1Z"},
+		{`printf 'a\cbZ'`, `a\cbZ`},
+	} {
+		if out, st := runBash(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
+			t.Errorf("%s: said % x status %d, want % x and 0", tc.src, out, st, tc.want)
+		}
+	}
+}

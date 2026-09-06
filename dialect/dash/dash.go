@@ -118,6 +118,13 @@ func Semantics() interp.Semantics {
 	// No `\x` in a format at all: `printf 'a\x41Z'` is the six characters
 	// as written, which is the whole panel's one holdout.
 	s.PrintfHexEscape = interp.PrintfHexEscapeAbsent
+	// Nor in a `%b` argument, and neither spelling of the escape character.
+	s.PrintfBHexEscape = interp.PrintfHexEscapeAbsent
+	s.PrintfBEscEscape = interp.No
+	s.PrintfBCapitalEscEscape = interp.No
+	// The octal needs no `\0` here, which is the one thing this shell and
+	// bash agree on that ksh93 and zsh do not.
+	s.PrintfBOctalWithoutZero = interp.Yes
 	// None: `%ld` is the conversion `l`, which dash does not have.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersAbsent
 	// No `%(fmt)T`: `%(` is a directive this shell does not have.

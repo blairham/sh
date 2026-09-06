@@ -1154,12 +1154,108 @@ the last code point, which is what ksh93 itself does once the value stops
 fitting at all — `printf '[\xffffffffffffffffffffff]'` is `5b 5d` there.
 Every value Unicode has agrees.
 
-The escape is a question about the **format**. `%b` expands the set `echo`
-expands, and the two tables are not the same one: ksh93 reads `\x41` in a
-format and leaves it as written in `printf '%b' 'a\x41Z'`, which is
-`61 5c 78 34 31 5a`. bash and zsh have it in both and dash in neither, so
-ksh93 alone shows that the site matters — and the axis is put to a format
-and never to a `%b` argument.
+The escape is a question about the **format**. A `%b` argument asks the
+same four readings at its own site, through `PrintfBHexEscape`, and ksh93
+answers the two differently: it reads `\x41` in a format and leaves it as
+written in `printf '%b' 'a\x41Z'`, which is `61 5c 78 34 31 5a`. bash and
+zsh have it at both sites and dash at neither, so ksh93 alone shows that
+the site matters — and `PrintfHexEscape` is put to a format and never to a
+`%b` argument. The next section is the rest of that table.
+
+### The escapes a `%b` argument expands
+
+`%b` and a format are two escape tables, not one table read twice, and
+every shell in the panel means it. Measured with `/bin/bash` 3.2.57,
+`/opt/homebrew/bin/bash` 5.3.15, `/bin/bash` as `sh`, `/bin/ksh` 93u+
+2012-08-01, `/opt/homebrew/bin/zsh` 5.9.2 and `/bin/dash`, reading bytes
+with `od -An -tx1` (macOS, 2026-09-05). The three bash columns agree
+throughout except where noted, so they are one column here:
+
+    printf '%b' 'a\0101Z'  bash 61 41 5a  ksh93 61 41 5a  zsh 61 41 5a
+                           dash 61 41 5a
+    printf 'a\0101Z'       all six  61 08 31 5a
+
+The octal is the sharpest of these: a `%b` reads `\0` and up to three
+octal digits **after** it, which is the XSI escape `echo` expands, where a
+format reads up to three digits with the leading zero optional. So the same
+four characters are an `A` at one site and a backspace and a `1` at the
+other, unanimously, and reading a `%b` with the format's reader produced
+neither answer — `61 08 31 5a` from a shell that should have written
+`61 41 5a` (#798). Both sites truncate to a byte rather than encoding a
+code point: `\0300` is `c0` and `\0400` is `00`.
+
+A `%b` and an `echo` argument are close but are not the same table either,
+and the panel says so twice over. bash 3.2 writes `61 1b 5a` for a `%b`
+argument's `\e` and `61 5c 65 5a` for an `echo` argument's, so one shell
+answers the two sites differently; and the bare octal below splits the two
+sites for every bash. The four dialects modeled here happen to give the
+same answer at both sites for `\e`, `\E` and `\x` — bash 3.2 is a version
+and not a dialect — but they are separate questions and are asked
+separately.
+
+The rest of the table splits, and each split falls in a different place:
+
+    printf '%b' 'a\101Z'   bash 61 41 5a   dash 61 41 5a
+                           ksh93 61 5c 31 30 31 5a   zsh 61 5c 31 30 31 5a
+    printf '%b' 'a\eZ'     bash 61 1b 5a   zsh 61 1b 5a
+                           dash 61 5c 65 5a   ksh93 61 5c 65 5a
+    printf '%b' 'a\EZ'     bash 61 1b 5a   ksh93 61 1b 5a
+                           dash 61 5c 45 5a   zsh 61 5c 45 5a
+    printf '%b' 'a\x41Z'   bash 61 41 5a   zsh 61 41 5a
+                           dash 61 5c 78 34 31 5a   ksh93 61 5c 78 34 31 5a
+    printf '%b' 'a\cbZ'    all six  61
+
+- **Whether the octal needs its `\0`.** `PrintfBOctalWithoutZero`. bash
+  and dash read a bare `\101`; ksh93 and zsh write the four characters.
+  This is **not** `echo`'s answer at the other site: an `echo` argument's
+  `\101` is `61 41 5a` in dash alone and `61 5c 31 30 31 5a` in the other
+  five, `-e` or not. So the two sites needed two axes rather than one
+  shared reading, and bash is the shell that separates them.
+- **The two spellings of the escape character are two questions.**
+  `PrintfBEscEscape` and `PrintfBCapitalEscEscape`. The two shells that
+  split them split them in **opposite** directions: ksh93 has `\E` and not
+  `\e`, zsh has `\e` and not `\E`. bash has both, dash neither. A single
+  answer for both letters is wrong for half the panel, which is why the
+  existing `EchoExpandsEscEscape` — one axis for both — cannot be reused
+  here. (It is also wrong for those two shells at `echo`'s own site; see
+  the follow-up noted below.)
+- **`\x`.** `PrintfBHexEscape`, the section above.
+- **`\c` asks nothing.** All six end the output there, where the same two
+  characters in a *format* are literal in bash and dash, control-X in ksh93
+  and a full stop in zsh (`PrintfBackslashC`). The one entry where the
+  format's table is the divided one and the `%b`'s is unanimous. What it
+  stops is the whole `printf` and not the one conversion — the rest of the
+  format is abandoned, the operands after it go unused, and the format is
+  not run again: `printf '[%b][%s]' 'a\cb' x` is `[a` in all six.
+
+Unanimous and asking nothing: the eight one-letter XSI escapes `\a \b \f
+\n \r \t \v \\`, which are the same bytes at every site that expands
+escapes at all; a backslash the argument ends on, which is a backslash; and
+a backslash before a character no entry claims, which keeps its backslash —
+`printf '%b' 'a\qZ'` is `61 5c 71 5a` everywhere.
+
+Two things measured here and **not** modeled.
+
+`\uHHHH` and `\UHHHHHHHH` are escapes in bash 5.3 and zsh at both sites,
+and in ksh93's *format* only. `printf '%b' 'a\u0041Z'` is `61 41 5a` in
+bash 5.3 and zsh and the characters as written in bash 3.2, bash as `sh`,
+dash and ksh93; `printf 'a\u0041Z'` moves ksh93 into the first group.
+Nothing here decodes them at either site, which is a gap the change for
+#798 left exactly where it found it.
+
+One more divergence is measured and not modeled, in the corner where the
+stop meets a field width. Five of the six pad and truncate the text a `\c`
+cut short exactly as they would any other — `printf '[%5b]' 'a\cb'` is
+`[    a` — and ksh93 alone writes the partial text as it stands, `[a`, and
+ignores a precision there too. With nothing stopping it ksh93 pads and
+truncates like the rest, so this is a property of the stop and not of the
+conversion. The five-shell answer is what is implemented.
+
+`echo`'s own `\e`/`\E` split is the same asymmetry the `%b` site has, and
+`EchoExpandsEscEscape` is one axis for both letters, so half of it is
+wrong: `echo -e 'a\EZ'` is `61 1b 5a` in ksh93 and `61 5c 45 5a` in zsh,
+where `echo -e 'a\eZ'` is the other way round. Both are follow-ups rather
+than part of #798.
 
 ### A format is a byte string, in every direction
 

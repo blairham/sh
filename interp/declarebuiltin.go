@@ -209,6 +209,10 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 				// See biExport: the failure's status is the one that stands.
 				return r.status
 			}
+			r.declarationAssignmentExport(name, f.export)
+			if r.unspecified {
+				return r.status
+			}
 		default:
 			r.declareEmpty(name)
 		}
@@ -419,6 +423,42 @@ func (r *Runner) declareEmpty(name string) {
 	if r.ask(r.sem().ValuelessDeclarationHidesTheOuterValue, "a declaration without a value hiding the outer value") {
 		r.hideVar(name)
 	}
+}
+
+// declarationAssignmentExport is what a declaration that *assigns* does to the
+// export attribute of the name it assigned to.
+//
+// One shell resets it: the name keeps the value and no child is told about it
+// again, at the top level and in a function whose declarations reach the
+// caller alike. The other two leave it alone, so this is a switch and not a
+// rule — see Semantics.DeclarationAssignmentClearsTheExportAttribute.
+//
+// namesTheAttribute is `-x` or `+x` on the declaration itself, which settles
+// the question outright and is not this one; `export NAME=value` is the same
+// case by another spelling, which is why that builtin never comes here.
+//
+// Asked only where a scope was *not* taken. Where one was, the question is
+// LocalInheritsTheExportAttribute — the same shell's answer from the other
+// side, already applied and already undone when the function returns. Both
+// firing would take the attribute off for good where a keyword function only
+// takes it off for its own duration, which is measurably not what happens.
+func (r *Runner) declarationAssignmentExport(name string, namesTheAttribute bool) {
+	if namesTheAttribute || !r.isExported(name) {
+		return
+	}
+	if len(r.scopes) > 0 {
+		if _, shadowed := r.scopes[len(r.scopes)-1].saved[name]; shadowed {
+			return
+		}
+	}
+	if !r.ask(r.sem().DeclarationAssignmentClearsTheExportAttribute,
+		"a declaration that assigns taking the export attribute off the name") {
+		return
+	}
+	if r.exported == nil {
+		r.exported = map[string]bool{}
+	}
+	r.exported[name] = false
 }
 
 // localExportAttribute answers whether the local a declaration just took

@@ -2143,6 +2143,14 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 				// See biExport.
 				return r.status
 			}
+			// `readonly` is one shell's `typeset -r` and behaves like it
+			// here: an assignment through it resets the export attribute
+			// where that shell's `typeset` does. See
+			// declarationAssignmentExport.
+			r.declarationAssignmentExport(name, false)
+			if r.unspecified {
+				return r.status
+			}
 		}
 		r.markReadonly(name)
 	}

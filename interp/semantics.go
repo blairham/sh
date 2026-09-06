@@ -1186,6 +1186,40 @@ type Semantics struct {
 	// reads the caller's value where it expected nothing.
 	ValuelessDeclarationHidesTheOuterValue Answer
 
+	// DeclarationAssignmentClearsTheExportAttribute takes the export
+	// attribute off a name a declaration utility assigns to. ksh93 does;
+	// bash 5.3, bash 3.2, bash as `sh` and zsh keep it, and dash has no
+	// declaration utility to ask with.
+	//
+	//	export FOO=bar; typeset FOO=baz; env | grep '^FOO='
+	//
+	// One shell tells the child nothing and goes on telling it nothing: the
+	// name keeps its value and is simply no longer exported, which
+	// `export -p` and `typeset -p` both confirm. `export FOO` afterwards
+	// puts the attribute back, so it is a reset rather than a refusal.
+	//
+	// Asked only where the name being assigned was already exported, where
+	// the declaration does not name the attribute itself, and where the
+	// declaration did *not* take a scope. The scoped half is
+	// LocalInheritsTheExportAttribute, which is the same shell's answer
+	// arrived at from the other side and already takes the attribute off for
+	// the function's duration — the two must not both fire, or a keyword
+	// function would leave the caller's name unexported, which it does not.
+	//
+	// The value on the line is what asks it. A valueless `typeset FOO`
+	// leaves the attribute alone, and so do the valueless declarations that
+	// change the value anyway — `typeset -i FOO` stores 0 and `typeset -u
+	// FOO` folds what is there, and a child is told about both. `readonly
+	// FOO=baz` clears it, because in the shell that does this `readonly` is
+	// that shell's `typeset -r`; `export FOO=baz` does not, because it names
+	// the attribute. A plain `FOO=baz` does not either, in any shell — this
+	// is a declaration utility's doing and not an assignment's.
+	//
+	// The preset is no: POSIX has an exported name keep the attribute for
+	// the life of the shell, and the two other shells with the builtin
+	// agree.
+	DeclarationAssignmentClearsTheExportAttribute Answer
+
 	// LocalInheritsTheExportAttribute gives a local declaration the export
 	// attribute of the name it shadows, so a child sees the local's value
 	// under the shadowed name. bash and dash say yes; zsh says no and hands
@@ -3259,6 +3293,11 @@ func PosixSemantics() Semantics {
 		// declaration of that name keeps it, which is what both shells with
 		// a `local` worth the reading do.
 		LocalInheritsTheExportAttribute: Yes,
+		// The same reading of the same sentence, for a declaration that
+		// assigns rather than one that shadows: the attribute belongs to
+		// the name, so an assignment through a declaration utility leaves
+		// it where it was. Both other shells with the builtin agree.
+		DeclarationAssignmentClearsTheExportAttribute: No,
 		// POSIX has `trap` save the action and execute it when the
 		// condition arises, so the text is not read until then. Three of
 		// the four agree; zsh reads it as the trap is set.

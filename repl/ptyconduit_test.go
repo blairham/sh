@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blairham/sh/internal/blocks"
 	"github.com/blairham/sh/internal/pty"
 )
 
@@ -537,4 +538,50 @@ func (s *slowSink) len() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.n
+}
+
+// takeOutput drains before it takes, and this is the test that says the drain
+// is *called* rather than that it works.
+//
+// The two are separate mutants and only one of them was caught: with the drain
+// working perfectly, deleting the one line that calls it left every test green,
+// because a session's own commands are small enough that the pump is always
+// finished first. The cost of that would be a block holding the head of its
+// output and the next block holding the tail — and a prompt drawn over output
+// still arriving, which is the half a person sees.
+//
+// Same slow sink, so a conduit that is not drained *cannot* have delivered
+// everything and the assertion is on the bytes.
+func TestTakeOutputDrainsBeforeItTakes(t *testing.T) {
+	sink := &slowSink{}
+	capture := blocks.NewCapture(1 << 20)
+	control, tty, err := pty.Open()
+	if err != nil {
+		t.Skipf("no pseudo-terminal: %v", err)
+	}
+	defer func() { _ = control.Close() }()
+	defer func() { _ = tty.Close() }()
+	conduit, err := newPtyConduit(tty, sink, capture.Stream)
+	if err != nil {
+		t.Skipf("no conduit: %v", err)
+	}
+	held := &outputCapture{cap: capture, conduit: conduit}
+	defer held.close()
+
+	const chunks, size = 64, 4096
+	payload := bytes.Repeat([]byte("z"), size)
+	for range chunks {
+		if _, err := conduit.Stream().Write(payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := Shell{}.takeOutput(held)
+	if want := int64(chunks * size); got.Bytes != want {
+		t.Errorf("the block holds %d bytes, want %d — takeOutput did not drain first",
+			got.Bytes, want)
+	}
+	if n := len(got.Text); n != chunks*size {
+		t.Errorf("the body is %d bytes, want %d", n, chunks*size)
+	}
 }

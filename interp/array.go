@@ -232,17 +232,7 @@ func (r *Runner) unsetArrayElem(name string, idx int, sub string) int {
 	blanks := r.unsetBlanksInPlace()
 	a, isArray := r.Arrays[name]
 	if !isArray {
-		// A name holding nothing at all has no first element for a subscript
-		// to be before, and is left alone without a word everywhere. A scalar
-		// has one under the blanking reading, where a span of one is what
-		// `unset a[i]` means and a scalar is such a span — so `a=v; unset
-		// "a[0]"` reaches the boundary there. The removing readings answer a
-		// scalar without reading the subscript at all, which is
-		// UnsetNotAnArray's question rather than this one.
-		if _, held := r.getVar(name); blanks && held && idx >= 0 && idx < r.arrayBase() {
-			return r.refuseSubscriptToUnset(name, sub)
-		}
-		return 0
+		return r.unsetScalarElem(name, idx, sub)
 	}
 	pos, within := r.elemPos(a, idx)
 	if blanks {
@@ -297,6 +287,298 @@ func (r *Runner) refuseSubscriptToUnset(name, sub string) int {
 	r.diagf("%s\n", Wording(r.diag().UnsetSubscriptBeforeTheFirstElement,
 		"unset: [%[2]s]: bad array subscript", name, sub))
 	return 1
+}
+
+// unsetSubscriptRange is `unset "a[lo,hi]"` where the dialect reads the comma
+// as the separator of a range rather than as the arithmetic operator whose
+// value is its right operand.
+//
+// handled is false where the subscript is not a pair, and where the two
+// readings name the same thing — a pair whose ends are the same subscript is
+// that subscript either way — so the single reading answers it and no axis is
+// asked. That is the discipline the expansion side already follows for
+// `${a[2,2]}`.
+//
+// Measured on zsh 5.9.2, the one shell that reads ranges, with `a=(x y z)`:
+//
+//	a[1,2]    [][z]        the span becomes one empty element
+//	a[1,3]    []           every element, and one is left
+//	a[0,1]    [][y][z]     a start below the first is the first
+//	a[3,4]    [x][y][]     an end past the last is the last
+//	a[4,5]    [x][y][z]    a start past the last names nothing
+//	a[2,1]    [x][][y][z]  a span with nothing in it is an empty element
+//	                       *inserted* where it would have begun
+//	a[-1,-1]  [x][y][]     the last element
+//	a[-2,-1]  [x][y][z]    a negative start other than -1 acts on nothing
+//	a[0,0]    refused      the whole span is below the first element
+//
+// The last two rows would not have been guessed. The negative rule is the
+// array's alone — a *string* loses characters to every negative within reach —
+// and it is the same "only -1 acts" this shell's single subscript already
+// follows. The refusal is the span rule spanIsBelowTheFirstElement holds, and
+// it is why `a[0]` is refused where `a[0,1]` is not: one names a span wholly
+// out of reach, the other one that begins out of reach and ends inside.
+func (r *Runner) unsetSubscriptRange(name, sub string) (handled bool, code int) {
+	lo, hi, ok := splitSubscriptRange(sub)
+	if !ok {
+		return false, 0
+	}
+	from, errLo := r.subscriptValue(lo)
+	to, errHi := r.subscriptValue(hi)
+	if errLo == nil && errHi == nil && from == to {
+		// The same subscript at both ends is that subscript under either
+		// reading, so there is nothing to ask and nothing to do differently.
+		return false, 0
+	}
+	if !r.ask(r.sem().SubscriptCommaIsARange, "`${a[1,3]}` naming a range rather than one subscript") {
+		return false, 0
+	}
+	if errLo != nil {
+		return true, r.badSubscriptToUnset(lo, errLo)
+	}
+	if errHi != nil {
+		return true, r.badSubscriptToUnset(hi, errHi)
+	}
+	if r.spanIsBelowTheFirstElement(from, to) {
+		return true, r.refuseSubscriptToUnset(name, sub)
+	}
+	if a, isArray := r.Arrays[name]; isArray {
+		return true, r.unsetElementSpan(name, a, from, to)
+	}
+	v, held := r.getVar(name)
+	if !held {
+		// Neither an element nor a character for any span to reach.
+		return true, 0
+	}
+	if r.scalarUnsetReadsAsCharacters(v, sub) {
+		return true, r.unsetCharacterSpan(name, v, from, to)
+	}
+	// The element reading, where a scalar is the one element at the base: a
+	// span that reaches it takes the whole name away, exactly as the single
+	// subscript naming it does, and one that does not is the question every
+	// other subscript on a scalar asks. No shell measured reads both a range
+	// and a scalar-as-element, so this is the two readings composed rather
+	// than a column of its own.
+	if first, tail, within := r.spanOver(1, from, to); within && tail > first {
+		r.unsetName(name)
+		return true, 0
+	}
+	return true, r.refuseSubscriptOnAScalar(name)
+}
+
+// spanIsBelowTheFirstElement says whether every subscript a span could name is
+// before the array's first element.
+//
+// One rule for the single subscript and for the pair, which is what tells them
+// apart rather than a check on each: `a[0]` is the span `[0,0]` where the
+// first element is 1, and is refused; `a[0,1]` begins out of reach and ends
+// inside, and is not. A negative end never counts as below — it is counted
+// back from the end and reaches nothing rather than reaching before the start,
+// which is the silence `array/unsetting-past-the-start` records.
+func (r *Runner) spanIsBelowTheFirstElement(from, to int) bool {
+	base := r.arrayBase()
+	return from >= 0 && from < base && to >= 0 && to < base
+}
+
+// spanOver resolves a written range against n units and reports whether the
+// span begins anywhere the units reach.
+//
+// The endpoints are subscripts and take the two rules a single subscript
+// takes: counted from the dialect's base, or back from the end when negative.
+// A start below the first unit is the first, an end past the last is the last,
+// and an end before the start leaves the span empty *at* the start — which is
+// where an empty element is inserted rather than nothing happening at all.
+func (r *Runner) spanOver(n, from, to int) (first, tail int, within bool) {
+	base := r.arrayBase()
+	first = from - base
+	if from < 0 {
+		first = n + from
+	}
+	last := to - base
+	if to < 0 {
+		last = n + to
+	}
+	if first < 0 {
+		first = 0
+	}
+	if last >= n {
+		last = n - 1
+	}
+	if first >= n {
+		// The span starts past the last unit: nothing to replace, and
+		// nothing beyond the end to put an empty one in front of.
+		return first, first, false
+	}
+	tail = last + 1
+	if tail < first {
+		tail = first
+	}
+	return first, tail, true
+}
+
+// unsetElementSpan is what `unset` does to the elements a range names.
+func (r *Runner) unsetElementSpan(name string, a Array, from, to int) int {
+	blanks := r.unsetBlanksInPlace()
+	if from < 0 && from != -1 && blanks {
+		// Only the last element answers to a negative subscript in the shell
+		// that blanks, and a range's start follows the same rule its single
+		// subscript does. Measured: `unset "a[-2,-1]"` leaves all three
+		// elements where `unset "a[-1,-1]"` blanks the last.
+		return 0
+	}
+	n := a.pastTheEnd()
+	first, tail, within := r.spanOver(n, from, to)
+	if !within {
+		return 0
+	}
+	elems := make([]string, n)
+	for pos, v := range a {
+		if pos >= 0 && pos < n {
+			elems[pos] = v
+		}
+	}
+	out := make([]string, 0, n+1)
+	out = append(out, elems[:first]...)
+	if blanks {
+		// The span becomes a single empty element, which is this shell's
+		// reading of `unset` over a span, read across a range rather than one
+		// element at a time. A span with nothing in it still becomes one, so
+		// a reversed range *inserts*.
+		out = append(out, "")
+	}
+	out = append(out, elems[tail:]...)
+	r.setArray(name, out)
+	return 0
+}
+
+// unsetCharacterSpan takes the characters a range names out of a string.
+//
+// The same span over characters, and the empty-span case says nothing here:
+// an empty character inserted leaves the string as it was, so `unset "a[3,2]"`
+// is a no-op where the same reversed range on an array gains an element.
+func (r *Runner) unsetCharacterSpan(name, v string, from, to int) int {
+	chars := r.units(v)
+	first, tail, within := r.spanOver(len(chars), from, to)
+	if !within {
+		return 0
+	}
+	r.setVar(name, strings.Join(chars[:first], "")+strings.Join(chars[tail:], ""))
+	return 0
+}
+
+// unsetScalarElem is `unset "a[i]"` where the name is not an array.
+//
+// The panel gives three answers and each one falls out of what a subscripted
+// name *means* where the name holds a string, rather than being a rule of its
+// own. Measured on `a=hello`:
+//
+//	                bash 5.3   bash 3.2   ksh93     zsh
+//	unset a[0]      unset      refused    unset     refused
+//	unset a[1]      refused    refused    silent    ello
+//	unset a[2]      refused    refused    silent    hllo
+//	unset a[-1]     refused    refused    silent    hell
+//	unset a[-5]     refused    refused    silent    ello
+//	unset a[-6]     refused    refused    silent    hello
+//	unset a[9]      refused    refused    silent    hello
+//
+// Where a subscript names a *character* the string loses it, and nothing else
+// about the name changes: past the end names nothing, and below the first
+// character is the boundary every subscript below the first meets. Every
+// negative within reach acts, which an array under the same reading does not —
+// there only `-1` does — so the string is a character position and not a
+// one-element array wearing one.
+//
+// Where it names an *element*, a scalar is the one element at the base. The
+// subscript that names it takes the whole name away — not the value, the name,
+// attribute and all — which is unanimous among the shells that read it that
+// way. Every other subscript names nothing, and there the two part:
+// UnsetSubscriptOnAScalarIsAnError.
+//
+// A name holding nothing at all has neither an element nor a character for a
+// subscript to name, and is left alone without a word everywhere — which is
+// what keeps `unset b[0]` on a name nobody set quiet.
+func (r *Runner) unsetScalarElem(name string, idx int, sub string) int {
+	v, held := r.getVar(name)
+	if !held {
+		return 0
+	}
+	if r.scalarUnsetReadsAsCharacters(v, sub) {
+		return r.unsetScalarCharacter(name, v, idx, sub)
+	}
+	if idx == r.arrayBase() {
+		// The subscript names the scalar itself, so this is `unset a` written
+		// the long way round.
+		r.unsetName(name)
+		return 0
+	}
+	return r.refuseSubscriptOnAScalar(name)
+}
+
+// refuseSubscriptOnAScalar is what one dialect does about a subscript that
+// names no element of a name that is no array, and what the other does not.
+func (r *Runner) refuseSubscriptOnAScalar(name string) int {
+	if !r.ask(r.sem().UnsetSubscriptOnAScalarIsAnError,
+		"a subscript naming no element of a name that is not an array") {
+		return 0
+	}
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	r.diagf("%s\n", Wording(r.diag().UnsetNotAnArray,
+		"unset: %[1]s: not an array variable", name))
+	return 1
+}
+
+// unsetScalarCharacter takes one character out of a string.
+//
+// The two span policies coincide here and neither is asked: replacing a span
+// of one character with a single empty element and removing that character
+// leave the same string, because an empty character is nothing at all.
+func (r *Runner) unsetScalarCharacter(name, v string, idx int, sub string) int {
+	chars := r.units(v)
+	pos := idx - r.arrayBase()
+	if idx < 0 {
+		pos = len(chars) + idx
+	}
+	if pos < 0 {
+		if idx < 0 {
+			// A negative that reaches back past the first character names
+			// nothing and says nothing — measured, and not the same answer
+			// as the non-negative below: `a=hello; unset "a[-6]"` is quiet
+			// where `unset "a[0]"` is refused. Negative subscripts never meet
+			// the boundary, here or on an array.
+			return 0
+		}
+		// Below the first character, which is the boundary a subscript below
+		// the first element meets — the same refusal, reached through a
+		// string.
+		return r.refuseSubscriptToUnset(name, sub)
+	}
+	if pos >= len(chars) {
+		// Past the end names nothing, and nothing is what changes.
+		return 0
+	}
+	r.setVar(name, strings.Join(append(append([]string{}, chars[:pos]...), chars[pos+1:]...), ""))
+	return 0
+}
+
+// scalarUnsetReadsAsCharacters is scalarReadsAsCharacters for `unset`, where
+// what the two readings differ about is not a value but what is left behind.
+//
+// Asked wherever the name holds a string, because the readings agree nowhere:
+// one takes a character out and the other takes the whole name away or
+// complains. The one-character string that makes the *expansion* readings
+// agree does not make these agree either — `a=v; unset "a[1]"` leaves an empty
+// string where the base is 1, and takes the name away or refuses where it is
+// 0, which is three different outcomes from one line.
+//
+// An empty string is asked too. It has no character for any subscript to name,
+// so the character reading leaves it alone — and the element reading still has
+// the one element a scalar is, and takes the name away through it. Reading the
+// empty string as "no characters, so no question" took `a=; unset "a[1]"` from
+// an empty name to no name at all.
+func (r *Runner) scalarUnsetReadsAsCharacters(string, string) bool {
+	return r.ask(r.sem().ScalarSubscriptIsACharacter, "`${s[2]}` naming a character of a string")
 }
 
 // unsetWholeArray is `unset a[@]`, where the subscript names every element

@@ -913,6 +913,28 @@ type Diagnostics struct {
 	// because only there can the result be a number of words other than one.
 	AmbiguousRedirect string
 
+	// DuplicationTargetIsNotADescriptor is `>&word` or `<&word` where the
+	// word expanded to exactly one thing and that thing is not a descriptor
+	// number. Two verbs: the target *as it was written*, and what it
+	// expanded to.
+	//
+	// The verbs are two because the shells name two different things. bash
+	// calls it an ambiguous redirect and names the expansion; ksh93 says the
+	// file unit number is bad and names the expansion too; zsh names nobody
+	// at all and says only that a file number was expected, which is why a
+	// wording here may use neither verb.
+	DuplicationTargetIsNotADescriptor string
+
+	// EmptyDuplicationTarget replaces it where the word expanded to nothing.
+	// The same two verbs, and here the first earns its place: bash writes
+	// `"": Bad file descriptor` for `<&""`, quotation marks and all, which is
+	// the target as it was written and not the empty string it came to.
+	//
+	// Empty leaves DuplicationTargetIsNotADescriptor standing, which is what
+	// zsh wants — it says the same thing either way — and what the core
+	// wants, which has nothing else to say.
+	EmptyDuplicationTarget string
+
 	// ExportNotAFunction is `export -f` given a name that is not one. One
 	// verb: the name.
 	ExportNotAFunction string

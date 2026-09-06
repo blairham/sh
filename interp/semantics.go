@@ -1404,6 +1404,18 @@ type Semantics struct {
 	// rather than a flag. See BareLocalListingForm.
 	BareLocalListing BareLocalListingForm
 
+	// BareTypesetListing is what `typeset` or `declare` with no operands
+	// and no letters writes.
+	//
+	// An axis of its own even though it shares the form type with
+	// BareLocalListing, because the
+	// shells that have both words do not answer the two the same: zsh writes
+	// the identical parameter table either way, and bash's bare `declare` is
+	// every variable the shell holds rather than the running function's
+	// locals. Only zsh's answer is a value this form already carries, so the
+	// others stay unanswered and are refused by name rather than guessed at.
+	BareTypesetListing BareLocalListingForm
+
 	// SetListing is what `set` with no arguments writes — see
 	// SetListingForm. All four list, but not the same things: one follows
 	// the variables with every defined function, and one lists special
@@ -2884,6 +2896,30 @@ type Semantics struct {
 	// nobody's question.
 	MultiDigitDuplicationTargetIsAnError Answer
 
+	// GreatAmpTarget is what `>&word` does with a word that is not a
+	// descriptor number — refuse it, or open it as a file for both output
+	// streams, which is the csh spelling of `&>word`. A form rather than a
+	// flag because two of the shells that keep the form disagree about a
+	// word that expanded to nothing; see GreatAmpTargetForm.
+	GreatAmpTarget GreatAmpTargetForm
+
+	// DuplicationTargetErrorOnABuiltinIsFatal ends a non-interactive shell
+	// when `<&word` names something that is not a descriptor and the command
+	// it is written on runs *in* the shell.
+	//
+	// zsh alone, and the boundary is the command rather than the redirection.
+	// Measured 2026-09-06: `cat <&""` and `/bin/echo hi <&""` complain and
+	// carry on, while `read x <&""`, `echo hi <&""`, `true <&""` and `: <&""`
+	// end the shell — the same word, the same complaint, and a builtin on the
+	// left.
+	//
+	// Not RedirectErrorOnSpecialBuiltinFatal, which zsh answers No and which
+	// would not reach `read` or `echo` in any case. Nor is it redirection
+	// failure in general: an ordinary one on a zsh builtin — `read x
+	// 3>/nope/x`, `read x <&9` — complains and carries on there too. It is
+	// this refusal, on a builtin.
+	DuplicationTargetErrorOnABuiltinIsFatal Answer
+
 	// RedirectErrorOnSpecialBuiltinFatal ends a non-interactive shell when a
 	// redirection written on a *special* builtin cannot be made — a file that
 	// will not open, a descriptor that is not there, a number the open-file
@@ -3002,6 +3038,38 @@ type Semantics struct {
 	// Asked only for an operand whose subscript actually failed, so `unset
 	// a[1]` needs no answer from anyone.
 	BadSubscriptToUnsetFatal Answer
+
+	// UnsetSubscriptOnAScalarIsAnError refuses `unset "a[1]"` where `a`
+	// holds a string, rather than leaving the name alone without a word.
+	// bash says `unset: a: not an array variable` and fails; ksh93 says
+	// nothing and succeeds.
+	//
+	// Reached only through the *element* reading of a subscripted name — the
+	// shell that reads `a[1]` as a character of the string takes that
+	// character out and never gets here, so this is ScalarSubscriptIsACharacter's
+	// consequence rather than a second decision about the same shape.
+	//
+	// Asked only where the subscript names *no* element. A scalar is the one
+	// element at the base, so `unset "a[0]"` where the base is 0 takes the
+	// whole name away in both shells and asks nothing; and a name holding
+	// nothing at all has no element for any subscript to name and is left
+	// alone everywhere, which is why `unset "b[0]"` on an unset `b` is quiet
+	// in all four.
+	//
+	// Nor is it about arrays with a gap: `a=(x y z); unset "a[9]"` is silent
+	// and succeeds in every shell measured. What the refusing shell objects
+	// to is the *name* not being an array, which is what its wording says.
+	//
+	// The preset is no. POSIX has `unset` remove what is there and say
+	// nothing about what is not — `unset nosuchname` is a success everywhere
+	// — and the silent reading is that sentence applied to a subscript.
+	//
+	// bash 3.2 refuses the base subscript too, so a corpus case here splits
+	// the `bash` and `bash32` columns on purpose: that build reads `${a[0]}`
+	// as the whole string for an *expansion* and still refuses to unset
+	// through it, which is a disagreement within one shell rather than
+	// between two.
+	UnsetSubscriptOnAScalarIsAnError Answer
 
 	// UnsetArraySpan is what `unset` does to the elements a subscript names,
 	// and the panel gives three answers rather than two — see
@@ -3294,7 +3362,9 @@ func PosixSemantics() Semantics {
 		// as well, and the standard names it in so many words. Three of the
 		// five follow it, and the two that do not both reach this answer as
 		// soon as their own posix mode is on.
-		RedirectErrorOnSpecialBuiltinFatal: Yes,
+		RedirectErrorOnSpecialBuiltinFatal:      Yes,
+		GreatAmpTarget:                          GreatAmpTargetIsADescriptor,
+		DuplicationTargetErrorOnABuiltinIsFatal: No,
 		// A bad name is a special builtin's failure too, and the standard
 		// makes no exception for `unset`.
 		BadNameToDeclarationFatal: Yes,
@@ -3376,6 +3446,10 @@ func PosixSemantics() Semantics {
 		// rather than an element, which is bash's and dash's answer.
 		DeclarationTakesASubscript: No,
 		UnsetTakesASubscript:       Yes,
+		// And `unset` says nothing about what is not there: the standard has
+		// it remove what it finds and succeed either way, which read over a
+		// subscript is the quiet answer.
+		UnsetSubscriptOnAScalarIsAnError: No,
 		// POSIX has `set` write each variable as an assignment "in a format
 		// that can be reused as input", and dash — its closest reading —
 		// single-quotes every value and lists no functions. The standard

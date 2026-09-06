@@ -179,6 +179,49 @@ type Action struct {
 	Args []string
 	// Write is set when an open is for writing.
 	Write bool
+	// Resolved is the kernel's own name for the object an open reached, when
+	// the name in Path reached somewhere else. Empty otherwise, which is
+	// every action but a resolved open — a name is almost always the object's
+	// own name.
+	//
+	// It exists because a record that says only one of the two names cannot be
+	// acted on. "This script read /srv/data/x, and /srv/data is a link to
+	// /mnt/vol1" is the fact somebody reviewing a run wants, and until #943
+	// the shell learned it and threw it away: an allowed open recorded the
+	// name the script wrote and nothing said the name had gone elsewhere,
+	// while a refused one recorded the object and nothing said which name
+	// reached it. Each record held half of one fact.
+	//
+	// So the pair is on every record about a resolved open, and Path means one
+	// thing there rather than two: **the name that was asked about**, which is
+	// what it means for an exec, a stat, a listing and a signal.
+	//
+	// # The Action a Gate is consulted about is not shaped this way
+	//
+	// A second consultation — the one that happens when an open's name reached
+	// somewhere else — carries the *object* in Path, with Resolved set to the
+	// same string. That looks redundant and is deliberate: a decision must be
+	// about the object, so the object is what a rule matches, and a Gate that
+	// has never heard of this field goes on deciding correctly. Handing it the
+	// name as well would invite matching on the name, which is the bug #703
+	// exists to have closed.
+	//
+	// Resolved being non-empty is therefore how a Gate tells the second
+	// consultation from the first — what a prompting one needs in order not to
+	// ask a person the same question twice about one open.
+	//
+	// # What this does not change
+	//
+	// Nothing the *script* is told. A refusal names the path as written and
+	// never where it went, because a diagnostic that reported the target would
+	// hand a script the one fact the rule exists to withhold and would let it
+	// map a hidden directory one link at a time by asking to be refused. That
+	// asymmetry is between *parties* — the script is told one thing, the
+	// operator another — and this field is entirely inside the operator's
+	// half. Filling it in makes the records consistent with each other; it
+	// does not make the script's view symmetric with the operator's, and must
+	// not.
+	Resolved string
 	// PID is the process a signal is aimed at, as kill(2) takes it: a
 	// negative value names a process group. Meaningful for ActionSignal.
 	PID int

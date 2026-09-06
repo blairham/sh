@@ -168,6 +168,38 @@ func (r *Runner) bareLocalListing() int {
 	return 2
 }
 
+// bareDeclarationListing answers `typeset` or `declare` with no operands and
+// no letters, which is a listing too — and not the same listing a bare
+// `local` is.
+//
+// Measured 2026-09-06. zsh writes the identical parameter table for either
+// word, inside a function or out; bash writes every variable the shell has,
+// which is neither of the values this form carries and so is left unanswered
+// here rather than approximated; ksh93 writes its own attribute listing and
+// has no `local` to compare it with; dash has no `typeset` at all, so the word
+// is a command that was not found and this is never reached.
+func (r *Runner) bareDeclarationListing() int {
+	switch r.sem().BareTypesetListing {
+	case BareLocalListsNothing:
+		return 0
+	case BareLocalListsEveryParameter:
+		locals := r.innermostLocalNames()
+		for _, name := range r.declarableNames() {
+			d, _ := r.declarationOf(name)
+			r.printf("%s\n", r.attributeWordDeclaration(d, locals[name]))
+		}
+		return 0
+	case BareLocalListsLocals:
+		// No shell answers a bare declaration this way, and the value is in
+		// the form for `local`'s sake. Reaching it would be a preset saying
+		// something nothing measured.
+	}
+	r.diagf("%s\n", r.unanswered("what a bare `typeset` lists"))
+	r.status = 2
+	r.unspecified = true
+	return 2
+}
+
 // localOutsideAFunction answers `local x=2` written where there is no
 // function to be local to, which the panel answers three ways and a fourth
 // does not have the question.

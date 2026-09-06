@@ -217,8 +217,19 @@ func TestARefusalNamesTheLinkAndNotWhereItWent(t *testing.T) {
 	if strings.Contains(out, "secret") {
 		t.Errorf("the diagnostic disclosed where the link went: %q", out)
 	}
-	if len(events) != 1 || !strings.Contains(events[0].Action.Path, "secret") {
-		t.Fatalf("the audit record must name what was reached, got %v", events)
+	// The record carries both names, which is #943: Path is the name the
+	// script wrote and Resolved is where it went. Half of one fact in each of
+	// two records is what this used to be — a refusal named the object and
+	// not the name that reached it, an allowed open named the name and not the
+	// object.
+	if len(events) != 1 {
+		t.Fatalf("the audit record must exist, got %v", events)
+	}
+	if got := events[0].Action.Path; got != link {
+		t.Errorf("the record names %q, want the path as written", got)
+	}
+	if !strings.Contains(events[0].Action.Resolved, "secret") {
+		t.Errorf("the audit record must say what was reached, got %+v", events[0].Action)
 	}
 	if len(denied) == 0 || events[0].Action.ID != denied[len(denied)-1].ID {
 		t.Errorf("the record and the consultation must be the same action, got %v and %v", events, denied)

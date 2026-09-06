@@ -156,8 +156,12 @@ func TestAFrontEndReadThroughALinkIsCheckedOnWhatItReached(t *testing.T) {
 	if len(denials) != 1 {
 		t.Fatalf("recorded %d denials, want one", len(denials))
 	}
-	if denials[0].Action.Path != object {
-		t.Errorf("the denial names %q, want the object at %q", denials[0].Action.Path, object)
+	if denials[0].Action.Path != link {
+		t.Errorf("the denial names %q, want the path as written", denials[0].Action.Path)
+	}
+	if denials[0].Action.Resolved != object {
+		t.Errorf("the denial resolved to %q, want the object at %q",
+			denials[0].Action.Resolved, object)
 	}
 	if denials[0].Session != "SESSIONUNDERTEST" {
 		t.Errorf("the denial says session %q, want the run's", denials[0].Session)
@@ -290,5 +294,77 @@ func TestAFrontEndParentIsMadeOnlyOnceTheGateHasAllowed(t *testing.T) {
 	}
 	if _, err := os.Stat(allowed); err != nil {
 		t.Errorf("the allowed write did not land: %v", err)
+	}
+}
+
+// TestAnAllowedFrontEndOpenThroughALinkRecordsWhereItWent is #943 on this side
+// of the boundary.
+//
+// The record here is written once the descriptor is in hand rather than beside
+// the consultation, which is a change from what this package used to do and is
+// the only way it can say this: a record written before the open could not know
+// where the name went. The *attempt* is still what is recorded — a startup file
+// that is not there is the normal case out here and is not an error — so a
+// failed open is still an access in the stream.
+func TestAnAllowedFrontEndOpenThroughALinkRecordsWhereItWent(t *testing.T) {
+	if !verifies() {
+		t.Skip("no way to ask the kernel what an open reached here")
+	}
+	dir, link, object := fixture(t, "PERMITTED")
+	b, _ := policyGate(t, "default allow", fmt.Sprintf("deny read %s/nowhere/**", dir))
+
+	body, err := b.ReadFile(t.Context(), link)
+	if err != nil || string(body) != "PERMITTED" {
+		t.Fatalf("read %q, %v", body, err)
+	}
+	var access []interp.Event
+	for _, e := range *b.events {
+		if e.Kind == interp.EventAccess && e.Action.Kind == interp.ActionOpen {
+			access = append(access, e)
+		}
+	}
+	if len(access) != 1 {
+		t.Fatalf("recorded %d accesses, want one: %+v", len(access), *b.events)
+	}
+	if access[0].Action.Path != link {
+		t.Errorf("the record names %q, want the path as written", access[0].Action.Path)
+	}
+	if access[0].Action.Resolved != object {
+		t.Errorf("the record resolved to %q, want the object at %q",
+			access[0].Action.Resolved, object)
+	}
+
+	// And the second consultation was about the object alone, so a rule
+	// matches what was reached even from a Gate that never heard of the field.
+	if len(*b.asked) != 2 {
+		t.Fatalf("the gate was consulted %d times, want the name and the object", len(*b.asked))
+	}
+	if (*b.asked)[1].Path != object {
+		t.Errorf("the second consultation asks about %q, want the object", (*b.asked)[1].Path)
+	}
+	if (*b.asked)[1].Resolved == "" {
+		t.Error("the second consultation is indistinguishable from the first")
+	}
+}
+
+// TestAFrontEndOpenThatFailsIsStillRecorded. Moving the record past the open is
+// what lets it carry the resolved name; it must not have cost the record for a
+// file that is not there, which out here is the ordinary case and is why this
+// package records the attempt rather than the success.
+func TestAFrontEndOpenThatFailsIsStillRecorded(t *testing.T) {
+	b, _ := policyGate(t, "default allow")
+	missing := filepath.Join(t.TempDir(), "not-there")
+	if _, err := b.ReadFile(t.Context(), missing); err == nil {
+		t.Fatal("opening a path that is not there succeeded")
+	}
+	var access []interp.Event
+	for _, e := range *b.events {
+		if e.Kind == interp.EventAccess && e.Action.Path == missing {
+			access = append(access, e)
+		}
+	}
+	if len(access) != 1 {
+		t.Errorf("recorded %d accesses for a missing file, want the attempt: %+v",
+			len(access), *b.events)
 	}
 }

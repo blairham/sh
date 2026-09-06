@@ -98,22 +98,33 @@ func (r *Runner) readDir(path string) ([]os.DirEntry, error) {
 		return os.ReadDir(path)
 	}
 	action := r.act(Action{Kind: ActionReadDir, Path: path})
-	if r.probeDenied(action) {
+	if r.Gate != nil && r.Gate.Allow(r.ctx, action) == Deny {
+		r.emit(r.ctx, Event{Kind: EventDenied, Action: action})
 		return nil, &fs.PathError{Op: "readdirent", Path: path, Err: syscall.ENOENT}
 	}
 	if r.Gate == nil {
 		// Watching without gating: there is nothing a verification could
 		// refuse, so the standard library's one-call form stands.
+		r.emit(r.ctx, Event{Kind: EventAccess, Action: action})
 		return os.ReadDir(path)
 	}
 	f, err := os.Open(path)
 	if err != nil {
+		// The attempt is the auditable act — a directory that is not there is
+		// the ordinary case for a glob — so it is recorded, and there was no
+		// descriptor to learn anything more from.
+		r.emit(r.ctx, Event{Kind: EventAccess, Action: action})
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
-	if !r.verifyOpened(r.ctx, action, f) {
+	if !r.verifyOpened(r.ctx, &action, f) {
 		return nil, &fs.PathError{Op: "readdirent", Path: path, Err: syscall.ENOENT}
 	}
+	// Recorded here rather than beside the consultation above, unlike this
+	// file's other probes: a listing is the one that opens something, so
+	// waiting until the descriptor is in hand is what lets the record say
+	// where the name went. See Action.Resolved.
+	r.emit(r.ctx, Event{Kind: EventAccess, Action: action})
 	entries, err := f.ReadDir(-1)
 	// Sorted, because os.ReadDir sorts and every caller here was written
 	// against that: a glob's expansion is in name order and would otherwise

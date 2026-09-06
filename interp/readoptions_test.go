@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/internal/pty"
 	. "github.com/blairham/sh/interp"
 )
 
@@ -549,22 +550,32 @@ func TestReadPromptIsSilentOffATerminal(t *testing.T) {
 	}
 }
 
-// TestReadPromptGoesToTheTerminalsStderr: the positive half, as close as a
-// test can sit to a terminal without stealing a keystroke from a real one —
-// a character device on the input. The prompt goes to standard error, no
-// newline, before anything is read, and never to standard output.
+// TestReadPromptGoesToTheTerminalsStderr: the positive half, on an actual
+// terminal. The prompt goes to standard error, no newline, before anything is
+// read, and never to standard output.
+//
+// It used to use `/dev/zero`, "a character device that is not the null
+// device", and that was not a stand-in for a terminal — it was the bug. The
+// terminal test was a file-mode test with one exception, so `/dev/zero` passed
+// it; #525 replaced that with the ioctl and `/dev/zero` correctly stopped
+// passing. A pseudo-terminal is the thing itself, and it hands the read a byte
+// as readily as the device did without a developer's keystroke being anywhere
+// near it.
 func TestReadPromptGoesToTheTerminalsStderr(t *testing.T) {
-	// /dev/zero passes the same test a terminal does — a character device
-	// that is not the null device — and hands the read a byte immediately,
-	// where /dev/tty would block on, or worse eat, a developer's keystroke.
-	zero, err := os.Open("/dev/zero")
+	control, terminal, err := pty.Open()
 	if err != nil {
-		t.Skipf("no /dev/zero: %v", err)
+		t.Skipf("no pseudo-terminal: %v", err)
 	}
-	t.Cleanup(func() { _ = zero.Close() })
+	t.Cleanup(func() { _ = control.Close(); _ = terminal.Close() })
+	// With the newline: a terminal in its own line discipline delivers
+	// nothing until a line is complete, so a bare "x" would sit in the
+	// kernel and the read would wait for a person who is not there.
+	if _, err := control.WriteString("x\n"); err != nil {
+		t.Fatal(err)
+	}
 	var stdout, stderr strings.Builder
 	run(t, `read -n 1 -p "PR> " v`, func(r *Runner) {
-		r.Stdin, r.Stdout, r.Stderr = zero, &stdout, &stderr
+		r.Stdin, r.Stdout, r.Stderr = terminal, &stdout, &stderr
 	})
 	if got := stderr.String(); got != "PR> " {
 		t.Errorf("stderr %q, want the prompt alone, no newline", got)

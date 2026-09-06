@@ -204,6 +204,42 @@ the path as written, and the audit record carries what was actually
 reached — the same split the rest of *What a refusal looks like* is
 built on.
 
+**The record carries both names, whichever way the decision went.**
+`path` is the name that was asked about and `resolved` is the kernel's
+own name for what it reached, empty when the two are the same. Each
+record used to hold half of one fact and a different half each way: an
+allowed open said the name and nothing said it had gone elsewhere, a
+refused one said the object and nothing said which name reached it.
+"This script read `/srv/data/x`, and `/srv/data` is a link to
+`/mnt/vol1`" is the thing somebody reviewing a run wants, and the shell
+had just learned it and thrown it away.
+
+That is not the script/operator asymmetry being softened. The asymmetry
+is about **who is told**: the script gets the name it wrote and nothing
+more, the operator gets both. `resolved` is entirely inside the
+operator's half, so filling it in makes the two *records* consistent
+with each other and changes nothing a script can observe. Making the
+script's view symmetric with the operator's is the thing that must not
+happen, and does not.
+
+**The gate is asked about the object alone.** A second consultation
+carries the object in `path`, with `resolved` set to the same string —
+which looks redundant and is deliberate. A decision must be about the
+object, so the object is what a rule matches, and a `Gate` written
+before this field goes on deciding correctly. Handing it the name as
+well would invite matching on the name, which is the bug this whole
+section exists to have closed. `resolved` being non-empty is how a
+prompting gate tells the second consultation from the first, so it does
+not ask a person twice about one open.
+
+One consequence inside the interpreter is worth writing down: a
+directory listing records its access *after* the open rather than beside
+the consultation, unlike the other probes in `fsgate.go`, because a
+record written before there is a descriptor cannot say where the name
+went. `internal/boundary` moved for the same reason and kept its own
+rule — it records the *attempt*, so a startup file that is not there is
+still an access in the stream.
+
 #### What this closes, and what it does not
 
 Closed, on Darwin and Linux: a redirect that reads or writes through a
@@ -678,7 +714,8 @@ being written cannot be.
 | `actionId` | string | when the action has an identity |
 | `event` | string | always — `command-start`, `command-end`, `denied`, `error`, `access` |
 | `action` | string | always — `exec`, `open`, `stat`, `read-dir`, `signal`, `inherit` |
-| `path` | string | when the action has one |
+| `path` | string | when the action has one — the name that was *asked about* |
+| `resolved` | string | for an open whose name reached an object the kernel calls something else |
 | `args` | array of string | for an exec |
 | `write` | bool | for an open |
 | `pid` | integer | for a signal, always, including 0 |

@@ -703,6 +703,23 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 					continue
 				}
 			}
+			if handled, code := r.unsetSubscriptRange(base, sub); handled {
+				// A subscript written as a pair, where the dialect reads the
+				// comma as a range rather than as the arithmetic operator
+				// whose value is its right operand. Ahead of the single
+				// reading rather than inside it, because a range names a
+				// span and a span is not a subscript.
+				if code != 0 {
+					status = code
+				}
+				if r.ctl == controlExit {
+					return status
+				}
+				continue
+			}
+			if r.unspecified {
+				return r.status
+			}
 			idx, err := r.subscriptValue(sub)
 			if err != nil {
 				// Reported by every shell in the panel, and silent here: the

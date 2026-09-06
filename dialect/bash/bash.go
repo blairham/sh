@@ -410,6 +410,11 @@ func Semantics() interp.Semantics {
 	// `10: Bad file descriptor`, status 1, and the script carries on.
 	s.MultiDigitDuplicationTargetIsAnError = interp.No
 	s.RedirectErrorOnSpecialBuiltinFatal = interp.No
+	// `echo hi >&qq` writes the file `qq` and puts both output streams in
+	// it, which is the csh spelling bash kept. A word that expanded to
+	// nothing is not a name, and is refused as a descriptor instead.
+	s.GreatAmpTarget = interp.GreatAmpTargetNamesAFile
+	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.No
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.No
 	// bash reports every operand that is not a name, exports the ones that
@@ -429,6 +434,13 @@ func Semantics() interp.Semantics {
 	s.UnsetNameOperands = interp.AnythingIsAName
 	s.DeclarationTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.Yes
+	// A single subscript on a name that is no array is refused rather than
+	// ignored: `a=v; unset "a[1]"` says `a: not an array variable` and fails,
+	// where the other shell that reads a subscript as an element says
+	// nothing. `a[0]` names the string itself and takes the whole name away
+	// in both — measured on 5.3.15. 3.2.57 refuses that one too, so a corpus
+	// case here splits the two bash columns; this column is the graded one.
+	s.UnsetSubscriptOnAScalarIsAnError = interp.Yes
 	// `unset a[@]` empties the array: `a=(x y z)` comes back with no elements
 	// and `${#a[@]}` is 0. Measured in both bash builds, and the same for
 	// `a[*]`. A name that holds a scalar is refused rather than emptied, and
@@ -556,7 +568,15 @@ func Diagnostics() interp.Diagnostics {
 		CommandVNotFound: "command: %[1]s: not found",
 		// The target as it was written, not as it expanded.
 		AmbiguousRedirect: "%[1]s: ambiguous redirect",
-		JobStarted:        "[%[1]d] %[2]d",
+		// The reading side of the csh spelling, which bash never opens as a
+		// file: `cat <&qq` is the redirect being ambiguous, and `<&""` is a
+		// descriptor that is not one — named as it was *written*, quotation
+		// marks and all. bash 3.2 names the descriptor number instead, which
+		// is a version difference rather than a dialect one; 5.3 is what this
+		// preset is.
+		DuplicationTargetIsNotADescriptor: "%[2]s: ambiguous redirect",
+		EmptyDuplicationTarget:            "%[1]s: Bad file descriptor",
+		JobStarted:                        "[%[1]d] %[2]d",
 		// The one line all three members of the panel's bash write when an
 		// interactive shell has no terminal to run the monitor on: 5.3.15 and
 		// 3.2.57 as `bash`, and 3.2 run as `sh`, which writes it with its own

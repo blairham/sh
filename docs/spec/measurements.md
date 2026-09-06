@@ -295,7 +295,21 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/removing-an-element-from-the-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][z] n=2` | `[x][z] n=2` | `[x][y][z] n=3` **2>** `<shell>: line 0: [-2]: bad array subscript` | `[x][z] n=2` | `[x][y][z] n=3` |
 | `array/unsetting-below-the-first-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~[y][z] n=2` | `st=0~[y][z] n=2` | `st=0~[y][z] n=2` | `st=0~[y][z] n=2` | `st=1~[x][y][z] n=3` **2>** `<shell>:1: a: assignment to invalid subscript range` |
 | `array/unsetting-past-the-start` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1~[x][y][z] n=3` **2>** `<shell>: line 1: unset: [-4]: bad array subscript` | `st=1~[x][y][z] n=3` **2>** `<shell>: line 1: unset: [-4]: bad array subscript` | `st=1~[x][y][z] n=3` **2>** `<shell>: line 0: [-4]: bad array subscript` | `st=1~[x][y][z] n=3` **2>** `<shell>: unset: a: subscript out of range` | `st=0~[x][y][z] n=3` |
+| `array/unsetting-a-range-of-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~[x][y] n=2` | `st=0~[x][y] n=2` | `st=0~[x][y] n=2` | `st=0~[x][y] n=2` | `st=0~[][z] n=2` |
+| `array/unsetting-a-range-below-the-first-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~[x][z] n=2~st=0~n=1` | `st=0~[x][z] n=2~st=0~n=1` | `st=0~[x][z] n=2~st=0~n=1` | `st=0~[x][z] n=2~st=0~n=1` | `st=0~[][y][z] n=3~st=1~n=3` **2>** `<shell>:1: a: assignment to invalid subscript range` |
+| `array/unsetting-a-reversed-range` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~[x][z] n=2` | `st=0~[x][z] n=2` | `st=0~[x][z] n=2` | `st=0~[x][z] n=2` | `st=0~[x][][y][z] n=4` |
+| `array/unsetting-a-range-that-starts-past-the-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~[x][y][z] n=3~[x][y][z] n=3` | `st=0~[x][y][z] n=3~[x][y][z] n=3` | `st=0~[x][y][z] n=3~[x][y][z] n=3` | `st=0~[x][y][z] n=3~[x][y][z] n=3` | `st=0~[x][y][z] n=3~[x][y][] n=3` |
+| `array/unsetting-a-range-from-the-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y] n=2~[x][y] n=2` | `[x][y] n=2~[x][y] n=2` | `[x][y][z] n=3~[x][y][z] n=3` **2>** `<shell>: line 0: [-1,-1]: bad array subscript~<shell>: line 0: [-2,-1]: bad array subscript` | `[x][y] n=2~[x][y] n=2` | `[x][y][] n=3~[x][y][z] n=3` |
+| `array/unsetting-a-range-of-characters` | **2>** `<shell>: 1: unset: a[2,3]: bad variable name` *(status 2)* | `st=1 [hello]~st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable~<shell>: line 1: unset: b: not an array variable` | `st=1 [hello]~st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable~<shell>: line 1: unset: b: not an array variable` | `st=1 [hello]~st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable~<shell>: line 0: unset: b: not an array variable` | `st=0 [hello]~st=0 [hello]` | `st=0 [hlo]~st=0 [hel]` |
+| `array/unsetting-a-reversed-range-of-characters` | **2>** `<shell>: 1: unset: a[3,2]: bad variable name` *(status 2)* | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0 [hello]` | `st=0 [hello]` |
 | `array/an-unset-subscript-refused-is-named-as-written` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1~n=3` **2>** `<shell>: line 1: unset: [x-9]: bad array subscript` | `st=1~n=3` **2>** `<shell>: line 1: unset: [x-9]: bad array subscript` | `st=1~n=3` **2>** `<shell>: line 0: [x-9]: bad array subscript` | `st=1~n=3` **2>** `<shell>: unset: a: subscript out of range` | `st=0~n=3` |
+| `array/unsetting-a-subscript-of-a-scalar` | **2>** `<shell>: 1: unset: a[2]: bad variable name` *(status 2)* | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0 [hello]` | `st=0 [hllo]` |
+| `array/unsetting-the-subscript-that-names-a-scalar` | **2>** `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=0 [UNSET]` | `st=0 [UNSET]` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0 [UNSET]` | `st=1 [hello]` **2>** `<shell>:1: a: assignment to invalid subscript range` |
+| `array/unsetting-a-subscript-of-a-scalar-takes-the-attribute-too` | **2>** `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=0~(none)` | `st=0~(none)` | `st=1~a=hello` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0~(none)` | `st=1~a=hello` **2>** `<shell>:1: a: assignment to invalid subscript range` |
+| `array/unsetting-a-subscript-of-a-name-holding-nothing` | **2>** `<shell>: 1: unset: b[0]: bad variable name` *(status 2)* | `st=0~st=0` | `st=0~st=0` | `st=0~st=0` | `st=0~st=0` | `st=0~st=0` |
+| `array/unsetting-a-character-from-the-end-of-a-scalar` | **2>** `<shell>: 1: unset: a[-1]: bad variable name` *(status 2)* | `st=1 [hello]~st=1 [hello]~st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable~<shell>: line 1: unset: b: not an array variable~<shell>: line 1: unset: c: not an array variable` | `st=1 [hello]~st=1 [hello]~st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable~<shell>: line 1: unset: b: not an array variable~<shell>: line 1: unset: c: not an array variable` | `st=1 [hello]~st=1 [hello]~st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable~<shell>: line 0: unset: b: not an array variable~<shell>: line 0: unset: c: not an array variable` | `st=0 [hello]~st=0 [hello]~st=0 [hello]` | `st=0 [hell]~st=0 [ello]~st=0 [hello]` |
+| `array/unsetting-a-subscript-past-the-end-of-a-scalar` | **2>** `<shell>: 1: unset: a[9]: bad variable name` *(status 2)* | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0 [hello]` | `st=0 [hello]` |
+| `array/unsetting-a-subscript-of-an-empty-scalar` | **2>** `<shell>: 1: unset: a[1]: bad variable name` *(status 2)* | `st=1 []` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 []` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 []` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0 []` | `st=0 []` |
 | `array/unsetting-every-element-of-a-scalar` | **2>** `<shell>: 1: unset: a[@]: bad variable name` *(status 2)* | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: unset: @: arithmetic syntax error` | `st=0 []` |
 | `array/a-quoted-gap-is-one-field` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=3` | `n=3` | `n=3` | `n=3` | `n=3` |
 | `array/a-quoted-gap-keeps-its-place` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[][x][y]` |
@@ -808,9 +822,65 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   a=(x y z); unset "a[-4]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
   ```
+- `array/unsetting-a-range-of-elements` — `unset` reaching a *span* written as a range, which one shell reads and the others read as the arithmetic comma operator naming its right operand alone. The two answers are two different arrays and neither says anything, so the value is the only evidence: the span becomes one empty element and the array shrinks, against one element blanked or removed where the operator's value points
+  ```sh
+  a=(x y z); unset "a[1,2]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-a-range-below-the-first-element` — the pair that shows the below-the-first-element refusal is a rule about the *span* and not about the subscript that starts it. A range that begins out of reach and ends inside is not refused — the start is the first element — and one that lies wholly out of reach is. `array/unsetting-below-the-first-element` is the same rule at a span of one, which is why `a[0]` alone is refused
+  ```sh
+  a=(x y z); unset "a[0,1]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"; unset "a[0,0]"; echo "st=$?"; echo "n=${#a[@]}"
+  ```
+- `array/unsetting-a-reversed-range` — an end before the start names a span with nothing in it, and the shell that replaces a span with one empty element still puts one there — so the array *gains* an element where it would have begun. Measured rather than guessed, and it is the strongest evidence that the reading is a replacement and not a removal
+  ```sh
+  a=(x y z); unset "a[2,1]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-a-range-that-starts-past-the-end` — the other end of the same rule, and the pair is the point: an end past the last is the last and a span of one is left, but a *start* past the last has nothing to replace and nothing to stand in front of, so nothing at all happens — where a reversed range inside the array inserts
+  ```sh
+  a=(x y z); unset "a[4,5]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"; unset "a[3,4]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-a-range-from-the-end` — a range's start takes the same negative rule its single subscript does: in the shell that blanks, only `-1` acts, so `[-1,-1]` blanks the last element and `[-2,-1]` leaves all three. Pinned because a span would otherwise be expected to act on both, and it does not
+  ```sh
+  a=(x y z); unset "a[-1,-1]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"; b=(x y z); unset "b[-2,-1]"; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"
+  ```
+- `array/unsetting-a-range-of-characters` — the same span over a string, where a subscript names a character: the characters go and the rest closes up. Every negative within reach acts here where on an array only `-1` does, so the two halves of the range reading part exactly where the single subscript's do
+  ```sh
+  a=hello; unset "a[2,3]"; echo "st=$? [${a-UNSET}]"; b=hello; unset "b[-2,-1]"; echo "st=$? [${b-UNSET}]"
+  ```
+- `array/unsetting-a-reversed-range-of-characters` — the reversed range on a string, which is where the insertion the array case shows becomes invisible: an empty character put where the span would have begun leaves the string as it was. The two are one rule and only the array can see it
+  ```sh
+  a=hello; unset "a[3,2]"; echo "st=$? [${a-UNSET}]"
+  ```
 - `array/an-unset-subscript-refused-is-named-as-written` — what the refusal names on this route, which is not what it names on the assignment's: bash keeps the subscript as written but drops the array in front of it, ksh93 names the array alone, and both put the builtin's name before the sentence where neither does for an assignment. The expression is what tells the written text from the -9 it came to. zsh has nothing to refuse, a negative subscript reaching nothing being silent there
   ```sh
   a=(x y z); unset "a[x-9]"; echo "st=$?"; echo "n=${#a[@]}"
+  ```
+- `array/unsetting-a-subscript-of-a-scalar` — a single subscript on a name that is no array, where the three readings show what they mean and give three different answers: the shell that reads a subscript as a character takes that character out, the shell that reads it as an element finds none — a scalar is the one element at the base — and refuses, and the other element-reading shell says nothing at all. Nobody turns the scalar into an array, and the value is what tells them apart rather than the status
+  ```sh
+  a=hello; unset "a[2]"; echo "st=$? [${a-UNSET}]"
+  ```
+- `array/unsetting-the-subscript-that-names-a-scalar` — the one subscript the element reading answers to: at the base, a scalar *is* the element, and unsetting through it takes the whole name away — not the value, the name. Below the first character where the base is 1, so the shell that reads characters refuses the same line. bash 3.2 refuses it too, having read `${a[0]}` as the whole string moments earlier, so the two bash columns disagree here on purpose and the graded one is 5.3's
+  ```sh
+  a=hello; unset "a[0]"; echo "st=$? [${a-UNSET}]"
+  ```
+- `array/unsetting-a-subscript-of-a-scalar-takes-the-attribute-too` — it is the name that goes and not the value: after it, no child is told about `a` either. Read through a real child because a name that is unset and a name that is empty look alike to the shell's own `$a`
+  ```sh
+  export a=hello; unset "a[0]"; echo "st=$?"; env | grep '^a=' || echo "(none)"
+  ```
+- `array/unsetting-a-subscript-of-a-name-holding-nothing` — the boundary of all of it: a name holding nothing has neither an element nor a character for a subscript to name, and every shell is quiet about both spellings. Without this the refusals above read as being about the subscript rather than about the name having a value
+  ```sh
+  unset b; unset "b[0]"; echo "st=$?"; unset "b[1]"; echo "st=$?"
+  ```
+- `array/unsetting-a-character-from-the-end-of-a-scalar` — every negative within reach acts on a character, where on an *array* under the same shell only `-1` does — so a string is a character position and not a one-element array wearing one. Reaching back past the first character is quiet rather than refused, which is the other half of `array/unsetting-past-the-start` and the reason the boundary is not one rule for both signs
+  ```sh
+  a=hello; unset "a[-1]"; echo "st=$? [$a]"; b=hello; unset "b[-5]"; echo "st=$? [$b]"; c=hello; unset "c[-6]"; echo "st=$? [$c]"
+  ```
+- `array/unsetting-a-subscript-past-the-end-of-a-scalar` — past the end names nothing under the character reading and the string is untouched — where the element readings are still looking at a name that is no array and answer as they do for any other subscript. One line, and it separates 'the subscript found nothing' from 'the name is not an array'
+  ```sh
+  a=hello; unset "a[9]"; echo "st=$? [${a-UNSET}]"
+  ```
+- `array/unsetting-a-subscript-of-an-empty-scalar` — an empty string still has the one element a scalar is, and has no character at all — so where the base is 1 the character reading leaves the name empty and the element readings reach for a name that is not an array. Reading 'no characters' as 'no question' took the empty name away entirely, which is the bug this pins
+  ```sh
+  a=; unset "a[1]"; echo "st=$? [${a-UNSET}]"
   ```
 - `array/unsetting-every-element-of-a-scalar` — the same spelling on a name that is no array, which is where the two readings show what they mean: bash means take every element away, a scalar has none, and it refuses and says so at 1; zsh means the span becomes one empty string, a scalar is one such span, and it comes back empty at 0. ksh93 reports its bad subscript and leaves the value alone. Nobody turns the scalar into an array
   ```sh
@@ -1125,6 +1195,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `read/an-initial-value-for-the-line` | `st=2 l=[keep]` **2>** `<shell>: 1: read: Illegal option -i` | `st=0 l=[x]` | `st=0 l=[x]` | `st=2 l=[keep]` **2>** `<shell>: line 0: read: -i: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]` | `st=2 l=[keep]` **2>** `<shell>: read: -i: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]` | `st=1 l=[keep]` **2>** `<shell>:read:1: bad option: -i` |
 | `read/an-initial-value-is-not-a-default` | `st=2 l=[keep]` **2>** `<shell>: 1: read: Illegal option -i` | `st=0 l=[]` | `st=0 l=[]` | `st=2 l=[keep]` **2>** `<shell>: line 0: read: -i: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]` | `st=2 l=[keep]` **2>** `<shell>: read: -i: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]` | `st=1 l=[keep]` **2>** `<shell>:read:1: bad option: -i` |
 | `read/an-initial-value-with-nothing-after-it` | `st=2 l=[keep]` **2>** `<shell>: 1: read: Illegal option -i` | `st=2 l=[keep]` **2>** `<shell>: line 1: read: -i: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]` | `st=2 l=[keep]` **2>** `<shell>: line 1: read: -i: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]` | `st=2 l=[keep]` **2>** `<shell>: line 0: read: -i: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]` | `st=2 l=[keep]` **2>** `<shell>: read: -i: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]` | `st=1 l=[keep]` **2>** `<shell>:read:1: bad option: -i` |
+| `read/a-prompt-is-for-a-terminal-and-not-a-character-device` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>: read: no query process` | `st=1` **2>** `<shell>:read:1: -p: no coprocess` |
 | `name/unset-f-on-a-name-no-function-could-have` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>: unset: 1x: invalid function name` | `st=1` **2>** `<shell>:unset:1: no such hash table element: 1x` |
 | `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>:unset:1: no such hash table element: nosuch` |
 | `name/a-lone-dash-given-to-a-builtin` | `st=1` **2>** `unalias: - not found` | `st=1` **2>** `<shell>: line 1: unalias: -: not found` | `st=1` **2>** `<shell>: line 1: unalias: -: not found` | `st=1` **2>** `<shell>: line 0: unalias: -: not found` | `st=1` | `st=1` **2>** `<shell>:unalias:1: not enough arguments` |
@@ -1562,6 +1633,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `read/an-initial-value-with-nothing-after-it` — the letter takes an argument, which is the half that has to be right in a shell that means to ignore the value: bash asks for the argument it is missing where the four that do not have the letter refuse it as one they never heard of, in the same words they use with a value after it
   ```sh
   printf "x\n" | { l=keep; read -i; echo "st=$? l=[$l]"; }
+  ```
+- `read/a-prompt-is-for-a-terminal-and-not-a-character-device` — a character device is not a terminal, and this is the device that says so rather than /dev/null: the read *succeeds* here, so there is every reason to have prompted and no shell prompts. Testing a character device instead of asking the kernel printed `PROMPT-42 ` into something nobody was reading (#525). ksh93 and zsh spell `-p` as the coprocess flag and refuse it, which is the same row saying that too
+  ```sh
+  read -p 'PROMPT-42 ' v < /dev/urandom; echo "st=$?"
   ```
 - `name/unset-f-on-a-name-no-function-could-have` — two of the panel are quiet here and two are not, and the two that speak are not answering the same question — one is judging the name, which `1x` could never be, and the other is reporting that its table holds nothing under it. The case next to this one is what tells them apart
   ```sh
@@ -5518,6 +5593,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/a-closed-stdin-is-closed-for-a-replacement` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
 | `redir/an-inherited-descriptor-keeps-its-number` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
 | `redir/a-dup-prefix-is-that-commands-alone` | `st=2` **2>** `<shell>: 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 6: bad file descriptor` |
+| `redir/great-amp-names-a-file` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=0 [hi]` | `st=0 [hi]` | `st=0 [hi]` | `st=1 []` **2>** `<shell>: qq: bad file unit number` | `st=0 [hi]` |
+| `redir/great-amp-names-a-file-takes-both-streams` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `[O~E]` | `[O~E]` | `[O~E]` | `[]` **2>** `<shell>: qq: bad file unit number` | `[O~E]` |
+| `redir/great-amp-with-a-number-in-front-is-not-a-file` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1 []` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1 []` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1 []` **2>** `<shell>: qq: ambiguous redirect` | `st=1 []` **2>** `<shell>: qq: bad file unit number` | `hi~st=0 []` |
+| `redir/less-amp-is-never-a-file` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1` **2>** `<shell>: line 1: qq: ambiguous redirect` | `st=1` **2>** `<shell>: qq: ambiguous redirect` | `st=1` **2>** `<shell>: qq: bad file unit number` | `st=1` **2>** `<shell>:1: file number expected` |
+| `redir/an-amp-target-that-came-to-nothing` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1` **2>** `<shell>: line 1: "": Bad file descriptor~<shell>: line 1: "": Bad file descriptor` | `st=1` **2>** `<shell>: line 1: "": Bad file descriptor~<shell>: line 1: "": Bad file descriptor` | `st=1` **2>** `<shell>: 1: Bad file descriptor~<shell>: 0: Bad file descriptor` | `st=1` **2>** `<shell>: : cannot open~<shell>: : cannot open` | `st=1` **2>** `<shell>:1: no such file or directory: ~<shell>:1: file number expected` |
+| `redir/an-amp-target-that-came-to-nothing-on-a-builtin` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `after st=1` **2>** `<shell>: line 1: "": Bad file descriptor` | `after st=1` **2>** `<shell>: line 1: "": Bad file descriptor` | `after st=1` **2>** `<shell>: 0: Bad file descriptor` | `after st=1` **2>** `<shell>: : cannot open` | **2>** `<shell>:1: file number expected` *(status 1)* |
+| `redir/noclobber-refuses-both-streams-to-one-file` | `st=2` **2>** `<shell>: 1: cannot create qq: File exists` | `st=1` **2>** `<shell>: line 1: qq: cannot overwrite existing file` | `st=1` **2>** `<shell>: line 1: qq: cannot overwrite existing file` | `st=1` **2>** `<shell>: qq: cannot overwrite existing file` | `st=1` **2>** `<shell>: qq: file already exists [File exists]` | `st=1` **2>** `<shell>:1: file exists: qq` |
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
 | `redir/file-then-merge` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` |
 | `redir/multios-is-zsh-only` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[x][x]` |
@@ -5787,6 +5869,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/a-dup-prefix-is-that-commands-alone` — a duplication prefixed to one command does not outlive it — only `exec`'s do
   ```sh
   true 6>&1; echo hi >&6; echo "st=$?"
+  ```
+- `redir/great-amp-names-a-file` — the csh spelling four of the six kept: an unnumbered `>&` whose word is not a descriptor opens the word as a file. bash 5.3, bash 3.2 and bash-as-`sh` write `hi` into `qq` and report 0; zsh does the same; ksh93 refuses the word as a bad file unit number and makes nothing; dash refuses it while parsing, so not even the first command runs
+  ```sh
+  echo hi >&qq; echo "st=$? [$(cat qq 2>/dev/null)]"
+  ```
+- `redir/great-amp-names-a-file-takes-both-streams` — and it is `&>` exactly, not `>`: the shells that open the file put *both* output streams in it, which is the half a reading of `>&` as a plain redirect would get wrong and nothing else in the corpus would notice
+  ```sh
+  sh -c 'echo O; echo E >&2' >&qq; printf "[%s]" "$(cat qq 2>/dev/null)"
+  ```
+- `redir/great-amp-with-a-number-in-front-is-not-a-file` — the leading number is the whole of the question. bash writes the file for the bare spelling and calls this one an ambiguous redirect; zsh takes it as a redirect of that one stream; ksh93 refuses it the same way it refuses the bare one
+  ```sh
+  echo hi 2>&qq; echo "st=$? [$(cat qq 2>/dev/null)]"
+  ```
+- `redir/less-amp-is-never-a-file` — the reading side of the same operator, which no shell opens as a file — and three sentences for one refusal: bash calls the redirect ambiguous, ksh93 calls the unit number bad, zsh says a file number was expected and names nobody
+  ```sh
+  echo x > qq; cat <&qq; echo "st=$?"
+  ```
+- `redir/an-amp-target-that-came-to-nothing` — what a script reaches when it writes `>&"${COPROC[1]}"` in a shell with no such array, and where the two shells that open a file part company: zsh takes the empty word as a name and fails on the empty path, bash takes it as a descriptor and calls it bad — naming the target as it was *written*, quotation marks and all, where bash 3.2 names the descriptor number instead
+  ```sh
+  echo hi >&""; cat <&""; echo "st=$?"
+  ```
+- `redir/an-amp-target-that-came-to-nothing-on-a-builtin` — the same refusal on a command that runs *in* the shell, which is where zsh alone stops: nothing after it runs. The external command in the row above survives it there, so the boundary is the command and not the redirection
+  ```sh
+  read -r l <&""; echo "after st=$?"
+  ```
+- `redir/noclobber-refuses-both-streams-to-one-file` — `set -C` refuses this truncation exactly as it refuses a plain `>`, unanimously and each in its own words — and unlike `>` there is no override spelling to exempt, because `>|&` is a syntax error in all six. A command with no output on purpose: the two shells that have no `&>` read the line as a background `true` and a bare `>qq`, and anything the job printed would arrive against the clock
+  ```sh
+  set -C; : > qq; true &>qq; echo "st=$?"
   ```
 - `redir/merge-then-file` — both streams reach the file: stdout is redirected first, then stderr is pointed at where stdout now goes
   ```sh
@@ -7221,6 +7331,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/local-readonly-letter` | **2>** `<shell>: 1: local: -r: bad variable name` *(status 2)* | **2>** `<shell>: line 1: ro: readonly variable` *(status 1)* | **2>** `<shell>: line 1: ro: readonly variable` *(status 127)* | **2>** `<shell>: ro: readonly variable` *(status 1)* | `unreached~after` **2>** `<shell>: local: not found` | **2>** `f: read-only variable: ro` *(status 1)* |
 | `declare/local-bad-name` | `in=ok` **2>** `<shell>: 1: 1x: bad variable name` *(status 2)* | `in=ok~st=0` **2>** `<shell>: line 1: local: `1x=5': not a valid identifier` | `in=ok~st=0` **2>** `<shell>: line 1: local: `1x=5': not a valid identifier` | `in=ok~st=0` **2>** `<shell>: line 0: local: `1x=5': not a valid identifier` | `in=ok~st=0` **2>** `<shell>: local: not found` | **2>** `f:local: not an identifier: 1x` *(status 1)* |
 | `declare/bare-local-lists-the-locals` | `0~st=1` | `2~st=0` | `2~st=0` | `0~st=1` | `0~st=1` **2>** `<shell>: local: not found~<shell>: local: not found` | `0~st=1` |
+| `declare/bare-typeset-is-a-listing-of-its-own` | `0~st=1` **2>** `<shell>: 1: typeset: not found` | `0~st=1` | `0~st=1` | `0~st=1` | `0~st=1` **2>** `<shell>: local: not found` | `1~st=0` |
 | `declare/global-letter-declares-a-global` | `gv= st=127` **2>** `<shell>: 1: typeset: not found` | `gv=7 st=0` | `gv=7 st=0` | `gv= st=2` **2>** `<shell>: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `gv=7 st=0` |
 | `declare/global-letter-against-a-local` | `in=in~out=out` **2>** `<shell>: 1: typeset: not found` | `in=in~out=new` | `in=in~out=new` | `in=in~out=out` **2>** `<shell>: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: local: not found~<shell>: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `in=new~out=out` |
 | `declare/lower-case-attribute` | `v=~v2=DEF` **2>** `<shell>: 1: typeset: not found` | `v=abc~v2=def` | `v=abc~v2=def` | `v=~v2=DEF` **2>** `<shell>: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `v=abc~v2=def` | `v=abc~v2=def` |
@@ -7391,6 +7502,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/bare-local-lists-the-locals` — a bare `local` writes the running function's locals as clustered declarations in exactly one shell — counted through grep because another lists its whole parameter table there, which is a fact about that engine rather than about the script
   ```sh
   f() { local x=1 y; local; }; f | grep -c '^declare'; echo "st=$?"
+  ```
+- `declare/bare-typeset-is-a-listing-of-its-own` — a bare `typeset` is a listing too, and not the one a bare `local` is in every shell that has both: one shell writes the same parameter table for either word — the line counted here is the attribute words and the assignment — while bash writes every variable it holds and ksh93 its own attribute listing, neither of which is the other's answer
+  ```sh
+  f() { local x=1; typeset; }; f | grep -c "^local x=1$"; echo "st=$?"
   ```
 - `declare/global-letter-declares-a-global` — `-g` reaches the global table from inside a function in the two shells that spell it; the third refuses it with its usage lines and stops — typeset is one of its own special builtins — and the fourth has no typeset at all
   ```sh

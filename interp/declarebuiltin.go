@@ -157,6 +157,14 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		return r.declareFunctions(args, f.funcNames)
 	}
 
+	if len(args) == 0 && f == (declareFlags{}) {
+		// Bare `typeset` is a listing, and not the one a bare `local` is —
+		// see BareDeclarationListing. Only the truly bare word: `typeset -i`
+		// with no names is a filtered listing in the shells that have it,
+		// which is a different question and not built.
+		return r.bareDeclarationListing()
+	}
+
 	if f.print {
 		// The other letters are accepted alongside `-p` and decide nothing:
 		// the shells that have them use an attribute letter to *filter* the

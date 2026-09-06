@@ -3086,17 +3086,20 @@ The letters themselves diverge before the behaviors do:
   they were: the read failed before reaching any input, so the
   clear-on-EOF rule never fires. The optstring's shape carries the split
   the way it does for `-n`; the refusal's words are
-  `Diagnostics.ReadNoCoprocess`. "Is a terminal" is `interp`'s
-  approximation — a character device, excepting the null device, which
-  every harness-fed child holds and bash measurably does not prompt
-  through. A character device that is neither a terminal nor `/dev/null`
-  (say `/dev/zero`) is taken for one; real shells ask isatty and are not
-  fooled, a difference accepted knowingly. The front end no longer
-  approximates: `driver.Interactively` asks the ioctl, through
-  `repl.IsTerminal` (#509, `invocation.md`). `interp` cannot reach that —
-  `repl` imports `interp`, so the dependency only runs one way — and this
-  is the remaining place where a character device stands in for a
-  terminal.
+  `Diagnostics.ReadNoCoprocess`. **"Is a terminal" is the ioctl here too**
+  (#525). It was `interp`'s own approximation until then — a character
+  device, excepting the null device — because the exact answer lived in
+  `repl` and `repl` imports `interp`, so the dependency only ran one way.
+  It is `internal/tty` now, which both import, and the exception for the
+  null device is *gone* rather than moved: the ioctl answers ENOTTY there
+  without being told the path. Measured 2026-09-06 on the device that made
+  the point, `read -p 'PROMPT-42 ' v < /dev/urandom` — bash 5.3.15, bash
+  3.2.57 and bash-as-sh all read a line, exit 0 and print **no prompt**,
+  where this shell printed one. `/dev/random` rather than `/dev/null` is
+  the case that says the question is about terminals: the read succeeds
+  there, so there is every reason to have prompted. `select`'s menu had
+  the same fault under the ksh93 axis, drawing its `#? ` where real ksh93
+  draws none.
 - **The timeout.** `-t SECS`, fractions allowed; input already waiting is
   read as if the flag were absent. Expiry reports 142 in bash (128 plus
   SIGALRM) and 1 in ksh93 and zsh — `Diagnostics.ReadTimeoutStatus` — and
@@ -6794,6 +6797,71 @@ Asked only for an operand whose subscript actually failed. dash has no
 subscript to evaluate — `UnsetTakesASubscript` is no there — so the axis
 is absent rather than false.
 
+**`UnsetSubscriptOnAScalarIsAnError`** — bash yes · dash absent · ksh93 no · zsh unreachable
+
+Refuses `unset "a[1]"` where `a` holds a string, rather than leaving the
+name alone without a word.
+
+`unset` through a subscript on a name that is no array gets a different
+answer from every column, and none of the three is a rule of its own —
+they all fall out of what a subscripted name *means* there. Measured on
+`a=hello`:
+
+    probe            bash 5.3   bash 3.2   ksh93     zsh
+    unset a[0]       unset      refused    unset     refused
+    unset a[1]       refused    refused    silent    ello
+    unset a[2]       refused    refused    silent    hllo
+    unset a[-1]      refused    refused    silent    hell
+    unset a[-5]      refused    refused    silent    ello
+    unset a[-6]      refused    refused    silent    hello
+    unset a[9]       refused    refused    silent    hello
+
+**Where a subscript names a character**
+(`ScalarSubscriptIsACharacter` yes) the string loses that character and
+nothing else about the name changes. Past the end names none. Every
+negative *within reach* acts — which an array under the same shell does
+not do, where only `-1` does — so a string here is a character position
+and not a one-element array wearing one. And a negative reaching back
+past the first character is quiet, where the non-negative below the first
+is `array/unsetting-below-the-first-element`'s refusal reached through a
+string.
+
+**Where it names an element**, a scalar is the one element at the base.
+The subscript that names it takes the whole *name* away — the value, the
+attribute and the environment entry with it, which is `unset a` written
+the long way round. Every other subscript names nothing, and there the
+two element-reading shells part: this axis.
+
+Asked only there. An array with a gap takes the same subscript without a
+word everywhere — `a=(x y z); unset "a[9]"` is a success in all four — so
+what the refusing shell objects to is the *name* not being an array,
+which is what its wording says: `unset: %s: not an array variable`, the
+`Diagnostics.UnsetNotAnArray` the whole-array spelling already carries. A
+name holding nothing at all has neither an element nor a character for
+any subscript to name and is left alone under every reading, which is why
+`unset "b[0]"` on an unset `b` is quiet in all four.
+
+An empty string is asked too, and it is where the two readings are
+furthest apart from one line: it has the one element a scalar is and no
+character at all, so `a=; unset "a[1]"` leaves the name empty where the
+base is 1 and takes the name away where it is 0.
+
+The preset is no. POSIX has `unset` remove what it finds and say nothing
+about what it does not — `unset nosuchname` succeeds everywhere — and the
+quiet reading is that sentence read over a subscript.
+
+zsh is *unreachable* rather than no: its subscript on a string names a
+character, so it never gets here. dash is absent — `UnsetTakesASubscript`
+is no there, and `unset "a[0]"` is a bad variable name.
+
+bash 3.2 refuses the base subscript too, having read `${a[0]}` as the
+whole string moments earlier, so
+`array/unsetting-the-subscript-that-names-a-scalar` splits the two bash
+columns on purpose. The graded column is 5.3's, for the reason
+`LocalInheritsTheExportAttribute` gives at the same fork: the older build
+is not a second coherent model of the shape, it is the same build
+disagreeing with itself about what `a[0]` names.
+
 **`UnsetArraySpan`** — bash removes every element · dash unspecified · ksh93 a subscript · zsh leaves one empty element
 
 Is what `unset` does to the span of elements a subscript names — `a[@]`
@@ -6834,6 +6902,60 @@ The reading is the *indexed* array's alone. With the keyed attribute on,
 `typeset -A m; m[k]=v; m[j]=w; unset "m[@]"` leaves both elements in all
 three shells that have the attribute — including the two that clear an
 indexed array through the same spelling.
+
+**A subscript written as a range** reaches this axis too, in the one
+dialect that reads the comma that way (`SubscriptCommaIsARange`). What
+the span *becomes* is the answer above; what a range adds is that a span
+can be written down. Measured on zsh 5.9.2 with `a=(x y z)`:
+
+    a[1,2]    [][z]        the span becomes one empty element
+    a[1,3]    []           every element, and one is left
+    a[0,1]    [][y][z]     a start below the first is the first
+    a[3,4]    [x][y][]     an end past the last is the last
+    a[4,5]    [x][y][z]    a start past the last names nothing
+    a[2,1]    [x][][y][z]  a span with nothing in it is an empty
+                           element *inserted* where it would have begun
+    a[-1,-1]  [x][y][]     the last element
+    a[-2,-1]  [x][y][z]    a negative start other than -1 acts on nothing
+    a[0,0]    refused      the whole span is below the first element
+
+Two of those would not have been guessed. The reversed range *inserts*,
+which is the strongest evidence anywhere that this reading replaces a
+span rather than removing subscripts — an empty span still becomes one
+element. And a range's negative start takes the same "only `-1` acts"
+rule this shell's single subscript already takes, so `[-2,-1]` leaves the
+array whole where `[-1,-1]` blanks the last element.
+
+Over a *string* the same span names characters, and the two halves part
+exactly where the single subscript's do: every negative within reach acts
+(`a=hello; unset "a[-2,-1]"` is `hel`), and a reversed range is invisible
+because an empty character put where the span would have begun leaves the
+string as it was.
+
+**The below-the-first-element refusal is a rule about the span**, and
+that is what tells `a[0]` from `a[0,1]`. A range that begins out of reach
+and ends inside is not refused — the start is the first element — and one
+that lies wholly out of reach is. A single subscript is that span with
+one end, so `array/unsetting-below-the-first-element` and
+`array/unsetting-a-range-below-the-first-element` are one rule seen at
+two widths, and `interp.Runner.spanIsBelowTheFirstElement` is the one
+place it is written. A negative end never counts as below: it is counted
+back from the end and reaches nothing rather than reaching before the
+start.
+
+A pair whose ends are the same subscript is that subscript under either
+reading, so `unset "a[2,2]"` asks the comma axis nothing and a runner
+with no dialect still answers it — the same discipline `${a[2,2]}`
+follows.
+
+Two shapes are recorded rather than modeled. zsh reports a range whose
+*end* will not evaluate and then acts as though it were 0 — `unset
+"a[1,x+]"` on three elements complains and comes back with four — where
+the same failure at the *start* is reported and nothing is done; we
+report and do nothing in both, which is what the single subscript already
+does. And no dialect reads a range while removing rather than blanking, so
+the removing answer read over a span — take every element the span names
+— is the two answers composed rather than a measured column.
 
 A single subscript is the same axis at a span of one, which is why there
 is one field and not two:

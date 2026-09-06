@@ -393,6 +393,10 @@ func Semantics() interp.Semantics {
 	// word's — this shell has no width rule of its own here.
 	s.MultiDigitDuplicationTargetIsAnError = interp.No
 	s.RedirectErrorOnSpecialBuiltinFatal = interp.Yes
+	// `>&` is a duplication and nothing else here: `echo hi >&qq` is
+	// `qq: bad file unit number` and no file is made.
+	s.GreatAmpTarget = interp.GreatAmpTargetIsADescriptor
+	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.No
 	// Fatal to `export` and `readonly` and not to `unset`, which prints the
 	// same kind of complaint, returns 1 and carries on. Not `unset` being
 	// less special: a bad *option* to it is fatal, just above.
@@ -409,6 +413,11 @@ func Semantics() interp.Semantics {
 	// arithmetic expression as they do everywhere else, `@` is not one, and
 	// the operand is reported as a bad subscript with the array left as it
 	// was — the only shell in the panel that does not clear it.
+	// A subscript naming no element of a name that is no array is quiet here:
+	// `a=v; unset "a[1]"` says nothing and succeeds, where bash refuses it.
+	// `a[0]` names the string — a scalar is the one element at the base — and
+	// takes the whole name away, which both shells that read elements do.
+	s.UnsetSubscriptOnAScalarIsAnError = interp.No
 	s.UnsetArraySpan = interp.UnsetArraySpanIsAnExpression
 	// And the complaint is the builtin's: `unset` reports 1 and the script
 	// goes on, which is what makes `unset a[@]` survivable here.
@@ -608,15 +617,20 @@ func Diagnostics() interp.Diagnostics {
 		FdNumberOverLimit: "bad file unit number [Invalid argument]",
 		// A target that expanded to nothing gets neither the reason nor the
 		// "create" wording, whichever direction the redirection was.
-		EmptyRedirectTarget:  "%[1]s: cannot open",
-		CannotCreate:         "%[1]s: cannot create [%[2]s]",
-		NoclobberRefusal:     "%[1]s: file already exists [%[2]s]",
-		ArithFailureStatus:   1,
-		ArithInfinity:        "inf",
-		ArithNotANumber:      "nan",
-		ArithFloatDigits:     15,
-		ArithFloatKeepsPoint: false,
-		SelectPrompt:         "#? ",
+		EmptyRedirectTarget: "%[1]s: cannot open",
+		// A word after `>&` or `<&` that is not a descriptor is refused as a
+		// bad unit number, and a word that came to nothing takes the same
+		// "cannot open" the ordinary empty target does.
+		DuplicationTargetIsNotADescriptor: "%[2]s: bad file unit number",
+		EmptyDuplicationTarget:            "%[2]s: cannot open",
+		CannotCreate:                      "%[1]s: cannot create [%[2]s]",
+		NoclobberRefusal:                  "%[1]s: file already exists [%[2]s]",
+		ArithFailureStatus:                1,
+		ArithInfinity:                     "inf",
+		ArithNotANumber:                   "nan",
+		ArithFloatDigits:                  15,
+		ArithFloatKeepsPoint:              false,
+		SelectPrompt:                      "#? ",
 		// A script operand that names nothing is a command that is not there,
 		// worded and numbered as one — and one that is there and will not
 		// open gets the bracketed reason ksh93 puts around every errno, at

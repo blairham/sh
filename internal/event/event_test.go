@@ -117,7 +117,7 @@ func TestAnAbsentFieldIsAnAbsentField(t *testing.T) {
 		Line:   3,
 	})
 	line := strings.TrimSpace(buf.String())
-	for _, field := range []string{"args", "write", "pid", "signal", "status", "error", "file"} {
+	for _, field := range []string{"args", "write", "pid", "signal", "status", "error", "file", "resolved"} {
 		if strings.Contains(line, `"`+field+`"`) {
 			t.Errorf("%q appears in a record that has no %s: %s", field, field, line)
 		}
@@ -518,5 +518,71 @@ func TestAConsumerWrittenBeforeTheIdentityFieldsStillReads(t *testing.T) {
 	if old.Event != "denied" || old.Action != "open" || old.Path != "/etc/shadow" ||
 		!old.Write || old.Line != 3 || old.File != "script.sh" || old.Seq != 1 {
 		t.Errorf("a version 1 consumer read %+v, want every original field unchanged", old)
+	}
+}
+
+// TestAResolvedOpenCarriesBothNames.
+//
+// The field exists because a record that says only one of the two names cannot
+// be acted on: "the script read /srv/data/x, and /srv/data is a link to
+// /mnt/vol1" is what somebody reviewing a run wants, and until #943 an allowed
+// open wrote the first half and a refused one wrote the second.
+func TestAResolvedOpenCarriesBothNames(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	testEncoder(&buf).Emit(t.Context(), interp.Event{
+		Kind: interp.EventAccess,
+		Action: interp.Action{
+			ID: "12", Kind: interp.ActionOpen,
+			Path: "/srv/data/x", Resolved: "/mnt/vol1/x",
+		},
+		Line: 3,
+	})
+	var got Record
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Path != "/srv/data/x" {
+		t.Errorf("path = %q, want the name as written", got.Path)
+	}
+	if got.Resolved != "/mnt/vol1/x" {
+		t.Errorf("resolved = %q, want where the name went", got.Resolved)
+	}
+}
+
+// TestAConsumerWrittenBeforeResolvedStillReads, which is rule 3 being used
+// rather than described: an added field must leave a record decodable by a
+// consumer that has never heard of it, with every original field unchanged and
+// the version where it was.
+func TestAConsumerWrittenBeforeResolvedStillReads(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	testEncoder(&buf).Emit(t.Context(), interp.Event{
+		Kind:    interp.EventDenied,
+		Session: "SESSION",
+		Action: interp.Action{
+			ID: "12", Kind: interp.ActionOpen,
+			Path: "/srv/data/x", Resolved: "/mnt/vol1/x", Write: true,
+		},
+		Line: 3, File: "script.sh",
+	})
+	var old struct {
+		V      int    `json:"v"`
+		Event  string `json:"event"`
+		Action string `json:"action"`
+		Path   string `json:"path"`
+		Write  bool   `json:"write"`
+		Line   int    `json:"line"`
+		File   string `json:"file"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &old); err != nil {
+		t.Fatalf("a record carrying resolved did not decode: %v", err)
+	}
+	if old.V != Version {
+		t.Errorf("v = %d, want %d — an added field must not bump the version", old.V, Version)
+	}
+	if old.Event != "denied" || old.Action != "open" || old.Path != "/srv/data/x" ||
+		!old.Write || old.Line != 3 || old.File != "script.sh" {
+		t.Errorf("a consumer without the field read %+v, want every other field unchanged", old)
 	}
 }

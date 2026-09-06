@@ -314,7 +314,7 @@ func Semantics() interp.Semantics {
 	// measured, `.` reports 1 and the sourcing file runs the command after
 	// it — for an unset parameter under `set -u`, a readonly assignment, a
 	// division by zero and a bad substitution alike.
-	s.FatalErrorEndsTheSourcedFileOnly = interp.Yes
+	s.FatalErrorEndsBorrowedTextOnly = interp.Yes
 	// And `${x?word}` is one of those errors here rather than a request to
 	// stop: `.` reports 1 for it too and the sourcing file carries on, which
 	// is the half of this zsh answers the other way.

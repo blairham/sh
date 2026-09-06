@@ -7,10 +7,11 @@ package interp
 // are caught in different places.
 //
 // `exit 3` in a file the shell is reading ends the shell, wherever that file
-// came from. An *error* the shell reported ends only the file it happened in,
-// in some shells and at some boundaries — measured, a file read by `.` is such
-// a boundary in ksh93 and zsh and not in bash or dash, and a startup file is
-// one in every shell that reads a startup file at all.
+// came from. An *error* the shell reported ends only the text it happened in,
+// in some shells and at some boundaries — measured, a file read by `.` and an
+// `eval` argument are both such a boundary in ksh93 and zsh and neither is in
+// bash or dash, and a startup file is one in every shell that reads a startup
+// file at all.
 //
 // controlExit carries both, so a boundary that catches one and not the other
 // needs to know which it is holding. That is this file: one field beside

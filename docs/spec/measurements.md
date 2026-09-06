@@ -253,6 +253,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/a-subscript-flag-group-searches-both-ways` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: (i)be*: arithmetic syntax error in expression (error token is "be*")` *(status 1)* | **2>** `<shell>: line 1: (i)be*: arithmetic syntax error in expression (error token is "be*")` *(status 1)* | **2>** `<shell>: (i)be*: syntax error in expression (error token is "be*")` *(status 1)* | **2>** `<shell>: alpha: parameter not set` *(status 1)* | `[alpha][delta][2][4][6][0]` |
 | `array/a-subscript-flag-group-exact-matching` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: (r)be*: arithmetic syntax error in expression (error token is "be*")` *(status 1)* | **2>** `<shell>: line 1: (r)be*: arithmetic syntax error in expression (error token is "be*")` *(status 1)* | **2>** `<shell>: (r)be*: syntax error in expression (error token is "be*")` *(status 1)* | **2>** `<shell>: (r)be*: arithmetic syntax error` *(status 1)* | `[beta][][beta]` |
 | `array/a-subscript-flag-group-unknown-flag-is-arithmetic` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: (z)2: arithmetic syntax error in expression (error token is "2")` *(status 1)* | **2>** `<shell>: line 1: (z)2: arithmetic syntax error in expression (error token is "2")` *(status 1)* | **2>** `<shell>: (z)2: syntax error in expression (error token is "2")` *(status 1)* | **2>** `<shell>: (z)2: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `2'` *(status 1)* |
+| `array/a-subscript-flag-group-unreadable-ends-the-file` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 2: (z)2: arithmetic syntax error in expression (error token is "2")` *(status 1)* | **2>** `<shell>: line 2: (z)2: arithmetic syntax error in expression (error token is "2")` *(status 1)* | **2>** `<shell>: line 1: (z)2: syntax error in expression (error token is "2")` *(status 1)* | **2>** `<shell>: line 2: (z)2: arithmetic syntax error` *(status 1)* | **2>** `<shell>:2: bad math expression: operator expected at `2'` *(status 1)* |
+| `array/a-subscript-range-with-four-parts-ends-the-file` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[]NEXT-RAN` | `[]NEXT-RAN` | `[]NEXT-RAN` | `[]NEXT-RAN` | **2>** `<shell>:2: bad substitution` *(status 1)* |
 | `array/a-subscript-flag-group-operand-is-text-as-written` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: (r)be*: arithmetic syntax error in expression (error token is "be*")` *(status 1)* | **2>** `<shell>: line 1: (r)be*: arithmetic syntax error in expression (error token is "be*")` *(status 1)* | **2>** `<shell>: (r)be*: syntax error in expression (error token is "be*")` *(status 1)* | **2>** `<shell>: (r)be*: arithmetic syntax error` *(status 1)* | `[beta]["beta"]` |
 | `array/a-subscript-flag-group-that-selects-nothing` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ()2: arithmetic syntax error: operand expected (error token is ")2")` *(status 1)* | **2>** `<shell>: line 1: ()2: arithmetic syntax error: operand expected (error token is ")2")` *(status 1)* | **2>** `<shell>: ()2: syntax error: operand expected (error token is ")2")` *(status 1)* | **2>** `<shell>: ()2: arithmetic syntax error` *(status 1)* | `[beta][beta][]` |
 | `array/a-subscript-flag-group-counts-matches-and-moves-the-start` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: (rn:2:)*a: missing `)' (error token is ":2:)*a")` *(status 1)* | **2>** `<shell>: line 1: (rn:2:)*a: missing `)' (error token is ":2:)*a")` *(status 1)* | **2>** `<shell>: (rn:2:)*a: missing `)' (error token is ":2:)*a")` *(status 1)* | **2>** `<shell>: (rn:2:)*a: unbalanced parenthesis` *(status 1)* | `[beta][gamma][gamma][6]` |
@@ -701,6 +703,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/a-subscript-flag-group-unknown-flag-is-arithmetic` — the row that makes this an *additive* grammar flag rather than a semantics axis: a group the shell cannot read is no group at all, so the subscript stands as written and is read as arithmetic — and the shell that has the construct fails here exactly as the four without it do. There is no text the flag gives a second meaning to
   ```sh
   a=(alpha beta gamma); printf "[%s]" "${a[(z)2]}"; echo
+  ```
+- `array/a-subscript-flag-group-unreadable-ends-the-file` — a group the shell cannot read leaves arithmetic that will not parse, and that is fatal to the file in every shell that got as far as reading it: the marker on the next line runs nowhere, so being more permissive here would show up as an extra line rather than only as a missing diagnostic
+  ```sh
+  a=(alpha beta gamma)
+  printf "[%s]" "${a[(z)2]}"
+  echo NEXT-RAN
+  ```
+- `array/a-subscript-range-with-four-parts-ends-the-file` — the shell with array *slicing* is the one that refuses a subscript with more commas than a slice has parts, and refusing it costs the file; the shells that read the same text as arithmetic with comma operators take the last value, subscript with it, print nothing and carry on — so the row records a refusal and a silent success side by side
+  ```sh
+  a=(alpha beta gamma)
+  printf "[%s]" "${a[1,2,3,4]}"
+  echo NEXT-RAN
   ```
 - `array/a-subscript-flag-group-operand-is-text-as-written` — a subscript is not a quoting context: the first element's value is the six characters `"beta"`, and the quoted operand finds *it* rather than the four-character one — the quotes were matched, not removed. The unquoted half is on the same row because it is the same rule read the other way: nothing escaped the `*`, so it is a live pattern, which is why a substituted value's metacharacters are live here while the same shell's `${(@)a:#$g}` leaves them alone
   ```sh
@@ -7871,6 +7885,16 @@ grades it and nothing drift-checks it either, for the same reason.
 | `dot/arguments-diverge` | `got=OUTER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` |
 | `dot/missing-file-diverges` | **2>** `<shell>: 1: .: cannot open ./nonexistent-xyz.sh: No such file` *(status 2)* | `REACHED st=1` **2>** `<shell>: line 1: ./nonexistent-xyz.sh: No such file or directory` | **2>** `<shell>: line 1: ./nonexistent-xyz.sh: No such file or directory` *(status 1)* | `REACHED st=1` **2>** `<shell>: ./nonexistent-xyz.sh: No such file or directory` | **2>** `<shell>: .: ./nonexistent-xyz.sh: cannot open [No such file or directory]` *(status 1)* | `REACHED st=127` **2>** `<shell>:.:1: no such file or directory: ./nonexistent-xyz.sh` |
 | `dot/no-operand-diverges` | `REACHED st=0` | `REACHED st=2` **2>** `<shell>: line 1: .: filename argument required~.: usage: . [-p path] filename [arguments]` | **2>** `<shell>: line 1: .: filename argument required~.: usage: . [-p path] filename [arguments]` *(status 2)* | `REACHED st=2` **2>** `<shell>: line 0: .: filename argument required~.: usage: . filename [arguments]` | **2>** `Usage: . [ options ] name [arg ...]` *(status 2)* | `REACHED st=1` **2>** `<shell>:.:1: not enough arguments` |
+| `dot/fatal-error-ends-the-sourced-file-only` | `IN-BEFORE` **2>** `<shell>: 3: ./p.sh: NOPE: parameter not set` *(status 2)* | `IN-BEFORE` **2>** `./p.sh: line 3: NOPE: unbound variable` *(status 127)* | `IN-BEFORE` **2>** `./p.sh: line 3: NOPE: unbound variable` *(status 127)* | `IN-BEFORE` **2>** `./p.sh: line 3: NOPE: unbound variable` *(status 127)* | `IN-BEFORE~OUT-AFTER st=1` **2>** `<shell>: .: line 3: NOPE: parameter not set` | `IN-BEFORE~OUT-AFTER st=126` **2>** `./p.sh:3: NOPE: parameter not set` |
+| `dot/fatal-error-ends-one-file-not-the-stack` | `MID-BEFORE~IN-BEFORE` **2>** `<shell>: 3: ./p.sh: NOPE: parameter not set` *(status 2)* | `MID-BEFORE~IN-BEFORE` **2>** `./p.sh: line 3: NOPE: unbound variable` *(status 127)* | `MID-BEFORE~IN-BEFORE` **2>** `./p.sh: line 3: NOPE: unbound variable` *(status 127)* | `MID-BEFORE~IN-BEFORE` **2>** `./p.sh: line 3: NOPE: unbound variable` *(status 127)* | `MID-BEFORE~IN-BEFORE~MID-AFTER st=1~OUT-AFTER st=0` **2>** `<shell>: .[2]: .: line 3: NOPE: parameter not set` | `MID-BEFORE~IN-BEFORE~MID-AFTER st=126~OUT-AFTER st=0` **2>** `./p.sh:3: NOPE: parameter not set` |
+| `dot/fatal-error-in-a-function-is-not-at-a-boundary` | `F-BEFORE` **2>** `<shell>: 1: NOPE: parameter not set` *(status 2)* | `F-BEFORE` **2>** `./p.sh: line 1: NOPE: unbound variable` *(status 127)* | `F-BEFORE` **2>** `./p.sh: line 1: NOPE: unbound variable` *(status 127)* | `F-BEFORE` **2>** `./p.sh: line 1: NOPE: unbound variable` *(status 127)* | `F-BEFORE` **2>** `<shell>: NOPE: parameter not set` *(status 1)* | `F-BEFORE` **2>** `f: NOPE: parameter not set` *(status 1)* |
+| `dot/fatal-error-resumes-the-function-that-sourced` | `F-BEFORE~IN-BEFORE` **2>** `<shell>: 3: ./p.sh: NOPE: parameter not set` *(status 2)* | `F-BEFORE~IN-BEFORE` **2>** `./p.sh: line 3: NOPE: unbound variable` *(status 127)* | `F-BEFORE~IN-BEFORE` **2>** `./p.sh: line 3: NOPE: unbound variable` *(status 127)* | `F-BEFORE~IN-BEFORE` **2>** `./p.sh: line 3: NOPE: unbound variable` *(status 127)* | `F-BEFORE~IN-BEFORE~F-AFTER st=1~OUT-AFTER st=0` **2>** `<shell>: .: line 3: NOPE: parameter not set` | `F-BEFORE~IN-BEFORE~F-AFTER st=126~OUT-AFTER st=0` **2>** `./p.sh:3: NOPE: parameter not set` |
+| `dot/exit-in-a-sourced-file-is-never-caught` | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* |
+| `dot/error-operator-ends-the-shell-in-zsh` | `IN-BEFORE` **2>** `<shell>: 2: ./p.sh: NOPE: msg` *(status 2)* | `IN-BEFORE` **2>** `./p.sh: line 2: NOPE: msg` *(status 127)* | `IN-BEFORE` **2>** `./p.sh: line 2: NOPE: msg` *(status 127)* | `IN-BEFORE` **2>** `./p.sh: line 2: NOPE: msg` *(status 127)* | `IN-BEFORE~OUT-AFTER st=1` **2>** `<shell>: .: line 2: NOPE: msg` | `IN-BEFORE` **2>** `./p.sh:2: NOPE: msg` *(status 1)* |
+| `eval/fatal-error-ends-the-evaluated-text-only` | `IN-BEFORE` **2>** `<shell>: 3: eval: NOPE: parameter not set` *(status 2)* | `IN-BEFORE` **2>** `<shell>: line 3: NOPE: unbound variable` *(status 127)* | `IN-BEFORE` **2>** `<shell>: line 3: NOPE: unbound variable` *(status 127)* | `IN-BEFORE` **2>** `<shell>: line 5: NOPE: unbound variable` *(status 127)* | `IN-BEFORE~OUT-AFTER st=1` **2>** `<shell>: eval: line 3: NOPE: parameter not set` | `IN-BEFORE~OUT-AFTER st=1` **2>** `(eval):3: NOPE: parameter not set` |
+| `eval/exit-in-evaluated-text-is-never-caught` | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* | `IN-BEFORE` *(status 7)* |
+| `eval/an-abandoned-statement-does-not-end-the-text` | `IN-BEFORE` **2>** `<script>: 3: eval: rr: is read only` *(status 2)* | `IN-BEFORE~IN-AFTER~OUT-AFTER st=0` **2>** `<script>: line 3: rr: readonly variable` | `IN-BEFORE` **2>** `<script>: line 3: rr: readonly variable` *(status 1)* | `IN-BEFORE~IN-AFTER~OUT-AFTER st=0` **2>** `<script>: line 6: rr: readonly variable` | `IN-BEFORE~OUT-AFTER st=1` **2>** `<script>[1]: eval: line 3: rr: is read only` | `IN-BEFORE~OUT-AFTER st=1` **2>** `(eval):3: read-only variable: rr` |
+| `dot/readonly-refusal-ends-the-sourced-file-only` | `IN-BEFORE` **2>** `<script>: 3: ./p.sh: rr: is read only` *(status 2)* | `IN-BEFORE~IN-AFTER~OUT-AFTER st=0` **2>** `./p.sh: line 3: rr: readonly variable` | `IN-BEFORE` **2>** `./p.sh: line 3: rr: readonly variable` *(status 1)* | `IN-BEFORE~IN-AFTER~OUT-AFTER st=0` **2>** `./p.sh: line 3: rr: readonly variable` | `IN-BEFORE~OUT-AFTER st=1` **2>** `<script>[1]: .: line 3: rr: is read only` | `IN-BEFORE~OUT-AFTER st=126` **2>** `./p.sh:3: read-only variable: rr` |
 | `dot/cwd-fallback-is-bash-only` | **2>** `<shell>: 1: .: fb.sh: not found` *(status 2)* | `cwd-hit~st=0` | **2>** `<shell>: line 1: .: fb.sh: file not found` *(status 1)* | `cwd-hit~st=0` | **2>** `<shell>: .: fb.sh: cannot open [No such file or directory]` *(status 1)* | `st=127` **2>** `<shell>:.:1: no such file or directory: fb.sh` |
 | `exec/replaces-the-shell` | `replaced` | `replaced` | `replaced` | `replaced` | `replaced` | `replaced` |
 | `exec/no-args-clears-the-status` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
@@ -7949,6 +7973,54 @@ grades it and nothing drift-checks it either, for the same reason.
 - `dot/no-operand-diverges` — four answers to one degenerate input: dash calls it success and does nothing, bash reports 2 and survives, ksh93 reports 2 and exits, zsh reports 1 and survives
   ```sh
   . ; echo REACHED st=$?
+  ```
+- `dot/fatal-error-ends-the-sourced-file-only` — the whole axis on one row: all six stop at the failing line inside the file, and only ksh93 and zsh come back — reporting 1 and 126 — where dash and the three bashes end the shell and never reach the `echo` on the same line as the `.`
+  ```sh
+  printf 'echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n' > p.sh; . ./p.sh; echo "OUT-AFTER st=$?"
+  ```
+- `dot/fatal-error-ends-one-file-not-the-stack` — the file given up is the innermost one and not every file above it: the middle file runs the line after its own `.` in the two shells that catch anything, which is what makes this one boundary rather than an unwind that stops at the outermost
+  ```sh
+  printf 'echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n' > p.sh; printf 'echo MID-BEFORE\n. ./p.sh\necho "MID-AFTER st=$?"\n' > m.sh; . ./m.sh; echo "OUT-AFTER st=$?"
+  ```
+- `dot/fatal-error-in-a-function-is-not-at-a-boundary` — the boundary is the `.` that is *running* and not the file the text was read from: a function defined in a sourced file and called afterwards ends the shell in all six, ksh93 and zsh included, so nothing about where a function came from survives the call
+  ```sh
+  printf 'f() { echo F-BEFORE; set -u; echo X${NOPE}; echo F-AFTER; }\n' > p.sh; . ./p.sh; f; echo "OUT-AFTER st=$?"
+  ```
+- `dot/fatal-error-resumes-the-function-that-sourced` — the other side of the same rule: a `.` inside a function *is* the boundary, so the two shells that catch resume the function body at the command after it rather than unwinding the call
+  ```sh
+  printf 'echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n' > p.sh; f() { echo F-BEFORE; . ./p.sh; echo "F-AFTER st=$?"; }; f; echo "OUT-AFTER st=$?"
+  ```
+- `dot/exit-in-a-sourced-file-is-never-caught` — unanimous, and it is what the row above is *not*: a request to stop ends the shell from inside a sourced file in every member of the panel, so an implementation that caught controlExit at the `.` without asking which kind it was holding would break this
+  ```sh
+  printf 'echo IN-BEFORE\nexit 7\necho IN-AFTER\n' > p.sh; . ./p.sh; echo NOT-REACHED
+  ```
+- `dot/error-operator-ends-the-shell-in-zsh` — `${x?word}` parts company with the unset-parameter row two above it in exactly one shell: ksh93 catches it like any other error and reports 1, and zsh ends the shell — which is what its own manual says the operator does, and is why the two are separate axes rather than one
+  ```sh
+  printf 'echo IN-BEFORE\necho X${NOPE?msg}\necho IN-AFTER\n' > p.sh; . ./p.sh; echo "OUT-AFTER st=$?"
+  ```
+- `eval/fatal-error-ends-the-evaluated-text-only` — `eval` is the same boundary as `.` and splits the same way — the four that end the shell for a sourced file end it here too, and ksh93 and zsh come back — but the status is *not* the same: zsh reports 1 for text it evaluated where it reports 126 for a file it sourced, which is why the number is a second field
+  ```sh
+  eval 'echo IN-BEFORE
+  set -u
+  echo X${NOPE}
+  echo IN-AFTER'; echo "OUT-AFTER st=$?"
+  ```
+- `eval/exit-in-evaluated-text-is-never-caught` — unanimous, and the guard on the row above: a request to stop is not an error, so the boundary that catches one must not catch the other
+  ```sh
+  eval 'echo IN-BEFORE
+  exit 7
+  echo IN-AFTER'; echo NOT-REACHED
+  ```
+- `eval/an-abandoned-statement-does-not-end-the-text` — a statement a shell *gives up* rather than dies over is given up as far as the end of its line and no further, evaluated text included: bash reports the refusal and runs the `echo` on the next line of the same eval, where a boundary that mistook the give-up for a fatal error would lose the rest of the text
+  ```sh
+  eval 'echo IN-BEFORE
+  readonly rr=1
+  rr=2
+  echo IN-AFTER'; echo "OUT-AFTER st=$?"
+  ```
+- `dot/readonly-refusal-ends-the-sourced-file-only` — one snippet, two rules. Where a readonly reassignment is *fatal* it ends only the sourced file — ksh93 1, zsh 126 — which is the reach being a fact about any error a shell calls fatal rather than about expansion. Where it is not fatal, bash gives up the statement and its line and runs the `echo` after it, inside the file, which is the give-up costing a line rather than the text it is in
+  ```sh
+  printf 'echo IN-BEFORE\nreadonly rr=1\nrr=2\necho IN-AFTER\n' > p.sh; . ./p.sh; echo "OUT-AFTER st=$?"
   ```
 - `dot/cwd-fallback-is-bash-only` — only bash looks in the current directory once PATH has missed; the other three call it not found, so a script relying on it is bash-only
   ```sh

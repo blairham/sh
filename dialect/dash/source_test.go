@@ -484,3 +484,24 @@ func TestPrintfBStopIsPadded(t *testing.T) {
 		}
 	}
 }
+
+// TestAnErrorInASourcedFileEndsTheShellHere: the standard's answer, and the
+// one this shell keeps. An expansion error ends a non-interactive shell and a
+// special builtin's failure is fatal — `.` is one — so nothing is caught at
+// the boundary ksh93 and zsh catch at, and the status is this shell's own 2.
+func TestAnErrorInASourcedFileEndsTheShellHere(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p.sh"),
+		[]byte("echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runDash(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n")
+	const want = "IN-BEFORE\n" +
+		"dash: 3: NOPE: parameter not set\n"
+	if out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+	if st != 2 {
+		t.Errorf("status = %d, want 2", st)
+	}
+}

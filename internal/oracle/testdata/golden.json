@@ -5922,6 +5922,50 @@
         "TimedOut": false
       }
     },
+    "array/a-subscript-flag-group-unreadable-ends-the-file": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: (z)2: arithmetic syntax error in expression (error token is \"2\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: (z)2: arithmetic syntax error in expression (error token is \"2\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: (z)2: syntax error in expression (error token is \"2\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 2: (z)2: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:2: bad math expression: operator expected at `2'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/a-subscript-holding-a-command-substitution": {
       "bash": {
         "Stdout": "[x][Q]",
@@ -6446,6 +6490,50 @@
         "Stdout": "n=5 all=[x    y]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/a-subscript-range-with-four-parts-ends-the-file": {
+      "bash": {
+        "Stdout": "[]NEXT-RAN",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[]NEXT-RAN",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[]NEXT-RAN",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[]NEXT-RAN",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:2: bad substitution",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -25591,6 +25679,270 @@
         "TimedOut": false
       }
     },
+    "dot/error-operator-ends-the-shell-in-zsh": {
+      "bash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "./p.sh: line 2: NOPE: msg",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "./p.sh: line 2: NOPE: msg",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "./p.sh: line 2: NOPE: msg",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "\u003cshell\u003e: 2: ./p.sh: NOPE: msg",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "IN-BEFORE~OUT-AFTER st=1",
+        "Stderr": "\u003cshell\u003e: .: line 2: NOPE: msg",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "./p.sh:2: NOPE: msg",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dot/exit-in-a-sourced-file-is-never-caught": {
+      "bash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dot/fatal-error-ends-one-file-not-the-stack": {
+      "bash": {
+        "Stdout": "MID-BEFORE~IN-BEFORE",
+        "Stderr": "./p.sh: line 3: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "MID-BEFORE~IN-BEFORE",
+        "Stderr": "./p.sh: line 3: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "MID-BEFORE~IN-BEFORE",
+        "Stderr": "./p.sh: line 3: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "MID-BEFORE~IN-BEFORE",
+        "Stderr": "\u003cshell\u003e: 3: ./p.sh: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "MID-BEFORE~IN-BEFORE~MID-AFTER st=1~OUT-AFTER st=0",
+        "Stderr": "\u003cshell\u003e: .[2]: .: line 3: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "MID-BEFORE~IN-BEFORE~MID-AFTER st=126~OUT-AFTER st=0",
+        "Stderr": "./p.sh:3: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dot/fatal-error-ends-the-sourced-file-only": {
+      "bash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "./p.sh: line 3: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "./p.sh: line 3: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "./p.sh: line 3: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "\u003cshell\u003e: 3: ./p.sh: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "IN-BEFORE~OUT-AFTER st=1",
+        "Stderr": "\u003cshell\u003e: .: line 3: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "IN-BEFORE~OUT-AFTER st=126",
+        "Stderr": "./p.sh:3: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dot/fatal-error-in-a-function-is-not-at-a-boundary": {
+      "bash": {
+        "Stdout": "F-BEFORE",
+        "Stderr": "./p.sh: line 1: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "F-BEFORE",
+        "Stderr": "./p.sh: line 1: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "F-BEFORE",
+        "Stderr": "./p.sh: line 1: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "F-BEFORE",
+        "Stderr": "\u003cshell\u003e: 1: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "F-BEFORE",
+        "Stderr": "\u003cshell\u003e: NOPE: parameter not set",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "F-BEFORE",
+        "Stderr": "f: NOPE: parameter not set",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dot/fatal-error-resumes-the-function-that-sourced": {
+      "bash": {
+        "Stdout": "F-BEFORE~IN-BEFORE",
+        "Stderr": "./p.sh: line 3: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "F-BEFORE~IN-BEFORE",
+        "Stderr": "./p.sh: line 3: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "F-BEFORE~IN-BEFORE",
+        "Stderr": "./p.sh: line 3: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "F-BEFORE~IN-BEFORE",
+        "Stderr": "\u003cshell\u003e: 3: ./p.sh: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "F-BEFORE~IN-BEFORE~F-AFTER st=1~OUT-AFTER st=0",
+        "Stderr": "\u003cshell\u003e: .: line 3: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "F-BEFORE~IN-BEFORE~F-AFTER st=126~OUT-AFTER st=0",
+        "Stderr": "./p.sh:3: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "dot/missing-file-diverges": {
       "bash": {
         "Stdout": "REACHED st=1",
@@ -25674,6 +26026,50 @@
       "zsh": {
         "Stdout": "REACHED st=1",
         "Stderr": "\u003cshell\u003e:.:1: not enough arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dot/readonly-refusal-ends-the-sourced-file-only": {
+      "bash": {
+        "Stdout": "IN-BEFORE~IN-AFTER~OUT-AFTER st=0",
+        "Stderr": "./p.sh: line 3: rr: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "./p.sh: line 3: rr: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "IN-BEFORE~IN-AFTER~OUT-AFTER st=0",
+        "Stderr": "./p.sh: line 3: rr: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "\u003cscript\u003e: 3: ./p.sh: rr: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "IN-BEFORE~OUT-AFTER st=1",
+        "Stderr": "\u003cscript\u003e[1]: .: line 3: rr: is read only",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "IN-BEFORE~OUT-AFTER st=126",
+        "Stderr": "./p.sh:3: read-only variable: rr",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -27747,6 +28143,94 @@
         "TimedOut": false
       }
     },
+    "eval/an-abandoned-statement-does-not-end-the-text": {
+      "bash": {
+        "Stdout": "IN-BEFORE~IN-AFTER~OUT-AFTER st=0",
+        "Stderr": "\u003cscript\u003e: line 3: rr: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "\u003cscript\u003e: line 3: rr: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "IN-BEFORE~IN-AFTER~OUT-AFTER st=0",
+        "Stderr": "\u003cscript\u003e: line 6: rr: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "\u003cscript\u003e: 3: eval: rr: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "IN-BEFORE~OUT-AFTER st=1",
+        "Stderr": "\u003cscript\u003e[1]: eval: line 3: rr: is read only",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "IN-BEFORE~OUT-AFTER st=1",
+        "Stderr": "(eval):3: read-only variable: rr",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "eval/exit-in-evaluated-text-is-never-caught": {
+      "bash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "eval/expands-twice": {
       "bash": {
         "Stdout": "hi",
@@ -27786,6 +28270,50 @@
       "zsh": {
         "Stdout": "hi",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "eval/fatal-error-ends-the-evaluated-text-only": {
+      "bash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "\u003cshell\u003e: line 3: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "\u003cshell\u003e: line 3: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "\u003cshell\u003e: line 5: NOPE: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "\u003cshell\u003e: 3: eval: NOPE: parameter not set",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "IN-BEFORE~OUT-AFTER st=1",
+        "Stderr": "\u003cshell\u003e: eval: line 3: NOPE: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "IN-BEFORE~OUT-AFTER st=1",
+        "Stderr": "(eval):3: NOPE: parameter not set",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

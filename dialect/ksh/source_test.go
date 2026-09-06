@@ -63,6 +63,16 @@ func TestTheTwoHalvesOfTheFatalRuleDisagree(t *testing.T) {
 	if got := s.DotMissingFileFatal; got != interp.Yes {
 		t.Errorf("DotMissingFileFatal = %v, want Yes", got)
 	}
+	// And a third reading of the same POSIX sentence: a file `.` could not
+	// open ends the script, while an error *inside* one it did open ends only
+	// that file — including `${x?word}`, which zsh alone reads as a request
+	// to stop.
+	if got := s.FatalErrorEndsBorrowedTextOnly; got != interp.Yes {
+		t.Errorf("FatalErrorEndsBorrowedTextOnly = %v, want Yes", got)
+	}
+	if got := s.ParamErrorIsAnExitRequest; got != interp.No {
+		t.Errorf("ParamErrorIsAnExitRequest = %v, want No", got)
+	}
 
 	dir := t.TempDir()
 	// `$?` is read immediately, because the trailing echo succeeds and would
@@ -494,5 +504,69 @@ func TestPrintfBStopIsNotPadded(t *testing.T) {
 		if out, st := runKsh(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
 			t.Errorf("%s: said %q status %d, want %q and 0", tc.src, out, st, tc.want)
 		}
+	}
+}
+
+// The file the abandonment tests source: it fails on line 3 and would print on
+// line 4, so a run that reaches IN-AFTER never gave the file up.
+const abandonFile = "echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n"
+
+// TestAnErrorInASourcedFileEndsThatFileAlone, measured against ksh93u+: the
+// sourced file stops at the failure, `.` reports 1 — not the 3 a syntax error
+// in a sourced file carries — and the sourcing file runs the command after it,
+// on the same line.
+func TestAnErrorInASourcedFileEndsThatFileAlone(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p.sh"), []byte(abandonFile), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runKsh(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n")
+	const want = "IN-BEFORE\n" +
+		"ksh: line 3: NOPE: parameter not set\n" +
+		"OUT-AFTER st=1\n"
+	if out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want 0: nothing asked the shell to stop", st)
+	}
+}
+
+// TestTheErrorOperatorIsAnOrdinaryErrorHere is where this shell parts company
+// with zsh: `${x?word}` is caught at the `.` like any other error and reports
+// the same 1, where zsh reads the operator as a request to stop and ends. The
+// two answers are why it is a second axis rather than a shade of the first.
+func TestTheErrorOperatorIsAnOrdinaryErrorHere(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p.sh"),
+		[]byte("echo IN-BEFORE\necho X${NOPE?msg}\necho IN-AFTER\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runKsh(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n")
+	const want = "IN-BEFORE\n" +
+		"ksh: line 2: NOPE: msg\n" +
+		"OUT-AFTER st=1\n"
+	if out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want 0", st)
+	}
+}
+
+// TestExitInASourcedFileStillEndsTheShell: the catch must not reach a request
+// to stop, which is unanimous in the panel.
+func TestExitInASourcedFileStillEndsTheShell(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p.sh"),
+		[]byte("echo IN-BEFORE\nexit 7\necho IN-AFTER\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runKsh(t, dir, ". ./p.sh\necho NOT-REACHED\n")
+	if out != "IN-BEFORE\n" {
+		t.Errorf("output = %q, want the shell to stop at the exit", out)
+	}
+	if st != 7 {
+		t.Errorf("status = %d, want 7", st)
 	}
 }

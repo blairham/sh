@@ -55,6 +55,15 @@ type sourced struct {
 	// 126 where its own syntax-error status is 1.
 	syntaxStatus int
 
+	// fatalStatus is what the builtin reports when the text was given up
+	// over an *error* — see Semantics.FatalErrorEndsBorrowedTextOnly. Passed
+	// rather than read from the dialect because the two callers disagree
+	// again, the same way they do about a parse failure: measured, a file
+	// `.` gave up over an error reports 126 in zsh where the same failure
+	// inside `eval` reports 1, and ksh93 says 1 for both. Zero means the
+	// status the error itself carried.
+	fatalStatus int
+
 	// catchReturn stops at `return` instead of letting it unwind the function
 	// around it.
 	//
@@ -138,13 +147,28 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		defer func() { r.sourceDepth-- }()
 	}
 	r.status = 0
+	// Borrowed text is a *file* of statements as far as giving one up goes,
+	// which is what abandoned records: measured, `readonly r=1` and then
+	// `r=2` inside `eval` or inside a sourced file reports, gives up that
+	// statement and its line, and runs the line after it — in bash 5.3 and
+	// bash 3.2 alike. Without this the give-up cost the whole borrowed text,
+	// which is the same error as the one this file is named for, one level
+	// down. The rule is RunPart's, and it is spelled the same way there.
+	abandoned := 0
 	for _, st := range f.Stmts {
+		if abandoned != 0 && r.lineOf(st.Pos()) == abandoned {
+			continue
+		}
 		if err := r.stmt(ctx, st); err != nil {
 			// A Builtin returns a status and not an error, so there is nowhere
 			// for this to go but a diagnostic — the same place runTrapBody
 			// puts it, and for the same reason.
 			r.diagf("%s: %v\n", s.label, err)
 			return 2
+		}
+		if r.ctl == controlAbandon {
+			r.ctl, abandoned = controlNone, r.abandonLine
+			continue
 		}
 		if r.ctl != controlNone {
 			break
@@ -153,7 +177,42 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	if s.catchReturn && r.ctl == controlReturn {
 		r.ctl = controlNone
 	}
+	// An error the text gave up over, caught here in the dialects that make
+	// borrowed text the boundary: the caller then carries on at the command
+	// after the builtin, and this is what the builtin reports.
+	if st, ok := r.caughtBorrowedError(s); ok {
+		return st
+	}
 	return r.status
+}
+
+// caughtBorrowedError catches an error the text just run gave up over,
+// reporting the status the builtin should carry.
+//
+// Nothing is caught unless the dialect says the borrowed text is the
+// boundary, and a request to stop is never caught — `exit 7` inside `eval` or
+// inside a sourced file exits 7 in every shell in the panel, and so does
+// errexit firing there.
+func (r *Runner) caughtBorrowedError(s sourced) (int, bool) {
+	if !r.pendingFileError() {
+		return 0, false
+	}
+	if !r.ask(r.sem().FatalErrorEndsBorrowedTextOnly,
+		"an error inside text a special builtin is running ending that text rather than the shell") {
+		return 0, false
+	}
+	if r.abandon == abandonParamError &&
+		r.ask(r.sem().ParamErrorIsAnExitRequest, "`${x?word}` ending the shell rather than the text it is in") {
+		// The one operand a dialect calls a request to stop rather than an
+		// error, so the catch above does not apply to it.
+		return 0, false
+	}
+	status := r.status
+	r.takeFileError()
+	if s.fatalStatus != 0 {
+		status = s.fatalStatus
+	}
+	return status, true
 }
 
 // parseMessage strips the parser's own "line:col: " prefix.
@@ -295,19 +354,9 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	st := r.runSourced(ctx, string(b), sourced{
 		label:        display,
 		syntaxStatus: r.diag().sourcedSyntaxStatus(),
+		fatalStatus:  r.diag().SourcedFatalStatus,
 		catchReturn:  true,
 	})
-	// An error the file gave up over, caught here in the dialects that make
-	// the file the boundary — the sourcing file then carries on at the
-	// command after the `.`, and this reports what the error cost. Before
-	// the RETURN trap, because a file given up over an error has still
-	// finished, and a controlExit still unwinding would keep the action from
-	// running at all.
-	if st, ok := r.caughtSourcedError(); ok {
-		r.status = st
-		r.runReturnTrap(ctx, sourcedFrame)
-		return r.status
-	}
 	// The RETURN trap fires as a sourced file finishes — wherever the trap
 	// was set, which is the half of the rule functions do not share. The
 	// action sees the file's status, and an `exit` of its own wins.
@@ -428,32 +477,4 @@ func (r *Runner) atDir(path string) string {
 func (r *Runner) readableFile(path string) bool {
 	st, err := r.stat(path)
 	return err == nil && !st.IsDir()
-}
-
-// caughtSourcedError catches an error the file `.` just read gave up over,
-// reporting the status the builtin should carry.
-//
-// Nothing is caught unless the dialect says the sourced file is the boundary,
-// and a request to stop is never caught — `exit 7` in a sourced file exits 7
-// in every shell in the panel, and so does errexit firing there.
-func (r *Runner) caughtSourcedError() (int, bool) {
-	if !r.pendingFileError() {
-		return 0, false
-	}
-	if !r.ask(r.sem().FatalErrorEndsTheSourcedFileOnly,
-		"an error inside a file `.` read ending that file rather than the shell") {
-		return 0, false
-	}
-	if r.abandon == abandonParamError &&
-		r.ask(r.sem().ParamErrorIsAnExitRequest, "`${x?word}` ending the shell rather than the file it is in") {
-		// The one operand a dialect calls a request to stop rather than an
-		// error, so the catch above does not apply to it.
-		return 0, false
-	}
-	status := r.status
-	r.takeFileError()
-	if n := r.diag().SourcedFatalStatus; n != 0 {
-		status = n
-	}
-	return status, true
 }

@@ -97,7 +97,12 @@ type Diagnostics struct {
 
 	// SourcedFatalStatus is what `.` reports when the file it read was given
 	// up because of an error, in a dialect that catches one there at all —
-	// see Semantics.FatalErrorEndsTheSourcedFileOnly.
+	// see Semantics.FatalErrorEndsBorrowedTextOnly.
+	//
+	// `.` and not `eval`, which is the same split SourcedSyntaxErrorStatus
+	// has and measured the same way: an error caught at an `eval` reports 1
+	// in both catching shells, where the same failure caught at a `.` reports
+	// 126 in zsh.
 	//
 	// Its own field because neither of the two shells that catch reports the
 	// status the error itself carried, and they do not agree with each

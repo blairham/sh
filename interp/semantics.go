@@ -2021,9 +2021,10 @@ type Semantics struct {
 	// Diagnostics.
 	BuiltinSyntaxErrorFatal Answer
 
-	// FatalErrorEndsTheSourcedFileOnly makes an error that would end a script
-	// end only the file `.` read it from, handing the builtin a status and
-	// letting the file that sourced it carry on.
+	// FatalErrorEndsBorrowedTextOnly makes an error that would end a script
+	// end only the text a special builtin is running — a file `.` read, or
+	// `eval`'s argument — handing the builtin a status and letting the script
+	// around it carry on.
 	//
 	// Measured with an error every shell in the panel words identically, so
 	// that the row is about the abandonment and not about the operator — a
@@ -2056,14 +2057,19 @@ type Semantics struct {
 	//	resumes after it.
 	//
 	//	`exit`, and errexit firing, are not errors and are never caught —
-	//	unanimous. That is what separates this from the neighbouring rule
+	//	unanimous. That is what separates this from the neighboring rule
 	//	that `exit` in a startup file ends the shell and the files after it
 	//	are not read.
 	//
-	// The status the builtin reports is Diagnostics.SourcedFatalStatus,
-	// because the two shells that catch disagree about it and neither number
-	// is the status the error itself carried.
-	FatalErrorEndsTheSourcedFileOnly Answer
+	// One axis covers `eval` and `.` because the answers are the same for
+	// both in every shell measured — the same four fatal, the same two
+	// catching, the same `exit` uncaught — which is the arrangement
+	// BuiltinSyntaxErrorFatal already has for the same pair. The *status* is
+	// not the same for both, and that is Diagnostics.SourcedFatalStatus,
+	// which the file route passes and `eval` does not: measured, an error
+	// caught at an `eval` reports 1 in ksh93 and in zsh, where the same
+	// failure caught at a `.` reports 1 in ksh93 and 126 in zsh.
+	FatalErrorEndsBorrowedTextOnly Answer
 
 	// ParamErrorIsAnExitRequest makes `${x?word}` and `${x:?word}` a request
 	// to stop rather than an error, so no boundary catches it.
@@ -3631,7 +3637,7 @@ func PosixSemantics() Semantics {
 		// `.` is one. So the standard's answer is that nothing is caught at
 		// a `.`, and dash, the panel member that targets this text,
 		// complies. ksh93 and zsh are the departure.
-		FatalErrorEndsTheSourcedFileOnly: No,
+		FatalErrorEndsBorrowedTextOnly: No,
 		// XCU's `${parameter?word}` says the shell writes the word and
 		// *exits*, in those words, so the standard reads the operator as a
 		// request to stop rather than as one more error. Nothing in the

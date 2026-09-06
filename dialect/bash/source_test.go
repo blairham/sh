@@ -647,3 +647,28 @@ func TestReadInitialValueIsTakenAndIgnored(t *testing.T) {
 		}
 	}
 }
+
+// Both spellings of the escape character are ESC here, which is this shell
+// alone in the panel: ksh93 has only `\E` and zsh only `\e` (#908).
+func TestEchoTakesBothSpellingsOfTheEscapeCharacter(t *testing.T) {
+	out, st := runBash(t, t.TempDir(), "echo -e 'a\\eZ:a\\EZ'\n")
+	if out != "a\x1bZ:a\x1bZ\n" || st != 0 {
+		t.Errorf("said % x status %d, want both letters as ESC", out, st)
+	}
+}
+
+// What a `\c` leaves of a `%b` still goes through the conversion's field
+// here, which is five of the six — ksh93 alone writes it as it stands (#910).
+func TestPrintfBStopIsPadded(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf '[%5b]' 'a\cb'`, "[    a"},
+		{`printf '[%-5b]' 'a\cb'`, "[a    "},
+		{`printf '[%.1b]' 'ab\cc'`, "[a"},
+		{`printf '[%5b]' 'ab'`, "[   ab]"},
+	} {
+		if out, st := runBash(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
+			t.Errorf("%s: said %q status %d, want %q and 0", tc.src, out, st, tc.want)
+		}
+	}
+}

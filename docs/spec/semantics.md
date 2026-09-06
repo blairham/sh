@@ -480,6 +480,81 @@ bash 5.3 still ignores the signal and zsh dies by it. Not modeled — POSIX
 says `trap -` restores the disposition the shell *inherited*, which makes
 both defensible, and nothing in the corpus asks yet.
 
+## A subshell that kills the shell, and where the process went
+
+    (kill -TERM $$; echo inner); echo outer
+
+    bash 5.3  → inner, killed by SIGTERM     dash   → inner, killed by SIGTERM
+    bash 3.2  → inner, killed by SIGTERM     ksh93  → nothing, killed by SIGTERM
+    bash as sh → inner, killed by SIGTERM    zsh    → inner, killed by SIGTERM
+
+`Semantics.SubshellRunsOnAfterSignalingTheShell` — bash yes · dash yes ·
+ksh93 no · zsh yes, preset yes.
+
+**The shell ends either way, and that half is unanimous.** All six are
+killed by the signal and `outer` prints in none of them. What splits is
+the one echo between the `kill` and the end of the subshell.
+
+**It is not a race.** The same answer on twenty-five runs of each with the
+machine under load, and a `sleep 0.3` between the kill and the echo does
+not change it either — nor does a second echo: `(kill -TERM $$; echo one;
+echo two)` prints both in the five and neither in ksh93.
+
+### The reason is the opposite of the obvious one
+
+The obvious reading is that ksh93 forks a real subshell, so `$$` names
+the parent and the whole process goes. Measured, that is backwards.
+
+Start a child inside the subshell and read its parent process id — with a
+command after the subshell, so no shell can exec its last command in
+place:
+
+    echo "shell=$$"; ( /bin/sh -c 'echo "in=$PPID"'; : ); echo tail
+
+    bash 5.3   in ≠ shell     dash   in ≠ shell
+    bash 3.2   in ≠ shell     ksh93  in = shell
+    bash as sh in ≠ shell     zsh    in ≠ shell
+
+**bash, dash and zsh give the subshell a process of its own. ksh93 does
+not.** So the five that keep going are the five that forked: the signal
+was aimed at the parent, the child never received it, and it finished its
+body while the parent died. ksh93 runs the subshell in the shell's own
+process, so `kill -TERM $$` is a self-signal landing on the very process
+that was about to run `echo inner`.
+
+`$$` itself is not the difference. It is the parent's pid inside a
+subshell in all six — `echo "$$"; (echo "$$")` prints the same number
+twice everywhere — which is what POSIX requires and what makes `$$`
+usable as a lock name.
+
+### Only a subshell
+
+The same signal at the top level, in a brace group, in a function body and
+in a `while` body stops all six at once and prints nothing. A command
+substitution is silent everywhere too, for its own reason: what the child
+wrote went into the assignment rather than to the output. So there is no
+question to ask anywhere but `( )`, and the axis is about being a separate
+*process* rather than about being a separate scope.
+
+### Why it is an axis here rather than a consequence
+
+Nothing in this implementation forks for a subshell — `docs/spec/core.md`
+and AGENTS.md both say so — which is structurally ksh93's arrangement. So
+the majority answer is not something the architecture hands us; it is a
+choice to behave like the shells that fork, and the minority answer is a
+choice to behave like the one that does not. That is exactly what a
+semantics field is for.
+
+The preset says yes: POSIX has `( )` execute "in a subshell environment"
+and describes that environment as a copy, which is the forking reading,
+and it is five of the six.
+
+Read with `ask` rather than read plainly, unlike the startup axes: this is
+reached while the script is running, and only by a `kill` at the shell's
+own pid from inside a subshell, so an unanswered preset refuses there and
+nowhere else.
+
+
 ## The other fatal signal, which is fatal without being a death
 
     kill -HUP $$; echo after
@@ -1218,10 +1293,11 @@ The rest of the table splits, and each split falls in a different place:
   `PrintfBEscEscape` and `PrintfBCapitalEscEscape`. The two shells that
   split them split them in **opposite** directions: ksh93 has `\E` and not
   `\e`, zsh has `\e` and not `\E`. bash has both, dash neither. A single
-  answer for both letters is wrong for half the panel, which is why the
-  existing `EchoExpandsEscEscape` — one axis for both — cannot be reused
-  here. (It is also wrong for those two shells at `echo`'s own site; see
-  the follow-up noted below.)
+  answer for both letters is wrong for half the panel, which is why one
+  `Echo…` axis could not be reused for the pair. `echo`'s own site has the
+  same asymmetry and was split the same way in #908 — the four dialects
+  give the same pair of answers at both sites, and the two sites are still
+  asked separately.
 - **`\x`.** `PrintfBHexEscape`, the section above.
 - **`\c` asks nothing.** All six end the output there, where the same two
   characters in a *format* are literal in bash and dash, control-X in ksh93
@@ -1247,19 +1323,31 @@ written in bash 3.2, dash and ksh93; `printf 'a\u0041Z'` moves ksh93 into
 the first group. Nothing here decodes them at either site, which is a gap
 the change for #798 left exactly where it found it.
 
-One more divergence is measured and not modeled, in the corner where the
-stop meets a field width. Five of the six pad and truncate the text a `\c`
-cut short exactly as they would any other — `printf '[%5b]' 'a\cb'` is
-`[    a` — and ksh93 alone writes the partial text as it stands, `[a`, and
-ignores a precision there too. With nothing stopping it ksh93 pads and
-truncates like the rest, so this is a property of the stop and not of the
-conversion. The five-shell answer is what is implemented.
+One more divergence lives in the corner where the stop meets a conversion's
+field, and it is `PrintfBStopIsPadded`. Five of the six put the text a `\c`
+cut short through the field exactly as they would any other; ksh93 alone
+writes it as it stands:
 
-`echo`'s own `\e`/`\E` split is the same asymmetry the `%b` site has, and
-`EchoExpandsEscEscape` is one axis for both letters, so half of it is
-wrong: `echo -e 'a\EZ'` is `61 1b 5a` in ksh93 and `61 5c 45 5a` in zsh,
-where `echo -e 'a\eZ'` is the other way round. Both are follow-ups rather
-than part of #798.
+    printf '[%5b]'   'a\cb'    five  [    a      ksh93  [a
+    printf '[%-5b]'  'a\cb'    five  [a          ksh93  [a
+    printf '[%.1b]'  'ab\cc'   five  [a          ksh93  [ab
+    printf '[%5.1b]' 'ab\cc'   five  [    a      ksh93  [ab
+
+It is a property of the **stop** and not of the conversion: with nothing
+stopping it ksh93 pads and truncates like the rest — `printf '[%5b]' 'ab'`
+is `[   ab` in all six, and `printf '[%.1b]' 'abc'` is `[a` — which is the
+control row `printf/a-b-escape-a-field-with-nothing-stopping-it` exists to
+hold. Without it the axis reads as "ksh93 has no field for `%b`", which is
+not what it does.
+
+Asked only where a `\c` actually stopped a `%b` *and* the field would change
+the text, so `printf '%b' 'a\cb'` and `printf '[%1b]' 'a\cb'` need no
+dialect.
+
+`echo`'s own `\e`/`\E` split is the same asymmetry the `%b` site has —
+`echo -e 'a\EZ'` is `61 1b 5a` in ksh93 and `61 5c 45 5a` in zsh, where
+`echo -e 'a\eZ'` is the other way round — and it was one axis for both
+letters until #908 split it. See `EchoExpandsCapitalEscEscape`.
 
 ### A format is a byte string, in every direction
 
@@ -2398,14 +2486,26 @@ the canonical names, and each compat spelling was identified by flipping it
 alone and reading which canonical entry moved with it.
 
 **Recognizing, recording and implementing are three claims, and only the
-first is unanimous across the table.** Every name is one of four kinds:
+first is unanimous across the table.** Every name is one of five kinds:
 
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 11 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e` |
 | axis- or matcher-backed | 6 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`) |
 | fixed | 18 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted |
-| **recorded** | 150 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| store-backed, read by the front end | 1 | `histignorespace`: kept where a recorded name is kept, and read by the line editor before it records a line |
+| **recorded** | 149 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+
+**Two names moved out of "recorded" when the history knobs were built**
+(#571). `histignorespace` is the fifth row above: its state has nowhere
+better to live, because the substrate has no `set -o` name for it, but an
+interactive session reads it through this namespace every time it accepts
+a line. `histignoredups` was already substrate-backed — zsh's `set -h`
+abbreviates it — and was a switch whose state nothing consulted; it is now
+consulted too. Both decide what a session writes to its history file, so
+neither is recorded any more. Nothing else about the split moved: 149 of
+185 is still most of the table, and the count above is the one produced by
+counting the constructors in `dialect/zsh/setopt.go`.
 
 The recorded kind is the change of position, and it is deliberate. A real
 `~/.zshrc` opens with a dozen `setopt` lines about completion, correction,
@@ -3392,8 +3492,10 @@ than missing:
   the chain rather than the last; `-x` sets the tab width of a printed body.
   Each is refused as not implemented rather than as unknown, the same
   distinction `compgen` draws between an action a shell lacks and a typo.
-- zsh `setopt` names of the **recorded** kind: 157 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 149 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
+  (This line read 157 while the table above read 150; neither was the count
+  the table produces. It is now counted from the constructors.)
 - zsh `emulate -L`: function-local emulation needs a restore-on-return seam
   the runner does not have; refused out loud rather than silently made
   global. `emulate csh` records the mode and changes nothing it could —
@@ -3945,6 +4047,85 @@ only about how they fail it in a script. Deferred, with this paragraph
 as the record; a shell embedding this engine that needs it can register
 the builtin through the extension seam. Filed as part of #430's scope
 decision.
+
+## Asking about one slot in the jobs table, without reading a listing
+
+The jobs table's slot lifecycle produced no corpus case for a long time
+(#500, #783), and the reason is that **a listing is not stable enough to
+grade**. `jobs` with no operands prints a `Done` row for a reaped job on
+some runs of the same binary and not others, so the same snippet gives
+two different bodies from one shell. A family of such rows is a family
+nobody can use.
+
+The probe that works asks about **one slot at a time, through a status**:
+
+    jobs %2 >/dev/null 2>&1; echo "two=$?"
+
+Whether a slot is *occupied* is the whole of the allocation question, and
+a status has no text to race. Two things had to be true first.
+
+### The number has to be right, and it was not
+
+Measured 2026-09-05 on `jobs %9`, which is the one of the three job
+builtins that reaches this in a script — `fg` and `bg` refuse for want of
+job control first in bash and zsh:
+
+| shell | status | what it says |
+| --- | --- | --- |
+| bash 5.3.15 · 3.2.57 · as `sh` | 1 | `jobs: %9: no such job` |
+| dash | **2** | `jobs: No such job: %9` |
+| ksh93u+ | 1 | `jobs: no such job` — **no spec at all** |
+| zsh 5.9.2 | **127** | `jobs: %9: no such job` |
+
+Four statuses across the panel, where the field for this said "all four
+report 1". `Diagnostics.NoSuchJobStatus` carries the two that differ, and
+zsh's 127 is the same number its `wait` gives a job that is not there — a
+command that is not there. Until those were right the probe graded
+nothing: every dialect answered 1 and every "not there" looked alike.
+
+ksh93's wording uses neither verb, which is the shell and not a
+truncation: `%nope` produces the same line.
+
+### The timing has to be gone, not merely small
+
+A job that is *certainly still running* is one with seconds left, killed
+at the end of the case. A job that has *certainly finished* is one a
+`wait` has returned from. Neither is a guess about the scheduler, which
+is what a `sleep 0.2` raced against something else is.
+
+The corpus rows are `jobs/slot-a-running-job-occupies-its-slot`, its
+control `jobs/slot-a-status-query-does-not-consume-it` — a *listing*
+consumes what it reports, and a status query does not — and
+`jobs/slot-an-empty-table-has-no-first-slot`, which reads the four
+statuses with nothing else in the script that could have produced them.
+Each ends in `:` so the case is about slots rather than about what `kill
+%n` reports, which dash alone answers 1.
+
+`jobs/slot-the-last-background-pid-outlives-a-bare-wait` asks the `$!`
+half as a yes/no, because the pid is different every run.
+
+### What is measurable this way and still not taken
+
+Two lifecycle questions the probe reaches and this spec does not answer,
+recorded so the next attempt does not re-measure them. Both are stable
+across runs; neither is a race.
+
+**Whether a bare `wait` frees the slots it waited for.** `sleep 0 & wait;
+jobs %1` — bash 1, dash 0, ksh93 0, zsh 127. So bash and zsh free the
+slot and dash and ksh93 keep the finished job. It is not taken because it
+does not hold still under the neighbouring probes: **bash 5.3.15 and bash
+3.2.57 disagree with each other** on the same question without a `wait`
+(`sleep 0 & sleep 1; jobs %1` is 0 in 5.3 and 1 in 3.2), and ksh93 answers
+`wait` and `wait %1` differently — keeping the slot for the first and
+freeing it for the second.
+
+**Where the next job number goes when there is a hole.** bash allocates
+*after the highest occupied slot* rather than refilling; this
+implementation refills. The other three cannot be asked the same way,
+because they do not free the slot in the first place. And the obvious
+probe faults ksh93u+: `sleep 0 & wait; sleep 5 &; jobs %1; jobs %2` exits
+139 there, reproducibly — a segmentation fault, not an answer, so no
+corpus row can hold it.
 
 ## A `wait` a trapped signal cuts short
 
@@ -4547,10 +4728,35 @@ and zsh does exactly the reverse. One field could not say that.
 
 ### `echo`
 
-**`EchoExpandsEscEscape`** — bash yes · dash no · ksh93 yes · zsh yes
+**`EchoExpandsEscEscape`** — bash yes · dash no · ksh93 no · zsh yes
 
-Admits `\e` and `\E` for the escape character: everyone with escapes but
-dash, whose set is the XSI list alone.
+Admits `\e` for the escape character in an `echo` argument.
+
+**`EchoExpandsCapitalEscEscape`** — bash yes · dash no · ksh93 yes · zsh no
+
+Admits `\E`, and it is a second axis because the two shells that split the
+letters split them in **opposite** directions. Measured with `od -An -tx1`
+(macOS, 2026-09-06):
+
+    echo -e 'a\eZ'   bash 5.3 61 1b 5a   zsh 61 1b 5a
+                     bash 3.2 61 5c 65 5a   ksh93 61 5c 65 5a
+                     dash (no -e) 61 5c 65 5a
+    echo -e 'a\EZ'   bash 5.3 61 1b 5a   ksh93 61 1b 5a
+                     bash 3.2 61 5c 45 5a   zsh 61 5c 45 5a
+                     dash (no -e) 61 5c 45 5a
+
+ksh93 has `\E` and not `\e`; zsh has `\e` and not `\E`. bash 5.3 has both
+and bash 3.2 neither, which is a version line rather than a dialect one.
+A single answer for the pair — which is what this was until #908 — is wrong
+for half the panel: it gave ksh93 an `\e` it does not have and zsh an `\E` it
+does not have.
+
+It is the same asymmetry the `%b` site has, asked separately there
+(`PrintfBEscEscape`, `PrintfBCapitalEscEscape`), and the four dialects give
+the same pair of answers at both sites. Each letter is asked only where its
+own spelling appears, so `echo -e 'a\EZ'` needs no answer about `\e`.
+
+Corpus: `echo/the-two-spellings-of-the-escape-character`.
 
 Re-measured for this catalog, bash 3.2 prints `\e` as written where bash
 5.3 writes ESC, so this too is a bash 4 addition — dating rather than
@@ -5588,12 +5794,22 @@ itself, which is unanimous: `s=$(printf 'a\200b')` has length 3 in every
 panel member, and zsh's `${s[2]}` is that byte rather than a replacement
 character.
 
-**Pattern matching does not yet follow.** `?`, `[…]` and the character
-classes still walk bytes here, so `${s#???}` on `héllo` is `llo` where
-bash, ksh93 and zsh give `lo` under a UTF-8 locale. That is the same
-axis reached through a different code path and is #905; the corpus
-records both the probe that separates the two readings and the
-`${s%??}` one that cannot.
+**Pattern matching follows the same axis** (#905). `?` consumes one
+character, a bracket matches one, and a `*` stops only between them, so
+`${s#???}` on `héllo` is `lo` under a UTF-8 locale and `llo` under a
+single-byte one — and `case héllo in ?????` matches under the first and
+not the second, though the pattern is five ASCII bytes either way. That
+is why the callers ask about the *subject* as well as the pattern, and
+why pathname expansion asks about the names in the directory.
+
+There is one matcher, and there always was: `case`, `[[ ]]`, `${x#pat}`,
+`${x%pat}`, `${x/pat/rep}`, the element-selection operators and pathname
+expansion all reach it. #899 read `${s%??}` giving `hél` as evidence
+that suffix removal was already rune-aware; the probe cannot
+discriminate, because `héllo` ends in two ASCII characters and two bytes
+off the end leave the same four. `../spec/grammar/patterns.md` has the
+range, the star and the character classes, each of which needed a
+measurement of its own.
 
 **`NegativeSubscriptPastTheStartInserts`** — bash no · dash unspecified · ksh93 no · zsh yes
 
@@ -6307,10 +6523,63 @@ Two neighbors are *not* this axis. What a valueless declaration leaves
 visible is `ValuelessDeclarationHidesTheOuterValue`, and the two compose:
 `local FOO` over an exported `FOO` shows dash's child the outer value,
 because dash hides nothing, and shows zsh's child nothing, because zsh
-exports nothing. bash is the residue and is a split within one shell —
-5.3 hands the child the outer value where its unset local has none of
-its own, and 3.2 hands it nothing — so it is recorded rather than
-modeled.
+exports nothing.
+
+bash is the residue, and it is not a third axis. Only a dialect that
+answers **both** of the two yes reaches the question at all — dash has
+nothing hidden to tell a child about and zsh has nothing exported — so
+there is one dialect here and no disagreement for a switch to hold. It
+is a value that dialect has to pick, and the two candidates are two
+builds of it:
+
+    export FOO=bar; f() { local FOO; env | grep '^FOO='; }; f
+
+    bash 5.3    FOO=bar     the value the local hid
+    bash 3.2    (nothing)
+
+**Ours is 5.3's**, and the reason is not that it is newer. Three
+measurements decided it:
+
+- POSIX mode is not the variable. The same 5.3 invoked as `sh` — the
+  panel's own `bash-as-sh` column, and a distinct member — gives the
+  same `FOO=bar`, and `/bin/sh` on this machine, which is 3.2, gives
+  nothing. Two of the six columns say the value and one says nothing.
+- 3.2 is not a coherent second model. It reports the opposite of what it
+  does — `export -p` inside the function lists `declare -x FOO=""` for a
+  name it then tells no child about — and it *does* hand a child a value
+  by the other route: for a name that arrived in the environment rather
+  than being exported by hand, `local TERM` shows the child `TERM=dumb`
+  in 3.2 as in 5.3. Choosing 3.2's answer means choosing between two
+  behaviors within 3.2 as well.
+- 5.3's answer is one rule and reaches further than the shape that
+  raised it. Two functions deep it is the *caller's* local that a child
+  is told, not the global behind it; `local -x` over an exported name
+  hands the value over and over an unexported one hands nothing; `+x`
+  takes the attribute off the local outright and the child is still told
+  the outer value. So it is the shadowed binding speaking rather than
+  the local, and both bash builds agree on the last of those.
+
+Written down as a rule: **an exported name a declaration shadows goes on
+reaching a command with the value it had, for as long as the declaration
+standing in front of it has none of its own.** What the shell reads and
+what a child is told part company there, which is why only a real child
+can measure it.
+
+Three neighbors of *that* are recorded rather than modeled, each one a
+place where bash reaches past a binding in a way a single variable table
+cannot see, and both builds agree on all three:
+
+- `local +x FOO=z` over an exported `FOO` hands a child `bar` and not
+  `z`. Taking the attribute off the local uncovers the binding behind
+  it, which needs an export attribute per binding rather than per name.
+  We hand the child nothing.
+- `local FOO` after a `local FOO=x` in the same scope leaves the value
+  standing — `${FOO-UNSET}` is `x` — where the same declaration in a
+  *new* scope hides it. We read it as unset. The child is told `x`
+  either way.
+- `unset` on such a local reads as unset in every build and still hands
+  a child the outer value. That one we match, by the rule above rather
+  than by a case of its own.
 
 
 ### `unset`

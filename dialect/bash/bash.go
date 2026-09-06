@@ -15,6 +15,12 @@ import (
 // Dialect is what bash 5 parses.
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
+	// `$[expr]`, the older spelling of `$((expr))`. Measured
+	// 2026-09-06: `echo $[1+1]` is 2 here and in the 3.2 macOS ships,
+	// and the same text is the literal `$[1+1]` in ksh93 and dash.
+	// bash has documented it as deprecated for years and both builds
+	// in the panel still take it (#900).
+	d.DollarBracketArith = true
 	// bash expands them interactively and needs `shopt -s expand_aliases`
 	// otherwise, which is not modeled yet — so no route, rather than a route
 	// this shell only takes with an option set. Measured on all three.
@@ -219,13 +225,20 @@ func Semantics() interp.Semantics {
 	s.EchoOptions = "neE"
 	s.EchoLastEscapeFlagWins = interp.Yes
 	s.EchoExpandsHexEscapes = interp.Yes
+	// Both spellings of the escape character, which is this shell alone in
+	// the panel: ksh93 has only `\E` and zsh only `\e`.
 	s.EchoExpandsEscEscape = interp.Yes
+	s.EchoExpandsCapitalEscEscape = interp.Yes
 	// read takes -r and -s plus the argument letters: -a names the array in
 	// the option's argument, -d a delimiter, -i the text a line editor would
 	// be seeded with, -n and -N the two counts, -p a prompt for when the
 	// input is a terminal, -t a timeout and -u a descriptor. A short -n
 	// keeps its text and reports 1; a short -N keeps its text too.
 	s.ReadOptions = "rsa:d:i:n:N:p:t:u:"
+	// `-n` unsets through a name reference. bash 3.2 does not have it —
+	// `unset -n x` is an invalid option there and under `--posix` — so
+	// this is 5.3's set, which is the binary the panel measures.
+	s.UnsetOptions = "vfn"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
@@ -331,6 +344,9 @@ func Semantics() interp.Semantics {
 	// it. Not this shell's answer for an `echo` argument, where `\101` is
 	// four characters — the two sites are two tables.
 	s.PrintfBOctalWithoutZero = interp.Yes
+	// What a `\c` left goes through the conversion's field like any other
+	// text: `printf '[%5b]' 'a\cb'` is `[    a`.
+	s.PrintfBStopIsPadded = interp.Yes
 	// `%zX`, `%ld`, `%jd` and any run of the letters, all of them read and
 	// thrown away: `%hhd` with 300 is 300.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC99
@@ -463,6 +479,10 @@ func Semantics() interp.Semantics {
 	// same, which is what keeps this question and MonitorNeedsATerminal
 	// apart.
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
+	// A subshell is a process of its own here — measured, a child started
+	// inside one reports the subshell rather than the shell as its parent —
+	// so a signal aimed at `$$` never reaches it and it finishes its body.
+	s.SubshellRunsOnAfterSignalingTheShell = interp.Yes
 	// And bash is the one member of the panel that announces nothing on
 	// this route. Measured on `-i script.sh` through a pseudo-terminal:
 	// 5.3.15, 3.2.57 and 3.2 run as `sh` all print neither the start nor
@@ -690,6 +710,17 @@ func Diagnostics() interp.Diagnostics {
 		ArithBadOperator:      "arithmetic syntax error: invalid arithmetic operator",
 		ArithFailureStatus:    1,
 		SyntaxUnexpected:      "syntax error near unexpected token `%[1]s'",
+		// Inside `[[ ]]` the same token gets two lines and neither is the
+		// one above: a sentence about the construct at the `[[`'s line, then
+		// a shorter `near` at the token's. Measured on bash 5.3.15 —
+		// `[[ -n x` newline `-z "" ]]` names line 1 and then line 2.
+		CondSyntaxPreamble:   "syntax error in conditional expression: unexpected token `%[1]s'",
+		CondSyntaxUnexpected: "syntax error near `%[1]s'",
+		// And a `[[` the input ran out inside of gets a line of its own,
+		// naming the closer it was waiting for. Measured: this shell writes
+		// it for `[[` and for nothing else — `if`, `for`, `case`, `{` and
+		// `(` left open each get the one ordinary line.
+		CondUnterminatedPreamble: "unexpected EOF while looking for `%[1]s'",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.
 		ForNameStatus: 1,

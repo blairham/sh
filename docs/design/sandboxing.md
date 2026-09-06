@@ -210,6 +210,29 @@ Closed, on Darwin and Linux: a redirect that reads or writes through a
 link, `.` sourcing through one, and a glob enumerating a directory
 through one.
 
+**And the front end's own opens, which were the tail of this.**
+`internal/boundary` consulted the gate and answered a bool; each of its
+nine callers then did its own `os.Open`, `os.ReadFile` or
+`os.WriteFile`, so out here the decision was about a name and the access
+was about an object — the same defect, in the package whose whole
+purpose is that the shell's own files are inside the boundary.
+`HISTFILE` is the one a *script* can aim: it is a shell variable, so a
+typed line points the history at a link and the shell reads and appends
+through it. The block store is aimed the same way by `SH_BLOCKS_DIR`,
+and the ACP pair is aimed by an agent, live, from outside the process.
+
+The fix is the API rather than nine careful call sites. `Boundary` makes
+the descriptor itself now — `OpenFile`, `ReadFile`, `WriteFile` — and
+verifies it before returning it, so there is no longer a way to ask this
+package's permission and then open something else. The shared half lives
+in `internal/opened`: the platform call, the table of links an operating
+system installs, and the held-back truncation, which is a security
+property and not a convenience. Two copies of it would drift.
+`TestEveryFrontEndOpenGoesThroughTheBoundaryOrSaysWhyNot` reads the
+source of every package that holds a `Boundary` and fails on a direct
+open that is not on a written-down exemption list, because the tenth
+call site will be written by copying one of the nine.
+
 Open, by construction and not by omission:
 
 - **Hard links and bind mounts.** Both names are real names for one
@@ -226,10 +249,6 @@ Open, by construction and not by omission:
 - **`exec` through a link.** Verifying it means opening the program to
   look at it, and execute permission does not imply read permission.
   `allow exec` is already total in the sense this page opens with.
-- **The front end's own opens** — `internal/boundary`, which covers the
-  script operand, startup files, `HISTFILE` and the block store. Those
-  do not go through the interpreter's open path and are not verified
-  yet.
 - **Platforms other than Darwin and Linux**, where there is no way to
   ask the kernel and the gate matches the name alone, as it always did.
 
@@ -864,7 +883,10 @@ the person who wrote the policy is the person who named the script.
 **A default-deny policy must allow the interpreter's own reachable
 paths.** A dialect with a prelude sources it from a string rather than a
 file, so that costs nothing, but `$ENV` and `HISTFILE` are real opens
-and are inside the boundary.
+and are inside the boundary — and, since they are verified after the
+fact, a rule must name the place the path *reaches* rather than the
+place it is spelled. A `HISTFILE` under a home directory that is itself
+a symbolic link needs a rule naming what the link reaches.
 
 **Allowing an interpreter allows everything.** `allow exec /bin/sh`,
 `/usr/bin/python3`, `/bin/busybox`, and anything else that runs a

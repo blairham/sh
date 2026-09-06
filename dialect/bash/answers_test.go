@@ -81,6 +81,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.No},
 		{"InteractiveMonitorNeedsATerminal", s.InteractiveMonitorNeedsATerminal, interp.Yes},
 		{"InteractiveScriptAnnouncesJobs", s.InteractiveScriptAnnouncesJobs, interp.No},
+		{"SubshellRunsOnAfterSignalingTheShell", s.SubshellRunsOnAfterSignalingTheShell, interp.Yes},
 		{"UnsetReadonlyFatal", s.UnsetReadonlyFatal, interp.No},
 		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.No},
 		{"EchoInterpretsEscapes", s.EchoInterpretsEscapes, interp.No},
@@ -203,5 +204,26 @@ func TestAWideDuplicationTargetIsReadAsANumber(t *testing.T) {
 	}
 	if !strings.Contains(out, "after") || st != 0 {
 		t.Errorf("out %q status %d, want the script to have carried on", out, st)
+	}
+}
+
+// `$[expr]`, the older spelling of `$((expr))`, which this shell still takes.
+//
+// Measured 2026-09-06 on bash 5.3.15 and on the 3.2.57 macOS ships: both give
+// 2 for `echo $[1+1]`, and both give the arithmetic diagnostics word for word
+// where the expression is bad. The manual has called it deprecated for years,
+// which is a fact about the manual and not about either parser (#900).
+func TestTheOlderArithmeticSpelling(t *testing.T) {
+	out, st := answersRun(t, `x=5; a=(7 8 9); echo "[$[1+1]][$[x*2]][$[a[1]+1]][$[2**10]]"`)
+	if want := "[2][10][9][1024]\n"; out != want || st != 0 {
+		t.Errorf("got %q at %d, want %q at 0", out, st, want)
+	}
+	// The two spellings are the same expression to everything downstream, so
+	// they answer with the same value where they answer at all. A bad
+	// expression is refused in the same words too, which is graded rather
+	// than asserted here: `arith/a-dollar-bracket-refuses-like-the-other`
+	// puts both wordings beside the panel's.
+	if out, st := answersRun(t, `echo "[$[2**10]][$((2**10))][$[]][$(( ))]"`); out != "[1024][1024][0][0]\n" || st != 0 {
+		t.Errorf("got %q at %d, want the two spellings to agree", out, st)
 	}
 }

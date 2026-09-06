@@ -295,6 +295,14 @@ func (r *Runner) substitutedWordFields(s syntax.Span) ([]string, bool) {
 // asked in one place. Answering it twice is how the joined and the split paths
 // would come to disagree about the same expansion.
 func (r *Runner) paramSource(e *syntax.ParamExpr) (value string, set, subscript bool) {
+	if e.Inner != nil {
+		// An expansion standing where a name would. Its fields are joined
+		// here because this is the scalar view; the list view is
+		// nestedFields, and both go through nestedWords so the two cannot
+		// come to different values.
+		words, iset := r.nestedWords(e)
+		return strings.Join(words, ifsFirst(r.ifs())), iset, false
+	}
 	if e.Index != nil {
 		if elems, ok := r.arraySubscript(e); ok {
 			// nil rather than empty is what says the element was not there:
@@ -481,7 +489,7 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	// Only for `[@]` and `[*]`, though. `${a[0]:1}` names one element and is
 	// a substring of it — slicing there is a one-element list with its first
 	// element dropped, which is no field at all. The corpus caught that.
-	if e.Index != nil && !e.Length &&
+	if e.Index != nil && e.Inner == nil && !e.Length &&
 		(e.Op == syntax.ParamNone ||
 			((e.Op == syntax.ParamSubstring || e.Op == syntax.ParamTransform ||
 				selectsElements(e.Op) || elementOp(e.Op) || r.yieldsTheArray(e)) &&
@@ -1304,7 +1312,7 @@ func (r *Runner) changeCaseWith(value, pattern string, e *syntax.ParamExpr) stri
 		e.Op == syntax.ParamLowerFirst ||
 		e.Op == syntax.ParamToggleFirst
 
-	o := r.patternOpts(pattern)
+	o := r.patternOpts(pattern, value)
 	var b strings.Builder
 	for i, c := range value {
 		if (pattern == "" || matchPattern(pattern, string(c), o)) &&
@@ -1317,19 +1325,6 @@ func (r *Runner) changeCaseWith(value, pattern string, e *syntax.ParamExpr) stri
 	return b.String()
 }
 
-// localeIsC reports an explicit C or POSIX locale, read the way POSIX ranks
-// the variables: LC_ALL over LC_CTYPE over LANG. Unset is not C here —
-// measured, a shell stripped of every locale variable still cases beyond
-// ASCII — so only asking for C narrows anything.
-func (r *Runner) localeIsC() bool {
-	for _, name := range []string{"LC_ALL", "LC_CTYPE", "LANG"} {
-		if v, ok := r.getVar(name); ok && v != "" {
-			return v == "C" || v == "POSIX"
-		}
-	}
-	return false
-}
-
 // toggleCase swaps a letter's case and leaves anything else alone.
 func toggleCase(c rune) rune {
 	if unicode.IsUpper(c) {
@@ -1339,24 +1334,61 @@ func toggleCase(c rune) rune {
 }
 
 func (r *Runner) trimWith(value, pattern string, op syntax.ParamOp) string {
-	return trim(value, pattern, op, r.patternOpts(pattern))
+	return trim(value, pattern, op, r.patternOpts(pattern, value))
+}
+
+// matchedWith is trimWith with the flag that keeps what the pattern took.
+func (r *Runner) matchedWith(value, pattern string, op syntax.ParamOp) string {
+	return matched(value, pattern, op, r.patternOpts(pattern))
 }
 
 func (r *Runner) replaceWith(value, pattern, with string, e *syntax.ParamExpr) string {
-	return replace(value, pattern, with, e, r.patternOpts(pattern))
+	return replace(value, pattern, with, e, r.patternOpts(pattern, value))
 }
 
 func trim(value, pattern string, op syntax.ParamOp, o patternOpts) string {
-	prefix := op == syntax.ParamTrimPrefix || op == syntax.ParamTrimPrefixLong
+	i, ok := trimEdge(value, pattern, op, o)
+	if !ok {
+		return value
+	}
+	if trimsPrefix(op) {
+		return value[i:]
+	}
+	return value[:i]
+}
+
+// matched is trim's other half: the part the pattern took rather than the part
+// it left, and nothing at all when it took none.
+//
+// One flag turns a trim into this — the same operator, the same match, the
+// other side of the same split — which is why it shares trimEdge rather than
+// scanning again. Measured: `${(M)v#h*l}` on `hello` is `hel` where
+// `${v#h*l}` is `lo`, and `${(M)v#zzz}` is empty where `${v#zzz}` is `hello`.
+func matched(value, pattern string, op syntax.ParamOp, o patternOpts) string {
+	i, ok := trimEdge(value, pattern, op, o)
+	if !ok {
+		return ""
+	}
+	if trimsPrefix(op) {
+		return value[:i]
+	}
+	return value[i:]
+}
+
+func trimsPrefix(op syntax.ParamOp) bool {
+	return op == syntax.ParamTrimPrefix || op == syntax.ParamTrimPrefixLong
+}
+
+// trimEdge is where a trim's pattern stops: the split point, and whether the
+// pattern matched at all.
+func trimEdge(value, pattern string, op syntax.ParamOp, o patternOpts) (int, bool) {
+	prefix := trimsPrefix(op)
 	longest := op == syntax.ParamTrimPrefixLong || op == syntax.ParamTrimSuffixLong
 
 	// Candidate split points, ordered so the first match found is the one
 	// wanted: shortest first for the single operators, longest first for the
 	// doubled ones.
-	idx := make([]int, 0, len(value)+1)
-	for i := 0; i <= len(value); i++ {
-		idx = append(idx, i)
-	}
+	idx := unitStops(value, o)
 	if (prefix && longest) || (!prefix && !longest) {
 		for l, r := 0, len(idx)-1; l < r; l, r = l+1, r-1 {
 			idx[l], idx[r] = idx[r], idx[l]
@@ -1365,31 +1397,37 @@ func trim(value, pattern string, op syntax.ParamOp, o patternOpts) string {
 	for _, i := range idx {
 		if prefix {
 			if matchPattern(pattern, value[:i], o) {
-				return value[i:]
+				return i, true
 			}
 			continue
 		}
 		if matchPattern(pattern, value[i:], o) {
-			return value[:i]
+			return i, true
 		}
 	}
-	return value
+	return 0, false
 }
 
 // replace substitutes a matching span, once or everywhere.
 //
 // The anchored forms match only at one end, which is what `/#` and `/%` mean.
 func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) string {
+	// Every position a match may start or end at, in order, and there is one
+	// more of them than there are units. They are unit boundaries rather than
+	// byte offsets, so a pattern is never handed half of a character —
+	// `${s//?/X}` on a three-character string is `XXX` and not `XXXXXXXXX`.
+	stops := unitStops(value, o)
+
 	switch e.Anchor {
 	case '#':
-		for i := len(value); i >= 0; i-- {
-			if matchPattern(pattern, value[:i], o) {
-				return with + value[i:]
+		for k := len(stops) - 1; k >= 0; k-- {
+			if matchPattern(pattern, value[:stops[k]], o) {
+				return with + value[stops[k]:]
 			}
 		}
 		return value
 	case '%':
-		for i := 0; i <= len(value); i++ {
+		for _, i := range stops {
 			if matchPattern(pattern, value[i:], o) {
 				return value[:i] + with
 			}
@@ -1398,21 +1436,22 @@ func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) st
 	}
 
 	var b strings.Builder
-	for i := 0; i <= len(value); {
+	for k := 0; k < len(stops); {
+		i := stops[k]
 		// The longest match at this position, so `*` behaves as it does
 		// everywhere else rather than matching empty and looping.
 		end := -1
-		for j := len(value); j >= i; j-- {
-			if matchPattern(pattern, value[i:j], o) {
-				end = j
+		for m := len(stops) - 1; m >= k; m-- {
+			if matchPattern(pattern, value[i:stops[m]], o) {
+				end = stops[m]
 				break
 			}
 		}
 		if end < 0 || end == i && pattern != "" && !matchPattern(pattern, "", o) {
 			if i < len(value) {
-				b.WriteByte(value[i])
+				b.WriteString(value[i:stops[k+1]])
 			}
-			i++
+			k++
 			continue
 		}
 		b.WriteString(with)
@@ -1423,14 +1462,29 @@ func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) st
 		if end == i {
 			// An empty match must still make progress.
 			if i < len(value) {
-				b.WriteByte(value[i])
+				b.WriteString(value[i:stops[k+1]])
 			}
-			i++
+			k++
 			continue
 		}
-		i = end
+		for stops[k] < end {
+			k++
+		}
 	}
 	return b.String()
+}
+
+// unitStops is every position a match may begin or end at: each unit boundary
+// of value, and the end of it. One byte apart where a unit is a byte, and one
+// character apart where a unit is a character.
+func unitStops(value string, o patternOpts) []int {
+	stops := make([]int, 0, len(value)+1)
+	for i := 0; ; i += o.unitWidth(value[i:]) {
+		stops = append(stops, i)
+		if i == len(value) {
+			return stops
+		}
+	}
 }
 
 // substringRange is `${x:…}`, which is a substring in three of the panel and
@@ -2180,5 +2234,83 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 		add(k)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// nestedWords expands the expansion standing where a parameter name would —
+// the `${v}` of `${${v}#a}` — and reports whether it came to anything.
+//
+// It is an ordinary word expansion, deliberately: the inner expansion may be
+// a parameter, a command substitution or an arithmetic one, may carry its own
+// flags, and may itself be nested, and every one of those is already answered
+// by the word pipeline. Reaching for the parameter machinery directly would
+// have re-answered a subset of it.
+//
+// "Set" is whether the inner produced a field at all, which is what the outer
+// `:-` and its family test. An inner naming nothing produces none, so
+// `${${u}:-d}` substitutes and `${${v}:-d}` on an empty value does too — the
+// colon's own rule, unchanged.
+func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set bool) {
+	if e.Inner == nil || len(e.Inner.Spans) == 0 {
+		return []string{""}, false
+	}
+	if e.Index != nil {
+		// `${${v}[2]}` subscripts the *result*, which is a second question
+		// on top of this one — and the one the subscript work is already
+		// asking. Named rather than answered, so a script that meets it is
+		// told which construct is missing.
+		r.diagf("${%s}: a subscript on a nested expansion is not implemented\n", e.Src)
+		r.expandErr = true
+		return []string{""}, false
+	}
+	// The inner is exactly one substitution span — the grammar admits nothing
+	// else in that position — so this is expandOneWord's loop with the loop
+	// taken out, and it keeps the fields that expandAt yields rather than
+	// joining them the way expandWordNoSplit does. Which of the two a nested
+	// expansion is, is the whole question below.
+	defer r.inWord(e.Inner)()
+	r.expandingSpan = 0
+	span := e.Inner.Spans[0]
+	if parts, ok := r.expandAt(span); ok {
+		words = parts
+	} else {
+		text, _ := r.expandSpan(span, splitNever)
+		words = []string{text}
+	}
+	// The marks come off once, whichever half produced the fields. The inner
+	// is an operand rather than a field of the command line, so a `*` in its
+	// value is a character the outer operator matches against and not a
+	// pattern the shell is about to escape for someone: leaving them on
+	// answered `${${v}}` on `a*b` with a backslash in it.
+	words = unescapeAll(words)
+	if len(words) == 0 {
+		// No field is still a *value*: the empty string, and set. Measured —
+		// `a=(); ${${a[@]}-d}` is empty in the shell with the grammar, where
+		// `${nosuch-d}` is `d`, so the colon-less test finds something here
+		// however little the inner came to.
+		words = []string{""}
+	}
+	if len(words) > 1 {
+		// An inner expansion that came to a *list* keeps its fields in the
+		// shell that has this grammar — `${${a[@]}}` is one field per
+		// element there — and the outer operator then applies to each. That
+		// is a second shape rather than a longer value, and it is refused by
+		// name rather than joined: a join would answer with one plausible
+		// field and say nothing, which is the failure this diagnostic
+		// exists to avoid.
+		r.diagf("${%s}: a nested expansion of a list is not implemented\n", e.Src)
+		r.expandErr = true
+		return []string{""}, false
+	}
+	return words, true
+}
+
+// unescapeAll takes the glob marks off every field, for a caller that wants
+// the text rather than a pattern.
+func unescapeAll(fields []string) []string {
+	out := make([]string, len(fields))
+	for i, f := range fields {
+		out[i] = globUnescape(f)
+	}
 	return out
 }

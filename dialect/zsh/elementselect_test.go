@@ -31,11 +31,10 @@ func TestTheElementSelectionOperatorsAreThisDialects(t *testing.T) {
 		{
 			// The plugin loader's idiom for "is this path absolute": the value
 			// survives only when the pattern does *not* match it. Written
-			// through a variable rather than as the one nested expansion the
-			// loader writes — `${${v:#/*}:-fallback}` — because nesting a
-			// `${ }` inside another is a construct this shell does not have
-			// yet, measured and independent of this operator: `${${v}}` is a
-			// bad substitution here and `abc` in the shell.
+			// through a variable, which keeps this case about the operator
+			// alone; the nested spelling the loader actually writes —
+			// `${${v:#/*}:-fallback}` — is in nestedparam_test.go, where the
+			// grammar that carries it is what is being tested.
 			"an absolute path leaves nothing behind",
 			`v=/abs/p; keep=${v:#/*}; printf "[%s]" "${keep:-WASABSOLUTE}"`,
 			"[WASABSOLUTE]",

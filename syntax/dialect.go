@@ -450,6 +450,24 @@ type Dialect struct {
 	// `${a:-x}` is still a default for the same reason.
 	ParamElementSelection bool
 
+	// NestedParamExpansion enables an expansion to stand where a parameter
+	// name would: `${${v}}` applies one expansion to the result of another,
+	// and `${${v}#a}` applies the outer operator to what the inner came to.
+	// One shell in the panel has it; bash and ksh93 refuse the same
+	// characters, in their own words and at their own moment.
+	//
+	// A grammar flag rather than a semantics axis, for the reason
+	// BareSubscript is one: it decides where the word is cut. Without it
+	// there is no parameter name at the front of `${${v}#a}` at all, so the
+	// expansion is unreadable rather than differently read — there is
+	// nothing for a value to switch between.
+	//
+	// The inner expansion is the *whole* of the name position. Measured:
+	// `${x${v}}` and `${${v}x}` are both a bad substitution in the shell that
+	// has the construct, so text either side of it is not a shape at all and
+	// an implementation that appended it would be inventing one.
+	NestedParamExpansion bool
+
 	// ParamIndirection enables `${!x}` to *parse*. bash and ksh93 accept it;
 	// dash and zsh reject it outright.
 	//
@@ -477,6 +495,28 @@ type Dialect struct {
 
 	// ArithExplicitBase enables the `base#digits` form. Absent from dash.
 	ArithExplicitBase bool
+
+	// DollarBracketArith enables `$[expr]`, the older spelling of `$((expr))`.
+	//
+	// Measured 2026-09-06: bash 5.3.15, bash 3.2.57, bash invoked as `sh` and
+	// zsh 5.9.2 all read it as arithmetic — `echo $[1+1]` is 2, `$[2**10]` is
+	// 1024, and it expands inside double quotes and in a here-document body
+	// exactly as `$((…))` does. ksh93u+ and dash do not read it at all: the
+	// `$` stays literal and the brackets are a pattern, so `echo $[1+1]`
+	// prints `$[1+1]` when nothing on the filesystem matches.
+	//
+	// The additive kind of difference, so a grammar flag: where it is off the
+	// text takes the route it takes today and nobody means something else by
+	// it. bash has *documented* it as deprecated for years, which is a fact
+	// about its manual rather than about its parser — both builds in the
+	// panel still take it, which is why they are separate members.
+	//
+	// The construct is arithmetic and nothing else: the expression inside is
+	// the same grammar `$((…))` holds, the diagnostics for a bad expression
+	// or a division by zero are word for word the ones `$((…))` gives, and
+	// what is produced is an ArithSubst span. Only the spelling differs,
+	// which Span.Bracketed carries for anything writing one back.
+	DollarBracketArith bool
 
 	// Whether `0100` is sixty-four or one hundred is deliberately *not* a
 	// field here. A literal is kept as written, so the tree bakes in no
@@ -513,6 +553,54 @@ type Dialect struct {
 	// `@(abc|xyz)` is a literal `@` followed by a group in zsh rather than an
 	// extended pattern — the same text, read by a different rule.
 	PatternAlternation bool
+
+	// BackgroundAndDisown reads `&!` and `&|` as terminators that start a
+	// statement in the background and then let go of the job: nothing lists
+	// it and nothing waits for it by number. zsh's, and the two spellings
+	// are one operator — every probe below answers alike for both.
+	//
+	// Measured 2026-09-06 with `-n` over a *script file*, which is the only
+	// instrument that answers this: a `-c` string reads `&!` differently,
+	// and "did it parse" is not the question anyway. The panel does not
+	// split the way a first look suggests:
+	//
+	//	`echo hi &!`   zsh disowns. bash 5.3 and ksh93 *parse* it — as `&`
+	//	               followed by the `!` that negates a pipeline — and
+	//	               leave the job in the table, which `jobs` then lists.
+	//	               bash 3.2, bash-as-sh and dash refuse it outright.
+	//	`echo hi &|`   zsh disowns. ksh93 parses it and means something
+	//	               else — `echo hi &| echo done` prints only `done`
+	//	               there. bash 5.3, bash 3.2, bash-as-sh and dash all
+	//	               refuse it.
+	//
+	// So what is zsh's alone is the *disowning*, and the flag carries the
+	// grammar half. What the other shells do with the same text is their
+	// own grammar answering, and this flag does not reach them.
+	//
+	// The job is otherwise an ordinary background job, measured: `$!` is
+	// still set to its process and `wait` still reports 0. Only the *table*
+	// differs, which is why a later `&` job is `[1]` and not `[2]`.
+	//
+	// There is no corpus row for any of this, and the reason is worth
+	// stating because it is not "nobody wrote one". Every snippet that puts
+	// a `&!` where it can *run* reaches a second gap on the way: `!` in the
+	// other shells is the pipeline negation, and what they do with a bare
+	// one differs from what this shell does in both directions. `echo a &!`
+	// alone is `a` in bash 5.3 and ksh93 and a syntax error in bash 3.2,
+	// bash-as-sh and dash; ours accepts it everywhere. `sleep 0.4 &!` with a
+	// line after it is accepted by bash 5.3 and ksh93 — the `!` negating the
+	// *next* line's pipeline — and ours refuses it. So a row recording the
+	// disowning would record four unrelated divergences beside it, and the
+	// bare `!` is its own issue. The behavior is asserted in
+	// syntax/disown_test.go and interp/disown_test.go instead.
+	//
+	// It does not change what happens at exit, and the first measurement
+	// that said it did was an artifact: `zsh m.sh | tr …` holds the script
+	// open for the whole `sleep 0.5` because the *pipe* is waiting for the
+	// background job that inherited its standard output, not because the
+	// shell is. Timed without a pipe, `sleep 0.5 &` and `sleep 0.5 &!` both
+	// return in six milliseconds.
+	BackgroundAndDisown bool
 
 	// NumericRangePattern reads `<n-m>` in a word as a pattern matching a
 	// run of digits whose *value* falls in the range, rather than as a

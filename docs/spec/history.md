@@ -30,11 +30,34 @@ file.
 | --- | --- | --- | --- | --- |
 | bash 5.3 | text, a line per entry | `HISTCONTROL=ignorespace` | `HISTIGNORE` globs | **gone** — `history` cannot see it |
 | bash 3.2 | text, a line per entry | `HISTCONTROL=ignorespace` | `HISTIGNORE` globs | gone |
-| zsh 5.9 | text, a line per entry | `setopt HIST_IGNORE_SPACE` | `HISTORY_IGNORE` glob | **kept** — `fc -l` still lists it |
+| zsh 5.9 | text, a line per entry | `setopt HIST_IGNORE_SPACE` | `HISTORY_IGNORE` glob | **it depends on the knob** — see the correction below |
 | ksh93 | its own binary format | none observed | none observed | — |
 | dash | none at all | — | — | — |
 
-Three things in there are worth stating separately.
+**Correction, 2026-09-06.** The zsh row's last column read "**kept** —
+`fc -l` still lists it", and that is the reading of `HISTORY_IGNORE`
+recorded against `setopt HIST_IGNORE_SPACE`. Two knobs were measured in
+one session and the answer of one was written down under the other; #571
+repeated it, and it stood until building the option-spelled knobs made
+something ask. Re-measured, zsh 5.9.2, `-f -i` on a pipe with a scratch
+`HOME`, `ZDOTDIR` and `HISTFILE`, `fc -l` read inside the session and the
+file read after `fc -W`:
+
+| zsh 5.9.2 knob | in `fc -l` | in the file |
+| --- | --- | --- |
+| `HISTORY_IGNORE='echo hidden'` | **yes**, as entry 5 | no |
+| `setopt HIST_IGNORE_SPACE` | no | no |
+| `setopt HIST_IGNORE_DUPS` | no | no |
+
+So zsh gives *both* answers, and which one it gives is decided by the
+knob and not by the shell. bash 5.3.15, bash 3.2.57 and bash-as-sh drop
+the line from `history` and from the file under all three of their rules.
+**The panel therefore agrees about a blank and about a repeat, and parts
+company only over a pattern** — which is a narrower conflict than the one
+first recorded, and it is why the axis below belongs to the pattern knob
+alone.
+
+Three more things in there are worth stating separately.
 
 **ksh93 has neither knob.** ` echo spaced` typed with a leading space
 is in the file, and setting `HISTIGNORE` — a name it does not know —
@@ -132,8 +155,7 @@ are measured above and were deliberately not part of the scrubbing
 change. They are a compatibility question with a dialect answer — bash
 and zsh name them differently, spell their patterns differently and
 disagree about the session list — where the scrubbing is a security
-feature with no dialect axis at all. The variable-named ones are built
-now; see below.
+feature with no dialect axis at all. All four are built now; see below.
 
 ## The history at the prompt
 
@@ -248,15 +270,26 @@ What differs is where they are written and what "ignored" costs:
 | --- | --- | --- |
 | blank / duplicate | `HISTCONTROL=ignorespace`, `ignoredups`, `ignoreboth` | `setopt HIST_IGNORE_SPACE`, `HIST_IGNORE_DUPS` |
 | patterns | `HISTIGNORE`, a colon-separated **list** | `HISTORY_IGNORE`, a **single** pattern |
-| an ignored line | **gone** — the up arrow skips past it | **kept** — the up arrow recalls it |
+| a line the *pattern* knob rejected | **gone** — the up arrow skips past it | **kept** — the up arrow recalls it |
+| a line the blank or repeat rule rejected | gone | gone |
 
-The last row is the axis: `repl.HistoryStyle.IgnoredStaysInSession`.
+The first of those two rows is the axis:
+`repl.HistoryStyle.PatternIgnoredStaysInSession`. The second is not an
+axis at all, and finding that out is what the correction above is: the
+panel agrees, so the rule is written once and takes no dialect answer.
 
-Two things are measured and not built. zsh's two are `setopt` names
-rather than variables, and this shell has no place to hold an
-interactive-only option yet; naming a variable zsh does not have would
-give the dialect a knob real zsh ignores, which is worse than the gap.
-And bash's `HISTIGNORE` gives `&` a meaning of its own: measured,
+All four knobs are built. zsh's two are option names rather than
+variables, which is a different namespace and not a different spelling —
+they are read through the dialect's own option namespace
+(`interp.Runner.DialectOption`), so `setopt hist_ignore_space`,
+`HIST_IGNORE_SPACE` and `histignorespace` are one request here exactly as
+they are one request in zsh, and a dialect with no such option leaves the
+field blank rather than naming a variable its shell does not have.
+`histignorespace` and `histignoredups` are the two names that stopped
+being *recorded-only* when this was built; see `docs/spec/semantics.md`.
+
+One thing is measured and not built. bash's `HISTIGNORE` gives `&` a
+meaning of its own: measured,
 `HISTIGNORE=&` drops a line identical to the one before it, exactly as
 `ignoredups` does. That is not implemented — a pattern of `&` is matched
 literally here — because it is a second spelling of a rule the same

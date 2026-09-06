@@ -407,6 +407,22 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 			// boundary: a trap the subshell set for itself catches nothing
 			// aimed at a pid it does not have.
 			r.recordSharedDeath(name, sig)
+			// And whether the subshell has anything left to do is the
+			// dialect's. Five of the six run the rest of the body, because
+			// five of the six gave the subshell a process of its own and the
+			// signal was aimed at the parent. ksh93 runs a subshell in the
+			// shell's own process, so the signal lands on the very thing
+			// that was about to run the next command — and nothing here
+			// forks either, which is what makes this a choice rather than a
+			// consequence. See Semantics.SubshellRunsOnAfterSignalingTheShell.
+			if !r.ask(r.sem().SubshellRunsOnAfterSignalingTheShell,
+				"whether a subshell runs on after signaling the shell") {
+				// Only the subshell stops here. The death is already
+				// recorded, so the parent takes it at the next sequence
+				// point and ends by the signal exactly as it would have.
+				r.status = 128 + int(sig)
+				r.ctl = controlExit
+			}
 			return nil
 		}
 		r.signalDeath(name, sig)

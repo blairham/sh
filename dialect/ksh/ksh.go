@@ -218,7 +218,10 @@ func Semantics() interp.Semantics {
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
 	// \x does not.
 	s.EchoOptions = "ne"
-	s.EchoExpandsEscEscape = interp.Yes
+	// `\E` is the escape character here and `\e` is two characters — the
+	// opposite of zsh, which is why one axis could not answer for both.
+	s.EchoExpandsEscEscape = interp.No
+	s.EchoExpandsCapitalEscEscape = interp.Yes
 	// read takes -r and -s plus -A, whose array is the first operand where
 	// bash's -a takes it as the option's argument, and the same -d, -n, -N,
 	// -t and -u. -p is a bare flag naming the coprocess as the source —
@@ -227,6 +230,8 @@ func Semantics() interp.Semantics {
 	// process` and 1, the variables untouched. A short -n is a success
 	// here; a short -N reports 1 and leaves the variable empty.
 	s.ReadOptions = "rspAd:n:N:t:u:"
+	// ksh93 takes `-n` and refuses `-m`, with its own usage line after it.
+	s.UnsetOptions = "vfn"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
@@ -316,6 +321,11 @@ func Semantics() interp.Semantics {
 	// The octal wants its `\0`: `printf '%b' 'a\101Z'` is `a\101Z` and
 	// `a\0101Z` is `aAZ`.
 	s.PrintfBOctalWithoutZero = interp.No
+	// This shell alone: what a `\c` left is written as it stands, so
+	// `printf '[%5b]' 'a\cb'` is `[a` where the other five pad it. A
+	// property of the stop — with nothing stopping it this shell pads and
+	// truncates like the rest.
+	s.PrintfBStopIsPadded = interp.No
 	// The same set bash takes, and ignored the same way. ksh93 will also
 	// read a width *after* the modifier — `%l5d` is a padded 42 there — but
 	// that is its free-order conversion prefix rather than this axis: `%5-d`
@@ -432,6 +442,11 @@ func Semantics() interp.Semantics {
 	// `-i script.sh` with no terminal anywhere, announcing its background
 	// jobs into a pipe.
 	s.InteractiveMonitorNeedsATerminal = interp.No
+	// A subshell here is not a process of its own, so a fatal signal aimed
+	// at the shell from inside one lands on the thing that was about to run
+	// the next command. Measured: `(kill -TERM $$; echo inner)` prints
+	// nothing at all, where the five that fork print `inner` and then die.
+	s.SubshellRunsOnAfterSignalingTheShell = interp.No
 	// And it announces both ends of a job on that route: measured on
 	// `-i script.sh` through a pseudo-terminal, `[1]\t<pid>` as the job
 	// starts and `[1] +  Done  sleep 0.3 &` as it ends.
@@ -552,7 +567,12 @@ func Diagnostics() interp.Diagnostics {
 		InvocationUsage:    "Usage: %[2]s [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]",
 		SignalDescriptions: signalDescriptions(),
 		JobRunning:         " Running",
-		JobStopped:         "Stopped",
+		// The spec is not named. Measured on `jobs %9`, which says exactly
+		// `jobs: no such job` — the one wording in this area that uses
+		// neither verb, and it is the shell rather than a truncation: `%nope`
+		// produces the same line.
+		NoSuchJob:  "%[1]s: no such job",
+		JobStopped: "Stopped",
 		// ^Z prints the listing's own row straight after the echoed `^Z`, as
 		// dash does; `fg` names the command alone. `bg` writes the job
 		// number, a tab, the command and an `&` with no space before it —

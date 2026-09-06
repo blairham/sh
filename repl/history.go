@@ -6,6 +6,7 @@ package repl
 import (
 	"bufio"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -109,17 +110,18 @@ func (h historyFile) load(ctx context.Context) []string {
 		// is turned off is not an access that was refused.
 		return nil
 	}
-	if !h.bound.Open(ctx, h.path, false) {
-		// A refused history reads as no history, which is what a missing
-		// file already means here — the session starts empty rather than
-		// failing to start.
-		return nil
-	}
-	// A missing file is not an error, and neither is no file at all: the
-	// first session a person runs has no history, and a history turned off
-	// has no path — the open fails either way and there is nothing to read.
+	// A refused history reads as no history, and so does a missing file:
+	// the first session a person runs has no history, a history turned off
+	// has no path, and a policy that hides the file meant for it not to be
+	// read. The open fails in all three cases and there is nothing to read.
 	// Complaining would be the first thing they saw.
-	f, err := os.Open(h.path)
+	//
+	// The open is the boundary's rather than the os package's, which is what
+	// makes HISTFILE a verified access: it is a shell variable, so a typed
+	// line can point it at a link into somewhere the policy hides, and until
+	// #942 the gate was asked about the name and the read was done on the
+	// object.
+	f, err := h.bound.OpenFile(ctx, boundary.File{Path: h.path})
 	if err != nil {
 		return nil
 	}
@@ -150,20 +152,27 @@ func (h historyFile) save(ctx context.Context, added []string) error {
 	if h.path == "" || h.size == 0 || h.file == 0 || len(added) == 0 {
 		return nil
 	}
-	if !h.bound.Open(ctx, h.path, true) {
+	// 0600: a shell history is a record of what someone typed, which is not
+	// something to leave readable by everyone on the machine. Parents,
+	// because the directory may not exist on a first run — a HISTFILE
+	// somewhere deliberate rather than in a home that is already there — and
+	// the boundary makes it only once the gate has allowed the file, so a
+	// refused HISTFILE does not leave a directory tree behind where it
+	// pointed.
+	f, err := h.bound.OpenFile(ctx, boundary.File{
+		Path:    h.path,
+		Flags:   os.O_APPEND | os.O_CREATE | os.O_WRONLY,
+		Perm:    0o600,
+		Parents: true,
+	})
+	if errors.Is(err, boundary.ErrRefused) {
 		// Refused, and silently: the session is ending, there is nobody left
 		// to tell, and a policy that hid the file meant for it not to be
-		// written. The sink has the refusal.
+		// written. The sink has the refusal. A HISTFILE that is a link into
+		// a denied place is refused here too, on the object rather than on
+		// the name, and reads the same way.
 		return nil
 	}
-	if dir := filepath.Dir(h.path); dir != "" {
-		// The directory may not exist on a first run — a HISTFILE somewhere
-		// deliberate rather than in a home that is already there.
-		_ = os.MkdirAll(dir, 0o700)
-	}
-	// 0600: a shell history is a record of what someone typed, which is not
-	// something to leave readable by everyone on the machine.
-	f, err := os.OpenFile(h.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}

@@ -243,7 +243,15 @@ func (p *printer) stmt(st *Stmt) {
 	}
 	p.expr(st.Expr)
 	if st.Background {
-		p.str(" &")
+		// `&!` rather than `&` where the job was let go of. One spelling of
+		// the two goes back, which is the printer's usual bargain: `&!` and
+		// `&|` parse to the same tree, so there is nothing to choose
+		// between them and nothing a test could tell apart.
+		if st.Disown {
+			p.str(" &!")
+		} else {
+			p.str(" &")
+		}
 	}
 	p.flushHeredocs()
 }
@@ -961,6 +969,13 @@ func (p *printer) span(s Span) {
 		}
 		p.str("$(" + s.Value + ")")
 	case ArithSubst:
+		// The spelling that was read, for the reason Span.Bracketed gives:
+		// the two are one node and are not one syntax, and normalizing them
+		// would edit a script rather than print it.
+		if s.Bracketed {
+			p.str("$[" + s.Value + "]")
+			return
+		}
 		p.str("$((" + s.Value + "))")
 	case ParamExp:
 		// `$x` where that is what it means, and `${x}` where the braces are

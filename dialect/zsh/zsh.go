@@ -16,6 +16,12 @@ import (
 // Dialect is what zsh parses.
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
+	// `$[expr]`, zsh's other arithmetic spelling and the older one.
+	// Measured 2026-09-06: `echo $[1+1]` is 2, and the same text is
+	// the literal `$[1+1]` in ksh93 and dash. Reading it as a glob is
+	// what made the failure `no matches found`, which points a
+	// person at globbing rather than at arithmetic (#900).
+	d.DollarBracketArith = true
 	// zsh does not expand under `-c` even with the option set.
 	// Measured 2026-09-05: `zsh -c 'alias hi=...; hi'` does not expand and
 	// the same two lines in a file, or on standard input, do. The route is
@@ -68,11 +74,21 @@ func Dialect() syntax.Dialect {
 	// 3.2, bash-as-sh and ksh93, and dash — which has no `[[ ]]` — tries to
 	// open a file called `-`.
 	d.NumericRangePattern = true
+	// `cmd &!` and `cmd &|` background a job and let go of it. zsh's alone:
+	// bash 5.3 and ksh93 parse `&!` as `&` and a negation and keep the job,
+	// and `&|` is a syntax error in every bash and in dash.
+	d.BackgroundAndDisown = true
 	// The parenthesized flag group an expansion may open with — `${(U)x}`,
 	// `${(%):-%x}` — which is this dialect's alone: the other three call
 	// the whole expansion a bad substitution.
 	d.ParamExpansionFlags = true
 	d.ParamElementSelection = true
+	// An expansion where a parameter name would be — `${${v}#a}`, which is
+	// how this shell applies one expansion to the result of another and is
+	// idiomatic here rather than a corner. Measured 2026-09-05 on zsh 5.9.2
+	// against the rest of the panel: bash 3.2 and 5.3 answer `bad
+	// substitution` and ksh93 a syntax error, so this shell alone.
+	d.NestedParamExpansion = true
 	// A parameter written without braces carries a subscript here, and `$#a`
 	// is a count rather than `$#` with a letter after it. Measured 2026-09-05
 	// on zsh 5.9.2: `a=(x y z); echo $a[1]` prints `x` and `echo $#a` prints
@@ -126,6 +142,9 @@ func Semantics() interp.Semantics {
 	// `monitor off` — zsh disagreeing with itself rather than an answer to
 	// this.
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
+	// The same, and zsh is worth stating rather than assuming: it forks for
+	// a `( )` that has a command after it, which is where this was measured.
+	s.SubshellRunsOnAfterSignalingTheShell = interp.Yes
 	// And it announces both ends of a job on that route: measured on
 	// `-i script.sh` through a pseudo-terminal, `[1] <pid>` as the job
 	// starts and `[1]  + done       sleep 0.3` as it ends.
@@ -293,7 +312,10 @@ func Semantics() interp.Semantics {
 	s.EchoOptions = "neE"
 	s.EchoLastEscapeFlagWins = interp.No
 	s.EchoExpandsHexEscapes = interp.Yes
+	// `\e` is the escape character here and `\E` is two characters — the
+	// opposite of ksh93.
 	s.EchoExpandsEscEscape = interp.Yes
+	s.EchoExpandsCapitalEscEscape = interp.No
 	// read takes -r and -s, -A with the array as the first operand, and the
 	// same -d, -t and -u as the others — but no counts: -N is a bad option
 	// here and -n is a flag it reads and, outside completion widgets, acts
@@ -304,6 +326,11 @@ func Semantics() interp.Semantics {
 	// spelling is not modeled, so here it reads the word after it as its
 	// seconds.
 	s.ReadOptions = "rsnpAd:t:u:"
+	// `unset -m` reads its operands as patterns, which is this shell's
+	// alone; `-n` is not here, and that is measured rather than an
+	// omission — `unset -n x` is `bad option: -n` in zsh 5.9.2 where bash
+	// 5.3 and ksh93 take it.
+	s.UnsetOptions = "vfm"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutFinishesWhatItStarted
 	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ArithLeadingZeroIsOctal = interp.No
@@ -395,6 +422,7 @@ func Semantics() interp.Semantics {
 	s.PrintfBCapitalEscEscape = interp.No
 	// The octal wants its `\0`, as in ksh93.
 	s.PrintfBOctalWithoutZero = interp.No
+	s.PrintfBStopIsPadded = interp.Yes
 	// One of `h`, `l` and `L`, which is C89's set: `%ld` is a decimal and
 	// `%lld`, `%zX` and `%jd` are invalid directives.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC89
@@ -859,6 +887,7 @@ func Diagnostics() interp.Diagnostics {
 		UnaliasNotFound:        "no such hash table element: %[2]s",
 		UnaliasAllWithOperands: "-a: too many arguments",
 		UnaliasUsage:           "not enough arguments",
+		UnsetPatternUsage:      "%[1]s: not enough arguments",
 		UnaliasNoOperandStatus: 1,
 		// The builtin's name comes from the location here, as everywhere in
 		// zsh, so it is not in the wording.
@@ -875,8 +904,12 @@ func Diagnostics() interp.Diagnostics {
 		WaitBadJob:               "wait: job not found: %[1]s",
 		WaitBadJobStatus:         127,
 		// The builtin's name rides the location, as ever.
-		WaitNoSuchJob:                    "wait: %[1]s: no such job",
-		KillNoSuchJob:                    "kill: %[1]s: no such job",
+		WaitNoSuchJob: "wait: %[1]s: no such job",
+		KillNoSuchJob: "kill: %[1]s: no such job",
+		// The wording is the shared one; the number is not. Measured,
+		// `jobs %9` reports 127 — a command that is not there — which is the
+		// same number this shell's `wait` gives a job that is not there.
+		NoSuchJobStatus:                  127,
 		DisownNoCurrentJob:               "disown: no current job",
 		WaitNotOurChild:                  "wait: pid %[1]d is not a child of this shell",
 		TrapCouldNotParse:                "couldn't parse trap command",

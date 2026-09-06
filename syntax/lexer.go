@@ -523,7 +523,8 @@ func (l *Lexer) fdVariableSubscript(open int) (int, bool) {
 var operators = []Kind{
 	TokDSemiAmp, TokTLess, TokAmpDGreat, TokDLessDash, // 3 bytes
 	TokAndAnd, TokOrOr, TokDSemi, TokSemiAmp, TokDGreat, TokLessAmp, TokGreatAmp,
-	TokLessGreat, TokClobber, TokDLess, TokAmpGreat, // 2 bytes
+	TokLessGreat, TokClobber, TokDLess, TokAmpGreat,
+	TokAmpBang, TokAmpPipe, // 2 bytes
 	TokAmp, TokPipe, TokSemi, TokLeftParen, TokRightParen, TokLess, TokGreat, // 1 byte
 }
 
@@ -538,6 +539,8 @@ func (l *Lexer) enabled(k Kind) bool {
 		return l.dialect.CaseContinue
 	case TokTLess:
 		return l.dialect.Herestring
+	case TokAmpBang, TokAmpPipe:
+		return l.dialect.BackgroundAndDisown
 	}
 	return true
 }
@@ -785,6 +788,13 @@ func (l *Lexer) scanWord(start Pos) Token {
 			flush()
 			spans = append(spans, l.scanParens(ArithSubst, Unquoted))
 
+		case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
+			// The older spelling of the case above. Where the flag is off
+			// this falls through to the literal path, which leaves a `$` and
+			// a bracket expression — what ksh93 and dash do with it.
+			flush()
+			spans = append(spans, l.scanBracket(Unquoted))
+
 		case c == '$' && l.peekAt(1) == '(':
 			flush()
 			spans = append(spans, l.scanParens(CommandSubst, Unquoted))
@@ -909,6 +919,10 @@ func (l *Lexer) heredocSpans() []Span {
 			flush()
 			out = append(out, l.scanParens(ArithSubst, DoubleQuoted))
 			litPos = l.pos()
+		case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
+			flush()
+			out = append(out, l.scanBracket(DoubleQuoted))
+			litPos = l.pos()
 		case c == '$' && l.peekAt(1) == '(':
 			flush()
 			out = append(out, l.scanParens(CommandSubst, DoubleQuoted))
@@ -991,6 +1005,10 @@ func (l *Lexer) scanDouble() []Span {
 		case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
 			flush()
 			out = append(out, l.scanParens(ArithSubst, DoubleQuoted))
+			litPos = l.pos()
+		case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
+			flush()
+			out = append(out, l.scanBracket(DoubleQuoted))
 			litPos = l.pos()
 		case c == '$' && l.peekAt(1) == '(':
 			flush()
@@ -1178,12 +1196,83 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		}
 	}
 
+	if holdsCommands(kind) {
+		// Counting found the end, which for a command substitution means the
+		// read above could not — and the commonest reason is the shape #785
+		// is about: a here-document
+		// whose delimiter is only there because the `)` follows it, so the
+		// body ran past the substitution and took the closing parenthesis
+		// with it. The document *did* end at end of input, and the one shell
+		// that says so says it here.
+		//
+		// Read from the substitution's own text, closing parenthesis
+		// included, because that is what the here-document's input is: the
+		// delimiter line is `EOF)` and matches nothing, and the last line of
+		// the substitution is the last line the body could have. The trimmed
+		// text would say the opposite — `EOF` alone is the delimiter, so
+		// there would be nothing to remark on, which is also why the
+		// substitution itself runs and yields `a`.
+		l.takeRemarks(l.src[start:l.off], open.Line)
+	}
 	// Trim the closing delimiters the loop consumed.
 	end := l.off
 	for n := 1; n <= closers(kind) && end > start && l.src[end-1] == ')'; n++ {
 		end--
 	}
 	return Span{Kind: kind, Value: l.src[start:end], Quoting: q, Pos: open}
+}
+
+// scanBracket reads `$[ … ]`, the older spelling of `$(( … ))`.
+//
+// It produces an ArithSubst span, because that is what it is: everything
+// downstream — the expression parser, evaluation, every diagnostic — is the
+// same, and only the delimiters differ. Span.Bracketed carries the spelling
+// for the printer.
+//
+// The closing `]` is found the way scanParens finds its `)`: by tracking
+// quoting and nesting rather than by taking the first one. Nesting is not
+// theoretical here — a subscript is arithmetic too, and `$[a[1]+1]` answers
+// in both shells that have the construct, so the inner `]` has to be counted
+// past.
+func (l *Lexer) scanBracket(q Quoting) Span {
+	open := l.pos()
+	l.advance() // $
+	l.advance() // [
+	depth := 1
+	start := l.off
+
+	for depth > 0 {
+		if l.eof() {
+			l.ranOut("$[")
+			l.fail(open, "unterminated arithmetic substitution")
+			break
+		}
+		switch l.peek() {
+		case '\'':
+			l.skipQuoted('\'', false)
+		case '"':
+			l.skipQuoted('"', true)
+		case '\\':
+			l.advance()
+			if !l.eof() {
+				l.advance()
+			}
+		case '[':
+			depth++
+			l.advance()
+		case ']':
+			depth--
+			l.advance()
+		default:
+			l.advance()
+		}
+	}
+
+	end := l.off
+	if end > start && l.src[end-1] == ']' {
+		end--
+	}
+	return Span{Kind: ArithSubst, Value: l.src[start:end], Quoting: q, Pos: open, Bracketed: true}
 }
 
 // parseToClose reads the contents of a command substitution and returns the
@@ -1193,6 +1282,29 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 // answer the grammar's question rather than a counting one. It reports
 // failure rather than a guess: an unfinished substitution has no closing
 // parenthesis to find, and the caller has an older answer for that.
+// takeRemarks reads text as a program of its own and keeps what it had to say
+// about input it accepted anyway, with the positions moved into this source.
+//
+// A parse inside a parse otherwise says nothing: a *failure* there is reported
+// as this parse failing, and a remark — the one thing a parser accepts and
+// remarks on — was dropped with the parser that noticed it. `v=$(cat <<EOF` …
+// `EOF)` runs, `v` is `a`, and the warning about the document ending at end of
+// file went nowhere (#785).
+//
+// from is the line text begins on, so a remark names a line of the program
+// rather than of the substitution. The offsets are relative to text and are
+// left that way: nothing reads a remark's offset, and moving it would claim a
+// correspondence this text does not have — it is a slice of the source here
+// and is not, for the routes that hand this package a fragment.
+//
+// Only remarks are taken. Whatever else the read found — an error, a tree — is
+// the caller's own business and it has already decided what to do about it.
+func (l *Lexer) takeRemarks(text string, from int) {
+	sub := NewParserAt(text, l.dialect, from)
+	sub.parseList()
+	l.remarks = append(l.remarks, sub.lex.remarks...)
+}
+
 func (l *Lexer) parseToClose(from int) (int, bool) {
 	sub := NewParser(l.src[from:], l.dialect)
 	sub.parseList()
@@ -1208,6 +1320,20 @@ func procSubstKind(c byte) SpanKind {
 		return ProcSubstOut
 	}
 	return ProcSubstIn
+}
+
+// holdsCommands reports whether what is between the parentheses is a program
+// rather than an expression.
+//
+// It decides which spans are read again for what that read has to say about
+// them, and the line it draws is not decoration: `$(( a << b ))` is a left
+// shift, and reading it as a program makes `<<` a here-document whose
+// delimiter `b` never arrives — a warning about a script that has none. The
+// two process-substitution kinds are on this side of it, which is measured
+// rather than assumed: bash remarks on `<(cat <<EOF` … `EOF)` exactly as it
+// does on `$(cat <<EOF` … `EOF)`.
+func holdsCommands(k SpanKind) bool {
+	return k == CommandSubst || k == ProcSubstIn || k == ProcSubstOut
 }
 
 func closers(k SpanKind) int {

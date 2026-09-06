@@ -50,7 +50,13 @@ func TestHistoryStyleForgetsWhatItIgnores(t *testing.T) {
 	if s.IgnoreIsOnePattern {
 		t.Error("HISTIGNORE is a colon-separated list, not one pattern")
 	}
-	if s.IgnoredStaysInSession {
+	if s.PatternIgnoredStaysInSession {
 		t.Error("this shell drops an ignored line from the session as well as from the file")
+	}
+	// bash spells the other two rules in HISTCONTROL and has no option for
+	// either. Naming one would give the dialect a `shopt` real bash ignores.
+	if s.IgnoreSpaceOption != "" || s.IgnoreDupsOption != "" {
+		t.Errorf("bash keeps these in HISTCONTROL, got %q and %q",
+			s.IgnoreSpaceOption, s.IgnoreDupsOption)
 	}
 }

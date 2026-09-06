@@ -132,3 +132,33 @@ func TestDisownLetsGoOrOnlyShields(t *testing.T) {
 		t.Errorf("stderr = %q, want the dialect's wording", errs)
 	}
 }
+
+// A job spec that names nothing reports the dialect's number, which is four
+// different answers across the panel and is what makes a slot answerable by
+// `jobs %n` at all.
+//
+// Measured 2026-09-05: bash 5.3.15, bash 3.2.57, bash 3.2 as `sh` and ksh93u+
+// report 1, dash reports 2, and zsh 5.9.2 reports 127. Zero here means the
+// shared 1.
+func TestTheStatusForAJobSpecThatNamesNothing(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dg   Diagnostics
+		want string
+	}{
+		{"the shared answer", Diagnostics{}, "one=1\n"},
+		{"a dialect with a number of its own", Diagnostics{NoSuchJobStatus: 2}, "one=2\n"},
+		{"and one that calls it a command that is not there", Diagnostics{NoSuchJobStatus: 127}, "one=127\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dg := tc.dg
+			out, _ := run(t, `jobs %1 >/dev/null 2>&1; echo "one=$?"`, func(r *Runner) {
+				sem := CoreSemantics()
+				r.Semantics, r.Diagnostics = &sem, &dg
+			})
+			if out != tc.want {
+				t.Errorf("out = %q, want %q", out, tc.want)
+			}
+		})
+	}
+}

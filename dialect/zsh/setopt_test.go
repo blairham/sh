@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/internal/dialecttest"
 )
 
 // zsh's option namespace ignores case and underscores, and a single `no`
@@ -338,5 +340,100 @@ func TestRecordedOptionAnswersTheCondition(t *testing.T) {
 			`[[ -o no_auto_cd ]]; echo "c=$?"; [[ -o dotglob ]]; echo "d=$?"`)
 	if want := "a=1\nb=0\nc=1\nd=1\n"; out != want || st != 0 {
 		t.Errorf("out %q status %d, want %q at 0", out, st, want)
+	}
+}
+
+// TestAliasesIsAnOptionAndNotAConstant — `no_aliases` is what a prompt theme
+// sets to protect its own code from a user's aliases, and it was a name that
+// could be read and not written: `setopt aliases` was granted because the
+// state already matched, and `setopt no_aliases` was `can't change option`.
+//
+// The state is the *option*, which is not the same question as whether this
+// shell expands aliases at all. The route answers that one — measured, zsh
+// under `-c` does not expand and the same two lines in a file do — while
+// `[[ -o aliases ]]` reads on under `-c` all the same.
+func TestAliasesIsAnOptionAndNotAConstant(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`[[ -o aliases ]]; echo on=$?`, "on=0\n"},
+		{`setopt no_aliases; [[ -o aliases ]]; echo off=$?`, "off=1\n"},
+		{`unsetopt aliases; [[ -o aliases ]]; echo off=$?`, "off=1\n"},
+		{`unsetopt aliases; setopt aliases; [[ -o aliases ]]; echo back=$?`, "back=0\n"},
+		// Through `builtin`, which is how the theme writes it.
+		{`builtin setopt no_aliases; [[ -o aliases ]]; echo off=$?`, "off=1\n"},
+	} {
+		if out, st := runZsh(t, dir, tc.src); out != tc.want || st != 0 {
+			t.Errorf("%s: out %q status %d, want %q", tc.src, out, st, tc.want)
+		}
+	}
+	// The listing follows, and it is the half a state nothing reads would
+	// still pass: `setopt` prints the spellings that are on where their
+	// default is off, so `noaliases` appears there only once it has been
+	// set, and `unsetopt` prints it until then. Asserted as whole lines
+	// rather than by searching the text, because `noaliases` is a substring
+	// of nothing here but would be of a name added later.
+	for _, tc := range []struct {
+		src, line string
+		want      bool
+	}{
+		{`setopt`, "noaliases", false},
+		{`setopt no_aliases; setopt`, "noaliases", true},
+		{`unsetopt`, "noaliases", true},
+		{`setopt no_aliases; unsetopt`, "noaliases", false},
+	} {
+		out, st := runZsh(t, dir, tc.src)
+		if st != 0 {
+			t.Errorf("%s: status %d", tc.src, st)
+		}
+		if got := hasLine(out, tc.line); got != tc.want {
+			t.Errorf("%s: %q listed = %v, want %v (out %q)", tc.src, tc.line, got, tc.want, out)
+		}
+	}
+}
+
+// hasLine reports whether s has line as a whole line of its own.
+func hasLine(s, line string) bool {
+	for _, l := range strings.Split(s, "\n") {
+		if l == line {
+			return true
+		}
+	}
+	return false
+}
+
+// TestNoAliasesReachesTheExpansionSwitch — the option is not only recorded:
+// turning it off stops the parser being offered the table, and turning it
+// back on restores what the *route* said rather than forcing expansion on.
+//
+// Asserted through the runner rather than through a program, because the
+// helper above parses its whole source before running any of it — so a
+// `setopt` in one snippet can never be seen by the parse of the next line in
+// the same snippet. The corpus case runs it from a file, where it can.
+func TestNoAliasesReachesTheExpansionSwitch(t *testing.T) {
+	for _, base := range []bool{true, false} {
+		r := preset.Runner(dialecttest.Base{Dir: t.TempDir()})
+		r.SetAliasExpansionBase(base)
+		if got := r.AliasExpansion(); got != base {
+			t.Fatalf("base %v: the switch started at %v", base, got)
+		}
+		setopt, ok := r.Builtin("setopt")
+		if !ok {
+			t.Fatal("this dialect has no setopt")
+		}
+		if code := setopt(r, t.Context(), []string{"no_aliases"}); code != 0 {
+			t.Errorf("base %v: setopt no_aliases reported %d", base, code)
+		}
+		if r.AliasExpansion() {
+			t.Errorf("base %v: the option is off and the switch is still on", base)
+		}
+		if code := setopt(r, t.Context(), []string{"aliases"}); code != 0 {
+			t.Errorf("base %v: setopt aliases reported %d", base, code)
+		}
+		// Back to the route's answer, not to `true`: a shell the route says
+		// does not expand must not start expanding because a script turned
+		// an option back on.
+		if got := r.AliasExpansion(); got != base {
+			t.Errorf("base %v: the switch came back at %v, want the route's answer", base, got)
+		}
 	}
 }

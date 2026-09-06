@@ -87,9 +87,25 @@ type Semantics struct {
 	// EchoExpandsHexEscapes admits `\xHH` alongside the XSI set: bash and
 	// zsh do, dash and ksh93 print it as written.
 	EchoExpandsHexEscapes Answer
-	// EchoExpandsEscEscape admits `\e` and `\E` for the escape character:
-	// everyone with escapes but dash, whose set is the XSI list alone.
+	// EchoExpandsEscEscape admits `\e` for the escape character in an `echo`
+	// argument: bash 5.3 and zsh do, dash bash 3.2 and ksh93 write the two
+	// characters.
+	//
+	// It is a separate axis from EchoExpandsCapitalEscEscape below because
+	// the two shells that split the letters split them in *opposite*
+	// directions, so no single answer describes either one — ksh93 has `\E`
+	// and not `\e`, zsh has `\e` and not `\E` (#908). It is the same
+	// asymmetry the `%b` site has, and it is asked separately there: see
+	// PrintfBEscEscape.
+	//
+	// Asked only where an `echo` argument actually carries a `\e`.
 	EchoExpandsEscEscape Answer
+	// EchoExpandsCapitalEscEscape admits `\E` in an `echo` argument: bash 5.3
+	// and ksh93 do, dash bash 3.2 and zsh write the two characters. See
+	// EchoExpandsEscEscape for why the two letters are two questions.
+	//
+	// Asked only where an `echo` argument actually carries a `\E`.
+	EchoExpandsCapitalEscEscape Answer
 	// EchoInterpretsEscapes expands backslash escapes in `echo` without -e.
 	// True in dash and zsh, false in bash and ksh93 — a grouping no other
 	// axis produces.
@@ -126,6 +142,14 @@ type Semantics struct {
 	// coprocess as the source in ksh93 and zsh. Empty means `r`, the one
 	// letter POSIX gives the builtin.
 	ReadOptions string
+	// UnsetOptions is the same question asked of `unset`, spelled the same
+	// way. The letters split three ways and no two dialects have the same
+	// set: `-v` and `-f` are unanimous, `-n` is bash 5.3's and ksh93's — and
+	// is refused by bash 3.2, dash and zsh — and `-m`, which reads its
+	// operands as *patterns* and unsets every parameter whose name matches
+	// one, is zsh's alone. Measured 2026-09-05 across the panel. Empty means
+	// `vf`, which is what POSIX gives the builtin.
+	UnsetOptions string
 	// ReadZeroTimeout is what `read -t 0` asks of the stream — a poll, a
 	// read of what is already waiting, or a read that commits once it has
 	// begun. Asked only where `-t 0` is actually written; every other
@@ -412,6 +436,44 @@ type Semantics struct {
 	// dies by it.
 	QuitIgnoredWhenNotInteractive Answer
 
+	// SubshellRunsOnAfterSignalingTheShell lets the rest of a subshell's
+	// body run after something inside it has sent the whole shell a fatal
+	// signal — `(kill -TERM $$; echo inner)`. True in bash, dash and zsh;
+	// false in ksh93.
+	//
+	// The shell ends either way, and that half is unanimous. Measured
+	// 2026-09-05, `(kill -TERM $$; echo inner); echo outer` ends the shell by
+	// the signal in all six panel members, `outer` is printed by none of
+	// them, and the answer is the same on twenty-five runs of each under
+	// load — this is not a delivery race. What splits is `inner`: bash
+	// 5.3.15, bash 3.2.57, bash 3.2 run as `sh`, dash and zsh 5.9.2 print it
+	// and ksh93u+ does not.
+	//
+	// The reason is the opposite of the obvious one. Measured with a child
+	// started inside the subshell and its parent process id read back:
+	// bash, dash and zsh give it a **process of its own**, so `$$` names the
+	// parent, the child never receives the signal, and it finishes its body
+	// while the parent dies. ksh93 runs the subshell **in the shell's own
+	// process**, so `kill -TERM $$` is a self-signal landing on the very
+	// process that was about to run `echo inner`, and there is nothing left
+	// to run it. So the shell that keeps going is the one that forked, and
+	// ksh93 is the panel's only member here that does not.
+	//
+	// Nothing in this implementation forks for a subshell either, which is
+	// what makes this an axis rather than a consequence: the answer has to be
+	// chosen rather than inherited from the architecture, and choosing the
+	// majority is choosing to behave like the shells that fork.
+	//
+	// Only a subshell. Measured on the same signal at the top level, in a
+	// brace group, in a function body and in a `while` body: all six shells
+	// stop at once and print nothing, so there is no question to ask
+	// anywhere but here.
+	//
+	// The preset says yes. POSIX has `( )` execute "in a subshell
+	// environment" and describes that environment as a copy, which is the
+	// forking reading, and it is five of the six.
+	SubshellRunsOnAfterSignalingTheShell Answer
+
 	// HangupIsAnOrderlyExit makes an untrapped SIGHUP end the shell the way
 	// `exit 1` would rather than by the signal's default action.
 	//
@@ -559,6 +621,22 @@ type Semantics struct {
 	//
 	// Asked only where a `%b` argument actually carries a `\E`.
 	PrintfBCapitalEscEscape Answer
+	// PrintfBStopIsPadded puts what a `\c` left of a `%b` argument through the
+	// conversion's field all the same — the width, the precision and the
+	// left-justifying flag. bash, dash and zsh do; ksh93 alone writes the
+	// partial text as it stands:
+	//
+	//	printf '[%5b]'   'a\cb'   five  [    a      ksh93  [a
+	//	printf '[%-5b]'  'a\cb'   five  [a          ksh93  [a
+	//	printf '[%.1b]'  'ab\cc'  five  [a          ksh93  [ab
+	//
+	// It is a property of the *stop* and not of the conversion: with nothing
+	// stopping it ksh93 pads and truncates like the rest, so `printf '[%5b]'
+	// 'ab'` is `[   ab` in all six.
+	//
+	// Asked only where a `\c` actually stopped a `%b` *and* the field would
+	// change the text, so an ordinary `printf '%b' 'a\cb'` needs no dialect.
+	PrintfBStopIsPadded Answer
 	// PrintfBOctalWithoutZero reads a `%b` argument's `\nnn` as octal with no
 	// leading zero to introduce it. bash and dash do; ksh93 and zsh want the
 	// `\0` and write `\101` as the four characters it is.
@@ -3032,13 +3110,16 @@ func PosixSemantics() Semantics {
 		BuiltinWriteErrorFailsTheCommand: Yes,
 		// The XSI echo: -n alone, no \x, no \e. The letters the dialects
 		// add are theirs to add.
-		EchoOptions:           "n",
-		EchoExpandsHexEscapes: No,
-		EchoExpandsEscEscape:  No,
+		EchoOptions:                 "n",
+		EchoExpandsHexEscapes:       No,
+		EchoExpandsEscEscape:        No,
+		EchoExpandsCapitalEscEscape: No,
 		// The POSIX read: -r alone. The counts, delimiters and descriptors
 		// the dialects add are theirs to add, and the two count axes are
 		// unreachable without the letters that raise them.
 		ReadOptions: "r",
+		// POSIX gives `unset` both letters and no others.
+		UnsetOptions: "vf",
 		// The POSIX jobs: -l and -p, and `-p` means the process ids alone.
 		// The state filters and the rest are the dialects' additions, and
 		// the two axes their letters raise are unreachable without them.
@@ -3338,6 +3419,11 @@ func PosixSemantics() Semantics {
 		TerminalTestRequiresANumber:      Yes,
 		FcEmptyHistoryIsAnError:          No,
 		JobControlAbsenceIsReportedFirst: No,
+		// POSIX has `( )` run "in a subshell environment" and describes that
+		// environment as a copy, which is the forking reading: the copy is
+		// not the process the signal was aimed at, so it finishes its body.
+		// Five of the six as well.
+		SubshellRunsOnAfterSignalingTheShell: Yes,
 		// The standard describes `exit` as exiting and says nothing about a
 		// job left stopped, so the base leaves; bash and zsh, which stay and
 		// warn, override.
@@ -4002,7 +4088,8 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		// serves — `case` and `[[ ]]` — and neither of the others: pathname
 		// expansion has a fold of its own, and parameter expansion stays
 		// exact. Which is why the fold sits here and not in patternOpts.
-		fold: r.MatchOption(MatchFoldsCase),
+		fold:  r.MatchOption(MatchFoldsCase),
+		chars: r.patternCountsCharacters(pattern, s),
 	}
 	var bad bool
 	if hasUnterminatedBracket(pattern) {

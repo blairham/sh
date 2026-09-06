@@ -1010,9 +1010,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `echo/dash-e-and-capital-e` | `-e a	b~-E c	d` | `a	b~c\td` | `a	b~c\td` | `a	b~c\td` | `a	b~-E c\td` | `a	b~c\td` |
 | `echo/backslash-c-stops-the-output` | `pdone` | `p\cq~done` | `p\cq~done` | `p\cq~done` | `p\cq~done` | `pdone` |
 | `echo/hex-escape-diverges` | `-e A\x41B` | `AAB` | `AAB` | `AAB` | `A\x41B` | `AAB` |
+| `echo/the-two-spellings-of-the-escape-character` | ` 2d 65 20 61 5c 65 5a 3a 61 5c 45 5a 0a ` | ` 61 1b 5a 3a 61 1b 5a 0a ` | ` 61 1b 5a 3a 61 1b 5a 0a ` | ` 61 5c 65 5a 3a 61 5c 45 5a 0a ` | ` 61 5c 65 5a 3a 61 1b 5a 0a ` | ` 61 1b 5a 3a 61 5c 45 5a 0a ` |
 | `echo/the-order-of-e-and-capital-e` | `-e -E m	n` | `m\tn` | `m\tn` | `m\tn` | `-E m	n` | `m	n` |
 | `readonly/reassignment-by-a-declaration` | **2>** `<shell>: 1: export: x: is read only` *(status 2)* | `after` **2>** `<shell>: line 1: x: readonly variable` | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | `after` **2>** `<shell>: x: readonly variable` | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
 | `readonly/reassignment-from-a-command-string` | **2>** `<shell>: 1: x: is read only` *(status 2)* | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | **2>** `<shell>: line 1: x: readonly variable` *(status 127)* | **2>** `<shell>: x: readonly variable` *(status 1)* | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
+| `jobs/a-disowned-job-is-not-in-the-listing` | **2>** `<shell>: 1: Syntax error: "\|" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `sleep 0.4 &\| jobs >j.txt; echo "n=$(grep -c . j.txt)"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `sleep 0.4 &\| jobs >j.txt; echo "n=$(grep -c . j.txt)"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `\|'~<shell>: -c: line 0: `sleep 0.4 &\| jobs >j.txt; echo "n=$(grep -c . j.txt)"'` *(status 2)* | `n=1` | `n=0` |
 | `jobs/a-running-background-job` | `[1] + Running                    ` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                 sleep 0.4 &` | `[1] +  Running                 <command unknown>` | `[1]  + running    sleep 0.4` |
 | `jobs/a-finished-background-job` | `[1] Done                       ~---` | `[1] Done                       sleep 0.05~---` | `[1] Done                       sleep 0.05~---` | `---` | `[1] Running                 <command unknown>~---` | `---` |
 | `jobs/a-background-job-that-failed` | `[1] Done(1)                    ` | `[1] Exit 1                     false` | `[1] Done(1)                    false` | *(no output, status 0)* | `[1] Running                 <command unknown>` | *(no output, status 0)* |
@@ -1030,6 +1032,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `jobs/a-substitution-and-the-parents-jobs` | `no jobs` | `the parent's job` | `the parent's job` | `the parent's job` | `the parent's job` | `no jobs` |
 | `jobs/a-subshell-lists-a-job-it-started-itself` | `its own` | `its own` | `its own` | `its own` | `its own` | `its own` |
 | `jobs/two-job-specs-in-the-order-written` | `[2] + Running                    ~[1] - Running                    ` | `[2]+  Running                    sleep 0.5 &~[1]-  Running                    sleep 0.4 &` | `[2]+  Running                    sleep 0.5 &~[1]-  Running                    sleep 0.4 &` | `[2]+  Running                 sleep 0.5 &~[1]-  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[2]  + running    sleep 0.5~[1]  - running    sleep 0.4` |
+| `jobs/slot-a-running-job-occupies-its-slot` | `one=0~two=0~three=2` | `one=0~two=0~three=1` | `one=0~two=0~three=1` | `one=0~two=0~three=1` | `one=0~two=0~three=1` | `one=0~two=0~three=127` |
+| `jobs/slot-a-status-query-does-not-consume-it` | `a=0~b=0` | `a=0~b=0` | `a=0~b=0` | `a=0~b=0` | `a=0~b=0` | `a=0~b=0` |
+| `jobs/slot-an-empty-table-has-no-first-slot` | `one=2` | `one=1` | `one=1` | `one=1` | `one=1` | `one=127` |
+| `jobs/slot-the-complaint-about-one-that-is-not-there` | `<shell>: 1: jobs: No such job: %9` *(status 2)* | `<shell>: line 1: jobs: %9: no such job` *(status 1)* | `<shell>: line 1: jobs: %9: no such job` *(status 1)* | `<shell>: line 0: jobs: %9: no such job` *(status 1)* | `<shell>: jobs: no such job` *(status 1)* | `<shell>:jobs:1: %9: no such job` *(status 127)* |
+| `jobs/slot-the-last-background-pid-outlives-a-bare-wait` | `bang=set` | `bang=set` | `bang=set` | `bang=set` | `bang=set` | `bang=set` |
 | `read/interrupted-by-a-trapped-signal` | `T~st=1 l=[]` | `T~st=0 l=[late]` | `T~st=130 l=[]` | `T~st=0 l=[late]` | `T~st=258 l=[]` | `T~st=0 l=[late]` |
 | `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
 | `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
@@ -1181,11 +1188,18 @@ grades it and nothing drift-checks it either, for the same reason.
 | `setopt/an-interactive-only-option-will-not-move` | `st=127~st=127` **2>** `<shell>: 1: setopt: not found~<shell>: 1: unsetopt: not found` | `st=127~st=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `st=127~st=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `st=127~st=127` **2>** `<shell>: setopt: command not found~<shell>: unsetopt: command not found` | `st=127~st=127` **2>** `<shell>: setopt: not found~<shell>: unsetopt: not found` | `st=1~st=0` **2>** `<shell>:setopt:1: can't change option: zle` |
 | `setopt/a-recorded-name-answers-the-condition-too` | `a=127~b=127~c=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: setopt: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `a=1~b=1~c=1` **2>** `<shell>: line 1: setopt: command not found` | `a=1~b=1~c=1` **2>** `<shell>: line 1: setopt: command not found` | `a=1~b=1~c=1` **2>** `<shell>: setopt: command not found` | `a=1~b=1~c=1` **2>** `<shell>: setopt: not found` | `a=1~b=0~c=1` |
 | `setopt/nounset-is-the-same-switch-as-set-u` | `~reached` **2>** `<shell>: 1: setopt: not found` | `~reached` **2>** `<shell>: line 1: setopt: command not found` | `~reached` **2>** `<shell>: line 1: setopt: command not found` | `~reached` **2>** `<shell>: setopt: command not found` | `~reached` **2>** `<shell>: setopt: not found` | **2>** `<shell>:1: zz: parameter not set` *(status 1)* |
+| `setopt/hist-ignore-space-moves-and-is-read-back` | `st=127~off` **2>** `<shell>: 1: setopt: not found~<shell>: 1: [[: not found~<shell>: 1: unsetopt: not found~<shell>: 1: [[: not found` | `st=127~off` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `st=127~off` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `st=127~off` **2>** `<shell>: setopt: command not found~<shell>: unsetopt: command not found` | `st=127~off` **2>** `<shell>: setopt: not found~<shell>: unsetopt: not found` | `st=0~on~off` |
+| `setopt/hist-ignore-dups-is-the-set-h-switch` | **2>** `<shell>: 1: set: Illegal option -h` *(status 2)* | `off` **2>** `<shell>: line 1: setopt: command not found` | `off` **2>** `<shell>: line 1: setopt: command not found` | `off` **2>** `<shell>: setopt: command not found` | `off` **2>** `<shell>: setopt: not found` | `on~off` |
+| `setopt/an-option-and-a-variable-are-two-namespaces` | `st=127~v=x` **2>** `<shell>: 1: setopt: not found` | `st=127~v=x` **2>** `<shell>: line 1: setopt: command not found` | `st=127~v=x` **2>** `<shell>: line 1: setopt: command not found` | `st=127~v=x` **2>** `<shell>: setopt: command not found` | `st=127~v=x` **2>** `<shell>: setopt: not found` | `st=1~v=x` **2>** `<shell>:setopt:1: no such option: HISTORY_IGNORE` |
 | `emulate/names-the-current-mode` | **2>** `<shell>: 1: emulate: not found~<shell>: 1: emulate: not found~<shell>: 1: emulate: not found` *(status 127)* | **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` *(status 127)* | **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` *(status 127)* | **2>** `<shell>: emulate: command not found~<shell>: emulate: command not found~<shell>: emulate: command not found` *(status 127)* | **2>** `<shell>: emulate: not found~<shell>: emulate: not found~<shell>: emulate: not found` *(status 127)* | `zsh~sh` |
 | `emulate/sh-moves-the-measured-axes` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2~x*~q` **2>** `<shell>: line 1: emulate: command not found` | `n=2~x*~q` **2>** `<shell>: line 1: emulate: command not found` | `n=2~x*~q` **2>** `<shell>: emulate: command not found` | `n=2~x*~q` **2>** `<shell>: emulate: not found` | `n=2~x*~q` |
 | `emulate/resets-the-options` | `reached` **2>** `<shell>: 1: setopt: not found~<shell>: 1: emulate: not found` | `reached` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found` | `reached` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found` | `reached` **2>** `<shell>: setopt: command not found~<shell>: emulate: command not found` | `reached` **2>** `<shell>: setopt: not found~<shell>: emulate: not found` | `reached` |
 | `emulate/dash-c-restores-after` | `x*~st=0` **2>** `<shell>: 1: setopt: not found~<shell>: 1: emulate: not found` | `x*~st=0` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found` | `x*~st=0` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found` | `x*~st=0` **2>** `<shell>: setopt: command not found~<shell>: emulate: command not found` | `x*~st=0` **2>** `<shell>: setopt: not found~<shell>: emulate: not found` | `inner~x*~st=0` |
 | `emulate/an-unknown-mode-is-passed-over` | `st=127` **2>** `<shell>: 1: emulate: not found~<shell>: 1: emulate: not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` *(status 127)* | `st=127` **2>** `<shell>: emulate: command not found~<shell>: emulate: command not found` *(status 127)* | `st=127` **2>** `<shell>: emulate: not found~<shell>: emulate: not found` *(status 127)* | `st=0~zsh` |
+| `emulate/dash-o-sets-an-option` | `st=127~on=127~off=127` **2>** `<shell>: 1: emulate: not found~<shell>: 1: [[: not found~<shell>: 1: emulate: not found~<shell>: 1: [[: not found` | `st=127~on=1~off=1` **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` | `st=127~on=1~off=1` **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` | `st=127~on=1~off=1` **2>** `<shell>: emulate: command not found~<shell>: emulate: command not found` | `st=127~on=1~off=1` **2>** `<shell>: emulate: not found~<shell>: emulate: not found` | `st=0~on=0~off=1` |
+| `emulate/dash-l-lasts-as-long-as-the-function` | `in=127~out=127` **2>** `<shell>: 1: emulate: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `in=1~out=1` **2>** `<shell>: line 1: emulate: command not found` | `in=1~out=1` **2>** `<shell>: line 1: emulate: command not found` | `in=1~out=1` **2>** `<shell>: emulate: command not found` | `in=1~out=1` **2>** `<shell>: emulate: not found` | `in=0~out=1` |
+| `emulate/dash-l-covers-a-later-setopt` | `in=127~out=127` **2>** `<shell>: 1: emulate: not found~<shell>: 1: setopt: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `in=1~out=1` **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: setopt: command not found` | `in=1~out=1` **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: setopt: command not found` | `in=1~out=1` **2>** `<shell>: emulate: command not found~<shell>: setopt: command not found` | `in=1~out=1` **2>** `<shell>: emulate: not found~<shell>: setopt: not found` | `in=0~out=1` |
+| `setopt/no-aliases-stops-the-expansion` | `expanded~expanded~expanded` **2>** `<script>: 3: setopt: not found~<script>: 5: setopt: not found` | **2>** `<script>: line 2: hi: command not found~<script>: line 3: setopt: command not found~<script>: line 4: hi: command not found~<script>: line 5: setopt: command not found~<script>: line 6: hi: command not found` *(status 127)* | `expanded~expanded~expanded` **2>** `<script>: line 3: setopt: command not found~<script>: line 5: setopt: command not found` | **2>** `<script>: line 2: hi: command not found~<script>: line 3: setopt: command not found~<script>: line 4: hi: command not found~<script>: line 5: setopt: command not found~<script>: line 6: hi: command not found` *(status 127)* | `expanded~expanded~expanded` **2>** `<script>: line 3: setopt: not found~<script>: line 5: setopt: not found` | `expanded~expanded` **2>** `<script>:4: command not found: hi` |
 | `whence/bare-is-the-resolution` | `st=127` **2>** `<shell>: 1: whence: not found~<shell>: 1: whence: not found~<shell>: 1: whence: not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` *(status 127)* | `st=127` **2>** `<shell>: whence: command not found~<shell>: whence: command not found~<shell>: whence: command not found` *(status 127)* | `echo~st=0~if~f` | `echo~st=0~if~f` |
 | `whence/v-is-the-sentence` | `st=127` **2>** `<shell>: 1: whence: not found` | `st=127` **2>** `<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: whence: command not found` | `echo is a shell builtin~st=0` | `echo is a shell builtin~st=0` |
 | `whence/a-name-that-resolves-to-nothing` | `st=127~st=127` **2>** `<shell>: 1: whence: not found~<shell>: 1: whence: not found` | `st=127~st=127` **2>** `<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` | `st=127~st=127` **2>** `<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` | `st=127~st=127` **2>** `<shell>: whence: command not found~<shell>: whence: command not found` | `st=1~st=1` **2>** `<shell>: whence: nosuchcmd431: not found` | `st=1~nosuchcmd431 not found~st=1` |
@@ -1242,6 +1256,10 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   echo -e 'A\x41B'
   ```
+- `echo/the-two-spellings-of-the-escape-character` — read as bytes, because an ESC is invisible in a rendered table and this row is entirely about which of the two letters produces one. The two shells that split `\e` from `\E` split them in *opposite* directions — ksh93 has `\E` and not `\e`, zsh has `\e` and not `\E` — so one answer for both letters is wrong for half the panel. bash 5.3 has both and bash 3.2 neither, which is also the version line here; dash has no -e and prints it. The same asymmetry the `%b` site has, and the row that says `echo` cannot borrow one answer for the pair
+  ```sh
+  echo -e 'a\eZ:a\EZ' | od -An -tx1 | tr -s " "
+  ```
 - `echo/the-order-of-e-and-capital-e` — -e then -E: bash lets the last flag win and prints the backslash, zsh lets -e win and expands — the other order agrees everywhere and asks nothing
   ```sh
   echo -e -E 'm\tn'
@@ -1253,6 +1271,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `readonly/reassignment-from-a-command-string` — an assignment to a name that cannot take one, given as an argument rather than read from a file. All four stop here — and one of them does not when the same three lines come from a file, which the case recorded elsewhere shows. So a readonly reassignment is fatal in three shells always and in the fourth by invocation, which is the second thing found to work that way after an expansion that failed
   ```sh
   readonly x=1; x=2; echo after
+  ```
+- `jobs/a-disowned-job-is-not-in-the-listing` — `&|` starts a job in the background and lets go of it, so nothing lists it — one shell's, and the only shape of it a record can hold. The sibling spelling `&!` cannot be recorded at all: bash 5.3 and ksh93 read those two characters as `&` and the `!` that negates a pipeline, and what they then do with a bare `!` is a divergence of its own (#948), so a row about the disowning would carry four unrelated ones beside it. `&|` has no such second reading in bash or dash, which both refuse it outright. ksh93's cell is the exception and is not this change's: it parses `&|` and means something else again — `echo hi &| echo done` prints only `done` there. Counted rather than printed, because what a listing looks like is four other rows' question
+  ```sh
+  sleep 0.4 &| jobs >j.txt; echo "n=$(grep -c . j.txt)"
   ```
 - `jobs/a-running-background-job` — one line of a `jobs` listing, and four shells write it four ways — the marker spacing, the width of the state column, the case of the word, and whether the command is there at all. dash shows an empty column and ksh93 `<command unknown>`, because neither kept the text; bash puts the `&` back on
   ```sh
@@ -1321,6 +1343,33 @@ grades it and nothing drift-checks it either, for the same reason.
 - `jobs/two-job-specs-in-the-order-written` — operands settle the order themselves — `%2 %1` lists 2 then 1 in all five, including the two whose bare listing starts from the newest — and each row keeps the job's own number rather than counting from the start of the listing
   ```sh
   sleep 0.4 & sleep 0.5 & jobs %2 %1; wait
+  ```
+- `jobs/slot-a-running-job-occupies-its-slot` — the jobs table asked one slot at a time, through a status rather than a listing — which is the only way this is gradeable at all. A bare `jobs` prints a `Done` row for a reaped job on some runs of the same binary and not others, so a family of listing cases would be a family of rows nobody can use (#783). A status has no text to race: two slots are occupied and the third is not, and the number for *not there* is four different answers — bash 1, dash 2, ksh93 1, zsh 127 — which is the whole reason the probe needed the number to be right before it could grade anything. The jobs are five seconds long and killed at the end, so nothing here waits on a scheduler; the trailing `:` keeps the case about slots rather than about what `kill %n` reports, which dash alone answers 1
+  ```sh
+  sleep 5 & sleep 5 &
+  jobs %1 >/dev/null 2>&1; echo "one=$?"
+  jobs %2 >/dev/null 2>&1; echo "two=$?"
+  jobs %3 >/dev/null 2>&1; echo "three=$?"
+  kill %1 2>/dev/null; kill %2 2>/dev/null; :
+  ```
+- `jobs/slot-a-status-query-does-not-consume-it` — the control that makes the row above a probe rather than a measurement of itself: asking about a slot twice gives the same answer twice in all six. It matters because a *listing* does consume what it reports — a finished job is reported once and then forgotten — so a reader could reasonably expect the query to be destructive too. It is not, for a job that is still running
+  ```sh
+  sleep 5 &
+  jobs %1 >/dev/null 2>&1; echo "a=$?"
+  jobs %1 >/dev/null 2>&1; echo "b=$?"
+  kill %1 2>/dev/null; :
+  ```
+- `jobs/slot-an-empty-table-has-no-first-slot` — the floor of the probe, and the cheapest reading of the four not-there statuses: no job has ever been started, so slot one is not there. Same four answers as the row above, with nothing else in the script that could have produced them
+  ```sh
+  jobs %1 >/dev/null 2>&1; echo "one=$?"
+  ```
+- `jobs/slot-the-complaint-about-one-that-is-not-there` — the wording beside the status, and it is three different sentences: bash and zsh name the spec after the builtin, dash puts the sentence first and the spec after it, and ksh93 names no spec at all — `jobs: no such job`, which is the shell and not a truncation, because `%nope` produces the same line
+  ```sh
+  jobs %9 2>&1 >/dev/null
+  ```
+- `jobs/slot-the-last-background-pid-outlives-a-bare-wait` — `$!` is a value the shell keeps and not a job it is still holding: after a bare `wait` the job has ended, and every shell in the panel still reports its pid. Asked as a yes/no because the pid itself is different every run — the same reason the rest of this family asks for a status rather than for text. It is here because it was not true: `$!` read the current job, and the notice that reports a finished job drops that, so on the interactive route `$!` went empty the moment the `Done` row was printed
+  ```sh
+  sleep 0 & wait; case ${!:-} in "") echo "bang=empty";; *) echo "bang=set";; esac
   ```
 - `read/interrupted-by-a-trapped-signal` — a `read` waiting on a pipe when a trapped signal arrives, which is where the prior reading of `$?` after an interrupt — 130, measured against bash — turns out to be one of four answers. bash 5.3, bash 3.2 and zsh run the handler and *resume* the read, so the line that arrives afterwards is read and the status is 0; the same bash 5.3 called `sh` abandons it at 130; dash abandons it at 1; ksh93 answers 258. The late write is what makes the case terminate at all rather than recording three timeouts, and it is what makes the resuming shells observably different from a shell that merely returned 0
   ```sh
@@ -1938,6 +1987,18 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   setopt no_unset; echo "${zz}"; echo reached
   ```
+- `setopt/hist-ignore-space-moves-and-is-read-back` — the option an interactive session reads before it records a line, asked of the shell a script can see: the state moves in both directions and reads back under either spelling. A script has no history for it to govern, which is exactly why the state has to be pinned here rather than inferred from a session
+  ```sh
+  setopt hist_ignore_space; echo "st=$?"; [[ -o histignorespace ]] && echo on; unsetopt hist_ignore_space; [[ -o hist_ignore_space ]] || echo off
+  ```
+- `setopt/hist-ignore-dups-is-the-set-h-switch` — zsh's `set -h` is histignoredups and not command hashing, which is what bash and ksh93 spell with the same letter — one switch reached by two words, and the row that says the dialect builtin and the substrate's option table are not two states that drift
+  ```sh
+  set -h; [[ -o histignoredups ]] && echo on; setopt no_hist_ignore_dups; [[ -o histignoredups ]] || echo off
+  ```
+- `setopt/an-option-and-a-variable-are-two-namespaces` — zsh keeps two of its history knobs as options and one as a variable, and they are not spellings of one namespace: `setopt HISTORY_IGNORE` is `no such option` at 1 even though the variable by that name is real and settable in the same breath
+  ```sh
+  setopt hist_ignore_space HISTORY_IGNORE; echo "st=$?"; HISTORY_IGNORE=x; echo "v=$HISTORY_IGNORE"
+  ```
 - `emulate/names-the-current-mode` — a bare emulate answers which shell zsh is currently being — zsh until something changes it, and the word that changed it after
   ```sh
   emulate; emulate sh; emulate
@@ -1957,6 +2018,27 @@ grades it and nothing drift-checks it either, for the same reason.
 - `emulate/an-unknown-mode-is-passed-over` — a word naming no emulation is silence and 0 in zsh, the mode unchanged — measured, and strange enough to be worth pinning against the guess that it would complain
   ```sh
   emulate fish; echo "st=$?"; emulate
+  ```
+- `emulate/dash-o-sets-an-option` — `{+|-}o name` names an option for the emulation to apply after it has placed its own defaults, which is the form a prompt theme opens every one of its functions with. The name is `setopt`'s and takes `setopt`'s spellings, underscores and all; `+o` is the same request the other way
+  ```sh
+  emulate zsh -o extendedglob; echo "st=$?"; [[ -o extendedglob ]]; echo "on=$?"; emulate zsh +o extendedglob; [[ -o extendedglob ]]; echo "off=$?"
+  ```
+- `emulate/dash-l-lasts-as-long-as-the-function` — `-L` is LOCAL_OPTIONS: the emulation and everything moved after it last as long as the call. Written as a function on purpose — outside one the letter changes nothing, measured, so a case at the top level would pass with the letter ignored
+  ```sh
+  f() { emulate -L zsh -o extendedglob; [[ -o extendedglob ]]; echo "in=$?"; }; f; [[ -o extendedglob ]]; echo "out=$?"
+  ```
+- `emulate/dash-l-covers-a-later-setopt` — and it is the *call* that is restored rather than the emulation's own changes: an option set later in the same function goes back too, which is the whole of what the option is for and the half a snapshot taken after the emulation would miss
+  ```sh
+  f() { emulate -L zsh; setopt err_exit; [[ -o err_exit ]]; echo "in=$?"; }; f; [[ -o err_exit ]]; echo "out=$?"
+  ```
+- `setopt/no-aliases-stops-the-expansion` — `no_aliases` is an option a script throws to protect its own code from a user's aliases, and it reaches the *parser*: the second `hi` is a command that does not exist. Run from a file because that is the route this shell expands on at all — under `-c` it never does, while `[[ -o aliases ]]` still reads on there, which is what makes the option and the route two questions
+  ```sh
+  alias hi='echo expanded'
+  hi
+  setopt no_aliases
+  hi
+  setopt aliases
+  hi
   ```
 - `whence/bare-is-the-resolution` — ksh93's own question about a name, answered bare: a builtin, keyword or function is its own name and nothing more. zsh has a whence too — the same ancestry — and bash and dash have none
   ```sh
@@ -2449,6 +2531,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/append-to-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` |
 | `core/array-star-joins` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` |
 | `unset/takes-away-an-environment-name` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` |
+| `unset/the-m-option-unsets-by-pattern` | **2>** `<shell>: 1: unset: Illegal option -m` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` | **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 0: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]` | **2>** `<shell>: unset: -m: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `st=0 [gone][gone][3]` |
+| `unset/the-n-option-splits-the-panel` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=0` | `st=0` | `st=2` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=0` | `st=1` **2>** `<shell>:unset:1: bad option: -n` |
 | `special/lineno-in-a-function-diverges` | `2` | `2` | `2` | `2` | `2` | `1` |
 
 - `special/ifs-has-a-default` — space, tab and newline in three of them and a NUL as well in zsh — and read as bytes because whitespace is what it is made of. Splitting worked here while `$IFS` was empty, so a script could neither read it nor tell it had been changed
@@ -2514,6 +2598,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `unset/takes-away-an-environment-name` — a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both
   ```sh
   unset HOME; echo "[${HOME-gone}]"
+  ```
+- `unset/the-m-option-unsets-by-pattern` — `unset -m` reads its operands as patterns rather than as names, and is one shell's alone — a prompt theme clears its whole namespace with it. The three values are what says the pattern is anchored at both ends of the *name*: `x*` takes `x` and `xy` and leaves `z`. The other four refuse the letter, in four wordings and at three statuses, and two of them print a usage line after it
+  ```sh
+  x=1 xy=2 z=3; unset -m "x*"; echo "st=$? [${x-gone}][${xy-gone}][${z-gone}]"
+  ```
+- `unset/the-n-option-splits-the-panel` — the letter beside it, and the row that says `unset`'s options are the dialect's rather than one set: bash 5.3 and ksh93 take `-n` where bash 3.2, bash-as-`sh`, dash and zsh refuse it, at three statuses and in four wordings. The *value* is deliberately not printed: what `-n` then does to a name that is not a reference splits the two shells that have the letter — bash removes nothing at all and ksh93 removes the variable — which is a second question, and one this shell does not yet answer
+  ```sh
+  x=1; unset -n x; echo "st=$?"
   ```
 - `special/lineno-in-a-function-diverges` — zsh numbers a function's lines from the line the function was written on; the other three count from the file
   ```sh
@@ -3238,6 +3330,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/a-b-escape-splits-esc-from-capital-esc` | ` 61 5c 65 5a 3a 61 5c 45 5a ` | ` 61 1b 5a 3a 61 1b 5a ` | ` 61 1b 5a 3a 61 1b 5a ` | ` 61 1b 5a 3a 61 1b 5a ` | ` 61 5c 65 5a 3a 61 1b 5a ` | ` 61 1b 5a 3a 61 5c 45 5a ` |
 | `printf/a-b-escape-hex-with-no-digits` | ` 61 5c 78 5a ` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 0: printf: missing hex digit for \x` | ` 61 5c 78 5a ` | ` 61 00 5a ` |
 | `printf/backslash-c-in-a-b-escape-always-stops` | ` 61 ` | ` 61 ` | ` 61 ` | ` 61 ` | ` 61 ` | ` 61 ` |
+| `printf/a-b-escape-a-stop-cut-short-still-fills-its-field` | `[    a[a` | `[    a[a` | `[    a[a` | `[    a[a` | `[a[ab` | `[    a[a` |
+| `printf/a-b-escape-a-field-with-nothing-stopping-it` | `[   ab][a]` | `[   ab][a]` | `[   ab][a]` | `[   ab][a]` | `[   ab][a]` | `[   ab][a]` |
 | `printf/backslash-c-in-a-b-escape-ends-the-whole-printf` | `[aEND` | `[aEND` | `[aEND` | `[aEND` | `[aEND` | `[aEND` |
 | `printf/an-octal-escape-is-a-byte-and-not-a-code-point` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
 | `printf/a-quoted-escape-used-as-a-format` | ` 24 61 5c 78 63 30 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
@@ -3431,6 +3525,14 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf '%b' 'a\cbZ' | od -An -tx1 | tr -s " "
   ```
+- `printf/a-b-escape-a-stop-cut-short-still-fills-its-field` — what a `\c` leaves goes through the conversion's field like any other text in five of the six — padded to the width, cut to the precision — where ksh93 alone writes it as it stands. A property of the *stop*: with nothing stopping it that shell pads and truncates like the rest, which `printf/a-b-escape-a-field-with-nothing-stopping-it` is here to show
+  ```sh
+  printf '[%5b]' 'a\cb'; printf '[%.1b]' 'ab\cc'
+  ```
+- `printf/a-b-escape-a-field-with-nothing-stopping-it` — the control for the row above, and unanimous: a `%b` with no `\c` in it is padded and truncated by every shell in the panel. Without this row the other one reads as `ksh93 has no field for %b`, which is not what it does
+  ```sh
+  printf '[%5b][%.1b]' 'ab' 'abc'
+  ```
 - `printf/backslash-c-in-a-b-escape-ends-the-whole-printf` — the stop is not confined to the conversion that read it: the format is abandoned where it stands, the operands after it go unused, and the reused format does not run again — unanimous, and the half of \c that a case reading only one conversion cannot see
   ```sh
   printf '[%b][%s]' 'a\cb' x; echo END
@@ -3547,6 +3649,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `signal-death/quit-is-not-fatal-in-every-shell` | *(no output, killed by signal 3 (quit))* | `after` | `after` | *(no output, killed by signal 3 (quit))* | *(no output, killed by signal 3 (quit))* | `after` |
 | `signal-death/hangup-is-an-exit-in-one-shell` | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, status 1)* |
 | `signal-death/a-hangup-that-exits-runs-the-exit-trap` | *(no output, killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(status 1)* |
+| `signal-death/a-subshell-that-signaled-the-shell` | `inner` *(killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | `inner` *(killed by signal 15 (terminated))* |
+| `signal-death/a-brace-group-does-not-outlive-the-signal` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
+| `signal-death/a-function-body-does-not-outlive-the-signal` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
+| `signal-death/a-loop-body-does-not-outlive-the-signal` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
+| `signal-death/a-command-substitution-that-signaled-the-shell` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
 | `signal-death/a-handled-signal-is-not-a-death` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
 | `signal-death/an-ordinary-failure-is-untouched` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` |
 | `umask/reads-the-mask` | `0022` | `0022` | `0022` | `0022` | `0022` | `022` |
@@ -3705,6 +3812,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `signal-death/a-hangup-that-exits-runs-the-exit-trap` — what says the row above is an exit and not merely a different number. zsh does not run the EXIT trap when a signal kills it — `trap 'echo bye' EXIT; kill -TERM $$` prints nothing there — and it prints bye here, so SIGHUP produced no death for that question to be asked about. bash and ksh93 print bye because dying counts as exiting for them, and dash prints nothing for either signal, which is why the trap alone cannot tell the two apart and the status beside it can
   ```sh
   trap 'echo bye' EXIT; kill -HUP $$; echo after
+  ```
+- `signal-death/a-subshell-that-signaled-the-shell` — the whole of what a subshell changes about a fatal self-signal, and the one place in the grammar that changes anything. The shell ends by the signal in all six and `outer` prints in none of them, so what splits is `inner`: bash 5.3.15, bash 3.2.57, bash 3.2 as `sh`, dash and zsh print it and ksh93 does not. Not a delivery race — the same answer on twenty-five runs of each under load, and unchanged by a `sleep 0.3` between the kill and the echo. The reason is the opposite of the obvious one: measured with a child started inside the subshell and its parent process id read back, the five that keep going are the five that gave the subshell a **process of its own**, so the signal aimed at `$$` never reached it; ksh93 runs the subshell in the shell's own process and the signal lands on the thing that was about to run the echo. Semantics.SubshellRunsOnAfterSignalingTheShell
+  ```sh
+  (kill -TERM $$; echo inner); echo outer
+  ```
+- `signal-death/a-brace-group-does-not-outlive-the-signal` — the control for the row above, and the reason that one names a subshell rather than a compound command: a brace group is the same shell, so all six stop at once and print nothing. Grouping is not what defers the death — being a separate process is
+  ```sh
+  { kill -TERM $$; echo inner; }; echo outer
+  ```
+- `signal-death/a-function-body-does-not-outlive-the-signal` — the same control one level further in, because a function body is the place a reader would next expect the boundary to be. Unanimous: nothing prints, in all six. Together with the brace group and the loop below this is what makes the subshell row an axis about processes and not an axis about scopes
+  ```sh
+  f() { kill -TERM $$; echo inner; }; f; echo outer
+  ```
+- `signal-death/a-loop-body-does-not-outlive-the-signal` — the third control, and the one that asks whether a shell checks for its own death only between *top-level* commands. It does not: all six stop inside the loop body, printing neither the echo after the kill nor anything after the loop
+  ```sh
+  i=0; while [ $i -lt 1 ]; do kill -TERM $$; echo inner; i=1; done; echo outer
+  ```
+- `signal-death/a-command-substitution-that-signaled-the-shell` — the other subshell environment, and it does not divide the panel the way `( )` does: all six print nothing and die, because whatever the child wrote went into the assignment rather than to the output and the shell never reached the echo that would have shown it. Here so that the `( )` row is not read as a claim about every subshell environment
+  ```sh
+  x=$(kill -TERM $$; echo inner); echo "outer x=$x"
   ```
 - `signal-death/a-handled-signal-is-not-a-death` — the control: the same signal with a trap for it runs the handler and the shell carries on to exit normally, so the two rows above are about the *absence* of a handler rather than about the signal arriving
   ```sh
@@ -3996,6 +4123,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/a-character-code-on-a-character` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "##a"` *(status 2)* | **2>** `<shell>: line 1: ##a: arithmetic syntax error: operand expected (error token is "##a")` *(status 1)* | **2>** `<shell>: line 1: ##a: arithmetic syntax error: operand expected (error token is "##a")` *(status 127)* | **2>** `<shell>: ##a: syntax error: operand expected (error token is "##a")` *(status 1)* | **2>** `<shell>: ##a: arithmetic syntax error` *(status 1)* | `[97][65][10][65]` |
 | `arith/a-character-code-missing-its-character` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "##"` *(status 2)* | **2>** `<shell>: line 1: ##: arithmetic syntax error: operand expected (error token is "##")` *(status 1)* | **2>** `<shell>: line 1: ##: arithmetic syntax error: operand expected (error token is "##")` *(status 127)* | **2>** `<shell>: ##: syntax error: operand expected (error token is "##")` *(status 1)* | **2>** `<shell>: ##: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: character missing after ##` *(status 1)* |
 | `arith/a-radix-literal-is-not-a-character-code` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "16#ff"` *(status 2)* | `[255][5]` | `[255][5]` | `[255][5]` | `[255][5]` | `[255][5]` |
+| `arith/a-dollar-bracket-is-arithmetic` | `[$[1+1]][$[x*2]][$[2**10]][$[3*3]]` | `[2][10][1024][9]` | `[2][10][1024][9]` | `[2][10][1024][9]` | `[$[1+1]][$[x*2]][$[2**10]][$[3*3]]` | `[2][10][1024][9]` |
+| `arith/a-dollar-bracket-nests-and-quotes-like-the-other-spelling` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[9][8][9]` | `[9][8][9]` | `[9][8][9]` | `[$[a[1]+1]][$[$[2+2]*2]][$[ (1+2)*3 ]]` | `[8][8][9]` |
+| `arith/a-dollar-bracket-in-a-here-document` | `v=$[6*7]~w=$[6*7]` | `v=42~w=$[6*7]` | `v=42~w=$[6*7]` | `v=42~w=$[6*7]` | `v=$[6*7]~w=$[6*7]` | `v=42~w=$[6*7]` |
+| `arith/a-dollar-bracket-is-text-in-single-quotes` | `$[1+1]~$[1+1]` | `$[1+1]~2` | `$[1+1]~2` | `$[1+1]~2` | `$[1+1]~$[1+1]` | `$[1+1]~2` |
+| `arith/a-dollar-bracket-refuses-like-the-other` | `[$[1+]]~after` | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 127)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | `[$[1+]]~after` | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 
 - `let/evaluates-and-assigns` — `let` is `(( ))` with the expression as a word rather than inside parentheses. bash, ksh93 and zsh have it; dash has only `$(( ))` and reports it as a command it never heard of
   ```sh
@@ -4297,6 +4429,31 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   echo "[$((16#ff))][$((2#101))]"
   ```
+- `arith/a-dollar-bracket-is-arithmetic` — the older spelling of `$((…))`, and the panel splits four to two: bash 5.3, bash 3.2, bash as `sh` and zsh read it as arithmetic, and ksh93 and dash do not read it at all — there the `$` is literal and the brackets are a pattern, so the word stands as its own text. bash has documented it as deprecated for years and both of its builds still take it, which is why they are separate columns here. The additive kind of split, so a grammar flag rather than an axis: nobody means something *else* by it
+  ```sh
+  x=5; echo "[$[1+1]][$[x*2]][$[2**10]][${p:-$[3*3]}]"
+  ```
+- `arith/a-dollar-bracket-nests-and-quotes-like-the-other-spelling` — three shapes that a scan taking the first `]` gets wrong: a subscript, which is arithmetic too and carries a bracket of its own; the spelling nested in itself; and parentheses inside it. The first also inherits the array base, so the two shells that read the construct give different numbers for the same text — which is `ArrayBaseIsZero` showing through and not a second question
+  ```sh
+  a=(7 8 9); echo "[$[a[1]+1]][$[$[2+2]*2]][${p:-$[ (1+2)*3 ]}]"
+  ```
+- `arith/a-dollar-bracket-in-a-here-document` — an unquoted here-document body expands it exactly as it expands `$((…))`, and a quoted one leaves it alone — so the construct belongs to every place a substitution is read and not only to a word. The pair is the point: a lexer that added it to the word scanner alone would pass the first line and fail nothing
+  ```sh
+  cat <<EOF
+  v=$[6*7]
+  EOF
+  cat <<'EOF'
+  w=$[6*7]
+  EOF
+  ```
+- `arith/a-dollar-bracket-is-text-in-single-quotes` — the quoting rule the construct shares with every other substitution — single quotes make it text and double quotes do not — pinned so that adding the spelling cannot reach inside a quote nobody expands. Unanimous on the first half, since the shells without the construct have nothing to expand anywhere
+  ```sh
+  echo '$[1+1]'; echo "$[1+1]"
+  ```
+- `arith/a-dollar-bracket-refuses-like-the-other` — a bad expression in the older spelling, which is the claim that the two are one construct stated where it can be checked: the two shells that read it word the refusal exactly as they word it for `$((1+))`, down to the error token, and neither invents a diagnostic of its own for the brackets. The two that do not read it reach no expression at all and print the text
+  ```sh
+  echo "[$[1+]]"; echo after
+  ```
 
 ## shell options
 
@@ -4342,6 +4499,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/set-v-echoes-the-tail-after-the-last-command` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` |
 | `opt/set-v-writes-to-the-descriptor-the-script-points` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` |
 | `opt/set-v-follows-a-descriptor-that-moves` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` |
+| `opt/set-v-echoes-the-line-that-would-not-parse` | `one` **2>** `echo one~fi~<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one` **2>** `echo one~fi~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `fi'` *(status 2)* | `one` **2>** `echo one~fi~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `fi'` *(status 2)* | `one` **2>** `echo one~fi~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `fi'` *(status 2)* | `one` **2>** `echo one~fi~<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one` **2>** `echo one~fi~<script>:2: parse error near `fi'` *(status 1)* |
+| `opt/set-v-echoes-a-first-token-that-will-not-lex` | **2>** `"abc~echo two~<script>: 3: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `"abc~echo two~<script>: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `"abc~echo two~<script>: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `"abc~echo two~<script>: line 1: unexpected EOF while looking for matching `"'~<script>: line 3: syntax error: unexpected end of file` *(status 2)* | **2>** `"abc~echo two~<script>: syntax error at line 1: `"' unmatched` *(status 3)* | **2>** `"abc~echo two~<script>:3: unmatched "` *(status 1)* |
+| `opt/set-v-echoes-input-that-ran-out` | `one` **2>** `echo one~if true; then~<script>: 3: Syntax error: end of file unexpected (expecting "fi")` *(status 2)* | `one` **2>** `echo one~if true; then~<script>: line 3: syntax error: unexpected end of file from `if' command on line 2` *(status 2)* | `one` **2>** `echo one~if true; then~<script>: line 3: syntax error: unexpected end of file from `if' command on line 2` *(status 2)* | `one` **2>** `echo one~if true; then~<script>: line 3: syntax error: unexpected end of file` *(status 2)* | `one` **2>** `echo one~if true; then~<script>: syntax error at line 3: `then' unmatched` *(status 3)* | `one` **2>** `echo one~if true; then~<script>:3: parse error near `\n'` *(status 1)* |
+| `opt/set-v-echoes-before-a-remark` | `one~body` **2>** `echo one~cat <<END~body` | `one~body` **2>** `echo one~cat <<END~body~~<script>: line 4: warning: here-document at line 2 delimited by end-of-file (wanted `END')` | `one~body` **2>** `echo one~cat <<END~body~~<script>: line 4: warning: here-document at line 2 delimited by end-of-file (wanted `END')` | `one~body` **2>** `echo one~cat <<END~body` | `one~body` **2>** `echo one~cat <<END~body` | `one~body` **2>** `echo one~cat <<END~body` |
 | `opt/set-o-verbose-echoes-what-is-read` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` |
 | `opt/pipefail-appears-in-the-plus-o-listing` | *(no output, status 0)* | `pipefail` | `pipefail` | `pipefail` | *(no output, status 0)* | `pipefail` |
 | `opt/pipefail-turned-on-is-listed-on` | *(no output, status 0)* | `pipefail` | `pipefail` | `pipefail` | `pipefail` | `pipefail` |
@@ -4570,6 +4731,27 @@ grades it and nothing drift-checks it either, for the same reason.
   exec 2>&1
   echo back
   ```
+- `opt/set-v-echoes-the-line-that-would-not-parse` — the shell writes back what it read before it complains about it, so the offending line comes out and *then* the syntax error. Unanimous, and it is the line rather than the whole input: the walk stops where the reader did. The wordings and statuses differ — 2, 2, 3 and 1 — and the order does not. The letter is on the invocation rather than in the script, because one shell prefixes a syntax error with the line it had reached and only when the option was turned on from inside
+  ```sh
+  echo one
+  fi
+  ```
+- `opt/set-v-echoes-a-first-token-that-will-not-lex` — the same rule where the parser has nothing at all to hand back — the *first* token of the input will not lex, so there is no logical line to drive an echo from. Both physical lines are still written back before the complaint, in all four; the line each of them blames is 1, 3, 1 and 3
+  ```sh
+  "abc
+  echo two
+  ```
+- `opt/set-v-echoes-input-that-ran-out` — the second face of the same rule, where there is no offending line to name: what was read runs to the end of the text and is written back before the complaint. Unanimous
+  ```sh
+  echo one
+  if true; then
+  ```
+- `opt/set-v-echoes-before-a-remark` — and for input the shell *accepted*: the here-document's lines are written back, then the one shell that remarks on a delimiter that never arrived says so, then the command's own output. The order is the same rule as the two rows above, which is why they are three rows and one fix. The body ends in a newline because the printer round-trip needs one — a body without it is printed with the delimiter attached to its last line
+  ```sh
+  echo one
+  cat <<END
+  body
+  ```
 - `opt/set-o-verbose-echoes-what-is-read` — the long spelling of `set -v`: input is written back to stderr as it is read, and never the line that turned it on. From a file all four agree; a -c string is read differently — bash echoes it where dash and zsh do not — so the case pins the route every script uses
   ```sh
   echo before
@@ -4673,6 +4855,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/a-substring-modifier-chain` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[File.Txt]` | `[File.Txt]` | `[File.Txt]` | `[File.Txt]` | `[Dir]` |
 | `param/a-substring-modifier-with-something-after-it` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[/tmp/Dir/File.Txt]~after` | `[/tmp/Dir/File.Txt]~after` | `[/tmp/Dir/File.Txt]~after` | `[/tmp/Dir/File.Txt]~after` | **2>** `<shell>:1: unrecognized modifier` *(status 1)* |
 | `param/a-substring-offset-on-a-subscripted-parameter` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: a[@]: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `param/the-matching-flag-keeps-what-a-trim-took` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${(M)v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${(M)v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]: bad substitution` *(status 127)* | **2>** `<shell>: [${(M)v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]""' unexpected` *(status 3)* | `[hel][hell][lo][llo][][]` |
+| `param/the-matching-flag-inverts-the-exclusion` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(M@)a:#f2*}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(M@)a:#f2*}: bad substitution` *(status 127)* | **2>** `<shell>: ${(M@)a:#f2*}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#f2*}""' unexpected` *(status 3)* | `[f22]~[f1][f333]` |
+| `param/the-matching-flag-elsewhere-does-nothing` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${(M)v/l/L}][${(M)v:1}][${(M)v:-alt}][${(M)v}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${(M)v/l/L}][${(M)v:1}][${(M)v:-alt}][${(M)v}]: bad substitution` *(status 127)* | **2>** `<shell>: [${(M)v/l/L}][${(M)v:1}][${(M)v:-alt}][${(M)v}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `v/l/L}][${(M)v:1}][${(M)v:-alt}][${(M)v}]""' unexpected` *(status 3)* | `[heLlo][ello][hello][hello]` |
+| `param/an-expansion-where-a-name-belongs` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${${v}}][${${v}#a}][${${v}%c}][${${v}/b/X}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${${v}}][${${v}#a}][${${v}%c}][${${v}/b/X}]: bad substitution` *(status 127)* | **2>** `<shell>: [${${v}}][${${v}#a}][${${v}%c}][${${v}/b/X}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `!' unexpected` *(status 3)* | `[abc][bc][ab][aXc]` |
+| `param/nested-expansions-nest` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${${${v}}}][${${${v}#a}%c}][${${v#a}}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${${${v}}}][${${${v}#a}%c}][${${v#a}}]: bad substitution` *(status 127)* | **2>** `<shell>: [${${${v}}}][${${${v}#a}%c}][${${v#a}}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `!' unexpected` *(status 3)* | `[abc][b][bc]` |
+| `param/a-nested-expansion-takes-flags-and-a-substitution` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${(U)${v}}][${${(U)v}}][${$(echo xy)#x}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${(U)${v}}][${${(U)v}}][${$(echo xy)#x}]: bad substitution` *(status 127)* | **2>** `<shell>: [${(U)${v}}][${${(U)v}}][${$(echo xy)#x}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `!' unexpected` *(status 3)* | `[ABC][ABC][y]` |
+| `param/a-nested-expansion-is-the-whole-name` **(refusal)** | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${x${v}}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${x${v}}: bad substitution` *(status 127)* | **2>** `<shell>: ${x${v}}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `$' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/a-nested-expansions-value-is-what-the-outer-operator-tests` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${${v}:-d}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${${v}:-d}]: bad substitution` *(status 127)* | **2>** `<shell>: [${${v}:-d}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `!' unexpected` *(status 3)* | `[d]~[abc]~[y]` |
 | `param/a-substring-offset-is-an-expression` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cd]` | `[cd]` | `[cd]` | `[cd]` | `[cd]` |
 | `param/colon-extends-the-test-unset` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` |
 | `param/colon-extends-the-test-empty` | `[D][]` | `[D][]` | `[D][]` | `[D][]` | `[D][]` | `[D][]` |
@@ -4715,6 +4905,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/a-length-of-an-array-element-in-a-utf8-locale` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[2][5][3]` | `[2][5][3]` | `[2][5][3]` | `[2][5][3]` | `[2][0][5]` |
 | `param/a-pattern-trims-the-same-either-way` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` |
 | `param/a-pattern-trims-characters-in-a-utf8-locale` | `[hél][llo]` | `[hél][lo]` | `[hél][lo]` | `[hél][lo]` | `[hél][lo]` | `[hél][lo]` |
+| `param/a-pattern-trims-bytes-in-a-single-byte-locale` | `[hél][llo]` | `[hél][llo]` | `[hél][llo]` | `[hél][llo]` | `[hél][llo]` | `[hél][llo]` |
+| `param/a-replacement-runs-over-characters` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[XXX][Xllo]` | `[XXX][Xllo]` | `[XXX][Xllo]` | `[XXX][Xllo]` | `[XXX][Xllo]` |
 | `param/case-change-is-bash-only` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ABC][abc]` | `[ABC][abc]` | **2>** `<shell>: ${x^^}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/case-toggle-is-newer-bash-still` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ABc][AbC][ABc]` | `[ABc][AbC][ABc]` | **2>** `<shell>: ${x~}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `~' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/indirection-diverges-four-ways` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[V]` | `[V]` | `[V]` | `[x]` | **2>** `<shell>:1: bad substitution` *(status 1)* |
@@ -4799,6 +4991,38 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/a-substring-offset-on-a-subscripted-parameter` — the parameter a diagnostic names is the name and its subscript, not the name alone — `a[@]` — in the one shell that names it at all. The list form of the substring reaches the same evaluation as the string form, so this also says the two spellings share it
   ```sh
   a=(p q r); echo "[${a[@]:1+}]"; echo after
+  ```
+- `param/the-matching-flag-keeps-what-a-trim-took` — one flag turns each of the four trims inside out: the same operator, the same match, and the *other* side of the split substituted. The operator still chooses how much — the doubled forms take the longest match here exactly as they drop the longest without the flag — so this is not a fifth and sixth operator but a second reading of the four. The last two are the rows that separate it from a no-op: a pattern that matches nothing leaves nothing, where the trim without the flag leaves the whole value, and an empty pattern takes the empty string
+  ```sh
+  v=hello; echo "[${(M)v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]"
+  ```
+- `param/the-matching-flag-inverts-the-exclusion` — the same flag on the operator that chooses *elements* rather than characters, and the same inversion: keep what the pattern matched instead of dropping it. Both spellings on one row, because the pair is what says it is an inversion and not an unrelated second operator — and the `(@)` is load-bearing, since quoted without it the array joins to one string first and the whole-match rule then takes all of it or none
+  ```sh
+  a=(f1 f22 f333); printf "[%s]" "${(M@)a:#f2*}"; echo; printf "[%s]" "${(@)a:#f2*}"; echo
+  ```
+- `param/the-matching-flag-elsewhere-does-nothing` — and the boundary, which is worth a row because a flag named for matching looks as though it should reach the operator that matches and replaces: it does not. A replacement, a substring, a default and an expansion with no operator at all are what they would have been without it, so the flag reaches exactly the trims and the exclusion — measured one operator at a time rather than reasoned from the name
+  ```sh
+  v=hello; echo "[${(M)v/l/L}][${(M)v:1}][${(M)v:-alt}][${(M)v}]"
+  ```
+- `param/an-expansion-where-a-name-belongs` — one expansion applied to the result of another, which is one shell's grammar and is idiomatic there rather than a corner — two of the third-party files a real startup sources use it. Every operator may follow the inner brace, so the row carries four of them: with the name position taken by an expansion there is nothing for `#` to be a length of and nothing for `%` to be a job specification of, and an implementation that reached for the name first has no name to reach for. bash and dash call the whole thing a bad substitution and ksh93 a syntax error
+  ```sh
+  v=abc; echo "[${${v}}][${${v}#a}][${${v}%c}][${${v}/b/X}]"
+  ```
+- `param/nested-expansions-nest` — the depth is not one: an expansion standing in the name position may itself have one standing in *its* name position, and the operators stack outward — the inner `#a` runs before the outer `%c` sees anything. The third form is the same characters with the operator on the inside instead, which has to keep working and is the reading a parser gets by accident if it splits on the first brace
+  ```sh
+  v=abc; echo "[${${${v}}}][${${${v}#a}%c}][${${v#a}}]"
+  ```
+- `param/a-nested-expansion-takes-flags-and-a-substitution` — what may sit either side of the nesting: a flag group belongs to the expansion it opens, so the outer and the inner may each carry one and the two spellings of `(U)` come to the same word. And the inner need not be a parameter expansion at all — a command substitution stands in the same position, which is what says the shape is `an expansion` rather than `another ${`
+  ```sh
+  v=abc; echo "[${(U)${v}}][${${(U)v}}][${$(echo xy)#x}]"
+  ```
+- `param/a-nested-expansion-is-the-whole-name` **(refusal)** — and the boundary, refused by every shell in the panel including the one that has the construct: the inner expansion is the whole of the name position, so text in front of it is not a longer name and `${${v}x}` is not a name with a suffix. Graded on the refusal because five shells decline the same characters in five wordings, which is what the Diagnostics vector is for
+  ```sh
+  v=abc; echo "${x${v}}"
+  ```
+- `param/a-nested-expansions-value-is-what-the-outer-operator-tests` — the conditional operators test what the inner expansion came to rather than whether some name is set, which is the whole reason the idiom exists: `${${0:#$ZSH_ARGZERO}:-${(%):-%N}}`, out of a plugin manager on this machine, is a default over the *result* of a pattern exclusion. An empty inner fires the colon test and a set one does not
+  ```sh
+  v=; echo "[${${v}:-d}]"; v=abc; echo "[${${v}:-d}]"; echo "[${${v}:+y}]"
   ```
 - `param/a-substring-offset-is-an-expression` — the same numeral-only reading, reached through the substring rather than through a subscript: unanimous in all four with substrings, and taking the numeral alone gave an offset of 0 — `ab`, which is a real substring of the right length and so looks like an answer rather than a failure
   ```sh
@@ -4960,13 +5184,21 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   a=(héllo 日本語); echo "[${#a[@]}][${#a[0]}][${#a[1]}]"
   ```
-- `param/a-pattern-trims-the-same-either-way` — the suffix probe #899 cites as evidence that pattern matching is already rune-aware, pinned so that it stays where it is. It is unanimous, and it is also *not* discriminating: `héllo` ends in two ASCII characters, so two bytes and two characters off the end leave the same four bytes. `${s#???}` from the other end separates them and ours gives dash's answer — #905
+- `param/a-pattern-trims-the-same-either-way` — the suffix probe #899 cites as evidence that pattern matching is already rune-aware, pinned so that it stays where it is. It is unanimous, and it is also *not* discriminating: `héllo` ends in two ASCII characters, so two bytes and two characters off the end leave the same four bytes. `${s#???}` from the other end is what separates the readings, and is the pair of cases below (#905)
   ```sh
   s=héllo; echo "[${s%??}][${s%%?}]"
   ```
-- `param/a-pattern-trims-characters-in-a-utf8-locale` — the suffix probe beside the prefix one that separates the readings. Two characters off the end is the same four bytes either way, so `${s%??}` agrees with everyone; three off the front is `lo` under a UTF-8 locale and `llo` under a single-byte one, and dash gives `llo` in both. We give dash's answer, which is #905 — the length machinery reads the locale after #899 and the pattern matcher still walks bytes
+- `param/a-pattern-trims-characters-in-a-utf8-locale` — the suffix probe beside the prefix one that separates the readings. Two characters off the end is the same four bytes either way, so `${s%??}` agrees with everyone; three off the front is `lo` here and `llo` under a single-byte locale, and dash gives `llo` in both, having no decoder to consult the locale with. Paired with the single-byte row below so that a matcher which simply always counted characters would fail one of them (#905)
   ```sh
   s=héllo; echo "[${s%??}][${s#???}]"
+  ```
+- `param/a-pattern-trims-bytes-in-a-single-byte-locale` — the other half of the pair above, under the locale every case here runs in: three off the front is three *bytes*, `llo`, in all six including the four that answer `lo` when the locale names a multibyte encoding. Without it a matcher that counted characters unconditionally would look right — which is what the scalar subscript did before #899
+  ```sh
+  s=héllo; echo "[${s%??}][${s#???}]"
+  ```
+- `param/a-replacement-runs-over-characters` — replacement walks the subject looking for a match at each position, so it has the same unit question the trim has and one more: where it *restarts*. Three characters become three X here and nine under a single-byte locale, and the anchored form has to leave `llo` rather than a continuation byte in front of it — a scan that found matches by character and advanced by byte would answer neither
+  ```sh
+  s=日本語; t=héllo; echo "[${s//?/X}][${t/??/X}]"
   ```
 - `param/case-change-is-bash-only` — bash alone: ksh93 reports a syntax error and zsh a bad substitution, so it belongs to the bash dialect rather than the core
   ```sh
@@ -5132,6 +5364,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `heredoc/a-body-that-runs-to-the-end` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` |
 | `heredoc/the-delimiter-is-the-whole-line` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` |
 | `heredoc/a-delimiter-that-closes-a-command-substitution` | **2>** `<script>: 6: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `v=[a] st=0` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `v=[a] st=0` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `v=[a] st=0` | `v=[a] st=0` | **2>** `<script>:6: parse error near `v=$(cat <<EOF'` *(status 1)* |
+| `heredoc/a-substitutions-delimiter-is-remarked-on-before-it-runs` | **2>** `<script>: 6: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `done` | `done` | **2>** `<script>:6: parse error near `v=$(cat <<EOF'` *(status 1)* |
+| `heredoc/a-substitution-that-is-not-a-dollar-sign` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `a~done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `a~done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `a~done` | `a~done` | **2>** `<script>:6: parse error near `<(cat <<EOF'` *(status 1)* |
 | `heredoc/a-delimiter-that-never-matches` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` |
 | `redir/open-failure-wording` | `st=2` **2>** `<shell>: 1: cannot open nosuchfile: No such file` | `st=1` **2>** `<shell>: line 1: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: line 1: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: nosuchfile: cannot open [No such file or directory]` | `st=1` **2>** `<shell>:1: no such file or directory: nosuchfile` |
 | `redir/failure-line-when-the-redirect-is-elsewhere` | `one~st=2` **2>** `<shell>: 2: cannot open nosuchfile: No such file` | `one~st=1` **2>** `<shell>: line 5: nosuchfile: No such file or directory` | `one~st=1` **2>** `<shell>: line 5: nosuchfile: No such file or directory` | `one~st=1` **2>** `<shell>: line 4: nosuchfile: No such file or directory` | `one~st=1` **2>** `<shell>: line 4: nosuchfile: cannot open [No such file or directory]` | `one~st=1` **2>** `<shell>:2: no such file or directory: nosuchfile` |
@@ -5265,6 +5499,20 @@ grades it and nothing drift-checks it either, for the same reason.
   a
   EOF)
   echo "v=[$v] st=$?"
+  ```
+- `heredoc/a-substitutions-delimiter-is-remarked-on-before-it-runs` — the remark about the same shape is a fact about *reading* rather than about running: the substitution is on the right of a `&&` that never reaches it, and the one shell that says anything still says it. Which is what makes it the parser's to produce and not the interpreter's
+  ```sh
+  false && v=$(cat <<EOF
+  a
+  EOF)
+  echo done
+  ```
+- `heredoc/a-substitution-that-is-not-a-dollar-sign` — the same shape spelled the other way. What decides the remark is that the parentheses hold a *program*, not which sigil opened them — bash 5.3 says the same thing here as for `$( )`, bash 3.2 and ksh93 stay silent as they do there, and the two that have no process substitution refuse the line outright. The counter-case is arithmetic: `$(( a << b ))` is a shift and reading it as a program would invent a here-document
+  ```sh
+  cat <(cat <<EOF
+  a
+  EOF)
+  echo done
   ```
 - `heredoc/a-delimiter-that-never-matches` — the terminator has a leading space, so it is not the delimiter and the body runs to the end of the input. Every shell takes it and runs the command — this made it a syntax error. Standard error is still discarded here, and the reason changed: the warning about it is now produced, but this body is inside a backquoted substitution, which the one shell that warns re-parses while carrying its line counter on from the outer input — so a three-line script is remarked on at line 5. The two cases above pin the warning where the lines are the file's own
   ```sh
@@ -5915,6 +6163,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cond/a-newline-before-the-operator` | **2>** `<shell>: 1: [[: not found~<shell>: 2: Syntax error: "&&" unexpected` *(status 2)* | `yes` | `yes` | `yes` | `yes` | `yes` |
 | `cond/a-newline-before-the-operator-indented` | **2>** `<shell>: 1: [[: not found~<shell>: 2: Syntax error: "&&" unexpected` *(status 2)* | `yes` | `yes` | `yes` | `yes` | `yes` |
 | `cond/a-newline-before-a-second-operand-is-refused` | **2>** `<shell>: 1: [[: not found~<shell>: 2: -z: not found` *(status 127)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `-z'~<shell>: -c: line 2: syntax error near `-z'~<shell>: -c: line 2: `-z "" ]] && echo yes'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `-z'~<shell>: -c: line 2: syntax error near `-z'~<shell>: -c: line 2: `-z "" ]] && echo yes'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error in conditional expression~<shell>: -c: line 1: syntax error near `-z'~<shell>: -c: line 1: `-z "" ]] && echo yes'` *(status 2)* | **2>** `<shell>: syntax error at line 2: `-z' unexpected` *(status 3)* | **2>** `<shell>:1: unknown condition: -n` *(status 2)* |
+| `cond/a-semicolon-inside-a-condition` | `st=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: ]]: not found` | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `;'~<shell>: -c: line 1: syntax error near `;'~<shell>: -c: line 1: `[[ -n x ; ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `;'~<shell>: -c: line 1: syntax error near `;'~<shell>: -c: line 1: `[[ -n x ; ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `;'~<shell>: -c: line 0: syntax error near `;'~<shell>: -c: line 0: `[[ -n x ; ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `;'` *(status 1)* |
+| `cond/an-unterminated-condition` | **2>** `<shell>: 1: [[: not found` *(status 127)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for `]]'~<shell>: -c: line 2: syntax error: unexpected end of file from `[[' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for `]]'~<shell>: -c: line 2: syntax error: unexpected end of file from `[[' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected EOF while looking for `]]'~<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `[[' unmatched` *(status 3)* | **2>** `<shell>:1: parse error near `x'` *(status 1)* |
+| `cond/a-condition-opened-on-one-line-and-refused-on-another` | **2>** `<shell>: 1: [[: not found~<shell>: 2: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `;'~<shell>: -c: line 2: syntax error near `;'~<shell>: -c: line 2: ` ; ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `;'~<shell>: -c: line 2: syntax error near `;'~<shell>: -c: line 2: ` ; ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `;'~<shell>: -c: line 1: syntax error near `;'~<shell>: -c: line 1: ` ; ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: syntax error at line 2: `;' unexpected` *(status 3)* | **2>** `<shell>:2: parse error near `;'` *(status 1)* |
 | `pat/star-matches-dot-in-case` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` |
 | `pat/star-skips-leading-dot-in-glob` | `[vis]` | `[vis]` | `[vis]` | `[vis]` | `[vis]` | `[vis]` |
 | `pat/star-matches-slash-in-case` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` |
@@ -5924,6 +6175,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pat/only-a-leading-period-is-special` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` |
 | `pat/bracket-set-and-range` | `set range` | `set range` | `set range` | `set range` | `set range` | `set range` |
 | `pat/bracket-dash-at-an-edge-is-literal` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` |
+| `pat/a-question-mark-is-one-character` | `six` | `five` | `five` | `five` | `five` | `five` |
+| `pat/a-question-mark-is-one-byte-in-a-single-byte-locale` | `six` | `six` | `six` | `six` | `six` | `six` |
+| `pat/a-bracket-holds-a-whole-character` | `no~whole` | `lit~whole` | `lit~whole` | `lit~whole` | `lit~whole` | `lit~whole` |
+| `pat/a-bracket-range-is-ranked-by-code-point` | `out~out` | `in~in` | `in~in` | `in~in` | `in~in` | `in~in` |
+| `pat/a-character-class-outside-ascii` | *(no output, status 0)* | `alpha alnum lower print graph ` | `alpha alnum lower print graph ` | `alpha alnum lower print graph ` | `alpha ` | `alpha alnum lower print graph ` |
 | `pat/bracket-bang-negates-everywhere` | `negated` | `negated` | `negated` | `negated` | `negated` | `negated` |
 | `pat/bracket-caret-is-an-extension` | `no-caret` | `caret` | `caret` | `caret` | `caret` | `caret` |
 | `pat/character-class` | `class` | `class` | `class` | `class` | `class` | `class` |
@@ -5991,6 +6247,19 @@ grades it and nothing drift-checks it either, for the same reason.
   [[ -n x
   -z "" ]] && echo yes
   ```
+- `cond/a-semicolon-inside-a-condition` — a `;` where the condition wanted an operator or its `]]`, and the row that says a refusal names the *offending* token rather than what was wanted. Each of the three shells with `[[ ]]` words it in its own way and all three name the `;`. The `|` spelling of the same question is deliberately not a row beside it: dash has no `[[ ]]`, so there the words are a *pipeline* of two commands that do not exist, and which of the two `not found` lines arrives first is a race. bash writes two lines and the second is not the sentence it gives a stray token anywhere else — `syntax error near` without the words `unexpected token` — which is measurable only because it keeps them everywhere else
+  ```sh
+  [[ -n x ; ]]; echo "st=$?"
+  ```
+- `cond/an-unterminated-condition` — the `[[` the input ran out inside of, which is a different failure from a token the grammar did not want and is named differently by every shell that has the construct: ksh93 calls the `[[` unmatched, bash names it as the command the end of file came from *and* writes a line in front saying what it was looking for, and zsh blames the last word it read. `[[` is not a word the list parser stacks, so nothing filled either of the two verbs those wordings use and one of them came out as a hole
+  ```sh
+  [[ -n x
+  ```
+- `cond/a-condition-opened-on-one-line-and-refused-on-another` — and the reason bash's extra line carries a location of its own: the construct is named at the `[[`'s line and the token at the token's, so a condition opened on line 1 and refused on line 2 names both. One line would have looked right in every single-line case above
+  ```sh
+  [[ -n x
+   ; ]]; echo "st=$?"
+  ```
 - `pat/star-matches-dot-in-case` — in case there is no filesystem, so nothing restricts the star
   ```sh
   case .hidden in *) echo star-matches-dot;; esac
@@ -6026,6 +6295,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pat/bracket-dash-at-an-edge-is-literal` — a dash first or last in a bracket expression is a character rather than a range, so [a-] matches a and a literal dash and nothing between
   ```sh
   case - in [a-]) echo trailing;; esac; case - in [-a]) echo leading;; esac; case a in [a-]) echo a;; esac; case b in [a-]) echo range;; *) echo not-b;; esac
+  ```
+- `pat/a-question-mark-is-one-character` — the shortest statement of the whole question: the pattern is five ASCII bytes and the answer still moves with the locale, because what a `?` consumes is one character of the *subject*. bash, ksh93 and zsh say five; dash says six, having no decoder
+  ```sh
+  s=héllo; case $s in ?????) echo five;; ??????) echo six;; esac
+  ```
+- `pat/a-question-mark-is-one-byte-in-a-single-byte-locale` — and the same pattern under the fixed locale, where every member of the panel says six. The pair is the axis; either row alone reads as a fact about `?`
+  ```sh
+  s=héllo; case $s in ?????) echo five;; ??????) echo six;; esac
+  ```
+- `pat/a-bracket-holds-a-whole-character` — a bracket matches one unit of the subject as `?` does, so a two-byte character is in a bracket that lists it and is *not* matched by a bracket holding either of its bytes' worth of ASCII. The second half is the one a byte matcher gets wrong in the direction nobody notices: it would take `é` for the `e` it starts near
+  ```sh
+  case é in [é]) echo lit;; *) echo no;; esac; case é in [ae]) echo half;; *) echo whole;; esac
+  ```
+- `pat/a-bracket-range-is-ranked-by-code-point` — the endpoints of a range are characters too, and the comparison is by code point rather than by text: ç is between a and é as a number and is not between them byte for byte, so a matcher that compared the encoded forms would answer the first of these wrongly and the second by luck
+  ```sh
+  case ç in [a-é]) echo in;; *) echo out;; esac; case é in [a-ÿ]) echo in;; *) echo out;; esac
+  ```
+- `pat/a-character-class-outside-ascii` — where the panel is least uniform. bash 5.3, bash 3.2 and zsh agree exactly — a letter outside ASCII is alpha, alnum, lower, print and graph — and dash answers none of them, having no decoder. ksh93 answers **alpha and nothing else**, which is a partial implementation rather than a different reading of the classes: it agrees with the other three on every ASCII character and on the name of the class it does implement. This follows the three that agree, so the ksh93 cell is a recorded difference rather than a modeled one
+  ```sh
+  for c in alpha alnum upper lower digit space punct print graph; do case é in [[:$c:]]) printf "%s " "$c";; esac; done; echo
   ```
 - `pat/bracket-bang-negates-everywhere` — ! is the portable negation
   ```sh
@@ -6774,6 +7063,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/valueless-local-with-an-outer-value` | `[out]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[out]~after=[out]` **2>** `<script>: line 2: local: not found` | `[]~after=[out]` |
 | `declare/valueless-typeset-with-an-outer-value` | **2>** `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[]~after=[out]` |
 | `declare/local-shadowing-an-exported-name` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=bar~FOO=bar` **2>** `<shell>: local: not found` | `(none)~FOO=bar` |
+| `declare/valueless-local-shadowing-an-exported-name` | `read=[bar]~read=[bar]~FOO=bar` | `read=[bar]~read=[UNSET]~FOO=bar` | `read=[bar]~read=[UNSET]~FOO=bar` | `read=[bar]~read=[UNSET]~(none)` | `read=[bar]~read=[bar]~FOO=bar` **2>** `<shell>: local: not found` | `read=[bar]~read=[]~(none)` |
+| `declare/valueless-local-shadowing-an-imported-name` | `read=[dumb]~TERM=dumb` | `read=[UNSET]~TERM=dumb` | `read=[UNSET]~TERM=dumb` | `read=[UNSET]~(none)` | `read=[dumb]~TERM=dumb` **2>** `<shell>: local: not found` | `read=[]~(none)` |
+| `declare/valueless-local-shadowing-a-callers-local` | `FOO=mid` | `FOO=mid` | `FOO=mid` | `(none)` | `FOO=bar` **2>** `<shell>: local: not found~<shell>: local: not found` | `(none)` |
+| `declare/valueless-local-over-an-unexported-name` | **2>** `<shell>: 1: local: -x: bad variable name` *(status 2)* | `(none)` | `(none)` | `(none)` | `(none)` **2>** `<shell>: local: not found` | `(none)` |
+| `declare/a-declaration-without-a-value-exports-nothing` | `(none)~(none)` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `(none)~BAR=` | `(none)~BAR=` | `FOO=~BAR=` | `(none)~BAR=` | `(none)~BAR=` |
+| `declare/a-declared-name-a-local-has-shadowed` | `(none)~(none)` **2>** `<shell>: 1: typeset: not found` | `(none)~(none)` | `(none)~(none)` | `FOO=~FOO=` | `(none)~(none)` **2>** `<shell>: local: not found` | `(none)~FOO=` |
 | `declare/local-shadowing-an-imported-name` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=dumb~TERM=dumb` **2>** `<shell>: local: not found` | `(none)~TERM=dumb` |
 | `declare/typeset-local-shadowing-an-exported-name` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `(none)~FOO=bar` | `(none)~FOO=bar` |
 | `declare/integer-attribute-evaluates-a-later-assignment` | `[5+2]` **2>** `<shell>: 1: typeset: not found` | `[7]` | `[7]` | `[7]` | `[7]` | `[7]` |
@@ -6841,6 +7136,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/local-shadowing-an-exported-name` — whether the local inherits the export attribute of the name it shadows: bash and dash hand the child the local's value, zsh hands it nothing at all under that name, and ksh93 has no `local` to ask with. Read through a real child rather than through a listing, because what the attribute decides is what a command is told
   ```sh
   export FOO=bar; f() { local FOO=baz; env | grep '^FOO=' || echo "(none)"; }; f; env | grep '^FOO='
+  ```
+- `declare/valueless-local-shadowing-an-exported-name` — what a child is told for an exported name a valueless declaration has taken out of view, which is where the two bash builds part company: 5.3 reads the name as unset and still hands a child the value it hid, and 3.2 hands it nothing. Both columns are right about their own build and the `bash` column is the one graded, so this case splits them on purpose
+  ```sh
+  export FOO=bar; f() { echo "read=[${FOO-UNSET}]"; local FOO; echo "read=[${FOO-UNSET}]"; env | grep '^FOO=' || echo "(none)"; }; f
+  ```
+- `declare/valueless-local-shadowing-an-imported-name` — the same question by the other route, and the one both bash builds answer the same way: a name is exported by having arrived in the environment, so a valueless local over it hands a child what arrived while the shell itself reads the name as unset
+  ```sh
+  f() { local TERM; echo "read=[${TERM-UNSET}]"; env | grep '^TERM=' || echo "(none)"; }; f
+  ```
+- `declare/valueless-local-shadowing-a-callers-local` — which value it is: the caller's local rather than the global standing behind it, so the answer belongs to the scope that took the name and not to the name. The two readings differ only two functions deep, which is why the pair is here
+  ```sh
+  export FOO=bar; g() { local FOO; env | grep '^FOO=' || echo "(none)"; }; f() { local FOO=mid; g; }; f
+  ```
+- `declare/valueless-local-over-an-unexported-name` — the other side of it: `-x` is the local's own attribute and says nothing about the name it shadows, so a shadowed name nothing exported reaches no child — an exported name with no value is told to nobody in any shell measured
+  ```sh
+  FOO=bar; f() { local -x FOO; env | grep '^FOO=' || echo "(none)"; }; f
+  ```
+- `declare/a-declaration-without-a-value-exports-nothing` — declared and assigned-empty are the same to every listing and not to a child: the shell that considers a name declared without a value to be *set* still tells no command about it, where `=` on the same line hands over an empty entry. Found by the case above, which had this shell exporting an empty value under a name it should say nothing about
+  ```sh
+  typeset -x FOO; env | grep '^FOO=' || echo "(none)"; typeset -x BAR=; env | grep '^BAR=' || echo "(none)"
+  ```
+- `declare/a-declared-name-a-local-has-shadowed` — the shell that considers a name declared without a value to be set forgets that on the way out of a function: after any local of that name, the caller's is an *empty* export where before it was told to no child at all. The pair is the point — the same `env` twice, with only a function call between them
+  ```sh
+  typeset -x FOO; env | grep '^FOO=' || echo "(none)"; f() { local FOO=v; }; f; env | grep '^FOO=' || echo "(none)"
   ```
 - `declare/local-shadowing-an-imported-name` — the same question where the name arrived in the environment rather than being exported by hand, which is the route that made the two answers one: an imported name is exported by having been imported, so the local either inherits that or does not, and the split is the same either way
   ```sh

@@ -461,3 +461,26 @@ func TestShiftHasNoOptionsAndNoMarker(t *testing.T) {
 		}
 	}
 }
+
+// Neither spelling of the escape character: this shell's set is the XSI list
+// alone, and it has no -e either, so the option word is an operand (#908).
+func TestEchoTakesNeitherSpellingOfTheEscapeCharacter(t *testing.T) {
+	out, st := runDash(t, t.TempDir(), "echo -e 'a\\eZ:a\\EZ'\n")
+	if out != "-e a\\eZ:a\\EZ\n" || st != 0 {
+		t.Errorf("said %q status %d, want both letters as written and the -e printed", out, st)
+	}
+}
+
+// The field applies to what a `\c` left here too (#910).
+func TestPrintfBStopIsPadded(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf '[%5b]' 'a\cb'`, "[    a"},
+		{`printf '[%.1b]' 'ab\cc'`, "[a"},
+		{`printf '[%5b]' 'ab'`, "[   ab]"},
+	} {
+		if out, st := runDash(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
+			t.Errorf("%s: said %q status %d, want %q and 0", tc.src, out, st, tc.want)
+		}
+	}
+}

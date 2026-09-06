@@ -747,3 +747,15 @@ func TestTheStartupRemarkAboutJobControl(t *testing.T) {
 		t.Error("NoJobControlAtStartupNamesTheScript = true, want false — bash names itself, not the script")
 	}
 }
+
+// The shared wording and the shared status, both by omission: bash is what the
+// defaults were written from. Measured, `jobs %9` says `jobs: %9: no such job`
+// and reports 1 in all three members.
+func TestTheJobSpecThatNamesNothing(t *testing.T) {
+	if got := bash.Diagnostics().NoSuchJob; got != "" {
+		t.Errorf("NoSuchJob = %q, want empty — the shared wording", got)
+	}
+	if got := bash.Diagnostics().NoSuchJobStatus; got != 0 {
+		t.Errorf("NoSuchJobStatus = %d, want 0 — the shared 1", got)
+	}
+}

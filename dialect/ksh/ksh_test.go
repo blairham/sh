@@ -675,3 +675,16 @@ func TestNothingIsSaidAboutJobControlAtStartup(t *testing.T) {
 		t.Errorf("NoJobControlAtStartup = %q, want empty — this shell says nothing", got)
 	}
 }
+
+// The job-spec complaint names no spec, which is the shell and not a
+// truncation: measured, `jobs %9` and `jobs %nope` produce the same line.
+//
+// The status is the shared 1, so there is no field for it.
+func TestTheJobSpecThatNamesNothing(t *testing.T) {
+	if got, want := ksh.Diagnostics().NoSuchJob, "%[1]s: no such job"; got != want {
+		t.Errorf("NoSuchJob = %q, want %q", got, want)
+	}
+	if got := ksh.Diagnostics().NoSuchJobStatus; got != 0 {
+		t.Errorf("NoSuchJobStatus = %d, want 0 — the shared 1", got)
+	}
+}

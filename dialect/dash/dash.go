@@ -56,6 +56,9 @@ func Semantics() interp.Semantics {
 	// job control turned off` — the same sentence its `set -m` refusal uses,
 	// from the same shell, about two different questions.
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
+	// The same, and measured the same way: dash forks for `( )`, so the
+	// subshell outlives the signal its `kill` sent the shell.
+	s.SubshellRunsOnAfterSignalingTheShell = interp.Yes
 	// dash has somebody to tell on this route, and tells them exactly one
 	// thing: measured on `-i script.sh` through a pseudo-terminal it writes
 	// `[1] + Done sleep 0.3` and never the line that starts the job. The
@@ -100,12 +103,19 @@ func Semantics() interp.Semantics {
 	// argument, printed only to a terminal. The rest of bash's set (-s, the
 	// counts, -d, -t, -u) is refused as unknown here.
 	s.ReadOptions = "rp:"
+	// dash has the two POSIX letters and calls anything else illegal.
+	s.UnsetOptions = "vf"
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
 	// dash single-quotes every listed value; it has no declare, so this
 	// style exists for the two -p listings alone.
 	s.DeclareValueQuoting = interp.ListingQuoteAlwaysEscaped
 	s.EchoInterpretsEscapes = interp.Yes
+	// Neither spelling of the escape character: this shell's set is the XSI
+	// list alone, so `\e` and `\E` are the two characters they are written
+	// as.
+	s.EchoExpandsEscEscape = interp.No
+	s.EchoExpandsCapitalEscEscape = interp.No
 	s.LengthOfSpecialIsCount = interp.No
 	s.UnterminatedBracket = interp.BracketNoMatch
 	// `.` with no filename at all is not an error here: dash does nothing and
@@ -136,6 +146,7 @@ func Semantics() interp.Semantics {
 	// The octal needs no `\0` here, which is the one thing this shell and
 	// bash agree on that ksh93 and zsh do not.
 	s.PrintfBOctalWithoutZero = interp.Yes
+	s.PrintfBStopIsPadded = interp.Yes
 	// None: `%ld` is the conversion `l`, which dash does not have.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersAbsent
 	// No `%(fmt)T`: `%(` is a directive this shell does not have.
@@ -515,13 +526,21 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinBadOption:      "%[1]s: Illegal option %[2]s",
 		// The same sentence kill already had for its own missing argument,
 		// measured for the builtins' shared reader with `read -p`.
-		OptionNeedsArgument:   "%[1]s: No arg for -%[2]s option",
-		ShiftBadNumber:        "shift: Illegal number: %[1]s",
-		WaitBadJob:            "wait: Illegal number: %[1]s",
-		WaitBadJobStatus:      2,
-		WaitNoSuchJob:         "wait: No such job: %[1]s",
-		WaitNoSuchJobStatus:   2,
-		KillNoSuchJob:         "kill: No such job: %[1]s",
+		OptionNeedsArgument: "%[1]s: No arg for -%[2]s option",
+		ShiftBadNumber:      "shift: Illegal number: %[1]s",
+		WaitBadJob:          "wait: Illegal number: %[1]s",
+		WaitBadJobStatus:    2,
+		WaitNoSuchJob:       "wait: No such job: %[1]s",
+		WaitNoSuchJobStatus: 2,
+		KillNoSuchJob:       "kill: No such job: %[1]s",
+		// The same shape for `jobs`, `fg` and `bg`, which is dash's house
+		// order everywhere: the sentence first and the spec after it.
+		// Measured on `jobs %9`, `fg %9` and `bg %9` — dash is the one shell
+		// that reaches this for all three in a script.
+		NoSuchJob: "%[1]s: No such job: %[2]s",
+		// And dash's usage number rather than a plain failure, which is what
+		// it reports for every one of the three.
+		NoSuchJobStatus:       2,
 		LocalOutsideAFunction: "local: not in a function",
 		// One wording for all three, naming the part in front of any `=`.
 		BuiltinBadName: map[string]string{

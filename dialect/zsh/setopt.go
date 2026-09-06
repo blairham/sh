@@ -57,12 +57,22 @@ import (
 //     they are the five about being interactive — `interactive`, `monitor`,
 //     `shinstdin`, `singlecommand` and `zle`. Every other name it takes, in
 //     both directions, which is measured and is what says the rest belong in
-//     one of the other three kinds rather than in a refusal;
+//     one of the other kinds rather than in a refusal;
+//   - backed by the store a recorded name uses, and read by the front end
+//     rather than by anything in this package: `histignorespace` alone, whose
+//     state the line editor asks for through this namespace before it records
+//     a line. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 150 of the 185
+//     typing a directory name still does not change directory. 149 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
+//
+// Two names moved out of "recorded" when the front end learned to read them:
+// `histignorespace` above, and `histignoredups`, which was already a `set -o`
+// backed switch whose state nothing consulted. Both now decide what a session
+// writes to its history file, so both are implemented rather than remembered.
+// Nothing else about the split moved, and 149 is still most of the table.
 //
 // Recording is worth doing and is not the same as implementing. A real rc
 // file opens with a dozen `setopt` lines about completion, correction and
@@ -122,7 +132,26 @@ var zshOptions = []zshOption{
 	// routes into the shell it happens on is the parser's question and this
 	// is not it (syntax.Dialect.ExpandAliases); the state is that the shell
 	// does the thing, and it is not this shell's to switch off.
-	fixedConstant("aliases", true, true),
+	{
+		// `no_aliases` stops alias expansion for as long as it is off, which
+		// is what a prompt theme sets to protect its own code from a user's
+		// aliases — so refusing it is not cosmetic, it changes how the rest
+		// of that file is *parsed*.
+		//
+		// The option is not the same thing as whether this shell expands at
+		// all. The route decides that — measured, `zsh -c 'alias hi=…; hi'`
+		// does not expand and the same two lines in a file do — while the
+		// option reads `on` under `-c` all the same: `zsh -c '[[ -o aliases
+		// ]]'` is 0. So the state kept here is the option, and what reaches
+		// the parser is the option *and* the route.
+		base: "aliases", def: true,
+		get: func(r *interp.Runner) bool { return !recordedDeviates(r, "aliases") },
+		set: func(r *interp.Runner, on bool) int {
+			setRecordedDeviation(r, "aliases", !on)
+			r.SetAliasExpansion(on && r.AliasExpansionBase())
+			return 0
+		},
+	},
 	recorded("aliasfuncdef", false),
 	setOptBacked("allexport", false, "allexport", false),
 	recorded("alwayslastprompt", true),
@@ -205,8 +234,12 @@ var zshOptions = []zshOption{
 	recorded("histfcntllock", false),
 	recorded("histfindnodups", false),
 	recorded("histignorealldups", false),
+	// Not recorded, and no longer unread: this is the switch a session asks
+	// before deciding whether a line repeating the one before it goes into the
+	// history file. `set -o`-backed because zsh's `set -h` abbreviates it, so
+	// the substrate carried the state already.
 	setOptBacked("histignoredups", false, "histignoredups", false),
-	recorded("histignorespace", false),
+	storeBacked("histignorespace", false),
 	recorded("histlexwords", false),
 	recorded("histnofunctions", false),
 	recorded("histnostore", false),
@@ -448,6 +481,25 @@ func recorded(base string, def bool) zshOption {
 	}
 }
 
+// storeBacked keeps its state in the same store a recorded name does and is
+// not recorded, because something reads it.
+//
+// The one name in this table with that shape today is `histignorespace`. The
+// state has nowhere better to live — the substrate has no `set -o` name for
+// it, unlike `histignoredups`, which zsh's `set -h` abbreviates and which is
+// therefore a switch this shell's own option machinery already carries — but
+// the front end reads it through this dialect's namespace every time it
+// accepts a line, so calling it recorded would be claiming less than it does.
+// See HistoryStyle in this package.
+//
+// The distinction is the point: `recorded` means remembered and not acted on,
+// and an option that has moved out of that set must stop saying it is in it.
+func storeBacked(base string, def bool) zshOption {
+	o := recorded(base, def)
+	o.recorded = false
+	return o
+}
+
 // zshRecordedStore is where the recorded options live: the canonical names
 // whose state differs from the table's default, in an array under a name no
 // script can reach — the shape `zstyle` and `emulate` already use, and for
@@ -578,6 +630,28 @@ func registerSetopt(r *interp.Runner) {
 	r.SetOptionNamespace(func(name string) (bool, bool) { return conditionOption(r, name) })
 }
 
+// setOption moves one option by name, reporting what `setopt` would. Shared
+// with `emulate`, whose `-o name` and `+o name` are the same request written
+// on another builtin's command line.
+func setOption(r *interp.Runner, name string, on bool) int {
+	o, inverted, ok := resolveOptionName(normalizeOption(name))
+	if !ok {
+		r.Diagnosef("no such option: %s\n", name)
+		return 1
+	}
+	want := on != inverted
+	if o.set != nil {
+		return o.set(r, want)
+	}
+	if o.get(r) == want {
+		// Already where it was asked to be: granted, the same bargain the
+		// substrate's own option table strikes.
+		return 0
+	}
+	r.Diagnosef("can't change option: %s\n", name)
+	return 1
+}
+
 // setoptBuiltin builds either half; they differ in the direction a bare base
 // name means and in what an empty command lists.
 func setoptBuiltin(setting bool) interp.Builtin {
@@ -588,26 +662,9 @@ func setoptBuiltin(setting bool) interp.Builtin {
 		}
 		status := 0
 		for _, arg := range args {
-			o, inverted, ok := resolveOptionName(normalizeOption(arg))
-			if !ok {
-				r.Diagnosef("no such option: %s\n", arg)
-				status = 1
-				continue
+			if code := setOption(r, arg, setting); code != 0 {
+				status = code
 			}
-			want := setting != inverted
-			if o.set != nil {
-				if code := o.set(r, want); code != 0 {
-					status = code
-				}
-				continue
-			}
-			if o.get(r) == want {
-				// Already where it was asked to be: granted, the same
-				// bargain the substrate's own option table strikes.
-				continue
-			}
-			r.Diagnosef("can't change option: %s\n", arg)
-			status = 1
 		}
 		return status
 	}

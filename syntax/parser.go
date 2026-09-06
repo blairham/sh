@@ -666,10 +666,14 @@ func (p *Parser) parseStmt() *Stmt {
 	}
 	st := &Stmt{Expr: expr, Semi: p.bodyTookTerm}
 	switch p.tok.Kind {
-	case TokAmp:
+	case TokAmp, TokAmpBang, TokAmpPipe:
 		// `&` belongs to the statement, not the command: `a && b &`
-		// backgrounds the whole and-or.
+		// backgrounds the whole and-or. `&!` and `&|` are the same
+		// terminator with the job let go of, and they reach the same
+		// statement for the same reason — `true && false &!` disowns the
+		// whole and-or.
 		st.Background = true
+		st.Disown = p.tok.Kind != TokAmp
 		st.Semi = p.tok.Pos
 		// What was written, for a `jobs` listing to show. Taken from the
 		// input rather than rebuilt from the tree: `jobs` shows what someone

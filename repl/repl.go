@@ -919,12 +919,15 @@ func (s Shell) take(pending *strings.Builder, remember func(string), line string
 // being protected by forgetting it.
 //
 // The rest of what it does is the panel's own knobs, and they part company at
-// exactly one point. A line the session was told to ignore is left out of the
-// file by both shells; bash also leaves it out of the list, where zsh keeps
-// it. Which of the two this session does is HistoryStyle's to say, and the
-// credential rule above takes zsh's answer for its own reasons — so the two
-// paths look alike here and are decided separately, which is why they are
-// written separately rather than folded together.
+// exactly one point: a line the *pattern* knob rejected is left out of the
+// file by both shells, and bash also drops it from the list where zsh keeps
+// it. A line rejected for a leading blank or for repeating the one before it
+// is gone from the list in both, which is measured rather than assumed — see
+// HistoryStyle.PatternIgnoredStaysInSession. Which answer this session gives
+// is the rules' to say, and the credential rule above takes zsh's answer for
+// its own reasons — so the two paths look alike here and are decided
+// separately, which is why they are written separately rather than folded
+// together.
 func (s Shell) recording(ed *editor, added *[]string) func(string) {
 	if ed == nil {
 		return nil
@@ -947,8 +950,8 @@ func (s Shell) recording(ed *editor, added *[]string) func(string) {
 			ed.remember(line)
 			return
 		}
-		if rules.ignored(line, ed.newest()) {
-			if rules.keepIgnored {
+		if ignored, recallable := rules.ignored(line, ed.newest()); ignored {
+			if recallable {
 				ed.remember(line)
 			}
 			return
@@ -1044,7 +1047,11 @@ func (s Shell) historyRules() historyRules {
 	if s.Runner == nil {
 		return historyRules{}
 	}
-	return historyRulesFrom(s.History, s.Runner.GetVar, s.Runner.MatchPattern)
+	// Three seams into the same shell, because the settings live in three
+	// places: a variable, an option, and the pattern rules a `case` uses. A
+	// session that answered any of them itself would be a second shell
+	// disagreeing with the first about what it was told.
+	return historyRulesFrom(s.History, s.Runner.GetVar, s.Runner.DialectOption, s.Runner.MatchPattern)
 }
 
 // newEditor is the line editor this shell types into.

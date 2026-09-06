@@ -98,6 +98,26 @@ func codesetIsUTF8(locale string) bool {
 	return b.String() == "utf8"
 }
 
+// localeIsC reports an explicit C or POSIX locale, read the way POSIX ranks
+// the variables and multibyteLocale reads them: LC_ALL over LC_CTYPE over
+// LANG.
+//
+// A **different question** from multibyteLocale, and it lives here so that
+// the two are read in one place and cannot drift apart. It is asked about
+// case mapping — whether `${x^^}` on `café` is `CAFé` — and the two differ
+// where nothing is set at all: measured, a shell stripped of every locale
+// variable still cases beyond ASCII, so unset is not C here, while unset is
+// single-byte for a length because every panel member counts bytes with no
+// locale to consult.
+func (r *Runner) localeIsC() bool {
+	for _, name := range localeVariables {
+		if v, ok := r.getVar(name); ok && v != "" {
+			return v == "C" || v == "POSIX"
+		}
+	}
+	return false
+}
+
 // countsCharacters reports whether the length of v, and the positions in it,
 // are counted in characters rather than in bytes.
 //
@@ -108,6 +128,31 @@ func codesetIsUTF8(locale string) bool {
 // from refusing `${#x}` on `abcd`.
 func (r *Runner) countsCharacters(v string) bool {
 	if !r.multibyteLocale() || isASCII(v) {
+		return false
+	}
+	return r.ask(r.sem().MultibyteEncodingIsHonored,
+		"a character being the locale's rather than a byte")
+}
+
+// patternCountsCharacters is countsCharacters for a match rather than a
+// length: the pattern and the subject are both walked, so either one holding
+// a byte above ASCII is enough to make the two readings differ.
+//
+// `?` is the shortest example of why the subject has to be looked at: the
+// pattern is one ASCII byte and the answer still moves, because what it
+// consumes is one *character* of the subject.
+func (r *Runner) patternCountsCharacters(texts ...string) bool {
+	if !r.multibyteLocale() {
+		return false
+	}
+	allASCII := true
+	for _, t := range texts {
+		if !isASCII(t) {
+			allASCII = false
+			break
+		}
+	}
+	if allASCII {
 		return false
 	}
 	return r.ask(r.sem().MultibyteEncodingIsHonored,

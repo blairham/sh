@@ -595,8 +595,9 @@ func (r *Runner) reportJobLookup(spec string, code int, name string) int {
 	case jobSpecUnanswered:
 		return r.status
 	}
-	r.diagf("%s\n", Wording(r.diag().NoSuchJob, "%[1]s: %[2]s: no such job", name, spec))
-	return 1
+	d := r.diag()
+	r.diagf("%s\n", Wording(d.NoSuchJob, "%[1]s: %[2]s: no such job", name, spec))
+	return orDefault(d.NoSuchJobStatus, 1)
 }
 
 // signalJob sends to the job's process group rather than to the one process.

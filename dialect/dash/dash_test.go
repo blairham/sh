@@ -562,3 +562,18 @@ func TestDollarDashInteractiveStartupLetters(t *testing.T) {
 		t.Errorf("InteractiveOptionLetters = %q, want empty", got)
 	}
 }
+
+// The job-spec complaint and its status, which is what makes a slot in the
+// jobs table answerable by `jobs %n` without reading a listing.
+//
+// Measured 2026-09-05 on `jobs %9`: dash puts the sentence first and the spec
+// after it, and reports its usage number rather than a plain failure. bash and
+// ksh93 report 1 here and zsh reports 127.
+func TestTheJobSpecThatNamesNothing(t *testing.T) {
+	if got, want := dash.Diagnostics().NoSuchJob, "%[1]s: No such job: %[2]s"; got != want {
+		t.Errorf("NoSuchJob = %q, want %q", got, want)
+	}
+	if got, want := dash.Diagnostics().NoSuchJobStatus, 2; got != want {
+		t.Errorf("NoSuchJobStatus = %d, want %d", got, want)
+	}
+}

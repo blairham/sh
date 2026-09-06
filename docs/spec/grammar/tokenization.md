@@ -534,9 +534,42 @@ naming the assignment. The case is
 
 So the exception is not "a prefix ends the body" but "the substitution's
 closer may follow the delimiter" — four of the six columns take it and
-two refuse — and it is the only place the whole-line rule bends. bash
-also *warns* there that the document was delimited by end of file, which
-is the same remark `<<-` with a space-indented delimiter earns below.
+two refuse — and it is the only place the whole-line rule bends.
+
+bash 5.3 also *warns* there that the document was delimited by end of
+file, which is the same remark `<<-` with a space-indented delimiter
+earns below. **Where that warning comes from is the interesting part**
+(#785). The delimiter is present and matches nothing, so from the
+here-document's point of view the input ran out — while the program
+itself is complete, `v` is `a` and the status is 0. Both halves are true
+because the here-document's input is *the substitution's own text,
+closing parenthesis included*: `EOF)` is a body line, and the last line
+of the substitution is the last line the body could have. Read the
+trimmed text instead and the opposite is true — `EOF` alone is the
+delimiter, there is nothing to remark on, and that is exactly why the
+substitution runs and yields `a`.
+
+Which is also what makes it the *parser's* remark rather than the
+interpreter's: it is said for a substitution on the right of a `&&` that
+never reaches it (`heredoc/a-substitutions-delimiter-is-remarked-on-before-it-runs`).
+bash 3.2 says nothing, so the wording is a `Diagnostics` value and the
+silence is an answer rather than a gap.
+
+What decides it is that the parentheses hold **a program**, not which
+sigil opened them. `<(cat <<EOF` … `EOF)` earns the same remark in bash
+5.3 and the same silence in bash 3.2 and ksh93
+(`heredoc/a-substitution-that-is-not-a-dollar-sign`); dash and zsh have
+no process substitution and refuse the line. The counter-case draws the
+line and is the reason there is one: `$(( a << b ))` is a **left shift**,
+and reading it as a program would make `<<` a here-document whose
+delimiter `b` never arrives — a warning about a script that has none.
+
+Not reached: a command substitution *inside* an arithmetic one —
+`$(( $(cat <<EOF` … `EOF) + 1 ))` — where bash warns and we do not. The
+arithmetic text is not read as commands while the source is scanned, so
+the substitution inside it is invisible to the parser and the remark has
+nowhere to come from. Recorded rather than fixed; it is a question about
+when nested expansions are parsed, not about here-documents.
 
 **Several heredocs on one line are collected in operator order**:
 

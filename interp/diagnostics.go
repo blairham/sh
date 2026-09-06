@@ -385,6 +385,11 @@ type Diagnostics struct {
 	// Empty means it prints nothing, which is dash.
 	UnaliasUsage string
 
+	// UnsetPatternUsage is what `unset -m` prints when given no pattern to
+	// match. One verb, the builtin's name. Only one dialect has the letter,
+	// so only one dialect can reach this.
+	UnsetPatternUsage string
+
 	// UnaliasUsageUnprefixed writes that without the shell and line in front.
 	UnaliasUsageUnprefixed bool
 
@@ -1270,7 +1275,31 @@ type Diagnostics struct {
 
 	// NoSuchJob is a job spec that names nothing. Two verbs: the builtin and
 	// the spec as written.
+	//
+	// Measured 2026-09-05 on `jobs %9`, which is the one of the three
+	// builtins that reaches this in a script — `fg` and `bg` refuse for want
+	// of job control first in bash and zsh:
+	//
+	//	bash (all three)  jobs: %9: no such job
+	//	dash              jobs: No such job: %9
+	//	ksh93u+           jobs: no such job — no spec at all
+	//	zsh 5.9.2         jobs: %9: no such job
+	//
+	// So the shared default is bash's and zsh's, and the two that differ say
+	// so. ksh93's format uses neither verb, which Wording allows.
 	NoSuchJob string
+
+	// NoSuchJobStatus is what that reports. Zero means 1, which is bash's
+	// and ksh93's.
+	//
+	// Measured on the same probe, and it is the field that makes a slot
+	// answerable without reading a listing: `jobs %2 >/dev/null 2>&1; echo
+	// $?` is a yes/no about one slot with no text to race, and it grades
+	// nothing at all while the number is wrong. dash reports 2 and zsh
+	// reports 127 — the status of a command that is not there, which is what
+	// zsh takes a job that is not there to be, and the same number its `wait`
+	// uses for the same question.
+	NoSuchJobStatus int
 
 	PrintfUsage string
 	// PrintfUsageUnprefixed prints it bare, as ksh93 prints every usage.
@@ -1642,6 +1671,40 @@ type Diagnostics struct {
 	// nothing about the condition. bash is the exception and words it as a
 	// statement about the operator rather than about the token.
 	CondOperand string
+
+	// CondSyntaxUnexpected is a token the grammar did not want *inside*
+	// `[[ ]]`, where the dialect words it differently from the same token
+	// anywhere else. Three verbs, the same as SyntaxUnexpected: %[1]s the
+	// token, %[2]s what would have been valid, %[3]d the line.
+	//
+	// Empty is "whatever it says about any such token", which is three of
+	// the four: ksh93's `` `-z' unexpected `` and zsh's ``parse error near
+	// `-z'`` are the sentences those shells give a stray token wherever it
+	// stands. bash is the exception and drops the words `unexpected token`
+	// here — `` syntax error near `-z' `` — which is measurable only
+	// because it keeps them everywhere else.
+	CondSyntaxUnexpected string
+
+	// CondSyntaxPreamble is a line one dialect writes *before* that one,
+	// naming the construct rather than the token: bash's `syntax error in
+	// conditional expression: unexpected token `-z'`. Two verbs: %[1]s the
+	// token and %[2]d the line — and the line is the `[[`'s, not the
+	// token's, which is why it is a second verb rather than the location
+	// the report already carries.
+	//
+	// Empty means no such line, which is every dialect but one.
+	CondSyntaxPreamble string
+
+	// CondUnterminatedPreamble is the same idea for a `[[` the input ran
+	// out inside of, and the same dialect writes it: `unexpected EOF while
+	// looking for `]]'`, again at the `[[`'s line and again in front of the
+	// ordinary sentence. Two verbs: %[1]s the closer it was waiting for and
+	// %[2]d the line.
+	//
+	// It is a *second* field rather than the one above because bash writes
+	// this line for `[[` and for nothing else: `if`, `for`, `case`, `{` and
+	// `(` left open all get one line and it is the ordinary one. Measured.
+	CondUnterminatedPreamble string
 
 	// AnonymousFunctionName is what a function with no name is called where
 	// one is wanted — a frame, `$0`, a diagnostic. Empty means `(anon)`,
@@ -2435,6 +2498,11 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 		// One dialect does not name the token here at all.
 		return d.SyntaxRedirectUnexpected
 	}
+	if se.Construct == "[[" && d.CondSyntaxUnexpected != "" {
+		// A token refused inside a condition, where this dialect says
+		// something shorter than it says anywhere else.
+		form = d.CondSyntaxUnexpected
+	}
 	msg := Wording(form, `"%[1]s" unexpected`, se.Token, se.Expected, se.Pos.Line)
 	if se.Expected != "" && d.SyntaxExpecting != "" {
 		msg += Wording(d.SyntaxExpecting, "", se.Expected)
@@ -2667,7 +2735,8 @@ func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) 
 		// the plain location and no echo.
 		return d.Report(name, line, d.ParseFailure(err)+"\n")
 	}
-	out := d.ReportFrom(name, input, line, d.ParseFailure(err)+"\n")
+	out := d.condPreamble(name, input, err)
+	out += d.ReportFrom(name, input, line, d.ParseFailure(err)+"\n")
 	return out + d.echoLine(name, input, line, err, src)
 }
 
@@ -2676,6 +2745,34 @@ func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) 
 func missingFuncBody(err error) bool {
 	var se *syntax.Error
 	return errors.As(err, &se) && se.FuncBody
+}
+
+// condPreamble is the line one dialect writes in front of a token refused
+// inside `[[ ]]`, or empty for the three that write none.
+//
+// It carries its own location, and that is the whole reason it is a line of
+// its own rather than a longer wording: bash points it at the `[[` and points
+// the line after it at the token, so a condition opened on line 1 and refused
+// on line 2 names both.
+func (d Diagnostics) condPreamble(name, input string, err error) string {
+	var se *syntax.Error
+	if !errors.As(err, &se) || se.Construct != "[[" {
+		return ""
+	}
+	form, verb := d.CondSyntaxPreamble, se.Token
+	if se.Kind == syntax.ErrUnterminated {
+		form, verb = d.CondUnterminatedPreamble, se.Expected
+	} else if se.Kind != syntax.ErrUnexpected {
+		return ""
+	}
+	if form == "" {
+		return ""
+	}
+	line := se.ConstructLine
+	if line < 1 {
+		line = 1
+	}
+	return d.ReportFrom(name, input, line, Wording(form, "", verb, line)+"\n")
 }
 
 // echoLine is the second line, or empty for none.

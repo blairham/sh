@@ -3211,14 +3211,58 @@ What was built, all through the extension seam — registered builtins in each
   three measured axes above and reset the option table to the emulation's
   defaults, `-c` runs a string under the emulation and restores everything
   after, and a bare `emulate` names the mode.
-- **ksh93 `whence`** (dialect/ksh/whence.go): bare, `-v`, `-p`, `-q` — the
-  bare mode delegating to the same lookup `command -v` uses, `-v` to the
+- **ksh93 `whence`** (dialect/ksh/whence.go): bare, `-v`, `-p`, `-q`, `-a` —
+  the bare mode delegating to the same lookup `command -v` uses, `-v` to the
   core `type`, whose ksh wording was already `whence`'s, and aliases spoken
   for in the dialect because the core's lookup cannot see them.
-- **zsh `whence` and `where`** (dialect/zsh/whence.go): bare, `-v`, `-c`,
-  `-a`, `-p`, `-w`, `-f`, and `where` as `whence -ca` under a name that
-  parses no options at all. **Not ksh93's builtin under the same
-  spelling** — it is measured separately and differs in every part that
+
+  `-a` is every resolution rather than the first, always in `-v`'s
+  sentences, in this order:
+
+      alias, if any            N is an alias for V
+      keyword, if any          N is a keyword
+      function, if any         N is a function
+      builtin, if any and no   N is a shell builtin
+        function shadows it
+      every PATH hit           N is <path>, or `N is a tracked alias for
+                               <path>` when the PATH hit is the only line
+      the FPATH candidate      N is an undefined function
+
+  A defined function hides the builtin of the same name — which is what the
+  shell would run — and an alias hides nothing.
+
+  The last line is what #633 recorded as needing FPATH machinery this
+  substrate does not have, and the measurement says it does not. It appears
+  exactly when the name had a **builtin or function** resolution *and* a
+  **PATH hit**, and it appears with FPATH unset, set to an empty directory,
+  or exported: `whence -a whence` and `whence -a typeset` — builtins with no
+  file on PATH — do not print it, while `whence -a alias` and a function
+  named after a PATH command do. So it is a PATH search, which this
+  substrate has.
+- **zsh `whence`, `which` and `where`** (dialect/zsh/whence.go): bare, `-v`,
+  `-c`, `-a`, `-p`, `-w`, `-f`, with `which` as `whence -c` and `where` as
+  `whence -ca` under names of their own. Each name **stops offering the
+  letters its preset already decided**, which is a rule and not a
+  coincidence — measured letter by letter, zsh 5.9.2, 2026-09-05:
+
+      whence  -v -p -c -a -w -f      and -m -s -x -S
+      which      -p    -a -w         and -m -s -x -S   (-c -v -f refused)
+      where      -p       -w         and -m -s -x -S   (-a -c -v -f refused)
+
+  `-c` is already on in both, so it cannot be asked for; `-a` is already on
+  in `where`; and `-v` and `-f` are the two shapes `-c` displaces. `where`
+  used to refuse *every* dash word, which is right for `-v` and wrong for
+  `-p` and `-w`, both of which this shell answers.
+
+  `which` is registered even though /usr/bin/which exists: a builtin
+  shadowing a PATH command is what this shell does, and the five shells
+  without the builtin reach the external, which knows only PATH — the same
+  word asking two different questions, which is the corpus row
+  `whence/which-is-whence-with-c`. #572 left it out on the grounds that
+  shadowing was not what it had been asked for; #633 is that decision going
+  the other way.
+
+  **Not ksh93's builtin under the same spelling** — it is measured separately and differs in every part that
   could differ, which is the whole reason it is a second implementation
   rather than a registration of the first:
 
@@ -3339,23 +3383,32 @@ than missing:
   and wording (`bad file number: 9` where ksh93 brackets the errno). Its
   `whence` is built now, above; `print` stays command-not-found, visible in
   the corpus's `print/` cases as the recorded difference.
-- zsh `whence -m`, `-s` and `-x`: `-m` reads the operands as *patterns* and
-  matches them against every name the shell could run, PATH included — the
-  answer on the measuring machine was sixty-four lines of /usr/bin, and
-  nothing here walks PATH; `-s` resolves a symlink, which would be the bare
-  answer for every name that is not one and silently wrong for one that is;
-  `-x` sets the tab width of a printed body. Each is refused as not
-  implemented rather than as unknown, the same distinction `compgen` draws
-  between an action a shell lacks and a typo.
+- zsh `whence -m`, `-s`, `-S` and `-x`, under all three of its names: `-m`
+  reads the operands as *patterns* and matches them against every name the
+  shell could run, PATH included — the answer on the measuring machine was
+  sixty-four lines of /usr/bin, and nothing here walks PATH; `-s` resolves a
+  symlink, which would be the bare answer for every name that is not one and
+  silently wrong for one that is, and `-S` is `-s` reporting every step of
+  the chain rather than the last; `-x` sets the tab width of a printed body.
+  Each is refused as not implemented rather than as unknown, the same
+  distinction `compgen` draws between an action a shell lacks and a typo.
 - zsh `setopt` names of the **recorded** kind: 157 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
 - zsh `emulate -L`: function-local emulation needs a restore-on-return seam
   the runner does not have; refused out loud rather than silently made
   global. `emulate csh` records the mode and changes nothing it could —
   csh's differences are not modeled anywhere else either.
-- ksh93 `print -v`/`-C` and `whence -a`/`-f`: value quoting, compound
-  output, the all-resolutions walk and the function skip; each is refused
-  as not implemented rather than unknown, which would be the worse answer.
+- ksh93 `print -v`/`-C` and `whence -f`: value quoting, compound output and
+  the function skip; each is refused as not implemented rather than unknown,
+  which would be the worse answer. `whence -a` was on this list and is
+  built now, above.
+
+  Two divergences it inherits rather than introduces, both visible at
+  `whence -v` and `whence` already: this shell's builtin set is not ksh93's
+  (`sleep` is a builtin there and a PATH command here, so `whence -a sleep`
+  is one line rather than three), and `type`/`whence -v` says `is a shell
+  builtin` where ksh93 says `is a special shell builtin` for the special
+  ones. Neither is `-a`'s to fix.
 - ksh93 `hist`: interactive history editing, and there is no history.
 - bash `bind`: readline's. The seam zsh's `bindkey` reaches the editor
   through is the core's rather than zsh's, so this is now a matter of

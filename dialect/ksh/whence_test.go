@@ -95,8 +95,10 @@ func TestWhenceRefusals(t *testing.T) {
 	if st != 2 || out != "Usage: whence [-afpqv] name  ...\n" {
 		t.Errorf("out %q status %d, want the bare usage at 2", out, st)
 	}
-	out, st = runKsh(t, t.TempDir(), `whence -a echo`)
-	if st != 2 || !strings.Contains(out, "whence: -a is not implemented yet") {
+	// `-f` is the letter still missing; `-a` was on this list until #633 and
+	// is built now — see TestWhenceAListsEveryResolution.
+	out, st = runKsh(t, t.TempDir(), `whence -f echo`)
+	if st != 2 || !strings.Contains(out, "whence: -f is not implemented yet") {
 		t.Errorf("out %q status %d, want the not-implemented refusal at 2", out, st)
 	}
 }
@@ -109,5 +111,96 @@ func TestWhenceCarriesOnPastAMiss(t *testing.T) {
 	out, st := runKsh(t, dir, `whence echo nosuchzz tool`)
 	if st != 1 || out != "echo\n"+path+"\n" {
 		t.Errorf("out %q status %d, want both hits and the miss in the status", out, st)
+	}
+}
+
+// `whence -a` is every resolution rather than the first, always in `-v`'s
+// sentences, in the order ksh93 lists them. Measured 2026-09-05, ksh93u+.
+//
+// The last line is the one #633 recorded as needing FPATH machinery, and the
+// measurement says otherwise: `N is an undefined function` appears exactly
+// when the name had a builtin or function resolution *and* a PATH hit, with
+// FPATH unset, empty or exported alike. A builtin with no file on PATH does
+// not get it.
+func TestWhenceAListsEveryResolution(t *testing.T) {
+	dir := t.TempDir()
+	path := toolOnPath(t, dir)
+	for _, c := range []struct {
+		name, src, want string
+		st              int
+	}{
+		{
+			"a builtin with no file on PATH is one line",
+			"whence -a whence", "whence is a shell builtin\n", 0,
+		},
+		{
+			"a PATH hit standing alone keeps the tracked-alias sentence",
+			"whence -a tool", "tool is a tracked alias for " + path + "\n", 0,
+		},
+		{
+			"a keyword", "whence -a if", "if is a keyword\n", 0,
+		},
+		{
+			"an alias", "alias al='ls -l'; whence -a al", "al is an alias for 'ls -l'\n", 0,
+		},
+		{
+			"a function", "f() { :; }; whence -a f", "f is a function\n", 0,
+		},
+		{
+			// A function and a PATH hit: the function line, the plain path
+			// rather than the tracked alias, and the undefined-function line
+			// the pair earns.
+			"a function that is also on PATH",
+			"tool() { :; }; whence -a tool",
+			"tool is a function\ntool is " + path + "\ntool is an undefined function\n", 0,
+		},
+		{
+			// An alias hides nothing, so the function line is still there —
+			// and the alias alone would not have earned the last line.
+			"an alias over a function that is also on PATH",
+			"alias tool=x; tool() { :; }; whence -a tool",
+			"tool is an alias for x\ntool is a function\ntool is " + path +
+				"\ntool is an undefined function\n", 0,
+		},
+		{
+			// The alias without the function: a PATH hit that is not the
+			// only line, and no undefined-function line.
+			"an alias over a PATH hit alone",
+			"alias tool=x; whence -a tool",
+			"tool is an alias for x\ntool is " + path + "\n", 0,
+		},
+		{
+			// The complaint is the same whence-prefixed line every other
+			// mode gives, on standard error, which runKsh folds in.
+			"a name that is nothing", "whence -a nosuchzz",
+			"ksh: whence: nosuchzz: not found\n", 1,
+		},
+		{
+			"every operand is answered", "whence -a if whence",
+			"if is a keyword\nwhence is a shell builtin\n", 0,
+		},
+		{
+			// -a already speaks in sentences, so -v adds nothing.
+			"-v adds nothing", "whence -av if", "if is a keyword\n", 0,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runKsh(t, dir, c.src)
+			if out != c.want || st != c.st {
+				t.Errorf("out %q status %d, want %q and %d", out, st, c.want, c.st)
+			}
+		})
+	}
+}
+
+// `-aq` is the status with the words withheld, both ways.
+func TestWhenceAQIsQuiet(t *testing.T) {
+	out, st := runKsh(t, t.TempDir(), `whence -aq if`)
+	if out != "" || st != 0 {
+		t.Errorf("out %q status %d, want silence at 0", out, st)
+	}
+	out, st = runKsh(t, t.TempDir(), `whence -aq nosuchzz`)
+	if out != "" || st != 1 {
+		t.Errorf("out %q status %d, want silence at 1", out, st)
 	}
 }

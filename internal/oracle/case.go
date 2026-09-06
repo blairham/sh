@@ -7332,6 +7332,26 @@ exit 7`,
 		Why:     "and it is a name rather than a synonym with flags: `where -v` is a bad option, not the sentence `whence -v` writes. A shell that implemented it by handing its arguments to whence would pass every other row here and fail this one",
 	},
 	{
+		ID: "whence/which-is-whence-with-c", Category: "builtins",
+		Snippet: `alias ll="ls -l"; which echo; which ll; which nosuchcmd431; echo "st=$?"`,
+		Why:     "zsh has `which` as a builtin and it is `whence -c`, so it answers for an alias and for a builtin and says `not found` for neither. The other five have no such builtin and reach /usr/bin/which, which knows only PATH — the same word, two entirely different questions, and the reason a dialect that leaves it out is not this shell",
+	},
+	{
+		ID: "whence/which-refuses-the-letters-its-preset-decided", Category: "builtins",
+		Snippet: `which -c echo; echo "st=$?"; which -v echo; echo "st=$?"`,
+		Why:     "and it is not `whence` with a flag set: the letters `-c` already decided are no longer on offer, so `which -c` and `which -v` are bad options where `which -a`, `-p` and `-w` are taken. A shell that implemented it by handing its arguments to whence would pass the row above and fail this one",
+	},
+	{
+		ID: "whence/where-takes-the-letters-its-preset-left", Category: "builtins",
+		Snippet: `where -p echo; where -w echo; echo "st=$?"`,
+		Why:     "the same rule from the other end: `where` is `whence -ca`, so `-c` and `-a` are gone and `-p` and `-w` remain — two letters it does answer, beside the `-v` that `whence/where-takes-no-options` shows it refuses. Refusing every dash word passes that row and fails this one",
+	},
+	{
+		ID: "whence/a-on-a-name-that-is-only-on-path", Category: "builtins",
+		Snippet: `whence -a ls; echo "st=$?"`,
+		Why:     "the PATH hit standing alone keeps the sentence `-v` gives it — ksh93 says `tracked alias for` here and plain `N is <path>` when a builtin or function line came first, which is the difference `whence -a echo` cannot show. zsh, whose `-a` has no sentences at all, just prints the path",
+	},
+	{
 		ID: "whence/nothing-to-ask-about", Category: "builtins",
 		Snippet: `whence; echo "st=$?"`,
 		Why:     "the two shells with the builtin part company over an empty operand list: zsh says nothing and reports 1, ksh93 prints its usage line and reports 2. The quiet one is the trap — a script testing the status sees a plain miss",

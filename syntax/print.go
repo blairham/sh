@@ -173,6 +173,21 @@ type printer struct {
 
 func (p *printer) str(s string) { p.b.WriteString(s) }
 
+// atLineStart reports whether what has been written so far ends a line.
+//
+// The printer owns every newline it writes but one: a here-document's body
+// carries the newlines the input gave it, and the last of them is the reason
+// the delimiter that follows begins a line. So after a body the writing may
+// already be at the start of a line — or, where the input ran out mid-line,
+// may not be at the start of one the printer would otherwise have assumed.
+//
+// Everything that ends a statement asks here first. A separator, a keyword
+// terminator or a body's opening newline written without asking is a
+// separator alone on a line of its own, which is not a statement terminator
+// in any shell — bash, dash and ksh93 all refuse it — and a delimiter written
+// without asking joins the body's last line and becomes part of the body.
+func (p *printer) atLineStart() bool { return strings.HasSuffix(p.b.String(), "\n") }
+
 // stmts writes a list, separated the way a shell separates them on one line.
 //
 // `;` between and none after, which is what a group needs — `{ a; b; }` has
@@ -206,15 +221,18 @@ func (p *printer) separate(prev, next *Stmt) {
 	if p.layout.Lines {
 		// A shape the caller asked for, so the source's own lines do not
 		// come into it. A backgrounded statement is already terminated
-		// whatever the arrangement says.
-		if !prev.Background {
+		// whatever the arrangement says, and so is one whose here-document
+		// body ended the line — bash leaves the blank line that falls out
+		// of this, and writing the separator there instead is a `;` with
+		// nothing before it.
+		if !prev.Background && !p.atLineStart() {
 			p.str(p.layout.Separator)
 		}
 		p.str("\n" + p.pad())
 		return
 	}
 	// A here-document body has already ended the line.
-	ended := strings.HasSuffix(p.b.String(), "\n")
+	ended := p.atLineStart()
 	if prev.End().Line != next.Pos().Line {
 		if !ended {
 			p.str("\n")
@@ -465,6 +483,14 @@ func (p *printer) opener(word string, ownLine bool) {
 		p.str("; " + word)
 		return
 	}
+	if p.atLineStart() {
+		// The header owed a here-document, whose body ended the line. There
+		// is nothing left on it to separate from, so the keyword opens the
+		// line it is already at the start of — which is where bash puts it,
+		// whether or not the arrangement would have kept it inline.
+		p.str(p.pad() + word)
+		return
+	}
 	if ownLine {
 		p.str(p.layout.Separator + "\n" + p.pad() + word)
 		return
@@ -559,7 +585,7 @@ func (p *printer) bodyAt(list []*Stmt, closedByKeyword, ownLine bool) {
 	}
 	p.str(p.pad())
 	p.stmts(list)
-	if closedByKeyword {
+	if closedByKeyword && !p.atLineStart() {
 		p.str(p.layout.KeywordTerminator)
 	}
 	p.depth--
@@ -596,7 +622,7 @@ func (p *printer) keyword(word string) {
 // shell script on this machine — four of them close a block right after a
 // here-document, and the corpus has none that do.
 func (p *printer) terminate() {
-	if strings.HasSuffix(p.b.String(), "\n") {
+	if p.atLineStart() {
 		return
 	}
 	// A backgrounded statement is already terminated — the rule separate
@@ -836,13 +862,47 @@ func explicitDupTarget(w *Word) bool {
 }
 
 // flushHeredocs writes the bodies queued by the statement just printed.
+//
+// Neither newline around a body is the printer's to assume, and assuming each
+// of them was a silent corruption: the text came back valid and meant
+// something else.
+//
+// Before the body, because a body goes on lines of its own — but after a
+// previous body's delimiter the line is already ended, and a second newline
+// opens the next body with a blank first line that was never in it. `cat <<A
+// <<B` reads B's body, so that blank line is the whole of the difference:
+// every shell in the panel prints `b` for the original and an empty line then
+// `b` for what we wrote.
+//
+// After the body there is no newline to write at all, and that is the part
+// the bug report guessed wrong. The delimiter only delimits when it is alone
+// on a line, so writing it straight after a body that ended mid-line joins it
+// to that line and the body gains the delimiter's text: `cat <<END\nbody`
+// came back as `cat << END\nbodyEND\n`, which every shell in the panel runs
+// as `bodyEND`. But supplying the missing newline and then the delimiter is
+// not the fix either — it gives the body a newline it did not have, which is
+// a different body and so a different tree, and the printer's promise is the
+// tree. Measured, the difference is real and it is not even the same size in
+// every shell: `cat <<END\nbody` writes `body` in dash, ksh93 and zsh and
+// `body\n` in bash, so a printer that closed the document would be choosing
+// one shell's answer for every caller.
+//
+// A body ends mid-line only by running to the end of the input, which means
+// nothing followed it and nothing may follow it here. So the document is
+// written back the way it was read — open — and that is the one form that
+// parses to the body it came from.
 func (p *printer) flushHeredocs() {
 	pending := p.heredocs
 	p.heredocs = nil
 	for _, rd := range pending {
-		p.str("\n")
+		if !p.atLineStart() {
+			p.str("\n")
+		}
 		if rd.Heredoc != nil {
 			p.str(rd.Heredoc.Literal())
+		}
+		if !p.atLineStart() {
+			return
 		}
 		// The delimiter alone on its line is what ends it, and it is written
 		// bare however it was quoted: the quoting on the operator's word

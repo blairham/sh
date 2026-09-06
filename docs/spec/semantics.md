@@ -5450,6 +5450,16 @@ Read without asking, for the reason above. Unanswered means the
 parameter is set and empty, which is what this shell did before the axis
 existed and what the two shells that carry on do.
 
+One spelling is recorded and not claimed. bash writes `$!` back for the
+`$!` spelling and `!` alone for `${!}` — measured, `set -u; echo "${!}"`
+is `!: unbound variable` in 5.3.15 where `$!` is `$!: unbound variable`,
+and 3.2.57 prints *two* lines for the braced form. This shell says
+`$!: unbound variable` for both. A second wording field would hold a
+copy of the first in all four presets to carry one character in one
+shell in a form nothing writes, and the braced spelling collides with
+bash's indirection syntax besides, which is what the two lines from 3.2
+are.
+
 Corpus: `jobs/the-last-background-pid-before-any-job` reads the
 parameter, `jobs/an-unstarted-last-background-pid-under-set-u` asks
 `set -u` about it, and

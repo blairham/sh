@@ -348,7 +348,7 @@ func (r *Runner) paramSource(e *syntax.ParamExpr) (value string, set, subscript 
 	if !set {
 		value, set = r.getVar(e.Name)
 	}
-	if e.Name == "!" && !r.lastJobPIDSet && !e.Indirect &&
+	if e.Name == "!" && !r.lastJobPIDSet &&
 		r.sem().LastBackgroundPidIsUnsetBeforeAnyJob == Yes {
 		// `$!` before anything has been started is *unset* in two of the
 		// four shells rather than set and empty, and `set -u` is fatal about
@@ -357,9 +357,10 @@ func (r *Runner) paramSource(e *syntax.ParamExpr) (value string, set, subscript 
 		// three other callers read it that way — and answering false would
 		// send `$!` off to look for a variable of that name.
 		//
-		// Not for an indirection. `${!x}` is a different construct that
-		// happens to share the character, and whether the panel even reads
-		// it as one is its own axis (IndirectionYieldsName).
+		// An indirection cannot reach this and needs no guard of its own:
+		// `${!x}` parses with the name `x` and the indirect flag set, so the
+		// name here is never `!` for one. A `!e.Indirect` clause was written
+		// and was dead — a surviving mutant is what said so.
 		set = false
 	}
 	return value, set, false

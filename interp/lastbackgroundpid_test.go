@@ -128,11 +128,14 @@ func TestTheLastBackgroundPidRefusalIsWordedByTheDialect(t *testing.T) {
 }
 
 // `${!x}` is a different construct that happens to share the character, and
-// the axis must not reach it.
+// the axis does not reach it.
 //
-// Whether the panel even reads those four characters as an indirection is its
-// own axis, and on the side that does, the name is a variable's — so `set -u`
-// has an unset *variable* to talk about and not an unstarted job.
+// It cannot, and the reason is worth writing down rather than guarding: an
+// indirection parses with the name `x` and the indirect flag set, so the name
+// the axis tests is never `!` for one. A `!e.Indirect` clause was written into
+// the test on the assumption that it could, and a mutant that removed it
+// survived — which is what said the clause was dead. This case stays as the
+// regression guard for the construct, not for that clause.
 func TestTheAxisDoesNotReachAnIndirection(t *testing.T) {
 	sem := permissive()
 	sem.LastBackgroundPidIsUnsetBeforeAnyJob = Yes

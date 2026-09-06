@@ -422,6 +422,10 @@ func Semantics() interp.Semantics {
 	// `-i script.sh` with no terminal anywhere, announcing its background
 	// jobs into a pipe.
 	s.InteractiveMonitorNeedsATerminal = interp.No
+	// And it announces both ends of a job on that route: measured on
+	// `-i script.sh` through a pseudo-terminal, `[1]\t<pid>` as the job
+	// starts and `[1] +  Done  sleep 0.3 &` as it ends.
+	s.InteractiveScriptAnnouncesJobs = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.Yes

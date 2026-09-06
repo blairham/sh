@@ -4976,6 +4976,57 @@ that has not chosen. Unanswered reads as yes, which leaves the monitor
 off — the majority and the quiet answer.
 
 
+**`InteractiveScriptAnnouncesJobs`** — bash no · dash yes · ksh93 yes · zsh yes
+
+Gives an interactive shell running a **named script file** somebody to
+tell about its jobs: the job number and pid as one starts, the `Done` row
+as one ends.
+
+Measured 2026-09-05 through a pseudo-terminal, scratch `HOME` and scratch
+`HISTFILE`, on `sh -i script.sh` running `sleep 0.3 &` between two echoes:
+bash 5.3.15, bash 3.2.57 and bash 3.2 run as `sh` print nothing at all;
+dash prints the `Done` row and never the start; ksh93u+ and zsh print
+both.
+
+**It is not the monitor read a second time.** The monitor is unanimous on
+this route with a terminal and this is not, so a front end that turned
+both on together would give bash an announcement no bash makes. That is
+why #793 turned the monitor on here and left this alone.
+
+**It is however gated on the monitor.** Measured with no terminal
+anywhere: dash and zsh leave the monitor off there and say nothing about
+the job either, while ksh93 runs the monitor without one and announces
+both ends. So the notice rides on the monitor, and this axis is what the
+one dialect that runs a monitor and stays quiet anyway is for.
+
+**It is not about where the commands come from either**, which is the
+reading the grid rules out: `bash -i < script`, with the program on a
+pipe and no terminal to read commands from, announces both — and so does
+`bash -i -c`. bash is silent on exactly one interactive route, the one
+whose program is a named file, so the axis names the route.
+
+Separate from `AnnouncesBackgroundJob`, which asks whether the *start* is
+announced at all and which dash alone answers no. Both are read here, and
+dash is why they cannot be one field: it announces the end of a job on
+this route and never the beginning.
+
+The preset says no. XCU has nothing to say about a notice on this route,
+and where the text is silent the preset takes the answer that claims less
+— a shell that has not been asked for a job report does not write one. It
+is the intersection as well: the panel is quiet here only if bash is, and
+the core is the intersection rather than the majority.
+
+Read rather than `ask`ed, exactly as `InteractiveMonitorNeedsATerminal`
+is and for the same reason: the answer is wanted once at startup, so an
+unanswered field would put "the shells disagree here" ahead of every
+`-i script.sh` under a preset that has not chosen, including the scripts
+that never start a job.
+
+`-i -c` is a different split — bash, ksh93 and zsh announce there and dash
+does not — and is therefore a different axis, not yet taken. See
+docs/spec/invocation.md for the whole grid.
+
+
 **`WaitReadsOptions`** — bash yes · dash yes · ksh93 yes · zsh no
 
 Reads a leading `-` word as an option rather than as a job to wait for.

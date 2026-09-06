@@ -2240,6 +2240,62 @@ type Semantics struct {
 	// here is the state the other two readers report.
 	InteractiveMonitorNeedsATerminal Answer
 
+	// InteractiveScriptAnnouncesJobs gives an interactive shell running a
+	// *named script file* somebody to tell about its jobs: the job number
+	// and pid as one starts, and the `Done` row as one ends. True in dash,
+	// ksh93 and zsh; false in bash.
+	//
+	// A different question from AnnouncesBackgroundJob, which asks whether
+	// the *start* is announced at all and is answered No by dash alone. Both
+	// are read on this route, and dash is why they cannot be one field: it
+	// announces the end of a job here and never the beginning.
+	//
+	// Measured 2026-09-05 through a pseudo-terminal, scratch HOME and scratch
+	// HISTFILE, on `sh -i script.sh` running `sleep 0.3 &` between two
+	// echoes:
+	//
+	//	bash 5.3.15   nothing         bash 3.2.57  nothing
+	//	bash as `sh`  nothing         dash         the `Done` row, no start
+	//	ksh93u+       both            zsh 5.9.2    both
+	//
+	// It is not the monitor asked a second time. The monitor is unanimous on
+	// this route with a terminal — InteractiveMonitorNeedsATerminal records
+	// that — and this is not, so a front end that turned both on together
+	// would give bash an announcement no bash makes.
+	//
+	// It is however *gated* on the monitor, which is measured: with no
+	// terminal anywhere, dash and zsh leave the monitor off and say nothing
+	// about the job either, and ksh93 runs the monitor without one and
+	// announces both ends. So the notice rides on the monitor and this axis
+	// is what the one dialect that runs a monitor and stays quiet anyway is
+	// for.
+	//
+	// And bash's silence is not about where the commands come from, which is
+	// the reading the grid rules out: `bash -i < script` with the program on
+	// a *pipe* announces both, and so does `bash -i -c`. Measured, bash is
+	// silent on exactly one interactive route, the one whose program is a
+	// named file — which is why this axis names the route rather than the
+	// terminal.
+	//
+	// The preset says no. XCU has nothing to say about a notice on this
+	// route, and where the text is silent the preset takes the answer that
+	// claims less: a shell that has not been asked for a job report does not
+	// write one. It is also the intersection — the whole panel is quiet on
+	// this route only if bash is — and the core is the intersection rather
+	// than the majority.
+	//
+	// Read rather than `ask`ed, exactly as InteractiveMonitorNeedsATerminal
+	// is and for the same reason: the answer is wanted once at startup,
+	// before the program has run a line, so an unanswered field would put
+	// "the shells disagree here" ahead of every `-i script.sh` under a preset
+	// that has not chosen — including scripts that never mention a job.
+	//
+	// `-i -c` is a separate question and is deliberately not this one. On
+	// that route bash, ksh93 and zsh announce and dash does not, which is a
+	// different split and therefore a different axis; `docs/spec/invocation.md`
+	// has the grid.
+	InteractiveScriptAnnouncesJobs Answer
+
 	// PunctuatedFunctionNameIsRefused stops the script when a function
 	// whose name carries `-` or `.` is defined. ksh93 alone: bash and zsh
 	// define and run it, and dash never parses the definition at all.
@@ -3171,8 +3227,14 @@ func PosixSemantics() Semantics {
 		// less: a shell with no terminal does not say it is running a
 		// monitor. It is also three of the four.
 		InteractiveMonitorNeedsATerminal: Yes,
-		TildePlusMinusExpands:            No,
-		UnderscoreTracksTheLastArgument:  No,
+		// The standard says nothing about announcing a job to a shell that
+		// was handed a script to run, so the preset claims less and says
+		// nothing. It is the intersection as well: bash is silent here and
+		// the other three are not, and a core made of what they all do is
+		// the quiet one.
+		InteractiveScriptAnnouncesJobs:  No,
+		TildePlusMinusExpands:           No,
+		UnderscoreTracksTheLastArgument: No,
 		// POSIX has no `$_`, so nothing is written at startup and a name
 		// the environment carried is an ordinary variable that shows
 		// through — which is also the majority, five of the six.

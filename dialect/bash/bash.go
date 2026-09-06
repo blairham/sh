@@ -447,6 +447,12 @@ func Semantics() interp.Semantics {
 	// same, which is what keeps this question and MonitorNeedsATerminal
 	// apart.
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
+	// And bash is the one member of the panel that announces nothing on
+	// this route. Measured on `-i script.sh` through a pseudo-terminal:
+	// 5.3.15, 3.2.57 and 3.2 run as `sh` all print neither the start nor
+	// the `Done` row, where the other three print at least one. It is the
+	// route and not the terminal — `bash -i < script` announces both.
+	s.InteractiveScriptAnnouncesJobs = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.No

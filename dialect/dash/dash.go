@@ -51,6 +51,12 @@ func Semantics() interp.Semantics {
 	// job control turned off` — the same sentence its `set -m` refusal uses,
 	// from the same shell, about two different questions.
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
+	// dash has somebody to tell on this route, and tells them exactly one
+	// thing: measured on `-i script.sh` through a pseudo-terminal it writes
+	// `[1] + Done sleep 0.3` and never the line that starts the job. The
+	// start is AnnouncesBackgroundJob, which dash answers No, and the two
+	// fields are separate because of exactly this shell.
+	s.InteractiveScriptAnnouncesJobs = interp.Yes
 	// DefaultOptionLetters stays empty on purpose: measured, dash's `$-`
 	// starts blank however it is invoked, save the `s` of the
 	// standard-input route, which is unanimous and comes from Runner.Route.

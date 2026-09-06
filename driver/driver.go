@@ -319,6 +319,20 @@ func RunScript(sh Shell, src, path string) int {
 // One place, so the ignored error is ignored once and on purpose: there is
 // nothing a shell can usefully do about a failed write to stderr except try to
 // report it to stderr. interp's own errf exists for the same reason.
+// reportFinishedJobs writes what has ended since it was last asked, which is
+// the same notice a prompt writes before drawing itself and is worded in the
+// same place — interp holds the rendering because it holds the wording.
+//
+// To the error stream, which is where two of the panel put it: measured on
+// `-i script.sh` with the two writable streams separated, dash and ksh93 both
+// write the `Done` row to standard error and neither writes anything to
+// standard output. The same stream the prompt route already uses.
+func (sh Shell) reportFinishedJobs(r *interp.Runner) {
+	for _, line := range r.FinishedJobNotices() {
+		sh.errf("%s\n", line)
+	}
+}
+
 func (sh Shell) errf(format string, args ...any) {
 	_, _ = fmt.Fprintf(sh.Stderr, format, args...)
 }
@@ -1150,6 +1164,18 @@ func (sh Shell) runInput(in source) int {
 		// turning both on here would give bash an announcement no bash
 		// makes.
 		r.SetInteractiveMonitor(sh.hasTerminal())
+		// And whether there is anybody to *tell* about a job, which splits
+		// where the monitor does not: measured through a pseudo-terminal on
+		// `-i script.sh`, ksh93 and zsh announce a job starting and ending,
+		// dash announces only the ending, and all three bash members say
+		// nothing at all. So this is asked and the monitor is not, and the
+		// answer is Semantics.InteractiveScriptAnnouncesJobs.
+		//
+		// bash's silence is about the route and not about the terminal:
+		// `bash -i < script`, with the program on a pipe and no terminal to
+		// read commands from, announces both. Only a named script file is
+		// quiet.
+		r.SetInteractiveJobNotices()
 	}
 	r.SetScriptFile(in.file)
 	pr := wholeProgram(src, sh.Dialect)
@@ -1415,6 +1441,19 @@ func (sh Shell) executeLines(
 			sh.errf("%s", in.dg.Report(in.diagName(), 1, err.Error()+"\n"))
 			return usageStatus, endingRefused
 		}
+		// What ended while that line was running, said before the next line
+		// starts. That is where the panel puts it and it is measured rather
+		// than assumed: on `-i script.sh` dash, ksh93 and zsh all write the
+		// `Done` row between the command the job outlived and the command
+		// after it — and all three write it after the *last* command too,
+		// when there is no command after it, which is why this is here
+		// rather than at the top of the loop.
+		//
+		// Nothing at all for a shell with nobody to tell. This is the route
+		// a plain script takes as well, and FinishedJobNotices answers with
+		// nothing while JobControl is off — which is every route but the
+		// interactive one, in every dialect but the three that announce.
+		sh.reportFinishedJobs(r)
 		if r.Exited() {
 			break
 		}

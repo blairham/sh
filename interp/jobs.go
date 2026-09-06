@@ -297,7 +297,21 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 				return r.interruptedWaitStatus(sig, false)
 			}
 		}
-		r.jobs = nil
+		// The jobs stay where they are, because a job a bare `wait` reaped
+		// is still owed a notice. Measured 2026-09-05 at a prompt on a
+		// pseudo-terminal with `sleep 2 &` and then `wait`, so the wait is
+		// really what reaps it: bash 5.3.15, bash 3.2.57, bash 3.2 run as
+		// `sh`, dash and ksh93u+ all write the `Done` row afterwards, and a
+		// `jobs` listing after that writes nothing — so the notice is what
+		// forgets them, exactly as it is everywhere else.
+		//
+		// Unless there is nobody to tell, in which case the notice will
+		// never come and this is the only place they can be let go of: a
+		// shell with no job control that held them here would start listing
+		// finished jobs a shell without this line never listed.
+		if !r.JobControl {
+			r.jobs = nil
+		}
 		return 0
 	}
 	last := 0

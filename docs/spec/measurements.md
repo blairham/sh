@@ -246,6 +246,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/a-subscript-without-braces-is-read-once` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x[1][1]]` | `[x[1][1]]` | `[x[1][1]]` | `[x[1][1]]` | `[x[1]]` |
 | `array/a-length-without-braces` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[0a]` | `[0a]` | `[0a]` | `[0a]` | `[3]` |
 | `array/a-length-without-braces-stops-at-two-specials` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[2#][2@][2a]` | `[2#][2@][2a]` | `[2#][2@][2a]` | `[2#][2@][2a]` | `[2#][2][3]` |
+| `expansion/element-exclusion-by-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#t*}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#t*}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#t*}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#t*}""' unexpected` *(status 3)* | `[one]` |
+| `expansion/element-exclusion-is-a-whole-match-not-a-prefix` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: v: #hel*: arithmetic syntax error: operand expected (error token is "#hel*")` *(status 1)* | **2>** `<shell>: line 1: v: #hel*: arithmetic syntax error: operand expected (error token is "#hel*")` *(status 1)* | **2>** `<shell>: v: #hel*: syntax error: operand expected (error token is "#hel*")` *(status 1)* | `[lo][lo][hello]` | `[][lo][hello]` |
+| `expansion/element-exclusion-without-a-flag-group` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: #two: arithmetic syntax error: operand expected (error token is "#two")` *(status 1)* | **2>** `<shell>: line 1: a: #two: arithmetic syntax error: operand expected (error token is "#two")` *(status 1)* | **2>** `<shell>: a: #two: syntax error: operand expected (error token is "#two")` *(status 1)* | `[one]` | `[one two three]` |
+| `expansion/element-exclusion-empty-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#}' unexpected` *(status 3)* | `[one]` |
+| `expansion/element-exclusion-pattern-out-of-a-parameter` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#$p}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#$p}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#$p}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#$p}""' unexpected` *(status 3)* | `[one][two]` |
+| `expansion/element-set-difference-and-intersection` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:\|b}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:\|b}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:\|b}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `' unexpected` *(status 3)* | `[x][z]~[y]` |
+| `expansion/element-set-operators-against-an-unset-name` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:\|nope}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:\|nope}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:\|nope}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `' unexpected` *(status 3)* | `[x][y][z]~[]` |
+| `expansion/a-colon-before-anything-else-is-still-an-offset` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cdef][cd][ef][abcdef][set]` | `[cdef][cd][ef][abcdef][set]` | `[cdef][cd][ef][abcdef][set]` | `[cdef][cd][ef][abcdef][set]` | `[cdef][cd][ef][abcdef][set]` |
 | `array/reading-a-subscript-is-arithmetic` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[y]` |
 | `array/a-subscript-reads-a-variable` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[y]` |
 | `array/an-unset-name-in-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[]` |
@@ -578,6 +586,38 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/a-length-without-braces-stops-at-two-specials` — how far the no-brace length form reaches, measured at the two edges at once: zsh takes a name and takes `@`, and does *not* take `#` — `$##` is the positional count and then a literal `#` there exactly as it is in bash. So the parameter after the `#` is drawn from a set with holes in it rather than from every parameter, and a dialect that read one more character than the shell does would differ only on the shapes nothing tests
   ```sh
   set -- p q; a=(x y z); echo "[$##][$#@][$#a]"
+  ```
+- `expansion/element-exclusion-by-pattern` — `:#` drops the elements a pattern matches, which is one shell's alone: to bash the characters after the colon are an offset and `#t*` is arithmetic it refuses, and ksh93 refuses the flag group before it gets that far. The shape a startup file on this machine uses to take a hook out of a list, and the one that produced `operand expected at ``#fig_precmd''` here
+  ```sh
+  a=(one two three); printf "[%s]" "${(@)a:#t*}"; echo
+  ```
+- `expansion/element-exclusion-is-a-whole-match-not-a-prefix` — the sharpest row in the family, because two shells accept the same six characters and mean different things by them: zsh matches the pattern against the *whole* value and substitutes nothing when it hits, while ksh93 ignores the colon entirely and gives exactly what `${v#hel*}` gives — `lo`. bash refuses it as arithmetic. So `:#` is not `#` with a colon in front, and a dialect that treated it as one would silently answer ksh93's question in zsh's grammar
+  ```sh
+  v=hello; echo "[${v:#hel*}][${v#hel*}][${v:#xyz}]"
+  ```
+- `expansion/element-exclusion-without-a-flag-group` — the same operator with no `(@)` in front and inside quotes, where the array joins to one string first: the pattern is then matched against `one two three` as a whole, matches nothing, and the value is left standing. Not a no-op by accident — `${a:#*}` on the same array is empty — and it is what says the operator asks about *elements*, of which a joined scalar has one. ksh93 answers `one` from the same characters, which is `${a#two}` against a scalar that is only the first element, so the two shells agree on neither the operator nor what `$a` names
+  ```sh
+  a=(one two three); echo "[${a:#two}]"
+  ```
+- `expansion/element-exclusion-empty-pattern` — an operator with nothing after it, which the whole-match rule makes meaningful rather than degenerate: the empty pattern matches only the empty string, so exactly the empty element goes. A reading that treated an absent pattern as `*` would empty the array, and one that treated it as no operator at all would leave it whole
+  ```sh
+  a=("" one); printf "[%s]" "${(@)a:#}"; echo
+  ```
+- `expansion/element-exclusion-pattern-out-of-a-parameter` — whether the pattern may come out of a variable, and it may not: the shell that has the operator is the one that does not glob the result of an expansion, so `$p` is the two literal characters and matches no element. The same axis that keeps `p='et*'; echo $p` from expanding, reaching a third construct — and the reason the pattern is built from the operand's *word* rather than from its text
+  ```sh
+  p='t*'; a=(one two); printf "[%s]" "${(@)a:#$p}"; echo
+  ```
+- `expansion/element-set-difference-and-intersection` — the two operators that live beside `:#` and take the *name* of another array rather than a pattern, comparing elements for equality: `:|` keeps what the other does not hold and `:*` keeps only what it does. Both are the same one shell's, and both are refused as arithmetic elsewhere — bash names the token `|b` and `*b`, which is the tell that it read an offset
+  ```sh
+  a=(x y z); b=(y w); printf "[%s]" "${(@)a:|b}"; echo; printf "[%s]" "${(@)a:*b}"; echo
+  ```
+- `expansion/element-set-operators-against-an-unset-name` — a name nothing is stored under is an empty set and not a complaint, in both directions: the difference keeps everything and the intersection keeps nothing. Quietly — no diagnostic and status 0 — which is the half a reading that refused an unknown name would get wrong on the safe-looking side
+  ```sh
+  a=(x y z); printf "[%s]" "${(@)a:|nope}"; echo; printf "[%s]" "${(@)a:*nope}"; echo
+  ```
+- `expansion/a-colon-before-anything-else-is-still-an-offset` — the guard on the whole family: exactly three characters after a colon make it an operator, and every other spelling is what it always was. All five are unanimous across the panel, so a grammar that widened the disambiguation by one character would break the shapes every shell shares rather than the ones only zsh has
+  ```sh
+  v=abcdef; echo "[${v:2}][${v:2:2}][${v: -2}][${v:-alt}][${v:+set}]"
   ```
 - `array/reading-a-subscript-is-arithmetic` — a subscript being read is an expression, exactly as one being written through is. It took a numeral and nothing else, so this expanded to the empty string with status 0 — and `a[1+1]=v` had already learned to store where `${a[1+1]}` could not look, which is two spellings of one subscript naming two different elements. zsh answers the element before, which is the base rather than a different reading
   ```sh

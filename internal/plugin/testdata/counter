@@ -6,11 +6,10 @@
 # whether the host delivered everything rather than how fast the fixture is.
 #
 # The total goes to standard error at end of input, which is the last thing it
-# does before exiting: two of the host's shutdown steps have to be right for
-# that line to arrive at all, and both of them are steps that can only be
-# graded from here — the records still in the host's buffer have to be put on
-# the wire before the input is closed, and what this writes has to be relayed
-# before the error stream is taken away.
+# does before exiting: for that line to arrive at all, the records still in the
+# host's buffer have to be put on the wire before the input is closed, and what
+# this writes has to be relayed before the error stream is taken away — the
+# first is the observer role's shutdown drain and the second is #1070's.
 exec 3>&1
 n=0
 while IFS= read -r line; do

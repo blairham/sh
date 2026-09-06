@@ -169,6 +169,24 @@ func TestTheLastBackgroundPidSurvivesTheNotice(t *testing.T) {
 	}
 }
 
+// And before any background command there is nothing to report.
+//
+// Five of the six: `echo "[$!]"` writes `[]` in bash 5.3.15, bash 3.2.57,
+// bash 3.2 run as `sh`, dash and ksh93u+. zsh 5.9.2 writes `[0]`, and is the
+// only shell in the panel that answers with a number nothing ever had. The
+// core takes the reading that invents nothing.
+//
+// Zero is not the same answer as nothing here, which is why whether a job has
+// been started is its own fact: a background builtin runs in this process and
+// its job carries no pid, so a runner really can hold a recorded zero.
+func TestTheLastBackgroundPidIsEmptyBeforeAnyJob(t *testing.T) {
+	var r *Runner
+	notices(t, `:`, true, No, Diagnostics{}, &r)
+	if got := bang(t, r); got != "" {
+		t.Errorf("`$!` = %q with no background command started, want it empty", got)
+	}
+}
+
 // bang is what this runner expands `$!` to, read the way a script reads it.
 func bang(t *testing.T, r *Runner) string {
 	t.Helper()

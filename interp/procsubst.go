@@ -97,6 +97,7 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	// *os.File alone, so a shell whose streams are files hands its children
 	// the descriptors, and one whose streams are not was giving them pipes
 	// either way.
+	//
 	// Both *streams*, not only the shared one, and that is the same argument
 	// again: an embedder may hand one writer to Stdout and Stderr both, so
 	// the substitution's diagnostic and the outer command's output are the

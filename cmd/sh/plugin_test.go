@@ -420,19 +420,32 @@ func TestAnObserverDoesNotSilenceTheRecordTheShellWasAlreadyKeeping(t *testing.T
 // off a command line — and it would mean that adding a second plugin quietly
 // widened what the first one is told.
 func TestNoPluginIsShownAnotherPluginsLaunch(t *testing.T) {
-	first := writePlugin(t, greeter)
-	second := writePlugin(t, watcher)
-	got := sandboxed(t, "posix", "-plugin", first, "-plugin", second, "-c", "/bin/echo hi")
-	if got.code != 0 {
-		t.Fatalf("status = %d, err = %q", got.code, got.errs)
-	}
-	if !strings.Contains(got.errs, "saw command-start exec /bin/echo") {
-		t.Fatalf("errs = %q, want the observer to have been watching at all", got.errs)
-	}
-	if strings.Contains(got.errs, first) {
-		t.Errorf("errs = %q: an observer was shown the exec that launched %s", got.errs, first)
-	}
-	if strings.Contains(got.errs, second) {
-		t.Errorf("errs = %q: an observer was shown the exec that launched itself", got.errs)
+	// Both orders, because the rule is that the order does not matter and a
+	// test that fixed one would only hold half of it: an observer named second
+	// is not yet composed when the first plugin starts *by accident of
+	// sequence*, and an observer named first is the case where composing as
+	// each launch happened would tell it about the next one.
+	for _, order := range []struct {
+		name           string
+		command, watch string
+	}{
+		{"the observer named second", greeter, watcher},
+		{"the observer named first", watcher, greeter},
+	} {
+		first := writePlugin(t, order.command)
+		second := writePlugin(t, order.watch)
+		got := sandboxed(t, "posix", "-plugin", first, "-plugin", second, "-c", "/bin/echo hi")
+		if got.code != 0 {
+			t.Fatalf("%s: status = %d, err = %q", order.name, got.code, got.errs)
+		}
+		if !strings.Contains(got.errs, "saw command-start exec /bin/echo") {
+			t.Fatalf("%s: errs = %q, want the observer to have been watching at all", order.name, got.errs)
+		}
+		for _, path := range []string{first, second} {
+			if strings.Contains(got.errs, path) {
+				t.Errorf("%s: errs = %q: an observer was shown the exec that launched %s",
+					order.name, got.errs, path)
+			}
+		}
 	}
 }

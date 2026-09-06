@@ -315,6 +315,15 @@ func Semantics() interp.Semantics {
 	// POSIX "a special builtin's failure is fatal" rule are answered
 	// differently, which is why they are two axes.
 	s.BuiltinSyntaxErrorFatal = interp.No
+	// An error inside a file `.` read ends that file and nothing above it:
+	// measured, `.` reports 1 and the sourcing file runs the command after
+	// it — for an unset parameter under `set -u`, a readonly assignment, a
+	// division by zero and a bad substitution alike.
+	s.FatalErrorEndsBorrowedTextOnly = interp.Yes
+	// And `${x?word}` is one of those errors here rather than a request to
+	// stop: `.` reports 1 for it too and the sourcing file carries on, which
+	// is the half of this zsh answers the other way.
+	s.ParamErrorIsAnExitRequest = interp.No
 	s.DotPassesArguments = interp.Yes
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes

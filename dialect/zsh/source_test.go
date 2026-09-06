@@ -137,6 +137,10 @@ func TestEvalAndDotAxes(t *testing.T) {
 		{"DotPassesArguments", s.DotPassesArguments, interp.Yes},
 		// Not bash: PATH missing the file is the end of it here.
 		{"DotFallsBackToCurrentDirectory", s.DotFallsBackToCurrentDirectory, interp.No},
+		// An error inside a sourced file ends only that file — with `${x?}`
+		// the documented exception, which this shell calls a request to stop.
+		{"FatalErrorEndsBorrowedTextOnly", s.FatalErrorEndsBorrowedTextOnly, interp.Yes},
+		{"ParamErrorIsAnExitRequest", s.ParamErrorIsAnExitRequest, interp.Yes},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)
@@ -556,5 +560,98 @@ func TestPrintfBStopIsPadded(t *testing.T) {
 		if out, st := runZsh(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
 			t.Errorf("%s: said %q status %d, want %q and 0", tc.src, out, st, tc.want)
 		}
+	}
+}
+
+// The file every abandonment test below sources: it fails on line 3 and would
+// print on line 4, so a run that reaches IN-AFTER never gave the file up.
+const abandonFile = "echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n"
+
+// TestAnErrorInASourcedFileEndsThatFileAlone: measured against zsh 5.9.2 with
+// an error zsh and every other shell in the panel words the same way, so the
+// comparison is about the abandonment and not about the operator.
+//
+// The whole output rather than lines in it, and `$?` on the same line as the
+// `.`: this shell reports 126 there — not the 1 a fatal error carries, and not
+// the 3 a syntax error in a sourced file carries — and a fix that resumed the
+// sourcing file with the wrong number would satisfy any weaker assertion.
+func TestAnErrorInASourcedFileEndsThatFileAlone(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p.sh"), []byte(abandonFile), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runZsh(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n")
+	const want = "IN-BEFORE\n" +
+		"./p.sh:3: NOPE: parameter not set\n" +
+		"OUT-AFTER st=126\n"
+	if out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want 0: nothing asked the shell to stop", st)
+	}
+}
+
+// TestTheErrorOperatorEndsTheShellFromInsideASourcedFile is the exception this
+// shell's own manual documents: `${x?word}` prints the word and *exits*, so it
+// is not caught where the unset-parameter failure two lines away is. Measured
+// on zsh 5.9.2 — the same file, one operand changed, and the sourcing file
+// never runs again.
+func TestTheErrorOperatorEndsTheShellFromInsideASourcedFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p.sh"),
+		[]byte("echo IN-BEFORE\necho X${NOPE?msg}\necho IN-AFTER\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runZsh(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n")
+	const want = "IN-BEFORE\n" +
+		"./p.sh:2: NOPE: msg\n"
+	if out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+	if st != 1 {
+		t.Errorf("status = %d, want 1", st)
+	}
+}
+
+// TestExitInASourcedFileStillEndsTheShell: the catch must not reach a request
+// to stop. Unanimous in the panel, and the one rule a boundary that consumed
+// controlExit without asking which kind it held would break.
+func TestExitInASourcedFileStillEndsTheShell(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p.sh"),
+		[]byte("echo IN-BEFORE\nexit 7\necho IN-AFTER\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runZsh(t, dir, ". ./p.sh\necho NOT-REACHED\n")
+	if out != "IN-BEFORE\n" {
+		t.Errorf("output = %q, want the shell to stop at the exit", out)
+	}
+	if st != 7 {
+		t.Errorf("status = %d, want 7", st)
+	}
+}
+
+// TestEvalIsTheSameBoundaryWithADifferentStatus: measured on zsh 5.9.2, the
+// same failure caught at an `eval` reports 1 where the file route reports 126.
+// One axis, two statuses — which is why the number is a Diagnostics field the
+// file route passes and `eval` does not.
+func TestEvalIsTheSameBoundaryWithADifferentStatus(t *testing.T) {
+	dir := t.TempDir()
+	out, st := runZsh(t, dir, "eval 'echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER'\necho \"OUT-AFTER st=$?\"\n")
+	// The location is `zsh:3:` here and `(eval):3:` in the real shell — a
+	// naming gap that predates this and belongs to the diagnostic rather than
+	// to the boundary; the corpus row
+	// `eval/fatal-error-ends-the-evaluated-text-only` records both spellings.
+	// It is written out rather than matched around so that closing that gap
+	// fails this test and is noticed.
+	const want = "IN-BEFORE\n" +
+		"zsh:3: NOPE: parameter not set\n" +
+		"OUT-AFTER st=1\n"
+	if out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want 0", st)
 	}
 }

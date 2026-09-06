@@ -3291,6 +3291,22 @@ echo "st=$?"`,
 		Snippet: `a=(alpha beta gamma); printf "[%s]" "${a[(z)2]}"; echo`,
 		Why:     "the row that makes this an *additive* grammar flag rather than a semantics axis: a group the shell cannot read is no group at all, so the subscript stands as written and is read as arithmetic — and the shell that has the construct fails here exactly as the four without it do. There is no text the flag gives a second meaning to",
 	},
+	// The two rows below pin what a *failed* subscript costs the file it is
+	// in, which is the other half of the abandonment the `dot/` rows measure:
+	// there the question is how far an error reaches, here it is whether
+	// there is an error at all. They are on separate lines from the marker
+	// after them on purpose — a one-line snippet cannot tell a shell that
+	// gave up the rest of the file from one that printed nothing.
+	{
+		ID: "array/a-subscript-flag-group-unreadable-ends-the-file", Category: "expansion",
+		Snippet: "a=(alpha beta gamma)\nprintf \"[%s]\" \"${a[(z)2]}\"\necho NEXT-RAN",
+		Why:     "a group the shell cannot read leaves arithmetic that will not parse, and that is fatal to the file in every shell that got as far as reading it: the marker on the next line runs nowhere, so being more permissive here would show up as an extra line rather than only as a missing diagnostic",
+	},
+	{
+		ID: "array/a-subscript-range-with-four-parts-ends-the-file", Category: "expansion",
+		Snippet: "a=(alpha beta gamma)\nprintf \"[%s]\" \"${a[1,2,3,4]}\"\necho NEXT-RAN",
+		Why:     "the shell with array *slicing* is the one that refuses a subscript with more commas than a slice has parts, and refusing it costs the file; the shells that read the same text as arithmetic with comma operators take the last value, subscript with it, print nothing and carry on — so the row records a refusal and a silent success side by side",
+	},
 	{
 		ID: "array/a-subscript-flag-group-operand-is-text-as-written", Category: "expansion",
 		Snippet: `b=('"beta"' beta); printf "[%s]" "${b[(r)be*]}" "${b[(r)"beta"]}"; echo`,
@@ -6033,6 +6049,87 @@ echo unreachable`,
 		ID: "dot/no-operand-diverges", Category: "eval and dot",
 		Snippet: `. ; echo REACHED st=$?`,
 		Why:     "four answers to one degenerate input: dash calls it success and does nothing, bash reports 2 and survives, ksh93 reports 2 and exits, zsh reports 1 and survives",
+	},
+	// --- what an error inside a sourced file costs ---------------------
+	//
+	// The operand is an unset parameter under `set -u` throughout, chosen
+	// because every shell in the panel calls it a failure and words it almost
+	// identically: the rows are about how far the abandonment reaches, and an
+	// operand only some of them refuse would measure the operator instead.
+	{
+		ID: "dot/fatal-error-ends-the-sourced-file-only", Category: "eval and dot",
+		Snippet: `printf 'echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n' > p.sh; . ./p.sh; echo "OUT-AFTER st=$?"`,
+		Why:     "the whole axis on one row: all six stop at the failing line inside the file, and only ksh93 and zsh come back — reporting 1 and 126 — where dash and the three bashes end the shell and never reach the `echo` on the same line as the `.`",
+	},
+	{
+		ID: "dot/fatal-error-ends-one-file-not-the-stack", Category: "eval and dot",
+		Snippet: `printf 'echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n' > p.sh; printf 'echo MID-BEFORE\n. ./p.sh\necho "MID-AFTER st=$?"\n' > m.sh; . ./m.sh; echo "OUT-AFTER st=$?"`,
+		Why:     "the file given up is the innermost one and not every file above it: the middle file runs the line after its own `.` in the two shells that catch anything, which is what makes this one boundary rather than an unwind that stops at the outermost",
+	},
+	{
+		ID: "dot/fatal-error-in-a-function-is-not-at-a-boundary", Category: "eval and dot",
+		Snippet: `printf 'f() { echo F-BEFORE; set -u; echo X${NOPE}; echo F-AFTER; }\n' > p.sh; . ./p.sh; f; echo "OUT-AFTER st=$?"`,
+		Why:     "the boundary is the `.` that is *running* and not the file the text was read from: a function defined in a sourced file and called afterwards ends the shell in all six, ksh93 and zsh included, so nothing about where a function came from survives the call",
+	},
+	{
+		ID: "dot/fatal-error-resumes-the-function-that-sourced", Category: "eval and dot",
+		Snippet: `printf 'echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n' > p.sh; f() { echo F-BEFORE; . ./p.sh; echo "F-AFTER st=$?"; }; f; echo "OUT-AFTER st=$?"`,
+		Why:     "the other side of the same rule: a `.` inside a function *is* the boundary, so the two shells that catch resume the function body at the command after it rather than unwinding the call",
+	},
+	{
+		ID: "dot/exit-in-a-sourced-file-is-never-caught", Category: "eval and dot",
+		Snippet: `printf 'echo IN-BEFORE\nexit 7\necho IN-AFTER\n' > p.sh; . ./p.sh; echo NOT-REACHED`,
+		Why:     "unanimous, and it is what the row above is *not*: a request to stop ends the shell from inside a sourced file in every member of the panel, so an implementation that caught controlExit at the `.` without asking which kind it was holding would break this",
+	},
+	{
+		ID: "dot/error-operator-ends-the-shell-in-zsh", Category: "eval and dot",
+		Snippet: `printf 'echo IN-BEFORE\necho X${NOPE?msg}\necho IN-AFTER\n' > p.sh; . ./p.sh; echo "OUT-AFTER st=$?"`,
+		Why:     "`${x?word}` parts company with the unset-parameter row two above it in exactly one shell: ksh93 catches it like any other error and reports 1, and zsh ends the shell — which is what its own manual says the operator does, and is why the two are separate axes rather than one",
+	},
+	{
+		ID: "eval/fatal-error-ends-the-evaluated-text-only", Category: "eval and dot",
+		Snippet: `eval 'echo IN-BEFORE
+set -u
+echo X${NOPE}
+echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
+		Why: "`eval` is the same boundary as `.` and splits the same way — the four that end the shell for a sourced file end it here too, and ksh93 and zsh come back — but the status is *not* the same: zsh reports 1 for text it evaluated where it reports 126 for a file it sourced, which is why the number is a second field",
+	},
+	{
+		ID: "eval/exit-in-evaluated-text-is-never-caught", Category: "eval and dot",
+		Snippet: `eval 'echo IN-BEFORE
+exit 7
+echo IN-AFTER'; echo NOT-REACHED`,
+		Why: "unanimous, and the guard on the row above: a request to stop is not an error, so the boundary that catches one must not catch the other",
+	},
+	{
+		ID: "eval/an-abandoned-statement-does-not-end-the-text", Category: "eval and dot",
+		Script: true,
+		Snippet: `eval 'echo IN-BEFORE
+readonly rr=1
+rr=2
+echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
+		Why: "a statement a shell *gives up* rather than dies over is given up as far as the end of its line and no further, evaluated text included: bash reports the refusal and runs the `echo` on the next line of the same eval, where a boundary that mistook the give-up for a fatal error would lose the rest of the text",
+	},
+	{
+		ID: "dot/a-given-up-statement-takes-the-rest-of-its-line", Category: "eval and dot",
+		// From a file: `-c` would answer with bash's own rule that a bare
+		// readonly reassignment is fatal when the program *is* the command
+		// string, which is a different question.
+		Script:  true,
+		Snippet: `printf 'echo IN-BEFORE\nreadonly rr=1\nrr=2; echo SAME-LINE\necho NEXT-LINE\n' > p.sh; . ./p.sh; echo "OUT-AFTER st=$?"`,
+		Why:     "the give-up reaches to the end of the line and no further, inside a sourced file exactly as at the top of a script: SAME-LINE never prints in any shell that survives the refusal, and NEXT-LINE does — a row asserting only that the file kept running would pass with the same-line half missing",
+	},
+	{
+		ID: "dot/readonly-refusal-ends-the-sourced-file-only", Category: "eval and dot",
+		Snippet: `printf 'echo IN-BEFORE\nreadonly rr=1\nrr=2\necho IN-AFTER\n' > p.sh; . ./p.sh; echo "OUT-AFTER st=$?"`,
+		// From a file rather than from `-c`, which is not decoration: bash
+		// alone makes a bare readonly reassignment fatal when the program
+		// *is* the command string, and that rule would answer this row
+		// instead of the one it is asking about. Measured — the same three
+		// lines are fatal as `bash -c` and survivable in a file, and text
+		// `eval` or `.` runs is survivable either way.
+		Script: true,
+		Why:    "one snippet, two rules. Where a readonly reassignment is *fatal* it ends only the sourced file — ksh93 1, zsh 126 — which is the reach being a fact about any error a shell calls fatal rather than about expansion. Where it is not fatal, bash gives up the statement and its line and runs the `echo` after it, inside the file, which is the give-up costing a line rather than the text it is in",
 	},
 	{
 		ID: "dot/cwd-fallback-is-bash-only", Category: "eval and dot",

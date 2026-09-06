@@ -566,6 +566,10 @@ type Runner struct {
 	// control flow rather than errors, so they are not returned as ones.
 	ctl      control
 	ctlDepth int
+	// abandon says whether the controlExit being carried is an error the
+	// shell reported or a request to stop, for the boundaries that give up
+	// one file and catch only the first. See fileabandon.go.
+	abandon abandonKind
 	// loopDepth is how many loops execution is inside right now, which is
 	// what a ^Z has to break out of — see breakLoopsForAStop. Dynamic rather
 	// than lexical: a loop that calls a function that loops is two, because
@@ -1415,6 +1419,15 @@ func (r *Runner) locationPrefix() string {
 func (r *Runner) fatalExpansion(format string, args ...any) {
 	r.diagf(format, args...)
 	r.fatalExpansionQuiet()
+}
+
+// fatalParamError is fatalExpansion for `${x?word}` and `${x:?word}`, the one
+// expansion failure a dialect may read as a request to stop rather than as an
+// error — see Semantics.ParamErrorIsAnExitRequest for what that is measured
+// against and where it is asked.
+func (r *Runner) fatalParamError(format string, args ...any) {
+	r.fatalExpansion(format, args...)
+	r.abandon = abandonParamError
 }
 
 // fatalExpansionQuiet is the same for a failure that has already reported
@@ -2825,7 +2838,11 @@ func (r *Runner) fatalQuiet() {
 	} else {
 		r.status = 2
 	}
-	r.ctl = controlExit
+	// An error rather than a request to stop, which is what lets a boundary
+	// reading a file of its own give up that file and carry on. Set here for
+	// the reason the status and the unwinding are: every fatal error comes
+	// through this one door, so nothing else has to remember to say so.
+	r.ctl, r.abandon = controlExit, abandonError
 }
 
 func (r *Runner) fatal(format string, args ...any) {

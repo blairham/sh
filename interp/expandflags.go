@@ -352,7 +352,7 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 		return []string{r.joinWord(e.Arg)}, false, true
 	case syntax.ParamError:
 		if fires {
-			r.fatalExpansion("%s\n", Wording(r.diag().ParamErrorMessage, "%[1]s: %[2]s",
+			r.fatalParamError("%s\n", Wording(r.diag().ParamErrorMessage, "%[1]s: %[2]s",
 				e.Name, r.paramErrorWord(e, set)))
 			return nil, false, false
 		}

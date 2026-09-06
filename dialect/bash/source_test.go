@@ -94,6 +94,12 @@ func TestEvalAndDotAxes(t *testing.T) {
 		{"DotPassesArguments", s.DotPassesArguments, interp.Yes},
 		// The one shell in the panel that does this.
 		{"DotFallsBackToCurrentDirectory", s.DotFallsBackToCurrentDirectory, interp.Yes},
+		// An error inside a sourced file ends the shell here, where ksh93 and
+		// zsh end only the file — and `${x?word}` is one of those errors
+		// rather than a request to stop, which shows at the startup-file
+		// boundary this shell does give up a file at.
+		{"FatalErrorEndsBorrowedTextOnly", s.FatalErrorEndsBorrowedTextOnly, interp.No},
+		{"ParamErrorIsAnExitRequest", s.ParamErrorIsAnExitRequest, interp.No},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)
@@ -670,5 +676,27 @@ func TestPrintfBStopIsPadded(t *testing.T) {
 		if out, st := runBash(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
 			t.Errorf("%s: said %q status %d, want %q and 0", tc.src, out, st, tc.want)
 		}
+	}
+}
+
+// TestAnErrorInASourcedFileEndsTheShellHere is the other side of the axis
+// ksh93 and zsh answer the other way. Measured on bash 5.3.15, on the same
+// binary under an argv[0] of `sh`, and on bash 3.2.57: the sourced file stops
+// at the failure and so does everything above it, including the `echo` on the
+// same line as the `.`.
+func TestAnErrorInASourcedFileEndsTheShellHere(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p.sh"),
+		[]byte("echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runBash(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n")
+	const want = "IN-BEFORE\n" +
+		"./p.sh: line 3: NOPE: unbound variable\n"
+	if out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+	if st != 1 {
+		t.Errorf("status = %d, want 1", st)
 	}
 }

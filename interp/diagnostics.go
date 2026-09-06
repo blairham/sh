@@ -95,6 +95,27 @@ type Diagnostics struct {
 	// Zero means "the same as SyntaxErrorStatus", which is the common case.
 	SourcedSyntaxErrorStatus int
 
+	// SourcedFatalStatus is what `.` reports when the file it read was given
+	// up because of an error, in a dialect that catches one there at all —
+	// see Semantics.FatalErrorEndsBorrowedTextOnly.
+	//
+	// `.` and not `eval`, which is the same split SourcedSyntaxErrorStatus
+	// has and measured the same way: an error caught at an `eval` reports 1
+	// in both catching shells, where the same failure caught at a `.` reports
+	// 126 in zsh.
+	//
+	// Its own field because neither of the two shells that catch reports the
+	// status the error itself carried, and they do not agree with each
+	// other: measured over an unset parameter under `set -u`, a readonly
+	// assignment, a division by zero and a bad substitution alike, `.`
+	// reports 1 in ksh93 and 126 in zsh, where a fatal error that reaches
+	// the top reports 1 in both. Nor is it the sourced *syntax* status,
+	// which is 3 in ksh93 against this 1.
+	//
+	// Zero means the status the error already produced, which is what makes
+	// ksh93 need no answer here.
+	SourcedFatalStatus int
+
 	// DotNoOperand is what `.` says when given no filename at all. No verbs.
 	DotNoOperand string
 	// DotNoOperandStatus is the status that carries. bash and ksh93 say 2,

@@ -316,6 +316,16 @@ func Semantics() interp.Semantics {
 	s.ReadonlyReassignmentFatalFromCommandString = interp.Yes
 	s.ReadonlyReassignmentByDeclarationFatal = interp.No
 	s.BuiltinSyntaxErrorFatal = interp.No
+	// An error inside a file `.` read ends the shell here, not just the file:
+	// measured, a sourced file whose third line is `echo X${NOPE}` under
+	// `set -u` prints nothing after it in the sourcing file either, and bash
+	// exits 1. Same under argv[0] of `sh` and in bash 3.2.
+	s.FatalErrorEndsBorrowedTextOnly = interp.No
+	// `${x?word}` is an error here rather than a request to stop, which shows
+	// at the one boundary this shell does give up a file at: measured, a
+	// `$BASH_ENV` whose second line is `echo X${NOPE?msg}` stops there and
+	// the script the shell was started for still runs.
+	s.ParamErrorIsAnExitRequest = interp.No
 	s.DotMissingFileFatal = interp.No
 	s.DotPassesArguments = interp.Yes
 	// The only shell in the panel that looks in the current directory once

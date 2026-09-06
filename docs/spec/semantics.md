@@ -287,6 +287,135 @@ Three questions, then, about what reads in the standard as one sentence:
 is it fatal, what status does it carry, and how is it worded. The rule for
 adding an axis at the end of this file is what forced them apart.
 
+## How far a fatal error reaches: the file, or every file above it
+
+Measured 2026-09-06. The previous section is about *whether* a failure is
+fatal. This one is about what "fatal" costs, and it is a different
+question with a different split.
+
+The probe has to use a failure every shell in the panel words the same
+way, or the row measures the operator instead of the abandonment. An
+unset parameter under `set -u` does: `p.sh` fails on line 3 and would
+print on line 4, and the file that sourced it prints afterwards.
+
+    # p.sh                        # the program
+    echo IN-BEFORE                . ./p.sh
+    set -u                        echo "OUT-AFTER st=$?"
+    echo X${NOPE}
+    echo IN-AFTER
+
+| | IN-AFTER | OUT-AFTER | `$?` at the `.` | shell |
+| --- | --- | --- | --- | --- |
+| dash | no | **no** | — | ends, 2 |
+| bash 5.3 | no | **no** | — | ends, 1 |
+| bash-as-sh | no | **no** | — | ends, 1 |
+| bash 3.2 | no | **no** | — | ends, 1 |
+| ksh93 | no | **yes** | **1** | runs on |
+| zsh | no | **yes** | **126** | runs on |
+
+Every shell stops at the failing line *inside* the file, which is not the
+axis — that is the rule a failed expansion already follows. What splits
+is how far the abandonment reaches: one file, or every file up the stack.
+`FatalErrorEndsBorrowedTextOnly` is the field, and the status the
+builtin reports is `Diagnostics.SourcedFatalStatus`, because neither
+catching shell reports the status the error itself carried and they do not
+agree with each other. ksh93's 1 is also not its sourced-*syntax* status,
+which is 3.
+
+**`eval` is the same boundary**, and one axis covers both for the reason
+`BuiltinSyntaxErrorFatal` does: the four that end the shell for a sourced
+file end it for evaluated text too, ksh93 and zsh catch both, and `exit`
+is caught in neither. The *status* is not shared, which is why it is a
+`Diagnostics` field the file route passes and `eval` does not:
+
+| caught at | ksh93 | zsh |
+| --- | --- | --- |
+| `. p.sh` | 1 | **126** |
+| `eval "…"` | 1 | **1** |
+
+That is the same shape `SyntaxErrorStatus` and `SourcedSyntaxErrorStatus`
+already have, measured the same way and for the same shell.
+
+**A statement the shell merely *gives up* is a third thing again**, and it
+does not end borrowed text in any shell. `readonly rr=1` then `rr=2`
+inside an `eval` or a sourced file reports the refusal, gives up that
+statement as far as the end of its line, and runs the line after it —
+inside the borrowed text — in bash 5.3 and bash 3.2 alike. Where the same
+refusal is *fatal*, ksh93 and zsh give up the text and report 1 and 126 as
+above, which is what makes the pair worth measuring on one snippet.
+
+**Four further measurements make it one axis rather than several.**
+
+- **It is not about expansion.** A readonly reassignment where the dialect
+  calls one fatal, `$((1/0))`, and `${x@ZZ}` all behave the same way at
+  the boundary: caught in ksh93 and zsh, fatal above them elsewhere.
+
+- **One file, not the stack.** A file sourced from a file sourced from the
+  program loses the innermost file alone; the middle one runs the line
+  after its own `.`.
+
+- **The boundary is the running `.`, not where the text came from.** A
+  function *defined* in a sourced file and called after the sourcing has
+  finished ends the shell in every member of the panel, ksh93 and zsh
+  included. And a `.` inside a function *is* a boundary: the function body
+  resumes at the command after it.
+
+- **`exit` and errexit are caught nowhere.** `exit 7` in a sourced file
+  exits 7 in all six, and `set -e` firing there ends the shell in all six.
+  That is what separates this from the neighbouring rule that `exit` in a
+  startup file ends the shell and the files after it are not read.
+
+### The one operand that is not an error
+
+`${x?word}` is the exception, and it is the exception in one shell:
+
+| operand in `p.sh` | ksh93 | zsh |
+| --- | --- | --- |
+| `set -u` then `echo X${NOPE}` | caught, `$?` 1 | caught, `$?` 126 |
+| `echo X${NOPE?msg}` | caught, `$?` 1 | **shell ends, 1** |
+
+Two lines apart in the same file, one caught and one not. zsh's own manual
+is why that reads as a rule rather than an inconsistency: the `?` form is
+documented to print the word and *exit the shell*, which puts it in the
+family of the `exit` builtin rather than the family of a diagnostic. So
+`ParamErrorIsAnExitRequest` is a second field, asked only at a boundary —
+at the top level of a script both operands end the shell everywhere, and
+there is nothing there to ask. It splits the same way at an `eval` and at a
+startup file.
+
+### The same boundary at a startup file, and there the panel is unanimous
+
+A startup file is a file the shell reads for itself rather than one a
+script sourced, and it is a boundary in every shell that reads one with
+nobody on the other end:
+
+    # $BASH_ENV, or $ZDOTDIR/.zshenv          # then: sh script.sh
+    echo RC-BEFORE                            echo MAIN-RAN
+    set -u
+    echo X${NOPE}
+    echo RC-AFTER
+
+bash and zsh both print `RC-BEFORE`, the diagnostic, and then `MAIN-RAN`:
+the startup file stops at the failure and the program the shell was
+started for still runs. zsh goes on to read `.zprofile`, `.zshrc` and
+`.zlogin` as well. Replace the failure with `exit 3` and neither the later
+startup files nor the program run, in either shell — which is the rule
+`driver/startup.go` already models on `Exited`.
+
+So there is no axis here, only the same distinction: `Runner.GiveUpTheFile`
+is what a front end reading whole files of its own calls, and it catches an
+error and never a request to stop. `${x?word}` splits at this boundary too,
+exactly as it does at a `.` — the operand stops the file and lets the
+program run in bash, and ends the shell before the program in zsh — which
+is why that axis is read here as well.
+
+**Why it is worth the trouble.** A real startup sources many files. Before
+this, one bad expansion in one of them cost every line after the `source`
+in the *outer* file, with no diagnostic saying so — a person loses half
+their configuration and cannot tell. It also makes a startup diagnostic
+count lie: a new failure early in a sourced file suppresses everything
+after it, so the number of complaints *falls* while the shell gets worse.
+
 ## A divergence that is not the shells' but ours
 
 Every other row in this file is a disagreement between real shells. This one

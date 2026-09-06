@@ -31,6 +31,7 @@
 //	sh -policy p.policy script.sh  # run it under a declarative policy
 //	sh -audit log.jsonl script.sh  # record every action as JSON, one per line
 //	sh -acp                        # serve the Agent Client Protocol on stdio
+//	sh -plugin /opt/x/p script.sh  # a builtin whose process is not ours
 //	sh -acp-connect npx pkg --acp  # drive an ACP agent, under the same policy
 //	sh -blocks-list                # the recent blocks: what ran, and how it went
 //	sh -blocks-show 1              # the most recent block, its record and output
@@ -39,8 +40,8 @@
 // positional parameters, `-s`, a lone `-`, set options like `-e` — is read
 // by the shared front end in driver, exactly as the dialect binaries read
 // it. Only the flags no shell has — -tokens, -parse, -dialect,
-// -trace-events, -deny, -policy, -audit, -blocks-list and -blocks-show — are
-// this binary's own, and they
+// -trace-events, -deny, -policy, -audit, -plugin, -blocks-list and
+// -blocks-show — are this binary's own, and they
 // come first on the line: the first word that is not one of them belongs to
 // the shell, so a script's own arguments can never be mistaken for them.
 //
@@ -177,6 +178,26 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		// A policy that will not load is not a shell that runs unsandboxed.
 		return fail(stderr, err)
 	}
+	sh, pluginsCloser, err := launchPlugins(sh, own.plugins, stderr)
+	if err != nil {
+		// Fatal, and see launchPlugins: a shell that quietly ran without the
+		// plugin you asked for would resolve that name from PATH instead.
+		if closer != nil {
+			_ = closer.Close()
+		}
+		return fail(stderr, err)
+	}
+	// Both closers, everywhere the invocation can end. Written as one function
+	// rather than repeated at each return, because the failure this file has
+	// already had once is a cleanup that exists on some paths.
+	done := func() {
+		if pluginsCloser != nil {
+			_ = pluginsCloser.Close()
+		}
+		if closer != nil {
+			_ = closer.Close()
+		}
+	}
 	if own.acpConnect {
 		// The other direction: this shell drives an agent rather than being
 		// one. The words after the flag are the command that starts it, so
@@ -184,9 +205,7 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		// installed, so a policy governs what the agent asks us to do exactly
 		// as it governs what a script does.
 		code := connectACP(sh, own.acpAllow, own.acpAuth, rest)
-		if closer != nil {
-			_ = closer.Close()
-		}
+		done()
 		return code
 	}
 	if own.acp {
@@ -200,9 +219,7 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		// here rather than earlier: a policy handed to `-acp` governs every
 		// session the client opens, exactly as it governs a script.
 		code := serveACP(sh, rest)
-		if closer != nil {
-			_ = closer.Close()
-		}
+		done()
 		return code
 	}
 	if own.blocksList > 0 || own.blocksShow != "" {
@@ -215,8 +232,10 @@ func run(argv []string, stdout, stderr io.Writer) int {
 			show = func() error { return showBlocks(sh, stdout, own.blocksList) }
 		}
 		if err := show(); err != nil {
+			done()
 			return fail(stderr, err)
 		}
+		done()
 		return 0
 	}
 	if own.tokens || own.parse {
@@ -225,8 +244,10 @@ func run(argv []string, stdout, stderr io.Writer) int {
 			dump = dumpTokens
 		}
 		if err := dump(stdout, strings.Join(rest, " "), sh.Dialect); err != nil {
+			done()
 			return fail(stderr, err)
 		}
+		done()
 		return 0
 	}
 	// Everything else is a shell invocation, and the shared front end reads
@@ -236,14 +257,13 @@ func run(argv []string, stdout, stderr io.Writer) int {
 	// named `-`.
 	sh.Stdout, sh.Stderr = stdout, stderr
 	code := driver.MainArgs(sh, append([]string{argv[0]}, rest...))
-	if closer != nil {
-		// Closed here rather than deferred, because main ends with os.Exit
-		// and a defer would never run. Nothing is lost either way — every
-		// record is written straight through — but an audit file the process
-		// holds open until the kernel takes it back is untidy in the way that
-		// later reads as a leak.
-		_ = closer.Close()
-	}
+	// Closed here rather than deferred, because main ends with os.Exit and a
+	// defer would never run. For the audit file nothing is lost either way —
+	// every record is written straight through — but a file the process holds
+	// open until the kernel takes it back is untidy in the way that later
+	// reads as a leak. For a plugin it is not untidiness: a plugin the shell
+	// did not shut down is a process that outlives it.
+	done()
 	return code
 }
 
@@ -278,6 +298,12 @@ type ownFlags struct {
 	// to choose, and picking one for them is the kind of silent default this
 	// front end refuses everywhere else.
 	acpAuth string
+	// plugins are the plugin executables this invocation named, in the order
+	// it named them. Repeatable, like -deny and unlike -policy: two plugins
+	// are two sets of commands, which composes without ambiguity, where two
+	// policies would be two rule sets and reading one of them silently is the
+	// dangerous half of that.
+	plugins []string
 }
 
 // readOwnFlags strips this binary's flags from the front of the line,
@@ -376,6 +402,17 @@ func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
 				val = args[i]
 			}
 			own.blocksShow = val
+		case "plugin":
+			if !hasVal {
+				if i+1 >= len(args) {
+					return own, nil, errors.New("-plugin requires the path of a plugin executable")
+				}
+				i++
+				val = args[i]
+			}
+			// Repeatable, for the reason -deny is: every separator that would
+			// do is a character a path may legally contain.
+			own.plugins = append(own.plugins, val)
 		case "policy", "audit":
 			if !hasVal {
 				if i+1 >= len(args) {

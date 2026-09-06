@@ -1,0 +1,14 @@
+#!/bin/sh
+# Answers the handshake and then never answers a call, and ignores the
+# cancellation too. The host has to stop waiting on its own and kill it.
+while IFS= read -r line; do
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"ignorecancel\",\"commands\":[\"forever\"]}}"
+		;;
+	*'"method":"command/invoke"'*)
+		sleep 120
+		;;
+	esac
+done

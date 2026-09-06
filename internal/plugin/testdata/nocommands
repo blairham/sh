@@ -1,0 +1,11 @@
+#!/bin/sh
+# Declares nothing. A plugin somebody asked for that does nothing is a
+# configuration error, and silence is the failure mode.
+while IFS= read -r line; do
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"empty\",\"commands\":[]}}"
+		;;
+	esac
+done

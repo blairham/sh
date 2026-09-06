@@ -1,0 +1,17 @@
+#!/bin/sh
+# Writes to its own standard error. The host relays it, prefixed and one
+# prefix per line, because a plugin dying with a message and the message being
+# eaten is the worst failure mode a plugin author meets.
+printf 'first thing\nsecond thing\n' >&2
+while IFS= read -r line; do
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"noisy\",\"commands\":[\"quiet\"]}}"
+		;;
+	*'"method":"command/invoke"'*)
+		printf 'a word with no newline after it' >&2
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"status\":0}}"
+		;;
+	esac
+done

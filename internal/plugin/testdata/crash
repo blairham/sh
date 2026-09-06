@@ -1,0 +1,5 @@
+#!/bin/sh
+# Dies before saying anything. This is why the host speaks first: a launch
+# failure with a diagnostic, rather than a wait with no end.
+echo "I cannot start" >&2
+exit 7

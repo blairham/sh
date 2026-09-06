@@ -1,0 +1,16 @@
+#!/bin/sh
+# Writes one line that is not a message before answering properly. One bad
+# message must be one bad message: the transport is line-delimited exactly so
+# that it can be, and the handshake behind it still has to work.
+echo 'this is not JSON at all'
+while IFS= read -r line; do
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"garbage\",\"commands\":[\"still-here\"]}}"
+		;;
+	*'"method":"command/invoke"'*)
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"status\":0}}"
+		;;
+	esac
+done

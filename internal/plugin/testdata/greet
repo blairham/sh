@@ -1,0 +1,100 @@
+#!/bin/sh
+# A plugin, in POSIX shell, and that is the point of it: the whole of the
+# protocol is reading a line of JSON and writing a line of JSON, so a plugin
+# needs no library, no code generator and no toolchain. This one is the
+# functional fixture for the command role, and it is under two hundred lines
+# of shell with no dependency past sed, printf and base64.
+#
+# What a real plugin should NOT copy from it: it serves one call at a time and
+# answers its own host-method requests by reading the very next line, which
+# works only because there is one call in flight. The host does not serialize
+# calls — a background job holding a plugin would otherwise block a foreground
+# command into the same one — so a plugin that wants to be usable on both ends
+# of a pipeline has to match ids and serve concurrently. `greet x | sink`
+# against this fixture deadlocks, and correctly: the sink call asks for input
+# that the greet call has not been reached to produce.
+
+id_of()   { printf '%s' "$1" | sed -n 's/.*"id":\([0-9]*\).*/\1/p'; }
+str_of()  { printf '%s' "$2" | sed -n 's/.*"'"$1"'":"\([^"]*\)".*/\1/p'; }
+arg1_of() { printf '%s' "$1" | sed -n 's/.*"args":\["\([^"]*\)".*/\1/p'; }
+b64()     { printf '%s' "$1" | base64 | tr -d '\n'; }
+
+# Protocol messages go out on fd 3, which is a copy of the original standard
+# output made before anything else runs. Not fd 1, and this is the one thing
+# in this fixture worth copying into a real plugin written in a shell: a
+# command substitution captures fd 1, so a helper that both sends a request
+# and returns its answer would send the request into the capture instead of to
+# the host. The symptom is a deadlock, with both sides waiting to read.
+exec 3>&1
+send() { printf '%s\n' "$1" >&3; }
+
+# write CALL STREAM TEXT — one chunk of what the command wrote.
+write() {
+	send "{\"jsonrpc\":\"2.0\",\"method\":\"command/output\",\"params\":{\"call\":\"$1\",\"stream\":\"$2\",\"data\":\"$(b64 "$3")\"}}"
+}
+
+# ask METHOD PARAMS — one host method, then read its answer off the next line.
+ask() {
+	send "{\"jsonrpc\":\"2.0\",\"id\":9000,\"method\":\"$1\",\"params\":$2}"
+	IFS= read -r reply
+	printf '%s' "$reply"
+}
+
+while IFS= read -r line; do
+	id=$(id_of "$line")
+	case $line in
+	*'"method":"initialize"'*)
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"greet\",\"commands\":[\"greet\",\"shout\",\"getset\",\"where\",\"sink\",\"moan\",\"bigstatus\"]}}"
+		;;
+	*'"method":"command/invoke"'*)
+		call=$(str_of call "$line")
+		name=$(str_of name "$line")
+		arg=$(arg1_of "$line")
+		status=0
+		case $name in
+		greet)
+			write "$call" out "hello $arg
+"
+			;;
+		shout)
+			write "$call" err "shouting about $arg
+"
+			status=3
+			;;
+		getset)
+			reply=$(ask shell/getVar "{\"call\":\"$call\",\"name\":\"$arg\"}")
+			value=$(str_of value "$reply")
+			set=$(printf '%s' "$reply" | sed -n 's/.*"set":\([a-z]*\).*/\1/p')
+			ask shell/setVar "{\"call\":\"$call\",\"name\":\"SEEN\",\"value\":\"$value/$set\"}" >/dev/null
+			;;
+		where)
+			reply=$(ask shell/dir "{\"call\":\"$call\"}")
+			write "$call" out "$(str_of dir "$reply")
+"
+			;;
+		sink)
+			# The chunks come back already base64 and go straight out again as
+			# base64, so this fixture never has to decode anything: the host
+			# encoded it and the host will decode it.
+			while :; do
+				reply=$(ask shell/read "{\"call\":\"$call\",\"max\":64}")
+				data=$(str_of data "$reply")
+				eof=$(printf '%s' "$reply" | sed -n 's/.*"eof":\([a-z]*\).*/\1/p')
+				if [ -n "$data" ]; then
+					send "{\"jsonrpc\":\"2.0\",\"method\":\"command/output\",\"params\":{\"call\":\"$call\",\"stream\":\"out\",\"data\":\"$data\"}}"
+				fi
+				[ "$eof" = true ] && break
+			done
+			;;
+		moan)
+			ask shell/diagnose "{\"call\":\"$call\",\"text\":\"$arg is not a thing\"}" >/dev/null
+			status=1
+			;;
+		bigstatus)
+			status=256
+			;;
+		esac
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"status\":$status}}"
+		;;
+	esac
+done

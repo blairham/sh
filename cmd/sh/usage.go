@@ -71,6 +71,7 @@ first word that is not one of them belongs to the shell.
 	-deny RULE             refuse one path, or one kind of action, repeatable
 	-audit FILE            record every gated action as JSON, one per line
 	-trace-events          print every gated action to standard error
+	-plugin PATH           a builtin from another process, repeatable
 	-blocks-list[=N]       the recent blocks: what ran, and how it went
 	-blocks-show ID        one block in full, its record and its output
 	-acp                   serve the Agent Client Protocol on standard input
@@ -78,6 +79,13 @@ first word that is not one of them belongs to the shell.
 	-acp-allow             answer the agent's permission requests with yes
 	-acp-auth METHOD       sign in with one of the methods the agent offers
 	-highlight             color a quotation left open, while it is typed
+
+A plugin's path must be absolute and there is no search: a plugin named by a
+variable is arbitrary code chosen by whoever set the variable. Launching one
+is an exec and passes the policy, so under a default-deny policy a plugin does
+not start unless the policy names it. What a plugin then does with its own
+descriptors is its own business, exactly as for any command the shell was
+allowed to start.
 
 A policy on an agent reaches what the agent asks this shell for: the files it
 reads and writes, and the commands it asks us to run. A command it runs in its

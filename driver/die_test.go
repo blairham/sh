@@ -237,25 +237,40 @@ func TestAFatalSignalFromOutsideKillsTheShellQuietly(t *testing.T) {
 // reachesTheFrontEnd reports whether a signal *sent* to this process is handed
 // to the front end rather than left to the Go runtime.
 //
-// Two facts, and the platforms split on both.
+// One fact now, where there used to be two.
 //
-// The runtime lets a sent signal through to os/signal for the throwing class
-// only when the kernel marks it as one a process sent, and macOS does not do
-// that for SEGV, BUS or ILL. Measured with a program that registers all eight
-// and is then sent each one: on Linux all eight arrive; on darwin five arrive
-// and those three crash with a fault code in the dump rather than the user
-// one. There is no road to those three from here, and putting the kernel
-// default back at startup instead would silence a *real* fault as well, which
-// is the one case where a Go stack is the right thing to print.
+// The one that is gone: the front end did not listen on darwin at all, because
+// asking os/signal for a signal makes the runtime open a pipe to carry it and
+// a script's `exec 3>f` then wrote over it — #799, which is the same fault as
+// #695 and #731 arriving through signal handling instead of through the
+// poller. driver/lowfds_unix.go keeps the runtime above every descriptor a
+// script can name, so the pipe is out of reach and the whole class is the
+// front end's on every platform this builds on.
 //
-// And on darwin the front end does not listen at all — see
-// fatalsignal_darwin.go, where asking os/signal for a signal costs the
-// descriptors an `exec` then writes over. So the whole class is the runtime's
-// there.
+// The one that remains is the kernel's. The runtime lets a sent signal through
+// to os/signal for the throwing class only when the kernel marks it as one a
+// *process* sent, and macOS does not do that for SEGV, BUS or ILL. Measured
+// with a program that registers all eight and is then sent each one: on Linux
+// all eight arrive; on darwin five arrive and those three crash with a fault
+// code in the dump rather than the user one. There is no road to those three
+// from here, and putting the kernel default back at startup instead would
+// silence a *real* fault as well, which is the one case where a Go stack is
+// the right thing to print.
 //
 // Asserted rather than skipped, in both directions, so that the day either
 // changes is a failing test rather than one that has been passing vacuously.
-func reachesTheFrontEnd(syscall.Signal) bool { return runtime.GOOS != "darwin" }
+// That is how the darwin half above came off: removing the gap turned five of
+// these subtests red with a message naming this function.
+func reachesTheFrontEnd(sig syscall.Signal) bool {
+	if runtime.GOOS != "darwin" {
+		return true
+	}
+	switch sig {
+	case syscall.SIGSEGV, syscall.SIGBUS, syscall.SIGILL:
+		return false
+	}
+	return true
+}
 
 // A signal the script has trapped is still the script's.
 //

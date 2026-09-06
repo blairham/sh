@@ -24,15 +24,18 @@ import "syscall"
 // the other BSDs — are ones this change has no way to test on, and an
 // untested raw execve is a worse bet than a window nobody has seen bite.
 //
-// And on the platform that matters most here it would buy nothing. macOS has
-// its own instance of this bug (#799) and it is not a window at all: the
-// runtime carries signals over a pipe, `exec 3>f` places the script's file
-// over the pipe's descriptor, and the goroutine already blocked reading it
-// throws immediately. There is no interval to empty — the descriptor is gone
-// from the moment it is placed — so nothing about when the conversions run
-// changes the outcome. Measured: a forced allocation in this window has never
-// failed on macOS at any size, and #799 fails there every time with no forced
-// anything.
+// And on the platform that matters most here it would have bought nothing.
+// macOS had its own instance of this bug (#799) and it was not a window at
+// all: the runtime carries signals over a pipe, `exec 3>f` placed the script's
+// file over the pipe's descriptor, and the goroutine already blocked reading
+// it threw immediately. There was no interval to empty — the descriptor was
+// gone from the moment it was placed — so nothing about when the conversions
+// run would have changed the outcome. Measured: a forced allocation in this
+// window has never failed on macOS at any size, and #799 failed there every
+// time with no forced anything.
+//
+// What fixed it was moving the runtime's descriptors instead, which is
+// driver/lowfds_unix.go and is where the argument now lives.
 type readyExec struct {
 	path string
 	argv []string

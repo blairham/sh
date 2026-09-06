@@ -769,14 +769,20 @@ and the sink. An ACP session and a prompt session are the same shell.
 
 ## Package layout
 
+    internal/jsonrpc/      JSON-RPC 2.0 over a newline-delimited stream
     internal/acp/          the shared core — neither side's
-      jsonrpc.go           JSON-RPC 2.0 over a newline-delimited stream
       wire.go              the v1 message shapes, for both parties
       permission.go        option kinds ↔ interp.Decision, and the memory
       session.go           id, cwd, one turn at a time, cancellation
     internal/acp/agent/    role: we answer
     internal/acp/client/   role: we ask, and we provide the world
     cmd/sh                 `sh --acp` serves; `sh --acp-connect` calls out
+
+The framing began as `internal/acp/jsonrpc.go` and moved out when a
+second protocol needed it — see `docs/design/plugins.md`, which chose
+this transport over gRPC. What moved is the framing and nothing else: the
+message shapes, the method names and the reserved `-32000` are ACP's and
+stayed here.
 
 `internal/` per the promotion rule; the consumer that earns promotion is
 the binary. Putting both behind `cmd/sh` gets `-dialect` for free, keeps

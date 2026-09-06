@@ -14,6 +14,8 @@ import (
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/jsonrpc"
 )
 
 // The shell as an ACP Agent: an editor launches it, sends it shell to run,
@@ -48,7 +50,7 @@ type Agent struct {
 	// one tool call per PATH candidate is a client showing nothing.
 	Verbose bool
 
-	conn *Conn
+	conn *jsonrpc.Conn
 
 	mu          sync.Mutex
 	initialized bool
@@ -75,7 +77,7 @@ func NewAgent(sh driver.Shell, info Implementation) *Agent {
 // standard output. Each session gives its runner writers of its own, and every
 // write becomes a session update.
 func (a *Agent) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
-	a.conn = NewConn(r, w, a)
+	a.conn = jsonrpc.NewConn(r, w, a)
 	return a.conn.Serve(ctx)
 }
 
@@ -84,7 +86,7 @@ func (a *Agent) Handle(ctx context.Context, method string, params json.RawMessag
 	if method != MethodInitialize && !a.ready() {
 		// The handshake is the first thing that happens. A version has not
 		// been agreed yet, so nothing else can be answered in it.
-		return nil, Errorf(CodeInvalidRequest, "initialize first")
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidRequest, "initialize first")
 	}
 	switch method {
 	case MethodInitialize:
@@ -101,7 +103,7 @@ func (a *Agent) Handle(ctx context.Context, method string, params json.RawMessag
 	// and config options because the obvious candidate is the dialect and it
 	// is runtime state a script can change mid-turn. docs/design/acp.md says
 	// so for each.
-	return nil, Errorf(CodeMethodNotFound, "%s is not served by a shell", method)
+	return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "%s is not served by a shell", method)
 }
 
 // Notify takes a notification, which has no answer and cannot fail.
@@ -127,14 +129,14 @@ func (a *Agent) ready() bool {
 func (a *Agent) initialize(params json.RawMessage) (any, error) {
 	var req InitializeRequest
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, Errorf(CodeInvalidParams, "initialize: %v", err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "initialize: %v", err)
 	}
 	if req.ProtocolVersion < Version {
 		// The client is older than we are and has told us the newest it
 		// speaks. There is no negotiating downwards here — one version
 		// exists — so this is a refusal rather than an agreement to
 		// something neither side has implemented.
-		return nil, Errorf(CodeInvalidParams,
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams,
 			"protocol version %d: this agent speaks %d", req.ProtocolVersion, Version)
 	}
 	a.mu.Lock()
@@ -165,7 +167,7 @@ func (a *Agent) initialize(params json.RawMessage) (any, error) {
 func (a *Agent) newSession(params json.RawMessage) (any, error) {
 	var req NewSessionRequest
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, Errorf(CodeInvalidParams, "session/new: %v", err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "session/new: %v", err)
 	}
 	a.mu.Lock()
 	a.nextSession++
@@ -209,14 +211,14 @@ func (a *Agent) newSession(params json.RawMessage) (any, error) {
 	// written down in docs/design/acp.md.
 	empty, err := os.Open(os.DevNull)
 	if err != nil {
-		return nil, Errorf(CodeInternalError, "no empty input for the session: %v", err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInternalError, "no empty input for the session: %v", err)
 	}
 	sh.Stdin = empty
 	sh.Gate = &Gate{Ask: s.ask, Remembered: s.mem}
 	sh.Events = s
 	shell, code := driver.NewSession(sh)
 	if shell == nil {
-		return nil, Errorf(CodeInternalError, "the shell would not start: status %d", code)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInternalError, "the shell would not start: status %d", code)
 	}
 	s.shell = shell
 
@@ -235,11 +237,11 @@ func (a *Agent) session(id string) *session {
 func (a *Agent) prompt(ctx context.Context, params json.RawMessage) (any, error) {
 	var req PromptRequest
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, Errorf(CodeInvalidParams, "session/prompt: %v", err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "session/prompt: %v", err)
 	}
 	s := a.session(req.SessionID)
 	if s == nil {
-		return nil, Errorf(CodeInvalidParams, "no session %q", req.SessionID)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "no session %q", req.SessionID)
 	}
 	return s.run(ctx, program(req.Prompt))
 }
@@ -290,7 +292,7 @@ func (s *session) run(ctx context.Context, src string) (any, error) {
 		// runner would give neither the variables it wrote. A caller waiting
 		// for a turn that has not started is owed an answer rather than a
 		// delay.
-		return nil, Errorf(CodeInvalidParams, "session %s is already running a turn", s.id)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "session %s is already running a turn", s.id)
 	}
 	s.inTurn, s.stop = true, cancel
 	s.mu.Unlock()

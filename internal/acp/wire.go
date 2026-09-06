@@ -10,8 +10,9 @@
 // and the event stream becomes session updates one way round; the agent's own
 // requests pass through the same gate the other way round.
 //
-// **Nothing in this package has a side.** JSON-RPC is symmetric — a Conn
-// answers and calls out, whichever end of a connection it is — and one party
+// **Nothing in this package has a side.** JSON-RPC is symmetric — a
+// jsonrpc.Conn answers and calls out, whichever end of a connection it is —
+// and one party
 // writes the message shapes the other reads. Turning a permission option into
 // a decision is the same function whoever chose the option. The role-specific
 // part is only which methods a peer answers and which capabilities are its to

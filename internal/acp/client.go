@@ -15,6 +15,8 @@ import (
 
 	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/jsonrpc"
 )
 
 // The shell as an ACP Client: it launches a coding agent and *is* the
@@ -94,7 +96,7 @@ type Client struct {
 	// accepts that.
 	Terminals bool
 
-	conn  *Conn
+	conn  *jsonrpc.Conn
 	agent InitializeResponse
 
 	// mu guards the terminals this client is running for the agent. They are
@@ -143,7 +145,7 @@ func (c *Client) Commands() (asked, announced int) {
 // on a goroutine, and a client that built its connection *inside* Serve would
 // hand every caller a race between starting that goroutine and making the
 // first request. Connect happens on the caller's own goroutine, before either.
-func (c *Client) Connect(r io.Reader, w io.Writer) { c.conn = NewConn(r, w, c) }
+func (c *Client) Connect(r io.Reader, w io.Writer) { c.conn = jsonrpc.NewConn(r, w, c) }
 
 // Serve reads the agent's output until it ends.
 //
@@ -189,7 +191,7 @@ func (c *Client) Handle(ctx context.Context, method string, params json.RawMessa
 	// Everything else is a capability we did not advertise. A client that
 	// answered a method it never claimed would be telling the agent
 	// something untrue about what it can rely on.
-	return nil, Errorf(CodeMethodNotFound, "this client does not serve %s", method)
+	return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "this client does not serve %s", method)
 }
 
 // Notify takes the agent's session updates.
@@ -275,7 +277,7 @@ func (c *Client) Initialize(ctx context.Context) (InitializeResponse, error) {
 		// The agent answered with a version it will speak and we do not.
 		// Disconnecting is what the protocol says to do, and pretending
 		// otherwise would put messages of an unknown shape on the wire.
-		return resp, Errorf(CodeInvalidParams,
+		return resp, jsonrpc.Errorf(jsonrpc.CodeInvalidParams,
 			"the agent speaks protocol version %d and this client speaks %d",
 			resp.ProtocolVersion, Version)
 	}
@@ -385,7 +387,7 @@ func (c *Client) Cancel(sessionID string) error {
 // published agents answer it to session/new, so a client that treats a
 // successful initialize as "ready to work" fails on both.
 func AuthRequired(err error) bool {
-	var rpcErr *Error
+	var rpcErr *jsonrpc.Error
 	return errors.As(err, &rpcErr) && rpcErr.Code == CodeAuthRequired
 }
 
@@ -395,14 +397,14 @@ func AuthRequired(err error) bool {
 // method. A client must carry on rather than fail, which is the protocol's own
 // rule about capabilities read at the level of a single call.
 func Unsupported(err error) bool {
-	var rpcErr *Error
-	return errors.As(err, &rpcErr) && rpcErr.Code == CodeMethodNotFound
+	var rpcErr *jsonrpc.Error
+	return errors.As(err, &rpcErr) && rpcErr.Code == jsonrpc.CodeMethodNotFound
 }
 
 func (c *Client) permission(ctx context.Context, params json.RawMessage) (any, error) {
 	var req RequestPermissionRequest
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, Errorf(CodeInvalidParams, "session/request_permission: %v", err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "session/request_permission: %v", err)
 	}
 	if c.Answer == nil {
 		// Nobody to ask, so nothing was allowed. Reported as a chosen
@@ -422,10 +424,10 @@ func (c *Client) permission(ctx context.Context, params json.RawMessage) (any, e
 func (c *Client) readFile(ctx context.Context, params json.RawMessage) (any, error) {
 	var req ReadTextFileRequest
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, Errorf(CodeInvalidParams, "fs/read_text_file: %v", err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "fs/read_text_file: %v", err)
 	}
 	if !c.Files {
-		return nil, Errorf(CodeMethodNotFound, "this client does not serve %s", MethodReadTextFile)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "this client does not serve %s", MethodReadTextFile)
 	}
 	// The read is the boundary's rather than the os package's, so what is
 	// checked is the object the open reached and not the name the agent sent.
@@ -440,11 +442,11 @@ func (c *Client) readFile(ctx context.Context, params json.RawMessage) (any, err
 		// the rule the interpreter's own probes set — and a name that
 		// resolved into a hidden place is answered the same way, so an agent
 		// cannot map one by asking to be refused.
-		return nil, Errorf(CodeInvalidParams, "%s: no such file or directory", req.Path)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: no such file or directory", req.Path)
 	}
 	if err != nil {
 		c.failed(ctx, interp.Action{Kind: interp.ActionOpen, Path: req.Path}, err)
-		return nil, Errorf(CodeInvalidParams, "%s: %v", req.Path, err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: %v", req.Path, err)
 	}
 	return ReadTextFileResponse{Content: window(string(b), req.Line, req.Limit)}, nil
 }
@@ -493,19 +495,19 @@ func window(text string, line, limit *int) string {
 func (c *Client) writeFile(ctx context.Context, params json.RawMessage) (any, error) {
 	var req WriteTextFileRequest
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, Errorf(CodeInvalidParams, "fs/write_text_file: %v", err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "fs/write_text_file: %v", err)
 	}
 	if !c.Files {
-		return nil, Errorf(CodeMethodNotFound, "this client does not serve %s", MethodWriteTextFile)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "this client does not serve %s", MethodWriteTextFile)
 	}
 	err := c.Boundary.WriteFile(ctx,
 		boundary.File{Path: req.Path, Perm: 0o600}, []byte(req.Content))
 	if errors.Is(err, boundary.ErrRefused) {
-		return nil, Errorf(CodeInvalidParams, "%s: permission denied", req.Path)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: permission denied", req.Path)
 	}
 	if err != nil {
 		c.failed(ctx, interp.Action{Kind: interp.ActionOpen, Path: req.Path, Write: true}, err)
-		return nil, Errorf(CodeInvalidParams, "%s: %v", req.Path, err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: %v", req.Path, err)
 	}
 	return WriteTextFileResponse{}, nil
 }

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package acp_test
+package jsonrpc_test
 
 import (
 	"context"
@@ -14,8 +14,20 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/blairham/sh/internal/acp"
+	"github.com/blairham/sh/internal/jsonrpc"
 )
+
+// ask and answer are the payloads these tests send, and they are the test's
+// own rather than any protocol's: this package carries messages and has no
+// opinion about their shape. The message types of a protocol built on it are
+// exercised by that protocol's package.
+type ask struct {
+	Session string `json:"session"`
+}
+
+type answer struct {
+	Reason string `json:"reason"`
+}
 
 // handlerFuncs is a Handler assembled from two closures, so a test can say
 // what it answers without a type of its own each time.
@@ -26,7 +38,7 @@ type handlerFuncs struct {
 
 func (h handlerFuncs) Handle(ctx context.Context, m string, p json.RawMessage) (any, error) {
 	if h.handle == nil {
-		return nil, acp.Errorf(acp.CodeMethodNotFound, "no method %q", m)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "no method %q", m)
 	}
 	return h.handle(ctx, m, p)
 }
@@ -40,11 +52,11 @@ func (h handlerFuncs) Notify(ctx context.Context, m string, p json.RawMessage) {
 // pair wires two connections to each other over an in-memory stream and serves
 // both, which is the arrangement the real thing has: a client and an agent
 // that each answer and each call out.
-func pair(t *testing.T, agent, client acp.Handler) (agentConn, clientConn *acp.Conn) {
+func pair(t *testing.T, agent, client jsonrpc.Handler) (agentConn, clientConn *jsonrpc.Conn) {
 	t.Helper()
 	a, c := net.Pipe()
-	agentConn = acp.NewConn(a, a, agent)
-	clientConn = acp.NewConn(c, c, client)
+	agentConn = jsonrpc.NewConn(a, a, agent)
+	clientConn = jsonrpc.NewConn(c, c, client)
 	ctx, cancel := context.WithCancel(t.Context())
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -65,40 +77,40 @@ func TestCallReturnsTheResult(t *testing.T) {
 	t.Parallel()
 	agent := handlerFuncs{handle: func(_ context.Context, m string, p json.RawMessage) (any, error) {
 		if m != "session/prompt" {
-			return nil, acp.Errorf(acp.CodeMethodNotFound, "no method %q", m)
+			return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "no method %q", m)
 		}
-		var req acp.PromptRequest
+		var req ask
 		if err := json.Unmarshal(p, &req); err != nil {
 			return nil, err
 		}
-		return acp.PromptResponse{StopReason: "end_turn:" + req.SessionID}, nil
+		return answer{Reason: "end_turn:" + req.Session}, nil
 	}}
 	_, client := pair(t, agent, nil)
 
-	var got acp.PromptResponse
-	err := client.Call(t.Context(), "session/prompt", acp.PromptRequest{SessionID: "s1"}, &got)
+	var got answer
+	err := client.Call(t.Context(), "session/prompt", ask{Session: "s1"}, &got)
 	if err != nil {
 		t.Fatalf("Call: %v", err)
 	}
-	if got.StopReason != "end_turn:s1" {
-		t.Errorf("stopReason = %q, want end_turn:s1", got.StopReason)
+	if got.Reason != "end_turn:s1" {
+		t.Errorf("stopReason = %q, want end_turn:s1", got.Reason)
 	}
 }
 
 func TestCallSurfacesTheErrorObject(t *testing.T) {
 	t.Parallel()
 	agent := handlerFuncs{handle: func(context.Context, string, json.RawMessage) (any, error) {
-		return nil, acp.Errorf(acp.CodeInvalidParams, "no such session")
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "no such session")
 	}}
 	_, client := pair(t, agent, nil)
 
 	err := client.Call(t.Context(), "session/prompt", nil, nil)
-	var rpcErr *acp.Error
+	var rpcErr *jsonrpc.Error
 	if !errors.As(err, &rpcErr) {
-		t.Fatalf("err = %v, want an *acp.Error", err)
+		t.Fatalf("err = %v, want an *jsonrpc.Error", err)
 	}
-	if rpcErr.Code != acp.CodeInvalidParams {
-		t.Errorf("code = %d, want %d", rpcErr.Code, acp.CodeInvalidParams)
+	if rpcErr.Code != jsonrpc.CodeInvalidParams {
+		t.Errorf("code = %d, want %d", rpcErr.Code, jsonrpc.CodeInvalidParams)
 	}
 	if !strings.Contains(rpcErr.Message, "no such session") {
 		t.Errorf("message = %q, want it to name the failure", rpcErr.Message)
@@ -116,12 +128,12 @@ func TestAPlainErrorBecomesAnInternalError(t *testing.T) {
 	_, client := pair(t, agent, nil)
 
 	err := client.Call(t.Context(), "session/prompt", nil, nil)
-	var rpcErr *acp.Error
+	var rpcErr *jsonrpc.Error
 	if !errors.As(err, &rpcErr) {
-		t.Fatalf("err = %v, want an *acp.Error", err)
+		t.Fatalf("err = %v, want an *jsonrpc.Error", err)
 	}
-	if rpcErr.Code != acp.CodeInternalError {
-		t.Errorf("code = %d, want %d", rpcErr.Code, acp.CodeInternalError)
+	if rpcErr.Code != jsonrpc.CodeInternalError {
+		t.Errorf("code = %d, want %d", rpcErr.Code, jsonrpc.CodeInternalError)
 	}
 	if !strings.Contains(rpcErr.Message, "the runner is gone") {
 		t.Errorf("message = %q, want the Go error's text", rpcErr.Message)
@@ -133,12 +145,12 @@ func TestNoHandlerAnswersMethodNotFound(t *testing.T) {
 	_, client := pair(t, nil, nil)
 
 	err := client.Call(t.Context(), "session/load", nil, nil)
-	var rpcErr *acp.Error
+	var rpcErr *jsonrpc.Error
 	if !errors.As(err, &rpcErr) {
-		t.Fatalf("err = %v, want an *acp.Error", err)
+		t.Fatalf("err = %v, want an *jsonrpc.Error", err)
 	}
-	if rpcErr.Code != acp.CodeMethodNotFound {
-		t.Errorf("code = %d, want %d", rpcErr.Code, acp.CodeMethodNotFound)
+	if rpcErr.Code != jsonrpc.CodeMethodNotFound {
+		t.Errorf("code = %d, want %d", rpcErr.Code, jsonrpc.CodeMethodNotFound)
 	}
 }
 
@@ -146,13 +158,13 @@ func TestNotificationReachesTheHandlerAndIsNotAnswered(t *testing.T) {
 	t.Parallel()
 	got := make(chan string, 1)
 	agent := handlerFuncs{notify: func(_ context.Context, m string, p json.RawMessage) {
-		var n acp.CancelNotification
+		var n ask
 		_ = json.Unmarshal(p, &n)
-		got <- m + " " + n.SessionID
+		got <- m + " " + n.Session
 	}}
 	_, client := pair(t, agent, nil)
 
-	if err := client.Notify(acp.MethodCancel, acp.CancelNotification{SessionID: "s7"}); err != nil {
+	if err := client.Notify("session/cancel", ask{Session: "s7"}); err != nil {
 		t.Fatalf("Notify: %v", err)
 	}
 	// Received once: a second receive on a channel nothing else writes to
@@ -169,32 +181,26 @@ func TestNotificationReachesTheHandlerAndIsNotAnswered(t *testing.T) {
 // each other forever.
 func TestAHandlerMayCallBackWhileHandling(t *testing.T) {
 	t.Parallel()
-	var agentConn *acp.Conn
+	var agentConn *jsonrpc.Conn
 	agent := handlerFuncs{handle: func(ctx context.Context, _ string, _ json.RawMessage) (any, error) {
-		var resp acp.RequestPermissionResponse
-		if err := agentConn.Call(ctx, acp.MethodRequestPermission, acp.RequestPermissionRequest{
-			SessionID: "s1",
-			ToolCall:  acp.ToolCall{ToolCallID: "call-1"},
-			Options:   acp.PermissionOptions(),
-		}, &resp); err != nil {
+		var resp answer
+		if err := agentConn.Call(ctx, "session/request_permission", ask{Session: "s1"}, &resp); err != nil {
 			return nil, err
 		}
-		return acp.PromptResponse{StopReason: resp.Outcome.OptionID}, nil
+		return answer{Reason: resp.Reason}, nil
 	}}
 	client := handlerFuncs{handle: func(context.Context, string, json.RawMessage) (any, error) {
-		return acp.RequestPermissionResponse{Outcome: acp.PermissionOutcome{
-			Outcome: acp.OutcomeSelected, OptionID: acp.OptionAllowOnce,
-		}}, nil
+		return answer{Reason: "allow_once"}, nil
 	}}
-	var clientConn *acp.Conn
+	var clientConn *jsonrpc.Conn
 	agentConn, clientConn = pair(t, agent, client)
 
-	var got acp.PromptResponse
-	if err := clientConn.Call(t.Context(), acp.MethodPrompt, nil, &got); err != nil {
+	var got answer
+	if err := clientConn.Call(t.Context(), "session/prompt", nil, &got); err != nil {
 		t.Fatalf("Call: %v", err)
 	}
-	if got.StopReason != acp.OptionAllowOnce {
-		t.Errorf("the handler saw %q, want the option the client chose", got.StopReason)
+	if got.Reason != "allow_once" {
+		t.Errorf("the handler saw %q, want the answer the peer chose", got.Reason)
 	}
 }
 
@@ -204,11 +210,11 @@ func TestAHandlerMayCallBackWhileHandling(t *testing.T) {
 func TestConcurrentCallsAreMatchedByID(t *testing.T) {
 	t.Parallel()
 	agent := handlerFuncs{handle: func(_ context.Context, _ string, p json.RawMessage) (any, error) {
-		var req acp.PromptRequest
+		var req ask
 		if err := json.Unmarshal(p, &req); err != nil {
 			return nil, err
 		}
-		return acp.PromptResponse{StopReason: req.SessionID}, nil
+		return answer{Reason: req.Session}, nil
 	}}
 	_, client := pair(t, agent, nil)
 
@@ -221,9 +227,9 @@ func TestConcurrentCallsAreMatchedByID(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			id := string(rune('a' + i))
-			var got acp.PromptResponse
-			errs[i] = client.Call(t.Context(), acp.MethodPrompt, acp.PromptRequest{SessionID: id}, &got)
-			answers[i] = got.StopReason
+			var got answer
+			errs[i] = client.Call(t.Context(), "session/prompt", ask{Session: id}, &got)
+			answers[i] = got.Reason
 		}()
 	}
 	wg.Wait()
@@ -242,8 +248,8 @@ func TestConcurrentCallsAreMatchedByID(t *testing.T) {
 func TestGarbageLineIsAnsweredAndTheConnectionSurvives(t *testing.T) {
 	t.Parallel()
 	a, c := net.Pipe()
-	conn := acp.NewConn(a, a, handlerFuncs{handle: func(context.Context, string, json.RawMessage) (any, error) {
-		return acp.PromptResponse{StopReason: acp.StopEndTurn}, nil
+	conn := jsonrpc.NewConn(a, a, handlerFuncs{handle: func(context.Context, string, json.RawMessage) (any, error) {
+		return answer{Reason: "end_turn"}, nil
 	}})
 	go func() { _ = conn.Serve(t.Context()) }()
 	t.Cleanup(func() { _ = a.Close(); _ = c.Close() })
@@ -253,13 +259,13 @@ func TestGarbageLineIsAnsweredAndTheConnectionSurvives(t *testing.T) {
 	}
 	dec := json.NewDecoder(c)
 	var first struct {
-		ID    any        `json:"id"`
-		Error *acp.Error `json:"error"`
+		ID    any            `json:"id"`
+		Error *jsonrpc.Error `json:"error"`
 	}
 	if err := dec.Decode(&first); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if first.Error == nil || first.Error.Code != acp.CodeParseError {
+	if first.Error == nil || first.Error.Code != jsonrpc.CodeParseError {
 		t.Fatalf("answer = %+v, want a parse error", first.Error)
 	}
 	if first.ID != nil {
@@ -271,13 +277,13 @@ func TestGarbageLineIsAnsweredAndTheConnectionSurvives(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 	var second struct {
-		Result acp.PromptResponse `json:"result"`
+		Result answer `json:"result"`
 	}
 	if err := dec.Decode(&second); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if second.Result.StopReason != acp.StopEndTurn {
-		t.Errorf("stopReason = %q, want %q", second.Result.StopReason, acp.StopEndTurn)
+	if second.Result.Reason != "end_turn" {
+		t.Errorf("stopReason = %q, want %q", second.Result.Reason, "end_turn")
 	}
 }
 
@@ -291,20 +297,20 @@ func TestPendingCallsFailWhenTheConnectionEnds(t *testing.T) {
 	// A handler that never answers, so the call is still outstanding when the
 	// stream is closed underneath it.
 	blocked := make(chan struct{})
-	peer := acp.NewConn(c, c, handlerFuncs{handle: func(ctx context.Context, _ string, _ json.RawMessage) (any, error) {
+	peer := jsonrpc.NewConn(c, c, handlerFuncs{handle: func(ctx context.Context, _ string, _ json.RawMessage) (any, error) {
 		close(blocked)
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}})
-	conn := acp.NewConn(a, a, nil)
+	conn := jsonrpc.NewConn(a, a, nil)
 	go func() { _ = peer.Serve(t.Context()) }()
 	go func() { _ = conn.Serve(t.Context()) }()
 
 	done := make(chan error, 1)
-	go func() { done <- conn.Call(context.Background(), acp.MethodPrompt, nil, nil) }()
+	go func() { done <- conn.Call(context.Background(), "session/prompt", nil, nil) }()
 	<-blocked
 	_ = a.Close()
-	if err := <-done; !errors.Is(err, acp.ErrClosed) {
+	if err := <-done; !errors.Is(err, jsonrpc.ErrClosed) {
 		t.Errorf("err = %v, want ErrClosed", err)
 	}
 	_ = c.Close()
@@ -317,14 +323,14 @@ func TestCallGivesUpWhenItsContextIsCancelled(t *testing.T) {
 	release := make(chan struct{})
 	agent := handlerFuncs{handle: func(context.Context, string, json.RawMessage) (any, error) {
 		<-release
-		return acp.PromptResponse{StopReason: acp.StopEndTurn}, nil
+		return answer{Reason: "end_turn"}, nil
 	}}
 	_, client := pair(t, agent, nil)
 	t.Cleanup(func() { close(release) })
 
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- client.Call(ctx, acp.MethodPrompt, nil, nil) }()
+	go func() { done <- client.Call(ctx, "session/prompt", nil, nil) }()
 	cancel()
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Errorf("err = %v, want context.Canceled", err)
@@ -337,8 +343,8 @@ func TestCallGivesUpWhenItsContextIsCancelled(t *testing.T) {
 func TestAnUnmatchedResponseIsIgnored(t *testing.T) {
 	t.Parallel()
 	a, c := net.Pipe()
-	conn := acp.NewConn(a, a, handlerFuncs{handle: func(context.Context, string, json.RawMessage) (any, error) {
-		return acp.PromptResponse{StopReason: acp.StopEndTurn}, nil
+	conn := jsonrpc.NewConn(a, a, handlerFuncs{handle: func(context.Context, string, json.RawMessage) (any, error) {
+		return answer{Reason: "end_turn"}, nil
 	}})
 	go func() { _ = conn.Serve(t.Context()) }()
 	t.Cleanup(func() { _ = a.Close(); _ = c.Close() })
@@ -350,19 +356,19 @@ func TestAnUnmatchedResponseIsIgnored(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 	var got struct {
-		Result acp.PromptResponse `json:"result"`
+		Result answer `json:"result"`
 	}
 	if err := json.NewDecoder(c).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if got.Result.StopReason != acp.StopEndTurn {
-		t.Errorf("stopReason = %q, want the connection to have survived", got.Result.StopReason)
+	if got.Result.Reason != "end_turn" {
+		t.Errorf("stopReason = %q, want the connection to have survived", got.Result.Reason)
 	}
 }
 
 // Notifications arrive in the order they were sent, and that order is their
-// meaning: session updates are a stream, and the chunks of what a command
-// wrote are only what the command wrote if they stay in sequence. Handing each
+// meaning: a protocol's updates are a stream, and the chunks of what a
+// command wrote are only what the command wrote if they stay in sequence. Handing each
 // one to a goroutine delivers them in whatever order the scheduler picks,
 // which is what this pins down.
 func TestNotificationsAreDeliveredInOrder(t *testing.T) {
@@ -370,17 +376,15 @@ func TestNotificationsAreDeliveredInOrder(t *testing.T) {
 	const n = 200
 	got := make(chan string, n)
 	agent := handlerFuncs{notify: func(_ context.Context, _ string, p json.RawMessage) {
-		var v struct {
-			SessionID string `json:"sessionId"`
-		}
+		var v ask
 		_ = json.Unmarshal(p, &v)
-		got <- v.SessionID
+		got <- v.Session
 	}}
 	_, client := pair(t, agent, nil)
 
 	for i := range n {
-		if err := client.Notify(acp.MethodCancel,
-			acp.CancelNotification{SessionID: strconv.Itoa(i)}); err != nil {
+		if err := client.Notify("session/cancel",
+			ask{Session: strconv.Itoa(i)}); err != nil {
 			t.Fatalf("Notify: %v", err)
 		}
 	}

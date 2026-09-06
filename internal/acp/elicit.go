@@ -6,6 +6,8 @@ package acp
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/blairham/sh/internal/jsonrpc"
 )
 
 // elicitation/create: where a question for a person lives.
@@ -118,18 +120,18 @@ type ElicitationMode struct{}
 // elicit puts a form to whoever answers for the person.
 func (c *Client) elicit(ctx context.Context, params json.RawMessage) (any, error) {
 	if c.Elicit == nil {
-		return nil, Errorf(CodeMethodNotFound, "this client does not serve %s", MethodCreateElicitation)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "this client does not serve %s", MethodCreateElicitation)
 	}
 	var req CreateElicitationRequest
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, Errorf(CodeInvalidParams, "%s: %v", MethodCreateElicitation, err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: %v", MethodCreateElicitation, err)
 	}
 	if req.Mode != ElicitForm {
 		// Only the form mode is advertised, so only the form mode is answered.
 		// A client that served a mode it never claimed would be telling the
 		// agent something untrue about what it can rely on — the same rule the
 		// file and terminal capabilities are held to.
-		return nil, Errorf(CodeInvalidParams,
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams,
 			"this client serves only %q elicitation, not %q", ElicitForm, req.Mode)
 	}
 	out, err := c.Elicit(ctx, req)

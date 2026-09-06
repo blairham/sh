@@ -89,6 +89,7 @@ func Semantics() interp.Semantics {
 	// the file.
 	s.StartupFileOptions = interp.StartupFileOptions{Login: "-l"}
 	s.CommandStringShowsCInDollarDash = interp.No
+	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// $(( )) with nothing in it wants a primary and stops the script.

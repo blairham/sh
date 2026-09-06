@@ -116,6 +116,13 @@ func (r *Runner) optionLetters() string {
 		// field the option table writes.
 		b.WriteByte('i')
 	}
+	if r.LoginShell && r.sem().LoginShowsLInDollarDash == Yes {
+		// A login shell, in the two shells that say so. No majority to
+		// follow — see Semantics.LoginShowsLInDollarDash — and read from
+		// the fact the front end carried in for the reason `i` above is:
+		// login-ness is an invocation fact and no `set` letter writes it.
+		b.WriteByte('l')
+	}
 	if r.Route == RouteCommandString && r.sem().CommandStringShowsCInDollarDash == Yes {
 		// A command string, in the two shells that say so. No majority to
 		// follow — see Semantics.CommandStringShowsCInDollarDash.

@@ -190,6 +190,71 @@ only where `-s` was written. That is a shell disagreeing with its own
 later build rather than a panel disagreement, so it is recorded here and
 not modeled; the bash dialect follows 5.3, as it does everywhere else.
 
+### The login letter, `l`
+
+**The rule.** `l` is in `$-` when the shell was started as a login shell
+and the dialect says so. Login-ness itself is the front end's —
+`interp.Runner.LoginShell`, carried in beside `Interactive` and `Route`
+and for the same reason: `interp` never saw an argument vector, and no
+`set` letter turns login-ness on for the option table to have written.
+Whether the letter is written is `Semantics.LoginShowsLInDollarDash`,
+*read* rather than `ask`ed, exactly as the two route letters above are.
+
+Either route to login-ness counts, because both are measured to: an
+explicit `-l` or `--login`, and a dashed `argv[0]` with no option written
+at all — which is what `login` and every terminal emulator's "run as a
+login shell" does. The two routes differ over which startup files get
+read, which is a different question (see `LoginProfileWhenNonInteractive`),
+and not over this letter.
+
+#### Measured
+
+Same panel, 2026-09-06. Membership, since the spelling is what splits.
+
+| invocation | dash | bash 5.3 | bash-as-`sh` | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `-lc cmd` | — | — | — | — | `l` | `l` |
+| `-l -c cmd` | — | — | — | — | `l` | `l` |
+| `--login -c cmd` | *refused* | — | — | — | `l` | `l` |
+| `argv[0]` dashed, `-c cmd` | — | — | — | — | `l` | `l` |
+| `argv[0]` undashed, `-c cmd` | — | — | — | — | — | — |
+| `-l script.sh` | — | — | — | — | `l` | `l` |
+| `-l -s`, program on standard input | — | — | — | — | `l` | `l` |
+| `-c cmd` | — | — | — | — | — | — |
+
+Whole strings for the first row, which is why every case pins membership:
+bash writes `hBc`, ksh93 `chsBl`, zsh `569Xl` and dash nothing at all.
+
+Four things to read out of it:
+
+- **Four against two, so it is an axis.** ksh93 and zsh show the letter;
+  dash and all three bash columns do not. There is no majority to follow.
+- **bash's silence is a decision and not an omission.** It keeps the fact
+  in `shopt login_shell`, which reads `on` for exactly the invocations
+  this letter would mark and `off` at status 1 otherwise, so the shell
+  answers the question somewhere else. Neither ksh93 nor zsh has `shopt`
+  at all.
+- **The spelling does not matter and the route does not matter.** Every
+  column answers the same for a bundle, for unbundled letters, for the
+  long word, for a dashed `argv[0]`, and on the command-string, script
+  and standard-input routes alike. The letter is about what the shell
+  *is*, not how it was told.
+- **dash refuses `--login`** outright — `Illegal option --` at status 2 —
+  which is why its `Login` spelling is `-l` alone.
+
+**zsh's letter is also a `set` option, and that is recorded rather than
+implemented.** Measured: `zsh -c 'set -l'` exits 0 and `$-` becomes
+`569Xl`; `zsh -lc 'set +l'` exits 0 and `$-` becomes `569X`; `setopt
+login` and `unsetopt login` do the same, and its `set -o` listing carries
+`login on` for a login shell. So in that one shell login-ness is a
+mutable option rather than only a startup fact. Ours reports the startup
+fact and refuses `set -l`, so `set +l` does not take the letter back out.
+**ksh93 is the mirror image and stranger**: `set -l` is a bad option
+there, and its own `set -o` listing says `login_shell off` in the very
+invocation whose `$-` contains `l` — a shell disagreeing with itself,
+recorded and not modeled. Neither is implemented, and neither is asked by
+a case.
+
 ### The letters an interactive shell starts with are a second vector
 
 **The rule.** What `$-` begins with is `Semantics.DefaultOptionLetters` for a

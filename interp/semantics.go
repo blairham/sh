@@ -866,6 +866,40 @@ type Semantics struct {
 	// Read without asking, for the reason above.
 	CommandStringShowsSInDollarDash Answer
 
+	// LoginShowsLInDollarDash puts `l` in `$-` when the shell was started as
+	// a login shell.
+	//
+	// Four against two, so there is no majority to follow and this is a
+	// switch: ksh93 and zsh say yes, and dash and all three bash columns say
+	// no. bash's no is a deliberate one rather than an omission — it keeps
+	// the fact in `shopt login_shell`, which reads `on` for exactly the
+	// invocations this letter would mark, so the shell answers the question
+	// and answers it somewhere else.
+	//
+	// Measured 2026-09-06 with the letters bundled (`-lc`), unbundled
+	// (`-l -c`), spelled long (`--login -c`) and inferred from a dashed
+	// `argv[0]` with no option at all: every column answers the same way on
+	// all four, so the split belongs to the shell and not to how the caller
+	// said it. Membership rather than the spelling in the cases that pin it
+	// — ksh93 writes `chsBl` and zsh `569Xl`, and no two shells in the panel
+	// order the string alike.
+	//
+	// The fact itself is Runner.LoginShell, carried in from the front end:
+	// no `set` letter turns login-ness on in three of the four dialects, so
+	// there is no option field for the table to write. zsh is the exception
+	// and is recorded rather than implemented — see docs/spec/semantics.md,
+	// "the login letter": there `l` is a genuine `set` option, `set +l`
+	// takes it back out of `$-` and `set -l` puts it in, which this shell
+	// does not do.
+	//
+	// The POSIX preset leaves it unanswered, which shows no letter: POSIX
+	// names no login option at all, so there is nothing for `$-` to report
+	// as one — unlike CommandStringShowsCInDollarDash, where `-c` *is* an
+	// invocation flag the text defines.
+	//
+	// Read without asking, for the reason above.
+	LoginShowsLInDollarDash Answer
+
 	// ArithIntegerOperatorRefusesFloat rejects a float where only an integer
 	// will do — `7 % 2.5`, `1.5 & 1`, a shift. ksh93 says yes and refuses;
 	// zsh says no and truncates. It does not arise in a shell without floats,

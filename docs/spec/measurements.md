@@ -8756,6 +8756,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `harness/a-login-bundle-runs-the-command-string` | `ran` | `ran` | `ran` | `ran` | `ran` | `ran` |
 | `harness/the-login-letter-in-dollar-dash` | `no-l` | `no-l` | `no-l` | `no-l` | `has-l` | `has-l` |
 | `harness/the-login-letter-spelled-as-its-own-word` | `no-l` | `no-l` | `no-l` | `no-l` | `has-l` | `has-l` |
+| `harness/a-dashed-argv-zero-is-a-login-shell` | `no-l` | `no-l` | `no-l` | `no-l` | `has-l` | `has-l` |
+| `harness/an-undashed-argv-zero-is-not-a-login-shell` | `no-l` | `no-l` | `no-l` | `no-l` | `no-l` | `no-l` |
 | `harness/an-interactive-bundle-runs-the-command-string` | `ran~has-i` **2>** `<shell>: 0: can't access tty; job control turned off` | `ran~has-i` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `ran~has-i` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `ran~has-i` **2>** `<shell>: no job control in this shell` | `ran~has-i` | `ran~has-i` |
 | `harness/a-login-and-interactive-bundle` | `ran` **2>** `<shell>: 0: can't access tty; job control turned off` | `ran` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `ran` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `ran` **2>** `<shell>: no job control in this shell` | `ran` | `ran` |
 | `harness/an-option-after-the-command-string-is-an-operand` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` |
@@ -8775,6 +8777,14 @@ grades it and nothing drift-checks it either, for the same reason.
   case $- in *l*) echo has-l ;; *) echo no-l ;; esac
   ```
 - `harness/the-login-letter-spelled-as-its-own-word` — the same question with the letters unbundled, and every column answers exactly as it did bundled — so the split above belongs to the shell rather than to how the caller spelled it. Without this pair a front end that recorded the letter only for a bundle would pass the row above
+  ```sh
+  case $- in *l*) echo has-l ;; *) echo no-l ;; esac
+  ```
+- `harness/a-dashed-argv-zero-is-a-login-shell` — the login route no option can reach, and the one `login` and every terminal emulator's "run as a login shell" actually takes: a dashed `argv[0]` and nothing else. The split is exactly the one the two rows above record — ksh93 and zsh say `has-l`, dash and all three bash columns say `no-l` — which is what says the letter is about login-ness rather than about the option having been written. The name is `-shell` rather than `-sh` on purpose: a dash in front of `sh` would ask two questions at once, since that name also starts a shell in POSIX mode, and measured with `-shell` the answer is the same in all six. Paired with the row below, which is the same name undashed
+  ```sh
+  case $- in *l*) echo has-l ;; *) echo no-l ;; esac
+  ```
+- `harness/an-undashed-argv-zero-is-not-a-login-shell` — the control the row above needs, and unanimous: one character earlier is the whole of the convention, so the same name without its dash is no login shell in any of the six. Without this a front end that put `l` in `$-` for every invocation, or that read login-ness off the name rather than off the dash, would pass the row above
   ```sh
   case $- in *l*) echo has-l ;; *) echo no-l ;; esac
   ```

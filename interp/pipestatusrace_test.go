@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
 	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -23,16 +22,18 @@ import (
 // named it, so the substrate alone cannot reach this at all.
 func TestTwoSubshellsInAPipelineDoNotShareTheRecord(t *testing.T) {
 	src := "true\n(exit 3) | (exit 4) | true\necho \"st=$? [${PIPESTATUS[@]}]\"\n"
-	f, err := syntax.Parse(src, bash.Dialect())
+	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for range 20 {
 		var buf bytes.Buffer
-		sem := bash.Semantics()
-		dg := bash.Diagnostics()
+		sem := testSemantics()
+		dg := PosixDiagnostics()
 		r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg})
-		bash.Apply(r)
+		// The record is the core's; a name for it is a dialect's, and this
+		// test needs one because an unnamed record cannot be read back.
+		r.SetPipelineStatus("PIPESTATUS")
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
 		}

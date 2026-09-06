@@ -10,7 +10,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
 	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -94,17 +93,16 @@ func TestAPipelinesWritesHaveAllArrivedWhenRunReturns(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			f, err := syntax.Parse(tc.src, bash.Dialect())
+			f, err := syntax.Parse(tc.src, syntax.Core())
 			if err != nil {
 				t.Fatal(err)
 			}
 			w := &settledWriter{}
-			sem := bash.Semantics()
-			dg := bash.Diagnostics()
+			sem := testSemantics()
+			dg := PosixDiagnostics()
 			r := newTestRunner(t, &Runner{
 				Stdout: w, Stderr: w, Semantics: &sem, Diagnostics: &dg, Env: testPATH(),
 			})
-			bash.Apply(r)
 			if _, err := r.Run(context.Background(), f); err != nil {
 				t.Fatal(err)
 			}

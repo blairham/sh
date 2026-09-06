@@ -9,7 +9,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
 	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -73,7 +72,7 @@ func TestAChildsStreamTakesTheLockTheShellPutsOverACallersWriter(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			d := bash.Dialect()
+			d := syntax.Core()
 			d.Coproc = true
 			f, err := syntax.Parse(tc.src, d)
 			if err != nil {
@@ -81,12 +80,11 @@ func TestAChildsStreamTakesTheLockTheShellPutsOverACallersWriter(t *testing.T) {
 			}
 			for range 20 {
 				w := &callersWriter{}
-				sem := bash.Semantics()
-				dg := bash.Diagnostics()
+				sem := testSemantics()
+				dg := PosixDiagnostics()
 				r := newTestRunner(t, &Runner{
 					Stdout: w, Stderr: w, Semantics: &sem, Diagnostics: &dg, Env: testPATH(),
 				})
-				bash.Apply(r)
 				if _, err := r.Run(context.Background(), f); err != nil {
 					t.Fatal(err)
 				}

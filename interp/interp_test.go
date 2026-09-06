@@ -12,7 +12,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/internal/treeguard"
 	. "github.com/blairham/sh/interp"
 
@@ -221,7 +220,7 @@ func runScript(t *testing.T, src string, enable func(*syntax.Dialect), setup fun
 	// *behavior* has to name a dialect, because the default is the strict
 	// core and the core refuses anything the shells disagree about — which
 	// is exactly what these tests are full of.
-	bash := bash.Semantics()
+	bash := testSemantics()
 	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &bash, Env: testPATH()})
 	if setup != nil {
 		setup(r)
@@ -685,7 +684,7 @@ func TestOnlyExportedVariablesReachTheEnvironment(t *testing.T) {
 // established has to still be there for the next one.
 func TestRunPartLeavesTheShellOpen(t *testing.T) {
 	var out bytes.Buffer
-	s := bash.Semantics()
+	s := testSemantics()
 	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &s})
 	for _, src := range []string{`x=1; f() { echo "f says $x"; }`, `x=2`, `f`} {
 		f, err := syntax.Parse(src, syntax.Core())
@@ -705,7 +704,7 @@ func TestRunPartLeavesTheShellOpen(t *testing.T) {
 // to a chunk, or a trap would fire after every line.
 func TestFinishRunsTheExitTrapOnce(t *testing.T) {
 	var out bytes.Buffer
-	s := bash.Semantics()
+	s := testSemantics()
 	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &s})
 	for _, src := range []string{`trap 'echo bye' EXIT`, `echo one`, `echo two`} {
 		f, err := syntax.Parse(src, syntax.Core())
@@ -729,7 +728,7 @@ func TestFinishRunsTheExitTrapOnce(t *testing.T) {
 // reading another, or the rest of the script would run after it.
 func TestExitedStopsTheCaller(t *testing.T) {
 	var out bytes.Buffer
-	s := bash.Semantics()
+	s := testSemantics()
 	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &s})
 	f, err := syntax.Parse(`echo one; exit 3; echo two`, syntax.Core())
 	if err != nil {

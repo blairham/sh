@@ -10,8 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -38,8 +36,15 @@ func newDialect(t *testing.T, out *bytes.Buffer) *interp.Runner {
 
 	// 1. Choose the axes. This is the whole of "which shell am I", and it is
 	//    a value rather than a fork of the code.
-	sem := bash.Semantics()
-	dial := bash.Dialect()
+	//
+	//    From the standard and the core, never from a sibling. This file is
+	//    the documented example, and it used to build its miniature dialect
+	//    on bash's two vectors — demonstrating borrowing where it meant to
+	//    demonstrate building (#491). A preset that inherits from a shell
+	//    inherits that shell's future mistakes, which is the rule
+	//    dialect/doc.go states for the real ones and this is no different.
+	sem := interp.PosixSemantics()
+	dial := dialectGrammar()
 	r := newTestRunner(t, &interp.Runner{
 		Stdout: out, Stderr: out,
 		Semantics: &sem, Dialect: &dial, Name: "mysh",
@@ -76,10 +81,15 @@ func newDialect(t *testing.T, out *bytes.Buffer) *interp.Runner {
 	return r
 }
 
+// dialectGrammar is the miniature dialect's grammar, in one place because the
+// prelude and the snippets have to be read the same way — a dialect is what
+// parses as well as what it means.
+func dialectGrammar() syntax.Dialect { return syntax.Core() }
+
 func runDialect(t *testing.T, r *interp.Runner, out *bytes.Buffer, src string) string {
 	t.Helper()
 	out.Reset()
-	f, err := syntax.Parse(src, bash.Dialect())
+	f, err := syntax.Parse(src, dialectGrammar())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
@@ -149,9 +159,9 @@ func TestTheAxesAreValuesNotForks(t *testing.T) {
 	// Two dialects differing only in a field, which is the point of the
 	// vector: "which shell am I" is data. Both start from the same base and
 	// answer one axis differently.
-	octal := bash.Semantics()
+	octal := testSemantics()
 	octal.ArithLeadingZeroIsOctal = interp.Yes
-	decimal := bash.Semantics()
+	decimal := testSemantics()
 	decimal.ArithLeadingZeroIsOctal = interp.No
 	for _, tc := range []struct {
 		name string

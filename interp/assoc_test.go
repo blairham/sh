@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
 	. "github.com/blairham/sh/interp"
 
 	"github.com/blairham/sh/syntax"
@@ -138,7 +137,7 @@ func TestIndirectSubscriptYieldsTheKeys(t *testing.T) {
 				t.Fatalf("parse %q: %v", c.src, err)
 			}
 			var out bytes.Buffer
-			sem := bash.Semantics()
+			sem := testSemantics()
 			r := newTestRunner(t, &Runner{Semantics: &sem, Dialect: &d, Stdout: &out, Stderr: &out})
 			if _, err := r.Run(context.Background(), f); err != nil {
 				t.Fatalf("run: %v", err)
@@ -181,9 +180,9 @@ func TestALocalAssociativeArrayStaysInTheFunction(t *testing.T) {
 // does — and the "one element" answer is the element whose key is `0`, not
 // the first key there is, because an associative array has no first.
 func TestAssocScalarFollowsTheArrayScalarAxis(t *testing.T) {
-	whole := bash.Semantics()
+	whole := testSemantics()
 	whole.ArrayScalarIsTheWholeArray = Yes
-	one := bash.Semantics()
+	one := testSemantics()
 	one.ArrayScalarIsTheWholeArray = No
 
 	src := `typeset -A m; m[b]=2; m[a]=1; printf "[%s]" "$m"`

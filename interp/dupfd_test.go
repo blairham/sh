@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
 	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -25,7 +24,7 @@ func runSplit(t *testing.T, src string) (out, errOut string, status int) {
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var o, e bytes.Buffer
-	sem := bash.Semantics()
+	sem := testSemantics()
 	r := newTestRunner(t, &Runner{Stdout: &o, Stderr: &e, Semantics: &sem})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {

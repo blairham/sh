@@ -225,6 +225,19 @@ type Span struct {
 	// would not be terminated by a parenthesis. Anything writing one back
 	// has to write the spelling that was read.
 	Backquoted bool
+
+	// Bracketed says an arithmetic substitution was written `$[ … ]` rather
+	// than `$(( … ))`.
+	//
+	// The same reasoning Backquoted carries, one construct along: the two are
+	// one node to everything that evaluates them — the expression grammar is
+	// the same and so is every diagnostic it produces — and they are not the
+	// same syntax, because one ends at a `]` and the other at a `))`. So
+	// anything writing one back has to write the spelling that was read, and
+	// a printer that normalized `$[1+1]` into `$((1+1))` would be editing a
+	// script rather than printing it.
+	Bracketed bool
+
 	// Pos is where the span starts, including its opening delimiter.
 	Pos Pos
 }

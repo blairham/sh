@@ -6564,6 +6564,31 @@ echo unreachable`,
 		Why:     "the one place the two spellings of `#` could collide: `base#digits` is a literal in every shell with arithmetic and its `#` follows digits, where the character code stands where an operand belongs. Unanimous except in dash, which has no based literal — and the row exists so that adding the operator cannot quietly cost the literal",
 	},
 	{
+		ID: "arith/a-dollar-bracket-is-arithmetic", Category: "arithmetic",
+		Snippet: `x=5; echo "[$[1+1]][$[x*2]][$[2**10]][${p:-$[3*3]}]"`,
+		Why:     "the older spelling of `$((…))`, and the panel splits four to two: bash 5.3, bash 3.2, bash as `sh` and zsh read it as arithmetic, and ksh93 and dash do not read it at all — there the `$` is literal and the brackets are a pattern, so the word stands as its own text. bash has documented it as deprecated for years and both of its builds still take it, which is why they are separate columns here. The additive kind of split, so a grammar flag rather than an axis: nobody means something *else* by it",
+	},
+	{
+		ID: "arith/a-dollar-bracket-nests-and-quotes-like-the-other-spelling", Category: "arithmetic",
+		Snippet: `a=(7 8 9); echo "[$[a[1]+1]][$[$[2+2]*2]][${p:-$[ (1+2)*3 ]}]"`,
+		Why:     "three shapes that a scan taking the first `]` gets wrong: a subscript, which is arithmetic too and carries a bracket of its own; the spelling nested in itself; and parentheses inside it. The first also inherits the array base, so the two shells that read the construct give different numbers for the same text — which is `ArrayBaseIsZero` showing through and not a second question",
+	},
+	{
+		ID: "arith/a-dollar-bracket-in-a-here-document", Category: "arithmetic",
+		Snippet: "cat <<EOF\nv=$[6*7]\nEOF\ncat <<'EOF'\nw=$[6*7]\nEOF\n",
+		Why:     "an unquoted here-document body expands it exactly as it expands `$((…))`, and a quoted one leaves it alone — so the construct belongs to every place a substitution is read and not only to a word. The pair is the point: a lexer that added it to the word scanner alone would pass the first line and fail nothing",
+	},
+	{
+		ID: "arith/a-dollar-bracket-is-text-in-single-quotes", Category: "arithmetic",
+		Snippet: `echo '$[1+1]'; echo "$[1+1]"`,
+		Why:     "the quoting rule the construct shares with every other substitution — single quotes make it text and double quotes do not — pinned so that adding the spelling cannot reach inside a quote nobody expands. Unanimous on the first half, since the shells without the construct have nothing to expand anywhere",
+	},
+	{
+		ID: "arith/a-dollar-bracket-refuses-like-the-other", Category: "arithmetic",
+		Snippet: `echo "[$[1+]]"; echo after`,
+		Why:     "a bad expression in the older spelling, which is the claim that the two are one construct stated where it can be checked: the two shells that read it word the refusal exactly as they word it for `$((1+))`, down to the error token, and neither invents a diagnostic of its own for the brackets. The two that do not read it reach no expression at all and print the text",
+	},
+	{
 		ID: "cond/a-group-in-a-regex", Category: "conditions",
 		Snippet: `[[ abc =~ ^(a|x)bc$ ]] && echo y || echo n`,
 		Why:     "the parentheses belong to the regular expression rather than to the shell, so the word does not end at one — which the lexer has to be told, since where a word ends is settled before any parser sees a token",

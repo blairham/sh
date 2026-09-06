@@ -496,6 +496,28 @@ type Dialect struct {
 	// ArithExplicitBase enables the `base#digits` form. Absent from dash.
 	ArithExplicitBase bool
 
+	// DollarBracketArith enables `$[expr]`, the older spelling of `$((expr))`.
+	//
+	// Measured 2026-09-06: bash 5.3.15, bash 3.2.57, bash invoked as `sh` and
+	// zsh 5.9.2 all read it as arithmetic — `echo $[1+1]` is 2, `$[2**10]` is
+	// 1024, and it expands inside double quotes and in a here-document body
+	// exactly as `$((…))` does. ksh93u+ and dash do not read it at all: the
+	// `$` stays literal and the brackets are a pattern, so `echo $[1+1]`
+	// prints `$[1+1]` when nothing on the filesystem matches.
+	//
+	// The additive kind of difference, so a grammar flag: where it is off the
+	// text takes the route it takes today and nobody means something else by
+	// it. bash has *documented* it as deprecated for years, which is a fact
+	// about its manual rather than about its parser — both builds in the
+	// panel still take it, which is why they are separate members.
+	//
+	// The construct is arithmetic and nothing else: the expression inside is
+	// the same grammar `$((…))` holds, the diagnostics for a bad expression
+	// or a division by zero are word for word the ones `$((…))` gives, and
+	// what is produced is an ArithSubst span. Only the spelling differs,
+	// which Span.Bracketed carries for anything writing one back.
+	DollarBracketArith bool
+
 	// Whether `0100` is sixty-four or one hundred is deliberately *not* a
 	// field here. A literal is kept as written, so the tree bakes in no
 	// answer and nothing in the parser has the question to ask; the answer

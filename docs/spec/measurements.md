@@ -4091,6 +4091,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/a-character-code-on-a-character` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "##a"` *(status 2)* | **2>** `<shell>: line 1: ##a: arithmetic syntax error: operand expected (error token is "##a")` *(status 1)* | **2>** `<shell>: line 1: ##a: arithmetic syntax error: operand expected (error token is "##a")` *(status 127)* | **2>** `<shell>: ##a: syntax error: operand expected (error token is "##a")` *(status 1)* | **2>** `<shell>: ##a: arithmetic syntax error` *(status 1)* | `[97][65][10][65]` |
 | `arith/a-character-code-missing-its-character` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "##"` *(status 2)* | **2>** `<shell>: line 1: ##: arithmetic syntax error: operand expected (error token is "##")` *(status 1)* | **2>** `<shell>: line 1: ##: arithmetic syntax error: operand expected (error token is "##")` *(status 127)* | **2>** `<shell>: ##: syntax error: operand expected (error token is "##")` *(status 1)* | **2>** `<shell>: ##: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: character missing after ##` *(status 1)* |
 | `arith/a-radix-literal-is-not-a-character-code` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "16#ff"` *(status 2)* | `[255][5]` | `[255][5]` | `[255][5]` | `[255][5]` | `[255][5]` |
+| `arith/a-dollar-bracket-is-arithmetic` | `[$[1+1]][$[x*2]][$[2**10]][$[3*3]]` | `[2][10][1024][9]` | `[2][10][1024][9]` | `[2][10][1024][9]` | `[$[1+1]][$[x*2]][$[2**10]][$[3*3]]` | `[2][10][1024][9]` |
+| `arith/a-dollar-bracket-nests-and-quotes-like-the-other-spelling` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[9][8][9]` | `[9][8][9]` | `[9][8][9]` | `[$[a[1]+1]][$[$[2+2]*2]][$[ (1+2)*3 ]]` | `[8][8][9]` |
+| `arith/a-dollar-bracket-in-a-here-document` | `v=$[6*7]~w=$[6*7]` | `v=42~w=$[6*7]` | `v=42~w=$[6*7]` | `v=42~w=$[6*7]` | `v=$[6*7]~w=$[6*7]` | `v=42~w=$[6*7]` |
+| `arith/a-dollar-bracket-is-text-in-single-quotes` | `$[1+1]~$[1+1]` | `$[1+1]~2` | `$[1+1]~2` | `$[1+1]~2` | `$[1+1]~$[1+1]` | `$[1+1]~2` |
+| `arith/a-dollar-bracket-refuses-like-the-other` | `[$[1+]]~after` | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 127)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | `[$[1+]]~after` | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 
 - `let/evaluates-and-assigns` — `let` is `(( ))` with the expression as a word rather than inside parentheses. bash, ksh93 and zsh have it; dash has only `$(( ))` and reports it as a command it never heard of
   ```sh
@@ -4391,6 +4396,31 @@ grades it and nothing drift-checks it either, for the same reason.
 - `arith/a-radix-literal-is-not-a-character-code` — the one place the two spellings of `#` could collide: `base#digits` is a literal in every shell with arithmetic and its `#` follows digits, where the character code stands where an operand belongs. Unanimous except in dash, which has no based literal — and the row exists so that adding the operator cannot quietly cost the literal
   ```sh
   echo "[$((16#ff))][$((2#101))]"
+  ```
+- `arith/a-dollar-bracket-is-arithmetic` — the older spelling of `$((…))`, and the panel splits four to two: bash 5.3, bash 3.2, bash as `sh` and zsh read it as arithmetic, and ksh93 and dash do not read it at all — there the `$` is literal and the brackets are a pattern, so the word stands as its own text. bash has documented it as deprecated for years and both of its builds still take it, which is why they are separate columns here. The additive kind of split, so a grammar flag rather than an axis: nobody means something *else* by it
+  ```sh
+  x=5; echo "[$[1+1]][$[x*2]][$[2**10]][${p:-$[3*3]}]"
+  ```
+- `arith/a-dollar-bracket-nests-and-quotes-like-the-other-spelling` — three shapes that a scan taking the first `]` gets wrong: a subscript, which is arithmetic too and carries a bracket of its own; the spelling nested in itself; and parentheses inside it. The first also inherits the array base, so the two shells that read the construct give different numbers for the same text — which is `ArrayBaseIsZero` showing through and not a second question
+  ```sh
+  a=(7 8 9); echo "[$[a[1]+1]][$[$[2+2]*2]][${p:-$[ (1+2)*3 ]}]"
+  ```
+- `arith/a-dollar-bracket-in-a-here-document` — an unquoted here-document body expands it exactly as it expands `$((…))`, and a quoted one leaves it alone — so the construct belongs to every place a substitution is read and not only to a word. The pair is the point: a lexer that added it to the word scanner alone would pass the first line and fail nothing
+  ```sh
+  cat <<EOF
+  v=$[6*7]
+  EOF
+  cat <<'EOF'
+  w=$[6*7]
+  EOF
+  ```
+- `arith/a-dollar-bracket-is-text-in-single-quotes` — the quoting rule the construct shares with every other substitution — single quotes make it text and double quotes do not — pinned so that adding the spelling cannot reach inside a quote nobody expands. Unanimous on the first half, since the shells without the construct have nothing to expand anywhere
+  ```sh
+  echo '$[1+1]'; echo "$[1+1]"
+  ```
+- `arith/a-dollar-bracket-refuses-like-the-other` — a bad expression in the older spelling, which is the claim that the two are one construct stated where it can be checked: the two shells that read it word the refusal exactly as they word it for `$((1+))`, down to the error token, and neither invents a diagnostic of its own for the brackets. The two that do not read it reach no expression at all and print the text
+  ```sh
+  echo "[$[1+]]"; echo after
   ```
 
 ## shell options

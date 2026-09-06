@@ -788,6 +788,13 @@ func (l *Lexer) scanWord(start Pos) Token {
 			flush()
 			spans = append(spans, l.scanParens(ArithSubst, Unquoted))
 
+		case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
+			// The older spelling of the case above. Where the flag is off
+			// this falls through to the literal path, which leaves a `$` and
+			// a bracket expression — what ksh93 and dash do with it.
+			flush()
+			spans = append(spans, l.scanBracket(Unquoted))
+
 		case c == '$' && l.peekAt(1) == '(':
 			flush()
 			spans = append(spans, l.scanParens(CommandSubst, Unquoted))
@@ -912,6 +919,10 @@ func (l *Lexer) heredocSpans() []Span {
 			flush()
 			out = append(out, l.scanParens(ArithSubst, DoubleQuoted))
 			litPos = l.pos()
+		case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
+			flush()
+			out = append(out, l.scanBracket(DoubleQuoted))
+			litPos = l.pos()
 		case c == '$' && l.peekAt(1) == '(':
 			flush()
 			out = append(out, l.scanParens(CommandSubst, DoubleQuoted))
@@ -994,6 +1005,10 @@ func (l *Lexer) scanDouble() []Span {
 		case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
 			flush()
 			out = append(out, l.scanParens(ArithSubst, DoubleQuoted))
+			litPos = l.pos()
+		case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
+			flush()
+			out = append(out, l.scanBracket(DoubleQuoted))
 			litPos = l.pos()
 		case c == '$' && l.peekAt(1) == '(':
 			flush()
@@ -1205,6 +1220,59 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		end--
 	}
 	return Span{Kind: kind, Value: l.src[start:end], Quoting: q, Pos: open}
+}
+
+// scanBracket reads `$[ … ]`, the older spelling of `$(( … ))`.
+//
+// It produces an ArithSubst span, because that is what it is: everything
+// downstream — the expression parser, evaluation, every diagnostic — is the
+// same, and only the delimiters differ. Span.Bracketed carries the spelling
+// for the printer.
+//
+// The closing `]` is found the way scanParens finds its `)`: by tracking
+// quoting and nesting rather than by taking the first one. Nesting is not
+// theoretical here — a subscript is arithmetic too, and `$[a[1]+1]` answers
+// in both shells that have the construct, so the inner `]` has to be counted
+// past.
+func (l *Lexer) scanBracket(q Quoting) Span {
+	open := l.pos()
+	l.advance() // $
+	l.advance() // [
+	depth := 1
+	start := l.off
+
+	for depth > 0 {
+		if l.eof() {
+			l.ranOut("$[")
+			l.fail(open, "unterminated arithmetic substitution")
+			break
+		}
+		switch l.peek() {
+		case '\'':
+			l.skipQuoted('\'', false)
+		case '"':
+			l.skipQuoted('"', true)
+		case '\\':
+			l.advance()
+			if !l.eof() {
+				l.advance()
+			}
+		case '[':
+			depth++
+			l.advance()
+		case ']':
+			depth--
+			l.advance()
+		default:
+			l.advance()
+		}
+	}
+
+	end := l.off
+	if end > start && l.src[end-1] == ']' {
+		end--
+	}
+	return Span{Kind: ArithSubst, Value: l.src[start:end], Quoting: q, Pos: open, Bracketed: true}
 }
 
 // parseToClose reads the contents of a command substitution and returns the

@@ -16,6 +16,12 @@ import (
 // Dialect is what zsh parses.
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
+	// `$[expr]`, zsh's other arithmetic spelling and the older one.
+	// Measured 2026-09-06: `echo $[1+1]` is 2, and the same text is
+	// the literal `$[1+1]` in ksh93 and dash. Reading it as a glob is
+	// what made the failure `no matches found`, which points a
+	// person at globbing rather than at arithmetic (#900).
+	d.DollarBracketArith = true
 	// zsh does not expand under `-c` even with the option set.
 	// Measured 2026-09-05: `zsh -c 'alias hi=...; hi'` does not expand and
 	// the same two lines in a file, or on standard input, do. The route is

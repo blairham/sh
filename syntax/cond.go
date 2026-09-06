@@ -124,16 +124,26 @@ func (p *Parser) parseTestClause() Command {
 	p.next()
 	// A newline inside `[[ ]]` continues the condition rather than ending a
 	// command, so it is skipped wherever the grammar is still waiting for
-	// something. Unanimous across the three shells that have `[[ ]]`, at
-	// every structural point: after `[[`, after `&&`, `||` and `!`, on both
-	// sides of a group's parentheses, and before `]]`.
+	// something. Unanimous across the shells that have `[[ ]]`, at every
+	// structural point: after `[[`, after `&&`, `||` and `!`, on both sides
+	// of a group's parentheses, before `]]`, and — the one this list was
+	// missing — *before* `&&` and `||`, where the condition so far is
+	// complete and an operator may still follow.
+	//
+	// That last one cannot be a point at all, because at the newline it is
+	// not yet known whether an operator or the `]]` comes next; condOr and
+	// condAnd skip speculatively instead. Skipping there is safe precisely
+	// because the two places a complete condition may end — an operator and
+	// the `]]` — both tolerate newlines in front of them.
 	//
 	// Not after a *binary operator* — `[[ 1 ==` then a newline is an error in
 	// bash and ksh93, and only zsh takes it. That one is left refused, which
 	// is what the two agree on.
 	p.skipNewlines()
 	c.Expr = p.condOr()
-	p.skipNewlines()
+	// No skip before the `]]` test: condAnd has already done it, for every
+	// closer at once. The one above is still needed — nothing has read
+	// anything yet at that point.
 	if c.Expr == nil && p.err == nil {
 		p.fail("expected a condition after [[")
 	}
@@ -149,6 +159,10 @@ func (p *Parser) parseTestClause() Command {
 
 func (p *Parser) condOr() CondExpr {
 	x := p.condAnd()
+	// No skip of its own before the test: every route to this operator runs
+	// through condAnd, which has already skipped whatever newlines stood
+	// between the condition and here. Skipping again would be a second
+	// spelling of the same rule, and one no input could tell from the first.
 	for x != nil && p.at(TokOrOr) && p.err == nil {
 		p.next()
 		p.skipNewlines()
@@ -164,7 +178,17 @@ func (p *Parser) condOr() CondExpr {
 
 func (p *Parser) condAnd() CondExpr {
 	x := p.condPrimary()
-	for x != nil && p.at(TokAndAnd) && p.err == nil {
+	for x != nil && p.err == nil {
+		// Speculatively, per parseTestClause: a complete condition may be
+		// followed on the next line by `&&`, by `||`, by a group's `)` or by
+		// the `]]`, and all four tolerate newlines in front of them — so the
+		// newline can be consumed before it is known which of the four it
+		// was. This is the only place it happens for any of them, condOr and
+		// the group both reaching their operator through here.
+		p.skipNewlines()
+		if !p.at(TokAndAnd) {
+			break
+		}
 		p.next()
 		p.skipNewlines()
 		y := p.condPrimary()
@@ -203,7 +227,7 @@ func (p *Parser) condPrimary() CondExpr {
 			p.fail("expected a condition after (")
 			return nil
 		}
-		p.skipNewlines()
+		// Nor here, and for the same reason.
 		stop := p.tok.End
 		if !p.at(TokRightParen) {
 			p.fail("expected ) in a condition")

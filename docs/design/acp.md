@@ -843,3 +843,53 @@ genuinely the maintainer's.
 5. the client side, and `sh --acp-connect`, against all three agents.
 
 `Closes #493` belongs on the last of those and on nothing before it.
+
+### The fifth stage, as amended
+
+That last line said "against all three agents", and read literally it meant
+three completed round trips. Two of them complete; the third needs a Gemini
+credential, which is a human action nobody working on this repository can
+perform on somebody else's account — so the initiative was blocked on
+something that is not code and would have held the first tag with it.
+
+**Decided by the maintainer, 2026-09-06: Gemini's credential is #729 at P2 and
+does not block v0.0.0.** The criterion becomes:
+
+> All three agents are **driven**, and any that cannot complete a session
+> **reports exactly why, with its advertised methods**.
+
+That is a bar and not a formality, and it is met by measurement rather than by
+assertion. Gemini CLI 0.58.0 reaches it on both of its paths:
+
+```
+sh: connected to gemini-cli 0.58.0, protocol 1
+sh: gemini-cli 0.58.0 needs authenticating first: jsonrpc -32000: Gemini API key is missing or not configured.
+sh:   oauth-personal [agent] (Log in with Google): Log in with your Google account
+sh:   gemini-api-key [agent] (Gemini API key): Use an API key with Gemini Developer API
+sh:   vertex-ai [agent] (Vertex AI): Use an API key with Vertex AI GenAI API
+sh:   gateway [agent] (AI API Gateway): Use a custom AI API Gateway
+sh: choose one with -acp-auth oauth-personal
+```
+
+and, with a method named and **accepted**, which is the path that had to be
+fixed to meet the bar:
+
+```
+sh: gemini-cli 0.58.0 accepted -acp-auth gemini-api-key and still refuses a session: jsonrpc -32000: Gemini API key is missing or not configured.
+sh: the method was settled, so what is missing is the credential behind it
+sh: rather than the choice of method — supply it outside this shell.
+sh:   gemini-api-key [agent] (Gemini API key): Use an API key with Gemini Developer API   <- the one -acp-auth named
+```
+
+**Why that second one was work rather than wording.** Gemini answers
+`authenticate` with `{}` and then refuses `session/new` anyway, so the old
+message told a person who *had* authenticated that they needed to authenticate
+first, and then suggested the first advertised id — which, after they had used
+one, is the method they did not choose being offered as though nothing had
+happened. A person following that goes round the same flag again. What is
+missing is the credential behind an accepted method, and saying so is the
+difference between somebody going to get an API key and somebody retrying a
+flag. `TestASessionRefusedForAuthenticationSaysExactlyWhy` holds it.
+
+An agent that hangs, that fails generically, or that says nothing does **not**
+meet this criterion, and neither does one this shell cannot drive at all.

@@ -148,21 +148,87 @@ func runID(sh driver.Shell) string {
 	return event.NewID(time.Now())
 }
 
-// listAuth writes out what the agent said it would accept.
+// sayf writes one line of diagnostic to a caller's stream.
+//
+// One place, so the ignored error is ignored once and on purpose: there is
+// nothing useful to do about a failed write to the stream a diagnostic would
+// be reported on. driver.errf and interp's own errf exist for the same reason.
+// The writes that go straight to os.Stderr in this file need no such wrapper —
+// this one exists because the two functions below take the stream, so that
+// what a person is told about an agent that will not open a session is
+// something a test can read.
+func sayf(w io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(w, format, args...)
+}
+
+// listAuth writes out what the agent said it would accept, marking the method
+// already tried and suggesting one that has not been.
 //
 // The kind is named beside the id, because it decides what a person has to do:
 // an agent method opens something of the agent's own and a terminal method
 // hands them a login here. Naming the flag is the other half — a list of ids
 // with no way to use one is a diagnostic that stops short.
-func listAuth(methods []acp.AuthMethod) {
+//
+// tried is what `-acp-auth` named, or empty where nothing was. It matters
+// because the same list means two different things: with nothing tried it is a
+// menu, and after a method was settled it is what is *left*. Suggesting the
+// first id in both cases hands somebody back the method they just used and
+// reads as a loop with no way out of it — which is what this printed against
+// Gemini CLI before the release bar in #493 was measured rather than asserted.
+func listAuth(w io.Writer, methods []acp.AuthMethod, tried string) {
 	if len(methods) == 0 {
-		fmt.Fprintln(os.Stderr, "sh:   it advertised no authentication methods")
+		sayf(w, "sh:   it advertised no authentication methods\n")
 		return
 	}
 	for _, m := range methods {
-		fmt.Fprintf(os.Stderr, "sh:   %s [%s] (%s): %s\n", m.ID, m.Kind(), m.Name, m.Description)
+		mark := ""
+		if m.ID == tried {
+			mark = "   <- the one -acp-auth named"
+		}
+		sayf(w, "sh:   %s [%s] (%s): %s%s\n", m.ID, m.Kind(), m.Name, m.Description, mark)
 	}
-	fmt.Fprintf(os.Stderr, "sh: choose one with -acp-auth %s\n", methods[0].ID)
+	if next, ok := otherThan(methods, tried); ok {
+		sayf(w, "sh: choose one with -acp-auth %s\n", next)
+	}
+}
+
+// otherThan is the first advertised method that is not the one already tried,
+// and whether there is one. A single method that has already been settled
+// leaves nothing to suggest, and suggesting it anyway would be the loop above.
+func otherThan(methods []acp.AuthMethod, tried string) (string, bool) {
+	for _, m := range methods {
+		if m.ID != tried {
+			return m.ID, true
+		}
+	}
+	return "", false
+}
+
+// refusedASession says why a session could not be opened, which is the whole
+// of what the amended closing criterion in docs/design/acp.md asks of an agent
+// this shell cannot drive: it is driven, and what stopped it is said exactly.
+//
+// The two cases are not one message with a variable in it, because they are
+// not one situation. With no method named, authentication has not been
+// attempted and the list is a menu. With one named and *accepted* — which is
+// what Gemini CLI does with `gemini-api-key`, answering `{}` and then refusing
+// `session/new` anyway — telling somebody they "need authenticating first" is
+// false: they authenticated, and what is missing is the credential behind the
+// method rather than the choice of method. That distinction is the difference
+// between a person knowing to go and get an API key and a person retrying the
+// same flag.
+func refusedASession(w io.Writer, name, tried string, methods []acp.AuthMethod, err error) {
+	if tried == "" {
+		sayf(w, "sh: %s needs authenticating first: %v\n", name, err)
+		listAuth(w, methods, "")
+		return
+	}
+	sayf(w, "sh: %s accepted -acp-auth %s and still refuses a session: %v\n",
+		name, tried, err)
+	sayf(w,
+		"sh: the method was settled, so what is missing is the credential behind it\n"+
+			"sh: rather than the choice of method — supply it outside this shell.\n")
+	listAuth(w, methods, tried)
 }
 
 func fail1(format string, args ...any) int {
@@ -234,7 +300,7 @@ func talk(ctx context.Context, client *acp.Client, authMethod string, in *bufio.
 	if authMethod != "" {
 		if err := client.Authenticate(ctx, authMethod); err != nil {
 			fmt.Fprintf(os.Stderr, "sh: %s did not authenticate: %v\n", name, err)
-			listAuth(info.AuthMethods)
+			listAuth(os.Stderr, info.AuthMethods, authMethod)
 			return exitFailure
 		}
 	}
@@ -250,9 +316,9 @@ func talk(ctx context.Context, client *acp.Client, authMethod string, in *bufio.
 			// is: two of the three published agents refuse a session until
 			// they have been authenticated. Naming the methods it offers is
 			// the useful half, since which one applies decides what a person
-			// has to do about it.
-			fmt.Fprintf(os.Stderr, "sh: %s needs authenticating first: %v\n", name, err)
-			listAuth(info.AuthMethods)
+			// has to do about it — and whether one was already accepted
+			// decides what they have to do *next*.
+			refusedASession(os.Stderr, name, authMethod, info.AuthMethods, err)
 			return exitFailure
 		}
 		return fail1("session/new: %v", err)

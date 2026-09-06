@@ -122,7 +122,8 @@ func TestASwallowedQuoteDoesNotEndTheWordEarly(t *testing.T) {
 // run out inside one of these still runs out.
 //
 // Which delimiter the refusal blames is deliberately not asserted for the
-// nested rows, and the reason is a measurement rather than an omission: the
+// nested rows, and the reason is a measurement rather than an omission (#1151):
+// the
 // panel gives four different answers to `echo "${x:-"$( echo 'a"b'` — bash
 // names the `)`, ksh93 names the `(`, zsh names the `"`, dash names the `)`
 // in one of these two shapes and the `'` in the other — and this shell names
@@ -250,8 +251,8 @@ func TestTheSkipCountsTheNestingRatherThanTakingTheFirstCloser(t *testing.T) {
 // what the panel does: all four of bash, dash, ksh93 and zsh refuse
 // `"${x:-'a$(b'}"` and `"${x:-'a` + "`" + `b'}"` — the `${ }` body is where they
 // look inside single quotes and this shell does not. The divergence is
-// pre-existing and unanimous, so it is a bug of its own rather than a part
-// of this one; the assertion here is that removing the guard is a change,
+// pre-existing and unanimous, so it is a bug of its own (#1150) rather than a
+// part of this one; the assertion here is that removing the guard is a change,
 // so that it cannot be removed as tidying while the answer to that bug is
 // still open.
 func TestASingleQuotedRunIsTakenLiterally(t *testing.T) {

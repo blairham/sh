@@ -117,13 +117,16 @@ print -r -- "st=$?"`)
 	}
 }
 
-// The builtin's refusal must not set the expansion machinery's failure flag,
-// and this is the line that can tell: the flag is sticky and every expansion
-// reads it *relatively* — one already set before an expansion starts is taken
-// as "was already failing" and the expansion's own failure is then not fatal.
-// So a `print -P` that set it would silently disarm the next genuine
-// expansion failure, and the script would run on past a word it could not
-// produce.
+// A builtin refusal leaves the next expansion's refusal fatal.
+//
+// Said plainly about what this does *not* prove: the expansion machinery's
+// failure flag is reset at the start of every command — see the three flags
+// cleared together in interp's command path — so a builtin that set it could
+// not be caught here, and a mutant that sets it survives. The rule the code
+// states is still the right one and the reason is not this test: nothing is
+// being expanded, and the builtin's own status is the answer. What this
+// pins is the behaviour a reader would want to check first, which is that
+// one refusal does not disarm the next.
 func TestTheBuiltinsRefusalDoesNotDisarmTheNextExpansionFailure(t *testing.T) {
 	// The second refusal is written before the redirection on its own line
 	// takes effect — a word is expanded before the command it belongs to is

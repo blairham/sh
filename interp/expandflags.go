@@ -502,6 +502,12 @@ func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr) (string, bool) {
 // been named by the location the dialect writes, so it says the sentence
 // alone — and it does not set expandErr, because nothing is being expanded
 // and the builtin's own status is the answer.
+//
+// Setting it there would in fact change nothing observable: the flag is
+// cleared at the start of every command, so a builtin cannot leak it into
+// the next one, and the builtin's own operands were expanded before it ran.
+// It is left out because it would be false rather than because it would
+// break, and a mutation that puts it back survives for that reason.
 func (r *Runner) refusePromptEscape(e *syntax.ParamExpr, c byte) (string, bool) {
 	if e == nil {
 		r.diagf("the %%%c prompt escape is not implemented\n", c)

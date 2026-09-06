@@ -144,6 +144,12 @@ func (o *observer) Emit(_ context.Context, e interp.Event) {
 		// The feed has gone: the plugin is dead or the host is closing. There
 		// is nobody to number records for, and an unread buffer that goes on
 		// filling is memory held for a reader that will never come.
+		//
+		// Not covered, and correctly: removing it is a mutant that survives,
+		// because what it saves is a conversion and a lock per event on a
+		// stream nobody is reading and it changes no answer anywhere. It is a
+		// cost rather than a behavior, which is the one kind of line a test
+		// should not be written to pin.
 		return
 	default:
 	}
@@ -209,6 +215,12 @@ func (o *observer) feed() {
 }
 
 // put writes one record and says whether the stream is still there.
+//
+// Stopping on a failed write is not covered either, and for a related reason:
+// carrying on regardless is a mutant that survives, because the loop is fed by
+// events rather than by itself, so what it costs is one failed write per
+// record on a stream that is gone and not a spin. It stops because there is
+// nothing left to do, not because continuing would break anything.
 func (o *observer) put(r event.Record) bool {
 	if err := o.h.conn.Notify(MethodEvent, r); err != nil {
 		// The stream is gone. Not reported as the plugin's death: this is very

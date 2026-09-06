@@ -537,6 +537,13 @@ func (h *Host) Close() error {
 			<-h.relayDone
 		}
 		if h.obs != nil {
+			// Belt and braces, and **not** covered: removing it is a mutant
+			// that survives. The feed's only remaining place to be is inside a
+			// write to a stream that has just been taken away, which returns,
+			// and the goroutine-count test polls precisely because a goroutine
+			// on its way out is not a leak. It stays because "every goroutine
+			// the host starts has a reason to return that the host controls" is
+			// worth less if the host does not wait to see it happen.
 			<-h.obs.done
 		}
 	})

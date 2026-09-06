@@ -5616,6 +5616,31 @@ echo unreachable`,
 		Why:     "the same question where the name arrived in the environment rather than being exported by hand, which is the route that made the two answers one: an imported name is exported by having been imported, so the local either inherits that or does not, and the split is the same either way",
 	},
 	{
+		ID: "declare/typeset-assignment-and-the-export-attribute", Category: "declarations",
+		Snippet: `export FOO=bar; typeset FOO=baz; env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"`,
+		Why:     "whether a declaration that assigns takes the export attribute off the name it assigned to: one shell tells the child nothing and goes on holding the value, the other two hand the child the new value. Not about scope — this is the top level — and read through a real child, because the name keeps its value either way and only a command can see the difference",
+	},
+	{
+		ID: "declare/typeset-assignment-and-the-export-attribute-put-back", Category: "declarations",
+		Snippet: `export FOO=bar; typeset FOO=baz; export FOO; env | grep '^FOO=' || echo "(none)"`,
+		Why:     "a reset and not a refusal: naming the attribute again afterwards puts it back, so the shell that clears it has not decided the name may never be exported",
+	},
+	{
+		ID: "declare/readonly-assignment-and-the-export-attribute", Category: "declarations",
+		Snippet: `export FOO=bar; readonly FOO=baz; env | grep '^FOO=' || echo "(none)"; export BAR=b; readonly BAR; env | grep '^BAR=' || echo "(none)"`,
+		Why:     "the same question through `readonly`, which is that shell's `typeset -r` and answers it the same way — and the valueless half is the other end of the axis: with no value on the line the attribute is left alone everywhere, which is what makes the pair above a statement about assignment rather than about the builtin. Spelled with `readonly` rather than `typeset` because one shell *lists* a valueless `typeset` of a name it already has, which is a divergence of its own and not this one. dash reaches this case where it has no `typeset` to reach the others with",
+	},
+	{
+		ID: "declare/export-assignment-keeps-the-export-attribute", Category: "declarations",
+		Snippet: `export FOO=bar; export FOO=baz; env | grep '^FOO=' || echo "(none)"; FOO=qux; env | grep '^FOO=' || echo "(none)"`,
+		Why:     "the two spellings that never ask it: `export` names the attribute outright, and a plain assignment is not a declaration utility's doing at all. Both hand the child the new value in every shell, which is the boundary the axis is drawn at",
+	},
+	{
+		ID: "declare/typeset-assignment-in-a-posix-function", Category: "declarations",
+		Snippet: `export FOO=bar; f() { typeset FOO=baz; }; f; env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"`,
+		Why:     "where the declaration reaches the caller rather than taking a scope, the attribute goes off for good — the pair with the keyword-function case below, where the same shell only takes it off for the function's duration",
+	},
+	{
 		ID: "declare/typeset-local-shadowing-an-exported-name", Category: "declarations",
 		Snippet: `export FOO=bar; function f { typeset FOO=baz; env | grep '^FOO=' || echo "(none)"; }; f; env | grep '^FOO='`,
 		Why:     "the same question through `typeset` in a keyword function, which is the only form that asks it of ksh93 — and it answers as zsh does, by a road of its own: this shell's `typeset` takes the attribute off any name it assigns, at the top level as well as in a function",

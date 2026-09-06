@@ -7070,6 +7070,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/a-declaration-without-a-value-exports-nothing` | `(none)~(none)` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `(none)~BAR=` | `(none)~BAR=` | `FOO=~BAR=` | `(none)~BAR=` | `(none)~BAR=` |
 | `declare/a-declared-name-a-local-has-shadowed` | `(none)~(none)` **2>** `<shell>: 1: typeset: not found` | `(none)~(none)` | `(none)~(none)` | `FOO=~FOO=` | `(none)~(none)` **2>** `<shell>: local: not found` | `(none)~FOO=` |
 | `declare/local-shadowing-an-imported-name` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=dumb~TERM=dumb` **2>** `<shell>: local: not found` | `(none)~TERM=dumb` |
+| `declare/typeset-assignment-and-the-export-attribute` | `FOO=bar~read=[bar]` **2>** `<shell>: 1: typeset: not found` | `FOO=baz~read=[baz]` | `FOO=baz~read=[baz]` | `FOO=baz~read=[baz]` | `(none)~read=[baz]` | `FOO=baz~read=[baz]` |
+| `declare/typeset-assignment-and-the-export-attribute-put-back` | `FOO=bar` **2>** `<shell>: 1: typeset: not found` | `FOO=baz` | `FOO=baz` | `FOO=baz` | `FOO=baz` | `FOO=baz` |
+| `declare/readonly-assignment-and-the-export-attribute` | `FOO=baz~BAR=b` | `FOO=baz~BAR=b` | `FOO=baz~BAR=b` | `FOO=baz~BAR=b` | `(none)~BAR=b` | `FOO=baz~BAR=b` |
+| `declare/export-assignment-keeps-the-export-attribute` | `FOO=baz~FOO=qux` | `FOO=baz~FOO=qux` | `FOO=baz~FOO=qux` | `FOO=baz~FOO=qux` | `FOO=baz~FOO=qux` | `FOO=baz~FOO=qux` |
+| `declare/typeset-assignment-in-a-posix-function` | `FOO=bar~read=[bar]` **2>** `<shell>: 1: typeset: not found` | `FOO=bar~read=[bar]` | `FOO=bar~read=[bar]` | `FOO=bar~read=[bar]` | `(none)~read=[baz]` | `FOO=bar~read=[bar]` |
 | `declare/typeset-local-shadowing-an-exported-name` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `(none)~FOO=bar` | `(none)~FOO=bar` |
 | `declare/integer-attribute-evaluates-a-later-assignment` | `[5+2]` **2>** `<shell>: 1: typeset: not found` | `[7]` | `[7]` | `[7]` | `[7]` | `[7]` |
 | `declare/integer-attribute-on-the-declaration` | `[]` **2>** `<shell>: 1: typeset: not found` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` |
@@ -7164,6 +7169,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/local-shadowing-an-imported-name` — the same question where the name arrived in the environment rather than being exported by hand, which is the route that made the two answers one: an imported name is exported by having been imported, so the local either inherits that or does not, and the split is the same either way
   ```sh
   f() { local TERM=changed; env | grep '^TERM=' || echo "(none)"; }; f; env | grep '^TERM='
+  ```
+- `declare/typeset-assignment-and-the-export-attribute` — whether a declaration that assigns takes the export attribute off the name it assigned to: one shell tells the child nothing and goes on holding the value, the other two hand the child the new value. Not about scope — this is the top level — and read through a real child, because the name keeps its value either way and only a command can see the difference
+  ```sh
+  export FOO=bar; typeset FOO=baz; env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"
+  ```
+- `declare/typeset-assignment-and-the-export-attribute-put-back` — a reset and not a refusal: naming the attribute again afterwards puts it back, so the shell that clears it has not decided the name may never be exported
+  ```sh
+  export FOO=bar; typeset FOO=baz; export FOO; env | grep '^FOO=' || echo "(none)"
+  ```
+- `declare/readonly-assignment-and-the-export-attribute` — the same question through `readonly`, which is that shell's `typeset -r` and answers it the same way — and the valueless half is the other end of the axis: with no value on the line the attribute is left alone everywhere, which is what makes the pair above a statement about assignment rather than about the builtin. Spelled with `readonly` rather than `typeset` because one shell *lists* a valueless `typeset` of a name it already has, which is a divergence of its own and not this one. dash reaches this case where it has no `typeset` to reach the others with
+  ```sh
+  export FOO=bar; readonly FOO=baz; env | grep '^FOO=' || echo "(none)"; export BAR=b; readonly BAR; env | grep '^BAR=' || echo "(none)"
+  ```
+- `declare/export-assignment-keeps-the-export-attribute` — the two spellings that never ask it: `export` names the attribute outright, and a plain assignment is not a declaration utility's doing at all. Both hand the child the new value in every shell, which is the boundary the axis is drawn at
+  ```sh
+  export FOO=bar; export FOO=baz; env | grep '^FOO=' || echo "(none)"; FOO=qux; env | grep '^FOO=' || echo "(none)"
+  ```
+- `declare/typeset-assignment-in-a-posix-function` — where the declaration reaches the caller rather than taking a scope, the attribute goes off for good — the pair with the keyword-function case below, where the same shell only takes it off for the function's duration
+  ```sh
+  export FOO=bar; f() { typeset FOO=baz; }; f; env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"
   ```
 - `declare/typeset-local-shadowing-an-exported-name` — the same question through `typeset` in a keyword function, which is the only form that asks it of ksh93 — and it answers as zsh does, by a road of its own: this shell's `typeset` takes the attribute off any name it assigns, at the top level as well as in a function
   ```sh

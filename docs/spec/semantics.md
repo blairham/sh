@@ -6498,6 +6498,48 @@ This is the shape used to declare a local before assigning it
 conditionally, so the difference is silent: the function reads the
 caller's value where it expected nothing.
 
+**`DeclarationAssignmentClearsTheExportAttribute`** — bash no · dash absent · ksh93 yes · zsh no
+
+Takes the export attribute off a name a declaration utility assigns to.
+
+    export FOO=bar; typeset FOO=baz; env | grep '^FOO='
+
+    bash 5.3, bash 3.2, bash as sh, zsh   FOO=baz
+    ksh93                                 nothing, now and afterwards
+
+One shell resets it. The name goes on holding `baz` — `typeset -p` says
+so, `export -p` no longer lists it — and no child is told about it again
+until something names the attribute. That last part is what makes it a
+reset rather than a refusal: `export FOO` afterwards puts it back.
+
+**The value on the line is what asks it.** A valueless `typeset FOO`
+leaves the attribute alone in every shell, and so do the valueless
+declarations that change the value anyway — `typeset -i FOO` stores 0
+over a non-numeric value and `typeset -u FOO` folds what is there, and a
+child is told about both. `readonly FOO=baz` clears it, because in the
+shell that does this `readonly` *is* its `typeset -r`; `export FOO=baz`
+does not, because it names the attribute; and a plain `FOO=baz` does not
+in any shell, which is the boundary the axis is drawn at.
+
+Asked only where the name was already exported, where the declaration
+does not name the attribute itself, and where the declaration did **not**
+take a scope. The scoped half is `LocalInheritsTheExportAttribute` below
+— the same shell's answer arrived at from the other side — and the two
+must not both fire: in a keyword function the attribute comes back on
+return, and in a function whose declarations reach the caller it is gone
+for good.
+
+    export FOO=bar
+    f() { typeset FOO=baz; }             # no scope: gone for good
+    function f { typeset FOO=baz; }      # a scope: back on return
+
+dash is absent rather than no: it has no `typeset` at all. It does have
+`readonly`, and it keeps the attribute there, which is the one column
+that reaches this axis by the other spelling.
+
+The preset is no. POSIX has an exported name keep the attribute for the
+life of the shell, and both other shells with the builtin agree.
+
 **`LocalInheritsTheExportAttribute`** — bash yes · dash yes · ksh93 no · zsh no
 
 Gives a local declaration the export attribute of the name it shadows,
@@ -6515,9 +6557,10 @@ route.
 
 ksh93 has no `local`, so the question reaches it only through `typeset`
 in a keyword function — where the child is told nothing, as in zsh. It
-gets there from further away: that shell's `typeset` takes the export
-attribute off any name it assigns, at the top level as well as in a
-function, and only the local half is modeled.
+gets there from further away, and the axis above is the rest of the road:
+that shell's `typeset` takes the export attribute off any name it
+assigns, at the top level as well as in a function. Both halves are
+modeled, and each is asked where the other is not.
 
 Two neighbors are *not* this axis. What a valueless declaration leaves
 visible is `ValuelessDeclarationHidesTheOuterValue`, and the two compose:

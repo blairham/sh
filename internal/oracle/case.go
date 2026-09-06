@@ -4728,6 +4728,26 @@ echo "st=$?"`,
 		Snippet: `case x in x) ;; esac; echo "empty=$?"; case x in y) echo no;; esac; echo "nomatch=$?"`,
 		Why:     "an empty body is legal and a case matching nothing exits 0",
 	},
+	{
+		ID: "shape/case-pattern-with-an-empty-alternative", Category: "compound shapes", SyntaxError: true,
+		Snippet: "case \"\" in (|https|git) echo empty-matched;; *) echo no;; esac\ncase git in (|https|git) echo named-matched;; *) echo no;; esac\ncase ftp in (|https|git) echo m;; *) echo unmatched;; esac",
+		Why:     "an alternative of the pattern list written as **nothing**, so the arm matches the empty subject as well as the named ones — the idiom for \"one of these schemes, or none\", and the line `~/.zi/bin/lib/zsh/install.zsh` stops at. One shell accepts it and the other four refuse in three wordings at two statuses, each blaming the `|`. All three subjects are in one row because an implementation that accepted the line and matched only the *named* alternatives would pass a row that asked about parsing alone (#1083)",
+	},
+	{
+		ID: "shape/case-pattern-list-ending-in-a-separator", Category: "compound shapes", SyntaxError: true,
+		Snippet: `case a in (a|b|) echo trailing;; *) echo no;; esac`,
+		Why:     "the emptiness at the other end, which is not a separate feature in the shell that has it — a `|` may have no pattern after it as well as none before it. It is also where the refusals stop agreeing about the token: bash and ksh93 blame the `)`, and dash blames a *word* and names the paren as what it expected, because one operator may stand where any pattern belongs there and the slot swallows the `)` before the complaint is raised",
+	},
+	{
+		ID: "shape/case-pattern-list-with-no-pattern-at-all", Category: "compound shapes", SyntaxError: true,
+		Snippet: `case a in ) echo m;; *) echo no;; esac`,
+		Why:     "the boundary the empty alternative must not be widened past: with no `|` there is nothing to read the emptiness off, and **every** shell refuses it — including the one that accepts an empty alternative in every position a separator can put one. A rule written as \"the pattern list may be empty\" passes the two rows above and fails this one",
+	},
+	{
+		ID: "shape/an-operator-where-a-later-case-pattern-belongs", Category: "compound shapes", SyntaxError: true,
+		Snippet: "case a in (a| ; |b) echo m-a;; *) echo no-a;; esac\ncase \"\" in (a| ; |b) echo m-empty;; *) echo no-empty;; esac",
+		Why:     "one shell lets an operator stand where a pattern belongs, and it lets it stand where **any** of them belongs rather than only the first — measured at half its reach until this row. The arm keeps the patterns beside it, so it still matches `a`, and the operator contributes no pattern at all: the empty subject does not match, which is what separates this from the empty alternative another shell reads out of a bare `|`. The spaces around the `;` keep it a token of its own; written against the `|` it is one token in the shell that has `&|` and `;|`",
+	},
 
 	// --- [[ ]] and (( )) ------------------------------------------------------
 	{
@@ -7036,6 +7056,16 @@ echo unreachable`,
 		ID: "pat/a-literal-at-before-a-bare-group", Category: "pattern matching", SyntaxError: true,
 		Snippet: `case @abc in @(abc|xyz)) echo yes;; *) echo no;; esac`,
 		Why:     "the other half of that reading: the subject that zsh matches and the extended-pattern shells do not, which is what proves the two are reading the same text by different rules",
+	},
+	{
+		ID: "pat/a-group-arm-that-matches-nothing", Category: "pattern matching",
+		Snippet: "[[ b == @(|a)b ]] && echo one || echo no-one\n[[ b == @(*)b ]] && echo two || echo no-two\n[[ \"\" == @(a|) ]] && echo three || echo no-three\n[[ \"\" == +(|a) ]] && echo four || echo no-four",
+		Why:     "one repetition of an arm that matches no text is no text, so a group with such an arm stands for nothing — however it is quantified and including not at all. Unanimous in the shells that read the construct here, and this answered the opposite way in every dialect: the matcher tried the group against one character of the subject and upward, so a zero-length arm could never be reached. Asked as \"can an arm match nothing\" and not \"is an arm empty\", which is what the `@(*)b` line is for — a rule written the second way answers it wrong. Written in a condition rather than in a `case` so that bash reaches it without `extglob`, which is not in force until the line after the one that sets it",
+	},
+	{
+		ID: "pat/the-shortest-match-of-a-group-may-be-nothing", Category: "pattern matching", SyntaxError: true,
+		Snippet: "shopt -s extglob 2>/dev/null\nv=abc; echo \"[${v#@(|a)}][${v##@(|a)}]\"\ncase b in @(|a)b) echo m;; *) echo no;; esac",
+		Why:     "the same rule reaching the trim operators, where it is the whole difference between the two of them: `#` takes the shortest match an alternative offers and the empty one is the shortest there is, so it trims nothing, while `##` takes the longest and trims the `a`. This trimmed the `a` for both — a wrong *value* rather than a match not made, which is the failure mode a status can never show. `shopt` is on a line of its own because the option is not in force until the next line is parsed, and silenced because two panel shells have no such builtin and one of those reads the group natively anyway",
 	},
 	{
 		ID: "pat/a-nested-group-needs-no-quantifier", Category: "pattern matching", SyntaxError: true,

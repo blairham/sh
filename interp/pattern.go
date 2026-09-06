@@ -527,6 +527,22 @@ func matchGroup(body string, quant byte, rest, s string, o patternOpts) bool {
 			return true
 		}
 	}
+	// One repetition of an arm that matches no text is also no text, so a
+	// group with such an arm may stand for nothing however it is quantified
+	// — including not at all. `@(|a)b` matches `b` in every shell that has
+	// the construct, and so does the unquantified `(|a)b` in the one shell
+	// that has *that*; the split loop below starts at one character and
+	// could never reach it.
+	//
+	// Asked as "can an arm match nothing" rather than "is an arm empty",
+	// because `@(*)b` matches `b` too and the arm there is `*`. It is not
+	// folded into the `?`/`*` branch above: those two allow zero
+	// repetitions whatever the arms are, and this allows one repetition
+	// that happens to consume nothing. Recursing here would not terminate,
+	// which is the other reason it is a check and not an iteration.
+	if matchesAnyArm(arms, "", o) && matchHere(rest, s, o) {
+		return true
+	}
 	repeat := quant == '*' || quant == '+'
 	for i := 1; i <= len(s); i++ {
 		if !matchesAnyArm(arms, s[:i], o) {

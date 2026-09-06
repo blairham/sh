@@ -49666,6 +49666,50 @@
         "TimedOut": false
       }
     },
+    "pat/a-group-arm-that-matches-nothing": {
+      "bash": {
+        "Stdout": "one~two~three~four",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~two~three~four",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error in conditional expression: unexpected token `('~\u003cshell\u003e: -c: line 0: syntax error near `|'~\u003cshell\u003e: -c: line 0: `[[ b == @(|a)b ]] \u0026\u0026 echo one || echo no-one'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~two~three~four",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "no-one~no-two~no-three~no-four",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/a-group-from-an-expansion": {
       "bash": {
         "Stdout": "n",
@@ -51684,6 +51728,50 @@
       },
       "zsh": {
         "Stdout": "cntrl blank graph print",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/the-shortest-match-of-a-group-may-be-nothing": {
+      "bash": {
+        "Stdout": "[abc][bc]~m",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[abc][bc]~m",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[abc][bc]~m",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[abc][abc]",
+        "Stderr": "\u003cshell\u003e: 3: Syntax error: \"(\" unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[abc][bc]~m",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[abc][abc]~no",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -63218,6 +63306,50 @@
         "TimedOut": false
       }
     },
+    "shape/an-operator-where-a-later-case-pattern-belongs": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `;'~\u003cshell\u003e: -c: line 1: `case a in (a| ; |b) echo m-a;; *) echo no-a;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `;'~\u003cshell\u003e: -c: line 1: `case a in (a| ; |b) echo m-a;; *) echo no-a;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `;'~\u003cshell\u003e: -c: line 0: `case a in (a| ; |b) echo m-a;; *) echo no-a;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "m-a~no-empty",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `;' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `;'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "shape/case-empty-body-and-no-match": {
       "bash": {
         "Stdout": "empty=0~nomatch=0",
@@ -63344,6 +63476,138 @@
       },
       "zsh": {
         "Stdout": "alt",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/case-pattern-list-ending-in-a-separator": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 1: `case a in (a|b|) echo trailing;; *) echo no;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 1: `case a in (a|b|) echo trailing;; *) echo no;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 0: `case a in (a|b|) echo trailing;; *) echo no;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `)' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "trailing",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/case-pattern-list-with-no-pattern-at-all": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 1: `case a in ) echo m;; *) echo no;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 1: `case a in ) echo m;; *) echo no;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 0: `case a in ) echo m;; *) echo no;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `)' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `)'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/case-pattern-with-an-empty-alternative": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `|'~\u003cshell\u003e: -c: line 1: `case \"\" in (|https|git) echo empty-matched;; *) echo no;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `|'~\u003cshell\u003e: -c: line 1: `case \"\" in (|https|git) echo empty-matched;; *) echo no;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `|'~\u003cshell\u003e: -c: line 0: `case \"\" in (|https|git) echo empty-matched;; *) echo no;; esac'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `|' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "empty-matched~named-matched~unmatched",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -215,6 +215,33 @@ type Dialect struct {
 	// should be.
 	CasePatternAcceptsOperator bool
 
+	// CasePatternMayBeEmpty lets a `case` arm's pattern list carry a pattern
+	// written as nothing, which then matches only the empty string:
+	// `(|https|git|ftp)` is the idiom for "one of these schemes, or none",
+	// and it is what a widely installed zsh library's own startup path is
+	// written with.
+	//
+	// Measured 2026-09-06 with `-n` over a script file, because the question
+	// is whether it parses. zsh 5.9.2 accepts it; bash 5.3.15, the same
+	// binary as `sh`, bash 3.2.57, ksh93u+ and dash all refuse, at three
+	// statuses and in three wordings, and each blames a different token
+	// depending on where the emptiness is.
+	//
+	// The emptiness is read off the *separator* rather than off the
+	// position, and every place a separator can put one is allowed:
+	// `(|a|b)`, `(a||b)`, `(a|b|)`, `(|)` and `(||)` all parse there, with
+	// or without the arm's optional open paren. `()` does not — the shell
+	// that accepts every line above calls it a parse error — so this is not
+	// "the list may be empty": with no separator there is nothing to read
+	// the emptiness off.
+	//
+	// It is a grammar flag and not a matching rule. A group with an arm that
+	// matches nothing already stands for nothing in every shell that has the
+	// construct at all — `@(|a)b` matches `b` in bash and ksh93 alike — so
+	// what divides the panel here is only whether the pattern *list* may
+	// have such an alternative written into it.
+	CasePatternMayBeEmpty bool
+
 	// FuncDefAtParen commits to a function definition as soon as a name is
 	// followed by `(`, rather than requiring the `()` pair.
 	//

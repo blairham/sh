@@ -6955,6 +6955,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shape/case-leading-paren` | `paren` | `paren` | `paren` | `paren` | `paren` | `paren` |
 | `shape/case-pattern-alternatives` | `alt` | `alt` | `alt` | `alt` | `alt` | `alt` |
 | `shape/case-empty-body-and-no-match` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` |
+| `shape/case-pattern-with-an-empty-alternative` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `case "" in (\|https\|git) echo empty-matched;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `case "" in (\|https\|git) echo empty-matched;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `\|'~<shell>: -c: line 0: `case "" in (\|https\|git) echo empty-matched;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `\|' unexpected` *(status 3)* | `empty-matched~named-matched~unmatched` |
+| `shape/case-pattern-list-ending-in-a-separator` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `case a in (a\|b\|) echo trailing;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `case a in (a\|b\|) echo trailing;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `)'~<shell>: -c: line 0: `case a in (a\|b\|) echo trailing;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `)' unexpected` *(status 3)* | `trailing` |
+| `shape/case-pattern-list-with-no-pattern-at-all` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `case a in ) echo m;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `case a in ) echo m;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `)'~<shell>: -c: line 0: `case a in ) echo m;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `)' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `)'` *(status 1)* |
+| `shape/an-operator-where-a-later-case-pattern-belongs` | `m-a~no-empty` | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `case a in (a\| ; \|b) echo m-a;; *) echo no-a;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `case a in (a\| ; \|b) echo m-a;; *) echo no-a;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `case a in (a\| ; \|b) echo m-a;; *) echo no-a;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `;'` *(status 1)* |
 | `case/an-operator-where-a-pattern-belongs` | `miss` | **2>** `<shell>: -c: line 1: syntax error near unexpected token `&'~<shell>: -c: line 1: `case a in & ) echo hit;; *) echo miss;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `&'~<shell>: -c: line 1: `case a in & ) echo hit;; *) echo miss;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in & ) echo hit;; *) echo miss;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `&'` *(status 1)* |
 
 - `shape/terminator-required-before-then` — the keyword does not delimit the condition; a ; or newline does, so the production needs a separator
@@ -7001,6 +7005,25 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shape/case-empty-body-and-no-match` — an empty body is legal and a case matching nothing exits 0
   ```sh
   case x in x) ;; esac; echo "empty=$?"; case x in y) echo no;; esac; echo "nomatch=$?"
+  ```
+- `shape/case-pattern-with-an-empty-alternative` — an alternative of the pattern list written as **nothing**, so the arm matches the empty subject as well as the named ones — the idiom for "one of these schemes, or none", and the line `~/.zi/bin/lib/zsh/install.zsh` stops at. One shell accepts it and the other four refuse in three wordings at two statuses, each blaming the `|`. All three subjects are in one row because an implementation that accepted the line and matched only the *named* alternatives would pass a row that asked about parsing alone (#1083)
+  ```sh
+  case "" in (|https|git) echo empty-matched;; *) echo no;; esac
+  case git in (|https|git) echo named-matched;; *) echo no;; esac
+  case ftp in (|https|git) echo m;; *) echo unmatched;; esac
+  ```
+- `shape/case-pattern-list-ending-in-a-separator` — the emptiness at the other end, which is not a separate feature in the shell that has it — a `|` may have no pattern after it as well as none before it. It is also where the refusals stop agreeing about the token: bash and ksh93 blame the `)`, and dash blames a *word* and names the paren as what it expected, because one operator may stand where any pattern belongs there and the slot swallows the `)` before the complaint is raised
+  ```sh
+  case a in (a|b|) echo trailing;; *) echo no;; esac
+  ```
+- `shape/case-pattern-list-with-no-pattern-at-all` — the boundary the empty alternative must not be widened past: with no `|` there is nothing to read the emptiness off, and **every** shell refuses it — including the one that accepts an empty alternative in every position a separator can put one. A rule written as "the pattern list may be empty" passes the two rows above and fails this one
+  ```sh
+  case a in ) echo m;; *) echo no;; esac
+  ```
+- `shape/an-operator-where-a-later-case-pattern-belongs` — one shell lets an operator stand where a pattern belongs, and it lets it stand where **any** of them belongs rather than only the first — measured at half its reach until this row. The arm keeps the patterns beside it, so it still matches `a`, and the operator contributes no pattern at all: the empty subject does not match, which is what separates this from the empty alternative another shell reads out of a bare `|`. The spaces around the `;` keep it a token of its own; written against the `|` it is one token in the shell that has `&|` and `;|`
+  ```sh
+  case a in (a| ; |b) echo m-a;; *) echo no-a;; esac
+  case "" in (a| ; |b) echo m-empty;; *) echo no-empty;; esac
   ```
 - `case/an-operator-where-a-pattern-belongs` — dash parses this and prints miss: one operator is accepted where the pattern list would start, and the arm it opens matches nothing at all — not `&`, not the empty string. The other three refuse at the `&`. Measured rather than inferred from the diagnostic, because a shell that only worded the error differently would still not reach the esac
   ```sh
@@ -7164,6 +7187,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pat/extended-patterns-in-a-condition` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `yes` | `yes` | **2>** `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 0: syntax error near `@(a'~<shell>: -c: line 0: `[[ abc == @(abc\|xyz) ]] && echo yes \|\| echo no'` *(status 2)* | `yes` | `no` |
 | `pat/a-bare-group-is-alternation` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case ab in a(b\|c)) echo yes;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case ab in a(b\|c)) echo yes;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case ab in a(b\|c)) echo yes;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `yes` |
 | `pat/a-literal-at-before-a-bare-group` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case @abc in @(abc\|xyz)) echo yes;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case @abc in @(abc\|xyz)) echo yes;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case @abc in @(abc\|xyz)) echo yes;; *) echo no;; esac'` *(status 2)* | `no` | `yes` |
+| `pat/a-group-arm-that-matches-nothing` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `one~two~three~four` | `one~two~three~four` | **2>** `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 0: syntax error near `\|'~<shell>: -c: line 0: `[[ b == @(\|a)b ]] && echo one \|\| echo no-one'` *(status 2)* | `one~two~three~four` | `no-one~no-two~no-three~no-four` |
+| `pat/the-shortest-match-of-a-group-may-be-nothing` | `[abc][abc]` **2>** `<shell>: 3: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `[abc][bc]~m` | `[abc][bc]~m` | `[abc][bc]~m` | `[abc][bc]~m` | `[abc][abc]~no` |
 | `pat/a-nested-group-needs-no-quantifier` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case b in @(a\|(b))) echo y;; *) echo n;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case b in @(a\|(b))) echo y;; *) echo n;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case b in @(a\|(b))) echo y;; *) echo n;; esac'` *(status 2)* | `y` | `n` |
 | `pat/a-group-from-an-expansion` | `n` | `n` | `n` | `n` | `y` | `n` |
 | `pat/a-subshell-is-not-a-group` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
@@ -7348,6 +7373,19 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pat/a-literal-at-before-a-bare-group` — the other half of that reading: the subject that zsh matches and the extended-pattern shells do not, which is what proves the two are reading the same text by different rules
   ```sh
   case @abc in @(abc|xyz)) echo yes;; *) echo no;; esac
+  ```
+- `pat/a-group-arm-that-matches-nothing` — one repetition of an arm that matches no text is no text, so a group with such an arm stands for nothing — however it is quantified and including not at all. Unanimous in the shells that read the construct here, and this answered the opposite way in every dialect: the matcher tried the group against one character of the subject and upward, so a zero-length arm could never be reached. Asked as "can an arm match nothing" and not "is an arm empty", which is what the `@(*)b` line is for — a rule written the second way answers it wrong. Written in a condition rather than in a `case` so that bash reaches it without `extglob`, which is not in force until the line after the one that sets it
+  ```sh
+  [[ b == @(|a)b ]] && echo one || echo no-one
+  [[ b == @(*)b ]] && echo two || echo no-two
+  [[ "" == @(a|) ]] && echo three || echo no-three
+  [[ "" == +(|a) ]] && echo four || echo no-four
+  ```
+- `pat/the-shortest-match-of-a-group-may-be-nothing` — the same rule reaching the trim operators, where it is the whole difference between the two of them: `#` takes the shortest match an alternative offers and the empty one is the shortest there is, so it trims nothing, while `##` takes the longest and trims the `a`. This trimmed the `a` for both — a wrong *value* rather than a match not made, which is the failure mode a status can never show. `shopt` is on a line of its own because the option is not in force until the next line is parsed, and silenced because two panel shells have no such builtin and one of those reads the group natively anyway
+  ```sh
+  shopt -s extglob 2>/dev/null
+  v=abc; echo "[${v#@(|a)}][${v##@(|a)}]"
+  case b in @(|a)b) echo m;; *) echo no;; esac
   ```
 - `pat/a-nested-group-needs-no-quantifier` — ksh93 needs a quantifier at the top level and not inside a group, so `@(a|(b))` matches b there — the lexer is what refuses the bare one, and by the time the matcher sees text it came from somewhere the dialect allows
   ```sh

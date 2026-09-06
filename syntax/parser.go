@@ -2366,24 +2366,8 @@ func (p *Parser) parseCase() Command {
 		if p.at(TokLeftParen) {
 			p.next()
 		}
-		if p.dialect.CasePatternAcceptsOperator && !p.at(TokWord) && !p.at(TokRightParen) && !p.at(TokEOF) {
-			// One operator may stand where the pattern list would start, and
-			// the arm it opens has no patterns — so it matches nothing, which
-			// is what the dialect that allows this does with it.
-			p.next()
-		} else {
-			for {
-				w := p.word()
-				if w == nil {
-					p.failUnexpected("")
-					return c
-				}
-				it.Patterns = append(it.Patterns, w)
-				if !p.at(TokPipe) {
-					break
-				}
-				p.next()
-			}
+		if !p.casePatterns(it) {
+			return c
 		}
 		if !p.at(TokRightParen) {
 			p.failUnexpectedOperand(")")
@@ -2423,6 +2407,65 @@ func (p *Parser) parseCase() Command {
 	c.Stop = p.tok.End
 	p.expectWord("esac")
 	return c
+}
+
+// casePatterns reads one arm's pattern list, `a | b | c`, and reports whether
+// it got one. The caller has already consumed any open paren and stops at the
+// close paren, which this does not read.
+//
+// Where the dialect allows it a pattern may be written as nothing, and the
+// emptiness is read off the *separator* rather than off the position: a `|`
+// with no word before it, after it, or on either side stands for a pattern
+// that matches only the empty string. `(|a|b)` is the idiom for "one of these
+// or none" and is what a real zsh library's own startup path is written with.
+//
+// `()` is a parse error even there, which is why this is not "the list may be
+// empty": with no separator there is nothing to read the emptiness off, and
+// the shell that accepts every line above refuses that one.
+func (p *Parser) casePatterns(it *CaseItem) bool {
+	empty := p.dialect.CasePatternMayBeEmpty
+	for {
+		switch {
+		case empty && (p.at(TokPipe) || p.at(TokOrOr)):
+			it.Patterns = append(it.Patterns, p.emptyPattern())
+		case p.dialect.CasePatternAcceptsOperator && !p.at(TokWord) && !p.at(TokEOF):
+			// One operator may stand where a pattern belongs, and it
+			// contributes no pattern at all — not even an empty one, which
+			// is what separates this from the flag above. The two are never
+			// set together, and the empty alternative is asked first because
+			// its `|` is an operator too.
+			p.next()
+		default:
+			w := p.word()
+			if w == nil {
+				p.failUnexpected("")
+				return false
+			}
+			it.Patterns = append(it.Patterns, w)
+		}
+		switch {
+		case p.at(TokPipe):
+			p.next()
+		case empty && p.at(TokOrOr):
+			// `||` is two separators with a pattern of nothing between,
+			// and it arrives as one token because the lexer reads the
+			// operator before anything has said this is a pattern list.
+			it.Patterns = append(it.Patterns, p.emptyPattern())
+			p.next()
+		default:
+			return true
+		}
+		if empty && p.at(TokRightParen) {
+			it.Patterns = append(it.Patterns, p.emptyPattern())
+			return true
+		}
+	}
+}
+
+// emptyPattern is the pattern written as nothing between two separators. It
+// has no spans, so it expands to the empty string and matches only that.
+func (p *Parser) emptyPattern() *Word {
+	return &Word{Start: p.tok.Pos, Stop: p.tok.Pos}
 }
 
 // ParseParamExpFor parses the inside of a `${ }` that was captured outside the

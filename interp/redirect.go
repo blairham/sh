@@ -293,7 +293,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			return closers, nil
 		}
 
-		f, err := r.openGated(ctx, action, path, flags)
+		f, err := r.openGated(ctx, &action, path, flags)
 		if errors.Is(err, errRefused) {
 			// The gate let the *name* through and refused what the name
 			// reached — a link into a denied place. Reported here rather

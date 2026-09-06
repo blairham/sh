@@ -156,8 +156,12 @@ func TestAFrontEndReadThroughALinkIsCheckedOnWhatItReached(t *testing.T) {
 	if len(denials) != 1 {
 		t.Fatalf("recorded %d denials, want one", len(denials))
 	}
-	if denials[0].Action.Path != object {
-		t.Errorf("the denial names %q, want the object at %q", denials[0].Action.Path, object)
+	if denials[0].Action.Path != link {
+		t.Errorf("the denial names %q, want the path as written", denials[0].Action.Path)
+	}
+	if denials[0].Action.Resolved != object {
+		t.Errorf("the denial resolved to %q, want the object at %q",
+			denials[0].Action.Resolved, object)
 	}
 	if denials[0].Session != "SESSIONUNDERTEST" {
 		t.Errorf("the denial says session %q, want the run's", denials[0].Session)

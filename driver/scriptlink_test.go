@@ -78,8 +78,11 @@ func TestAScriptOperandThroughALinkIsCheckedOnWhatItReached(t *testing.T) {
 	}
 	// The record does say, because that half belongs to whoever wrote the
 	// policy and cannot be acted on otherwise.
-	if !opened(rec, interp.EventDenied, object) {
-		t.Errorf("no denial naming %q reached the event stream", object)
+	if !rec.seen(func(e interp.Event) bool {
+		return e.Kind == interp.EventDenied && e.Action.Kind == interp.ActionOpen &&
+			e.Action.Path == link && e.Action.Resolved == object
+	}) {
+		t.Errorf("no denial naming %q and resolving to %q reached the event stream", link, object)
 	}
 
 	// And the indistinguishability, stated exactly rather than by inspection:

@@ -69,6 +69,11 @@ func (r *Runner) elementKeeper(e *syntax.ParamExpr) func(string) bool {
 		// `p=t*; a=(one two); ${(@)a:#$p}` removes nothing in the shell that
 		// has the operator.
 		pattern := r.patternOf(e.Arg)
+		// `M` keeps what the pattern matched instead of dropping it, which
+		// is the whole of the flag here — the same test, read the other way.
+		if matchingFlag(e) {
+			return func(el string) bool { return r.matchPatternR(pattern, el, false) }
+		}
 		return func(el string) bool { return !r.matchPatternR(pattern, el, false) }
 	}
 	// The set operators name an array. Its *elements* are the operand, and a

@@ -623,8 +623,26 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(k)` | keys of an associative array | `typeset -A m=(k1 v1); ${(k)m}` | `k1` |
 | `(v)` | with `(k)`: key and value pairs | `${(kv)m}` | `k1 v1` interleaved |
 | `(%)` | expand prompt `%` escapes | `${(%):-%x}` | see below |
+| `(M)` | substitute what the pattern took | `v=hello; ${(M)v#h*l}` | `hel` |
 
 Details, each measured:
+
+- **`(M)` reads a match from the other side, and reaches exactly two
+  operators.** On the four trims it substitutes the part the pattern *took*
+  rather than the part it left, with the operator still choosing how much:
+  `${(M)v#h*l}` on `hello` is `hel` and `${(M)v##h*l}` is `hell`, against
+  `lo` and `o` without it. A pattern that matches nothing substitutes
+  nothing — `${(M)v#zzz}` is empty where `${v#zzz}` is the whole value —
+  and an empty pattern takes the empty string. On `:#` it keeps the
+  elements the pattern matched instead of dropping them:
+  `a=(f1 f22 f333); ${(M@)a:#f2*}` is `f22` where `${(@)a:#f2*}` is `f1
+  f333`.
+
+  Everywhere else it does nothing, and that was measured one operator at a
+  time rather than reasoned from the name: a replacement, an anchored
+  replacement, a substring, the conditionals, `:|`, `:*` and an expansion
+  with no operator at all are all what they would have been without it.
+  Written twice it is written once.
 
 - **Order of application.** Operators run before flags: `${(U)x:-def}` on an
   unset `x` is `DEF`, `${(U)x#h}` on `hello` is `ELLO`, `${(U)u:=def}`

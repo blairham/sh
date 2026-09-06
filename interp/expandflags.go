@@ -22,7 +22,7 @@ import (
 // else the grammar accepted is refused *by name* when the expansion is
 // reached, because the only thing worse than refusing a flag is answering it
 // wrong with status 0.
-const implementedParamFlags = "ULfsj@kvP%q"
+const implementedParamFlags = "ULfsj@kvP%qM"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -315,8 +315,17 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong,
 		syntax.ParamTrimSuffix, syntax.ParamTrimSuffixLong:
 		pattern := r.patternOf(e.Arg)
+		// Rule: `M` substitutes what the pattern *took* rather than what it
+		// left. The same operator and the same match, read from the other
+		// side — measured, `${(M)v#h*l}` on `hello` is `hel` and
+		// `${(M)v##h*l}` is `hell`, so the shortest/longest choice is still
+		// the operator's.
+		take := r.trimWith
+		if matchingFlag(e) {
+			take = r.matchedWith
+		}
 		for i, w := range words {
-			words[i] = r.trimWith(w, pattern, e.Op)
+			words[i] = take(w, pattern, e.Op)
 		}
 	case syntax.ParamReplace:
 		pattern, with := r.patternOf(e.Arg), r.joinWord(e.Arg2)
@@ -550,4 +559,17 @@ func controlEscape(c byte) string {
 		return `\v`
 	}
 	return fmt.Sprintf(`\%03o`, c)
+}
+
+// matchingFlag reports whether the `M` flag was written, which turns the
+// operators that *remove* what a pattern matched into ones that keep it.
+//
+// It reaches exactly two of them, measured across every operator the flag
+// group may stand in front of: the four trims, where it substitutes the
+// matched part, and `:#`, where it keeps the matching elements instead of
+// dropping them. On `/`, `:|`, `:*`, a substring, the conditionals and an
+// expansion with no operator at all it does nothing — which is why there is
+// no third call site rather than an oversight.
+func matchingFlag(e *syntax.ParamExpr) bool {
+	return e != nil && strings.ContainsRune(e.Flags, 'M')
 }

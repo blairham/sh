@@ -185,3 +185,35 @@ func TestTheLocationDoesNotNameTheBuiltin(t *testing.T) {
 		t.Errorf("wrote %q, want %q — the builtin belongs in neither half here", out, want)
 	}
 }
+
+// POSIX mode moves two axes now, and it has to remember them apart.
+//
+// The pair that makes the difference visible is a vector where they disagree,
+// which is not a hypothetical: zsh carries on past a failed redirection on a
+// special builtin and stops on this, and ksh93 is the reverse. A single saved
+// answer would put whichever one was remembered back over both on the way out,
+// and no dialect in the tree would notice — bash is the only shell that
+// reaches SetPosixMode from a script, and bash starts with both axes No.
+func TestLeavingPosixModeRestoresBothAxesSeparately(t *testing.T) {
+	s := permissive()
+	s.RedirectErrorOnSpecialBuiltinFatal = No
+	s.UnsetReadonlyFatal = Yes
+	r := newTestRunner(t, &Runner{Semantics: &s})
+
+	r.SetPosixMode(true)
+	if got := r.Semantics.RedirectErrorOnSpecialBuiltinFatal; got != Yes {
+		t.Errorf("redirection axis in posix mode = %v, want %v", got, Yes)
+	}
+	if got := r.Semantics.UnsetReadonlyFatal; got != Yes {
+		t.Errorf("unset axis in posix mode = %v, want %v", got, Yes)
+	}
+
+	r.SetPosixMode(false)
+	if got := r.Semantics.RedirectErrorOnSpecialBuiltinFatal; got != No {
+		t.Errorf("redirection axis after leaving = %v, want the vector's %v", got, No)
+	}
+	if got := r.Semantics.UnsetReadonlyFatal; got != Yes {
+		t.Errorf("unset axis after leaving = %v, want the vector's %v — "+
+			"one saved answer cannot put back two that disagree", got, Yes)
+	}
+}

@@ -25547,6 +25547,50 @@
         "TimedOut": false
       }
     },
+    "dot/a-given-up-statement-takes-the-rest-of-its-line": {
+      "bash": {
+        "Stdout": "IN-BEFORE~NEXT-LINE~OUT-AFTER st=0",
+        "Stderr": "./p.sh: line 3: rr: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "./p.sh: line 3: rr: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "IN-BEFORE~NEXT-LINE~OUT-AFTER st=0",
+        "Stderr": "./p.sh: line 3: rr: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "IN-BEFORE",
+        "Stderr": "\u003cscript\u003e: 3: ./p.sh: rr: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "IN-BEFORE~OUT-AFTER st=1",
+        "Stderr": "\u003cscript\u003e[1]: .: line 3: rr: is read only",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "IN-BEFORE~OUT-AFTER st=126",
+        "Stderr": "./p.sh:3: read-only variable: rr",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "dot/arguments-diverge": {
       "bash": {
         "Stdout": "got=INNER~after=OUTER",

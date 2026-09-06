@@ -202,3 +202,71 @@ func TestTheStartupDirectoryVariableRedirects(t *testing.T) {
 		t.Errorf("got %q, want the home directory for a dialect with no such variable", got)
 	}
 }
+
+// TestAnErrorInAStartupFileCostsThatFileAndNotTheSession: a startup file is a
+// file of its own, and every shell that reads one without a person on the
+// other end agrees. Measured: a `$BASH_ENV` or a `$ZDOTDIR/.zshenv` whose
+// third line is `echo X${NOPE}` under `set -u` stops there, the startup files
+// after it are still read, and the script the shell was started for still
+// runs. Before this the same error ended the session — one bad line in one
+// file cost a person the whole rest of their invocation, silently.
+//
+// Two files, because the second is the half that says the *session* survived
+// rather than only that startup returned zero.
+func TestAnErrorInAStartupFileCostsThatFileAndNotTheSession(t *testing.T) {
+	home := t.TempDir()
+	first := filepath.Join(home, "rc.sh")
+	write(t, first, "FIRST=yes\nset -u\necho X${NOPE_UNSET_VAR}\nAFTER_ERROR=yes\n")
+	write(t, filepath.Join(home, ".profile"), "PROFILE=yes\n")
+
+	var errs strings.Builder
+	sh, r := newTestShell(t, map[string]string{"HOME": home, "ENV": first})
+	sh.Stderr = &errs
+	r.Stderr = &errs
+	if code := sh.startup(r, source{login: true, interactive: true}); code != 0 {
+		t.Fatalf("startup reported %d, want the error to cost the file only", code)
+	}
+	if r.Exited() {
+		t.Error("Exited() = true; an error in a startup file must not end the session")
+	}
+	if _, ok := r.GetVar("FIRST"); !ok {
+		t.Error("the failing file did not run at all")
+	}
+	if _, ok := r.GetVar("AFTER_ERROR"); ok {
+		t.Error("the failing file kept going past its error")
+	}
+	if _, ok := r.GetVar("PROFILE"); !ok {
+		t.Error("the startup file after the failing one was not read")
+	}
+	if !strings.Contains(errs.String(), "NOPE_UNSET_VAR") {
+		t.Errorf("said %q, want the failure reported", errs.String())
+	}
+}
+
+// TestAnExitInAStartupFileStillEndsTheSession is the neighboring rule, and
+// the one the catch above must not repair: `exit 3` in a startup file exits 3
+// and the files after it are not read, measured in every shell that reads more
+// than one.
+func TestAnExitInAStartupFileStillEndsTheSession(t *testing.T) {
+	home := t.TempDir()
+	first := filepath.Join(home, "rc.sh")
+	write(t, first, "FIRST=yes\nexit 3\nAFTER_EXIT=yes\n")
+	write(t, filepath.Join(home, ".profile"), "PROFILE=yes\n")
+
+	sh, r := newTestShell(t, map[string]string{"HOME": home, "ENV": first})
+	// The run-commands file is read before the profile only for a shell that
+	// is interactive and not a login shell, so the order here is the one that
+	// puts the exiting file first.
+	if code := sh.startup(r, source{interactive: true}); code != 0 {
+		t.Fatalf("startup reported %d", code)
+	}
+	if !r.Exited() {
+		t.Error("Exited() = false after `exit 3` in a startup file")
+	}
+	if _, ok := r.GetVar("AFTER_EXIT"); ok {
+		t.Error("the file kept going past its exit")
+	}
+	if r.ExitStatus() != 3 {
+		t.Errorf("status = %d, want 3", r.ExitStatus())
+	}
+}

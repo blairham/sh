@@ -396,3 +396,59 @@ func TestAGivenUpStatementDoesNotEndBorrowedText(t *testing.T) {
 		}
 	}
 }
+
+// TestAGivenUpStatementTakesTheRestOfItsLineInsideBorrowedText is the half of
+// the give-up rule that a "does the next line run" test cannot see: what is
+// abandoned is the statement *and the rest of its line*, so `rr=2; echo
+// SAME-LINE` prints nothing while an `echo` on the line after it runs.
+//
+// Measured and unanimous among the shells that survive the refusal at all:
+// bash 5.3 and bash 3.2 both print NEXT-LINE and never SAME-LINE, from inside
+// a sourced file and from inside an eval.
+func TestAGivenUpStatementTakesTheRestOfItsLineInsideBorrowedText(t *testing.T) {
+	sem := abandonSemantics(Yes, No)
+	sem.ReadonlyReassignmentFatal = No
+	sem.ReadonlyReassignmentFatalFromCommandString = No
+	dg := abandonDiagnostics()
+	dg.ReadonlyVariable = "%s: readonly variable"
+
+	const file = "echo IN-BEFORE\nreadonly rr=1\nrr=2; echo SAME-LINE\necho NEXT-LINE\n"
+	const want = "IN-BEFORE\n" +
+		"./p.sh: line 3: rr: readonly variable\n" +
+		"NEXT-LINE\n" +
+		"OUT-AFTER st=0\n"
+	dir := t.TempDir()
+	write(t, dir, "p.sh", file)
+	out, _ := sourceRun(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n", sem, dg)
+	if out != want {
+		t.Errorf("sourced: got %q, want %q", out, want)
+	}
+}
+
+// TestACaughtErrorDoesNotMakeALaterExitSurvivable is what clearing the kind
+// alongside the control is for, and it needs two sourced files to reach:
+// after one has been given up over an error, `exit 7` in the next one must
+// still end the shell. Measured — ksh93 and zsh both exit 7 with nothing after
+// the second `.`.
+//
+// A boundary that cleared only the control flow would leave the mark behind
+// and read the exit as one more error, which is the one way this change could
+// have turned `exit` into something survivable.
+func TestACaughtErrorDoesNotMakeALaterExitSurvivable(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "a.sh", sourcedFatal)
+	write(t, dir, "b.sh", "echo IN2\nexit 7\necho NOT-REACHED\n")
+	out, st := sourceRun(t, dir,
+		". ./a.sh\necho \"MID st=$?\"\n. ./b.sh\necho NOT-REACHED-EITHER\n",
+		abandonSemantics(Yes, No), abandonDiagnostics())
+	const want = "IN-BEFORE\n" +
+		"./a.sh: line 3: NOPE: parameter not set\n" +
+		"MID st=1\n" +
+		"IN2\n"
+	if out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+	if st != 7 {
+		t.Errorf("status = %d, want 7", st)
+	}
+}

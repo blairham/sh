@@ -6111,6 +6111,15 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why: "a statement a shell *gives up* rather than dies over is given up as far as the end of its line and no further, evaluated text included: bash reports the refusal and runs the `echo` on the next line of the same eval, where a boundary that mistook the give-up for a fatal error would lose the rest of the text",
 	},
 	{
+		ID: "dot/a-given-up-statement-takes-the-rest-of-its-line", Category: "eval and dot",
+		// From a file: `-c` would answer with bash's own rule that a bare
+		// readonly reassignment is fatal when the program *is* the command
+		// string, which is a different question.
+		Script:  true,
+		Snippet: `printf 'echo IN-BEFORE\nreadonly rr=1\nrr=2; echo SAME-LINE\necho NEXT-LINE\n' > p.sh; . ./p.sh; echo "OUT-AFTER st=$?"`,
+		Why:     "the give-up reaches to the end of the line and no further, inside a sourced file exactly as at the top of a script: SAME-LINE never prints in any shell that survives the refusal, and NEXT-LINE does — a row asserting only that the file kept running would pass with the same-line half missing",
+	},
+	{
 		ID: "dot/readonly-refusal-ends-the-sourced-file-only", Category: "eval and dot",
 		Snippet: `printf 'echo IN-BEFORE\nreadonly rr=1\nrr=2\necho IN-AFTER\n' > p.sh; . ./p.sh; echo "OUT-AFTER st=$?"`,
 		// From a file rather than from `-c`, which is not decoration: bash

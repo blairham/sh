@@ -603,11 +603,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 				}
 				return escapeAll(elems), true
 			}
-			var out []string
-			for _, el := range elems {
-				out = append(out, splitFields(el, ifs, set)...)
-			}
-			return out, true
+			return r.elementFields(elems, sp), true
 		}
 	}
 	// `${@@Q}` and `${*@Q}`: a transformation distributes over the positional
@@ -628,11 +624,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 		if s.Quoting != syntax.Unquoted {
 			return escapeAll(elems), true
 		}
-		var out []string
-		for _, el := range elems {
-			out = append(out, splitFields(el, ifs, set)...)
-		}
-		return out, true
+		return r.elementFields(elems, sp), true
 	}
 	if e.Name != "@" || e.Op != syntax.ParamNone || e.Length {
 		return nil, false
@@ -643,16 +635,62 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 		// a pattern. Returning them raw made `set -- "$x"` glob.
 		return escapeAll(r.Params), true
 	}
-	// Unquoted, each parameter is then split like any other expansion.
+	// Unquoted, each parameter goes through the same two stages every other
+	// expansion does.
+	return r.elementFields(r.Params, sp), true
+}
+
+// elementFields is what an unquoted list expansion yields: the fields its
+// elements become, one element at a time.
+//
+// The two stages that follow an expansion are the dialect's — whether the
+// result is split on IFS, and whether what comes out is read as a pattern —
+// and this path was performing both without asking either. Every element went
+// through splitFields unconditionally and none was ever glob-escaped, so an
+// element holding a separator became two arguments and one holding a `*`
+// became whatever the directory happened to contain, at status 0 both times.
+// `$@`, `${a[@]}` and — since a bare array name is the elements — `$a` all
+// arrive here, which is why `for f in $files` was wrong for any filename with
+// a space in it.
+//
+// Asked per element and only where the answer could change the result, which
+// is the same discipline expansionResult follows for the scalar path: a
+// element with no separator in it is not split either way, and one with no
+// metacharacter is not a pattern either way.
+func (r *Runner) elementFields(elems []string, sp splitPolicy) []string {
 	ifs, set := r.ifs()
+	split := sp.answer(r.sem().SplitParamExpansion)
+	glob := r.sem().GlobExpansionResults
+	numericRange := r.dialect().NumericRangePattern
 	var out []string
-	for _, p := range r.Params {
-		out = append(out, splitFields(p, ifs, set)...)
+	for _, el := range elems {
+		if el == "" {
+			// An unquoted empty expansion is no field at all, which is
+			// unanimous and has nothing to do with splitting: zsh drops it
+			// with its splitting turned off exactly as bash drops it with
+			// splitting on. It used to fall out of splitFields returning
+			// nothing for the empty string, and has to be said outright now
+			// that the split is conditional.
+			continue
+		}
+		doSplit := false
+		if containsAnyOf(el, ifs) {
+			doSplit = r.ask(split, "splitting an unquoted parameter expansion")
+		}
+		// Before the split rather than after, as the scalar path does it:
+		// what the escape adds is backslashes, which no IFS puts a field
+		// boundary on.
+		if hasUnescapedMeta(el, numericRange) &&
+			!r.ask(glob, "globbing the result of an expansion") {
+			el = globEscape(el)
+		}
+		if doSplit {
+			out = append(out, splitFields(el, ifs, set)...)
+			continue
+		}
+		out = append(out, el)
 	}
-	if !r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion") {
-		out = escapeAll(out)
-	}
-	return out, true
+	return out
 }
 
 // splitPolicy says what the context a span is expanded in does with a result

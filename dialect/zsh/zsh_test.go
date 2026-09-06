@@ -842,3 +842,64 @@ func TestABareArrayNameIsTheElements(t *testing.T) {
 		}
 	}
 }
+
+// TestAnUnquotedListKeepsItsElementsWhole — the two stages that follow an
+// expansion are this shell's plainest disagreement with the others, and the
+// whole-array path was performing both without asking: every element went
+// through field splitting and none was ever glob-escaped (#981).
+//
+// Here rather than in the substrate's suite because the answers are this
+// dialect's: it splits no unquoted parameter expansion and reads no
+// expansion's result as a pattern, so it is the one shell where the bug is
+// visible. The rows #929 added avoid separators inside elements, which is why
+// they passed under it.
+//
+// Every want is the exact field count and the exact values, because the bug
+// hands back the same characters in a different number of fields.
+func TestAnUnquotedListKeepsItsElementsWhole(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		// The element holds a separator, so a shell that split would give
+		// three fields where this one gives two.
+		{`a=("b 2" c); set -- ${a[@]}; echo "n=$# [$1][$2]"`, "n=2 [b 2][c]"},
+		{`set -- "p q" r; set -- $@; echo "n=$# [$1][$2]"`, "n=2 [p q][r]"},
+		{`a=("b 2" c); set -- $a; echo "n=$# [$1][$2]"`, "n=2 [b 2][c]"},
+		{`a=("b 2" c); for f in ${a[@]}; do printf "<%s>" "$f"; done; echo`, "<b 2><c>"},
+		// Against the separators as they stand, not against whitespace.
+		{`IFS=-; a=("x-y" z); set -- ${a[@]}; echo "n=$# [$1][$2]"`, "n=2 [x-y][z]"},
+		{`IFS=-; set -- "x-y" z; set -- $@; echo "n=$# [$1][$2]"`, "n=2 [x-y][z]"},
+		// The operators are on the same path and inherit the answer.
+		{`a=("b 2" c); set -- ${a[@]:0:2}; echo "n=$# [$1][$2]"`, "n=2 [b 2][c]"},
+		{`a=("b 2" c); set -- ${a[@]#q}; echo "n=$# [$1][$2]"`, "n=2 [b 2][c]"},
+		// An empty element is no field, which is not a splitting question:
+		// it holds here, where nothing splits, exactly as it does elsewhere.
+		{`a=("" x); set -- ${a[@]}; echo "n=$# [$1]"`, "n=1 [x]"},
+		{`set -- "" x; set -- $@; echo "n=$# [$1]"`, "n=1 [x]"},
+		// The result of an expansion is not a pattern here, so an element
+		// that looks like one is handed over as its own text — with a file
+		// in the directory that it would otherwise have matched.
+		{`: > zz1; a=("zz*" other); set -- ${a[@]}; echo "n=$# [$1][$2]"`, "n=2 [zz*][other]"},
+		{`: > zz1; set -- "zz*" other; set -- $@; echo "n=$# [$1][$2]"`, "n=2 [zz*][other]"},
+		// Quoted is unchanged, which is what says the fix is about the
+		// unquoted stages and not about the elements.
+		{`a=("b 2" c); set -- "${a[@]}"; echo "n=$# [$1][$2]"`, "n=2 [b 2][c]"},
+	} {
+		f, err := syntax.Parse(tc.src, zsh.Dialect())
+		if err != nil {
+			t.Fatalf("%s: %v", tc.src, err)
+		}
+		var out bytes.Buffer
+		s, d := zsh.Semantics(), zsh.Diagnostics()
+		r := &interp.Runner{
+			Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d,
+			Dialect: presetDialect(), Dir: dir,
+		}
+		zsh.Apply(r)
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatalf("%s: %v", tc.src, err)
+		}
+		if got := strings.TrimSpace(out.String()); got != tc.want {
+			t.Errorf("%s:\n got %q\nwant %q", tc.src, got, tc.want)
+		}
+	}
+}

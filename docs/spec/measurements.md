@@ -3529,6 +3529,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/dollar-single-octal-escape` | ` [ $ \ 1 0 1 \ 0 1 0 1 \ 1 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` |
 | `core/dollar-single-unicode-escape` | ` [ $ \ u 4 1 \ u 0 0 4 1 \ U 0 0~ 0 0 0 0 5 8 ] ` | ` [ A A X ] ` | ` [ A A X ] ` | ` [ \ u 4 1 \ u 0 0 4 1 \ U 0 0 0~ 0 0 0 5 8 ] ` | ` [ A A X ] ` | ` [ A A X ] ` |
 | `core/dollar-single-unknown-escape` | ` [ $ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ q 8 ] ` | ` [ q 8 ] ` |
+| `core/a-substitution-inside-an-expansion-brings-its-own-quoting` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` |
+| `core/a-swallowed-quote-changes-the-program-rather-than-refusing-it` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` |
+| `core/what-a-nested-substitution-holds-is-not-a-delimiter` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` |
 
 - `core/dollar-single-expands-escapes` — read as bytes, because the failure mode was a literal backslash-t that looks almost right in a terminal — the quoting was recorded and nothing decoded it
   ```sh
@@ -3569,6 +3572,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/dollar-single-unknown-escape` — a backslash before a character no escape claims: bash keeps both, ksh93 and zsh drop the backslash — the axis `\c` falls to in the one shell that has no `\c`
   ```sh
   printf '[%s]' $'\q\8' | od -An -c | tr -s " "
+  ```
+- `core/a-substitution-inside-an-expansion-brings-its-own-quoting` — the quote that ends a double-quoted run is not the next `"` in the text: a `$( )` written inside one holds a *program*, so the single quotes in it quote that `"` and the run continues past it. Every shell in the panel prints the word; a scanner that reads the run as text takes the inner `"` as the closer, is left on the second `'`, and swallows the rest of the file — which is what all four dialects did, each in its own wording, until #1140. This is the shape `~/.zi/bin/lib/zsh/install.zsh` stops at on line 1389, written with `[^"]` inside a `grep` pattern
+  ```sh
+  printf '[%s]\n' "${x:-"$( echo 'a"b' )"}"
+  ```
+- `core/a-swallowed-quote-changes-the-program-rather-than-refusing-it` — the same defect with a second expansion after it, and the reason this row is not a duplicate of the one above: two of them put the stray quotes back in balance, so nothing is ever unterminated and the misreading is *silent*. The output was `[a"b} c'd]` — one field where there are two, a literal `}` that belongs to the grammar, and no diagnostic anywhere. A shell that only refused this shape would pass a corpus written from the refusal. The second expansion is the mirror of the first, a `'` inside double quotes, so neither quote character is the special one
+  ```sh
+  printf '[%s]' "${x:-"$( echo 'a"b' )"}" "${y:-"$( echo "c'd" )"}"; echo
+  ```
+- `core/what-a-nested-substitution-holds-is-not-a-delimiter` — the two neighbours the fix has to reach as well: the arithmetic spelling, which nests a `$( )` of its own, and a single-quoted `)` that closes nothing. Both are unanimous. They are here because the counting scanner got the `)` and the `}` right already when they stood at the body's own level — `${x:-"$( echo ')' )"}` parsed on either side of the change — so a case built only from those two characters measures nothing, and only the `"` inside the substitution tells the two readings apart
+  ```sh
+  printf '[%s]' "${x:-"$(( 1 + $( printf %s '"' | wc -c ) ))"}" "${y:-"$( echo 'a")b' )"}"; echo
   ```
 
 ## command language

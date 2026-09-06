@@ -1686,6 +1686,20 @@ func unescapeBackquoted(s string) string {
 // skipQuoted consumes a quoted run while scanning inside a substitution. It
 // does not build a span: the inner text is kept verbatim and re-lexed later by
 // whoever parses the substitution.
+//
+// A double-quoted run is not a run of text. A substitution written inside one
+// holds a *program*, and a program brings its own quoting: the single quotes
+// in `"$(grep '"')"` quote that `"`, so it is not the one that ends the run.
+// Skipping the run character by character reads it as the closing quote,
+// leaves the cursor on the second `'`, and takes the rest of the file as a
+// single-quoted string — which is why `${x:-"$(grep '"')"}` was refused with
+// the brace never found, in all four dialects at once (#1140). So the skip
+// steps over a nested substitution whole, exactly as scanDouble does when it
+// is building spans rather than skipping them.
+//
+// Single quotes need none of this: nothing inside them is special, which is
+// the whole of their specification, and `escapes` is the flag that already
+// separates the two.
 func (l *Lexer) skipQuoted(quote byte, escapes bool) {
 	l.advance() // opening quote
 	for !l.eof() {
@@ -1701,7 +1715,78 @@ func (l *Lexer) skipQuoted(quote byte, escapes bool) {
 			}
 			continue
 		}
+		if escapes && l.skipSubstitution() {
+			continue
+		}
 		l.advance()
+	}
+}
+
+// skipSubstitution steps over a substitution beginning at the cursor and
+// reports whether one did. It is the skipping counterpart of the spans
+// scanWord builds, and it exists for the scanners that only need to find a
+// delimiter: `$( )`, `$(( ))` and the backquoted form all hold input whose
+// quoting is its own.
+//
+// `${ }` is deliberately not one of them. Its body is a word rather than a
+// program, and what quoting means inside it is exactly where the panel stops
+// agreeing — `${x:-"${y:-'"'}"}` is accepted by bash alone and refused by the
+// other five — so it is a dialect question rather than a delimiter one, and
+// nothing here should answer it.
+func (l *Lexer) skipSubstitution() bool {
+	if l.peek() == '`' {
+		l.skipBackticks()
+		return true
+	}
+	if l.peek() != '$' || l.peekAt(1) != '(' {
+		return false
+	}
+	l.advance() // $
+	l.advance() // (
+	depth := 1
+	if l.peek() == '(' {
+		// `$(( ))`, whose two closers are counted as two open parentheses so
+		// that one loop serves both spellings. An arithmetic body cannot
+		// hold an unbalanced parenthesis, so nothing is lost by not telling
+		// them apart here.
+		l.advance()
+		depth = 2
+	}
+	l.skipToDepth(depth)
+	return true
+}
+
+// skipToDepth consumes input until the given number of parentheses have been
+// closed, tracking quoting and further nesting on the way. It is the scanning
+// rule scanParens uses to find its own `)`, factored out for the skippers,
+// and it stops at end of input rather than complaining: whoever called it is
+// inside a construct of its own and already has the unterminated one to
+// report.
+func (l *Lexer) skipToDepth(depth int) {
+	for depth > 0 && !l.eof() {
+		switch c := l.peek(); c {
+		case '\'':
+			l.skipQuoted('\'', false)
+		case '"':
+			l.skipQuoted('"', true)
+		case '`':
+			l.skipBackticks()
+		case '\\':
+			l.advance()
+			if !l.eof() {
+				l.advance()
+			}
+		case '(':
+			depth++
+			l.advance()
+		case ')':
+			depth--
+			l.advance()
+		default:
+			if !l.skipSubstitution() {
+				l.advance()
+			}
+		}
 	}
 }
 

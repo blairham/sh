@@ -1012,6 +1012,21 @@ var Corpus = []Case{
 		Why:     "a backslash before a character no escape claims: bash keeps both, ksh93 and zsh drop the backslash — the axis `\\c` falls to in the one shell that has no `\\c`",
 	},
 	{
+		ID: "core/a-substitution-inside-an-expansion-brings-its-own-quoting", Category: "quoting",
+		Snippet: `printf '[%s]\n' "${x:-"$( echo 'a"b' )"}"`,
+		Why:     "the quote that ends a double-quoted run is not the next `\"` in the text: a `$( )` written inside one holds a *program*, so the single quotes in it quote that `\"` and the run continues past it. Every shell in the panel prints the word; a scanner that reads the run as text takes the inner `\"` as the closer, is left on the second `'`, and swallows the rest of the file — which is what all four dialects did, each in its own wording, until #1140. This is the shape `~/.zi/bin/lib/zsh/install.zsh` stops at on line 1389, written with `[^\"]` inside a `grep` pattern",
+	},
+	{
+		ID: "core/a-swallowed-quote-changes-the-program-rather-than-refusing-it", Category: "quoting",
+		Snippet: `printf '[%s]' "${x:-"$( echo 'a"b' )"}" "${y:-"$( echo "c'd" )"}"; echo`,
+		Why:     "the same defect with a second expansion after it, and the reason this row is not a duplicate of the one above: two of them put the stray quotes back in balance, so nothing is ever unterminated and the misreading is *silent*. The output was `[a\"b} c'd]` — one field where there are two, a literal `}` that belongs to the grammar, and no diagnostic anywhere. A shell that only refused this shape would pass a corpus written from the refusal. The second expansion is the mirror of the first, a `'` inside double quotes, so neither quote character is the special one",
+	},
+	{
+		ID: "core/what-a-nested-substitution-holds-is-not-a-delimiter", Category: "quoting",
+		Snippet: `printf '[%s]' "${x:-"$(( 1 + $( printf %s '"' | wc -c ) ))"}" "${y:-"$( echo 'a")b' )"}"; echo`,
+		Why:     "the two neighbours the fix has to reach as well: the arithmetic spelling, which nests a `$( )` of its own, and a single-quoted `)` that closes nothing. Both are unanimous. They are here because the counting scanner got the `)` and the `}` right already when they stood at the body's own level — `${x:-\"$( echo ')' )\"}` parsed on either side of the change — so a case built only from those two characters measures nothing, and only the `\"` inside the substitution tells the two readings apart",
+	},
+	{
 		ID: "core/append-assignment", Category: "parameters",
 		Snippet: `x=a; x+=b; echo "[$x]"`,
 		Why:     "dash has no += and reads the whole word as a command name, which is the divergence — the other three append",

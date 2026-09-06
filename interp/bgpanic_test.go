@@ -52,12 +52,7 @@ func TestABugOnTheShellsOwnGoroutineCostsOnlyThatGoroutine(t *testing.T) {
 		// closed by an element that never got to close it itself.
 		{
 			name: "a pipeline element",
-			// `cat`'s own error stream is sent away rather than left
-			// pointing at the shell's: a child whose stderr is not a file
-			// is copied into it by os/exec, on a goroutine with no share of
-			// the lock interp puts over a caller's writer. That is #735,
-			// and it would race what this test reads.
-			src:  `boom | cat 2>/dev/null; echo "after=$?"`,
+			src:  `boom | cat; echo "after=$?"`,
 			want: "after=0\n",
 		},
 		// The status of an element that stopped without finishing, which is

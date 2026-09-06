@@ -14811,6 +14811,138 @@
         "TimedOut": false
       }
     },
+    "compgen/a-function-listing-is-the-persons-own": {
+      "bash": {
+        "Stdout": "0~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "0~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "0~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "0~0",
+        "Stderr": "\u003cshell\u003e: 1: compgen: not found~\u003cshell\u003e: 1: compgen: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "0~0",
+        "Stderr": "\u003cshell\u003e: compgen: not found~\u003cshell\u003e: compgen: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "0~0",
+        "Stderr": "\u003cshell\u003e:1: command not found: compgen~\u003cshell\u003e:1: command not found: compgen",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "compgen/a-prefix-only-the-shells-own-names-have": {
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: compgen",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "compgen/a-prefix-the-person-defined-over-the-shells-name": {
+      "bash": {
+        "Stdout": "pushd~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "pushd~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "pushd~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: compgen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: compgen",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "compgen/an-action-name-that-is-not-one": {
       "bash": {
         "Stdout": "st=2",

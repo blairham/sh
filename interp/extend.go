@@ -276,6 +276,16 @@ func (r *Runner) KnownBuiltin(name string) bool {
 }
 
 // FuncNames is every function this runner has defined, sorted.
+//
+// Every function *callable*, including the ones a dialect's prelude defined,
+// which is what an embedder completing a command word wants: the line editor
+// builds its command list from this and [Runner.BuiltinNames], and `pushd`
+// is in neither if this one narrows. A *listing* of "what functions exist"
+// wants the other set — the script's own, with the shell's left out — and
+// that is scriptFuncNames, which every listing and `compgen -A function` ask
+// instead (#1035, #1081). Two callers want two sets; the predicate behind
+// both is Runner.speaksForTheShell, so there is still one notion of whose a
+// function is.
 func (r *Runner) FuncNames() []string {
 	seen := make(map[string]bool, len(r.funcs))
 	for name := range r.funcs {

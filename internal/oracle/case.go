@@ -8130,6 +8130,21 @@ echo after`,
 		Why:     "`invalid action name` at 2 — the wording that separates a typo from a shell that is missing something, which is the distinction the action table exists to keep",
 	},
 	{
+		ID: "compgen/a-function-listing-is-the-persons-own", Category: "builtins",
+		Snippet: `f() { :; }; compgen -A function | grep -cE '^dirs$|^popd$|^pushd$'; compgen -A function | grep -c "^f$"`,
+		Why:     "who owns a name a completion generator is offered, graded as two counts of a slice the case sets itself rather than as a listing — a listing grades everything a build happens to have defined. Both counts are unanimous where the command exists at all: 0 for the shell's own directory-stack commands, which are builtins in bash and therefore not functions, and 1 for the function the snippet wrote. Ours counted 3 on the first line, because a dialect written as shell has them as prelude functions and this generator read every function callable (#1081). The other three shells have no `compgen`, so both counts are grep's 0 and the pipeline's 1. `grep -cE` and not a BRE alternation: `^a$` + BRE alternation anchors only its last branch on this platform's grep, so an anchored BRE here counts 1 for three matching lines and could not have graded the first line at all",
+	},
+	{
+		ID: "compgen/a-prefix-only-the-shells-own-names-have", Category: "builtins",
+		Snippet: `compgen -A function pu; echo "st=$?"`,
+		Why:     "the silent half of the row above, and the one a status cannot hide. `pu` matches nothing in bash — no function begins with it — so the answer is nothing at **1**, and ours wrote `pushd` at **0**: a completer asking whether there is anything to offer was told yes and handed a name the person never defined. Nothing on stderr in any column, which is what makes it the silent kind",
+	},
+	{
+		ID: "compgen/a-prefix-the-person-defined-over-the-shells-name", Category: "builtins",
+		Snippet: `pushd() { :; }; compgen -A function pu; echo "st=$?"`,
+		Why:     "the same prefix once the person has written their own `pushd`, which is the control the row above is read against: bash offers it at 0, because there the function shadows the builtin and really is a function. So the answer turns on whose declaration is standing rather than on the name, which is the rule #603 and #1035 already set — and a fix that suppressed the name outright would pass the row above and fail this one",
+	},
+	{
 		ID: "compgen/an-action-this-shell-does-not-generate", Category: "builtins",
 		Snippet: `compgen -A alias zzzznosuch; echo "st=$?"`,
 		Why:     "bash generates it and answers 1 for no match; this shell refuses it as not implemented at 2, and the divergence is recorded here deliberately — an action generated from a guess would be a promise the shell cannot keep, and the honest refusal is the answer docs/spec/semantics.md scopes",

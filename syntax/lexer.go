@@ -1197,6 +1197,12 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	}
 
 	// Where the loop stopped, kept before anything below moves the cursor.
+	//
+	// Only the refusal moves it, and a refused span is nobody's to read
+	// today — a mutant taking the span from the moved cursor is
+	// indistinguishable end to end. The span is still cut here, because the
+	// alternative is a Value that silently becomes the rest of the file for
+	// the first caller that reads a tree after a parse failure.
 	stop := l.off
 
 	if holdsCommands(kind) {
@@ -1230,7 +1236,11 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		//
 		// `depth == 0` because the loop above may have run out of input
 		// instead of finding the `)`, which is already reported and is not
-		// this.
+		// this. Nothing can observe the difference — ranOut keeps the first
+		// call and the fail helpers keep the first error, so the second pass
+		// would change nothing — and a mutant without it is byte-identical
+		// across every unterminated shape in all four dialects. It stays
+		// because "already reported" is the reason, not the idempotence.
 		//
 		// The remark is kept either way, and deliberately. It is what says a
 		// body reached the end of this text, so the nesting depends on it:

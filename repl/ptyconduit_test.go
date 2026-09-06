@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -602,4 +603,111 @@ func TestTakeOutputDrainsBeforeItTakes(t *testing.T) {
 	if n := len(got.Text); n != chunks*size {
 		t.Errorf("the body is %d bytes, want %d", n, chunks*size)
 	}
+}
+
+// The inner terminal is the size of the outer one, asked by a child.
+//
+// Without this a full-screen program asks fd 1 how wide the terminal is and is
+// told 0 by 0 — which is worse than a wrong answer, because a program that gets
+// zero draws nothing and a program that gets eighty draws something. A fresh
+// pseudo-terminal pair is zero by zero, so this is a thing the shell has to do
+// and not a thing it gets.
+//
+// The session's terminal is 40 by 200, which is not any default: 24 by 80 would
+// pass for a conduit that was never sized if anything anywhere filled that in.
+func TestTheInnerTerminalHasTheOuterOnesSize(t *testing.T) {
+	session := atACapturingPrompt(t)
+	defer session.finish()
+
+	// `stty size` prints rows then columns. The typed line does not contain
+	// "40 200", so the wait is answered by the child and not by the echo.
+	session.typeLine(`/bin/sh -c 'stty size <&1'`)
+	session.waitForOutput("40 200", "the child reading the size of its own standard output")
+}
+
+// And it follows the outer one, which is the half a single sizing at startup
+// would not do.
+//
+// Driven by a real SIGWINCH rather than by calling resize directly, because
+// the signal is the wiring: a conduit that sized itself once and never
+// registered for the signal passes every assertion that only calls resize.
+//
+// The signal is sent to this process on purpose. The kernel sends it to the
+// foreground process group of a terminal that changed size, and a test process
+// is not in this pseudo-terminal's session, so nothing would arrive on its own.
+func TestTheInnerTerminalFollowsAResize(t *testing.T) {
+	sink := &syncBuffer{}
+	control, tty, err := pty.Open()
+	if err != nil {
+		t.Skipf("no pseudo-terminal: %v", err)
+	}
+	defer func() { _ = control.Close() }()
+	defer func() { _ = tty.Close() }()
+	if err := pty.SetSize(tty, 40, 200); err != nil {
+		t.Fatal(err)
+	}
+	conduit, err := newPtyConduit(tty, sink, func(w io.Writer) io.Writer { return w })
+	if err != nil {
+		t.Skipf("no conduit: %v", err)
+	}
+	defer conduit.close()
+
+	if rows, cols := terminalSize(conduit.Stream()); rows != 40 || cols != 200 {
+		t.Fatalf("the inner terminal opened at %dx%d, want 40x200", rows, cols)
+	}
+	if err := pty.SetSize(tty, 12, 132); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Kill(os.Getpid(), syscall.SIGWINCH); err != nil {
+		t.Fatal(err)
+	}
+	// The handler runs in a goroutine of its own, so this waits for the state
+	// it is meant to reach rather than assuming it has.
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
+		if rows, cols := terminalSize(conduit.Stream()); rows == 12 && cols == 132 {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	rows, cols := terminalSize(conduit.Stream())
+	t.Errorf("the inner terminal is %dx%d after a resize to 12x132", rows, cols)
+}
+
+// Closing the conduit lets what is in it reach the terminal first.
+//
+// The last block of a session is the case: a command finishes, the session
+// ends, and whatever is still in the conduit is the tail of what the person
+// asked for. A close that stopped the pump instead of waiting for it would
+// drop exactly that, and drop it silently — the shell has already exited.
+//
+// Same slow sink, so a close that does not wait cannot have delivered
+// everything.
+func TestClosingWaitsForWhatIsStillInTheConduit(t *testing.T) {
+	sink := &slowSink{}
+	control, tty, err := pty.Open()
+	if err != nil {
+		t.Skipf("no pseudo-terminal: %v", err)
+	}
+	defer func() { _ = control.Close() }()
+	defer func() { _ = tty.Close() }()
+	conduit, err := newPtyConduit(tty, sink, func(w io.Writer) io.Writer { return w })
+	if err != nil {
+		t.Skipf("no conduit: %v", err)
+	}
+
+	const chunks, size = 64, 4096
+	payload := bytes.Repeat([]byte("z"), size)
+	for range chunks {
+		if _, err := conduit.Stream().Write(payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	conduit.close()
+
+	if got, want := sink.len(), chunks*size; got != want {
+		t.Errorf("the terminal has %d bytes after the close, want %d — the close did not wait", got, want)
+	}
+	// And twice is once: a session that closed a conduit on its way out and
+	// then deferred a close as well must not wait for a pump that has gone.
+	conduit.close()
 }

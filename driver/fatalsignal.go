@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build !darwin
-
 package driver
 
 import (
@@ -40,10 +38,16 @@ import (
 // same restore-and-raise the self-signal path already uses, so the two roads
 // end in the same place.
 //
-// Not on darwin, and fatalsignal_darwin.go is where that is measured and
-// argued. Asking os/signal for a signal there makes the runtime open a pipe to
-// carry it, on descriptors low enough for a script to name — and `exec 3>f`
-// then writes over the runtime's own end of it.
+// On every platform, which it was not: darwin had a file of its own saying the
+// front end must not listen there, because asking os/signal for a signal makes
+// that runtime open a *pipe* to carry it, on descriptors low enough for a
+// script to name — and `exec 3>f` then wrote over the runtime's own end of it,
+// killing the shell where it was about to become the command. That was #799.
+// driver/lowfds_unix.go keeps the runtime above every number a script can
+// name, so the pipe is out of reach and this file has no exception left to
+// make. Five of the eight arrive on darwin rather than all eight, for a
+// reason that is the kernel's and not ours; driver/die_test.go's
+// reachesTheFrontEnd has it measured.
 
 // fatalSignals are the ones the Go runtime treats as throwing: it prints a
 // goroutine dump and exits rather than letting the default action run.

@@ -227,10 +227,21 @@ func TestThePipesNameIsExemptOnlyWhileItsCommandRuns(t *testing.T) {
 	// command *does* have a live substitution — so a recognition that matched
 	// on the directory would wave through a write to a sibling path the
 	// script captured earlier, which is a hole in the shape of a fix.
-	// The live pipe is named by an *earlier redirect* of the same command, so
-	// it is registered by the time the second redirect opens its target.
-	sibling := `p=$(echo <(true)); /bin/cat < <(true) > "$p"; echo "after:$?"`
-	_, errs, _ = gated(t, sibling, containing(t, t.TempDir()), nil)
+	// Two pipes of the *same* shell, which is what makes this the case a
+	// recognition matching on the directory would wave through: a command
+	// substitution gets a temporary directory of its own, so a path captured
+	// through one is never a neighbour of anything. The path is written to a
+	// file and read back with `read`, both in this shell.
+	//
+	// The live pipe is named by an *earlier redirect* of the same command,
+	// because argument words expand after the redirects are applied — so a
+	// substitution in the operand position is not registered yet when the
+	// redirect opens its target.
+	sibling := "/bin/echo <(true) > out\n" +
+		"read p < out\n" +
+		`/bin/cat < <(true) > "$p"` + "\n"
+	sout, errs, _ := gated(t, sibling, containing(t, t.TempDir()), nil)
+	t.Logf("sibling: out=%q errs=%q", sout, errs)
 	if !strings.Contains(errs, "refused") {
 		t.Errorf("a write to a neighbour of a live pipe was allowed: %q", errs)
 	}

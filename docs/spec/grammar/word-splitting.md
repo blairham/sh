@@ -157,6 +157,58 @@ wrong.
 An unquoted expansion of an empty value vanishes. Quoting it produces one
 empty field. All four shells agree.
 
+## `$@` and `$*` unquoted
+
+Without quotes the two are the same expansion in every shell measured,
+with one shape excepted below — and *which* expansion is a dialect's
+answer, not a fact.
+
+bash, bash 3.2 and bash as `sh` make the list one string first, joining
+the elements on the **first character of `IFS`**, and split that. zsh,
+ksh93 and dash split each element on its own and never join. The two
+readings agree under a whitespace `IFS`, which is why the difference is
+easy to miss.
+
+Measured with `IFS=:`, printing the field count with the fields:
+
+| parameters | bash | ksh93 | dash | zsh | zsh + `shwordsplit` |
+| --- | --- | --- | --- | --- | --- |
+| `x "" y` | `3 [x][][y]` | `2 [x][y]` | `2 [x][y]` | `2 [x][y]` | `3 [x][][y]` |
+| `x y ""` | `2 [x][y]` | `3 [x][y][]` | `2 [x][y]` | `2 [x][y]` | `3 [x][y][]` |
+| `"x:" y` | `3 [x][][y]` | `2 [x][y]` | `2 [x][y]` | `2 [x:][y]` | `3 [x][][y]` |
+| `":x" y` | `3 [][x][y]` | `3 [][x][y]` | `3 [][x][y]` | `2 [:x][y]` | `3 [][x][y]` |
+
+Every one of bash's answers is the scalar split of the joined string —
+`x::y`, `x:y:`, `x::y`, `:x:y` — which is what says it joins rather than
+that it has a second rule about empty elements. The rule has three faces
+and they must not be modeled separately:
+
+- an empty element **between** others survives the join, because two
+  separators meet and the field between them is a field;
+- an empty element at the **end** does not, because the join puts a
+  trailing separator there and a trailing delimiter is absorbed (see the
+  leading/trailing asymmetry above);
+- an element that **ends in a separator** makes an empty field with
+  nothing empty anywhere, because its separator meets the join's.
+
+zsh is the shell that shows the join is real: with its splitting off it
+answers `[x:][y]` where no arrangement of the splitting answer can, since
+joining would give one field and it gives two.
+
+The excepted shape is ksh93's, and it is the second row: a **trailing**
+empty element is one field for `$@` there and none for `$*`, so ksh93 is
+the only shell in the panel where the two unquoted spellings part. It is
+also the only row neither reading explains — dropping the empty element
+gives two fields and keeping it gives three for both spellings, and
+ksh93 gives three for one and two for the other.
+
+Two guards. There is nothing to join with when `IFS` is set and empty —
+`IFS=""; set -- x y` is two fields for `$@` and `$*` alike in all four,
+where joining would leave one — and nothing to join when the list has one
+element. And the splitting answer stands in front of the join: with
+splitting off there is nothing to undo it, and zsh gives one field per
+element rather than one field.
+
 ## `"$@"` and `"$*"`
 
 Special parameters, and the only place where quoting produces *more* than

@@ -412,6 +412,44 @@ type Semantics struct {
 	// dies by it.
 	QuitIgnoredWhenNotInteractive Answer
 
+	// SubshellRunsOnAfterSignallingTheShell lets the rest of a subshell's
+	// body run after something inside it has sent the whole shell a fatal
+	// signal — `(kill -TERM $$; echo inner)`. True in bash, dash and zsh;
+	// false in ksh93.
+	//
+	// The shell ends either way, and that half is unanimous. Measured
+	// 2026-09-05, `(kill -TERM $$; echo inner); echo outer` ends the shell by
+	// the signal in all six panel members, `outer` is printed by none of
+	// them, and the answer is the same on twenty-five runs of each under
+	// load — this is not a delivery race. What splits is `inner`: bash
+	// 5.3.15, bash 3.2.57, bash 3.2 run as `sh`, dash and zsh 5.9.2 print it
+	// and ksh93u+ does not.
+	//
+	// The reason is the opposite of the obvious one. Measured with a child
+	// started inside the subshell and its parent process id read back:
+	// bash, dash and zsh give it a **process of its own**, so `$$` names the
+	// parent, the child never receives the signal, and it finishes its body
+	// while the parent dies. ksh93 runs the subshell **in the shell's own
+	// process**, so `kill -TERM $$` is a self-signal landing on the very
+	// process that was about to run `echo inner`, and there is nothing left
+	// to run it. So the shell that keeps going is the one that forked, and
+	// ksh93 is the panel's only member here that does not.
+	//
+	// Nothing in this implementation forks for a subshell either, which is
+	// what makes this an axis rather than a consequence: the answer has to be
+	// chosen rather than inherited from the architecture, and choosing the
+	// majority is choosing to behave like the shells that fork.
+	//
+	// Only a subshell. Measured on the same signal at the top level, in a
+	// brace group, in a function body and in a `while` body: all six shells
+	// stop at once and print nothing, so there is no question to ask
+	// anywhere but here.
+	//
+	// The preset says yes. POSIX has `( )` execute "in a subshell
+	// environment" and describes that environment as a copy, which is the
+	// forking reading, and it is five of the six.
+	SubshellRunsOnAfterSignallingTheShell Answer
+
 	// HangupIsAnOrderlyExit makes an untrapped SIGHUP end the shell the way
 	// `exit 1` would rather than by the signal's default action.
 	//
@@ -3338,6 +3376,11 @@ func PosixSemantics() Semantics {
 		TerminalTestRequiresANumber:      Yes,
 		FcEmptyHistoryIsAnError:          No,
 		JobControlAbsenceIsReportedFirst: No,
+		// POSIX has `( )` run "in a subshell environment" and describes that
+		// environment as a copy, which is the forking reading: the copy is
+		// not the process the signal was aimed at, so it finishes its body.
+		// Five of the six as well.
+		SubshellRunsOnAfterSignallingTheShell: Yes,
 		// The standard describes `exit` as exiting and says nothing about a
 		// job left stopped, so the base leaves; bash and zsh, which stay and
 		// warn, override.

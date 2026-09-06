@@ -29,6 +29,7 @@ func trapSem() Semantics {
 	s.BackgroundJobKeepsTrapListing = No
 	s.KeptTrapListingIncludesExit = Yes
 	s.SubshellHidesInheritedIgnoredTraps = No
+	s.SubshellRunsOnAfterSignallingTheShell = Yes
 	return s
 }
 
@@ -215,6 +216,53 @@ func TestSubshellSelfKillReachesTheParent(t *testing.T) {
 	got, st = run(t, `(trap 'echo got' INT; kill -INT $$; echo sub); echo done`, withSem(s))
 	if got != "sub\n" || st != 130 {
 		t.Errorf("locally trapped: got %q status %d, want %q status 130", got, st, "sub\n")
+	}
+}
+
+// And the dialect that runs its subshells in the shell's own process stops
+// there instead, which is the whole of what the panel disagrees about.
+//
+// Measured 2026-09-05: `(kill -TERM $$; echo inner); echo outer` prints
+// `inner` and dies in bash 5.3.15, bash 3.2.57, bash 3.2 run as `sh`, dash and
+// zsh 5.9.2, and prints nothing and dies in ksh93u+. The shell ends and
+// `outer` goes unprinted in all six, so what the axis moves is the one echo
+// between them.
+//
+// Not a delivery race: the same answer on twenty-five runs of each under load,
+// and a `sleep 0.3` between the kill and the echo does not change it. What
+// separates ksh93 is that it gives the subshell no process of its own, so the
+// signal lands on the very thing that was going to run the echo. Nothing here
+// forks either, which is why the answer has to be chosen.
+func TestASubshellMayStopWhereItSignalledTheShell(t *testing.T) {
+	s := trapSem()
+	s.SubshellRunsOnAfterSignallingTheShell = No
+	got, st := run(t, `(kill -INT $$; echo sub); echo done`, withSem(s))
+	if got != "" || st != 130 {
+		t.Errorf("got %q status %d, want no output and status 130 — ksh93's shape", got, st)
+	}
+	// And the parent still stops: what the axis moves is the subshell's own
+	// next command, never whether the shell ends.
+	got, st = run(t, `(kill -INT $$; echo sub)
+echo done`, withSem(s))
+	if got != "" || st != 130 {
+		t.Errorf("with a command after it: got %q status %d, want no output and status 130", got, st)
+	}
+}
+
+// An unanswered axis is refused rather than guessed at, which is the rule for
+// every axis read while the script is running: this one is reached only by a
+// `kill` at the shell's own pid from inside a subshell, so nothing else pays
+// for it.
+func TestAnUnansweredSubshellSignalAxisIsRefused(t *testing.T) {
+	s := trapSem()
+	s.SubshellRunsOnAfterSignallingTheShell = Unspecified
+	got, _ := run(t, `(kill -INT $$; echo sub); echo done`, withSem(s))
+	if !strings.Contains(got, "no dialect was chosen") {
+		t.Errorf("got %q, want the axis refused", got)
+	}
+	// And a subshell that signals nothing never reaches it.
+	if out, st := run(t, `(echo hi); echo done`, withSem(s)); st != 0 || out != "hi\ndone\n" {
+		t.Errorf("a plain subshell should need no answer: got %q status %d", out, st)
 	}
 }
 

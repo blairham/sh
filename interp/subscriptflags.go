@@ -1,0 +1,300 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package interp
+
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
+
+// A subscript's own flag group — `${a[(re)value]}` — selects an element by
+// *searching* rather than by counting. One grammar in the panel has it
+// (syntax.Dialect.ArraySubscriptFlags), so what the letters mean here is that
+// shell's answer, measured with the binary and recorded in
+// docs/spec/grammar/parameter-expansion.md.
+//
+// Four letters do the selecting and they are mutually exclusive — the last
+// one written wins, measured: `(ri)` is an index and `(ir)` an element:
+//
+//	(r)  the first element the operand matches, or nothing
+//	(R)  the last such element
+//	(i)  the index of the first match, or one past the last element
+//	(I)  the index of the last match, or one before the first
+//
+// and three modify the search: `(e)` makes the operand a literal string
+// rather than a pattern, `(n:expr:)` asks for the expr'th match rather than
+// the first, and `(b:expr:)` moves where the search starts.
+//
+// A group with *no* selecting letter changes nothing about the reading:
+// `${a[()2]}` and `${a[(e)2]}` are both the second element, measured. That is
+// why this reports whether it handled the subscript rather than answering
+// every flagged one — the ordinary reading is still the right one for a group
+// that only says how a search it did not ask for would have run.
+
+// implementedSubscriptFlags are the letters this carries. The other six the
+// grammar accepts are refused *by name* when the subscript is reached, for
+// the reason implementedParamFlags gives: the only thing worse than refusing
+// a flag is answering it wrong at status 0, and a subscript flag's wrong
+// answer is a plausible element rather than a visible failure.
+const implementedSubscriptFlags = "rRiIenb"
+
+// searchSubscriptFlags are the four that select. Written in no particular
+// order; only which of them came last matters.
+const searchSubscriptFlags = "rRiI"
+
+// flaggedSubscript answers a subscript that carries a flag group, reporting
+// whether it answered at all.
+func (r *Runner) flaggedSubscript(e *syntax.ParamExpr) ([]string, bool) {
+	g := e.IndexFlags
+	for _, c := range g.Flags {
+		if !strings.ContainsRune(implementedSubscriptFlags, c) {
+			r.refuseSubscriptFlag(e, string(c), "")
+			return nil, true
+		}
+	}
+	search := lastOf(g.Flags, searchSubscriptFlags)
+	if search == 0 {
+		// Nothing to select by, so the operand is an ordinary subscript.
+		return nil, false
+	}
+	if _, isAssoc := r.AssocArrays[e.Name]; isAssoc {
+		// A search over an associative array reads its *keys* for `i` and
+		// `I` and its *values* for `r` and `R`, and `I` and `R` there answer
+		// with every match rather than one — a different construct wearing
+		// the same letters, and one whose order is the hash's. Refused by
+		// name rather than answered with the ordered array's rule, which
+		// would be a plausible wrong element.
+		r.refuseSubscriptFlag(e, string(search), " for an associative array")
+		return nil, true
+	}
+	elems, scalar, held := r.subscriptTarget(e)
+	if !held {
+		// A name holding nothing is searched and found to hold nothing:
+		// measured, `${nosucharray[(i)x]}` is empty rather than the
+		// one-past-the-end an *empty* array answers with.
+		return nil, true
+	}
+	if scalar {
+		// A search over a plain string is a search for a *substring*, and
+		// what comes back is a character position rather than an element.
+		// Refused by name for the reason the associative array is.
+		r.refuseSubscriptFlag(e, string(search), " for a scalar")
+		return nil, true
+	}
+	at, found := r.searchElements(g, search, elems)
+	// The index is the base plus the element's *position*, which is the same
+	// thing only while an array has no gaps. It has none in the grammar that
+	// has this construct — measured, `a=(x); a[5]=y` there leaves five
+	// elements and `${a[(i)y]}` is 5 — and a grammar that kept its gaps would
+	// need the stored subscript rather than the position. Written down here
+	// because nothing in this file would notice the difference.
+	base := r.arrayBase()
+	switch search {
+	case 'r', 'R':
+		if !found {
+			return nil, true
+		}
+		return []string{elems[at]}, true
+	case 'i':
+		// One past the last element when nothing matched, which is what
+		// makes `a[(i)new]=v` an append in the shell that has the construct.
+		if !found {
+			return []string{itoa(base + len(elems))}, true
+		}
+	default: // 'I'
+		// One before the first, which is the index no element has.
+		if !found {
+			return []string{itoa(base - 1)}, true
+		}
+	}
+	return []string{itoa(base + at)}, true
+}
+
+// searchElements walks the elements the way the group asks and returns the
+// position of the match it wanted, 0-based.
+func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []string) (at int, found bool) {
+	matches := r.subscriptMatcher(g)
+	back := search == 'R' || search == 'I'
+	from, within := r.searchStart(g, len(elems), back)
+	if !within {
+		// A start outside the array is not clamped to its end: measured,
+		// with five elements `${a[(Ib:6:)*a]}` is 0 and `${a[(ib:6:)*a]}` is
+		// 6, so neither direction searches at all.
+		return 0, false
+	}
+	want := r.searchNth(g)
+	step := 1
+	if back {
+		step = -1
+	}
+	for i := from; i >= 0 && i < len(elems); i += step {
+		if !matches(elems[i]) {
+			continue
+		}
+		if want--; want == 0 {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// subscriptMatcher is the test one element has to pass, built once for the
+// whole walk.
+//
+// The operand is a pattern unless `(e)` says otherwise, and in either case it
+// is the subscript's text *as written* with its substitutions performed —
+// there is no quoting inside a subscript at all. Measured, three ways:
+// `${a[(r)"beta"]}` finds an element whose value is the six characters
+// `"beta"` and not the four; `${a[(r)"$h"]}` with `h=beta` finds that same
+// six-character element, so the quotes stayed while the value was
+// substituted; and `${a[(re)"beta"]}` does the same under exact matching, so
+// this is the operand's rule rather than the pattern's.
+//
+// The consequence for the pattern half is that a substituted value's
+// metacharacters are simply live, with nothing to override: `g='be*';
+// ${a[(r)$g]}` finds `beta` in the shell that has the construct while
+// `${(@)a:#$g}` in the same shell removes nothing, and the difference is that
+// only one of the two is a quoting context.
+func (r *Runner) subscriptMatcher(g *syntax.SubscriptFlags) func(string) bool {
+	operand := r.searchOperand(g.Arg)
+	if strings.ContainsRune(g.Flags, 'e') {
+		return func(el string) bool { return el == operand }
+	}
+	return func(el string) bool { return r.matchPatternR(operand, el, false) }
+}
+
+// searchOperand renders a subscript search's operand: every substitution
+// performed, and every other character — quotes and backslashes included —
+// left exactly where it was written.
+//
+// The quote characters are put back because the *lexer* took them off. It
+// reads the operand as it reads any word, which is right for the ordinary
+// subscript behind a flag group and wrong for the search in front of it, and
+// a word is the only shape that carries where a substitution is.
+func (r *Runner) searchOperand(w *syntax.Word) string {
+	if w == nil {
+		return ""
+	}
+	var b strings.Builder
+	open := syntax.Unquoted
+	quote := func(q syntax.Quoting) string {
+		switch q {
+		case syntax.SingleQuoted:
+			return "'"
+		case syntax.DoubleQuoted:
+			return `"`
+		}
+		return ""
+	}
+	for _, s := range w.Spans {
+		// A run of spans inside one pair of quotes is one pair of quotes:
+		// `"ab$h"` is `"ab` plus the value plus `"`, not a pair around each
+		// of its three pieces.
+		q := s.Quoting
+		if q == syntax.BackslashQuoted || q == syntax.DollarSingleQuoted {
+			q = syntax.Unquoted
+		}
+		if q != open {
+			b.WriteString(quote(open))
+			b.WriteString(quote(q))
+			open = q
+		}
+		switch s.Quoting {
+		case syntax.BackslashQuoted:
+			// One character each, so this cannot use the run above: `\*\?`
+			// is two backslashes and not one.
+			b.WriteString(`\` + s.Value)
+			continue
+		case syntax.DollarSingleQuoted:
+			b.WriteString("$'" + s.Value + "'")
+			continue
+		}
+		switch s.Kind {
+		case syntax.ParamExp:
+			b.WriteString(r.expandParam(s.Param))
+		case syntax.CommandSubst:
+			b.WriteString(r.commandSubst(r.ctx, s))
+		case syntax.ArithSubst:
+			v, ok := r.arithSpanValue(s)
+			if !ok {
+				return ""
+			}
+			b.WriteString(v)
+		default:
+			b.WriteString(s.Value)
+		}
+	}
+	b.WriteString(quote(open))
+	return b.String()
+}
+
+// searchStart is the 0-based element the walk begins at, and whether that is
+// an element at all.
+//
+// `(b:expr:)` names it in the array's own base, a negative one counting back
+// from the end — measured, with five elements `b:-1:` is the fifth and
+// `b:-5:` the first. Without the flag the walk begins at whichever end the
+// direction implies.
+func (r *Runner) searchStart(g *syntax.SubscriptFlags, n int, back bool) (from int, within bool) {
+	if g.Begin == "" {
+		if back {
+			return n - 1, n > 0
+		}
+		return 0, n > 0
+	}
+	begin, ok := r.subscriptIndex(g.Begin)
+	if !ok {
+		return 0, false
+	}
+	base := r.arrayBase()
+	if begin < 0 {
+		// The same counting an ordinary negative subscript does, so `b:-1:`
+		// and `${a[-1]}` name one element.
+		from = n + begin
+	} else {
+		from = begin - base
+		if from < 0 {
+			// Measured: `b:0:` where the base is 1 starts at the first
+			// element rather than nowhere.
+			from = 0
+		}
+	}
+	return from, from >= 0 && from < n
+}
+
+// searchNth is which match the group asked for, counting from 1.
+//
+// `(n:expr:)` is an arithmetic expression and not a numeral — measured,
+// `(rn:1+1:)` is the second match — and anything below one is one, which is
+// also measured: `(rn:0:)` is the first.
+func (r *Runner) searchNth(g *syntax.SubscriptFlags) int {
+	if g.Nth == "" {
+		return 1
+	}
+	nth, ok := r.subscriptIndex(g.Nth)
+	if !ok || nth < 1 {
+		return 1
+	}
+	return nth
+}
+
+// refuseSubscriptFlag says which flag was not carried, naming the subscript
+// as it was written.
+func (r *Runner) refuseSubscriptFlag(e *syntax.ParamExpr, flag, where string) {
+	r.diagf("${%s}: the (%s) subscript flag is not implemented%s\n",
+		r.paramSubject(e), flag, where)
+	r.expandErr = true
+}
+
+// lastOf is the last character of s that is in set, or 0 for none.
+func lastOf(s, set string) byte {
+	last := byte(0)
+	for i := 0; i < len(s); i++ {
+		if strings.IndexByte(set, s[i]) >= 0 {
+			last = s[i]
+		}
+	}
+	return last
+}

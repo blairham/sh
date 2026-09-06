@@ -223,7 +223,7 @@ func (r *Runner) flagKeepsFields(e *syntax.ParamExpr) bool {
 	if strings.ContainsRune(e.Flags, '@') || e.Name == "@" {
 		return true
 	}
-	return e.Index != nil && r.subscriptText(e.Index) == "@"
+	return e.Index != nil && r.atArrayIndex(e)
 }
 
 // flagJoinSep is what joining uses: the `j` argument when one was given, and
@@ -264,7 +264,7 @@ func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool
 	}
 	if e.Index != nil {
 		if list, lok := r.arraySubscript(e); lok {
-			if wholeArraySubscript(r.subscriptText(e.Index)) {
+			if r.wholeArrayIndex(e) {
 				return list, list != nil, true
 			}
 			return []string{strings.Join(list, " ")}, list != nil, false
@@ -338,7 +338,7 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 			// The side effect stores the word as written; the flags apply
 			// only to what is substituted — measured, `${(U)u:=def}` leaves
 			// `def` behind and expands to `DEF`.
-			if e.Index != nil && !wholeArraySubscript(r.subscriptText(e.Index)) {
+			if e.Index != nil && !r.wholeArrayIndex(e) {
 				r.assignSubscript(e, v)
 			} else if e.Name != "" {
 				r.setVar(e.Name, v)

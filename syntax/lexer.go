@@ -2005,7 +2005,22 @@ func (l *Lexer) bareSubscript(name string, q Quoting) {
 		return
 	}
 	depth := 0
+	// A subscript may open with a flag group of its own, and the `(` that
+	// opens one would otherwise end the word: `$a[(r)b]` was a syntax error
+	// naming the parenthesis, which is worse than a wrong answer because it
+	// takes the whole file with it. The group is stepped over as a unit, so
+	// only a group the grammar can actually read is protected — anything
+	// else still ends the word exactly where it did.
+	past := -1
+	if l.dialect.ArraySubscriptFlags {
+		if _, rest, isGroup := scanSubscriptFlags(l.src[l.off+1:]); isGroup {
+			past = len(l.src) - len(rest)
+		}
+	}
 	for i := l.off; i < len(l.src); i++ {
+		if i > l.off && i < past {
+			continue
+		}
 		switch c := l.src[i]; {
 		case c == '[':
 			depth++

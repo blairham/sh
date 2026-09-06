@@ -101,6 +101,15 @@ func Dialect() syntax.Dialect {
 	// refuses it while reading. `~/.zi/bin/zi.zsh` uses it eighteen times in
 	// nineteen lines, and a refusal there leaves eighteen variables empty.
 	d.ParamTildeFlag = true
+	// A subscript's own parenthesized flag group: `${a[(re)value]}`, the
+	// first element equal to the operand. This shell alone — measured
+	// 2026-09-06, bash 5.3, bash 3.2, bash-as-sh and ksh93 all read the same
+	// text as arithmetic and fail there, and dash has no arrays to subscript
+	// — and it is additive rather than a conflict because this shell reads a
+	// group it does not recognize as arithmetic too. `~/.zi/bin/zi.zsh` has
+	// sixty-four of them, six of which stand between the plugin manager and
+	// its first definition.
+	d.ArraySubscriptFlags = true
 	d.ParamElementSelection = true
 	// The length may carry an operator here, and it measures what the
 	// operator *leaves*: `v=abc; echo ${#v#a}` is 2. bash, bash 3.2, bash as

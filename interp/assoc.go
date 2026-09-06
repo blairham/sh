@@ -93,7 +93,7 @@ func (r *Runner) unsetAssocElem(name, key string) {
 // the element stored under the three characters, measured unanimous in the
 // shells that have the attribute.
 func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
-	switch key := r.subscriptText(e.Index); key {
+	switch key := r.subscriptText(e.Subscript()); key {
 	case "@", "*":
 		// Non-nil even when empty: the array exists, so `${m[@]:-d}` on an
 		// empty one is zero fields rather than the default — the same answer

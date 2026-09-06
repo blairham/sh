@@ -171,9 +171,25 @@ func version(ctx context.Context, path string) string {
 
 	// --version covers bash and zsh. ksh and dash have no such flag; ksh
 	// answers ${.sh.version}, and dash reports nothing at all.
+	//
+	// --help is last because it is the only spelling BusyBox answers, and it
+	// has to not disturb the shells ahead of it. Measured: BusyBox v1.37.0
+	// invoked as sh refuses both earlier probes -- `bad option '--version'`
+	// and `syntax error: bad substitution`, each non-zero -- and answers
+	// --help with `BusyBox v1.37.0 (...) multi-call binary.` on a zero exit,
+	// which is the only place the string busybox appears at all. That string
+	// is what MustReport would have to match, and without this probe an ash
+	// column records `unknown` and lands in missing on every machine. bash
+	// and zsh never reach here (--version already answered) and ksh never
+	// does either (${.sh.version} did); dash refuses --help the way it
+	// refuses the rest, so it stays unknown. /bin/sh being BusyBox on Alpine
+	// and dash on Debian is exactly the mislabeling MustReport exists for,
+	// so the probe that tells them apart belongs here rather than in a
+	// per-shell branch.
 	for _, probe := range [][]string{
 		{"--version"},
 		{"-c", "echo ${.sh.version}"},
+		{"--help"},
 	} {
 		out, err := exec.CommandContext(ctx, path, probe...).CombinedOutput()
 		if err != nil {

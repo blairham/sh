@@ -1565,3 +1565,60 @@ func panelMember(t *testing.T, name string) (Found, bool) {
 	}
 	return Found{}, false
 }
+
+// TestVersionIdentifiesAShellThatOnlyAnswersHelp pins the probe BusyBox needs.
+//
+// version tries spellings in order and gives up with "unknown", so a shell it
+// cannot name is indistinguishable from a shell with no version at all --
+// which is how BusyBox ash read: `--version` is a bad option to it and
+// `${.sh.version}` is a bad substitution, both non-zero, and the only place
+// it writes its build is the first line of --help. An entry asserting
+// MustReport: "busybox" would therefore land in missing on every machine,
+// ash present or not. The stand-in refuses the first two probes exactly as
+// BusyBox v1.37.0 does and answers the third with the banner it prints, so
+// the test fails if the third spelling is dropped or misspelled.
+func TestVersionIdentifiesAShellThatOnlyAnswersHelp(t *testing.T) {
+	const banner = "BusyBox v1.37.0 (2026-01-10 15:38:28 UTC) multi-call binary."
+
+	path := filepath.Join(t.TempDir(), "sh")
+	script := "#!/bin/sh\n" +
+		"case \"$1\" in\n" +
+		"--help) echo '" + banner + "'; echo; echo 'Usage: sh [-il] ...'; exit 0 ;;\n" +
+		"--version) echo \"sh: bad option '--version'\" >&2; exit 2 ;;\n" +
+		"*) echo 'sh: syntax error: bad substitution' >&2; exit 2 ;;\n" +
+		"esac\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := version(context.Background(), path); got != banner {
+		t.Errorf("version = %q, want %q", got, banner)
+	}
+	if !strings.Contains(strings.ToLower(version(context.Background(), path)), "busybox") {
+		t.Error("the reported version does not carry the word MustReport would match")
+	}
+}
+
+// TestVersionPrefersTheSpellingAShellAlreadyAnswers keeps the new probe from
+// moving a column that was already recorded.
+//
+// version runs for every panel member, so a spelling appended to the list is
+// only additive if no shell ahead of BusyBox reaches it. bash answers both
+// --version and --help, with different first lines on the two, and the golden
+// record holds the --version one.
+func TestVersionPrefersTheSpellingAShellAlreadyAnswers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sh")
+	script := "#!/bin/sh\n" +
+		"case \"$1\" in\n" +
+		"--version) echo 'GNU bash, version 5.3.15(1)-release'; exit 0 ;;\n" +
+		"--help) echo 'Usage: sh [options]'; exit 0 ;;\n" +
+		"*) exit 2 ;;\n" +
+		"esac\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := version(context.Background(), path); !strings.HasPrefix(got, "GNU bash") {
+		t.Errorf("version = %q, want the --version answer", got)
+	}
+}

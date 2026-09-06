@@ -63,13 +63,15 @@ func interactiveJobs(
 	}
 	var o, e bytes.Buffer
 	sh.Stdout, sh.Stderr = &o, &e
-	args := make([]string, 0, len(argv)+1)
-	args = append(args, "testsh")
+	// `@SCRIPT@` is the probe's path and `@SOURCE@` its text, so a case can
+	// hand the same program to `-i script` and to `-i -c` and compare the
+	// two routes rather than two programs.
+	args := []string{"testsh"}
 	for _, a := range argv {
-		args = append(args, strings.ReplaceAll(a, "@SCRIPT@", path))
+		a = strings.ReplaceAll(a, "@SCRIPT@", path)
+		args = append(args, strings.ReplaceAll(a, "@SOURCE@", src))
 	}
-	args = append(args, strings.ReplaceAll("", "@SCRIPT@", path))
-	if code := driver.MainArgs(sh, args[:len(args)-1]); code != 0 {
+	if code := driver.MainArgs(sh, args); code != 0 {
 		t.Fatalf("status %d, want 0 (stderr %q)", code, e.String())
 	}
 	b, err := os.ReadFile(pidPath)
@@ -133,13 +135,24 @@ func TestAnInteractiveScriptMayAnnounceNothing(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		answer interp.Answer
+		preset bool
 	}{
-		{"a dialect that says nothing", interp.No},
-		{"and an unanswered axis is quiet", interp.Unspecified},
+		{name: "a dialect that says nothing", answer: interp.No},
+		{name: "and an unanswered axis is quiet", answer: interp.Unspecified},
+		// The preset's own answer, read from the preset rather than written
+		// into the case: XCU says nothing about a notice on this route, so
+		// the base claims less and stays silent — which is the intersection
+		// as well, the panel being quiet here only if bash is.
+		{name: "and so is the preset, which is asked rather than told", preset: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := announcing()
-			sem.InteractiveScriptAnnouncesJobs = tc.answer
+			if tc.preset {
+				sem = interp.PosixSemantics()
+				sem.AnnouncesBackgroundJob = interp.Yes
+			} else {
+				sem.InteractiveScriptAnnouncesJobs = tc.answer
+			}
 			errs, out, _ := interactiveJobs(t, sem, true, "-i", "@SCRIPT@")
 			if errs != "" {
 				t.Errorf("wrote %q to the error stream, want nothing", errs)
@@ -189,6 +202,24 @@ func TestAScriptThatIsNotInteractiveIsToldNothing(t *testing.T) {
 	errs, out, _ := interactiveJobs(t, announcing(), true, "@SCRIPT@")
 	if errs != "" {
 		t.Errorf("wrote %q to the error stream, want nothing", errs)
+	}
+	if out != "end\n" {
+		t.Errorf("wrote %q to the output stream, want %q", out, "end\n")
+	}
+}
+
+// The route is the whole of what the axis names, and `-i -c` is not it: the
+// same program, the same vector, the same terminal, and nothing is said.
+//
+// Measured, and it is the reason the axis names the route rather than the
+// terminal: `bash -i -c` announces a job starting while `bash -i script.sh`
+// announces nothing, so a shell that read this axis on both routes would be
+// wrong about one of them. That column is a different split — bash, ksh93 and
+// zsh announce there and dash does not — and is deliberately not this axis.
+func TestACommandStringIsNotTheRouteThisAxisNames(t *testing.T) {
+	errs, out, _ := interactiveJobs(t, announcing(), true, "-i", "-c", "@SOURCE@")
+	if errs != "" {
+		t.Errorf("wrote %q to the error stream, want nothing — `-i -c` is not `-i script.sh`", errs)
 	}
 	if out != "end\n" {
 		t.Errorf("wrote %q to the output stream, want %q", out, "end\n")

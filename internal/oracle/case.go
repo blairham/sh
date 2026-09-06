@@ -5969,6 +5969,26 @@ echo unreachable`,
 		Why:     "the axis inside the letter: with a local standing in front of the name, one engine writes the global cell past it and the other assigns the local it can see — `in=in out=new` against `in=new out=out`",
 	},
 	{
+		ID: "declare/global-letter-keeps-the-associative-attribute", Category: "declarations",
+		Snippet: `typeset -gA m; m[k]=v; echo "k=${m[k]} st=$?"`,
+		Why:     "`-g` says where a declaration lands and must not cost it the `-A` attribute: the two shells that spell both letters store a string key, bash 3.2 refuses the letter it does not have and carries on with an ordinary array, ksh93 refuses it and stops — typeset is one of its own special builtins — and dash has no typeset at all",
+	},
+	{
+		ID: "declare/global-associative-declared-in-a-function", Category: "declarations",
+		Snippet: `f() { typeset -gA m; }; f; m[k]=v; echo "k=${m[k]} st=$?"`,
+		Why:     "the shape a startup script actually writes — the table declared inside a function and filled in by the caller — which needs the attribute *and* the global scope to survive the return; the same four answers as the row before it",
+	},
+	{
+		ID: "declare/global-letter-without-a-value", Category: "declarations",
+		Snippet: `typeset -g gq; echo "set=${gq-unset}"; gq=1; echo "gq=$gq"`,
+		Why:     "a valueless `-g` declaration brings the name into being at the global scope in the shell whose valueless declarations set the name, and leaves it unset in the shells whose do not — the whole of a `typeset -gA a b c` setup line, which carries no values at all",
+	},
+	{
+		ID: "declare/global-letter-over-a-standing-value", Category: "declarations",
+		Snippet: `gr=1; typeset -g gr; echo "gr=$gr"`,
+		Why:     "`-g` takes no shadow, so there is no fresh cell to fill in and the value already there stays — unanimous among the shells that read the letter",
+	},
+	{
 		ID: "declare/lower-case-attribute", Category: "declarations",
 		Snippet: `typeset -l v=ABC; echo "v=$v"; v=DEF; echo "v2=$v"`,
 		Why:     "a property of the name, not of the assignment: the declaring value folds and so does every later one, in all three shells with the letter — one folds on expansion rather than assignment, which only its listing can tell apart",

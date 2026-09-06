@@ -127,3 +127,42 @@ command -V nosuch; echo st=$?`)
 		}
 	}
 }
+
+// `declare -gA` shares one implementation with `typeset -gA`, and shared it
+// the bug too — measured against bash 5.3 on 2026-09-06. It was silent here
+// rather than loud: this shell evaluates an unknown subscript as arithmetic,
+// so a name that had lost the associative attribute took `m[k]=v` as index 0
+// and `${m[k]}` read the same 0 back. The round trip looked right and
+// `declare -p` was the witness — `declare -a m=([0]="v")` where the real
+// shell says `declare -A m=([k]="v" )` (#989).
+func TestGlobalAssociativeDeclaration(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"the listing says associative, not indexed",
+			"declare -gA m\nm[k]=v\ndeclare -p m", "declare -A m=([k]=\"v\" )\n",
+		},
+		{
+			"the subscript is text, not arithmetic",
+			"declare -gA m\nm[1+1]=x\ndeclare -p m", "declare -A m=([1+1]=\"x\" )\n",
+		},
+		{
+			"the declaration outlives the function that made it",
+			"f() { declare -gA m; m[k]=v; }\nf\ndeclare -p m", "declare -A m=([k]=\"v\" )\n",
+		},
+		{
+			"a valueless global declaration still records the attribute",
+			"f() { declare -gA m; }\nf\ndeclare -p m", "declare -A m\n",
+		},
+		{
+			"the letters in either order",
+			"declare -Ag m\nm[k]=v\necho \"[${m[k]}]\"", "[v]\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runBash(t, t.TempDir(), c.src)
+			if out != c.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q", out, st, c.want)
+			}
+		})
+	}
+}

@@ -1662,6 +1662,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `dirstack/dirs-unabbreviated` | `--` **2>** `<shell>: 1: pushd: not found~<shell>: 1: dirs: not found~<shell>: 1: dirs: not found` *(status 127)* | `/ ~~--~/ <tmp>` | `/ ~~--~/ <tmp>` | `/ ~~--~/ <tmp>` | `--` **2>** `<shell>: pushd: not found~<shell>: dirs: not found~<shell>: dirs: not found` *(status 127)* | `/ ~~--~/ <tmp>` |
 | `dirstack/pushd-into-a-directory-that-is-not-there` | `st=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: dirs: not found` *(status 127)* | `st=1~/` **2>** `<shell>: line 1: pushd: /no/such-xyz: No such file or directory` | `st=1~/` **2>** `<shell>: line 1: pushd: /no/such-xyz: No such file or directory` | `st=1~/` **2>** `<shell>: line 0: pushd: /no/such-xyz: No such file or directory` | `st=127` **2>** `<shell>: pushd: not found~<shell>: dirs: not found` *(status 127)* | `st=1~/` **2>** `<shell>:pushd:1: no such file or directory: /no/such-xyz` |
 | `dirstack/dirs-a-letter-it-does-not-have` | `st=127` **2>** `<shell>: 1: dirs: not found` | `st=2` **2>** `<shell>: line 1: dirs: -q: invalid number~dirs: usage: dirs [-clpv] [+N] [-N]` | `st=2` **2>** `<shell>: line 1: dirs: -q: invalid number~dirs: usage: dirs [-clpv] [+N] [-N]` | `st=1` **2>** `<shell>: line 0: dirs: -q: invalid number~dirs: usage: dirs [-clpv] [+N] [-N]` | `st=127` **2>** `<shell>: dirs: not found` | `st=1` **2>** `<shell>:dirs:1: bad option: -q` |
+| `dirstack/unset-the-function-name-of-a-builtin` | `u=0~st=127` **2>** `<shell>: 1: pushd: not found` | `u=0~/tmp /~st=0` | `u=0~/tmp /~st=0` | `u=0~/tmp /~st=0` | `u=0~st=127` **2>** `<shell>: pushd: not found` | `u=1~st=0` **2>** `<shell>:unset:1: no such hash table element: pushd` |
+| `dirstack/unset-a-function-that-shadowed-a-builtin` | `u=0~st=127` **2>** `<shell>: 1: pushd: not found` | `u=0~/tmp /~st=0` | `u=0~/tmp /~st=0` | `u=0~/tmp /~st=0` | `u=0~st=127` **2>** `<shell>: pushd: not found` | `u=0~st=0` |
+| `dirstack/unset-a-shadowing-function-twice` | `u=0~st=127` **2>** `<shell>: 1: pushd: not found` | `u=0~/tmp /~st=0` | `u=0~/tmp /~st=0` | `u=0~/tmp /~st=0` | `u=0~st=127` **2>** `<shell>: pushd: not found` | `u=1~st=0` **2>** `<shell>:unset:1: no such hash table element: pushd` |
+| `dirstack/unset-the-whole-directory-stack-by-name` | `u=0~st=127` **2>** `<shell>: 1: pushd: not found~<shell>: 1: dirs: not found` | `u=0~/tmp /~/tmp /~st=0` | `u=0~/tmp /~/tmp /~st=0` | `u=0~/tmp /~/tmp /~st=0` | `u=0~st=127` **2>** `<shell>: pushd: not found~<shell>: dirs: not found` | `u=1~/tmp /~st=0` **2>** `<shell>:unset:1: no such hash table element: dirs~<shell>:unset:1: no such hash table element: popd~<shell>:unset:1: no such hash table element: pushd` |
 | `type/f-skips-or-prints-the-function` | `-f: not found~f is a shell function~st=127` | `st=1` **2>** `<shell>: line 1: type: f: not found` | `st=1` **2>** `<shell>: line 1: type: f: not found` | `st=1` **2>** `<shell>: line 0: type: f: not found` | `f is an undefined function~st=0` | `f () {~	:~}~st=0` |
 | `type/a-lists-a-keyword` | `-a: not found~if is a shell keyword~st=127` | `if is a shell keyword~st=0` | `if is a shell keyword~st=0` | `if is a shell keyword~st=0` | `if is a keyword~st=0` | `if is a reserved word~st=0` |
 | `type/p-on-a-name-that-is-nothing` | `-p: not found~nosuchzz_qq: not found~st=127` | `st=1` | `st=1` | `st=1` | `st=1` | `nosuchzz_qq not found~st=1` |
@@ -2424,6 +2428,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `dirstack/dirs-a-letter-it-does-not-have` — the shape of the option parser: 2 where a bad letter is an invalid *number* with an unlocated usage line after it, 1 where it is a bad option, 127 where there is no `dirs`. The same split decides whether `dirs -lv` is two letters or one malformed index
   ```sh
   dirs -q; echo "st=$?"
+  ```
+- `dirstack/unset-the-function-name-of-a-builtin` — whether `unset -f` can take a name the shell itself provides. It cannot, in any of the six: `pushd` is a builtin in the two that have it, so there is no function of that name to remove and the name still pushes afterwards. What splits is only what the *unset* says — silence at 0 in five, and in zsh the same `no such hash table element` it writes for any name it does not hold, at 1. Ours deleted the declaration and lost the directory stack for the rest of the session at a silent 0, and the failure surfaced later as `command not found` from an unrelated line (#1082)
+  ```sh
+  cd /; unset -f pushd; echo "u=$?"; pushd /tmp; echo "st=$?"
+  ```
+- `dirstack/unset-a-function-that-shadowed-a-builtin` — the other half, and the reason the row above is not a refusal. A function of the script's own is removable by the same rule that makes it the script's — and removing it *uncovers* the builtin, so both shells that have one push. Silent at 0 in all six, zsh included, because the name really was a function. The two names have no relationship in a shell where one is a builtin, and every relationship in a shell where the dialect is written as shell, which is what this pins
+  ```sh
+  cd /; pushd() { echo mine; }; unset -f pushd; echo "u=$?"; pushd /tmp; echo "st=$?"
+  ```
+- `dirstack/unset-a-shadowing-function-twice` — the sharpest of the three, because it separates three outcomes a status alone cannot. The second `unset -f` is answered as a name that is *not* a function — silence at 0 in five and the hash-table complaint at 1 in zsh, the same answer as the first row — which is only true if the first removal gave the name back to the shell rather than keeping the script's function or deleting the name for good. `pushd /tmp` after it still pushes
+  ```sh
+  cd /; pushd() { echo mine; }; unset -f pushd; unset -f pushd; echo "u=$?"; pushd /tmp; echo "st=$?"
+  ```
+- `dirstack/unset-the-whole-directory-stack-by-name` — the shape a real rc file writes: `unset -f` over a list of names, defensively, before defining any. A widely used zsh plugin manager runs exactly this line. All three names survive it in the two shells that have them and the stack works, and the operands are answered one at a time — zsh writes three complaints and hands 1 on, the rest are silent at 0
+  ```sh
+  cd /; unset -f dirs popd pushd; echo "u=$?"; pushd /tmp; dirs; echo "st=$?"
   ```
 - `type/f-skips-or-prints-the-function` — one letter, two opposite meanings: two shells use -f to leave functions out of the search — so a name that is only a function is not found — and one turns it around and prints the definition. The fourth has no options and answers -f as a name
   ```sh

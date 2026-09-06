@@ -28,12 +28,16 @@ import (
 // It is not a question about `$( )`. Real zsh refuses `cat <(cat <<EOF` …
 // `EOF)` the same way, which is why both spellings are here.
 //
-// Two of these differ from what real zsh prints, and both differences are
-// this shell's already and are shared with the control rather than caused by
-// the shape: the quoted text starts at the `$(` where zsh starts at `v=$(`,
-// and an unterminated `<(` gets a sentence of its own where zsh words it as
-// the same parse error. Neither is what this case is about, and the corpus
-// rows are what grade them.
+// One of these differs from what real zsh prints, and the difference is this
+// shell's already and is shared with the control rather than caused by the
+// shape: the quoted text starts at the `$(` where zsh starts at `v=$(`. That
+// is #1022 and the corpus rows are what grade it.
+//
+// The `<( )` rows used to differ too — a sentence of the lexer's own and no
+// line at all, because the failure was not a *syntax.Error for a line to be
+// read from. #1023 moved that refusal onto the same footing as `$(`'s, so
+// both spellings now reach the same wording from the same state, which is the
+// claim the last assertion in the loop makes.
 func TestADelimiterCarryingTheClosingParenLeavesTheConstructOpen(t *testing.T) {
 	for _, c := range []struct {
 		name, src, want string
@@ -59,9 +63,9 @@ func TestADelimiterCarryingTheClosingParenLeavesTheConstructOpen(t *testing.T) {
 		{
 			name: "parentheses that hold a program without a dollar sign",
 			src:  "cat <(cat <<EOF\na\nEOF)\necho done\n",
-			want: "unterminated process substitution", line: 0,
+			want: "parse error near `<(cat <<EOF'", line: 5,
 			control:     "cat <(echo hi\necho done\n",
-			controlWant: "unterminated process substitution", controlLine: 0,
+			controlWant: "parse error near `<(echo hi'", controlLine: 3,
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -72,8 +76,7 @@ func TestADelimiterCarryingTheClosingParenLeavesTheConstructOpen(t *testing.T) {
 			}
 			// The line is the one the input ran out on, measured against
 			// zsh 5.9.2 for each of these. Located at the `)` instead it is
-			// three lines early on the first. The `<( )` row has no line at
-			// all, which is this shell's own gap and is the control's too.
+			// three lines early on the first.
 			if got := d.ParseFailureLine(err); got != c.line {
 				t.Errorf("blamed line %d, want %d", got, c.line)
 			}

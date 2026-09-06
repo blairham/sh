@@ -6801,6 +6801,24 @@ grades it and nothing drift-checks it either, for the same reason.
   print -p x; echo "p=$?"; read -p y; echo "r=$?"
   ```
 
+## syntax errors
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `unterminated/a-process-substitution-that-never-closes` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 4: `end of file' unexpected` *(status 3)* | **2>** `<script>:4: parse error near `<(echo hi'` *(status 1)* |
+| `unterminated/an-output-process-substitution-that-never-closes` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 4: `end of file' unexpected` *(status 3)* | **2>** `<script>:4: parse error near `>(echo hi'` *(status 1)* |
+
+- `unterminated/a-process-substitution-that-never-closes` — the plainly unterminated shape of the construct the here-document rows reach the long way round. Every panel member words it, and no two alike: the two that read a program in parentheses either way say exactly what they say for `$(`, the third names the end of the file where it names an unmatched parenthesis for `$(`, the fourth quotes the word the construct began, and the one without the construct at all refuses the `(` on line 1. A refusal the lexer worded could be none of those
+  ```sh
+  cat <(echo hi
+  echo after
+  ```
+- `unterminated/an-output-process-substitution-that-never-closes` — the other direction, which no shell in the panel distinguishes — the same sentence and the same line from all six. It is the row that says the opener is carried into the diagnostic for what it is rather than as the one spelling somebody tested
+  ```sh
+  cat >(echo hi
+  echo after
+  ```
+
 ## substitutions
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |

@@ -4081,6 +4081,18 @@ EOF
 		Why:        "the same shape spelled the other way. What decides the remark is that the parentheses hold a *program*, not which sigil opened them — bash 5.3 says the same thing here as for `$( )`, bash 3.2 and ksh93 stay silent as they do there, and the two that have no process substitution refuse the line outright. The counter-case is arithmetic: `$(( a << b ))` is a shift and reading it as a program would invent a here-document",
 	},
 	{
+		ID: "unterminated/a-process-substitution-that-never-closes", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "cat <(echo hi\necho after\n",
+		Why:     "the plainly unterminated shape of the construct the here-document rows reach the long way round. Every panel member words it, and no two alike: the two that read a program in parentheses either way say exactly what they say for `$(`, the third names the end of the file where it names an unmatched parenthesis for `$(`, the fourth quotes the word the construct began, and the one without the construct at all refuses the `(` on line 1. A refusal the lexer worded could be none of those",
+	},
+	{
+		ID: "unterminated/an-output-process-substitution-that-never-closes", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "cat >(echo hi\necho after\n",
+		Why:     "the other direction, which no shell in the panel distinguishes — the same sentence and the same line from all six. It is the row that says the opener is carried into the diagnostic for what it is rather than as the one spelling somebody tested",
+	},
+	{
 		ID: "heredoc/a-delimiter-that-never-matches", Category: "redirection",
 		Snippet: `{ x=` + "`" + `cat <<EOF
 a)

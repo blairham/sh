@@ -8977,6 +8977,34 @@ exit 7`,
 	// a style set for a completion system survives being set, that the order
 	// styles come back in is the order a lookup reads them in, and that a key
 	// bound to a widget the shell has not got is accepted rather than refused.
+	// `autoload` — a name defined from `$fpath` the first time it is called.
+	// ksh93 has the word too, as `typeset -fu` under another name, which is
+	// why its column is a `typeset` usage line rather than a not-found.
+	{
+		ID: "autoload/the-name-is-a-function-at-once", Category: "builtins",
+		Snippet: `autoload -Uz zzfn; echo "decl=$?"; whence -w zzfn; echo "wh=$?"`,
+		Why:     "the shape of the builtin, and the thing a resolve-now implementation would get wrong: the declaration reads nothing, reports 0 and the name is *already* a function — `zzfn: function`. bash has no `autoload` at all; ksh93 has one, spelled as `typeset -fu`, and refuses zsh's `-U` and `-z` with its own usage line",
+	},
+	{
+		ID: "autoload/the-file-becomes-the-body", Category: "builtins",
+		Snippet: `mkdir -p fp; printf "%s\n" 'echo "cf ran [$*]"' > fp/cfn; fpath=(fp); autoload -Uz cfn; cfn a b; echo "st=$?"`,
+		Why:     "the call is what reads the file, and the file's contents are the function's *body* — so its `$*` is the call's arguments, `a b`. The case writes its own `fpath` entry, because a row that reached for a real one would be a record of the machine",
+	},
+	{
+		ID: "autoload/a-missing-file-fails-at-the-call", Category: "builtins",
+		Snippet: `fpath=(); autoload -Uz zznone; echo "decl=$?"; zznone; echo "call=$?"`,
+		Why:     "and where it fails: the declaration is 0 with an empty `fpath` and the *call* is `zznone: function definition file not found` at 1. Two statuses in one row, because a shell that resolved at the declaration would report the failure in the wrong place and a script's `autoload || return` would fire when nothing was wrong yet",
+	},
+	{
+		ID: "autoload/the-two-signs-of-x", Category: "builtins",
+		Snippet: `autoload +X; echo "plus=$?"; autoload -X; echo "minus=$?"`,
+		Why:     "`+X` and `-X` are two commands rather than one letter with a sign: `+X` with nothing to resolve is silence and 0, and `-X` with nothing is `bad autoload` — it means \"the function I am running inside\", so at the top level there is nothing for it to be about. zsh ends the script there and this shell reports and runs on, which the row records",
+	},
+	{
+		ID: "autoload/a-letter-the-builtin-does-not-have", Category: "builtins",
+		Snippet: `autoload -Q zz; echo "st=$?"`,
+		Why:     "`bad option: -Q` and 1 — the same wording `zmodload` and `bindkey` use and not `zstyle`'s `invalid option`. `-Q` is one of the forty letters zsh's autoload does not have, against the twelve it does",
+	},
 	// `zmodload` — the module loader, which is the first line of a real
 	// plugin manager that actually stops the file. This shell cannot load a
 	// compiled module and never will, so what is recorded is the shape of

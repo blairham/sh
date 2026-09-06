@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -148,15 +149,51 @@ func TestAValuelessDeclarationThatHidesNothingHandsOverOneEntry(t *testing.T) {
 	// Where the outer value shows through, the name was never hidden and the
 	// ordinary export list already carries it. Counted rather than read,
 	// because the failure this guards against is a second copy.
-	out, st := axisRun(t,
-		`export FOO=bar; f() { local FOO; /usr/bin/env | grep -c '^FOO='; }; f`,
-		func(s *Semantics) {
-			s.DeclaredNameWithoutValueIsEmpty = No
-			s.ValuelessDeclarationHidesTheOuterValue = No
-			s.LocalInheritsTheExportAttribute = Yes
-		})
+	set := func(s *Semantics) {
+		s.DeclaredNameWithoutValueIsEmpty = No
+		s.ValuelessDeclarationHidesTheOuterValue = No
+		s.LocalInheritsTheExportAttribute = Yes
+	}
+	out, st := axisRun(t, `export FOO=bar; f() { local FOO; /usr/bin/env | grep -c '^FOO='; }; f`, set)
 	if st != 0 || out != "1\n" {
 		t.Errorf("got %q status %d, want exactly one entry", out, st)
+	}
+	// And for an imported name, where the entry the shell was born with is
+	// the one that carries it: the record and the inherited entry are the
+	// same name, and the list would hold it twice.
+	//
+	// Read off the list itself rather than out of a child, because the only
+	// route that hands the list over *as written* is a process replacement:
+	// os/exec collapses a repeated name to its last entry, so a duplicate is
+	// invisible to every ordinary command and reaches a child intact through
+	// execve.
+	var handed []string
+	outExec, st := run(t, "f() { local IMPORTED; exec /usr/bin/true; }\nf",
+		func(r *Runner) {
+			sem := CoreSemantics()
+			set(&sem)
+			// The one axis the route itself asks, and not the subject here.
+			sem.ExecFailureRunsExitTrap = Yes
+			r.Semantics = &sem
+			r.Env = append(r.Env, "IMPORTED=arrived")
+			r.ReplaceProcess = func(_ string, _, env []string, _ []*os.File) error {
+				handed = env
+				// A real replacement does not return; an error is how a test
+				// says the image could not be replaced.
+				return os.ErrPermission
+			}
+		})
+	if st != 126 {
+		t.Fatalf("got %q status %d, want the replacement reached and refused", outExec, st)
+	}
+	var carried []string
+	for _, kv := range handed {
+		if strings.HasPrefix(kv, "IMPORTED=") {
+			carried = append(carried, kv)
+		}
+	}
+	if len(carried) != 1 || carried[0] != "IMPORTED=arrived" {
+		t.Errorf("the list carries %v, want exactly one IMPORTED=arrived", carried)
 	}
 }
 
@@ -201,7 +238,22 @@ func TestADeclarationWithoutAValueTellsNoChildAboutTheName(t *testing.T) {
 	if st != 0 || out != "FOO=later\n" {
 		t.Errorf("got %q status %d, want the later value handed over", out, st)
 	}
-	// The declaration's record goes away with the scope that made it.
+	// The declaration's record goes away with the scope that made it, and so
+	// does a caller's: a function that declares a local of the name leaves
+	// the outer one an empty export where it had been told to nobody. That
+	// is measured — the shell that reads a declaration this way forgets on
+	// the way out — and not a tidiness rule.
+	out, st = axisRun(t,
+		`typeset -x FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"; f() { local FOO=v; }; f; `+
+			`/usr/bin/env | grep '^FOO=' || echo "(none)"`,
+		func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = Yes
+			s.DeclareOptions = "x"
+			s.LocalInheritsTheExportAttribute = No
+		})
+	if st != 0 || out != "(none)\nFOO=\n" {
+		t.Errorf("got %q status %d, want the record forgotten with the scope", out, st)
+	}
 	out, st = axisRun(t,
 		`export FOO=out; f() { typeset -x FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; `+
 			`/usr/bin/env | grep '^FOO='`,
@@ -213,5 +265,67 @@ func TestADeclarationWithoutAValueTellsNoChildAboutTheName(t *testing.T) {
 		})
 	if st != 0 || out != "(none)\nFOO=out\n" {
 		t.Errorf("got %q status %d, want the outer name exported again on return", out, st)
+	}
+}
+
+func TestADeclarationWithNoScopeToDeclareIntoRecordsNothing(t *testing.T) {
+	// A dialect can give `typeset` a scope only in a function defined with
+	// the keyword; in the other kind the declaration is an ordinary
+	// assignment that reaches the caller. Nothing was shadowed there, so
+	// there is nothing standing in front of the name and nothing for a child
+	// to be told about once `unset` takes the value away.
+	out, st := axisRun(t,
+		`export FOO=bar; f() { typeset FOO; unset FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`,
+		func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = No
+			s.ValuelessDeclarationHidesTheOuterValue = Yes
+			s.LocalInheritsTheExportAttribute = Yes
+			s.TypesetLocalNeedsKeywordFunction = Yes
+		})
+	if st != 0 || out != "(none)\n" {
+		t.Errorf("got %q status %d, want nothing recorded where no scope was taken", out, st)
+	}
+}
+
+func TestTypesetsOwnExportLetterSaysNothingAboutTheNameItShadows(t *testing.T) {
+	// The same reading as `local -x`, through the other builtin, because the
+	// two are separate paths and each has to read the name's attribute
+	// before applying this declaration's own.
+	out, st := axisRun(t,
+		`FOO=bar; function f { typeset -x FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`,
+		func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = No
+			s.ValuelessDeclarationHidesTheOuterValue = Yes
+			s.LocalInheritsTheExportAttribute = Yes
+			s.DeclareOptions = "x"
+			s.TypesetLocalNeedsKeywordFunction = No
+		})
+	if st != 0 || out != "(none)\n" {
+		t.Errorf("got %q status %d, want no entry for a name nothing exported", out, st)
+	}
+	// And where the shadowed name *is* exported, the value it held goes to a
+	// child whatever this declaration says about the local's own attribute.
+	out, st = axisRun(t,
+		`export FOO=bar; function f { typeset -x FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`,
+		func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = No
+			s.ValuelessDeclarationHidesTheOuterValue = Yes
+			s.LocalInheritsTheExportAttribute = Yes
+			s.DeclareOptions = "x"
+			s.TypesetLocalNeedsKeywordFunction = No
+		})
+	if st != 0 || out != "FOO=bar\n" {
+		t.Errorf("got %q status %d, want the shadowed value handed over", out, st)
+	}
+}
+
+func TestASecondDeclarationHandsOverWhatTheFirstOneLeft(t *testing.T) {
+	// A declaration of a name this scope has already taken hides the value
+	// the scope itself put there, not the one it will put back. The two
+	// readings differ only where a scope declares the same name twice.
+	out, st := valuelessRun(t,
+		`export FOO=bar; f() { local FOO=x; local FOO; /usr/bin/env | grep '^FOO='; }; f`)
+	if st != 0 || out != "FOO=x\n" {
+		t.Errorf("got %q status %d, want the value the second declaration hid", out, st)
 	}
 }

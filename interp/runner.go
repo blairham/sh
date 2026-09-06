@@ -481,8 +481,15 @@ type Runner struct {
 	// shell reads such a name as empty and no child is told about it, which
 	// is a distinction only a real child can see: `local -x FOO` and `local
 	// -x FOO=` list identically in the shell that makes them differ, and
-	// hand a command nothing and an empty entry respectively. Cleared by
-	// any assignment, by `unset`, and by the scope going away.
+	// hand a command nothing and an empty entry respectively.
+	//
+	// Cleared by an assignment, and by a scope that shadowed the name going
+	// away — the second measured rather than tidy: a function that declares
+	// a local of that name leaves the caller's an *empty* export where it
+	// had been told to no child at all, in the one shell that reads a
+	// declaration this way. `unset` needs no third place and deliberately
+	// has none: it takes the name out of Vars, and both roads back in go
+	// through one of those two.
 	declaredEmpty map[string]bool
 
 	// aliases is the table `alias` and `unalias` keep. Substitution happens
@@ -2574,10 +2581,6 @@ type scope struct {
 	// an environment value the script had taken away — or forgetting one it
 	// had not.
 	removedBefore map[string]bool
-	// declaredEmptyBefore is the same for whether the name's value had come
-	// from a declaration rather than from an assignment. See
-	// Runner.declaredEmpty.
-	declaredEmptyBefore map[string]bool
 	// savedAssoc shadows the associative table the same way, attribute and
 	// all: what comes back on exit is whether the name was associative as
 	// much as what it held.

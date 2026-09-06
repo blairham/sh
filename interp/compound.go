@@ -522,6 +522,13 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 		} else {
 			delete(r.Vars, name)
 		}
+		// And the name stops being one a *declaration* gave its value to,
+		// which is measured rather than tidiness: the shell that reads a
+		// declaration as setting the name leaves the caller's an empty
+		// export once a function has declared a local of it, where before
+		// the declaration it was told to no child at all. Putting the
+		// record back instead kept it silent, which no shell does.
+		delete(r.declaredEmpty, name)
 	}
 	for name, old := range sc.savedArrays {
 		if sc.arrayExisted[name] {
@@ -554,15 +561,6 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 			r.removed[name] = true
 		} else {
 			delete(r.removed, name)
-		}
-	}
-	// And whether the value the name had was a declaration's rather than an
-	// assignment's, which decides whether a child is told about it.
-	for name, was := range sc.declaredEmptyBefore {
-		if was {
-			r.declaredEmpty[name] = true
-		} else {
-			delete(r.declaredEmpty, name)
 		}
 	}
 	r.scopes = r.scopes[:len(r.scopes)-1]

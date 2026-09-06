@@ -5319,6 +5319,11 @@ echo unreachable`,
 		Why:     "declared and assigned-empty are the same to every listing and not to a child: the shell that considers a name declared without a value to be *set* still tells no command about it, where `=` on the same line hands over an empty entry. Found by the case above, which had this shell exporting an empty value under a name it should say nothing about",
 	},
 	{
+		ID: "declare/a-declared-name-a-local-has-shadowed", Category: "declarations",
+		Snippet: `typeset -x FOO; env | grep '^FOO=' || echo "(none)"; f() { local FOO=v; }; f; env | grep '^FOO=' || echo "(none)"`,
+		Why:     "the shell that considers a name declared without a value to be set forgets that on the way out of a function: after any local of that name, the caller's is an *empty* export where before it was told to no child at all. The pair is the point — the same `env` twice, with only a function call between them",
+	},
+	{
 		ID: "declare/local-shadowing-an-imported-name", Category: "declarations",
 		Snippet: `f() { local TERM=changed; env | grep '^TERM=' || echo "(none)"; }; f; env | grep '^TERM='`,
 		Why:     "the same question where the name arrived in the environment rather than being exported by hand, which is the route that made the two answers one: an imported name is exported by having been imported, so the local either inherits that or does not, and the split is the same either way",

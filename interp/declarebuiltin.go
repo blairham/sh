@@ -572,10 +572,8 @@ func (r *Runner) shadow(name string) {
 		sc.existed[name] = existed
 		if sc.removedBefore == nil {
 			sc.removedBefore = map[string]bool{}
-			sc.declaredEmptyBefore = map[string]bool{}
 		}
 		sc.removedBefore[name] = r.removed[name]
-		sc.declaredEmptyBefore[name] = r.declaredEmpty[name]
 	}
 	// Arrays live in a table of their own, so a name has to be saved from
 	// both. Saving only the scalar left `f() { local a; a=(x y); }` writing a

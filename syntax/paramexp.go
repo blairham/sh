@@ -272,7 +272,9 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 		s = s[1:]
 	}
 
-	if p.dialect.NestedParamExpansion && strings.HasPrefix(s, "$") {
+	// A `"` as well as a `$`, because the substitution standing here may be
+	// quoted — see scanNestedExpansion, which is where the shape is decided.
+	if p.dialect.NestedParamExpansion && (strings.HasPrefix(s, "$") || strings.HasPrefix(s, `"`)) {
 		if inner, rest, ok := p.scanNestedExpansion(s, start); ok {
 			// Src as well as the node: a diagnostic about a nested expansion
 			// names the text it was written as, and there is no parameter
@@ -805,7 +807,22 @@ func (p *Parser) scanNestedExpansion(s string, at Pos) (inner *Word, rest string
 	// the parameter named `$`, which is not this at all. `${$'x'}` opens with
 	// a dollar and is not a substitution either: the quoting carries it, and
 	// the span is literal text.
-	if !strings.HasPrefix(s, "${") && !strings.HasPrefix(s, "$(") {
+	// Or the same substitution in double quotes, which is what `${(@f)"$(cmd)"}`
+	// is written with and is a *different program* from the unquoted one:
+	// quoted, the inner comes to one field and the outer flags split that;
+	// unquoted, it is split on IFS first and the flags then see several.
+	// Measured on zsh 5.9.2 — `${(@f)"$(printf "a b\nc")"}` is two fields
+	// and `${(@f)$(printf "a b\nc")}` is three.
+	//
+	// Only double quotes, and only around a substitution: `${"abc"}`,
+	// `${'$(cmd)'}` and `${"$v"}` are all a bad substitution there, so what
+	// the quotes may hold is exactly what they may hold without them.
+	quoted := strings.HasPrefix(s, `"`)
+	body := s
+	if quoted {
+		body = s[1:]
+	}
+	if !strings.HasPrefix(body, "${") && !strings.HasPrefix(body, "$(") {
 		return nil, "", false
 	}
 	// Which is also the whole of the test. A kind check on the span behind it
@@ -814,6 +831,12 @@ func (p *Parser) scanNestedExpansion(s string, at Pos) (inner *Word, rest string
 	// could tell from its absence.
 	t := NewLexer(s, p.dialect).Next()
 	if t.Kind != TokWord || len(t.Spans) == 0 {
+		return nil, "", false
+	}
+	if quoted && t.Spans[0].Quoting != DoubleQuoted {
+		// The quote did not survive as quoting, which means the lexer read
+		// something other than a quoted substitution — an unterminated
+		// quote, or a `"` that began a longer run of text.
 		return nil, "", false
 	}
 	// Where the substitution ended: the next span's start, or the token's own

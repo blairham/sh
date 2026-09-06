@@ -167,10 +167,13 @@ func TestABareArrayNameAsksNothingWhereTheListPathDoesNotAnswer(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
 		// `${#a}` is ArrayLengthWithoutSubscriptIsCount's question.
 		{`a=(one two); set -- ${#a}; echo "[$1]"`, "[2]"},
-		// The three operators the array path does not answer with elements.
-		{`a=(one two); set -- ${a:=d}; echo "[$1]"`, "[one two]"},
-		{`a=(one two); set -- ${a:?e}; echo "[$1]"`, "[one two]"},
-		{`a=(one two); set -- ${a=d}; echo "[$1]"`, "[one two]"},
+		// `${a:=d}`, `${a:?e}` and `${a=d}` were here, as operators the
+		// array path did not answer with elements. It answers all three
+		// since #984 — they come to the *parameter* when their test does
+		// not fire, and the parameter is the whole array — so they are no
+		// longer spellings the axis is asked too widely for. They ask it
+		// because they use the answer, which is what
+		// TestABareArrayNameUnderAConditionalAsksTheAxis pins.
 		// And a name that is not an array at all.
 		{`v=xy; set -- $v; echo "[$1]"`, "[xy]"},
 	} {
@@ -186,6 +189,39 @@ func TestABareArrayNameAsksNothingWhereTheListPathDoesNotAnswer(t *testing.T) {
 		}
 		if got := strings.TrimSpace(out); got != tc.want || status != 0 {
 			t.Errorf("%s: got %q at %d, want %q", tc.src, got, status, tc.want)
+		}
+	}
+}
+
+// The four conditionals reach the array path since #984, so a bare name under
+// one of them asks the axis and *uses* the answer — which is the opposite of
+// the neighbouring test's subject and belongs beside it for that reason.
+//
+// Measured 2026-09-06: `a=(one two); printf "[%s]" ${a:=d}` is `[one][two]` in
+// zsh 5.9.2 and `[one]` in bash 5.3, bash 3.2 and ksh93, and `${a:?e}`,
+// `${a=d}` and `${a?e}` answer alike. Before #984 it was one field holding
+// `one two` in every dialect — nobody's answer, at status 0.
+func TestABareArrayNameUnderAConditionalAsksTheAxis(t *testing.T) {
+	for _, op := range []string{":=d", ":?e", "=d", "?e"} {
+		src := `a=(one two); set -- ${a` + op + `}; echo "n=$# [$1]"`
+		set := func(s *Semantics) {
+			s.ArrayScalarIsTheWholeArray = No
+			s.SplitParamExpansion = No
+			s.GlobExpansionResults = No
+		}
+		out, status := axisRun(t, src, func(s *Semantics) {
+			set(s)
+			s.ArrayNameWithoutSubscriptIsTheList = Yes
+		})
+		if got := strings.TrimSpace(out); got != "n=2 [one]" || status != 0 {
+			t.Errorf("%s where the name is the list: got %q at %d, want %q", op, got, status, "n=2 [one]")
+		}
+		out, status = axisRun(t, src, func(s *Semantics) {
+			set(s)
+			s.ArrayNameWithoutSubscriptIsTheList = No
+		})
+		if got := strings.TrimSpace(out); got != "n=1 [one]" || status != 0 {
+			t.Errorf("%s where the name is one element: got %q at %d, want %q", op, got, status, "n=1 [one]")
 		}
 	}
 }

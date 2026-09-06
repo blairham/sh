@@ -44,6 +44,11 @@ func Semantics() interp.Semantics {
 	// disappears under: `IFS=:; set -- x "" y` is two fields here and three
 	// in bash.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// POSIX makes an unquoted `$@` behave as `$*` where nothing is split,
+	// and this shell complies: `IFS=-; set -- x y z; v=${@}` is `x-y-z`
+	// here and in zsh, against `x y z` in bash and ksh93. It has no arrays,
+	// so the positional spelling is the whole of the question here.
+	s.UnsplitAtListJoinsOnIFS = interp.Yes
 	s.CommandNotFoundStatusIsNotFound = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// The panel's only shell with no multibyte decoder: `s=héllo; echo
@@ -70,6 +75,13 @@ func Semantics() interp.Semantics {
 	// start is AnnouncesBackgroundJob, which dash answers No, and the two
 	// fields are separate because of exactly this shell.
 	s.InteractiveScriptAnnouncesJobs = interp.Yes
+	// And `$!` before any background command is unset here as it is in bash,
+	// in its own words and with its own status: measured,
+	// `set -u; echo "[$!]"` writes `!: parameter not set` — the name without
+	// its `$` — and stops at 2.
+	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.Yes
+	// And it reads as nothing rather than as a zero: `echo "[$!]"` is `[]`.
+	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
 	// DefaultOptionLetters stays empty on purpose: measured, dash's `$-`
 	// starts blank however it is invoked, save the `s` of the
 	// standard-input route, which is unanimous and comes from Runner.Route.
@@ -89,6 +101,7 @@ func Semantics() interp.Semantics {
 	// the file.
 	s.StartupFileOptions = interp.StartupFileOptions{Login: "-l"}
 	s.CommandStringShowsCInDollarDash = interp.No
+	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// $(( )) with nothing in it wants a primary and stops the script.

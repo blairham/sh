@@ -354,6 +354,22 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	}
 
 	op, rest, ok := p.scanParamOp(s, e)
+	if ok && e.Length && !p.dialect.ParamLengthTakesAnOperator {
+		// `${#v#a}` is a bad substitution in four of the five: the length
+		// takes no operator there. Marked and deferred rather than failed,
+		// in every dialect — measured, none of the four decides this while
+		// reading, so `${#v#a}` in a branch never taken is not an error at
+		// all. That includes the one grammar that *does* refuse an unknown
+		// operator early, which is why BadSubstitutionAtParseTime is not
+		// consulted here; the `@` family above is deferred by it for the
+		// same measured reason.
+		//
+		// After the operator scan rather than before it, so a `#` that is
+		// not an operator at all cannot be mistaken for one: `${#v}` never
+		// reaches this, and neither does `${#a[@]}`.
+		e.Bad, e.Src = true, src
+		return e
+	}
 	if !ok {
 		if !p.dialect.BadSubstitutionAtParseTime || s[0] == '@' {
 			// The majority defers: the node is kept, marked, and diagnosed
@@ -586,6 +602,19 @@ func (p *Parser) scanParamOp(s string, e *ParamExpr) (ParamOp, string, bool) {
 	case p.dialect.ParamElementSelection && len(s) >= 2 && s[0] == ':' &&
 		strings.IndexByte("#|*", s[1]) >= 0:
 		return elementSelectOp(s[1]), s[2:], true
+	// The colon before a trim is ignored in one shell, so the operator is
+	// the trim it would have been without it. After the element-selection
+	// case above, which is the other reading of `:#`; no shell sets both,
+	// and the order makes the pair defined rather than accidental.
+	//
+	// Read by dropping the colon and scanning again rather than by naming
+	// the four operators here, so `##` against `#` and `%%` against `%` stay
+	// decided in one place. The recursion cannot run away: it is entered
+	// only when the next character is `#` or `%`, and both of those return
+	// on the following pass.
+	case p.dialect.ParamColonBeforeTrimIsIgnored && len(s) >= 2 &&
+		s[0] == ':' && (s[1] == '#' || s[1] == '%'):
+		return p.scanParamOp(s[1:], e)
 	case s[0] == ':':
 		if !p.dialect.ParamSubstring {
 			return 0, "", false

@@ -415,6 +415,23 @@ type Runner struct {
 	// monitor on for `-i script.sh`, so the two do not move together.
 	Interactive bool
 
+	// LoginShell says this shell was started as a login shell — a dashed
+	// `argv[0]`, which is what `login` and a terminal emulator's "run as a
+	// login shell" does, or an explicit `-l` / `--login`.
+	//
+	// The front end's to set, and carried *in* for exactly the reason
+	// Interactive is: which word started the process and what it looked
+	// like is an invocation fact, and a library Runner reached through Run
+	// never saw an argument vector. `driver` decides it — see
+	// driver.LoginShell and source.loginShell, which take either route —
+	// and hands it over here.
+	//
+	// What reads it is `$-`, through Semantics.LoginShowsLInDollarDash,
+	// where the panel splits 4-2. Nothing else in this package does: which
+	// startup files a login shell reads is `driver`'s, and it has the fact
+	// first-hand there (#1034).
+	LoginShell bool
+
 	// Dynamic holds parameters whose value is produced when they are read,
 	// rather than stored: `LINENO` is wherever execution has reached, and
 	// `RANDOM` is a different number every time. A dialect fills in the ones
@@ -2632,16 +2649,37 @@ func (r *Runner) hiddenExports(yield func(name, value string) bool) {
 			}
 			seen[name] = true
 			if _, own := r.Vars[name]; own {
-				// Assigned since, so the local has a value of its own and
-				// the loop above has already handed it over. Skipped rather
-				// than emitted and superseded: a duplicate name in an
-				// environment is settled by execve keeping the first, and
-				// this list is deduplicated the other way round.
-				continue
-			}
-			if !r.removed[name] {
-				// Still visible — the dialect's valueless declaration left
-				// the outer value showing — so the loops above have it.
+				// Assigned since, so the local has a value of its own — but
+				// it reaches a child only if the local carries the export
+				// attribute, and `+x` on the declaration takes it off. So
+				// this is two cases and not one: with the attribute the loop
+				// above has already handed the local's value over, and
+				// without it that loop passed the name by and the binding
+				// standing behind it is still the one a child is told about.
+				//
+				// Measured 2026-09-06, `env -i`, from a file and through
+				// `-c` alike: `export FOO=bar; f() { local +x FOO=z; env; }`
+				// hands the child `FOO=bar` in bash 5.3.15, bash as `sh` and
+				// bash 3.2.57 — the outer value, not `z` — while the shell
+				// itself reads `z`. `export FOO` inside the same function
+				// puts the attribute back on the local and the child is then
+				// told `z`, and with the outer binding never exported the
+				// child is told nothing, which is what says it is the outer
+				// binding speaking rather than a value the local kept.
+				//
+				// Skipping unconditionally told the child nothing at all,
+				// because neither list claimed the name.
+				if r.isExported(name) {
+					// Skipped rather than emitted and superseded: a
+					// duplicate name in an environment is settled by execve
+					// keeping the first, and this list is deduplicated the
+					// other way round.
+					continue
+				}
+			} else if !r.removed[name] {
+				// No value of its own and still visible — the dialect's
+				// valueless declaration left the outer value showing — so
+				// the loops above have it.
 				continue
 			}
 			if !yield(name, value) {

@@ -571,10 +571,24 @@ func (r *Runner) declareEmpty(name string, fresh bool) {
 	// through is a second disagreement, and it only arises where a shadow
 	// was actually taken: `declare u` at the top level leaves the global
 	// alone in every shell measured.
-	if len(r.scopes) == 0 {
-		return
-	}
-	if _, shadowed := r.scopes[len(r.scopes)-1].saved[name]; !shadowed {
+	//
+	// Taken *by this declaration*, which is what `fresh` says and what the
+	// question turns on. A second declaration of a name its own scope already
+	// declared has no outer value in front of it — the value it would hide is
+	// the local the first declaration made — and no shell hides that.
+	// Measured 2026-09-06, `env -i`, from a file and through `-c` alike:
+	// `f() { local FOO=x; local FOO; echo "[${FOO-UNSET}]"; }` reads `x` in
+	// bash 5.3.15, bash as `sh`, bash 3.2.57 and zsh 5.9.2, and the ksh93
+	// spelling `typeset FOO=x; typeset FOO` reads `x` in all four including
+	// ksh93u+. `typeset -g FOO` after a `local FOO=x` is the same shape and
+	// the same answer. It is a *different* function's declaration that hides:
+	// `f() { local FOO=x; g; }; g() { local FOO; ... }` reads UNSET, and that
+	// is the case this axis is about.
+	//
+	// Asking the scope instead of the declaration answered the two the same
+	// way, so the value a function had just put in its own local was thrown
+	// away by a line that only meant to name it again.
+	if !fresh {
 		return
 	}
 	if r.ask(r.sem().ValuelessDeclarationHidesTheOuterValue, "a declaration without a value hiding the outer value") {

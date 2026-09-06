@@ -290,7 +290,31 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expansion/a-quoted-star-subscript-always-joins` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `1[x y-z]` | `1[x y-z]` | `1[x y-z]` | `1[x y-z]` | `1[x y-z]` |
 | `expansion/a-quoted-star-always-joins-the-parameters` | `1[x y-z]` | `1[x y-z]` | `1[x y-z]` | `1[x y-z]` | `1[x y-z]` | `1[x y-z]` |
 | `expansion/an-unquoted-star-subscript-does-not-always-join` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y][z]` | `[x][y][z]` | `[x][y][z]` | `[x][y][z]` | `[x y][z]` |
+| `expansion/an-unquoted-star-subscript-under-an-operator-distributes` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[ox][y]` | `[ox][y]` | `[ox][y]` | `[ox][y]` | `[ox][y]` |
+| `expansion/a-quoted-star-subscript-does-not-filter-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[*]: #ba*: arithmetic syntax error: operand expected (error token is "#ba*")` *(status 1)* | **2>** `<shell>: line 1: a[*]: #ba*: arithmetic syntax error: operand expected (error token is "#ba*")` *(status 1)* | **2>** `<shell>: a[*]: #ba*: syntax error: operand expected (error token is "#ba*")` *(status 1)* | `[foo r z]` | `[foo bar baz]` |
+| `expansion/a-quoted-star-subscript-set-intersection-empties-to-one-field` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[*]: *b: arithmetic syntax error: operand expected (error token is "*b")` *(status 1)* | **2>** `<shell>: line 1: a[*]: *b: arithmetic syntax error: operand expected (error token is "*b")` *(status 1)* | **2>** `<shell>: a[*]: *b: syntax error: operand expected (error token is "*b")` *(status 1)* | **2>** `<shell>: \*b: arithmetic syntax error` *(status 1)* | `1[]` |
+| `expansion/a-quoted-star-subscripts-operator-sees-the-ifs-join` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[*]: #ox?-yo: arithmetic syntax error: operand expected (error token is "#ox?-yo")` *(status 1)* | **2>** `<shell>: line 1: a[*]: #ox?-yo: arithmetic syntax error: operand expected (error token is "#ox?-yo")` *(status 1)* | **2>** `<shell>: a[*]: #ox?-yo: syntax error: operand expected (error token is "#ox?-yo")` *(status 1)* | `1[oxo-yo]` | `1[]` |
+| `expansion/a-slice-under-a-star-subscript-reads-the-list-quoted-too` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[two three][two]` | `[two three][two]` | `[two three][two]` | `[two three][two]` | `[two three][two]` |
+| `expansion/a-quoted-bare-array-name-sliced` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[ne]` | `[ne]` | `[ne]` | `[ne]` | `[two three]` |
+| `expansion/a-quoted-bare-array-name-sliced-past-one-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[olo]` | `[olo]` | `[olo]` | `[olo]` | `[]` |
+| `expansion/a-star-list-joined-where-nothing-splits` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x-y-z]` | `[x-y-z]` | `[x y z]` | `[x-y-z]` | `[x-y-z]` |
+| `expansion/a-star-list-of-parameters-joined-where-nothing-splits` | `[x-y-z]` | `[x-y-z]` | `[x-y-z]` | `[x-y-z]` | `[x-y-z]` | `[x-y-z]` |
+| `expansion/an-empty-ifs-joins-an-unsplit-list-with-nothing` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[xy]` | `[xy]` | `[x y]` | `[xy]` | `[xy]` |
+| `expansion/a-star-subscript-as-a-redirection-target` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${a[*]}: ambiguous redirect` | `x-y` | **2>** `<shell>: ${a[*]}: ambiguous redirect` | `x-y` | `x~y` |
+| `expansion/a-conditional-assignment-keeps-the-arrays-fields` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `2[x y][z]` | `2[x y][z]` | `2[x y][z]` | `2[x y][z]` | `2[x y][z]` |
+| `expansion/a-conditional-error-keeps-the-arrays-fields` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `2[x y][z]` | `2[x y][z]` | `2[x y][z]` | `2[x y][z]` | `2[x y][z]` |
+| `expansion/a-conditional-assignment-under-a-star-subscript-still-joins` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `1[x y-z]` | `1[x y-z]` | `1[x y-z]` | `1[x y-z]` | `1[x y-z]` |
+| `expansion/a-bare-array-name-with-a-conditional-assignment` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one]` | `[one]` | `[one]` | `[one]` | `[one][two]` |
+| `expansion/a-bare-array-name-with-a-conditional-error` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one]` | `[one]` | `[one]` | `[one]` | `[one][two]` |
 | `expansion/element-exclusion-without-a-flag-group` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: #two: arithmetic syntax error: operand expected (error token is "#two")` *(status 1)* | **2>** `<shell>: line 1: a: #two: arithmetic syntax error: operand expected (error token is "#two")` *(status 1)* | **2>** `<shell>: a: #two: syntax error: operand expected (error token is "#two")` *(status 1)* | `[one]` | `[one two three]` |
+| `expansion/a-length-with-an-operator` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${#v#a}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${#v#a}: bad substitution` *(status 127)* | **2>** `<shell>: ${#v#a}: bad substitution` *(status 1)* | **2>** `<shell>: ${#v#a}: bad substitution` *(status 1)* | `2` |
+| `expansion/a-length-with-a-substring-operator` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${#v:1}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${#v:1}: bad substitution` *(status 127)* | **2>** `<shell>: ${#v:1}: bad substitution` *(status 1)* | **2>** `<shell>: ${#v:1}: bad substitution` *(status 1)* | `2` |
+| `expansion/a-length-with-a-replacement-operator` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${#v/b/XX}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${#v/b/XX}: bad substitution` *(status 127)* | **2>** `<shell>: ${#v/b/XX}: bad substitution` *(status 1)* | **2>** `<shell>: ${#v/b/XX}: bad substitution` *(status 1)* | `4` |
+| `expansion/a-length-with-an-operator-is-refused-late` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` |
+| `expansion/a-length-with-no-operator-is-unanimous` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `3 2 2` | `3 2 2` | `3 2 2` | `3 2 2` | `3 2 2` |
+| `expansion/a-colon-before-a-trim-is-a-third-reading` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: v: #hel*: arithmetic syntax error: operand expected (error token is "#hel*")` *(status 1)* | **2>** `<shell>: line 1: v: #hel*: arithmetic syntax error: operand expected (error token is "#hel*")` *(status 1)* | **2>** `<shell>: v: #hel*: syntax error: operand expected (error token is "#hel*")` *(status 1)* | `[lo][][hel][he]` | `[][][hello][hello]` |
+| `expansion/a-colon-before-a-trim-reaches-the-array-forms` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[@]: #ba*: arithmetic syntax error: operand expected (error token is "#ba*")` *(status 1)* | **2>** `<shell>: line 1: a[@]: #ba*: arithmetic syntax error: operand expected (error token is "#ba*")` *(status 1)* | **2>** `<shell>: a[@]: #ba*: syntax error: operand expected (error token is "#ba*")` *(status 1)* | `[foo][r][z]` | `[foo]` |
+| `expansion/a-colon-before-anything-but-a-trim` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[llo][ll][hello]` | `[llo][ll][hello]` | `[llo][ll][hello]` | `[llo][ll][hello]` | `[llo][ll][hello]` |
 | `expansion/element-exclusion-empty-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#}' unexpected` *(status 3)* | `[one]` |
 | `expansion/element-exclusion-pattern-out-of-a-parameter` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#$p}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#$p}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#$p}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#$p}""' unexpected` *(status 3)* | `[one][two]` |
 | `expansion/element-set-difference-and-intersection` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:\|b}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:\|b}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:\|b}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `' unexpected` *(status 3)* | `[x][z]~[y]` |
@@ -819,9 +843,105 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   a=("x y" z); printf "[%s]" ${a[*]}; echo
   ```
+- `expansion/an-unquoted-star-subscript-under-an-operator-distributes` — quoting is what decides whether an operator sees the list or the joined string, and the *unquoted* spelling has one answer nobody has to be asked for: every shell in the panel with arrays trims each element and hands back two fields. The axis was asked here regardless, so the dialect that answers no gave the unquoted form the quoted reading and returned a single field holding `oxo y` — the trim applied to a field boundary instead of to an element, at status 0
+  ```sh
+  a=(oxo yo); printf "[%s]" ${a[*]%o}; echo
+  ```
+- `expansion/a-quoted-star-subscript-does-not-filter-elements` — the silent direction of the same rule: quoted, the array joins to one string first and the pattern is tested against that whole value, so `ba*` — which matches two of the three elements — drops nothing and the array comes back entire. Filtering leaves `foo`, and a filter that ran where the shell would have left the array alone is indistinguishable from a pattern that did not match. ksh93 reads the same characters as `${a[*]#ba*}` and answers `foo r z`, which is neither
+  ```sh
+  a=(foo bar baz); printf "[%s]" "${a[*]:#ba*}"; echo
+  ```
+- `expansion/a-quoted-star-subscript-set-intersection-empties-to-one-field` — the direction that empties it, and what quoting still guarantees when it does: the joined value is held by no other array, so nothing survives — and the result is one *empty* field rather than no field at all. The unquoted spelling of the same snippet is zero fields, so this is the row that says quoting decides the count independently of what the operator left
+  ```sh
+  a=(x y z); b=(nope); set -- "${a[*]:*b}"; printf "%d" "$#"; printf "[%s]" "$@"; echo
+  ```
+- `expansion/a-quoted-star-subscripts-operator-sees-the-ifs-join` — which string the operator is handed, once it is handed one: the elements joined on the first character of IFS, not on a space. The pattern is written with the dash and matches; written with a space it would not. It is the row that keeps the quoted reading from being implemented with a hardcoded separator, which would pass every row above and fail this one
+  ```sh
+  IFS=-; a=(oxo yo); set -- "${a[*]:#ox?-yo}"; printf "%d" "$#"; printf "[%s]" "$@"; echo
+  ```
+- `expansion/a-slice-under-a-star-subscript-reads-the-list-quoted-too` — the operator that is the exception, and the reason the rule is about the operator rather than about quoting alone: a slice's offset counts *elements* under `[*]` however the expansion is quoted, and only the join afterwards differs. Unanimous in all three shells with arrays, so it is core and must reach no axis — a reading that gave every quoted `[*]` the joined string would answer `wo three` here
+  ```sh
+  a=(one two three); printf "[%s]" "${a[*]:1}" "${a[*]:1:1}"; echo
+  ```
+- `expansion/a-quoted-bare-array-name-sliced` — the same rule reached through a bare name, and the spelling that stayed wrong while `[*]` was: where the name is the whole array this is the list sliced and then joined — `two three` — and where it is `${a[0]}` it is that element with its first character dropped, `ne`. Both are plausible strings at status 0. The unquoted spelling is `${a[@]}`'s question and was already recorded; this is the quoted half, and only the slice needs it, because every other operator applied to the joined value is already the reading the shell follows
+  ```sh
+  a=(one two three); printf "[%s]" "${a:1}"; echo
+  ```
+- `expansion/a-quoted-bare-array-name-sliced-past-one-element` — one element is enough for the two readings to part, which is why the slice cannot be waved through on a short array the way the value-to-value operators can: dropping the only element leaves nothing, where dropping the first character leaves `olo`. The empty answer is the quiet one — a script slicing a one-element array gets a field that is there and empty rather than a complaint
+  ```sh
+  a=(solo); printf "[%s]" "${a:1}"; echo
+  ```
+- `expansion/a-star-list-joined-where-nothing-splits` — the other spelling, and core rather than the axis: bash 5.3, ksh93 and zsh all join on the first character of IFS here, and ours joined on a space in every dialect. bash 3.2 is the panel's one deviation and is recorded rather than modeled — it joins this on a space while joining `$*` on IFS in the same build, so it disagrees with itself, and no dialect here is graded against 3.2. The pair with the `[@]` row is what says the spelling decides which question is asked
+  ```sh
+  IFS=-; a=(x y z); v=${a[*]}; echo "[$v]"
+  ```
+- `expansion/a-star-list-of-parameters-joined-where-nothing-splits` — the bare spelling of the same core answer, unanimous across the whole panel including dash and bash 3.2 — the row that says the star half needs no dialect. It was a hard space here in every dialect, so this was the one shape wrong in all four at once against a panel that agrees completely
+  ```sh
+  IFS=-; set -- x y z; v=$*; echo "[$v]"
+  ```
+- `expansion/an-empty-ifs-joins-an-unsplit-list-with-nothing` — an IFS that is set and empty joins with *nothing* rather than falling back to a space: `xy`, in bash 5.3, ksh93 and zsh alike. It is the guard that separates this question from whether an unquoted list is joined before it is split — that one must not be asked when there is nothing to join with, and this one must, because the join happens either way and joining with nothing is a real answer
+  ```sh
+  IFS=""; a=(x y); v=${a[*]}; echo "[$v]"
+  ```
+- `expansion/a-star-subscript-as-a-redirection-target` — the fourth place the join was a hard space, and the one where the answer becomes a *filename*: ksh93 writes `x-y` where we wrote `x y`, so a script's redirection created a different file from the one the shell would have. bash refuses the target as ambiguous and zsh writes to both names, so ksh93 is the only member that reaches the joined reading — which is exactly why nothing here had ever measured it
+  ```sh
+  IFS=-; a=(x y); : > ${a[*]}; ls
+  ```
+- `expansion/a-conditional-assignment-keeps-the-arrays-fields` — `:=` comes to the *parameter* when its test does not fire, and the parameter is the whole array — so it keeps its fields exactly as `${a[@]:-d}` does. Every panel member with arrays answers two fields; joining them gives one holding `x y z`, which is a plausible string at status 0 and the reason the count is printed. The element holding a separator is what makes the bug visible at all: on `(one two)` the unquoted spelling joins on IFS and the split takes the fields straight back out, so it was right by coincidence wherever splitting is on
+  ```sh
+  a=("x y" z); set -- "${a[@]:=d}"; printf "%d" "$#"; printf "[%s]" "$@"; echo
+  ```
+- `expansion/a-conditional-error-keeps-the-arrays-fields` — the other operator with the same two outcomes, and the same answer when the test does not fire. It is a separate row because the firing side is a *fatal* one: an implementation that answered `the parameter` for a fired `?` would keep these fields and never raise the error, which is the one direction where being wrong loses a diagnostic the script asked for rather than a field boundary
+  ```sh
+  a=("x y" z); set -- "${a[@]:?e}"; printf "%d" "$#"; printf "[%s]" "$@"; echo
+  ```
+- `expansion/a-conditional-assignment-under-a-star-subscript-still-joins` — the guard on the half that must not move: `[*]` is one field with the elements joined on the first character of IFS, and it stays so under an operator. The pair with the `[@]` row above is what says the fix belongs to the subscript rather than to the operator — a reading that simply kept the fields under every conditional would answer this one wrongly, and it is quiet either way because both answers are the same characters differently divided
+  ```sh
+  IFS=-; a=("x y" z); set -- "${a[*]:=d}"; printf "%d" "$#"; printf "[%s]" "$@"; echo
+  ```
+- `expansion/a-bare-array-name-with-a-conditional-assignment` — the same operator reached through a bare name, which follows from the rewrite rather than from a second rule: where the name is the list the elements come through, and where it is `${a[0]}` the first alone does. zsh answers two fields and bash and ksh93 one. It was one joined field in all three, so the two spellings disagreed with the shell in opposite directions at once
+  ```sh
+  a=(one two); printf "[%s]" ${a:=d}; echo
+  ```
+- `expansion/a-bare-array-name-with-a-conditional-error` — the fourth conditional through the bare name, recorded beside the third because the two are answered by one test and a drifting copy of it would part them. The test does not fire on a set array, so nothing is fatal here and the row is about the fields — which is exactly the shape that returns a plausible answer with no complaint
+  ```sh
+  a=(one two); printf "[%s]" ${a:?e}; echo
+  ```
 - `expansion/element-exclusion-without-a-flag-group` — the same operator with no `(@)` in front and inside quotes, where the array joins to one string first: the pattern is then matched against `one two three` as a whole, matches nothing, and the value is left standing. Not a no-op by accident — `${a:#*}` on the same array is empty — and it is what says the operator asks about *elements*, of which a joined scalar has one. ksh93 answers `one` from the same characters, which is `${a#two}` against a scalar that is only the first element, so the two shells agree on neither the operator nor what `$a` names
   ```sh
   a=(one two three); echo "[${a:#two}]"
+  ```
+- `expansion/a-length-with-an-operator` — the length and an operator in one expansion, which two shells read as different things and four refuse outright. zsh measures what the operator *leaves* and answers 2; bash, bash 3.2, bash as `sh`, dash and ksh93 all call it a bad substitution. The number we answered was 3 — the length of the untouched value, the operator dropped on the floor — which is not merely the wrong one of two readings but nobody's at all, and it came back at status 0. A script computing a trimmed length got the untrimmed one
+  ```sh
+  v=abc; echo ${#v#a}
+  ```
+- `expansion/a-length-with-a-substring-operator` — the same pairing with the operator that looks least like one, and the row that says the refusal is about the operator rather than about the character `#`: there is no second `#` here and four of the five still refuse. zsh answers 2 for the same reason as the trim — apply, then measure
+  ```sh
+  v=abc; echo ${#v:1}
+  ```
+- `expansion/a-length-with-a-replacement-operator` — the operator that makes the value *longer*, which is what separates measuring the result from measuring the subject: zsh answers 4 where the untouched value is 3, so a reading that quietly ignored the operator cannot hide behind a coincidence here the way it can on a pattern that trims nothing
+  ```sh
+  v=abc; echo ${#v/b/XX}
+  ```
+- `expansion/a-length-with-an-operator-is-refused-late` — when each shell decides. Every one of the five that refuses the pairing defers it to the expansion — the branch is never taken, so nothing is wrong and all six print `reached`. That includes ksh93, whose grammar otherwise refuses an unknown operator while reading, so the deferral is measured rather than assumed from where the other refusals happen
+  ```sh
+  v=abc; if false; then echo ${#v#a}; fi; echo reached
+  ```
+- `expansion/a-length-with-no-operator-is-unanimous` — the boundary the previous rows need: the length on its own is the value's, a whole-array subscript counts elements and the positional spelling counts parameters, and all three are unanimous. A grammar that refused the length whenever anything followed the name would break every one of these while fixing the pairing above
+  ```sh
+  v=abc; a=(xx yy); set -- p qq; echo "${#v} ${#a[@]} ${#@}"
+  ```
+- `expansion/a-colon-before-a-trim-is-a-third-reading` — the three readings of the same six characters, in the one shell whose reading had no implementation behind it: ksh93 ignores the colon entirely, so all four of these are the plain trims and answer `lo`, ``, `hel` and `he`. zsh reads `:#` as an element exclusion and matches the pattern against the whole value, and bash refuses it as arithmetic with `#hel*` named as the offending token. Four operators in one row because the shortest-against-longest distinction has to survive the colon — a reading that dropped it and then re-scanned gets all four, and one that named them over somewhere else can lose the doubling
+  ```sh
+  v=hello; printf "[%s]" "${v:#hel*}" "${v:##hel*}" "${v:%lo}" "${v:%%l*}"; echo
+  ```
+- `expansion/a-colon-before-a-trim-reaches-the-array-forms` — the same node, so the per-element mapping under `[@]` comes for free: ksh93 trims each element and answers `foo r z`, which is exactly what `${a[@]#ba*}` does there. zsh drops the elements the pattern matches and answers `foo`, and the two are one field apart with no diagnostic either way. It is the row that says the colon is *ignored* rather than recorded — a node carrying a flag downstream would have had to be taught this separately
+  ```sh
+  a=(foo bar baz); printf "[%s]" "${a[@]:#ba*}"; echo
+  ```
+- `expansion/a-colon-before-anything-but-a-trim` — the boundary of the previous two rows, and what stops the colon from meaning nothing at all: an offset is still an offset in ksh93, a second colon is still a length, and `:-` is still a default. Unanimous across the panel, so a grammar that swallowed every colon rather than the four trims would break the shapes every shell shares while fixing the one only ksh93 has
+  ```sh
+  v=hello; printf "[%s]" "${v:2}" "${v:2:2}" "${v:-d}"; echo
   ```
 - `expansion/element-exclusion-empty-pattern` — an operator with nothing after it, which the whole-match rule makes meaningful rather than degenerate: the empty pattern matches only the empty string, so exactly the empty element goes. A reading that treated an absent pattern as `*` would empty the array, and one that treated it as no operator at all would leave it whole
   ```sh
@@ -1073,6 +1193,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expansion/an-element-ending-in-a-separator-meets-the-join` | `2[x][y]` | `3[x][][y]` | `3[x][][y]` | `3[x][][y]` | `2[x][y]` | `2[x:][y]` |
 | `expansion/an-unquoted-star-does-not-always-join-the-parameters` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` |
 | `expansion/an-unquoted-star-subscript-under-a-non-whitespace-separator` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `3[x][][y]` | `3[x][][y]` | `3[x][][y]` | `2[x][y]` | `2[x:][y]` |
+| `expansion/a-quoted-star-subscript-under-an-operator-is-the-axis` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[ox y]` | `[ox y]` | `[ox y]` | `[ox y]` | `[oxo y]` |
+| `expansion/an-at-list-joined-where-nothing-splits` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x y z]` | `[x y z]` | `[x y z]` | `[x y z]` | `[x-y-z]` |
+| `expansion/an-at-list-joined-in-a-here-document` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x y z]` | `[x y z]` | `[x y z]` | `[x y z]` | `[x-y-z]` |
+| `expansion/an-at-list-joined-into-a-pattern-operand` | `[Z]` | `[Zx-y]` | `[Zx-y]` | `[Zx-y]` | `[Zx-y]` | `[Z]` |
 | `readonly/an-associative-element-is-refused` | **2>** `<script>: 1: typeset: not found~<script>: 2: m[a]=1: not found~<script>: 3: typeset: not found~<script>: 4: m[k]=v: not found~<script>: 5: Bad substitution` *(status 2)* | `st=1 k=[unset] a=[1]~after` **2>** `<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: readonly variable` *(status 1)* | `st=1 k=[1] a=[1]~after` **2>** `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: is read only` *(status 1)* | **2>** `<script>:4: read-only variable: m` *(status 1)* |
 | `readonly/an-indexed-element-is-not-written` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: readonly variable` *(status 1)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: a` *(status 1)* |
 | `readonly/an-element-append-is-refused` | **2>** `<script>: 1: typeset: not found~<script>: 2: m[a]=1: not found~<script>: 3: typeset: not found~<script>: 4: m[a]+=Q: not found~<script>: 5: Bad substitution` *(status 2)* | `st=1 a=[1]~after` **2>** `<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: readonly variable` *(status 1)* | `st=1 a=[1]~after` **2>** `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: is read only` *(status 1)* | **2>** `<script>:4: read-only variable: m` *(status 1)* |
@@ -1273,6 +1397,24 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   IFS=:; a=("x:" y); set -- ${a[*]}; printf "%d" "$#"; printf "[%s]" "$@"; echo
   ```
+- `expansion/a-quoted-star-subscript-under-an-operator-is-the-axis` — the half that really is a disagreement, and the pair with the row above is the whole rule: quotes join first, `[*]` joins last. bash and ksh93 trim each element and join what is left, zsh joins first and trims the joined string once — one field either way, differing only in whether the `o` inside the join survived. Both answers are plausible strings, which is why the two rows have to stand together
+  ```sh
+  a=(oxo yo); printf "[%s]" "${a[*]%o}"; echo
+  ```
+- `expansion/an-at-list-joined-where-nothing-splits` — the character a list is joined with when it reaches a context that keeps no fields, which had never been asked: zsh joins on the first character of IFS and bash and ksh93 rejoin on a hard space. Silent in the shape that is hardest to see — the default IFS begins with a space, so every script that leaves IFS alone gets the right answer and the one that sets it gets a wrong one at status 0. The `*` spelling is a different question and is core; this is the `@` one
+  ```sh
+  IFS=-; a=(x y z); v=${a[@]}; echo "[$v]"
+  ```
+- `expansion/an-at-list-joined-in-a-here-document` — the same answer in a second context, which is what says it is one axis rather than one per context: a here-document body is lexed as double-quoted text and expanded span by span, so a whole-array subscript in one reaches the scalar view rather than the list path and was joined by a third copy of the same hard space. All four never-splitting contexts — an assignment's value, a `case` subject, a `[[ ]]` operand and this — answer alike within each shell
+  ```sh
+  IFS=-; a=(x y z); cat <<E
+  [${a[@]}]
+  E
+  ```
+- `expansion/an-at-list-joined-into-a-pattern-operand` — the quietest face of the join, because the joined string is a *pattern* and what it joins with decides whether it matches at all: on IFS the operand is the suffix `x-y` and the trim leaves `Z`, on a space it is `x y` and the trim silently does nothing. A trim that ran and changed nothing is indistinguishable from a pattern that did not match, and the status is 0 either way
+  ```sh
+  IFS=-; set -- x y; v="Zx-y"; echo "[${v%$@}]"
+  ```
 - `readonly/an-associative-element-is-refused` — the refusal on an *element* of a frozen name, which is the row #1012 is about. All three shells with the attribute refuse it and leave the table alone — bash 3.2 has no `-A` and dash has no arrays, so the panel's intersection here is the three that can be asked. Ours stored the element, said nothing and reported 0, which is a silent write to a table a script deliberately froze. Run from a script rather than `-c` because the two shells that end the script here would stop before the line that reads the table back
   ```sh
   typeset -A m
@@ -1368,6 +1510,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `echo/the-order-of-e-and-capital-e` | `-e -E m	n` | `m\tn` | `m\tn` | `m\tn` | `-E m	n` | `m	n` |
 | `readonly/reassignment-by-a-declaration` | **2>** `<shell>: 1: export: x: is read only` *(status 2)* | `after` **2>** `<shell>: line 1: x: readonly variable` | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | `after` **2>** `<shell>: x: readonly variable` | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
 | `readonly/reassignment-from-a-command-string` | **2>** `<shell>: 1: x: is read only` *(status 2)* | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | **2>** `<shell>: line 1: x: readonly variable` *(status 127)* | **2>** `<shell>: x: readonly variable` *(status 1)* | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
+| `jobs/the-last-background-pid-before-any-job` | `[]` | `[]` | `[]` | `[]` | `[]` | `[0]` |
+| `jobs/an-unstarted-last-background-pid-under-set-u` | **2>** `<shell>: 1: !: parameter not set` *(status 2)* | **2>** `<shell>: line 1: $!: unbound variable` *(status 127)* | **2>** `<shell>: line 1: $!: unbound variable` *(status 127)* | **2>** `<shell>: $!: unbound variable` *(status 127)* | `[]~st=0` | `[0]~st=0` |
+| `jobs/the-last-background-pid-under-set-u-once-a-job-has-run` | `st=0 set=[yes]` | `st=0 set=[yes]` | `st=0 set=[yes]` | `st=0 set=[yes]` | `st=0 set=[yes]` | `st=0 set=[yes]` |
 | `jobs/a-disowned-job-is-not-in-the-listing` | **2>** `<shell>: 1: Syntax error: "\|" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `sleep 0.4 &\| jobs >j.txt; echo "n=$(grep -c . j.txt)"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `sleep 0.4 &\| jobs >j.txt; echo "n=$(grep -c . j.txt)"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `\|'~<shell>: -c: line 0: `sleep 0.4 &\| jobs >j.txt; echo "n=$(grep -c . j.txt)"'` *(status 2)* | `n=1` | `n=0` |
 | `jobs/a-background-job-outlives-the-shell` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` |
 | `jobs/a-background-external-command-outlives-the-shell` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` |
@@ -1633,6 +1778,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `readonly/reassignment-from-a-command-string` — an assignment to a name that cannot take one, given as an argument rather than read from a file. All four stop here — and one of them does not when the same three lines come from a file, which the case recorded elsewhere shows. So a readonly reassignment is fatal in three shells always and in the fourth by invocation, which is the second thing found to work that way after an expansion that failed
   ```sh
   readonly x=1; x=2; echo after
+  ```
+- `jobs/the-last-background-pid-before-any-job` — one line, no pid in it, and the whole `$!` grid's only machine-independent row (#937): what the parameter is before a background command has been started. Five columns write nothing and zsh writes `0`, a number nothing ever had — and zero is not the same answer as nothing here, because a background builtin has no process and a shell really can hold a recorded zero. Everything else about `$!` carries a pid and cannot be recorded
+  ```sh
+  echo "[$!]"
+  ```
+- `jobs/an-unstarted-last-background-pid-under-set-u` — the bigger split on the same parameter, and the one scripts rely on: `set -u` exists to stop exactly this read. bash stops with `$!: unbound variable` at 127 — the `$` written back, as it is for a positional — dash stops with `!: parameter not set` at 2, and ksh93 and zsh carry on, ksh93 with nothing and zsh with its zero. Two against two, and neither answer predicts the row above: zsh's zero is a value and ksh93's empty is a set parameter, so the two quiet columns are quiet for different reasons
+  ```sh
+  set -u; echo "[$!]"; echo "st=$?"
+  ```
+- `jobs/the-last-background-pid-under-set-u-once-a-job-has-run` — the control for the row above, and it is what says the refusal is about *nothing having been started* rather than about `$!`: with one job behind it the parameter is set in all six columns and `set -u` has nothing to say. Read into a variable and reported as a yes rather than printed, because the value is a pid and a pid is not the same twice
+  ```sh
+  set -u; sleep 0 & wait; x=$!; echo "st=$? set=[${x:+yes}]"
   ```
 - `jobs/a-disowned-job-is-not-in-the-listing` — `&|` starts a job in the background and lets go of it, so nothing lists it — one shell's, and the only shape of it a record can hold. The sibling spelling `&!` cannot be recorded at all: bash 5.3 and ksh93 read those two characters as `&` and the `!` that negates a pipeline, and what they then do with a bare `!` is a divergence of its own (#948), so a row about the disowning would carry four unrelated ones beside it. `&|` has no such second reading in bash or dash, which both refuse it outright. ksh93's cell is the exception and is not this change's: it parses `&|` and means something else again — `echo hi &| echo done` prints only `done` there. Counted rather than printed, because what a listing looks like is four other rows' question
   ```sh
@@ -7688,6 +7845,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/valueless-local-shadowing-an-imported-name` | `read=[dumb]~TERM=dumb` | `read=[UNSET]~TERM=dumb` | `read=[UNSET]~TERM=dumb` | `read=[UNSET]~(none)` | `read=[dumb]~TERM=dumb` **2>** `<shell>: local: not found` | `read=[]~(none)` |
 | `declare/valueless-local-shadowing-a-callers-local` | `FOO=mid` | `FOO=mid` | `FOO=mid` | `(none)` | `FOO=bar` **2>** `<shell>: local: not found~<shell>: local: not found` | `(none)` |
 | `declare/valueless-local-over-an-unexported-name` | **2>** `<shell>: 1: local: -x: bad variable name` *(status 2)* | `(none)` | `(none)` | `(none)` | `(none)` **2>** `<shell>: local: not found` | `(none)` |
+| `declare/a-local-that-drops-the-export-attribute` | **2>** `<shell>: 1: local: +x: bad variable name` *(status 2)* | `FOO=bar~read=[z]~after=[bar]` | `FOO=bar~read=[z]~after=[bar]` | `FOO=bar~read=[z]~after=[bar]` | `FOO=bar~read=[bar]~after=[bar]` **2>** `<shell>: local: not found` | `(none)~read=[z]~after=[bar]` |
+| `declare/a-local-that-drops-the-export-attribute-over-an-unexported-name` | **2>** `<shell>: 1: local: +x: bad variable name` *(status 2)* | `(none)` | `(none)` | `(none)` | `(none)` **2>** `<shell>: local: not found` | `(none)` |
+| `declare/a-local-that-drops-the-export-attribute-then-puts-it-back` | **2>** `<shell>: 1: local: +x: bad variable name` *(status 2)* | `FOO=z` | `FOO=z` | `FOO=z` | `FOO=bar` **2>** `<shell>: local: not found` | `FOO=z` |
+| `declare/a-typeset-that-drops-the-export-attribute` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `FOO=bar~read=[z]` | `FOO=bar~read=[z]` | `FOO=bar~read=[z]` | `(none)~read=[z]` | `(none)~read=[z]` |
+| `declare/a-local-declared-twice-in-one-function` | `read=[x]~FOO=x` | `read=[x]~FOO=x` | `read=[x]~FOO=x` | `read=[x]~FOO=x` | `read=[bar]~FOO=bar` **2>** `<shell>: local: not found~<shell>: local: not found` | `FOO=x~read=[x]~(none)` |
+| `declare/a-typeset-declared-twice-in-one-function` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `read=[x]` | `read=[x]` | `read=[x]` | `read=[x]` | `FOO=x~read=[x]` |
+| `declare/a-global-declaration-over-this-functions-local` | `read=[x]~after=[bar]` **2>** `<shell>: 1: typeset: not found` | `read=[x]~after=[bar]` | `read=[x]~after=[bar]` | `read=[x]~after=[bar]` **2>** `<shell>: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: local: not found~<shell>: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `read=[x]~after=[bar]` |
 | `declare/a-declaration-without-a-value-exports-nothing` | `(none)~(none)` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `(none)~BAR=` | `(none)~BAR=` | `FOO=~BAR=` | `(none)~BAR=` | `(none)~BAR=` |
 | `declare/a-declared-name-a-local-has-shadowed` | `(none)~(none)` **2>** `<shell>: 1: typeset: not found` | `(none)~(none)` | `(none)~(none)` | `FOO=~FOO=` | `(none)~(none)` **2>** `<shell>: local: not found` | `(none)~FOO=` |
 | `declare/local-shadowing-an-imported-name` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=dumb~TERM=dumb` **2>** `<shell>: local: not found` | `(none)~TERM=dumb` |
@@ -7798,6 +7962,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/valueless-local-over-an-unexported-name` — the other side of it: `-x` is the local's own attribute and says nothing about the name it shadows, so a shadowed name nothing exported reaches no child — an exported name with no value is told to nobody in any shell measured
   ```sh
   FOO=bar; f() { local -x FOO; env | grep '^FOO=' || echo "(none)"; }; f
+  ```
+- `declare/a-local-that-drops-the-export-attribute` — `+x` takes the attribute off the *local* and says nothing about the binding behind it, which is still exported and still holds `bar` — so bash hands the child `bar` while the shell itself reads `z`. The same shape as `declare/valueless-local-shadowing-an-exported-name` with a value on the line, and the value is what made it fail: the local had one of its own, so the list of shadowed exports passed the name over, and the unexported local made the ordinary loop pass it over too. The child was told nothing at all by either. zsh and ksh93 tell it nothing for the reason `declare/local-shadowing-an-exported-name` records — the local never inherited the attribute — and `after` shows the outer binding untouched
+  ```sh
+  export FOO=bar; f() { local +x FOO=z; env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"; }; f; echo "after=[$FOO]"
+  ```
+- `declare/a-local-that-drops-the-export-attribute-over-an-unexported-name` — the control the row above needs, and what says it is the shadowed binding speaking rather than a value the local kept: with nothing exported behind it, the same line tells the child nothing in every shell. A fix that handed over the outer value unconditionally would pass the case above and fail here
+  ```sh
+  FOO=bar; f() { local +x FOO=z; env | grep '^FOO=' || echo "(none)"; }; f
+  ```
+- `declare/a-local-that-drops-the-export-attribute-then-puts-it-back` — the third leg: `export` inside the function puts the attribute on the local, and the child is then told `z` rather than the `bar` it was told a line earlier. Unanimous in bash and zsh, which is what makes the difference between the two rows above a fact about the *attribute* and not about the spelling
+  ```sh
+  export FOO=bar; f() { local +x FOO=z; export FOO; env | grep '^FOO=' || echo "(none)"; }; f
+  ```
+- `declare/a-typeset-that-drops-the-export-attribute` — the same rule through the spelling ksh93 has, in the keyword function ksh93 gives a scope. bash hands the child the outer `bar`; ksh93 and zsh tell it nothing, the same way they answer the `local` spelling — so the split is `LocalInheritsTheExportAttribute` and not a rule of its own. It is the row that says ksh93 is on that axis at all, since it has no `local` to be asked with
+  ```sh
+  export FOO=bar; function f { typeset +x FOO=z; env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"; }; f
+  ```
+- `declare/a-local-declared-twice-in-one-function` — a valueless declaration of a name its own scope already declared: bash 5.3, bash 3.2 and zsh all leave `x` standing, because the value it would hide is the local the first line made and there is no outer value in front of it any more. We read UNSET — a declaration that only meant to name the variable again threw away what the function had just put in it, silently and at status 0. `declare/valueless-local-shadowing-a-callers-local` is the case this must not become: a *different* function's declaration does hide
+  ```sh
+  export FOO=bar; f() { local FOO=x; local FOO; echo "read=[${FOO-UNSET}]"; env | grep '^FOO=' || echo "(none)"; }; f
+  ```
+- `declare/a-typeset-declared-twice-in-one-function` — the same shape through `typeset` in a keyword function, and the one spelling all four shells with the builtin answer — ksh93 included, which the `local` row cannot ask. Unanimous `x`, which is what makes this core rather than either shell's reading
+  ```sh
+  export FOO=bar; function f { typeset FOO=x; typeset FOO; echo "read=[${FOO-UNSET}]"; }; f
+  ```
+- `declare/a-global-declaration-over-this-functions-local` — the third spelling of the same bug: `-g` takes no shadow, so it is not the declaration that put anything in front of the name — but the scope had one already and the value went away anyway. bash 5.3 and zsh read `x` and leave the global `bar` alone. bash 3.2 and ksh93 have no `-g` and their cells are the refusal, which is why the row is worth having rather than folding into the one above: it reaches the same code by the path where no shadow is taken at all
+  ```sh
+  export FOO=bar; f() { local FOO=x; typeset -g FOO; echo "read=[${FOO-UNSET}]"; }; f; echo "after=[${FOO-UNSET}]"
   ```
 - `declare/a-declaration-without-a-value-exports-nothing` — declared and assigned-empty are the same to every listing and not to a child: the shell that considers a name declared without a value to be *set* still tells no command about it, where `=` on the same line hands over an empty entry. Found by the case above, which had this shell exporting an empty value under a name it should say nothing about
   ```sh
@@ -8836,6 +9028,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `harness/a-login-bundle-runs-the-command-string` | `ran` | `ran` | `ran` | `ran` | `ran` | `ran` |
 | `harness/the-login-letter-in-dollar-dash` | `no-l` | `no-l` | `no-l` | `no-l` | `has-l` | `has-l` |
 | `harness/the-login-letter-spelled-as-its-own-word` | `no-l` | `no-l` | `no-l` | `no-l` | `has-l` | `has-l` |
+| `harness/a-dashed-argv-zero-is-a-login-shell` | `no-l` | `no-l` | `no-l` | `no-l` | `has-l` | `has-l` |
+| `harness/an-undashed-argv-zero-is-not-a-login-shell` | `no-l` | `no-l` | `no-l` | `no-l` | `no-l` | `no-l` |
 | `harness/an-interactive-bundle-runs-the-command-string` | `ran~has-i` **2>** `<shell>: 0: can't access tty; job control turned off` | `ran~has-i` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `ran~has-i` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `ran~has-i` **2>** `<shell>: no job control in this shell` | `ran~has-i` | `ran~has-i` |
 | `harness/a-login-and-interactive-bundle` | `ran` **2>** `<shell>: 0: can't access tty; job control turned off` | `ran` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `ran` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `ran` **2>** `<shell>: no job control in this shell` | `ran` | `ran` |
 | `harness/an-option-after-the-command-string-is-an-operand` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` |
@@ -8857,6 +9051,14 @@ grades it and nothing drift-checks it either, for the same reason.
   case $- in *l*) echo has-l ;; *) echo no-l ;; esac
   ```
 - `harness/the-login-letter-spelled-as-its-own-word` — the same question with the letters unbundled, and every column answers exactly as it did bundled — so the split above belongs to the shell rather than to how the caller spelled it. Without this pair a front end that recorded the letter only for a bundle would pass the row above
+  ```sh
+  case $- in *l*) echo has-l ;; *) echo no-l ;; esac
+  ```
+- `harness/a-dashed-argv-zero-is-a-login-shell` — the login route no option can reach, and the one `login` and every terminal emulator's "run as a login shell" actually takes: a dashed `argv[0]` and nothing else. The split is exactly the one the two rows above record — ksh93 and zsh say `has-l`, dash and all three bash columns say `no-l` — which is what says the letter is about login-ness rather than about the option having been written. The name is `-shell` rather than `-sh` on purpose: a dash in front of `sh` would ask two questions at once, since that name also starts a shell in POSIX mode, and measured with `-shell` the answer is the same in all six. Paired with the row below, which is the same name undashed
+  ```sh
+  case $- in *l*) echo has-l ;; *) echo no-l ;; esac
+  ```
+- `harness/an-undashed-argv-zero-is-not-a-login-shell` — the control the row above needs, and unanimous: one character earlier is the whole of the convention, so the same name without its dash is no login shell in any of the six. Without this a front end that put `l` in `$-` for every invocation, or that read login-ness off the name rather than off the dash, would pass the row above
   ```sh
   case $- in *l*) echo has-l ;; *) echo no-l ;; esac
   ```

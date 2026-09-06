@@ -1179,6 +1179,17 @@ func (sh Shell) runInput(in source) int {
 	// whether anyone is watching. `$-` reports it as `i`, which is measured
 	// unanimous for `-i` on every route.
 	r.Interactive = in.interactive
+	// And the other invocation fact `$-` reports, by either of the two
+	// routes there are — a dashed argv[0] or an explicit `-l`. Handed over
+	// for the same reason: interp never saw an argument vector, and no
+	// `set` letter turns login-ness on for it to have written (#1034).
+	//
+	// loginShell() rather than in.startup.login, because the letter is
+	// measured on both routes: `exec -a -ksh ksh -c` puts it in `$-` with
+	// no option written at all. The two routes differ over which startup
+	// files are read, which is readsLoginProfile's question and not this
+	// one.
+	r.LoginShell = in.loginShell()
 	if in.interactive {
 		// `sh -i script.sh` is interactive while it runs, and an interactive
 		// shell runs the monitor: measured, bash 5.3.15, dash, ksh93u+ and

@@ -31,6 +31,8 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | an EXIT trap set in a function fires there | no | no | no | **yes** |
 | a signal handler sees the earlier `$?` | no | no | no | **yes** |
 | an unset positional survives `set -u` | no | no | **yes** | no |
+| `$!` before any job is `0` | no | no | no | **yes** |
+| `$!` before any job is unset for `set -u` | yes | yes | **no** | **no** |
 | `set +x` traces itself | yes | yes | **no** | yes |
 | `set -f` turns off globbing | yes | yes | yes | **no** |
 | each assignment gets its own trace line | no | **yes** | **yes** | no |
@@ -5497,6 +5499,82 @@ bash reports success if it signaled anything at all, and zsh reports the
 number that failed — which is a status carrying a count rather than a
 verdict, and the reason this is a policy rather than a bool.
 
+**`LastBackgroundPidIsZeroBeforeAnyJob`** — bash no · dash no · ksh93 no · zsh yes
+
+Makes `$!` read `0` before a background command has been started. zsh
+alone, and it is a number nothing ever had: `sh -c 'echo "[$!]"'` writes
+`[0]` there and `[]` in bash 5.3.15, bash 3.2.57, bash 3.2 run as `sh`,
+dash and ksh93u+.
+
+Zero is not the same answer as nothing, which is why this is a switch
+and not a rendering: a background builtin runs in this process and its
+job carries no pid, so a shell really can hold a *recorded* zero, and a
+script could not tell that apart from zsh's if the two were spelled
+alike.
+
+Read without asking. A preset that has not chosen answers with nothing,
+which is what five of the six columns do; refusing a `$!` expansion over
+an unanswered field would break the `p=$!` of every script running under
+it, including before its first job, where the read is the ordinary one.
+
+**`LastBackgroundPidIsUnsetBeforeAnyJob`** — bash yes · dash yes · ksh93 no · zsh no
+
+Makes `$!` an *unset* parameter before a background command has been
+started, so `set -u` is fatal about it.
+
+A different split from the field above and the more useful one — two
+against two, and `set -u` is what scripts actually rely on:
+
+| shell | `set -u; echo "[$!]"; echo "st=$?"` |
+| --- | --- |
+| bash 5.3.15 | `$!: unbound variable`, status 127 |
+| bash 3.2.57 | `$!: unbound variable`, status 127 |
+| bash 3.2 as `sh` | `$!: unbound variable`, status 127 |
+| dash | `!: parameter not set`, status 2 |
+| ksh93u+ | `[]` then `st=0` — set, and empty |
+| zsh 5.9.2 | `[0]` then `st=0` — set, and zero |
+
+Neither field predicts the other. zsh's zero is a value and ksh93's
+empty is a set parameter, so the two quiet columns are quiet for
+different reasons, and a single field could say only one of those
+things. `TestTheTwoLastBackgroundPidAxesAreIndependent` runs all four
+combinations, the one no shell in the panel is included.
+
+Nor is it `UnsetPositionalIsAllowed` reached from another route. ksh93
+lets an unset `$1` be empty and lets `$!` be empty too, but zsh refuses
+`$1` and does not refuse `$!`, so the pair splits the panel differently.
+
+The wording and the status are the same two Diagnostics fields an unset
+positional reads, because measured they are the same two lines: bash
+writes the `$` back for `$!` exactly as it does for `$1`, which is
+`Diagnostics.UnboundPositional`, and dash's is its ordinary `parameter
+not set`. A third field would have held a copy of one of those in all
+four presets.
+
+Read without asking, for the reason above. Unanswered means the
+parameter is set and empty, which is what this shell did before the axis
+existed and what the two shells that carry on do.
+
+One spelling is recorded and not claimed. bash writes `$!` back for the
+`$!` spelling and `!` alone for `${!}` — measured, `set -u; echo "${!}"`
+is `!: unbound variable` in 5.3.15 where `$!` is `$!: unbound variable`,
+and 3.2.57 prints *two* lines for the braced form. This shell says
+`$!: unbound variable` for both. A second wording field would hold a
+copy of the first in all four presets to carry one character in one
+shell in a form nothing writes, and the braced spelling collides with
+bash's indirection syntax besides, which is what the two lines from 3.2
+are.
+
+Corpus: `jobs/the-last-background-pid-before-any-job` reads the
+parameter, `jobs/an-unstarted-last-background-pid-under-set-u` asks
+`set -u` about it, and
+`jobs/the-last-background-pid-under-set-u-once-a-job-has-run` is the
+control that says the refusal is about nothing having been started
+rather than about `$!` — with one job behind it the parameter is set in
+all six columns. These are the whole `$!` grid's only recordable rows:
+everything else about the parameter carries a pid, which is not the same
+twice.
+
 **`MonitorNeedsATerminal`** — bash no · dash yes · ksh93 no · zsh yes
 
 Ties turning `set -m` on to having a terminal. Measured in shells run
@@ -6805,6 +6883,13 @@ This is the shape used to declare a local before assigning it
 conditionally, so the difference is silent: the function reads the
 caller's value where it expected nothing.
 
+**Asked of the declaration and not of the scope.** The value hidden is an
+*outer* one, so a second declaration of a name its own scope has already
+declared asks nothing: it stands in front of the local the first one
+made, and every shell with the builtin leaves that standing. See the note
+under `LocalInheritsTheExportAttribute` for the measurement and for the
+`typeset -g` route to the same place (#999).
+
 **`DeclarationAssignmentClearsTheExportAttribute`** — bash no · dash absent · ksh93 yes · zsh no
 
 Takes the export attribute off a name a declaration utility assigns to.
@@ -6915,21 +7000,64 @@ standing in front of it has none of its own.** What the shell reads and
 what a child is told part company there, which is why only a real child
 can measure it.
 
-Three neighbors of *that* are recorded rather than modeled, each one a
-place where bash reaches past a binding in a way a single variable table
-cannot see, and both builds agree on all three:
+The rule reaches two more shapes, and both are modeled (#999). Both bash
+builds agree on both, so neither is a version split, and neither needed a
+new axis:
 
-- `local +x FOO=z` over an exported `FOO` hands a child `bar` and not
-  `z`. Taking the attribute off the local uncovers the binding behind
-  it, which needs an export attribute per binding rather than per name.
-  We hand the child nothing.
-- `local FOO` after a `local FOO=x` in the same scope leaves the value
-  standing — `${FOO-UNSET}` is `x` — where the same declaration in a
-  *new* scope hides it. We read it as unset. The child is told `x`
-  either way.
-- `unset` on such a local reads as unset in every build and still hands
-  a child the outer value. That one we match, by the rule above rather
-  than by a case of its own.
+**A local that drops the attribute uncovers the binding behind it.**
+`local +x FOO=z` over an exported `FOO` hands a child `bar` and not `z`.
+`+x` is the *local's* attribute and says nothing about what it shadows,
+so the shadowed binding is still exported, still holds `bar`, and is
+still the one a child is told about — while the shell itself reads `z`.
+
+    export FOO=bar; f() { local +x FOO=z; env | grep '^FOO='; }; f
+
+    bash 5.3, bash 3.2, bash as sh   FOO=bar
+    ksh93 (typeset, keyword func)    nothing
+    zsh                              nothing
+
+Three measurements say it is the shadowed binding speaking rather than a
+value the local kept: with nothing exported behind it the same line tells
+a child nothing; `export FOO` inside the function puts the attribute on
+the local and the child is then told `z`; and two functions deep it is
+the caller's local that is handed over. ksh93 and zsh tell a child
+nothing because their local never inherits the attribute — this axis's
+own `no`, not a second question.
+
+It falls out of the rule above with one word changed: the declaration
+standing in front has none of its **exported** value of its own, rather
+than none of its own. A local with a value the child cannot be told about
+is, from the environment's side, a local with nothing to say. Reading it
+the other way left the name in the gap between two lists — the loop over
+the tables passed it over because the local is not exported, and the list
+of shadowed exports passed it over because the local has a value — and
+the child was told nothing at all.
+
+**A redeclaration in the same scope hides nothing.**
+`local FOO` after a `local FOO=x` leaves the value standing: `x`, not
+UNSET, in bash 5.3, bash 3.2, bash as `sh` and zsh, and `typeset FOO=x;
+typeset FOO` in a keyword function reads `x` in all four shells that
+spell the builtin, ksh93u+ included. So this is **core** and not this
+axis at all — what a valueless declaration hides is an *outer* value, and
+a scope that already declared the name has none in front of it. The value
+the second declaration would hide is the local the first one made.
+
+    f() { local FOO=x; local FOO; ... }      x       — same scope
+    f() { local FOO=x; g; }; g() { local FOO; ... }  UNSET — new scope
+
+The second line is what `ValuelessDeclarationHidesTheOuterValue` is
+about, and the two must not be answered together. Asking the *scope*
+whether the name was shadowed answered them identically, so a line that
+only meant to name the variable again threw away what the function had
+just computed — silently, at status 0. The question is whether **this
+declaration** took the shadow. `typeset -g FOO` after a `local FOO=x` is
+the same shape reached where no shadow is taken at all, and the same
+answer.
+
+One neighbor is still recorded rather than modeled: `unset` on such a
+local reads as unset in every build and still hands a child the outer
+value. That one we match, by the rule above rather than by a case of its
+own.
 
 
 ### `unset`

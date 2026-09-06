@@ -70,6 +70,8 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"EqualsExpansion", s.EqualsExpansion, interp.No},
 		{"LastPipelineElementInCurrentShell", s.LastPipelineElementInCurrentShell, interp.No},
 		{"UnsetPositionalIsAllowed", s.UnsetPositionalIsAllowed, interp.No},
+		{"LastBackgroundPidIsUnsetBeforeAnyJob", s.LastBackgroundPidIsUnsetBeforeAnyJob, interp.Yes},
+		{"LastBackgroundPidIsZeroBeforeAnyJob", s.LastBackgroundPidIsZeroBeforeAnyJob, interp.No},
 		{"ExitTrapIsFunctionLocal", s.ExitTrapIsFunctionLocal, interp.No},
 		{"ArithNameValueRecurses", s.ArithNameValueRecurses, interp.Yes},
 		{"ArithInvalidOctalDigitIsError", s.ArithInvalidOctalDigitIsError, interp.Yes},
@@ -89,6 +91,11 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"LengthOfSpecialIsCount", s.LengthOfSpecialIsCount, interp.Yes},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.Yes},
+		// The other join, and the opposite answer: an unquoted `@` list
+		// reaching a context that keeps no fields is rejoined on a hard
+		// space here — `IFS=-; a=(x y z); v=${a[@]}` is `x y z`, against
+		// `x-y-z` in zsh. The `*` spelling is core and does not ask this.
+		{"UnsplitAtListJoinsOnIFS", s.UnsplitAtListJoinsOnIFS, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.No},

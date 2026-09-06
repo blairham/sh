@@ -70,6 +70,8 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"BracketCaretNegates", s.BracketCaretNegates, interp.Yes},
 		{"EqualsExpansion", s.EqualsExpansion, interp.No},
 		{"UnsetPositionalIsAllowed", s.UnsetPositionalIsAllowed, interp.Yes},
+		{"LastBackgroundPidIsUnsetBeforeAnyJob", s.LastBackgroundPidIsUnsetBeforeAnyJob, interp.No},
+		{"LastBackgroundPidIsZeroBeforeAnyJob", s.LastBackgroundPidIsZeroBeforeAnyJob, interp.No},
 		{"ExitTrapIsFunctionLocal", s.ExitTrapIsFunctionLocal, interp.No},
 		{"ArithNameValueRecurses", s.ArithNameValueRecurses, interp.Yes},
 		{"ArithInvalidOctalDigitIsError", s.ArithInvalidOctalDigitIsError, interp.No},
@@ -87,6 +89,10 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.No},
+		// bash's answer on this one against its own on the axis above: the
+		// two partition the panel differently, which is why neither can
+		// stand in for the other.
+		{"UnsplitAtListJoinsOnIFS", s.UnsplitAtListJoinsOnIFS, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},

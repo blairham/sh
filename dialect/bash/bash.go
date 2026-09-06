@@ -100,6 +100,13 @@ func Semantics() interp.Semantics {
 	// trailing separator makes no field — so this one answer is what the
 	// panel's two shapes of disagreement both come from.
 	s.UnquotedListJoinsOnIFS = interp.Yes
+	// The other join, and the opposite answer: where an unquoted `@` list
+	// reaches a context that keeps no fields, this shell rejoins it on a
+	// hard space rather than on IFS. `IFS=-; a=(x y z); v=${a[@]}` is
+	// `x y z` here and `x-y-z` in zsh, and the same in a `case` subject, a
+	// `[[ ]]` operand and a here-document body. The `*` spelling is core and
+	// does not come through here — `v=${a[*]}` is `x-y-z` in this shell.
+	s.UnsplitAtListJoinsOnIFS = interp.No
 	// The panel's holdout on the login profile, measured on all four
 	// non-interactive routes and in both bash 5.3 and the 3.2 macOS ships:
 	// `exec -a -bash bash script.sh` reads neither ~/.bash_profile nor
@@ -165,6 +172,7 @@ func Semantics() interp.Semantics {
 	// not. The `s` of the standard-input route is not added under `-c`
 	// here — ksh93 alone does that.
 	s.CommandStringShowsCInDollarDash = interp.Yes
+	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.No
 	s.ArrayNameWithoutSubscriptIsTheList = interp.No
@@ -514,6 +522,18 @@ func Semantics() interp.Semantics {
 	// the `Done` row, where the other three print at least one. It is the
 	// route and not the terminal — `bash -i < script` announces both.
 	s.InteractiveScriptAnnouncesJobs = interp.No
+	// `$!` before any background command is *unset*, not set and empty:
+	// measured, `set -u; echo "[$!]"` writes `$!: unbound variable` and stops
+	// at 127 in 5.3.15, in 3.2.57 and in 3.2 run as `sh`. Without `set -u` it
+	// expands to nothing, which is the other four columns' answer too, so the
+	// difference only shows where a script asked to be told.
+	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.Yes
+	// And it reads as nothing rather than as a zero: measured,
+	// `echo "[$!]"` writes `[]` in all three bash columns. Stated rather
+	// than left unanswered — the field is read without asking, so unanswered
+	// gives the same behavior, but only a written answer says it was
+	// measured.
+	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.No

@@ -28,6 +28,13 @@ func Dialect() syntax.Dialect {
 		"typeset": true, "export": true, "readonly": true,
 	}
 	d.ParamIndirection = true
+	// A colon written before a trim is ignored here: `${v:#hel*}` is
+	// `${v#hel*}` and comes to `lo`, where zsh reads the same six characters
+	// as an element exclusion and bash refuses them as arithmetic. All four
+	// trims, measured — `:#`, `:##`, `:%` and `:%%` — and nothing else: the
+	// replacement, the case changes and a colon with a space after it stay
+	// arithmetic errors, and `${v:2}` is still an offset.
+	d.ParamColonBeforeTrimIsIgnored = true
 	// A function body that is not compound may carry no redirection here:
 	// `f() echo hi` runs and `f() >out`, `f() echo hi >out` and `f() x=1
 	// >out` are all a syntax error at the operator. A braced body is not
@@ -87,6 +94,11 @@ func Semantics() interp.Semantics {
 	// join: `IFS=:; set -- "x:" y; printf "[%s]" $@` is `[x][y]` here and
 	// `[x][][y]` in bash, which joins to `x::y` first.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// bash's answer on the other join, against its own on the one above:
+	// `IFS=-; a=(x y z); v=${a[@]}` is `x y z` here where zsh gives
+	// `x-y-z`. The two axes partition the panel differently, which is why
+	// neither can stand in for the other.
+	s.UnsplitAtListJoinsOnIFS = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD
@@ -127,6 +139,7 @@ func Semantics() interp.Semantics {
 	// three's is "the program came from standard input"; this is the one
 	// invocation where those two differ.
 	s.CommandStringShowsCInDollarDash = interp.Yes
+	s.LoginShowsLInDollarDash = interp.Yes
 	s.CommandStringShowsSInDollarDash = interp.Yes
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
@@ -475,6 +488,21 @@ func Semantics() interp.Semantics {
 	// `-i script.sh` through a pseudo-terminal, `[1]\t<pid>` as the job
 	// starts and `[1] +  Done  sleep 0.3 &` as it ends.
 	s.InteractiveScriptAnnouncesJobs = interp.Yes
+	// `$!` before any background command is set and empty here, so `set -u`
+	// has nothing to say about it: measured, `set -u; echo "[$!]"; echo
+	// "st=$?"` writes `[]` and then `st=0`. Stated rather than left
+	// unanswered, because ksh93 is on the quiet side of a two-against-two
+	// split and an unanswered field would read as "not yet measured".
+	//
+	// Note this is *not* UnsetPositionalIsAllowed reached from another route.
+	// ksh93 does let an unset `$1` be empty, and it lets `$!` be empty too,
+	// but the two are separate answers: bash refuses both and dash refuses
+	// both, while zsh refuses `$1` and not `$!`.
+	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.No
+	// And it reads as nothing rather than as a zero: `echo "[$!]"` is `[]`,
+	// which is what makes ksh93's empty a *set* parameter with no value where
+	// zsh's is a value.
+	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.Yes

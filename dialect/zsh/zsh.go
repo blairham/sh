@@ -97,6 +97,14 @@ func Dialect() syntax.Dialect {
 	// nineteen lines, and a refusal there leaves eighteen variables empty.
 	d.ParamTildeFlag = true
 	d.ParamElementSelection = true
+	// The length may carry an operator here, and it measures what the
+	// operator *leaves*: `v=abc; echo ${#v#a}` is 2. bash, bash 3.2, bash as
+	// `sh`, dash and ksh93 all call the same text a bad substitution, so
+	// this is the grammar that has the construct rather than a different
+	// arithmetic over one they share. Uniform across every operator this
+	// shell has — the trims, the substring, the replacement, the four
+	// conditionals and the element exclusion — measured 2026-09-06.
+	d.ParamLengthTakesAnOperator = true
 	// An expansion where a parameter name would be — `${${v}#a}`, which is
 	// how this shell applies one expansion to the result of another and is
 	// idiomatic here rather than a corner. Measured 2026-09-05 on zsh 5.9.2
@@ -163,6 +171,19 @@ func Semantics() interp.Semantics {
 	// `-i script.sh` through a pseudo-terminal, `[1] <pid>` as the job
 	// starts and `[1]  + done       sleep 0.3` as it ends.
 	s.InteractiveScriptAnnouncesJobs = interp.Yes
+	// `$!` before any background command is `0` here and empty in the other
+	// five columns — a number nothing ever had. Measured,
+	// `sh -c 'echo "[$!]"'` writes `[0]`.
+	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.Yes
+	// And that zero is *set*, so `set -u` carries on: measured,
+	// `set -u; echo "[$!]"; echo "st=$?"` writes `[0]` then `st=0`. It is the
+	// same side of that split as ksh93 and for a different reason — ksh93 has
+	// nothing there and does not mind, zsh has a value.
+	//
+	// Stated even though it is the unanswered default, because zsh refuses an
+	// unset `$1` and does not refuse `$!`, and a reader checking that pair
+	// needs to see the second answer written down.
+	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.No
 	// Measured: `echo $-` reports `569X` under -c, a script file and
 	// standard input alike — letters from zsh's own single-letter option
 	// namespace, which shares almost nothing with the other shells'. The
@@ -202,6 +223,7 @@ func Semantics() interp.Semantics {
 		SuppressAll: "-f --no-rcs",
 	}
 	s.CommandStringShowsCInDollarDash = interp.No
+	s.LoginShowsLInDollarDash = interp.Yes
 	s.CommandStringShowsSInDollarDash = interp.No
 	// The panel's holdout: `echo hi >&-` is status 0 here and 1 in the other
 	// three — the text is quietly lost and nothing is said about a simple
@@ -295,6 +317,12 @@ func Semantics() interp.Semantics {
 	// printf "[%s]" ${a[*]}` is `[x][y]` here, and with `shwordsplit` on,
 	// `a=("x y" z)` is `[x][y][z]` — neither of which a join can produce.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// And the join this shell *does* perform: an unquoted `@` list reaching
+	// a context that keeps no fields is joined on the first character of
+	// IFS, so `IFS=-; a=(x y z); v=${a[@]}` is `x-y-z` where bash and ksh93
+	// give `x y z`. With IFS set and empty it is `xy`, which is what says
+	// the separator is read from IFS rather than defaulted to a space.
+	s.UnsplitAtListJoinsOnIFS = interp.Yes
 	s.GlobExpansionResults = interp.No
 	s.GlobNoMatchIsError = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No

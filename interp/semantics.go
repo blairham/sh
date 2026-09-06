@@ -88,6 +88,37 @@ type Semantics struct {
 	// in every shell measured. Both are core.
 	UnquotedListJoinsOnIFS Answer
 
+	// UnsplitAtListJoinsOnIFS decides the character an unquoted list spelled
+	// `@` is joined with when it reaches a context that keeps no fields: the
+	// first character of IFS, or a hard space.
+	//
+	// True in zsh and dash; false in bash, bash 3.2, bash as `sh` and ksh93.
+	// Measured 2026-09-06 in the four contexts that never split — an
+	// assignment's value, a `case` subject, a `[[ ]]` operand and a
+	// here-document body — with `IFS=-` and a three-element list:
+	//
+	//	IFS=-; a=(x y z); v=${a[@]}   zsh x-y-z · bash, ksh93 x y z
+	//	IFS=-; set -- x y z; v=${@}   zsh, dash x-y-z · bash, ksh93 x y z
+	//
+	// All four contexts answer alike within each shell, which is what makes
+	// this one axis rather than one per context.
+	//
+	// The `*` spelling is **not** this question and must not reach it. `$*`,
+	// `${a[*]}` and a range subscript join on the first character of IFS in
+	// every graded dialect's shell, so that half is core — see
+	// Runner.unsplitJoinSeparator, which answers the star before it asks.
+	//
+	// Asked only at the disagreement, and the guard is not the one
+	// UnquotedListJoinsOnIFS uses. Here the join happens either way and only
+	// its character is in question, so an IFS that is *set and empty* is a
+	// live answer rather than a reason not to ask: `IFS=""; a=(x y); v=$a`
+	// is `xy` in zsh against `x y` in bash, and joining with nothing is
+	// exactly what zsh does. What does make the readings coincide is an IFS
+	// whose first character is already a space — which is every script that
+	// leaves IFS alone, and the reason this is silent — and a list of fewer
+	// than two elements, which uses no separator at all.
+	UnsplitAtListJoinsOnIFS Answer
+
 	// GlobExpansionResults matches the *result* of an expansion against the
 	// filesystem. False in zsh, where only a pattern written literally in the
 	// source is expanded. The same rule decides whether `[[ abc == $p ]]`
@@ -379,6 +410,44 @@ type Semantics struct {
 	// a script that reads an argument it was not given carries on there and
 	// stops everywhere else.
 	UnsetPositionalIsAllowed Answer
+	// LastBackgroundPidIsZeroBeforeAnyJob makes `$!` read `0` before a
+	// background command has been started. zsh alone, and it is a number
+	// nothing ever had: `sh -c 'echo "[$!]"'` writes `[0]` there and `[]` in
+	// bash 5.3, bash 3.2, bash 3.2 as `sh`, dash and ksh93u+.
+	//
+	// Zero is not the same answer as nothing, which is why this is a switch
+	// and not a rendering: a background builtin runs in this process and its
+	// job carries no pid, so a shell really can hold a *recorded* zero, and a
+	// script cannot tell that apart from zsh's if the two are spelled alike.
+	//
+	// Read without asking. A dialect that answers nothing answers with
+	// nothing, which is what five of the six columns do, and refusing a `$!`
+	// expansion over an unanswered field would break the `p=$!` of every
+	// script that runs under a preset which has not chosen — including
+	// before its first job, where the read is exactly the ordinary one.
+	LastBackgroundPidIsZeroBeforeAnyJob Answer
+	// LastBackgroundPidIsUnsetBeforeAnyJob makes `$!` an *unset* parameter
+	// before a background command has been started, so `set -u` is fatal
+	// about it.
+	//
+	// A different split from the field above, and the more useful one: two
+	// shells against two. `set -u; echo "[$!]"` stops bash — `$!: unbound
+	// variable`, status 127 — and dash — `!: parameter not set`, status 2 —
+	// and is silently empty in ksh93 and zero in zsh, both carrying on at 0.
+	// Neither answer predicts the other: zsh's zero is set and ksh93's empty
+	// is set too, for different reasons.
+	//
+	// It is the half a script relies on, since `set -u` exists to stop
+	// exactly this read. The wording and the status come from the same
+	// Diagnostics fields an unset *name* uses, because measured they are the
+	// same two lines — bash writes the `$` back for `$!` as it does for `$1`,
+	// which is Diagnostics.UnboundPositional, and dash's is its ordinary
+	// `parameter not set`.
+	//
+	// Read without asking, for the reason above. Unanswered means the
+	// parameter is set and empty, which is what this shell did before the
+	// axis existed and what the two shells that carry on do.
+	LastBackgroundPidIsUnsetBeforeAnyJob Answer
 	// ExitInTrapReportsEarlierStatus makes a bare `exit` in an EXIT trap
 	// report the status the shell had when the trap began, rather than that
 	// of the trap's own last command.
@@ -865,6 +934,40 @@ type Semantics struct {
 	//
 	// Read without asking, for the reason above.
 	CommandStringShowsSInDollarDash Answer
+
+	// LoginShowsLInDollarDash puts `l` in `$-` when the shell was started as
+	// a login shell.
+	//
+	// Four against two, so there is no majority to follow and this is a
+	// switch: ksh93 and zsh say yes, and dash and all three bash columns say
+	// no. bash's no is a deliberate one rather than an omission — it keeps
+	// the fact in `shopt login_shell`, which reads `on` for exactly the
+	// invocations this letter would mark, so the shell answers the question
+	// and answers it somewhere else.
+	//
+	// Measured 2026-09-06 with the letters bundled (`-lc`), unbundled
+	// (`-l -c`), spelled long (`--login -c`) and inferred from a dashed
+	// `argv[0]` with no option at all: every column answers the same way on
+	// all four, so the split belongs to the shell and not to how the caller
+	// said it. Membership rather than the spelling in the cases that pin it
+	// — ksh93 writes `chsBl` and zsh `569Xl`, and no two shells in the panel
+	// order the string alike.
+	//
+	// The fact itself is Runner.LoginShell, carried in from the front end:
+	// no `set` letter turns login-ness on in three of the four dialects, so
+	// there is no option field for the table to write. zsh is the exception
+	// and is recorded rather than implemented — see docs/spec/semantics.md,
+	// "the login letter": there `l` is a genuine `set` option, `set +l`
+	// takes it back out of `$-` and `set -l` puts it in, which this shell
+	// does not do.
+	//
+	// The POSIX preset leaves it unanswered, which shows no letter: POSIX
+	// names no login option at all, so there is nothing for `$-` to report
+	// as one — unlike CommandStringShowsCInDollarDash, where `-c` *is* an
+	// invocation flag the text defines.
+	//
+	// Read without asking, for the reason above.
+	LoginShowsLInDollarDash Answer
 
 	// ArithIntegerOperatorRefusesFloat rejects a float where only an integer
 	// will do — `7 % 2.5`, `1.5 & 1`, a shift. ksh93 says yes and refuses;
@@ -3328,7 +3431,12 @@ func PosixSemantics() Semantics {
 		// reading that takes the elements one at a time — and it is dash's,
 		// the shell in the panel that targets this text. bash's join is the
 		// departure from it.
-		UnquotedListJoinsOnIFS:                   No,
+		UnquotedListJoinsOnIFS: No,
+		// POSIX makes an unquoted `$@` in a context that does not split
+		// behave as `$*` does, which is the join on IFS; dash, the shell in
+		// the panel that targets this text, complies. bash and ksh93 are the
+		// departure.
+		UnsplitAtListJoinsOnIFS:                  Yes,
 		GlobExpansionResults:                     Yes,
 		GlobNoMatchIsError:                       No,
 		AssignmentPrefixPersistsOnSpecialBuiltin: Yes,

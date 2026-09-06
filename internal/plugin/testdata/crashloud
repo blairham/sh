@@ -1,0 +1,12 @@
+#!/bin/sh
+# Dies before saying anything, like `crash`, but with more to say than one
+# read of the relay's buffer holds. The relay reads in 4 KiB bites, so a
+# message this size takes several of them, and a shutdown that takes the
+# stream away mid-message loses the rest of it — which is what #1070 was.
+i=1
+while [ "$i" -le 200 ]; do
+	echo "line $i: I cannot start, and this is the part that says why" >&2
+	i=$((i + 1))
+done
+echo "LAST-WORD" >&2
+exit 7

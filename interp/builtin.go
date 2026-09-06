@@ -588,12 +588,24 @@ func (r *Runner) unsetMatching(patterns []string) int {
 }
 
 // parameterNames is every parameter this shell can see, once each and in
-// order. The same four sources [Runner.namesWithPrefix] reads, plus the two
-// array tables, which that one has no use for and this one does: `unset -m`
-// is about parameters rather than about strings.
+// order. The same three sources [Runner.namesWithPrefix] reads.
+//
+// The array tables are deliberately not among them, and that is a fact about
+// this shell rather than an omission: an array's name is in Vars as well —
+// `a=(p q)` writes both — so walking Arrays and AssocArrays here added
+// nothing at all. It was written, and a mutant that deleted it survived every
+// test including the one about arrays, which is how the duplication was
+// found. Should the two tables ever come apart, this is one of the places
+// that has to be told.
 func (r *Runner) parameterNames() []string {
 	seen := map[string]bool{}
 	var out []string
+	// The `removed` half of the guard is the one no test can see, and it is
+	// here because a name `unset` has already taken away is not a parameter
+	// — not because anything would go wrong without it. Removing a name
+	// twice is removing it once, so a mutant that drops this clause passes
+	// everything, the same standing this codebase gives an escaped ordinary
+	// character. It is the *rule* that is being written down.
 	add := func(name string) {
 		if seen[name] || r.removed[name] {
 			return
@@ -602,12 +614,6 @@ func (r *Runner) parameterNames() []string {
 		out = append(out, name)
 	}
 	for name := range r.Vars {
-		add(name)
-	}
-	for name := range r.Arrays {
-		add(name)
-	}
-	for name := range r.AssocArrays {
 		add(name)
 	}
 	for name := range r.Dynamic {

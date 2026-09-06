@@ -45,9 +45,16 @@ func TestUnsetMatchesNamesAgainstAPattern(t *testing.T) {
 			t.Errorf("%s: out %q status %d, want %q", tc.src, out, st, tc.want)
 		}
 	}
+	// A name that arrived in the environment is a parameter too, and the
+	// tables a lookup reads are not the one table: `unset` already had to
+	// learn that for a name, and a pattern has to walk the same three.
+	out, st := run(t, `unset -m "PAT*"; echo "[${PATH-gone}]"`, withSem(unsetSem("vfm")))
+	if !strings.Contains(out, "[gone]") || st != 0 {
+		t.Errorf("out %q status %d, want an environment name matched too", out, st)
+	}
 	// With nothing to match the letter is refused rather than treated as a
 	// bare `unset`, which is silent. Measured on zsh 5.9.2.
-	out, st := run(t, `unset -m; echo "st=$?"`, withSem(unsetSem("vfm")))
+	out, st = run(t, `unset -m; echo "st=$?"`, withSem(unsetSem("vfm")))
 	if !strings.Contains(out, "unset: not enough arguments\n") || !strings.Contains(out, "st=1\n") {
 		t.Errorf("out %q status %d, want the letter refused with nothing to match", out, st)
 	}
@@ -84,6 +91,21 @@ func TestUnsetsLettersAreTheDialects(t *testing.T) {
 	out, _ := run(t, `x=1; unset -n x; echo "[${x-gone}]"`, withSem(unsetSem("")))
 	if !strings.Contains(out, "[1]") {
 		t.Errorf("out %q, want `-n` refused where the dialect named no letters", out)
+	}
+	// And the *specification's* answer, read from the preset rather than
+	// written here: POSIX gives `unset` `-v` and `-f` and nothing more, so
+	// `-n` is refused and `-f` is not. Two assertions rather than one,
+	// because a preset that named too many letters and one that named none
+	// both leave the first alone.
+	base := permissive()
+	base.BadOptionToSpecialBuiltinFatal = No
+	out, _ = run(t, `x=1; unset -n x; echo "[${x-gone}]"`, withSem(base))
+	if !strings.Contains(out, "[1]") {
+		t.Errorf("out %q, want `-n` refused by the POSIX letter set", out)
+	}
+	out, _ = run(t, `f() { :; }; unset -f f; f; echo "st=$?"`, withSem(base))
+	if strings.Contains(out, "invalid option") {
+		t.Errorf("out %q, want `-f` among the POSIX letters", out)
 	}
 }
 

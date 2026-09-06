@@ -192,6 +192,14 @@ func TestEmulateDashLLastsAsLongAsTheFunction(t *testing.T) {
 	if out != "in=0\nout=1\n" {
 		t.Errorf("out %q, want a later setopt restored as well", out)
 	}
+	// And an option the *caller* had set before the call, which is what says
+	// the snapshot is taken before the emulation rather than after it: a
+	// plain emulation resets every option, so a state saved afterwards would
+	// restore the defaults instead of what the caller had.
+	out, _ = runZsh(t, dir, `setopt err_exit; f() { emulate -L zsh; }; f; [[ -o err_exit ]]; echo after=$?`)
+	if out != "after=0\n" {
+		t.Errorf("out %q, want the caller's own option back on", out)
+	}
 	// And the mode itself.
 	out, _ = runZsh(t, dir, `f() { emulate -L sh; emulate; }; f; emulate`)
 	if out != "sh\nzsh\n" {

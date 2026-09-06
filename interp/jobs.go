@@ -163,11 +163,29 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// is not racing the goroutine that sets it.
 	<-job.ready
 
-	r.jobs = append(r.jobs, job)
+	// A disowned job — `cmd &!` — is started and then let go of, so it never
+	// reaches the table: nothing lists it, `fg` cannot name it, and the next
+	// ordinary background job is `[1]` rather than `[2]`, which is measured.
+	//
+	// Everything else about it is an ordinary background job, and that is
+	// measured too: `$!` is still its process, and the shell exits without
+	// waiting for it — exactly as it does for `sleep 0.5 &`.
+	//
+	// It is not announced either, and that one is reasoned rather than
+	// measured: an announcement is `[n] pid`, and a job outside the table
+	// has no `n` to print. The measurement that would settle it needs an
+	// interactive shell with job control, which a script cannot have —
+	// `set -m` is `can't change option: -m` in a non-interactive zsh.
+	if !st.Disown {
+		r.jobs = append(r.jobs, job)
+	}
 	// `$!` is the most recent background job, which is how a script waits for
-	// a specific one.
+	// a specific one — and a disowned job is still the most recent one:
+	// measured, two `$!` readings either side of a `&!` differ.
 	r.setLastJob(job)
-	r.announceJob(job)
+	if !st.Disown {
+		r.announceJob(job)
+	}
 	// Starting a job succeeds even when the job will not.
 	r.status = 0
 	return nil

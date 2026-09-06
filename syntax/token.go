@@ -36,6 +36,8 @@ const (
 
 	// Control operators.
 	TokAmp        // &
+	TokAmpBang    // &!   background it and let go of it
+	TokAmpPipe    // &|   the same, spelled the other way
 	TokAndAnd     // &&
 	TokPipe       // |
 	TokOrOr       // ||
@@ -65,7 +67,8 @@ const (
 // matches against. Longest match wins, which is why callers must not assume
 // this is ordered by anything but Kind.
 var text = map[Kind]string{
-	TokAmp: "&", TokAndAnd: "&&", TokPipe: "|", TokOrOr: "||",
+	TokAmp: "&", TokAmpBang: "&!", TokAmpPipe: "&|",
+	TokAndAnd: "&&", TokPipe: "|", TokOrOr: "||",
 	TokSemi: ";", TokDSemi: ";;", TokSemiAmp: ";&", TokDSemiAmp: ";;&",
 	TokLeftParen: "(", TokRightParen: ")",
 	TokLess: "<", TokGreat: ">", TokDGreat: ">>", TokLessAmp: "<&", TokGreatAmp: ">&",

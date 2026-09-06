@@ -66,8 +66,13 @@ func TestTheFunctionNamePunctuationIsTheMeasuredSet(t *testing.T) {
 		"f@g", "f]g", "f^g",
 		// Every position, and a name that is nothing but the mark.
 		":f", "f:", ":", "+f", "f+", "-f", "f-", "@f", "f@",
-		// The one the daily driver needs, and a name outside ASCII.
-		":zi-reload-and-run", "\u00e9f", "\u276ex\u276f",
+		// The names the daily driver needs, written the way the plugin
+		// manager whose loading this unblocks writes them, and a name
+		// outside ASCII.
+		":zi-reload-and-run", ":zi-tmp-subst-alias",
+		"@zi-substitute", "@zi-register-annex", "@zi-register-hook",
+		".zi-add-fpath", "-zi_scheduler_add_sh",
+		"\u00e9f", "\u276ex\u276f",
 	} {
 		for _, src := range []string{name + `(){ echo ok; }`, `function ` + name + ` { echo ok; }`} {
 			if _, err := Parse(src, allow); err != nil {

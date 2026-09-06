@@ -11202,50 +11202,6 @@
         "TimedOut": false
       }
     },
-    "cmd/function-name-with-a-star": {
-      "bash": {
-        "Stdout": "after",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "after",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "after",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: 1: Syntax error: Bad function name",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
-        "Status": 3,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e:1: no matches found: f*g",
-        "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
     "cmd/function-parens-then-end-of-input": {
       "bash": {
         "Stdout": "",

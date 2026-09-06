@@ -252,7 +252,10 @@ type Dialect struct {
 	//   - `*`, `?`, `[`, `{` and `~` split the panel: bash and zsh parse
 	//     them and ksh93 refuses. `]` does not split, which is the shape of
 	//     the disagreement — it is the *opening* of a pattern that ksh93
-	//     will not have in a name.
+	//     will not have in a name. They are not in the corpus either,
+	//     because the case that would record them cannot be run: zsh parses
+	//     `f*g(){ :; }` and then expands the word, so what it reports is
+	//     `no matches found` rather than anything about a name.
 	//   - `}` splits the other way: zsh alone refuses `f}`, because a close
 	//     brace is reserved wherever a word may stand there — the same fact
 	//     [Dialect.CloseBraceAlwaysReserved] records.

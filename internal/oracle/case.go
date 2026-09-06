@@ -3605,11 +3605,6 @@ echo "st=$?"`,
 		Why:     "the third, and the one nearest a job specification — `%` is a job only where a job may stand, and in a name it is a name",
 	},
 	{
-		ID: "cmd/function-name-with-a-star", Category: "command language",
-		Snippet: `f*g(){ echo ok; }; echo after`,
-		Why:     "the boundary from the other side: bash and zsh parse a pattern character in a name and ksh93 refuses it at the parens, which is why `*` is outside the class the flag carries while `]` — measured the same way and unanimous — is inside it. The call is left off, because running it would be asking a glob question rather than a name one",
-	},
-	{
 		ID: "cmd/function-keyword-name-with-punctuation", Category: "command language",
 		Snippet: `function :f { echo ok; }; :f; echo after`,
 		Why:     "the same name in the keyword form, which is a separate production and had to be measured separately; dash has no keyword at all, so its refusal here is a different sentence from the one it gives the parens",

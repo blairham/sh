@@ -252,6 +252,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/a-subscript-pair-is-counted-as-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[3]` | `[3]` | `[3]` | `[3]` | `[2]` |
 | `array/a-subscript-on-a-string` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[hello][][][]` **2>** `<shell>: line 1: s: bad array subscript` | `[hello][][][]` **2>** `<shell>: line 1: s: bad array subscript` | `[hello][][][]` **2>** `<shell>: s: bad array subscript` | `[hello][][][]` | `[][h][e][o]` |
 | `array/a-string-subscript-pair` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][]` | `[][]` | `[][]` | `[][]` | `[ell][he]` |
+| `array/a-string-subscript-in-a-single-byte-locale` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][]` | `[][]` | `[][]` | `[][]` | `[é][l]` |
+| `array/a-string-subscript-in-a-utf8-locale` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][]` | `[][]` | `[][]` | `[][]` | `[él][l]` |
+| `array/a-string-subscript-of-an-invalid-byte` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `differs` | `differs` | `differs` | `differs` | `same` |
 | `array/a-subscript-on-the-positional-list` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${@[1]}][${*[2]}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${@[1]}][${*[2]}]: bad substitution` *(status 127)* | **2>** `<shell>: [${@[1]}][${*[2]}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `[' unexpected` *(status 3)* | `[a][b]` |
 | `array/a-subscript-on-a-positional-parameter` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${1[2]}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${1[2]}]: bad substitution` *(status 127)* | **2>** `<shell>: [${1[2]}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `[' unexpected` *(status 3)* | `[b]` |
 | `array/a-quoted-subscript-pair-joins` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=1 [z]~n=3 [x]` | `n=1 [z]~n=3 [x]` | `n=1 [z]~n=3 [x]` | `n=1 [z]~n=3 [x]` | `n=1 [x y]~n=3 [x]` |
@@ -621,6 +624,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/a-string-subscript-pair` — the two readings of a subscript meeting on one string: a range of characters is a substring, and a start counted back past the first character is *clamped* here where the same reach on an array is empty. The asymmetry is measured rather than derived, and it is the half a shared range helper would flatten
   ```sh
   s=hello; echo "[${s[2,4]}][${s[-6,2]}]"
+  ```
+- `array/a-string-subscript-in-a-single-byte-locale` — the character reading of a subscript is the *locale's* character: under the fixed locale zsh's `${s[2,3]}` is two bytes that happen to spell one character and `${s[4]}` is the byte after them. Reading runes unconditionally, which is what #854 shipped, answered `él` and `o` here — right for a UTF-8 locale and wrong for this one
+  ```sh
+  s=héllo; echo "[${s[2,3]}][${s[4]}]"
+  ```
+- `array/a-string-subscript-in-a-utf8-locale` — the same subscripts with the codeset changed: `él` and `l`, two characters and the one after them. Paired with the case above so that `${s[N]}` and `${#s}` are held to the same reading of what a character is — they were two answers in one shell before #899
+  ```sh
+  s=héllo; echo "[${s[2,3]}][${s[4]}]"
+  ```
+- `array/a-string-subscript-of-an-invalid-byte` — the undecodable byte reached by a subscript rather than by a length, compared against itself rather than printed, so the record stays text. zsh answers with the byte; the shells with no character reading answer with nothing and so say `differs`, which is the same statement about them the plain string case makes
+  ```sh
+  s=$(printf 'a\200b'); b=$(printf '\200'); [ "${s[2]}" = "$b" ] && echo same || echo differs
   ```
 - `array/a-subscript-on-the-positional-list` — whether the positional parameters are a list a subscript reaches into. zsh says yes; every other member of the panel refuses the expansion outright — bash calls it a bad substitution when it is reached, ksh93 refuses the bracket while reading, dash says `Bad substitution`. Five refusals and one reading, with nobody meaning something else by it, which is what makes it a grammar flag rather than an axis. Expanding it to nothing at status 0 was the silent middle answer nobody gives
   ```sh
@@ -4637,6 +4652,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/an-empty-array-quoted-at` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1` | `n=0` |
 | `param/a-negative-substring-length` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[bcd]` | `[bcd]` | **2>** `<shell>: -2: substring expression < 0` *(status 1)* | `[]` | `[bcd]` |
 | `param/substring` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` |
+| `param/a-length-in-a-single-byte-locale` | `[6][9]` | `[6][9]` | `[6][9]` | `[6][9]` | `[6][9]` | `[6][9]` |
+| `param/a-length-in-a-utf8-locale` | `[6][9]` | `[5][3]` | `[5][3]` | `[5][3]` | `[5][3]` | `[5][3]` |
+| `param/a-length-counts-an-invalid-byte-as-one` | `[3]` | `[3]` | `[3]` | `[3]` | `[3]` | `[3]` |
+| `param/a-substring-in-a-single-byte-locale` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[é][llo]` | `[é][llo]` | `[é][llo]` | `[é][llo]` | `[é][llo]` |
+| `param/a-substring-in-a-utf8-locale` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[él][lo]` | `[él][lo]` | `[él][lo]` | `[él][lo]` | `[él][lo]` |
+| `param/a-substring-from-the-end-in-a-utf8-locale` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[éllo][él][éll]` | `[éllo][él][éll]` | **2>** `<shell>: -1: substring expression < 0` *(status 1)* | `[éllo][él][]` | `[éllo][él][éll]` |
+| `param/a-length-of-an-array-element-in-a-utf8-locale` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[2][5][3]` | `[2][5][3]` | `[2][5][3]` | `[2][5][3]` | `[2][0][5]` |
+| `param/a-pattern-trims-the-same-either-way` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` |
+| `param/a-pattern-trims-characters-in-a-utf8-locale` | `[hél][llo]` | `[hél][lo]` | `[hél][lo]` | `[hél][lo]` | `[hél][lo]` | `[hél][lo]` |
 | `param/case-change-is-bash-only` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ABC][abc]` | `[ABC][abc]` | **2>** `<shell>: ${x^^}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/case-toggle-is-newer-bash-still` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ABc][AbC][ABc]` | `[ABc][AbC][ABc]` | **2>** `<shell>: ${x~}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `~' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/indirection-diverges-four-ways` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[V]` | `[V]` | `[V]` | `[x]` | **2>** `<shell>:1: bad substitution` *(status 1)* |
@@ -4853,6 +4877,42 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/substring` — offset with and without a length; absent from dash
   ```sh
   x=abcdef; printf "[%s]" "${x:1:3}" "${x:2}"
+  ```
+- `param/a-length-in-a-single-byte-locale` — the length of a string holding characters wider than a byte, under the locale every case here runs in. Unanimous at the byte count — 6 and 9 — dash and the four multibyte shells alike, which is the half of #899 that makes the other half readable: the panel does not divide over whether a character is a byte, it divides over whether the locale is consulted
+  ```sh
+  s=héllo; t=日本語; echo "[${#s}][${#t}]"
+  ```
+- `param/a-length-in-a-utf8-locale` — the same snippet with the codeset changed and nothing else, which is where the panel divides: bash, ksh93 and zsh count characters — 5 and 3 — and dash counts bytes in every locale there is, having no multibyte decoder. Silent on both sides, since either answer is a plausible number. The `MultibyteEncodingIsHonored` axis; the locale itself is runtime state and not a second axis, which the pair of these two cases is what shows
+  ```sh
+  s=héllo; t=日本語; echo "[${#s}][${#t}]"
+  ```
+- `param/a-length-counts-an-invalid-byte-as-one` — a byte that begins no valid sequence, under the locale that decodes: 3 unanimously, so an undecodable byte is one character of its own rather than an error, a skipped byte or a replacement character. The trap is real in both directions — a decoder that folded it into U+FFFD would answer 3 with a value nothing put there, and one that rejected the replacement rune answered 0 for `$((##\x80))` in #855
+  ```sh
+  s=$(printf 'a\200b'); echo "[${#s}]"
+  ```
+- `param/a-substring-in-a-single-byte-locale` — a substring's offset and length count the same units its shell's `${#s}` does, so under the fixed locale they are bytes and `${s:1:2}` is the two bytes of one character. Written to keep both halves valid text on either side of the axis, which `${s:2}` would not be
+  ```sh
+  s=héllo; echo "[${s:1:2}][${s:3}]"
+  ```
+- `param/a-substring-in-a-utf8-locale` — the same offsets over characters: `él` and `lo` where the byte reading gives `é` and `llo`. The pair is what pins that the offset moves with the length rather than being a separate decision — a fix that counted `${#s}` in characters and indexed the string in bytes would pass the length case and cut this one in half
+  ```sh
+  s=héllo; echo "[${s:1:2}][${s:3}]"
+  ```
+- `param/a-substring-from-the-end-in-a-utf8-locale` — the negative offset and the negative length counted in characters, which is where an implementation that converts one end and not the other comes apart: a negative offset added to a byte length lands in the middle of a character. ksh93 keeps its own answer for a negative *length* — nothing — under any locale, so this also holds `SubstringNegativeLengthIsEmpty` still where it was
+  ```sh
+  s=héllo; echo "[${s: -4}][${s: -4:2}][${s:1:-1}]"
+  ```
+- `param/a-length-of-an-array-element-in-a-utf8-locale` — the count and the width in one line: `${#a[@]}` is 2 in every shell with arrays whatever the locale, and `${#a[N]}` is the length of one element and moves with the codeset. The two questions share a spelling and one of them is not a length at all, so a change to the length machinery has to leave the count alone
+  ```sh
+  a=(héllo 日本語); echo "[${#a[@]}][${#a[0]}][${#a[1]}]"
+  ```
+- `param/a-pattern-trims-the-same-either-way` — the suffix probe #899 cites as evidence that pattern matching is already rune-aware, pinned so that it stays where it is. It is unanimous, and it is also *not* discriminating: `héllo` ends in two ASCII characters, so two bytes and two characters off the end leave the same four bytes. `${s#???}` from the other end separates them and ours gives dash's answer — #905
+  ```sh
+  s=héllo; echo "[${s%??}][${s%%?}]"
+  ```
+- `param/a-pattern-trims-characters-in-a-utf8-locale` — the suffix probe beside the prefix one that separates the readings. Two characters off the end is the same four bytes either way, so `${s%??}` agrees with everyone; three off the front is `lo` under a UTF-8 locale and `llo` under a single-byte one, and dash gives `llo` in both. We give dash's answer, which is #905 — the length machinery reads the locale after #899 and the pattern matcher still walks bytes
+  ```sh
+  s=héllo; echo "[${s%??}][${s#???}]"
   ```
 - `param/case-change-is-bash-only` — bash alone: ksh93 reports a syntax error and zsh a bad substitution, so it belongs to the bash dialect rather than the core
   ```sh

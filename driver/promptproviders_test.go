@@ -42,3 +42,31 @@ func TestAShellWithoutProvidersCarriesNoneToTheFrontEnd(t *testing.T) {
 		t.Errorf("the prompt carries %d providers, want none", len(got))
 	}
 }
+
+// And what colors a typed line reaches the prompt too, for the same reason:
+// the editor exists only where there is a terminal, so a field dropped on the
+// way looks exactly like a binary that asked for no coloring.
+func TestAHighlighterReachesTheFrontEnd(t *testing.T) {
+	mine := repl.HighlighterFunc(func(string) []repl.Highlight {
+		return []repl.Highlight{{Start: 0, End: 1, Style: "\x1b[31m"}}
+	})
+	sh := Shell{Name: "testsh", Highlighter: mine}.withDefaults([]string{"testsh"})
+	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+
+	front := sh.frontEnd(r, "testsh", sh.Diagnostics)
+	if front.Highlighter == nil {
+		t.Fatal("the prompt carries no highlighter")
+	}
+	if got := front.Highlighter.Highlight("x"); len(got) != 1 || got[0].Style != "\x1b[31m" {
+		t.Errorf("the highlighter that arrived answers %v, want one red run", got)
+	}
+}
+
+// A binary that asked for none leaves the line plain.
+func TestAShellWithoutAHighlighterCarriesNoneToTheFrontEnd(t *testing.T) {
+	sh := Shell{Name: "testsh"}.withDefaults([]string{"testsh"})
+	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+	if got := sh.frontEnd(r, "testsh", sh.Diagnostics).Highlighter; got != nil {
+		t.Errorf("the prompt carries a highlighter %#v, want none", got)
+	}
+}

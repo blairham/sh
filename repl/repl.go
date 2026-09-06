@@ -73,6 +73,22 @@ type Shell struct {
 	// substrate's own wording and filters nothing.
 	History HistoryStyle
 
+	// Highlighter colors the line as it is typed. Nil draws it plainly, which
+	// is what every shell in the panel does and what a front end that has not
+	// said gets.
+	//
+	// **In-process only, and never a plugin.** It is asked on every keystroke,
+	// which is the hot-path exclusion docs/design/plugins.md already writes
+	// down, one step hotter than completion. See highlight.go, which carries
+	// the measurement that decided the seam's shape and the reason this one
+	// must not be generalized.
+	//
+	// Not a dialect's, and this one is not even a close call: measured, none
+	// of the four colors a line as it is typed, so there is no disagreement
+	// for a dialect field to record. UnclosedQuote is the highlighter this
+	// package ships and the front end chooses its color.
+	Highlighter Highlighter
+
 	// PromptProviders contribute text to every prompt this session draws, in
 	// order, before the prompt parameter's own text. Nil is a session whose
 	// prompt is the prompt parameter and nothing else, which is what a front
@@ -929,6 +945,9 @@ func (s Shell) newEditor() *editor {
 		// completer is handed it in every Completion and `cd` moves it
 		// between one keystroke and the next.
 		workingDir: s.workingDir,
+		// What colors the line while it is typed, which is nothing unless the
+		// front end said otherwise.
+		highlighter: s.Highlighter,
 		// What this dialect marks an abandoned line with, which is `^C` in
 		// two of the four and nothing in the other two.
 		interrupt:       s.Editor.Interrupt,

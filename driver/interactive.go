@@ -230,6 +230,9 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// What this binary adds to every prompt, which is nothing for a
 		// dialect binary and the sandbox marker for cmd/sh under a policy.
 		PromptProviders: sh.PromptProviders,
+		// And what colors the line while it is typed, which is nothing
+		// unless the binary asked for it.
+		Highlighter: sh.Highlighter,
 		// Bound to *this* runner and read per keystroke, so a `bindkey` typed
 		// at the prompt takes effect on the next line rather than the next
 		// shell.

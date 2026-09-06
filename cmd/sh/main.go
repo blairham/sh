@@ -171,6 +171,7 @@ func run(argv []string, stdout, stderr io.Writer) int {
 	// The fallback for an argv with nothing in it; driver names the shell by
 	// argv[0] the way every dialect binary is named.
 	sh.Name = "sh"
+	sh = withHighlighting(sh, own)
 	sh, closer, err := installSeams(sh, own, stderr)
 	if err != nil {
 		// A policy that will not load is not a shell that runs unsandboxed.
@@ -269,6 +270,9 @@ type ownFlags struct {
 	blocksShow string
 	acpConnect bool
 	acpAllow   bool
+	// highlight colors the line as it is typed, at an interactive prompt.
+	// Off by default, because that is what every real shell does.
+	highlight bool
 	// acpAuth names one of the authentication methods the agent advertises.
 	// Empty attempts none: which credential a person signs in with is theirs
 	// to choose, and picking one for them is the kind of silent default this
@@ -325,6 +329,8 @@ func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
 			own.acpConnect = true
 		case "acp-allow":
 			own.acpAllow = true
+		case "highlight":
+			own.highlight = true
 		case "acp-auth":
 			if !hasVal {
 				if i+1 >= len(args) {

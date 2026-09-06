@@ -1338,7 +1338,7 @@ func (r *Runner) allowed(ctx context.Context, a Action) bool {
 		return true
 	}
 	r.emit(ctx, Event{Kind: EventDenied, Action: a})
-	r.diagf("%s: refused: %s\n", a.Kind, a.Path)
+	r.reportRefusal(a)
 	r.status = 126
 	return false
 }

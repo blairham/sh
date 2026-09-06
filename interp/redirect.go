@@ -288,7 +288,19 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			return closers, nil
 		}
 
-		f, err := os.OpenFile(path, flags, 0o666)
+		f, err := r.openGated(ctx, action, path, flags)
+		if errors.Is(err, errRefused) {
+			// The gate let the *name* through and refused what the name
+			// reached — a link into a denied place. Reported here rather
+			// than through allowed(), and reported with the name the script
+			// wrote: see verifyOpened for why the audit record and the
+			// diagnostic say different things. To the script this is the
+			// refusal above, word for word.
+			r.reportRefusal(action)
+			r.status = r.diag().redirectFailureStatus()
+			r.redirErr = true
+			return closers, nil
+		}
 		if err != nil {
 			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 			// Two verbs, positional because the shells order them

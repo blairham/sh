@@ -49,6 +49,18 @@ import (
 	"time"
 )
 
+// PipeMarker is the name the interpreter gives the directory its substitution
+// pipes live in, and so the string a command line has to contain for the
+// command to be holding one.
+//
+// Here rather than in the interpreter because every package whose tests run a
+// shell wants the same guard, and only one of them can own the constant. The
+// interpreter keeps its own — a directory prefix is its business, not a test
+// helper's — and its tests pin the two together, so a prefix that changed in
+// one place fails the build rather than leaving the guard quietly finding
+// nothing.
+const PipeMarker = "sh-procsub"
+
 // Grace is how long a straggler is given to finish before it is called a leak.
 //
 // A substitution's own goroutine can still be closing its end of the pipe when
@@ -71,7 +83,7 @@ type Process struct {
 //
 // A package guards itself with
 //
-//	func TestMain(m *testing.M) { os.Exit(treeguard.Run(childguard.Wrap(m, "sh-procsub"))) }
+//	func TestMain(m *testing.M) { os.Exit(treeguard.Run(childguard.Wrap(m, childguard.PipeMarker))) }
 //
 // and the status is the inner run's unless something was left behind, in which
 // case a passing package still fails — the same rule treeguard follows, and

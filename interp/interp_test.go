@@ -41,7 +41,7 @@ import (
 // leaking on the day, which is the argument #860 and #890 both landed on:
 // three corrected call sites do not stop the fourth.
 func TestMain(m *testing.M) {
-	os.Exit(treeguard.Run(childguard.Wrap(m, ProcSubDirPrefix)))
+	os.Exit(treeguard.Run(childguard.Wrap(m, childguard.PipeMarker)))
 }
 
 // TestSurvivableShiftSpeaksOnlyWhereTheDialectHasWords names the field rather

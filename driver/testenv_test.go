@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/internal/childguard"
 )
 
 // This file is the suite's environment, and the reason it exists is that the
@@ -74,12 +76,12 @@ func TestMain(m *testing.M) {
 		// so touching it here would overwrite the question being asked.
 		os.Exit(m.Run())
 	}
-	os.Exit(runIsolated(m))
+	os.Exit(runIsolated(childguard.Wrap(m, childguard.PipeMarker)))
 }
 
 // runIsolated assembles the environment, runs the suite in it, and then checks
 // that the home it handed out is still untouched.
-func runIsolated(m *testing.M) int {
+func runIsolated(m interface{ Run() int }) int {
 	home, err := os.MkdirTemp("", "sh-driver-home-")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "driver tests: no scratch home: %v\n", err)

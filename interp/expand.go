@@ -5,6 +5,7 @@ package interp
 
 import (
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -687,6 +688,68 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 // element with no separator in it is not split either way, and one with no
 // metacharacter is not a pattern either way.
 func (r *Runner) elementFields(elems []string, sp splitPolicy) []string {
+	perElement := r.splitEachElement(elems, sp)
+	if !r.listCouldJoinDifferently(elems) {
+		return perElement
+	}
+	// The join is only ever a *different* reading where the split then runs
+	// on what it produced. With splitting off there is nothing to undo it and
+	// the whole list would come back as one field, which no shell in the
+	// panel does — zsh has its splitting off by default and still gives one
+	// field per element. So the splitting answer stands in front of this one,
+	// and where it says no the question is never reached.
+	if !r.ask(sp.answer(r.sem().SplitParamExpansion),
+		"splitting an unquoted parameter expansion") {
+		return perElement
+	}
+	ifs, set := r.ifs()
+	joined := r.splitEachElement([]string{strings.Join(elems, ifsFirst(ifs, set))}, sp)
+	if slices.Equal(perElement, joined) {
+		// The two readings coincide, which is the common case: under a
+		// whitespace IFS a run of separators is one delimiter and an empty
+		// element leaves nothing behind either way. Asking here would make
+		// every `for f in $@` demand a dialect for a question that has only
+		// one answer — see the note on UnquotedListJoinsOnIFS.
+		return perElement
+	}
+	if r.ask(r.sem().UnquotedListJoinsOnIFS,
+		"an unquoted list joining its elements before it is split") {
+		return joined
+	}
+	return perElement
+}
+
+// listCouldJoinDifferently is whether joining the elements could reach a
+// different set of fields from taking them one at a time.
+//
+// It cannot when there is nothing to join — one element is its own join — and
+// it cannot when there is nothing to join *with*: an IFS that is set and empty
+// has no first character, and no shell in the panel joins there, so
+// `IFS=""; set -- x y` is two fields for `$@` and for `$*` alike.
+//
+// Past those, the join changes nothing unless some element is empty or carries
+// a separator of its own. Joining n elements that hold no separator puts one
+// between each pair and splitting takes them straight back out, so the answer
+// is the elements either way — which is what keeps a plain `for f in $@` from
+// demanding a dialect.
+func (r *Runner) listCouldJoinDifferently(elems []string) bool {
+	ifs, set := r.ifs()
+	if len(elems) < 2 || ifsFirst(ifs, set) == "" {
+		return false
+	}
+	for _, el := range elems {
+		if el == "" || containsAnyOf(el, ifs) {
+			return true
+		}
+	}
+	return false
+}
+
+// splitEachElement is the reading that takes the elements one at a time.
+//
+// The other reading joins them first, and elementFields above is what chooses
+// between the two.
+func (r *Runner) splitEachElement(elems []string, sp splitPolicy) []string {
 	ifs, set := r.ifs()
 	split := sp.answer(r.sem().SplitParamExpansion)
 	glob := r.sem().GlobExpansionResults
@@ -695,20 +758,18 @@ func (r *Runner) elementFields(elems []string, sp splitPolicy) []string {
 	var out []string
 	for _, el := range elems {
 		if el == "" {
-			// An unquoted empty element is no field, which under a
-			// whitespace IFS is unanimous and has nothing to do with
+			// An unquoted empty element is no field *in this reading*, which
+			// under a whitespace IFS is unanimous and has nothing to do with
 			// splitting: zsh drops it with its splitting turned off exactly
 			// as bash drops it with splitting on.
 			//
-			// Said outright because it used to fall out of splitFields
-			// returning nothing for the empty string, and the split is
-			// conditional now. Which keeps the answer this path has always
-			// given — including where it is wrong: with a *non-whitespace*
-			// IFS the three shells that split keep the empty field and
-			// answer `[x][][y]` for `IFS=:; set -- x "" y; printf "[%s]" $@`
-			// where this gives `[x][y]`. That is its own disagreement — it
-			// predates this and is unchanged by it — and it is #1013 rather
-			// than something to settle here on the way past.
+			// Under a non-whitespace IFS it is not unanimous, and the
+			// disagreement is not about the element at all — it is about
+			// whether the list was joined before it got here. bash joins, so
+			// the empty element is a separator meeting a separator and the
+			// field between them survives; zsh, ksh93 and dash do not join,
+			// and here it is. UnquotedListJoinsOnIFS is that question, and
+			// elementFields asks it.
 			continue
 		}
 		doSplit := false

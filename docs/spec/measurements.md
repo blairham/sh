@@ -278,6 +278,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expansion/unquoted-array-elements-under-a-changed-ifs` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y][z]` | `[x][y][z]` | `[x][y][z]` | `[x][y][z]` | `[x-y][z]` |
 | `expansion/an-unquoted-array-element-that-looks-like-a-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[zz1][other]` | `[zz1][other]` | `[zz1][other]` | `[zz1][other]` | `[zz*][other]` |
 | `expansion/a-bare-array-name-with-a-separator-in-an-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[b][2]` | `[b][2]` | `[b][2]` | `[b][2]` | `[b 2][c]` |
+| `expansion/an-empty-element-under-a-whitespace-separator` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` |
+| `expansion/the-array-spelling-joins-with-the-parameters` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `3[x][][y]` | `3[x][][y]` | `3[x][][y]` | `2[x][y]` | `2[x][y]` |
+| `expansion/the-scalar-path-splits-the-same-string-the-join-makes` | `3[x][][y]` | `3[x][][y]` | `3[x][][y]` | `3[x][][y]` | `3[x][][y]` | `1[x::y]` |
+| `expansion/an-empty-ifs-joins-nothing` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` |
 | `expansion/an-unquoted-star-subscript-does-not-always-join` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y][z]` | `[x][y][z]` | `[x][y][z]` | `[x][y][z]` | `[x y][z]` |
 | `expansion/element-exclusion-without-a-flag-group` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: #two: arithmetic syntax error: operand expected (error token is "#two")` *(status 1)* | **2>** `<shell>: line 1: a: #two: arithmetic syntax error: operand expected (error token is "#two")` *(status 1)* | **2>** `<shell>: a: #two: syntax error: operand expected (error token is "#two")` *(status 1)* | `[one]` | `[one two three]` |
 | `expansion/element-exclusion-empty-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#}' unexpected` *(status 3)* | `[one]` |
@@ -760,6 +764,22 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   a=("b 2" c); printf "[%s]" $a; echo
   ```
+- `expansion/an-empty-element-under-a-whitespace-separator` — the contrast that says the disagreement is the separator's and not the empty element's: with a whitespace IFS every shell in the panel drops it, because a run of separators is one delimiter there however the fields were arrived at. This is the row that made the drop look unanimous, and it is why the axis must not be asked here
+  ```sh
+  set -- x "" y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"; echo
+  ```
+- `expansion/the-array-spelling-joins-with-the-parameters` — `$@` and `${a[@]}` are the same fields for the same elements in every shell measured, which is what keeps the two branches from parting company — they reach the answer by different code and must not disagree
+  ```sh
+  IFS=:; a=(x "" y); set -- ${a[@]}; printf "%d" "$#"; printf "[%s]" "$@"; echo
+  ```
+- `expansion/the-scalar-path-splits-the-same-string-the-join-makes` — the string bash's join produces, split on its own: every shell that splits answers three fields, so the scalar path is unanimous and is not the axis. It is the anchor for the list rows above — bash's list answer is exactly this one, which is what says bash joins rather than that it has a second rule about empty elements
+  ```sh
+  IFS=:; v="x::y"; set -- $v; printf "%d" "$#"; printf "[%s]" "$@"; echo
+  ```
+- `expansion/an-empty-ifs-joins-nothing` — an IFS that is set and empty has no first character to join on, and no shell in the panel joins there — two fields, where a join would leave one. The guard on the axis: it must not be asked where there is nothing to join with
+  ```sh
+  IFS=""; set -- x y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"; echo
+  ```
 - `expansion/an-unquoted-star-subscript-does-not-always-join` — the neighbor of the `[@]` rows and a question of its own: bash and ksh93 join the elements on IFS and split the result, which is why they answer three fields, while zsh does not join an *unquoted* `[*]` at all and answers two — the same two `${a[@]}` gives it. Quoted, all three join. So whether an unquoted `[*]` joins is not decided by whether the shell splits, and no arrangement of the splitting answer produces zsh's reading here
   ```sh
   a=("x y" z); printf "[%s]" ${a[*]}; echo
@@ -1013,6 +1033,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `unset/a-readonly-name-with-no-value-is-refused-too` | **2>** `<shell>: 1: unset: y: is read only` *(status 2)* | `st=1 [gone]~after` **2>** `<shell>: line 1: unset: y: cannot unset: readonly variable` | **2>** `<shell>: line 1: unset: y: cannot unset: readonly variable` *(status 1)* | `st=1 [gone]~after` **2>** `<shell>: line 0: unset: y: cannot unset: readonly variable` | `st=1 [gone]~after` **2>** `<shell>: unset: warning: y: is read only` | **2>** `<shell>:1: read-only variable: y` *(status 1)* |
 | `unset/a-readonly-name-under-v-is-refused` | **2>** `<shell>: 1: unset: x: is read only` *(status 2)* | `st=1 [1]~after` **2>** `<shell>: line 1: unset: x: cannot unset: readonly variable` | **2>** `<shell>: line 1: unset: x: cannot unset: readonly variable` *(status 1)* | `st=1 [1]~after` **2>** `<shell>: line 0: unset: x: cannot unset: readonly variable` | `st=1 [1]~after` **2>** `<shell>: unset: warning: x: is read only` | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
 | `unset/a-readonly-name-behind-a-subscript-is-refused` | **2>** `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=1 [1]~after` **2>** `<shell>: line 1: unset: a: cannot unset: readonly variable` | **2>** `<shell>: line 1: unset: a: cannot unset: readonly variable` *(status 1)* | `st=1 [1]~after` **2>** `<shell>: line 0: unset: a: cannot unset: readonly variable` | `st=1 [1]~after` **2>** `<shell>: unset: warning: a: is read only` | **2>** `<shell>:1: no matches found: a[0]` *(status 1)* |
+| `expansion/an-empty-element-under-a-non-whitespace-separator` | `2[x][y]` | `3[x][][y]` | `3[x][][y]` | `3[x][][y]` | `2[x][y]` | `2[x][y]` |
+| `expansion/a-trailing-empty-element-under-a-non-whitespace-separator` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `3[x][y][]` | `2[x][y]` |
+| `expansion/an-element-ending-in-a-separator-meets-the-join` | `2[x][y]` | `3[x][][y]` | `3[x][][y]` | `3[x][][y]` | `2[x][y]` | `2[x:][y]` |
 | `readonly/an-associative-element-is-refused` | **2>** `<script>: 1: typeset: not found~<script>: 2: m[a]=1: not found~<script>: 3: typeset: not found~<script>: 4: m[k]=v: not found~<script>: 5: Bad substitution` *(status 2)* | `st=1 k=[unset] a=[1]~after` **2>** `<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: readonly variable` *(status 1)* | `st=1 k=[1] a=[1]~after` **2>** `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: is read only` *(status 1)* | **2>** `<script>:4: read-only variable: m` *(status 1)* |
 | `readonly/an-indexed-element-is-not-written` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: readonly variable` *(status 1)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: a` *(status 1)* |
 | `readonly/an-element-append-is-refused` | **2>** `<script>: 1: typeset: not found~<script>: 2: m[a]=1: not found~<script>: 3: typeset: not found~<script>: 4: m[a]+=Q: not found~<script>: 5: Bad substitution` *(status 2)* | `st=1 a=[1]~after` **2>** `<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: readonly variable` *(status 1)* | `st=1 a=[1]~after` **2>** `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: is read only` *(status 1)* | **2>** `<script>:4: read-only variable: m` *(status 1)* |
@@ -1192,6 +1215,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `unset/a-readonly-name-behind-a-subscript-is-refused` — a subscripted operand is refused by the variable the subscript indexes, and the shells that reach the check name the base — `a`, not `a[0]` — so the refusal stands ahead of the element path and the subscript is never evaluated. Only bash and ksh93 get that far: dash refuses `a[0]` as a bad variable name first and zsh reads the brackets as a pattern that matches nothing, so this row records three different complaints for one line and is the reason the wording is worth reading rather than the status alone
   ```sh
   readonly a=1; unset a[0]; echo "st=$? [${a-gone}]"; echo after
+  ```
+- `expansion/an-empty-element-under-a-non-whitespace-separator` — the row #1013 is about, and the one that turns the empty-element rule from a unanimous drop into an axis. bash, bash 3.2 and bash as `sh` join the parameters on the first character of IFS before splitting, so `x::y` has two separators meeting and the field between them survives — three fields from three parameters. ksh93 and dash take the elements one at a time and the empty one is no field at all, so two come out; zsh drops it too, and keeps it under `setopt shwordsplit`. The count is printed with the fields because `[x][y]` and `[x][][y]` are the same characters once the boundaries are gone
+  ```sh
+  IFS=:; set -- x "" y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"; echo
+  ```
+- `expansion/a-trailing-empty-element-under-a-non-whitespace-separator` — the other face of the same answer, and the reason the axis cannot be spelled *an empty element survives*: the join that keeps a middle empty is what loses a trailing one, because `x:y:` ends in a separator and a trailing separator makes no field. bash answers two. zsh under `shwordsplit` does not join and keeps three, and ksh93 keeps three here while dropping the middle one in the row above — the one shape in the panel neither reading explains
+  ```sh
+  IFS=:; set -- x y ""; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"; echo
+  ```
+- `expansion/an-element-ending-in-a-separator-meets-the-join` — the face no rule about *empty elements* reaches at all: nothing here is empty, and bash still answers three fields because the separator ending the first element meets the one the join puts after it. Taken one at a time the trailing separator makes no field and two come out, which is ksh93's and dash's answer. It is the row that says the question is the join rather than the element
+  ```sh
+  IFS=:; set -- "x:" y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"; echo
   ```
 - `readonly/an-associative-element-is-refused` — the refusal on an *element* of a frozen name, which is the row #1012 is about. All three shells with the attribute refuse it and leave the table alone — bash 3.2 has no `-A` and dash has no arrays, so the panel's intersection here is the three that can be asked. Ours stored the element, said nothing and reported 0, which is a silent write to a table a script deliberately froze. Run from a script rather than `-c` because the two shells that end the script here would stop before the line that reads the table back
   ```sh

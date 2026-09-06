@@ -122,6 +122,7 @@ func TestSemantics(t *testing.T) {
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.Yes},
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.No},
+		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.No},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.No},
 		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.No},
 		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.Yes},

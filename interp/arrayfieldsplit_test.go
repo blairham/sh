@@ -24,12 +24,19 @@ import (
 
 // fieldsRun runs src with both axes answered as given, and with the array
 // scalar reading pinned so a test about splitting is not also about that.
+//
+// The join is pinned off as well, for the same reason: it is a third question
+// about an unquoted list — see UnquotedListJoinsOnIFS and
+// listjoin_test.go — and taking each element on its own is the reading every
+// expectation in this file was written against. A test that wants the other
+// one answers it itself.
 func fieldsRun(t *testing.T, src string, split, glob Answer) (string, int) {
 	t.Helper()
 	return axisRun(t, src, func(s *Semantics) {
 		s.SplitParamExpansion = split
 		s.GlobExpansionResults = glob
 		s.ArrayScalarIsTheWholeArray = No
+		s.UnquotedListJoinsOnIFS = No
 	})
 }
 

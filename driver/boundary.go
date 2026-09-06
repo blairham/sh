@@ -5,8 +5,8 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"io/fs"
-	"os"
 	"syscall"
 
 	"github.com/blairham/sh/internal/boundary"
@@ -26,7 +26,8 @@ func (sh Shell) boundary() boundary.Boundary {
 	return boundary.Boundary{Gate: sh.Gate, Events: sh.Events, Session: sh.Session}
 }
 
-// readFile is os.ReadFile through this shell's gate.
+// readFile is os.ReadFile through this shell's gate, and through the
+// verification that says what the read actually reached.
 //
 // A refusal comes back as a permission error rather than as a missing file,
 // which is the opposite of what a denied *stat* answers, and the difference is
@@ -34,9 +35,15 @@ func (sh Shell) boundary() boundary.Boundary {
 // an absent one does because the construct only wanted a yes or a no; a script
 // the shell was told to run and may not read is a failure with nowhere to go,
 // and saying "no such file" for it would send someone looking for a typo.
+//
+// A name that resolved to an object the gate will not have is refused in the
+// same words, which is the point: `sh -policy p link` where the link points
+// into a denied place fails the way `sh -policy p denied-file` fails, and the
+// record — not the diagnostic — says where the link went.
 func (sh Shell) readFile(path string) ([]byte, error) {
-	if !sh.boundary().Open(context.Background(), path, false) {
+	b, err := sh.boundary().ReadFile(context.Background(), path)
+	if errors.Is(err, boundary.ErrRefused) {
 		return nil, &fs.PathError{Op: "open", Path: path, Err: syscall.EACCES}
 	}
-	return os.ReadFile(path)
+	return b, err
 }

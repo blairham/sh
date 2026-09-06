@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package interp
+package opened
 
 // The links macOS ships at the root, and only those.
 //
@@ -12,10 +12,10 @@ package interp
 // They are here because the kernel answers F_GETPATH with the physical path,
 // so on a Mac *every* access under `/tmp`, `/var` or `/etc` — which is to say
 // every temporary file any script writes — comes back spelled differently
-// from the name that was asked about. Without this the verification in
-// verifyopen.go would consult the gate a second time about every one of them,
-// and a gate that prompts would ask a person twice for the same file. That is
-// the crying-wolf failure the permission model is most careful about; see
+// from the name that was asked about. Without this, Elsewhere would report
+// every one of them as having resolved somewhere else and a gate that prompts
+// would ask a person twice for the same file. That is the crying-wolf
+// failure the permission model is most careful about; see
 // internal/acp's Escalates for the same argument made about probe actions.
 //
 // The bar for an entry is deliberately high and is the one internal/policy

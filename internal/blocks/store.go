@@ -194,18 +194,20 @@ func (s *Store) indexFile(ctx context.Context) (*os.File, error) {
 	}
 	s.opened = true
 	path := filepath.Join(s.dir, IndexName)
-	if !s.bound.Open(ctx, path, true) {
+	// 0700 and 0600: a block store is a record of what someone typed and what
+	// it printed, which is not something to leave readable by everyone on the
+	// machine. The history file already sets that bar.
+	f, err := s.bound.OpenFile(ctx, boundary.File{
+		Path:    path,
+		Flags:   os.O_APPEND | os.O_CREATE | os.O_WRONLY,
+		Perm:    0o600,
+		Parents: true,
+	})
+	if errors.Is(err, boundary.ErrRefused) {
 		// Refused, and silently: a policy that hid the store meant for it not
 		// to be written, and the sink has the refusal.
 		return nil, nil
 	}
-	// 0700 and 0600: a block store is a record of what someone typed and what
-	// it printed, which is not something to leave readable by everyone on the
-	// machine. The history file already sets that bar.
-	if err := os.MkdirAll(s.dir, 0o700); err != nil {
-		return nil, err
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, err
 	}
@@ -259,14 +261,13 @@ func (s *Store) WriteBody(ctx context.Context, id string, t time.Time, text stri
 	}
 	rel := BodyPath(id, t)
 	full := filepath.Join(s.dir, filepath.FromSlash(rel))
-	if !s.bound.Open(ctx, full, true) {
+	redacted, _ := secret.Default().Redact(text)
+	err := s.bound.WriteFile(ctx,
+		boundary.File{Path: full, Perm: 0o600, Parents: true}, []byte(redacted))
+	if errors.Is(err, boundary.ErrRefused) {
 		return "", nil
 	}
-	if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
-		return "", err
-	}
-	redacted, _ := secret.Default().Redact(text)
-	if err := os.WriteFile(full, []byte(redacted), 0o600); err != nil {
+	if err != nil {
 		return "", err
 	}
 	return rel, nil
@@ -283,10 +284,7 @@ func (s *Store) Body(ctx context.Context, r Record) (string, bool) {
 		return "", false
 	}
 	full := filepath.Join(s.dir, filepath.FromSlash(r.Output))
-	if !s.bound.Open(ctx, full, false) {
-		return "", false
-	}
-	b, err := os.ReadFile(full)
+	b, err := s.bound.ReadFile(ctx, full)
 	if err != nil {
 		return "", false
 	}
@@ -310,13 +308,11 @@ func (s *Store) Load(ctx context.Context, n int) []Record {
 		return nil
 	}
 	path := filepath.Join(s.dir, IndexName)
-	if !s.bound.Open(ctx, path, false) {
-		return nil
-	}
-	f, err := os.Open(path)
+	f, err := s.bound.OpenFile(ctx, boundary.File{Path: path})
 	if err != nil {
 		// A store nothing has written to yet is the first session anyone runs,
-		// and complaining would be the first thing they saw.
+		// and a store a policy hides is one this session does not read.
+		// Complaining about either would be the first thing they saw.
 		return nil
 	}
 	defer func() { _ = f.Close() }()

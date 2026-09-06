@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 
@@ -428,14 +427,21 @@ func (c *Client) readFile(ctx context.Context, params json.RawMessage) (any, err
 	if !c.Files {
 		return nil, Errorf(CodeMethodNotFound, "this client does not serve %s", MethodReadTextFile)
 	}
-	if !c.Boundary.Open(ctx, req.Path, false) {
+	// The read is the boundary's rather than the os package's, so what is
+	// checked is the object the open reached and not the name the agent sent.
+	// This is the call site where that matters most: every other path this
+	// package gates comes from the invocation or from a shell variable, and
+	// this one is chosen, live, by a party outside the process.
+	b, err := c.Boundary.ReadFile(ctx, req.Path)
+	if errors.Is(err, boundary.ErrRefused) {
 		// Refused the way a denied open is refused everywhere else: as a
 		// path that is not there. A policy hiding a file and a file that
 		// does not exist are indistinguishable to whoever asked, which is
-		// the rule the interpreter's own probes set.
+		// the rule the interpreter's own probes set — and a name that
+		// resolved into a hidden place is answered the same way, so an agent
+		// cannot map one by asking to be refused.
 		return nil, Errorf(CodeInvalidParams, "%s: no such file or directory", req.Path)
 	}
-	b, err := os.ReadFile(req.Path)
 	if err != nil {
 		c.failed(ctx, interp.Action{Kind: interp.ActionOpen, Path: req.Path}, err)
 		return nil, Errorf(CodeInvalidParams, "%s: %v", req.Path, err)
@@ -492,10 +498,12 @@ func (c *Client) writeFile(ctx context.Context, params json.RawMessage) (any, er
 	if !c.Files {
 		return nil, Errorf(CodeMethodNotFound, "this client does not serve %s", MethodWriteTextFile)
 	}
-	if !c.Boundary.Open(ctx, req.Path, true) {
+	err := c.Boundary.WriteFile(ctx,
+		boundary.File{Path: req.Path, Perm: 0o600}, []byte(req.Content))
+	if errors.Is(err, boundary.ErrRefused) {
 		return nil, Errorf(CodeInvalidParams, "%s: permission denied", req.Path)
 	}
-	if err := os.WriteFile(req.Path, []byte(req.Content), 0o600); err != nil {
+	if err != nil {
 		c.failed(ctx, interp.Action{Kind: interp.ActionOpen, Path: req.Path, Write: true}, err)
 		return nil, Errorf(CodeInvalidParams, "%s: %v", req.Path, err)
 	}

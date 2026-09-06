@@ -3,7 +3,7 @@
 
 //go:build !darwin
 
-package interp
+package opened
 
 // No platform links, which is a statement about these systems rather than a
 // gap left for later. See the darwin file beside this one for the bar an

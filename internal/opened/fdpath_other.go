@@ -3,7 +3,7 @@
 
 //go:build !darwin && !linux
 
-package interp
+package opened
 
 // pathOfFd has no answer on a platform with no way to ask one, and says so
 // rather than guessing. The consequence is written down instead of inferred:

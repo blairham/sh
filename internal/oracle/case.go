@@ -5759,6 +5759,61 @@ echo unreachable`,
 		Why:     "and the case that keeps it from eating an array literal: a `(` straight after `=` opens one, never a group — `a=(b|c)` is a parse error in that shell rather than a pattern",
 	},
 	{
+		ID: "pat/an-operand-out-of-a-command-substitution", Category: "pattern matching",
+		Snippet: `v=abcd; echo "[${v#$(echo ab)}]"`,
+		Why:     "a pattern operand is a word and is expanded like one, unanimously across the panel — the row that was missing while `${v#$(echo ab)}` answered `abcd` here, stripping the five characters `echo ab` from a string that does not begin with them. No diagnostic, no status, a plausible string: exactly the shape the corpus exists to catch, and a variable holding the same pattern worked, which is what hid it",
+	},
+	{
+		ID: "pat/an-operand-out-of-a-backquoted-substitution", Category: "pattern matching",
+		Snippet: "v=abcd; echo \"[${v#`echo ab`}]\"",
+		Why:     "the other spelling of the same substitution, which the parser records as a different span and which an implementation reaching for one kind by name would leave behind",
+	},
+	{
+		ID: "pat/an-expanded-operands-metacharacter", Category: "pattern matching",
+		Snippet: `v=abcdabcd; echo "[${v##$(echo 'a*a')}]"`,
+		Why:     "and what the expanded text is then worth: a `*` that arrived from a substitution is a metacharacter in dash, bash and ksh93 and an ordinary character in zsh, which is the same axis that decides `p='a*a'; ${v##$p}` and `x='et*'; echo $x`. One answer observed in a third place rather than a quirk of this operator, and the reason the operand's *word* is what becomes the pattern",
+	},
+	{
+		ID: "pat/an-operand-out-of-an-arithmetic-expansion", Category: "pattern matching",
+		Snippet: `v=2bcd; echo "[${v#$((1+1))}]"`,
+		Why:     "the same omission asked about the other substitution: unanimous, and the digit is what makes it visible — an operand of `$((1+1))` left unexpanded is the four characters `1+1`, which strips nothing from a value beginning with a 2",
+	},
+	{
+		ID: "pat/a-replacements-pattern-out-of-a-substitution", Category: "pattern matching",
+		Snippet: `v=abcd; echo "[${v/$(echo bc)/X}]"`,
+		Why:     "the replacement operator's pattern side, which is a separate call site from the trims and was wrong in the same way. dash has no `/` at all and says so, so this is the three-shell agreement rather than the panel's",
+	},
+	{
+		ID: "pat/a-case-arm-out-of-a-command-substitution", Category: "pattern matching",
+		Snippet: `case ab in $(echo ab)) echo hit;; *) echo miss;; esac`,
+		Why:     "the same word in the other construct that takes a pattern, and unanimous: an arm is expanded before it is matched. Worth its own row because the two constructs are the same function here — a report that this position was *unaffected* was measured against the globbing question and did not ask the expansion one",
+	},
+	{
+		ID: "pat/a-case-arms-metacharacter-out-of-a-substitution", Category: "pattern matching",
+		Snippet: `case abc in $(echo 'a*')) echo hit;; *) echo miss;; esac`,
+		Why:     "and the arm's half of the globbing axis, which is where the two questions come apart: every shell expands the arm and only zsh then declines to read a `*` in what came back. So `case` is not exempt from the expansion and is exempt from the glob in exactly one shell",
+	},
+	{
+		ID: "pat/a-condition-operand-out-of-a-command-substitution", Category: "pattern matching",
+		Snippet: `[[ ab == $(echo ab) ]] && echo hit || echo miss`,
+		Why:     "the third construct, agreeing with the other two in every shell that has `[[ ]]` at all. dash has none and reports the words as a command, which is the row's other half: a condition is a keyword rather than a builtin",
+	},
+	{
+		ID: "pat/an-operand-holding-a-dollar-single-escape", Category: "pattern matching",
+		Snippet: "v=$'\\tx'; echo \"[${v#$'\\t'}]\"",
+		Why:     "quoting that carries an escape is decoded in a pattern operand as it is anywhere else — the same tab on both sides, so the prefix goes. Unanimous, including dash by a different route: it has no such quoting, so both sides are a literal dollar and a backslash-t and they still match each other",
+	},
+	{
+		ID: "pat/a-process-substitution-in-an-operand", Category: "pattern matching",
+		Snippet: `v=abcd; echo "[${v#<(:)}]"`,
+		Why:     "the substitution the panel does *not* agree about, recorded here so that the agreement above is not read as covering it: only bash runs the command in this position, and no shell's pattern then matches, so the value comes back whole in all six. The visible half is unanimous and the invisible half is not, which is why this is a pinned row rather than an implemented behavior",
+	},
+	{
+		ID: "pat/an-operand-expands-once-for-a-whole-array", Category: "pattern matching",
+		Snippet: `a=(abc bcd); printf "[%s]" "${a[@]#$(printf x >>marks; echo a)}"; printf "n=%s\n" "$(cat marks)"`,
+		Why:     "one operand, one expansion, however many elements it is applied to: the mark file holds a single x in every shell with arrays. The alternative reading is not visible in the fields — both spellings print the same two — and shows only in how many times the word's side effects fired, which is what makes it worth a file rather than an assertion about output",
+	},
+	{
 		ID: "exec/lines-run-as-they-are-read", Category: "command language", SyntaxError: true,
 		Script:  true,
 		Snippet: "echo one\n{ fi; }\necho three\n",

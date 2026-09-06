@@ -110,6 +110,34 @@ func TestTheDrainMarkDoesNotReachTheTerminal(t *testing.T) {
 	}
 }
 
+// TestAConduitSessionEndsWhetherOrNotTheCallerWaitedForThePrompt is the same
+// rule asked of the other repl helper, because a rule that holds in one of two
+// places is the state #1018 was filed about.
+//
+// See promptSession in historyui_test.go for the argument. The short of it is
+// that a caller which waits for the prompt itself has consumed it, and a
+// helper that waits again blocks forever on one that is never drawn — so the
+// helper tracks whether the wait is still owed rather than simply doing it.
+func TestAConduitSessionEndsWhetherOrNotTheCallerWaitedForThePrompt(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		waitsForItself bool
+	}{
+		{"the caller leaves the prompt to finish", false},
+		{"the caller waited for the prompt itself", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			session := atACapturingPrompt(t)
+			session.typeLine(`/bin/sh -c 'echo mark-$((6*7))'`)
+			session.waitForOutput("mark-42", "the command's output")
+			if tc.waitsForItself {
+				session.waitForPrompt("the prompt after the line ran")
+			}
+			session.finish()
+		})
+	}
+}
+
 // A command that prints a great deal is not lost or reordered by the conduit.
 //
 // The pump reads in 32 KiB bites and the mark can land across any of those
@@ -161,6 +189,7 @@ type capturingSession struct {
 	out      *syncBuffer
 	dir      string
 	finished bool
+	atPrompt bool
 	done     chan error
 }
 
@@ -216,20 +245,33 @@ func atACapturingPrompt(t *testing.T) *capturingSession {
 		_, err := s.Run(t.Context())
 		sess.done <- err
 	}()
-	sess.waitForOutput("$ ", "the first prompt")
+	sess.waitForPrompt("the first prompt")
 	return sess
 }
 
 func (s *capturingSession) typeLine(line string) {
 	s.t.Helper()
+	s.atPrompt = false
 	if _, err := s.control.WriteString(line + "\r"); err != nil {
 		s.t.Fatal(err)
 	}
 }
 
+// waitForOutput waits for anything that is not a prompt, and says nothing
+// about whether the shell is reading again — output arrives while the terminal
+// is still being handed back, which is the window the comment on finish is
+// about.
 func (s *capturingSession) waitForOutput(want, what string) {
 	s.t.Helper()
 	waitFor(s.t, s.out, want, what)
+}
+
+// waitForPrompt waits for the next prompt and records that the shell is
+// reading again, so finish knows a wait is no longer owed.
+func (s *capturingSession) waitForPrompt(what string) {
+	s.t.Helper()
+	waitFor(s.t, s.out, "$ ", what)
+	s.atPrompt = true
 }
 
 func (s *capturingSession) screen() string { return s.out.String() }
@@ -261,6 +303,12 @@ func (s *capturingSession) screen() string { return s.out.String() }
 // helper do this wait. This is a second session helper, written without it,
 // so it lost the answer along with the code.
 //
+// Since #1018 all three session helpers state one rule — wait for the next
+// prompt before sending a key, and the helper does the waiting — and the flag
+// is what lets the helper own it without punishing a caller that waited too.
+// See promptSession in historyui_test.go, which carries the argument, and
+// driver's screen.endSession, which has owned it since #685.
+//
 // The prompt is the mark to wait on because it is drawn after raw mode is
 // restored and immediately before the read, which is an order the two cannot
 // swap. A *new* prompt: the buffer carries a cursor, and it has to, because
@@ -272,7 +320,9 @@ func (s *capturingSession) finish() {
 		return
 	}
 	s.finished = true
-	s.waitForOutput("$ ", "the prompt that says the shell is reading again")
+	if !s.atPrompt {
+		s.waitForPrompt("the prompt that says the shell is reading again")
+	}
 	if _, err := s.control.WriteString("\x04"); err != nil {
 		s.t.Fatal(err)
 	}

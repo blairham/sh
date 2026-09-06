@@ -467,3 +467,12 @@ func TestShiftReadsEveryDashWordAsAnOption(t *testing.T) {
 		}
 	}
 }
+
+// `\E` is the escape character here and `\e` is two characters — the opposite
+// of zsh, which is why one axis could not answer for both letters (#908).
+func TestEchoTakesTheCapitalEscapeAlone(t *testing.T) {
+	out, st := runKsh(t, t.TempDir(), "echo -e 'a\\eZ:a\\EZ'\n")
+	if out != "a\\eZ:a\x1bZ\n" || st != 0 {
+		t.Errorf("said % x status %d, want the small letter as written and the capital as ESC", out, st)
+	}
+}

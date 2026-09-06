@@ -1025,10 +1025,16 @@ func biEcho(r *Runner, _ context.Context, args []string) int {
 		// The two set extensions are asked only when their escapes appear.
 		hex := strings.Contains(out, `\x`) &&
 			r.ask(r.sem().EchoExpandsHexEscapes, "echo expanding \\xHH")
-		esc := (strings.Contains(out, `\e`) || strings.Contains(out, `\E`)) &&
+		// The two spellings of the escape character are two questions, and
+		// each is asked only where its own letter appears: ksh93 has `\E`
+		// and not `\e`, zsh has `\e` and not `\E`, so one answer for both
+		// was wrong for half the panel (#908).
+		esc := strings.Contains(out, `\e`) &&
 			r.ask(r.sem().EchoExpandsEscEscape, "echo expanding \\e")
+		capEsc := strings.Contains(out, `\E`) &&
+			r.ask(r.sem().EchoExpandsCapitalEscEscape, "echo expanding \\E")
 		var stopped bool
-		out, stopped = expandEchoEscapes(out, hex, esc)
+		out, stopped = expandEchoEscapes(out, hex, esc, capEsc)
 		if stopped {
 			// `\c` ends the output, newline included.
 			newline = false
@@ -1102,10 +1108,12 @@ func xsiEscape(c byte) (byte, bool) {
 }
 
 // expandEchoEscapes interprets the escapes `echo` expands where the dialect
-// says it does: the XSI set, with `\xHH` and `\e` admitted per dialect.
+// says it does: the XSI set, with `\xHH`, `\e` and `\E` admitted per
+// dialect — the last two separately, because ksh93 and zsh have one each and
+// not the other.
 // stopped reports a `\c`, which discards the rest of the output and the
 // closing newline with it.
-func expandEchoEscapes(s string, hex, esc bool) (expanded string, stopped bool) {
+func expandEchoEscapes(s string, hex, esc, capEsc bool) (expanded string, stopped bool) {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] != '\\' || i+1 >= len(s) {
@@ -1121,7 +1129,11 @@ func expandEchoEscapes(s string, hex, esc bool) (expanded string, stopped bool) 
 		case 'c':
 			return b.String(), true
 		case 'e', 'E':
-			if !esc {
+			admitted := esc
+			if s[i] == 'E' {
+				admitted = capEsc
+			}
+			if !admitted {
 				b.WriteByte('\\')
 				b.WriteByte(s[i])
 				break

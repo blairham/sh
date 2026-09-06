@@ -101,4 +101,28 @@ func TestAScriptOperandThroughALinkIsCheckedOnWhatItReached(t *testing.T) {
 	if plainCode != code {
 		t.Errorf("a refusal by name exits %d and one through a link exits %d", plainCode, code)
 	}
+
+	// Both of those go through the gate, so a change that broke the wording of
+	// every refusal alike would leave the comparison above satisfied. The
+	// third run is the one with no policy at all: a script this process really
+	// may not read, refused by the kernel. What the gate says has to be that
+	// sentence — "a refusal comes back as a permission error" is the claim
+	// driver.readFile is written for, and the operating system is the oracle
+	// for what one of those reads like.
+	unreadable := filepath.Join(dir, "unreadable.sh")
+	if err := os.WriteFile(unreadable, []byte("echo ran\n"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	if f, err := os.Open(unreadable); err == nil {
+		_ = f.Close()
+		t.Skip("this process can read a mode-0 file, so the kernel is not an oracle here")
+	}
+	_, kernelErrs, kernelCode := runArgs(t, shell(), "testsh", unreadable)
+	if want := strings.Replace(kernelErrs, unreadable, link, 1); errs != want {
+		t.Errorf("a refused script reads\n\t%q\nand one the kernel would not open reads\n\t%q\n"+
+			"want the policy's refusal to be a permission error, in those words", errs, want)
+	}
+	if kernelCode != code {
+		t.Errorf("the kernel's refusal exits %d and the policy's exits %d", kernelCode, code)
+	}
 }

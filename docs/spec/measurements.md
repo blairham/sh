@@ -1578,6 +1578,19 @@ grades it and nothing drift-checks it either, for the same reason.
 | `whence/where-takes-the-letters-its-preset-left` | `st=127` **2>** `<shell>: 1: where: not found~<shell>: 1: where: not found` | `st=127` **2>** `<shell>: line 1: where: command not found~<shell>: line 1: where: command not found` | `st=127` **2>** `<shell>: line 1: where: command not found~<shell>: line 1: where: command not found` | `st=127` **2>** `<shell>: where: command not found~<shell>: where: command not found` | `st=127` **2>** `<shell>: where: not found~<shell>: where: not found` | `/bin/echo~echo: builtin~echo: command~st=0` |
 | `whence/a-on-a-name-that-is-only-on-path` | `st=127` **2>** `<shell>: 1: whence: not found` | `st=127` **2>** `<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: whence: command not found` | `ls is a tracked alias for /bin/ls~st=0` | `/bin/ls~st=0` |
 | `whence/nothing-to-ask-about` | `st=127` **2>** `<shell>: 1: whence: not found` | `st=127` **2>** `<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: line 1: whence: command not found` | `st=127` **2>** `<shell>: whence: command not found` | `st=2` **2>** `Usage: whence [-afpqv] name  ...` | `st=1` |
+| `zmodload/a-fresh-shell-has-one-module` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `zsh/main~st=0` |
+| `zmodload/the-listing-as-the-commands-that-would-make-it` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `zmodload zsh/main~st=0` |
+| `zmodload/asking-whether-a-module-is-loaded` | `main=127~zutil=127` **2>** `<shell>: 1: zmodload: not found~<shell>: 1: zmodload: not found` | `main=127~zutil=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: zmodload: command not found` | `main=127~zutil=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: zmodload: command not found` | `main=127~zutil=127` **2>** `<shell>: zmodload: command not found~<shell>: zmodload: command not found` | `main=127~zutil=127` **2>** `<shell>: zmodload: not found~<shell>: zmodload: not found` | `main=0~zutil=1` |
+| `zmodload/unloading-what-was-never-loaded` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=1` **2>** `<shell>:zmodload:1: no such module zsh/nosuchmodule` |
+| `zmodload/unloading-a-real-module-that-is-not-loaded` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=1` **2>** `<shell>:zmodload:1: no such module zsh/mathfunc` |
+| `zmodload/unloading-the-module-a-fresh-shell-has` | `st=127~listing=127` **2>** `<shell>: 1: zmodload: not found~<shell>: 1: zmodload: not found` | `st=127~listing=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: zmodload: command not found` | `st=127~listing=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: zmodload: command not found` | `st=127~listing=127` **2>** `<shell>: zmodload: command not found~<shell>: zmodload: command not found` | `st=127~listing=127` **2>** `<shell>: zmodload: not found~<shell>: zmodload: not found` | `st=0~listing=0` |
+| `zmodload/a-module-that-will-not-load-is-status-one` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=1` |
+| `zmodload/the-features-of-a-module-with-none` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=1` **2>** `<shell>:zmodload:1: module `zsh/main' does not support features` |
+| `zmodload/the-feature-letter-needs-the-listing-letter` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=1` **2>** `<shell>:zmodload:1: -l is only allowed with -F` |
+| `zmodload/the-feature-letter-needs-a-module` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=1` **2>** `<shell>:zmodload:1: -F requires a module name` |
+| `zmodload/a-letter-the-builtin-does-not-have` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=1` **2>** `<shell>:zmodload:1: bad option: -q` |
+| `zmodload/autoloading-a-builtin-from-a-module` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=0` |
+| `zmodload/loading-by-feature` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=0` |
 | `zstyle/stores-and-lists-what-it-is-given` | `st=127` **2>** `<shell>: 1: zstyle: not found~<shell>: 1: zstyle: not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found` *(status 127)* | `st=127` **2>** `<shell>: zstyle: command not found~<shell>: zstyle: command not found` *(status 127)* | `st=127` **2>** `<shell>: zstyle: not found~<shell>: zstyle: not found` *(status 127)* | `st=0~zstyle ':completion:*' verbose yes` |
 | `zstyle/more-components-sort-first` | **2>** `<shell>: 1: zstyle: not found~<shell>: 1: zstyle: not found~<shell>: 1: zstyle: not found~<shell>: 1: zstyle: not found` *(status 127)* | **2>** `<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found` *(status 127)* | **2>** `<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found` *(status 127)* | **2>** `<shell>: zstyle: command not found~<shell>: zstyle: command not found~<shell>: zstyle: command not found~<shell>: zstyle: command not found` *(status 127)* | **2>** `<shell>: zstyle: not found~<shell>: zstyle: not found~<shell>: zstyle: not found~<shell>: zstyle: not found` *(status 127)* | `zstyle ':a:b:c:d:*' v 1~zstyle ':m:n:*' v 3~zstyle ':q:*' v 2` |
 | `zstyle/an-exact-pattern-beats-a-wildcard-one` | **2>** `<shell>: 1: zstyle: not found~<shell>: 1: zstyle: not found~<shell>: 1: zstyle: not found~<shell>: 1: zstyle: not found` *(status 127)* | **2>** `<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found` *(status 127)* | **2>** `<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found~<shell>: line 1: zstyle: command not found` *(status 127)* | **2>** `<shell>: zstyle: command not found~<shell>: zstyle: command not found~<shell>: zstyle: command not found~<shell>: zstyle: command not found` *(status 127)* | **2>** `<shell>: zstyle: not found~<shell>: zstyle: not found~<shell>: zstyle: not found~<shell>: zstyle: not found` *(status 127)* | `zstyle ab v 3~zstyle 'a*b' v 1~zstyle 'a?b' v 2` |
@@ -2503,6 +2516,58 @@ grades it and nothing drift-checks it either, for the same reason.
 - `whence/nothing-to-ask-about` — the two shells with the builtin part company over an empty operand list: zsh says nothing and reports 1, ksh93 prints its usage line and reports 2. The quiet one is the trap — a script testing the status sees a plain miss
   ```sh
   whence; echo "st=$?"
+  ```
+- `zmodload/a-fresh-shell-has-one-module` — what is loaded before a script asks for anything: `zsh/main` alone, one name per line and 0. Not `zsh/complete` and `zsh/zle` as well — those are linked into the binary and `zmodload -e` says 1 for both, which is why this row is the bare listing rather than a claim about what is compiled in. Nobody else has the builtin at all
+  ```sh
+  zmodload; echo "st=$?"
+  ```
+- `zmodload/the-listing-as-the-commands-that-would-make-it` — `-L` writes the same set as the commands that would load it — `zmodload zsh/main` — which is the shape a script re-plays and therefore the shape worth pinning
+  ```sh
+  zmodload -L; echo "st=$?"
+  ```
+- `zmodload/asking-whether-a-module-is-loaded` — `-e` asks instead of loading, and says nothing either way: 0 for the module a fresh shell has and 1 for one it has not, with no output on either. This is the row that makes `-e` a question rather than a load, and the two answers side by side are what a shell that always answered 0 would fail
+  ```sh
+  zmodload -e zsh/main; echo "main=$?"; zmodload -e zsh/zutil; echo "zutil=$?"
+  ```
+- `zmodload/unloading-what-was-never-loaded` — `no such module` here means *not loaded*, not *no such name*: `-u` on a module that was never loaded is `no such module zsh/nosuchmodule` and 1. The row that proves it is the next one, which says the same of a module zsh certainly ships
+  ```sh
+  zmodload -u zsh/nosuchmodule; echo "st=$?"
+  ```
+- `zmodload/unloading-a-real-module-that-is-not-loaded` — the same answer for a module that exists — `no such module zsh/mathfunc` and 1 — which is what settles what the sentence means. Taken together with the row above, `-u` says nothing at all about whether a name is a module, only whether it is loaded here and now
+  ```sh
+  zmodload -u zsh/mathfunc; echo "st=$?"
+  ```
+- `zmodload/unloading-the-module-a-fresh-shell-has` — and the other side of it: `zsh/main` *is* loaded, so `-u` takes it and the listing afterwards is empty with status 0. The emptied listing has to survive being written, which is what tells a store nobody has touched apart from one somebody emptied
+  ```sh
+  zmodload -u zsh/main; echo "st=$?"; zmodload; echo "listing=$?"
+  ```
+- `zmodload/a-module-that-will-not-load-is-status-one` — the whole of what a script can act on, without the wording: `-s` silences the complaint and the status is still 1. `zmodload zsh/zutil || return 1` is the line this row is about — a shell answering 0 here sends a plugin manager on to call a builtin the module was supposed to bring, several hundred lines further on
+  ```sh
+  zmodload -s zsh/nosuchmodule; echo "st=$?"
+  ```
+- `zmodload/the-features-of-a-module-with-none` — `-lF` lists a module's features, and the one module a fresh shell has is the one with none: `module 'zsh/main' does not support features` and 1 — its own sentence, not the `is not yet loaded` a module that has features but is absent gets. The builtin's name is in the location here, which is where this shell puts it
+  ```sh
+  zmodload -lF zsh/main; echo "st=$?"
+  ```
+- `zmodload/the-feature-letter-needs-the-listing-letter` — `-l` alone is refused rather than read as a listing — `-l is only allowed with -F` and 1. Worth a row because `-l` and `-L` are one letter apart and do unrelated things, so a shell that folded them would look right until a script wrote the lower-case one
+  ```sh
+  zmodload -l zsh/main; echo "st=$?"
+  ```
+- `zmodload/the-feature-letter-needs-a-module` — and `-F` with nothing to act on is `-F requires a module name` and 1, where the bare builtin with no letters at all is a listing and 0 — so the operand is required by the letter rather than by the builtin
+  ```sh
+  zmodload -F; echo "st=$?"
+  ```
+- `zmodload/a-letter-the-builtin-does-not-have` — `bad option: -q` and 1 — this builtin's wording, which is `bindkey`'s and not `zstyle`'s `invalid option`, measured in all three. `-q` is one of twenty-two letters zsh's zmodload does not have, against the seventeen it does
+  ```sh
+  zmodload -q zsh/main; echo "st=$?"
+  ```
+- `zmodload/autoloading-a-builtin-from-a-module` — `-a` registers a builtin to be loaded from a module on first use, and zsh takes the line with silence and 0 — it defers everything, so a module that does not exist is not its problem yet. Nothing here can autoload a builtin, so the letter is named as missing and the status differs; the row is what records that, rather than leaving a refusal graded against nothing
+  ```sh
+  zmodload -a zsh/nosuchmodule mybuiltin; echo "st=$?"
+  ```
+- `zmodload/loading-by-feature` — `-F` names the features to act on and, given none, loads the module whole: silence and 0 in zsh. A feature here is a builtin or a parameter the shell either has or has not, and `+zparseopts` cannot conjure one, so `-F` without `-l` is named as missing — the row records the difference rather than hiding it behind a 0 this shell has not earned
+  ```sh
+  zmodload -F zsh/zutil; echo "st=$?"
   ```
 - `zstyle/stores-and-lists-what-it-is-given` — the honest minimum an rc file needs: zsh takes the style, reports 0 and says it back as the command that would set it. Everyone else has no zstyle at all, which is why a config's first twenty lines die outside zsh
   ```sh

@@ -71790,6 +71790,578 @@
         "TimedOut": false
       }
     },
+    "zmodload/a-fresh-shell-has-one-module": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "zsh/main~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/a-letter-the-builtin-does-not-have": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:zmodload:1: bad option: -q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/a-module-that-will-not-load-is-status-one": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/asking-whether-a-module-is-loaded": {
+      "bash": {
+        "Stdout": "main=127~zutil=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "main=127~zutil=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "main=127~zutil=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "main=127~zutil=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "main=127~zutil=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "main=0~zutil=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/autoloading-a-builtin-from-a-module": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/loading-by-feature": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/the-feature-letter-needs-a-module": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:zmodload:1: -F requires a module name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/the-feature-letter-needs-the-listing-letter": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:zmodload:1: -l is only allowed with -F",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/the-features-of-a-module-with-none": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:zmodload:1: module `zsh/main' does not support features",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/the-listing-as-the-commands-that-would-make-it": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "zmodload zsh/main~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/unloading-a-real-module-that-is-not-loaded": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:zmodload:1: no such module zsh/mathfunc",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/unloading-the-module-a-fresh-shell-has": {
+      "bash": {
+        "Stdout": "st=127~listing=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~listing=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~listing=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~listing=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~listing=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~listing=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/unloading-what-was-never-loaded": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:zmodload:1: no such module zsh/nosuchmodule",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "zstyle/an-exact-pattern-beats-a-wildcard-one": {
       "bash": {
         "Stdout": "",

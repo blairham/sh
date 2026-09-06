@@ -21,7 +21,7 @@ import (
 // reports what a run happened to interleave.
 func TestAJobsProcessIdIsItsFirstProcess(t *testing.T) {
 	j := &Job{done: make(chan struct{}), ready: make(chan struct{})}
-	j.setPID(111)
+	j.settlePID(111)
 	select {
 	case <-j.ready:
 	default:
@@ -30,7 +30,7 @@ func TestAJobsProcessIdIsItsFirstProcess(t *testing.T) {
 	if j.PID != 111 {
 		t.Fatalf("PID = %d, want 111", j.PID)
 	}
-	j.setPID(222)
+	j.settlePID(222)
 	if j.PID != 111 {
 		t.Errorf("PID = %d after a second process, want the first one, 111", j.PID)
 	}
@@ -48,7 +48,7 @@ func TestAJobsProcessIdDoesNotMoveOnceItCanBeRead(t *testing.T) {
 		writers.Add(1)
 		go func() {
 			defer writers.Done()
-			j.setPID(pid)
+			j.settlePID(pid)
 		}()
 	}
 	<-j.ready

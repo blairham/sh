@@ -319,6 +319,12 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			return closers, nil
 		}
 
+		// A background job's pid is settled before an open that may never
+		// return, so that `&` can hand the shell back. See
+		// settleBackgroundJobBeforeABlockingOpen: this is where a job whose
+		// first act blocks would otherwise leave the shell waiting for a pid
+		// that is not coming.
+		r.settleBackgroundJobBeforeABlockingOpen(path)
 		f, err := r.openGated(ctx, &action, path, flags)
 		if errors.Is(err, errRefused) {
 			// The gate let the *name* through and refused what the name

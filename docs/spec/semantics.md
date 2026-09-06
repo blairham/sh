@@ -4059,18 +4059,50 @@ shell has no subshell process to name, so the id is an approximation either
 way, and one that stays put is worth more to `kill %1` and `jobs -l` than one
 that tracks whichever command the job has reached.
 
-**And one it did not fix, filed as #1003.** `&` does not return at all when the
-job blocks *before* starting any external command — `(read x < a-fifo; :) &`
-never reaches the next command. `background` waits for the process id to settle
-and it never does. That is a different defect from this one and its fix is a
-restructuring rather than a line, so it is its own issue.
+**And one it did not fix, filed as #1003 and fixed there.** `&` did not return
+at all when the job blocked *before* starting any external command —
+`(read x < a-fifo; :) & echo NOW` printed nothing here and prints the marker at
+once in all six shells in the panel, which fork before they open anything.
+Every shape of job did it, a lone external command included, because the
+blocking was in the *redirection* and a redirection is opened before the shell
+knows whether the command is a builtin, a function or a program.
 
-Three corpus rows ask the question, where none did before:
+The settling now has a third trigger beside a process having started and the
+job having ended: **a background job is settled without a process id when it is
+about to open something that may never open** — a named pipe with no peer,
+which is the one shape whose open waits by construction. Nothing has started there
+and while the job stands at that open nothing will, so zero is the truthful
+answer and not a lost one; it is the same zero this shell already reports for a
+background builtin or compound command.
+
+Only where the open can really wait, and the stat is the whole reason: settling
+before *every* redirection would cost a real answer, since `sleep 0.3 > log &`
+reports the sleep's process id here and a latch that fired on an ordinary file
+would report zero. A character device was in the test for one draft, on the
+reasoning that a terminal's open can wait, and it was a regression rather than
+a completeness — `/dev/null` is a character device, so `sleep 1 > /dev/null &`
+began reporting no process id at all. The devices whose open really does wait
+are a terminal held by another process group and a serial line with no carrier,
+and a background job here is a goroutine in the shell's own process group, so
+neither is reachable. The trade in the other direction is that a job settled at a
+blocking open keeps its zero even if a writer arrives later and the job goes on
+to run a program — a pid that arrives after the shell has stopped waiting is
+dropped rather than recorded, because writing the field and closing the channel
+that publishes it are now one `sync.Once` and not two. That is what makes every
+reader's `<-job.ready` a synchronization point rather than a hope. `$!` for a
+blocked job is therefore `0` where the panel answers with the pid of the fork it
+made, which is the same knowing difference as the row below: there is no fork
+here to name.
+
+Five corpus rows ask the question, where none did before:
 `jobs/a-background-job-outlives-the-shell` records the difference,
 `jobs/a-background-external-command-outlives-the-shell` records the
-half that already works, and
+half that already works,
 `jobs/wait-brings-a-background-job-back-before-the-shell-ends` records
-the workaround a script has.
+the workaround a script has, and
+`jobs/an-ampersand-returns-before-the-job-opens-a-fifo` and
+`jobs/an-ampersand-returns-when-an-external-commands-redirection-blocks`
+record that `&` comes back — which is a row that timed out before.
 
 **`wait -n`** is bash's: block until whichever job finishes first, report
 its status, 127 in silence with no jobs at all

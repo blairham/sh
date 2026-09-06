@@ -2415,10 +2415,10 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 			return nil
 		}
 		// The pid is final now, so anything waiting to read `$!` may proceed
-		// while this goroutine blocks on the process. Once, and setPID says
+		// while this goroutine blocks on the process. Once, and settlePID says
 		// why: a job that starts a second external command reaches this again,
 		// by which time the shell has already read the field.
-		r.bg.setPID(cmd.Process.Pid)
+		r.bg.settlePID(cmd.Process.Pid)
 		err := cmd.Wait()
 		r.status = r.exitStatus(err)
 		r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})

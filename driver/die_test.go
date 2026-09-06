@@ -6,6 +6,7 @@
 package driver_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,26 +25,38 @@ import (
 // test".
 const dyingScript = "SH_TEST_DYING_SCRIPT"
 
-// deathBudget is how long a shell that is going to be killed by a signal is
-// given to be killed by it.
+// deathDeadline is how long a shell that has been asked to die is given
+// before this test gives up on it and says so.
 //
-// It is not a performance assertion. The measured time is tens of
-// milliseconds on both platforms, and the defect this guards against was a
-// shell that parked forever — so it only has to be tight enough that a hang
-// is reported as a hang rather than as whatever the enclosing timeout
-// eventually says.
+// **It is a deadline that fires, not a stopwatch read afterwards.** That is
+// the whole of what changed, and the reason is that the two catch different
+// things. A stopwatch cannot see the defect this exists for — a shell that
+// parks forever leaves the wait blocking, and the run ends at the harness
+// timeout with a goroutine dump naming nothing, which the stopwatch never
+// gets to read. What the stopwatch *could* see was how long a successful
+// death took, which nobody needs: it is not a performance assertion, and
+// twice it failed unrelated pull requests (#627, #635, #1088) for saying so.
 //
-// It was two seconds, and a loaded ubuntu runner under -race missed it by
-// five milliseconds (2.0048s), which failed unrelated pull requests until
-// somebody read the number. Forking and starting a second copy of the test
-// binary is most of the measurement and is exactly what a busy machine
-// stretches, so the budget is set by what a stall costs rather than by what
-// the work costs.
+// So the number is now generous on purpose. A passing run never reaches it —
+// the wait returns as soon as the process is reaped — and a run that does
+// reach it is a hang, which is the only thing worth reporting. Raising a
+// stopwatch's number buys time; raising a deadline's costs nothing.
 //
-// It is still deliberately under the raise's own grace period (deathGrace),
-// so a shell that gave up and exited with a number is caught by this as well
-// as by the wait status.
-const deathBudget = 4 * time.Second
+// **What a slow death is measured at.** Signal sent to process reaped, on
+// Linux under -race: 1ms median (N=48, `docker run --cpus=1`), 6ms median and
+// 91ms worst under nine runnable threads on that one cpu (N=48). On macOS
+// 8ms median idle (N=25). The two failures that reopened this were 4.07s and
+// 4.28s on ubuntu-latest, which is 40000 times the work — see writeNoCore for
+// what was actually taking that long and why the guard against it had stopped
+// working.
+//
+// **What is no longer asserted here, and where it moved.** The old comment
+// noted that the budget sat under the raise's own grace period (deathGrace),
+// so a shell that gave up and exited with a number was caught by the clock as
+// well as by the wait status. It is still caught, by the wait status, which is
+// the assertion that names the thing rather than a proxy for it: ws.Signaled()
+// is false for such a shell whatever the clock says.
+const deathDeadline = 30 * time.Second
 
 // dieRunningAsAShell turns this process into a shell when it was re-executed
 // as one, and does nothing otherwise.
@@ -74,12 +87,32 @@ func dieRunningAsAShell() {
 // what a shell's own `ulimit -c 0` does and is scoped to the shell half rather
 // than to the test binary.
 //
-// Not tidiness. SIGABRT is a core-dumping signal on Linux where it is not on
-// macOS, and a race-instrumented test binary is large: measured on a CI runner,
-// the kernel spent 1.5 seconds writing the image before reaping the process, so
-// the timing this file is here to measure was the core writer's rather than the
-// shell's. The failure looked platform-specific and was a matter of what the
-// default action *does* on each one.
+// Not tidiness. Every signal these tests raise is a core-dumping one, and a
+// race-instrumented test binary is large — 458MB of image, measured. On a CI
+// runner the kernel spent 1.5 seconds writing it before reaping the process,
+// so the timing this file is here to measure was the core writer's rather than
+// the shell's.
+//
+// **The resource limit alone does not do it, and that is why this came back.**
+// A Linux core_pattern beginning with `|` names a program to pipe the image to,
+// which is what a distribution with a crash reporter installs. On that path the
+// kernel does not enforce RLIMIT_CORE at all — the limit is consulted only for
+// a dump it writes itself, plus the one reserved value of 1 that stops the
+// helper dumping recursively. So `ulimit -c 0` reads as a guard and is not one,
+// on exactly the machines that have a crash reporter.
+//
+// Measured, `docker run --cpus=1` with a race-instrumented binary and
+// core_pattern set to a pipe: 156ms median with the limit alone (N=16), 1ms
+// median with refuseToBeDumped as well (N=16), against 1ms with no pipe at all.
+// A 156-fold difference on a fast local disk with nothing else running, for
+// work that scales with the size of the image and the load on the machine —
+// which is the shape of a 4-second death on a busy runner, and the reason two
+// pull requests about arrays and about `for` were failed by a test about
+// signals.
+//
+// refuseToBeDumped is the part that holds either way: it tells the kernel this
+// process is not to be dumped at all, so there is no image to write and no
+// helper to start.
 func writeNoCore() {
 	var lim syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_CORE, &lim); err != nil {
@@ -87,22 +120,40 @@ func writeNoCore() {
 	}
 	lim.Cur = 0
 	_ = syscall.Setrlimit(syscall.RLIMIT_CORE, &lim)
+	refuseToBeDumped()
 }
 
 // waitStatusOfAShell re-executes this test binary as a shell running src and
-// reports how it ended, how long that took, and what it wrote.
-func waitStatusOfAShell(t *testing.T, name, src string) (syscall.WaitStatus, time.Duration, string) {
+// reports how it ended and what it wrote.
+//
+// The deadline is the context's, so a shell that never dies is killed and
+// named here rather than left to hold the harness open — see deathDeadline.
+// It covers the fork and the exec as well as the death, which is deliberate:
+// on this route there is no moment to start counting from, and a deadline
+// generous enough for a hang does not care.
+func waitStatusOfAShell(t *testing.T, name, src string) (syscall.WaitStatus, string) {
 	t.Helper()
-	cmd := exec.Command(os.Args[0], "-test.run="+name)
+	ctx, cancel := context.WithTimeout(context.Background(), deathDeadline)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run="+name)
 	cmd.Env = append(os.Environ(), dyingScript+"="+src)
-	start := time.Now()
+	// So the deadline is one a child cannot outlive. CombinedOutput reads
+	// through a pipe, and a pipe is held open by whatever inherited it — a
+	// `sleep` the shell left behind would keep the read going after the
+	// process itself had been killed, which would put the hang back in a
+	// second form. WaitDelay closes the descriptors a second after the
+	// process is gone.
+	cmd.WaitDelay = time.Second
 	out, _ := cmd.CombinedOutput()
-	took := time.Since(start)
+	if ctx.Err() != nil {
+		t.Fatalf("%s: the shell was still running after %v and had to be killed — "+
+			"it never died of the signal", src, deathDeadline)
+	}
 	ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
 	if !ok {
 		t.Fatalf("no wait status for the shell half")
 	}
-	return ws, took, string(out)
+	return ws, string(out)
 }
 
 // killedBy asserts the shape every one of these cases wants: the shell was
@@ -110,7 +161,7 @@ func waitStatusOfAShell(t *testing.T, name, src string) (syscall.WaitStatus, tim
 // computed, it said nothing, and it did it promptly.
 func killedBy(t *testing.T, name, src string, want syscall.Signal) {
 	t.Helper()
-	ws, took, out := waitStatusOfAShell(t, name, src)
+	ws, out := waitStatusOfAShell(t, name, src)
 	switch {
 	case !ws.Signaled():
 		t.Errorf("%s: exited with %d rather than being killed by a signal", src, ws.ExitStatus())
@@ -123,9 +174,6 @@ func killedBy(t *testing.T, name, src string, want syscall.Signal) {
 		// the run. The first of it says which signal and is enough to tell
 		// this apart from a shell writing a diagnostic of its own.
 		t.Errorf("%s: wrote %q, want nothing at all", src, firstLine(out))
-	}
-	if took > deathBudget {
-		t.Errorf("%s: took %v to die, budget %v", src, took, deathBudget)
 	}
 }
 
@@ -202,7 +250,7 @@ func TestAFatalSignalFromOutsideKillsTheShellQuietly(t *testing.T) {
 		syscall.SIGSYS, syscall.SIGILL, syscall.SIGBUS, syscall.SIGSEGV,
 	} {
 		t.Run(sig.String(), func(t *testing.T) {
-			ws, took, out := shellSignaledFromOutside(t,
+			ws, out := shellSignaledFromOutside(t,
 				"TestAFatalSignalFromOutsideKillsTheShellQuietly", "", countedSleeps, sig)
 
 			if !reachesTheFrontEnd(sig) {
@@ -226,9 +274,6 @@ func TestAFatalSignalFromOutsideKillsTheShellQuietly(t *testing.T) {
 			}
 			if out != "" {
 				t.Errorf("wrote %q, want nothing at all", firstLine(out))
-			}
-			if took > deathBudget {
-				t.Errorf("took %v to die, budget %v", took, deathBudget)
 			}
 		})
 	}
@@ -281,7 +326,7 @@ func reachesTheFrontEnd(sig syscall.Signal) bool {
 // is a worse answer than the goroutine dump it replaced.
 func TestATrappedFatalSignalFromOutsideIsTheScriptsToHandle(t *testing.T) {
 	dieRunningAsAShell()
-	ws, _, out := shellSignaledFromOutside(t,
+	ws, out := shellSignaledFromOutside(t,
 		"TestATrappedFatalSignalFromOutsideIsTheScriptsToHandle",
 		`trap 'echo caught; exit 7' QUIT; `, countedSleeps, syscall.SIGQUIT)
 
@@ -312,7 +357,7 @@ func TestATrappedFatalSignalFromOutsideIsTheScriptsToHandle(t *testing.T) {
 // that needs a second process to send the signal.
 func TestAnExitFromATrapEndsAnEndlessLoop(t *testing.T) {
 	dieRunningAsAShell()
-	ws, _, out := shellSignaledFromOutside(t,
+	ws, out := shellSignaledFromOutside(t,
 		"TestAnExitFromATrapEndsAnEndlessLoop",
 		`trap 'echo caught; exit 7' USR1; `, endlessLoop, syscall.SIGUSR1)
 
@@ -361,7 +406,7 @@ const (
 //
 // The wait is measured from the signal rather than from the start, because
 // what is being timed is the death and not the second copy of a test binary.
-func shellSignaledFromOutside(t *testing.T, name, setup, hold string, sig syscall.Signal) (syscall.WaitStatus, time.Duration, string) {
+func shellSignaledFromOutside(t *testing.T, name, setup, hold string, sig syscall.Signal) (syscall.WaitStatus, string) {
 	t.Helper()
 	ready := filepath.Join(t.TempDir(), "ready")
 	cmd := exec.Command(os.Args[0], "-test.run="+name)
@@ -395,17 +440,34 @@ func shellSignaledFromOutside(t *testing.T, name, setup, hold string, sig syscal
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	start := time.Now()
 	if err := cmd.Process.Signal(sig); err != nil {
 		t.Fatalf("signaling the shell half: %v", err)
 	}
-	_ = cmd.Wait()
-	took := time.Since(start)
+	// Waited on with a deadline that fires rather than timed and judged
+	// afterwards. The wait itself is the assertion — it returns when the
+	// kernel reaps the process, which is the event — and the deadline is here
+	// only so that a shell which never dies is reported as one instead of
+	// holding the harness open until its own timeout. See deathDeadline.
+	reaped := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(reaped)
+	}()
+	select {
+	case <-reaped:
+	case <-time.After(deathDeadline):
+		_ = cmd.Process.Kill()
+		// Waited for even here, so the goroutine above cannot be touching
+		// cmd.ProcessState while anything else reads it.
+		<-reaped
+		t.Fatalf("the shell was still running %v after being sent %v — "+
+			"it never died of the signal: %q", deathDeadline, sig, readLog(t, logPath))
+	}
 	ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
 	if !ok {
 		t.Fatalf("no wait status for the shell half")
 	}
-	return ws, took, readLog(t, logPath)
+	return ws, readLog(t, logPath)
 }
 
 // readLog is what the shell half wrote, from the file it wrote it to.

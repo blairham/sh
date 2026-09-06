@@ -3433,6 +3433,41 @@ echo "st=$?"`,
 		Why:     "the same boundary from the other side, which is the only side the shells whose first element is 0 can reach it from. The shell that blanks is silent here rather than refusing, and that is not a second rule: blanking replaces a span that is there, and a subscript counting back past the start names none — the same reading `array/removing-an-element-from-the-end` records at `-2`. bash 3.2 refuses it for having no negative subscripts at all, which is a different reason for the same line",
 	},
 	{
+		ID: "array/unsetting-a-range-of-elements", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[1,2]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "`unset` reaching a *span* written as a range, which one shell reads and the others read as the arithmetic comma operator naming its right operand alone. The two answers are two different arrays and neither says anything, so the value is the only evidence: the span becomes one empty element and the array shrinks, against one element blanked or removed where the operator's value points",
+	},
+	{
+		ID: "array/unsetting-a-range-below-the-first-element", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[0,1]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"; unset "a[0,0]"; echo "st=$?"; echo "n=${#a[@]}"`,
+		Why:     "the pair that shows the below-the-first-element refusal is a rule about the *span* and not about the subscript that starts it. A range that begins out of reach and ends inside is not refused — the start is the first element — and one that lies wholly out of reach is. `array/unsetting-below-the-first-element` is the same rule at a span of one, which is why `a[0]` alone is refused",
+	},
+	{
+		ID: "array/unsetting-a-reversed-range", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[2,1]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "an end before the start names a span with nothing in it, and the shell that replaces a span with one empty element still puts one there — so the array *gains* an element where it would have begun. Measured rather than guessed, and it is the strongest evidence that the reading is a replacement and not a removal",
+	},
+	{
+		ID: "array/unsetting-a-range-that-starts-past-the-end", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[4,5]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"; unset "a[3,4]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the other end of the same rule, and the pair is the point: an end past the last is the last and a span of one is left, but a *start* past the last has nothing to replace and nothing to stand in front of, so nothing at all happens — where a reversed range inside the array inserts",
+	},
+	{
+		ID: "array/unsetting-a-range-from-the-end", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[-1,-1]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"; b=(x y z); unset "b[-2,-1]"; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`,
+		Why:     "a range's start takes the same negative rule its single subscript does: in the shell that blanks, only `-1` acts, so `[-1,-1]` blanks the last element and `[-2,-1]` leaves all three. Pinned because a span would otherwise be expected to act on both, and it does not",
+	},
+	{
+		ID: "array/unsetting-a-range-of-characters", Category: "expansion",
+		Snippet: `a=hello; unset "a[2,3]"; echo "st=$? [${a-UNSET}]"; b=hello; unset "b[-2,-1]"; echo "st=$? [${b-UNSET}]"`,
+		Why:     "the same span over a string, where a subscript names a character: the characters go and the rest closes up. Every negative within reach acts here where on an array only `-1` does, so the two halves of the range reading part exactly where the single subscript's do",
+	},
+	{
+		ID: "array/unsetting-a-reversed-range-of-characters", Category: "expansion",
+		Snippet: `a=hello; unset "a[3,2]"; echo "st=$? [${a-UNSET}]"`,
+		Why:     "the reversed range on a string, which is where the insertion the array case shows becomes invisible: an empty character put where the span would have begun leaves the string as it was. The two are one rule and only the array can see it",
+	},
+	{
 		ID: "array/an-unset-subscript-refused-is-named-as-written", Category: "expansion",
 		Snippet: `a=(x y z); unset "a[x-9]"; echo "st=$?"; echo "n=${#a[@]}"`,
 		Why:     "what the refusal names on this route, which is not what it names on the assignment's: bash keeps the subscript as written but drops the array in front of it, ksh93 names the array alone, and both put the builtin's name before the sentence where neither does for an assignment. The expression is what tells the written text from the -9 it came to. zsh has nothing to refuse, a negative subscript reaching nothing being silent there",

@@ -289,6 +289,183 @@ func (r *Runner) refuseSubscriptToUnset(name, sub string) int {
 	return 1
 }
 
+// unsetSubscriptRange is `unset "a[lo,hi]"` where the dialect reads the comma
+// as the separator of a range rather than as the arithmetic operator whose
+// value is its right operand.
+//
+// handled is false where the subscript is not a pair, and where the two
+// readings name the same thing — a pair whose ends are the same subscript is
+// that subscript either way — so the single reading answers it and no axis is
+// asked. That is the discipline the expansion side already follows for
+// `${a[2,2]}`.
+//
+// Measured on zsh 5.9.2, the one shell that reads ranges, with `a=(x y z)`:
+//
+//	a[1,2]    [][z]        the span becomes one empty element
+//	a[1,3]    []           every element, and one is left
+//	a[0,1]    [][y][z]     a start below the first is the first
+//	a[3,4]    [x][y][]     an end past the last is the last
+//	a[4,5]    [x][y][z]    a start past the last names nothing
+//	a[2,1]    [x][][y][z]  a span with nothing in it is an empty element
+//	                       *inserted* where it would have begun
+//	a[-1,-1]  [x][y][]     the last element
+//	a[-2,-1]  [x][y][z]    a negative start other than -1 acts on nothing
+//	a[0,0]    refused      the whole span is below the first element
+//
+// The last two rows would not have been guessed. The negative rule is the
+// array's alone — a *string* loses characters to every negative within reach —
+// and it is the same "only -1 acts" this shell's single subscript already
+// follows. The refusal is the span rule spanIsBelowTheFirstElement holds, and
+// it is why `a[0]` is refused where `a[0,1]` is not: one names a span wholly
+// out of reach, the other one that begins out of reach and ends inside.
+func (r *Runner) unsetSubscriptRange(name, sub string) (handled bool, code int) {
+	lo, hi, ok := splitSubscriptRange(sub)
+	if !ok {
+		return false, 0
+	}
+	from, errLo := r.subscriptValue(lo)
+	to, errHi := r.subscriptValue(hi)
+	if errLo == nil && errHi == nil && from == to {
+		// The same subscript at both ends is that subscript under either
+		// reading, so there is nothing to ask and nothing to do differently.
+		return false, 0
+	}
+	if !r.ask(r.sem().SubscriptCommaIsARange, "`${a[1,3]}` naming a range rather than one subscript") {
+		return false, 0
+	}
+	if errLo != nil {
+		return true, r.badSubscriptToUnset(lo, errLo)
+	}
+	if errHi != nil {
+		return true, r.badSubscriptToUnset(hi, errHi)
+	}
+	if r.spanIsBelowTheFirstElement(from, to) {
+		return true, r.refuseSubscriptToUnset(name, sub)
+	}
+	if a, isArray := r.Arrays[name]; isArray {
+		return true, r.unsetElementSpan(name, a, from, to)
+	}
+	v, held := r.getVar(name)
+	if !held {
+		// Neither an element nor a character for any span to reach.
+		return true, 0
+	}
+	if r.scalarUnsetReadsAsCharacters(v, sub) {
+		return true, r.unsetCharacterSpan(name, v, from, to)
+	}
+	// The element reading, where a scalar is the one element at the base: a
+	// span that reaches it takes the whole name away, exactly as the single
+	// subscript naming it does, and one that does not is the question every
+	// other subscript on a scalar asks. No shell measured reads both a range
+	// and a scalar-as-element, so this is the two readings composed rather
+	// than a column of its own.
+	if first, tail, within := r.spanOver(1, from, to); within && tail > first {
+		r.unsetName(name)
+		return true, 0
+	}
+	return true, r.refuseSubscriptOnAScalar(name)
+}
+
+// spanIsBelowTheFirstElement says whether every subscript a span could name is
+// before the array's first element.
+//
+// One rule for the single subscript and for the pair, which is what tells them
+// apart rather than a check on each: `a[0]` is the span `[0,0]` where the
+// first element is 1, and is refused; `a[0,1]` begins out of reach and ends
+// inside, and is not. A negative end never counts as below — it is counted
+// back from the end and reaches nothing rather than reaching before the start,
+// which is the silence `array/unsetting-past-the-start` records.
+func (r *Runner) spanIsBelowTheFirstElement(from, to int) bool {
+	base := r.arrayBase()
+	return from >= 0 && from < base && to >= 0 && to < base
+}
+
+// spanOver resolves a written range against n units and reports whether the
+// span begins anywhere the units reach.
+//
+// The endpoints are subscripts and take the two rules a single subscript
+// takes: counted from the dialect's base, or back from the end when negative.
+// A start below the first unit is the first, an end past the last is the last,
+// and an end before the start leaves the span empty *at* the start — which is
+// where an empty element is inserted rather than nothing happening at all.
+func (r *Runner) spanOver(n, from, to int) (first, tail int, within bool) {
+	base := r.arrayBase()
+	first = from - base
+	if from < 0 {
+		first = n + from
+	}
+	last := to - base
+	if to < 0 {
+		last = n + to
+	}
+	if first < 0 {
+		first = 0
+	}
+	if last >= n {
+		last = n - 1
+	}
+	if first >= n {
+		// The span starts past the last unit: nothing to replace, and
+		// nothing beyond the end to put an empty one in front of.
+		return first, first, false
+	}
+	tail = last + 1
+	if tail < first {
+		tail = first
+	}
+	return first, tail, true
+}
+
+// unsetElementSpan is what `unset` does to the elements a range names.
+func (r *Runner) unsetElementSpan(name string, a Array, from, to int) int {
+	blanks := r.unsetBlanksInPlace()
+	if from < 0 && from != -1 && blanks {
+		// Only the last element answers to a negative subscript in the shell
+		// that blanks, and a range's start follows the same rule its single
+		// subscript does. Measured: `unset "a[-2,-1]"` leaves all three
+		// elements where `unset "a[-1,-1]"` blanks the last.
+		return 0
+	}
+	n := a.pastTheEnd()
+	first, tail, within := r.spanOver(n, from, to)
+	if !within {
+		return 0
+	}
+	elems := make([]string, n)
+	for pos, v := range a {
+		if pos >= 0 && pos < n {
+			elems[pos] = v
+		}
+	}
+	out := make([]string, 0, n+1)
+	out = append(out, elems[:first]...)
+	if blanks {
+		// The span becomes a single empty element, which is this shell's
+		// reading of `unset` over a span, read across a range rather than one
+		// element at a time. A span with nothing in it still becomes one, so
+		// a reversed range *inserts*.
+		out = append(out, "")
+	}
+	out = append(out, elems[tail:]...)
+	r.setArray(name, out)
+	return 0
+}
+
+// unsetCharacterSpan takes the characters a range names out of a string.
+//
+// The same span over characters, and the empty-span case says nothing here:
+// an empty character inserted leaves the string as it was, so `unset "a[3,2]"`
+// is a no-op where the same reversed range on an array gains an element.
+func (r *Runner) unsetCharacterSpan(name, v string, from, to int) int {
+	chars := r.units(v)
+	first, tail, within := r.spanOver(len(chars), from, to)
+	if !within {
+		return 0
+	}
+	r.setVar(name, strings.Join(chars[:first], "")+strings.Join(chars[tail:], ""))
+	return 0
+}
+
 // unsetScalarElem is `unset "a[i]"` where the name is not an array.
 //
 // The panel gives three answers and each one falls out of what a subscripted
@@ -334,6 +511,12 @@ func (r *Runner) unsetScalarElem(name string, idx int, sub string) int {
 		r.unsetName(name)
 		return 0
 	}
+	return r.refuseSubscriptOnAScalar(name)
+}
+
+// refuseSubscriptOnAScalar is what one dialect does about a subscript that
+// names no element of a name that is no array, and what the other does not.
+func (r *Runner) refuseSubscriptOnAScalar(name string) int {
 	if !r.ask(r.sem().UnsetSubscriptOnAScalarIsAnError,
 		"a subscript naming no element of a name that is not an array") {
 		return 0

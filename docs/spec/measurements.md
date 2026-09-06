@@ -295,6 +295,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/removing-an-element-from-the-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][z] n=2` | `[x][z] n=2` | `[x][y][z] n=3` **2>** `<shell>: line 0: [-2]: bad array subscript` | `[x][z] n=2` | `[x][y][z] n=3` |
 | `array/unsetting-below-the-first-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~[y][z] n=2` | `st=0~[y][z] n=2` | `st=0~[y][z] n=2` | `st=0~[y][z] n=2` | `st=1~[x][y][z] n=3` **2>** `<shell>:1: a: assignment to invalid subscript range` |
 | `array/unsetting-past-the-start` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1~[x][y][z] n=3` **2>** `<shell>: line 1: unset: [-4]: bad array subscript` | `st=1~[x][y][z] n=3` **2>** `<shell>: line 1: unset: [-4]: bad array subscript` | `st=1~[x][y][z] n=3` **2>** `<shell>: line 0: [-4]: bad array subscript` | `st=1~[x][y][z] n=3` **2>** `<shell>: unset: a: subscript out of range` | `st=0~[x][y][z] n=3` |
+| `array/unsetting-a-range-of-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~[x][y] n=2` | `st=0~[x][y] n=2` | `st=0~[x][y] n=2` | `st=0~[x][y] n=2` | `st=0~[][z] n=2` |
+| `array/unsetting-a-range-below-the-first-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~[x][z] n=2~st=0~n=1` | `st=0~[x][z] n=2~st=0~n=1` | `st=0~[x][z] n=2~st=0~n=1` | `st=0~[x][z] n=2~st=0~n=1` | `st=0~[][y][z] n=3~st=1~n=3` **2>** `<shell>:1: a: assignment to invalid subscript range` |
+| `array/unsetting-a-reversed-range` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~[x][z] n=2` | `st=0~[x][z] n=2` | `st=0~[x][z] n=2` | `st=0~[x][z] n=2` | `st=0~[x][][y][z] n=4` |
+| `array/unsetting-a-range-that-starts-past-the-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~[x][y][z] n=3~[x][y][z] n=3` | `st=0~[x][y][z] n=3~[x][y][z] n=3` | `st=0~[x][y][z] n=3~[x][y][z] n=3` | `st=0~[x][y][z] n=3~[x][y][z] n=3` | `st=0~[x][y][z] n=3~[x][y][] n=3` |
+| `array/unsetting-a-range-from-the-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y] n=2~[x][y] n=2` | `[x][y] n=2~[x][y] n=2` | `[x][y][z] n=3~[x][y][z] n=3` **2>** `<shell>: line 0: [-1,-1]: bad array subscript~<shell>: line 0: [-2,-1]: bad array subscript` | `[x][y] n=2~[x][y] n=2` | `[x][y][] n=3~[x][y][z] n=3` |
+| `array/unsetting-a-range-of-characters` | **2>** `<shell>: 1: unset: a[2,3]: bad variable name` *(status 2)* | `st=1 [hello]~st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable~<shell>: line 1: unset: b: not an array variable` | `st=1 [hello]~st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable~<shell>: line 1: unset: b: not an array variable` | `st=1 [hello]~st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable~<shell>: line 0: unset: b: not an array variable` | `st=0 [hello]~st=0 [hello]` | `st=0 [hlo]~st=0 [hel]` |
+| `array/unsetting-a-reversed-range-of-characters` | **2>** `<shell>: 1: unset: a[3,2]: bad variable name` *(status 2)* | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0 [hello]` | `st=0 [hello]` |
 | `array/an-unset-subscript-refused-is-named-as-written` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1~n=3` **2>** `<shell>: line 1: unset: [x-9]: bad array subscript` | `st=1~n=3` **2>** `<shell>: line 1: unset: [x-9]: bad array subscript` | `st=1~n=3` **2>** `<shell>: line 0: [x-9]: bad array subscript` | `st=1~n=3` **2>** `<shell>: unset: a: subscript out of range` | `st=0~n=3` |
 | `array/unsetting-a-subscript-of-a-scalar` | **2>** `<shell>: 1: unset: a[2]: bad variable name` *(status 2)* | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0 [hello]` | `st=0 [hllo]` |
 | `array/unsetting-the-subscript-that-names-a-scalar` | **2>** `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=0 [UNSET]` | `st=0 [UNSET]` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0 [UNSET]` | `st=1 [hello]` **2>** `<shell>:1: a: assignment to invalid subscript range` |
@@ -814,6 +821,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/unsetting-past-the-start` — the same boundary from the other side, which is the only side the shells whose first element is 0 can reach it from. The shell that blanks is silent here rather than refusing, and that is not a second rule: blanking replaces a span that is there, and a subscript counting back past the start names none — the same reading `array/removing-an-element-from-the-end` records at `-2`. bash 3.2 refuses it for having no negative subscripts at all, which is a different reason for the same line
   ```sh
   a=(x y z); unset "a[-4]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-a-range-of-elements` — `unset` reaching a *span* written as a range, which one shell reads and the others read as the arithmetic comma operator naming its right operand alone. The two answers are two different arrays and neither says anything, so the value is the only evidence: the span becomes one empty element and the array shrinks, against one element blanked or removed where the operator's value points
+  ```sh
+  a=(x y z); unset "a[1,2]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-a-range-below-the-first-element` — the pair that shows the below-the-first-element refusal is a rule about the *span* and not about the subscript that starts it. A range that begins out of reach and ends inside is not refused — the start is the first element — and one that lies wholly out of reach is. `array/unsetting-below-the-first-element` is the same rule at a span of one, which is why `a[0]` alone is refused
+  ```sh
+  a=(x y z); unset "a[0,1]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"; unset "a[0,0]"; echo "st=$?"; echo "n=${#a[@]}"
+  ```
+- `array/unsetting-a-reversed-range` — an end before the start names a span with nothing in it, and the shell that replaces a span with one empty element still puts one there — so the array *gains* an element where it would have begun. Measured rather than guessed, and it is the strongest evidence that the reading is a replacement and not a removal
+  ```sh
+  a=(x y z); unset "a[2,1]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-a-range-that-starts-past-the-end` — the other end of the same rule, and the pair is the point: an end past the last is the last and a span of one is left, but a *start* past the last has nothing to replace and nothing to stand in front of, so nothing at all happens — where a reversed range inside the array inserts
+  ```sh
+  a=(x y z); unset "a[4,5]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"; unset "a[3,4]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-a-range-from-the-end` — a range's start takes the same negative rule its single subscript does: in the shell that blanks, only `-1` acts, so `[-1,-1]` blanks the last element and `[-2,-1]` leaves all three. Pinned because a span would otherwise be expected to act on both, and it does not
+  ```sh
+  a=(x y z); unset "a[-1,-1]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"; b=(x y z); unset "b[-2,-1]"; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"
+  ```
+- `array/unsetting-a-range-of-characters` — the same span over a string, where a subscript names a character: the characters go and the rest closes up. Every negative within reach acts here where on an array only `-1` does, so the two halves of the range reading part exactly where the single subscript's do
+  ```sh
+  a=hello; unset "a[2,3]"; echo "st=$? [${a-UNSET}]"; b=hello; unset "b[-2,-1]"; echo "st=$? [${b-UNSET}]"
+  ```
+- `array/unsetting-a-reversed-range-of-characters` — the reversed range on a string, which is where the insertion the array case shows becomes invisible: an empty character put where the span would have begun leaves the string as it was. The two are one rule and only the array can see it
+  ```sh
+  a=hello; unset "a[3,2]"; echo "st=$? [${a-UNSET}]"
   ```
 - `array/an-unset-subscript-refused-is-named-as-written` — what the refusal names on this route, which is not what it names on the assignment's: bash keeps the subscript as written but drops the array in front of it, ksh93 names the array alone, and both put the builtin's name before the sentence where neither does for an assignment. The expression is what tells the written text from the -9 it came to. zsh has nothing to refuse, a negative subscript reaching nothing being silent there
   ```sh

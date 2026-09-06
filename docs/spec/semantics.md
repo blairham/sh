@@ -3804,13 +3804,14 @@ spelling `ReadOptions` uses — `Semantics.DeclareOptions` and
 
     declare/typeset
       bash   aAfFgilprux   plus -I -n -t, unimplemented here
-      zsh    aAfFgHilpruUx plus floats, padding, ties…, unimplemented;
+      zsh    aAfFgHilpruUTx
+                           plus floats, padding, namerefs…, unimplemented;
                            -F taken in silence, see below
       ksh93  aAilprux      plus -f -F -b -n… and its own -H, unimplemented
       dash   —             no typeset at all
     local
       bash   aAgilprux     plus -f -F -I -n -t, unimplemented
-      zsh    aAHilpruUx
+      zsh    aAHilpruUTx
       dash   (none)        `local -r x` declares a name `-r`, then refuses
                            it: `local: -r: bad variable name`, fatal
       ksh93  —             no local at all
@@ -3919,6 +3920,71 @@ consulted at the one place an array goes back into the store. It is said
 back on a listing last of all the letters, after export: `typeset -arxU
 A1=( 1 2 )`, `export -iU n1=5`. Corpus:
 `declare/unique-attribute-*`.
+
+**`-T` ties a scalar to an array, and it is one shell's letter with a
+second shell's letter spelled the same.** Measured 2026-09-06 against zsh
+5.9.2. `typeset -T SCALAR array [sep]` makes two names for one value:
+writing the scalar splits it on the separator and the array becomes those
+fields, writing the array joins them and the scalar becomes that string.
+`SCA=a:b:c` is three elements; `sca=(x y z)` is `x:y:z`; `sca+=(w)` is
+`x:y:z:w`; `sca[1]=Z` is `Z:y:z:w`. The separator is the third operand and
+defaults to `:` — with `#`, `S2=a#b#c` is three fields.
+
+**`unset` of either name unsets both**, and forgets the tie: `unset SCA`
+leaves `sca` unset rather than merely empty, and a later `SCA=c:d` is a
+plain scalar with `${#sca}` still 0. Half a tie is not a state this shell
+has.
+
+The declaration follows the rule every other attribute follows — a name
+that already holds a value keeps it and is read back through what has just
+arrived, so `V=one:two; typeset -T V v` fills `v` rather than emptying
+both. That is the rule that makes a tie over `PATH` safe. A *valueless*
+declaration leaves the scalar set and empty and the array with **no**
+elements, which is not the same as `SCA=''`: the empty string splits into
+one field and a declaration splits nothing.
+
+The other letters go to the halves they belong to. `-U` and `-r` to both —
+`typeset -TU A a` lists as `export -UT` and `typeset -aUT`, `-r` as `-rT`
+and `-arT` — and **export to the scalar alone**, because the scalar is what
+a child can be told. `T` is written last of all the letters, after `U`.
+
+Five refusals, and their fatality is **not** one rule: `-T requires names
+of scalar and array`, `can't tie already tied scalar: S` and `second
+argument of tie must be array: s` are reported and the script runs on,
+while `can't tie a variable to itself: A` and a half that is not a name at
+all end it. The last of those goes through the refusal every declaration
+operand goes through, so it takes `BadNameToDeclarationFatal` rather than a
+rule of its own — and that check earns its place twice over, because this
+parser lifts an array literal out of the operand list and appends its bare
+name, so `typeset -T R r=(a b) ':'` arrives as `R`, `:`, `r` and a
+positional reading would tie `R` to `:`.
+
+`typeset -T` with nothing to tie lists the ties, both halves of each, as
+plain assignments — `A=1:2` and `a=( 1 2 )`, not `typeset -T A a=( 1 2 )`.
+Not quite the bare listing either, which in this shell writes scalars
+alone.
+
+There is no axis. bash refuses `-T` under both spellings with its usage
+line and 2. **ksh93 is the column that makes this a letter rather than an
+attribute**: `typeset -T tname` declares a *type* there, so it takes
+`typeset -T TS ts` without a word and leaves `ts` empty — the same letter,
+silently doing something else, which is why it stays refused by name there
+rather than being modelled as one attribute with two readings. So the
+letter lives in `Semantics.DeclareOptions` and `LocalOptions`, and the
+mechanism is `interp/tiedscalar.go`: a pair recorded under both names, and
+each of the two choke points — `setVarAs` and `storeArray` — mirroring
+into the other under a re-entrancy guard, because the mirrors would
+otherwise call each other forever.
+
+What is **not** here: zsh's own built-in ties. `PATH`/`path`,
+`FPATH`/`fpath`, `CDPATH`/`cdpath`, `MANPATH`/`manpath`,
+`MAILPATH`/`mailpath`, `MODULE_PATH`/`module_path`, `PSVAR`/`psvar` and
+`FIGNORE`/`fignore` are ties in that shell and are not made here, so
+`$path` is an ordinary array and writing it does not reach `PATH`. That is
+a startup-state change with its own blast radius and its own measurements;
+this is the machinery it needs. Corpus: `declare/tie-*`,
+`declare/unsetting-half-a-tie-unsets-all-of-it`,
+`declare/a-tie-over-a-standing-value`, `declare/tying-a-name-to-itself`.
 
 **An attribute added to a name that already holds a value keeps it, and
 re-reads it.** A separate rule from the one above, and the one that

@@ -183,6 +183,12 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		// Before installSeams and before the streams reach the front end, so
 		// there is one guarded pair rather than a guarded copy beside an
 		// unguarded one.
+		//
+		// The condition is a cost rather than a behavior, and is deliberately
+		// not covered: making it unconditional is a mutant that survives,
+		// because with no plugin there is no second goroutine and the guard
+		// excludes nothing that was not already excluded. It says what the
+		// lock is for.
 		stdout, stderr = guardedStreams(stdout, stderr)
 	}
 	sh, closer, err := installSeams(sh, own, stderr)

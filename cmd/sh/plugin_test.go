@@ -566,3 +566,35 @@ func TestAPluginsRelayDoesNotWriteTheShellsStreamAtTheSameTimeAsTheShell(t *test
 		t.Errorf("errs = %q, want the command's own standard error in it", text)
 	}
 }
+
+// One writer handed to both streams is still one writer, and the guard has to
+// be one lock rather than one per field.
+//
+// The case is interp's `lockedWriter` note arrived at from outside: `Stdout`
+// and `Stderr` are two fields and need not be two objects, and an embedder
+// that wants what `2>&1` gives hands the same buffer to both. A lock per field
+// would then be two locks over one object, which excludes nothing — so this is
+// the same overlap as the test above with the relay racing the *output* copy
+// instead of the error one.
+func TestOneWriterHandedToBothStreamsIsGuardedByOneLock(t *testing.T) {
+	path := writePlugin(t, chatterer)
+	both := &overlapProbe{hold: 200 * time.Microsecond}
+	code := run([]string{
+		"sh", "-dialect", "posix", "-plugin", path, "-c",
+		"i=0; while [ $i -lt 6 ]; do /bin/sh -c 'j=0; while [ $j -lt 40 ]; do echo noise; j=$((j+1)); done'; i=$((i+1)); done",
+	}, both, both)
+	text, overlapped := both.report()
+	if code != 0 {
+		t.Fatalf("status = %d, output = %q", code, text)
+	}
+	if overlapped {
+		t.Error("two goroutines were inside Write at once on the one writer both streams were given: " +
+			"the guard is a lock per field rather than a lock over the stream")
+	}
+	if !strings.Contains(text, "chatterer: chatter") {
+		t.Errorf("output = %q, want the plugin's relayed chatter in it", text)
+	}
+	if !strings.Contains(text, "noise") {
+		t.Errorf("output = %q, want the command's own standard output in it", text)
+	}
+}

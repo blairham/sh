@@ -6877,6 +6877,51 @@ exit 7`,
 		Why:     "setopt and set -o drive one table: err_exit ends the run exactly as set -e would, rather than being a second errexit that drifts",
 	},
 	{
+		ID: "setopt/a-name-with-no-behavior-behind-it-is-still-recorded", Category: "builtins",
+		Snippet: `setopt auto_cd share_history no_list_types; echo "st=$?"; setopt`,
+		Why:     "three of the sixteen names a real rc file writes at startup, none of them a feature this shell has: zsh takes them at 0 and then reports them back canonically spelled, which is what recognizing a name buys when implementing it is a separate job",
+	},
+	{
+		ID: "setopt/a-compat-spelling-lists-under-the-canonical-name", Category: "builtins",
+		Snippet: `setopt dotglob; setopt`,
+		Why:     "zsh carries twelve sh and ksh spellings as second names for options it already has, and they are never what a listing prints: `dotglob` sets `globdots` and `globdots` is the line that comes back",
+	},
+	{
+		ID: "setopt/the-no-prefix-reaches-a-compat-spelling", Category: "builtins",
+		Snippet: `setopt nolog; setopt`,
+		Why:     "the prefix and the alias table compose, and the alias is the inverted kind: `nolog` is zsh's `histnofunctions` turned on, which is the name the listing then prints",
+	},
+	{
+		ID: "setopt/nullglob-wins-over-nomatch", Category: "builtins",
+		Snippet: `setopt nullglob; echo "[" zz* "]"; echo "st=$?"`,
+		Why:     "the only ordering the two settings can have: deleting a word that matched nothing leaves nothing for `no matches found` to complain about, so zsh prints the brackets at 0 with nomatch still on",
+	},
+	{
+		ID: "setopt/caseglob-is-the-globs-alone", Category: "builtins",
+		Snippet: `mkdir d; : > d/B.txt; unsetopt caseglob; echo d/b*; case AB in ab) echo yes;; *) echo no;; esac`,
+		Why:     "zsh's caseglob governs pathname expansion and nothing else — the glob folds case and the case statement still does not — which is what says it is not the same switch as bash's nocasematch",
+	},
+	{
+		ID: "setopt/globdots-brings-back-the-hidden-names", Category: "builtins",
+		Snippet: `mkdir d; : > d/.h; : > d/a; setopt globdots; echo d/*`,
+		Why:     "the leading period stops being special, and only that: `.h` joins the expansion where `.` and `..` still do not",
+	},
+	{
+		ID: "setopt/an-interactive-only-option-will-not-move", Category: "builtins",
+		Snippet: `setopt zle; echo "st=$?"; unsetopt zle; echo "st=$?"`,
+		Why:     "five of zsh's 185 options refuse to be turned on in a shell that is not interactive and every other one is granted, measured name by name; turning one of the five off is asking for where it already is, which is granted",
+	},
+	{
+		ID: "setopt/a-recorded-name-answers-the-condition-too", Category: "builtins",
+		Snippet: `[[ -o auto_cd ]]; echo "a=$?"; setopt auto_cd; [[ -o auto_cd ]]; echo "b=$?"; [[ -o no_auto_cd ]]; echo "c=$?"`,
+		Why:     "`[[ -o name ]]` reads the same namespace `setopt` writes, so a name the table only records still answers the condition — and the `no` prefix inverts the answer rather than being an unknown name. bash has the condition and not the namespace, which is what makes the pair worth one row",
+	},
+	{
+		ID: "setopt/nounset-is-the-same-switch-as-set-u", Category: "builtins",
+		Snippet: `setopt no_unset; echo "${zz}"; echo reached`,
+		Why:     "zsh spells `set -u` as `unsetopt unset`, and it is one switch rather than two: an unset parameter ends the run exactly as `set -u` makes it, which is the pairing that says the dialect's own builtin has to reach the substrate's table",
+	},
+	{
 		ID: "emulate/names-the-current-mode", Category: "builtins",
 		Snippet: `emulate; emulate sh; emulate`,
 		Why:     "a bare emulate answers which shell zsh is currently being — zsh until something changes it, and the word that changed it after",

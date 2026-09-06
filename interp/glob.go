@@ -130,10 +130,17 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		return nil, false
 	}
 	defer func() {
-		if r.globMissed && r.ask(r.sem().GlobNoMatchIsError, "an unmatched pattern being an error") {
+		if r.globMissed && r.ask(r.sem().GlobNoMatchIsError, "an unmatched pattern being an error") &&
+			!r.MatchOption(UnmatchedPatternIsEmpty) {
 			// An error, which in zsh means the command does not run and the
 			// script stops. Reporting it and then passing the pattern
 			// through was the same report-then-continue bug as the others.
+			//
+			// Deleting the word wins over complaining about it, which is the
+			// only ordering the two settings can have: measured, `setopt
+			// nullglob; echo "[" zz* "]"` prints `[ ]` at 0 in a zsh where
+			// nomatch is still on. The axis is still asked, so a dialect
+			// that answered nothing about it is still told so.
 			r.fatal("no matches found: %s\n", globUnescape(field))
 		}
 		r.globMissed = false

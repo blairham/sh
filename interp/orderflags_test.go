@@ -56,8 +56,8 @@ func TestTheOrderingFlags(t *testing.T) {
 		{"u with a sort", `a=(b a b c a); printf "[%s]" "${(@ou)a}"`, "[a][b][c]"},
 		{"either way round", `a=(b a b c a); printf "[%s]" "${(@uo)a}"`, "[a][b][c]"},
 		{"and descending", `a=(b a b c a); printf "[%s]" "${(@uO)a}"`, "[c][b][a]"},
-		// Where the step sits. Both of these are measurements and neither is
-		// what the manual's rule numbers suggest by name.
+		// Where the step sits. Every one of these is a measurement and none
+		// is what the manual's rule numbers suggest by name.
 		{"the operator runs first", `a=(zb ya); printf "[%s]" "${(@o)a#z}"`, "[b][ya]"},
 		{"and so does the case conversion", `a=(B a); printf "[%s]" "${(@oU)a}"`, "[A][B]"},
 		{"a split makes the list the sort acts on", `v=c,a,b; printf "[%s]" "${(@s.,.o)v}"`, "[a][b][c]"},
@@ -65,6 +65,32 @@ func TestTheOrderingFlags(t *testing.T) {
 		// was written.
 		{"a forced join leaves nothing to sort", `a=(c a b); printf "[%s]" "${(oj.-.)a}"`, "[c-a-b]"},
 		{"as does the quoted join without @", `a=(c a b); printf "[%s]" "${(o)a}"`, "[c a b]"},
+		// And the two rows that moved the step: it is the *last* thing the
+		// group does, after the prompt escapes and after the quoting, not
+		// before them. `*` sorts ahead of a path only once `%x` has become
+		// one, and `a!` ahead of `a\ b` only once the space has become a
+		// backslash — both reverse if the sort runs first.
+		{"the quoting has already run", `a=("a b" "a!"); printf "[%s]" "${(@qo)a}"`, `[a!][a\ b]`},
+		{"and the letters may be written either way round here too", `a=("a b" "a!"); printf "[%s]" "${(@oq)a}"`, `[a!][a\ b]`},
+		{"and so has the unquoting", `a=("'z'" b); printf "[%s]" "${(@Qo)a}"`, "[b][z]"},
+		// `a` is the sort *key* and not a sort: the element's own position,
+		// so ascending is the order it was written in. Which is the reading
+		// the issue's own list would have got wrong — it grouped `a` with
+		// `A` and `e` as flags that change the *subject* rather than the
+		// order, and measurement puts it here instead.
+		{"a orders by the index, which is the order written", `a=(c a b); printf "[%s]" "${(@a)a}"`, "[c][a][b]"},
+		{"and O reverses that", `a=(c a b); printf "[%s]" "${(@aO)a}"`, "[b][a][c]"},
+		{"either way round", `a=(c a b); printf "[%s]" "${(@Oa)a}"`, "[b][a][c]"},
+		// The rows that say `a` *wins* rather than merely joining in. Each
+		// of the three comparisons would give `a b c` on this data, so a
+		// reading where `o` still decided would pass none of them.
+		{"a beats o", `a=(c a b); printf "[%s]" "${(@oa)a}"`, "[c][a][b]"},
+		{"a beats n", `a=(c a b); printf "[%s]" "${(@na)a}"`, "[c][a][b]"},
+		{"a beats i", `a=(c a b); printf "[%s]" "${(@ia)a}"`, "[c][a][b]"},
+		{"and beats them descending too", `a=(c a b); printf "[%s]" "${(@aOn)a}"`, "[b][a][c]"},
+		{"u still runs ahead of it", `a=(b a b c a); printf "[%s]" "${(@au)a}"`, "[b][a][c]"},
+		{"a scalar has one index", `v=hello; printf "[%s]" "${(a)v}"`, "[hello]"},
+		{"and an empty array none", `a=(); printf "[%s]" "${(@a)a}"`, "[]"},
 		{"a scalar is already in order", `v=cab; printf "[%s]" "${(o)v}"`, "[cab]"},
 		{"an empty array stays empty", `a=(); printf "[%s]" "${(@o)a}"`, "[]"},
 		{"and one element stays one", `a=(one); printf "[%s]" "${(@o)a}"`, "[one]"},

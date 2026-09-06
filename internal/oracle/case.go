@@ -3206,6 +3206,31 @@ echo "st=$?"`,
 		Why:     "where the step sits, in four answers that would each be different if it sat anywhere else: the operator has already run, so trimming `z` off `zb` puts it first; the case conversion has already run, so `(B a)` uppercased sorts as `A B` and not `B A`; a forced join has already made one word, which is in order however it was written; and the quoted join without `(@)` does the same. None of it is what the rule numbers suggest by name",
 	},
 	{
+		ID: "param/the-index-is-an-ordering-key", Category: "parameter expansion",
+		Snippet: `a=(c a b); printf "[%s]" "${(@a)a}"; printf "[%s]" "${(@aO)a}"; printf "[%s]" "${(@oa)a}"; echo`,
+		Why:     "`a` is the sort *key* and not a sort: the element's own position, so ascending is the order it was written in and `O` reverses it. The third answer is the row that earns the case — `(oa)` on this data is `c a b`, so the index wins over the lexical comparison rather than joining it, and a reading where the two composed would give `a b c` there and pass the first two",
+	},
+	{
+		ID: "param/the-length-flags-count-characters-and-words", Category: "parameter expansion",
+		Snippet: `a=(abc de f); printf "[%s]" "${#a}" "${(c)#a}" "${(w)#a}"; v="a b  c"; printf "[%s]" "${(w)#v}" "${(W)#v}"; echo`,
+		Why:     "three flags that change what a length counts, against the plain answer beside them: the elements are 3, their characters *joined* are 8 rather than 6 because the separators count, and the words in each element added up are 3 again. The scalar separates the last two — `w` is 3 words where `W` is 4 fields, the extra one being the empty field between the two spaces — which is the only shape that tells them apart",
+	},
+	{
+		ID: "param/a-length-is-taken-before-the-joining-and-the-split", Category: "parameter expansion",
+		Snippet: `a=(abc de f); printf "[%s]" "${(U)#a}" "${(Uj.-.)#a}"; v=":a:"; printf "[%s]" "${(s.:.)#v}" "${(ws.:.)#v}" "${(Ws.:.)#v}"; echo`,
+		Why:     "where the length step sits, which is earlier than the rule numbers put it: a quoted list still counts its elements, so this is 3 and not the 8 characters of the joined text, and a `j` separator changes the join without reaching the count. The scalar says the same about splitting — `${(s.:.)#v}` is the three characters of the value and not the fields the separator would have made — and the two rows after it are the same value asked as words, where the leading empty field is dropped and the trailing one is not",
+	},
+	{
+		ID: "param/the-unquoting-flag-removes-one-level", Category: "parameter expansion",
+		Snippet: `x=hi; v='"$x" c'; printf "[%s]" "${(@Q)v}"; v="'unterm"; printf "[%s]" "${(Q)v}"; v='$(echo hi)'; printf "[%s]" "${(Q)v}"; echo`,
+		Why:     "quoting removed and nothing expanded, which is the whole flag and is what the first answer pins: `x` is set, so a reading that handed the value to the parser would substitute `hi` where this leaves the two characters `$x` — and it stays one field, the space inside the quotes not making two. An opener with no closer comes back as written rather than as an error or a truncation, and a command substitution stays ten characters of text",
+	},
+	{
+		ID: "param/where-the-unquoting-and-ordering-steps-sit", Category: "parameter expansion",
+		Snippet: `v="'a b'"; printf "[%s]" "${(Qq)v}"; a=("a b" "a!"); printf "[%s]" "${(@qo)a}"; a=("'z'" b); printf "[%s]" "${(@Qo)a}"; echo`,
+		Why:     "the two halves of rule 14 in the order they run, and the ordering step after both of them. `q` runs before `Q`, so the pair written together is a round trip and not `a\\ b`. Then the sort sees what the quoting left: `a!` comes before `a\\ b` only because the space has become a backslash, and `b` before `z` only because the quotes have gone — both orders reverse if the sort runs first, which is where this implementation had it",
+	},
+	{
 		ID: "param/the-matching-flag-keeps-what-a-trim-took", Category: "parameter expansion",
 		Snippet: `v=hello; echo "[${(M)v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]"`,
 		Why:     "one flag turns each of the four trims inside out: the same operator, the same match, and the *other* side of the split substituted. The operator still chooses how much — the doubled forms take the longest match here exactly as they drop the longest without the flag — so this is not a fifth and sixth operator but a second reading of the four. The last two are the rows that separate it from a no-op: a pattern that matches nothing leaves nothing, where the trim without the flag leaves the whole value, and an empty pattern takes the empty string",

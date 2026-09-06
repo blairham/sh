@@ -628,6 +628,11 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(n)` | sort by the numbers in the words | `a=(10 9 1); ${(@n)a}` | `1 9 10` |
 | `(i)` | sort with case folded away | `a=(B a); ${(@i)a}` | `a B` |
 | `(u)` | keep the first of each repeat | `a=(b a b); ${(@u)a}` | `b a` |
+| `(a)` | order by the index, not the text | `a=(c a b); ${(@a)a}` | `c a b` |
+| `(Q)` | remove one level of quoting | `v="'a b'"; ${(Q)v}` | `a b` |
+| `(c)` | with `${#…}`: characters, joined | `a=(abc de f); ${(c)#a}` | `8` |
+| `(w)` | with `${#…}`: words | `v="a b  c"; ${(w)#v}` | `3` |
+| `(W)` | with `${#…}`: words, empties too | `v="a b  c"; ${(W)#v}` | `4` |
 
 Details, each measured:
 
@@ -646,12 +651,38 @@ Details, each measured:
   and answers `a b B C`. This implementation is byte order in both, so a
   non-C locale's collation is a **measured gap** rather than a claim.
 
+  **`(a)` is the sort key rather than a sort.** It orders by the
+  element's own position, so ascending is the order the elements were
+  written in and `O` reverses it — `a=(c a b); ${(@a)a}` is `c a b` and
+  `${(@aO)a}` is `b a c`, in either spelling. And it *wins* over the
+  comparisons rather than composing with them: `${(oa)a}`, `${(na)a}`
+  and `${(ia)a}` are all `c a b` on that data, where a reading in which
+  `o` still decided would answer `a b c`. `u` still runs ahead of it.
+
+  So `(a)` belongs with the sorts and not with `(A)` and `(e)`, which do
+  change what the subject is. The two differ only in case and in nothing
+  else, which is the mistake this note exists to stop.
+
   Where the step sits is measured rather than read off the rule numbers,
-  and it is later than the name suggests: after the operator
+  and it is **last of the group**: after the operator
   (`a=(zb ya); ${(@o)a#z}` is `b ya`), after the case conversion
-  (`a=(B a); ${(@oU)a}` is `A B`), after splitting, and after joining —
-  so `${(oj.-.)a}` is `c-a-b` unsorted, one word being already in order,
-  and so is `"${(o)a}"`, which the quoted join has already made one word.
+  (`a=(B a); ${(@oU)a}` is `A B`), after splitting, after joining — so
+  `${(oj.-.)a}` is `c-a-b` unsorted, one word being already in order,
+  and so is `"${(o)a}"`, which the quoted join has already made one word
+  — and after the prompt escapes and the quoting too:
+
+  | probe | zsh 5.9.2 | if the sort ran first |
+  | --- | --- | --- |
+  | `a=("%x" "*"); ${(@%o)a}` | `*` then the path | the path then `*` |
+  | `a=("a b" "a!"); ${(@qo)a}` | `a!` then `a\ b` | `a\ b` then `a!` |
+  | `a=("'z'" b); ${(@Qo)a}` | `b` then `z` | `z` then `b` |
+
+  The last two are what moved it. `*` sorts ahead of a path only once
+  `%x` has become one, `a!` ahead of `a\ b` only once the space has
+  become a backslash, and `b` ahead of `z` only once the quotes have
+  gone. This implementation had the step between the case conversion and
+  the quoting, which passed every row above that does not involve `%`,
+  `q` or `Q` and was wrong on all three of these.
 
 - **`(M)` reads a match from the other side, and reaches exactly two
   operators.** On the four trims it substitutes the part the pattern *took*
@@ -703,6 +734,73 @@ Details, each measured:
   `(qqq)` wraps in double quotes escaping `\`, `` ` ``, `"`, `$`.
   `(qqqq)` wraps in `$'…'` escaping `'`, `\`, `!` and control bytes as in
   `(q)`. Multibyte UTF-8 passes through every form.
+- **`(Q)` removes quoting and expands nothing**, and that pair is the
+  whole flag. `v='"$x"'` with `x` set is `$x`, two characters, where a
+  reading that handed the value to the parser would answer `hi`;
+  `$(echo hi)` and a backquote stay text; a tilde and a `*` stay text.
+  It makes no fields either — `${(@Q)v}` on `"'a b' c"` is one word.
+  `'…'` takes its contents whole, `"…"` gives a backslash meaning before
+  `"`, `` ` ``, `$` and `\` and drops a `\`-newline pair altogether while
+  leaving the backslash in place anywhere else (`"a\qb"` is `a\qb`),
+  `$'…'` is decoded, and a bare backslash escapes whatever follows it.
+  `$"` is not a quote, so `$"x"` is `$x`.
+
+  **An opener with no closer comes back as written** — `'unterm` is
+  `'unterm` — rather than as an error, a truncation, or the contents
+  without the opener. A substitution is a verbatim region for the same
+  reason: `"a$(b"c")d"` is `a$(b"c")d`, so the quotes inside it neither
+  closed the outer one nor were removed, and `"a$(x b"` comes back whole
+  because the unclosed group takes the quote with it. `` ` ``…`` ` ``,
+  `$(…)` (parentheses counted, so `$(b(c))` is one) and `${…}` all
+  behave that way, inside quotes and out.
+
+  Written beside `q` it runs **after** it, which the manual's single
+  rule 14 does not say: `${(Qq)v}` and `${(qQ)v}` on `'a b'` are both
+  `'a b'`, the round trip, where a `Q` that ran first would have left
+  `a\ b`.
+- **`(c)`, `(w)` and `(W)` change what a length counts**, and do nothing
+  at all to a value — `${(@c)a}` is the plain expansion. The **last** of
+  the three written wins: `${(cw)#v}` on `a b` is 2 and `${(wc)#v}` is 3.
+
+  `c` is the characters of the words joined, separators included, so
+  `a=(abc de f); ${(c)#a}` is 8 and not 6. **The separator it counts is
+  a space and not `$IFS`'s first character** — measured, `IFS=:` leaves
+  it at 8 — and a `j` argument does replace it: `${(cj.--.)#a}` is 10.
+
+  `w` counts words and `W` counts the empty ones too, an element at a
+  time with the totals added — `a=(a: :b)` with `(s.:.)` is 3 and 4,
+  where a join first would have made both one lower. The separator is
+  the `s` argument where one was written, a newline where `f` was
+  (`${(fw)#v}` on `a\nb\n` is 3), and `$IFS` otherwise — and that last
+  is a different *rule* rather than a different value:
+
+  Each cell below is `w` / `W`, measured on the same value read three
+  ways:
+
+  | value | `$IFS` default | `IFS=:` | `(s.:.)` |
+  | --- | --- | --- | --- |
+  | `""` | 0 / 0 | 0 / 0 | 1 / 1 |
+  | `"::"` | 1 / 1 | 3 / 3 | 1 / 3 |
+  | `":a:"` | 1 / 1 | 3 / 3 | 2 / 3 |
+  | `"a b  c"` | 3 / 4 | 1 / 1 | 1 / 1 |
+
+  Under `$IFS`, `W` lets every separator delimit while `w` collapses a
+  run of IFS *whitespace* and trims it from both ends — so a
+  non-whitespace `IFS` makes the two agree. A trailing separator still
+  opens a field for `w`, which ordinary word splitting absorbs, and it
+  is the trailing *run* that decides rather than the last byte:
+  `IFS=': '` counts `a: ` as 2 and `a ` as 1. With an explicit
+  separator, `W` is every field the literal split makes while `w`
+  collapses runs of it and drops a leading empty field but keeps a
+  trailing one; an empty separator counts characters, and an empty value
+  is one field where under `$IFS` it is none.
+
+  **The length is taken before the double-quoted join and before the
+  split**, which is not where the rule numbers put it: `"${(U)#a}"` on
+  `(abc de f)` is 3 and not 8, `"${(Uj.-.)#a}"` is 3 as well, and
+  `${(s.:.)#v}` on `:a:` is the value's 3 characters rather than the
+  fields the separator would have made. This implementation answered 8
+  to the first of those until #935's second change.
 - **`(k)`/`(v)` order.** zsh yields hash order, which it does not promise;
   this implementation yields sorted key order, the same deterministic
   answer `${m[@]}` already gives. `(k)` on anything that is not an
@@ -764,6 +862,16 @@ array otherwise gets), `-name-indirection` (`(P)`),
 ordering rule and `(P)`'s exception to it), and
 `param/prompt-percent-names-the-script` (`(%)`).
 
+The flags that order, count and unquote have rows of their own:
+`param/the-ordering-flags-sort-a-list`, `-and-case`,
+`param/the-unique-flag-is-not-a-sort`,
+`param/the-index-is-an-ordering-key` (`(a)`),
+`param/the-length-flags-count-characters-and-words` (`(c)`, `(w)`,
+`(W)`), `param/the-unquoting-flag-removes-one-level` (`(Q)`), and two
+rows for where the steps sit —
+`param/a-length-is-taken-before-the-joining-and-the-split` and
+`param/where-the-unquoting-and-ordering-steps-sit`.
+
 `(k)` is pinned with a **single** pair. zsh yields hash order for more
 than one and does not promise it, so a row with two keys would record a
 coin flip as evidence; the sorted order this implementation yields is
@@ -772,12 +880,47 @@ panel.
 
 ### What this implementation refuses
 
-Flags zsh has and this slice does not — `(A)` (array assignment), sorting
-`(o)`/`(O)`, `(t)`, `(z)`, `(e)`, `(D)`, padding, and the rest of the
-alphabet, plus the `q-`/`q+` variants and `(qqq…)` beyond four — are
-refused at run time naming the flag, with the same fatal shape as an
-unrecognized one. Refusing loudly is the honest answer where imitating
-would answer wrong.
+Flags zsh has and this slice does not — `(A)` (array assignment), `(e)`
+(expand the result again), `(z)` (split by shell parsing), `(t)`, `(D)`,
+padding, and the rest of the alphabet, plus the `q-`/`q+` variants and
+`(qqq…)` beyond four — are refused at run time naming the flag, with the
+same fatal shape as an unrecognized one. Refusing loudly is the honest
+answer where imitating would answer wrong, and the refusal is asserted
+whole rather than assumed: `TestTheUnbuiltFlagsAreStillRefusedByName`
+holds it as each letter is built, because a letter added to the
+implemented set is a letter taken out of the guarantee that let this list
+be enumerated exactly.
+
+Three of them were measured while the rest of #935 was built, and the
+measurements are here so the next change starts from them:
+
+- **`(e)`** expands the result again — parameters, command substitutions
+  and arithmetic. `w=zz; v='$w'; ${(e)v}` is `zz` and
+  `v='$(echo hi)'; ${(e)v}` is `hi`; a bare `1+2` is *not* arithmetic and
+  stays `1+2`.
+- **`(A)`** makes an assignment an array assignment:
+  `${(A)x::=a b c}` substitutes `a b c` and leaves `x` an array of three,
+  which `${(t)x}` reports as `array`. It needs the assignment side of
+  the expansion rather than the value side, which is why it is not
+  beside the others.
+- **`(z)`** splits the value the way the shell reads a line, keeping the
+  quoting: `v='echo "a b" c'` is three words, the middle one still
+  `"a b"` — which is the pair `${(Q)${(z)line}}` real configuration is
+  written with. Operators are words of their own (`;`, `|`, `&&`, `;;`,
+  `(`, `)`), a newline becomes `;`, an `IO` number joins the redirection
+  after it so `2>&1` is `2>&` and `1`, and an unterminated quote is no
+  error at all — `echo "unterminated` is two words, the second one with
+  its opening quote still on it.
+
+  **`(z)` needs one lexical decision this slice has not taken**: a `#`
+  is not a comment there. `v="a # b"` is three words, and that does not
+  change with `interactive_comments` either way, so the split runs a
+  lexer in a mode where the character is ordinary. Everything else it
+  needs, `syntax.Lexer` already answers — including the unterminated
+  quote, whose token arrives with the right text before the error does.
+  Whether "a `#` begins a comment" becomes a `syntax.Dialect` value, and
+  whether a runtime option rather than a dialect is what varies it, is
+  the question standing in front of the flag.
 
 ### Grammar
 

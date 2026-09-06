@@ -20,12 +20,16 @@ func TestPrintDashPRunsAfterTheBackslashEscapesAndNotOverThem(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `print -P '\045\045'
 print -P '%%%%'
 print -P 'a\tb'
-print -rP 'a\tb'`)
+print -rP 'a\tb%%'`)
 	// `\045\045` is two backslash escapes making `%%`, which the prompt pass
 	// then reads as one `%`. `%%%%` never meets the backslash pass at all and
 	// is two `%%` making `%%` — the `%` that the first `%%` produced is not
 	// looked at again.
-	want := "%\n%%\na\tb\na\\tb\n"
+	// `-r` suppresses the backslash pass and leaves this one: the tab stays
+	// two characters and the `%%` still becomes one `%`. Without the `%%`
+	// the line cannot tell a `-r` that suppresses both passes from one that
+	// suppresses the right one.
+	want := "%\n%%\na\tb\na\\tb%\n"
 	if out != want || st != 0 {
 		t.Errorf("print -P = %q (status %d), want %q", out, st, want)
 	}
@@ -110,6 +114,28 @@ print -r -- "st=$?"`)
 	}
 	if !strings.Contains(out, "zsh:print:2: -D is not implemented yet") {
 		t.Errorf("got %q, want -D still named as missing", out)
+	}
+}
+
+// The builtin's refusal must not set the expansion machinery's failure flag,
+// and this is the line that can tell: the flag is sticky and every expansion
+// reads it *relatively* — one already set before an expansion starts is taken
+// as "was already failing" and the expansion's own failure is then not fatal.
+// So a `print -P` that set it would silently disarm the next genuine
+// expansion failure, and the script would run on past a word it could not
+// produce.
+func TestTheBuiltinsRefusalDoesNotDisarmTheNextExpansionFailure(t *testing.T) {
+	// The second refusal is written before the redirection on its own line
+	// takes effect — a word is expanded before the command it belongs to is
+	// set up — so it stands in the output. What this asserts is the line
+	// *after* it, which must not be reached.
+	out, st := runZsh(t, t.TempDir(), `print -P '[%q]' 2>/dev/null
+v='%q'
+print -r -- "[${(%)v}]"
+print -r -- "reached"`)
+	want := "zsh:3: ${(%)v}: the %q prompt escape is not implemented\n"
+	if out != want || st != 1 {
+		t.Errorf("after a builtin refusal = %q (status %d), want %q with 1", out, st, want)
 	}
 }
 

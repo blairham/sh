@@ -172,16 +172,25 @@ func singleBytes(v string) []string {
 	return out
 }
 
-// characterWidth is how many bytes the first character of a non-empty string
-// occupies. An invalid sequence is one byte wide, per characters above.
+// characterWidth is how many bytes the first character of a **non-empty**
+// string occupies. An invalid sequence is one byte wide, per characters above.
+//
+// The ASCII branch is speed and not meaning: DecodeRuneInString answers 1 for
+// every byte below RuneSelf, so removing it changes nothing a test could see —
+// which is what a mutant of it surviving says, and why it says nothing about
+// coverage. It is here because a length walks a string a byte at a time and
+// most strings a shell measures are ASCII throughout.
+//
+// There is no floor under the size for the same reason there is no guard on
+// the string being empty: DecodeRuneInString answers at least 1 for any
+// non-empty string, both callers walk while i < len(v), and an empty one
+// would have panicked on v[0] a line earlier. A guard that cannot fire is
+// worse than none — it reads as a case somebody has thought about.
 func characterWidth(v string) int {
 	if v[0] < utf8.RuneSelf {
 		return 1
 	}
 	_, size := utf8.DecodeRuneInString(v)
-	if size < 1 {
-		return 1
-	}
 	return size
 }
 

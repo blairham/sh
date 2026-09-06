@@ -742,6 +742,82 @@ they are separate questions: a shell could spell a `repeat` body only as
 `do … done`, and the words `repeat`, `foreach`, `end` and `()` are
 constructs rather than body spellings.
 
+## What may stand where a loop's name does
+
+Two questions, and the panel splits on only one of them.
+
+### A name may not come out of an expansion — core
+
+    n=x; for $n in a b; do echo "[$x][$n]"; done
+
+| shell | answer | status |
+| --- | --- | --- |
+| bash 5.3.15 | `` `$n': not a valid identifier `` | 1, and the script goes on |
+| bash-as-`sh` | the same sentence | 2, and stops |
+| bash 3.2.57 | the same sentence | 1, and the script goes on |
+| dash | `Syntax error: Bad for loop variable` | 2 |
+| ksh93u+ | `$n: invalid variable name` | 1 |
+| zsh 5.9.2 | ``parse error near `$n' `` | 1 |
+
+Measured 2026-09-06, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`,
+over a script file and through `-c` alike. Six columns, **four** wordings
+— the three bash columns share one — and three statuses. `${n}`, `"$n"`,
+`$(echo n)`, `` `echo n` `` and `$((1))` all answer alike, and so do the
+same words after `select` and `foreach`.
+
+Unanimous, so it is core and not a flag. **We took it in every dialect**,
+and that is the shape of failure this repository exists to avoid: the loop
+bound a variable literally called `n`, so the script's own `$n` read the
+list's words, the name it meant to reach stayed empty, and the status was
+0 with nothing written. The token's literal is what hid it — a `$n` word
+reports `n`, so the name test was satisfied by a word that names nothing
+yet. What tells them apart is the word's **spans**: a substitution is a
+span of its own kind (#1076).
+
+The word is reported **as written**, quotes and expansion and all. Three
+of the four wordings quote it back and none of them quotes the literal:
+`for $n` names `$n` and not `n`.
+
+Corpus: `core/a-for-name-that-is-an-expansion`,
+`core/a-select-name-that-is-an-expansion`.
+
+### Whether it may be *quoted* is an axis
+
+    for "i" in a b; do echo "[$i]"; done
+
+| line | dash | bash 5.3 | bash 3.2 | bash-as-`sh` | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `for "i"` | error | error | error | error | **binds `i`** | error |
+| `for 'i'` | error | error | error | error | **binds `i`** | error |
+| `for i""` | error | error | error | error | **binds `i`** | error |
+| `for "i"x` | error | error | error | error | **binds `ix`** | error |
+| `for \i` | error | error | error | error | **binds `i`** | error |
+
+ksh93 removes the quoting and reads the name; the other four want it
+written plainly. The escape answers with the quotes rather than being a
+question of its own, so it is one bit: `ForNameMayBeQuoted`, on for `ksh`
+and off in the core.
+
+It is the quoting alone and does not widen what counts as a name — `for
+1x`, `for "1x"`, `for "a b"` and `for ""` are refused in that shell too —
+and it does not reach the rule above: `for "$n"` is refused there as
+everywhere, which is why one predicate asks the two halves separately
+rather than comparing the source text with the literal and calling that
+the whole of it.
+
+Corpus: `core/a-for-name-that-is-a-quoted-word`.
+
+### The stage is a third question, and not answered yet
+
+bash and ksh93 **parse** all of the above and complain when the loop is
+reached, so `bash -n` accepts a script we refuse, and bash's complaint is
+not fatal — the loop fails with status 1 and the script carries on. We
+find it while parsing in every dialect and stop. `Diagnostics.ForNameStatus`
+and `runtimeRefusal` are what make the wording and the refusal's own
+status right today; they cannot say the parse succeeded. Filed as #1110,
+which is also where ksh93's own split lives: it is fatal for `for` and not
+for `select`.
+
 ## A `for` with more than one name
 
 The same shell lets a `for` or a `foreach` name more than one variable,
@@ -792,7 +868,9 @@ so the word right after `for` is one whatever it spells:
 
 A name is a plain unquoted name and is not expanded. `for a "b" ( … )`
 and `for a $n ( … )` are both parse errors, so the words are not
-unquoted or expanded before being read as names.
+unquoted or expanded before being read as names — and the same holds for
+the *first* name in every loop and every shell, which is the section
+below.
 
 **A list that does not divide still runs its short last pass, and the
 names it did not reach are empty rather than unset.** This is where the

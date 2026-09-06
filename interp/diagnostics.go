@@ -2778,8 +2778,16 @@ func (d Diagnostics) ReportFrom(name, input string, line int, msg string) string
 // name is the shell or the script; input is what the front end calls the
 // origin, "-c" or empty; src is the whole script, for the echo.
 func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) string {
-	if d.ParseFailureNamesItsOwnLine {
+	_, runtime := d.runtimeRefusal(err)
+	if d.ParseFailureNamesItsOwnLine && !runtime {
 		// The wording says where it was, so the location says only who.
+		//
+		// Only for a failure this dialect words as a parse failure. A
+		// refusal it words as a *command's* — `for` with a bad name — has no
+		// line in its sentence, so clearing the location left it with no
+		// line at all: `<script>: 1x: invalid variable name` where the real
+		// shell says `<script>: line 1: 1x: invalid variable name`. The flag
+		// was read before anything asked which kind this was (#1076).
 		d.Location = LocationNone
 	}
 	if d.MissingFuncBodyOmitsTheLine && missingFuncBody(err) {
@@ -2794,7 +2802,7 @@ func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) 
 		// be pointed at honestly, and saying "line 0" would be worse.
 		line = 1
 	}
-	if _, runtime := d.runtimeRefusal(err); runtime {
+	if runtime {
 		// Not a parse failure as far as this dialect is concerned, so it gets
 		// the plain location and no echo.
 		return d.Report(name, line, d.ParseFailure(err)+"\n")

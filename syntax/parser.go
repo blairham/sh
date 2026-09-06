@@ -2033,17 +2033,11 @@ func (p *Parser) parseFor() Command {
 	}
 	c := &ForClause{Start: start}
 	p.next()
-	if p.tok.Kind != TokWord || !isName(p.tok.Literal()) {
-		if p.err == nil {
-			p.err = &Error{
-				Pos: p.tok.Pos, Kind: ErrForName,
-				Token: p.tokenLiteral(), Class: p.tokenClass(false),
-				Msg: "expected a name after `for`",
-			}
-		}
+	name, ok := p.forName("for")
+	if !ok {
 		return c
 	}
-	c.Names = []string{p.tok.Literal()}
+	c.Names = []string{name}
 	nameEnd := p.tok.End
 	p.next()
 	nameEnd = p.moreForNames(c, nameEnd, "for")
@@ -2096,6 +2090,87 @@ func (p *Parser) parseFor() Command {
 	return c
 }
 
+// forName reads the word standing where a loop's variable belongs and reports
+// whether it may be one, recording the refusal where it may not.
+//
+// **A name may not come out of an expansion, and that is unanimous.** `n=x;
+// for $n in a b` is refused by bash 5.3.15, the same binary as `sh`, bash
+// 3.2.57, dash, ksh93u+ and zsh 5.9.2 alike — measured 2026-09-06, `env -i
+// PATH=/usr/bin:/bin` with a scratch HOME, from a script file and through `-c`.
+// So is `${n}`, `"$n"` and `$(echo n)`. The loop would otherwise bind a
+// variable literally called `n`, the script's own `$n` would read the list's
+// words, and the name it meant to reach through the expansion would stay
+// empty — at status 0 and with nothing said (#1076).
+//
+// The token's literal cannot see it: a `$n` word reports `n`, so [isName] is
+// satisfied by a word that names nothing yet. What tells them apart is the
+// *spans* — a substitution is a span of its own kind — and asking that way
+// rather than by comparing the source text is what keeps the two halves below
+// separate, because quoting changes the source text too.
+//
+// **Whether the word may be quoted at all is an axis**, [Dialect.ForNameMayBeQuoted]:
+// ksh93 removes the quoting and takes the name, where bash, dash and zsh want
+// the name written plainly. Measured on `for "i"`, `for 'i'`, `for i""`,
+// `for "i"x` and `for \i` — ksh93 runs all five and the other three refuse all
+// five, so the escape travels with the quotes rather than being its own
+// question.
+//
+// The name is reported **as written**, quotes, escapes, expansion and all:
+// three of the four dialects quote the source text back and none of them
+// quotes the literal. `for $n` names `$n` and not `n`.
+func (p *Parser) forName(word string) (string, bool) {
+	if p.forNameIsUsable() {
+		return p.tok.Literal(), true
+	}
+	if p.err == nil {
+		p.err = &Error{
+			Pos: p.tok.Pos, Kind: ErrForName,
+			Token: p.forNameAsWritten(), Class: p.tokenClass(false),
+			Msg: "expected a name after `" + word + "`",
+		}
+	}
+	return "", false
+}
+
+// forNameIsUsable is the predicate.
+//
+// A token that is not a word needs no test of its own: only a word has spans,
+// so its literal is empty and [isName] refuses it. A guard for it here read as
+// if it decided something and did not — the mutant that removed it survived,
+// which is the whole of the evidence that it was dead.
+//
+// What a non-word in that position *should* say is a separate answer and not a
+// second predicate. `for ; in a b` is an ordinary unexpected-token failure in
+// bash and ksh93 — status 2 and 3, with bash echoing the line — because those
+// two want only a word there and check the name when the loop runs; dash gives
+// it the same one sentence it gives every bad loop variable, and zsh's two
+// wordings coincide. That is the stage question of #1110 showing through, and
+// modeling it as its own axis would be modeling the symptom.
+func (p *Parser) forNameIsUsable() bool {
+	for _, sp := range p.tok.Spans {
+		if sp.Kind != Literal {
+			// A name out of a substitution: refused everywhere.
+			return false
+		}
+	}
+	if !p.dialect.ForNameMayBeQuoted && p.forNameAsWritten() != p.tok.Literal() {
+		// Written with quotes or an escape in it, in a dialect that wants
+		// the name plain. Comparing the source text with the literal is what
+		// says so for both spellings at once.
+		return false
+	}
+	return isName(p.tok.Literal())
+}
+
+// forNameAsWritten is the word's source text, which is what a diagnostic
+// quotes and what the plainness check above compares against.
+func (p *Parser) forNameAsWritten() string {
+	if p.tok.Kind != TokWord {
+		return p.tokenLiteral()
+	}
+	return p.slice(p.tok.Pos, p.tok.End)
+}
+
 // moreForNames reads the names after the first, where the dialect lets a loop
 // have more than one. It returns where the last of them ends.
 //
@@ -2133,17 +2208,11 @@ func (p *Parser) moreForNames(c *ForClause, end Pos, word string) Pos {
 		return end
 	}
 	for p.tok.Kind == TokWord && !p.atStopWord() && !p.atWord("in") && !p.atWord("{") {
-		if p.tok.IsQuoted() || !isName(p.tok.Literal()) || p.slice(p.tok.Pos, p.tok.End) != p.tok.Literal() {
-			if p.err == nil {
-				p.err = &Error{
-					Pos: p.tok.Pos, Kind: ErrForName,
-					Token: p.tokenLiteral(), Class: p.tokenClass(false),
-					Msg: "expected a name after `" + word + "`",
-				}
-			}
+		name, ok := p.forName(word)
+		if !ok {
 			return end
 		}
-		c.Names = append(c.Names, p.tok.Literal())
+		c.Names = append(c.Names, name)
 		end = p.tok.End
 		p.next()
 	}
@@ -2248,17 +2317,11 @@ func (p *Parser) parseForeach() Command {
 	c := &ForClause{Start: p.tok.Pos}
 	defer p.opens("foreach")()
 	p.next()
-	if p.tok.Kind != TokWord || !isName(p.tok.Literal()) {
-		if p.err == nil {
-			p.err = &Error{
-				Pos: p.tok.Pos, Kind: ErrForName,
-				Token: p.tokenLiteral(), Class: p.tokenClass(false),
-				Msg: "expected a name after `foreach`",
-			}
-		}
+	name, ok := p.forName("foreach")
+	if !ok {
 		return c
 	}
-	c.Names = []string{p.tok.Literal()}
+	c.Names = []string{name}
 	end := p.tok.End
 	p.next()
 	end = p.moreForNames(c, end, "foreach")
@@ -2293,17 +2356,11 @@ func (p *Parser) parseSelect() Command {
 	c := &SelectClause{Start: p.tok.Pos}
 	defer p.opens("select")()
 	p.next()
-	if p.tok.Kind != TokWord || !isName(p.tok.Literal()) {
-		if p.err == nil {
-			p.err = &Error{
-				Pos: p.tok.Pos, Kind: ErrForName,
-				Token: p.tokenLiteral(), Class: p.tokenClass(false),
-				Msg: "expected a name after `select`",
-			}
-		}
+	name, ok := p.forName("select")
+	if !ok {
 		return c
 	}
-	c.Name = p.tok.Literal()
+	c.Name = name
 	nameEnd := p.tok.End
 	p.next()
 	p.skipNewlines()

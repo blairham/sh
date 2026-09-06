@@ -272,9 +272,12 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 		s = s[1:]
 	}
 
-	// A `"` as well as a `$`, because the substitution standing here may be
-	// quoted — see scanNestedExpansion, which is where the shape is decided.
-	if p.dialect.NestedParamExpansion && (strings.HasPrefix(s, "$") || strings.HasPrefix(s, `"`)) {
+	// What may stand here is decided in one place, and it is not this one:
+	// scanNestedExpansion returns false for anything that is not a
+	// substitution. A prefix test here as well was a second copy of the same
+	// rule, and mutants that widened *this* one were unobservable because
+	// the other still refused — which is how the duplication was found.
+	if p.dialect.NestedParamExpansion {
 		if inner, rest, ok := p.scanNestedExpansion(s, start); ok {
 			// Src as well as the node: a diagnostic about a nested expansion
 			// names the text it was written as, and there is no parameter
@@ -825,18 +828,16 @@ func (p *Parser) scanNestedExpansion(s string, at Pos) (inner *Word, rest string
 	if !strings.HasPrefix(body, "${") && !strings.HasPrefix(body, "$(") {
 		return nil, "", false
 	}
-	// Which is also the whole of the test. A kind check on the span behind it
-	// could not be reached: those two prefixes lex to a substitution and
-	// nothing else does, so a guard on the kind was a branch no mutation
-	// could tell from its absence.
+	// Which is also the whole of the test, for the quoted spelling as much as
+	// the bare one. A kind check on the span behind it could not be reached:
+	// those two prefixes lex to a substitution and nothing else does, so a
+	// guard on the kind was a branch no mutation could tell from its absence
+	// — and a check that the span came back *double*-quoted is unreachable
+	// for the same reason, because the only quote stripped above is a `"`.
+	// The single-quoted spelling is refused by that strip and by nothing
+	// else, which is where to look if `${(@f)'$(cmd)'}` ever starts parsing.
 	t := NewLexer(s, p.dialect).Next()
 	if t.Kind != TokWord || len(t.Spans) == 0 {
-		return nil, "", false
-	}
-	if quoted && t.Spans[0].Quoting != DoubleQuoted {
-		// The quote did not survive as quoting, which means the lexer read
-		// something other than a quoted substitution — an unterminated
-		// quote, or a `"` that began a longer run of text.
 		return nil, "", false
 	}
 	// Where the substitution ended: the next span's start, or the token's own

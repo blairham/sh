@@ -129,7 +129,12 @@ func TestTheStartupFilePassesTheGate(t *testing.T) {
 // what is being checked is the wiring: a session gated for what a script does
 // and ungated for what the prompt does looks exactly like a shell that works.
 func TestTheHistoryFileIsInsideTheBoundary(t *testing.T) {
-	hist := filepath.Join(t.TempDir(), "history")
+	// A home of its own before the history file is aimed, because naming
+	// HISTFILE turns the block store back on and the store is under $HOME:
+	// isolating one of the two leaves the other writing into a person's home.
+	// The history file is then aimed away from it, which is the whole of what
+	// this test is about.
+	hist := filepath.Join(scratchHome(t), "history")
 	if err := os.WriteFile(hist, []byte("echo earlier\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

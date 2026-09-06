@@ -108,6 +108,19 @@ func (s Shell) blockCwd() string {
 	return dir
 }
 
+// An outputCapture is what a session keeps of what its commands printed,
+// together with whatever it had to put in front of the terminal to keep it.
+//
+// Two fields because there are two ways to keep output and they cost different
+// things. Through a pseudo-terminal the child is still on a terminal and the
+// capture is free; through a wrapper the child is on a pipe and `ls` stops
+// colorizing. Which one a session gets is CaptureMode's to say and the
+// terminal's to allow, and the rest of this file does not care which happened.
+type outputCapture struct {
+	cap     *blocks.Capture
+	conduit *ptyConduit
+}
+
 // captureOutput installs the capture this session keeps, or nothing.
 //
 // Installed once, at the start, rather than around each command, and the
@@ -121,21 +134,89 @@ func (s Shell) blockCwd() string {
 //
 // The consequence is that setting SH_BLOCKS_OUTPUT at the prompt takes effect
 // in the next session and not the next command.
-func (s Shell) captureOutput() *blocks.Capture {
+//
+// # Which of the two ways this session gets
+//
+// A pseudo-terminal, where there is a terminal to put one in front of and the
+// two streams go to the same one. Otherwise the wrapper, and only where the
+// session asked for output whatever it cost — the default keeps nothing rather
+// than quietly taking a child's terminal away, which is the whole of what #720
+// was waiting for.
+//
+// **Both streams have to be the same terminal.** One conduit carries them
+// merged, which is what a block records and what a screen shows anyway; two
+// different destinations merged into one and written back to the first would
+// be sending a command's diagnostics somewhere they were not addressed. Asked
+// with SameFile rather than by comparing the writers, because a shell's own
+// two streams are two *os.File values on one terminal.
+func (s Shell) captureOutput() *outputCapture {
 	if s.Runner == nil {
 		return nil
 	}
-	on, max := blocks.CaptureFrom(s.Runner.GetVar)
-	if !on {
+	mode, max := blocks.CaptureFrom(s.Runner.GetVar)
+	if mode == blocks.CaptureOff {
+		return nil
+	}
+	if s.blocksDir() == "" {
+		// Nowhere to write a body, so there is nothing for a capture to be
+		// for. Worth a check of its own now that the default is on: without
+		// it, a session that turned the store off with an empty HISTFILE
+		// would still be paying for a pseudo-terminal and a copy of every
+		// byte, to fill a buffer nobody empties.
 		return nil
 	}
 	c := blocks.NewCapture(max)
-	// The Runner's streams and not the session's. What the editor draws is not
-	// a command's output, and a block that held the prompt would be recording
-	// the shell talking to itself.
+	if out := s.oneTerminalForBothStreams(); out != nil {
+		// The Runner's streams and not the session's. What the editor draws is
+		// not a command's output, and a block that held the prompt would be
+		// recording the shell talking to itself.
+		if conduit, err := newPtyConduit(out, out, c.Stream); err == nil {
+			s.Runner.Stdout, s.Runner.Stderr = conduit.Stream(), conduit.Stream()
+			return &outputCapture{cap: c, conduit: conduit}
+		}
+		// A terminal that would not give up a pseudo-terminal falls through to
+		// the same answer a session with no terminal gets: keep the child's
+		// terminal, and keep output only if that was asked for by name.
+	}
+	if mode != blocks.CaptureAlways {
+		return nil
+	}
 	s.Runner.Stdout = c.Stream(s.Runner.Stdout)
 	s.Runner.Stderr = c.Stream(s.Runner.Stderr)
-	return c
+	return &outputCapture{cap: c}
+}
+
+// oneTerminalForBothStreams is the terminal this session's commands write to,
+// or nil when they do not both write to one.
+func (s Shell) oneTerminalForBothStreams() *os.File {
+	out, ok := s.Runner.Stdout.(*os.File)
+	if !ok {
+		return nil
+	}
+	errs, ok := s.Runner.Stderr.(*os.File)
+	if !ok {
+		return nil
+	}
+	if !IsTerminal(out) || !IsTerminal(errs) {
+		return nil
+	}
+	oi, err := out.Stat()
+	if err != nil {
+		return nil
+	}
+	ei, err := errs.Stat()
+	if err != nil || !os.SameFile(oi, ei) {
+		return nil
+	}
+	return out
+}
+
+// close shuts the conduit down and lets what is in it reach the terminal.
+func (c *outputCapture) close() {
+	if c == nil {
+		return
+	}
+	c.conduit.close()
 }
 
 // closeBlock records what came of it.
@@ -151,7 +232,7 @@ func (s Shell) captureOutput() *blocks.Capture {
 // cannot be written would complain after every command — which is a broken
 // prompt rather than a useful diagnostic. The store is an addition to a shell
 // that works without it.
-func (s Shell) closeBlock(ctx context.Context, store *blocks.Store, cap *blocks.Capture, b openBlock) {
+func (s Shell) closeBlock(ctx context.Context, store *blocks.Store, cap *outputCapture, b openBlock) {
 	if strings.TrimSpace(b.command) == "" {
 		// Taken anyway, so that whatever a background job printed while nobody
 		// was typing joins the next real block instead of being attributed to
@@ -183,10 +264,18 @@ func (s Shell) closeBlock(ctx context.Context, store *blocks.Store, cap *blocks.
 
 // takeOutput is what this block printed, and nothing when the session is not
 // capturing.
-func (s Shell) takeOutput(cap *blocks.Capture) blocks.Output {
+//
+// The conduit is drained first, and that is not tidiness: a pseudo-terminal is
+// a queue, so a command's last bytes may still be in it when the command has
+// exited. Taking the capture before they arrive would put the tail of one
+// block at the head of the next, and — worse, because it is what a person sees
+// — the next prompt would be drawn on top of output still in flight. The drain
+// waits for an in-band mark rather than for quiet; see ptyConduit.drain.
+func (s Shell) takeOutput(cap *outputCapture) blocks.Output {
 	if cap == nil {
 		return blocks.Output{}
 	}
-	text, total, truncated := cap.Take()
+	cap.conduit.drain()
+	text, total, truncated := cap.cap.Take()
 	return blocks.Output{Text: text, Bytes: total, Truncated: truncated}
 }

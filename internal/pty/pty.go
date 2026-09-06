@@ -11,8 +11,12 @@
 // under CI has none at all, and one it inherited from a developer's shell is
 // not a thing to write assertions against.
 //
-// Test infrastructure rather than product, which is why it is internal: the
-// same reason the oracle is. Nothing outside a test builds a terminal.
+// It began as test infrastructure and is no longer only that. `repl` opens a
+// pair in a running shell — the conduit that lets output be captured without
+// a child losing its terminal (#720) — so "nothing outside a test builds a
+// terminal" is no longer true and is not left standing here. Still internal,
+// because it is this module's own and not an interface anybody outside it
+// should be holding.
 //
 // There is no portable call for this outside libc and this module does not
 // use cgo, so each family is opened its own way — see the per-platform files.

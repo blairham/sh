@@ -18,9 +18,11 @@ const (
 	// DirVar names the store. An empty value turns it off, which is the same
 	// idiom an empty HISTFILE already is, so there is one thing to learn.
 	DirVar = "SH_BLOCKS_DIR"
-	// OutputVar turns the output half on. Empty — the default — records the
-	// command half only, because capture costs a child its terminal and the
-	// command half costs nothing. See Capture.Stream.
+	// OutputVar turns the output half on, off, or leaves it to the front end.
+	// Unset is the default and means "keep output if a terminal can be put
+	// behind it"; empty turns it off outright, the same idiom an empty
+	// HISTFILE already is; anything else keeps output whatever it costs. See
+	// CaptureFrom, and Capture.Stream for what the cost is.
 	OutputVar = "SH_BLOCKS_OUTPUT"
 	// MaxOutputVar bounds one block's body, in bytes.
 	MaxOutputVar = "SH_BLOCKS_MAX_OUTPUT"
@@ -63,15 +65,49 @@ func DirFrom(get func(string) (string, bool)) string {
 	return filepath.Join(home, ".local", "state", "sh", "blocks")
 }
 
-// CaptureFrom reports whether this session keeps output, and how much.
+// A CaptureMode is what a session was told to do about keeping output.
 //
-// Off unless asked, and the cost is the reason: see Capture.Stream. A max that
-// is not a number leaves the default rather than zero, which would turn the
-// output half back off through a typo — the same rule HISTFILESIZE follows.
-func CaptureFrom(get func(string) (string, bool)) (on bool, max int) {
+// Three answers rather than two, and the third is the default. Keeping output
+// used to cost a child its terminal — interp hands a child r.Stdout directly,
+// so anything that is not an *os.File makes os/exec build a pipe and `isatty`
+// is false downstream of it — which is why this was off unless asked. A front
+// end that can put a pseudo-terminal behind the capture pays nothing for it,
+// and one that cannot still pays the whole price. So the setting says which of
+// those a session is willing to accept, and the front end says which it is.
+type CaptureMode int
+
+const (
+	// CaptureOff keeps no output. What an empty OutputVar asks for.
+	CaptureOff CaptureMode = iota
+	// CaptureIfTerminal keeps output where the front end can do it without a
+	// child noticing, and keeps none where it cannot. The default: a session
+	// that said nothing gets the whole feature at a terminal and no surprises
+	// anywhere else.
+	CaptureIfTerminal
+	// CaptureAlways keeps output whatever it costs, which is what a
+	// non-empty OutputVar asks for. Still worth having, and it is not a
+	// legacy spelling: a session recording a build in a pipeline has no
+	// terminal to preserve and wants the bodies anyway.
+	CaptureAlways
+)
+
+// CaptureFrom reports what this session keeps of what it printed, and how much.
+//
+// A max that is not a number leaves the default rather than zero, which would
+// turn the output half back off through a typo — the same rule HISTFILESIZE
+// follows.
+func CaptureFrom(get func(string) (string, bool)) (mode CaptureMode, max int) {
 	v, ok := get(OutputVar)
-	if !ok || v == "" {
-		return false, 0
+	switch {
+	case ok && v == "":
+		// Set to nothing is the one way to say "not this session", and it is
+		// the same gesture an empty HISTFILE is. It has to exist now that the
+		// default is on; before, unset already meant off and nobody needed it.
+		return CaptureOff, 0
+	case !ok:
+		mode = CaptureIfTerminal
+	default:
+		mode = CaptureAlways
 	}
 	max = DefaultMaxOutput
 	if s, ok := get(MaxOutputVar); ok {
@@ -79,5 +115,5 @@ func CaptureFrom(get func(string) (string, bool)) (on bool, max int) {
 			max = n
 		}
 	}
-	return true, max
+	return mode, max
 }

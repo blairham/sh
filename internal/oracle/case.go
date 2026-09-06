@@ -6051,6 +6051,18 @@ echo unreachable`,
 		Why:     "the option's contract is to write back what it reads, and the lines after the last command are read like any others: two blank lines and a comment, echoed by all four. Blank lines and comments *between* commands are dragged out by the line that follows them, so only the tail — where there is no line after — shows a shell that echoes per command rather than per line. The comment is last because a record trims trailing newlines, and blank lines at the very end would leave nothing to compare",
 	},
 	{
+		ID: "opt/set-v-writes-to-the-descriptor-the-script-points", Category: "shell options",
+		Script:  true,
+		Snippet: "exec 2>&1\nset -v\ncat <<END >&2\nbody\nEND\necho after",
+		Why:     "the echo goes to descriptor 2 as the *script* has pointed it, not to the stream the shell started with: after `exec 2>&1` every echoed line joins the output and standard error is empty. Unanimous. Written this way rather than with the body on descriptor 2, which is the workaround the same question had to use while a front end held its own stream (#771)",
+	},
+	{
+		ID: "opt/set-v-follows-a-descriptor-that-moves", Category: "shell options",
+		Script:  true,
+		Snippet: "set -v\nexec 2>/dev/null\necho gone\nexec 2>&1\necho back",
+		Why:     "the descriptor is read at the moment of the echo, which decides three things at once: the line holding the `exec` goes to the descriptor it is about to replace, the lines after it disappear into what it was pointed at, and only the line after the restore comes back. Unanimous. The snippet ends without a newline because the harness adds one, and a trailing blank line is not the same question: one shell reads ahead in blocks and echoes that line *before* running the command above it",
+	},
+	{
 		ID: "opt/set-o-verbose-echoes-what-is-read", Category: "shell options",
 		Snippet: "echo before\nset -o verbose\necho after\n",
 		Why:     "the long spelling of `set -v`: input is written back to stderr as it is read, and never the line that turned it on. From a file all four agree; a -c string is read differently — bash echoes it where dash and zsh do not — so the case pins the route every script uses",

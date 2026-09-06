@@ -4290,6 +4290,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/set-o-noexec-reads-and-never-runs` | `before` | `before` | `before` | `before` | `before` | `before` |
 | `opt/set-v-echoes-a-here-document-with-its-command` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` |
 | `opt/set-v-echoes-the-tail-after-the-last-command` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` |
+| `opt/set-v-writes-to-the-descriptor-the-script-points` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` |
+| `opt/set-v-follows-a-descriptor-that-moves` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` |
 | `opt/set-o-verbose-echoes-what-is-read` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` |
 | `opt/pipefail-appears-in-the-plus-o-listing` | *(no output, status 0)* | `pipefail` | `pipefail` | `pipefail` | *(no output, status 0)* | `pipefail` |
 | `opt/pipefail-turned-on-is-listed-on` | *(no output, status 0)* | `pipefail` | `pipefail` | `pipefail` | `pipefail` | `pipefail` |
@@ -4500,6 +4502,23 @@ grades it and nothing drift-checks it either, for the same reason.
 
 
   # the end
+  ```
+- `opt/set-v-writes-to-the-descriptor-the-script-points` — the echo goes to descriptor 2 as the *script* has pointed it, not to the stream the shell started with: after `exec 2>&1` every echoed line joins the output and standard error is empty. Unanimous. Written this way rather than with the body on descriptor 2, which is the workaround the same question had to use while a front end held its own stream (#771)
+  ```sh
+  exec 2>&1
+  set -v
+  cat <<END >&2
+  body
+  END
+  echo after
+  ```
+- `opt/set-v-follows-a-descriptor-that-moves` — the descriptor is read at the moment of the echo, which decides three things at once: the line holding the `exec` goes to the descriptor it is about to replace, the lines after it disappear into what it was pointed at, and only the line after the restore comes back. Unanimous. The snippet ends without a newline because the harness adds one, and a trailing blank line is not the same question: one shell reads ahead in blocks and echoes that line *before* running the command above it
+  ```sh
+  set -v
+  exec 2>/dev/null
+  echo gone
+  exec 2>&1
+  echo back
   ```
 - `opt/set-o-verbose-echoes-what-is-read` — the long spelling of `set -v`: input is written back to stderr as it is read, and never the line that turned it on. From a file all four agree; a -c string is read differently — bash echoes it where dash and zsh do not — so the case pins the route every script uses
   ```sh

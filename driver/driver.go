@@ -1385,7 +1385,7 @@ func (sh Shell) executeLines(
 			// reads. Blank lines and comments *between* commands come out
 			// with the line after them; the ones after the last command have
 			// no line after them and were dropped outright.
-			sh.sayVerboseRest(pr.text(), echoed, r.Verbose())
+			sh.sayVerboseRest(r.Err(), pr.text(), echoed, r.Verbose())
 			break
 		}
 		if err := pr.err(); err != nil {
@@ -1408,7 +1408,7 @@ func (sh Shell) executeLines(
 		// spent, not saved — the line that says `set -v` is not echoed by the
 		// shell it turns on — and the line after it can only be found once
 		// every line before it has been walked past.
-		echoed = sh.sayVerbose(pr.text(), line.Last.Line, echoed, r.Verbose())
+		echoed = sh.sayVerbose(r.Err(), pr.text(), line.Last.Line, echoed, r.Verbose())
 		if err := r.RunPart(ctx, line); err != nil {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.
@@ -1449,7 +1449,19 @@ type verbosePos struct {
 // sayVerbose accounts for the physical lines up to and including upTo,
 // resuming where it left off and reporting how far it got. It writes them when
 // echo says to and passes over them silently when it does not.
-func (sh Shell) sayVerbose(src string, upTo int, at verbosePos, echo bool) verbosePos {
+//
+// w is descriptor 2 **as the script has pointed it** rather than the front
+// end's own stream, which is the whole of #771: `set -v` writes to the
+// shell's standard error, and a script that has moved it takes the echo with
+// it. Measured unanimous across the panel — after `exec 2>&1` the echo joins
+// the output, after `exec 2>/dev/null` it disappears, and `exec 2>&3` brings
+// it back.
+//
+// Read afresh at each call, and that is what makes the line holding the
+// redirection come out on the *old* descriptor: the echo happens when the
+// line is read and the `exec` has not run yet. A per-command redirect never
+// captures it at all, for the same reason and without needing a rule.
+func (sh Shell) sayVerbose(w io.Writer, src string, upTo int, at verbosePos, echo bool) verbosePos {
 	if upTo <= at.line {
 		return at
 	}
@@ -1465,7 +1477,7 @@ func (sh Shell) sayVerbose(src string, upTo int, at verbosePos, echo bool) verbo
 			at.off = len(src) + 1
 		}
 		if echo {
-			sh.errf("%s\n", text)
+			echoLine(w, text)
 		}
 		at.line++
 	}
@@ -1488,7 +1500,7 @@ func (sh Shell) sayVerbose(src string, upTo int, at verbosePos, echo bool) verbo
 // Not called where the shell stopped early. A script that runs `exit` is done
 // reading, and three of the four echo nothing after it; a line that failed to
 // parse is a separate question with its own answer.
-func (sh Shell) sayVerboseRest(src string, at verbosePos, echo bool) {
+func (sh Shell) sayVerboseRest(w io.Writer, src string, at verbosePos, echo bool) {
 	for at.off < len(src) {
 		rest := src[at.off:]
 		text := rest
@@ -1500,9 +1512,21 @@ func (sh Shell) sayVerboseRest(src string, at verbosePos, echo bool) {
 			at.off = len(src) + 1
 		}
 		if echo {
-			sh.errf("%s\n", text)
+			echoLine(w, text)
 		}
 	}
+}
+
+// echoLine writes one line of the input back, for `set -v`.
+//
+// Not Shell.errf, and the difference is the point rather than a detail: errf
+// holds the front end's own stream, which is where a *diagnostic* goes however
+// the script has arranged its descriptors, and this goes to the descriptor the
+// script has arranged. The ignored error is ignored for the same reason errf
+// ignores its own — there is nowhere left to report a failed write to standard
+// error.
+func echoLine(w io.Writer, text string) {
+	_, _ = fmt.Fprintf(w, "%s\n", text)
 }
 
 // source runs the prelude on an existing runner, which is how a prelude is

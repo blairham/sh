@@ -565,6 +565,31 @@ not saved.
 The front end is where this lives, and it has to be: the runner knows only
 whether the option is on, and the raw text belongs to whatever read it.
 
+### Which standard error it writes to
+
+**The rule.** Descriptor 2 **as the script has pointed it**, read at the moment
+of the echo — not the stream the shell was started with. Measured 2026-09-05
+from a script file, unanimous across dash, bash 3.2, bash 5.3, bash-as-`sh`,
+ksh93 and zsh:
+
+| the script says | where the echo goes |
+| --- | --- |
+| `exec 2>&1` | the output, and standard error is left empty |
+| `exec 2>/dev/null` | nowhere, until something points it back |
+| a redirection on a *command* — `echo one 2>&1` | standard error, unmoved |
+| the `exec` line itself | the descriptor it is about to replace |
+
+The last two rows are the same fact as the first and need no rule of their own.
+The echo happens when the line is *read*, and both a per-command redirection
+and the `exec`'s own effect arrive when the line is *run*, which is later.
+
+It matters beyond tidiness: with the two streams apart, the position of a
+here-document's terminator against the body the command wrote is invisible, and
+joining them is how a script asks. A front end holding its own stream loses the
+echo out of the joined text, so the question could not be asked at all — which
+is why the corpus row that asks it had to put the here-document body on
+descriptor 2 instead (#582), a workaround for exactly this (#771).
+
 ### It walks the text once, and used to walk it once per line
 
 The echo has to find the text of the lines it has not written yet. Recovering
@@ -593,7 +618,11 @@ being asked for help (#580).
 
 ### Where it lives
 
-`driver`'s `sayVerbose`, and the position it carries. The position is a line
+`driver`'s `sayVerbose`, the writer it is handed, and the position it carries.
+The writer is `interp.Runner.Err` — the runner's own descriptor 2 — read afresh
+at every call, which is the whole of the rule above; `Shell.errf` is the other
+thing and is where a *diagnostic* goes, however the script has arranged its
+descriptors. The position is a line
 number **and a byte offset**: the number is what the parser reports and the
 offset is what makes the walk one pass, and neither can be derived from the
 other once the text is growing a line at a time. Lines read while the option is

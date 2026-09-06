@@ -33,7 +33,7 @@ func (l *LineReaderForTest) Read(in io.Reader, buf []byte) string { return l.lr.
 // next call resumes on the right byte, and nothing a Shell can be handed makes
 // that observable on its own.
 func (sh Shell) SayVerboseForTest(src string, upTo, line, off int, echo bool) (int, int) {
-	at := sh.sayVerbose(src, upTo, verbosePos{line: line, off: off}, echo)
+	at := sh.sayVerbose(sh.Stderr, src, upTo, verbosePos{line: line, off: off}, echo)
 	return at.line, at.off
 }
 

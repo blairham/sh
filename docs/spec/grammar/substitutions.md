@@ -78,6 +78,56 @@ leave `b"}` behind as text. The **operators inside** (`:-`, `#`, `%`,
 `/`, `:offset:length`, `[index]`) are a separate specification this
 document does not attempt. The lexer only has to find the end.
 
+### Tracking the quoting is not enough on its own
+
+A quoted run inside the body can hold a substitution, and what that
+substitution holds is a **program**, not more of the run's text. Its
+quoting is the program's own, so a quote character inside it is not a
+quote character of the run:
+
+| probe | all six |
+| --- | --- |
+| `${x:-"$( echo 'a"b' )"}` | `a"b` |
+| `${x:-"$( echo "c'd" )"}` | `c'd` |
+| `${x:-"$(( 1 + $( echo 1 ) ))"}` | `2` |
+| ``${x:-"`echo 'e"f'`"}`` | `e"f` |
+
+    (core/a-substitution-inside-an-expansion-brings-its-own-quoting)
+    (core/what-a-nested-substitution-holds-is-not-a-delimiter)
+    (core/the-older-substitution-spelling-brings-its-own-quoting-too)
+
+"Its own quoting" is the short way of saying "it is a program", and the
+parentheses go with it. A `case` arm's `)` closes nothing here either,
+one level further in than the rule above:
+
+    ${x:-"$( echo `case a in a) echo y;; esac` )"}   →  y   all six
+
+    (core/a-case-arm-inside-backquotes-inside-an-expansion)
+
+The scan for the closing `}` therefore has to step over such a
+substitution whole rather than read across it. A scan that does not takes
+the `"` in `'"'` as the run's closer, continues from the `'` after it as
+though a single-quoted string began there, and swallows the rest of the
+input.
+
+The failure is not always a refusal, which is what makes it worth a rule
+of its own. Two of the shape in one line put the stray quotes back in
+balance:
+
+    printf '[%s]' "${x:-"$( echo 'a"b' )"}" "${y:-"$( echo "c'd" )"}"
+      →  [a"b][c'd]     all six
+      →  [a"b} c'd]     a scan that reads across, exit status 0
+
+One field where there are two, the grammar's own `}` in the output, and
+no diagnostic anywhere.
+
+    (core/a-swallowed-quote-changes-the-program-rather-than-refusing-it)
+
+**A nested `${ }` is not one of these.** Its body is a word rather than a
+program, and the panel divides on it — `${x:-"${y:-'"'}"}` is accepted by
+bash alone and refused by the other five — so it is a dialect question
+and not part of this rule.
+
 ## `${ cmd;}` — a substitution that runs in the current shell
 
 A space after the brace turns the same delimiters into a **command**

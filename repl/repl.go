@@ -132,6 +132,23 @@ type Shell struct {
 	// before writing one that does I/O.
 	Completers []Completer
 
+	// HistoryRecorders are told every line this session records, besides the
+	// history file, which is always told too. Nil is a session whose history
+	// is the file and nothing else.
+	//
+	// An addition rather than a replacement, and every one of them is told —
+	// a recorder is not answering a question, so there is no winner to pick.
+	// See historyseam.go, which carries the reasoning and the rules a line
+	// has already passed by the time a recorder sees it.
+	HistoryRecorders []HistoryRecorder
+
+	// HistorySources supply lines this session can recall, before the history
+	// file's. Nil is a session that recalls the file and nothing else.
+	//
+	// Asked once, in the order given, before the first prompt; their lines
+	// are the older half of the walk. See historyseam.go.
+	HistorySources []HistorySource
+
 	// Clock is what a prompt with the time in it reads. Nil is the real one.
 	Clock func() time.Time
 
@@ -188,7 +205,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// measured, bash given `-i` on a pipe with three lines in HISTFILE draws
 	// `!4 #1` at its first prompt, editor or no editor.
 	hist := s.historyFile()
-	earlier := hist.load(ctx)
+	earlier := s.recalled(ctx, hist)
 	s.counts = &counts{history: len(earlier)}
 	// Where this session records a command and what came of it. Opened here
 	// rather than in either loop so the two cannot disagree about whether a
@@ -912,8 +929,81 @@ func (s Shell) recording(ed *editor, added *[]string) func(string) {
 			return
 		}
 		ed.remember(line)
-		*added = append(*added, line)
+		// Past every rule the file's contents depend on, so this is exactly
+		// what the session will write — which is what makes a recorder
+		// protected by the credential check above rather than obliged to
+		// repeat it.
+		s.recorded(sessionRecorder{added: added}, line)
 	}
+}
+
+// sessionRecorder is the substrate's own: what this session will write to its
+// history file.
+//
+// It is the history seam's first implementation and it is production code
+// rather than a test's, which is the point of it being written this way. The
+// file's contents are what this collects and nothing else, so a recorder added
+// beside it cannot change them and cannot be forgotten by them.
+type sessionRecorder struct{ added *[]string }
+
+// Record adds the line to what the session will write.
+func (r sessionRecorder) Record(e HistoryEntry) { *r.added = append(*r.added, e.Command) }
+
+// recorded tells the file and then every recorder the front end contributed.
+//
+// The file first, so the thing that is always there is never behind a
+// contributed recorder that misbehaves. Each behind the panic guard, and
+// separately: a recorder is not answering a question, so one that fails costs
+// its own record and nobody else's — the same shape a prompt provider has, for
+// the same reason. Guarded at all because this runs between commands, where a
+// diagnostic has somewhere to go; the seams that run while a line is being
+// drawn are not, because there a complaint lands on top of the line.
+func (s Shell) recorded(own HistoryRecorder, line string) {
+	entry := HistoryEntry{
+		Command: line,
+		Dir:     s.workingDir(),
+		At:      s.now(),
+		Session: s.Session,
+	}
+	own.Record(entry)
+	if len(s.HistoryRecorders) == 0 {
+		return
+	}
+	guard := s.guard()
+	for _, r := range s.HistoryRecorders {
+		if r == nil {
+			continue
+		}
+		guard.Do(func() { r.Record(entry) })
+	}
+}
+
+// recalled is the list this session can walk: what the front end's sources
+// supply, and then what the history file holds.
+//
+// The file last, so it is the recent end of the walk — the up arrow reaches
+// this machine's own tail before it reaches a tool's longer memory. Each
+// source behind the panic guard, for the reason a recorder is: this happens
+// before the first prompt, where there is somewhere to put a complaint, and a
+// session that would not start because a history tool has a bug is worse than
+// a session that starts without it.
+func (s Shell) recalled(ctx context.Context, hist historyFile) []string {
+	if len(s.HistorySources) == 0 {
+		return hist.Lines(ctx)
+	}
+	guard := s.guard()
+	var lines []string
+	for _, src := range s.HistorySources {
+		if src == nil {
+			continue
+		}
+		var got []string
+		if guard.Do(func() { got = src.Lines(ctx) }) {
+			continue
+		}
+		lines = append(lines, got...)
+	}
+	return append(lines, hist.Lines(ctx)...)
 }
 
 // historyRules is what this session was told to leave out, read from the

@@ -95,6 +95,13 @@ func countFrom(get func(string) (string, bool), name string, fallback int) int {
 	return n
 }
 
+// Lines is the file as a HistorySource: what previous sessions left.
+//
+// The substrate's own implementation of the public seam, so the shipped
+// history and a front end's are the same kind of thing and are composed by
+// one rule rather than one being a special case in the loop.
+func (h historyFile) Lines(ctx context.Context) []string { return h.load(ctx) }
+
 // load reads the lines a previous session left.
 func (h historyFile) load(ctx context.Context) []string {
 	if h.path == "" || h.size == 0 {

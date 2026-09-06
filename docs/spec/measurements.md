@@ -3840,6 +3840,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/an-element-past-the-end-is-zero` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `1` | `1` | `1` | `1` | `1` |
 | `arith/a-subscript-on-something-that-is-not-an-array` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: " nosucharray[0] + 1 "` *(status 2)* | `1` | `1` | `1` | `1` | `1` |
 | `arith/assigning-to-an-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `9` | `9` | `9` | `9` | `9` |
+| `arith/a-character-code-on-a-name` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "#b"` *(status 2)* | **2>** `<shell>: line 1: #b: arithmetic syntax error: operand expected (error token is "#b")` *(status 1)* | **2>** `<shell>: line 1: #b: arithmetic syntax error: operand expected (error token is "#b")` *(status 127)* | **2>** `<shell>: #b: syntax error: operand expected (error token is "#b")` *(status 1)* | **2>** `<shell>: #b: arithmetic syntax error` *(status 1)* | `[122]` |
+| `arith/a-character-code-is-not-a-length` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: #a: arithmetic syntax error: operand expected (error token is "#a")` *(status 1)* | **2>** `<shell>: line 1: #a: arithmetic syntax error: operand expected (error token is "#a")` *(status 127)* | **2>** `<shell>: #a: syntax error: operand expected (error token is "#a")` *(status 1)* | **2>** `<shell>: #a: arithmetic syntax error` *(status 1)* | `[49]` |
+| `arith/a-character-code-with-nothing-to-take` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "#nothing"` *(status 2)* | **2>** `<shell>: line 1: #nothing: arithmetic syntax error: operand expected (error token is "#nothing")` *(status 1)* | **2>** `<shell>: line 1: #nothing: arithmetic syntax error: operand expected (error token is "#nothing")` *(status 127)* | **2>** `<shell>: #nothing: syntax error: operand expected (error token is "#nothing")` *(status 1)* | **2>** `<shell>: #nothing: arithmetic syntax error` *(status 1)* | `[0][0]` |
+| `arith/a-character-code-on-a-character` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "##a"` *(status 2)* | **2>** `<shell>: line 1: ##a: arithmetic syntax error: operand expected (error token is "##a")` *(status 1)* | **2>** `<shell>: line 1: ##a: arithmetic syntax error: operand expected (error token is "##a")` *(status 127)* | **2>** `<shell>: ##a: syntax error: operand expected (error token is "##a")` *(status 1)* | **2>** `<shell>: ##a: arithmetic syntax error` *(status 1)* | `[97][65][10][65]` |
+| `arith/a-character-code-missing-its-character` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "##"` *(status 2)* | **2>** `<shell>: line 1: ##: arithmetic syntax error: operand expected (error token is "##")` *(status 1)* | **2>** `<shell>: line 1: ##: arithmetic syntax error: operand expected (error token is "##")` *(status 127)* | **2>** `<shell>: ##: syntax error: operand expected (error token is "##")` *(status 1)* | **2>** `<shell>: ##: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: character missing after ##` *(status 1)* |
+| `arith/a-radix-literal-is-not-a-character-code` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "16#ff"` *(status 2)* | `[255][5]` | `[255][5]` | `[255][5]` | `[255][5]` | `[255][5]` |
 
 - `let/evaluates-and-assigns` — `let` is `(( ))` with the expression as a word rather than inside parentheses. bash, ksh93 and zsh have it; dash has only `$(( ))` and reports it as a command it never heard of
   ```sh
@@ -4116,6 +4122,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `arith/assigning-to-an-element` — the subscript belongs to the assignment's target, so `a[1] = 9` writes an element rather than evaluating one and throwing it away
   ```sh
   a=(3 4); (( a[1] = 9 )); echo "${a[1]}"
+  ```
+- `arith/a-character-code-on-a-name` — the leading `#` in an expression, which is a character code in zsh and an arithmetic syntax error in bash 5.3, bash 3.2, bash as sh, ksh93 and dash alike — every one of them naming the operand it could not read. One shell has an operator and five refuse it, so the split is additive and belongs in the grammar rather than on the semantics vector
+  ```sh
+  b=zebra; echo "[$((#b))]"
+  ```
+- `arith/a-character-code-is-not-a-length` — the reason the operator is worth a case at all: `$((#a))` looks like a length and is not one. It is 49 in zsh — the code of the `1` that begins the array's first element — where the count is `$(( $#a ))`. An implementation that read it as a length would answer 2 here and pass every test written on a single-character value
+  ```sh
+  a=(1 2); echo "[$((#a))]"
+  ```
+- `arith/a-character-code-with-nothing-to-take` — the quiet edges, both zero in the shell that has the operator: a name never set, and a name holding the empty string. Neither reports, which is what makes an implementation that refused either one louder than the shell a script was written for. A third edge — a `#` with no operand at all — is left out of the corpus on purpose: `$(( # ))` makes bash lose the closing parenthesis of the whole word, so the row would be about its scanner rather than about the operator
+  ```sh
+  b=; echo "[$((#nothing))][$((#b))]"
+  ```
+- `arith/a-character-code-on-a-character` — the doubled spelling, which takes the character written out rather than a parameter — and decodes the escapes `$'…'` decodes, so the third is a newline and not the letter n. Four probes in one case because the escape table is where an implementation is most likely to stop early
+  ```sh
+  echo "[$((##a))][$((##A))][$((##\n))][$((##\x41))]"
+  ```
+- `arith/a-character-code-missing-its-character` — the operator with nothing after it, worded by the shell that has it as neither of the two failures the rest of arithmetic has — `character missing after ##` — and fatal to the command. The shells without the operator reach a refusal too, by the ordinary route, which is what makes this a row about wording rather than about behavior
+  ```sh
+  echo "[$((##))]"; echo after
+  ```
+- `arith/a-radix-literal-is-not-a-character-code` — the one place the two spellings of `#` could collide: `base#digits` is a literal in every shell with arithmetic and its `#` follows digits, where the character code stands where an operand belongs. Unanimous except in dash, which has no based literal — and the row exists so that adding the operator cannot quietly cost the literal
+  ```sh
+  echo "[$((16#ff))][$((2#101))]"
   ```
 
 ## shell options

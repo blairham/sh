@@ -3478,6 +3478,36 @@ echo "st=$?"`,
 		Why:     "an IFS that is set and empty has no first character to join on, and no shell in the panel joins there — two fields, where a join would leave one. The guard on the axis: it must not be asked where there is nothing to join with",
 	},
 	{
+		ID: "expansion/an-unquoted-star-does-not-always-join-the-parameters", Category: "semantics axes",
+		Snippet: `IFS=:; set -- x y; set -- $*; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the same question on the bare spelling, which had a branch of its own: `$*` joined on the scalar path and the split that would have undone it never ran in zsh, so one field `x:y` came out where every shell in the panel gives two. One answer settles both faces",
+	},
+	{
+		ID: "expansion/an-unquoted-star-subscript-under-a-non-whitespace-separator", Category: "semantics axes",
+		Snippet: `IFS=:; a=("x:" y); set -- ${a[*]}; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the join itself, on the star spelling, with nothing empty anywhere: bash makes `x::y` and answers three fields, and ksh93 splits each element on its own, loses the trailing separator and answers two. It is the same answer `${a[@]}` asks — measured, an unquoted `[*]` and an unquoted `[@]` are the same fields in every shell in the panel",
+	},
+	{
+		ID: "expansion/an-unquoted-star-subscript-and-at-agree", Category: "expansion",
+		Snippet: `IFS=:; a=("x:" y); printf "@"; printf "[%s]" ${a[@]}; printf " *"; printf "[%s]" ${a[*]}; echo`,
+		Why:     "the two spellings side by side on the same elements, which is what says one answer settles both rather than the star being a question the `[@]` path had already answered differently. They agree in every shell in the panel — with one shape excepted, recorded rather than folded in here: ksh93 alone parts them on a *trailing* empty element, where `${a[@]}` keeps a field and `${a[*]}` does not. That is the same ksh93 oddity `expansion/a-trailing-empty-element-under-a-non-whitespace-separator` records, seen from the second spelling, and neither reading of the join explains it",
+	},
+	{
+		ID: "expansion/an-unquoted-star-subscript-is-not-always-a-pattern", Category: "expansion",
+		Snippet: `: > zz1; a=("zz*" other); set -- ${a[*]}; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the stage this path never performed at all: the result of an expansion is matched against the filesystem only where the dialect says it is, and the star join returned its fields raw. zsh leaves the star alone and bash and ksh93 expand it, and ours matched the directory in every dialect — the same silent wrong answer #981 fixed on the `[@]` path",
+	},
+	{
+		ID: "expansion/a-quoted-star-subscript-always-joins", Category: "expansion",
+		Snippet: `IFS=-; a=("x y" z); set -- "${a[*]}"; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the guard on the half that must not move: inside quotes every shell measured joins on the first character of IFS and yields one field, which is what the two spellings exist to differ about. The axis is the *unquoted* spelling and this row is what watches the boundary",
+	},
+	{
+		ID: "expansion/a-quoted-star-always-joins-the-parameters", Category: "expansion",
+		Snippet: `IFS=-; set -- "x y" z; set -- "$*"; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the same guard on the bare spelling, beside `\"$@\"` keeping one field per parameter — the pair that says quoting is what decides the join and the dialect is what decides it without quotes",
+	},
+	{
 		ID: "expansion/an-unquoted-star-subscript-does-not-always-join", Category: "expansion",
 		Snippet: `a=("x y" z); printf "[%s]" ${a[*]}; echo`,
 		Why:     "the neighbor of the `[@]` rows and a question of its own: bash and ksh93 join the elements on IFS and split the result, which is why they answer three fields, while zsh does not join an *unquoted* `[*]` at all and answers two — the same two `${a[@]}` gives it. Quoted, all three join. So whether an unquoted `[*]` joins is not decided by whether the shell splits, and no arrangement of the splitting answer produces zsh's reading here",

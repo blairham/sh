@@ -596,11 +596,28 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 				// `"${*[1,2]}"` is one field too — while `"${@[1,2]}"` is
 				// one field per parameter, because `@` keeps its fields
 				// however it is subscripted.
-				joined := strings.Join(elems, ifsFirst(ifs, set))
 				if s.Quoting != syntax.Unquoted {
-					return []string{globEscape(joined)}, true
+					return []string{globEscape(strings.Join(elems, ifsFirst(ifs, set)))}, true
 				}
-				return splitFields(joined, ifs, set), true
+				// Unquoted, the join is a dialect's answer rather than the
+				// spelling's, and it is the same answer `[@]` asks — measured,
+				// an unquoted `[*]` and an unquoted `[@]` are the same fields
+				// in every shell in the panel. So this hands the elements to
+				// the list path instead of joining them here: bash joins them
+				// there and zsh, ksh93 and dash do not.
+				//
+				// The join here was unconditional, which is bash's answer
+				// given to all four. zsh does not join an unquoted `[*]` at
+				// all — `a=("x y" z); printf "[%s]" ${a[*]}` is `[x y][z]`
+				// there, which no arrangement of the splitting answer reaches,
+				// since the element boundary the join destroys cannot be put
+				// back by any later stage.
+				//
+				// It also picks up the two stages `[@]` already asks about:
+				// this path never glob-escaped, so `a=("zz*" other)` matched
+				// the directory in the zsh dialect, where the shell leaves the
+				// star alone.
+				return r.elementFields(elems, sp), true
 			}
 			if s.Quoting != syntax.Unquoted {
 				if len(elems) == 0 && e.Op == syntax.ParamNone {
@@ -656,7 +673,24 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 		}
 		return r.elementFields(elems, sp), true
 	}
-	if e.Name != "@" || e.Op != syntax.ParamNone || e.Length {
+	if e.Op != syntax.ParamNone || e.Length {
+		return nil, false
+	}
+	if e.Name == "*" {
+		// A bare `$*` unquoted is the same question the subscripted spelling
+		// asks, reached by its own branch: it was joining unconditionally too,
+		// on the scalar path, so `IFS=:; set -- x y; printf "[%s]" $*` was one
+		// field `x:y` in the zsh dialect where the shell gives two.
+		//
+		// Only unquoted. `"$*"` is one field holding the join in every shell
+		// measured, and it stays on the scalar path that produces it — the
+		// same division the subscripted spelling keeps above.
+		if s.Quoting != syntax.Unquoted {
+			return nil, false
+		}
+		return r.elementFields(r.Params, sp), true
+	}
+	if e.Name != "@" {
 		return nil, false
 	}
 	if s.Quoting != syntax.Unquoted {

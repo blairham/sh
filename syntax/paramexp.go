@@ -209,6 +209,21 @@ type ParamExpr struct {
 	// printer write the span back exactly as written.
 	TildeFlags int
 
+	// SplitFlags is how many `=` characters were written in the same slot —
+	// `${=x}` carries 1 and `${==x}` carries 2. Zero is the ordinary
+	// expansion.
+	//
+	// A count for the same reason TildeFlags is one: parity is the meaning.
+	// An odd number splits the substituted value into words on `IFS` and an
+	// even one refuses to, both regardless of the option that would
+	// otherwise decide, which is measured.
+	//
+	// Separate from TildeFlags rather than one run of "flag characters",
+	// because the two decide different questions and a script writes both:
+	// `${=~g}` and `${~=g}` are the same expansion, and each half has to be
+	// counted on its own for parity to mean anything.
+	SplitFlags int
+
 	// Bad marks an expansion whose operator the grammar did not recognize,
 	// in a dialect that diagnoses that when the expansion is reached rather
 	// than when it is read. Src holds the inside of the braces for the
@@ -271,12 +286,26 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 		}
 	}
 
-	// A run of `~` stands between the flag group and everything else, which
-	// is where the shell that has it puts it: `${(U)~g}` reads, `${~(U)g}`
-	// is a bad substitution, and `${(U)~#g}` is a length — so after the
-	// group and in front of the `#` below.
-	for p.dialect.ParamTildeFlag && strings.HasPrefix(s, "~") {
-		e.TildeFlags++
+	// A run of `~` and `=` stands between the flag group and everything
+	// else, which is where the shell that has them puts them: `${(U)~g}`
+	// reads, `${~(U)g}` is a bad substitution, and `${(U)~#g}` is a length —
+	// so after the group and in front of the `#` below. The two characters
+	// share the slot and are interchangeable within it, measured: `${=~g}`
+	// and `${~=g}` are the same expansion.
+	//
+	// In front of the `#` is what keeps `${#=word}` the assignment it is in
+	// that shell — `$#` with a default assigned to it — rather than a
+	// length with a flag inside it.
+scan:
+	for s != "" {
+		switch {
+		case p.dialect.ParamTildeFlag && s[0] == '~':
+			e.TildeFlags++
+		case p.dialect.ParamSplitFlag && s[0] == '=':
+			e.SplitFlags++
+		default:
+			break scan
+		}
 		s = s[1:]
 	}
 
@@ -315,7 +344,8 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	if e.Inner == nil {
 		e.Name, s = scanParamName(s)
 	}
-	if e.Name == "" && !e.HasFlags && e.TildeFlags == 0 && e.Inner == nil {
+	if e.Name == "" && !e.HasFlags && e.TildeFlags == 0 && e.SplitFlags == 0 &&
+		e.Inner == nil {
 		if !p.dialect.BadSubstitutionAtParseTime {
 			// The majority defers an unreadable expansion to the run, the
 			// same way an unknown operator is deferred: a `${%x}` in a
@@ -334,7 +364,8 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	}
 	// With a flag group the name may be empty — `${(U)}` is an empty string
 	// and `${(%):-%x}` is all operator — so an operator may still follow.
-	// A tilde run relaxes it the same way: `${~}` is the empty string too.
+	// A tilde run relaxes it the same way, and so does an `=` run: `${~}`
+	// and `${=}` are the empty string too.
 
 	// `${!name@}` and `${!name*}` are the names beginning with name, not a
 	// value at all. Only after `!`, and only when the whole rest is the one

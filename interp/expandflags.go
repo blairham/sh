@@ -30,13 +30,13 @@ const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwW"
 // head has the meaning expandSpan gives it: whether this span stands at the
 // head of the word being built, which is what the `${~spec}` flag's tilde
 // half asks about.
-func (r *Runner) expandFlagged(s syntax.Span, head bool) ([]string, bool) {
+func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]string, bool) {
 	e := s.Param
 	if e == nil || !e.HasFlags {
 		return nil, false
 	}
 	quoted := s.Quoting != syntax.Unquoted
-	words, isList, ok := r.flaggedWords(e, quoted)
+	words, isList, ok := r.flaggedWords(e, sp, quoted)
 	if !ok {
 		return nil, true
 	}
@@ -63,7 +63,11 @@ func (r *Runner) expandFlagged(s syntax.Span, head bool) ([]string, bool) {
 	// `"${(@s.:.)x}"` keeps the third. `$@` and an `[@]` subscript keep
 	// their empties in quotes without needing the flag, exactly as they do
 	// without one.
-	keepEmpty := quoted && r.flagKeepsFields(e)
+	// A `${(U)=v}` splits on IFS inside the group, and the fields it made
+	// are kept whole in quotes: measured, `v=' a '; "${(U)=v}"` is three
+	// fields, the outer two empty. That is the same rule `(@)` asks for,
+	// reached by a different flag.
+	keepEmpty := quoted && (r.flagKeepsFields(e) || splitFlagInGroup(e, sp))
 	out := make([]string, 0, len(words))
 	for _, w := range words {
 		if w == "" && !keepEmpty {
@@ -79,7 +83,7 @@ func (r *Runner) expandFlagged(s syntax.Span, head bool) ([]string, bool) {
 
 // flaggedWords runs the flag pipeline and returns the resulting words, raw.
 // ok is false when the expansion failed and the failure has been reported.
-func (r *Runner) flaggedWords(e *syntax.ParamExpr, quoted bool) (words []string, isList, ok bool) {
+func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) (words []string, isList, ok bool) {
 	if e.FlagsErrPos > 0 {
 		// A character the group could not carry, deferred here by the
 		// parser: reached in a branch never taken, it is no error at all,
@@ -148,7 +152,9 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, quoted bool) (words []string,
 		words, isList = []string{itoa(r.flaggedLength(e, words, isList))}, false
 	}
 
-	hasSplit := strings.ContainsAny(e.Flags, "fs")
+	// An `=` beside the group is this same step with IFS for a separator.
+	ifsSplit := splitFlagInGroup(e, sp)
+	hasSplit := strings.ContainsAny(e.Flags, "fs") || ifsSplit
 	// Rule 10: forced joining, ahead of a split — `${(s.:.)a}` on an array
 	// joins its elements with IFS's first character and splits the result.
 	if (strings.ContainsRune(e.Flags, 'j') || hasSplit) && !joined && isList {
@@ -161,6 +167,14 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, quoted bool) (words []string,
 	if hasSplit {
 		var split []string
 		for _, w := range words {
+			if ifsSplit {
+				// `${=spec}` splitting, which is field splitting on IFS and
+				// not a separator the group named. Quoted it keeps the
+				// fields at the edges — see interp/splitflag.go.
+				ifs, set := r.ifs()
+				split = append(split, splitFieldsEdges(w, nil, ifs, set, quoted)...)
+				continue
+			}
 			split = append(split, splitFlagged(w, e)...)
 		}
 		words, isList = split, true

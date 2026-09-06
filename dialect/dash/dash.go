@@ -41,6 +41,11 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// The panel's only shell with no multibyte decoder: `s=héllo; echo
+	// ${#s}` is 6 here in every locale, where bash, ksh93 and zsh answer 6
+	// under `LC_ALL=C` and 5 under a UTF-8 one. Measured 2026-09-05 across
+	// LC_ALL, LC_CTYPE and LANG, and dash does not move for any of them.
+	s.MultibyteEncodingIsHonored = interp.No
 	// The one shell that refuses the -h letter POSIX names.
 	s.SetHasTheHLetter = interp.No
 	// Job control wants the tty: with none, `set -m` earns the remark

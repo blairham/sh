@@ -72,6 +72,26 @@ greediness syntax inside the pattern.
 
 `${#x}` is the length of the value — `x=abcd` gives 4, unanimously.
 
+**In what unit** is not unanimous, and is not a property of the shell
+alone:
+
+| probe | `LC_ALL=C` | `LC_ALL=C.UTF-8` |
+| --- | --- | --- |
+| `s=héllo; ${#s}` | 6 everywhere | 5, and 6 in dash |
+| `s=日本語; ${#s}` | 9 everywhere | 3, and 9 in dash |
+
+So the length is what the locale's encoding calls a character, and dash
+is the one member of the panel with no multibyte decoder to consult it
+with. Semantics axis `MultibyteEncodingIsHonored`; the locale itself is
+runtime state read off the runner rather than a second axis, and
+`docs/spec/semantics.md` has the precedence, the codesets and the
+undecodable byte.
+
+`${s:off:len}` and a subscript on a scalar count the same unit, which is
+the part a partial fix gets wrong: an offset in bytes against a length in
+characters lands in the middle of a character. Pattern matching does
+*not* follow yet (#905).
+
 `${#@}` and `${#*}` are not unanimous:
 
 | probe, after `set -- p q r` | dash | bash | ksh93 | zsh |
@@ -264,8 +284,13 @@ unanimous and is what this implementation gives; bash's advisory is
 recorded rather than modeled, the same treatment its out-of-range
 subscript warning gets above.
 
-Characters and not bytes: `s=héllo; "${s[2]}"` is `é` and `"${s[2,3]}"`
-is `él`.
+Characters and not bytes — where the locale says a character is more
+than a byte. `s=héllo; "${s[2]}"` is `é` and `"${s[2,3]}"` is `él` under
+`LC_ALL=C.UTF-8`, and under `LC_ALL=C` the same two are the single byte
+`\xc3` and the pair that spells `é`, measured on zsh 5.9.2. It is the
+same `MultibyteEncodingIsHonored` question `${#s}` asks, so the two
+agree by construction; reading runes unconditionally answered the UTF-8
+column in both.
 
 ### A subscript on a parameter that is not a name
 

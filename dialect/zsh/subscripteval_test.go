@@ -82,7 +82,19 @@ func TestASubscriptOnAStringIsACharacter(t *testing.T) {
 		{"a range clamped at the start", `s=hello; echo "[${s[-6,2]}]"`, "[he]\n"},
 		{"a range to the last", `s=hello; echo "[${s[3,99]}]"`, "[llo]\n"},
 		{"a range one past the last", `s=hello; echo "[${s[4,6]}]"`, "[lo]\n"},
-		{"a character is not a byte", `s=héllo; echo "[${s[2]}][${s[2,3]}]"`, "[é][él]\n"},
+		// The locale decides what a character is, and zsh reads it off a
+		// plain assignment: measured on zsh 5.9.2, `${s[2]}` of `héllo` is
+		// `é` under a UTF-8 locale and the lone byte `\xc3` under C.
+		{
+			"a character is not a byte",
+			`LC_ALL=en_US.UTF-8; s=héllo; echo "[${s[2]}][${s[2,3]}]"`,
+			"[é][él]\n",
+		},
+		{
+			"and under a single-byte locale it is one",
+			`LC_ALL=C; s=héllo; echo "[${s[2]}][${s[2,3]}]"`,
+			"[\xc3][é]\n",
+		},
 		{"an operator reaches it", `s=hello; echo "[${s[2]#h}]"`, "[e]\n"},
 		{"without braces", `s=hello; echo "[$s[2]]"`, "[e]\n"},
 	} {

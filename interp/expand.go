@@ -925,7 +925,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 				if r.subscriptYieldsAList(e) {
 					return itoa(len(elems))
 				}
-				return itoa(len(strings.Join(elems, "")))
+				return itoa(r.stringLength(strings.Join(elems, "")))
 			}
 			// nil rather than empty is what says the element was not there:
 			// an element holding "" is set, and `${a[0]:-d}` has to tell the
@@ -973,10 +973,11 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			// way.
 			return itoa(n)
 		}
+		n := r.stringLength(value)
 		if r.unspecified {
 			return ""
 		}
-		return itoa(len(value))
+		return itoa(n)
 	}
 
 	// The colon extends the test from "unset" to "unset or empty". That one
@@ -1472,19 +1473,27 @@ func (r *Runner) substringRange(value string, e *syntax.ParamExpr) string {
 }
 
 // substring takes a slice of the value.
+//
+// The offset and the length count the same units `${#x}` does — characters
+// where the dialect and the locale both say so, bytes otherwise — which is
+// why it walks a slice of units rather than indexing the string. Measured
+// under a UTF-8 locale, `s=héllo; ${s:1:2}` is `él` in bash, ksh93 and zsh
+// and `${s:2}` is `llo`; under `LC_ALL=C` the same shells give `é` and `llo`
+// with the `é` cut in half, which is what indexing bytes produces.
 func substring(value string, off int, e *syntax.ParamExpr, r *Runner) string {
 	lenWord := e.Arg2
+	units := r.units(value)
 	if off < 0 {
-		off += len(value)
+		off += len(units)
 	}
 	if off < 0 {
 		off = 0
 	}
-	if off > len(value) {
+	if off > len(units) {
 		return ""
 	}
 	if lenWord == nil {
-		return value[off:]
+		return strings.Join(units[off:], "")
 	}
 	n := r.numOf(lenWord, e, nil)
 	if n < 0 {
@@ -1494,15 +1503,15 @@ func substring(value string, off int, e *syntax.ParamExpr, r *Runner) string {
 			return ""
 		}
 		// A negative length is an offset from the end.
-		n = len(value) + n - off
+		n = len(units) + n - off
 	}
 	if n < 0 {
 		n = 0
 	}
-	if off+n > len(value) {
-		n = len(value) - off
+	if off+n > len(units) {
+		n = len(units) - off
 	}
-	return value[off : off+n]
+	return strings.Join(units[off:off+n], "")
 }
 
 func (r *Runner) joinWord(w *syntax.Word) string {

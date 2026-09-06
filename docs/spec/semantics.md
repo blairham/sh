@@ -5405,6 +5405,65 @@ A range and a character go together — `${s[2,4]}` is `ell` in the shell
 that reads characters — but they are two axes, because `${a[1,3]}` on an
 *array* is a range with no character in it.
 
+**`MultibyteEncodingIsHonored`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Decodes the character encoding the locale names, so that `${#s}`,
+`${s:off:len}` and a subscript on a scalar count characters rather than
+bytes.
+
+Measured 2026-09-05 on bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93u+,
+zsh 5.9.2 and dash:
+
+    s=héllo; echo ${#s}     LC_ALL=C          → 6 in all six
+                            LC_ALL=C.UTF-8    → 5 in all but dash, which says 6
+    s=日本語; echo ${#s}     LC_ALL=C.UTF-8    → 3 in all but dash, which says 9
+
+So the panel does **not** divide over whether a character is a byte. It
+divides over whether the locale is consulted at all: dash has no
+multibyte decoder and gives the byte count in every locale there is,
+while the other four give the byte count too whenever the locale names a
+single-byte encoding. Silent either way — both answers are plausible
+numbers, and nothing is reported.
+
+**The locale is not a second axis.** Which encoding is in force is
+runtime state, read off the runner's own variables the way `PATH` and
+`IFS` are, and it moves inside a running shell: `LC_ALL=C; s=héllo; echo
+${#s}` gives 6 in every panel member with nothing exported. An axis keyed
+on it would record the machine the measurement was taken on rather than
+the rule — the same reasoning `driver/startup.go` writes down for POSIX
+mode being read off the runner (#691, #733).
+
+The precedence is measured rather than assumed: a non-empty `LC_ALL`
+beats a non-empty `LC_CTYPE` beats `LANG`, and an *empty* one of the
+first two is skipped rather than being an answer of its own, so
+`LC_ALL= LANG=C.UTF-8` counts characters. A locale name with no codeset
+in it — `LC_ALL=UTF-8`, which is not a locale name — is single-byte
+here; the panel splits on it, and refusing it is what ksh93, zsh and
+dash do.
+
+This implementation decodes UTF-8 and nothing else. The single-byte
+encodings are right by that rule (`C`, `POSIX` and `en_US.ISO8859-1` all
+measure as bytes across the panel); `eucJP` and the other multibyte
+codesets would each be a decoder, and are a known limit rather than an
+answer.
+
+Asked only where the two readings differ — a value whose bytes are all
+ASCII is the same length and has its positions in the same places under
+both — so the core, which refuses nearly every axis, still answers
+`${#x}` on ordinary text.
+
+An undecodable byte is one character of one byte and is handed back as
+itself, which is unanimous: `s=$(printf 'a\200b')` has length 3 in every
+panel member, and zsh's `${s[2]}` is that byte rather than a replacement
+character.
+
+**Pattern matching does not yet follow.** `?`, `[…]` and the character
+classes still walk bytes here, so `${s#???}` on `héllo` is `llo` where
+bash, ksh93 and zsh give `lo` under a UTF-8 locale. That is the same
+axis reached through a different code path and is #905; the corpus
+records both the probe that separates the two readings and the
+`${s%??}` one that cannot.
+
 **`NegativeSubscriptPastTheStartInserts`** — bash no · dash unspecified · ksh93 no · zsh yes
 
 Places a new element in front of every other when a negative subscript

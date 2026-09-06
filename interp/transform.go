@@ -192,7 +192,7 @@ func (r *Runner) attributeLetters(name string) string {
 	if _, ok := r.Arrays[name]; ok && !r.removed[name] {
 		b.WriteByte('a')
 	}
-	if _, ok := r.AssocArrays[name]; ok && !r.removed[name] {
+	if _, ok := r.assocFor(name); ok && !r.removed[name] {
 		b.WriteByte('A')
 	}
 	if r.integer[name] {
@@ -327,7 +327,7 @@ func (r *Runner) keysAndValues(e *syntax.ParamExpr, elems []string) []string {
 // implementation keeps everywhere: subscript order for an indexed array, the
 // keys sorted for an associative one — the shells promise no order there.
 func (r *Runner) arrayPairs(name string) (keys, vals []string, assoc, stored bool) {
-	if a, ok := r.AssocArrays[name]; ok && !r.removed[name] {
+	if a, ok := r.assocFor(name); ok && !r.removed[name] {
 		ks := a.keys()
 		vs := make([]string, len(ks))
 		for i, k := range ks {

@@ -39,6 +39,39 @@ func TestArrayLengthWithoutASubscriptIsAnAxis(t *testing.T) {
 	}
 }
 
+// And the axis is asked at **one** element as much as at several, which is a
+// correction rather than a new question. The reading was skipped there on the
+// grounds that a one-element array is its own element either way — true of the
+// value and false of its length, which is the whole of what `${#a}` asks. An
+// array of one three-character word is 1 under one answer and 3 under the
+// other, and answering 5 for both was a plausible number at status 0 (#1060). The
+// associative shape lands in the same place and is graded in the corpus,
+// where the other axes a keyed array asks are answered by a dialect.
+func TestArrayLengthAsksTheAxisAtOneElementToo(t *testing.T) {
+	for _, tc := range []struct {
+		src, count, width string
+	}{
+		{`a=(hello); echo "${#a}"`, "1", "5"},
+		// The empty and the several-element cases, which agreed before and
+		// still do — they are here so that a change moving them would show.
+		{`a=(); echo "${#a}"`, "0", "0"},
+		{`a=(hello there); echo "${#a}"`, "2", "5"},
+	} {
+		out, _ := axisRun(t, tc.src, func(s *Semantics) {
+			s.ArrayLengthWithoutSubscriptIsCount = Yes
+		})
+		if strings.TrimSpace(out) != tc.count {
+			t.Errorf("%s counting: got %q, want %q", tc.src, out, tc.count)
+		}
+		out, _ = axisRun(t, tc.src, func(s *Semantics) {
+			s.ArrayLengthWithoutSubscriptIsCount = No
+		})
+		if strings.TrimSpace(out) != tc.width {
+			t.Errorf("%s measuring: got %q, want %q", tc.src, out, tc.width)
+		}
+	}
+}
+
 // TestABareArrayNameBeingTheListIsAnAxis — an unquoted `$a` is the elements
 // in one shell and the first element in the others (#929).
 //

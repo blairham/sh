@@ -170,10 +170,17 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 
 // The bare `export` and `readonly` drop the command word, which their own
 // `-p` does not — and this shell's `readonly -p` is not even `readonly`.
+//
+// `builtins` is in both readonly listings and carries no value in either,
+// which is measured rather than an artifact: this shell's `$builtins` is a
+// readonly association it *produces*, and zsh's is too — `set` there writes
+// the bare name and `typeset -r` writes the bare name, because the parameter
+// is hidden. Writing the table out instead would put every builtin this shell
+// has into a listing a caller sources back (#1060).
 func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
 		`export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
-	want := "V='a b'\nR=2\nexport V='a b'\ntypeset -r R=2\n"
+	want := "V='a b'\nR=2\nbuiltins\nexport V='a b'\ntypeset -r R=2\ntypeset -Ar builtins\n"
 	if st != 0 || out != want {
 		t.Errorf("got %q status %d, want %q at 0", out, st, want)
 	}

@@ -489,19 +489,29 @@ func (r *Runner) unsetFunction(name string) int {
 		}
 		return 0
 	}
+	r.removeFunction(name)
+	return 0
+}
+
+// removeFunction takes a function out, and gives the name back to the
+// prelude's where there was one.
+//
+// One mechanism for what is two spellings: `unset -f pushd` and — in the
+// dialect that has it — `unset "functions[pushd]"` are the same operation
+// asked for two ways, and a shell where they left the name in two different
+// states would be two shells. A redefinition took the voice away and removing
+// it gives the name back: the shells with the builtin uncover it when the
+// function shadowing it goes, so `pushd() { echo mine; }; unset -f pushd;
+// pushd /tmp` pushes in both of them. Reconstructing the namespace boundary
+// by hand, because a dialect written as shell has one table where they have
+// two.
+func (r *Runner) removeFunction(name string) {
 	delete(r.funcs, name)
 	delete(r.funcFiles, name)
 	delete(r.exportedFuncs, name)
 	if prelude := r.preludeFuncs[name]; prelude != nil {
-		// A redefinition took the voice away and removing it gives the name
-		// back: the shells with the builtin uncover it when the function
-		// shadowing it goes, so `pushd() { echo mine; }; unset -f pushd;
-		// pushd /tmp` pushes in both of them. Reconstructing the namespace
-		// boundary by hand, because a dialect written as shell has one table
-		// where they have two.
 		r.funcs[name] = prelude
 	}
-	return 0
 }
 
 // badSubscriptToUnset reports an `unset` operand whose subscript would not

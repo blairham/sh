@@ -376,6 +376,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `subst/a-case-inside-a-substitution` | `[yes]` | `[yes]` | `[yes]` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;;'~<shell>: -c: line 0: `x=$(case a in a) echo yes;; esac); echo "[$x]"'` *(status 2)* | `[yes]` | `[yes]` |
 | `subst/a-substitution-inside-an-arm` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` |
 | `glob/matches-are-in-order` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` |
+| `length/of-a-one-element-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `one=5~two=5~none=0` | `one=5~two=5~none=0` | `one=5~two=5~none=0` | `one=5~two=5~none=3` | `one=1~two=2~none=0` |
 
 - `expand/results-not-rescanned-quote` — a quote in expanded text is a literal quote
   ```sh
@@ -1199,6 +1200,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `glob/matches-are-in-order` — byte order, which every shell in the panel gives under the LC_ALL=C both sweeps run in. Outside that locale three of the four collate and dash does not, and the two platforms disagree about where punctuation goes — none of which this can record, which is exactly why the ordering it does record is worth pinning
   ```sh
   mkdir -p g && cd g && : > Apple && : > banana && : > Cherry && : > _under && : > 1digit && echo *
+  ```
+- `length/of-a-one-element-array` — the shells split on what `${#a}` of an array means — one counts the elements and the others measure the scalar a bare name yields — and the split is visible at *one* element as much as at two: 1 against 5 for `a=(hello)`. A reading that skipped the question at one element on the grounds that such an array is its own element is true of the value and false of its length, and answers a plausible number at status 0
+  ```sh
+  a=(hello); echo "one=${#a}"; a=(hello there); echo "two=${#a}"; a=(); echo "none=${#a}"
   ```
 
 ## semantics axes
@@ -9639,6 +9644,62 @@ grades it and nothing drift-checks it either, for the same reason.
 - `env/the-interactive-file-that-is-not-there` — not a failure in any of them. Every shell starts for the first time without one, and a complaint would be the first thing anybody saw — the same answer the non-interactive file gives, recorded separately because they are read on different routes
   ```sh
   echo main
+  ```
+
+## variables
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `parameter/functions-is-a-view-of-the-function-table` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `a=[ABSENT] n=0~b=[ABSENT] n=0~c=[ABSENT] n=0` | `a=[ABSENT] n=0~b=[ABSENT] n=0~c=[ABSENT] n=0` | `a=[ABSENT] n=0~b=[ABSENT] n=0~c=[ABSENT] n=0` | `a=[ABSENT] n=0~b=[ABSENT] n=0~c=[ABSENT] n=0` | `a=[ABSENT] n=0~b=[	:] n=1~c=[ABSENT] n=0` |
+| `parameter/a-function-body-is-what-a-listing-prints-between-the-braces` | `[[f]]` | `[[f]]` | `[[f]]` | `[[f]]` | `[[f]]` | `[	echo one~	if [[ 1 = 1 ]]~	then~		echo two~	fi]` |
+| `parameter/assigning-to-functions-defines-one` | `n=0` **2>** `<shell>: 1: functions[h]=echo made: not found~<shell>: 1: h: not found~<shell>: 1: unset: functions[h]: bad variable name` *(status 2)* | `n=9~gone=0` **2>** `<shell>: line 1: h: command not found` | `n=9~gone=0` **2>** `<shell>: line 1: h: command not found` | `n=9~gone=0` **2>** `<shell>: h: command not found` | `n=9~gone=0` **2>** `<shell>: h: not found` | `made~n=1~gone=0` |
+| `parameter/options-is-a-view-of-the-option-namespace` | `n=0 a=[extendedglob]~b=[extendedglob]~c=[extendedglob]` **2>** `<shell>: 1: setopt: not found~<shell>: 1: unsetopt: not found` | `n=0 a=[extendedglob]~b=[extendedglob]~c=[extendedglob]` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `n=0 a=[extendedglob]~b=[extendedglob]~c=[extendedglob]` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `n=0 a=[extendedglob]~b=[extendedglob]~c=[extendedglob]` **2>** `<shell>: setopt: command not found~<shell>: unsetopt: command not found` | `n=0 a=[extendedglob]~b=[extendedglob]~c=[extendedglob]` **2>** `<shell>: setopt: not found~<shell>: unsetopt: not found` | `n=197 a=off~b=on~c=off` |
+| `parameter/the-compat-option-spellings-are-keys-of-their-own` | `[[log]] [[histnofunctions]]~[[log]] [[histnofunctions]]` **2>** `<shell>: 1: setopt: not found` | `[[log]] [[histnofunctions]]~[[log]] [[histnofunctions]]` **2>** `<shell>: line 1: setopt: command not found` | `[[log]] [[histnofunctions]]~[[log]] [[histnofunctions]]` **2>** `<shell>: line 1: setopt: command not found` | `[[log]] [[histnofunctions]]~[[log]] [[histnofunctions]]` **2>** `<shell>: setopt: command not found` | `[[log]] [[histnofunctions]]~[[log]] [[histnofunctions]]` **2>** `<shell>: setopt: not found` | `[on] [off]~[off] [on]` |
+| `parameter/assigning-to-options-is-setopt` | `unknown=127~bad=127 still=[[extendedglob]]` **2>** `<shell>: 1: options[extendedglob]=on: not found~<shell>: 1: [[: not found~<shell>: 1: options[nosuchopt]=on: not found~<shell>: 1: options[extendedglob]=maybe: not found` | `unknown=0~bad=0 still=[maybe[extendedglob]]` | `unknown=0~bad=0 still=[maybe[extendedglob]]` | `unknown=0~bad=0 still=[maybe[extendedglob]]` | `unknown=0~bad=0 still=[maybe[extendedglob]]` | `on-now~unknown=0~bad=0 still=[on]` **2>** `<shell>:1: no such option: nosuchopt~<shell>:1: invalid value: maybe` |
+| `parameter/builtins-drops-one-that-is-switched-off` | `a=[[cd]]` **2>** `<shell>: 1: disable: not found~<shell>: 1: Bad substitution` *(status 2)* | `a=[[cd]]~b=[ABSENT]~c=[[cd]]` **2>** `<shell>: line 1: disable: command not found` | `a=[[cd]]~b=[ABSENT]~c=[[cd]]` **2>** `<shell>: line 1: disable: command not found` | `a=[[cd]]~b=[ABSENT]~c=[[cd]]` **2>** `<shell>: disable: command not found` | `a=[[cd]]~b=[ABSENT]~c=[[cd]]` **2>** `<shell>: disable: not found~<shell>: enable: not found` | `a=[defined]~b=[ABSENT]~c=[defined]` |
+| `parameter/builtins-is-readonly` | `st=127` **2>** `<shell>: 1: builtins[x]=y: not found` | `st=0` | `st=0` | `st=0` | `st=0` | **2>** `<shell>:1: read-only variable: builtins` *(status 1)* |
+| `parameter/aliases-is-a-view-of-the-alias-table` | `b=[[q]]` **2>** `<shell>: 1: Bad substitution` *(status 2)* | `b=[[q]]~c=[ABSENT]` **2>** `<shell>: line 1: alias: zz: not found` *(status 1)* | `b=[[q]]~c=[ABSENT]` **2>** `<shell>: line 1: alias: zz: not found` *(status 1)* | `b=[[q]]~c=[ABSENT]` **2>** `<shell>: line 0: alias: zz: not found` *(status 1)* | `b=[[q]]~c=[ABSENT]` **2>** `zz: alias not found` *(status 1)* | `b=[ls]~c=[ABSENT]~zz='echo z'` |
+| `parameter/commands-is-a-view-of-the-path-search` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `absent=[ABSENT]~a=[ABSENT]~b=[ABSENT]` | `absent=[ABSENT]~a=[ABSENT]~b=[ABSENT]` | `absent=[ABSENT]~a=[ABSENT]~b=[ABSENT]` | `absent=[ABSENT]~a=[ABSENT]~b=[ABSENT]` | `absent=[ABSENT]~a=[/bin/ls]~b=[ABSENT]` |
+
+- `parameter/functions-is-a-view-of-the-function-table` — three reads around two mutations, which is the shape a snapshot cannot satisfy at any instant: absent, then the body with its leading tab and a count of one, then absent again. A parameter filled in once and never updated answers the first pair three times and looks perfectly reasonable doing it. Nobody else has the module
+  ```sh
+  zmodload zsh/parameter 2>/dev/null; echo "a=[${functions[g]:-ABSENT}] n=${#functions}"; g(){ :; }; echo "b=[${functions[g]:-ABSENT}] n=${#functions}"; unset -f g; echo "c=[${functions[g]:-ABSENT}] n=${#functions}"
+  ```
+- `parameter/a-function-body-is-what-a-listing-prints-between-the-braces` — the value is the lines a listing puts between the braces — tab-indented, a nested block indented twice, no header line and no trailing newline. Every character that decides this row is whitespace, which is why it is bracketed and printed with `printf` rather than echoed
+  ```sh
+  zmodload zsh/parameter 2>/dev/null; f(){ echo one; if [[ 1 = 1 ]]; then echo two; fi; }; printf "[%s]" "$functions[f]"
+  ```
+- `parameter/assigning-to-functions-defines-one` — the association is written *through* to the function table in both directions: the assignment defines a function that then runs, and unsetting the element undefines it. A write that landed in an ordinary stored table would define nothing and — worse — would shadow the view from that moment, since a stored table is what a read finds first
+  ```sh
+  zmodload zsh/parameter 2>/dev/null; functions[h]="echo made"; h; echo "n=${#functions}"; unset "functions[h]"; echo "gone=${#functions}"
+  ```
+- `parameter/options-is-a-view-of-the-option-namespace` — 197 names, and the state of one of them read on either side of a `setopt` and an `unsetopt`. The count is the part worth pinning beside the movement: it is the whole option namespace and not the couple of dozen names `set +o` writes, which is the same table under another name
+  ```sh
+  zmodload zsh/parameter 2>/dev/null; echo "n=${#options} a=$options[extendedglob]"; setopt extendedglob; echo "b=$options[extendedglob]"; unsetopt extendedglob; echo "c=$options[extendedglob]"
+  ```
+- `parameter/the-compat-option-spellings-are-keys-of-their-own` — the twelve sh and ksh compat spellings are keys here where the `setopt` and `unsetopt` listings never print them, which is what makes 197 rather than 185 — and a pair that means opposite states moves in opposite directions from one `setopt`. A table built from the listings alone is twelve keys short and cannot tell which way each of them reads
+  ```sh
+  zmodload zsh/parameter 2>/dev/null; echo "[$options[log]] [$options[histnofunctions]]"; setopt histnofunctions; echo "[$options[log]] [$options[histnofunctions]]"
+  ```
+- `parameter/assigning-to-options-is-setopt` — the assignment is `setopt` written another way, and its two complaints both leave the *command's* status at 0 — a name nobody has is `no such option` and a value that is neither on nor off is `invalid value`, with the option unmoved. The status is the surprise: a script testing `$?` after either learns nothing
+  ```sh
+  zmodload zsh/parameter 2>/dev/null; options[extendedglob]=on; [[ -o extendedglob ]] && echo on-now; options[nosuchopt]=on; echo "unknown=$?"; options[extendedglob]=maybe; echo "bad=$? still=[$options[extendedglob]]"
+  ```
+- `parameter/builtins-drops-one-that-is-switched-off` — a builtin put aside with `disable` is not a key here at all — not a key with an empty value — which the default operator is what tells apart: a view that merely emptied the value would read identically to a caller using `$builtins[cd]` alone. zsh moves it to `dis_builtins`, which is one of the twenty-eight parameters of this module nothing here provides
+  ```sh
+  zmodload zsh/parameter 2>/dev/null; echo "a=[$builtins[cd]]"; disable cd; echo "b=[${builtins[cd]:-ABSENT}]"; enable cd; echo "c=[$builtins[cd]]"
+  ```
+- `parameter/builtins-is-readonly` — `read-only variable: builtins` and a failure, where its four neighbors in this module all take an assignment. Worth a row because a produced association with no answer for a write has to have *some* answer: one that quietly stored the element would shadow the view it was written to
+  ```sh
+  zmodload zsh/parameter 2>/dev/null; builtins[x]=y; echo "st=$?"
+  ```
+- `parameter/aliases-is-a-view-of-the-alias-table` — the same table `alias` and `unalias` keep, read through and written through: an alias defined by the builtin is in the association, one removed by the builtin is gone from it, and one defined *by assignment* is what the builtin says back
+  ```sh
+  zmodload zsh/parameter 2>/dev/null; alias q=ls; echo "b=[$aliases[q]]"; unalias q; echo "c=[${aliases[q]:-ABSENT}]"; aliases[zz]="echo z"; alias zz
+  ```
+- `parameter/commands-is-a-view-of-the-path-search` — the association follows PATH, which is the property that makes it a view rather than a table filled in at startup: the same name resolves and then does not, in one shell, with nothing between the two reads but an assignment to PATH
+  ```sh
+  zmodload zsh/parameter 2>/dev/null; echo "absent=[${commands[definitelynotacommand]:-ABSENT}]"; PATH=/bin; echo "a=[${commands[ls]:-ABSENT}]"; PATH=/nonexistent; echo "b=[${commands[ls]:-ABSENT}]"
   ```
 
 ## harness invocation

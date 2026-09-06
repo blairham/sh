@@ -47,14 +47,26 @@ func (a AssocArray) values() []string {
 }
 
 // assocDeclared reports whether the name carries the associative attribute.
+//
+// A *produced* one carries it as much as a stored one: the attribute decides
+// how a subscript is read, and `${functions[a b]}` has to be a key wherever
+// the table came from.
 func (r *Runner) assocDeclared(name string) bool {
-	_, ok := r.AssocArrays[name]
+	_, ok := r.assocFor(name)
 	return ok
 }
 
 // markAssoc gives a name the associative attribute, which is what
 // `declare -A` and `typeset -A` do. Declaring twice keeps the elements.
 func (r *Runner) markAssoc(name string) {
+	if _, produced := r.DynamicAssocs[name]; produced {
+		// A produced association already has the attribute — assocDeclared
+		// asks assocFor — and giving it a stored table would put an empty one
+		// in front of the producer, which is the shadowing setAssocElem
+		// guards against by another route. `typeset -A functions` is the line
+		// that reaches here.
+		return
+	}
 	if r.AssocArrays == nil {
 		r.AssocArrays = map[string]AssocArray{}
 	}
@@ -71,7 +83,19 @@ func (r *Runner) markAssoc(name string) {
 
 // setAssocElem assigns one element. The key is any string, the empty one
 // included — it is the subscript as written, never a number.
+//
+// A **produced** association is written through its own hook and never into
+// the stored table, and that is not a nicety: a stored table shadows the
+// producer — assocFor asks it first — so one assignment would turn a live view
+// into a snapshot taken at that instant, and every read afterwards would be a
+// plausible answer to a question about the past. The name would still be an
+// association, still hold the right keys, and never say it had stopped
+// tracking. See SetDynamicAssocWriter.
 func (r *Runner) setAssocElem(name, key, value string) {
+	if write, ok := r.dynamicAssocWriters[name]; ok {
+		write(r, key, value, true)
+		return
+	}
 	a := r.AssocArrays[name]
 	if a == nil {
 		a = AssocArray{}
@@ -84,7 +108,16 @@ func (r *Runner) setAssocElem(name, key, value string) {
 }
 
 // unsetAssocElem removes one key, which is `unset m[k]` on a declared name.
+//
+// Through the producer's hook for a produced one, for the reason setAssocElem
+// is: `unset "functions[f]"` undefines the function in the shell this models,
+// and a delete from a table that is not the answer would do nothing and say
+// nothing.
 func (r *Runner) unsetAssocElem(name, key string) {
+	if write, ok := r.dynamicAssocWriters[name]; ok {
+		write(r, key, "", false)
+		return
+	}
 	delete(r.AssocArrays[name], key)
 }
 
@@ -146,6 +179,15 @@ func (r *Runner) assignAssocLiteral(name string, elems []*syntax.Word, appendTo 
 // dialect that reads a subscript as a key stores `a=([k]=v)` here, and it must
 // not expand the elements a second time to do so.
 func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bool) {
+	if _, produced := r.DynamicAssocs[name]; produced && !appendTo {
+		// Replacing a produced association wholesale would mean emptying
+		// something this shell does not store — every function at once, every
+		// option at once — and the stored table it would leave behind
+		// shadows the view for good. Refused by name; the element form
+		// beside it goes through the producer's own hook.
+		r.diagf("%s: assigning to the whole of a produced association is not implemented yet\n", name)
+		return
+	}
 	if !appendTo {
 		if r.AssocArrays == nil {
 			r.AssocArrays = map[string]AssocArray{}
@@ -220,4 +262,70 @@ func (r *Runner) assocElem(w *syntax.Word) (key, value string, ok bool) {
 		return r.expandAssignValue(&keyWord), r.expandAssignValue(&valueWord), true
 	}
 	return "", "", false
+}
+
+// SetDynamicAssoc registers an associative array whose contents are produced
+// when it is read.
+//
+// The third of the three produced-parameter seams, and the one the other two
+// cannot stand in for. `SetDynamic` gives a string and `SetDynamicArray` a
+// list; a parameter that answers *which functions exist and what each one's
+// body is* is neither, because `${m[key]}` has to reach one of them by name
+// and a list of pairs cannot be asked that question.
+//
+// **It is a view and not a snapshot**, and that distinction is the whole
+// reason it is a function rather than a table. A dialect that filled an
+// AssocArray once would be right until the first `f() { … }` and then quietly
+// wrong — and quietly is the word, because the shape stays plausible: the
+// caller reads an association, gets a value or an empty string, and is never
+// told the table stopped tracking. The producer is asked on every read, so
+// read, mutate, read again in one shell gives three different answers where a
+// snapshot gives one.
+func (r *Runner) SetDynamicAssoc(name string, value func(*Runner) AssocArray) {
+	if r.DynamicAssocs == nil {
+		r.DynamicAssocs = map[string]func(*Runner) AssocArray{}
+	}
+	r.DynamicAssocs[name] = value
+}
+
+// SetDynamicAssocWriter says what happens when a script assigns to one element
+// of a produced association, or unsets one — `set` false is the unset.
+//
+// Required rather than optional for any produced association a script may
+// write to, and the reason is the failure it prevents. Without it an
+// assignment lands in the stored table, the stored table is what a later read
+// finds first, and the view has silently become a snapshot of the moment
+// somebody wrote to it. Nothing about the name's shape changes and no
+// diagnostic is written; the caller reads a perfectly ordinary association
+// that stopped tracking.
+//
+// A produced association a script must *not* write to is marked readonly
+// instead, which is a refusal with a sentence rather than a write that goes
+// somewhere unhelpful.
+func (r *Runner) SetDynamicAssocWriter(name string, write func(r *Runner, key, value string, set bool)) {
+	if r.dynamicAssocWriters == nil {
+		r.dynamicAssocWriters = map[string]func(*Runner, string, string, bool){}
+	}
+	r.dynamicAssocWriters[name] = write
+}
+
+// assocFor is the associative table a name reads as, produced or stored.
+//
+// The stored table is asked first, which is the order the produced scalars and
+// the produced arrays already follow: a script that has assigned to the name
+// gets its own value back. A produced one has no stored table until something
+// writes to it, so in practice the second clause is the answer.
+func (r *Runner) assocFor(name string) (AssocArray, bool) {
+	if a, ok := r.AssocArrays[name]; ok {
+		return a, true
+	}
+	if produce, ok := r.DynamicAssocs[name]; ok {
+		// A producer with nothing to say still has a table: an empty
+		// association and an absent one are different things, and the name
+		// exists either way. A nil map needs no normalizing to say so — every
+		// read this package does of one is a length, a range or a lookup, and
+		// all three answer for nil — so there is no branch here to get wrong.
+		return produce(r), true
+	}
+	return nil, false
 }

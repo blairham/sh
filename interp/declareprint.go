@@ -149,7 +149,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	}
 	// The array tables answer ahead of Vars, which mirrors an array's first
 	// element — the same order every read follows.
-	if a, ok := r.AssocArrays[name]; ok {
+	if a, ok := r.assocFor(name); ok {
 		d.assoc, d.isAssoc = a, true
 		return d, true
 	}

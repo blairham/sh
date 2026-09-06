@@ -42538,6 +42538,50 @@
         "TimedOut": false
       }
     },
+    "length/of-a-one-element-array": {
+      "bash": {
+        "Stdout": "one=5~two=5~none=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one=5~two=5~none=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one=5~two=5~none=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one=5~two=5~none=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one=1~two=2~none=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "let/evaluates-and-assigns": {
       "bash": {
         "Stdout": "5",
@@ -50760,6 +50804,446 @@
       },
       "zsh": {
         "Stdout": "[DEF][sub]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/a-function-body-is-what-a-listing-prints-between-the-braces": {
+      "bash": {
+        "Stdout": "[[f]]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[[f]]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[[f]]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[[f]]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[[f]]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[\techo one~\tif [[ 1 = 1 ]]~\tthen~\t\techo two~\tfi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/aliases-is-a-view-of-the-alias-table": {
+      "bash": {
+        "Stdout": "b=[[q]]~c=[ABSENT]",
+        "Stderr": "\u003cshell\u003e: line 1: alias: zz: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "b=[[q]]~c=[ABSENT]",
+        "Stderr": "\u003cshell\u003e: line 1: alias: zz: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "b=[[q]]~c=[ABSENT]",
+        "Stderr": "\u003cshell\u003e: line 0: alias: zz: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "b=[[q]]",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "b=[[q]]~c=[ABSENT]",
+        "Stderr": "zz: alias not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "b=[ls]~c=[ABSENT]~zz='echo z'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/assigning-to-functions-defines-one": {
+      "bash": {
+        "Stdout": "n=9~gone=0",
+        "Stderr": "\u003cshell\u003e: line 1: h: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=9~gone=0",
+        "Stderr": "\u003cshell\u003e: line 1: h: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "n=9~gone=0",
+        "Stderr": "\u003cshell\u003e: h: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "n=0",
+        "Stderr": "\u003cshell\u003e: 1: functions[h]=echo made: not found~\u003cshell\u003e: 1: h: not found~\u003cshell\u003e: 1: unset: functions[h]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "n=9~gone=0",
+        "Stderr": "\u003cshell\u003e: h: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "made~n=1~gone=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/assigning-to-options-is-setopt": {
+      "bash": {
+        "Stdout": "unknown=0~bad=0 still=[maybe[extendedglob]]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "unknown=0~bad=0 still=[maybe[extendedglob]]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "unknown=0~bad=0 still=[maybe[extendedglob]]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "unknown=127~bad=127 still=[[extendedglob]]",
+        "Stderr": "\u003cshell\u003e: 1: options[extendedglob]=on: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: options[nosuchopt]=on: not found~\u003cshell\u003e: 1: options[extendedglob]=maybe: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "unknown=0~bad=0 still=[maybe[extendedglob]]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "on-now~unknown=0~bad=0 still=[on]",
+        "Stderr": "\u003cshell\u003e:1: no such option: nosuchopt~\u003cshell\u003e:1: invalid value: maybe",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/builtins-drops-one-that-is-switched-off": {
+      "bash": {
+        "Stdout": "a=[[cd]]~b=[ABSENT]~c=[[cd]]",
+        "Stderr": "\u003cshell\u003e: line 1: disable: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=[[cd]]~b=[ABSENT]~c=[[cd]]",
+        "Stderr": "\u003cshell\u003e: line 1: disable: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=[[cd]]~b=[ABSENT]~c=[[cd]]",
+        "Stderr": "\u003cshell\u003e: disable: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a=[[cd]]",
+        "Stderr": "\u003cshell\u003e: 1: disable: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=[[cd]]~b=[ABSENT]~c=[[cd]]",
+        "Stderr": "\u003cshell\u003e: disable: not found~\u003cshell\u003e: enable: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=[defined]~b=[ABSENT]~c=[defined]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/builtins-is-readonly": {
+      "bash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: builtins[x]=y: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: read-only variable: builtins",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/commands-is-a-view-of-the-path-search": {
+      "bash": {
+        "Stdout": "absent=[ABSENT]~a=[ABSENT]~b=[ABSENT]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "absent=[ABSENT]~a=[ABSENT]~b=[ABSENT]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "absent=[ABSENT]~a=[ABSENT]~b=[ABSENT]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "absent=[ABSENT]~a=[ABSENT]~b=[ABSENT]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "absent=[ABSENT]~a=[/bin/ls]~b=[ABSENT]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/functions-is-a-view-of-the-function-table": {
+      "bash": {
+        "Stdout": "a=[ABSENT] n=0~b=[ABSENT] n=0~c=[ABSENT] n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=[ABSENT] n=0~b=[ABSENT] n=0~c=[ABSENT] n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=[ABSENT] n=0~b=[ABSENT] n=0~c=[ABSENT] n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=[ABSENT] n=0~b=[ABSENT] n=0~c=[ABSENT] n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=[ABSENT] n=0~b=[\t:] n=1~c=[ABSENT] n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/options-is-a-view-of-the-option-namespace": {
+      "bash": {
+        "Stdout": "n=0 a=[extendedglob]~b=[extendedglob]~c=[extendedglob]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: unsetopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=0 a=[extendedglob]~b=[extendedglob]~c=[extendedglob]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: unsetopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "n=0 a=[extendedglob]~b=[extendedglob]~c=[extendedglob]",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: unsetopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "n=0 a=[extendedglob]~b=[extendedglob]~c=[extendedglob]",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: unsetopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "n=0 a=[extendedglob]~b=[extendedglob]~c=[extendedglob]",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: unsetopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "n=197 a=off~b=on~c=off",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/the-compat-option-spellings-are-keys-of-their-own": {
+      "bash": {
+        "Stdout": "[[log]] [[histnofunctions]]~[[log]] [[histnofunctions]]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[[log]] [[histnofunctions]]~[[log]] [[histnofunctions]]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[[log]] [[histnofunctions]]~[[log]] [[histnofunctions]]",
+        "Stderr": "\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[[log]] [[histnofunctions]]~[[log]] [[histnofunctions]]",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[[log]] [[histnofunctions]]~[[log]] [[histnofunctions]]",
+        "Stderr": "\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[on] [off]~[off] [on]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

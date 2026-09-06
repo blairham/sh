@@ -840,7 +840,7 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 			return v, true
 		}
 	}
-	if a, ok := r.AssocArrays[e.Name]; ok {
+	if a, ok := r.assocFor(e.Name); ok {
 		// The attribute decides the subscript's reading before anything is
 		// looked up: a declared name takes it as a key, an undeclared one
 		// falls through to the numeric path below.
@@ -1311,7 +1311,7 @@ func (r *Runner) arrayElementCount(name string) (int, bool) {
 	if a, ok := r.Arrays[name]; ok {
 		return len(r.readArray(a)), true
 	}
-	if m, ok := r.AssocArrays[name]; ok {
+	if m, ok := r.assocFor(name); ok {
 		return len(m), true
 	}
 	return 0, false

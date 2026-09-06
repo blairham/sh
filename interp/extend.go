@@ -181,7 +181,10 @@ func (r *Runner) DynamicParameter(name string) bool {
 	if _, ok := r.Dynamic[name]; ok {
 		return true
 	}
-	_, ok := r.DynamicArrays[name]
+	if _, ok := r.DynamicArrays[name]; ok {
+		return true
+	}
+	_, ok := r.DynamicAssocs[name]
 	return ok
 }
 

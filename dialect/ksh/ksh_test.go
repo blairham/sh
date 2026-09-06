@@ -298,13 +298,25 @@ func TestASourcedFileIsNamedByTheBuiltin(t *testing.T) {
 }
 
 // TestArithmeticFailuresAreTerse is ksh93's shape.
+// arithRun is what this dialect says about an expression it refused, observed
+// from a run.
+//
+// It used to be observed from a parse, because the expression was read as part
+// of reading the file. No shell in the panel does that — the complaint comes
+// when the command runs (#865) — so this is now the only route to it, and it
+// carries the whole line the shell writes rather than the sentence alone.
+func arithRun(t *testing.T, src string) string {
+	t.Helper()
+	out, _ := answersRun(t, src)
+	return out
+}
+
 func TestArithmeticFailuresAreTerse(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
-		{"echo $((1 2))", "1 2: arithmetic syntax error"},
-		{"echo $((1+))", "1+: more tokens expected"},
+		{"echo $((1 2))", "sh: 1 2: arithmetic syntax error\n"},
+		{"echo $((1+))", "sh: 1+: more tokens expected\n"},
 	} {
-		_, err := syntax.Parse(tc.src, ksh.Dialect())
-		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := arithRun(t, tc.src); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}

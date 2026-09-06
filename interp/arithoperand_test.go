@@ -38,9 +38,9 @@ func TestAMissingOperandIsTwoWordings(t *testing.T) {
 		{"%", "%: found <%>"},
 		{"1+&2", "1+&2: found <&2>"},
 	} {
-		_, err := syntax.Parse("echo $(("+tc.src+"))", syntax.Core())
+		err := arithErr(tc.src, syntax.Core())
 		if err == nil {
-			t.Fatalf("%s: parsed, want a failure", tc.src)
+			t.Fatalf("%s: read cleanly, want a failure", tc.src)
 		}
 		if got := d.ParseFailure(err); got != tc.want {
 			t.Errorf("%s: got %q, want %q", tc.src, got, tc.want)
@@ -58,9 +58,9 @@ func TestOneWordingServesBothWhenTheSecondIsEmpty(t *testing.T) {
 	// and the default stood in".
 	d := Diagnostics{ArithError: "%[1]s: %[2]s", ArithOperandExpected: "one sentence for both"}
 	for _, src := range []string{"1+", "%"} {
-		_, err := syntax.Parse("echo $(("+src+"))", syntax.Core())
+		err := arithErr(src, syntax.Core())
 		if err == nil {
-			t.Fatalf("%s: parsed, want a failure", src)
+			t.Fatalf("%s: read cleanly, want a failure", src)
 		}
 		if got, want := d.ParseFailure(err), src+": one sentence for both"; got != want {
 			t.Errorf("%s: got %q, want %q", src, got, want)
@@ -97,4 +97,13 @@ func TestBlamingOnlyTheOffsetKeepsTheRanOutWording(t *testing.T) {
 	if !strings.Contains(out, "1+: ran out") {
 		t.Errorf("output = %q, want the offset alone with the ran-out wording", out)
 	}
+}
+
+// arithErr reads one expression as this dialect and returns what the read had
+// to say — the route the interpreter itself takes when the command runs,
+// which is the only place a bad expression is refused now (#865).
+func arithErr(expr string, d syntax.Dialect) error {
+	p := syntax.NewParser("", d)
+	p.ParseArithFor(expr, syntax.Pos{})
+	return p.Err()
 }

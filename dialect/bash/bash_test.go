@@ -277,13 +277,25 @@ func TestBorrowedTextIsNamedTwoWays(t *testing.T) {
 
 // TestArithmeticFailuresNameTheToken is bash's shape, and the only one of the
 // four that names the token it blamed.
+// arithRun is what this dialect says about an expression it refused, observed
+// from a run.
+//
+// It used to be observed from a parse, because the expression was read as part
+// of reading the file. No shell in the panel does that — the complaint comes
+// when the command runs (#865) — so this is now the only route to it, and it
+// carries the whole line the shell writes rather than the sentence alone.
+func arithRun(t *testing.T, src string) string {
+	t.Helper()
+	out, _ := answersRun(t, src)
+	return out
+}
+
 func TestArithmeticFailuresNameTheToken(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
-		{"echo $((1 2))", `1 2: arithmetic syntax error in expression (error token is "2")`},
-		{"echo $((1+))", `1+: arithmetic syntax error: operand expected (error token is "+")`},
+		{"echo $((1 2))", "sh: line 1: " + `1 2: arithmetic syntax error in expression (error token is "2")` + "\n"},
+		{"echo $((1+))", "sh: line 1: " + `1+: arithmetic syntax error: operand expected (error token is "+")` + "\n"},
 	} {
-		_, err := syntax.Parse(tc.src, bash.Dialect())
-		if got := bash.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := arithRun(t, tc.src); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}
@@ -505,22 +517,18 @@ func TestAMalformedExpressionIsAFailedCommand(t *testing.T) {
 	if got, want := bash.Diagnostics().ArithFailureStatus, 1; got != want {
 		t.Errorf("ArithFailureStatus = %d, want %d", got, want)
 	}
-	f, err := syntax.Parse(`echo $((1 2))`, bash.Dialect())
-	if err == nil {
-		t.Fatal("want a parse failure")
-	}
-	_ = f
-	d := bash.Diagnostics()
-	if got, want := d.StatusForParseError(err), 1; got != want {
-		t.Errorf("status = %d, want %d — a failed command, not a failed parse", got, want)
-	}
-	// And none of the decoration: no named origin, no echoed line.
-	out := d.ParseDiagnostic("bash", "-c", err, "echo $((1 2))")
-	if strings.Contains(out, "-c") {
-		t.Errorf("got %q, want no origin named", out)
-	}
-	if strings.Count(out, "\n") != 1 {
-		t.Errorf("got %q, want no echoed line", out)
+	// And it really is a failed command now: the file reads, the command
+	// runs, and the whole of what is written is one line with no origin
+	// named and no echoed source (#865).
+	//
+	// Fatal, and measured rather than reasoned: a failed arithmetic
+	// *expansion* ends the script in bash, ksh93 and zsh alike, so the
+	// `echo` after it never runs. That is the expansion's answer and not the
+	// arithmetic command's — `((1 2)); echo st=$?` reaches its echo.
+	out, st := answersRun(t, `echo $((1 2)); echo "after=$?"`)
+	want := "sh: line 1: " + `1 2: arithmetic syntax error in expression (error token is "2")` + "\n"
+	if out != want || st != 1 {
+		t.Errorf("got %q at %d, want %q at 1", out, st, want)
 	}
 }
 

@@ -5,9 +5,6 @@ package zsh_test
 
 import (
 	"testing"
-
-	"github.com/blairham/sh/dialect/zsh"
-	"github.com/blairham/sh/syntax"
 )
 
 // `#` in arithmetic is a character code, end to end through this dialect.
@@ -80,25 +77,23 @@ func TestTheCharacterCodeOperatorOnACharacter(t *testing.T) {
 // anything past it is left over and refused as text where an operator belonged.
 func TestTheCharacterCodeOperatorRefusals(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
-		{`echo $((##))`, "bad math expression: character missing after ##"},
-		{`echo $((##ab))`, "bad math expression: operator expected at `b'"},
-		{`echo $((##\x41x))`, "bad math expression: operator expected at `x'"},
+		{`##`, "bad math expression: character missing after ##"},
+		{`##ab`, "bad math expression: operator expected at `b'"},
+		{`##\x41x`, "bad math expression: operator expected at `x'"},
 		// A single `#` has no escapes, so `\x` is the letter x and the `41`
 		// is left over — where the doubled spelling reads the whole of it.
-		{`echo $((#\x41))`, "bad math expression: operator expected at `41'"},
-		{`echo $((#\101))`, "bad math expression: operator expected at `01'"},
+		{`#\x41`, "bad math expression: operator expected at `41'"},
+		{`#\101`, "bad math expression: operator expected at `01'"},
 		// Four hex digits for the narrow escape and eight for the wide one,
 		// so a fifth is left over here and a ninth would be there.
-		{`echo $((##\u00410))`, "bad math expression: operator expected at `0'"},
-		{`echo $((# b))`, "bad math expression: operator expected at `b'"},
+		{`##\u00410`, "bad math expression: operator expected at `0'"},
+		{`# b`, "bad math expression: operator expected at `b'"},
 	} {
-		_, err := syntax.Parse(tc.src, zsh.Dialect())
-		if err == nil {
-			t.Errorf("%s parsed, want a refusal", tc.src)
-			continue
-		}
-		if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
-			t.Errorf("%s said %q, want %q", tc.src, got, tc.want)
+		// From a run: a file is not refused for an expression it cannot
+		// read, so this is where the complaint is (#865). The location is
+		// asserted with the sentence rather than trimmed off it.
+		if got := arithLine(t, tc.src); got != arithLoc+tc.want+"\n" {
+			t.Errorf("$((%s)) said %q, want %q", tc.src, got, arithLoc+tc.want+"\n")
 		}
 	}
 }

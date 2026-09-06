@@ -189,12 +189,47 @@ func hasExpansion(src string) bool {
 	return strings.ContainsAny(src, "$`")
 }
 
+// parseArithLater is parseArith for the places where the text is read as part
+// of reading the file, and where a failure is not the file's to report.
+//
+// No shell in the panel refuses a program for an expression it cannot read.
+// `bash -n` takes `((echo hi))`, and so do ksh93 and zsh; the complaint comes
+// when the command runs, so a branch that never runs never raises it and
+// `false && ((echo hi)); echo reached` reaches the echo in all six. Ours
+// refused the whole program instead — a parse-time answer to a run-time
+// question, and the one on the conformance list for that reason.
+//
+// The tree a *successful* read builds is still kept, because it is the same
+// tree the run would build and building it once is free. A failure is
+// discarded along with the error it recorded, which leaves nil beside the raw
+// text — the state an expression with an expansion in it has always been in,
+// and the state [Runner.arithTree] already reads: expand, then parse, then
+// evaluate. So there is nothing new on the far side of this.
+//
+// Rolling the error back rather than not looking is what keeps it to one
+// question. The read has to happen either way for the tree, and the error is
+// the only part of it that was ever wrong.
+func (p *Parser) parseArithLater(src string, at Pos) ArithExpr {
+	saved := p.err
+	e := p.parseArith(src, at)
+	if p.err != saved {
+		p.err = saved
+		return nil
+	}
+	return e
+}
+
 // parseArith parses the text inside `$(( … ))` or `(( … ))`.
 //
 // An expression containing an expansion is left alone: nil, with the raw text
 // still beside it, for the interpreter to expand and read when it runs. That
 // is the only thing that can — `$#` is not an operand until something knows
 // what the parameters are.
+//
+// A failure here is recorded on the parser, which is right for the one caller
+// that is reading an expression *as* the program — the interpreter, through
+// [Parser.ParseArithFor], at the moment the command runs. Everything reading
+// an expression while reading a file goes through parseArithLater instead.
 func (p *Parser) parseArith(src string, at Pos) ArithExpr {
 	if hasExpansion(src) {
 		return nil

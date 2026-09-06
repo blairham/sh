@@ -178,10 +178,12 @@ func TestArithExponentPrecedenceAndAssociativity(t *testing.T) {
 func TestArithDialectGates(t *testing.T) {
 	// None of these is in the standard's arithmetic, so POSIX() must refuse
 	// them rather than accept something it cannot mean.
+	// Asked of the expression rather than of the file: a file is not refused
+	// for an expression it cannot read (#865), so the flag gates the read the
+	// interpreter does when the command runs.
 	for _, src := range []string{`x++`, `1,2`, `2#101`, `2**3`} {
-		if _, err := Parse("echo $(("+src+"))", POSIX()); err == nil {
-			t.Errorf("%s: POSIX() accepted a construct the dialect does not have", src)
-		}
+		mustRefuseArith(t, src, POSIX(), "a construct the dialect does not have")
+		mustParse(t, "echo $(("+src+"))", POSIX(), "the file, whatever the expression turns out to be")
 	}
 	if got, want := arith(parseArithOf(t, `1,2`, Core())), `(1 , 2)`; got != want {
 		t.Errorf("comma: got %s, want %s", got, want)

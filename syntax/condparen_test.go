@@ -3,7 +3,10 @@
 
 package syntax
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 // Two parentheses that touch are the arithmetic command wherever a command
 // may begin, and two grouping parentheses inside `[[ ]]`, where none may.
@@ -92,18 +95,39 @@ func TestArithCommandAfterATestClause(t *testing.T) {
 // And a subshell that opens with a subshell still needs its space, which is
 // the rule the condition is the exception to.
 func TestTouchingParensAtCommandPositionAreArithmetic(t *testing.T) {
-	// Read as arithmetic, `echo hi` is not an expression — which is the
-	// proof that the two parentheses were one token. bash, ksh93 and zsh all
-	// report the same thing, a beat later, when the command runs.
-	_, err := Parse(`((echo hi))`, Core())
-	if err == nil {
-		t.Fatal("`((echo hi))` parsed; it is an arithmetic command over `echo hi`")
+	// The file reads: `echo hi` is kept as the command's text and nothing
+	// asks whether it is an expression until the command runs, which is what
+	// bash, ksh93 and zsh all do — `bash -n` takes this file (#865).
+	f, err := Parse(`((echo hi))`, Core())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
 	}
-	if got, want := err.Error(), `1:1: arithmetic expression: echo hi`; got != want {
-		t.Errorf("got %q, want %q", got, want)
+	ac, ok := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*ArithCmdClause)
+	if !ok {
+		t.Fatalf("parsed to %T, want an arithmetic command", f.Stmts[0].Expr.(*Pipeline).Cmds[0])
+	}
+	// The text is what a diagnostic will quote, and the tree is nil because
+	// there is no expression to build one from — the same state an expression
+	// holding an expansion is left in.
+	if got, want := ac.Expr, "echo hi"; got != want {
+		t.Errorf("Expr = %q, want %q", got, want)
+	}
+	if ac.Parsed != nil {
+		t.Errorf("Parsed = %#v, want nil — `echo hi` is not an expression", ac.Parsed)
+	}
+	// Which is the proof the two parentheses were one token: read as
+	// arithmetic the text is not an expression, where read as a subshell it
+	// would be a command that runs. The position is the runner's rather than
+	// this read's, so what is checked is the failure and the text it blames.
+	var se *Error
+	if !errors.As(arithErr(ac.Expr, Core()), &se) {
+		t.Fatalf("reading %q gave no arithmetic failure", ac.Expr)
+	}
+	if se.Kind != ErrArithOperator || se.Expr != "echo hi" {
+		t.Errorf("read %q as kind %d expr %q, want ErrArithOperator over `echo hi`", ac.Expr, se.Kind, se.Expr)
 	}
 
-	f, err := Parse(`( (echo hi) )`, Core())
+	f, err = Parse(`( (echo hi) )`, Core())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}

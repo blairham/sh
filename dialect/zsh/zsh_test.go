@@ -341,13 +341,25 @@ func TestBorrowedTextReplacesTheShellName(t *testing.T) {
 
 // TestArithmeticFailuresQuoteNothing is zsh's shape: it does not quote the
 // expression at all, and it puts the token inside the reason.
+// arithRun is what this dialect says about an expression it refused, observed
+// from a run.
+//
+// It used to be observed from a parse, because the expression was read as part
+// of reading the file. No shell in the panel does that — the complaint comes
+// when the command runs (#865) — so this is now the only route to it, and it
+// carries the whole line the shell writes rather than the sentence alone.
+func arithRun(t *testing.T, src string) string {
+	t.Helper()
+	out, _ := answersRun(t, src)
+	return out
+}
+
 func TestArithmeticFailuresQuoteNothing(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
-		{"echo $((1 2))", "bad math expression: operator expected at `2'"},
-		{"echo $((1+))", "bad math expression: operand expected at end of string"},
+		{"echo $((1 2))", "zsh:1: bad math expression: operator expected at `2'\n"},
+		{"echo $((1+))", "zsh:1: bad math expression: operand expected at end of string\n"},
 	} {
-		_, err := syntax.Parse(tc.src, zsh.Dialect())
-		if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := arithRun(t, tc.src); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}

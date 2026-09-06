@@ -257,14 +257,26 @@ func TestUnterminatedNamesWhatWouldHaveClosedIt(t *testing.T) {
 // one it does not: a digit too great for its base is not a diagnosis dash has
 // — the literal ends there and what follows is left over, so it says the same
 // thing it says about `$((1 2))`.
+// arithRun is what this dialect says about an expression it refused, observed
+// from a run.
+//
+// It used to be observed from a parse, because the expression was read as part
+// of reading the file. No shell in the panel does that — the complaint comes
+// when the command runs (#865) — so this is now the only route to it, and it
+// carries the whole line the shell writes rather than the sentence alone.
+func arithRun(t *testing.T, src string) string {
+	t.Helper()
+	out, _ := answersRun(t, src)
+	return out
+}
+
 func TestArithmeticFailuresAreDashsOwnShape(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
-		{"echo $((1 2))", `arithmetic expression: expecting EOF: "1 2"`},
-		{"echo $((1+))", `arithmetic expression: expecting primary: "1+"`},
-		{"echo $((1,2))", `arithmetic expression: expecting EOF: "1,2"`},
+		{"echo $((1 2))", "sh: 1: " + `arithmetic expression: expecting EOF: "1 2"` + "\n"},
+		{"echo $((1+))", "sh: 1: " + `arithmetic expression: expecting primary: "1+"` + "\n"},
+		{"echo $((1,2))", "sh: 1: " + `arithmetic expression: expecting EOF: "1,2"` + "\n"},
 	} {
-		_, err := syntax.Parse(tc.src, dash.Dialect())
-		if got := dash.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := arithRun(t, tc.src); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}

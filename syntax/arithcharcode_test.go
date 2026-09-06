@@ -74,11 +74,11 @@ func TestTheCharacterCodeOperatorReadsItsOperand(t *testing.T) {
 // an operator it cannot read, which is what the shell does.
 func TestTheCharacterCodeOperatorTakesOneCharacter(t *testing.T) {
 	for _, src := range []string{
-		"echo $((##ab))", "echo $((###a))", `echo $((##\x41x))`, `echo $((##\0101))`,
-		`echo $((##\u00410))`, `echo $((##\U000000410))`, `echo $((#\x41))`,
+		"##ab", "###a", `##\x41x`, `##\0101`,
+		`##\u00410`, `##\U000000410`, `#\x41`,
 	} {
-		if _, err := syntax.Parse(src, charCode(true)); err == nil {
-			t.Errorf("parse %q: accepted, want the leftover refused", src)
+		if err := arithErr(src, charCode(true)); err == nil {
+			t.Errorf("read %q: accepted, want the leftover refused", src)
 		}
 	}
 }
@@ -86,14 +86,14 @@ func TestTheCharacterCodeOperatorTakesOneCharacter(t *testing.T) {
 // Nothing after the operator is its own failure, worded by neither of the two
 // the rest of arithmetic has.
 func TestTheCharacterCodeOperatorWithNothingAfterIt(t *testing.T) {
-	for _, src := range []string{"echo $((##))"} {
-		_, err := syntax.Parse(src, charCode(true))
+	for _, src := range []string{"##"} {
+		err := arithErr(src, charCode(true))
 		var se *syntax.Error
 		if !errors.As(err, &se) {
-			t.Fatalf("parse %q: %v, want a syntax error", src, err)
+			t.Fatalf("read %q: %v, want a syntax error", src, err)
 		}
 		if se.Kind != syntax.ErrArithCharacterMissing {
-			t.Errorf("parse %q: kind %v, want ErrArithCharacterMissing", src, se.Kind)
+			t.Errorf("read %q: kind %v, want ErrArithCharacterMissing", src, se.Kind)
 		}
 	}
 }
@@ -102,14 +102,14 @@ func TestTheCharacterCodeOperatorWithNothingAfterIt(t *testing.T) {
 // ordinary missing-operand one every other unreadable operand gets — which is
 // what the rest of the panel says about the same text.
 func TestWithoutTheFlagTheHashIsNoOperator(t *testing.T) {
-	for _, src := range []string{"echo $((#b))", "echo $((##a))", "echo $((##))"} {
-		_, err := syntax.Parse(src, charCode(false))
+	for _, src := range []string{"#b", "##a", "##"} {
+		err := arithErr(src, charCode(false))
 		var se *syntax.Error
 		if !errors.As(err, &se) {
-			t.Fatalf("parse %q without the flag: %v, want a syntax error", src, err)
+			t.Fatalf("read %q without the flag: %v, want a syntax error", src, err)
 		}
 		if se.Kind != syntax.ErrArithOperand {
-			t.Errorf("parse %q without the flag: kind %v, want ErrArithOperand", src, se.Kind)
+			t.Errorf("read %q without the flag: kind %v, want ErrArithOperand", src, se.Kind)
 		}
 	}
 }

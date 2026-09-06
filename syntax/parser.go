@@ -979,7 +979,11 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 		case out[i].Kind == ParamExp && out[i].Param == nil:
 			out[i].Param = p.parseParamExp(out[i].Value, out[i].Pos)
 		case out[i].Kind == ArithSubst && out[i].Arith == nil:
-			out[i].Arith = p.parseArith(out[i].Value, out[i].Pos)
+			// Deferring, like the arithmetic command: a `$(( ))` whose
+			// expression will not read does not refuse the file. Both
+			// spellings come through here, so `$[echo hi]` is covered by
+			// the same line (#865).
+			out[i].Arith = p.parseArithLater(out[i].Value, out[i].Pos)
 		}
 	}
 	return &Word{Spans: out, Start: start, Stop: stop}
@@ -1669,7 +1673,11 @@ func (p *Parser) parseGroup(funcBody bool) Command {
 
 func (p *Parser) parseArithCmd() Command {
 	c := &ArithCmdClause{Expr: p.tok.Text, Start: p.tok.Pos, Stop: p.tok.End}
-	c.Parsed = p.parseArith(p.tok.Text, p.tok.Pos)
+	// The expression is not read as part of reading the file: every shell in
+	// the panel that has this construct complains about it when the command
+	// runs, so the raw text on Expr is what a diagnostic will quote and
+	// Parsed is nil until then if it cannot be read at all (#865).
+	c.Parsed = p.parseArithLater(p.tok.Text, p.tok.Pos)
 	p.next()
 	return c
 }
@@ -1724,14 +1732,18 @@ func (p *Parser) parseForArith(start Pos) Command {
 
 	init, cond, post := splitForArith(text)
 	c.InitText, c.CondText, c.PostText = init, cond, post
+	// The three parts defer too, and measured rather than assumed to: bash,
+	// ksh93 and zsh all take `for ((echo hi;;))` under `-n` and all reach
+	// past one in a branch that never runs. forArithPart already reads a
+	// part from its text where there is no tree (#865).
 	if init != "" {
-		c.Init = p.parseArith(init, at)
+		c.Init = p.parseArithLater(init, at)
 	}
 	if cond != "" {
-		c.Cond = p.parseArith(cond, at)
+		c.Cond = p.parseArithLater(cond, at)
 	}
 	if post != "" {
-		c.Post = p.parseArith(post, at)
+		c.Post = p.parseArithLater(post, at)
 	}
 
 	// This header ends itself, so the terminator before the body is optional

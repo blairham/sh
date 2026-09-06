@@ -63,7 +63,14 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	sub.Stdout = childOut
 	// Only the two named streams go through the pipes; complaints still
 	// reach whoever is watching the shell.
+	//
+	// Both sides, as background() and procSub do, and for the reason
+	// background() states: the shell carries straight on while the coprocess
+	// runs, so a lock only the coprocess takes excludes nothing — and a child
+	// the shell runs next is copied into the caller's writer by os/exec on a
+	// goroutine with no share of it. See #735.
 	sub.Stderr = r.lockedStderr()
+	r.Stderr, r.Stdout = sub.Stderr, r.lockedStdout()
 	// Handed over however the goroutine ended, for the reason a background
 	// job's status is: the shell waits below for this job to report its
 	// process, and a coprocess whose ends stayed open is a shell reading a

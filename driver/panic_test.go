@@ -179,13 +179,7 @@ func TestAnInterpreterBugInAStartupFileCostsTheFile(t *testing.T) {
 func TestAnInterpreterBugOnAGoroutineOfItsOwnCostsOnlyThatGoroutine(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{"a background job", `boom & wait -n; echo "after=$?"`, "after=2\n"},
-		// `cat` is the element downstream, and its own error stream is sent
-		// away rather than left pointing at the shell's: a child whose
-		// stderr is not a file is copied into it by os/exec, on a goroutine
-		// with no share of the lock interp puts over a caller's writer, and
-		// that races the report this test is here to read. It is #735 and
-		// it is not this.
-		{"a pipeline element", `boom | cat 2>/dev/null; echo "after=$?"`, "after=0\n"},
+		{"a pipeline element", `boom | cat; echo "after=$?"`, "after=0\n"},
 		{"a coprocess", `coproc boom; read -r l <&"${COPROC[0]}"; echo after`, "after\n"},
 		{"a process substitution", `read -r l < <(boom); echo after`, "after\n"},
 	} {

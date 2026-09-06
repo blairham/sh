@@ -325,7 +325,8 @@ while IFS= read -r line; do
 	*'"method":"observer/event"'*)
 		ev=$(printf '%s' "$line" | sed -n 's/.*"event":"\([^"]*\)".*/\1/p')
 		act=$(printf '%s' "$line" | sed -n 's/.*"action":"\([^"]*\)".*/\1/p')
-		printf 'saw %s %s\n' "$ev" "$act" >&2
+		path=$(printf '%s' "$line" | sed -n 's/.*"path":"\([^"]*\)".*/\1/p')
+		printf 'saw %s %s %s\n' "$ev" "$act" "$path" >&2
 		continue
 		;;
 	esac
@@ -407,5 +408,31 @@ func TestAnObserverDoesNotSilenceTheRecordTheShellWasAlreadyKeeping(t *testing.T
 	}
 	if !strings.Contains(got.errs, "sh: plugin watcher: saw command-start exec") {
 		t.Errorf("errs = %q, want the plugin to have been told as well", got.errs)
+	}
+}
+
+// No plugin is shown another plugin's launch.
+//
+// Every -plugin is launched before any observer sink is composed, so the exec
+// that starts one is recorded to the trace and to the audit file and to no
+// plugin. The alternative would make what a plugin can see depend on where its
+// flag sat in the argument list, which is a disclosure rule nobody could read
+// off a command line — and it would mean that adding a second plugin quietly
+// widened what the first one is told.
+func TestNoPluginIsShownAnotherPluginsLaunch(t *testing.T) {
+	first := writePlugin(t, greeter)
+	second := writePlugin(t, watcher)
+	got := sandboxed(t, "posix", "-plugin", first, "-plugin", second, "-c", "/bin/echo hi")
+	if got.code != 0 {
+		t.Fatalf("status = %d, err = %q", got.code, got.errs)
+	}
+	if !strings.Contains(got.errs, "saw command-start exec /bin/echo") {
+		t.Fatalf("errs = %q, want the observer to have been watching at all", got.errs)
+	}
+	if strings.Contains(got.errs, first) {
+		t.Errorf("errs = %q: an observer was shown the exec that launched %s", got.errs, first)
+	}
+	if strings.Contains(got.errs, second) {
+		t.Errorf("errs = %q: an observer was shown the exec that launched itself", got.errs)
 	}
 }

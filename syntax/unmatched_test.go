@@ -20,6 +20,13 @@ func TestUnmatchedDelimitersCarryTheirState(t *testing.T) {
 		{`echo 'abc`, `'`, `'`, `'abc`, 1, 1},
 		{"echo `echo", "`", "`", "`echo", 1, 1},
 		{`echo $(echo`, `$(`, `)`, `$(echo`, 1, 1},
+		// The two spellings that hold a program the other way. Before
+		// #1023 these were not an *Error at all — a plain formatted
+		// failure with none of this state on it, so no dialect could word
+		// them and ParseFailureLine answered 0.
+		{`cat <(echo`, `<(`, `)`, `<(echo`, 1, 1},
+		{`cat >(echo`, `>(`, `)`, `>(echo`, 1, 1},
+		{"cat <(cat <<E\na\nE)\n", `<(`, `)`, `<(cat <<E`, 1, 4},
 		{`echo ${x`, `${`, `}`, `${x`, 1, 1},
 		// A `${` opened inside a double quote blames the quote, which is
 		// what three of the panel do — the fourth's wording names the
@@ -28,7 +35,12 @@ func TestUnmatchedDelimitersCarryTheirState(t *testing.T) {
 		{`echo "${x"`, `"`, `"`, `${x"`, 1, 1},
 		{"echo ok\necho \"abc\ndef", `"`, `"`, `"abc`, 2, 3},
 	} {
-		_, err := Parse(c.src, Core())
+		d := Core()
+		// The two process-substitution rows need the construct to exist,
+		// and the here-document one needs a body that does not stop at the
+		// `)` — otherwise it closes and there is nothing unmatched (#963).
+		d.ProcessSubstitution = true
+		_, err := Parse(c.src, d)
 		var se *Error
 		if !errors.As(err, &se) || se.Kind != ErrUnmatched {
 			t.Errorf("%q: got %v, want an ErrUnmatched", c.src, err)

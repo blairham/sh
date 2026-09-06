@@ -712,8 +712,15 @@ func Diagnostics() interp.Diagnostics {
 		// runs out inside is closed and run, which is the grammar flag.
 		// The `"` case is a `${` that began inside a double quote, and it
 		// is worded as the quote character standing where it should not.
-		UnmatchedQuote:      "syntax error at line %[4]d: `%[1]s' unexpected",
-		UnmatchedCmdSubst:   "syntax error at line %[4]d: `(' unmatched",
+		UnmatchedQuote:    "syntax error at line %[4]d: `%[1]s' unexpected",
+		UnmatchedCmdSubst: "syntax error at line %[4]d: `(' unmatched",
+		// A process substitution reaches a different *diagnosis* here, not
+		// only a different sentence: `$(` is an unmatched parenthesis named
+		// at the opener's line, and `<(` is the end of the file named at the
+		// line the file ended on. Measured — `cat <(echo hi` in a script
+		// answers "syntax error at line 2: `end of file' unexpected" where
+		// `v=$(echo hi` answers "syntax error at line 1: `(' unmatched".
+		UnmatchedProcSubst:  "syntax error at line %[5]d: `end of file' unexpected",
 		UnmatchedBraceSubst: "%[3]s{: bad substitution",
 		SyntaxErrorStatus:   3,
 		// The status is never reached — a file `.` cannot open ends the script

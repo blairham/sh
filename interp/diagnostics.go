@@ -1645,6 +1645,15 @@ type Diagnostics struct {
 	UnmatchedBackquote string
 	// UnmatchedCmdSubst is `$(` the input ran out inside. Same verbs.
 	UnmatchedCmdSubst string
+	// UnmatchedProcSubst is `<(` or `>(` the input ran out inside. Same
+	// verbs, and empty falls back to UnmatchedCmdSubst: the parentheses hold
+	// a program either way, and three of the four shells that have the
+	// construct say about it exactly what they say about `$(`. The fourth
+	// reaches a different diagnosis rather than a different sentence — it
+	// names the end of file where it names an unmatched parenthesis for
+	// `$(` — which is why this is a wording of its own and not an argument
+	// the other one takes.
+	UnmatchedProcSubst string
 	// UnmatchedBraceSubst is `${` the input ran out inside. Same verbs.
 	UnmatchedBraceSubst string
 	// UnmatchedReportedAtOpener puts an unmatched quote's diagnostic on
@@ -2427,7 +2436,10 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 		return 0
 	}
 	if se.Kind == syntax.ErrUnmatched {
-		if se.Token == "$(" {
+		// The three openers that hold a program, together: the dialect that
+		// puts an unmatched `$(` at the line after the input's last puts
+		// `<(` and `>(` there too, which is measured rather than assumed.
+		if se.Token == "$(" || se.Token == "<(" || se.Token == ">(" {
 			if d.CmdSubstUnmatchedAtEnd && se.EndLine > 0 {
 				return se.EndLine
 			}
@@ -2567,6 +2579,11 @@ func (d Diagnostics) ParseFailure(err error) string {
 			}
 		case "$(":
 			form = d.UnmatchedCmdSubst
+		case "<(", ">(":
+			form = d.UnmatchedProcSubst
+			if form == "" {
+				form = d.UnmatchedCmdSubst
+			}
 		case "${":
 			form = d.UnmatchedBraceSubst
 		}

@@ -1234,11 +1234,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	for depth > 0 {
 		if l.eof() {
 			l.ranOut(openingOf(kind))
-			if kind == CommandSubst {
-				l.failUnmatched(open, "$(", ")", "unterminated command substitution")
-			} else {
-				l.fail(open, "unterminated %s", kind)
-			}
+			l.failedToClose(open, kind)
 			break
 		}
 		switch c := l.peek(); c {
@@ -1332,11 +1328,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 				l.advance()
 			}
 			l.ranOut(openingOf(kind))
-			if kind == CommandSubst {
-				l.failUnmatched(open, "$(", ")", "unterminated command substitution")
-			} else {
-				l.fail(open, "unterminated %s", kind)
-			}
+			l.failedToClose(open, kind)
 		}
 	}
 	// Trim the closing delimiters the loop consumed.
@@ -1345,6 +1337,31 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		end--
 	}
 	return Span{Kind: kind, Value: l.src[start:end], Quoting: q, Pos: open}
+}
+
+// failedToClose records a parenthesised construct the input ran out inside.
+//
+// The two kinds part here, and on the line holdsCommands already draws.
+// Everything that holds a *program* goes through failUnmatched, which carries
+// what a dialect words from: the opener as written, the closer that never
+// came, the text from the opener, and the line the input ran out on in both
+// conventions. Before this, only `$(` did — the two process-substitution
+// spellings took a plain formatted error instead, so all four dialects said
+// the lexer's own sentence, none of them said what its shell says, and
+// `ParseFailureLine` answered 0 because there was no *syntax.Error to read a
+// line from (#1023).
+//
+// The arithmetic one keeps the plain failure for now, and that is a scoped
+// gap rather than the same bug left half-fixed: routing it through
+// failUnmatched moves its *line* as well as its sentence — the shell that
+// reports `$(` at the line after the input's last reports `$((` at the
+// opener's — so it wants its own measured row per dialect. #1086.
+func (l *Lexer) failedToClose(open Pos, kind SpanKind) {
+	if !holdsCommands(kind) {
+		l.fail(open, "unterminated %s", kind)
+		return
+	}
+	l.failUnmatched(open, openingOf(kind), ")", "unterminated "+kind.String())
 }
 
 // scanBracket reads `$[ … ]`, the older spelling of `$(( … ))`.

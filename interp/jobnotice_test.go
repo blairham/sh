@@ -192,3 +192,37 @@ func bang(t *testing.T, r *Runner) string {
 	t.Helper()
 	return r.Expand("$!")
 }
+
+// The jobs a caller was handed stay the jobs it was handed.
+//
+// Reporting a finished job compacts the table in place and clears the slots
+// past the survivors, so that a job nobody can list is not held alive by an
+// array nobody reads. A caller still holding the longer header it took a
+// moment earlier would find a nil where its job had been, and `Wait` on a nil
+// job is a segmentation fault rather than an error.
+//
+// A prompt drawn between taking the slice and walking it is the whole of what
+// it takes, which is exactly what a shell does between one line and the next.
+func TestTheSliceOfJobsSurvivesTheTableBeingReaped(t *testing.T) {
+	var r *Runner
+	notices(t, `true & sleep 0.05`, true, No, Diagnostics{}, &r)
+	taken := r.Jobs()
+	if len(taken) != 1 {
+		t.Fatalf("%d jobs, want the one that was started", len(taken))
+	}
+	held := taken[0]
+	if lines := r.FinishedJobNotices(); len(lines) != 1 {
+		t.Fatalf("notices = %v, want the finished job reported once", lines)
+	}
+	if n := len(r.Jobs()); n != 0 {
+		t.Fatalf("%d jobs left, want the reported one forgotten", n)
+	}
+	if taken[0] != held {
+		t.Fatalf("the caller's slice holds %v after the reap, want the job it was handed", taken[0])
+	}
+	// And what it holds is still answerable, which is why a caller holds a job
+	// at all: it took the job while it was running and wants its status now.
+	if st := taken[0].Wait(); st != 0 {
+		t.Errorf("the job's status is %d, want 0", st)
+	}
+}

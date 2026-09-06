@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -684,7 +685,19 @@ func (r *Runner) setLastJob(j *Job) {
 //
 // For the shell around it: a `jobs` builtin has to list them and `fg` has to
 // find one by number, and the bookkeeping is this package's.
-func (r *Runner) Jobs() []*Job { return r.jobs }
+//
+// A copy of the header rather than the table itself, and that is the whole of
+// what it buys: reporting a finished job compacts the table in place and
+// clears the slots past the survivors, so that a job nobody lists is not held
+// alive by an array nobody reads. A caller still holding the header it was
+// handed before that compaction would be holding those cleared slots, and
+// `Wait` on a nil job is a segmentation fault rather than an error. It took
+// only a prompt drawn between taking the slice and walking it.
+//
+// The Job pointers are shared on purpose. A caller that took a job while it
+// was running can still wait for it after the table has forgotten it, which is
+// the question a caller holding a job is asking.
+func (r *Runner) Jobs() []*Job { return slices.Clone(r.jobs) }
 
 // Forget drops a job the shell has finished with — one that has been resumed
 // into the foreground and ended, or reported as done.

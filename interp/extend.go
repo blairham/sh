@@ -146,6 +146,43 @@ func (r *Runner) In() io.Reader { return r.stdin() }
 // is here because writing one found it missing.
 func (r *Runner) Diagnosef(format string, args ...any) { r.diagf(format, args...) }
 
+// DiagnoseAsTheShellf is Diagnosef for a complaint that is not the running
+// builtin's own.
+//
+// The dialect that puts a builtin's name in the location — `zsh:cd:1:` —
+// leaves it out when the message comes from machinery the builtin merely
+// asked for, and one command can write both kinds. Measured:
+// `zmodload zsh/nosuch` is `<file>:1: failed to load module …` with no
+// `zmodload:` in the location, while the same builtin's bad option is
+// `<file>:zmodload:1: bad option: -Q`. The module loader speaks in the first
+// and the builtin in the second, and the location says which.
+//
+// Here rather than at the call site because the builtin's name is this
+// package's to know: a dialect cannot reach it, and a registered builtin that
+// wrote its own prefix would be spelling a rule that already exists.
+func (r *Runner) DiagnoseAsTheShellf(format string, args ...any) {
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	r.diagf(format, args...)
+}
+
+// DynamicParameter reports whether a name is a parameter this shell
+// *produces* — one whose value is generated when it is read, registered
+// through SetDynamic or SetDynamicArray — rather than one a script assigned.
+//
+// For a builtin that has to answer whether the shell provides a parameter
+// as a feature, which is a different question from whether a variable of
+// that name happens to hold something: a script's own `options=(a b)` must
+// not make this shell look as though it had zsh's `$options`.
+func (r *Runner) DynamicParameter(name string) bool {
+	if _, ok := r.Dynamic[name]; ok {
+		return true
+	}
+	_, ok := r.DynamicArrays[name]
+	return ok
+}
+
 func (r *Runner) SetVar(name, value string) { r.setVar(name, value) }
 
 // GetVar reads a shell variable, falling back to the environment.

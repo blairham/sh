@@ -73,6 +73,87 @@ func TestDeniedExemptsOurOwnTree(t *testing.T) {
 	}
 }
 
+// TestDeniedRefusesAFetchedSuiteInsideOurOwnTree is the deliberate violation:
+// it puts another shell's tree in the one place the exemption used to cover
+// and asserts the guard still says no.
+//
+// It is the half that makes the test above mean something. Every path in this
+// repository is allowed, so a check that only walked real paths would pass
+// with the guard removed entirely — and would have passed while the hole was
+// open, which it was: measured before the change, `bash-5.3/tests/case.sub`
+// was refused everywhere on the machine except under the checkout, and under
+// the checkout is where CLEANROOM.md's own carve-out sends a fetched suite.
+// A guard whose exemption swallows the case it exists for reads exactly like a
+// guard that works.
+//
+// The reason matters as much as the refusal. A fetched suite is refused for
+// being another shell's *source tree*, which is the rule that has no business
+// standing down inside our tree, and not for sitting in a directory called
+// `tests`, which is the rule that does.
+func TestDeniedRefusesAFetchedSuiteInsideOurOwnTree(t *testing.T) {
+	for _, tc := range []struct {
+		name, own, path, want string
+	}{
+		{
+			// Where `make bash-suite` would fetch to: gitignored, inside the
+			// tree, and still another shell's distribution.
+			name: "an unpacked distribution under the build directory",
+			own:  "/home/me/sh",
+			path: "/home/me/sh/build/suites/bash-5.3/tests/case.sub",
+			want: wild.ReasonShellSource,
+		},
+		{
+			name: "the same for zsh",
+			own:  "/home/me/sh",
+			path: "/home/me/sh/build/suites/zsh-5.9/Test/A01grammar.ztst",
+			want: wild.ReasonShellSource,
+		},
+		{
+			name: "an installed distribution's layout, fetched in",
+			own:  "/home/me/sh",
+			path: "/home/me/sh/build/suites/zsh/5.9/functions/compinit",
+			want: wild.ReasonShellSource,
+		},
+		{
+			// Unchanged, and the reason the narrowing is a narrowing: our own
+			// testdata is generated from oracle runs and is ours to read.
+			name: "our own generated testdata is still ours",
+			own:  "/home/me/sh",
+			path: "/home/me/sh/internal/oracle/testdata/record.sh",
+			want: "",
+		},
+		{
+			name: "a directory of ours called tests is still ours",
+			own:  "/home/me/sh",
+			path: "/home/me/sh/tests/case.sh",
+			want: "",
+		},
+		{
+			// The path *above* the checkout is somebody's own naming. A
+			// worktree branched for a bash fix is not bash, and refusing the
+			// whole tree for its parent's name would take the sweep out with
+			// it.
+			name: "a checkout whose own directory name starts with a marker",
+			own:  "/home/me/bash-fix",
+			path: "/home/me/bash-fix/interp/case.sh",
+			want: "",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := wild.Denied(tc.path, tc.own); got != tc.want {
+				t.Errorf("Denied(%q, %q) = %q, want %q", tc.path, tc.own, got, tc.want)
+			}
+			// Asked of the directory too, because the walk stops on that
+			// question and never reaches the file's: a rule that refused the
+			// file and let the walk in would open every other file in the
+			// tree on the way past.
+			if got := wild.DeniedDir(filepath.Dir(tc.path), tc.own); got != tc.want {
+				t.Errorf("DeniedDir(%q, %q) = %q, want %q", filepath.Dir(tc.path), tc.own, got, tc.want)
+			}
+		})
+	}
+}
+
 // A denied file is counted and never surfaced: the sweep must not open it
 // even to read the shebang, and the report must not hand anyone its path.
 func TestFindCountsDeniedFilesWithoutOpeningThem(t *testing.T) {
@@ -108,6 +189,60 @@ func TestFindCountsDeniedFilesWithoutOpeningThem(t *testing.T) {
 	}
 	if skipped[wild.ReasonTestData] != 2 {
 		t.Errorf("skipped[%q] = %d, want 2", wild.ReasonTestData, skipped[wild.ReasonTestData])
+	}
+}
+
+// TestFindRefusesAFetchedSuiteInTheTreeItRunsFrom is the same refusal end to
+// end, through the walk, with the checkout being the directory the sweep is
+// standing in.
+//
+// The unit test above asks Denied and DeniedDir directly, which leaves the one
+// thing between them and the sweep untested: Find takes own from os.Getwd, so
+// nothing in a table can put a suite inside it. This does, by standing the
+// sweep in a temporary directory and unpacking a distribution below it.
+//
+// The file is made unreadable, which is how the whole file asserts "never
+// opened" rather than "not reported": if the walk tries to read it the count
+// breaks rather than quietly succeeding.
+func TestFindRefusesAFetchedSuiteInTheTreeItRunsFrom(t *testing.T) {
+	// Resolved before the sweep is stood in it. On this platform the scratch
+	// directory is reached through a symbolic link, and the walk judges each
+	// path *and* its resolved form — deliberately, so a link into a shell's
+	// tree is refused — so an unresolved cwd would put our own files outside
+	// our own tree and deny them. That is the safe direction to be wrong in
+	// and it is not what this test is about.
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	// build/ is gitignored, which is what makes it the place a suite is
+	// fetched to and never committed — and, until this, the place the walk
+	// would read it from.
+	suite := filepath.Join(dir, "build", "suites", "bash-5.3", "tests")
+	ours := filepath.Join(dir, "internal", "oracle", "testdata")
+	for _, d := range []string{suite, ours} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(t, suite, "case.sub", "#!/bin/sh\necho hi\n")
+	if err := os.Chmod(filepath.Join(suite, "case.sub"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	// Ours, in a directory whose name the other rule would refuse, so the
+	// same run proves the narrowing did not become a blanket denial.
+	allowed := write(t, ours, "record.sh", "#!/bin/sh\necho hi\n")
+
+	paths, skipped := wild.Find(wild.Scope{Dirs: []string{dir}, Depth: 6})
+	if len(paths) != 1 || paths[0] != allowed {
+		t.Errorf("paths = %v, want just %s", paths, allowed)
+	}
+	if skipped[wild.ReasonShellSource] != 1 {
+		t.Errorf("skipped[%q] = %d, want 1", wild.ReasonShellSource, skipped[wild.ReasonShellSource])
+	}
+	if n := skipped[wild.ReasonTestData]; n != 0 {
+		t.Errorf("skipped[%q] = %d, want 0 — our own testdata is ours to read", wild.ReasonTestData, n)
 	}
 }
 

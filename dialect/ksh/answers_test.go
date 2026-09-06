@@ -87,6 +87,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.Yes},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.Yes},
+		{"InteractiveMonitorNeedsATerminal", s.InteractiveMonitorNeedsATerminal, interp.No},
 		{"UnsetReadonlyFatal", s.UnsetReadonlyFatal, interp.No},
 		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},

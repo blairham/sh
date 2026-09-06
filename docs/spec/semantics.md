@@ -4781,6 +4781,41 @@ end gave it a person to report jobs to (JobControl) has a terminal, so
 the question is asked only without one. Turning the option *off* is
 granted everywhere.
 
+**`InteractiveMonitorNeedsATerminal`** — bash yes · dash yes · ksh93 no · zsh yes
+
+Ties the monitor an *interactive* shell turns on for itself to having a
+terminal. A different question from the one above: that is a script
+asking with `set -m`, and this is nobody asking at all.
+
+**The rule it qualifies is unanimous.** `-i script.sh` through a
+pseudo-terminal turns the monitor on in all four — bash 5.3.15, dash,
+ksh93u+ and zsh 5.9.2 all put `m` in `$-`, and the first three list
+`monitor on`. What splits is the same invocation with no terminal
+anywhere: ksh93 still reports `monitor on` and `imBE`, and the other
+three leave it off. See docs/spec/invocation.md for the grid.
+
+**It is not `MonitorNeedsATerminal` read twice**, and bash separates them
+in one binary: `bash -c 'set -m'` with no terminal turns the monitor on,
+and `bash -i script.sh` with no terminal leaves it off.
+
+The terminal that counts is one on **any of the three standard streams**,
+measured — a controlling terminal with all three redirected elsewhere is
+not enough, and a pseudo-terminal on any one of the three alone is.
+
+The preset says a terminal *is* needed, and this is the rarer case where
+the text does not decide: XCU enables `-m` by default for interactive
+shells and names no terminal in that sentence, but defines job control
+throughout in terms of a controlling terminal — so the sentence is silent
+about having none rather than permissive about it. Silent text gets the
+answer that claims less, which is three of the four as well.
+
+Read rather than `ask`ed, as `InteractiveOptionLetters` is: the answer is
+wanted once at startup, so refusing over an unanswered field would put
+"the shells disagree here" ahead of every `-i script.sh` under a preset
+that has not chosen. Unanswered reads as yes, which leaves the monitor
+off — the majority and the quiet answer.
+
+
 **`WaitReadsOptions`** — bash yes · dash yes · ksh93 yes · zsh no
 
 Reads a leading `-` word as an option rather than as a job to wait for.

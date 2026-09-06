@@ -222,6 +222,38 @@ func (r *Runner) SetPosixMode(on bool) {
 // posix option or invoked as `sh`. See Semantics.NonInteractiveStartupVariable.
 func (r *Runner) PosixMode() bool { return r.posixMode }
 
+// SetInteractiveMonitor turns the monitor on because this shell is an
+// interactive one, which is what every shell in the panel does for itself.
+//
+// Exported for the front end, and separate from setMonitor for the reason
+// SetPosixMode is separate from `set -o posix`: this is not a request a script
+// made, so there is nobody to refuse and nothing to word. Measured, and the
+// two really are different questions — `bash -c 'set -m'` with no terminal
+// turns the monitor on, and `bash -i script.sh` with no terminal leaves it
+// off, so a shell that routed one through the other would answer the second
+// with the first's answer.
+//
+// hasTerminal is the front end's to establish: interp is a library and has no
+// standing to ask the process what it was handed. Whether the answer matters
+// is the dialect's — Semantics.InteractiveMonitorNeedsATerminal — and one
+// member of the panel says it does not.
+//
+// Only ever turns it on. A shell that has decided it is not running a monitor
+// leaves the state where it was, so an inherited `set -m` is not undone by
+// this.
+func (r *Runner) SetInteractiveMonitor(hasTerminal bool) {
+	// Read rather than `ask`ed, for the reason InteractiveOptionLetters is
+	// read: this runs once at startup, before the program has done anything,
+	// so an unanswered axis would put "the shells disagree here" on the
+	// screen ahead of every `-i script.sh` under a preset that has not
+	// chosen — including scripts that never mention a job. An unanswered
+	// field therefore reads as the majority and the quiet answer, which is
+	// that a terminal is needed and the monitor stays off.
+	if hasTerminal || r.sem().InteractiveMonitorNeedsATerminal == No {
+		r.monitor = true
+	}
+}
+
 // setMonitor is `set -m`, the one request in the table a dialect can refuse:
 // two of the panel tie job control to the terminal, and this runner only has
 // one when a front end said so (JobControl).

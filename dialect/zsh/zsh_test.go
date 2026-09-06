@@ -752,3 +752,18 @@ func TestNothingIsSaidAboutJobControlAtStartup(t *testing.T) {
 		t.Errorf("NoJobControlAtStartup = %q, want empty — this shell says nothing", got)
 	}
 }
+
+// The wording for a job spec that names nothing is the shared one; the status
+// is not.
+//
+// Measured: `jobs %9` reports 127 — the status of a command that is not there,
+// which is what this shell takes a job that is not there to be, and the same
+// number its own `wait` gives for the same question.
+func TestTheJobSpecThatNamesNothing(t *testing.T) {
+	if got := zsh.Diagnostics().NoSuchJob; got != "" {
+		t.Errorf("NoSuchJob = %q, want empty — the shared wording", got)
+	}
+	if got, want := zsh.Diagnostics().NoSuchJobStatus, 127; got != want {
+		t.Errorf("NoSuchJobStatus = %d, want %d", got, want)
+	}
+}

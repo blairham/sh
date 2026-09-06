@@ -567,7 +567,12 @@ func Diagnostics() interp.Diagnostics {
 		InvocationUsage:    "Usage: %[2]s [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]",
 		SignalDescriptions: signalDescriptions(),
 		JobRunning:         " Running",
-		JobStopped:         "Stopped",
+		// The spec is not named. Measured on `jobs %9`, which says exactly
+		// `jobs: no such job` — the one wording in this area that uses
+		// neither verb, and it is the shell rather than a truncation: `%nope`
+		// produces the same line.
+		NoSuchJob:  "%[1]s: no such job",
+		JobStopped: "Stopped",
 		// ^Z prints the listing's own row straight after the echoed `^Z`, as
 		// dash does; `fg` names the command alone. `bg` writes the job
 		// number, a tab, the command and an `&` with no space before it —

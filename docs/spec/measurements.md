@@ -1032,6 +1032,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `jobs/a-substitution-and-the-parents-jobs` | `no jobs` | `the parent's job` | `the parent's job` | `the parent's job` | `the parent's job` | `no jobs` |
 | `jobs/a-subshell-lists-a-job-it-started-itself` | `its own` | `its own` | `its own` | `its own` | `its own` | `its own` |
 | `jobs/two-job-specs-in-the-order-written` | `[2] + Running                    ~[1] - Running                    ` | `[2]+  Running                    sleep 0.5 &~[1]-  Running                    sleep 0.4 &` | `[2]+  Running                    sleep 0.5 &~[1]-  Running                    sleep 0.4 &` | `[2]+  Running                 sleep 0.5 &~[1]-  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[2]  + running    sleep 0.5~[1]  - running    sleep 0.4` |
+| `jobs/slot-a-running-job-occupies-its-slot` | `one=0~two=0~three=2` | `one=0~two=0~three=1` | `one=0~two=0~three=1` | `one=0~two=0~three=1` | `one=0~two=0~three=1` | `one=0~two=0~three=127` |
+| `jobs/slot-a-status-query-does-not-consume-it` | `a=0~b=0` | `a=0~b=0` | `a=0~b=0` | `a=0~b=0` | `a=0~b=0` | `a=0~b=0` |
+| `jobs/slot-an-empty-table-has-no-first-slot` | `one=2` | `one=1` | `one=1` | `one=1` | `one=1` | `one=127` |
+| `jobs/slot-the-complaint-about-one-that-is-not-there` | `<shell>: 1: jobs: No such job: %9` *(status 2)* | `<shell>: line 1: jobs: %9: no such job` *(status 1)* | `<shell>: line 1: jobs: %9: no such job` *(status 1)* | `<shell>: line 0: jobs: %9: no such job` *(status 1)* | `<shell>: jobs: no such job` *(status 1)* | `<shell>:jobs:1: %9: no such job` *(status 127)* |
+| `jobs/slot-the-last-background-pid-outlives-a-bare-wait` | `bang=set` | `bang=set` | `bang=set` | `bang=set` | `bang=set` | `bang=set` |
 | `read/interrupted-by-a-trapped-signal` | `T~st=1 l=[]` | `T~st=0 l=[late]` | `T~st=130 l=[]` | `T~st=0 l=[late]` | `T~st=258 l=[]` | `T~st=0 l=[late]` |
 | `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
 | `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
@@ -1338,6 +1343,33 @@ grades it and nothing drift-checks it either, for the same reason.
 - `jobs/two-job-specs-in-the-order-written` — operands settle the order themselves — `%2 %1` lists 2 then 1 in all five, including the two whose bare listing starts from the newest — and each row keeps the job's own number rather than counting from the start of the listing
   ```sh
   sleep 0.4 & sleep 0.5 & jobs %2 %1; wait
+  ```
+- `jobs/slot-a-running-job-occupies-its-slot` — the jobs table asked one slot at a time, through a status rather than a listing — which is the only way this is gradeable at all. A bare `jobs` prints a `Done` row for a reaped job on some runs of the same binary and not others, so a family of listing cases would be a family of rows nobody can use (#783). A status has no text to race: two slots are occupied and the third is not, and the number for *not there* is four different answers — bash 1, dash 2, ksh93 1, zsh 127 — which is the whole reason the probe needed the number to be right before it could grade anything. The jobs are five seconds long and killed at the end, so nothing here waits on a scheduler; the trailing `:` keeps the case about slots rather than about what `kill %n` reports, which dash alone answers 1
+  ```sh
+  sleep 5 & sleep 5 &
+  jobs %1 >/dev/null 2>&1; echo "one=$?"
+  jobs %2 >/dev/null 2>&1; echo "two=$?"
+  jobs %3 >/dev/null 2>&1; echo "three=$?"
+  kill %1 2>/dev/null; kill %2 2>/dev/null; :
+  ```
+- `jobs/slot-a-status-query-does-not-consume-it` — the control that makes the row above a probe rather than a measurement of itself: asking about a slot twice gives the same answer twice in all six. It matters because a *listing* does consume what it reports — a finished job is reported once and then forgotten — so a reader could reasonably expect the query to be destructive too. It is not, for a job that is still running
+  ```sh
+  sleep 5 &
+  jobs %1 >/dev/null 2>&1; echo "a=$?"
+  jobs %1 >/dev/null 2>&1; echo "b=$?"
+  kill %1 2>/dev/null; :
+  ```
+- `jobs/slot-an-empty-table-has-no-first-slot` — the floor of the probe, and the cheapest reading of the four not-there statuses: no job has ever been started, so slot one is not there. Same four answers as the row above, with nothing else in the script that could have produced them
+  ```sh
+  jobs %1 >/dev/null 2>&1; echo "one=$?"
+  ```
+- `jobs/slot-the-complaint-about-one-that-is-not-there` — the wording beside the status, and it is three different sentences: bash and zsh name the spec after the builtin, dash puts the sentence first and the spec after it, and ksh93 names no spec at all — `jobs: no such job`, which is the shell and not a truncation, because `%nope` produces the same line
+  ```sh
+  jobs %9 2>&1 >/dev/null
+  ```
+- `jobs/slot-the-last-background-pid-outlives-a-bare-wait` — `$!` is a value the shell keeps and not a job it is still holding: after a bare `wait` the job has ended, and every shell in the panel still reports its pid. Asked as a yes/no because the pid itself is different every run — the same reason the rest of this family asks for a status rather than for text. It is here because it was not true: `$!` read the current job, and the notice that reports a finished job drops that, so on the interactive route `$!` went empty the moment the `Done` row was printed
+  ```sh
+  sleep 0 & wait; case ${!:-} in "") echo "bang=empty";; *) echo "bang=set";; esac
   ```
 - `read/interrupted-by-a-trapped-signal` — a `read` waiting on a pipe when a trapped signal arrives, which is where the prior reading of `$?` after an interrupt — 130, measured against bash — turns out to be one of four answers. bash 5.3, bash 3.2 and zsh run the handler and *resume* the read, so the line that arrives afterwards is read and the status is 0; the same bash 5.3 called `sh` abandons it at 130; dash abandons it at 1; ksh93 answers 258. The late write is what makes the case terminate at all rather than recording three timeouts, and it is what makes the resuming shells observably different from a shell that merely returned 0
   ```sh

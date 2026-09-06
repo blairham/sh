@@ -88,6 +88,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"EchoInterpretsEscapes", s.EchoInterpretsEscapes, interp.No},
 		{"LengthOfSpecialIsCount", s.LengthOfSpecialIsCount, interp.Yes},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},
+		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.Yes},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.No},

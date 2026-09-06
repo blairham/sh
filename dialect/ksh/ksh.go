@@ -83,6 +83,10 @@ func Dialect() syntax.Dialect {
 // Semantics is what ksh93 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// An unquoted list is its elements taken one at a time, never their
+	// join: `IFS=:; set -- "x:" y; printf "[%s]" $@` is `[x][y]` here and
+	// `[x][][y]` in bash, which joins to `x::y` first.
+	s.UnquotedListJoinsOnIFS = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD

@@ -284,6 +284,10 @@ func Semantics() interp.Semantics {
 	// local's value.
 	s.LocalInheritsTheExportAttribute = interp.No
 	s.SplitParamExpansion = interp.No
+	// An unquoted list is its elements, never their join: `IFS=:; a=(x y);
+	// printf "[%s]" ${a[*]}` is `[x][y]` here, and with `shwordsplit` on,
+	// `a=("x y" z)` is `[x][y][z]` — neither of which a join can produce.
+	s.UnquotedListJoinsOnIFS = interp.No
 	s.GlobExpansionResults = interp.No
 	s.GlobNoMatchIsError = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No

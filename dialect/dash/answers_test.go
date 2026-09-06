@@ -79,6 +79,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.No},
 		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},
+		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},

@@ -7099,6 +7099,46 @@ Prints `set +x` before acting on it. True in dash, bash and zsh; ksh93
 applies the change first, so the command that stops tracing leaves no
 trace of itself.
 
+**`UnquotedListJoinsOnIFS`** — bash yes · dash no · ksh93 no · zsh no
+
+Makes an unquoted list expansion one string first — the elements joined
+on the *first character* of `IFS` — and splits that, rather than
+splitting each element on its own. bash, bash 3.2 and bash as `sh` join;
+zsh, ksh93 and dash do not.
+
+The two readings agree under a whitespace `IFS`, which is what made the
+difference easy to miss and what keeps a plain `for f in $@` from
+demanding an answer. Under a non-whitespace one they part, and the
+divergence has three faces that one answer produces and no rule about
+*empty elements* can:
+
+    IFS=:; set -- x "" y    → bash 3 [x][][y]   ksh93/dash 2 [x][y]
+    IFS=:; set -- x y ""    → bash 2 [x][y]     ksh93 3 [x][y][]
+    IFS=:; set -- "x:" y    → bash 3 [x][][y]   ksh93/dash 2 [x][y]
+
+An empty element *between* others survives, because two separators meet
+and the field between them is a field. One at the *end* does not, because
+the join puts a trailing separator there and a trailing delimiter is
+absorbed. And an element ending in a separator makes an empty field with
+nothing empty anywhere. Every one of bash's answers is the scalar split
+of the joined string — `x::y`, `x:y:`, `x::y` — which is what says it
+joins rather than that it has a second rule.
+
+zsh is what shows the join is real: with its splitting off it answers
+`[x:][y]` for the third row, which no arrangement of the splitting answer
+reaches, since a join would give one field there and it gives two.
+
+The *quoted* spellings are not this question and must not reach it:
+`"$@"` and `"${a[@]}"` are one field per element and `"$*"` and
+`"${a[*]}"` are one joined field, in every shell measured — both core.
+
+Asked only at the disagreement. It is not reached when the two readings
+give the same fields, when there is nothing to join (one element) or
+nothing to join *with* (`IFS` set and empty, where no shell joins:
+`IFS=""; set -- x y` is two fields in all four), or when splitting is
+off — with no split to undo the join the whole list would be one field,
+which no shell does, so `SplitParamExpansion` stands in front of it.
+
 
 ### options, pipelines and status
 

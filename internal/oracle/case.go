@@ -3443,6 +3443,41 @@ echo "st=$?"`,
 		Why:     "the bare name inherits both stages, because it *is* the whole-array expansion in the shell that reads it as a list. The rows that made the bare name a list avoid separators inside elements and so pass under either reading; this one does not, and it is where `for f in $files` stops being right for a filename with a space in it",
 	},
 	{
+		ID: "expansion/an-empty-element-under-a-non-whitespace-separator", Category: "semantics axes",
+		Snippet: `IFS=:; set -- x "" y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the row #1013 is about, and the one that turns the empty-element rule from a unanimous drop into an axis. bash, bash 3.2 and bash as `sh` join the parameters on the first character of IFS before splitting, so `x::y` has two separators meeting and the field between them survives — three fields from three parameters. ksh93 and dash take the elements one at a time and the empty one is no field at all, so two come out; zsh drops it too, and keeps it under `setopt shwordsplit`. The count is printed with the fields because `[x][y]` and `[x][][y]` are the same characters once the boundaries are gone",
+	},
+	{
+		ID: "expansion/an-empty-element-under-a-whitespace-separator", Category: "expansion",
+		Snippet: `set -- x "" y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the contrast that says the disagreement is the separator's and not the empty element's: with a whitespace IFS every shell in the panel drops it, because a run of separators is one delimiter there however the fields were arrived at. This is the row that made the drop look unanimous, and it is why the axis must not be asked here",
+	},
+	{
+		ID: "expansion/a-trailing-empty-element-under-a-non-whitespace-separator", Category: "semantics axes",
+		Snippet: `IFS=:; set -- x y ""; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the other face of the same answer, and the reason the axis cannot be spelled *an empty element survives*: the join that keeps a middle empty is what loses a trailing one, because `x:y:` ends in a separator and a trailing separator makes no field. bash answers two. zsh under `shwordsplit` does not join and keeps three, and ksh93 keeps three here while dropping the middle one in the row above — the one shape in the panel neither reading explains",
+	},
+	{
+		ID: "expansion/an-element-ending-in-a-separator-meets-the-join", Category: "semantics axes",
+		Snippet: `IFS=:; set -- "x:" y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the face no rule about *empty elements* reaches at all: nothing here is empty, and bash still answers three fields because the separator ending the first element meets the one the join puts after it. Taken one at a time the trailing separator makes no field and two come out, which is ksh93's and dash's answer. It is the row that says the question is the join rather than the element",
+	},
+	{
+		ID: "expansion/the-array-spelling-joins-with-the-parameters", Category: "expansion",
+		Snippet: `IFS=:; a=(x "" y); set -- ${a[@]}; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "`$@` and `${a[@]}` are the same fields for the same elements in every shell measured, which is what keeps the two branches from parting company — they reach the answer by different code and must not disagree",
+	},
+	{
+		ID: "expansion/the-scalar-path-splits-the-same-string-the-join-makes", Category: "expansion",
+		Snippet: `IFS=:; v="x::y"; set -- $v; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the string bash's join produces, split on its own: every shell that splits answers three fields, so the scalar path is unanimous and is not the axis. It is the anchor for the list rows above — bash's list answer is exactly this one, which is what says bash joins rather than that it has a second rule about empty elements",
+	},
+	{
+		ID: "expansion/an-empty-ifs-joins-nothing", Category: "expansion",
+		Snippet: `IFS=""; set -- x y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "an IFS that is set and empty has no first character to join on, and no shell in the panel joins there — two fields, where a join would leave one. The guard on the axis: it must not be asked where there is nothing to join with",
+	},
+	{
 		ID: "expansion/an-unquoted-star-subscript-does-not-always-join", Category: "expansion",
 		Snippet: `a=("x y" z); printf "[%s]" ${a[*]}; echo`,
 		Why:     "the neighbor of the `[@]` rows and a question of its own: bash and ksh93 join the elements on IFS and split the result, which is why they answer three fields, while zsh does not join an *unquoted* `[*]` at all and answers two — the same two `${a[@]}` gives it. Quoted, all three join. So whether an unquoted `[*]` joins is not decided by whether the shell splits, and no arrangement of the splitting answer produces zsh's reading here",

@@ -57,6 +57,36 @@ type Semantics struct {
 	// SplitCommandSubstitution field-splits an unquoted command
 	// substitution. True everywhere measured, including zsh.
 	SplitCommandSubstitution Answer
+	// UnquotedListJoinsOnIFS makes an unquoted list expansion one string —
+	// the elements joined on the first character of IFS — before the split
+	// above runs on it, rather than splitting each element on its own.
+	//
+	// True in bash, bash 3.2 and bash as `sh`; false in zsh, ksh93 and dash.
+	// It is one question wearing two faces, and both were being answered
+	// without asking: `$@` and `${a[@]}` never joined, which is right for
+	// three of the six, and `$*` and `${a[*]}` always did, which is right for
+	// the other three.
+	//
+	// The join is what decides the fate of an *empty* element, which is where
+	// it shows. Under a non-whitespace IFS, `set -- x "" y` is `x::y` joined
+	// and splits back to three fields in bash, where splitting each element
+	// on its own drops the empty one and leaves two. The same join is why
+	// bash then *loses* a trailing empty element — `set -- x y ""` is `x:y:`,
+	// and a trailing separator makes no field — while zsh, which does not
+	// join, keeps it. No arrangement of the splitting answer alone reaches
+	// either reading, which is why this is a question of its own.
+	//
+	// Asked only at the disagreement: the two readings coincide under a
+	// whitespace IFS, which is why `a=("" x)` is `[x]` in every shell
+	// measured and needs no answer, and there is nothing to join with when
+	// IFS is set and empty. See Runner.elementFields, which computes both and
+	// asks only when they differ.
+	//
+	// The *quoted* spellings are not this question and must not reach it:
+	// `"$*"` and `"${a[*]}"` join on the first character of IFS in every
+	// shell measured, and `"$@"` and `"${a[@]}"` keep one field per element
+	// in every shell measured. Both are core.
+	UnquotedListJoinsOnIFS Answer
 
 	// GlobExpansionResults matches the *result* of an expansion against the
 	// filesystem. False in zsh, where only a pattern written literally in the
@@ -3248,8 +3278,13 @@ const (
 // wrong one for a runtime.
 func PosixSemantics() Semantics {
 	return Semantics{
-		SplitParamExpansion:                      Yes,
-		SplitCommandSubstitution:                 Yes,
+		SplitParamExpansion:      Yes,
+		SplitCommandSubstitution: Yes,
+		// A null field from an unquoted expansion is removed, which is the
+		// reading that takes the elements one at a time — and it is dash's,
+		// the shell in the panel that targets this text. bash's join is the
+		// departure from it.
+		UnquotedListJoinsOnIFS:                   No,
 		GlobExpansionResults:                     Yes,
 		GlobNoMatchIsError:                       No,
 		AssignmentPrefixPersistsOnSpecialBuiltin: Yes,

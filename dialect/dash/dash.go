@@ -39,6 +39,11 @@ func Dialect() syntax.Dialect {
 // Semantics is what dash means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// An unquoted list is its elements taken one at a time, never their
+	// join — the reading POSIX describes, and the one an empty element
+	// disappears under: `IFS=:; set -- x "" y` is two fields here and three
+	// in bash.
+	s.UnquotedListJoinsOnIFS = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// The panel's only shell with no multibyte decoder: `s=héllo; echo

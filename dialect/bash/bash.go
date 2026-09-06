@@ -93,6 +93,13 @@ func Dialect() syntax.Dialect {
 // Semantics is what bash 5 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// An unquoted list is joined on the first character of IFS and split
+	// back, which is what makes `IFS=:; set -- x "" y; printf "[%s]" $@`
+	// three fields here and two in ksh93 and dash. The join is also what
+	// loses a *trailing* empty element — `set -- x y ""` is `x:y:`, and a
+	// trailing separator makes no field — so this one answer is what the
+	// panel's two shapes of disagreement both come from.
+	s.UnquotedListJoinsOnIFS = interp.Yes
 	// The panel's holdout on the login profile, measured on all four
 	// non-interactive routes and in both bash 5.3 and the 3.2 macOS ships:
 	// `exec -a -bash bash script.sh` reads neither ~/.bash_profile nor

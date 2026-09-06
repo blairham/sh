@@ -36,7 +36,7 @@ func TestASubscriptNeedsNoBraces(t *testing.T) {
 		{"a comparison reads it", `a=(x y fig); [[ "$a[-1]" == fig ]] && echo last`, "last\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := condRun(t, tc.src)
+			out, st := answersRun(t, tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s gave %q at %d, want %q at 0", tc.src, out, st, tc.want)
 			}
@@ -64,7 +64,7 @@ func TestALengthNeedsNoBraces(t *testing.T) {
 		{"inside a condition", `a=(x y z); [[ $#a -eq 3 ]] && echo three`, "three\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := condRun(t, tc.src)
+			out, st := answersRun(t, tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s gave %q at %d, want %q at 0", tc.src, out, st, tc.want)
 			}

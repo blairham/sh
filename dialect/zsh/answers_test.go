@@ -18,9 +18,20 @@ import (
 // package proves what each axis value does, and this file pins which value
 // this preset gives — plus the few composites that are this shell's alone.
 
+// answersRun parses and runs one snippet as this dialect.
+//
+// The dialect is handed to the runner as well as to the parser, and both
+// halves are load-bearing. The parser decides what the source *is*; the
+// runner asks Runner.Dialect what a pattern means, whether arithmetic has
+// floats, and what grammar nested input — a command substitution, an `eval`,
+// a trap body, a sourced file — is parsed with. A runner built without one
+// falls back to the core, so a test whose whole purpose is to assert this
+// dialect's answer was asserting the core's: `[[ $k == a(b|c) ]]` parsed here
+// and then did not match (#849, found closing #826).
 func answersRun(t *testing.T, src string) (string, int) {
 	t.Helper()
-	f, err := syntax.Parse(src, zsh.Dialect())
+	d := zsh.Dialect()
+	f, err := syntax.Parse(src, d)
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
@@ -28,7 +39,7 @@ func answersRun(t *testing.T, src string) (string, int) {
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
 	r := &interp.Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
-		Name: "sh", Env: []string{"PATH=/usr/bin:/bin"},
+		Dialect: &d, Name: "sh", Env: []string{"PATH=/usr/bin:/bin"},
 	}
 	zsh.Apply(r)
 	st, rerr := r.Run(context.Background(), f)
@@ -36,6 +47,28 @@ func answersRun(t *testing.T, src string) (string, int) {
 		return buf.String() + "unsupported: " + rerr.Error(), -1
 	}
 	return buf.String(), st
+}
+
+// TestTheHelperRunsUnderThisDialectAndNotTheCore guards the field answersRun
+// sets. The pattern-matching half of the same claim is in
+// condalternation_test.go, which is where #849 was found; this is the nested
+// parse, which no dialect's suite covered.
+//
+// `repeat` is this shell's loop and not the core's, and an `eval` reparses
+// its argument with Runner.Dialect. Measured, zsh 5.9.2:
+//
+//	$ zsh -c 'eval "repeat 2 echo hi"'
+//	hi
+//	hi
+//
+// Without the field the reparse happens under the core, where `repeat` is
+// not a keyword and there is no such command.
+func TestTheHelperRunsUnderThisDialectAndNotTheCore(t *testing.T) {
+	out, st := answersRun(t, `eval 'repeat 2 echo hi'`)
+	if strings.TrimSpace(out) != "hi\nhi" || st != 0 {
+		t.Errorf("answersRun = %q status %d, want two lines of hi: the runner was not told the dialect",
+			out, st)
+	}
 }
 
 func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {

@@ -40,7 +40,7 @@ func TestASubscriptPairIsARange(t *testing.T) {
 		{"without braces", `a=(w x y z); echo "[$a[1,3]]"`, "[w x y]\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := condRun(t, tc.src)
+			out, st := answersRun(t, tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s gave %q at %d, want %q at 0", tc.src, out, st, tc.want)
 			}
@@ -55,7 +55,7 @@ func TestASubscriptPairIsARange(t *testing.T) {
 // element. Answering that here would be the other dialect's reading wearing
 // this one's name, which is the silent kind of wrong.
 func TestASubscriptWithThreePartsIsRefused(t *testing.T) {
-	out, st := condRun(t, `a=(w x y z); echo "[${a[1,2,3]}]"; echo after`)
+	out, st := answersRun(t, `a=(w x y z); echo "[${a[1,2,3]}]"; echo after`)
 	if want := "zsh:1: bad substitution\n"; out != want {
 		t.Errorf("output %q, want %q", out, want)
 	}
@@ -87,7 +87,7 @@ func TestASubscriptOnAStringIsACharacter(t *testing.T) {
 		{"without braces", `s=hello; echo "[$s[2]]"`, "[e]\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := condRun(t, tc.src)
+			out, st := answersRun(t, tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s gave %q at %d, want %q at 0", tc.src, out, st, tc.want)
 			}
@@ -118,7 +118,7 @@ func TestASubscriptOnTheSpecialParameters(t *testing.T) {
 		{"without braces", `set -- a b c; echo "[$@[1]][$*[2]]"`, "[a][b]\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := condRun(t, tc.src)
+			out, st := answersRun(t, tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s gave %q at %d, want %q at 0", tc.src, out, st, tc.want)
 			}
@@ -145,7 +145,7 @@ func TestAQuotedSubscriptMakesTheFieldsItsNameMakes(t *testing.T) {
 		{"and keeps its fields under the at", `a=(x y z); set -- "${a[@]}"; echo "n=$#"`, "n=3\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := condRun(t, tc.src)
+			out, st := answersRun(t, tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s gave %q at %d, want %q at 0", tc.src, out, st, tc.want)
 			}
@@ -164,7 +164,7 @@ func TestALengthOverARangeCountsWhatTheRangeNamed(t *testing.T) {
 		{"parameters are counted", `set -- a b c; echo "[${#@[1,2]}]"`, "[2]\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := condRun(t, tc.src)
+			out, st := answersRun(t, tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s gave %q at %d, want %q at 0", tc.src, out, st, tc.want)
 			}

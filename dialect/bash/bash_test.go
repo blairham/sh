@@ -109,6 +109,9 @@ func TestSemantics(t *testing.T) {
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.No},
+		// A `[[ -o ]]` name this shell does not have is a quiet false, which
+		// is not what the same name does to `set -o` one line above.
+		{"UnknownConditionOptionIsAStatus", s.UnknownConditionOptionIsAStatus, interp.No},
 		// `set -h` is command tracking here, and `set -m` is granted to a
 		// script with no terminal — measured, silently.
 		{"SetHasTheHLetter", s.SetHasTheHLetter, interp.Yes},

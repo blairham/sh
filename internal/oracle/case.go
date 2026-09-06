@@ -1555,6 +1555,42 @@ var Corpus = []Case{
 		Why:     "a caught signal runs its handler and the script carries on, which is the whole reason to catch one",
 	},
 	{
+		// The shape that was wrong, and the reason it is this one. A handler
+		// runs between commands, so an `exit` raised by a signal delivered
+		// during the body is read at the top of the *next* command — and in
+		// a `while` the next command is the condition. A loop that reads
+		// that refusal as a condition's answer finds it non-zero, decides
+		// the loop is over, and writes its own bookkeeping over the 7: the
+		// handler's line is printed, `after` is never reached, and the shell
+		// exits 0 all the same.
+		//
+		// Bounded rather than `while :`, so a shell that loses the exit
+		// fails this case instead of hanging on it.
+		ID: "trap/an-exit-from-a-handler-ends-a-while-loop", Category: "traps and exit",
+		Snippet: `trap 'echo caught; exit 7' USR1; i=0; while [ $i -lt 3 ]; do i=$((i+1)); kill -USR1 $$; done; echo after`,
+		Why:     "an `exit` raised inside a signal handler ends the shell from wherever it was raised, and a loop that was running when the signal arrived is not an exception: all six print `caught` once, never reach `after`, and exit 7. It is the status a caller acts on, and the one shape most likely to be got wrong, because a `while` asks its condition a question immediately after the handler has answered a different one",
+	},
+	{
+		ID: "trap/an-exit-from-a-handler-ends-an-until-loop", Category: "traps and exit",
+		Snippet: `trap 'echo caught; exit 7' USR1; i=0; until [ $i -ge 3 ]; do i=$((i+1)); kill -USR1 $$; done; echo after`,
+		Why:     "the same for the loop that reads its condition the other way round, unanimously 7. It is worth having beside the `while` row rather than assumed from it: an `until` inverts the sense of the status it reads, so a shell that mistakes a refusal for a condition gets the *opposite* wrong answer here — it runs the body again rather than deciding the loop is over",
+	},
+	{
+		ID: "trap/an-exit-from-a-handler-ends-a-for-loop", Category: "traps and exit",
+		Snippet: `trap 'echo caught; exit 7' USR1; for i in 1 2 3; do kill -USR1 $$; done; echo after`,
+		Why:     "the control row. A `for` reads no condition, so it has nothing to mistake a refusal for, and it was right while the `while` was wrong — which is what says the fault was in how a loop reads its control state rather than in how a trap sets one. All six exit 7 here too",
+	},
+	{
+		ID: "trap/an-exit-from-a-handler-ends-nested-loops", Category: "traps and exit",
+		Snippet: `trap 'echo caught; exit 7' USR1; i=0; while [ $i -lt 2 ]; do j=0; while [ $j -lt 2 ]; do j=$((j+1)); kill -USR1 $$; done; i=$((i+1)); done; echo after`,
+		Why:     "an exit raised two loops deep leaves both of them, rather than the inner one only: the outer loop's own condition is the next command after the inner loop returns, so a shell that recovers at one level goes round the outer loop and reports its bookkeeping instead. Still `caught` once and 7 in all six",
+	},
+	{
+		ID: "trap/an-exit-from-a-handler-ends-a-loop-inside-a-function", Category: "traps and exit",
+		Snippet: `trap 'echo caught; exit 7' USR1; f() { i=0; while [ $i -lt 3 ]; do i=$((i+1)); kill -USR1 $$; done; }; f; echo after`,
+		Why:     "and the same through a function boundary, which is the shape a real script has: an `exit` is not a `return`, so the function call it was raised inside does not absorb it. `caught` and 7 in all six, with `after` unreached",
+	},
+	{
 		ID: "trap/lineno-inside-an-action", Category: "traps and exit",
 		Script:          true,
 		LayoutSensitive: true,
@@ -2925,6 +2961,46 @@ var Corpus = []Case{
 		Why:     "a range has two ends and a third is not a wider one. The shell with ranges calls it a bad substitution and gives up on the command; the shells reading arithmetic take the comma operator's last operand and name an element. Answering the second in a dialect that has ranges would be the other reading wearing this one's name, and it is exactly the shape a fix reaches for when it splits on the first comma and ignores the rest",
 	},
 	{
+		ID: "expansion/element-exclusion-by-pattern", Category: "expansion",
+		Snippet: `a=(one two three); printf "[%s]" "${(@)a:#t*}"; echo`,
+		Why:     "`:#` drops the elements a pattern matches, which is one shell's alone: to bash the characters after the colon are an offset and `#t*` is arithmetic it refuses, and ksh93 refuses the flag group before it gets that far. The shape a startup file on this machine uses to take a hook out of a list, and the one that produced `operand expected at ``#fig_precmd''` here",
+	},
+	{
+		ID: "expansion/element-exclusion-is-a-whole-match-not-a-prefix", Category: "expansion",
+		Snippet: `v=hello; echo "[${v:#hel*}][${v#hel*}][${v:#xyz}]"`,
+		Why:     "the sharpest row in the family, because two shells accept the same six characters and mean different things by them: zsh matches the pattern against the *whole* value and substitutes nothing when it hits, while ksh93 ignores the colon entirely and gives exactly what `${v#hel*}` gives — `lo`. bash refuses it as arithmetic. So `:#` is not `#` with a colon in front, and a dialect that treated it as one would silently answer ksh93's question in zsh's grammar",
+	},
+	{
+		ID: "expansion/element-exclusion-without-a-flag-group", Category: "expansion",
+		Snippet: `a=(one two three); echo "[${a:#two}]"`,
+		Why:     "the same operator with no `(@)` in front and inside quotes, where the array joins to one string first: the pattern is then matched against `one two three` as a whole, matches nothing, and the value is left standing. Not a no-op by accident — `${a:#*}` on the same array is empty — and it is what says the operator asks about *elements*, of which a joined scalar has one. ksh93 answers `one` from the same characters, which is `${a#two}` against a scalar that is only the first element, so the two shells agree on neither the operator nor what `$a` names",
+	},
+	{
+		ID: "expansion/element-exclusion-empty-pattern", Category: "expansion",
+		Snippet: `a=("" one); printf "[%s]" "${(@)a:#}"; echo`,
+		Why:     "an operator with nothing after it, which the whole-match rule makes meaningful rather than degenerate: the empty pattern matches only the empty string, so exactly the empty element goes. A reading that treated an absent pattern as `*` would empty the array, and one that treated it as no operator at all would leave it whole",
+	},
+	{
+		ID: "expansion/element-exclusion-pattern-out-of-a-parameter", Category: "expansion",
+		Snippet: `p='t*'; a=(one two); printf "[%s]" "${(@)a:#$p}"; echo`,
+		Why:     "whether the pattern may come out of a variable, and it may not: the shell that has the operator is the one that does not glob the result of an expansion, so `$p` is the two literal characters and matches no element. The same axis that keeps `p='et*'; echo $p` from expanding, reaching a third construct — and the reason the pattern is built from the operand's *word* rather than from its text",
+	},
+	{
+		ID: "expansion/element-set-difference-and-intersection", Category: "expansion",
+		Snippet: `a=(x y z); b=(y w); printf "[%s]" "${(@)a:|b}"; echo; printf "[%s]" "${(@)a:*b}"; echo`,
+		Why:     "the two operators that live beside `:#` and take the *name* of another array rather than a pattern, comparing elements for equality: `:|` keeps what the other does not hold and `:*` keeps only what it does. Both are the same one shell's, and both are refused as arithmetic elsewhere — bash names the token `|b` and `*b`, which is the tell that it read an offset",
+	},
+	{
+		ID: "expansion/element-set-operators-against-an-unset-name", Category: "expansion",
+		Snippet: `a=(x y z); printf "[%s]" "${(@)a:|nope}"; echo; printf "[%s]" "${(@)a:*nope}"; echo`,
+		Why:     "a name nothing is stored under is an empty set and not a complaint, in both directions: the difference keeps everything and the intersection keeps nothing. Quietly — no diagnostic and status 0 — which is the half a reading that refused an unknown name would get wrong on the safe-looking side",
+	},
+	{
+		ID: "expansion/a-colon-before-anything-else-is-still-an-offset", Category: "expansion",
+		Snippet: `v=abcdef; echo "[${v:2}][${v:2:2}][${v: -2}][${v:-alt}][${v:+set}]"`,
+		Why:     "the guard on the whole family: exactly three characters after a colon make it an operator, and every other spelling is what it always was. All five are unanimous across the panel, so a grammar that widened the disambiguation by one character would break the shapes every shell shares rather than the ones only zsh has",
+	},
+	{
 		ID: "array/reading-a-subscript-is-arithmetic", Category: "expansion",
 		Snippet: `a=(x y z); echo "[${a[1+1]}]"`,
 		Why:     "a subscript being read is an expression, exactly as one being written through is. It took a numeral and nothing else, so this expanded to the empty string with status 0 — and `a[1+1]=v` had already learned to store where `${a[1+1]}` could not look, which is two spellings of one subscript naming two different elements. zsh answers the element before, which is the base rather than a different reading",
@@ -3742,6 +3818,66 @@ echo "st=$?"`,
 		Snippet: `(( 2 > 1 )) && echo gt`,
 		Why:     "> inside (( )) is a comparison; in dash the whole thing is nested subshells running a command",
 	},
+	{
+		ID: "cond/touching-grouping-parens", Category: "[[ ]] and (( ))",
+		Snippet: `[[ ((1 -eq 1)) ]]; echo "st=$?"`,
+		Why:     "inside [[ ]] no command may begin, so `((` is two grouping parentheses and not the arithmetic command — unanimous in bash 3.2 and 5.3, bash-as-sh, ksh93 and zsh, and the one line a real ~/.bashrc in the wild tripped over (#859)",
+	},
+	{
+		ID: "cond/spacing-the-grouping-parens-changes-nothing", Category: "[[ ]] and (( ))",
+		Snippet: `[[ ( (1 -eq 1) ) ]]; echo "st=$?"`,
+		Why:     "the spaced form of the case above. It is the pair that makes the finding: a lexer that reads `((` as one token answers these two differently, and no shell does",
+	},
+	{
+		ID: "cond/touching-grouping-parens-after-oror", Category: "[[ ]] and (( ))",
+		Snippet: `[[ (1 -eq 1) || ((2 -eq 2) && (3 -eq 3)) ]]; echo "st=$?"`,
+		Why:     "the shape that appears in the wild: a group after || whose first element is itself a group. Each structural position has to be checked separately because each is a different production",
+	},
+	{
+		ID: "cond/touching-grouping-parens-after-andand", Category: "[[ ]] and (( ))",
+		Snippet: `[[ 1 -eq 1 && ((2 -eq 2)) ]]; echo "st=$?"`,
+		Why:     "the same after &&",
+	},
+	{
+		ID: "cond/touching-grouping-parens-after-not", Category: "[[ ]] and (( ))",
+		Snippet: `[[ ! ((1 -eq 2)) ]]; echo "st=$?"`,
+		Why:     "the same after !, which is the third place a condition may begin",
+	},
+	{
+		ID: "cond/touching-grouping-parens-before-a-unary", Category: "[[ ]] and (( ))",
+		Snippet: `[[ (( -z "" )) ]]; echo "st=$?"`,
+		Why:     "`(( -z` is the shape that most looks like an arithmetic command and least is one: an arithmetic expression cannot start with `-z` at all, and every shell still reads two groups",
+	},
+	{
+		ID: "cond/three-touching-grouping-parens", Category: "[[ ]] and (( ))",
+		Snippet: `[[ (((1 -eq 1))) ]]; echo "st=$?"`,
+		Why:     "nesting is unbounded rather than a one-deep special case, so a fix that only looks one character ahead is caught here",
+	},
+	{
+		ID: "cond/a-regex-group-that-opens-with-a-group", Category: "[[ ]] and (( ))",
+		Snippet: `[[ xa =~ ((a)) ]]; echo "st=$?"`,
+		Why:     "the =~ operand owns its parentheses, so `((` there is the regular expression's and not the shell's either — the same confusion reached by a different route",
+	},
+	{
+		ID: "cond/the-arithmetic-command-survives-the-condition", Category: "[[ ]] and (( ))",
+		Snippet: `x=0; [[ 1 -eq 1 ]] && (( x++ )); echo "x=$x"`,
+		Why:     "`((` is only two parentheses *inside* the brackets. One character past `]]` it is the arithmetic command again, which is what a fix written as a lexer mode has to give back",
+	},
+	{
+		ID: "arith/a-command-expression-may-open-with-a-paren", Category: "arithmetic",
+		Snippet: `(( (1+2)*3 == 9 )); echo "st=$?"`,
+		Why:     "the other direction of the same ambiguity: at command position `(( (` is an arithmetic command whose expression is parenthesized, not three nested subshells. dash, which has no arithmetic command, is the contrast",
+	},
+	{
+		ID: "arith/two-parens-at-command-position-are-not-a-subshell", Category: "arithmetic", SyntaxError: true,
+		Snippet: `((echo hi)); echo "st=$?"`,
+		Why:     "outside a condition the distinction really is textual: with no space the three shells that have (( )) read an arithmetic command and fail on `echo`, while dash runs the nested subshell and prints hi. Marked a syntax error because *we* refuse it while reading, where all three refuse it while running — `bash -n` takes the file and `false && ((echo hi))` reaches the echo after it in every one of them",
+	},
+	{
+		ID: "cmd/a-subshell-that-opens-with-a-subshell", Category: "command language",
+		Snippet: `( (echo hi) ); echo "st=$?"`,
+		Why:     "one space is the whole difference from the case above, and it is unanimous — including in the shells that would otherwise have taken the two parentheses as one token",
+	},
 	// --- parameter expansion --------------------------------------------------
 	{
 		ID: "param/colon-extends-the-test-unset", Category: "parameter expansion",
@@ -3940,6 +4076,21 @@ echo "st=$?"`,
 		Snippet: `echo ${(%):-%x}`,
 		Script:  true,
 		Why:     "the wild idiom for a file's own path — /opt/homebrew's ruby-lsp-activate.sh opens with it: the %-flag prompt escape %x names the file being read, and the empty parameter with a :- is how a bare string reaches the flags at all",
+	},
+	{
+		ID: "param/prompt-percent-names-the-user", Category: "parameter expansion",
+		Snippet: `[[ "${(%):-%n}" == "$(id -un)" ]] && echo matches-the-login-name || echo differs`,
+		Why:     "`%n` is the user the shell runs as, and the row is written as a comparison rather than a name so the record is a fact about the escape and not about the machine that made it. The first two lines of a real ~/.zshrc build the prompt theme's cache path out of it, twice",
+	},
+	{
+		ID: "param/prompt-percent-user-is-not-a-variable", Category: "parameter expansion",
+		Snippet: `USER=someone-else; LOGNAME=someone-else; case "${(%):-%n}" in someone-else) echo follows-the-variable;; *) echo ignores-it;; esac`,
+		Why:     "the half that decides how `%n` may be implemented: it is a fact about the *process*, not about the environment, so assigning `USER` or `LOGNAME` does not move it — and neither does injecting them before the shell starts, measured separately. Reading either name would make `env USER=someone-else zsh` draw the wrong person, and bash's `\\u` was measured to ignore them too",
+	},
+	{
+		ID: "param/prompt-percent-refuses-an-escape-by-name", Category: "parameter expansion",
+		Snippet: `echo "[${(%):-%zz}]"; echo "st=$?"`,
+		Why:     "an escape outside the prompt language: zsh expands `%z` to nothing at all and carries on at 0, so the shell that has the construct is *quieter* here than this one, which refuses it by name. The refusal is the deliberate difference — a wrong answer wearing a success is worse than a complaint — and this row is where it is written down rather than left to be discovered",
 	},
 	{
 		ID: "param/expansion-flags-quote-four-ways", Category: "parameter expansion",
@@ -4492,6 +4643,37 @@ echo unreachable`,
 		ID: "cond/terminal-test-non-number-diverges", Category: "conditions",
 		Snippet: `[[ -t x ]]; echo "st=$?"`,
 		Why:     "a -t operand that is not a number: bash names an integer at status 2 where ksh93 and zsh answer a plain false at 1 — and bash 3.2 answers 1 too, so the complaint is younger than the operator. The TerminalTestRequiresANumber axis",
+	},
+	{
+		ID: "cond/option-test-reads-a-set-option", Category: "conditions",
+		Snippet: `set -e; [[ -o errexit ]]; echo "on=$?"; set +e; [[ -o errexit ]]; echo "off=$?"`,
+		Why:     "`-o` asks whether a shell option is set, and it is the core's rather than a dialect's: every shell in the panel that has `[[ ]]` at all has it, and dash is absent only because it has no `[[ ]]` to put it in. The name every one of them agrees about, read in both states from the same run",
+	},
+	{
+		ID: "cond/option-test-operand-is-an-ordinary-word", Category: "conditions",
+		Snippet: `set -u; v=nounset; [[ -o $v ]]; echo "var=$?"; [[ -o 'nounset' ]]; echo "quoted=$?"`,
+		Why:     "how the name reaches the operator: it is an ordinary word, expanded out of a variable and stripped of its quotes, unanimously. The quoted spelling is the one the prompt theme on this machine writes — `[[ ! -o 'aliases' ]]` — and a parser that took the operand as a literal token would read the apostrophes as part of the name",
+	},
+	{
+		ID: "cond/option-test-unknown-name-diverges", Category: "conditions",
+		Snippet: `[[ -o nosuchoption ]]; echo "st=$?"; echo alive`,
+		Why:     "a name no shell in the panel has: bash and ksh93 answer a quiet false at 1 where zsh complains and answers 3, and all three carry on to the next command — so this is not the fatality `set -o nosuchoption` produces in the same shell. The UnknownConditionOptionIsAStatus axis",
+	},
+	{
+		ID: "cond/option-test-unknown-name-is-not-a-false", Category: "conditions",
+		Snippet: `[[ ! -o nosuchoption ]]; echo "not=$?"; [[ -o nosuchoption || 1 == 1 ]]; echo "or=$?"; [[ 1 == 1 && -o nosuchoption ]]; echo "and=$?"`,
+		Why:     "what the divergent answer *is*, which the bare status hides: in zsh it is a third value rather than a false, so `!` leaves it at 3 instead of turning it into 0, `||` walks on past it to a right-hand side that answers 0, and `&&` stops on it. bash and ksh93 have a plain false in the same three places and answer 0, 0 and 1. A dialect that returned false with a status painted on would get the negation wrong",
+	},
+	{
+		ID: "cond/option-test-missing-operand", Category: "conditions",
+		SyntaxError: true,
+		Snippet:     `[[ -o ]]; echo "st=$?"`,
+		Why:         "`-o` with nothing after it is refused in all three, which is what says the operator takes an operand rather than defaulting one — and refused in three different ways: bash and ksh93 make it a *parse* error, where zsh takes the `-o` for a condition name it does not know and answers 2 at run time. It is also the shape that separates this from the single-bracket `-o`, where the same two words are a non-empty string test that succeeds",
+	},
+	{
+		ID: "cond/single-bracket-o-is-not-the-option-test", Category: "conditions",
+		Snippet: `[ -o nosuchoption ]; echo "two=$?"; [ -o ]; echo "one=$?"; [ '' -o x ]; echo "or=$?"`,
+		Why:     "the operator the standard gives `[` is `or`, and conflating it with the option test is the mistake this row exists to catch: bash and ksh93 do have a unary `-o` in the builtin, dash refuses it as an unexpected operator and zsh calls it too many arguments, so the single-bracket spelling is not core the way the double-bracket one is. `[ -o ]` is one argument and a true everywhere, and `[ '' -o x ]` is the binary or",
 	},
 
 	// --- eval and . : the special builtins that run text in this shell ---
@@ -6803,6 +6985,41 @@ exit 7`,
 		ID: "print/the-coprocess-letter-with-nothing-there", Category: "builtins",
 		Snippet: `print -p x; echo "st=$?"`,
 		Why:     "-p writes to the coprocess, and with no |& in this grammar there is never one: ksh93's `no query process` at 1, the same shape read -p measured",
+	},
+	{
+		ID: "print/l-and-n-are-the-separator-and-the-terminator", Category: "builtins",
+		Snippet: `print -l a b; print -ln c d; echo .`,
+		Why:     "zsh's `-l` separates the operands with newlines and `-n` withholds the terminator, so the two compose rather than canceling: `c~d.` on one line after `a~b`. ksh93 has no `-l` at all and says so twice, which is the dialect boundary inside a builtin both shells have",
+	},
+	{
+		ID: "print/nul-separates-and-terminates", Category: "builtins",
+		Snippet: `print -N a b | od -An -c | tr -s " "`,
+		Why:     "`-N` is zsh's alone and moves *both* settings: a NUL between the operands and a NUL after the last one, which is what makes `print -N` the writing half of `read -d ''`",
+	},
+	{
+		ID: "print/the-escapes-this-builtin-has-beyond-echo-s", Category: "builtins",
+		Snippet: `print '\101\zx\1' | od -An -c | tr -s " "`,
+		Why:     "the three ways zsh's print outruns its own echo and ksh93's print alike: a bare octal escape with no leading zero, an escape nobody knows losing its backslash rather than keeping it, and `\\1` as one byte. ksh93 prints all three as written",
+	},
+	{
+		ID: "print/capital-r-changes-the-option-parser", Category: "builtins",
+		Snippet: `print -Rl a b; print -R -l c d`,
+		Why:     "`-R` is raw in both shells and stops reading options in neither the same way: zsh reads the rest of the bundle as its own letters, so `-Rl` still lists one per line, while a later `-l` word is an operand. ksh93 reads no more letters at all and prints `a b`",
+	},
+	{
+		ID: "print/sorts-and-filters-its-operands", Category: "builtins",
+		Snippet: `print -o B a C; print -O B a C; print -m 'a*' abc bcd axy`,
+		Why:     "zsh's operand-list letters, none of which ksh93 has: `-o` sorts, `-O` sorts backwards, and `-m` reads the first operand as a pattern and keeps only the operands it matches. The order is byte order, which is what LC_ALL=C gets",
+	},
+	{
+		ID: "print/the-history-and-editor-letters-write-nowhere", Category: "builtins",
+		Snippet: `print -s a b; echo "s=$?"; print -z c; echo "z=$?"; print -S x y; echo "S=$?"`,
+		Why:     "`-s` and `-z` aim at a history and a line editor a non-interactive shell has not got: the operands are consumed and the answer is 0 in both shells for `-s`, while `-z` and `-S` are zsh's alone and `-S` refuses more than one operand",
+	},
+	{
+		ID: "print/e-is-echo-s-letter-in-only-one-of-them", Category: "builtins",
+		Snippet: `print -e 'a\tb'; echo "st=$?"`,
+		Why:     "ksh93's `-e` puts escape expansion back after a `-r`, and zsh — whose print expands by default and spells the same idea only inside `-R` — calls the letter a bad option at 1. The sharpest place the two builtins under one spelling disagree",
 	},
 	{
 		ID: "caller/from-a-function-under-dash-c", Category: "builtins",

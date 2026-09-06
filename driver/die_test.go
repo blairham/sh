@@ -203,7 +203,7 @@ func TestAFatalSignalFromOutsideKillsTheShellQuietly(t *testing.T) {
 	} {
 		t.Run(sig.String(), func(t *testing.T) {
 			ws, took, out := shellSignaledFromOutside(t,
-				"TestAFatalSignalFromOutsideKillsTheShellQuietly", "", sig)
+				"TestAFatalSignalFromOutsideKillsTheShellQuietly", "", countedSleeps, sig)
 
 			if !reachesTheFrontEnd(sig) {
 				// Asserted rather than skipped, so that the day the
@@ -237,25 +237,40 @@ func TestAFatalSignalFromOutsideKillsTheShellQuietly(t *testing.T) {
 // reachesTheFrontEnd reports whether a signal *sent* to this process is handed
 // to the front end rather than left to the Go runtime.
 //
-// Two facts, and the platforms split on both.
+// One fact now, where there used to be two.
 //
-// The runtime lets a sent signal through to os/signal for the throwing class
-// only when the kernel marks it as one a process sent, and macOS does not do
-// that for SEGV, BUS or ILL. Measured with a program that registers all eight
-// and is then sent each one: on Linux all eight arrive; on darwin five arrive
-// and those three crash with a fault code in the dump rather than the user
-// one. There is no road to those three from here, and putting the kernel
-// default back at startup instead would silence a *real* fault as well, which
-// is the one case where a Go stack is the right thing to print.
+// The one that is gone: the front end did not listen on darwin at all, because
+// asking os/signal for a signal makes the runtime open a pipe to carry it and
+// a script's `exec 3>f` then wrote over it — #799, which is the same fault as
+// #695 and #731 arriving through signal handling instead of through the
+// poller. driver/lowfds_unix.go keeps the runtime above every descriptor a
+// script can name, so the pipe is out of reach and the whole class is the
+// front end's on every platform this builds on.
 //
-// And on darwin the front end does not listen at all — see
-// fatalsignal_darwin.go, where asking os/signal for a signal costs the
-// descriptors an `exec` then writes over. So the whole class is the runtime's
-// there.
+// The one that remains is the kernel's. The runtime lets a sent signal through
+// to os/signal for the throwing class only when the kernel marks it as one a
+// *process* sent, and macOS does not do that for SEGV, BUS or ILL. Measured
+// with a program that registers all eight and is then sent each one: on Linux
+// all eight arrive; on darwin five arrive and those three crash with a fault
+// code in the dump rather than the user one. There is no road to those three
+// from here, and putting the kernel default back at startup instead would
+// silence a *real* fault as well, which is the one case where a Go stack is
+// the right thing to print.
 //
 // Asserted rather than skipped, in both directions, so that the day either
 // changes is a failing test rather than one that has been passing vacuously.
-func reachesTheFrontEnd(syscall.Signal) bool { return runtime.GOOS != "darwin" }
+// That is how the darwin half above came off: removing the gap turned five of
+// these subtests red with a message naming this function.
+func reachesTheFrontEnd(sig syscall.Signal) bool {
+	if runtime.GOOS != "darwin" {
+		return true
+	}
+	switch sig {
+	case syscall.SIGSEGV, syscall.SIGBUS, syscall.SIGILL:
+		return false
+	}
+	return true
+}
 
 // A signal the script has trapped is still the script's.
 //
@@ -268,7 +283,7 @@ func TestATrappedFatalSignalFromOutsideIsTheScriptsToHandle(t *testing.T) {
 	dieRunningAsAShell()
 	ws, _, out := shellSignaledFromOutside(t,
 		"TestATrappedFatalSignalFromOutsideIsTheScriptsToHandle",
-		`trap 'echo caught; exit 7' QUIT; `, syscall.SIGQUIT)
+		`trap 'echo caught; exit 7' QUIT; `, countedSleeps, syscall.SIGQUIT)
 
 	if ws.Signaled() {
 		t.Fatalf("killed by %v, want the script's own handler to have run", ws.Signal())
@@ -281,6 +296,60 @@ func TestATrappedFatalSignalFromOutsideIsTheScriptsToHandle(t *testing.T) {
 	}
 }
 
+// An `exit` from a handler ends the shell wherever the signal found it, and an
+// endless `while` is where it did not.
+//
+// The handler ran and its line was there in every case, so nothing about the
+// delivery was wrong; what was lost was the `exit`, and the only thing a
+// caller could see was the status. `while :; do sleep 0.05; done` reported 0
+// where bash 5.3.15, bash 3.2.57, that 5.3.15 build named `sh`, dash, ksh93u+
+// and zsh 5.9.2 all report 7, while a counted `for` over the same sleeps reported 7 —
+// one handler, one signal, two answers depending on the loop it arrived in.
+//
+// It is asserted here rather than in the corpus only for the external signal.
+// The in-process shape — a handler that exits, fired by the loop's own
+// `kill -USR1 $$` — is corpus-visible and is pinned there; this is the half
+// that needs a second process to send the signal.
+func TestAnExitFromATrapEndsAnEndlessLoop(t *testing.T) {
+	dieRunningAsAShell()
+	ws, _, out := shellSignaledFromOutside(t,
+		"TestAnExitFromATrapEndsAnEndlessLoop",
+		`trap 'echo caught; exit 7' USR1; `, endlessLoop, syscall.SIGUSR1)
+
+	if ws.Signaled() {
+		t.Fatalf("killed by %v, want the script's own handler to have run", ws.Signal())
+	}
+	if ws.ExitStatus() != 7 {
+		t.Errorf("status %d, want the 7 the handler exits with", ws.ExitStatus())
+	}
+	if out != "caught\n" {
+		t.Errorf("wrote %q, want %q", out, "caught\n")
+	}
+}
+
+// The two things a shell can be told to hold still with, and each is asking a
+// different question.
+//
+// countedSleeps is a loop of short sleeps rather than one long one, because
+// the same number would otherwise be both a floor and a ceiling: a shell told
+// to sleep once is only still there if the signal beats the sleep, and a shell
+// that has *trapped* the signal runs its handler only once the command it was
+// in has finished. A loop keeps it alive for as long as the whole of it while
+// giving the handler its turn after one step.
+//
+// endlessLoop is the same idea with the condition a real script writes, and it
+// is the shape #796 was about: an `exit` raised by a handler during
+// `while :; do … done` left this shell with 0 where every shell in the panel
+// leaves the handler's status. A counted `for` over the same sleeps was right
+// throughout, which is what said the fault was in how a loop read its control
+// state rather than in how a trap set one. Its `sleep` is short so that the
+// handler's turn comes quickly, and the loop only ever ends by the exit under
+// test — the harness kills what is left either way.
+const (
+	countedSleeps = "for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; done"
+	endlessLoop   = "while :; do sleep 0.05; done"
+)
+
 // shellSignaledFromOutside re-executes this test binary as a shell, waits for
 // it to be running, and sends it a signal from here.
 //
@@ -292,23 +361,11 @@ func TestATrappedFatalSignalFromOutsideIsTheScriptsToHandle(t *testing.T) {
 //
 // The wait is measured from the signal rather than from the start, because
 // what is being timed is the death and not the second copy of a test binary.
-func shellSignaledFromOutside(t *testing.T, name, setup string, sig syscall.Signal) (syscall.WaitStatus, time.Duration, string) {
+func shellSignaledFromOutside(t *testing.T, name, setup, hold string, sig syscall.Signal) (syscall.WaitStatus, time.Duration, string) {
 	t.Helper()
 	ready := filepath.Join(t.TempDir(), "ready")
 	cmd := exec.Command(os.Args[0], "-test.run="+name)
-	// A loop of short sleeps rather than one long one, because the same
-	// number would otherwise be both a floor and a ceiling: a shell told to
-	// sleep once is only still there if the signal beats the sleep, and a
-	// shell that has *trapped* the signal runs its handler only once the
-	// command it was in has finished. A loop keeps it alive for as long as
-	// the whole of it while giving the handler its turn after one step.
-	//
-	// Counted rather than endless, and that is not caution: `exit` from a
-	// trap fired inside `while :; do … done` leaves this shell with a status
-	// of 0 where bash leaves 7, which is #796 and is not what this is
-	// testing.
-	cmd.Env = append(os.Environ(), dyingScript+"="+setup+"printf r >"+ready+
-		"; for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; done")
+	cmd.Env = append(os.Environ(), dyingScript+"="+setup+"printf r >"+ready+"; "+hold)
 	// A file rather than a buffer, and this is the difference between timing
 	// a death and timing a sleep. os/exec copies a non-file stream on a
 	// goroutine and Wait does not return until that copy ends — and the copy

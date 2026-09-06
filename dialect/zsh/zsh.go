@@ -6,6 +6,7 @@ package zsh
 
 import (
 	"os"
+	"os/user"
 	"strconv"
 
 	"github.com/blairham/sh/interp"
@@ -65,6 +66,7 @@ func Dialect() syntax.Dialect {
 	// `${(%):-%x}` — which is this dialect's alone: the other three call
 	// the whole expansion a bad substitution.
 	d.ParamExpansionFlags = true
+	d.ParamElementSelection = true
 	// A parameter written without braces carries a subscript here, and `$#a`
 	// is a count rather than `$#` with a letter after it. Measured 2026-09-05
 	// on zsh 5.9.2: `a=(x y z); echo $a[1]` prints `x` and `echo $#a` prints
@@ -469,6 +471,7 @@ func Semantics() interp.Semantics {
 	s.CdRefusesUnknownOption = interp.No
 	s.CdLastPathOptionWins = interp.No
 	s.BadSetOptionNameFatal = interp.Yes
+	s.UnknownConditionOptionIsAStatus = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	s.LoneDashIsAnOption = interp.Yes
 	s.UnsetFunctionChecksTheName = interp.No
@@ -583,6 +586,12 @@ func Diagnostics() interp.Diagnostics {
 		// `monitor` — and fails at 1, fatally like every `set` failure here.
 		MonitorDenied:       "can't change option: %[1]s",
 		MonitorDeniedStatus: 1,
+		// `[[ -o nosuchoption ]]`. The same words `setopt` uses for the same
+		// mistake, and measured to be: one message, said at the condition's
+		// own location rather than a builtin's. The status is 3, which is
+		// neither of the two a condition otherwise gives.
+		UnknownConditionOption:       "no such option: %[1]s",
+		UnknownConditionOptionStatus: 3,
 		// zsh knows `-f` — it means functions to its own typeset — so what
 		// it refuses is the combination, and it says so without naming the
 		// letter it names in every other refusal.
@@ -882,6 +891,10 @@ func Apply(r *interp.Runner) {
 	// And the line editor's key table, which a real rc file also reaches for.
 	// See bindkey.go.
 	registerBindkey(r)
+	// This shell's richer `echo`, and not ksh93's builtin of the same
+	// spelling: different letters, a different escape set and different
+	// wordings, all measured side by side. See print.go.
+	registerPrint(r)
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
 	r.Unregister("complete")
@@ -920,6 +933,15 @@ func Apply(r *interp.Runner) {
 	// $UID has no other source. Same class as $$, which .golangci.yml has
 	// blessed since it was written.
 	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
+	// The login name for that same uid, for the `%n` prompt escape. Read
+	// here for the reason the uid above is: nothing a script does changes
+	// it, two shells in one program genuinely have the same one, and it has
+	// no other source. Measured as a fact about the *process* rather than
+	// about the environment — `%n` ignores `$USER`, `$LOGNAME` and
+	// `$USERNAME` however they are set — so it is not read out of a variable.
+	if u, err := user.Current(); err == nil {
+		r.SetPromptUser(u.Username)
+	}
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {

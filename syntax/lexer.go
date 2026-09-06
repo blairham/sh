@@ -44,7 +44,8 @@ type Lexer struct {
 	// inCondition is set while the parser is inside `[[ ]]`. One dialect
 	// reads pattern groups there and nowhere else, and the lexer is what has
 	// to know: whether `(` ends the word is decided before any parser sees a
-	// token.
+	// token. It also suspends the arithmetic command, whose `((` is two
+	// grouping parentheses in a condition.
 	inCondition bool
 
 	// inPattern is set while the token being read is the operand of a
@@ -249,10 +250,18 @@ func (l *Lexer) Next() Token {
 	}
 
 	// `((` is an arithmetic command; `( (` is a subshell containing one. The
-	// distinction is purely textual, which is measured rather than assumed:
-	// `((echo nested))` is an arithmetic error in bash, ksh and zsh even with
-	// no space, so no knowledge of command position is needed here.
-	if l.dialect.ArithCommand && l.peek() == '(' && l.peekAt(1) == '(' {
+	// distinction is textual wherever a command may begin: `((echo nested))`
+	// is an arithmetic error in bash, ksh and zsh even with no space, so no
+	// knowledge of *which* command position this is is needed there.
+	//
+	// Inside `[[ ]]` no command may begin at all, so there is no arithmetic
+	// command to be had and `((` is two grouping parentheses — unanimous in
+	// bash 3.2 and 5.3, bash-as-sh, ksh93 and zsh, which all take
+	// `[[ ((1 -eq 1)) ]]` and read it exactly as the spaced `[[ ( (1 -eq 1) ) ]]`.
+	// The condition is the only context in the grammar that suspends the
+	// rule, which is why the flag rather than a command-position test is
+	// what asks (#859).
+	if l.dialect.ArithCommand && !l.inCondition && l.peek() == '(' && l.peekAt(1) == '(' {
 		return l.scanArithCommand(start)
 	}
 

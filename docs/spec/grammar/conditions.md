@@ -109,10 +109,13 @@ regular expression for `=~` and for the same reason.
 **The group is one word, spaces and all.** `[[ "a b" == (a b) ]]`
 matches, so the scanner takes everything to the matching `)` rather than
 stopping at whitespace — which is the rule a group already had, reached
-from a new place. And a nested group starts `((`, which is the one place
-in the grammar where two parentheses are otherwise a single token: the
-pattern operand is read before that, or `[[ $k == ((a|b)|x) ]]` would be
-an arithmetic command.
+from a new place. And a nested group starts `((`, which the arithmetic
+command would otherwise claim as a single token: the pattern operand is
+read before that, or `[[ $k == ((a|b)|x) ]]` would be an arithmetic
+command. (Inside a condition nothing claims it any more — see *Two
+parentheses that touch* below — but the pattern operand still has to be
+read first, because it wants the whole group as one **word** and not two
+tokens.)
 
 **And the reading stops at the operand.** Whatever the lexer is told about
 a pattern operand has to stop being true when the operand ends, or every
@@ -203,6 +206,7 @@ the other two.
     -b f   -c f   -p f   -S f       block, character, fifo, socket
     -g f   -u f   -k f              setgid, setuid, sticky
     -t fd                           the descriptor is a terminal
+    -o name                         the shell option is set
     !                               negation
     &&     ||                       conjunction, disjunction
     ( … )                           grouping
@@ -231,6 +235,120 @@ through `test`, refuses too with its `Illegal number` wording.
 
 Semantics axis: `TerminalTestRequiresANumber` (bash and dash yes, ksh93
 and zsh no; unanswered in the core), asked only for such an operand.
+
+## `-o`: the option test
+
+`[[ -o name ]]` is true when the named shell option is set. It is
+**core**, on the same head count that put `[[ ]]` itself there: bash
+5.3, bash 3.2, bash-as-`sh`, ksh93 and zsh all have it, and dash is
+absent from the row only because it has no `[[ ]]` to put it in. There
+is no grammar for a dialect to switch here, because what the shells
+disagree about is which *names* exist — a question the parser never
+asks.
+
+The operand is an **ordinary word**, unanimously: it is expanded, its
+quotes come off, and it is not globbed.
+
+    v=errexit; [[ -o $v ]]          reads the variable
+    [[ -o 'aliases' ]]              the same name as the bare spelling
+    [[ -o err* ]]                   a name literally spelled `err*`; false
+
+Missing, it is refused everywhere, in three different ways — bash and
+ksh93 make `[[ -o ]]` a *parse* error, and zsh takes the `-o` for a
+condition name it does not know and answers 2 at run time. No shell
+lets it through, so this parser refuses it too.
+
+### Which names, and what an unknown one does
+
+Three separable questions, and only the last is an axis.
+
+**Does the shell have the name?** The option vector's, already:
+`interp` holds the names every shell has and each dialect declares its
+own extras. Names that read the same state in the whole panel include
+`errexit`, `nounset`, `xtrace`, `noexec`, `verbose` and `monitor`.
+Names that belong to some and not others do not: `braceexpand`,
+`posix` and `privileged` are bash's, `aliases` and `functionargzero`
+are zsh's, and `interactive` is ksh93's and zsh's and not bash's.
+
+**How is a spelling folded onto a name?** Measured, and it is not
+uniform: bash matches exactly, ksh93 also ignores underscores, and zsh
+folds case, ignores underscores, and reads a single leading `no` as a
+negation of what follows.
+
+| probe | bash | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `[[ -o errexit ]]` under `set -e` | true | true | true | true |
+| `[[ -o Err_Exit ]]` under `set -e` | false | false | true (`err_exit`) | true |
+| `[[ -o noerrexit ]]` under `set +e` | false | false | true | true |
+
+So zsh's option namespace is not its `set -o` names — about a hundred
+and eighty against a couple of dozen — which is why the substrate takes
+the lookup as a function a dialect supplies
+(`Runner.SetOptionNamespace`) rather than a longer list of its own. A
+shell that installs none reads its `set -o` names, which is bash's
+shape and ksh93's.
+
+**What happens to a name the shell does not have?** This is the axis.
+bash and ksh93 answer a quiet false at 1 and say nothing. zsh
+complains and answers **3** — a status that is neither of the two a
+condition otherwise gives. Both carry on to the next command, so this
+is *not* the fatality the same shell gives `set -o nosuchoption`
+(`BadSetOptionNameFatal`); one construct's refusal is not the other's.
+
+Semantics axis: `UnknownConditionOptionIsAStatus` (zsh yes; bash, ksh93
+and dash no; unanswered in the core), asked only where the shells
+disagree — at a name none of them would recognize. Wording and status
+are `Diagnostics.UnknownConditionOption` and
+`UnknownConditionOptionStatus`.
+
+The 3 is a **third value and not a false**, which is only visible
+through the operators that combine conditions. Measured across the
+whole truth table on zsh 5.9.2, with `zzz` a name it does not have:
+
+| probe | bash / ksh93 | zsh |
+| --- | --- | --- |
+| `[[ -o zzz ]]` | 1 | **3** |
+| `[[ ! -o zzz ]]` | 0 | **3** |
+| `[[ ! ! -o zzz ]]` | 1 | **3** |
+| `[[ -o zzz \|\| 1 == 1 ]]` | 0 | 0 |
+| `[[ -o zzz \|\| 1 == 2 ]]` | 1 | 1 |
+| `[[ -o zzz && 1 == 1 ]]` | 1 | **3** |
+| `[[ 1 == 1 && -o zzz ]]` | 1 | **3** |
+| `[[ 1 == 2 && -o zzz ]]` | 1 | 1 |
+| `[[ 1 == 1 \|\| -o zzz ]]` | 0 | 0 |
+
+The rule every row fits: `[[ ]]` combines *statuses*. `||` stops on a
+zero and otherwise takes the right-hand answer, `&&` stops on a
+non-zero and otherwise takes the right-hand answer, and `!` maps 0 to 1
+and 1 to 0 while leaving anything else alone. A false and a 3 differ
+only under `!` and under `||`, which is exactly where an
+implementation that returned false with a status painted on would give
+the wrong answer.
+
+A condition that failed for some *other* reason is a plain false, not a
+third value: `[[ x =~ "[" ]]` is 1 in all three, `[[ ! x =~ "[" ]]` is
+0 in all three, and zsh writes `failed to compile regex` beside its 1.
+So the third value belongs to this operator and not to `[[ ]]` errors
+in general.
+
+### The single-bracket `-o` is a different operator
+
+POSIX gives `[` a binary `-o` meaning *or*, and conflating the two is
+the mistake worth naming:
+
+| probe | bash | bash 3.2 | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `[ -o errexit ]` under `set -e` | true | true | `unexpected operator`, 2 | true | `too many arguments`, 2 |
+| `[ -o nosuchoption ]` | 1 | 1 | `unexpected operator`, 2 | 1 | `too many arguments`, 2 |
+| `[ -o ]` | 0 | 0 | 0 | 0 | 0 |
+| `[ '' -o x ]` | 0 | 0 | 0 | 0 | 0 |
+
+bash and ksh93 do carry the option test into the builtin; dash and zsh
+do not. So the single-bracket spelling is **not** core the way the
+double-bracket one is, and this shell does not implement it — `[ -o x ]`
+is `unary operator expected` here. One argument (`[ -o ]`) is a
+non-empty string test and true everywhere, and three arguments are the
+standard's *or* everywhere.
 
 ## The file comparisons: `-nt`, `-ot`, `-ef`
 
@@ -285,6 +403,55 @@ correct-looking and wrong. That is another
 consequence of it being parsed rather than executed, and it is why the
 parser needs its own production for the inside rather than reusing the
 one for lists.
+
+### Two parentheses that touch are two groups
+
+Everywhere a command may begin, `((` is the arithmetic command and `( (`
+is a subshell containing one. The distinction is textual, and no shell
+needs to know *which* command position it is at: `((echo hi))` is an
+arithmetic error in bash, ksh93 and zsh with no space, and two nested
+subshells that print `hi` in dash.
+
+Inside `[[ ]]` no command may begin at all, so there is no arithmetic
+command to be had and `((` is simply two grouping parentheses:
+
+    [[ ((1 -eq 1)) ]]        →  status 0
+    [[ ( (1 -eq 1) ) ]]      →  status 0
+
+Unanimous across every panel member that has the construct — bash 3.2.57,
+bash 5.3.15, bash-as-`sh`, ksh93 and zsh 5.9.2 — at every position where
+a condition may begin: after `[[`, after `&&`, after `||`, after `!`,
+after another `(`, and before a unary operator, where `(( -z ""` is the
+shape that most looks like an arithmetic command and least is one.
+dash has no `[[ ]]` and abstains, so the intersection is unanimous and
+this is core rather than a dialect flag.
+
+The disambiguator is context, and it is the *lexer's* to hold: `(` is an
+operator, so a token beginning with one never reaches the word scanner
+and the parser never gets to decide. The condition already tells the
+lexer it is inside one — the same flag the bare-pattern-group dialect
+reads — and that flag now also suspends the arithmetic command. It is
+cleared when the condition ends, so one character past `]]` the
+arithmetic command is back:
+
+    [[ 1 -eq 1 ]] && (( x++ ))
+
+The other direction is unchanged. An arithmetic command whose expression
+opens with a parenthesis — `(( (1+2)*3 ))` — was never in doubt, because
+the scan for the closing `))` tracks nesting rather than counting.
+
+Corpus: `cond/touching-grouping-parens`,
+`cond/spacing-the-grouping-parens-changes-nothing`,
+`cond/touching-grouping-parens-after-oror`,
+`cond/touching-grouping-parens-after-andand`,
+`cond/touching-grouping-parens-after-not`,
+`cond/touching-grouping-parens-before-a-unary`,
+`cond/three-touching-grouping-parens`,
+`cond/a-regex-group-that-opens-with-a-group`,
+`cond/the-arithmetic-command-survives-the-condition`,
+`arith/a-command-expression-may-open-with-a-paren`,
+`arith/two-parens-at-command-position-are-not-a-subshell`,
+`cmd/a-subshell-that-opens-with-a-subshell`.
 
 ## What this does not cover
 

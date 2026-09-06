@@ -74,3 +74,45 @@ func TestPrintRefusals(t *testing.T) {
 		t.Errorf("out %q status %d, want the not-implemented refusal at 2", out, st)
 	}
 }
+
+// `-R` is `-r` plus the end of this shell's option parsing, and it is not
+// zsh's letter of the same name. Measured 2026-09-05, ksh93u+: the rest of the
+// bundle goes unread except for an `n`, and of the words after it only a bare
+// `-n` is still an option — neither `-` nor `--` ends anything there, and a
+// later `-e` prints as a word instead of putting the expansion back.
+func TestPrintCapitalRStopsTheOptionParser(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`print -R a b`, "a b\n"},
+		{`print -R 'a\tb'`, `a\tb` + "\n"},
+		{`print -R -e 'a\tb'`, `-e a\tb` + "\n"},
+		{`print -R -en 'a\tb'`, `-en a\tb` + "\n"},
+		{`print -R -r a`, "-r a\n"},
+		{`print -R -x a`, "-x a\n"},
+		{`print -R -f x a`, "-f x a\n"},
+		{`print -R -- -n a`, "-- -n a\n"},
+		{`print -R - -n a`, "- -n a\n"},
+		{`print -R`, "\n"},
+		{`print -R -`, "-\n"},
+		// One `-n` is read and the next is an operand.
+		{`print -R -n a b`, "a b"},
+		{`print -R -n -n a`, "-n a"},
+		{`print -R -n`, ""},
+		// In the bundle only `n` still counts; the letters that would be
+		// options anywhere else are not read at all.
+		{`print -Rn a b`, "a b"},
+		{`print -Rnz a b`, "a b"},
+		{`print -Rzn a b`, "a b"},
+		{`print -Rz a b`, "a b\n"},
+		{`print -Rzq a b`, "a b\n"},
+		{`print -Re a`, "a\n"},
+		{`print -Rf '%s' a`, "%s a\n"},
+		{`print -Rl a b`, "a b\n"},
+		// Before an `R` the letters are read as usual.
+		{`print -eR a`, "a\n"},
+	} {
+		out, st := runKsh(t, t.TempDir(), tc.src)
+		if st != 0 || out != tc.want {
+			t.Errorf("%s: out %q status %d, want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+}

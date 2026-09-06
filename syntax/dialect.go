@@ -399,6 +399,25 @@ type Dialect struct {
 	// when a flag group was read.
 	ParamExpansionFlags bool
 
+	// ParamElementSelection enables the three operators that choose which
+	// *elements* of a value survive: `${a:#pattern}` drops the ones a
+	// pattern matches, `${a:|other}` the ones another array holds, and
+	// `${a:*other}` keeps only those. One shell in the panel has them.
+	//
+	// A grammar flag rather than a semantics axis, for the reason
+	// BareSubscript is one: the panel does not disagree about what these
+	// characters *mean*, it cuts the word in different places. `${a:#two}`
+	// is an exclusion in zsh, an offset whose arithmetic begins `#two` in
+	// bash — which is a refusal, `operand expected` — and in ksh93 it is
+	// `${a#two}`, prefix removal, the colon simply ignored. Three readings,
+	// no shared syntax for a value to switch between, so the flag decides
+	// which grammar is being read and nothing downstream has to ask.
+	//
+	// It is only about the colon. `${a:1}` is still an offset with the flag
+	// on, because the disambiguation is the single character after it, and
+	// `${a:-x}` is still a default for the same reason.
+	ParamElementSelection bool
+
 	// ParamIndirection enables `${!x}` to *parse*. bash and ksh93 accept it;
 	// dash and zsh reject it outright.
 	//

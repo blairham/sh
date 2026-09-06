@@ -643,10 +643,34 @@ Details, each measured:
   in a sourced file the sourced file's path. Inside a function `%N` is the
   function's name while `%x` stays the defining file. `%%` is a literal
   `%`. The escapes apply to the value — `x="%x"; ${(%)x}` expands — and
-  elementwise on arrays. zsh implements its whole prompt language here
-  (`%M` the host, `%~` the directory, `%D` the date); this implementation
-  carries only `%x`, `%N` and `%%`, and refuses anything else loudly
-  rather than answering wrong.
+  elementwise on arrays. `%n` is the user the shell runs as. zsh
+  implements its whole prompt language here (`%M` the host, `%~` the
+  directory, `%D` the date); this implementation carries only `%x`, `%N`,
+  `%n` and `%%`, and refuses anything else loudly rather than answering
+  wrong. Louder than the shell, in fact — measured, `${(%):-%zz}` in zsh
+  expands `%z` to nothing at all and carries on at 0, where this refuses
+  by name at 1. Silence is the worse of the two failures, so the
+  difference is deliberate.
+
+  **`%n` is a fact about the process, not about the environment.** It is
+  the login name for the shell's real uid, and it ignores `USER`,
+  `LOGNAME` and `USERNAME` — assigned inside the shell or injected before
+  it starts. Measured on zsh 5.9.2 and on bash's `\u`, which ignores them
+  too, so this is unanimous wherever the escape exists at all. Reading one
+  of those variables would make `env USER=someone-else zsh` draw the wrong
+  person. `USERNAME` is not even assignable: zsh answers `failed to change
+  group ID` and leaves it, because the name is bound to the uid.
+
+  So the value is *carried in* rather than read here —
+  `Runner.SetPromptUser`, filled in by the shell binaries beside the `$UID`
+  they already read — which keeps the process lookup out of a package that
+  may be embedded twice in one program. A runner nobody told refuses `%n`
+  with the rest rather than expanding it to nothing.
+
+  The same escape is `%n` in a prompt, and it means the same thing there:
+  measured in both positions in one shell. The prompt renderer in `repl/`
+  resolves it from `$USER` and `$LOGNAME` instead, which is a divergence
+  from the panel that this does not close — see the note in that file.
 - **An empty name is legal once flags are present.** `${(U)}` is an empty
   string, and `${(%):-%x}` — the wild idiom — has no name at all: the `:-`
   fires and the flags apply to the substituted word. `${()x}` with empty
@@ -772,6 +796,73 @@ subscript instead and reports `invalid subscript` at run time — for the
 unclosed unquoted form and for `"$a[" ]` alike; the shape fails either
 way, and the difference is the wording.
 
+## Choosing elements: `:#`, `:|` and `:*` — zsh only
+
+Three operators that change **which elements** a value has, where the
+substring above changes which characters each one has.
+
+    ${a:#pattern}   drop the elements the pattern matches
+    ${a:|other}     drop the elements the array named `other` holds
+    ${a:*other}     keep only those
+
+They share the `:` with the substring, and that is the whole difficulty:
+the single character after the colon decides which construct was
+written, before anything can be evaluated. Grammar flag
+`ParamElementSelection`, for the reason `BareSubscript` is one — the
+panel does not disagree about what these characters *mean*, it cuts the
+word in different places, and three shells cut it three ways:
+
+| `v=hello` | bash 5.3 / 3.2 / as-`sh` | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `${v:#hel*}` | `operand expected`, 1 | `Bad substitution`, 2 | `lo` | *empty* |
+| `${v#hel*}` | `lo` | `lo` | `lo` | `lo` |
+
+bash reads an offset and hands `#hel*` to arithmetic. **ksh93 accepts
+the same six characters and means `${v#hel*}` by them** — the colon is
+simply ignored, so it is prefix removal and not exclusion. Only zsh has
+the operator, and it matches the pattern against the **whole** value.
+Treating `:#` as `#` with a colon in front would answer ksh93's question
+inside zsh's grammar, silently.
+
+### What the operator does
+
+The pattern is matched whole and never against a part, which is the
+entire difference from `#`. Consequences, all measured:
+
+    a=(one two three); ${(@)a:#t*}     one
+    a=(one two);       ${(@)a:#*}      no fields at all
+    a=("" one);        ${(@)a:#}       one — the empty pattern matches
+                                       the empty string and nothing else
+    a=(One two);       ${(@)a:#one}    One two — case-sensitive
+
+A scalar is the one-element list it is, so the answer is the value or
+nothing — and *nothing* here is one empty field, where an emptied list
+is no field at all. `set -- "${v:#hel*}"` leaves `$#` at 1 and
+`set -- "${(@)a:#*}"` leaves it at 0.
+
+The pattern is built from the operand's **word**, so whether a
+metacharacter out of a parameter is a metacharacter is
+`GlobExpansionResults` — the same axis that decides whether
+`p='et*'; echo $p` expands. In the shell that has the operator that axis
+is false, so `p='t*'; ${(@)a:#$p}` removes nothing.
+
+`:|` and `:*` take the **name** of another array rather than a word, and
+compare elements for **equality** rather than by pattern: an element
+`t*` in the other array removes only a literal `t*`. A name nothing is
+stored under is an empty set, quietly — the difference keeps everything,
+the intersection keeps nothing, and neither complains.
+
+### The disambiguation is exactly one character
+
+Every other spelling after a colon is what it always was, and all of
+them are unanimous across the panel:
+
+    ${v:2}  ${v:2:2}  ${v: -2}  ${v:-alt}  ${v:=set}  ${v:?msg}  ${v:+set}
+
+`${v:}` is too short to carry an operator and stays the substring with an
+empty offset. A grammar that widened the rule by one character would
+break the shapes every shell shares rather than the ones only zsh has.
+
 ## Dialect flags
 
     ParamSubstitution      ${x/pat/rep} and its anchored forms
@@ -781,12 +872,14 @@ way, and the difference is the wording.
                            what ${!x} then *means* diverges (see above)
     ParamTransformations   ${x@Q} and its letter family — bash only
     ParamExpansionFlags    ${(U)x}           — zsh only
+    ParamElementSelection  ${a:#pat} ${a:|b} ${a:*b} — zsh only
     BareSubscript          $a[1] and $#a, written without braces — zsh only
     SpecialParamSubscript  ${@[1]}, ${1[2]}, ${?[1]} — a subscript on a
                            parameter that is not a name — zsh only
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
-`ParamTransformations` and `ParamExpansionFlags` are false for `core`:
+`ParamTransformations`, `ParamExpansionFlags` and
+`ParamElementSelection` are false for `core`:
 the first and the last two are one shell's, and the `!` family is two
 shells' — neither is a common denominator. `BareSubscript` is false for
 both, and for the same reason as `ParamExpansionFlags`: one shell reads

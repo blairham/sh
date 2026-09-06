@@ -231,10 +231,10 @@ case was edited, and the recorded behavior is no longer what the panel
 does. The response is to work out which, update the affected spec
 entries, and re-record.
 
-### Two questions, enforced in two places
+### Three questions, enforced in two places
 
-`oracle -check` asks two things, and only one of them has the same answer
-on every machine.
+`oracle -check` asks three things, and only one of them has an answer that
+changes from machine to machine.
 
 **Do the committed files agree with each other?** `case.go`, the golden
 record and `measurements.md` are three views of one thing, and the
@@ -263,6 +263,31 @@ explanation attached to a correct measurement is harder to catch later
 than a wrong number, because the numbers are checked and the prose was
 not. The same comparison catches a case added, removed or renamed without
 regenerating, and a renderer change shipped without one.
+
+**Was the record normalized by this build of the normalizer?** Also
+machine-independent, and also blocking, for a gap that took two findings
+to name. A normalization rule was added and a record generated *before* it
+was committed with it, so five cells kept text the new rule strips. Every
+other check stayed green — the record was internally consistent, the
+document rendered from it exactly, and nothing in the tree disagreed with
+anything else. Only a live panel run knew, and that run cannot be a gate.
+
+The question that needs no shells: **is every recorded cell already a
+fixed point of the normalizer?** A cell *is* what `normalize` produced, so
+running `normalize` over it again must change nothing; a cell that does
+change was made by an older build, and the text it still carries is
+exactly the text the new rule was written to remove. The record flattens a
+cell's newlines to `~`, which is `normalize`'s own last step, so they go
+back before the rules run — most rules anchor to the start of a line,
+because that is where a shell names itself. The shell's path is not in the
+record and is not needed: what the name rules read is its basename, and
+the panel entry lists every path the shell is looked for at, so every
+basename that machine could have used is tried.
+
+It does not catch a rule that got *looser*. Those leave old cells
+over-normalized, and the text that would show it was thrown away when the
+cell was recorded; answering that needs the raw output kept beside every
+cell, which is a much larger record for a rarer mistake.
 
 **Does the panel still behave as recorded?** Report-only in CI, for a
 measured reason rather than an assumed one: on `ubuntu-latest`, against a

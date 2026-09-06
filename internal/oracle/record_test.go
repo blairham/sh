@@ -213,3 +213,80 @@ func TestADocumentCutAtALineBoundaryIsCaught(t *testing.T) {
 		t.Errorf("the report does not say the document is short:\n%q", rc.DocDetail)
 	}
 }
+
+// #660 re-created: a record whose cells were produced before a normalization
+// rule existed.
+//
+// The rule #660 added strips the shell's name from a `Usage:` block. A record
+// generated before it kept the name, and every other check stayed green — the
+// record was internally consistent and the document rendered from it exactly.
+// Here the same cell is put back the way #660 left it, and the check has to
+// say so without a shell being run.
+func TestACellFromBeforeANormalizationRuleIsCaught(t *testing.T) {
+	cases := twoCases()
+	golden := recordOf(cases)
+	golden.Results[cases[0].ID]["bash"] = Result{
+		Stderr: "bash: -q: invalid option~Usage:\tbash [GNU long option] [option] ...~" +
+			"\tbash [GNU long option] [option] script-file ...",
+	}
+
+	rc := CheckRecord(golden, golden.Markdown(cases), cases)
+	if rc.RestaleTotal == 0 {
+		t.Fatal("a cell carrying the shell's own name went unreported")
+	}
+	// Asked of OK as well as of the field: a verdict that saw it and still
+	// said the files agree would be the same as not checking.
+	if rc.OK() {
+		t.Error("the check found a stale cell and still said the record is current")
+	}
+	// The report names the case and shows both texts, because the record is
+	// 1380 cases long and "something is stale" is not actionable. All three
+	// spellings the rule strips have to be in the rendering — the diagnostic
+	// prefix, the `Usage:` header and its indented continuation — since a
+	// rule that only reached one of them is how #667 happened.
+	report := rc.String()
+	for _, want := range []string{cases[0].ID, "<shell>: -q", "Usage:\t<shell>", "~\t<shell> [GNU"} {
+		if !strings.Contains(report, want) {
+			t.Errorf("the report does not show %q:\n%s", want, report)
+		}
+	}
+}
+
+// The other half of the same claim: a cell the current normalizer agrees with
+// is left alone, including one that legitimately contains text the rules look
+// for. Without this the check could pass by reporting everything.
+func TestACurrentCellIsNotReportedStale(t *testing.T) {
+	cases := twoCases()
+	golden := recordOf(cases)
+	golden.Results[cases[0].ID]["bash"] = Result{
+		// What the cell above looks like after the rule has run, plus a
+		// `bash` that is not a name a shell gave itself: mid-line, and so
+		// out of reach of a rule anchored to the start of one. A check that
+		// rewrote it would be finding staleness in a correct record.
+		Stderr: "<shell>: -q: invalid option~Usage:\t<shell> [GNU long option] ...~" +
+			"~running under bash: yes",
+	}
+	if rc := CheckRecord(golden, golden.Markdown(cases), cases); rc.RestaleTotal != 0 {
+		t.Errorf("a current cell was called stale:\n%s", rc)
+	}
+}
+
+// The committed record itself, which is the thing the gate is for. Kept apart
+// from TestTheCommittedRecordAndDocumentAgree so a failure says which of the
+// two questions was answered no.
+func TestTheCommittedRecordWasNormalizedByThisBuild(t *testing.T) {
+	golden, err := Load(filepath.Join("testdata", "golden.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, total := stillNormalizable(golden)
+	if total != 0 {
+		t.Errorf("%d recorded cell(s) the normalizer would still change:\n  %s",
+			total, strings.Join(first, "\n  "))
+	}
+	// A walk that read nothing would report nothing, which is the failure
+	// mode of every assertion made over a traversal.
+	if len(golden.Results) < 100 {
+		t.Fatalf("the record has %d cases; it should have over a thousand", len(golden.Results))
+	}
+}

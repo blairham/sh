@@ -308,6 +308,11 @@ func TestAnAbsentParameterRefusesByNameOnEveryReadRoute(t *testing.T) {
 		{"a flag group", `print -r -- "[${(k)jobstates}]"`},
 		{"an unquoted word", `print -r -- ${jobstates[x]}`},
 		{"a condition", `[[ -n $jobstates ]]`},
+		// A pattern rather than a value, which is where an empty read is
+		// least visible of all: an unrefused one matches nothing, takes
+		// the `*` branch, and looks exactly like a script whose input did
+		// not match.
+		{"a case pattern", `case x in $jobstates) print -r -- matched;; *) print -r -- fell-through;; esac`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), tc.snippet+"\nprint -r -- UNREACHED")
@@ -321,6 +326,55 @@ func TestAnAbsentParameterRefusesByNameOnEveryReadRoute(t *testing.T) {
 				t.Errorf("%s = status 0, want a failure", tc.snippet)
 			}
 		})
+	}
+}
+
+// **A here-document is the one place a refused value still lands**, and it does
+// so for an ordinary unset name under `set -u` in exactly the same way.
+//
+// It is also the route that proves the refusal is asked in *two* places and
+// not one. Every spelling in the table above is answered by the list path,
+// which reaches its own test; a here-document body is expanded span by span
+// down the scalar path alone, and a mutant that deleted the scalar site
+// survived every other test in this file and failed only this one.
+//
+// The body is expanded as the redirection is arranged, so the file is written and
+// the command is reached before the failed expansion stops anything: run with
+// `cat` on PATH, both print `[]`.
+//
+// Asserted as a *parity* rather than as a behavior worth having, which is the
+// only honest way to write it down: this is the substrate's here-document
+// route and not this parameter's, and a refusal that behaved differently here
+// would be a second answer to a question already answered. The diagnostic
+// still names the parameter, which is the part this change is responsible for.
+func TestAHereDocumentNamesAnAbsentParameterTheWayItNamesAnUnsetOne(t *testing.T) {
+	absent, ast := runZsh(t, t.TempDir(), "cat <<E\n[$jobstates]\nE\n")
+	unset, ust := runZsh(t, t.TempDir(), "set -u\ncat <<E\n[$nosuchvar]\nE\n")
+	if !strings.Contains(absent, "jobstates: parameter not implemented yet") {
+		t.Errorf("a here-document reading an absent parameter = %q (status %d), want it named", absent, ast)
+	}
+	if !strings.Contains(unset, "nosuchvar: parameter not set") {
+		t.Errorf("a here-document reading an unset name under set -u = %q (status %d), want it named", unset, ust)
+	}
+	// And the parity itself: in both, the command the here-document was for
+	// is still *reached* — the redirection was arranged before the expansion
+	// failed. `cat` is not on this test's PATH, so what says it ran is the
+	// shell's own complaint about it, and it is the same complaint in both.
+	if !strings.HasSuffix(absent, "command not found: cat\n") ||
+		!strings.HasSuffix(unset, "command not found: cat\n") {
+		t.Errorf("the two here-documents differ in shape: absent %q, unset %q", absent, unset)
+	}
+}
+
+// Arithmetic is deliberately left alone, and that is measured rather than
+// overlooked: `$(( jobstates + 1 ))` in a real zsh with the module loaded is
+// `1`, because an association read as a number is 0 there. A refusal here
+// would be this shell inventing a diagnostic the shell it models does not
+// write, over a spelling that means nothing in either.
+func TestArithmeticReadsAnAbsentParameterAsZeroLikeTheRealThing(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `print -r -- "n=$(( jobstates + 1 ))"`)
+	if want := "n=1\n"; out != want || st != 0 {
+		t.Errorf("arithmetic on an absent parameter = %q (status %d), want %q", out, st, want)
 	}
 }
 

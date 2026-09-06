@@ -77,17 +77,16 @@ func (r *Runner) AbsentParameter(name string) bool {
 // **A name the script gave a value of its own.** `jobstates=(a b)` and then
 // `$jobstates` is the script's array, exactly as it is in a shell where the
 // module was never loaded. The refusal is about reading something absent, not
-// about owning a spelling — and a parameter is asked about here before any of
-// them is read, so this is the one place that has to say so.
+// about owning a spelling, and this test runs before any value is fetched —
+// so it is the one place that can tell the two apart.
 //
 // **The four conditional operators.** `${jobstates-d}`, `${jobstates:=d}`,
 // `${jobstates+x}` and `${jobstates?msg}` are a script saying what to do when
 // the name has no value, and being told is what they are for: the first two
 // supply one, the third answers "no", and the fourth reports in the script's
 // own words. This is the same exemption `set -u` makes and for the same
-// reason. It is also what a plugin manager's `${+functions[f]}` is reaching
-// for — an absent parameter answering *no* is an answer, where an absent
-// parameter answering *empty* is not.
+// reason — an absent parameter answering *no* to "is it there?" is an answer,
+// where one answering *empty* to "what is it?" is not.
 func (r *Runner) refuseAbsentParameter(e *syntax.ParamExpr) bool {
 	if e == nil {
 		return false

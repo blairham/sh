@@ -148,7 +148,7 @@ func TestAnExpandedPatternWithoutAMetacharacterAsksNothing(t *testing.T) {
 // parse it; in `[[ ]]` bash runs it where zsh refuses the word outright. There
 // is no intersection, so the core does not invent one — and the test asserts
 // the command did not run, which is the half a change here would break
-// silently.
+// silently. The divergence itself is #902.
 func TestAProcessSubstitutionInAPatternIsNotPerformed(t *testing.T) {
 	// The subject is the value coming back whole, and the evidence that
 	// nothing ran is the scratch directory: a substitution that is performed

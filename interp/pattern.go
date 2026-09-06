@@ -95,7 +95,7 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 		// command, in a `case` arm bash and zsh both do and ksh93 and dash
 		// cannot parse it, and in `[[ ]]` bash runs it where zsh refuses the
 		// word outright. So the substitution is left as the text it was
-		// written as rather than answered one shell's way (#882).
+		// written as rather than answered one shell's way (#882, #902).
 		return s.Value, false
 	}
 	if s.Quoting == syntax.DollarSingleQuoted {

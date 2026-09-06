@@ -222,8 +222,9 @@ what a binary meant to be liftable into its own repository must not need.
 not pre-commit — it is too slow for every commit. When in doubt run
 `make check` *and* `make lint`.
 
-The report targets are `conformance`, `conformance-dialects`, `wild`,
-`wild-run` and `smoke`. None of them gates; each is described below.
+The report targets are `conformance`, `conformance-gated`,
+`conformance-dialects`, `wild`, `wild-run`, `wild-run-contained` and
+`smoke`. None of them gates; each is described below.
 
 ## Installing, and the name collision
 
@@ -416,6 +417,27 @@ records what six real shells do, so pointing it at our binary turns every
 case into a conformance test with no new expectations to maintain. Add
 `ARGS=-v` to list what does not match — the passing set is a number and the
 failing set is the work.
+
+`make conformance-gated` runs the same corpus twice through the same binary
+— once plain, once under a sandbox policy — and reports the cases that
+answer differently. It is how the boundary gets exercised by fourteen
+hundred cases written for other reasons entirely, rather than only by unit
+tests written by somebody who already knew where the boundary was.
+
+The policy confines *writes* to the scratch directory each case is given
+and leaves reads and execs alone, because an allowed program is outside
+the boundary the moment it starts and a policy refusing reads while
+permitting programs is telling itself a story. A stricter one is a
+`-policy` flag away; deny-everything moves a third of the corpus and is a
+wall rather than a signal. `docs/design/sandboxing.md` has the numbers and
+what each difference is.
+
+`make wild-run-contained` is `wild-run` with the same posture: the shell
+under test may write only in the directory its run was given. That is what
+turns the sweep's containment from a statement about the *arrangement*
+into a statement about the *shell* — and the first run of it found the old
+argument was not true, since `/usr/bin/imptrace` writes to a temporary
+file it names itself, outside the directory the sweep gave it.
 
 `make conformance-dialects` grades all four dialect binaries against the
 shells they claim to be. Each scores exactly what `make conformance` scores

@@ -41,6 +41,49 @@ var Probes = [][]string{
 	{"--help"},
 }
 
+// UnderTest names the shell being swept and how it is invoked.
+//
+// It is a struct rather than three parameters because the three go together:
+// a shell that needs a flag to be the dialect it is being graded as, and a
+// shell asked to contain itself, are both statements about *this* side of the
+// comparison. The reference is a path and stays one — a real shell needs no
+// flags to be itself and has no policy to be given.
+type UnderTest struct {
+	Path string
+	// Args are the flags the binary needs before the script, so a substrate
+	// binary can be swept as the dialect it is being compared against.
+	Args []string
+	// Contained asks for the shell to be handed a sandbox policy naming the
+	// directory this run is given, and nothing else to write to.
+	//
+	// This is what turns the sweep's containment from a statement about the
+	// *arrangement* into a statement about the *shell*. Today's containment
+	// is that each script runs in a directory of its own with no standard
+	// input and a timeout — all of it outside the shell, and none of it a
+	// claim the shell could fail. With a policy on, a script that writes
+	// outside its directory is refused by the thing under test, and every
+	// script on the machine becomes a test of the boundary, in bulk, written
+	// by people who did not know this implementation exists.
+	//
+	// Only the shell under test is contained. Handing the reference a flag it
+	// does not have would end the sweep, and containing a real shell is not
+	// possible in any case — which is the asymmetry the comparison has to
+	// live with, and the reason a difference here is read as "the policy
+	// refused something" rather than as "the shells disagree".
+	Contained bool
+}
+
+// containmentPolicy is what a contained run is handed: write where you were
+// put, and read and run as you like.
+//
+// The same posture the corpus runs under, and confined to writes for the same
+// reason. Reads and execs cannot honestly be confined here — an allowed
+// program is outside the boundary the instant it starts, and a `--help` that
+// could not read its own message would tell us nothing about the shell.
+func containmentPolicy(dir string) string {
+	return "version 1\ndefault allow\ndefault deny write\nallow write " + dir + "/**\nallow write /dev/**\n"
+}
+
 // RunResult is one script run one way under both shells.
 type RunResult struct {
 	Path string
@@ -73,12 +116,13 @@ type RunReport struct {
 // ours and reference are shell binaries. Only scripts this parser accepts are
 // run: one that cannot be read has already been reported by the parse sweep,
 // and running it would only say the same thing again.
-func RunSweep(ctx context.Context, paths []string, ours, reference string, timeout time.Duration) RunReport {
+func RunSweep(ctx context.Context, paths []string, ours UnderTest, reference string, timeout time.Duration) RunReport {
 	var rep RunReport
+	theirs := UnderTest{Path: reference}
 	for _, path := range paths {
 		for _, args := range Probes {
 			a, aTimeout := runOnce(ctx, ours, path, args, timeout)
-			b, bTimeout := runOnce(ctx, reference, path, args, timeout)
+			b, bTimeout := runOnce(ctx, theirs, path, args, timeout)
 			if aTimeout || bTimeout {
 				// A script that waits for something is not evidence about
 				// either shell, and which of them hung is not the question.
@@ -88,7 +132,7 @@ func RunSweep(ctx context.Context, paths []string, ours, reference string, timeo
 			rep.Ran++
 			res := RunResult{
 				Path: path, Args: args,
-				Ours: normalise(a.out, ours, path), Theirs: normalise(b.out, reference, path),
+				Ours: normalise(a.out, ours.Path, path), Theirs: normalise(b.out, reference, path),
 				OurStatus: a.status, TheirStatus: b.status,
 			}
 			if res.Match() {
@@ -128,7 +172,7 @@ func RunSweep(ctx context.Context, paths []string, ours, reference string, timeo
 // answer changes anything and keeps the cost to one extra run per difference
 // rather than one per script.
 func repeats(ctx context.Context, reference, path string, args []string, timeout time.Duration, res RunResult) bool {
-	again, timedOut := runOnce(ctx, reference, path, args, timeout)
+	again, timedOut := runOnce(ctx, UnderTest{Path: reference}, path, args, timeout)
 	if timedOut {
 		return false
 	}
@@ -147,7 +191,7 @@ type outcome struct {
 // rather than waiting for a person. A timeout, because some will wait anyway.
 // And an environment cut down to what a shell needs to find its tools, so the
 // answer does not depend on what happens to be exported today.
-func runOnce(ctx context.Context, shell, script string, args []string, timeout time.Duration) (outcome, bool) {
+func runOnce(ctx context.Context, shell UnderTest, script string, args []string, timeout time.Duration) (outcome, bool) {
 	dir, err := os.MkdirTemp("", "wild")
 	if err != nil {
 		return outcome{}, false
@@ -157,7 +201,22 @@ func runOnce(ctx context.Context, shell, script string, args []string, timeout t
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, shell, append([]string{script}, args...)...)
+	argv := append([]string(nil), shell.Args...)
+	if shell.Contained {
+		// Written into the run's own directory, which the policy therefore
+		// allows: a policy file somewhere else would be one more thing on the
+		// machine for the sweep to leave behind, and one more path the rule
+		// would have to name.
+		p := filepath.Join(dir, "contained.policy")
+		if err := os.WriteFile(p, []byte(containmentPolicy(dir)), 0o600); err != nil {
+			return outcome{}, false
+		}
+		argv = append(argv, "-policy", p)
+	}
+	argv = append(argv, script)
+	argv = append(argv, args...)
+
+	cmd := exec.CommandContext(ctx, shell.Path, argv...)
 	cmd.Dir = dir
 	// Stdin is left nil on purpose and not assigned: nil *is* the empty
 	// input, so a script that reads gets an immediate end rather than

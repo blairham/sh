@@ -536,3 +536,86 @@ func (r *Runner) Expand(text string) string {
 	}
 	return r.expandRawText(text)
 }
+
+// SetAssoc sets an associative array from a name-to-value table, giving the
+// name the associative attribute the way `typeset -A` does.
+//
+// The pair with GetAssoc is here for the same reason SetArray and GetArray
+// are, one shape further along: a registered builtin whose answer is a set of
+// *named* values has nowhere to put it. SetArray would lose the names and
+// reaching into the AssocArrays map directly skips the attribute, which is the
+// part that decides how a subscript is read — a table written in without it
+// answers `${m[1+1]}` as an arithmetic index rather than as a key, and the
+// difference is invisible until a script uses a key that looks like a sum.
+//
+// A nil or empty table still declares the name, because an empty associative
+// array and an absent one are different things to `${(k)m}` and to
+// `${m[k]:-d}`.
+func (r *Runner) SetAssoc(name string, values map[string]string) {
+	r.markAssoc(name)
+	table := make(AssocArray, len(values))
+	for k, v := range values {
+		table[k] = v
+	}
+	r.AssocArrays[name] = table
+}
+
+// GetAssoc is the table an associative array holds, and whether there is one.
+//
+// A copy rather than the runner's own map, so a caller that reads a table,
+// adds to it and writes it back cannot change the shell's state halfway
+// through deciding what to write.
+func (r *Runner) GetAssoc(name string) (map[string]string, bool) {
+	a, ok := r.AssocArrays[name]
+	if !ok || r.removed[name] {
+		return nil, false
+	}
+	out := make(map[string]string, len(a))
+	for k, v := range a {
+		out[k] = v
+	}
+	return out, true
+}
+
+// ArithValue is the value of an arithmetic expression, for a builtin holding
+// an expression it did not parse.
+//
+// The sibling of Expand and MatchPattern, and it exists for the same reason:
+// a builtin that is handed `1+1` and has to compare it with a number would
+// otherwise have to bring its own evaluator, and a shell whose `$(( ))` and
+// whose builtins disagreed about what an expression means would be one thing
+// pretending to be two.
+//
+// A word that is not a number is **not** a failure — a shell reads a bare
+// name in arithmetic as the variable's value and an unset one as zero, so
+// `x` is 0 and this returns it. An expression that will not *evaluate* is a
+// different thing, and it is reported and made fatal here exactly as
+// `$(( ))`'s is: `echo $((1/0))` stops a script in every shell in the panel,
+// and a builtin that swallowed the same division and carried on with a zero
+// would hand its caller a plausible answer to a question that failed. The
+// second result says it happened, so a caller can stop before writing
+// anything.
+//
+// The complaint is located as the shell rather than as the builtin, which is
+// what the arithmetic machinery does everywhere else: the expression failed,
+// not the command that held it.
+func (r *Runner) ArithValue(text string) (int, bool) {
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	tree, err := r.arithTree(nil, text)
+	if err != nil {
+		r.diagf("%s\n", r.diag().ParseFailure(err))
+		r.fatalQuiet()
+		return 0, false
+	}
+	n, err := r.evalNum(tree)
+	if err != nil {
+		r.diagf("%s\n", r.arithFailure(text, err))
+		r.fatalQuiet()
+		return 0, false
+	}
+	// An integer context, which is what a comparison with a test number is:
+	// a float truncates, exactly as an array subscript does.
+	return n.asInt(), true
+}

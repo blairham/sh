@@ -42,13 +42,33 @@ func TestNoLetterIsBothImplementedAndNot(t *testing.T) {
 			for _, b := range []struct{ builtin, opts string }{
 				{"read", d.sem.ReadOptions},
 				{"echo", d.sem.EchoOptions},
+				// The declaration builtins reach the same map by the same
+				// route, and one of them now has a letter taken in *silence*
+				// rather than refused — Semantics.DeclareOptionsWithoutEffect
+				// — which is a second way for a letter to be claimed and its
+				// "not implemented yet" line to become dead data (#1037).
+				//
+				// DeclareOptions alone is the list to compare, and
+				// deliberately not it plus the silent letters: a silent
+				// letter is one *out of* DeclareOptions, so adding them
+				// changes nothing, and a letter named silent that the dialect
+				// does not claim is refused first — which makes its line
+				// reachable rather than dead. A second mechanism here could
+				// only disagree with the first.
+				//
+				// Both spellings, because a dialect with `declare` and
+				// `typeset` under one implementation keys the map twice.
+				{"typeset", d.sem.DeclareOptions},
+				{"declare", d.sem.DeclareOptions},
+				{"local", d.sem.LocalOptions},
 			} {
 				claimed := strings.ReplaceAll(b.opts, ":", "")
 				missing := d.diag.UnimplementedOptionLetters[b.builtin]
 				for i := 0; i < len(missing); i++ {
 					if strings.IndexByte(claimed, missing[i]) >= 0 {
-						t.Errorf("%s: -%c is in ReadOptions/EchoOptions %q and in UnimplementedOptionLetters %q; "+
-							"the second can never be reached", b.builtin, missing[i], b.opts, missing)
+						t.Errorf("%s: -%c is among the letters this dialect claims, %q, and in "+
+							"UnimplementedOptionLetters %q; the second can never be reached",
+							b.builtin, missing[i], b.opts, missing)
 					}
 				}
 			}

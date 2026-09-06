@@ -106,6 +106,20 @@ from shell variables a typed line can set, so all of them are the
 policy's business. The vocabulary stays the interpreter's; the front end
 only asks.
 
+**And the front end's opens are verified, not only consulted about.**
+`internal/boundary` used to answer a bool and leave the open to its
+caller, so nine call sites each did their own `os.Open` afterwards and
+the check was about a *name* while the read was about an object — the
+defect `docs/design/sandboxing.md` closes for the interpreter, still
+open for the shell. `HISTFILE` is the one a typed line can aim. The
+boundary makes the descriptor itself now and asks the kernel what the
+open reached, which is the only arrangement where the check cannot be
+forgotten: there is no longer a way to ask this package's permission and
+then open something else. The platform half is shared with `interp`
+through `internal/opened` rather than copied, because a syscall wrapper
+that exists twice drifts and the copy that drifts is the one nobody is
+reading.
+
 The rest of the front end's own file work is outside, and here is the
 whole list, so that silence is never the record:
 
@@ -121,6 +135,12 @@ whole list, so that silence is never the record:
   filesystem. Gating it would let `-deny /dev/null` turn the null device
   into a terminal, which changes behavior without refusing anything
   reachable.
+- **Tab completion's directory listing.** `<Tab>` lists a directory a
+  person is typing into, and by the rule above that path was chosen by
+  the policy's subject — so this one is on the wrong side of the line
+  and is here as a known gap rather than as a decision. Issue #951
+  carries the argument; the guard in `internal/boundary`'s tests names
+  it so it cannot go quiet.
 - **`umask` and the resource limits.** These name no path and no program.
   They do not perform an access; they change what a later access creates
   with or is allowed to do, and that later access is itself gated and

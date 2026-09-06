@@ -1803,9 +1803,35 @@ type Semantics struct {
 	// than false.
 	ArrayLiteralSubscriptIsAKey Answer
 
-	// DollarZeroInFunctionIsFunctionName makes `$0` inside a function the
-	// function's name. True only in zsh.
-	DollarZeroInFunctionIsFunctionName Answer
+	// DollarZeroNamesTheInnermostCall makes `$0` the innermost thing the
+	// shell has been called into rather than the shell's own name: the
+	// function being run, or the file being sourced.
+	//
+	// One concept with two consequences, and one field because no shell
+	// splits them. zsh has both under a single option, and turning that
+	// option off takes both away together — `$0` inside a function goes back
+	// to the script's name in the same breath as `$0` inside a sourced file
+	// does. Every other member of the panel has neither: measured across
+	// dash, bash 5.3, bash-as-sh, bash 3.2 and ksh93, `$0` is the script's
+	// name inside a function, inside a file it sourced, inside a file that
+	// file sourced, and inside a function defined by one of them.
+	//
+	// Innermost is the whole of the rule and is measured rather than
+	// assumed: a function that sources a file reports the *file* while that
+	// file runs and the function's name again afterwards, and a function
+	// defined in a sourced file reports its own name and not the file it
+	// came from. So this is a question about the top of the call stack and
+	// not about whether a function is anywhere on it.
+	//
+	// The file is named as the operand was written — `. ./inc.sh` reports
+	// `./inc.sh` and a bare name found on PATH reports the bare name —
+	// which is the same spelling the call stack and the diagnostics use.
+	//
+	// A shell's startup files are outside this. They are read by the shell
+	// rather than sourced by a script, and `$0` inside one is the shell's
+	// own name in the shell that has this: measured, a `~/.zshrc` printing
+	// `$0` under `zsh -i` prints the path of the zsh binary.
+	DollarZeroNamesTheInnermostCall Answer
 
 	// BuiltinSyntaxErrorFatal ends a non-interactive shell when text handed
 	// to a special builtin does not parse — `eval "if"`, or a sourced file
@@ -3343,8 +3369,8 @@ func PosixSemantics() Semantics {
 		// characters", and defines a character as what the locale's
 		// LC_CTYPE category says one is. So the standard's answer is yes,
 		// and it is also what every panel member but dash does.
-		MultibyteEncodingIsHonored:         Yes,
-		DollarZeroInFunctionIsFunctionName: No,
+		MultibyteEncodingIsHonored:      Yes,
+		DollarZeroNamesTheInnermostCall: No,
 		// A special builtin's failure is fatal to a non-interactive shell,
 		// which the standard states outright. dash is the only member of the
 		// panel that still does it, and the preset follows the standard

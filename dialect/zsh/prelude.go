@@ -205,7 +205,22 @@ popd() {
 // in its family is running. Both are plain values rather than a version
 // string with a tag in it, so the tag goes where a reader will see it — a
 // script comparing the numbers gets what it asked for either way.
+//
+// ZSH_ARGZERO joins them because it is the same kind of fact — what this
+// shell was called — and because it is the one value `$0` cannot answer for
+// once Semantics.DollarZeroNamesTheInnermostCall is on: `$0` follows the
+// innermost function or sourced file, and this is what it was before
+// anything moved it. Captured by reading `$0` here, which works because the
+// prelude is the first thing the runner reads and nothing has been called
+// yet: measured against real zsh, that is the path of the binary for `-c`,
+// for standard input and for an interactive shell, and the script's path as
+// written for a script.
+//
+// A plain assignment and not a special parameter, which is what it is: real
+// zsh reports `typeset ZSH_ARGZERO=…`, does not export it, and lets a script
+// assign to it or unset it like any other scalar.
 const identity = `
 ZSH_VERSION='5.9.2-blairham'
 ZSH_NAME=zsh
+ZSH_ARGZERO=$0
 `

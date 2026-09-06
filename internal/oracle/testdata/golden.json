@@ -8606,6 +8606,270 @@
         "TimedOut": false
       }
     },
+    "axis/dollar-zero-in-a-file-found-on-path": {
+      "bash": {
+        "Stdout": "in=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[inc.sh]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/dollar-zero-in-a-file-read-by-source": {
+      "bash": {
+        "Stdout": "in=[\u003cscript\u003e]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[\u003cscript\u003e]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[\u003cscript\u003e]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: 2: source: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[\u003cscript\u003e]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[./inc.sh]~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/dollar-zero-in-a-file-sourced-from-a-function": {
+      "bash": {
+        "Stdout": "fn=[\u003cscript\u003e]~in=[\u003cscript\u003e]~fn-again=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "fn=[\u003cscript\u003e]~in=[\u003cscript\u003e]~fn-again=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "fn=[\u003cscript\u003e]~in=[\u003cscript\u003e]~fn-again=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "fn=[\u003cscript\u003e]~in=[\u003cscript\u003e]~fn-again=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "fn=[\u003cscript\u003e]~in=[\u003cscript\u003e]~fn-again=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "fn=[f]~in=[./inc.sh]~fn-again=[f]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/dollar-zero-in-a-function-a-sourced-file-defined": {
+      "bash": {
+        "Stdout": "in=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[f]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/dollar-zero-in-a-nested-sourced-file": {
+      "bash": {
+        "Stdout": "mid=[\u003cscript\u003e]~deep=[\u003cscript\u003e]~mid-again=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "mid=[\u003cscript\u003e]~deep=[\u003cscript\u003e]~mid-again=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "mid=[\u003cscript\u003e]~deep=[\u003cscript\u003e]~mid-again=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "mid=[\u003cscript\u003e]~deep=[\u003cscript\u003e]~mid-again=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "mid=[\u003cscript\u003e]~deep=[\u003cscript\u003e]~mid-again=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "mid=[./mid.sh]~deep=[./deep.sh]~mid-again=[./mid.sh]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/dollar-zero-in-a-sourced-file": {
+      "bash": {
+        "Stdout": "before=[\u003cscript\u003e]~in=[\u003cscript\u003e]~after=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "before=[\u003cscript\u003e]~in=[\u003cscript\u003e]~after=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "before=[\u003cscript\u003e]~in=[\u003cscript\u003e]~after=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "before=[\u003cscript\u003e]~in=[\u003cscript\u003e]~after=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "before=[\u003cscript\u003e]~in=[\u003cscript\u003e]~after=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "before=[\u003cscript\u003e]~in=[./inc.sh]~after=[\u003cscript\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/dollar-zero-in-function": {
       "bash": {
         "Stdout": "\u003cshell\u003e",
@@ -37297,6 +37561,50 @@
       "zsh": {
         "Stdout": "st=1",
         "Stderr": "\u003cshell\u003e:unset:1: not enough arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "name/zsh-argzero-under-a-moved-dollar-zero": {
+      "bash": {
+        "Stdout": "in=[\u003cscript\u003e] az=[unset]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[\u003cscript\u003e] az=[unset]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[\u003cscript\u003e] az=[unset]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=[\u003cscript\u003e] az=[unset]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[\u003cscript\u003e] az=[unset]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[./inc.sh] az=[\u003cscript\u003e]",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

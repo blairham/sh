@@ -367,7 +367,10 @@ func Semantics() interp.Semantics {
 	// scalar as an array of one.
 	s.ScalarSubscriptIsACharacter = interp.Yes
 	s.ArrayLiteralSubscriptIsAKey = interp.No
-	s.DollarZeroInFunctionIsFunctionName = interp.Yes
+	// The FUNCTION_ARGZERO option, on by default and the reason this shell
+	// alone moves `$0`: it names the function being run, or the file being
+	// sourced, and goes back to the script's name when that call returns.
+	s.DollarZeroNamesTheInnermostCall = interp.Yes
 	s.BuiltinSyntaxErrorFatal = interp.No
 	s.DotMissingFileFatal = interp.No
 	s.DotPassesArguments = interp.Yes

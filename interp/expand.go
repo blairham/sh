@@ -1854,10 +1854,17 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		}
 		return itoa(r.lastJobPID), true
 	case "0":
-		// zsh reports the *function's* name inside a function where every
-		// other shell reports the shell's.
-		if r.inFunc != "" && r.ask(r.sem().DollarZeroInFunctionIsFunctionName, "$0 inside a function") {
-			return r.inFunc, true
+		// zsh reports whatever the shell is *inside* — the function being
+		// run, or the file being sourced — where every other shell reports
+		// the shell's own name however deep it is.
+		//
+		// The innermost call and not the innermost function: a file sourced
+		// from a function is what `$0` names while it runs, so asking
+		// r.inFunc would answer with the function around it. See
+		// Semantics.DollarZeroNamesTheInnermostCall for the measurement.
+		if in, ok := r.innermostCall(); ok &&
+			r.ask(r.sem().DollarZeroNamesTheInnermostCall, "$0 naming the function or sourced file it is inside") {
+			return in, true
 		}
 		return r.Name, true
 	case "*":

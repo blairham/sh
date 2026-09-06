@@ -16,15 +16,34 @@ package interp
 // three different sets of names, and a fourth exposes nothing at all, so
 // naming is the dialect's the way every other wording is.
 
+// sourceFrameName is what a sourced file's frame is called, which is what
+// tells it apart from a function's. It is the builtin's own name because that
+// is what the shells put in their stacks, and it is spelled once here because
+// four places now ask the question — including `$0`, where reading a
+// function's frame as a file's would answer with the wrong kind of thing.
+const sourceFrameName = "source"
+
 // Frame is one entry of the call stack.
 type Frame struct {
 	// File is the file being read in this frame: the one a function was
 	// *defined* in, or the one that was sourced.
 	File string
 
-	// Name is the function's name, or "source" for a sourced file. Empty for
-	// the script itself.
+	// Name is the function's name, or sourceFrameName for a sourced file.
+	// Empty for the script itself.
 	Name string
+
+	// Operand is the word `.` was given, exactly as the shell constructed
+	// it and before any PATH search — which is a different string from File
+	// whenever the search found the file somewhere else. Empty for a
+	// function's frame, where Name is the answer instead.
+	//
+	// It exists because `$0` and a diagnostic disagree about a sourced file
+	// found on PATH, measured: `PATH=dir; . inc.sh` reports `$0` as the bare
+	// `inc.sh` and locates a failure inside the file at `dir/inc.sh`. So
+	// File cannot serve both, and using it for `$0` would have answered with
+	// a path the script never wrote.
+	Operand string
 
 	// Line is the line this frame was entered from, in the frame below it.
 	Line int
@@ -92,6 +111,28 @@ func (r *Runner) popFrame() {
 	if len(r.frames) > 0 {
 		r.frames = r.frames[:len(r.frames)-1]
 	}
+}
+
+// innermostCall is what the shell is inside, for the dialect that lets `$0`
+// say: the name of the function being run, or the path of the file being
+// sourced, whichever was entered last.
+//
+// It reports false at the top level, where there is nothing to name and `$0`
+// is the shell's own. The script's own frame is deliberately not consulted —
+// it is not in r.frames, and a script naming itself is what `$0` already
+// answers without any of this.
+//
+// A sourced file answers with the operand rather than the file, which is not
+// the same string for a file found on PATH. See Frame.Operand.
+func (r *Runner) innermostCall() (string, bool) {
+	if len(r.frames) == 0 {
+		return "", false
+	}
+	f := r.frames[len(r.frames)-1]
+	if f.Name == sourceFrameName {
+		return f.Operand, true
+	}
+	return f.Name, true
 }
 
 // currentFile is the file being read now, which is what a function defined

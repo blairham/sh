@@ -567,6 +567,61 @@ var Corpus = []Case{
 		Why:     "zsh reports the function name where the others report the shell",
 	},
 	{
+		ID: "axis/dollar-zero-in-a-sourced-file", Category: "semantics axes",
+		// A script rather than -c, so the outer name is a file that could
+		// plausibly still be the answer: under -c there is only one name in
+		// play and the question cannot be asked. The sourced file is written
+		// by the snippet, so the name it might report is the same on every
+		// machine.
+		Script:  true,
+		Snippet: "printf 'echo \"in=[$0]\"\\n' > inc.sh\necho \"before=[$0]\"\n. ./inc.sh\necho \"after=[$0]\"",
+		Why:     "`$0` inside a sourced file is the *sourced file* in zsh and the outer script in the other five, and it goes back afterwards in all six — which is what makes it a property of where the shell is rather than of what it has read. zsh names the operand as written, `./inc.sh` and not the resolved path. This is the gate a plugin manager on this machine computes its own install directory from (#978)",
+	},
+	{
+		ID: "axis/dollar-zero-in-a-file-read-by-source", Category: "semantics axes",
+		Script:  true,
+		Snippet: "printf 'echo \"in=[$0]\"\\n' > inc.sh\nsource ./inc.sh\necho st=$?",
+		Why:     "the other spelling of the same route, and the same answer wherever the name exists: `source` moves `$0` in zsh exactly as `.` does. dash is the column that answers something else entirely, because it has no `source` at all",
+	},
+	{
+		ID: "axis/dollar-zero-in-a-function-a-sourced-file-defined", Category: "semantics axes",
+		// Called after the sourcing has finished, so nothing about the `.` is
+		// still on the stack: what is reported is what the innermost call is
+		// now, not what the function was read from.
+		Script:  true,
+		Snippet: "printf 'f() { echo \"in=[$0]\"; }\\n' > inc.sh\n. ./inc.sh\nf",
+		Why:     "the function wins over the file it came from: zsh reports `f` and not `./inc.sh`, which is the evidence that `$0` follows the innermost call rather than remembering where anything was defined. The other five report the script, as they do everywhere",
+	},
+	{
+		ID: "axis/dollar-zero-in-a-nested-sourced-file", Category: "semantics axes",
+		Script:  true,
+		Snippet: "printf 'echo \"deep=[$0]\"\\n' > deep.sh\nprintf 'echo \"mid=[$0]\"\\n. ./deep.sh\\necho \"mid-again=[$0]\"\\n' > mid.sh\n. ./mid.sh",
+		Why:     "a file sourced by a sourced file: zsh reports the innermost of the three and restores the middle one when it returns, so the answer is a stack and not a flag. The other five report the outermost script for all three lines",
+	},
+	{
+		ID: "axis/dollar-zero-in-a-file-sourced-from-a-function", Category: "semantics axes",
+		Script:  true,
+		Snippet: "printf 'echo \"in=[$0]\"\\n' > inc.sh\nf() { echo \"fn=[$0]\"; . ./inc.sh; echo \"fn-again=[$0]\"; }\nf",
+		Why:     "the case that settles which of the two halves is really being asked. A function that sources a file reports the *file* while it runs and its own name again afterwards, so it is the innermost call and not the innermost function — a rule written as `is a function on the stack` gets this one wrong",
+	},
+	{
+		ID: "axis/dollar-zero-in-a-file-found-on-path", Category: "semantics axes",
+		// The file goes in a *subdirectory* named on PATH, so the path the
+		// search joins is a different string from the operand. A `.` on PATH
+		// would not show it: the joined name is then the bare name again.
+		// The entry is relative rather than absolute on purpose, so the row
+		// carries no machine's temporary directory in it.
+		Script:  true,
+		Snippet: "mkdir sub\nprintf 'echo \"in=[$0]\"\\n' > sub/inc.sh\nPATH=sub:$PATH\n. inc.sh",
+		Why:     "the one route where a sourced file's `$0` is not the name a diagnostic would use: zsh answers with the bare operand `inc.sh` where a failure inside the same file is located at `sub/inc.sh` — recorded by `location/a-message-from-inside-a-sourced-file`. So `$0` is the word the script wrote rather than the file that was opened, which is what a shell computing its own install directory from `${0:h}` depends on",
+	},
+	{
+		ID: "name/zsh-argzero-under-a-moved-dollar-zero", Category: "parameters",
+		Script:  true,
+		Snippet: "printf 'echo \"in=[$0] az=[${ZSH_ARGZERO-unset}]\"\\n' > inc.sh\n. ./inc.sh",
+		Why:     "zsh alone carries the value `$0` had before anything moved it, which is the only way a sourced file can tell what the shell itself was called. It is what the `${${0:#$ZSH_ARGZERO}:-…}` idiom in a plugin manager on this machine tests against; the other five have no such name and no moved `$0` for it to record",
+	},
+	{
 		ID: "axis/local-builtin", Category: "semantics axes",
 		Snippet: `f() { local v=1; echo "$v"; }; f`,
 		Why:     "ksh93 is the only panel member without local, which is why it is not a compatibility target",

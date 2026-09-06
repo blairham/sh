@@ -129,7 +129,7 @@ func TestSemantics(t *testing.T) {
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.Yes},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
-		{"DollarZeroInFunctionIsFunctionName", s.DollarZeroInFunctionIsFunctionName, interp.Yes},
+		{"DollarZeroNamesTheInnermostCall", s.DollarZeroNamesTheInnermostCall, interp.Yes},
 		// A `jobs` listing: which end it starts from, and whether a job that
 		// has already ended appears in it at all. Both split the panel two
 		// and two, which is why both are fields.

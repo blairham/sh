@@ -6,7 +6,6 @@ package oracle
 import (
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 )
@@ -63,8 +62,9 @@ func (c *RecordCheck) OK() bool {
 //
 // doc is the committed measurements file. The comparison is possible at all
 // because the document is a pure function of the other two — Markdown reads
-// nothing else — so re-rendering and comparing every byte asks the question
-// completely rather than sampling it.
+// nothing else, and since #776 that is true of the signal names as well — so
+// re-rendering and comparing every byte asks the question completely rather
+// than sampling it.
 //
 // That is what makes an edited Why fail. `oracle -check` compares *behavior*,
 // and a Why is prose, so editing one after `make oracle` has run left the
@@ -92,41 +92,20 @@ func CheckRecord(golden *Run, doc string, cases []Case) *RecordCheck {
 	sort.Strings(c.Unrecorded)
 	sort.Strings(c.Orphaned)
 
-	want, got := portable(golden.Markdown(cases)), portable(doc)
+	// Byte for byte, with nothing excluded. There used to be one exception —
+	// the word beside a signal number, which came from the *reader's* kernel
+	// while the number came from the recording machine's, so the check failed
+	// on a Linux runner and passed on macOS for a byte-identical tree. The
+	// word is recorded at measurement time now (Result.SignalName), so it is
+	// a fact about the machine that measured, like every other cell, and the
+	// comparison has no field it has to look away from (#776).
+	want, got := golden.Markdown(cases), doc
 	if want != got {
 		c.DocDiffers = true
 		c.DocDetail = firstDifference(want, got)
 	}
 	c.Restale, c.RestaleTotal = stillNormalizable(golden)
 	return c
-}
-
-// signalWord matches the system's word for a signal, beside the number the
-// record actually keeps.
-var signalWord = regexp.MustCompile(`(killed by signal \d+) \([^)]*\)`)
-
-// portable removes the one thing in the rendered document that is a property
-// of the reader's kernel rather than of the measurement.
-//
-// The document is otherwise a pure function of the record and the corpus,
-// which is the whole basis for comparing it byte for byte. The exception is
-// the word beside a signal number: it comes from syscall.Signal.String(),
-// which is the operating system's spelling, and the number in the record is
-// the one the *recording* machine used. Signal 30 is SIGUSR1 on macOS and
-// SIGPWR on Linux, so a name derived from a recorded number is wrong away
-// from the machine that recorded it — deriving it from the constant instead
-// only moves the problem, because the constant's value is what differs.
-//
-// This was found by the check failing on a Linux runner and passing on macOS
-// for a byte-identical tree, which is the failure mode a machine-independent
-// gate must not have.
-//
-// Nothing is lost by excluding it. The word is computed from the number, so
-// it carries no fact the number does not, and it is removed from *both* sides
-// rather than from the committed file — the document keeps its words for a
-// reader, and the comparison stops pretending they are evidence.
-func portable(doc string) string {
-	return signalWord.ReplaceAllString(doc, "$1")
 }
 
 // String is the report, or empty when there is nothing to report.

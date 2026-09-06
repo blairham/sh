@@ -74,6 +74,31 @@ type Result struct {
 	// to kill(2) that sends nothing, so nothing is ever killed by it.
 	Signal syscall.Signal
 
+	// SignalName is what the *recording* machine called that signal.
+	//
+	// Recorded rather than derived, which is the whole of #776. The rendered
+	// document showed a signal as a number and a word, and the two came from
+	// different machines: the number is the one the recording kernel used,
+	// and the word was syscall.Signal.String() evaluated by whoever rendered.
+	// They disagree — signal 30 is SIGUSR1 on macOS and SIGPWR on Linux — so
+	// the check over the committed files failed on a Linux runner and passed
+	// on macOS for a byte-identical tree. It was mitigated by dropping the
+	// word from both sides of that comparison, which left the one field in an
+	// instrument whose value is that it compares everything.
+	//
+	// Kept here, the word is a fact about the machine that made the
+	// measurement, like every other cell in the record, and the comparison
+	// goes back to being byte for byte with nothing excluded.
+	//
+	// Empty means no signal — or a record written before this field existed,
+	// which renders as the bare number and is then a difference the document
+	// check reports, which is the right answer: re-record.
+	//
+	// The tag is here and not on its neighbors because it is the one field
+	// that is empty for nearly every cell, and 1398 cases across six shells
+	// is 8388 `"SignalName": ""` lines nobody would read.
+	SignalName string `json:"SignalName,omitempty"`
+
 	// TimedOut marks a snippet the shell never finished.
 	TimedOut bool
 }
@@ -165,6 +190,11 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 	case errors.As(err, &ee):
 		res.Status = ee.ExitCode()
 		res.Signal = signalOf(ee.ProcessState)
+		if res.Signal != 0 {
+			// Named here, where the kernel that produced the number is the
+			// one being asked. See Result.SignalName.
+			res.SignalName = res.Signal.String()
+		}
 	case err != nil:
 		// Whatever the shell managed to write before the harness failed is
 		// not a measurement of anything, so it is replaced rather than

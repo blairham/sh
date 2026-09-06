@@ -8647,6 +8647,7 @@
         "Stderr": "\u003cscript\u003e:2: parse error near `if'~\u003cscript\u003e:trap:2: couldn't parse trap command",
         "Status": -1,
         "Signal": 30,
+        "SignalName": "user defined signal 1",
         "TimedOut": false
       }
     },
@@ -31476,6 +31477,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 11,
+        "SignalName": "segmentation fault",
         "TimedOut": false
       },
       "zsh": {
@@ -31712,6 +31714,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "bash-as-sh": {
@@ -31719,6 +31722,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "bash32": {
@@ -31726,6 +31730,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "dash": {
@@ -31733,6 +31738,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "ksh93": {
@@ -31740,6 +31746,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "zsh": {
@@ -31747,6 +31754,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       }
     },
@@ -52348,6 +52356,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 1,
+        "SignalName": "hangup",
         "TimedOut": false
       },
       "bash-as-sh": {
@@ -52355,6 +52364,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 1,
+        "SignalName": "hangup",
         "TimedOut": false
       },
       "bash32": {
@@ -52362,6 +52372,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 1,
+        "SignalName": "hangup",
         "TimedOut": false
       },
       "dash": {
@@ -52369,6 +52380,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 1,
+        "SignalName": "hangup",
         "TimedOut": false
       },
       "ksh93": {
@@ -52376,6 +52388,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 1,
+        "SignalName": "hangup",
         "TimedOut": false
       },
       "zsh": {
@@ -52392,6 +52405,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 30,
+        "SignalName": "user defined signal 1",
         "TimedOut": false
       },
       "bash-as-sh": {
@@ -52399,6 +52413,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 30,
+        "SignalName": "user defined signal 1",
         "TimedOut": false
       },
       "bash32": {
@@ -52406,6 +52421,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 30,
+        "SignalName": "user defined signal 1",
         "TimedOut": false
       },
       "dash": {
@@ -52413,6 +52429,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 30,
+        "SignalName": "user defined signal 1",
         "TimedOut": false
       },
       "ksh93": {
@@ -52420,6 +52437,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 30,
+        "SignalName": "user defined signal 1",
         "TimedOut": false
       },
       "zsh": {
@@ -52427,6 +52445,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 30,
+        "SignalName": "user defined signal 1",
         "TimedOut": false
       }
     },
@@ -52480,6 +52499,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 9,
+        "SignalName": "killed",
         "TimedOut": false
       },
       "bash-as-sh": {
@@ -52487,6 +52507,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 9,
+        "SignalName": "killed",
         "TimedOut": false
       },
       "bash32": {
@@ -52494,6 +52515,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 9,
+        "SignalName": "killed",
         "TimedOut": false
       },
       "dash": {
@@ -52501,6 +52523,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 9,
+        "SignalName": "killed",
         "TimedOut": false
       },
       "ksh93": {
@@ -52508,6 +52531,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 9,
+        "SignalName": "killed",
         "TimedOut": false
       },
       "zsh": {
@@ -52515,6 +52539,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 9,
+        "SignalName": "killed",
         "TimedOut": false
       }
     },
@@ -52524,6 +52549,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 6,
+        "SignalName": "abort trap",
         "TimedOut": false
       },
       "bash-as-sh": {
@@ -52531,6 +52557,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 6,
+        "SignalName": "abort trap",
         "TimedOut": false
       },
       "bash32": {
@@ -52538,6 +52565,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 6,
+        "SignalName": "abort trap",
         "TimedOut": false
       },
       "dash": {
@@ -52545,6 +52573,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 6,
+        "SignalName": "abort trap",
         "TimedOut": false
       },
       "ksh93": {
@@ -52552,6 +52581,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 6,
+        "SignalName": "abort trap",
         "TimedOut": false
       },
       "zsh": {
@@ -52559,6 +52589,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 6,
+        "SignalName": "abort trap",
         "TimedOut": false
       }
     },
@@ -52568,6 +52599,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 1,
+        "SignalName": "hangup",
         "TimedOut": false
       },
       "bash-as-sh": {
@@ -52575,6 +52607,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 1,
+        "SignalName": "hangup",
         "TimedOut": false
       },
       "bash32": {
@@ -52582,6 +52615,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 1,
+        "SignalName": "hangup",
         "TimedOut": false
       },
       "dash": {
@@ -52589,6 +52623,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 1,
+        "SignalName": "hangup",
         "TimedOut": false
       },
       "ksh93": {
@@ -52596,6 +52631,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 1,
+        "SignalName": "hangup",
         "TimedOut": false
       },
       "zsh": {
@@ -52626,6 +52662,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 3,
+        "SignalName": "quit",
         "TimedOut": false
       },
       "dash": {
@@ -52633,6 +52670,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 3,
+        "SignalName": "quit",
         "TimedOut": false
       },
       "ksh93": {
@@ -52640,6 +52678,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 3,
+        "SignalName": "quit",
         "TimedOut": false
       },
       "zsh": {
@@ -52700,6 +52739,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 15,
+        "SignalName": "terminated",
         "TimedOut": false
       },
       "bash-as-sh": {
@@ -52707,6 +52747,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 15,
+        "SignalName": "terminated",
         "TimedOut": false
       },
       "bash32": {
@@ -52714,6 +52755,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 15,
+        "SignalName": "terminated",
         "TimedOut": false
       },
       "dash": {
@@ -52721,6 +52763,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 15,
+        "SignalName": "terminated",
         "TimedOut": false
       },
       "ksh93": {
@@ -52728,6 +52771,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 15,
+        "SignalName": "terminated",
         "TimedOut": false
       },
       "zsh": {
@@ -52735,6 +52779,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 15,
+        "SignalName": "terminated",
         "TimedOut": false
       }
     },
@@ -52992,6 +53037,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "zsh": {
@@ -57452,6 +57498,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "bash-as-sh": {
@@ -57459,6 +57506,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "bash32": {
@@ -57466,6 +57514,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "dash": {
@@ -57473,6 +57522,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "ksh93": {
@@ -57480,6 +57530,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "zsh": {
@@ -57487,6 +57538,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       }
     },
@@ -57980,6 +58032,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "bash-as-sh": {
@@ -57987,6 +58040,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "bash32": {
@@ -57994,6 +58048,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "dash": {
@@ -58001,6 +58056,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "ksh93": {
@@ -58008,6 +58064,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       },
       "zsh": {
@@ -58015,6 +58072,7 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 2,
+        "SignalName": "interrupt",
         "TimedOut": false
       }
     },

@@ -499,9 +499,17 @@ func TestCellNamesTheStreamAMessageCameOutOn(t *testing.T) {
 		{Result{Status: 2}, "*(no output, status 2)*"},
 		{Result{TimedOut: true, Status: -1}, "*(timeout)*"},
 		// A signal death is named rather than given the -1 that stands for
-		// the exit status it does not have.
-		{Result{Status: -1, Signal: syscall.SIGTERM}, "*(no output, killed by signal 15 (terminated))*"},
-		{Result{Stdout: "a", Status: -1, Signal: syscall.SIGINT}, "`a` *(killed by signal 2 (interrupt))*"},
+		// the exit status it does not have. The word comes out of the record
+		// beside the number, so a cell reads the same on any machine (#776) —
+		// which is why these two spell it rather than leaving it derived.
+		{
+			Result{Status: -1, Signal: syscall.SIGTERM, SignalName: "terminated"},
+			"*(no output, killed by signal 15 (terminated))*",
+		},
+		{
+			Result{Stdout: "a", Status: -1, Signal: syscall.SIGINT, SignalName: "interrupt"},
+			"`a` *(killed by signal 2 (interrupt))*",
+		},
 	} {
 		if got := cell(tc.in); got != tc.want {
 			t.Errorf("cell(%+v) = %q, want %q", tc.in, got, tc.want)
@@ -541,6 +549,14 @@ func TestExecRecordsWhichSignalKilledTheShell(t *testing.T) {
 			if got.Status != -1 {
 				t.Errorf("Status = %d, want the -1 that says there is no exit status", got.Status)
 			}
+			// The word beside the number, taken from the kernel that
+			// produced it rather than from whoever renders it later (#776).
+			// Asserted against this machine's own spelling, because this
+			// machine is the one measuring: the point of recording it is
+			// that a *reader* elsewhere no longer computes it.
+			if want := tc.want.String(); got.SignalName != want {
+				t.Errorf("SignalName = %q, want this kernel's %q", got.SignalName, want)
+			}
 		})
 	}
 	// And a shell that ends by itself carries no signal, so zero really does
@@ -548,6 +564,11 @@ func TestExecRecordsWhichSignalKilledTheShell(t *testing.T) {
 	got := Exec(context.Background(), found[0], Case{ID: "t", Snippet: `exit 3`})
 	if got.Signal != 0 || got.Status != 3 {
 		t.Errorf("an ordinary exit = status %d signal %v, want status 3 and no signal", got.Status, got.Signal)
+	}
+	// And no word either: a name beside no signal would be a name for
+	// signal 0, which is the argument to kill(2) that sends nothing.
+	if got.SignalName != "" {
+		t.Errorf("an ordinary exit carries the name %q", got.SignalName)
 	}
 }
 

@@ -3621,6 +3621,26 @@ echo "st=$?"`,
 		Why:     "the dot is its own sentence in ksh93 — an invalid discipline function — and the same split everywhere else",
 	},
 	{
+		ID: "cmd/function-name-with-a-colon", Category: "command language",
+		Snippet: `:f(){ echo ok; }; :f; echo after`,
+		Why:     "the leading colon a plugin manager's whole namespace is written with — `:zi-reload-and-run` — and the same four answers as the dash: bash and zsh define and run it, dash refuses the name at parse time, ksh93 parses and stops the script at the definition",
+	},
+	{
+		ID: "cmd/function-name-with-a-plus", Category: "command language",
+		Snippet: `f+g(){ echo ok; }; f+g; echo after`,
+		Why:     "the second mark of the measured class, and the one that says this is not about `-` and `.`: the punctuation a function name may carry is a character class, and a dialect either has it or refuses every member",
+	},
+	{
+		ID: "cmd/function-name-with-a-percent", Category: "command language",
+		Snippet: `a%b(){ echo ok; }; a%b; echo after`,
+		Why:     "the third, and the one nearest a job specification — `%` is a job only where a job may stand, and in a name it is a name",
+	},
+	{
+		ID: "cmd/function-keyword-name-with-punctuation", Category: "command language",
+		Snippet: `function :f { echo ok; }; :f; echo after`,
+		Why:     "the same name in the keyword form, which is a separate production and had to be measured separately; dash has no keyword at all, so its refusal here is a different sentence from the one it gives the parens",
+	},
+	{
 		ID: "cmd/function-posix-form", Category: "command language",
 		Snippet: `f() { echo posix; }; f`,
 		Why:     "the universal definition form",

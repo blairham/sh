@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -811,5 +812,48 @@ func TestATerminalThatWillNotSaySizeLeavesTheInnerOneAlone(t *testing.T) {
 	if rows, cols := terminalSize(conduit.Stream()); rows != 40 || cols != 200 {
 		t.Errorf("the inner terminal is %dx%d, want the 40x200 it had — a refusal was written through as a size",
 			rows, cols)
+	}
+}
+
+// A session that ends takes its conduit with it.
+//
+// The conduit runs two goroutines — the pump and the resize watcher — and
+// holds two descriptors, all of them for as long as the session lasts. A
+// session that did not close it would leak all four *per session*, which in a
+// front end that starts a session per connection is a shell that grows until
+// it runs out of descriptors. Nothing about the output would look wrong.
+//
+// Counted rather than inspected, because the conduit belongs to the session
+// and there is no handle on it from out here. Several sessions are run so the
+// leak is larger than the noise, and the count is waited on rather than read
+// once: a goroutine that is on its way out has not gone yet.
+func TestASessionThatEndsTakesItsConduitWithIt(t *testing.T) {
+	settle := func() int {
+		var last int
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+			n := runtime.NumGoroutine()
+			if n == last {
+				return n
+			}
+			last = n
+			time.Sleep(20 * time.Millisecond)
+		}
+		return last
+	}
+	before := settle()
+
+	const sessions = 5
+	for range sessions {
+		session := atACapturingPrompt(t)
+		session.typeLine(`/bin/sh -c 'echo alive-$((6*7))'`)
+		session.waitForOutput("alive-42", "the command running under a conduit")
+		session.finish()
+	}
+
+	// Two goroutines a session, so five sessions leak ten. A little slack for
+	// the runtime's own, and far below what a leak would be.
+	if after := settle(); after > before+2 {
+		t.Errorf("%d goroutines after %d sessions, %d before — a conduit outlived its session",
+			after, sessions, before)
 	}
 }

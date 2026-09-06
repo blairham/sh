@@ -9,24 +9,16 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/internal/dialecttest"
 	"github.com/blairham/sh/interp"
-	"github.com/blairham/sh/syntax"
 )
 
 // refuseInScript runs src and reports what reached standard error.
 func refuseInScript(t *testing.T, src string) string {
 	t.Helper()
-	f, err := syntax.Parse(src, bash.Dialect())
-	if err != nil {
-		t.Fatalf("parse %q: %v", src, err)
-	}
+	f := preset.Parse(t, src)
 	var errs strings.Builder
-	sem, diag := bash.Semantics(), bash.Diagnostics()
-	r := &interp.Runner{
-		Stdout: &strings.Builder{}, Stderr: &errs,
-		Semantics: &sem, Diagnostics: &diag, Name: "bash",
-	}
-	bash.Apply(r)
+	r := preset.Runner(dialecttest.Base{Stdout: &strings.Builder{}, Stderr: &errs})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
 	}
@@ -38,12 +30,7 @@ func refuseInScript(t *testing.T, src string) string {
 func refuseAtInvocation(t *testing.T, apply func(*interp.Runner)) string {
 	t.Helper()
 	var errs strings.Builder
-	sem, diag := bash.Semantics(), bash.Diagnostics()
-	r := &interp.Runner{
-		Stdout: &strings.Builder{}, Stderr: &errs,
-		Semantics: &sem, Diagnostics: &diag, Name: "bash",
-	}
-	bash.Apply(r)
+	r := preset.Runner(dialecttest.Base{Stdout: &strings.Builder{}, Stderr: &errs})
 	apply(r)
 	return errs.String()
 }

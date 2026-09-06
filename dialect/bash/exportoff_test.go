@@ -30,7 +30,8 @@ func TestExportHasTheOffOption(t *testing.T) {
 	r := &interp.Runner{
 		Stdout: &out, Stderr: &errs,
 		Semantics: &sem, Diagnostics: &diag, Name: "bash",
-		Env: []string{"V=first"},
+		Env:     []string{"V=first"},
+		Dialect: presetDialect(),
 	}
 	bash.Apply(r)
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {

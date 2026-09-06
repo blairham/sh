@@ -366,7 +366,7 @@ func TestGetoptsAnswers(t *testing.T) {
 // kind of question as which builtins it has, so it is answered through the
 // same seam rather than as an axis.
 func TestParametersBashProvides(t *testing.T) {
-	r := &interp.Runner{}
+	r := &interp.Runner{Dialect: presetDialect()}
 	bash.Apply(r)
 	for _, name := range []string{"UID", "EUID", "RANDOM", "SECONDS"} {
 		f, err := syntax.Parse(`[ -n "${`+name+`-}" ] && echo have`, bash.Dialect())
@@ -374,7 +374,7 @@ func TestParametersBashProvides(t *testing.T) {
 			t.Fatal(err)
 		}
 		var out bytes.Buffer
-		rr := &interp.Runner{Stdout: &out}
+		rr := &interp.Runner{Stdout: &out, Dialect: presetDialect()}
 		bash.Apply(rr)
 		if _, err := rr.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -403,7 +403,7 @@ func TestBothDeclarationNames(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := bash.Semantics(), bash.Diagnostics()
-		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dir: dir}
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dir: dir, Dialect: presetDialect()}
 		bash.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -443,7 +443,7 @@ func TestPipelineStatusName(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := bash.Semantics(), bash.Diagnostics()
-		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 		bash.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -468,7 +468,7 @@ func TestRegexMatchName(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := bash.Semantics(), bash.Diagnostics()
-		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 		bash.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -599,7 +599,7 @@ func TestSetOptionNamesBashHas(t *testing.T) {
 			sem := bash.Semantics()
 			dg := bash.Diagnostics()
 			var out bytes.Buffer
-			r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg}
+			r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg, Dialect: presetDialect()}
 			bash.Apply(r)
 			f, err := syntax.Parse("set +o "+c.name, bash.Dialect())
 			if err != nil {

@@ -239,6 +239,7 @@ func runZshSplit(t *testing.T, dir, src string) (out string, status int, errs st
 	r := &interp.Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &diag,
 		Dir: dir, Name: "zsh", Vars: map[string]string{"PATH": dir},
+		Dialect: presetDialect(),
 	}
 	zsh.Apply(r)
 	st, rerr := r.Run(context.Background(), f)

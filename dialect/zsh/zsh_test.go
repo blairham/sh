@@ -244,7 +244,7 @@ func TestUnknownSignalIsNamedWithOnePrefix(t *testing.T) {
 		}
 		var errs bytes.Buffer
 		sem, dg := zsh.Semantics(), zsh.Diagnostics()
-		r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "zsh"}
+		r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "zsh", Dialect: presetDialect()}
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatalf("run %q: %v", tc.src, err)
 		}
@@ -286,7 +286,7 @@ func TestWhatZshSaysAndWhereItSaysIt(t *testing.T) {
 			}
 			var errs bytes.Buffer
 			sem, dg := zsh.Semantics(), zsh.Diagnostics()
-			r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "zsh"}
+			r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "zsh", Dialect: presetDialect()}
 			if _, err := r.Run(context.Background(), f); err != nil {
 				t.Fatalf("run: %v", err)
 			}
@@ -372,7 +372,7 @@ func TestWhoIsSpeakingInAConditionSplitsByWhenItFailed(t *testing.T) {
 		}
 		var errs bytes.Buffer
 		sem, dg := zsh.Semantics(), zsh.Diagnostics()
-		r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "zsh"}
+		r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "zsh", Dialect: presetDialect()}
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatalf("run %q: %v", tc.src, err)
 		}
@@ -462,7 +462,7 @@ func TestPipelineStatusName(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := zsh.Semantics(), zsh.Diagnostics()
-		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 		zsh.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -483,7 +483,7 @@ func TestRegexMatchLeavesTheBashNameAlone(t *testing.T) {
 	}
 	var out bytes.Buffer
 	s, d := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+	r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 	zsh.Apply(r)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
@@ -507,7 +507,7 @@ func TestCloseBraceIsReservedEverywhere(t *testing.T) {
 	}
 	var out bytes.Buffer
 	s, d := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+	r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 	zsh.Apply(r)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
@@ -583,7 +583,7 @@ func TestTheRefusalOfANonBuiltinNamesNoBuiltin(t *testing.T) {
 	}
 	var out bytes.Buffer
 	s, d := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+	r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 	zsh.Apply(r)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
@@ -601,7 +601,7 @@ func TestTheRefusalOfANonBuiltinNamesNoBuiltin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r = &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+	r = &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 	zsh.Apply(r)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)

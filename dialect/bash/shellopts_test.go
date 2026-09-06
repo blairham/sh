@@ -18,7 +18,7 @@ import (
 // core's; without this line the variable does not exist here at all.
 func TestBashNamesTheOptionRecord(t *testing.T) {
 	sem, diag := bash.Semantics(), bash.Diagnostics()
-	r := &interp.Runner{Semantics: &sem, Diagnostics: &diag, Name: "bash"}
+	r := &interp.Runner{Semantics: &sem, Diagnostics: &diag, Name: "bash", Dialect: presetDialect()}
 	bash.Apply(r)
 	value, ok := r.GetVar("SHELLOPTS")
 	if !ok {
@@ -46,7 +46,8 @@ func TestBashRefusesAnUnknownNameFromTheEnvironmentInItsOwnWords(t *testing.T) {
 	r := &interp.Runner{
 		Stdout: &strings.Builder{}, Stderr: &errs,
 		Semantics: &sem, Diagnostics: &diag, Name: "bash",
-		Env: []string{"SHELLOPTS=nosuchoption:nounset"},
+		Env:     []string{"SHELLOPTS=nosuchoption:nounset"},
+		Dialect: presetDialect(),
 	}
 	bash.Apply(r)
 	r.ApplyInheritedShellOptions()

@@ -228,7 +228,7 @@ func TestApplyRemovesLocal(t *testing.T) {
 		var buf bytes.Buffer
 		sem := ksh.Semantics()
 		diag := ksh.Diagnostics()
-		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag, Name: "ksh"}
+		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag, Name: "ksh", Dialect: presetDialect()}
 		if apply {
 			ksh.Apply(r)
 		}
@@ -397,7 +397,7 @@ func TestKshHasOnlyTheOlderDeclarationName(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := ksh.Semantics(), ksh.Diagnostics()
-		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 		ksh.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -427,7 +427,7 @@ func TestBraceRangeAnswers(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := ksh.Semantics(), ksh.Diagnostics()
-		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
 		ksh.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)

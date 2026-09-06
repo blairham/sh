@@ -4,49 +4,39 @@
 package ksh_test
 
 import (
-	"bytes"
-	"context"
 	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/ksh"
+	"github.com/blairham/sh/internal/dialecttest"
 	"github.com/blairham/sh/interp"
-	"github.com/blairham/sh/syntax"
 )
 
 // The per-shell answers the interp tests used to assert inline: the interp
 // package proves what each axis value does, and this file pins which value
 // this preset gives, so a preset edit cannot silently flip one.
 
-// answersRun parses and runs one snippet as this dialect.
+// answersRun parses and runs one snippet as this dialect, under `sh` and with
+// a PATH, which is the only thing it adds to the shared builder.
 //
-// The dialect is handed to the runner as well as to the parser, and both
-// halves are load-bearing. The parser decides what the source *is*; the
-// runner asks Runner.Dialect what a pattern means, whether arithmetic has
-// floats, and what grammar nested input — a command substitution, an `eval`,
-// a trap body, a sourced file — is parsed with. A runner built without one
-// falls back to the core, so a test whose whole purpose is to assert this
-// dialect's answer was asserting the core's: `[[ $k == a(b|c) ]]` parsed here
-// and then did not match (#849, found closing #826).
+// The dialect goes to the runner as well as to the parser, and both halves are
+// load-bearing. The parser decides what the source *is*; the runner asks
+// Runner.Dialect what a pattern means, whether arithmetic has floats, and what
+// grammar nested input — a command substitution, an `eval`, a trap body, a
+// sourced file — is parsed with. A runner built without one falls back to the
+// core, so a test whose whole purpose is to assert this dialect's answer was
+// asserting the core's: `[[ $k == a(b|c) ]]` parsed here and then did not
+// match (#849, found closing #826). dialecttest.Preset.Runner is now the one
+// place that field is set, for every helper in this package.
 func answersRun(t *testing.T, src string) (string, int) {
 	t.Helper()
-	d := ksh.Dialect()
-	f, err := syntax.Parse(src, d)
+	out, st, err := preset.Combined(t, dialecttest.Base{
+		Name: "sh", Env: []string{"PATH=/usr/bin:/bin"},
+	}, src)
 	if err != nil {
-		t.Fatalf("parse %q: %v", src, err)
+		return out + "unsupported: " + err.Error(), -1
 	}
-	var buf bytes.Buffer
-	sem, diag := ksh.Semantics(), ksh.Diagnostics()
-	r := &interp.Runner{
-		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
-		Dialect: &d, Name: "sh", Env: []string{"PATH=/usr/bin:/bin"},
-	}
-	ksh.Apply(r)
-	st, rerr := r.Run(context.Background(), f)
-	if rerr != nil {
-		return buf.String() + "unsupported: " + rerr.Error(), -1
-	}
-	return buf.String(), st
+	return out, st
 }
 
 // TestTheHelperRunsUnderThisDialectAndNotTheCore guards the field answersRun

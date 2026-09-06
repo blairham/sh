@@ -461,3 +461,12 @@ func TestShiftHasNoOptionsAndNoMarker(t *testing.T) {
 		}
 	}
 }
+
+// Neither spelling of the escape character: this shell's set is the XSI list
+// alone, and it has no -e either, so the option word is an operand (#908).
+func TestEchoTakesNeitherSpellingOfTheEscapeCharacter(t *testing.T) {
+	out, st := runDash(t, t.TempDir(), "echo -e 'a\\eZ:a\\EZ'\n")
+	if out != "-e a\\eZ:a\\EZ\n" || st != 0 {
+		t.Errorf("said %q status %d, want both letters as written and the -e printed", out, st)
+	}
+}

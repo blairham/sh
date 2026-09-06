@@ -225,19 +225,33 @@ func TestAQuotedBareArrayNameSlicesTheList(t *testing.T) {
 // reading the two answers differ on, so the rewrite must decline and the
 // substring must stay a substring.
 func TestTheQuotedRewriteDeclinesWhereThereIsNoList(t *testing.T) {
-	for _, c := range []struct{ src, want string }{
-		{`v=plain; printf "[%s]" "${v:1}"`, `[lain]`},
-		{`a=(); printf "[%s]" "${a:1}"`, `[]`},
-	} {
-		for _, a := range []Answer{Yes, No, Unspecified} {
-			out, st := runGrammar(t, c.src, nil, func(r *Runner) {
-				sem := CoreSemantics()
-				sem.ArrayScalarIsTheWholeArray = a
-				r.Semantics = &sem
-			})
-			if out != c.want || st != 0 {
-				t.Errorf("%s with the axis %v: got %q status %d, want %q at 0", c.src, a, out, st, c.want)
-			}
+	run := func(t *testing.T, src string, a Answer) (string, int) {
+		t.Helper()
+		return runGrammar(t, src, nil, func(r *Runner) {
+			sem := CoreSemantics()
+			sem.ArrayScalarIsTheWholeArray = a
+			r.Semantics = &sem
+		})
+	}
+	// A scalar asks nothing at all, however the axis is answered — including
+	// not at all, where an unanswered axis is a refusal.
+	for _, a := range []Answer{Yes, No, Unspecified} {
+		if out, st := run(t, `v=plain; printf "[%s]" "${v:1}"`, a); out != `[lain]` || st != 0 {
+			t.Errorf("a scalar with the axis %v: got %q status %d, want %q at 0", a, out, st, `[lain]`)
+		}
+	}
+	// An empty array is one field holding nothing under either reading —
+	// there is no list to slice and no element to take characters from — so
+	// the rewrite must decline and the answer must not depend on the axis.
+	//
+	// Only Yes and No. An empty array's bare name reaches
+	// ArrayScalarIsTheWholeArray on the scalar path since #1049, so an
+	// unanswered axis is refused there rather than here: `a=(); echo "${a}"`
+	// with no operator at all is refused on a bare core too, which is what
+	// says the refusal is not this rewrite's.
+	for _, a := range []Answer{Yes, No} {
+		if out, st := run(t, `a=(); printf "[%s]" "${a:1}"`, a); out != `[]` || st != 0 {
+			t.Errorf("an empty array with the axis %v: got %q status %d, want %q at 0", a, out, st, `[]`)
 		}
 	}
 }

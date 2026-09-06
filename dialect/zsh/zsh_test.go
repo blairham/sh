@@ -34,6 +34,20 @@ func TestGrammar(t *testing.T) {
 		zsh.Dialect().ExpandAliases.Has(syntax.AliasFromCommandString) {
 		t.Error("the two routes that differ are what the set is for")
 	}
+	// The length may carry an operator here, and this shell is the only one
+	// in the panel that reads the pairing as a construct at all: `${#v#a}` is
+	// the length of what the trim leaves, where bash, bash 3.2, bash as `sh`,
+	// dash and ksh93 all answer `bad substitution`. Pinned as a value rather
+	// than only as a behavior, because nothing else names which answer this
+	// preset gives — mutation says so.
+	if !zsh.Dialect().ParamLengthTakesAnOperator {
+		t.Error("ParamLengthTakesAnOperator = false, want true")
+	}
+	// And the other reading of a colon before an operator is not this
+	// shell's: `${v:#p}` is an element exclusion here, not `${v#p}`.
+	if zsh.Dialect().ParamColonBeforeTrimIsIgnored {
+		t.Error("ParamColonBeforeTrimIsIgnored = true, want false")
+	}
 	// And a body's newlines are lines of the program: $LINENO after a
 	// two-line body reads 6 against a physical 5.
 	if !zsh.Dialect().AliasBodyCountsLines {

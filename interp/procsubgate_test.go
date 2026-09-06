@@ -53,15 +53,20 @@ func containing(t *testing.T, scratch string) *policy.Policy {
 	return p
 }
 
-// gated runs src under a policy and returns what the shell wrote.
-func gated(t *testing.T, src string, g Gate, sink Sink) (out, errs string, status int) {
+// gated runs src in dir under a gate and returns what the shell wrote.
+//
+// The directory is the caller's rather than this helper's, and that is not
+// tidiness: a policy naming one directory while the shell runs in another
+// denies every ordinary write, which passes a test that asserts a refusal for
+// the wrong reason. It did — the neighbor case below was refused on its
+// *first* line and never reached the assertion.
+func gated(t *testing.T, dir, src string, g Gate, sink Sink) (out, errs string, status int) {
 	t.Helper()
 	var o, e output
-	scratch := t.TempDir()
 	sem := PosixSemantics()
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem,
-		Dir:       scratch,
+		Dir:       dir,
 		Stdout:    &o, Stderr: &e,
 		Gate: g, Events: sink,
 	})
@@ -90,7 +95,7 @@ func TestAProcessSubstitutionRunsUnderAPolicyThatConfinesWrites(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			scratch := t.TempDir()
-			out, errs, status := gated(t, tc.src, containing(t, scratch), nil)
+			out, errs, status := gated(t, scratch, tc.src, containing(t, scratch), nil)
 			if out != tc.want || status != 0 {
 				t.Errorf("out = %q status %d, want %q and 0\n\tstderr: %s",
 					out, status, tc.want, errs)
@@ -175,7 +180,7 @@ func TestTheShellsOwnPipeIsRecordedEvenThoughItIsNotRefused(t *testing.T) {
 	// `<(cmd)` is the shell writing into the pipe; `>(cmd)` is the shell
 	// reading out of it.
 	src := "/bin/cat <(/bin/echo hi); /bin/echo out > >(/bin/cat); /bin/sleep 0.3"
-	out, errs, status := gated(t, src, containing(t, scratch), sink)
+	out, errs, status := gated(t, scratch, src, containing(t, scratch), sink)
 	if out != "hi\nout\n" || status != 0 {
 		t.Fatalf("out = %q status %d, stderr %s", out, status, errs)
 	}
@@ -215,7 +220,7 @@ func TestThePipesNameIsExemptOnlyWhileItsCommandRuns(t *testing.T) {
 	scratch := t.TempDir()
 	// The path is printed by one command and written by the next.
 	src := `p=$(echo <(true)); echo "captured:$p" >&2; echo x > "$p"; echo "after:$?"`
-	out, errs, _ := gated(t, src, containing(t, scratch), nil)
+	out, errs, _ := gated(t, scratch, src, containing(t, scratch), nil)
 	if !strings.Contains(errs, "captured:") || !strings.Contains(errs, "sh-procsub") {
 		t.Fatalf("the substitution did not expand to a pipe under it: %q", errs)
 	}
@@ -230,7 +235,7 @@ func TestThePipesNameIsExemptOnlyWhileItsCommandRuns(t *testing.T) {
 	// Two pipes of the *same* shell, which is what makes this the case a
 	// recognition matching on the directory would wave through: a command
 	// substitution gets a temporary directory of its own, so a path captured
-	// through one is never a neighbour of anything. The path is written to a
+	// through one is never a neighbor of anything. The path is written to a
 	// file and read back with `read`, both in this shell.
 	//
 	// The live pipe is named by an *earlier redirect* of the same command,
@@ -240,10 +245,9 @@ func TestThePipesNameIsExemptOnlyWhileItsCommandRuns(t *testing.T) {
 	sibling := "/bin/echo <(true) > out\n" +
 		"read p < out\n" +
 		`/bin/cat < <(true) > "$p"` + "\n"
-	sout, errs, _ := gated(t, sibling, containing(t, t.TempDir()), nil)
-	t.Logf("sibling: out=%q errs=%q", sout, errs)
+	_, errs, _ = gated(t, scratch, sibling, containing(t, scratch), nil)
 	if !strings.Contains(errs, "refused") {
-		t.Errorf("a write to a neighbour of a live pipe was allowed: %q", errs)
+		t.Errorf("a write to a neighbor of a live pipe was allowed: %q", errs)
 	}
 }
 
@@ -257,7 +261,7 @@ func TestWhatRunsInsideASubstitutionIsStillGated(t *testing.T) {
 			}
 			return Allow
 		})
-		out, errs, _ := gated(t, `/bin/cat <(/bin/echo secret)`, g, nil)
+		out, errs, _ := gated(t, t.TempDir(), `/bin/cat <(/bin/echo secret)`, g, nil)
 		if strings.Contains(out, "secret") {
 			t.Errorf("out = %q, want the refused command not to have run", out)
 		}
@@ -277,7 +281,7 @@ func TestWhatRunsInsideASubstitutionIsStillGated(t *testing.T) {
 		if err != nil {
 			t.Fatalf("policy: %v", err)
 		}
-		out, _, _ := gated(t, `/bin/cat <(read x < `+secret+`; echo "$x")`, p, nil)
+		out, _, _ := gated(t, t.TempDir(), `/bin/cat <(read x < `+secret+`; echo "$x")`, p, nil)
 		if strings.Contains(out, "TOPSECRET") {
 			t.Errorf("out = %q, want the denied read refused inside the substitution too", out)
 		}
@@ -287,7 +291,7 @@ func TestWhatRunsInsideASubstitutionIsStillGated(t *testing.T) {
 // TestAnUnpoliciedProcessSubstitutionIsUnchanged, because the recognition must
 // not have moved anything for a shell nobody gave a policy.
 func TestAnUnpoliciedProcessSubstitutionIsUnchanged(t *testing.T) {
-	out, errs, status := gated(t, `/bin/cat <(/bin/echo hi)`, nil, nil)
+	out, errs, status := gated(t, t.TempDir(), `/bin/cat <(/bin/echo hi)`, nil, nil)
 	if out != "hi\n" || status != 0 {
 		t.Errorf("out = %q status %d stderr %q, want hi and 0", out, status, errs)
 	}

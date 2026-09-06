@@ -10,7 +10,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/internal/oracle"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -23,10 +22,11 @@ import (
 // the terminal instead of from the body; a lost `&` re-parses and waits. Only
 // running both says whether the printed source means what it said.
 //
-// Under one dialect rather than the core, because the core refuses whatever
-// the shells disagree about and most of the corpus is about exactly that —
-// the question here is the printer, not the semantics.
+// Under a wider grammar than the core, because the core refuses whatever the
+// shells disagree about and most of the corpus is about exactly that — the
+// question here is the printer, not the semantics.
 func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
+	unread := 0
 	for _, c := range oracle.Corpus {
 		if c.SyntaxError {
 			continue
@@ -40,9 +40,10 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 			continue
 		}
 		t.Run(c.ID, func(t *testing.T) {
-			f, err := syntax.Parse(c.Snippet, bash.Dialect())
+			f, err := syntax.Parse(c.Snippet, corpusGrammar())
 			if err != nil {
-				t.Skipf("not this dialect: %v", err)
+				unread++
+				t.Skipf("the grammar here does not read it: %v", err)
 			}
 			printed := syntax.Print(f)
 
@@ -58,6 +59,48 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 			}
 		})
 	}
+	// A skip is invisible in a passing run, so a grammar that quietly stopped
+	// reading half the corpus would read as a green round-trip over half as
+	// many cases. Every case here parses today; if one stops, that is the
+	// finding rather than a smaller test.
+	if unread != 0 {
+		t.Errorf("%d corpus cases did not parse; corpusGrammar no longer reads the corpus", unread)
+	}
+}
+
+// corpusGrammar is the grammar the round-trip reads the corpus with: the core,
+// widened by every construct the corpus actually contains.
+//
+// Named here rather than taken from a dialect. What this test needs is a
+// grammar wide enough to reach the cases — which shell happens to have that
+// grammar is not the printer's business, and borrowing one made `interp`'s
+// tests stop compiling without `dialect/bash` (#491). The list is the corpus's
+// requirement and the check above is what keeps it honest: today it reads all
+// 1270 of the cases that are neither syntax errors nor layout-sensitive.
+func corpusGrammar() syntax.Dialect {
+	d := syntax.Core()
+	d.CaseContinue = true
+	d.Coproc = true
+	d.CoprocName = true
+	d.CurrentShellSubstitution = true
+	d.DollarDoubleQuote = true
+	d.ExtendedPatternInCondition = true
+	d.FdVariableSubscript = true
+	d.FuncDefAtParen = true
+	d.FunctionKeywordParens = true
+	d.MultiDigitFdNumber = true
+	d.ParamCaseChange = true
+	d.ParamIndirection = true
+	d.ParamTransformations = true
+	d.RegexTakesAlternation = true
+	d.TimePosixFlag = true
+	// `declare` beside the four the core already reads as declarations, so a
+	// snippet using it keeps the assignment rule when it is printed back.
+	d.DeclarationUtilities = map[string]bool{
+		"declare": true, "export": true, "local": true,
+		"readonly": true, "typeset": true,
+	}
+	return d
 }
 
 // guardedBuffer is a buffer that may be read while the shell is still writing
@@ -94,13 +137,13 @@ func (g *guardedBuffer) String() string {
 // returns what it printed and reported.
 func runUnderBash(t *testing.T, src string) (string, int) {
 	t.Helper()
-	f, err := syntax.Parse(src, bash.Dialect())
+	f, err := syntax.Parse(src, corpusGrammar())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var out guardedBuffer
 	dir := t.TempDir()
-	sem, dg := bash.Semantics(), bash.Diagnostics()
+	sem, dg := testSemantics(), interp.PosixDiagnostics()
 	r := newTestRunner(t, &interp.Runner{
 		Semantics: &sem, Diagnostics: &dg,
 		Stdout: &out, Stderr: &out,
@@ -113,7 +156,6 @@ func runUnderBash(t *testing.T, src string) (string, int) {
 		// below, which is meant for what the *snippet* prints.
 		Name: "sh", Dir: dir, Env: append(testPATH(), "TMPDIR="+t.TempDir()),
 	})
-	bash.Apply(r)
 	status, rerr := r.Run(context.Background(), f)
 	text := strings.ReplaceAll(out.String(), dir, "<dir>")
 	if rerr != nil {

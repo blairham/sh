@@ -5,13 +5,16 @@ package interp_test
 
 import (
 	"testing"
-
-	"github.com/blairham/sh/dialect/bash"
 )
 
 // `set -e` is core behavior: dash, bash, ksh93 and zsh agree on all
 // twenty-four probes measured, including the ones where implementations
 // usually diverge. There is no axis here, which was not the expectation.
+//
+// So these run on the suite's own vector and set nothing. They used to seed
+// from bash's preset, which said the opposite of the paragraph above them
+// (#491): a file recording that a behavior has no axis, naming a shell to get
+// at it.
 func TestErrExit(t *testing.T) {
 	for _, tc := range []struct {
 		name, src  string
@@ -66,7 +69,7 @@ func TestErrExit(t *testing.T) {
 		{"a plain assignment succeeds", `set -e; x=1; echo reached`, "reached\n", 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, st := run(t, tc.src, withSem(bash.Semantics()))
+			got, st := run(t, tc.src, nil)
 			if got != tc.wantOut {
 				t.Errorf("output = %q, want %q", got, tc.wantOut)
 			}

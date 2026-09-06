@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
 	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -28,7 +27,7 @@ func declareRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) 
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
-	sem := bash.Semantics()
+	sem := testSemantics()
 	if set != nil {
 		set(&sem)
 	}
@@ -211,7 +210,7 @@ func TestDeclarePrintWithNoNamesListsEverythingSorted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sem := bash.Semantics()
+	sem := testSemantics()
 	var o, e bytes.Buffer
 	r := newTestRunner(t, &Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Name: "testsh",

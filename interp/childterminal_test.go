@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/internal/pty"
 	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -75,16 +74,15 @@ sleep 0.05 &
 /bin/sh -c 'test -t 1 && echo two-tty || echo two-pipe'
 wait
 `
-	f, err := syntax.Parse(src, bash.Dialect())
+	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
 	}
-	sem := bash.Semantics()
-	dg := bash.Diagnostics()
+	sem := testSemantics()
+	dg := PosixDiagnostics()
 	r := newTestRunner(t, &Runner{
 		Stdout: terminal, Stderr: terminal, Semantics: &sem, Diagnostics: &dg, Env: testPATH(),
 	})
-	bash.Apply(r)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

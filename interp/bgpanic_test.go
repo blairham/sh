@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blairham/sh/dialect/bash"
 	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -98,7 +97,7 @@ func TestABugOnTheShellsOwnGoroutineCostsOnlyThatGoroutine(t *testing.T) {
 			// on it.
 			var out syncBuffer
 			var g concurrentGuard
-			bash := bash.Semantics()
+			bash := testSemantics()
 			r := newTestRunner(t, &Runner{
 				Stdout: &out, Stderr: &out, Semantics: &bash, Env: testPATH(),
 			})

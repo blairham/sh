@@ -85,13 +85,18 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 			break
 		}
 		r.expandingSpan = i
+		// The head of the word, for the `${~spec}` flag: nothing has been
+		// accumulated in front of this span. An empty span in front of it
+		// leaves the head where it was, which is measured — `${empty}${~t}`
+		// expands and `x${~t}` does not.
+		head := len(fields) == 1 && fields[0] == ""
 		// `$@` is the one expansion that yields more than one field on its
 		// own, so it cannot go through expandSpan, which returns a string.
 		// The first parameter joins onto whatever precedes it and the last
 		// stays open for whatever follows — which is why `x$@y` attaches its
 		// literal text to the first and last fields rather than becoming
 		// words of its own.
-		if parts, ok := r.expandAt(s, splitByDialect); ok {
+		if parts, ok := r.expandAt(s, splitByDialect, head); ok {
 			if len(parts) == 0 {
 				continue
 			}
@@ -100,7 +105,7 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 			fields = append(fields, parts[1:]...)
 			continue
 		}
-		text, split := r.expandSpan(s, splitByDialect)
+		text, split := r.expandSpan(s, splitByDialect, head)
 		if !split {
 			fields[len(fields)-1] += text
 			any = any || text != "" || s.Quoting != syntax.Unquoted
@@ -174,11 +179,12 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 			break
 		}
 		r.expandingSpan = i
-		if parts, ok := r.expandAt(s, splitNever); ok {
+		head := b.Len() == 0
+		if parts, ok := r.expandAt(s, splitNever, head); ok {
 			b.WriteString(strings.Join(parts, " "))
 			continue
 		}
-		text, _ := r.expandSpan(s, splitNever)
+		text, _ := r.expandSpan(s, splitNever, head)
 		b.WriteString(text)
 	}
 	return []string{globUnescape(b.String())}
@@ -211,7 +217,8 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 	var b strings.Builder
 
 	for _, s := range w.Spans {
-		if parts, ok := r.expandAt(s, splitAlways); ok {
+		head := b.Len() == 0
+		if parts, ok := r.expandAt(s, splitAlways, head); ok {
 			b.WriteString(strings.Join(parts, " "))
 			if len(parts) == 0 {
 				continue
@@ -221,7 +228,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 			fields = append(fields, parts[1:]...)
 			continue
 		}
-		text, split := r.expandSpan(s, splitAlways)
+		text, split := r.expandSpan(s, splitAlways, head)
 		b.WriteString(text)
 		if !split {
 			fields[len(fields)-1] += text
@@ -458,7 +465,10 @@ func (r *Runner) expandColonTildes(w *syntax.Word) {
 // itself. Quoted, it is one field per parameter, each keeping its own spaces;
 // with no parameters it is *zero* fields, which is why `set -- "$@"` is safe
 // on an empty list and `set -- "$*"` is not.
-func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
+// head has the same meaning it has for expandSpan, and reaches the elements
+// through tildeFlagElements: only the first of them can be denied a head, the
+// rest are fields of their own.
+func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, bool) {
 	if s.Kind != syntax.ParamExp || s.Param == nil {
 		return nil, false
 	}
@@ -477,7 +487,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 	// A flag group changes what the whole expansion yields — how many
 	// fields, joined with what — so a node that carries one is answered by
 	// its own pipeline, before any of the shapes below are considered.
-	if fields, ok := r.expandFlagged(s); ok {
+	if fields, ok := r.expandFlagged(s, head); ok {
 		return fields, true
 	}
 	e := s.Param
@@ -617,7 +627,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 				// this path never glob-escaped, so `a=("zz*" other)` matched
 				// the directory in the zsh dialect, where the shell leaves the
 				// star alone.
-				return r.elementFields(elems, sp), true
+				return r.tildeFlagElements(s, head, r.elementFields(elems, sp, r.globSubstAnswer(s))), true
 			}
 			if s.Quoting != syntax.Unquoted {
 				if len(elems) == 0 && e.Op == syntax.ParamNone {
@@ -650,7 +660,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 				}
 				return escapeAll(elems), true
 			}
-			return r.elementFields(elems, sp), true
+			return r.tildeFlagElements(s, head, r.elementFields(elems, sp, r.globSubstAnswer(s))), true
 		}
 	}
 	// `${@@Q}` and `${*@Q}`: a transformation distributes over the positional
@@ -671,7 +681,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 		if s.Quoting != syntax.Unquoted {
 			return escapeAll(elems), true
 		}
-		return r.elementFields(elems, sp), true
+		return r.tildeFlagElements(s, head, r.elementFields(elems, sp, r.globSubstAnswer(s))), true
 	}
 	if e.Op != syntax.ParamNone || e.Length {
 		return nil, false
@@ -688,7 +698,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 		if s.Quoting != syntax.Unquoted {
 			return nil, false
 		}
-		return r.elementFields(r.Params, sp), true
+		return r.tildeFlagElements(s, head, r.elementFields(r.Params, sp, r.globSubstAnswer(s))), true
 	}
 	if e.Name != "@" {
 		return nil, false
@@ -701,7 +711,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 	}
 	// Unquoted, each parameter goes through the same two stages every other
 	// expansion does.
-	return r.elementFields(r.Params, sp), true
+	return r.tildeFlagElements(s, head, r.elementFields(r.Params, sp, r.globSubstAnswer(s))), true
 }
 
 // elementFields is what an unquoted list expansion yields: the fields its
@@ -721,8 +731,8 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy) ([]string, bool) {
 // is the same discipline expansionResult follows for the scalar path: a
 // element with no separator in it is not split either way, and one with no
 // metacharacter is not a pattern either way.
-func (r *Runner) elementFields(elems []string, sp splitPolicy) []string {
-	perElement := r.splitEachElement(elems, sp)
+func (r *Runner) elementFields(elems []string, sp splitPolicy, glob Answer) []string {
+	perElement := r.splitEachElement(elems, sp, glob)
 	if !r.listCouldJoinDifferently(elems) {
 		return perElement
 	}
@@ -737,7 +747,7 @@ func (r *Runner) elementFields(elems []string, sp splitPolicy) []string {
 		return perElement
 	}
 	ifs, set := r.ifs()
-	joined := r.splitEachElement([]string{strings.Join(elems, ifsFirst(ifs, set))}, sp)
+	joined := r.splitEachElement([]string{strings.Join(elems, ifsFirst(ifs, set))}, sp, glob)
 	if slices.Equal(perElement, joined) {
 		// The two readings coincide, which is the common case: under a
 		// whitespace IFS a run of separators is one delimiter and an empty
@@ -783,10 +793,9 @@ func (r *Runner) listCouldJoinDifferently(elems []string) bool {
 //
 // The other reading joins them first, and elementFields above is what chooses
 // between the two.
-func (r *Runner) splitEachElement(elems []string, sp splitPolicy) []string {
+func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) []string {
 	ifs, set := r.ifs()
 	split := sp.answer(r.sem().SplitParamExpansion)
-	glob := r.sem().GlobExpansionResults
 	numericRange := r.dialect().NumericRangePattern
 	patternGroup := r.dialect().PatternAlternation
 	var out []string
@@ -861,7 +870,11 @@ func (sp splitPolicy) answer(a Answer) Answer {
 // expandSpan expands one span, reporting whether its result is subject to
 // field splitting. Only unquoted expansions are; literal text never is,
 // however it was written.
-func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy) (text string, split bool) {
+// head says nothing has been accumulated in front of this span in the word
+// being built, which is what the `${~spec}` flag's tilde half asks about: a
+// substituted tilde expands where a written one would, and a written one
+// expands only at the head of a word.
+func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text string, split bool) {
 	unquoted := s.Quoting == syntax.Unquoted
 	switch s.Kind {
 	case syntax.Literal:
@@ -882,10 +895,16 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy) (text string, split b
 		return globEscape(s.Value), false
 	case syntax.ParamExp:
 		v := r.expandParam(s.Param)
-		return r.expansionResult(v, unquoted, sp.answer(r.sem().SplitParamExpansion), "splitting an unquoted parameter expansion")
+		text, split := r.expansionResult(v, unquoted, r.globSubstAnswer(s),
+			sp.answer(r.sem().SplitParamExpansion), "splitting an unquoted parameter expansion")
+		// Before the split, which is measured: `${~v}` on `~/zz ~/qq` is the
+		// head expanded and the second tilde left alone, so the value's head
+		// is what the flag reaches and not each field's.
+		return r.tildeFlagHead(s, head, text), split
 	case syntax.CommandSubst:
 		v := r.commandSubst(r.ctx, s)
-		return r.expansionResult(v, unquoted, sp.answer(r.sem().SplitCommandSubstitution), "splitting an unquoted command substitution")
+		return r.expansionResult(v, unquoted, r.sem().GlobExpansionResults,
+			sp.answer(r.sem().SplitCommandSubstitution), "splitting an unquoted command substitution")
 	case syntax.ProcSubstIn, syntax.ProcSubstOut:
 		// A path, and a path is never split or globbed however it was
 		// written: what came back is a name this shell just made, not text
@@ -900,7 +919,8 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy) (text string, split b
 		if !ok {
 			return "", false
 		}
-		return r.expansionResult(v, unquoted, sp.answer(r.sem().SplitParamExpansion), "splitting an unquoted arithmetic expansion")
+		return r.expansionResult(v, unquoted, r.sem().GlobExpansionResults,
+			sp.answer(r.sem().SplitParamExpansion), "splitting an unquoted arithmetic expansion")
 	}
 	return "", false
 }
@@ -954,7 +974,7 @@ func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
 //
 // Quoted, neither applies — that is universal. Unquoted, both are dialect
 // questions, and zsh answers no to both while everything else answers yes.
-func (r *Runner) expansionResult(v string, unquoted bool, split Answer, axis string) (string, bool) {
+func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, axis string) (string, bool) {
 	if !unquoted {
 		return globEscape(v), false
 	}
@@ -969,7 +989,7 @@ func (r *Runner) expansionResult(v string, unquoted bool, split Answer, axis str
 		doSplit = r.ask(split, axis)
 	}
 	if hasUnescapedMeta(v, r.dialect().NumericRangePattern, r.dialect().PatternAlternation) &&
-		!r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion") {
+		!r.ask(glob, "globbing the result of an expansion") {
 		// zsh does not treat the result of an expansion as a pattern. The
 		// same rule decides `[[ abc == $p ]]`, which is one behavior
 		// observed twice rather than two quirks.
@@ -2051,7 +2071,13 @@ func (r *Runner) expandRawText(text string) string {
 	// body is one blob of input rather than fields, in every shell in the
 	// panel, so the splitting axis has nothing to ask.
 	for _, s := range r.parseSpans(syntax.HeredocSpans(text, r.dialect())) {
-		out, _ := r.expandSpan(s, splitNever)
+		// head is false, and it is the belt to the quoting's braces: a
+		// here-document's spans are marked double-quoted — which is what
+		// stops the body being split — so `${~t}` in one is suppressed by
+		// the quoting before the head is consulted. Measured, a `${~t}` in a
+		// body is the value unchanged, and a mutant passing true here is
+		// unobservable for that reason.
+		out, _ := r.expandSpan(s, splitNever, false)
 		// expandSpan marks a literal's metacharacters for the glob stage,
 		// and a here-document has no glob stage — the text is input, not a
 		// pattern. Without this a backslash in the body came out doubled.
@@ -2128,29 +2154,9 @@ func (r *Runner) expandTilde(w *syntax.Word) {
 		!strings.HasPrefix(s.Value, "~") {
 		return
 	}
-	rest := s.Value[1:]
-	name, tail := rest, ""
-	if i := strings.IndexByte(rest, '/'); i >= 0 {
-		name, tail = rest[:i], rest[i:]
-	}
-	if name == "+" || name == "-" {
-		// `~+` is $PWD and `~-` is $OLDPWD in three of the four, and only
-		// when the variable is set: a fresh shell's `~-` stays literal.
-		if v, ok := r.tildeDirVar(name); ok {
-			s.Value = v + tail
-		}
-		return
-	}
-	if name != "" {
-		// `~user` needs a user database this package does not carry, so it is
-		// left alone rather than guessed at.
-		return
-	}
-	home, ok := r.getVar("HOME")
-	if !ok {
-		return
-	}
-	s.Value = home + tail
+	// tildeValue is the whole of the rule, shared with the substituted tilde
+	// `${~name}` produces so the two cannot drift apart.
+	s.Value = r.tildeValue(s.Value)
 }
 
 // tildeDirVar resolves `~+` and `~-`, in the dialects that have them.
@@ -2577,10 +2583,10 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set bool) {
 	defer r.inWord(e.Inner)()
 	r.expandingSpan = 0
 	span := e.Inner.Spans[0]
-	if parts, ok := r.expandAt(span, splitByDialect); ok {
+	if parts, ok := r.expandAt(span, splitByDialect, true); ok {
 		words = parts
 	} else {
-		text, _ := r.expandSpan(span, splitNever)
+		text, _ := r.expandSpan(span, splitNever, true)
 		words = []string{text}
 	}
 	// The marks come off once, whichever half produced the fields. The inner

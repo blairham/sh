@@ -931,6 +931,184 @@ parsed node carries the flag letters in order plus the two separators
 (`SplitSep`, `JoinSep`); the printer writes the span back raw, so the
 construct round-trips.
 
+## A tilde at the front: `${~spec}` — zsh only
+
+A `~` written between the `${` and the parameter makes the *result* of the
+substitution eligible for tilde expansion and filename generation, whatever
+the `GLOB_SUBST` option is set to. zsh alone has it. The other four call the
+whole expansion unreadable, in the same three-way split every unreadable
+expansion follows: bash 5.3, bash 3.2, bash-as-sh and dash say `bad
+substitution` when the expansion is reached, ksh93 refuses it while reading
+(`` `~' unexpected ``) — which `BadSubstitutionAtParseTime` already records.
+
+Found in the wild, and this is why the construct is here rather than on a
+list: `~/.zi/bin/zi.zsh:141-159` is eighteen of them in a row —
+
+    ZI[HOME_DIR]=${~ZI[HOME_DIR]}
+    …
+    ZPFX=${~ZPFX}
+
+— so a shell that refuses the substitution leaves eighteen variables *empty*
+and every path the plugin manager later builds is rooted at nothing. The
+construct is not a stylistic corner; refusing it corrupts state rather than
+merely reporting.
+
+All measurements below are of zsh 5.9.2 (Homebrew, arm64), taken 2026-09-06
+against fixtures in a scratch directory with `HOME` pointed into it.
+
+### What it does, measured
+
+With `g='DIR/inn*.sh'` matching three files, `t='~/zz'` a directory, and
+`typeset -A A; A[h]='~/zz'`:
+
+| written | result |
+| --- | --- |
+| `${g}` | `DIR/inn*.sh` — the value, unchanged |
+| `${~g}` | the three matched paths, as three words |
+| `"${~g}"` | `DIR/inn*.sh` — quoting suppresses it |
+| `${~t}` | `HOME/zz` |
+| `${~t}/sub` | `HOME/zz/sub` |
+| `${~A[h]}` | `HOME/zz` — a subscript is no obstacle |
+| `${~1}`, `${~@}` | the positional parameters, each one expanded |
+
+Three behaviors carry the construct and each is asserted rather than
+inferred from the absence of an error:
+
+- **Quoting suppresses it**, exactly as quoting suppresses ordinary filename
+  generation. `"${~p}"` is the value unchanged.
+- **The unquoted word form splits into as many words as the pattern
+  matched.** `w=( ${~g} )` is a three-element array, not one holding a
+  pattern.
+- **`${~~p}` turns it back off**, which is how a nested use says "not here".
+
+### The count is parity, and it overrides the option
+
+`GLOB_SUBST` is the option that makes *every* expansion's result eligible.
+The written tildes do not toggle it — they decide the answer outright, on the
+parity of how many were written, measured under the option both ways:
+
+| written | `unsetopt globsubst` | `setopt globsubst` |
+| --- | --- | --- |
+| `${g}` | the value | the matches |
+| `${~g}` | the matches | the matches |
+| `${~~g}` | the value | the value |
+| `${~~~g}` | the matches | the matches |
+| `${~~~~g}` | the value | the value |
+
+So one tilde is "yes" and two are "no" from either starting point, and only
+a `spec` with no tilde at all consults the option. The same table holds for
+the tilde half: `${t}` is `~/zz` with the option off and `HOME/zz` with it
+on, while `${~t}` is `HOME/zz` and `${~~t}` is `~/zz` regardless.
+
+`GLOB_SUBST` itself is recorded-and-inert in this implementation, so the
+zero-tilde row is the dialect's `GlobExpansionResults` answer and nothing
+else reaches it yet.
+
+### Where the tilde may be written
+
+After the parenthesized flag group and before everything else. Measured:
+
+| written | zsh |
+| --- | --- |
+| `${(U)~g}` | flags then tilde: read, uppercased, then matched |
+| `${~(U)g}` | `bad substitution` — the group may not follow the tilde |
+| `${(U)~#g}` | the *length*, so the tilde precedes `#` as well |
+| `${#~g}` | `bad substitution` |
+| `${~+x}` | `${+x}`, the is-it-set count, with the tilde applied to it — `${+x}` is a gap here, so both spellings are a `bad substitution` |
+| `${~!x}` | `bad substitution`, as `${!x}` is here anyway |
+| `${~}` | the empty string, no error — as `${}` is in this shell |
+
+`^` and `=` share the position and are interchangeable with it — `${^~a}`
+and `${~^a}` agree, `${=~g}` and `${~=g}` agree — and neither is in this
+slice.
+
+### It applies to the value the expansion came to
+
+The operator runs first and the tilde marks what the operator produced, which
+is the same ordering the flag group has:
+
+    v='XDIR/inn*.sh'; ${~v#X}    →  the three matched paths
+    ${~undef:-DIR/inn*.sh}       →  the three matched paths
+    v='~/zz'; ${~#v}             →  4, the length of `~/zz`
+
+The last one is the ordering seen from the other side: `#` has already
+reduced the value to a number, and a number holds no tilde and no
+metacharacter, so the flag has nothing left to do.
+
+Tilde expansion runs before filename generation, on the *head* of the value
+and nowhere else:
+
+    v='~/*'      →  every entry of HOME
+    v='a:~/zz'   →  `a:~/zz`, the tilde is not at the head
+    v='~/zz ~/qq' unquoted → `HOME/zz` and `~/qq`: the head expanded,
+                             then the value split, and the second tilde
+                             was never at a head
+
+A list expands elementwise, and each element is the head of its own word:
+`a=('~/zz' '~/qq'); ${~a[@]}` is both expanded, while `X${~a[@]}` is
+`X~/zz` and `HOME/qq` — the prefix took the first element out of head
+position and left the second in it.
+
+`~user` and a named directory (`hash -d`) both resolve in zsh; this
+implementation leaves `~user` as written, the same limit its literal tilde
+expansion already has, and has no named directories at all.
+
+### The other half is the pattern half
+
+Marking the value a pattern is the same question `GlobExpansionResults`
+already answers, so the flag reaches every place that answer is read, and
+that is measured rather than assumed:
+
+    p='a*'; [[ abc == ${~p} ]]        →  true   (${p} alone is false)
+    p='a*'; case abc in ${~p})        →  matches
+    v=abc; p='a*'; ${v#${~p}}         →  `bc`   (${p} alone leaves `abc`)
+
+And the run-time option still wins over it, because the option is about the
+filesystem pass and not about what the word is: `setopt noglob; ${~g}` is
+the value unchanged. A pattern matching nothing is `no matches found` and
+fatal, which is `GlobNoMatchIsError`; under `nullglob` the word is dropped.
+
+### Grammar
+
+The tilde run is read only when the dialect's `ParamTildeFlag` is on;
+elsewhere a leading `~` is not a name and the expansion follows the
+bad-substitution split above. The parsed node carries `TildeFlags`, the
+number of tildes written, so parity is the interpreter's to take and the
+printer keeps writing the span back raw — the construct round-trips as
+source text.
+
+`ParamTildeFlag` and `ParamCaseChange` never coexist in a dialect, and would
+not collide if they did: bash's case-toggle `~` follows the name (`${x~}`)
+and this one precedes it.
+
+### What the corpus pins
+
+`param/the-tilde-flag-is-one-dialects` (the three-way split),
+`-quoting-suppresses-it`, `-doubled-turns-it-off`, `-expands-a-tilde`
+and `-marks-a-pattern-operand`.
+
+### What this implementation does not match
+
+Two divergences, both inherited from where this implementation does its
+literal tilde expansion — the first span of a word — rather than from the
+flag:
+
+- `""${~t}` and `${empty}${~t}` expand here, because nothing was
+  accumulated in front of them, which agrees with zsh. But `x${~t}` does
+  not, and neither does zsh's; the disagreement is narrower than it looks
+  and no measured case is missed by it.
+- `q=a:${~t}` is `a:HOME/zz` in zsh: a substituted tilde is eligible in
+  every position a written one would be, and an assignment's colons are
+  such a position. Here the colon rule (`expandColonTildes`) reads literal
+  spans only, so the substituted tilde stays. `q=a:~/zz` written out is
+  correct in both.
+
+Separately, `${}` and `x${}y` are the empty string in zsh and a `bad
+substitution` here, and `${+x}` — the is-it-set count — is unread. `${~}`
+is right because the tilde relaxes the empty-name rule the way a flag group
+does; the two plain forms are gaps of their own and `${~+x}` inherits the
+second of them.
+
 ## A subscript without braces — zsh only
 
 Everything above is written `${ … }`. zsh also reads a subscript and a
@@ -1157,6 +1335,7 @@ implemented` are what they say instead.
                            what ${!x} then *means* diverges (see above)
     ParamTransformations   ${x@Q} and its letter family — bash only
     ParamExpansionFlags    ${(U)x}           — zsh only
+    ParamTildeFlag         ${~x}, the tilde-and-filename flag — zsh only
     ParamElementSelection  ${a:#pat} ${a:|b} ${a:*b} — zsh only
     BareSubscript          $a[1] and $#a, written without braces — zsh only
     SpecialParamSubscript  ${@[1]}, ${1[2]}, ${?[1]} — a subscript on a
@@ -1167,7 +1346,7 @@ implemented` are what they say instead.
                            — zsh only
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
-`ParamTransformations`, `ParamExpansionFlags` and
+`ParamTransformations`, `ParamExpansionFlags`, `ParamTildeFlag` and
 `ParamElementSelection` are false for `core`:
 the first and the last two are one shell's, and the `!` family is two
 shells' — neither is a common denominator. `BareSubscript` is false for

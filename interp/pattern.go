@@ -86,15 +86,20 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 	switch s.Kind {
 	case syntax.ParamExp:
-		return r.expansionPattern(r.expandParam(s.Param), s.Quoting)
+		// The `${~spec}` flag reaches here too, and that is measured rather
+		// than assumed: `p='a*'; [[ abc == ${~p} ]]` is true in the shell
+		// that has the construct where `${p}` alone is false, and
+		// `${v#${~p}}` trims where `${v#${p}}` does not. It is the same
+		// question GlobExpansionResults answers, so it is the same override.
+		return r.expansionPattern(r.expandParam(s.Param), s.Quoting, r.globSubstAnswer(s))
 	case syntax.CommandSubst:
-		return r.expansionPattern(r.commandSubst(r.ctx, s), s.Quoting)
+		return r.expansionPattern(r.commandSubst(r.ctx, s), s.Quoting, r.sem().GlobExpansionResults)
 	case syntax.ArithSubst:
 		v, ok := r.arithSpanValue(s)
 		if !ok {
 			return "", false
 		}
-		return r.expansionPattern(v, s.Quoting)
+		return r.expansionPattern(v, s.Quoting, r.sem().GlobExpansionResults)
 	case syntax.ProcSubstIn, syntax.ProcSubstOut:
 		// Performed, like any other substitution in a word, and the *path*
 		// is the pattern.
@@ -138,14 +143,14 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 // The axis is asked only where the two answers differ. A result holding no
 // metacharacter escapes to itself, so `pat=ab; echo ${v#$pat}` — which every
 // shell in the panel answers the same way — is answered rather than refused.
-func (r *Runner) expansionPattern(v string, q syntax.Quoting) (string, bool) {
+func (r *Runner) expansionPattern(v string, q syntax.Quoting, glob Answer) (string, bool) {
 	if q != syntax.Unquoted {
 		return v, false
 	}
 	if !strings.ContainsAny(v, patternMeta) {
 		return v, true
 	}
-	return v, r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion")
+	return v, r.ask(glob, "globbing the result of an expansion")
 }
 
 // matchPattern reports whether pattern matches the whole of s.

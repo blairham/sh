@@ -8764,6 +8764,31 @@ exit 7`,
 		Why:     "the keymap list a config's `bindkey -M` has to name one of, and what a name outside it costs: `no such keymap` with zsh's own backtick-and-quote spelling, at 1",
 	},
 	{
+		ID: "print/prompt-escapes-run-after-the-backslash-ones", Category: "builtins",
+		Snippet: `print -P '\045\045'; echo "st=$?"`,
+		Why:     "the order of `print -P`'s two passes, put where only one order can produce the answer: `\045` is a backslash escape for `%`, so the backslash pass makes `%%` and the prompt pass then reads that as one `%`. A shell doing the prompt pass first sees no `%` at all and prints `%%`. zsh alone has `print -P`; ksh93 has `print` and refuses `-P` with its usage line, and bash and dash have no `print`",
+	},
+	{
+		ID: "print/prompt-escapes-do-not-read-their-own-result", Category: "builtins",
+		Snippet: `print -P '%%%%'; echo "st=$?"`,
+		Why:     "the other half of the same rule, and the row that a second prompt pass would fail: `%%%%` never meets the backslash pass, and the two `%%` make `%%` rather than `%` — the `%` each one produced is not looked at again",
+	},
+	{
+		ID: "print/a-trailing-percent-is-dropped", Category: "builtins",
+		Snippet: `print -P 'x%'; echo "st=$?"`,
+		Why:     "a `%` with nothing after it is dropped rather than written — `x`, not `x%`. Worth a row because writing it through is what an implementation that only looks at complete pairs does, and it is silently one character wrong on every prompt that ends in a percent",
+	},
+	{
+		ID: "print/a-prompt-escape-this-shell-has-not", Category: "builtins",
+		Snippet: `print -P '[%q]'; echo "st=$?"`,
+		Why:     "zsh's prompt language has about forty escapes and this shell carries four of them. `%q` is one it does not, and zsh drops it silently — `[]` and 0 — so the row records the difference between dropping an escape and naming it as missing. Naming it is the choice here: a prompt quietly short of a field is the kind of wrong answer nobody reports",
+	},
+	{
+		ID: "print/the-raw-letter-leaves-the-prompt-pass-alone", Category: "builtins",
+		Snippet: `print -rP 'a\tb%%'; echo "st=$?"`,
+		Why:     "`-r` suppresses the backslash pass and not the prompt one: the tab stays two characters and the `%%` still becomes one `%`. The two letters are about different passes, which is what a shell folding them into one `raw` flag would get wrong",
+	},
+	{
 		ID: "print/joins-expands-and-ends-the-line", Category: "builtins",
 		Snippet: `print hello world; print -n ab; print cd`,
 		Why:     "ksh93's echo: operands joined with single spaces, a newline after, and -n withholding it. zsh has print too; bash and dash do not, which is the dialect boundary this case records",

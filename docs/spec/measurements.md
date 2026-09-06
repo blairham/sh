@@ -8520,3 +8520,74 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   echo main
   ```
+
+## harness invocation
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `harness/a-login-bundle-runs-the-command-string` | `ran` | `ran` | `ran` | `ran` | `ran` | `ran` |
+| `harness/the-login-letter-in-dollar-dash` | `no-l` | `no-l` | `no-l` | `no-l` | `has-l` | `has-l` |
+| `harness/the-login-letter-spelled-as-its-own-word` | `no-l` | `no-l` | `no-l` | `no-l` | `has-l` | `has-l` |
+| `harness/an-interactive-bundle-runs-the-command-string` | `ran~has-i` **2>** `<shell>: 0: can't access tty; job control turned off` | `ran~has-i` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `ran~has-i` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `ran~has-i` **2>** `<shell>: no job control in this shell` | `ran~has-i` | `ran~has-i` |
+| `harness/a-login-and-interactive-bundle` | `ran` **2>** `<shell>: 0: can't access tty; job control turned off` | `ran` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `ran` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `ran` **2>** `<shell>: no job control in this shell` | `ran` | `ran` |
+| `harness/an-option-after-the-command-string-is-an-operand` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` | `0=[-l] n=0 1=[]` |
+| `harness/a-command-string-that-spans-lines` | `one~st=0` | `one~st=0` | `one~st=0` | `one~st=0` | `one~st=0` | `one~st=0` |
+| `harness/a-snapshot-file-is-sourced-then-the-command-runs` | `main` **2>** `alias: -- not found` | `main` | `main` | `main` | `main` | `main` |
+| `harness/the-snapshot-spelling-of-an-alias` | `st=1~g='echo one'` **2>** `alias: -- not found` | `st=0~alias g='echo one'` | `st=0~g='echo one'` | `st=0~alias g='echo one'` | `st=0~g='echo one'` | `st=0~g='echo one'` |
+| `harness/enumerating-every-function-at-once` | `st=127` **2>** `<shell>: 1: declare: not found` | `declare -f f~declare -f g~st=0` | `declare -f f~declare -f g~st=0` | `declare -f f~declare -f g~st=0` | `st=127` **2>** `<shell>: declare: not found` | `st=0` |
+| `harness/asking-for-the-whole-option-table` | `st=127` **2>** `<shell>: 1: shopt: not found` | `st=0` | `st=0` | `st=0` | `st=127` **2>** `<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt` |
+| `harness/the-option-table-is-re-inputtable` | `0` *(status 1)* | `1` | `1` | `1` | `0` *(status 1)* | `0` *(status 1)* |
+
+- `harness/a-login-bundle-runs-the-command-string` — `$SHELL -lc '…'` is the wrapper shape — a login shell so the person's profile is in scope, a command string so nothing is interactive — and all six run the string. The letters are one word, so a front end that read `-lc` as an option called `lc` would refuse the invocation outright and a front end that stopped the bundle at `l` would open `echo ran` as a script file
+  ```sh
+  echo ran
+  ```
+- `harness/the-login-letter-in-dollar-dash` — four against two, so it is an axis rather than a rule: ksh93 and zsh put `l` in `$-` for a shell started as a login shell, and dash and all three bash columns do not — bash keeps the fact in `shopt login_shell` instead, which is a different question with a different answer. Membership rather than the spelling, for the reason every other `$-` case uses it: no two shells order the string alike
+  ```sh
+  case $- in *l*) echo has-l ;; *) echo no-l ;; esac
+  ```
+- `harness/the-login-letter-spelled-as-its-own-word` — the same question with the letters unbundled, and every column answers exactly as it did bundled — so the split above belongs to the shell rather than to how the caller spelled it. Without this pair a front end that recorded the letter only for a bundle would pass the row above
+  ```sh
+  case $- in *l*) echo has-l ;; *) echo no-l ;; esac
+  ```
+- `harness/an-interactive-bundle-runs-the-command-string` — `-ic` is what a caller writes when it wants the person's aliases and functions in scope, and it is the invocation with a terminal missing from it. Unanimous twice — every shell runs the string and every shell puts `i` in `$-` — and split four ways on what it says about job control first: bash 5.3 names the process group it could not set and then says there is none, bash 3.2 says only the second half, dash says it cannot reach a tty, and ksh93 and zsh say nothing at all. The process id in bash's line is masked by the harness rather than dropped, because *that it named one* is part of the complaint
+  ```sh
+  echo ran; case $- in *i*) echo has-i ;; *) echo no-i ;; esac
+  ```
+- `harness/a-login-and-interactive-bundle` — three letters in one word, which is the shape a terminal emulator's run-this-command setting writes and the longest bundle a real caller produces. It composes: the job-control announcement is the interactive half's, unchanged by the `l` beside it, and every shell still runs the string
+  ```sh
+  echo ran
+  ```
+- `harness/an-option-after-the-command-string-is-an-operand` — the mistake a caller assembling an argv from a list makes, and it is silent in all six: an option word written *after* the command string is not an option, it is the first operand, so `-l` becomes `$0` and the shell is not a login shell at all. Nothing complains and nothing is refused — which is why it needs a case rather than a diagnostic. The pair to invoke/options-between-c-and-its-string, where the same word one position earlier *is* an option
+  ```sh
+  echo "0=[$0] n=$# 1=[${1-}]"
+  ```
+- `harness/a-command-string-that-spans-lines` — a caller hands the person's command over whole, so the command string is routinely several lines with a here-document in it — the one construct that needs the lines *after* the line it appears on. Unanimous, and it is the control the two multi-line rows below are read against: a front end that read only the first line of `-c` would print nothing and exit 0
+  ```sh
+  cat <<EOF
+  one
+  EOF
+  echo "st=$?"
+  ```
+- `harness/a-snapshot-file-is-sourced-then-the-command-runs` — the whole harness shape in one case: a login-bundled command string that sources a captured state file and then runs the command, with the file's three structural lines standing in for the real one's several thousand. dash is the finding. It has no `--` for `alias`, so it reads the word as a name to look up, fails to find it, and writes `alias: -- not found` — once per alias line, which is forty-five times in the file that was measured, into the output the caller then shows a person as the command's own. Every other column is silent, and all six reach `main`
+  ```sh
+  unalias -a 2>/dev/null || true
+  alias -- g='echo one'
+  export PATH="$PATH"
+  ```
+- `harness/the-snapshot-spelling-of-an-alias` — the row above narrowed to the one line that splits, with the status shown. `alias -- name=value` is the re-inputtable spelling three shells print and only some accept as input: five take the `--` as the end of the options and exit 0, and dash takes it as an operand, diagnoses it and exits 1 — with the alias still set, which is why the failure is survivable and therefore easy to miss. A generator's file under `set -e` would stop at its first alias
+  ```sh
+  alias -- g='echo one'; echo "st=$?"; alias g
+  ```
+- `harness/enumerating-every-function-at-once` — how a state capture asks what functions exist. Three answers rather than two, and the middle one is the dangerous shape: bash lists both names, dash and ksh93 have no `declare` at all and say so at 127, and zsh reads `-F` as a float's precision, has nothing to say about a bare one, and exits **0** — a caller that trusted the status would record a shell with no functions and never learn it had asked the wrong question. declare/capital-f-names-a-function asks the same thing of a *named* function; this asks for the listing, which is what a generator actually runs
+  ```sh
+  f() { echo hi; }; g() { echo bye; }; declare -F; echo "st=$?"
+  ```
+- `harness/asking-for-the-whole-option-table` — the shell-options half of the same capture, and the half where failing is loud: `shopt` is bash's alone, so dash, ksh93 and zsh answer 127 in three different wordings while the three bash columns write the table and exit 0. Redirected away because the table is a hundred lines of whatever this build's defaults are; what is pinned is the status and the complaint
+  ```sh
+  shopt -p >/dev/null; echo "st=$?"
+  ```
+- `harness/the-option-table-is-re-inputtable` — the property the capture depends on and the one nothing else in the corpus asks for: what `shopt -p` prints has to be a command that sets the option back. The three bash columns write the line exactly and count 1; the other three print nothing, so `grep -c` counts 0 and the pipeline's status is grep's 1. A shell that listed the option in any other layout would count 0 here while still answering 0 to the row above
+  ```sh
+  shopt -s nullglob 2>/dev/null; shopt -p 2>/dev/null | grep -c "^shopt -s nullglob$"
+  ```

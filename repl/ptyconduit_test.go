@@ -119,8 +119,19 @@ func TestALotOfOutputSurvivesTheConduit(t *testing.T) {
 	session := atACapturingPrompt(t)
 
 	const lines = 4000
-	session.typeLine(`/bin/sh -c 'i=0; while [ $i -lt 4000 ]; do echo "line-$i"; i=$((i+1)); done; echo TAIL_MARK'`)
-	session.waitForOutput("TAIL_MARK", "the last line of a long run")
+	// The tail is an expression and the wait is on its *value*, which is the
+	// invariant the first test in this file states and this one had broken: a
+	// terminal echoes what is typed, so a wait on a word the command line
+	// contains is answered by the echo. It was, every time: the wait returned
+	// while the line was still being drawn, which left even finish's wait for
+	// the next prompt to be answered by one of the editor's own redraws — it
+	// draws the prompt again on every keystroke — and the ^D then went in
+	// before the command had started, which is the window finish exists to
+	// stay out of. Measured on Linux under `-race` at one core: 15 runs in 17
+	// failed on this, and none of the other five session tests in this file
+	// failed at all.
+	session.typeLine(`/bin/sh -c 'i=0; while [ $i -lt 4000 ]; do echo "line-$i"; i=$((i+1)); done; echo tail-$((6*7))'`)
+	session.waitForOutput("tail-42", "the last line of a long run")
 	session.finish()
 
 	bodies := session.bodies(t)
@@ -223,12 +234,45 @@ func (s *capturingSession) waitForOutput(want, what string) {
 
 func (s *capturingSession) screen() string { return s.out.String() }
 
+// finish ends the session with a ^D, once the shell is reading again.
+//
+// The wait for the next prompt is the whole of this method and it is a
+// synchronization rather than tidiness. A shell puts the terminal back in its
+// own line discipline to run a command and takes it into raw mode again
+// afterwards — see Shell.run — and the kernel drops what is queued but unread
+// when the discipline changes. Every test here waits for its command's
+// *output*, which arrives while that window is still open, so a ^D typed
+// there is destroyed and the editor goes on waiting for a byte that will
+// never come — the deadline below then reports the silence instead of the
+// cause.
+//
+// Probed on Linux with a bare pseudo-terminal and no shell in it: a ^D that
+// arrives while the terminal is raw is read as 0x04, and one that arrives in
+// canonical mode and is read after the switch to raw comes back as **0x00** —
+// the discipline keeps VEOF as a placeholder byte plus an end-of-line flag,
+// and the mode change clears the flag. The editor has no meaning for that
+// byte, so it keeps reading.
+//
+// The same probe types a whole line in that window and gets it back byte for
+// byte, which is why this wait belongs where the ^D is typed and typeLine
+// does not need one.
+//
+// That is #635, and #685 had already answered it by making the driver's
+// helper do this wait. This is a second session helper, written without it,
+// so it lost the answer along with the code.
+//
+// The prompt is the mark to wait on because it is drawn after raw mode is
+// restored and immediately before the read, which is an order the two cannot
+// swap. A *new* prompt: the buffer carries a cursor, and it has to, because
+// the editor redraws the prompt on every keystroke and a search over
+// everything drawn would be answered by one of those forever.
 func (s *capturingSession) finish() {
 	s.t.Helper()
 	if s.finished {
 		return
 	}
 	s.finished = true
+	s.waitForOutput("$ ", "the prompt that says the shell is reading again")
 	if _, err := s.control.WriteString("\x04"); err != nil {
 		s.t.Fatal(err)
 	}

@@ -6793,6 +6793,39 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Snippet: `d=MiXeD; typeset -u d; echo "[$d] st=$?"`,
 		Why:     "the same question of a case letter, and the same split — `MIXED` in ksh93 and zsh, `MiXeD` in bash — which is what makes it a rule about attributes rather than about arithmetic. bash 3.2 has no `-u` at all and answers 2 while leaving the value where it is",
 	},
+	// The ties this shell arrives with, rather than the ones `typeset -T`
+	// makes. Every row is a slice the case sets itself, because the values
+	// these names really hold are the machine's.
+	{
+		ID: "tie/a-built-in-scalar-fills-its-array", Category: "declarations",
+		Snippet: `CDPATH=a:b; echo "n=${#cdpath[@]} [${cdpath[*]}] st=$?"`,
+		Why:     "`CDPATH` and `cdpath` are one value in zsh, so assigning the scalar fills the array: two elements. `cdpath` does not exist anywhere else and answers 0, which is what makes this the whole of the difference rather than a wording. Chosen over `PATH` because a case must not depend on what the machine's search path holds",
+	},
+	{
+		ID: "tie/a-built-in-array-fills-its-scalar", Category: "declarations",
+		Snippet: `cdpath=(x y); echo "CDPATH=[$CDPATH] st=$?"`,
+		Why:     "the same tie from the array end — `x:y` — which is the half a one-directional mirror gets wrong while passing the row above. Everywhere else `cdpath` is an ordinary array nothing reads, so `CDPATH` stays empty",
+	},
+	{
+		ID: "tie/writing-path-reaches-PATH", Category: "declarations",
+		Snippet: `PATH=/aa:/bb; path=(/zz "${path[@]}"); echo "[$PATH] st=$?"`,
+		Why:     "the line every rc file in the world writes, and the reason the ties matter at all: prepending to `path` puts the directory on the search path. `PATH` is set first so the row says the same thing on every machine — `/zz:/aa:/bb` in zsh against `/aa:/bb` everywhere else, where the array write reaches nothing and does so **silently**",
+	},
+	{
+		ID: "tie/a-built-in-tie-lists-as-one", Category: "declarations",
+		Snippet: `CDPATH=a; typeset -p CDPATH; echo "st=$?"`,
+		Why:     "how a built-in tie says itself back: `typeset -T CDPATH cdpath=( a )` — both names and the array's elements — against bash's `declare -- CDPATH=\"a\"` and ksh93's bare `CDPATH=a`. The row that says the tie is a property of the name rather than something only assignments can see",
+	},
+	{
+		ID: "tie/all-eight-built-in-pairs", Category: "declarations",
+		Snippet: `MANPATH=a:b; PSVAR=c:d; FIGNORE=e:f; MODULE_PATH=g; MAILPATH=h:i; echo "${#manpath[@]} ${#psvar[@]} ${#fignore[@]} ${#module_path[@]} ${#mailpath[@]}"`,
+		Why:     "the membership, in one row: five of the eight pairs at once, each counted rather than printed so the row says nothing about a machine. `2 2 2 1 2` in zsh and zeroes everywhere else. `PATH`, `FPATH` and `CDPATH` have rows of their own above; `ZSH_EVAL_CONTEXT` is deliberately absent, being a produced parameter rather than a tie",
+	},
+	{
+		ID: "tie/FPATH-fills-fpath", Category: "declarations",
+		Snippet: `FPATH=/x:/y; echo "n=${#fpath[@]} [${fpath[*]}] st=$?"`,
+		Why:     "the tie `autoload` depends on: a function is looked for in `$fpath`, and `$fpath` is whatever `FPATH` says. Worth its own row rather than folding into the membership one, because this is the pair whose absence made every autoload a `function definition file not found` for a reason that had nothing to do with autoloading",
+	},
 	{
 		ID: "declare/tie-mirrors-a-scalar-and-an-array", Category: "declarations",
 		Snippet: `typeset -T TS ts; TS=a:b:c; echo "n=${#ts[@]} [${ts[*]}] st=$?"`,

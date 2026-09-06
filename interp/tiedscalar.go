@@ -275,3 +275,38 @@ func (r *Runner) tieListing() int {
 	}
 	return 0
 }
+
+// Tie makes a scalar and an array two names for one value, from a dialect
+// rather than from a script.
+//
+// The seam the *built-in* ties need. A shell whose own `PATH` and `path` are
+// the same thing has to say so before the first command runs, and
+// `typeset -T`'s own path is the builtin's — it takes flags, takes a scope,
+// refuses a name that is already tied and refuses one that is not an
+// identifier, none of which a startup call has any use for.
+//
+// The seeding is the same rule the builtin follows and is the reason this is
+// safe over `PATH`: a scalar that already holds a value keeps it and the
+// array is filled from it. A scalar with no value leaves the array with no
+// elements rather than one empty one, which is what the shell being copied
+// does — measured, `zsh -f` with no `CDPATH` in the environment has
+// `${#cdpath}` 0 and `$CDPATH` empty.
+//
+// Nothing about the export attribute is decided here, deliberately. Measured:
+// `PATH` is `export -T` when the environment supplied it and plain
+// `typeset -T` when it did not, and writing `cdpath` never exports `CDPATH`.
+// So a tie *inherits* whatever the scalar already was and confers nothing.
+func (r *Runner) Tie(scalar, array, sep string) {
+	if sep == "" {
+		sep = defaultTieSeparator
+	}
+	r.tieNames(tie{scalar: scalar, array: array, sep: sep})
+	if v, ok := r.getVar(scalar); ok {
+		r.mirrorScalarToArray(scalar, v)
+		return
+	}
+	r.mirroring = true
+	r.setVar(scalar, "")
+	r.setArray(array, nil)
+	r.mirroring = false
+}

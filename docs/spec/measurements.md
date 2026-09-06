@@ -8385,6 +8385,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/global-letter-with-the-table-attribute` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `[v] st=0` | `[v] st=0` | `[v] st=0` **2>** `<shell>: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `[v] st=0` |
 | `declare/integer-attribute-added-to-a-name-with-a-value` | `[5+2] st=127` **2>** `<shell>: 1: typeset: not found` | `[5+2] st=0` | `[5+2] st=0` | `[5+2] st=0` | `[7] st=0` | `[7] st=0` |
 | `declare/case-attribute-added-to-a-name-with-a-value` | `[MiXeD] st=127` **2>** `<shell>: 1: typeset: not found` | `[MiXeD] st=0` | `[MiXeD] st=0` | `[MiXeD] st=2` **2>** `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[MIXED] st=0` | `[MIXED] st=0` |
+| `tie/a-built-in-scalar-fills-its-array` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=0 [] st=0` | `n=0 [] st=0` | `n=0 [] st=0` | `n=0 [] st=0` | `n=2 [a b] st=0` |
+| `tie/a-built-in-array-fills-its-scalar` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `CDPATH=[] st=0` | `CDPATH=[] st=0` | `CDPATH=[] st=0` | `CDPATH=[] st=0` | `CDPATH=[x:y] st=0` |
+| `tie/writing-path-reaches-PATH` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[/aa:/bb] st=0` | `[/aa:/bb] st=0` | `[/aa:/bb] st=0` | `[/aa:/bb] st=0` | `[/zz:/aa:/bb] st=0` |
+| `tie/a-built-in-tie-lists-as-one` | `st=127` **2>** `<shell>: 1: typeset: not found` | `declare -- CDPATH="a"~st=0` | `declare -- CDPATH="a"~st=0` | `declare -- CDPATH="a"~st=0` | `CDPATH=a~st=0` | `typeset -T CDPATH cdpath=( a )~st=0` |
+| `tie/all-eight-built-in-pairs` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `0 0 0 0 0` | `0 0 0 0 0` | `0 0 0 0 0` | `0 0 0 0 0` | `2 2 2 1 2` |
+| `tie/FPATH-fills-fpath` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=0 [] st=0` | `n=0 [] st=0` | `n=0 [] st=0` | `n=0 [] st=0` | `n=2 [/x /y] st=0` |
 | `declare/tie-mirrors-a-scalar-and-an-array` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: Bad substitution` *(status 2)* | `n=0 [] st=0` **2>** `<shell>: line 1: typeset: -T: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `n=0 [] st=0` **2>** `<shell>: line 1: typeset: -T: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `n=0 [] st=0` **2>** `<shell>: line 0: typeset: -T: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `n=0 [] st=0` | `n=3 [a b c] st=0` |
 | `declare/tie-mirrors-the-other-way-too` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `TS=[] st=0` **2>** `<shell>: line 1: typeset: -T: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `TS=[] st=0` **2>** `<shell>: line 1: typeset: -T: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `TS=[] st=0` **2>** `<shell>: line 0: typeset: -T: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `TS=[] st=0` | `TS=[x:y:z] st=0` |
 | `declare/tie-joins-a-later-append` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `TS=[] st=0` **2>** `<shell>: line 1: typeset: -T: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `TS=[] st=0` **2>** `<shell>: line 1: typeset: -T: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `TS=[] st=0` **2>** `<shell>: line 0: typeset: -T: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `TS=[] st=0` | `TS=[x:y:w] st=0` |
@@ -8682,6 +8688,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/case-attribute-added-to-a-name-with-a-value` — the same question of a case letter, and the same split — `MIXED` in ksh93 and zsh, `MiXeD` in bash — which is what makes it a rule about attributes rather than about arithmetic. bash 3.2 has no `-u` at all and answers 2 while leaving the value where it is
   ```sh
   d=MiXeD; typeset -u d; echo "[$d] st=$?"
+  ```
+- `tie/a-built-in-scalar-fills-its-array` — `CDPATH` and `cdpath` are one value in zsh, so assigning the scalar fills the array: two elements. `cdpath` does not exist anywhere else and answers 0, which is what makes this the whole of the difference rather than a wording. Chosen over `PATH` because a case must not depend on what the machine's search path holds
+  ```sh
+  CDPATH=a:b; echo "n=${#cdpath[@]} [${cdpath[*]}] st=$?"
+  ```
+- `tie/a-built-in-array-fills-its-scalar` — the same tie from the array end — `x:y` — which is the half a one-directional mirror gets wrong while passing the row above. Everywhere else `cdpath` is an ordinary array nothing reads, so `CDPATH` stays empty
+  ```sh
+  cdpath=(x y); echo "CDPATH=[$CDPATH] st=$?"
+  ```
+- `tie/writing-path-reaches-PATH` — the line every rc file in the world writes, and the reason the ties matter at all: prepending to `path` puts the directory on the search path. `PATH` is set first so the row says the same thing on every machine — `/zz:/aa:/bb` in zsh against `/aa:/bb` everywhere else, where the array write reaches nothing and does so **silently**
+  ```sh
+  PATH=/aa:/bb; path=(/zz "${path[@]}"); echo "[$PATH] st=$?"
+  ```
+- `tie/a-built-in-tie-lists-as-one` — how a built-in tie says itself back: `typeset -T CDPATH cdpath=( a )` — both names and the array's elements — against bash's `declare -- CDPATH="a"` and ksh93's bare `CDPATH=a`. The row that says the tie is a property of the name rather than something only assignments can see
+  ```sh
+  CDPATH=a; typeset -p CDPATH; echo "st=$?"
+  ```
+- `tie/all-eight-built-in-pairs` — the membership, in one row: five of the eight pairs at once, each counted rather than printed so the row says nothing about a machine. `2 2 2 1 2` in zsh and zeroes everywhere else. `PATH`, `FPATH` and `CDPATH` have rows of their own above; `ZSH_EVAL_CONTEXT` is deliberately absent, being a produced parameter rather than a tie
+  ```sh
+  MANPATH=a:b; PSVAR=c:d; FIGNORE=e:f; MODULE_PATH=g; MAILPATH=h:i; echo "${#manpath[@]} ${#psvar[@]} ${#fignore[@]} ${#module_path[@]} ${#mailpath[@]}"
+  ```
+- `tie/FPATH-fills-fpath` — the tie `autoload` depends on: a function is looked for in `$fpath`, and `$fpath` is whatever `FPATH` says. Worth its own row rather than folding into the membership one, because this is the pair whose absence made every autoload a `function definition file not found` for a reason that had nothing to do with autoloading
+  ```sh
+  FPATH=/x:/y; echo "n=${#fpath[@]} [${fpath[*]}] st=$?"
   ```
 - `declare/tie-mirrors-a-scalar-and-an-array` — the letter one shell in the panel has with this meaning: zsh ties a scalar to an array so each reflects the other, splitting the scalar on `:`. bash refuses `-T` with its usage line and 2. **ksh93 is the interesting column**: `typeset -T tname` declares a *type* there, so it takes this line without a word and answers `n=0 []` — the same letter, silently doing something else, which is why it must be refused by name in that dialect rather than shared as one attribute with two readings
   ```sh

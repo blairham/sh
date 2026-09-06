@@ -745,12 +745,27 @@ type Dialect struct {
 	// way. `$(` and `${` are not quotes and still refuse.
 	CloseQuotesAtEOF bool
 
-	// Coproc is bash's `coproc [NAME] command`: the command runs in the
-	// background with a pipe on each of its named streams, and the shell
-	// keeps the near ends in an array. zsh spells a coprocess the same
-	// way and plumbs it differently — through `print -p` and `read -p`
-	// rather than an array — and that model is not this flag.
+	// Coproc is `coproc command`: the command runs in the background with a
+	// pipe on each of its named streams and the shell keeps the near ends.
+	// bash and zsh both have the word; ksh93 spells a coprocess `cmd |&`,
+	// which is a different construct, and dash has none.
+	//
+	// How the shell reaches the ends is not this flag — bash puts them in an
+	// array and zsh speaks to them with `print -p` and `read -p` — because
+	// that is what a *running* coprocess offers rather than what the parser
+	// reads. It is interp.Semantics.CoprocEndsInAnArray.
 	Coproc bool
+
+	// CoprocName lets a *name* stand between `coproc` and a compound
+	// command, and it is bash's alone: `coproc MY { cat; }` puts the near
+	// ends in MY there, and is a parse error in zsh, whose coprocess has no
+	// name to give. Additive over Coproc, and asked only where that is set.
+	//
+	// The name is a name only before a *compound* command in the shell that
+	// has it: before a simple one the first word is the command, so
+	// `coproc MY cat` runs `MY cat` in both shells, and both leave whatever
+	// the reader asks for afterwards unset.
+	CoprocName bool
 }
 
 // Core is the common denominator of real shells: what dash, bash, ksh93 and

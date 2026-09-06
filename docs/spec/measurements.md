@@ -5304,6 +5304,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `commands/coproc-names-a-compound` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `hi` | `hi` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `coproc MY { cat; }; echo hi >&"${MY[1]}"; read -r l <&"${MY[0]}"; echo "$l"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `}'` *(status 1)* |
 | `commands/coproc-names-a-subshell` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2` | `n=2` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `coproc MY ( cat </dev/null ); echo "n=${#MY[@]}"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `)'` *(status 1)* |
 | `commands/coproc-does-not-name-a-simple-command` | **2>** `<shell>: 1: coproc: not found~<shell>: 1: Bad substitution` *(status 2)* | `l=ran-MY COPROC=2 MY=0` | `l=ran-MY COPROC=2 MY=0` | `l= COPROC=0 MY=0` **2>** `<shell>: coproc: command not found~<shell>: 0: Bad file descriptor` | `l= COPROC=0 MY=0` **2>** `<shell>: coproc: not found~<shell>: : cannot open` | **2>** `<shell>:1: file number expected` *(status 1)* |
+| `commands/coproc-speaks-by-a-letter-where-it-has-no-array` | **2>** `<shell>: 1: coproc: not found~<shell>: 1: print: not found~<shell>: 1: read: arg count~<shell>: 1: Bad substitution` *(status 2)* | `l= COPROC=2` **2>** `<shell>: line 1: print: command not found` | `l= COPROC=2` **2>** `<shell>: line 1: print: command not found` | `l= COPROC=0` **2>** `<shell>: coproc: command not found~<shell>: print: command not found` | `l= COPROC=0` **2>** `<shell>: coproc: not found~<shell>: print: no query process [Bad file descriptor]~<shell>: read: no query process` | `l=hi COPROC=0` |
+| `commands/coproc-with-no-name-takes-a-compound` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `l=` **2>** `<shell>: line 1: print: command not found` | `l=` **2>** `<shell>: line 1: print: command not found` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `coproc { cat; }; print -p hi; read -p l; echo "l=$l"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | `l=hi` |
+| `commands/the-coprocess-letters-with-nothing-started` | `p=127~r=2` **2>** `<shell>: 1: print: not found~<shell>: 1: read: arg count` | `p=127~r=1` **2>** `<shell>: line 1: print: command not found` | `p=127~r=1` **2>** `<shell>: line 1: print: command not found` | `p=127~r=1` **2>** `<shell>: print: command not found` | `p=1~r=1` **2>** `<shell>: print: no query process [Bad file descriptor]~<shell>: read: no query process` | `p=1~r=1` **2>** `<shell>:print:1: -p: no coprocess~<shell>:read:1: -p: no coprocess` |
 
 - `exec/a-command-is-named-as-it-was-written` — a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else
   ```sh
@@ -5386,6 +5389,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `commands/coproc-does-not-name-a-simple-command` — the other side of the same rule, and the one worth pinning: before a *simple* command the first word is the command, so `coproc MY cat` runs MY and the array is the default COPROC. A function named MY is what makes that visible without a race — bash reports `MY: command not found` from the background job otherwise, whenever the job gets there — and the line read back is the function's own output, which no shell that had taken MY as a name could produce
   ```sh
   MY() { echo ran-MY; }; coproc MY cat; read -r l <&"${COPROC[0]}"; echo "l=$l COPROC=${#COPROC[@]} MY=${#MY[@]}"
+  ```
+- `commands/coproc-speaks-by-a-letter-where-it-has-no-array` — the other coprocess model, and the reason the word alone is not the whole feature: zsh starts one with the same keyword, gives it no name and publishes no array, and a script reaches its two ends with `print -p` and `read -p` — `l=hi` with COPROC still empty. bash has the array and neither letter, ksh93 has both letters and starts no coprocess for them, and bash 3.2 and dash have none of it
+  ```sh
+  coproc cat; print -p hi; read -p l; echo "l=$l COPROC=${#COPROC[@]}"
+  ```
+- `commands/coproc-with-no-name-takes-a-compound` — a compound command needs no name in front of it, which is what separates the two grammars rather than the keyword: the shell with no name for a coprocess still takes `{ … }` here, where the one that reads a name would have read `{` as the name's absence. bash 3.2, dash and ksh93 date the construct by refusing the `}`
+  ```sh
+  coproc { cat; }; print -p hi; read -p l; echo "l=$l"
+  ```
+- `commands/the-coprocess-letters-with-nothing-started` — the same two letters before any `coproc`, which is the refusal each shell keeps for the case: two sentences and 1 in the shell that has both letters and a coprocess, two others and 1 in the shell that has the letters and no way here to start one, and in the two without `print` a command that was not found at 127 with `-p` reading as a prompt
+  ```sh
+  print -p x; echo "p=$?"; read -p y; echo "r=$?"
   ```
 
 ## substitutions

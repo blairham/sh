@@ -57,12 +57,16 @@ func runCoproc(t *testing.T, src string) string {
 	t.Helper()
 	d := syntax.Core()
 	d.Coproc = true
+	d.CoprocName = true
 	d.FdVariableSubscript = true
 	f, err := syntax.Parse(src, d)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sem := PosixSemantics()
+	// POSIX has no coprocess, so it answers nothing about one; these cases
+	// are about the array model, which is the answer that has a name in it.
+	sem.CoprocEndsInAnArray = Yes
 	out := &strings.Builder{}
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",

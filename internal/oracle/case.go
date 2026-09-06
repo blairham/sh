@@ -6697,6 +6697,21 @@ out=$(CDPATH=./pool cd sub)
 		Why:     "the other side of the same rule, and the one worth pinning: before a *simple* command the first word is the command, so `coproc MY cat` runs MY and the array is the default COPROC. A function named MY is what makes that visible without a race — bash reports `MY: command not found` from the background job otherwise, whenever the job gets there — and the line read back is the function's own output, which no shell that had taken MY as a name could produce",
 	},
 	{
+		ID: "commands/coproc-speaks-by-a-letter-where-it-has-no-array", Category: "commands",
+		Snippet: `coproc cat; print -p hi; read -p l; echo "l=$l COPROC=${#COPROC[@]}"`,
+		Why:     "the other coprocess model, and the reason the word alone is not the whole feature: zsh starts one with the same keyword, gives it no name and publishes no array, and a script reaches its two ends with `print -p` and `read -p` — `l=hi` with COPROC still empty. bash has the array and neither letter, ksh93 has both letters and starts no coprocess for them, and bash 3.2 and dash have none of it",
+	},
+	{
+		ID: "commands/coproc-with-no-name-takes-a-compound", Category: "commands",
+		Snippet: `coproc { cat; }; print -p hi; read -p l; echo "l=$l"`,
+		Why:     "a compound command needs no name in front of it, which is what separates the two grammars rather than the keyword: the shell with no name for a coprocess still takes `{ … }` here, where the one that reads a name would have read `{` as the name's absence. bash 3.2, dash and ksh93 date the construct by refusing the `}`",
+	},
+	{
+		ID: "commands/the-coprocess-letters-with-nothing-started", Category: "commands",
+		Snippet: `print -p x; echo "p=$?"; read -p y; echo "r=$?"`,
+		Why:     "the same two letters before any `coproc`, which is the refusal each shell keeps for the case: two sentences and 1 in the shell that has both letters and a coprocess, two others and 1 in the shell that has the letters and no way here to start one, and in the two without `print` a command that was not found at 127 with `-p` reading as a prompt",
+	},
+	{
 		ID: "syntax/an-unmatched-double-quote", Category: "diagnostics",
 		SyntaxError: true,
 		Snippet:     `echo "abc`,

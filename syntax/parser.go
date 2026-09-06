@@ -861,10 +861,15 @@ func (p *Parser) parseCommand() Command {
 // rather than defining a coprocess called cat that runs nothing. Measured:
 // bash reports `MY: command not found` for `coproc MY cat`. The construct is
 // specified in the `coproc` section of docs/spec/grammar/commands.md.
+//
+// A dialect with the word and no CoprocName never reads a name at all, so
+// `coproc MY { cat; }` is `MY {` followed by an unexpected `}` there — which
+// is the failure zsh reports, and it falls out of the missing flag rather
+// than being written down twice.
 func (p *Parser) parseCoproc() Command {
 	c := &CoprocClause{Coproc: p.tok.Pos}
 	p.next()
-	if p.at(TokWord) && isPlainName(p.tokenLiteral()) && !stopWords[p.tokenLiteral()] {
+	if p.dialect.CoprocName && p.at(TokWord) && isPlainName(p.tokenLiteral()) && !stopWords[p.tokenLiteral()] {
 		w := p.word()
 		if p.startsCompoundCommand() {
 			c.Name = w.Literal()

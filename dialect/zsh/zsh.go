@@ -80,6 +80,12 @@ func Dialect() syntax.Dialect {
 	// bad substitution when it is reached, ksh93 refuses `[' while reading,
 	// dash says `Bad substitution`.
 	d.SpecialParamSubscript = true
+	// A coprocess, spelled with the same word as bash's and with no name
+	// before it: `coproc MY { cat; }` is `parse error near `}'` here, because
+	// `MY {` is a simple command and the `}` closes nothing. The near ends
+	// are reached with `print -p` and `read -p` rather than through an array,
+	// which is CoprocEndsInAnArray rather than a grammar flag.
+	d.Coproc = true
 	return d
 }
 
@@ -171,9 +177,14 @@ func Semantics() interp.Semantics {
 	// — values in the alias style, keys in the trap one.
 	s.DeclareListing = interp.DeclareListingExportSpelled
 	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededEscaped
+	s.ListingControlEscape = interp.ControlEscapeCaret
 	s.ExportListing = interp.DeclareListingCommandWord
 	// readonly -p speaks typeset here, not readonly.
 	s.ReadonlyListing = interp.DeclareListingExportSpelled
+	// The bare form drops the command word in both builtins, which is where
+	// this shell's `readonly` parts company with its own `readonly -p` by more
+	// than a word: `typeset -r R=2` with the letter, `R=2` without it.
+	s.BareDeclarationListing = interp.DeclareListingPlainAssignment
 	s.DeclarePrintReportsAMissingName = interp.Yes
 	s.TrapBodyLine = interp.TrapBodyLineWhereItFired
 	s.TrapActionIsParsedWhenSet = interp.Yes
@@ -518,7 +529,18 @@ func Semantics() interp.Semantics {
 	// engine's parameter table, refused as unimplemented rather than
 	// approximated.
 	s.BareLocalListing = interp.BareLocalListsEveryParameter
-	s.SetListing = interp.SetListingEveryParameter
+	// The listing is `name=value` in the same shape dash and ksh93 write,
+	// with the quoting bash uses — measured against all six panel members
+	// from the same three values. Real zsh's listing also carries its special
+	// parameters and its tied arrays, which this parameter table has not got;
+	// that is a difference in what a shell *holds* rather than in what a
+	// listing looks like, and modeling it as a form of its own only bought a
+	// refusal where a script wanted a listing.
+	s.SetListing = interp.SetListingAssignments
+	// No array and no name: a coprocess here is reached by `print -p` and
+	// `read -p`, measured — `${COPROC[0]}` is empty after `coproc cat`.
+	s.CoprocEndsInAnArray = interp.No
+	s.SetListingQuoting = interp.ListingQuoteWhenNeededEscaped
 
 	// A descriptor number the process cannot hold is not checked here: with
 	// `ulimit -n 6`, `exec 8>f` reports success and prints nothing, where

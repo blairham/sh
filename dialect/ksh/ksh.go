@@ -145,8 +145,13 @@ func Semantics() interp.Semantics {
 	// silence, status 0, which is measured rather than a shortcut.
 	s.DeclareListing = interp.DeclareListingBareAssignments
 	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededDollar
+	s.ListingControlEscape = interp.ControlEscapeHex
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
+	// And the bare form is not the `-p` form here: the command word goes and
+	// what is left is a plain assignment — `export` writes `V='a b'` where
+	// `export -p` writes `export V='a b'`. Measured; zsh does the same.
+	s.BareDeclarationListing = interp.DeclareListingPlainAssignment
 	s.DeclarePrintReportsAMissingName = interp.No
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.Yes

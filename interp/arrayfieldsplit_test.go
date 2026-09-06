@@ -169,3 +169,29 @@ func TestUnquotedListRefusesAnUnansweredAxis(t *testing.T) {
 		t.Errorf("got %q status %d, want the question not asked where it changes nothing", out, st)
 	}
 }
+
+// TestUnquotedListEscapesBeforeItSplits pins an order no shell in the panel
+// can reach.
+//
+// The two stages only interact when a separator is also a pattern
+// metacharacter, and only for a dialect that splits an expansion's result
+// *and* does not read it as a pattern — a combination none of the four
+// presets has: the three that split also glob, and the one that does neither
+// splits nor globs. So there is no oracle for it, and what settles it is
+// agreement with the scalar path, which has escaped before splitting since
+// expansionResult was written.
+//
+// Recorded because a mutant that swapped the two survived the rest of this
+// file: without a row here the order is accidental, and an embedder choosing
+// that pair of answers would get whichever one the last edit left behind.
+func TestUnquotedListEscapesBeforeItSplits(t *testing.T) {
+	const list = `IFS='*'; a=("x*y" z); set -- ${a[@]}; printf "%d" "$#"; printf "[%s]" "$@"`
+	const scalar = `IFS='*'; v="x*y"; set -- $v; printf "%d" "$#"; printf "[%s]" "$@"`
+	got, _ := fieldsRun(t, list, Yes, No)
+	if got != `3[x\][y][z]` {
+		t.Errorf("list: got %q, want the escape before the split", got)
+	}
+	if scalarGot, _ := fieldsRun(t, scalar, Yes, No); scalarGot != `2[x\][y]` {
+		t.Errorf("scalar: got %q, want the same order the list path takes", scalarGot)
+	}
+}

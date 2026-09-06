@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -46,20 +47,18 @@ type Job struct {
 
 	done chan struct{}
 	once sync.Once
-	// ready is closed once the PID is known, or once the job has finished
-	// without ever having one. `$!` has to be answerable on the next line,
-	// so starting the job cannot return before this is settled.
-	ready     chan struct{}
-	readyOnce sync.Once
-	// pidOnce keeps the PID a job's *first* process and not its latest. See
-	// setPID.
+	// ready is closed once the PID is settled — a real process, or the
+	// decision that this job is answered by none. `$!` has to be answerable
+	// on the next line, so starting the job cannot return before this is
+	// settled.
+	ready chan struct{}
+	// pidOnce keeps the PID a job's *first* answer and not its latest, and
+	// keeps the field's one write on the near side of closing ready. See
+	// settlePID.
 	pidOnce sync.Once
 }
 
-// markReady says the job's PID is now final, one way or the other.
-func (j *Job) markReady() { j.readyOnce.Do(func() { close(j.ready) }) }
-
-// setPID records the process this job is answered by, and does it once.
+// settlePID records the process this job is answered by, and does it once.
 //
 // Once is the whole point, and it was a data race before: a job that runs more
 // than one external command — `(sleep 0.1; sleep 0.1) &`, a loop, anything
@@ -73,11 +72,77 @@ func (j *Job) markReady() { j.readyOnce.Do(func() { close(j.ready) }) }
 // PID here is an approximation either way, and one that stays put is worth
 // more than one that tracks whichever command the job is running now. It is
 // what `kill %1` and `jobs -l` are reading.
-func (j *Job) setPID(pid int) {
+//
+// Writing the field and closing the channel are the *same* Once rather than
+// two, which is what makes every reader's `<-j.ready` a real synchronization
+// point. They were separate, and the separation was load-bearing in the wrong
+// direction: settling a job with no pid could release the shell and leave a
+// later process free to write the field behind it. Now a job that has been
+// settled without a process stays settled without one — see
+// Runner.settleBackgroundJobBeforeABlockingOpen for the case that reaches it,
+// and why 0 is the truthful answer there rather than a lost one.
+func (j *Job) settlePID(pid int) {
 	j.pidOnce.Do(func() {
 		j.PID = pid
-		j.markReady()
+		close(j.ready)
 	})
+}
+
+// settleNoPID says this job is answered by no process of its own.
+//
+// A background builtin or compound command, a job that ended without ever
+// reaching an external command, and a job stopped where it stands waiting on
+// something outside the shell all arrive here.
+func (j *Job) settleNoPID() { j.settlePID(0) }
+
+// settleBackgroundJobBeforeABlockingOpen settles a background job's pid when
+// the job is about to open something that may never open.
+//
+// This is what makes `&` return. Starting a background job waits for the pid
+// to settle, because `$!` has to be answerable on the next line — and the two
+// places that settled it were a process having started and the job having
+// ended. A job whose *first* act is to block reaches neither, so `&` waited
+// for an answer that was not coming and the shell never reached the next
+// command at all: measured, `(read x < fifo; :) & echo NOW` printed nothing
+// here and printed `NOW` at once in all six shells in the panel, which fork
+// before they open anything. Every shape of the job did it — a subshell, a
+// brace group, a function, a bare builtin, and `sleep 1 < fifo &` too, which
+// is an external command that never gets as far as being one.
+//
+// Opening a fifo with no writer is the shape that reaches it first, because
+// redirections are opened before the builtin-or-external dispatch. So the
+// point where the job is about to wait on something outside the shell is the
+// point where its pid is as settled as it is going to get, and the honest
+// answer there is that it has none: nothing has started, and while the job
+// stands here nothing will.
+//
+// Only where the open can really block, and that is the whole reason for the
+// stat. Settling before *every* redirection would cost a real answer:
+// `sleep 0.3 > log & echo $!` prints the sleep's pid today, and a latch that
+// fired on the log file would print 0. A fifo and a character device are the
+// two the open itself waits on — a regular file's open returns whether or not
+// anything is at the other end.
+//
+// A pid that arrives later is dropped rather than recorded, and that is
+// deliberate: settlePID is one Once, so the field cannot be written after the
+// channel that publishes it has been closed. A job the shell has already
+// stopped waiting for cannot be handed a different pid behind the shell's
+// back. It is the same trade the doc comment on Job.PID states — a job with
+// no process of its own is reported as zero rather than papered over.
+func (r *Runner) settleBackgroundJobBeforeABlockingOpen(path string) {
+	if r.bg == nil {
+		return
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		// Not there, or not reachable. Either way the open will fail rather
+		// than wait, and the job carries on to whatever it does next.
+		return
+	}
+	if fi.Mode()&(os.ModeNamedPipe|os.ModeCharDevice) == 0 {
+		return
+	}
+	r.bg.settleNoPID()
 }
 
 // Finished reports whether the job has ended, without waiting for it.
@@ -100,7 +165,7 @@ func (j *Job) Wait() int {
 }
 
 func (j *Job) finish(status int) {
-	j.markReady()
+	j.settleNoPID()
 	j.once.Do(func() {
 		j.Status = status
 		close(j.done)
@@ -538,7 +603,6 @@ func (r *Runner) waitBadJob(operand string) int {
 // nothing able to name it.
 func (r *Runner) addStoppedJob(pid int, argv []string, sig syscall.Signal) {
 	job := &Job{
-		PID:     pid,
 		Stopped: true,
 		StopSig: int(sig),
 		Command: strings.Join(argv, " "),
@@ -546,7 +610,10 @@ func (r *Runner) addStoppedJob(pid int, argv []string, sig syscall.Signal) {
 		done:    make(chan struct{}),
 		ready:   make(chan struct{}),
 	}
-	job.markReady()
+	// Through settlePID rather than as a field, so that the field's one write
+	// is the one the channel publishes. A job stopped in the foreground has
+	// its process from the start; there is nothing left to settle later.
+	job.settlePID(pid)
 	r.jobs = append(r.jobs, job)
 	r.setLastJob(job)
 	r.announceStopped(job)

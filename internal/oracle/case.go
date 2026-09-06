@@ -2321,6 +2321,16 @@ echo "st=$?"`,
 		Why:     "the same question where the whole job is one external command, and this shell answers it correctly — the child is a real process and outliving the shell is what a real process does. The pair with the row above is what says the difference is about the *shell logic* in a job and not about `&`: a subshell, an and-list, a brace group and a function all lose their remainder, and a single command loses nothing",
 	},
 	{
+		ID: "jobs/an-ampersand-returns-before-the-job-opens-a-fifo", Category: "builtins",
+		Snippet: `mkfifo p; (read x <p; echo "GOT-$x") & echo NOW-42; echo hi >p; wait`,
+		Why:     "the question the three rows above it do not reach (#1003): what `&` does when the job's *first* act is to wait rather than to run. A named pipe with nobody at the other end is what makes the job block where it opens the redirection, before the shell knows whether the command is a builtin or a program — and every shell in the panel prints the marker at once, because a real shell forks before it opens anything. This shell printed nothing at all and timed out: starting a job waited for a process id that a job blocked before its first command was never going to have. The late write is what makes the case terminate instead of recording six timeouts, and the order is fixed by the pipe rather than by the scheduler — the job cannot get past its open until the write arrives, and the write does not happen until the marker is printed",
+	},
+	{
+		ID: "jobs/an-ampersand-returns-when-an-external-commands-redirection-blocks", Category: "builtins",
+		Snippet: `mkfifo p; /bin/cat <p >o.txt & echo NOW-42; echo hi >p; wait; cat o.txt`,
+		Why:     "the same question where the job is one external command, and it is the row that says the fault was not about compound commands: `sh -c ... &` returns here because the child is a real process, but a program whose redirection blocks never becomes one, so the pid the shell was waiting for did not exist yet. The pair with the row above is what separates opening a redirection from dispatching a command — the open comes first in every shape",
+	},
+	{
 		ID: "jobs/wait-brings-a-background-job-back-before-the-shell-ends", Category: "builtins",
 		Snippet: `(sleep 0.2; echo LATE-42) & wait; echo NOW-42`,
 		Why:     "the same job with a `wait` in front of the ending, which every shell including this one gets right and which is the workaround the row above leaves a script needing. It is the pair that says the loss is about the shell *ending*, not about the job: nothing is wrong with the job while there is still a shell to run it",

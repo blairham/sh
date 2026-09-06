@@ -103,6 +103,46 @@ quoted — it cannot be handed a plain string.
 That is the second requirement the tree carries for this stage, after
 `parameter-expansion.md`'s: a pattern is a *word*, not a string.
 
+## A pattern operand is expanded before any of that
+
+    v=abcd
+    echo ${v#$(echo ab)}          →  cd        (all six)
+    echo ${v#`echo ab`}           →  cd        (all six)
+    v=2bcd; echo ${v#$((1+1))}    →  bcd       (all six)
+    v=$'\tx'; echo ${v#$'\t'}     →  x         (all six)
+    case ab in $(echo ab))        →  matches   (all six)
+    [[ ab == $(echo ab) ]]        →  true      (the five with [[ ]])
+
+Unanimous, in every position that takes a pattern and in every shell that
+has the position at all: the operand is a word, so it goes through word
+expansion first and what comes back is the pattern. Nothing here is
+special to the pattern operators — it is the same expansion any other
+word gets — which is exactly why it is easy to leave out and hard to see
+missing. An operand handed to the matcher as its own source text
+*matches nothing*, and matching nothing is a legal answer: `${v#…}`
+returns the subject and the script carries on.
+
+The `pat/an-operand-out-of-…` corpus cases pin each substitution, and
+`pat/a-case-arm-out-of-a-command-substitution` and
+`pat/a-condition-operand-out-of-a-command-substitution` pin that `case`
+and `[[ ]]` are the same rule rather than exceptions to it.
+
+Then, and only then, the quoting rule above applies to what came back —
+and with it one axis. Whether a metacharacter that *arrived from an
+expansion* is live is `GlobExpansionResults`, and where the expansion
+stood does not change the answer:
+`v=abcdabcd; echo ${v##$(echo 'a*a')}` is `bcd` in dash, bash and ksh93
+and `abcdabcd` in zsh — the same split as `p='a*a'; ${v##$p}` and as
+`x='et*'; echo $x`. One axis, observed in three places.
+
+**Process substitution is the exception, and the panel does not agree
+about it.** In `${v#<(cmd)}` only bash runs the command; in a `case` arm
+bash and zsh both do, and ksh93 and dash cannot parse it; in `[[ ]]` bash
+runs it where zsh refuses the word outright — `process substitution
+<(cmd) cannot be used here`. There is no intersection, so the core does
+not perform one in a pattern operand. The corpus row
+`pat/a-process-substitution-in-an-operand` records the position.
+
 ## Extended patterns are not core
 
     ?(…)  *(…)  +(…)  @(…)  !(…)

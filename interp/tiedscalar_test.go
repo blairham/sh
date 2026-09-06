@@ -4,9 +4,12 @@
 package interp_test
 
 import (
+	"bytes"
+	"context"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // The substrate behind `typeset -T`: a letter the dialect hands the builtin
@@ -199,6 +202,47 @@ typeset -p C c`, withTies, Diagnostics{})
 		"typeset -T C c=( 1 2 ) '#'\ntypeset -aT C c=( 1 2 ) '#'\n"
 	if out != want || st != 0 || errs != "" {
 		t.Errorf("the tie listing = %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}
+
+// Runner.Tie is the seam a *dialect* uses for the ties a shell arrives with:
+// `typeset -T` without the flags, the scope or the refusals a builtin needs.
+// Three things only it can say — the seeding of a standing value, the empty
+// separator meaning the default, and that it confers no export attribute on
+// the scalar it ties.
+func TestTheTieSeamSeedsDefaultsAndConfersNoExport(t *testing.T) {
+	sem := permissive()
+	sem.DeclareOptions = "aAgHilpruUTx"
+	sem.DeclareListing = DeclareListingExportSpelled
+	sem.DeclareValueQuoting = ListingQuoteWhenNeededEscaped
+	sem.ArraysAreSparse = No
+	sem.ArrayBaseIsZero = No
+	var out, errs bytes.Buffer
+	dg := Diagnostics{}
+	r := newTestRunner(t, &Runner{
+		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
+		Dir: t.TempDir(), Name: "testsh",
+		Vars: map[string]string{"STANDING": "one:two:three"},
+	})
+	// An empty separator is the default one, which is what a caller that
+	// does not care should be able to write.
+	r.Tie("STANDING", "standing", "")
+	r.Tie("FRESH", "fresh", ":")
+	f, err := syntax.Parse(`echo "seeded n=${#standing[@]} [${standing[@]}]"
+echo "fresh n=${#fresh[@]} FRESH=[${FRESH-UNSET}]"
+typeset -p STANDING`, syntax.Core())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	// `typeset` and not `export`: the tie carries whatever the scalar was,
+	// and this one was never exported.
+	want := "seeded n=3 [one two three]\nfresh n=0 FRESH=[]\n" +
+		"typeset -T STANDING standing=( one two three )\n"
+	if out.String() != want || errs.String() != "" {
+		t.Errorf("the seam = %q (stderr %q), want %q", out.String(), errs.String(), want)
 	}
 }
 

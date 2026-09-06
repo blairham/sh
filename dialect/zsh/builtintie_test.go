@@ -40,6 +40,19 @@ print -r -- "PSVAR=[$PSVAR]"`)
 	}
 }
 
+// The seeding: a scalar the shell arrives holding fills its array *before*
+// any script runs, which is a different moment from the mirror every later
+// write goes through. Nothing else here can see it — every other test sets
+// its scalar first and is then watching the mirror.
+func TestATieIsSeededFromTheValueTheShellArrivesWith(t *testing.T) {
+	dir := t.TempDir()
+	out, st := runZsh(t, dir, `print -r -- "n=${#path[@]} [$path[1]]"`)
+	want := "n=1 [" + dir + "]\n"
+	if out != want || st != 0 {
+		t.Errorf("the seeded array = %q (status %d), want %q", out, st, want)
+	}
+}
+
 // The line every rc file writes, and the reason the ties are here: writing
 // `path` puts a directory on the search path, and the *lookup* follows. Two
 // executables of the same name in two directories is what proves the second

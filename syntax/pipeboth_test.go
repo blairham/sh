@@ -123,6 +123,12 @@ func TestPrintingPipeBothStreams(t *testing.T) {
 		{`! a |& b`, `! a |& b`},
 		{`{ a; } |& b`, `{ a; } |& b`},
 		{`a 2>&1 | b`, `a 2>&1 | b`},
+		// A function definition has no redirection list of its own, so the
+		// operator is carried by its *body* — which is where the parser puts
+		// a written redirection there too. The spelling has to come back off
+		// the body as well, or this line prints as a plain bar.
+		{`f() { :; } |& b`, `f() { :; } |& b`},
+		{`f() ( : ) |& b`, `f() ( : ) |& b`},
 	} {
 		f, err := Parse(tc.src, withPipeBothStreams())
 		if err != nil {
@@ -201,6 +207,35 @@ func TestABarAtTheEndOfInputIsUnfinished(t *testing.T) {
 		}
 		if se.Kind != ErrUnterminated {
 			t.Errorf("%q: kind %v, want ErrUnterminated", src, se.Kind)
+		}
+	}
+}
+
+// A `|&` waiting for its command is open under its own spelling, not under
+// the bar's. That is the one surface on which the two are distinguishable to
+// the person typing: zsh's continuation prompt names them apart, `pipe`
+// against `errpipe`, so the word the parser reports has to be the one that
+// was written.
+//
+//	% PS2='[%_]'
+//	% echo a |
+//	[pipe]cat
+//	% echo b |&
+//	[errpipe]cat
+func TestAPipeOfBothStreamsIsOpenUnderItsOwnName(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"echo x |\n", "|"},
+		{"echo x |&\n", "|&"},
+	} {
+		p := NewParser(tc.src, withPipeBothStreams())
+		p.Parse()
+		open := p.Open()
+		if len(open) != 1 {
+			t.Errorf("%q: open = %v, want one thing", tc.src, open)
+			continue
+		}
+		if open[0].Word != tc.want {
+			t.Errorf("%q: open as %q, want %q", tc.src, open[0].Word, tc.want)
 		}
 	}
 }

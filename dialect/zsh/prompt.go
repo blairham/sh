@@ -122,8 +122,13 @@ func PromptStyle() repl.PromptStyle {
 			"'":        {Text: "quote"},
 			`"`:        {Text: "dquote"},
 			"|":        {Text: "pipe"},
-			"&&":       {Text: "cmdand"},
-			"||":       {Text: "cmdor"},
+			// The pipe that carries standard error has a name of its own
+			// here, which is the one place the two spellings of a bar are
+			// distinguishable to the person typing: `echo b |&` then a
+			// newline draws `errpipe`, where `echo a |` draws `pipe`.
+			"|&": {Text: "errpipe"},
+			"&&": {Text: "cmdand"},
+			"||": {Text: "cmdor"},
 		},
 		Default:          "%m%# ",
 		DefaultContinued: "%_> ",

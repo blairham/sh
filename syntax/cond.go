@@ -172,15 +172,20 @@ func (p *Parser) parseTestClause() Command {
 	return c
 }
 
-// condWord is a word standing as an operand, which an unquoted `]]` is not.
+// condWord is a word standing as an operand, which a `]]` is not.
 //
 // Without this the closing `]]` was read as an operand and the failure landed
 // on whatever followed the condition: `[[ -n ]]` blamed the `;` after it
 // rather than the `]]` in front of it, which is what every shell in the panel
-// names. A quoted one is an ordinary word — `[[ -n "]]" ]]` tests a
-// two-character string — so the check is on the spelling and not on the text.
+// names.
+//
+// A *quoted* `]]` is an ordinary word — `[[ -n "]]" ]]` tests a
+// two-character string — and nothing here has to say so: atWord already
+// asks, because every reserved word in this grammar stops being one when it
+// is quoted. A second check beside it was written and a mutant that deleted
+// it passed everything, which is what said the question was already answered.
 func (p *Parser) condWord() *Word {
-	if p.atWord("]]") && !p.tok.IsQuoted() {
+	if p.atWord("]]") {
 		return nil
 	}
 	return p.word()
@@ -195,10 +200,27 @@ func (p *Parser) condWord() *Word {
 // in five signatures.
 func (p *Parser) blameCondition(start Pos) {
 	var se *Error
-	if !errors.As(p.err, &se) || se.Kind != ErrUnexpected {
+	if !errors.As(p.err, &se) {
 		return
 	}
 	se.Construct, se.ConstructLine = "[[", start.Line
+	if se.Kind == ErrUnterminated {
+		// A `[[` that never closed is unclosed *by the condition*, and two
+		// dialects name it: one as the construct and one as the innermost
+		// keyword still open. `[[` is not a word the list parser stacks, so
+		// nothing else filled either of them in and one came out as a hole —
+		// `` `' unmatched ``.
+		//
+		// Unconditionally, and that is measured rather than tidy: the `[[`
+		// *is* the innermost thing still open, so it displaces whatever the
+		// stack was holding. `if true; then [[ -n x` and `while [[ -n x`
+		// and `{ [[ -n x` are all `` `[[' unmatched `` in ksh93, not
+		// `then`, `while` or `{`. A guard that wrote this only when nothing
+		// else had was written first, and a mutant that deleted it passed
+		// every test — which is how the three nested shapes came to be
+		// measured at all.
+		se.Innermost = "[["
+	}
 }
 
 func (p *Parser) condOr() CondExpr {

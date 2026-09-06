@@ -1671,6 +1671,17 @@ type Diagnostics struct {
 	// Empty means no such line, which is every dialect but one.
 	CondSyntaxPreamble string
 
+	// CondUnterminatedPreamble is the same idea for a `[[` the input ran
+	// out inside of, and the same dialect writes it: `unexpected EOF while
+	// looking for `]]'`, again at the `[[`'s line and again in front of the
+	// ordinary sentence. Two verbs: %[1]s the closer it was waiting for and
+	// %[2]d the line.
+	//
+	// It is a *second* field rather than the one above because bash writes
+	// this line for `[[` and for nothing else: `if`, `for`, `case`, `{` and
+	// `(` left open all get one line and it is the ordinary one. Measured.
+	CondUnterminatedPreamble string
+
 	// AnonymousFunctionName is what a function with no name is called where
 	// one is wanted — a frame, `$0`, a diagnostic. Empty means `(anon)`,
 	// which is what the one dialect with the construct says.
@@ -2720,19 +2731,24 @@ func missingFuncBody(err error) bool {
 // the line after it at the token, so a condition opened on line 1 and refused
 // on line 2 names both.
 func (d Diagnostics) condPreamble(name, input string, err error) string {
-	if d.CondSyntaxPreamble == "" {
+	var se *syntax.Error
+	if !errors.As(err, &se) || se.Construct != "[[" {
 		return ""
 	}
-	var se *syntax.Error
-	if !errors.As(err, &se) || se.Kind != syntax.ErrUnexpected || se.Construct != "[[" {
+	form, verb := d.CondSyntaxPreamble, se.Token
+	if se.Kind == syntax.ErrUnterminated {
+		form, verb = d.CondUnterminatedPreamble, se.Expected
+	} else if se.Kind != syntax.ErrUnexpected {
+		return ""
+	}
+	if form == "" {
 		return ""
 	}
 	line := se.ConstructLine
 	if line < 1 {
 		line = 1
 	}
-	return d.ReportFrom(name, input, line,
-		Wording(d.CondSyntaxPreamble, "", se.Token, line)+"\n")
+	return d.ReportFrom(name, input, line, Wording(form, "", verb, line)+"\n")
 }
 
 // echoLine is the second line, or empty for none.

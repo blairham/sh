@@ -4553,6 +4553,12 @@ echo "st=$?"`,
 		Why:         "a `;` where the condition wanted an operator or its `]]`, and the row that says a refusal names the *offending* token rather than what was wanted. Each of the three shells with `[[ ]]` words it in its own way and all three name the `;`. The `|` spelling of the same question is deliberately not a row beside it: dash has no `[[ ]]`, so there the words are a *pipeline* of two commands that do not exist, and which of the two `not found` lines arrives first is a race. bash writes two lines and the second is not the sentence it gives a stray token anywhere else — `syntax error near` without the words `unexpected token` — which is measurable only because it keeps them everywhere else",
 	},
 	{
+		ID: "cond/an-unterminated-condition", Category: "pattern matching",
+		SyntaxError: true,
+		Snippet:     `[[ -n x`,
+		Why:         "the `[[` the input ran out inside of, which is a different failure from a token the grammar did not want and is named differently by every shell that has the construct: ksh93 calls the `[[` unmatched, bash names it as the command the end of file came from *and* writes a line in front saying what it was looking for, and zsh blames the last word it read. `[[` is not a word the list parser stacks, so nothing filled either of the two verbs those wordings use and one of them came out as a hole",
+	},
+	{
 		ID: "cond/a-condition-opened-on-one-line-and-refused-on-another", Category: "pattern matching",
 		SyntaxError: true,
 		Snippet: `[[ -n x

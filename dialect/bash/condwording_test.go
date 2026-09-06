@@ -67,3 +67,36 @@ func TestAConditionsRefusalIsThreeLines(t *testing.T) {
 		t.Errorf("out %q, want no conditional line outside a condition", out)
 	}
 }
+
+// TestAnUnterminatedConditionIsTwoLines — a `[[` the input ran out inside of
+// gets a line of its own naming the closer, and bash writes it for `[[` and
+// for nothing else: every other unterminated construct gets the one ordinary
+// line. Measured, and the reason it is a second field rather than the one the
+// refused-token preamble uses.
+func TestAnUnterminatedConditionIsTwoLines(t *testing.T) {
+	out := condDiagnostic(t, `[[ -n x`)
+	want := []string{
+		"line 1: unexpected EOF while looking for `]]'",
+		"line 2: syntax error: unexpected end of file from `[[' command on line 1",
+	}
+	got := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(got) != len(want) {
+		t.Fatalf("got %d lines, want %d:\n%s", len(got), len(want), out)
+	}
+	for i := range want {
+		if !strings.HasSuffix(got[i], want[i]) {
+			t.Errorf("line %d = %q, want it to end %q", i+1, got[i], want[i])
+		}
+	}
+	// Every other construct left open gets one line, which is what says this
+	// is `[[`'s and not a rule about running out of input.
+	for _, src := range []string{"if true; then", "for i in a; do", "case x in", "{ echo a", "( echo a"} {
+		out := condDiagnostic(t, src)
+		if n := strings.Count(strings.TrimRight(out, "\n"), "\n") + 1; n != 1 {
+			t.Errorf("%s: %d lines, want 1:\n%s", src, n, out)
+		}
+		if strings.Contains(out, "looking for") {
+			t.Errorf("%s: got the condition's extra line:\n%s", src, out)
+		}
+	}
+}

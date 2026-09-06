@@ -99,9 +99,51 @@ func TestAClosingBracketIsNotAnOperand(t *testing.T) {
 				tc.src, se.Token, se.Expected, tc.token, tc.arity)
 		}
 	}
-	// A *quoted* `]]` is an ordinary word, so the check is on the spelling
-	// and not on the text: `[[ -n "]]" ]]` tests a two-character string.
+	// A *quoted* `]]` is an ordinary word, so it is still an operand: `[[ -n
+	// "]]" ]]` tests a two-character string.
 	if _, err := Parse(`[[ -n "]]" ]]`, Core()); err != nil {
 		t.Errorf("a quoted `]]` was refused as an operand: %v", err)
+	}
+}
+
+// TestAnUnterminatedConditionNamesTheConstruct — a `[[` the input ran out
+// inside of is unclosed *by the condition*, and two dialects name it: one as
+// the construct left open and one as the innermost keyword still waiting.
+// `[[` is not a word the list parser stacks, so nothing else fills either in
+// and both were empty — which showed as a diagnostic with a hole in it,
+// “ `' unmatched “.
+func TestAnUnterminatedConditionNamesTheConstruct(t *testing.T) {
+	se := condErr(t, `[[ -n x`)
+	if se.Kind != ErrUnterminated {
+		t.Fatalf("kind %v, want an unterminated construct", se.Kind)
+	}
+	if se.Construct != "[[" || se.Innermost != "[[" {
+		t.Errorf("construct %q innermost %q, want `[[` for both", se.Construct, se.Innermost)
+	}
+	if se.ConstructLine != 1 {
+		t.Errorf("construct line = %d, want 1", se.ConstructLine)
+	}
+	// A `[[` inside another construct is still the innermost thing open, so
+	// it displaces what the stack was holding — measured, `if true; then [[
+	// -n x` is `` `[[' unmatched `` in ksh93 and not `` `then' ``.
+	for _, src := range []string{"if true; then [[ -n x", "while [[ -n x", "{ [[ -n x"} {
+		se := condErr(t, src)
+		if se.Innermost != "[[" {
+			t.Errorf("%s: innermost = %q, want `[[`", src, se.Innermost)
+		}
+	}
+	// And a construct left open with no condition inside it keeps its own
+	// answers: this must not reach a failure the condition had nothing to
+	// do with.
+	se = condErr(t, "if true; then")
+	if se.Construct == "[[" || se.Innermost == "[[" {
+		t.Errorf("an unterminated `if` was blamed on a condition: %q / %q",
+			se.Construct, se.Innermost)
+	}
+	// Nor one whose condition closed: the `[[` is not open any more, so the
+	// `then` is the innermost thing waiting.
+	se = condErr(t, "if true; then [[ -n x ]]")
+	if se.Innermost == "[[" {
+		t.Errorf("a closed condition was still named as open: %q", se.Innermost)
 	}
 }

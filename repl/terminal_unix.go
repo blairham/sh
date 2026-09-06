@@ -9,6 +9,8 @@ import (
 	"os"
 	"syscall"
 	"unsafe"
+
+	"github.com/blairham/sh/internal/tty"
 )
 
 // Raw mode, through syscall directly.
@@ -79,41 +81,21 @@ func ioctl(fd int, req uintptr, t *syscall.Termios) error {
 
 // IsTerminal reports whether this file is one.
 //
-// The question is put to the kernel as an ioctl — the same one raw mode
-// begins with — because that is the only test that answers it. A character
-// device is a strictly weaker question, and `/dev/null` passes it: it is a
-// character device, it is what cron, systemd, CI and every harness hand a
-// shell for standard input, and a shell that reads it as a terminal waits at
-// a prompt for someone who was never there. `/dev/zero` and `/dev/random`
-// are the same shape. Asking for the terminal attributes instead gets ENOTTY
-// from all three and a filled-in struct from a real one.
+// The question is put to the kernel as an ioctl — the same one raw mode begins
+// with — because that is the only test that answers it. A character device is
+// a strictly weaker question, and `/dev/null`, `/dev/zero` and `/dev/random`
+// all pass it while being nobody's terminal. See internal/tty, which holds the
+// call and the measurements.
 //
 // Asked of the file rather than of the process, because the shell's input is
 // the question and not the program's: a Runner embedded in something else may
 // have been handed a pipe while the program around it sits at a terminal.
 //
-// The descriptor is borrowed through SyscallConn rather than taken with Fd:
-// Fd detaches the file from the runtime's poller and leaves it in blocking
-// mode for good, which is a real change to make to a pipe merely to ask it a
-// question it is going to answer no to.
-//
-// Exported because the front end has the same question — `driver` decides
-// whether to prompt — and one implementation of it is the point. The decision
-// stays in `driver`; the ioctl lives here, with the rest of the termios code.
-func IsTerminal(f *os.File) bool {
-	if f == nil {
-		return false
-	}
-	rc, err := f.SyscallConn()
-	if err != nil {
-		return false
-	}
-	isTTY := false
-	if err := rc.Control(func(fd uintptr) {
-		var t syscall.Termios
-		isTTY = ioctl(int(fd), tcGets, &t) == nil
-	}); err != nil {
-		return false
-	}
-	return isTTY
-}
+// **The implementation moved and this name did not.** `interp` has to ask the
+// same question — `select`'s prompt and `read -p`'s (#525) — and `repl` imports
+// `interp`, so the dependency only runs one way and the ioctl could not stay
+// here. It is in internal/tty now, which both import. This stays exported
+// because the front end asks it by this name: `driver` decides whether to
+// prompt, and `cmd/sh` whether a connection has a person on it. The decision
+// stays in `driver`; the answer is one implementation, which is the point.
+func IsTerminal(f *os.File) bool { return tty.IsTerminal(f) }

@@ -3086,17 +3086,20 @@ The letters themselves diverge before the behaviors do:
   they were: the read failed before reaching any input, so the
   clear-on-EOF rule never fires. The optstring's shape carries the split
   the way it does for `-n`; the refusal's words are
-  `Diagnostics.ReadNoCoprocess`. "Is a terminal" is `interp`'s
-  approximation — a character device, excepting the null device, which
-  every harness-fed child holds and bash measurably does not prompt
-  through. A character device that is neither a terminal nor `/dev/null`
-  (say `/dev/zero`) is taken for one; real shells ask isatty and are not
-  fooled, a difference accepted knowingly. The front end no longer
-  approximates: `driver.Interactively` asks the ioctl, through
-  `repl.IsTerminal` (#509, `invocation.md`). `interp` cannot reach that —
-  `repl` imports `interp`, so the dependency only runs one way — and this
-  is the remaining place where a character device stands in for a
-  terminal.
+  `Diagnostics.ReadNoCoprocess`. **"Is a terminal" is the ioctl here too**
+  (#525). It was `interp`'s own approximation until then — a character
+  device, excepting the null device — because the exact answer lived in
+  `repl` and `repl` imports `interp`, so the dependency only ran one way.
+  It is `internal/tty` now, which both import, and the exception for the
+  null device is *gone* rather than moved: the ioctl answers ENOTTY there
+  without being told the path. Measured 2026-09-06 on the device that made
+  the point, `read -p 'PROMPT-42 ' v < /dev/urandom` — bash 5.3.15, bash
+  3.2.57 and bash-as-sh all read a line, exit 0 and print **no prompt**,
+  where this shell printed one. `/dev/random` rather than `/dev/null` is
+  the case that says the question is about terminals: the read succeeds
+  there, so there is every reason to have prompted. `select`'s menu had
+  the same fault under the ksh93 axis, drawing its `#? ` where real ksh93
+  draws none.
 - **The timeout.** `-t SECS`, fractions allowed; input already waiting is
   read as if the flag were absent. Expiry reports 142 in bash (128 plus
   SIGALRM) and 1 in ksh93 and zsh — `Diagnostics.ReadTimeoutStatus` — and

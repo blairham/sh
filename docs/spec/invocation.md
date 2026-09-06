@@ -534,12 +534,14 @@ one that drifts. `-s` as written travels beside it, in
 `Runner.StandardInputOption`, for the single invocation where the two
 differ: `sh -s -c cmd` runs the command string and still shows `s`.
 
-`interp` asks a related question for `select` and `read -p` and answers
-it differently — a character device, excepting the null device — because
-`interp` cannot import `repl` and the approximation is documented in
-`semantics.md` as a knowing difference. The two are not the same
-question: the front end asks about the *invocation*, and a builtin asks
-about whatever stream `-u` resolved to.
+`interp` asks a related question for `select` and `read -p`, and it now
+gets the same answer. It used to get a weaker one — a character device,
+excepting the null device — because `interp` cannot import `repl`; the
+ioctl is in `internal/tty` since #525, which both import, and
+`repl.IsTerminal` is a forwarder to it that keeps its exported name for
+the front end. The two are still not the same *question*: the front end
+asks about the **invocation**, and a builtin asks about whatever stream
+`-u` resolved to. They are one implementation of "is this a terminal".
 
 ## A program on standard input shares the descriptor with itself
 

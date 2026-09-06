@@ -436,19 +436,30 @@ func (h *Host) Err() error {
 //
 //  1. Close the plugin's input. A cooperating plugin sees EOF and exits, which
 //     is how every well-behaved one goes.
+//
 //  2. Wait a bound for that to happen.
+//
 //  3. SIGKILL the process group. Not impatience — see killGroup. This is what
 //     makes a blocked read on the plugin's output return, and killing the
 //     group is what takes anything the plugin started with it.
+//
 //  4. Wait for the reaper, which is unbounded and can be: SIGKILL cannot be
 //     caught, so the process goes.
-//  5. Take the two read streams away, which ends the two loops even if
-//     something outside the group inherited a write end. This last step is
-//     belt and braces and is **not** covered: removing it is a mutant that
-//     survives, because a write end held outside the process group needs a
-//     process that left it, and there is no portable way to arrange one from
-//     a fixture — `setsid` is not on darwin. It stays because the failure it
+//
+//  5. Take the read streams away, which ends the two loops even if something
+//     outside the group inherited a write end. Belt and braces, and **not**
+//     covered: a write end held outside the process group needs a process
+//     that left it, and there is no portable way to arrange one from a
+//     fixture — `setsid` is not on darwin. It stays because the failure it
 //     prevents is a goroutine parked for the life of the shell.
+//
+//     The two streams are not taken away together, and that asymmetry is
+//     #1070. Standard error carries the message a plugin died with, and the
+//     process is already reaped by this point, so the relay reaches end of
+//     input on its own: it is given that chance before its stream goes, and
+//     the close is what happens if it does not come. Doing both at once
+//     discarded the diagnostic on 8 launches in 500 on Linux and 0 in 500 on
+//     Darwin — the same bug on both, and only the odds differ.
 func (h *Host) Close() error {
 	h.closeOnce.Do(func() {
 		h.die(errors.New("the shell shut it down"))
@@ -459,9 +470,27 @@ func (h *Host) Close() error {
 			killGroup(h.cmd)
 		}
 		<-h.procDone
-		_, _ = h.out.Close(), h.errs.Close()
+		_ = h.out.Close()
 		<-h.serveDone
-		<-h.relayDone
+		// The standard error stream is not taken away on the same breath,
+		// because it is the one carrying a diagnostic. The plugin is reaped
+		// by the line above, so its write end is gone and what it died saying
+		// is sitting in the pipe at end of input: the relay reads it and
+		// finishes on its own, in the time it takes to copy one buffer.
+		// Closing first threw that message away — the read end went while the
+		// bytes were still unread, and `Launch` then reported a launch
+		// failure with nothing to say about why, which is #1070.
+		//
+		// Still bounded, and the bound is still worth having for the same
+		// reason it is on the other stream: a grandchild outside the process
+		// group holding the write end means no end of input is coming, and a
+		// shell that waited for one would park here for good.
+		select {
+		case <-h.relayDone:
+		case <-time.After(drainWait):
+			_ = h.errs.Close()
+			<-h.relayDone
+		}
 	})
 	return nil
 }

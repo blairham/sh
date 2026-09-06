@@ -1239,6 +1239,42 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		}
 		return strings.Join(words, ifsFirst(r.ifs()))
 	}
+	// `${#v#a}` is the length of what the operator *leaves* — 2, not 3 —
+	// in the one grammar that accepts the pairing at all. The operator was
+	// being dropped on the floor: the length block below answered from the
+	// untouched value and returned, so a script computing a trimmed length
+	// got the untrimmed one and carried on. Nothing said so, and every other
+	// shell refuses the expansion outright, so the number was nobody's.
+	//
+	// Answered by recursion rather than by a second copy of the operator
+	// machinery: the same node without its length is exactly the expansion
+	// whose result is being measured, so every operator reaches this for the
+	// same reason it reaches anything else, and a later fix to one is a fix
+	// to both. Measured across every operator this grammar has — the trims,
+	// the substring, the replacement, the four conditionals and the element
+	// exclusion — and the rule is uniform: apply, then measure.
+	//
+	// Before any value is read, which is the whole reason it is here and not
+	// beside the length block. paramSource expands a nested expansion's
+	// words, so intercepting after it would run `${#${v}#a}`'s inner
+	// substitution once for the length and once for the operator — and a
+	// command substitution in there has side effects that must happen once.
+	//
+	// The pairing itself is a grammar question and is settled there: the
+	// four shells that refuse it never build this node, so reaching here
+	// means the dialect accepts it and there is nothing to ask.
+	if e.Length && e.Op != syntax.ParamNone {
+		inner := *e
+		inner.Length = false
+		n := r.stringLength(r.expandParam(&inner))
+		if r.unspecified {
+			// The same guard the plain length keeps: an unanswered axis
+			// underneath has already spoken, and a number on top of it would
+			// read as an answer.
+			return ""
+		}
+		return itoa(n)
+	}
 	// An array subscript supplies a value too, and the operators apply to it
 	// exactly as they do to a variable. That is what the comment said before
 	// this function returned here instead: every operator was skipped, so

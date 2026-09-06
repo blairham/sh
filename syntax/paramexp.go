@@ -354,6 +354,22 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	}
 
 	op, rest, ok := p.scanParamOp(s, e)
+	if ok && e.Length && !p.dialect.ParamLengthTakesAnOperator {
+		// `${#v#a}` is a bad substitution in four of the five: the length
+		// takes no operator there. Marked and deferred rather than failed,
+		// in every dialect — measured, none of the four decides this while
+		// reading, so `${#v#a}` in a branch never taken is not an error at
+		// all. That includes the one grammar that *does* refuse an unknown
+		// operator early, which is why BadSubstitutionAtParseTime is not
+		// consulted here; the `@` family above is deferred by it for the
+		// same measured reason.
+		//
+		// After the operator scan rather than before it, so a `#` that is
+		// not an operator at all cannot be mistaken for one: `${#v}` never
+		// reaches this, and neither does `${#a[@]}`.
+		e.Bad, e.Src = true, src
+		return e
+	}
 	if !ok {
 		if !p.dialect.BadSubstitutionAtParseTime || s[0] == '@' {
 			// The majority defers: the node is kept, marked, and diagnosed

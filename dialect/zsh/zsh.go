@@ -97,6 +97,14 @@ func Dialect() syntax.Dialect {
 	// nineteen lines, and a refusal there leaves eighteen variables empty.
 	d.ParamTildeFlag = true
 	d.ParamElementSelection = true
+	// The length may carry an operator here, and it measures what the
+	// operator *leaves*: `v=abc; echo ${#v#a}` is 2. bash, bash 3.2, bash as
+	// `sh`, dash and ksh93 all call the same text a bad substitution, so
+	// this is the grammar that has the construct rather than a different
+	// arithmetic over one they share. Uniform across every operator this
+	// shell has — the trims, the substring, the replacement, the four
+	// conditionals and the element exclusion — measured 2026-09-06.
+	d.ParamLengthTakesAnOperator = true
 	// An expansion where a parameter name would be — `${${v}#a}`, which is
 	// how this shell applies one expansion to the result of another and is
 	// idiomatic here rather than a corner. Measured 2026-09-05 on zsh 5.9.2

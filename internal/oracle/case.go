@@ -3648,6 +3648,31 @@ echo "st=$?"`,
 		Why:     "the same operator with no `(@)` in front and inside quotes, where the array joins to one string first: the pattern is then matched against `one two three` as a whole, matches nothing, and the value is left standing. Not a no-op by accident — `${a:#*}` on the same array is empty — and it is what says the operator asks about *elements*, of which a joined scalar has one. ksh93 answers `one` from the same characters, which is `${a#two}` against a scalar that is only the first element, so the two shells agree on neither the operator nor what `$a` names",
 	},
 	{
+		ID: "expansion/a-length-with-an-operator", Category: "expansion",
+		Snippet: `v=abc; echo ${#v#a}`,
+		Why:     "the length and an operator in one expansion, which two shells read as different things and four refuse outright. zsh measures what the operator *leaves* and answers 2; bash, bash 3.2, bash as `sh`, dash and ksh93 all call it a bad substitution. The number we answered was 3 — the length of the untouched value, the operator dropped on the floor — which is not merely the wrong one of two readings but nobody's at all, and it came back at status 0. A script computing a trimmed length got the untrimmed one",
+	},
+	{
+		ID: "expansion/a-length-with-a-substring-operator", Category: "expansion",
+		Snippet: `v=abc; echo ${#v:1}`,
+		Why:     "the same pairing with the operator that looks least like one, and the row that says the refusal is about the operator rather than about the character `#`: there is no second `#` here and four of the five still refuse. zsh answers 2 for the same reason as the trim — apply, then measure",
+	},
+	{
+		ID: "expansion/a-length-with-a-replacement-operator", Category: "expansion",
+		Snippet: `v=abc; echo ${#v/b/XX}`,
+		Why:     "the operator that makes the value *longer*, which is what separates measuring the result from measuring the subject: zsh answers 4 where the untouched value is 3, so a reading that quietly ignored the operator cannot hide behind a coincidence here the way it can on a pattern that trims nothing",
+	},
+	{
+		ID: "expansion/a-length-with-an-operator-is-refused-late", Category: "expansion",
+		Snippet: `v=abc; if false; then echo ${#v#a}; fi; echo reached`,
+		Why:     "when each shell decides. Every one of the five that refuses the pairing defers it to the expansion — the branch is never taken, so nothing is wrong and all six print `reached`. That includes ksh93, whose grammar otherwise refuses an unknown operator while reading, so the deferral is measured rather than assumed from where the other refusals happen",
+	},
+	{
+		ID: "expansion/a-length-with-no-operator-is-unanimous", Category: "expansion",
+		Snippet: `v=abc; a=(xx yy); set -- p qq; echo "${#v} ${#a[@]} ${#@}"`,
+		Why:     "the boundary the previous rows need: the length on its own is the value's, a whole-array subscript counts elements and the positional spelling counts parameters, and all three are unanimous. A grammar that refused the length whenever anything followed the name would break every one of these while fixing the pairing above",
+	},
+	{
 		ID: "expansion/a-colon-before-a-trim-is-a-third-reading", Category: "expansion",
 		Snippet: `v=hello; printf "[%s]" "${v:#hel*}" "${v:##hel*}" "${v:%lo}" "${v:%%l*}"; echo`,
 		Why:     "the three readings of the same six characters, in the one shell whose reading had no implementation behind it: ksh93 ignores the colon entirely, so all four of these are the plain trims and answer `lo`, ``, `hel` and `he`. zsh reads `:#` as an element exclusion and matches the pattern against the whole value, and bash refuses it as arithmetic with `#hel*` named as the offending token. Four operators in one row because the shortest-against-longest distinction has to survive the colon — a reading that dropped it and then re-scanned gets all four, and one that named them over somewhere else can lose the doubling",

@@ -9103,6 +9103,14 @@ exit 7`,
 		Why:     "how a state capture asks what functions exist. Three answers rather than two, and the middle one is the dangerous shape: bash lists both names, dash and ksh93 have no `declare` at all and say so at 127, and zsh reads `-F` as a float's precision, has nothing to say about a bare one, and exits **0** — a caller that trusted the status would record a shell with no functions and never learn it had asked the wrong question. declare/capital-f-names-a-function asks the same thing of a *named* function; this asks for the listing, which is what a generator actually runs",
 	},
 	{
+		ID: "harness/a-function-listing-that-says-nothing-at-all", Category: "harness invocation",
+		Snippet: "f() { echo hi; }\n" +
+			`case $(declare -F 2>&1) in "") echo silent ;; *) echo spoke ;; esac` + "\n" +
+			"declare -F >/dev/null 2>&1\n" +
+			`echo "st=$?"`,
+		Why: "the row above narrowed to the half a status cannot show: whether the shell said anything, on either stream. zsh is the finding and the silence is the whole of it — `-F` is a float's precision there, so it answers a bare one with **0 and not one byte**, which is the shape that lets a caller record a shell with no functions and never learn it asked the wrong question. The three bash columns speak because they list, and dash and ksh93 speak because they have no `declare`, so `spoke` covers two different reasons and the case is about the one column that does neither. Emptiness rather than a byte count: a command substitution strips trailing newlines, so this asks whether anything was written without the answer depending on how long the shell's own path is on the machine that ran it",
+	},
+	{
 		ID: "harness/the-shells-own-functions-are-not-the-persons", Category: "harness invocation",
 		Snippet: "f() { :; }\n" +
 			"declare -F 2>/dev/null | grep -c \"dirs\\|popd\\|pushd\"\n" +

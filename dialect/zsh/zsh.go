@@ -629,7 +629,14 @@ func Semantics() interp.Semantics {
 	// `-U` under both spellings, and ksh93 does not have the letter at all,
 	// answering `typeset: -U: unknown option`. Its own `-u` — uppercase —
 	// is a different letter and stays what it was.
-	s.DeclareOptions = "aAfgHilpruUx"
+	s.DeclareOptions = "aAfFgHilpruUx"
+	// `-F` is a float's precision here rather than bash's function listing,
+	// and this engine has no float attribute to record it in. Taken in
+	// silence at 0, which is what real zsh answers to every shape of it —
+	// measured, not one byte on either stream — rather than refused, which
+	// is what a caller enumerating functions with `declare -F` used to get
+	// from a shell that has nothing to say to it (#1037).
+	s.DeclareOptionsWithoutEffect = "F"
 	s.LocalOptions = "aAHilpruUx"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
@@ -820,13 +827,13 @@ func Diagnostics() interp.Diagnostics {
 			// rest. The same set under both names, and for `local` too.
 			// `-H` and `-U` have left this list — they are implemented, in
 			// DeclareOptions above.
-			"typeset": "bcEFhkLmnRtTZ",
+			"typeset": "bcEhkLmnRtTZ",
 			"type":    "mvwsS",
 			// jobs' letters that are zsh's own: -d names the directory the
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.
 			"jobs":    "dzZ",
-			"declare": "bcEFhkLmnRtTZ",
+			"declare": "bcEhkLmnRtTZ",
 			"local":   "bcEFhkLmnRtTZ",
 		},
 		// The builtin's name is stripped to the location prefix as ever:

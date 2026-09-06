@@ -42,6 +42,13 @@ type declareFlags struct {
 	funcNames bool
 	remove    bool
 	print     bool
+	// inert records that a letter out of Semantics.DeclareOptionsWithoutEffect
+	// was read. Nothing consults it as an attribute; it exists so that a
+	// declaration carrying only such a letter is not mistaken for the bare
+	// word, whose listing is a different command entirely — `typeset -F`
+	// answering with the whole variable table is the one thing worse than
+	// refusing the letter (#1037).
+	inert bool
 }
 
 // declareOptionLetters is the set `declare` and `typeset` read where the
@@ -74,6 +81,14 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 		for _, c := range a[1:] {
 			if !strings.ContainsRune(known, c) {
 				return nil, f, r.refuseOption(name, a, known)
+			}
+			if strings.ContainsRune(r.sem().DeclareOptionsWithoutEffect, c) {
+				f.inert = true
+				// The dialect spells the letter and this engine models
+				// nothing it does, so it is taken in silence and decides
+				// nothing — see Semantics.DeclareOptionsWithoutEffect for
+				// which lie that is and why it is the smaller one.
+				continue
 			}
 			switch c {
 			case 'i':

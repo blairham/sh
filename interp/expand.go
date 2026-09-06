@@ -1342,12 +1342,52 @@ func (r *Runner) trimWith(value, pattern string, op syntax.ParamOp) string {
 	return trim(value, pattern, op, r.patternOpts(pattern))
 }
 
+// matchedWith is trimWith with the flag that keeps what the pattern took.
+func (r *Runner) matchedWith(value, pattern string, op syntax.ParamOp) string {
+	return matched(value, pattern, op, r.patternOpts(pattern))
+}
+
 func (r *Runner) replaceWith(value, pattern, with string, e *syntax.ParamExpr) string {
 	return replace(value, pattern, with, e, r.patternOpts(pattern))
 }
 
 func trim(value, pattern string, op syntax.ParamOp, o patternOpts) string {
-	prefix := op == syntax.ParamTrimPrefix || op == syntax.ParamTrimPrefixLong
+	i, ok := trimEdge(value, pattern, op, o)
+	if !ok {
+		return value
+	}
+	if trimsPrefix(op) {
+		return value[i:]
+	}
+	return value[:i]
+}
+
+// matched is trim's other half: the part the pattern took rather than the part
+// it left, and nothing at all when it took none.
+//
+// One flag turns a trim into this — the same operator, the same match, the
+// other side of the same split — which is why it shares trimEdge rather than
+// scanning again. Measured: `${(M)v#h*l}` on `hello` is `hel` where
+// `${v#h*l}` is `lo`, and `${(M)v#zzz}` is empty where `${v#zzz}` is `hello`.
+func matched(value, pattern string, op syntax.ParamOp, o patternOpts) string {
+	i, ok := trimEdge(value, pattern, op, o)
+	if !ok {
+		return ""
+	}
+	if trimsPrefix(op) {
+		return value[:i]
+	}
+	return value[i:]
+}
+
+func trimsPrefix(op syntax.ParamOp) bool {
+	return op == syntax.ParamTrimPrefix || op == syntax.ParamTrimPrefixLong
+}
+
+// trimEdge is where a trim's pattern stops: the split point, and whether the
+// pattern matched at all.
+func trimEdge(value, pattern string, op syntax.ParamOp, o patternOpts) (int, bool) {
+	prefix := trimsPrefix(op)
 	longest := op == syntax.ParamTrimPrefixLong || op == syntax.ParamTrimSuffixLong
 
 	// Candidate split points, ordered so the first match found is the one
@@ -1365,15 +1405,15 @@ func trim(value, pattern string, op syntax.ParamOp, o patternOpts) string {
 	for _, i := range idx {
 		if prefix {
 			if matchPattern(pattern, value[:i], o) {
-				return value[i:]
+				return i, true
 			}
 			continue
 		}
 		if matchPattern(pattern, value[i:], o) {
-			return value[:i]
+			return i, true
 		}
 	}
-	return value
+	return 0, false
 }
 
 // replace substitutes a matching span, once or everywhere.

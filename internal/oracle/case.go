@@ -3095,6 +3095,21 @@ echo "st=$?"`,
 		Why:     "a range has two ends and a third is not a wider one. The shell with ranges calls it a bad substitution and gives up on the command; the shells reading arithmetic take the comma operator's last operand and name an element. Answering the second in a dialect that has ranges would be the other reading wearing this one's name, and it is exactly the shape a fix reaches for when it splits on the first comma and ignores the rest",
 	},
 	{
+		ID: "param/the-matching-flag-keeps-what-a-trim-took", Category: "parameter expansion",
+		Snippet: `v=hello; echo "[${(M)v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]"`,
+		Why:     "one flag turns each of the four trims inside out: the same operator, the same match, and the *other* side of the split substituted. The operator still chooses how much — the doubled forms take the longest match here exactly as they drop the longest without the flag — so this is not a fifth and sixth operator but a second reading of the four. The last two are the rows that separate it from a no-op: a pattern that matches nothing leaves nothing, where the trim without the flag leaves the whole value, and an empty pattern takes the empty string",
+	},
+	{
+		ID: "param/the-matching-flag-inverts-the-exclusion", Category: "parameter expansion",
+		Snippet: `a=(f1 f22 f333); printf "[%s]" "${(M@)a:#f2*}"; echo; printf "[%s]" "${(@)a:#f2*}"; echo`,
+		Why:     "the same flag on the operator that chooses *elements* rather than characters, and the same inversion: keep what the pattern matched instead of dropping it. Both spellings on one row, because the pair is what says it is an inversion and not an unrelated second operator — and the `(@)` is load-bearing, since quoted without it the array joins to one string first and the whole-match rule then takes all of it or none",
+	},
+	{
+		ID: "param/the-matching-flag-elsewhere-does-nothing", Category: "parameter expansion",
+		Snippet: `v=hello; echo "[${(M)v/l/L}][${(M)v:1}][${(M)v:-alt}][${(M)v}]"`,
+		Why:     "and the boundary, which is worth a row because a flag named for matching looks as though it should reach the operator that matches and replaces: it does not. A replacement, a substring, a default and an expansion with no operator at all are what they would have been without it, so the flag reaches exactly the trims and the exclusion — measured one operator at a time rather than reasoned from the name",
+	},
+	{
 		ID: "expansion/element-exclusion-by-pattern", Category: "expansion",
 		Snippet: `a=(one two three); printf "[%s]" "${(@)a:#t*}"; echo`,
 		Why:     "`:#` drops the elements a pattern matches, which is one shell's alone: to bash the characters after the colon are an offset and `#t*` is arithmetic it refuses, and ksh93 refuses the flag group before it gets that far. The shape a startup file on this machine uses to take a hook out of a list, and the one that produced `operand expected at ``#fig_precmd''` here",

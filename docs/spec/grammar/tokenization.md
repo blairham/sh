@@ -661,3 +661,66 @@ a shell name.
 
 By contrast `>|`, which overrides `noclobber`, is accepted with the same
 meaning by all six and is core.
+
+### `|&` — a pipe of both streams, or a coprocess
+
+The other operator whose two bytes mean two different things. Measured
+2026-09-06, from a script file with a scratch `HOME` and `ZDOTDIR` under
+`env -i`, `-n` for the parse and a run for the behavior:
+
+| shell | `-n` | `{ echo out; echo err >&2; } \|& tr a-z A-Z` |
+| --- | --- | --- |
+| bash 5.3.15 | accepts | `OUT` and `ERR` |
+| bash as `sh` | accepts | the same — `argv[0]` takes nothing away here |
+| bash 3.2.57 | refuses | ``syntax error near unexpected token `&' ``, status 2 |
+| dash | refuses | `Syntax error: "&" unexpected`, status 2 |
+| ksh93u+ | accepts | **a coprocess**: `err` alone, and `tr` gets nothing |
+| zsh 5.9.2 | accepts | `OUT` and `ERR` |
+
+Three of the six columns disagree with the other three, and not in one
+direction. The two that refuse have no `|&` at all: they lex a bar and
+then an ampersand and blame the ampersand, which is the same sentence
+they give for `echo one | & echo two` — so a dialect without the operator
+needs no wording of its own, only the token the grammar could not take.
+
+**The two accepting readings are two constructs, not two meanings.** The
+measurement that separates them is what may follow the operator:
+
+| probe | bash 5.3 | ksh93 | zsh |
+| --- | --- | --- | --- |
+| `echo one \| ; echo two` | error at `;` | error at `;` | accepts |
+| `echo one \|& ; echo two` | error at `;` | **accepts** | accepts |
+| `echo one & ; echo two` | error at `;` | **accepts** | accepts |
+
+A `|` there needs a command after it and ksh93's `|&` does not, and a
+bare `&` does not either: ksh93's `|&` *terminates* a command the way `&`
+does, and what it starts is a coprocess whose ends are reached with
+`read -p` and `print -p`. It is a different slot in the grammar and wants
+its own flag beside `Coproc`, never a second value of this one. (zsh
+accepts all three because it is lenient about `;` after any of them,
+which is a separate question and not evidence either way.)
+
+The two bytes must be adjacent. `echo one | & echo two` is refused by
+bash 5.3, bash 3.2, bash-as-`sh`, dash and zsh alike — five of six, in
+four wordings — so reading a spaced pair as the operator would take a
+background command away from every shell that spells one that way.
+
+Where the operator *is* the pipe of both streams, it is exactly `2>&1 |`
+with the redirection written **last**. Two shapes measure the order, and
+both accepting shells agree on both (zsh with `nomultios`, because
+`MULTIOS` tees rather than replaces and hides the question):
+
+| probe | equal to | not equal to |
+| --- | --- | --- |
+| `e 2>/dev/null \|& cat` → `O`, `E` | `e 2>/dev/null 2>&1 \| cat` | `e 2>&1 2>/dev/null \| cat` → `O` |
+| `e >/dev/null \|& cat` → nothing | `e >/dev/null 2>&1 \| cat` | `e 2>&1 >/dev/null \| cat` → `E` |
+
+`$?` and `PIPESTATUS` are the same for both spellings as well, so the
+operator adds no status rule of its own.
+
+Grammar flag: `PipeBothStreams` — core: **off**; `bash` and `zsh`: on.
+Off in the core because three of the six columns do not have this reading
+and two of those three have no `|&` whatever: an intersection cannot
+contain it. It is a version fact as much as a dialect one — `|&` arrived
+in bash 4, so the `bash` preset states what bash 5.3 does and the bash
+3.2 column of every measurement above is the other half of the same row.

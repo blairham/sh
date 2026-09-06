@@ -150,6 +150,12 @@ func Dialect() syntax.Dialect {
 	// and is not one — `a=(1 2); $((#a))` is 49, the code of the `1`, where
 	// the count is `$(( $#a ))`.
 	d.ArithCharacterCode = true
+	// `a |& b`, read exactly as bash 5.3 reads it: the left side's standard
+	// error joins its standard output on the pipe. Not the ksh93 reading of
+	// the same two characters, which is a coprocess and a different slot in
+	// the grammar — measured, because ksh93 refuses `a | ; b` and accepts
+	// `a |& ; b`, so its `|&` ends a command where this one joins two.
+	d.PipeBothStreams = true
 	// A coprocess, spelled with the same word as bash's and with no name
 	// before it: `coproc MY { cat; }` is `parse error near `}'` here, because
 	// `MY {` is a simple command and the `}` closes nothing. The near ends

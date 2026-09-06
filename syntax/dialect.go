@@ -56,6 +56,29 @@ type Dialect struct {
 	// two.
 	AmpersandRedirect bool
 
+	// PipeBothStreams enables `|&`, a pipe that carries the left command's
+	// standard error along with its standard output. Measured identical to
+	// writing `2>&1` as the left command's *last* redirection — not its
+	// first: `e 2>/dev/null |& cat` shows the error and `e 2>&1 2>/dev/null
+	// | cat` does not, and `e >/dev/null |& cat` shows nothing where `e 2>&1
+	// >/dev/null | cat` shows the error. Both discriminating shapes agree in
+	// both shells that have it, so the parser writes the redirection out
+	// rather than the interpreter growing a second way to point a stream.
+	//
+	// Two of the six panel columns accept this reading — bash 5.3 and zsh —
+	// which is why it is not core. bash 3.2 has no `|&` at all, so this is a
+	// version fact as much as a dialect one; dash has none either. ksh93
+	// spells a *coprocess* with the same two characters, and it is not this
+	// construct with another meaning but another slot in the grammar: ksh93
+	// refuses `a | ; b` and accepts `a |& ; b`, so its `|&` terminates a
+	// command the way `&` does rather than joining two. A dialect for it
+	// wants its own flag beside `Coproc`, never a second value of this one.
+	//
+	// Where it is off, `a |& b` is not silently something else: the operator
+	// table falls back to `|` and then `&`, which is exactly what bash 3.2
+	// and dash lex, so the refusal lands on the `&` where theirs does.
+	PipeBothStreams bool
+
 	// CaseFallthrough enables `;&`, which runs the next case body. Absent
 	// from dash, and from bash before 4.0 — so it cannot be reached through
 	// macOS's /bin/sh.

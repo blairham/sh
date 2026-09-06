@@ -260,6 +260,17 @@ type Redirect struct {
 	// not a here-document — including `<<<`, which shares a prefix with `<<`
 	// and nothing else: a here-string's input is its Word, on the same line.
 	Heredoc *Word
+
+	// PipeBoth records a redirection nobody wrote: the `2>&1` that a `|&`
+	// after this command stands for. The operator is the source text and
+	// this is what it means, which is why the meaning is here rather than
+	// on the pipeline — the redirection has to be the command's *last*, and
+	// the command's own list is the only place that can say so.
+	//
+	// Kept marked so the printer writes `|&` back rather than the
+	// redirection, and so anything reading the tree can tell what the script
+	// said from what the grammar added.
+	PipeBoth bool
 }
 
 func (r *Redirect) Pos() Pos {
@@ -298,6 +309,29 @@ func (c *SimpleCmd) commandNode() {}
 // applies to everything inside it: `{ …; } >f` and `for … done >f` both work.
 type redirs struct {
 	Redirs []*Redirect
+}
+
+func (r *redirs) redirList() []*Redirect { return r.Redirs }
+
+func (c *SimpleCmd) redirList() []*Redirect { return c.Redirs }
+
+// mergesStderr reports whether c ends in the redirection a `|&` stands for.
+//
+// Asked of the command to the *left* of a bar, which is the one that carries
+// it: a pipeline's spelling is recoverable from the tree rather than recorded
+// twice, so nothing can record the two halves and disagree.
+func mergesStderr(c Command) bool {
+	if f, ok := c.(*FuncDecl); ok {
+		// A definition holds its redirections on its body, which is where
+		// the parser puts the written ones too.
+		return f.Body != nil && mergesStderr(f.Body)
+	}
+	h, ok := c.(interface{ redirList() []*Redirect })
+	if !ok {
+		return false
+	}
+	rs := h.redirList()
+	return len(rs) > 0 && rs[len(rs)-1].PipeBoth
 }
 
 // Subshell is `( list )`, which runs in a child shell so its assignments do

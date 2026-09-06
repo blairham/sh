@@ -38,6 +38,10 @@ func corpusDialect() syntax.Dialect {
 	// the corpus records both answers, so the grammar that has to *read* every
 	// case is the one that takes them.
 	d.HeredocEndsAtClosingParen = true
+	// `a |& b` — the pipe-of-both-streams cases. Four of the six columns
+	// take the operator and the corpus records what the other two say about
+	// it, so the grammar that reads every case has to have it.
+	d.PipeBothStreams = true
 	return d
 }
 

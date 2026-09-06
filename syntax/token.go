@@ -41,6 +41,7 @@ const (
 	TokAndAnd     // &&
 	TokPipe       // |
 	TokOrOr       // ||
+	TokPipeAmp    // |&   pipe both streams; two bytes with no blank between
 	TokSemi       // ;
 	TokDSemi      // ;;
 	TokSemiAmp    // ;&   fall through to the next case body
@@ -68,7 +69,7 @@ const (
 // this is ordered by anything but Kind.
 var text = map[Kind]string{
 	TokAmp: "&", TokAmpBang: "&!", TokAmpPipe: "&|",
-	TokAndAnd: "&&", TokPipe: "|", TokOrOr: "||",
+	TokAndAnd: "&&", TokPipe: "|", TokOrOr: "||", TokPipeAmp: "|&",
 	TokSemi: ";", TokDSemi: ";;", TokSemiAmp: ";&", TokDSemiAmp: ";;&",
 	TokLeftParen: "(", TokRightParen: ")",
 	TokLess: "<", TokGreat: ">", TokDGreat: ">>", TokLessAmp: "<&", TokGreatAmp: ">&",

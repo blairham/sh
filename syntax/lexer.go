@@ -575,7 +575,7 @@ var operators = []Kind{
 	TokDSemiAmp, TokTLess, TokAmpDGreat, TokDLessDash, // 3 bytes
 	TokAndAnd, TokOrOr, TokDSemi, TokSemiAmp, TokDGreat, TokLessAmp, TokGreatAmp,
 	TokLessGreat, TokClobber, TokDLess, TokAmpGreat,
-	TokAmpBang, TokAmpPipe, // 2 bytes
+	TokAmpBang, TokAmpPipe, TokPipeAmp, // 2 bytes
 	TokAmp, TokPipe, TokSemi, TokLeftParen, TokRightParen, TokLess, TokGreat, // 1 byte
 }
 
@@ -592,6 +592,8 @@ func (l *Lexer) enabled(k Kind) bool {
 		return l.dialect.Herestring
 	case TokAmpBang, TokAmpPipe:
 		return l.dialect.BackgroundAndDisown
+	case TokPipeAmp:
+		return l.dialect.PipeBothStreams
 	}
 	return true
 }

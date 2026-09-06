@@ -286,7 +286,11 @@ func (p *printer) expr(e Expr) {
 		}
 		for i, c := range x.Cmds {
 			if i > 0 {
-				p.str(" | ")
+				if mergesStderr(x.Cmds[i-1]) {
+					p.str(" |& ")
+				} else {
+					p.str(" | ")
+				}
 			}
 			p.command(c)
 		}
@@ -771,6 +775,11 @@ func (p *printer) assign(a *Assign) {
 
 func (p *printer) redirs(rs []*Redirect) {
 	for _, rd := range rs {
+		if rd.PipeBoth {
+			// Nobody wrote this one: it is what the `|&` after the command
+			// means, and the pipeline writes that operator back instead.
+			continue
+		}
 		p.str(" ")
 		if rd.Op == TokLessAmp || rd.Op == TokGreatAmp {
 			p.dup(rd)

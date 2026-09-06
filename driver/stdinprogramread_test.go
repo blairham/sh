@@ -194,9 +194,12 @@ func TestNoBytesAreLostAheadOfWhatTheScriptReads(t *testing.T) {
 // them forward instead — everything read becomes program text — because that
 // is the only answer that loses none of them.
 func TestAnOverReadThatCannotBeGivenBackIsRunAsTheProgram(t *testing.T) {
-	// Not reachable through Shell.Stdin, which is an *os.File and either seeks
-	// or does not: this is the reader's own contract, exercised where a
-	// descriptor that changes its mind can be built.
+	// The reader's own contract rather than a route, exercised directly
+	// because a descriptor that changes its mind is not a thing a test can
+	// open. Shell.Stdin is an io.Reader now — see stdinreader_test.go, where
+	// both of lineReader's arms are reached through the field — but neither a
+	// file nor an in-memory reader answers the seek question one way and then
+	// the other, which is what this arm is for.
 	in := &seekOnceReader{r: strings.NewReader("echo one\necho two\n")}
 	var lr driver.LineReaderForTest
 	got := lr.Read(in, make([]byte, 64))

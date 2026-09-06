@@ -28,8 +28,108 @@ import (
 // raw mode afterwards, and the kernel drops what is queued but unread across
 // that change, so input sent any earlier is simply gone (#635).
 
+// promptSession is a shell at a prompt on a pseudo-terminal, and the owner of
+// the rule above.
+//
+// The rule is one sentence — **wait for the next prompt before sending a key,
+// and the helper does the waiting** — and #1018 is what it cost to have it
+// written in three places and meant in two. `driver`'s screen.endSession has
+// always owned it. capturingSession owns it since #1014. This one left it to
+// every call site, which is how a fifth instance of #635 gets written by
+// somebody who copied the fourth.
+//
+// It cannot be shared as code: these tests are `package repl` because they use
+// unexported things, and `driver` imports `repl`, so the direction the reuse
+// would have to go is a cycle. What can be shared is the rule, and each helper
+// states it and owns it.
+//
+// atPrompt is what makes owning it safe rather than merely dutiful. Folding
+// the wait into finish and leaving the call sites alone hangs **all seven** of
+// them — measured, and it is the reason #1018 exists rather than a patch: the
+// buffer carries a cursor and has to, because the editor redraws the prompt on
+// every keystroke, so a caller that already waited has consumed the prompt and
+// a second wait blocks on one that is never drawn again. The flag says whether
+// the prompt has been consumed since the last key went out, so finish waits
+// exactly when a wait is owed. A call site that waits and one that does not are
+// both correct, which is the property the two other helpers do not yet have and
+// the one that makes the rule unforgettable.
+//
+// What this is not: a live bug removed. These sessions hand the Shell a buffer
+// for Out and Err and only the terminal for In, so the output a caller waits
+// on never crosses the pseudo-terminal, and the #635 window does not open the
+// way it does for capturingSession — which gives the Shell the terminal for
+// all three. Measured, with the wait taken out of both helpers entirely and
+// run on Linux at one core under load: the conduit test fails 6 times in 60,
+// and three callers of *this* helper fail 0 times in 200 each. So the wait
+// here is preventive and costs one prompt. It is worth having because the
+// susceptibility is a property of how a session was wired and not of the rule,
+// and the next test to want the editor's drawing on a real terminal will wire
+// it the other way — #635 is what happens then, and the fifth instance is the
+// one this is meant to prevent rather than to fix.
+type promptSession struct {
+	t        *testing.T
+	control  *os.File
+	out      *syncBuffer
+	errs     *syncBuffer
+	path     string
+	done     chan error
+	tty      *os.File
+	atPrompt bool
+	finished bool
+}
+
+// send puts keys on the terminal, and records that the shell is no longer
+// known to be reading.
+func (s *promptSession) send(keys string) {
+	s.t.Helper()
+	s.atPrompt = false
+	if _, err := s.control.WriteString(keys); err != nil {
+		s.t.Fatal(err)
+	}
+}
+
+// waitFor waits for anything that is not a prompt. It says nothing about
+// whether the shell is reading again, because output arrives while the
+// terminal is still being handed back — which is exactly the window #635 is
+// about, and exactly the mistake #1014 fixed in the other helper.
+func (s *promptSession) waitFor(want, what string) {
+	s.t.Helper()
+	waitFor(s.t, s.out, want, what)
+}
+
+// waitForPrompt waits for the next prompt, which is drawn after raw mode is
+// restored and immediately before the read — an order the two cannot swap.
+func (s *promptSession) waitForPrompt(what string) {
+	s.t.Helper()
+	waitFor(s.t, s.out, "$ ", what)
+	s.atPrompt = true
+}
+
+// finish ends the session with a ^D, once the shell is reading again.
+func (s *promptSession) finish() {
+	s.t.Helper()
+	if s.finished {
+		return
+	}
+	s.finished = true
+	if !s.atPrompt {
+		s.waitForPrompt("the prompt that says the shell is reading again")
+	}
+	s.send("\x04")
+	select {
+	case err := <-s.done:
+		if err != nil {
+			s.t.Fatal(err)
+		}
+	case <-time.After(20 * time.Second):
+		s.t.Fatal("the shell did not exit on ^D")
+	}
+	_ = s.tty.Close()
+	_ = s.control.Close()
+}
+
 // atThePrompt starts a session on a pseudo-terminal with a history of its own.
-func atThePrompt(t *testing.T, vars map[string]string, style HistoryStyle, seeded ...string) (*os.File, *syncBuffer, *syncBuffer, string, func()) {
+func atThePrompt(t *testing.T, vars map[string]string, style HistoryStyle, seeded ...string) *promptSession {
 	t.Helper()
 	return atThePromptWith(t, vars, style, nil, seeded...)
 }
@@ -45,7 +145,7 @@ func atThePromptWith(
 	style HistoryStyle,
 	prepare func(*interp.Runner),
 	seeded ...string,
-) (*os.File, *syncBuffer, *syncBuffer, string, func()) {
+) *promptSession {
 	t.Helper()
 	control, tty, err := pty.Open()
 	if err != nil {
@@ -77,24 +177,45 @@ func atThePromptWith(
 		done <- err
 	}()
 
-	waitFor(t, out, "$ ", "the first prompt")
-	finish := func() {
-		t.Helper()
-		if _, err := control.WriteString("\x04"); err != nil {
-			t.Fatal(err)
-		}
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Fatal(err)
+	sess := &promptSession{t: t, control: control, out: out, errs: errs, path: path, done: done, tty: tty}
+	sess.waitForPrompt("the first prompt")
+	return sess
+}
+
+// TestASessionEndsWhetherOrNotTheCallerWaitedForThePrompt is the ownership
+// rule as something that runs, and it is the half #1018 could not have by
+// folding.
+//
+// Two callers, identical but for one line: one leaves the prompt entirely to
+// finish, and one waits for it itself because it wants to assert on what the
+// prompt was. Both have to end the session. That is what "the helper owns it"
+// has to mean if it is to be worth more than a convention — a rule that only
+// works when the caller also knows the rule is not owned anywhere.
+//
+// Without the flag the second caller hangs for the full deadline: the buffer's
+// cursor has moved past the prompt it consumed, and finish's own wait then
+// blocks on one that is never drawn again. That is the measured reason the
+// naive fold fails, and with the call sites of the day it failed all seven.
+func TestASessionEndsWhetherOrNotTheCallerWaitedForThePrompt(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		waitsForItself bool
+	}{
+		{"the caller leaves the prompt to finish", false},
+		{"the caller waited for the prompt itself", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sess := atThePrompt(t, nil, HistoryStyle{})
+			// An expression, so the wait on its value cannot be answered by
+			// the terminal echoing the line back.
+			sess.send("echo mark-$((6*7))\r")
+			sess.waitFor("mark-42", "the command's output")
+			if tc.waitsForItself {
+				sess.waitForPrompt("the prompt after the line ran")
 			}
-		case <-time.After(20 * time.Second):
-			t.Fatal("the shell did not exit on ^D")
-		}
-		_ = tty.Close()
-		_ = control.Close()
+			sess.finish()
+		})
 	}
-	return control, out, errs, path, finish
 }
 
 // `C-r` at a real prompt finds an earlier line and runs it.
@@ -103,33 +224,25 @@ func TestTheTerminalLoopSearchesTheHistory(t *testing.T) {
 		SearchPrompt:       "(reverse-i-search)`%s': ",
 		SearchFailedPrompt: "(failed reverse-i-search)`%s': ",
 	}
-	control, out, _, _, finish := atThePrompt(t, nil, style, "echo alpha", "echo beta")
+	sess := atThePrompt(t, nil, style, "echo alpha", "echo beta")
 
-	if _, err := control.WriteString("\x12alpha"); err != nil {
-		t.Fatal(err)
-	}
+	sess.send("\x12alpha")
 	// The wording arrives before the line is accepted, which is the half a
 	// test of the returned string cannot see.
-	waitFor(t, out, "(reverse-i-search)`alpha': echo alpha", "the search on screen")
-	if _, err := control.WriteString("\r"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, out, "alpha\n", "the output of the line the search found")
-	waitFor(t, out, "$ ", "the prompt after the line ran")
-	finish()
+	sess.waitFor("(reverse-i-search)`alpha': echo alpha", "the search on screen")
+	sess.send("\r")
+	sess.waitFor("alpha\n", "the output of the line the search found")
+	sess.finish()
 }
 
 // The up arrow reaches what an earlier session left, and the search reaches
 // past the newest of it.
 func TestTheTerminalLoopRecallsWhatWasLoaded(t *testing.T) {
-	control, out, _, _, finish := atThePrompt(t, nil, HistoryStyle{}, "echo alpha", "echo beta")
+	sess := atThePrompt(t, nil, HistoryStyle{}, "echo alpha", "echo beta")
 
-	if _, err := control.WriteString("\x1b[A\x1b[A\r"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, out, "alpha\n", "two steps back through the loaded history")
-	waitFor(t, out, "$ ", "the prompt after the line ran")
-	finish()
+	sess.send("\x1b[A\x1b[A\r")
+	sess.waitFor("alpha\n", "two steps back through the loaded history")
+	sess.finish()
 }
 
 // The knobs reach the loop, and the two lists they produce are both right: the
@@ -137,26 +250,19 @@ func TestTheTerminalLoopRecallsWhatWasLoaded(t *testing.T) {
 func TestTheTerminalLoopHonorsTheKnobs(t *testing.T) {
 	style := HistoryStyle{Control: "HISTCONTROL", Ignore: "HISTIGNORE"}
 	vars := map[string]string{"HISTCONTROL": "ignorespace"}
-	control, out, _, path, finish := atThePrompt(t, vars, style, "echo seeded")
+	sess := atThePrompt(t, vars, style, "echo seeded")
 
 	for _, line := range []string{" echo hidden\r", "echo kept\r"} {
-		if _, err := control.WriteString(line); err != nil {
-			t.Fatal(err)
-		}
-		waitFor(t, out, "$ ", "the prompt after the line ran")
+		sess.send(line)
+		sess.waitForPrompt("the prompt after the line ran")
 	}
 	// The up arrow skips straight past the hidden line to the kept one.
-	if _, err := control.WriteString("\x1b[A\x1b[A"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, out, "$ echo seeded", "the entry before the kept one, the hidden line having been dropped")
-	if _, err := control.WriteString("\x03"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, out, "$ ", "the prompt after the line was abandoned")
-	finish()
+	sess.send("\x1b[A\x1b[A")
+	sess.waitFor("$ echo seeded", "the entry before the kept one, the hidden line having been dropped")
+	sess.send("\x03")
+	sess.finish()
 
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(sess.path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,22 +278,19 @@ func TestTheTerminalLoopHonorsTheKnobs(t *testing.T) {
 // up arrow reach two of them and stops there.
 func TestTheTerminalLoopBoundsWhatItRecalls(t *testing.T) {
 	vars := map[string]string{"HISTSIZE": "2"}
-	control, out, _, path, finish := atThePrompt(t, vars, HistoryStyle{},
+	sess := atThePrompt(t, vars, HistoryStyle{},
 		"echo one", "echo two", "echo three", "echo four")
 
 	// Four steps back, on a list two long: the fourth and third are
 	// reachable and the walk stops rather than wrapping.
-	if _, err := control.WriteString("\x1b[A\x1b[A\x1b[A\x1b[A\r"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, out, "three\n", "the oldest line HISTSIZE allows")
-	waitFor(t, out, "$ ", "the prompt after the line ran")
-	finish()
+	sess.send("\x1b[A\x1b[A\x1b[A\x1b[A\r")
+	sess.waitFor("three\n", "the oldest line HISTSIZE allows")
+	sess.finish()
 
 	// And the file follows, because HISTFILESIZE defaults to HISTSIZE.
 	// Measured: bash 5.3.15 given only `HISTSIZE=2` leaves two lines in the
 	// file however many were there before.
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(sess.path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,17 +307,14 @@ func TestTheTerminalLoopBoundsWhatItRecalls(t *testing.T) {
 // variable being read for both.
 func TestABigFileBoundKeepsWhatASmallHistsizeCannotRecall(t *testing.T) {
 	vars := map[string]string{"HISTSIZE": "2", "HISTFILESIZE": "100"}
-	control, out, _, path, finish := atThePrompt(t, vars, HistoryStyle{},
+	sess := atThePrompt(t, vars, HistoryStyle{},
 		"echo one", "echo two", "echo three", "echo four")
 
-	if _, err := control.WriteString("echo added\r"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, out, "added\n", "the line running")
-	waitFor(t, out, "$ ", "the prompt after the line ran")
-	finish()
+	sess.send("echo added\r")
+	sess.waitFor("added\n", "the line running")
+	sess.finish()
 
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(sess.path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,27 +381,20 @@ func TestTheTerminalLoopHonorsAnOptionSpelledKnob(t *testing.T) {
 		return false, false
 	}
 	prepare := func(r *interp.Runner) { r.SetOptionNamespace(namespace) }
-	control, out, _, path, finish := atThePromptWith(t, nil, style, prepare, "echo seeded")
+	sess := atThePromptWith(t, nil, style, prepare, "echo seeded")
 
 	for _, line := range []string{" echo hidden\r", "echo kept\r"} {
-		if _, err := control.WriteString(line); err != nil {
-			t.Fatal(err)
-		}
-		waitFor(t, out, "$ ", "the prompt after the line ran")
+		sess.send(line)
+		sess.waitForPrompt("the prompt after the line ran")
 	}
 	// Two steps back reaches the seeded line, the space-led one having been
 	// dropped from the list as well as from the file.
-	if _, err := control.WriteString("\x1b[A\x1b[A"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, out, "$ echo seeded", "the entry before the kept one, the space-led line having been dropped")
-	if _, err := control.WriteString("\x03"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, out, "$ ", "the prompt after the line was abandoned")
-	finish()
+	sess.send("\x1b[A\x1b[A")
+	sess.waitFor("$ echo seeded", "the entry before the kept one, the space-led line having been dropped")
+	sess.send("\x03")
+	sess.finish()
 
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(sess.path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,26 +424,19 @@ func TestTheTerminalLoopKeepsAPatternIgnoredLineOnTheArrow(t *testing.T) {
 	prepare := func(r *interp.Runner) {
 		r.SetOptionNamespace(func(string) (bool, bool) { return false, false })
 	}
-	control, out, _, path, finish := atThePromptWith(t, vars, style, prepare, "echo seeded")
+	sess := atThePromptWith(t, vars, style, prepare, "echo seeded")
 
-	if _, err := control.WriteString("echo hidden\r"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, out, "hidden\n", "the ignored line still running")
-	waitFor(t, out, "$ ", "the prompt after the line ran")
+	sess.send("echo hidden\r")
+	sess.waitFor("hidden\n", "the ignored line still running")
+	sess.waitFor("$ ", "the prompt after the line ran")
 	// One step back is the ignored line itself, which is the half bash does
 	// not agree with.
-	if _, err := control.WriteString("\x1b[A"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, out, "$ echo hidden", "the ignored line, still on the arrow")
-	if _, err := control.WriteString("\x03"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, out, "$ ", "the prompt after the line was abandoned")
-	finish()
+	sess.send("\x1b[A")
+	sess.waitFor("$ echo hidden", "the ignored line, still on the arrow")
+	sess.send("\x03")
+	sess.finish()
 
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(sess.path)
 	if err != nil {
 		t.Fatal(err)
 	}

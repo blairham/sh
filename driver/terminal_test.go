@@ -363,6 +363,25 @@ func (s *screen) awaitReadyForInput(t *testing.T) {
 // The wait belongs in here rather than at each call site: three tests end a
 // session and every one of them had the wait missing, so the way to keep a
 // fourth from repeating it is to leave no way to type the byte without it.
+//
+// This is the oldest of the three session helpers and the rule the other two
+// were settled onto by #1018: wait for the next prompt before sending a key,
+// and the *helper* does the waiting. `repl` has the other two — capturingSession
+// and promptSession, both in package repl, which cannot reach this one because
+// driver imports repl and the reuse would be a cycle. So the rule is shared
+// and the code is not, and each of the three says so where it is owned.
+//
+// The difference worth knowing before adding a call site: the two in repl
+// track whether the prompt has already been consumed, and this one does not.
+// screen carries the same cursor theirs does — awaitReadyForInput is await,
+// and await calls seek — so a caller that waits for the prompt itself and then
+// calls this hangs on a prompt that is never drawn again, exactly as it does
+// there. Nothing here prevents that; what keeps it from happening is that all
+// three callers wait for their command's *output* and leave the prompt to this
+// method, which is the convention #685 established and is a convention rather
+// than a guarantee. If a fourth caller ever needs the prompt for an assertion
+// of its own, give screen the flag promptSession has rather than adding a
+// second wait here.
 func (s *screen) endSession(t *testing.T, control *os.File) {
 	t.Helper()
 	s.awaitReadyForInput(t)

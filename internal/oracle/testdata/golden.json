@@ -29375,6 +29375,50 @@
         "TimedOut": false
       }
     },
+    "heredoc/a-body-that-never-ended-its-last-line": {
+      "bash": {
+        "Stdout": "body",
+        "Stderr": "\u003cscript\u003e: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "body",
+        "Stderr": "\u003cscript\u003e: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "body",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "body",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "body",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "body",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "heredoc/a-body-that-runs-to-the-end": {
       "bash": {
         "Stdout": "[body]",
@@ -30029,6 +30073,50 @@
       },
       "zsh": {
         "Stdout": "line~EOF x~echo \"st=0\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/two-on-one-command-and-the-last-is-read": {
+      "bash": {
+        "Stdout": "b",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "b",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "b",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "b",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "b",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a~b",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -37305,14 +37393,14 @@
     "opt/set-v-echoes-before-a-remark": {
       "bash": {
         "Stdout": "one~body",
-        "Stderr": "echo one~cat \u003c\u003cEND~body~~\u003cscript\u003e: line 4: warning: here-document at line 2 delimited by end-of-file (wanted `END')",
+        "Stderr": "echo one~cat \u003c\u003cEND~body~\u003cscript\u003e: line 3: warning: here-document at line 2 delimited by end-of-file (wanted `END')",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "one~body",
-        "Stderr": "echo one~cat \u003c\u003cEND~body~~\u003cscript\u003e: line 4: warning: here-document at line 2 delimited by end-of-file (wanted `END')",
+        "Stderr": "echo one~cat \u003c\u003cEND~body~\u003cscript\u003e: line 3: warning: here-document at line 2 delimited by end-of-file (wanted `END')",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -63336,6 +63424,50 @@
       },
       "zsh": {
         "Stdout": "f is a shell function from zsh",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "type/a-body-with-a-here-document-in-it": {
+      "bash": {
+        "Stdout": "f is a function~f () ~{ ~    cat \u003c\u003cE~body~E~~    echo after~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "f is a function~f () ~{ ~    cat \u003c\u003cE~body~E~~    echo after~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "f is a function~f () ~{ ~    cat  \u003c\u003cE~body~E~~    echo after~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "f is a shell function",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "f is a function",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "f is a shell function from \u003cscript\u003e",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

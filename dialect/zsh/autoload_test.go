@@ -164,20 +164,32 @@ print -r -- "call st=$?"`)
 	}
 }
 
-// `-X` acts on the **innermost** function, not the outermost: an autoloaded
-// name called from inside another function must resolve itself and not its
-// caller. One frame deep cannot tell the two apart.
+// `-X` acts on the **innermost** function, not the outermost. One frame deep
+// cannot tell the two apart, and this is the shape that can: `inner` called
+// from `outer` must replace `inner`. Walking the call stack the wrong way
+// round replaced the *caller* with the callee's file, and nothing caught it —
+// the generated stub uses `+X NAME` and never comes through that path, so
+// only a hand-written `-X` reaches it.
+//
+// zsh prints `INNER` here as well: its `-X` replaces the function *and the
+// shell re-enters it*, so the loaded body runs on the same call. This one
+// replaces and returns, which is why the generated stub says `&& NAME "$@"`
+// — the re-entry is interpreter machinery and the stub is how a body says
+// the same thing. A hand-written `-X` gets the replacement without the
+// re-entry, and that is the whole of the difference.
 func TestMinusXResolvesTheInnermostFunction(t *testing.T) {
-	fp := fpathDir(t, map[string]string{"innerfn": `print -r -- INNER`})
+	fp := fpathDir(t, map[string]string{"inner": `print -r -- INNER`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
-autoload -Uz innerfn
-outer() { innerfn; print -r -- "after st=$?"; }
+inner() { builtin autoload -X; print -r -- "after st=$?"; }
+outer() { inner; }
 outer
+typeset -f inner
 typeset -f outer`)
-	want := "INNER\nafter st=0\n" +
-		"outer () {\n\tinnerfn\n\tprint -r -- \"after st=$?\"\n}\n"
+	want := "after st=0\n" +
+		"inner () {\n\tprint -r -- INNER\n}\n" +
+		"outer () {\n\tinner\n}\n"
 	if out != want || st != 0 {
-		t.Errorf("a nested autoload = %q (status %d), want %q", out, st, want)
+		t.Errorf("a nested -X = %q (status %d), want %q", out, st, want)
 	}
 }
 

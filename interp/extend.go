@@ -426,6 +426,12 @@ func (r *Runner) DefineFunction(name, body string) bool {
 	}
 	decl, ok := pipe.Cmds[0].(*syntax.FuncDecl)
 	if !ok {
+		// Unreachable by construction: the text this builds is a definition,
+		// so a parse that got this far produced one. Kept because storing a
+		// nil declaration would turn a bad body into a crash on the next
+		// call rather than a false here, and a mutant that returns true
+		// instead survives for exactly that reason — there is no body that
+		// reaches it.
 		return false
 	}
 	if r.funcs == nil {

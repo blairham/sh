@@ -3709,6 +3709,13 @@ What was built, all through the extension seam — registered builtins in each
   replaces the definition or fails, and `&&` stops on the failure. The
   behaviour is the same and the text is not.
 
+  `-X` acts on the **innermost** function, and zsh replaces it *and
+  re-enters it*, so the loaded body runs on the same call. Here it replaces
+  and returns — the re-entry is interpreter machinery, and the stub's
+  `&& NAME "$@"` is how a body says the same thing. A hand-written `-X`
+  therefore gets the replacement without the run, which is the whole of the
+  difference.
+
   Letters: zsh has `d k m r R t T U w W X z`, measured a letter at a time
   against all fifty-two, and refuses every other as `bad option`. `-U`
   (no alias expansion while the file is read) and `-z` (zsh-style
@@ -3718,6 +3725,12 @@ What was built, all through the extension seam — registered builtins in each
   tracing (`-t`/`-T`), the ksh-style and pattern forms (`-d`/`-k`/`-m`),
   resolving the path now (`-r`/`-R`) and compiled `.zwc` files
   (`-w`/`-W`).
+
+  A file that is found but is not a body this shell can read gets its own
+  complaint — `NAME: bad function definition` — rather than "not found",
+  which would send somebody looking for a file that is right there. zsh
+  reports the parse error itself, `badfn:1: parse error near 'fi'`; the
+  status is the same and the reason is not said here.
 
   ksh93 has the word too — `autoload` is `typeset -fu` there — which is
   why its corpus column is a `typeset` usage line rather than a

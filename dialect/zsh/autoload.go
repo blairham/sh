@@ -207,10 +207,15 @@ func autoloadBad(r *interp.Runner) int {
 // autoloadEnclosingFunction is the name of the function this builtin is
 // running inside, which is what a bare `-X` acts on.
 func autoloadEnclosingFunction(r *interp.Runner) (string, bool) {
-	frames := r.CallStack()
-	for i := len(frames) - 1; i >= 0; i-- {
-		if frames[i].Name != "" {
-			return frames[i].Name, true
+	// CallStack is **innermost first**, with the script's own frame last, so
+	// this walks forwards. It walked backwards once and found the outermost
+	// function instead: `inner` called from `outer` resolved `outer`, which
+	// is the caller being replaced by the callee's file. Nothing caught it
+	// until a mutant asked, because the generated stub uses `+X NAME` and
+	// never comes through here — only a hand-written `-X` does.
+	for _, f := range r.CallStack() {
+		if f.Name != "" {
+			return f.Name, true
 		}
 	}
 	return "", false

@@ -152,6 +152,20 @@ func TestAScopedDeclarationAsksTheOtherAxisInstead(t *testing.T) {
 	if st != 0 || out != "(none)\nFOO=bar\n" {
 		t.Errorf("got %q status %d, want the attribute back on return", out, st)
 	}
+	// And with the scoped axis answered the other way, the guard is the only
+	// thing standing between the local's own attribute and a name left
+	// unexported for the rest of the script: nothing puts the attribute back
+	// where the local inherited it rather than taking it off.
+	out, st = exportResetRun(t,
+		`export FOO=bar; f() { typeset FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; `+
+			`/usr/bin/env | grep '^FOO=' || echo "(none)"`,
+		func(s *Semantics) {
+			s.DeclarationAssignmentClearsTheExportAttribute = Yes
+			s.LocalInheritsTheExportAttribute = Yes
+		})
+	if st != 0 || out != "FOO=baz\nFOO=bar\n" {
+		t.Errorf("got %q status %d, want the local's value inside and the outer name still exported after", out, st)
+	}
 	// And where the dialect gives that declaration no scope, the assignment
 	// reaches the caller and this axis is the one that answers — for good.
 	out, st = axisRun(t,

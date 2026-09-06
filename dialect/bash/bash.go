@@ -704,6 +704,17 @@ func Diagnostics() interp.Diagnostics {
 		ArithBadOperator:      "arithmetic syntax error: invalid arithmetic operator",
 		ArithFailureStatus:    1,
 		SyntaxUnexpected:      "syntax error near unexpected token `%[1]s'",
+		// Inside `[[ ]]` the same token gets two lines and neither is the
+		// one above: a sentence about the construct at the `[[`'s line, then
+		// a shorter `near` at the token's. Measured on bash 5.3.15 —
+		// `[[ -n x` newline `-z "" ]]` names line 1 and then line 2.
+		CondSyntaxPreamble:   "syntax error in conditional expression: unexpected token `%[1]s'",
+		CondSyntaxUnexpected: "syntax error near `%[1]s'",
+		// And a `[[` the input ran out inside of gets a line of its own,
+		// naming the closer it was waiting for. Measured: this shell writes
+		// it for `[[` and for nothing else — `if`, `for`, `case`, `{` and
+		// `(` left open each get the one ordinary line.
+		CondUnterminatedPreamble: "unexpected EOF while looking for `%[1]s'",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.
 		ForNameStatus: 1,

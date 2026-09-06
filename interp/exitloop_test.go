@@ -10,30 +10,53 @@ import (
 
 // `exit` ends the shell from inside a loop as surely as from anywhere else.
 //
-// It did not. The loop carried on, the next round found the shell refusing to
-// run anything, and `while` fell out of its condition and set the status to 0
-// — so `exit 3` exited 0. `until` read the same refusal as its condition
-// still holding and span forever.
+// It did not. The loop carried on and the next round found the shell refusing
+// to run anything, and what happened then depended on the loop: `while` fell
+// out of its condition and set the status to 0, so `exit 3` exited 0, and an
+// endless loop never fell out of anything at all.
+//
+// **Bounded, one case at a time, because half of these cannot fail — they can
+// only hang** (#894). Three of the six run forever if `exit` stops leaving the
+// loop, and a table that ran them all in one function reported the first hang
+// as a package timeout ten minutes later with no snippet in it. A subtest per
+// case with a bound on each says which construct stopped and says it in
+// seconds. See deadline for the rule and for what it costs.
+//
+// Which one hangs is not the one the comment on loopControl used to name, and
+// it was worth measuring rather than assuming. Dropping `controlExit` from
+// that case and taking a goroutine dump: `while` and `until` both *finish*,
+// because `loop` has a guard of its own — it refuses another round the moment
+// control flow is set, whatever loopControl said — and `for` over a list is
+// finite whatever happens. The one that spins is `for ((;;))`, in
+// forArithClause, which has no such guard and no end of its own, so
+// loopControl's fast exit is the only thing that stops it. The stack sits in
+// forArithPart evaluating the step expression, round after round.
 func TestExitLeavesALoop(t *testing.T) {
 	for _, tc := range []struct {
-		src    string
-		status int
+		name, src string
+		status    int
 	}{
-		{`g() { exit 3; }; while :; do g; done; echo after`, 3},
-		{`g() { exit 3; }; until false; do g; done; echo after`, 3},
-		{`g() { exit 3; }; for i in 1 2 3; do g; done; echo after`, 3},
-		{`g() { exit 3; }; for ((;;)); do g; done; echo after`, 3},
-		{`while :; do exit 3; done; echo after`, 3},
+		{"a while loop", `g() { exit 3; }; while :; do g; done; echo after`, 3},
+		{"an until loop", `g() { exit 3; }; until false; do g; done; echo after`, 3},
+		{"a for over a list", `g() { exit 3; }; for i in 1 2 3; do g; done; echo after`, 3},
+		{"an endless arithmetic for", `g() { exit 3; }; for ((;;)); do g; done; echo after`, 3},
+		{"written into the body rather than called", `while :; do exit 3; done; echo after`, 3},
 		// Out through every loop it is inside.
-		{`g() { exit 3; }; while :; do while :; do g; done; done; echo after`, 3},
+		{"out through both of two loops", `g() { exit 3; }; while :; do while :; do g; done; done; echo after`, 3},
 	} {
-		out, status := run(t, tc.src, nil)
-		if status != tc.status {
-			t.Errorf("%s: status %d, want %d", tc.src, status, tc.status)
-		}
-		if strings.Contains(out, "after") {
-			t.Errorf("%s: kept going — %q", tc.src, out)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			var out string
+			var status int
+			deadline(t, tc.name+" — "+tc.src, func() {
+				out, status = run(t, tc.src, nil)
+			})
+			if status != tc.status {
+				t.Errorf("%s: status %d, want %d", tc.src, status, tc.status)
+			}
+			if strings.Contains(out, "after") {
+				t.Errorf("%s: kept going — %q", tc.src, out)
+			}
+		})
 	}
 }
 

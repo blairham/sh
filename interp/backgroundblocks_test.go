@@ -10,7 +10,6 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-	"time"
 )
 
 // blockingFifo makes a named pipe with nobody at either end, so that opening
@@ -34,26 +33,6 @@ func blockingFifo(t *testing.T) string {
 		_ = w.Close()
 	})
 	return path
-}
-
-// deadline runs body and fails the test if it has not finished in time.
-//
-// A hang is not a wrong answer, and asserting on the output cannot catch one:
-// the test simply never returns and the package reports a panic ten minutes
-// later naming whichever case the binary was in. So the wait is bounded and
-// the failure says what did not happen — the shape #1002 was solved with.
-func deadline(t *testing.T, what string, body func()) {
-	t.Helper()
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		body()
-	}()
-	select {
-	case <-done:
-	case <-time.After(20 * time.Second):
-		t.Fatalf("%s did not finish: the shell is still waiting", what)
-	}
 }
 
 // `&` comes back even when the job's first act is to wait for something that

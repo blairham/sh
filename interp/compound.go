@@ -340,10 +340,21 @@ func (r *Runner) loopControl() bool {
 		// Leaving `exit` out was not a missing case so much as an invisible
 		// one. The loop carried on, the next round found the shell refusing
 		// to run anything, and `while` then fell out of its condition and set
-		// the status to 0 — so `exit 3` from inside one exited 0. `until`
-		// read the same refusal as its condition still holding and span
-		// forever. A `for` over a finite list happened to come out right,
-		// which is why this survived: the shape most scripts use hid it.
+		// the status to 0 — so `exit 3` from inside one exited 0. A `for`
+		// over a finite list happened to come out right, which is why this
+		// survived: the shape most scripts use hid it.
+		//
+		// For `exit` it is *not* only a fast exit, and which loop that is
+		// true of was measured rather than assumed (#894). Dropping
+		// controlExit from this case and taking a goroutine dump: `while`
+		// and `until` both still finish, because loop refuses another round
+		// the moment control flow is set whatever this returns, and a `for`
+		// over a list runs out of list. `for ((;;))` does neither — it has no
+		// guard of its own and no end of its own — so this line is the only
+		// thing that stops it, and without it the shell spins in
+		// forArithPart evaluating the step for ever. That is why
+		// TestExitLeavesALoop runs each of its cases under a bound: the
+		// arithmetic one cannot fail, it can only hang.
 		return true
 	}
 	return false

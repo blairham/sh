@@ -177,6 +177,18 @@ func TestARangeOverAScalarReadAsAnElement(t *testing.T) {
 	if st != 0 || out != "sh: unset: a: not an array variable\nst=1 [hello]\n" {
 		t.Errorf("out of reach: got %q status %d, want the scalar refusal", out, st)
 	}
+	// And a span with nothing in it reaches no element either, however close
+	// to the one a scalar is it begins: an empty span is not the element it
+	// stands in front of.
+	out, st = rangeUnsetRun(t, `a=hello; unset "a[0,-2]"; echo "st=$? [${a-UNSET}]"`,
+		func(s *Semantics) {
+			s.ScalarSubscriptIsACharacter = No
+			s.ArrayBaseIsZero = Yes
+			s.UnsetSubscriptOnAScalarIsAnError = Yes
+		})
+	if st != 0 || out != "sh: unset: a: not an array variable\nst=1 [hello]\n" {
+		t.Errorf("empty span: got %q status %d, want the scalar refusal", out, st)
+	}
 }
 
 func TestARangeRemovesTheSpanWhereThatIsTheAnswer(t *testing.T) {

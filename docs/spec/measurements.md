@@ -3011,6 +3011,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `location/a-message-from-inside-a-function` | **2>** `<shell>: 2: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 1: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: not found` *(status 127)* | **2>** `f:1: command not found: nosuchcmd` *(status 127)* |
 | `location/a-message-from-inside-a-sourced-file` | `st=127` **2>** `<script>: 1: ./inc.sh: nosuchcmd-xyz: not found` | `st=127` **2>** `./inc.sh: line 1: nosuchcmd-xyz: command not found` | `st=127` **2>** `./inc.sh: line 1: nosuchcmd-xyz: command not found` | `st=127` **2>** `./inc.sh: line 1: nosuchcmd-xyz: command not found` | `st=127` **2>** `<script>[2]: .: line 1: nosuchcmd-xyz: not found` | `st=127` **2>** `./inc.sh:1: command not found: nosuchcmd-xyz` |
 | `location/a-message-from-a-function-a-sourced-file-defined` | `st=127` **2>** `<script>: 2: nosuchcmd-xyz: not found` | `st=127` **2>** `./inc.sh: line 2: nosuchcmd-xyz: command not found` | `st=127` **2>** `./inc.sh: line 2: nosuchcmd-xyz: command not found` | `st=127` **2>** `./inc.sh: line 2: nosuchcmd-xyz: command not found` | `st=127` **2>** `<script>: line 2: nosuchcmd-xyz: not found` | `st=127` **2>** `f:1: command not found: nosuchcmd-xyz` |
+| `unterminated/a-substitution-is-quoted-back-with-its-word` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `a$(echo hi'` *(status 1)* |
+| `unterminated/a-substitution-in-a-word-of-its-own-quotes-only-itself` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `$(echo hi'` *(status 1)* |
+| `unterminated/a-word-is-not-cut-at-a-quoted-blank` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `"a b"$(echo hi'` *(status 1)* |
 | `diag/a-line-worth-naming` | `one~st=127` **2>** `<shell>: 2: nosuchcmd: not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 1: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: not found` | `one~st=127` **2>** `<shell>:2: command not found: nosuchcmd` |
 | `diag/a-command-after-an-operator` | `one~st=127` **2>** `<shell>: 3: nosuchcmd: not found` | `one~st=127` **2>** `<shell>: line 3: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 3: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 3: nosuchcmd: not found` | `one~st=127` **2>** `<shell>:3: command not found: nosuchcmd` |
 | `syntax/an-unmatched-double-quote` | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected EOF while looking for matching `"'~<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `abc` | **2>** `<shell>:1: unmatched "` *(status 1)* |
@@ -3117,6 +3120,21 @@ grades it and nothing drift-checks it either, for the same reason.
   . ./inc.sh
   f
   echo st=$?
+  ```
+- `unterminated/a-substitution-is-quoted-back-with-its-word` — the shell that quotes the offending text back quotes the **word** the construct was written in, and this is the shape that says so: `a$(echo hi` and not `$(echo hi`. The assignment-prefix rows say the same thing and are read equally well as naming the *command*, which they are not — here the command is `echo` and no shell names it
+  ```sh
+  echo a$(echo hi
+  echo after
+  ```
+- `unterminated/a-substitution-in-a-word-of-its-own-quotes-only-itself` — the control the row above needs. Two words in front of the construct and neither is quoted, so what is quoted is the word and nothing before it — a rule about the command would have taken `echo one two $(echo hi` and a rule about the line would have taken the whole line
+  ```sh
+  echo one two $(echo hi
+  echo after
+  ```
+- `unterminated/a-word-is-not-cut-at-a-quoted-blank` — the blank inside the quotes does not end the word, so the quoted text reaches back past it: `"a b"$(echo hi`. It is why the word has to come from the scanner rather than from a search backwards through the source for the previous space, which is the plausible wrong implementation
+  ```sh
+  echo "a b"$(echo hi
+  echo after
   ```
 - `diag/a-line-worth-naming` — ksh93 names the line under `-c` only after the first: `ksh: nosuchcmd: not found` on line 1 and `ksh: line 2: nosuchcmd: not found` here. Every earlier measurement used a one-line `-c`, where naming no line and naming line 1 are the same output
   ```sh

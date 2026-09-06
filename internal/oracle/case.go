@@ -4027,6 +4027,24 @@ EOF
 		Why:        "the delimiter is compared against the *physical line as written*, so `EOF x` is body and not a terminator — unanimously, in a shape that would read as a terminator to anything matching a prefix. The body then runs to the end of the input, which is why the last line is printed rather than run, and bash 5.3 alone remarks that the document ended at end of file where bash 3.2 says nothing. Prior work of our own had this as a rule about prefixes, and the prefix reading is exactly what is false",
 	},
 	{
+		ID: "unterminated/a-substitution-is-quoted-back-with-its-word", Category: "diagnostics", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo a$(echo hi\necho after\n",
+		Why:     "the shell that quotes the offending text back quotes the **word** the construct was written in, and this is the shape that says so: `a$(echo hi` and not `$(echo hi`. The assignment-prefix rows say the same thing and are read equally well as naming the *command*, which they are not — here the command is `echo` and no shell names it",
+	},
+	{
+		ID: "unterminated/a-substitution-in-a-word-of-its-own-quotes-only-itself", Category: "diagnostics", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo one two $(echo hi\necho after\n",
+		Why:     "the control the row above needs. Two words in front of the construct and neither is quoted, so what is quoted is the word and nothing before it — a rule about the command would have taken `echo one two $(echo hi` and a rule about the line would have taken the whole line",
+	},
+	{
+		ID: "unterminated/a-word-is-not-cut-at-a-quoted-blank", Category: "diagnostics", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo \"a b\"$(echo hi\necho after\n",
+		Why:     "the blank inside the quotes does not end the word, so the quoted text reaches back past it: `\"a b\"$(echo hi`. It is why the word has to come from the scanner rather than from a search backwards through the source for the previous space, which is the plausible wrong implementation",
+	},
+	{
 		ID: "heredoc/a-delimiter-that-closes-a-command-substitution", Category: "redirection",
 		Script:  true,
 		Snippet: "v=$(cat <<EOF\na\nEOF)\necho \"v=[$v] st=$?\"\n",

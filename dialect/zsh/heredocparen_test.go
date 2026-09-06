@@ -28,16 +28,17 @@ import (
 // It is not a question about `$( )`. Real zsh refuses `cat <(cat <<EOF` …
 // `EOF)` the same way, which is why both spellings are here.
 //
-// One of these differs from what real zsh prints, and the difference is this
-// shell's already and is shared with the control rather than caused by the
-// shape: the quoted text starts at the `$(` where zsh starts at `v=$(`. That
-// is #1022 and the corpus rows are what grade it.
+// Both of these used to differ from what real zsh prints, and neither does
+// now — which matters here because both differences were this shell's own and
+// were shared with the controls rather than caused by the shape, so this case
+// was pinning them while claiming not to be about them.
 //
-// The `<( )` rows used to differ too — a sentence of the lexer's own and no
-// line at all, because the failure was not a *syntax.Error for a line to be
-// read from. #1023 moved that refusal onto the same footing as `$(`'s, so
-// both spellings now reach the same wording from the same state, which is the
-// claim the last assertion in the loop makes.
+// The quoted text started at the `$(` where zsh starts at `v=$(`: #1022 made
+// it the whole word the construct was written in. And the `<( )` rows got a
+// sentence of the lexer's own with no line at all, because the failure was
+// not a *syntax.Error for a line to be read from: #1023 put that refusal onto
+// the same footing as `$(`'s, so both spellings reach the same wording from
+// the same state, which is the claim the last assertion in the loop makes.
 func TestADelimiterCarryingTheClosingParenLeavesTheConstructOpen(t *testing.T) {
 	for _, c := range []struct {
 		name, src, want string
@@ -49,16 +50,16 @@ func TestADelimiterCarryingTheClosingParenLeavesTheConstructOpen(t *testing.T) {
 		{
 			name: "the delimiter carries the paren",
 			src:  "v=$(cat <<EOF\na\nEOF)\necho x\n",
-			want: "parse error near `$(cat <<EOF'", line: 5,
+			want: "parse error near `v=$(cat <<EOF'", line: 5,
 			control:     "v=$(echo hi\necho x\n",
-			controlWant: "parse error near `$(echo hi'", controlLine: 3,
+			controlWant: "parse error near `v=$(echo hi'", controlLine: 3,
 		},
 		{
 			name: "a second here-document carries it",
 			src:  "v=$(cat <<A\nx\nA\ncat <<B\ny\nB)\necho x\n",
-			want: "parse error near `$(cat <<A'", line: 8,
+			want: "parse error near `v=$(cat <<A'", line: 8,
 			control:     "v=$(cat <<A\nx\nA\ncat <<B\ny\n",
-			controlWant: "parse error near `$(cat <<A'", controlLine: 6,
+			controlWant: "parse error near `v=$(cat <<A'", controlLine: 6,
 		},
 		{
 			name: "parentheses that hold a program without a dollar sign",

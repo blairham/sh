@@ -36,6 +36,22 @@ type Lexer struct {
 	// substitution ends the input once, and it is the quote that is waiting.
 	openWord string
 
+	// wordStart is where the word being read began, kept for the diagnostic
+	// that quotes it back.
+	//
+	// One dialect names the whole word a construct ran out inside rather
+	// than the construct — `v=$(echo hi` and not `$(echo hi` — and the word
+	// is not something the text can be searched backwards for. Quoting is
+	// what makes it so: `echo "a b"$(echo hi` is one word and names all of
+	// it, `echo a\ b$(echo hi` equally, and a scan back to the previous
+	// blank would cut both in half. The scanner is the only thing that knows
+	// where a word started, so it says (#1022).
+	//
+	// Zero outside a word, which is a real state rather than an unset one: a
+	// here-document body that runs out is inside no word, and that dialect
+	// quotes nothing there.
+	wordStart Pos
+
 	// inRegex is set while the token being read is the operand of `=~`. Its
 	// parentheses belong to the regular expression rather than to the shell,
 	// and in two of the three dialects that have `[[ ]]` so does a bare `|`.
@@ -183,7 +199,21 @@ func (l *Lexer) failUnmatched(open Pos, opener, closer, msg string) {
 	if l.err != nil {
 		return
 	}
-	near := l.src[open.Offset:]
+	// From the start of the word rather than from the opener, which is what
+	// the dialect that quotes this names: the construct is part of a word and
+	// the word is what was being read. An assignment prefix is inside it —
+	// `v=$(echo hi` is one word — and so is anything quoted, which is why
+	// this comes from the scanner rather than from a search backwards
+	// through the text (#1022).
+	//
+	// No comparison between the two positions: the word *contains* the
+	// opener, so its start is never past it, and a guard saying so was a
+	// mutant nothing could kill.
+	from := open.Offset
+	if l.wordStart.IsValid() {
+		from = l.wordStart.Offset
+	}
+	near := l.src[from:]
 	if i := strings.IndexByte(near, '\n'); i >= 0 {
 		near = near[:i]
 	}
@@ -734,6 +764,12 @@ func (l *Lexer) scanArgumentGroup() string {
 // quoting. The spans are the point: a"b c"d is one word of three spans, and
 // only the unquoted ones are subject to splitting and globbing later.
 func (l *Lexer) scanWord(start Pos) Token {
+	// Cleared on the way out rather than left behind: a failure raised after
+	// the word is read belongs to no word, and a stale start would quote one
+	// that had already finished.
+	l.wordStart = start
+	defer func() { l.wordStart = Pos{} }()
+
 	var spans []Span
 	var lit strings.Builder
 	litPos := start

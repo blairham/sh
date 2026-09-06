@@ -231,7 +231,7 @@ func (r *Runner) currentFrameSerial() int {
 // trap set in the script still fires inside a file it sources.
 func (r *Runner) currentFunctionFrameSerial() int {
 	for i := len(r.frames) - 1; i >= 0; i-- {
-		if r.frames[i].Name != "source" {
+		if r.frames[i].Name != sourceFrameName {
 			return r.frames[i].serial
 		}
 	}

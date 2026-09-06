@@ -6978,9 +6978,24 @@ the same word, and only expansion differs. It is also silent in the `&>`
 sense — `echo {1..3}` prints something either way, and nothing reports
 that one of them is not what was meant.
 
-**`DollarZeroInFunctionIsFunctionName`** — bash no · dash no · ksh93 no · zsh yes
+**`DollarZeroNamesTheInnermostCall`** — bash no · dash no · ksh93 no · zsh yes
 
-Makes `$0` inside a function the function's name. True only in zsh.
+Makes `$0` the innermost thing the shell has been called into rather than the
+shell's own name: the function being run, or the file being sourced. One field
+because no shell splits the two — zsh has both under a single option and
+loses both when it is turned off, and the other four have neither.
+
+Innermost, and measured: a function that sources a file reports the *file*
+while that file runs and its own name again afterwards, and a function defined
+in a sourced file reports its own name rather than the file it came from. The
+file is named as the operand was written, so `. ./inc.sh` reports `./inc.sh`.
+
+Startup files are outside it. They are read by the shell rather than sourced
+by a script, and `$0` inside `~/.zshrc` is the path of the zsh binary.
+
+The value `$0` had before any of this is `ZSH_ARGZERO`, which is a wording
+rather than an axis: the zsh dialect's prelude sets it and no other dialect
+has the name.
 
 **`EqualsExpansion`** — bash no · dash no · ksh93 no · zsh yes
 

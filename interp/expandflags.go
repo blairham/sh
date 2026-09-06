@@ -450,7 +450,7 @@ func (r *Runner) refusePromptEscape(e *syntax.ParamExpr, c byte) (string, bool) 
 func (r *Runner) promptUnitName() string {
 	if len(r.frames) > 0 {
 		f := r.frames[len(r.frames)-1]
-		if f.Name != "" && f.Name != "source" {
+		if f.Name != "" && f.Name != sourceFrameName {
 			return f.Name
 		}
 		if f.File != "" {

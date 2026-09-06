@@ -955,6 +955,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `axis/echo-backslash` | `expanded` | `literal` | `literal` | `literal` | `literal` | `expanded` |
 | `axis/pipeline-last-element` | `[]` | `[]` | `[]` | `[]` | `[x]` | `[x]` |
 | `axis/dollar-zero-in-function` | `<shell>` | `<shell>` | `sh` | `<shell>` | `<shell>` | `f` |
+| `axis/dollar-zero-in-a-sourced-file` | `before=[<script>]~in=[<script>]~after=[<script>]` | `before=[<script>]~in=[<script>]~after=[<script>]` | `before=[<script>]~in=[<script>]~after=[<script>]` | `before=[<script>]~in=[<script>]~after=[<script>]` | `before=[<script>]~in=[<script>]~after=[<script>]` | `before=[<script>]~in=[./inc.sh]~after=[<script>]` |
+| `axis/dollar-zero-in-a-file-read-by-source` | `st=127` **2>** `<script>: 2: source: not found` | `in=[<script>]~st=0` | `in=[<script>]~st=0` | `in=[<script>]~st=0` | `in=[<script>]~st=0` | `in=[./inc.sh]~st=0` |
+| `axis/dollar-zero-in-a-function-a-sourced-file-defined` | `in=[<script>]` | `in=[<script>]` | `in=[<script>]` | `in=[<script>]` | `in=[<script>]` | `in=[f]` |
+| `axis/dollar-zero-in-a-nested-sourced-file` | `mid=[<script>]~deep=[<script>]~mid-again=[<script>]` | `mid=[<script>]~deep=[<script>]~mid-again=[<script>]` | `mid=[<script>]~deep=[<script>]~mid-again=[<script>]` | `mid=[<script>]~deep=[<script>]~mid-again=[<script>]` | `mid=[<script>]~deep=[<script>]~mid-again=[<script>]` | `mid=[./mid.sh]~deep=[./deep.sh]~mid-again=[./mid.sh]` |
+| `axis/dollar-zero-in-a-file-sourced-from-a-function` | `fn=[<script>]~in=[<script>]~fn-again=[<script>]` | `fn=[<script>]~in=[<script>]~fn-again=[<script>]` | `fn=[<script>]~in=[<script>]~fn-again=[<script>]` | `fn=[<script>]~in=[<script>]~fn-again=[<script>]` | `fn=[<script>]~in=[<script>]~fn-again=[<script>]` | `fn=[f]~in=[./inc.sh]~fn-again=[f]` |
+| `axis/dollar-zero-in-a-file-found-on-path` | `in=[<script>]` | `in=[<script>]` | `in=[<script>]` | `in=[<script>]` | `in=[<script>]` | `in=[inc.sh]` |
 | `axis/local-builtin` | `1` | `1` | `1` | `1` | **2>** `<shell>: local: not found` | `1` |
 | `axis/shift-past-end` | **2>** `<shell>: 1: shift: can't shift that many` *(status 2)* | `survived` | `survived` **2>** `<shell>: line 1: shift: 5: shift count out of range` | `survived` | **2>** `<shell>: shift: 5: bad number` *(status 1)* | `survived` **2>** `<shell>:shift:1: shift count must be <= $#` |
 | `axis/local-outside-a-function` | **2>** `<script>: 1: local: not in a function` *(status 2)* | `x=~end` **2>** `<script>: line 1: local: can only be used in a function` | `x=~end` **2>** `<script>: line 1: local: can only be used in a function` | `x=~end` **2>** `<script>: line 1: local: can only be used in a function` | `x=~end` **2>** `<script>: line 1: local: not found` | `x=2~end` |
@@ -996,6 +1002,44 @@ grades it and nothing drift-checks it either, for the same reason.
 - `axis/dollar-zero-in-function` — zsh reports the function name where the others report the shell
   ```sh
   f() { echo "$0"; }; f
+  ```
+- `axis/dollar-zero-in-a-sourced-file` — `$0` inside a sourced file is the *sourced file* in zsh and the outer script in the other five, and it goes back afterwards in all six — which is what makes it a property of where the shell is rather than of what it has read. zsh names the operand as written, `./inc.sh` and not the resolved path. This is the gate a plugin manager on this machine computes its own install directory from (#978)
+  ```sh
+  printf 'echo "in=[$0]"\n' > inc.sh
+  echo "before=[$0]"
+  . ./inc.sh
+  echo "after=[$0]"
+  ```
+- `axis/dollar-zero-in-a-file-read-by-source` — the other spelling of the same route, and the same answer wherever the name exists: `source` moves `$0` in zsh exactly as `.` does. dash is the column that answers something else entirely, because it has no `source` at all
+  ```sh
+  printf 'echo "in=[$0]"\n' > inc.sh
+  source ./inc.sh
+  echo st=$?
+  ```
+- `axis/dollar-zero-in-a-function-a-sourced-file-defined` — the function wins over the file it came from: zsh reports `f` and not `./inc.sh`, which is the evidence that `$0` follows the innermost call rather than remembering where anything was defined. The other five report the script, as they do everywhere
+  ```sh
+  printf 'f() { echo "in=[$0]"; }\n' > inc.sh
+  . ./inc.sh
+  f
+  ```
+- `axis/dollar-zero-in-a-nested-sourced-file` — a file sourced by a sourced file: zsh reports the innermost of the three and restores the middle one when it returns, so the answer is a stack and not a flag. The other five report the outermost script for all three lines
+  ```sh
+  printf 'echo "deep=[$0]"\n' > deep.sh
+  printf 'echo "mid=[$0]"\n. ./deep.sh\necho "mid-again=[$0]"\n' > mid.sh
+  . ./mid.sh
+  ```
+- `axis/dollar-zero-in-a-file-sourced-from-a-function` — the case that settles which of the two halves is really being asked. A function that sources a file reports the *file* while it runs and its own name again afterwards, so it is the innermost call and not the innermost function — a rule written as `is a function on the stack` gets this one wrong
+  ```sh
+  printf 'echo "in=[$0]"\n' > inc.sh
+  f() { echo "fn=[$0]"; . ./inc.sh; echo "fn-again=[$0]"; }
+  f
+  ```
+- `axis/dollar-zero-in-a-file-found-on-path` — the one route where a sourced file's `$0` is not the name a diagnostic would use: zsh answers with the bare operand `inc.sh` where a failure inside the same file is located at `sub/inc.sh` — recorded by `location/a-message-from-inside-a-sourced-file`. So `$0` is the word the script wrote rather than the file that was opened, which is what a shell computing its own install directory from `${0:h}` depends on
+  ```sh
+  mkdir sub
+  printf 'echo "in=[$0]"\n' > sub/inc.sh
+  PATH=sub:$PATH
+  . inc.sh
   ```
 - `axis/local-builtin` — ksh93 is the only panel member without local, which is why it is not a compatibility target
   ```sh
@@ -2361,6 +2405,116 @@ grades it and nothing drift-checks it either, for the same reason.
   f() { caller x; echo "st=$?"; }; f
   ```
 
+## parameters
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `name/zsh-argzero-under-a-moved-dollar-zero` | `in=[<script>] az=[unset]` | `in=[<script>] az=[unset]` | `in=[<script>] az=[unset]` | `in=[<script>] az=[unset]` | `in=[<script>] az=[unset]` | `in=[./inc.sh] az=[<script>]` |
+| `special/ifs-has-a-default` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n \0 ` |
+| `special/underscore-follows-the-last-argument` | `[]~[]` | `[two]~[]` | `[two]~[]` | `[two]~[]` | `[]~[]` | `[two]~[]` |
+| `special/underscore-after-a-declaration-command` | `a=[]~b=[]` | `a=[]~b=[y=2]` | `a=[]~b=[y=2]` | `a=[]~b=[y]` | `a=[]~b=[]` | `a=[]~b=[export]` |
+| `special/underscore-at-startup` | `[]` | `[<shell>]` | `[sh]` | `[<shell>]` | `[]` | `[]` |
+| `special/underscore-inherited-from-the-environment` | `[inherited]` | `[inherited]` | `[inherited]` | `[inherited]` | `[inherited]` | `[]` |
+| `special/dollar-dash-in-full` | `[]` | `[hBc]` | `[hBc]` | `[hBc]` | `[chsB]` | `[569X]` |
+| `special/dollar-dash-in-full-from-a-script` | `[]` | `[hB]` | `[hB]` | `[hB]` | `[hB]` | `[569X]` |
+| `special/dollar-dash-orders-the-letters-its-own-way` | `[ufe]` | `[efhuBc]` | `[efhuBc]` | `[efhuBc]` | `[cefhsuB]` | `[569Xefu]` |
+| `special/lineno-is-where-you-are` | `1~1` | `1~1` | `1~1` | `0~0` | `1~1` | `1~1` |
+| `special/random-is-absent-from-dash` | `none` | `have` | `have` | `have` | `have` | `have` |
+| `special/uid-is-bash-and-zsh` | `none` | `have` | `have` | `have` | `none` | `have` |
+| `special/assigning-random-seeds-it` | `none` | `produced` | `produced` | `produced` | `produced` | `produced` |
+| `core/append-assignment` | `[a]` **2>** `<shell>: 1: x+=b: not found` | `[ab]` | `[ab]` | `[ab]` | `[ab]` | `[ab]` |
+| `core/append-to-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` |
+| `core/array-star-joins` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` |
+| `unset/takes-away-an-environment-name` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` |
+| `unset/the-m-option-unsets-by-pattern` | **2>** `<shell>: 1: unset: Illegal option -m` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` | **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 0: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]` | **2>** `<shell>: unset: -m: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `st=0 [gone][gone][3]` |
+| `unset/the-n-option-splits-the-panel` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=0` | `st=0` | `st=2` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=0` | `st=1` **2>** `<shell>:unset:1: bad option: -n` |
+| `special/lineno-in-a-function-diverges` | `2` | `2` | `2` | `2` | `2` | `1` |
+
+- `name/zsh-argzero-under-a-moved-dollar-zero` — zsh alone carries the value `$0` had before anything moved it, which is the only way a sourced file can tell what the shell itself was called. It is what the `${${0:#$ZSH_ARGZERO}:-…}` idiom in a plugin manager on this machine tests against; the other five have no such name and no moved `$0` for it to record
+  ```sh
+  printf 'echo "in=[$0] az=[${ZSH_ARGZERO-unset}]"\n' > inc.sh
+  . ./inc.sh
+  ```
+- `special/ifs-has-a-default` — space, tab and newline in three of them and a NUL as well in zsh — and read as bytes because whitespace is what it is made of. Splitting worked here while `$IFS` was empty, so a script could neither read it nor tell it had been changed
+  ```sh
+  printf '%s' "$IFS" | od -An -c | tr -s " "
+  ```
+- `special/underscore-follows-the-last-argument` — bash and zsh move $_ to the previous command's last argument and to empty after a bare assignment; dash and ksh93 answer with nothing at all, because they keep no such parameter and `$_` is an ordinary unset name there. This reason said they leave it at the shell's own path, which the row beside it has never shown — the harness writes a shell's path as `<shell>` and both cells are empty. A wrong sentence over a right measurement is the failure `oracle-check` cannot see, since it compares behavior and not prose (#706)
+  ```sh
+  echo one two >/dev/null; echo "[$_]"; x=5; echo "[$_]"
+  ```
+- `special/underscore-after-a-declaration-command` — what a *declaration* command leaves in $_, and the panel gives four answers to it: bash 5.3 binds the assignment word as written, `y=2`; bash 3.2 binds the name alone, `y`; zsh binds the command word, `export`; dash and ksh93 keep no $_ at all. A bare assignment leaves it empty everywhere that has one, which is the first line and the control. The bash-to-bash disagreement is the point — a claim about this recorded against one build would have been wrong for the other
+  ```sh
+  x=1; echo "a=[$_]"; export y=2; echo "b=[$_]"
+  ```
+- `special/underscore-at-startup` — before any command has run, $_ holds how the shell was *invoked*: bash writes the path it was started as, and the same binary called `sh` writes `sh`, which is argv[0] rather than the path — so the parameter carries the invocation and not the executable. dash, ksh93 and zsh leave it empty. Run from a script rather than -c because that is the route where the answer is a path at all
+  ```sh
+  echo "[$_]"
+  ```
+- `special/underscore-inherited-from-the-environment` — the other half of the startup value, and the half no snippet can ask about, since nothing running inside a shell can put a name in the environment that shell was started with. An exported `_` beats the invocation in five of the six — bash writes argv[0] only where the environment said nothing — and zsh alone discards it and starts empty however it was called. It is also the row that shows the neighboring case is not the whole rule: three columns are empty there and only one of them is empty here
+  ```sh
+  echo "[$_]"
+  ```
+- `special/dollar-dash-in-full` — the whole of $- rather than a test for one letter in it. The `invoke/dollar-dash-*` cases ask whether `c` or `s` is present, which is the axis; this records what each shell actually carries, and the answers share almost nothing: dash writes *nothing at all* for a command string, bash `hBc`, ksh93 `chsB`, and zsh a set of digits. So there is no common alphabet to write a default over, and a claim about `$-` that does not name a shell is not a claim
+  ```sh
+  echo "[$-]"
+  ```
+- `special/dollar-dash-in-full-from-a-script` — the same string by the other route, and it moves in three of the six: the `c` goes, and ksh93 loses its `s` as well and lands on exactly bash's `hB`. Two shells that agree on one route and not on another is why a `$-` answer has to be recorded per route, and it is the pair with the case above that says so
+  ```sh
+  echo "[$-]"
+  ```
+- `special/dollar-dash-orders-the-letters-its-own-way` — three options turned on in a written order, and no shell reports them in it. bash sorts the lowercase letters and keeps its own suffix (`efhuBc`); ksh93 sorts including the letters it already had (`cefhsuB`); zsh puts its digits first (`569Xefu`); dash answers `ufe`, which is neither the order they were set in nor alphabetical but its own option table's. The order is therefore a property of the shell and never a fact about `$-`, which is worth pinning because a reader of any one row would assume otherwise
+  ```sh
+  set -f; set -u; set -e; echo "[$-]"
+  ```
+- `special/lineno-is-where-you-are` — produced when it is read rather than stored, which is the whole of the distinction: a stored copy would be the line the shell started on
+  ```sh
+  echo "$LINENO"; echo "$LINENO"
+  ```
+- `special/random-is-absent-from-dash` — which parameters a shell provides is the same kind of question as which builtins it has — dash has neither RANDOM nor SECONDS, and the value cannot be recorded because it is a different number every time
+  ```sh
+  [ -n "${RANDOM-}" ] && echo have || echo none
+  ```
+- `special/uid-is-bash-and-zsh` — the parameter a real system script began with — `if [ $UID -ne 0 ]` is `[ -ne 0 ]` where it is unset, which is not the same test and does not fail the same way
+  ```sh
+  [ -n "${UID-}" ] && echo have || echo none
+  ```
+- `special/assigning-random-seeds-it` — assigning a produced parameter is a message to whatever produces it rather than a replacement for it: the next read is a new number and not the 5
+  ```sh
+  [ -n "${RANDOM-}" ] || { echo none; exit; }; RANDOM=5; a=$RANDOM; b=$RANDOM; [ "$a" = 5 ] && echo stored || echo produced
+  ```
+- `core/append-assignment` — dash has no += and reads the whole word as a command name, which is the divergence — the other three append
+  ```sh
+  x=a; x+=b; echo "[$x]"
+  ```
+- `core/append-to-an-array` — appending to an array adds to its end rather than to its first element, which is the same spelling doing a different thing
+  ```sh
+  a=(one two); a+=(three); echo "[${a[*]}] ${#a[@]}"
+  ```
+- `core/array-star-joins` — `[*]` is one field with the elements joined by the first character of IFS where `[@]` is one field each — the same difference `$*` has from `$@`
+  ```sh
+  a=(one two); echo "[${a[*]}]"; IFS=-; echo "[${a[*]}]"
+  ```
+- `unset/takes-away-an-environment-name` — a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both
+  ```sh
+  unset HOME; echo "[${HOME-gone}]"
+  ```
+- `unset/the-m-option-unsets-by-pattern` — `unset -m` reads its operands as patterns rather than as names, and is one shell's alone — a prompt theme clears its whole namespace with it. The three values are what says the pattern is anchored at both ends of the *name*: `x*` takes `x` and `xy` and leaves `z`. The other four refuse the letter, in four wordings and at three statuses, and two of them print a usage line after it
+  ```sh
+  x=1 xy=2 z=3; unset -m "x*"; echo "st=$? [${x-gone}][${xy-gone}][${z-gone}]"
+  ```
+- `unset/the-n-option-splits-the-panel` — the letter beside it, and the row that says `unset`'s options are the dialect's rather than one set: bash 5.3 and ksh93 take `-n` where bash 3.2, bash-as-`sh`, dash and zsh refuse it, at three statuses and in four wordings. The *value* is deliberately not printed: what `-n` then does to a name that is not a reference splits the two shells that have the letter — bash removes nothing at all and ksh93 removes the variable — which is a second question, and one this shell does not yet answer
+  ```sh
+  x=1; unset -n x; echo "st=$?"
+  ```
+- `special/lineno-in-a-function-diverges` — zsh numbers a function's lines from the line the function was written on; the other three count from the file
+  ```sh
+  f(){
+  echo $LINENO
+  }
+  f
+  ```
+
 ## diagnostics
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
@@ -2655,110 +2809,6 @@ grades it and nothing drift-checks it either, for the same reason.
 - `token/clobber-override` — >| overrides noclobber with the same meaning everywhere, unlike &>
   ```sh
   set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"
-  ```
-
-## parameters
-
-| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- | --- |
-| `special/ifs-has-a-default` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n \0 ` |
-| `special/underscore-follows-the-last-argument` | `[]~[]` | `[two]~[]` | `[two]~[]` | `[two]~[]` | `[]~[]` | `[two]~[]` |
-| `special/underscore-after-a-declaration-command` | `a=[]~b=[]` | `a=[]~b=[y=2]` | `a=[]~b=[y=2]` | `a=[]~b=[y]` | `a=[]~b=[]` | `a=[]~b=[export]` |
-| `special/underscore-at-startup` | `[]` | `[<shell>]` | `[sh]` | `[<shell>]` | `[]` | `[]` |
-| `special/underscore-inherited-from-the-environment` | `[inherited]` | `[inherited]` | `[inherited]` | `[inherited]` | `[inherited]` | `[]` |
-| `special/dollar-dash-in-full` | `[]` | `[hBc]` | `[hBc]` | `[hBc]` | `[chsB]` | `[569X]` |
-| `special/dollar-dash-in-full-from-a-script` | `[]` | `[hB]` | `[hB]` | `[hB]` | `[hB]` | `[569X]` |
-| `special/dollar-dash-orders-the-letters-its-own-way` | `[ufe]` | `[efhuBc]` | `[efhuBc]` | `[efhuBc]` | `[cefhsuB]` | `[569Xefu]` |
-| `special/lineno-is-where-you-are` | `1~1` | `1~1` | `1~1` | `0~0` | `1~1` | `1~1` |
-| `special/random-is-absent-from-dash` | `none` | `have` | `have` | `have` | `have` | `have` |
-| `special/uid-is-bash-and-zsh` | `none` | `have` | `have` | `have` | `none` | `have` |
-| `special/assigning-random-seeds-it` | `none` | `produced` | `produced` | `produced` | `produced` | `produced` |
-| `core/append-assignment` | `[a]` **2>** `<shell>: 1: x+=b: not found` | `[ab]` | `[ab]` | `[ab]` | `[ab]` | `[ab]` |
-| `core/append-to-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` |
-| `core/array-star-joins` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` |
-| `unset/takes-away-an-environment-name` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` |
-| `unset/the-m-option-unsets-by-pattern` | **2>** `<shell>: 1: unset: Illegal option -m` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` | **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 0: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]` | **2>** `<shell>: unset: -m: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `st=0 [gone][gone][3]` |
-| `unset/the-n-option-splits-the-panel` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=0` | `st=0` | `st=2` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=0` | `st=1` **2>** `<shell>:unset:1: bad option: -n` |
-| `special/lineno-in-a-function-diverges` | `2` | `2` | `2` | `2` | `2` | `1` |
-
-- `special/ifs-has-a-default` — space, tab and newline in three of them and a NUL as well in zsh — and read as bytes because whitespace is what it is made of. Splitting worked here while `$IFS` was empty, so a script could neither read it nor tell it had been changed
-  ```sh
-  printf '%s' "$IFS" | od -An -c | tr -s " "
-  ```
-- `special/underscore-follows-the-last-argument` — bash and zsh move $_ to the previous command's last argument and to empty after a bare assignment; dash and ksh93 answer with nothing at all, because they keep no such parameter and `$_` is an ordinary unset name there. This reason said they leave it at the shell's own path, which the row beside it has never shown — the harness writes a shell's path as `<shell>` and both cells are empty. A wrong sentence over a right measurement is the failure `oracle-check` cannot see, since it compares behavior and not prose (#706)
-  ```sh
-  echo one two >/dev/null; echo "[$_]"; x=5; echo "[$_]"
-  ```
-- `special/underscore-after-a-declaration-command` — what a *declaration* command leaves in $_, and the panel gives four answers to it: bash 5.3 binds the assignment word as written, `y=2`; bash 3.2 binds the name alone, `y`; zsh binds the command word, `export`; dash and ksh93 keep no $_ at all. A bare assignment leaves it empty everywhere that has one, which is the first line and the control. The bash-to-bash disagreement is the point — a claim about this recorded against one build would have been wrong for the other
-  ```sh
-  x=1; echo "a=[$_]"; export y=2; echo "b=[$_]"
-  ```
-- `special/underscore-at-startup` — before any command has run, $_ holds how the shell was *invoked*: bash writes the path it was started as, and the same binary called `sh` writes `sh`, which is argv[0] rather than the path — so the parameter carries the invocation and not the executable. dash, ksh93 and zsh leave it empty. Run from a script rather than -c because that is the route where the answer is a path at all
-  ```sh
-  echo "[$_]"
-  ```
-- `special/underscore-inherited-from-the-environment` — the other half of the startup value, and the half no snippet can ask about, since nothing running inside a shell can put a name in the environment that shell was started with. An exported `_` beats the invocation in five of the six — bash writes argv[0] only where the environment said nothing — and zsh alone discards it and starts empty however it was called. It is also the row that shows the neighboring case is not the whole rule: three columns are empty there and only one of them is empty here
-  ```sh
-  echo "[$_]"
-  ```
-- `special/dollar-dash-in-full` — the whole of $- rather than a test for one letter in it. The `invoke/dollar-dash-*` cases ask whether `c` or `s` is present, which is the axis; this records what each shell actually carries, and the answers share almost nothing: dash writes *nothing at all* for a command string, bash `hBc`, ksh93 `chsB`, and zsh a set of digits. So there is no common alphabet to write a default over, and a claim about `$-` that does not name a shell is not a claim
-  ```sh
-  echo "[$-]"
-  ```
-- `special/dollar-dash-in-full-from-a-script` — the same string by the other route, and it moves in three of the six: the `c` goes, and ksh93 loses its `s` as well and lands on exactly bash's `hB`. Two shells that agree on one route and not on another is why a `$-` answer has to be recorded per route, and it is the pair with the case above that says so
-  ```sh
-  echo "[$-]"
-  ```
-- `special/dollar-dash-orders-the-letters-its-own-way` — three options turned on in a written order, and no shell reports them in it. bash sorts the lowercase letters and keeps its own suffix (`efhuBc`); ksh93 sorts including the letters it already had (`cefhsuB`); zsh puts its digits first (`569Xefu`); dash answers `ufe`, which is neither the order they were set in nor alphabetical but its own option table's. The order is therefore a property of the shell and never a fact about `$-`, which is worth pinning because a reader of any one row would assume otherwise
-  ```sh
-  set -f; set -u; set -e; echo "[$-]"
-  ```
-- `special/lineno-is-where-you-are` — produced when it is read rather than stored, which is the whole of the distinction: a stored copy would be the line the shell started on
-  ```sh
-  echo "$LINENO"; echo "$LINENO"
-  ```
-- `special/random-is-absent-from-dash` — which parameters a shell provides is the same kind of question as which builtins it has — dash has neither RANDOM nor SECONDS, and the value cannot be recorded because it is a different number every time
-  ```sh
-  [ -n "${RANDOM-}" ] && echo have || echo none
-  ```
-- `special/uid-is-bash-and-zsh` — the parameter a real system script began with — `if [ $UID -ne 0 ]` is `[ -ne 0 ]` where it is unset, which is not the same test and does not fail the same way
-  ```sh
-  [ -n "${UID-}" ] && echo have || echo none
-  ```
-- `special/assigning-random-seeds-it` — assigning a produced parameter is a message to whatever produces it rather than a replacement for it: the next read is a new number and not the 5
-  ```sh
-  [ -n "${RANDOM-}" ] || { echo none; exit; }; RANDOM=5; a=$RANDOM; b=$RANDOM; [ "$a" = 5 ] && echo stored || echo produced
-  ```
-- `core/append-assignment` — dash has no += and reads the whole word as a command name, which is the divergence — the other three append
-  ```sh
-  x=a; x+=b; echo "[$x]"
-  ```
-- `core/append-to-an-array` — appending to an array adds to its end rather than to its first element, which is the same spelling doing a different thing
-  ```sh
-  a=(one two); a+=(three); echo "[${a[*]}] ${#a[@]}"
-  ```
-- `core/array-star-joins` — `[*]` is one field with the elements joined by the first character of IFS where `[@]` is one field each — the same difference `$*` has from `$@`
-  ```sh
-  a=(one two); echo "[${a[*]}]"; IFS=-; echo "[${a[*]}]"
-  ```
-- `unset/takes-away-an-environment-name` — a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both
-  ```sh
-  unset HOME; echo "[${HOME-gone}]"
-  ```
-- `unset/the-m-option-unsets-by-pattern` — `unset -m` reads its operands as patterns rather than as names, and is one shell's alone — a prompt theme clears its whole namespace with it. The three values are what says the pattern is anchored at both ends of the *name*: `x*` takes `x` and `xy` and leaves `z`. The other four refuse the letter, in four wordings and at three statuses, and two of them print a usage line after it
-  ```sh
-  x=1 xy=2 z=3; unset -m "x*"; echo "st=$? [${x-gone}][${xy-gone}][${z-gone}]"
-  ```
-- `unset/the-n-option-splits-the-panel` — the letter beside it, and the row that says `unset`'s options are the dialect's rather than one set: bash 5.3 and ksh93 take `-n` where bash 3.2, bash-as-`sh`, dash and zsh refuse it, at three statuses and in four wordings. The *value* is deliberately not printed: what `-n` then does to a name that is not a reference splits the two shells that have the letter — bash removes nothing at all and ksh93 removes the variable — which is a second question, and one this shell does not yet answer
-  ```sh
-  x=1; unset -n x; echo "st=$?"
-  ```
-- `special/lineno-in-a-function-diverges` — zsh numbers a function's lines from the line the function was written on; the other three count from the file
-  ```sh
-  f(){
-  echo $LINENO
-  }
-  f
   ```
 
 ## quoting

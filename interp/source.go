@@ -286,7 +286,10 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	// and carrying the operand as the shell constructed it rather than the
 	// resolved path, which is the spelling diagnostics and the source stack
 	// were measured to use.
-	r.pushFrame(Frame{File: display, Name: "source"})
+	// The operand as well as the file, because `$0` takes the first and a
+	// diagnostic takes the second, and a PATH search is where they part
+	// company. See Frame.Operand.
+	r.pushFrame(Frame{File: display, Name: sourceFrameName, Operand: args[0]})
 	defer r.popFrame()
 
 	st := r.runSourced(ctx, string(b), sourced{

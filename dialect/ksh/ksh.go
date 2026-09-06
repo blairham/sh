@@ -356,6 +356,9 @@ func Semantics() interp.Semantics {
 	// less special: a bad *option* to it is fatal, just above.
 	s.BadNameToDeclarationFatal = interp.Yes
 	s.BadNameToUnsetFatal = interp.No
+	// Not fatal here either, and ksh93 goes further than any other member of
+	// the panel in saying so: it calls the refusal a *warning*.
+	s.UnsetReadonlyFatal = interp.No
 	s.DeclarationNameOperands = interp.PlainNamesOnly
 	s.UnsetNameOperands = interp.PlainNamesOnly
 	s.DeclarationTakesASubscript = interp.Yes
@@ -570,10 +573,13 @@ func Diagnostics() interp.Diagnostics {
 		ScriptBuiltinLocation:       interp.LocationBracketLine,
 		ParseFailureNamesItsOwnLine: true,
 		ReadonlyVariable:            "%s: is read only",
-		ShiftTooMany:                "shift: %[2]s: bad number",
-		StdinBuiltinLocation:        interp.LocationBracketLine,
-		ArithError:                  "%[1]s: %[2]s",
-		DivisionByZero:              "divide by zero",
+		// A warning rather than an error, in so many words, and the only
+		// member of the panel that says so.
+		UnsetReadonly:        "unset: warning: %s: is read only",
+		ShiftTooMany:         "shift: %[2]s: bad number",
+		StdinBuiltinLocation: interp.LocationBracketLine,
+		ArithError:           "%[1]s: %[2]s",
+		DivisionByZero:       "divide by zero",
 		// ksh93 names the innermost keyword still awaiting a partner: `if`
 		// on its own, and the `then` inside it once that has been consumed.
 		EvalNaming:             interp.SourceBeforeLocation,

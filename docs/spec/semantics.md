@@ -5029,6 +5029,83 @@ Not a question about `unset` being less special than the other two — a
 bad *option* to ksh93's `unset` is fatal, which is what makes the split
 about the kind of failure rather than about the builtin.
 
+**`UnsetReadonlyFatal`** — bash no · dash yes · ksh93 no · zsh yes
+
+Ends the script when `unset` is asked to remove a readonly name.
+
+**The refusal is not the axis.** Every shell in the panel refuses, says
+so, and leaves the value standing — `readonly x=1; unset x; echo
+"${x-gone}"` prints `1` in all six — so all three of those are the core
+answer and only what follows the refusal splits. Measured 2026-09-05 with
+a scratch `HOME`:
+
+| shell | what it says | status | carries on? |
+| --- | --- | --- | --- |
+| bash 5.3 | `unset: x: cannot unset: readonly variable` | 1 | yes |
+| bash 3.2 | the same, at `line 0` | 1 | yes |
+| bash-as-`sh` | the same wording | 1 | **no** |
+| dash | `unset: x: is read only` | 2 | **no** |
+| ksh93 | `unset: warning: x: is read only` | 1 | yes |
+| zsh | `read-only variable: x` | 1 | **no** |
+
+The status needs nothing of its own: the three that stop carry
+`FatalErrorStatusIsOne`'s number, which is where dash's 2 comes from, and
+the three that carry on all report 1.
+
+**It is not `BadNameToUnsetFatal` read twice**, though the two agree on
+all four dialect defaults. bash's POSIX mode moves this one and not that
+one: `set -o posix` makes bash 5.3 stop here, and makes no difference to
+`unset 1x`, which bash 5.3 accepts in silence whatever the mode. That is
+what `FatalErrorStatusIsOne`'s note describes — *which* errors are fatal
+stays per-error even when two errors happen to split the panel alike.
+
+**Nor is it `RedirectErrorOnSpecialBuiltinFatal`**, which is the axis it
+most looks like. The sets are different and they cross:
+
+| | redirection on a special builtin | `unset` of a readonly |
+| --- | --- | --- |
+| bash 5.3 | carries on | carries on |
+| bash-as-`sh` | **stops** | **stops** |
+| dash | **stops** | **stops** |
+| ksh93 | **stops** | carries on |
+| zsh | carries on | **stops** |
+
+ksh93 and zsh swap sides, so one flag could not answer both. Like that
+axis, though, a dialect's field is where the shell *starts* and its own
+posix knob moves it — `set -o posix` and `set +o posix` in bash, and
+`SetPosixMode` in the core, which is why the runner remembers a saved
+answer per axis rather than one for the mode. zsh does **not** move:
+`emulate sh`, `emulate ksh` and `emulate zsh` all stop.
+
+bash 3.2 is fatal in neither mode, so what is recorded is bash 5's rule
+rather than bash's.
+
+The wording is `Diagnostics.UnsetReadonly`, one verb — the name. Three of
+the four dialects name `unset` in the sentence and one of those three
+calls the refusal a *warning*; the fourth writes exactly what it writes
+for a refused assignment and names no builtin, so its wording must not
+reach the location either. An empty value falls back to the default,
+which is the wording the three bash columns share.
+
+Two details of *which* name is refused, both unanimous where they can be
+seen. A `readonly` name declared with no value is still refused — the
+attribute is what is checked, not the value. And a subscripted operand is
+refused by the variable the subscript indexes, naming the **base**:
+`unset a[0]` against a readonly `a` says `a` and never `a[0]`, so the
+refusal stands ahead of the element path and the subscript is never
+evaluated.
+
+The refusal is one name's rather than the builtin's. `readonly x=1; y=2;
+unset x y` leaves `x` standing and removes `y` in every shell that gets
+that far, so a single readonly operand does not save the rest, and the
+status is still 1.
+
+Corpus: `unset/a-readonly-name-is-refused`,
+`unset/a-readonly-name-refused-alongside-another`,
+`unset/a-readonly-name-with-no-value-is-refused-too`,
+`unset/a-readonly-name-under-v-is-refused`,
+`unset/a-readonly-name-behind-a-subscript-is-refused`.
+
 **`DeclarePrintReportsAMissingName`** — bash yes · dash unspecified · ksh93 no · zsh yes
 
 Makes `typeset -p nosuch` say so and fail. bash and zsh report it (with

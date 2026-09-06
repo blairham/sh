@@ -56566,6 +56566,226 @@
         "TimedOut": false
       }
     },
+    "unset/a-readonly-name-behind-a-subscript-is-refused": {
+      "bash": {
+        "Stdout": "st=1 [1]~after",
+        "Stderr": "\u003cshell\u003e: line 1: unset: a: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: unset: a: cannot unset: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 [1]~after",
+        "Stderr": "\u003cshell\u003e: line 0: unset: a: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: a[0]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 [1]~after",
+        "Stderr": "\u003cshell\u003e: unset: warning: a: is read only",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: no matches found: a[0]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unset/a-readonly-name-is-refused": {
+      "bash": {
+        "Stdout": "st=1 [1]~after",
+        "Stderr": "\u003cshell\u003e: line 1: unset: x: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: unset: x: cannot unset: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 [1]~after",
+        "Stderr": "\u003cshell\u003e: line 0: unset: x: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: x: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 [1]~after",
+        "Stderr": "\u003cshell\u003e: unset: warning: x: is read only",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: read-only variable: x",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unset/a-readonly-name-refused-alongside-another": {
+      "bash": {
+        "Stdout": "st=1 [1][gone]~after",
+        "Stderr": "\u003cshell\u003e: line 1: unset: x: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: unset: x: cannot unset: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 [1][gone]~after",
+        "Stderr": "\u003cshell\u003e: line 0: unset: x: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: x: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 [1][gone]~after",
+        "Stderr": "\u003cshell\u003e: unset: warning: x: is read only",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: read-only variable: x",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unset/a-readonly-name-under-v-is-refused": {
+      "bash": {
+        "Stdout": "st=1 [1]~after",
+        "Stderr": "\u003cshell\u003e: line 1: unset: x: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: unset: x: cannot unset: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 [1]~after",
+        "Stderr": "\u003cshell\u003e: line 0: unset: x: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: x: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 [1]~after",
+        "Stderr": "\u003cshell\u003e: unset: warning: x: is read only",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: read-only variable: x",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unset/a-readonly-name-with-no-value-is-refused-too": {
+      "bash": {
+        "Stdout": "st=1 [gone]~after",
+        "Stderr": "\u003cshell\u003e: line 1: unset: y: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: unset: y: cannot unset: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 [gone]~after",
+        "Stderr": "\u003cshell\u003e: line 0: unset: y: cannot unset: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: y: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 [gone]~after",
+        "Stderr": "\u003cshell\u003e: unset: warning: y: is read only",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: read-only variable: y",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "unset/takes-away-an-environment-name": {
       "bash": {
         "Stdout": "[gone]",

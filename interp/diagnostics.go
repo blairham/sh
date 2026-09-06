@@ -1752,6 +1752,17 @@ type Diagnostics struct {
 	// ReadonlyVariable is an assignment to a readonly name. One verb: the
 	// name.
 	ReadonlyVariable string
+	// UnsetReadonly is `unset` refusing to remove a readonly name. One verb:
+	// the name — the *base* name, since a subscripted operand is refused by
+	// the variable it indexes rather than by the element.
+	//
+	// A field of its own rather than ReadonlyVariable's wording reused,
+	// because only one dialect in the panel words the two the same way.
+	// Three of the four name `unset` in the sentence, and one of those three
+	// calls it a warning rather than an error; the fourth writes exactly what
+	// it writes for an assignment. Empty falls back to the default below,
+	// which is what the dialect the default was measured from wants.
+	UnsetReadonly string
 	// InvalidNumber is the reason given when arithmetic text is not a
 	// number. No verbs: it is a reason, not a message — ArithError wraps it
 	// with the expression and the offending token.

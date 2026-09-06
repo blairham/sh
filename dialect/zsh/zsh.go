@@ -389,6 +389,11 @@ func Semantics() interp.Semantics {
 	// `unset ?` is not, `unset 12` is quiet and `export 12` is not.
 	s.BadNameToDeclarationFatal = interp.Yes
 	s.BadNameToUnsetFatal = interp.Yes
+	// Fatal here too, and unlike bash's this does not move: `emulate sh`,
+	// `emulate ksh` and `emulate zsh` all stop. It is the axis that keeps
+	// this question apart from RedirectErrorOnSpecialBuiltinFatal, which zsh
+	// answers the other way.
+	s.UnsetReadonlyFatal = interp.Yes
 	s.DeclarationNameOperands = interp.NamesAndSpecialParameters
 	s.UnsetNameOperands = interp.NamesAndPositionals
 	s.DeclarationTakesASubscript = interp.No
@@ -671,6 +676,9 @@ func Diagnostics() interp.Diagnostics {
 		// option complaint here.
 		OptionNeedsArgument: "%[1]s: argument expected: -%[2]s",
 		ReadonlyVariable:    "read-only variable: %s",
+		// The one dialect that words the refusal to unset exactly as it words
+		// the refusal to assign, and the only one that does not name `unset`.
+		UnsetReadonly: "read-only variable: %s",
 		// `ulimit -a`, row for row as the engine writes it — the flag
 		// first, no pipe row, and no resident-set row at all.
 		UlimitListing: []interp.UlimitListingRow{

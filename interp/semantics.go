@@ -2498,6 +2498,34 @@ type Semantics struct {
 	// about the kind of failure rather than about the builtin.
 	BadNameToUnsetFatal Answer
 
+	// UnsetReadonlyFatal ends a non-interactive shell when `unset` is asked
+	// to remove a readonly name. True in dash and zsh; bash and ksh93 report
+	// it, leave the value standing and carry on with a status of 1.
+	//
+	// The refusal itself is not the axis. Every shell in the panel refuses,
+	// keeps the value, and says so — `readonly x=1; unset x` leaves `x` as 1
+	// in all six — so *that* is the core answer and only what follows the
+	// refusal splits.
+	//
+	// A field of its own rather than BadNameToUnsetFatal, which it agrees
+	// with on all four dialect defaults. They are separable because bash's
+	// POSIX mode moves this one and not that one: `set -o posix` makes bash
+	// 5.3 stop here, and it makes no difference to `unset 1x` — a name bash
+	// 5.3 accepts in silence whatever the mode. That is the shape
+	// FatalErrorStatusIsOne's note describes, where *which* errors are fatal
+	// stays per-error even when two errors happen to split the panel alike.
+	//
+	// Like RedirectErrorOnSpecialBuiltinFatal, a dialect's field is where the
+	// shell *starts* and its own posix knob moves it — see SetPosixMode. zsh
+	// is the difference between the two: it carries on past a failed
+	// redirection on a special builtin and stops here, under every
+	// `emulate`, so the two axes cannot be one flag. ksh93 is the same
+	// difference the other way round.
+	//
+	// bash 3.2 is fatal in neither mode, so this is bash 5's rule and not
+	// bash's; the preset carries the version that measured it.
+	UnsetReadonlyFatal Answer
+
 	// DeclarationNameOperands says what may stand where `export` and
 	// `readonly` want a name, beyond a plain name itself.
 	//
@@ -2819,6 +2847,10 @@ func PosixSemantics() Semantics {
 		// makes no exception for `unset`.
 		BadNameToDeclarationFatal: Yes,
 		BadNameToUnsetFatal:       Yes,
+		// And so is a refusal to unset a readonly name: the standard makes a
+		// special builtin's failure fatal and names no exception for this
+		// one either.
+		UnsetReadonlyFatal: Yes,
 		// `local` needs a function to be local to, and saying so is what
 		// three of the four do — the substrate keeps the answer it had
 		// before the question was one.

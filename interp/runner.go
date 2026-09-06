@@ -660,13 +660,20 @@ type Runner struct {
 	// no history there are no duplicates to ignore, so either state is kept
 	// truthfully.
 	histIgnoreDups bool
-	// posixMode is `set -o posix`, and posixSaved is the answer the axes it
-	// moves held before it was turned on, so turning it off restores the
-	// dialect's rather than asserting the standard's opposite. Two fields
-	// rather than a saved vector: an option changed *while* posix mode is on
-	// is not part of the mode and must survive leaving it.
-	posixMode  bool
-	posixSaved Answer
+	// posixMode is `set -o posix`, and the posixSaved fields are the answers
+	// the axes it moves held before it was turned on, so turning it off
+	// restores the dialect's rather than asserting the standard's opposite.
+	// Named fields rather than a saved vector: an option changed *while*
+	// posix mode is on is not part of the mode and must survive leaving it.
+	//
+	// One per axis, and they cannot be collapsed into one: the dialects do
+	// not agree on the two, so a single remembered answer would put the wrong
+	// one back for whichever shell disagrees with the other axis. zsh carries
+	// on past a failed redirection on a special builtin and stops on `unset`
+	// of a readonly name; ksh93 is the reverse.
+	posixMode               bool
+	posixSaved              Answer
+	posixSavedUnsetReadonly Answer
 
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or

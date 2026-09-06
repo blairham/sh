@@ -514,6 +514,54 @@ type Dialect struct {
 	// extended pattern — the same text, read by a different rule.
 	PatternAlternation bool
 
+	// BackgroundAndDisown reads `&!` and `&|` as terminators that start a
+	// statement in the background and then let go of the job: nothing lists
+	// it and nothing waits for it by number. zsh's, and the two spellings
+	// are one operator — every probe below answers alike for both.
+	//
+	// Measured 2026-09-06 with `-n` over a *script file*, which is the only
+	// instrument that answers this: a `-c` string reads `&!` differently,
+	// and "did it parse" is not the question anyway. The panel does not
+	// split the way a first look suggests:
+	//
+	//	`echo hi &!`   zsh disowns. bash 5.3 and ksh93 *parse* it — as `&`
+	//	               followed by the `!` that negates a pipeline — and
+	//	               leave the job in the table, which `jobs` then lists.
+	//	               bash 3.2, bash-as-sh and dash refuse it outright.
+	//	`echo hi &|`   zsh disowns. ksh93 parses it and means something
+	//	               else — `echo hi &| echo done` prints only `done`
+	//	               there. bash 5.3, bash 3.2, bash-as-sh and dash all
+	//	               refuse it.
+	//
+	// So what is zsh's alone is the *disowning*, and the flag carries the
+	// grammar half. What the other shells do with the same text is their
+	// own grammar answering, and this flag does not reach them.
+	//
+	// The job is otherwise an ordinary background job, measured: `$!` is
+	// still set to its process and `wait` still reports 0. Only the *table*
+	// differs, which is why a later `&` job is `[1]` and not `[2]`.
+	//
+	// There is no corpus row for any of this, and the reason is worth
+	// stating because it is not "nobody wrote one". Every snippet that puts
+	// a `&!` where it can *run* reaches a second gap on the way: `!` in the
+	// other shells is the pipeline negation, and what they do with a bare
+	// one differs from what this shell does in both directions. `echo a &!`
+	// alone is `a` in bash 5.3 and ksh93 and a syntax error in bash 3.2,
+	// bash-as-sh and dash; ours accepts it everywhere. `sleep 0.4 &!` with a
+	// line after it is accepted by bash 5.3 and ksh93 — the `!` negating the
+	// *next* line's pipeline — and ours refuses it. So a row recording the
+	// disowning would record four unrelated divergences beside it, and the
+	// bare `!` is its own issue. The behavior is asserted in
+	// syntax/disown_test.go and interp/disown_test.go instead.
+	//
+	// It does not change what happens at exit, and the first measurement
+	// that said it did was an artifact: `zsh m.sh | tr …` holds the script
+	// open for the whole `sleep 0.5` because the *pipe* is waiting for the
+	// background job that inherited its standard output, not because the
+	// shell is. Timed without a pipe, `sleep 0.5 &` and `sleep 0.5 &!` both
+	// return in six milliseconds.
+	BackgroundAndDisown bool
+
 	// NumericRangePattern reads `<n-m>` in a word as a pattern matching a
 	// run of digits whose *value* falls in the range, rather than as a
 	// redirection: `<->` is any number, `<1-9>` a bounded one, and `<2->`

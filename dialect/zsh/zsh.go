@@ -68,6 +68,10 @@ func Dialect() syntax.Dialect {
 	// 3.2, bash-as-sh and ksh93, and dash — which has no `[[ ]]` — tries to
 	// open a file called `-`.
 	d.NumericRangePattern = true
+	// `cmd &!` and `cmd &|` background a job and let go of it. zsh's alone:
+	// bash 5.3 and ksh93 parse `&!` as `&` and a negation and keep the job,
+	// and `&|` is a syntax error in every bash and in dash.
+	d.BackgroundAndDisown = true
 	// The parenthesized flag group an expansion may open with — `${(U)x}`,
 	// `${(%):-%x}` — which is this dialect's alone: the other three call
 	// the whole expansion a bad substitution.

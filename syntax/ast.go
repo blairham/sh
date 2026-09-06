@@ -39,6 +39,17 @@ type Stmt struct {
 	// a newline. It belongs to the statement rather than to the command,
 	// because `a && b &` backgrounds the whole and-or.
 	Background bool
+
+	// Disown is set when the terminator was `&!` or `&|` rather than `&`,
+	// where the dialect has them: the job is started in the background and
+	// then let go of, so no listing shows it and nothing waits for it by
+	// number.
+	//
+	// Always with Background, never instead of it — the two spellings are
+	// `&` plus a disowning, which is why this is a second bool rather than a
+	// third state of the first. A dialect without the operators never sets
+	// it.
+	Disown bool
 	Semi       Pos
 
 	// Text is the source this statement was written as, and is recorded only

@@ -243,7 +243,15 @@ func (p *printer) stmt(st *Stmt) {
 	}
 	p.expr(st.Expr)
 	if st.Background {
-		p.str(" &")
+		// `&!` rather than `&` where the job was let go of. One spelling of
+		// the two goes back, which is the printer's usual bargain: `&!` and
+		// `&|` parse to the same tree, so there is nothing to choose
+		// between them and nothing a test could tell apart.
+		if st.Disown {
+			p.str(" &!")
+		} else {
+			p.str(" &")
+		}
 	}
 	p.flushHeredocs()
 }

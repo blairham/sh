@@ -40,6 +40,12 @@ func TestAQuestionMarkConsumesOneUnit(t *testing.T) {
 func TestTrimmingCountsTheSameUnitAMatchDoes(t *testing.T) {
 	bothLocales(t, `s=héllo; printf "[%s][%s]" "${s#???}" "${s%??}"`,
 		"[lo][hél]", "[llo][hél]")
+	// Two off the front rather than three, which is the one that separates
+	// *where a match may start* from what it matches: the shortest split
+	// that satisfies `??` is after two characters, and a scan offering every
+	// byte offset would satisfy it a byte earlier — at `h` plus the lead
+	// byte of `é`, leaving a continuation byte at the head of the result.
+	bothLocales(t, `s=héllo; printf "[%s]" "${s#??}"`, "[llo]", "[\xa9llo]")
 	// And the doubled operators, which choose the other end of the match.
 	bothLocales(t, `s=héllo; printf "[%s][%s]" "${s##?*l}" "${s%%?}"`,
 		"[o][héll]", "[o][héll]")
@@ -63,6 +69,10 @@ func TestReplacementRunsOverUnits(t *testing.T) {
 func TestABracketHoldsOneWholeUnit(t *testing.T) {
 	bothLocales(t, `case é in [é]) printf lit;; *) printf no;; esac`, "lit", "no")
 	bothLocales(t, `case é in [ae]) printf half;; *) printf whole;; esac`, "whole", "whole")
+	// Two characters that share a lead byte, which is what a comparison
+	// looking at the first byte of a unit gets wrong: è is c3 a8 and é is
+	// c3 a9. A miss in every panel member.
+	bothLocales(t, `case è in [é]) printf hit;; *) printf miss;; esac`, "miss", "miss")
 	// A negated bracket is the same question inverted, and gets it from the
 	// same place rather than from a second reading.
 	bothLocales(t, `case é in [!ae]) printf other;; *) printf listed;; esac`, "other", "listed")
@@ -94,6 +104,29 @@ func TestACharacterClassOutsideAscii(t *testing.T) {
 	}
 	// ASCII is untouched by any of it, in either locale.
 	bothLocales(t, `set -- a; `+src, "alpha alnum lower print graph ", "alpha alnum lower print graph ")
+}
+
+// Two classes whose answers outside ASCII are not the obvious ones, and both
+// are measured rather than taken from Go's tables.
+//
+// `digit` holds nothing outside ASCII, though `alnum` holds the same
+// character: POSIX says the digit class is the digits 0 through 9 in every
+// locale, and `case ٣ in [[:digit:]]` is a miss in ksh93, zsh and dash. bash
+// 5.3 and 3.2 call it a digit, and are the ones out — so this one assertion
+// is what this implementation does rather than what the shell it is being
+// does, which is #956 and is filed rather than settled here.
+//
+// `graph` excludes a space where `print` keeps it, which is the only place
+// the two differ: a non-breaking space is print in bash and zsh, graph in
+// neither, and space in both. Go counts it Graphic, so the space is taken
+// back out by hand.
+func TestTwoClassesWhoseAnswersAreNotTheObviousOnes(t *testing.T) {
+	bothLocales(t, `case ٣ in [[:digit:]]) printf digit;; *) printf no;; esac`, "no", "no")
+	bothLocales(t, `case ٣ in [[:alnum:]]) printf alnum;; *) printf no;; esac`, "alnum", "no")
+	const nbsp = " "
+	bothLocales(t, `case `+nbsp+` in [[:graph:]]) printf graph;; *) printf no;; esac`, "no", "no")
+	bothLocales(t, `case `+nbsp+` in [[:print:]]) printf print;; *) printf no;; esac`, "print", "no")
+	bothLocales(t, `case `+nbsp+` in [[:space:]]) printf space;; *) printf no;; esac`, "space", "no")
 }
 
 // `[[ ]]` reaches the same matcher as `case`, so it answers the same way.

@@ -230,20 +230,22 @@ func eqUnit(a, b string, fold bool) bool {
 	return a == b
 }
 
-// ordOf ranks one unit for a bracket range: its code point where characters
-// are being matched, and its byte where bytes are.
+// ordOf ranks one unit for a bracket range or a character class: its code
+// point, or its byte where the unit is one byte.
 //
-// A byte that begins no valid sequence ranks as itself, which keeps it below
-// every character it is a fragment of rather than sorting with the
-// replacement character.
-func ordOf(unit string, chars bool) rune {
-	if !chars || len(unit) == 1 {
+// It needs no answer about whether characters are being matched, and no case
+// for an undecodable byte, because a unit is never either of the two things
+// that would want one. unitWidth answers 1 for every byte where characters
+// are not being counted, and DecodeRuneInString answers a width above 1 only
+// for a sequence it decoded — so a unit longer than a byte is always a valid
+// character, and a byte that begins no sequence arrives here alone and ranks
+// as itself. Both were written as guards first and both are dead, which
+// mutation testing is what said.
+func ordOf(unit string) rune {
+	if len(unit) == 1 {
 		return rune(unit[0])
 	}
-	c, size := utf8.DecodeRuneInString(unit)
-	if c == utf8.RuneError && size <= 1 {
-		return rune(unit[0])
-	}
+	c, _ := utf8.DecodeRuneInString(unit)
 	return c
 }
 
@@ -574,8 +576,8 @@ func matchBracket(p string, c string, o patternOpts) (rest string, ok bool) {
 		if strings.HasPrefix(p[i:], "[:") {
 			end := strings.Index(p[i:], ":]")
 			if end >= 0 {
-				if inClass(p[i+2:i+end], c, o.chars) ||
-					(o.fold && inClass(p[i+2:i+end], swapUnitCase(c), o.chars)) {
+				if inClass(p[i+2:i+end], c) ||
+					(o.fold && inClass(p[i+2:i+end], swapUnitCase(c))) {
 					matched = true
 				}
 				i += end + 2
@@ -597,9 +599,9 @@ func matchBracket(p string, c string, o patternOpts) (rest string, ok bool) {
 			// Ranked rather than compared as text: `[a-é]` has to hold ç,
 			// which is between them by code point and is not between them
 			// byte for byte.
-			from, to := ordOf(lo, o.chars), ordOf(hi, o.chars)
-			if inRange(ordOf(c, o.chars), from, to) ||
-				(o.fold && inRange(ordOf(swapUnitCase(c), o.chars), from, to)) {
+			from, to := ordOf(lo), ordOf(hi)
+			if inRange(ordOf(c), from, to) ||
+				(o.fold && inRange(ordOf(swapUnitCase(c)), from, to)) {
 				matched = true
 			}
 			i += lw + 1 + hw
@@ -651,9 +653,9 @@ func hasUnterminatedBracket(p string) bool {
 // panel. A name outside the twelve matches nothing, silently — the answer of
 // every panel shell but bash 3.2, which falls back to reading the characters
 // literally (see docs/spec/grammar/patterns.md).
-func inClass(name string, unit string, chars bool) bool {
+func inClass(name string, unit string) bool {
 	if len(unit) > 1 {
-		return inWideClass(name, ordOf(unit, chars))
+		return inWideClass(name, ordOf(unit))
 	}
 	c := unit[0]
 	switch name {
@@ -697,9 +699,22 @@ func inClass(name string, unit string, chars bool) bool {
 // reading of the classes — this follows the three that agree, and the corpus
 // records ksh93's answer beside it.
 //
+// digit is **false** and not unicode.IsNumber, which is measured and is where
+// the panel splits again: `case ٣ in [[:digit:]]` is a hit in bash 5.3 and 3.2
+// and a miss in ksh93, zsh and dash. POSIX says the digit class holds only the
+// digits 0 through 9 in every locale, so the standard and three of the four
+// agree, and bash is the one out. `[[:alnum:]]` still holds it, which is bash
+// and zsh together. That leaves the bash dialect deviating from bash on this
+// one class, which is #956 — either an axis or a decision written down, and
+// not something to inherit from a comment.
+//
 // xdigit, blank and cntrl are deliberately absent: no character outside ASCII
 // is in any of them in the shells measured, and Go's unicode tables would put
 // characters in cntrl that none of them do.
+//
+// graph excludes a space where print does not, which is the one place the two
+// part company: a non-breaking space is print in bash and zsh and graph in
+// neither, and Go counts it Graphic, so the space has to be taken back out.
 func inWideClass(name string, c rune) bool {
 	switch name {
 	case "alpha":

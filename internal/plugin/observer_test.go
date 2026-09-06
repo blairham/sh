@@ -237,3 +237,52 @@ func TestARecordDoesNotKeepTheInterpretersMemory(t *testing.T) {
 		args[2] = "again"
 	}
 }
+
+// What is already numbered is delivered at shutdown, not abandoned.
+//
+// docs/design/plugins.md's lifetime rule says the write channel is "abandoned
+// on shutdown rather than drained", and that rule is right about what it was
+// written against — a plugin must not choose how long a shutdown takes. Taken
+// literally it makes the role useless for the commonest shell there is: `sh -c
+// cmd` emits every record it will ever emit and then exits, so what an
+// abandoning host lost would be the records about the command that was
+// actually run. So the drain is bounded, and this is the assertion that the
+// drain exists.
+//
+// Fewer records than the buffer holds, so nothing is dropped and the total is
+// a number rather than a range — and emitted in a tight loop, so that they are
+// certainly still in the buffer when Close is called: a channel send is orders
+// of magnitude cheaper than a marshal and a write, which is the whole reason
+// Emit is the shape it is.
+func TestWhatIsAlreadyNumberedIsDeliveredAtShutdown(t *testing.T) {
+	t.Parallel()
+	relayed := &syncBuffer{}
+	h := launch(t, "counter", plugin.Options{Stderr: relayed})
+	sink := h.Sink()
+	const records = observerBufferForTest
+	ctx := t.Context()
+	for i := range records {
+		sink.Emit(ctx, interp.Event{
+			Kind:   interp.EventAccess,
+			Action: interp.Action{Kind: interp.ActionStat, Path: "/srv/x"},
+			Line:   i,
+		})
+	}
+	if err := h.Close(); err != nil {
+		t.Fatalf("Close() = %v", err)
+	}
+	// Said at end of input, which the plugin only reaches once the host has
+	// closed its standard input — so this line arriving at all means the
+	// records went out first and the relay was given the chance to finish.
+	if want := "total 1000"; !strings.Contains(relayed.String(), want) {
+		t.Errorf("relayed = %q, want %q", relayed.String(), want)
+	}
+}
+
+// observerBufferForTest is one fewer than nothing in particular: it is a
+// number chosen to be under the host's buffer so that no record is dropped,
+// stated here rather than derived from the unexported constant because an
+// external test asserting on an internal number would be asserting on the
+// wrong thing. If the buffer ever shrinks below this, this test fails loudly
+// rather than quietly measuring drops.
+const observerBufferForTest = 1000

@@ -1,0 +1,29 @@
+#!/bin/sh
+# Counts the records it was given and says the total when its input ends.
+#
+# Nothing forks in the loop — no sed, no printf, no command substitution — so
+# it reads as fast as a shell can, which is what makes it usable for asking
+# whether the host delivered everything rather than how fast the fixture is.
+#
+# The total goes to standard error at end of input, which is the last thing it
+# does before exiting: two of the host's shutdown steps have to be right for
+# that line to arrive at all, and both of them are steps that can only be
+# graded from here — the records still in the host's buffer have to be put on
+# the wire before the input is closed, and what this writes has to be relayed
+# before the error stream is taken away.
+exec 3>&1
+n=0
+while IFS= read -r line; do
+	case $line in
+	*'"method":"observer/event"'*)
+		n=$((n + 1))
+		continue
+		;;
+	*'"method":"initialize"'*)
+		id=${line#*\"id\":}
+		id=${id%%,*}
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"counter\",\"commands\":[],\"observer\":true}}" >&3
+		;;
+	esac
+done
+printf 'total %s\n' "$n" >&2

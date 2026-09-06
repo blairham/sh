@@ -87,6 +87,83 @@ func TestAPluginThatDiesAtStartupIsALaunchFailure(t *testing.T) {
 	}
 }
 
+// TestEverythingAPluginDiesSayingIsRelayed is the same guarantee as the test
+// above, asked so that the answer is not a coin.
+//
+// TestAPluginThatDiesAtStartupIsALaunchFailure is the right assertion and was
+// the wrong instrument: the message it looks for fits in one read of the
+// relay's buffer, so whether it arrives is a race between the relay's first
+// read and the shutdown taking the stream away, and a race is what #1070 was
+// reported as — 8 launches in 500 on Linux against 0 in 500 on Darwin, the
+// same bug on both platforms with only the odds differing.
+//
+// This one removes the coin from both ends. The plugin says more than one
+// read holds, so the relay has to come back for the rest; and the relay's
+// target takes its time, so the window in which a shutdown could take the
+// stream away mid-message is milliseconds rather than microseconds. The
+// witness is the plugin's *last* word, because the failure this pins does not
+// lose the message — it loses the end of it.
+//
+// Measured: with the streams closed together, as they were before #1070, this
+// fails every run on Darwin, where the original test fails none.
+func TestEverythingAPluginDiesSayingIsRelayed(t *testing.T) {
+	t.Parallel()
+	relayed := &slowWriter{per: 200 * time.Microsecond}
+	_, err := plugin.Launch(t.Context(), plugin.Options{Path: fixture(t, "crashloud"), Stderr: relayed})
+	if err == nil {
+		t.Fatal("Launch returned a host for a plugin that exited")
+	}
+	got := relayed.String()
+	if !strings.Contains(got, "line 1:") {
+		t.Errorf("the first line never arrived, so nothing was relayed at all: %q", first(got))
+	}
+	if !strings.Contains(got, "LAST-WORD") {
+		t.Errorf("the plugin's last word was not relayed, so the stream went while it was "+
+			"still being read — %d bytes arrived, ending %q", len(got), last(got))
+	}
+	if n := strings.Count(got, "I cannot start"); n != 200 {
+		t.Errorf("%d of the 200 lines were relayed", n)
+	}
+}
+
+// first and last are the ends of a relayed message, for a failure that must
+// not print twelve kilobytes.
+func first(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+func last(s string) string {
+	s = strings.TrimSuffix(s, "\n")
+	if i := strings.LastIndexByte(s, '\n'); i >= 0 {
+		return s[i+1:]
+	}
+	return s
+}
+
+// slowWriter is a relay target that takes its time, so a shutdown racing the
+// relay has a window wide enough to be a fact rather than a coin.
+type slowWriter struct {
+	mu  sync.Mutex
+	b   strings.Builder
+	per time.Duration
+}
+
+func (w *slowWriter) Write(p []byte) (int, error) {
+	time.Sleep(w.per)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.Write(p)
+}
+
+func (w *slowWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.String()
+}
+
 // A version mismatch is a refusal and not a negotiation. A protocol
 // half-understood produces a builtin that does something other than what the
 // script asked, which is a different risk from a log with an unknown record in

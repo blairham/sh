@@ -6541,6 +6541,31 @@ echo unreachable`,
 		Why:     "text that is not a number is not an error: `abc` is an expression whose value is an unset name, so the result is zero and nothing is said",
 	},
 	{
+		ID: "declare/an-attribute-re-reads-the-value-the-name-already-holds", Category: "declarations",
+		Snippet: "FOO=bar; typeset -i FOO; echo \"i[$FOO]\"\nd=MiXeD; typeset -u d; echo \"u[$d]\"\ne=MiXeD; typeset -l e; echo \"l[$e]\"",
+		Why:     "whether an attribute added to a name that is already holding something reaches *backwards* to the value it found, or waits for the next assignment. ksh93 and zsh re-read at once — `bar` is an expression made of an unset name, so 0 is what is left, and `MiXeD` folds on the spot — where the three bash columns leave all three values standing. **Both answers lose data**, which is what makes it a field and not a rule: one destroys the text and the other leaves a name declared integer holding text that is not a number. The three letters are on one line because they share one answer per shell rather than each having one, which is the whole finding: the issue this closes recorded `-u` as unanimous and bash 5.3.15 does not fold it, and recorded zsh on bash's side of `-i` when it is on ksh93's. `declare/integer-attribute-added-to-a-name-with-a-value` and `declare/case-attribute-added-to-a-name-with-a-value` ask two of these of a value that is already a number or already mixed-case; this one asks all three of text, which is where the two answers part company hardest — one of them destroys it (#1000)",
+	},
+	{
+		ID: "declare/an-integer-attribute-over-a-number-written-oddly", Category: "declarations",
+		Snippet: "a=08; typeset -i a; echo \"1[$a]\"\nb=\" 7 \"; typeset -i b; echo \"2[$b]\"\nc=+7; typeset -i c; echo \"3[$c]\"\ng=5+2; typeset -i g; echo \"4[$g]\"\nh=; typeset -i h; echo \"5[$h]\"",
+		Why:     "the same question over text that *is* a number written some other way, which is where a narrower reading of it goes wrong. The shells that re-read canonicalize all five — `08` is 8 and not an octal error, a padded `7` loses its spaces, `+7` its sign, `5+2` is 7 and an empty value is 0 — and the shells that do not leave every one of them as written. `08` is the row that decides how the *question* may be asked: a predicate that folded first to find out whether the readings differ would report a bad octal digit and fail, where the shells that keep the text say nothing at all, so the answer of the question would depend on the answer being asked for",
+	},
+	{
+		ID: "declare/an-attribute-that-would-change-nothing-needs-no-dialect", Category: "declarations",
+		Snippet: "a=7; typeset -i a; echo \"1[$a]\"\nb=abc; typeset -x b; echo \"2[$b]\"\nc=MiXeD; typeset -r c; echo \"3[$c]\"",
+		Why:     "the control, and it is unanimous across all six columns: a value the attribute would read back unchanged, and two attributes that have nothing to say about a value at all. So the divergence above belongs to the *re-reading* and not to declaring — a reading under which a declaration empties or rewrites whatever it touches passes the rows above and fails this one, and an earlier one of ours emptied the name here",
+	},
+	{
+		ID: "declare/an-attribute-over-a-cell-a-function-just-shadowed", Category: "declarations",
+		Snippet: "v=5\nfunction f { typeset -i v; echo \"in[${v-UNSET}]\"; }\nf\necho \"out[$v]\"",
+		Why:     "the boundary: inside a function the cell the declaration just made is **new** whatever the caller was holding, so there is nothing standing in it to re-read. bash and ksh93 leave it unset and zsh gives it the empty-declaration value 0 — which is `DeclaredNameWithoutValueIsEmpty` and not this axis, and is why the two had to be separated: the re-read used to live inside that branch, so zsh got it by accident of answering that question yes and ksh93, which answers it no, never reached it. The caller's 5 is untouched in every column. The keyword spelling of the definition is load-bearing for one shell, where `typeset` makes a local only in that form",
+	},
+	{
+		ID: "declare/an-attribute-added-to-an-exported-name-reaches-the-child", Category: "declarations",
+		Snippet: `export FOO=bar; typeset -i FOO; env | grep '^FOO='`,
+		Why:     "the same divergence seen from the only place it cannot be argued about: what the *child* is told. `FOO=0` in ksh93 and zsh and `FOO=bar` in the three bash columns, so the re-read is a change to the value and not a way of reading it back — a shell that merely rendered the name differently to its own expansions would answer this row `bar` everywhere",
+	},
+	{
 		ID: "declare/readonly-attribute-allows-its-own-value", Category: "declarations",
 		Script:  true,
 		Snippet: "typeset -r c=1\necho \"[$c]\"\nc=2\necho \"[$c]\"\n",

@@ -87,6 +87,10 @@ func TestSemantics(t *testing.T) {
 		{"SelectEofEndsPromptLine", s.SelectEofEndsPromptLine, interp.No},
 		{"SelectAssumesUnboundedWidth", s.SelectAssumesUnboundedWidth, interp.No},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
+		// An attribute waits for the next assignment here rather than
+		// re-reading what the name already holds: `FOO=bar; typeset -i FOO`
+		// still reads `bar`, and `d=MiXeD; typeset -u d` still reads MiXeD.
+		{"AttributeRereadsTheValueItFinds", s.AttributeRereadsTheValueItFinds, interp.No},
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.No},
 		{"BraceExpansion", s.BraceExpansion, interp.Yes},
 		{"IndirectionYieldsName", s.IndirectionYieldsName, interp.No},

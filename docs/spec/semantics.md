@@ -4392,6 +4392,50 @@ The rule is the one above, asked by name instead of by declaration:
   unreachable by name and gives the shell two answers to whether
   `pushd` is a function. One notion of prelude-ness, one answer.
 
+**Whose function a removal is asking about** (#1082). The third caller,
+and the one that lost something: `unset -f pushd` deleted the
+declaration and took the directory stack away for the rest of the
+session, at a silent 0, with the failure surfacing later and elsewhere
+as `command not found`. `unset -f name` ahead of defining one is an
+ordinary defensive line in an rc file — a widely used zsh plugin
+manager writes exactly it — and `unset -f` over a list of names is what
+a state capture's cleanup does.
+
+Measured across the panel, and the part that matters is unanimous:
+`dirs`, `popd` and `pushd` are builtins in the two shells that have
+them, so there is no function of that name to remove and **the name
+still works afterwards**. `unset -f pushd; pushd /tmp` pushes in bash
+and in zsh. What the two disagree about is only whether the *unset*
+says anything, and that was already asked — bash, bash 3.2, bash-as-sh,
+dash and ksh93 are silent at 0, and zsh writes the same
+`no such hash table element: pushd` it writes for any name it does not
+hold, at 1.
+
+So the rule needs no new field and no new record of prelude-ness:
+
+- **A name the prelude declared is not the script's to remove.** It is
+  the "not defined" case, answered by
+  `Semantics.UnsetFunctionReportsMissing` and worded by
+  `Diagnostics.UnsetFunctionNotFound` — a name this shell provides is
+  exactly a name the script never defined. The declaration is what is
+  compared, which is the whole of it.
+- **Removing a redefinition gives the name back to the shell.**
+  `pushd() { echo mine; }; unset -f pushd; pushd /tmp` pushes in both
+  shells that have the builtin, because the function shadowing it went
+  and uncovered it. A dialect written as shell has one function table
+  where they have a builtin table and a function table, so the boundary
+  is reconstructed by hand: the prelude's declaration stands again. It
+  is silent at 0 in all six, zsh included, because the name really was
+  a function — and a second `unset -f` is then answered exactly as the
+  first row is, which is what separates "gave the name back" from
+  "kept the script's" and from "deleted it for good".
+
+This is the same call "a name asked for is still answered" made, seen
+from the other side. Refusing the unset outright would give the shell
+two answers to one question; answering it as a name the script does not
+have is one answer, and it is the one every shell in the panel behaves
+as though it had given.
+
 Still leaking, measured and not fixed here: `compgen -A function`
 enumerates through the public `Runner.FuncNames`, which is also what the
 line editor completes from — so narrowing it there would cost `pushd`

@@ -24271,6 +24271,182 @@
         "TimedOut": false
       }
     },
+    "dirstack/unset-a-function-that-shadowed-a-builtin": {
+      "bash": {
+        "Stdout": "u=0~/tmp /~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "u=0~/tmp /~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "u=0~/tmp /~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "u=0~st=127",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "u=0~st=127",
+        "Stderr": "\u003cshell\u003e: pushd: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "u=0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/unset-a-shadowing-function-twice": {
+      "bash": {
+        "Stdout": "u=0~/tmp /~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "u=0~/tmp /~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "u=0~/tmp /~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "u=0~st=127",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "u=0~st=127",
+        "Stderr": "\u003cshell\u003e: pushd: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "u=1~st=0",
+        "Stderr": "\u003cshell\u003e:unset:1: no such hash table element: pushd",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/unset-the-function-name-of-a-builtin": {
+      "bash": {
+        "Stdout": "u=0~/tmp /~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "u=0~/tmp /~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "u=0~/tmp /~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "u=0~st=127",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "u=0~st=127",
+        "Stderr": "\u003cshell\u003e: pushd: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "u=1~st=0",
+        "Stderr": "\u003cshell\u003e:unset:1: no such hash table element: pushd",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/unset-the-whole-directory-stack-by-name": {
+      "bash": {
+        "Stdout": "u=0~/tmp /~/tmp /~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "u=0~/tmp /~/tmp /~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "u=0~/tmp /~/tmp /~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "u=0~st=127",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: dirs: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "u=0~st=127",
+        "Stderr": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: dirs: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "u=1~/tmp /~st=0",
+        "Stderr": "\u003cshell\u003e:unset:1: no such hash table element: dirs~\u003cshell\u003e:unset:1: no such hash table element: popd~\u003cshell\u003e:unset:1: no such hash table element: pushd",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "disown/lets-go-or-only-shields": {
       "bash": {
         "Stdout": "st=0",

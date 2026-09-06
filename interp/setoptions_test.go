@@ -699,3 +699,46 @@ func TestAnOptionRefusedAtAnInvocationDoesNotNameTheBuiltin(t *testing.T) {
 		}
 	})
 }
+
+// POSIX mode and the alias-expansion base are independent, and the runner
+// holds both so that the front end may write them in either order.
+//
+// Today it always writes the base first — the route is known before the name
+// the shell was invoked under is acted on — so the ordering this pins is not
+// reachable through any front end. It is pinned anyway because the guarantee
+// is what the two fields are *for*: a base written while the mode is on must
+// not turn expansion off, or `sh` would stop expanding aliases the moment
+// anything re-read the route.
+func TestAliasExpansionAndPosixModeAreIndependent(t *testing.T) {
+	// testrunner:bare — the subject is the two option bits and nothing else
+	// here reads the filesystem.
+	r := &Runner{}
+	if r.AliasExpansion() {
+		t.Errorf("a fresh runner expands aliases, want off")
+	}
+	// The mode turns it on over a base that says no.
+	r.SetAliasExpansionBase(false)
+	r.SetPosixMode(true)
+	if !r.AliasExpansion() {
+		t.Errorf("posix mode did not turn alias expansion on")
+	}
+	// And writing the base again while the mode is on leaves it on.
+	r.SetAliasExpansionBase(false)
+	if !r.AliasExpansion() {
+		t.Errorf("re-writing the base turned alias expansion off inside posix mode")
+	}
+	// Leaving the mode drops to the base, whatever was set in between.
+	r.SetAliasExpansion(true)
+	r.SetPosixMode(false)
+	if r.AliasExpansion() {
+		t.Errorf("leaving posix mode kept alias expansion on, want the base back")
+	}
+	// The other base, and the round trip from it.
+	r.SetAliasExpansionBase(true)
+	r.SetPosixMode(true)
+	r.SetAliasExpansion(false)
+	r.SetPosixMode(false)
+	if !r.AliasExpansion() {
+		t.Errorf("leaving posix mode did not restore a base that was on")
+	}
+}

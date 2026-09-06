@@ -476,10 +476,30 @@ type Runner struct {
 	// something assigns it again.
 	removed map[string]bool
 
-	// aliases is the table `alias` and `unalias` keep. Nothing expands from
-	// it yet — substitution happens when a line is parsed, which is the other
-	// half of the feature and lives in the parser rather than here.
+	// aliases is the table `alias` and `unalias` keep. Substitution happens
+	// when a line is parsed, which is the other half of the feature and lives
+	// in the parser rather than here; the two meet at [Runner.ExpandingAlias].
 	aliases map[string]string
+
+	// aliasExpansion is whether a word being parsed *right now* is replaced
+	// by what the table holds for it, and aliasExpansionBase is the answer
+	// this shell started with.
+	//
+	// Two fields rather than one because the pair is what a mode needs. The
+	// route a program arrived by decides the base — a dialect's
+	// syntax.Dialect.ExpandAliases, which the front end reads and hands here
+	// — and two things move the live one off it: `shopt -s expand_aliases`
+	// in the one dialect with the name, and POSIX mode, which turns it on for
+	// as long as the mode lasts. Measured, and the reason leaving the mode
+	// restores the *base* rather than what was set before entering it: `shopt
+	// -s expand_aliases; set -o posix; set +o posix; shopt expand_aliases`
+	// answers `off` in bash 5.3.
+	//
+	// Plain bools, so a subshell clone carries its own copy: `(shopt -s
+	// expand_aliases)` is the subshell's business, the same as every other
+	// option here.
+	aliasExpansion     bool
+	aliasExpansionBase bool
 
 	// killedBy is the signal this shell sent itself and had no handler for,
 	// with the number kept beside it so the death does not have to look the

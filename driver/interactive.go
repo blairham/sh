@@ -88,6 +88,11 @@ func (sh Shell) session(argv []string, in source) int {
 	r.ApplyInheritedShellOptions()
 	// The prelude is the dialect's own; these are the user's, and come after
 	// it so a person's settings win over the shell's defaults.
+	// Every shell in the panel expands aliases at a prompt whatever it does
+	// in a script, so the base is on here — before the startup files, which
+	// may define an alias and use it, and before the mode below, which the
+	// base must not overwrite.
+	r.SetAliasExpansionBase(true)
 	if code := sh.startup(r, in); code != 0 {
 		return code
 	}

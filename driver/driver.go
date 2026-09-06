@@ -1134,9 +1134,13 @@ func (sh Shell) runInput(in source) int {
 	// bash is the one that would not have in `sh script.sh`. This arm was
 	// unreachable until now — the field it read meant "took the prompt
 	// route", and the prompt route does not come through here.
-	if sh.Dialect.ExpandAliases.Has(in.aliasRoute()) || in.interactive {
-		pr.aliases = r.LookupAlias
-	}
+	//
+	// The hook goes on unconditionally and the route's answer is handed to
+	// the runner instead, because the switch has to be movable from inside
+	// the script: `shopt -s expand_aliases` and POSIX mode both turn it on
+	// partway through. See Runner.ExpandingAlias.
+	r.SetAliasExpansionBase(sh.Dialect.ExpandAliases.Has(in.aliasRoute()) || in.interactive)
+	pr.aliases = r.ExpandingAlias
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code

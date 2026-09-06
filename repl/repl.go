@@ -240,6 +240,9 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// captured stream is not a terminal to the child on the other end of it —
 	// see blocks.Capture.Stream.
 	capture := s.captureOutput()
+	// Closed on the way out, so that whatever is still in the conduit reaches
+	// the terminal before the process does anything else with it.
+	defer capture.close()
 	if !IsTerminal(s.inFile()) {
 		// A prompt without a terminal is not a mistake to refuse: every shell
 		// in the panel, given `-i` on a pipe, still prints a prompt and runs
@@ -571,7 +574,7 @@ func (s Shell) reportFinishedJobs(continuing bool) {
 //
 // The prompt goes to the error stream, where a shell always puts it: the
 // output of `sh -i < script > out` is the commands' output and nothing else.
-func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *blocks.Capture) (int, error) {
+func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outputCapture) (int, error) {
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
 	for {

@@ -227,6 +227,9 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		Style:   sh.PromptStyle,
 		Editor:  sh.EditorStyle,
 		History: sh.HistoryStyle,
+		// What this binary adds to every prompt, which is nothing for a
+		// dialect binary and the sandbox marker for cmd/sh under a policy.
+		PromptProviders: sh.PromptProviders,
 		// Bound to *this* runner and read per keystroke, so a `bindkey` typed
 		// at the prompt takes effect on the next line rather than the next
 		// shell.

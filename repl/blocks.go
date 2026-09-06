@@ -160,6 +160,13 @@ func (s Shell) closeBlock(ctx context.Context, store *blocks.Store, cap *blocks.
 		return
 	}
 	end := s.now()
+	// What the next prompt is told about the command that just ran. Here
+	// rather than in the loops for the reason the record below is: this is the
+	// one place that has both ends of the command and the rule for what counts
+	// as one, and a second place applying that rule is a second place to
+	// disagree about a blank line. It happens whether or not there is a store
+	// to write to — a prompt provider is not a feature of the block index.
+	s.counted().last = lastCommand{command: b.command, duration: end.Sub(b.start)}
 	_ = store.Record(ctx, blocks.Record{
 		ID:      event.NewID(b.start),
 		Command: b.command,

@@ -110,6 +110,14 @@ func installSeams(sh driver.Shell, own ownFlags, w io.Writer) (driver.Shell, io.
 	default:
 		sh.Events = s
 	}
+	if sh.Gate != nil {
+		// A gated session says so at its prompt. Keyed on the gate rather
+		// than on the flags, so a route that installs one some other way is
+		// marked too and a route that installs none is not — see
+		// sandboxprompt.go. An event sink alone is not a sandbox and is not
+		// marked: watching a shell does not change what it may do.
+		sh.PromptProviders = append(sh.PromptProviders, sandboxMarker{})
+	}
 	return sh, closer, nil
 }
 

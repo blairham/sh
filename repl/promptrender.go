@@ -383,8 +383,13 @@ func (s Shell) liveJobs() int {
 	return n
 }
 
-// counts are the two running totals, held by pointer because the prompt is
-// drawn from a Shell taken by value and these change under it.
+// counts is the session state a prompt is drawn from, held by pointer because
+// the prompt is drawn from a Shell taken by value and this changes under it.
+//
+// Named for what it started as. It is now the two running totals, what the
+// parser is still inside, the terminal's name, and what the last command was —
+// all of it the same thing: facts about the session that only the loops know
+// and that the next prompt needs.
 type counts struct {
 	// open is what the parser was still inside when the line so far ran out,
 	// for a continuation prompt that says what it is waiting for.
@@ -403,6 +408,23 @@ type counts struct {
 	history int
 	// command is how many commands this session has run, which does not.
 	command int
+
+	// last is what the previous command was, for a prompt provider that draws
+	// something about it. Recorded by closeBlock, which is also where the
+	// block store's record of the same command is written — one place and one
+	// rule, so the two accounts of "the last command" cannot part company.
+	last lastCommand
+}
+
+// lastCommand is what a prompt provider is told about the command before this
+// prompt. The zero value is a session in which nothing has run yet.
+type lastCommand struct {
+	// command is the line as typed, before expansion, which is the same text
+	// a block record keeps and for the same reason: it is what the person
+	// wrote, and an event carries argv after expansion instead.
+	command string
+	// duration is the wall clock around the whole typed line.
+	duration time.Duration
 }
 
 // accepted records what one accepted line was.

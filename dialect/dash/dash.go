@@ -70,6 +70,13 @@ func Semantics() interp.Semantics {
 	// start is AnnouncesBackgroundJob, which dash answers No, and the two
 	// fields are separate because of exactly this shell.
 	s.InteractiveScriptAnnouncesJobs = interp.Yes
+	// And `$!` before any background command is unset here as it is in bash,
+	// in its own words and with its own status: measured,
+	// `set -u; echo "[$!]"` writes `!: parameter not set` — the name without
+	// its `$` — and stops at 2.
+	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.Yes
+	// And it reads as nothing rather than as a zero: `echo "[$!]"` is `[]`.
+	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
 	// DefaultOptionLetters stays empty on purpose: measured, dash's `$-`
 	// starts blank however it is invoked, save the `s` of the
 	// standard-input route, which is unanimous and comes from Runner.Route.

@@ -355,6 +355,21 @@ func (r *Runner) paramSource(e *syntax.ParamExpr) (value string, set, subscript 
 	if !set {
 		value, set = r.getVar(e.Name)
 	}
+	if e.Name == "!" && !r.lastJobPIDSet &&
+		r.sem().LastBackgroundPidIsUnsetBeforeAnyJob == Yes {
+		// `$!` before anything has been started is *unset* in two of the
+		// four shells rather than set and empty, and `set -u` is fatal about
+		// it there. Asked here rather than in specialParam because that
+		// function's bool says "this is a parameter and not a variable" —
+		// three other callers read it that way — and answering false would
+		// send `$!` off to look for a variable of that name.
+		//
+		// An indirection cannot reach this and needs no guard of its own:
+		// `${!x}` parses with the name `x` and the indirect flag set, so the
+		// name here is never `!` for one. A `!e.Indirect` clause was written
+		// and was dead — a surviving mutant is what said so.
+		set = false
+	}
 	return value, set, false
 }
 
@@ -2001,6 +2016,12 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		// the notice that reports it, and `$!` still names the process
 		// afterwards in every shell in the panel. See Runner.lastJobPID.
 		if !r.lastJobPIDSet {
+			// One shell answers with a number nothing ever had. Read
+			// without asking, so a preset that has not chosen answers with
+			// nothing — which is what the other five do.
+			if r.sem().LastBackgroundPidIsZeroBeforeAnyJob == Yes {
+				return "0", true
+			}
 			return "", true
 		}
 		return itoa(r.lastJobPID), true
@@ -2235,16 +2256,43 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 		// ksh93 alone lets `$1` be empty here. bash writes the `$` back for
 		// a positional and not for a name, which is why the wording is its
 		// own field rather than a decoration applied here.
-		format := r.diag().UnboundPositional
-		if format == "" {
-			format = r.diag().UnboundVariable
-		}
-		r.fatalExpansion("%s\n", Wording(format, "%s: parameter not set", e.Name))
+		r.fatalExpansion("%s\n", r.unboundSigilWording(e.Name))
+		return
+	}
+	if e.Name == "!" {
+		// `$!` before any background command, where the dialect calls that
+		// unset — see LastBackgroundPidIsUnsetBeforeAnyJob, which is what
+		// decides whether this is reached at all. The sigil is written back
+		// by the same shell and the same rule as for a positional, so it is
+		// the same field: `$!: unbound variable` against
+		// `!: parameter not set`.
+		//
+		// Not through UnsetPositionalIsAllowed. That axis is ksh93 letting an
+		// argument it was not given be empty, and ksh93's answer here comes
+		// from the other axis instead — it never reaches this line, so
+		// asking would be asking the wrong question of the one dialect it
+		// would change.
+		r.fatalExpansion("%s\n", r.unboundSigilWording(e.Name))
 		return
 	}
 	if !isPositional(e.Name) {
 		r.fatalExpansion("%s\n", Wording(r.diag().UnboundVariable, "%s: parameter not set", e.Name))
 	}
+}
+
+// unboundSigilWording is the `set -u` refusal for a parameter whose name is
+// not a variable name — a positional, and `$!`.
+//
+// One wording for both because it is one measurement: bash writes the `$` back
+// for each of them and says `unbound variable`, and the other three write the
+// name alone and say `parameter not set`, which is what UnboundVariable
+// already holds. Empty means the two are the same line.
+func (r *Runner) unboundSigilWording(name string) string {
+	format := r.diag().UnboundPositional
+	if format == "" {
+		format = r.diag().UnboundVariable
+	}
+	return Wording(format, "%s: parameter not set", name)
 }
 
 // isPositional reports whether a parameter name is a positional one.

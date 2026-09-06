@@ -379,6 +379,44 @@ type Semantics struct {
 	// a script that reads an argument it was not given carries on there and
 	// stops everywhere else.
 	UnsetPositionalIsAllowed Answer
+	// LastBackgroundPidIsZeroBeforeAnyJob makes `$!` read `0` before a
+	// background command has been started. zsh alone, and it is a number
+	// nothing ever had: `sh -c 'echo "[$!]"'` writes `[0]` there and `[]` in
+	// bash 5.3, bash 3.2, bash 3.2 as `sh`, dash and ksh93u+.
+	//
+	// Zero is not the same answer as nothing, which is why this is a switch
+	// and not a rendering: a background builtin runs in this process and its
+	// job carries no pid, so a shell really can hold a *recorded* zero, and a
+	// script cannot tell that apart from zsh's if the two are spelled alike.
+	//
+	// Read without asking. A dialect that answers nothing answers with
+	// nothing, which is what five of the six columns do, and refusing a `$!`
+	// expansion over an unanswered field would break the `p=$!` of every
+	// script that runs under a preset which has not chosen — including
+	// before its first job, where the read is exactly the ordinary one.
+	LastBackgroundPidIsZeroBeforeAnyJob Answer
+	// LastBackgroundPidIsUnsetBeforeAnyJob makes `$!` an *unset* parameter
+	// before a background command has been started, so `set -u` is fatal
+	// about it.
+	//
+	// A different split from the field above, and the more useful one: two
+	// shells against two. `set -u; echo "[$!]"` stops bash — `$!: unbound
+	// variable`, status 127 — and dash — `!: parameter not set`, status 2 —
+	// and is silently empty in ksh93 and zero in zsh, both carrying on at 0.
+	// Neither answer predicts the other: zsh's zero is set and ksh93's empty
+	// is set too, for different reasons.
+	//
+	// It is the half a script relies on, since `set -u` exists to stop
+	// exactly this read. The wording and the status come from the same
+	// Diagnostics fields an unset *name* uses, because measured they are the
+	// same two lines — bash writes the `$` back for `$!` as it does for `$1`,
+	// which is Diagnostics.UnboundPositional, and dash's is its ordinary
+	// `parameter not set`.
+	//
+	// Read without asking, for the reason above. Unanswered means the
+	// parameter is set and empty, which is what this shell did before the
+	// axis existed and what the two shells that carry on do.
+	LastBackgroundPidIsUnsetBeforeAnyJob Answer
 	// ExitInTrapReportsEarlierStatus makes a bare `exit` in an EXIT trap
 	// report the status the shell had when the trap began, rather than that
 	// of the trap's own last command.

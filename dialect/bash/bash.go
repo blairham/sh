@@ -514,6 +514,18 @@ func Semantics() interp.Semantics {
 	// the `Done` row, where the other three print at least one. It is the
 	// route and not the terminal — `bash -i < script` announces both.
 	s.InteractiveScriptAnnouncesJobs = interp.No
+	// `$!` before any background command is *unset*, not set and empty:
+	// measured, `set -u; echo "[$!]"` writes `$!: unbound variable` and stops
+	// at 127 in 5.3.15, in 3.2.57 and in 3.2 run as `sh`. Without `set -u` it
+	// expands to nothing, which is the other four columns' answer too, so the
+	// difference only shows where a script asked to be told.
+	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.Yes
+	// And it reads as nothing rather than as a zero: measured,
+	// `echo "[$!]"` writes `[]` in all three bash columns. Stated rather
+	// than left unanswered — the field is read without asking, so unanswered
+	// gives the same behavior, but only a written answer says it was
+	// measured.
+	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.No

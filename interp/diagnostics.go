@@ -2128,11 +2128,20 @@ type Diagnostics struct {
 	// UnboundVariable is an unset parameter under `set -u`. One verb: the
 	// name. bash calls it unbound where the other three call it not set.
 	UnboundVariable string
-	// UnboundPositional is the same failure for `$1` rather than `$NAME`.
-	// One verb: the number, without its `$`. Empty means "the same as
+	// UnboundPositional is the same failure for a parameter whose name is not
+	// a variable name — `$1`, and `$!` before any background command. One
+	// verb: the name, without its `$`. Empty means "the same as
 	// UnboundVariable", which is true of three of the four — bash alone
-	// writes the `$` back, saying `$1: unbound variable` where it says
-	// `NOPE: unbound variable` for a name.
+	// writes the `$` back, saying `$1: unbound variable` and
+	// `$!: unbound variable` where it says `NOPE: unbound variable` for a
+	// name.
+	//
+	// Named for the positional because that is where it was found, and it
+	// holds for `$!` too because bash's rule is about the *sigil* rather than
+	// about the parameter: measured, `set -u; echo "[$!]"` says
+	// `$!: unbound variable` in all three bash columns and dash says
+	// `!: parameter not set`, which is exactly the pair this field and
+	// UnboundVariable already carry.
 	UnboundPositional string
 	// BadPattern is a pattern the dialect rejects. One verb: the pattern.
 	BadPattern string

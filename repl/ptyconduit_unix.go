@@ -72,8 +72,16 @@ type ptyConduit struct {
 	// reached is signaled by the pump each time it passes a mark.
 	reached chan struct{}
 
-	// winch is where SIGWINCH is delivered while this exists.
-	winch chan os.Signal
+	// winch is where SIGWINCH is delivered while this exists, and winchDone
+	// is closed when the goroutine reading it has stopped.
+	//
+	// Two, because stopping the delivery is not the same as the reader having
+	// finished: signal.Stop guarantees no *further* sends, and says nothing
+	// about a resize already in progress. Closing the inner terminal while
+	// that resize is holding its descriptor is a race the detector finds and
+	// a descriptor a reused fd number turns into somebody else's ioctl.
+	winch     chan os.Signal
+	winchDone chan struct{}
 	// real is the terminal whose size the inner one copies.
 	real *os.File
 
@@ -259,8 +267,10 @@ func (c *ptyConduit) resize() {
 // it, and it will only do that if the size it is asking about has changed.
 func (c *ptyConduit) watchResize() {
 	c.winch = make(chan os.Signal, 1)
+	c.winchDone = make(chan struct{})
 	signal.Notify(c.winch, syscall.SIGWINCH)
 	go func() {
+		defer close(c.winchDone)
 		for range c.winch {
 			c.resize()
 		}
@@ -274,10 +284,14 @@ func (c *ptyConduit) close() {
 	}
 	c.closeOnce.Do(func() {
 		if c.winch != nil {
+			// Stop the delivery, end the loop, and wait for it: the watcher
+			// may be inside a resize right now, and that resize is holding
+			// the descriptor closed two lines below.
 			signal.Stop(c.winch)
 			close(c.winch)
+			<-c.winchDone
 		}
-		// The slave first: with the last writer gone the master reads end of
+		// The slave then: with the last writer gone the master reads end of
 		// file, which is what stops the pump. Closing the master first would
 		// stop it by error and lose whatever was still queued.
 		_ = c.slave.Close()

@@ -53230,6 +53230,402 @@
         "TimedOut": false
       }
     },
+    "readonly/a-compound-append-is-refused": {
+      "bash": {
+        "Stdout": "st=1 a=[1] z=[unset]~after",
+        "Stderr": "\u003cscript\u003e: line 4: m: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: m: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 a=[1] z=[1]~after",
+        "Stderr": "\u003cscript\u003e: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cscript\u003e: line 4: m: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: m[a]=1: not found~\u003cscript\u003e: 3: typeset: not found~\u003cscript\u003e: 4: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: m: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:4: read-only variable: m",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "readonly/a-compound-literal-is-refused": {
+      "bash": {
+        "Stdout": "st=1 a=[1] z=[unset]~after",
+        "Stderr": "\u003cscript\u003e: line 4: m: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: m: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 a=[1] z=[1]~after",
+        "Stderr": "\u003cscript\u003e: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cscript\u003e: line 4: m: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: m[a]=1: not found~\u003cscript\u003e: 3: typeset: not found~\u003cscript\u003e: 4: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: m: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:4: read-only variable: m",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "readonly/a-declarations-own-array-value-survives-its-flag": {
+      "bash": {
+        "Stdout": "st=0 all=[x y]~st=0 k=[v]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 all=[x y]~st=0 k=[v]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0 all=[x y]~st=2 k=[v]",
+        "Stderr": "\u003cscript\u003e: line 3: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[1]: typeset: -ar: invalid variable name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 all=[x y]~st=0 k=[v]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "readonly/a-refused-array-operand-gives-up-the-line": {
+      "bash": {
+        "Stdout": "two",
+        "Stderr": "\u003cscript\u003e: line 3: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "two",
+        "Stderr": "\u003cscript\u003e: line 3: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "two",
+        "Stderr": "\u003cscript\u003e: line 3: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 3: a: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:3: read-only variable: a",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "readonly/a-refused-declaration-operand-reports-one": {
+      "bash": {
+        "Stdout": "st=1 all=[x y]~after",
+        "Stderr": "\u003cscript\u003e: line 3: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1 all=[x y]~after",
+        "Stderr": "\u003cscript\u003e: line 3: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 all=[x y]~after",
+        "Stderr": "\u003cscript\u003e: line 3: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 3: a: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:3: read-only variable: a",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "readonly/a-scalar-over-a-frozen-array-is-refused": {
+      "bash": {
+        "Stdout": "st=1 all=[x y]~after",
+        "Stderr": "\u003cscript\u003e: line 3: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 3: a: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 all=[x y]~after",
+        "Stderr": "\u003cscript\u003e: line 3: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 3: a: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:3: read-only variable: a",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "readonly/an-associative-element-is-refused": {
+      "bash": {
+        "Stdout": "st=1 k=[unset] a=[1]~after",
+        "Stderr": "\u003cscript\u003e: line 4: m: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: m: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 k=[1] a=[1]~after",
+        "Stderr": "\u003cscript\u003e: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cscript\u003e: line 4: m: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: m[a]=1: not found~\u003cscript\u003e: 3: typeset: not found~\u003cscript\u003e: 4: m[k]=v: not found~\u003cscript\u003e: 5: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: m: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:4: read-only variable: m",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "readonly/an-element-append-is-refused": {
+      "bash": {
+        "Stdout": "st=1 a=[1]~after",
+        "Stderr": "\u003cscript\u003e: line 4: m: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: m: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 a=[1]~after",
+        "Stderr": "\u003cscript\u003e: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cscript\u003e: line 4: m: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: m[a]=1: not found~\u003cscript\u003e: 3: typeset: not found~\u003cscript\u003e: 4: m[a]+=Q: not found~\u003cscript\u003e: 5: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: m: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:4: read-only variable: m",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "readonly/an-indexed-element-is-not-written": {
+      "bash": {
+        "Stdout": "st=1 all=[x y]~after",
+        "Stderr": "\u003cscript\u003e: line 3: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 3: a: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 all=[x y]~after",
+        "Stderr": "\u003cscript\u003e: line 3: a: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 3: a: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:3: read-only variable: a",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "readonly/no-operands-lists-what-is-readonly": {
       "bash": {
         "Stdout": "declare -r RONAME=\"2\"",

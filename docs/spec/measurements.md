@@ -1013,6 +1013,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `unset/a-readonly-name-with-no-value-is-refused-too` | **2>** `<shell>: 1: unset: y: is read only` *(status 2)* | `st=1 [gone]~after` **2>** `<shell>: line 1: unset: y: cannot unset: readonly variable` | **2>** `<shell>: line 1: unset: y: cannot unset: readonly variable` *(status 1)* | `st=1 [gone]~after` **2>** `<shell>: line 0: unset: y: cannot unset: readonly variable` | `st=1 [gone]~after` **2>** `<shell>: unset: warning: y: is read only` | **2>** `<shell>:1: read-only variable: y` *(status 1)* |
 | `unset/a-readonly-name-under-v-is-refused` | **2>** `<shell>: 1: unset: x: is read only` *(status 2)* | `st=1 [1]~after` **2>** `<shell>: line 1: unset: x: cannot unset: readonly variable` | **2>** `<shell>: line 1: unset: x: cannot unset: readonly variable` *(status 1)* | `st=1 [1]~after` **2>** `<shell>: line 0: unset: x: cannot unset: readonly variable` | `st=1 [1]~after` **2>** `<shell>: unset: warning: x: is read only` | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
 | `unset/a-readonly-name-behind-a-subscript-is-refused` | **2>** `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=1 [1]~after` **2>** `<shell>: line 1: unset: a: cannot unset: readonly variable` | **2>** `<shell>: line 1: unset: a: cannot unset: readonly variable` *(status 1)* | `st=1 [1]~after` **2>** `<shell>: line 0: unset: a: cannot unset: readonly variable` | `st=1 [1]~after` **2>** `<shell>: unset: warning: a: is read only` | **2>** `<shell>:1: no matches found: a[0]` *(status 1)* |
+| `readonly/an-associative-element-is-refused` | **2>** `<script>: 1: typeset: not found~<script>: 2: m[a]=1: not found~<script>: 3: typeset: not found~<script>: 4: m[k]=v: not found~<script>: 5: Bad substitution` *(status 2)* | `st=1 k=[unset] a=[1]~after` **2>** `<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: readonly variable` *(status 1)* | `st=1 k=[1] a=[1]~after` **2>** `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: is read only` *(status 1)* | **2>** `<script>:4: read-only variable: m` *(status 1)* |
+| `readonly/an-indexed-element-is-not-written` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: readonly variable` *(status 1)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: a` *(status 1)* |
+| `readonly/an-element-append-is-refused` | **2>** `<script>: 1: typeset: not found~<script>: 2: m[a]=1: not found~<script>: 3: typeset: not found~<script>: 4: m[a]+=Q: not found~<script>: 5: Bad substitution` *(status 2)* | `st=1 a=[1]~after` **2>** `<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: readonly variable` *(status 1)* | `st=1 a=[1]~after` **2>** `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: is read only` *(status 1)* | **2>** `<script>:4: read-only variable: m` *(status 1)* |
+| `readonly/a-compound-literal-is-refused` | **2>** `<script>: 1: typeset: not found~<script>: 2: m[a]=1: not found~<script>: 3: typeset: not found~<script>: 4: Syntax error: "(" unexpected` *(status 2)* | `st=1 a=[1] z=[unset]~after` **2>** `<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: readonly variable` *(status 1)* | `st=1 a=[1] z=[1]~after` **2>** `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: is read only` *(status 1)* | **2>** `<script>:4: read-only variable: m` *(status 1)* |
+| `readonly/a-compound-append-is-refused` | **2>** `<script>: 1: typeset: not found~<script>: 2: m[a]=1: not found~<script>: 3: typeset: not found~<script>: 4: Syntax error: word unexpected (expecting ")")` *(status 2)* | `st=1 a=[1] z=[unset]~after` **2>** `<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: readonly variable` *(status 1)* | `st=1 a=[1] z=[1]~after` **2>** `<script>: line 1: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 4: m: readonly variable` | **2>** `<script>: line 4: m: is read only` *(status 1)* | **2>** `<script>:4: read-only variable: m` *(status 1)* |
+| `readonly/a-scalar-over-a-frozen-array-is-refused` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: readonly variable` *(status 1)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: a` *(status 1)* |
+| `readonly/a-refused-array-operand-gives-up-the-line` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `two` **2>** `<script>: line 3: a: readonly variable` | `two` **2>** `<script>: line 3: a: readonly variable` | `two` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: a` *(status 1)* |
+| `readonly/a-refused-declaration-operand-reports-one` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: a` *(status 1)* |
 | `axis/export-a-subscripted-operand` | **2>** `<script>: 1: export: a[0]: bad variable name` *(status 2)* | `st=1~after` **2>** `<script>: line 1: export: `a[0]': not a valid identifier` | **2>** `<script>: line 1: export: `a[0]': not a valid identifier` *(status 1)* | `st=1~after` **2>** `<script>: line 1: export: `a[0]': not a valid identifier` | `st=0~after` | **2>** `<script>:1: a: assignment to invalid subscript range` *(status 1)* |
 | `axis/readonly-a-subscripted-operand` | **2>** `<script>: 1: readonly: a[0]: bad variable name` *(status 2)* | `st=1~after` **2>** `<script>: line 1: readonly: `a[0]': not a valid identifier` | **2>** `<script>: line 1: readonly: `a[0]': not a valid identifier` *(status 1)* | `st=1~after` **2>** `<script>: line 1: readonly: `a[0]': not a valid identifier` | `st=0~after` | **2>** `<script>:readonly:1: a[0]: can't create readonly array elements` *(status 1)* |
 | `axis/unset-a-subscripted-operand` | **2>** `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` |
@@ -1184,6 +1192,73 @@ grades it and nothing drift-checks it either, for the same reason.
 - `unset/a-readonly-name-behind-a-subscript-is-refused` — a subscripted operand is refused by the variable the subscript indexes, and the shells that reach the check name the base — `a`, not `a[0]` — so the refusal stands ahead of the element path and the subscript is never evaluated. Only bash and ksh93 get that far: dash refuses `a[0]` as a bad variable name first and zsh reads the brackets as a pattern that matches nothing, so this row records three different complaints for one line and is the reason the wording is worth reading rather than the status alone
   ```sh
   readonly a=1; unset a[0]; echo "st=$? [${a-gone}]"; echo after
+  ```
+- `readonly/an-associative-element-is-refused` — the refusal on an *element* of a frozen name, which is the row #1012 is about. All three shells with the attribute refuse it and leave the table alone — bash 3.2 has no `-A` and dash has no arrays, so the panel's intersection here is the three that can be asked. Ours stored the element, said nothing and reported 0, which is a silent write to a table a script deliberately froze. Run from a script rather than `-c` because the two shells that end the script here would stop before the line that reads the table back
+  ```sh
+  typeset -A m
+  m[a]=1
+  typeset -r m
+  m[k]=v
+  echo "st=$? k=[${m[k]-unset}] a=[${m[a]}]"
+  echo after
+  ```
+- `readonly/an-indexed-element-is-not-written` — the same refusal on the indexed spelling, and the reason the array is read back rather than the status alone: ours printed the complaint and wrote the element anyway, because the only thing consulting the readonly set on this path was the scalar view storeArray keeps in step — after the store. The message alone matched every shell in the panel while the table did not
+  ```sh
+  typeset -a a=(x y)
+  typeset -r a
+  a[0]=z
+  echo "st=$? all=[${a[*]}]"
+  echo after
+  ```
+- `readonly/an-element-append-is-refused` — `m[k]+=v` reads the element, joins the value and stores the result, so it is a write by a second route and had to be asked separately — a guard on the plain element assignment that missed this one would leave the append as the way through
+  ```sh
+  typeset -A m
+  m[a]=1
+  typeset -r m
+  m[a]+=Q
+  echo "st=$? a=[${m[a]}]"
+  echo after
+  ```
+- `readonly/a-compound-literal-is-refused` — the whole-name assignment on an associative array, which never went through the scalar path at all and so replaced the table outright: `a` came back unset where every shell in the panel still has it. The name path being refused is what a fix to the element path must not loosen, and this row is what watches it
+  ```sh
+  typeset -A m
+  m[a]=1
+  typeset -r m
+  m=([z]=9)
+  echo "st=$? a=[${m[a]-unset}] z=[${m[z]-unset}]"
+  echo after
+  ```
+- `readonly/a-compound-append-is-refused` — `m+=(…)` keeps what is there and adds to it, which is a third store with its own path into the table
+  ```sh
+  typeset -A m
+  m[a]=1
+  typeset -r m
+  m+=([z]=9)
+  echo "st=$? a=[${m[a]-unset}] z=[${m[z]-unset}]"
+  echo after
+  ```
+- `readonly/a-scalar-over-a-frozen-array-is-refused` — a scalar assignment replaces any array of the same name, and the removal that does it ran after the refusal had already reported — so a refused assignment destroyed the array it was refused for. The array is read back because the status and the message were both already right
+  ```sh
+  typeset -a a=(x y)
+  typeset -r a
+  a=p
+  echo "st=$? all=[${a[*]}]"
+  echo after
+  ```
+- `readonly/a-refused-array-operand-gives-up-the-line` — an array operand's refusal is a bare assignment's and not a declaration's, which the spelling does not suggest. bash tells the two apart twice over: `declare r=2` against a frozen name reports, names the builtin and runs the next command on the same line, and `typeset -a a=(p q)` names only the variable and gives the rest of the line up — `one` never prints and `two` does. The array operand goes through the assignment machinery and the builtin's name never reaches it. See axis/readonly-refusal-names-the-builtin for the scalar half
+  ```sh
+  typeset -a a=(x y)
+  typeset -r a
+  typeset -a a=(p q); echo one
+  echo two
+  ```
+- `readonly/a-refused-declaration-operand-reports-one` — the status of a declaration whose *operand* was refused. The operand assignments land after the builtin has returned, so the 0 the builtin reported for the attributes it did apply stood over the value it did not — the message printed and `$?` said success
+  ```sh
+  typeset -a a=(x y)
+  typeset -r a
+  typeset -a a=(p q)
+  echo "st=$? all=[${a[*]}]"
+  echo after
   ```
 - `axis/export-a-subscripted-operand` — ksh93 takes it, bash and dash refuse it in the words they give any bad name, and zsh has a complaint of its own about the subscript — naming the base rather than the operand, and without naming the builtin in the location where its other messages do
   ```sh
@@ -5186,6 +5261,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `decl/an-array-assignment-as-an-operand` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[y]` | `[y]` | `[y]` | `[y]` | `[x]` |
 | `decl/a-local-array-stays-local` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[g]` | `[g]` | `[g]` | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `[]` |
 | `decl/readonly-takes-its-array-first` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[q]` | `[q]` | `[q]` | `[q]` | `[p]` |
+| `readonly/a-declarations-own-array-value-survives-its-flag` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 all=[x y]~st=0 k=[v]` | `st=0 all=[x y]~st=0 k=[v]` | `st=0 all=[x y]~st=2 k=[v]` **2>** `<script>: line 3: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<script>[1]: typeset: -ar: invalid variable name` *(status 1)* | `st=0 all=[x y]~st=0 k=[v]` |
 | `param/case-change-applies-its-pattern` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ABc]` | `[ABc]` | **2>** `<shell>: ${x^^[ab]}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/case-change-of-the-first-character` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[Hello][hello]` | `[Hello][hello]` | **2>** `<shell>: ${x^}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/an-expansion-inside-an-operand` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y]` | `[x][y]` | `[x][y]` | `[x][y]` | `[x][y]` |
@@ -5603,6 +5679,13 @@ grades it and nothing drift-checks it either, for the same reason.
 - `decl/readonly-takes-its-array-first` — `readonly` has to set the array before it locks the name, because locking first refuses the very assignment the command was given — the opposite order from `local`, which must make the name local before the array lands
   ```sh
   readonly a=(p q); echo "[${a[1]}]"
+  ```
+- `readonly/a-declarations-own-array-value-survives-its-flag` — the other half of the rule `decl/readonly-takes-its-array-first` records, reached by the spelling that cannot solve it the same way: `readonly` assigns its operands before it locks, and `typeset` cannot, because the array has to land after the shadow a declaration takes inside a function. So the freeze waits for the operand instead. bash and zsh both keep the value; ksh93 does not cluster `-ar` and refuses the flag rather than the value, which is why the row is worth having in all four
+  ```sh
+  typeset -ar a=(x y)
+  echo "st=$? all=[${a[*]}]"
+  typeset -Ar m=([k]=v)
+  echo "st=$? k=[${m[k]}]"
   ```
 - `param/case-change-applies-its-pattern` — the operator carries a pattern saying *which* characters to convert, matched one at a time — `ABc`, not `ABC`. Discarding it was a silent wrong answer in a feature already claimed: the script asked for a subset and got the whole string, with status 0. bash alone has the operator, so the other three refuse the word
   ```sh

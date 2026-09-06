@@ -402,11 +402,54 @@ func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
 // Never undone: a readonly name cannot be made writable again in any shell in
 // the panel, so `+r` does nothing rather than reversing it — which is what
 // they do.
+//
+// A name the running declaration is also assigning to as an operand is frozen
+// *after* that assignment rather than now: see the freezing field and
+// applyDeferredFreeze. `declare -ar A=(x y)` is one command, and the value it
+// carries cannot be refused by the attribute it carries beside it.
 func (r *Runner) markReadonly(name string) {
+	if r.freezing[name] {
+		r.freezeAfter = append(r.freezeAfter, name)
+		return
+	}
 	if r.readonly == nil {
 		r.readonly = map[string]bool{}
 	}
 	r.readonly[name] = true
+}
+
+// applyDeferredFreeze freezes the names markReadonly held back, now that the
+// declaration's own operand assignments have landed.
+//
+// Held as a list rather than a set because nothing here depends on the order
+// and a list says so: the same name twice freezes once either way.
+func (r *Runner) applyDeferredFreeze() {
+	for _, name := range r.freezeAfter {
+		if r.readonly == nil {
+			r.readonly = map[string]bool{}
+		}
+		r.readonly[name] = true
+	}
+	r.freezeAfter = nil
+}
+
+// operandNames is the set of names a command assigns to as operands — the
+// `a=(x y)` written after a declaration utility's own word.
+//
+// Nil when there are none, which is every command that is not a declaration
+// with an array in it, so the lookup markReadonly makes costs a nil map read.
+func operandNames(c *syntax.SimpleCmd) map[string]bool {
+	var names map[string]bool
+	for _, a := range c.Assigns {
+		if !a.Operand {
+			continue
+		}
+		if names == nil {
+			names = map[string]bool{}
+		}
+		names[a.Name] = true
+	}
+	return names
 }
 
 // integerValue evaluates an assignment to a name declared integer.

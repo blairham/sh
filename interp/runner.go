@@ -1080,6 +1080,13 @@ type Runner struct {
 	shellOptsName string
 	// readonly names refuse assignment.
 	readonly map[string]bool
+	// freezing is the names the declaration now running is assigning to as
+	// operands, and freezeAfter is the ones whose `-r` is waiting for those
+	// assignments to land. `declare -ar A=(x y)` carries the value and the
+	// attribute in one command, so the attribute cannot be what refuses the
+	// value — see markReadonly and applyDeferredFreeze.
+	freezing    map[string]bool
+	freezeAfter []string
 	// integer names evaluate what is assigned to them: with the attribute,
 	// `n=5+2` stores 7 rather than the four characters. It is a property of
 	// the name and not of the assignment, which is why it is recorded here.
@@ -2244,13 +2251,52 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// order: `local a=(x)` must make the name local first, or the array
 		// lands in the caller's scope.
 		locks := argv[0] == "readonly"
+		outerFreezing := r.freezing
 		if locks {
 			r.assignOperands(c)
+		} else {
+			// `declare -ar A=(x y)` has the same problem `readonly` solves by
+			// assigning first, and cannot solve it the same way — the array
+			// has to land after the shadow. So the *freeze* waits instead:
+			// the operand is part of the declaration that is applying `-r`,
+			// so `-r` cannot be what refuses it. Without this the refusal
+			// added below turned `declare -ar A=(x y)` into a refusal of its
+			// own value, and `declare -Ar M=([k]=v)` with it.
+			r.freezing = operandNames(c)
 		}
 		st := r.callBuiltin(ctx, argv[0], fn, argv[1:])
 		r.inBuiltin = outer
+		fatal := false
 		if st == 0 && !locks {
 			r.assignOperands(c)
+			switch {
+			case r.ctl == controlExit:
+				// Something here was fatal, and a fatal error has already set
+				// the status its dialect gives one. The builtin's own 0 must
+				// not be written over it below: two of the four end the
+				// script on a refused declaration operand and both reported 0
+				// for having done so.
+				//
+				// Reached only where the builtin itself reported 0, which is
+				// what keeps this away from the option refusals — those are
+				// fatal in one dialect too, and the status they report is the
+				// one the corpus pins.
+				fatal = true
+			case r.assignFailed:
+				// A refused operand is the declaration's own failure, and
+				// biDeclare cannot see it: the operand assignments land after
+				// the builtin has returned, so the 0 it reported for the
+				// attributes it did apply stood over the value it did not.
+				// `readonly A; declare -a A=(p q)` said `A: readonly
+				// variable` and reported 0. Every other spelling of the same
+				// refusal already reports 1 — see biDeclare's own check.
+				st = 1
+			}
+		}
+		r.applyDeferredFreeze()
+		r.freezing = outerFreezing
+		if fatal {
+			return nil
 		}
 		// A builtin can consult an axis of its own — `echo` asks about
 		// backslash escapes — so the check is repeated after it runs as well
@@ -2803,60 +2849,84 @@ func (r *Runner) attributeFolded(name, value string) (string, bool) {
 	return value, true
 }
 
+// refuseReadonly reports whether an assignment to a frozen name is refused,
+// having said so and having decided what the refusal does to the script.
+//
+// Taken out of setVarAs because an array is not stored through it. An element
+// write, a whole-array literal and a compound append each reach a store of
+// their own, and every one of them was taking the write: the refusal was only
+// ever consulted on the path a scalar takes. The indexed spellings *looked*
+// guarded, because storeArray keeps the scalar view in step and that call does
+// go through setVarAs — so the complaint printed after the element had already
+// been written. `declare -a A=(x y); readonly A; A[0]=z` said `A: readonly
+// variable` and left `z` in the array; the associative spelling has no scalar
+// view to keep in step, so it said nothing at all and reported 0.
+//
+// One rule reached from a second place rather than a second rule: the wording
+// is the same, and so is every answer about what the refusal costs — see the
+// ReadonlyReassignment axes below.
+func (r *Runner) refuseReadonly(name string, form assignForm) bool {
+	if !r.readonly[name] {
+		return false
+	}
+	// Fatal everywhere but bash, measured with a plain assignment in a
+	// script — which is the contaminated-probe case oracle.md records.
+	//
+	// And in bash it is fatal after all when the program came from an
+	// argument: `bash -c 'readonly x=1; x=2; echo after'` stops and exits 1,
+	// where the same three lines in a file print `after` and exit 0. Only for
+	// an assignment standing alone — `export x=2` and `x=2 cmd` are not fatal
+	// there either way.
+	//
+	// Two arguments only where the wording asks for two: a format with no
+	// explicit indexes and a spare argument becomes "%!(EXTRA …)", which is
+	// what Wording's own note is about.
+	msg := Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name)
+	if form == assignedByDeclaration && r.diag().ReadonlyVariableInDeclaration != "" &&
+		r.diag().ReadonlyRefusalNamesBuiltin[r.inBuiltin] {
+		msg = Wording(r.diag().ReadonlyVariableInDeclaration, "", name, r.inBuiltin)
+	}
+	// The builtin has been taken for the wording above where a dialect wants
+	// it, and this message does not carry it in the *location* in the dialect
+	// that puts it there for everything else: zsh writes `zsh:1: read-only
+	// variable: x` from inside `export`, not `zsh:export:1:`. So it is put
+	// aside for the report and given back.
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	fatal := r.sem().ReadonlyReassignmentFatal
+	switch {
+	case form == assignedAlone && r.Route == RouteCommandString:
+		fatal = r.sem().ReadonlyReassignmentFatalFromCommandString
+	case form == assignedByDeclaration:
+		// A third answer, and a different set of shells from either of the two
+		// above: `export x=2` stops dash, ksh93 and zsh, and bash reports it
+		// and carries on — by both invocation routes.
+		fatal = r.sem().ReadonlyReassignmentByDeclarationFatal
+	}
+	if r.ask(fatal, "a readonly reassignment being fatal") {
+		r.fatal("%s\n", msg)
+		return true
+	}
+	r.diagf("%s\n", msg)
+	r.status, r.assignFailed = 1, true
+	// Reported and not fatal, and the shell still gives up what it was
+	// running: `readonly r=1; r=2; echo one` never prints `one`, and the line
+	// after it runs. Measured in every shape that encloses a statement — a
+	// loop, a function body, an `if`, a group, a subshell.
+	//
+	// A *declaration* does not give anything up. `export x=2`, `declare x=2`
+	// and `readonly x=2` against a readonly name all report and run the next
+	// command on the same line, which is the tell that this is about a bare
+	// assignment failing rather than about the refusal.
+	if form != assignedByDeclaration {
+		r.ctl, r.abandonLine = controlAbandon, r.line
+	}
+	return true
+}
+
 func (r *Runner) setVarAs(name, value string, form assignForm) {
-	if r.readonly[name] {
-		// Fatal everywhere but bash, measured with a plain assignment in a
-		// script — which is the contaminated-probe case oracle.md records.
-		//
-		// And in bash it is fatal after all when the program came from an
-		// argument: `bash -c 'readonly x=1; x=2; echo after'` stops and
-		// exits 1, where the same three lines in a file print `after` and
-		// exit 0. Only for an assignment standing alone — `export x=2` and
-		// `x=2 cmd` are not fatal there either way.
-		// Two arguments only where the wording asks for two: a format with
-		// no explicit indexes and a spare argument becomes "%!(EXTRA …)",
-		// which is what Wording's own note is about.
-		msg := Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name)
-		if form == assignedByDeclaration && r.diag().ReadonlyVariableInDeclaration != "" &&
-			r.diag().ReadonlyRefusalNamesBuiltin[r.inBuiltin] {
-			msg = Wording(r.diag().ReadonlyVariableInDeclaration, "", name, r.inBuiltin)
-		}
-		// The builtin has been taken for the wording above where a dialect
-		// wants it, and this message does not carry it in the *location* in
-		// the dialect that puts it there for everything else: zsh writes
-		// `zsh:1: read-only variable: x` from inside `export`, not
-		// `zsh:export:1:`. So it is put aside for the report and given back.
-		outer := r.inBuiltin
-		r.inBuiltin = ""
-		defer func() { r.inBuiltin = outer }()
-		fatal := r.sem().ReadonlyReassignmentFatal
-		switch {
-		case form == assignedAlone && r.Route == RouteCommandString:
-			fatal = r.sem().ReadonlyReassignmentFatalFromCommandString
-		case form == assignedByDeclaration:
-			// A third answer, and a different set of shells from either of
-			// the two above: `export x=2` stops dash, ksh93 and zsh, and
-			// bash reports it and carries on — by both invocation routes.
-			fatal = r.sem().ReadonlyReassignmentByDeclarationFatal
-		}
-		if r.ask(fatal, "a readonly reassignment being fatal") {
-			r.fatal("%s\n", msg)
-			return
-		}
-		r.diagf("%s\n", msg)
-		r.status, r.assignFailed = 1, true
-		// Reported and not fatal, and the shell still gives up what it was
-		// running: `readonly r=1; r=2; echo one` never prints `one`, and the
-		// line after it runs. Measured in every shape that encloses a
-		// statement — a loop, a function body, an `if`, a group, a subshell.
-		//
-		// A *declaration* does not give anything up. `export x=2`, `declare
-		// x=2` and `readonly x=2` against a readonly name all report and run
-		// the next command on the same line, which is the tell that this is
-		// about a bare assignment failing rather than about the refusal.
-		if form != assignedByDeclaration {
-			r.ctl, r.abandonLine = controlAbandon, r.line
-		}
+	if r.refuseReadonly(name, form) {
 		return
 	}
 	if r.Vars == nil {
@@ -2966,6 +3036,25 @@ func (r *Runner) assignOperands(c *syntax.SimpleCmd) {
 // assign performs one assignment, which is three different things wearing the
 // same syntax: a scalar, a whole array, or one element of one.
 func (r *Runner) assign(a *syntax.Assign) {
+	// The refusal stands in front of all three, and it used to stand in front
+	// of one: setVarAs is where it lived, and only the scalar branch below
+	// goes through setVarAs. An element write, an array literal and a
+	// compound append each reach a store of their own and every one of them
+	// took the write — see refuseReadonly.
+	//
+	// Only the array form is ever an operand (see syntax.Assign.Operand), so
+	// a declaration utility's own `a=(…)` arrives here too — and it is
+	// refused as a bare assignment rather than as a declaration, which is not
+	// what the spelling suggests. Measured in bash: `declare r=2` and
+	// `export r=2` against a frozen name report and run the next command on
+	// the same line, and `declare r=2` names the builtin in the complaint,
+	// while `typeset -a a=(p q)` does neither — it gives up the rest of the
+	// line and names only the variable, exactly as `a=(p q)` and `a[0]=z` do.
+	// The array operand goes through the assignment machinery in every shell
+	// that has it, and the builtin's name never reaches it.
+	if r.refuseReadonly(a.Name, assignedAlone) {
+		return
+	}
 	switch {
 	case a.IsArray && r.assocDeclared(a.Name):
 		// The attribute was declared, so the literal's elements are keyed

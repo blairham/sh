@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -149,11 +150,24 @@ func TestAnExpandedPatternWithoutAMetacharacterAsksNothing(t *testing.T) {
 // the command did not run, which is the half a change here would break
 // silently.
 func TestAProcessSubstitutionInAPatternIsNotPerformed(t *testing.T) {
-	const src = `ran=no; marker() { ran=yes; }; v=abcd; ` +
-		`printf "[%s]" "${v#<(marker)}"; printf "ran=%s" "$ran"`
-	out, st := runGrammar(t, src, patternGrammar, nil)
-	if want := "[abcd]ran=no"; out != want || st != 0 {
+	// The subject is the value coming back whole, and the evidence that
+	// nothing ran is the scratch directory: a substitution that is performed
+	// makes an `sh-procsub…` directory under the Runner's TMPDIR to hold its
+	// pipe. Asserting on a variable the command sets would prove nothing —
+	// the command runs in a child, so an assignment it makes never comes
+	// back either way.
+	tmp := t.TempDir()
+	out, st := runGrammar(t, `v=abcd; printf "[%s]" "${v#<(:)}"`, patternGrammar,
+		func(r *Runner) { r.Env = append(r.Env, "TMPDIR="+tmp) })
+	if want := "[abcd]"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
+	}
+	made, err := filepath.Glob(filepath.Join(tmp, "sh-procsub*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(made) != 0 {
+		t.Errorf("a process substitution ran: %v", made)
 	}
 }
 

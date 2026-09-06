@@ -1606,6 +1606,34 @@ type Semantics struct {
 	// the dialect's first subscript is itself under either reading.
 	ScalarSubscriptIsACharacter Answer
 
+	// MultibyteEncodingIsHonored decodes the locale's character encoding, so
+	// that `${#s}`, `${s:off:len}` and a subscript on a scalar count
+	// characters rather than bytes.
+	//
+	// Measured 2026-09-05 with `s=héllo; echo ${#s}` under
+	// `LC_ALL=en_US.UTF-8`: bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93u+
+	// and zsh 5.9.2 all answer 5, and dash answers 6. Under `LC_ALL=C` every
+	// one of them answers 6, dash included — so this is not "four shells
+	// count characters", it is "four shells honor the encoding the locale
+	// names and one has no multibyte decoder at all". `s=日本語; echo ${#s}`
+	// separates them further: 3 against 9.
+	//
+	// Which encoding is in force is **not** a second axis. It is state read
+	// off the runner's own variables, exactly as PATH and IFS are, and it
+	// moves inside a running shell: `LC_ALL=C; s=héllo; echo ${#s}` gives 6
+	// in every panel member with nothing exported. See interp/multibyte.go
+	// for the precedence and the codesets, and driver/startup.go for the
+	// same reasoning applied to POSIX mode (#691, #733).
+	//
+	// Silent either way, which is why it is an axis and not a bug in one
+	// place: both answers are plausible numbers and neither shell reports
+	// anything.
+	//
+	// Asked only where the two readings differ — a value whose bytes are all
+	// ASCII is the same length and has the same positions under both — so a
+	// shell that never sees a non-ASCII byte never needs an answer.
+	MultibyteEncodingIsHonored Answer
+
 	// NegativeSubscriptPastTheStartInserts places a new element in front of
 	// every other when a negative subscript counts back past the first one:
 	// `a=(p q); a[-3]=x` leaves three elements with `x` at the head, however
@@ -3033,8 +3061,13 @@ func PosixSemantics() Semantics {
 		// have is its arithmetic: a comma there is the operator whose value
 		// is its right operand, and a string is not a sequence a subscript
 		// reaches into. Both are also what every panel member but one does.
-		SubscriptCommaIsARange:             No,
-		ScalarSubscriptIsACharacter:        No,
+		SubscriptCommaIsARange:      No,
+		ScalarSubscriptIsACharacter: No,
+		// XCU defines ${#parameter} as the length of the value "in
+		// characters", and defines a character as what the locale's
+		// LC_CTYPE category says one is. So the standard's answer is yes,
+		// and it is also what every panel member but dash does.
+		MultibyteEncodingIsHonored:         Yes,
 		DollarZeroInFunctionIsFunctionName: No,
 		// A special builtin's failure is fatal to a non-interactive shell,
 		// which the standard states outright. dash is the only member of the

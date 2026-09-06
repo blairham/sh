@@ -666,7 +666,7 @@ func (r *Runner) rangeSubscript(e *syntax.ParamExpr, elems []string, scalar bool
 func (r *Runner) rangeElems(elems []string, scalar bool, lo, hi string) ([]string, bool) {
 	var units []string
 	if scalar {
-		units = characters(elems[0])
+		units = r.units(elems[0])
 	} else {
 		units = elems
 	}
@@ -731,15 +731,17 @@ func (r *Runner) scalarReadsAsCharacters(v, idx string) bool {
 // charAt is one character of a string, counted the way the dialect counts
 // subscripts and from the end when the subscript is negative.
 //
-// Characters and not bytes: the shell that reads a string this way reports
-// `${s[2]}` of a five-character string holding a two-byte character as that
-// character, measured.
+// What a character *is* is the locale's, not a byte: measured under a UTF-8
+// locale, the shell that reads a string this way reports `${s[2]}` of a
+// five-character string holding a two-byte character as that character, and
+// under `LC_ALL=C` the same shell reports the string's second byte. See
+// interp/multibyte.go, which owns both halves of that question.
 func (r *Runner) charAt(v, idx string) (string, bool) {
 	n, err := r.subscriptValue(idx)
 	if err != nil {
 		return "", false
 	}
-	chars := characters(v)
+	chars := r.units(v)
 	var pos int
 	if n < 0 {
 		pos = len(chars) + n
@@ -750,16 +752,6 @@ func (r *Runner) charAt(v, idx string) (string, bool) {
 		return "", false
 	}
 	return chars[pos], true
-}
-
-// characters splits a string the way a shell counts it: by character, so a
-// multi-byte one is a single unit.
-func characters(v string) []string {
-	out := make([]string, 0, len(v))
-	for _, c := range v {
-		out = append(out, string(c))
-	}
-	return out
 }
 
 // equalStrings compares two readings of one subscript, counting a nil result

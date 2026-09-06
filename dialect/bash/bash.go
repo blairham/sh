@@ -304,6 +304,11 @@ func Semantics() interp.Semantics {
 	s.ProcessSubstitutionInCondition = interp.Yes
 	s.ShiftPastEndFatal = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	// An attribute added to a name that already holds a value waits for the
+	// next assignment: `FOO=bar; typeset -i FOO` still reads `bar`, and
+	// `d=MiXeD; typeset -u d` still reads `MiXeD`. ksh93 and zsh re-read on
+	// the spot and store 0 and MIXED.
+	s.AttributeRereadsTheValueItFinds = interp.No
 	// `local u` hides the caller's `u` — the local exists unset.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No

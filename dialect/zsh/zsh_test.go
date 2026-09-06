@@ -134,6 +134,10 @@ func TestSemantics(t *testing.T) {
 		{"SelectEofEndsPromptLine", s.SelectEofEndsPromptLine, interp.Yes},
 		{"SelectAssumesUnboundedWidth", s.SelectAssumesUnboundedWidth, interp.Yes},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.Yes},
+		// The same answer as the axis above, and by coincidence rather than
+		// by implication: this shell got the re-read for years out of the
+		// other question being yes, and ksh93 answers the two differently.
+		{"AttributeRereadsTheValueItFinds", s.AttributeRereadsTheValueItFinds, interp.Yes},
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.No},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.No},

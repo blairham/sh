@@ -115,6 +115,9 @@ func TestSemantics(t *testing.T) {
 		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.No},
 		{"TerminalTestRequiresANumber", s.TerminalTestRequiresANumber, interp.Yes},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
+		// dash has no `typeset` or `declare` either, so there is no attribute
+		// to add to a standing value and the axis does not arise.
+		{"AttributeRereadsTheValueItFinds", s.AttributeRereadsTheValueItFinds, interp.Unspecified},
 		// dash has no `typeset`, so TypesetLocalNeedsKeywordFunction is absent
 		// rather than false — the axis does not arise.
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.Unspecified},

@@ -7024,6 +7024,76 @@ recorded it would record where it was generated.
 
 ### declarations, `export` and `readonly`
 
+**`AttributeRereadsTheValueItFinds`** — bash no · dash unspecified · ksh93 yes · zsh yes
+
+Makes an attribute a declaration adds re-read the value the name is
+already holding, on the spot, rather than waiting for the next
+assignment.
+
+    FOO=bar;   typeset -i FOO      bash [bar]     ksh93, zsh [0]
+    d=MiXeD;   typeset -u d        bash [MiXeD]   ksh93, zsh [MIXED]
+    e=MiXeD;   typeset -l e        bash [MiXeD]   ksh93, zsh [mixed]
+
+Measured 2026-09-06, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`,
+from a script file and through `-c`, and in zsh under `emulate sh`,
+`emulate ksh` and `emulate zsh` alike. The three bash columns answer no
+and both of the others answer yes; dash has neither builtin. The issue
+that filed this had zsh on bash's side and had `-u` as unanimous, and
+both were wrong — the measurement is what made it one field instead of a
+rule plus an axis.
+
+**Both answers lose data, which is what makes it a field.** A shell that
+re-reads destroys text: `bar` is an expression made of an unset name, so
+0 is what the name holds afterwards. A shell that does not leaves a name
+declared integer holding text that is not a number. There is no reading
+under which both are kept, so a dialect has to say which shell it is.
+
+**One question over every letter that has something to say about a
+value**, not one per letter. The shells that re-read `-i` fold `-u` and
+`-l` on the spot too, and the shell that does not, does not; `-x`, `-r`
+and `-a` say nothing about a value and never reach it. Splitting them
+would have been three fields whose answers can only ever agree.
+
+The re-read canonicalizes rather than merely evaluating, which is where a
+narrower reading goes wrong: `08` is 8 and not an octal complaint, `" 7 "`
+loses its spaces, `+7` its sign, `5+2` is 7, and an empty value is 0.
+
+**The question has to be asked without evaluating.** Folding first to
+find out whether the two readings differ makes the question's own answer
+depend on the dialect's, in the loud direction: `FOO=08; typeset -i FOO`
+reported `value too great for base` and failed at 1 under the bash
+answer, where real bash reads `08` back in silence. So the predicate asks
+the narrower "is this text already the canonical spelling of itself",
+which is pure.
+
+Asked only where a name is *already* holding something in the cell being
+declared. A declaration that creates the name has nothing to re-read, and
+inside a function the cell a shadow just made is new whatever the caller
+held — that is `DeclaredNameWithoutValueIsEmpty` and not this, and the
+two were one branch until this field existed, so zsh got the re-read by
+accident of answering that question yes and ksh93, which answers it no,
+never reached it at all.
+
+The *next* assignment is unanimous and no part of this: `typeset -i a;
+a=3+4` is 7 and `typeset -u d; d=again` is AGAIN in every shell that
+spells the letter. What is asked is only whether the attribute reaches
+backwards.
+
+Not an assignment, so it does not meet the readonly refusal: `typeset -r
+r=1; typeset -i r` is 1 at status 0 in the two shells that re-read.
+
+Pinned by `declare/an-attribute-re-reads-the-value-the-name-already-holds`,
+`declare/an-integer-attribute-over-a-number-written-oddly`,
+`declare/an-attribute-that-would-change-nothing-needs-no-dialect`,
+`declare/an-attribute-over-a-cell-a-function-just-shadowed` and
+`declare/an-attribute-added-to-an-exported-name-reaches-the-child`, the
+last of which asks it of a *child* — so the re-read is a change to the
+value and not a way of rendering it.
+
+Two divergences beside it, measured and not modeled: ksh93 folds an
+array's elements under `-u` where zsh leaves them alone, and zsh renders
+`0x10` under `-i` as `16#10` where ksh93 gives `16`.
+
 **`DeclarationNameOperands`** — bash PlainNamesOnly · dash PlainNamesOnly · ksh93 PlainNamesOnly · zsh NamesAndSpecialParameters
 
 Says what may stand where `export` and `readonly` want a name, beyond a

@@ -81,6 +81,11 @@ func TestSemantics(t *testing.T) {
 		// axis does not arise here and is left unanswered.
 		{"SelectAssumesUnboundedWidth", s.SelectAssumesUnboundedWidth, interp.Unspecified},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
+		// And the opposite answer to the one beside it, which is the pair
+		// that says the two are separate questions: an attribute re-reads
+		// the value it finds here — `FOO=bar; typeset -i FOO` is 0 — while a
+		// declaration that creates the name leaves it unset.
+		{"AttributeRereadsTheValueItFinds", s.AttributeRereadsTheValueItFinds, interp.Yes},
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.Yes},
 		{"IndirectionYieldsName", s.IndirectionYieldsName, interp.Yes},
 		// The brace-range answers: `{01..3}` is `1 2 3`, `{10..1..3}` is

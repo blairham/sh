@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -551,33 +552,22 @@ func (r *Runner) integerValue(text string) (string, bool) {
 // is a dialect's answer, so this is the one place that decides it and both
 // `local` and `typeset` come through here.
 func (r *Runner) declareEmpty(name string, fresh bool) {
+	// A name that already holds a value is not one this declaration is
+	// bringing into being, and nothing about being declared empties it:
+	// `typeset -x v` on a `v=abc` leaves `abc` alone in all four shells that
+	// spell the builtin, and so does `typeset -H h` on an `h=hid`. Emptying
+	// it made a declaration that only meant to add an attribute destroy the
+	// value it was adding it to.
+	//
+	// Inside a function the cell a shadow just made is new whatever the
+	// caller held, which is what fresh says — measured, `v=5; function f {
+	// typeset -i v; echo "[${v-UNSET}]"; }` reads UNSET in bash and ksh93 and
+	// `0` in zsh, against `[5]` for the same line at the top.
+	if !fresh && r.declaredNameHolds(name) {
+		r.rereadStandingValue(name)
+		return
+	}
 	if r.ask(r.sem().DeclaredNameWithoutValueIsEmpty, "a declaration without a value setting the name") {
-		if !fresh && r.declaredNameHolds(name) {
-			// The axis is about a name the declaration *creates*, not about
-			// one that is already there: `typeset -x v` on a `v=abc` leaves
-			// `abc` alone in all four shells that spell the builtin, and so
-			// does `typeset -H h` on an `h=hid`. Emptying it here made a
-			// declaration that only meant to add an attribute destroy the
-			// value it was adding it to. Inside a function the cell the
-			// shadow just made is new whatever the caller held, which is
-			// what fresh says — measured `in=[0]` for `typeset -i v` under
-			// an outer `v=5`, against `[5]` for the same line at the top.
-			//
-			// What it keeps is read back through the attribute that has
-			// just arrived, which is not the same as leaving it untouched:
-			// `a=5+2; typeset -i a` is 7 and `d=MiXeD; typeset -u d` is
-			// MIXED. A scalar only — an array keeps its elements as they
-			// are under both case letters, measured `a b` from
-			// `arr=(a b); typeset -u arr`. Not an assignment either, so a
-			// readonly name is re-read rather than refused: measured
-			// `typeset -r r=1; typeset -i r` as 1 with status 0.
-			if v, ok := r.Vars[name]; ok {
-				if folded, ok := r.attributeFolded(name, v); ok {
-					r.Vars[name] = folded
-				}
-			}
-			return
-		}
 		r.setVar(name, "")
 		// Set by a declaration and not by an assignment, which the shell's
 		// own reads cannot tell apart and a child can: see
@@ -654,6 +644,101 @@ func (r *Runner) declarationAssignmentExport(name string, namesTheAttribute bool
 		r.exported = map[string]bool{}
 	}
 	r.exported[name] = false
+}
+
+// rereadStandingValue applies an attribute a declaration has just added to the
+// value the name was already holding, where the dialect says it reaches back.
+//
+// The two answers **both lose something**, which is why it is a field rather
+// than a rule. A shell that re-reads destroys text: `FOO=bar; typeset -i FOO`
+// evaluates `bar` as an expression, an unset name is 0, and 0 is what the name
+// holds afterwards — measured in ksh93u+ and zsh 5.9.2, from a file and
+// through `-c`, and in every zsh emulation. A shell that does not leaves a
+// name declared integer holding text that is not a number — measured in bash
+// 5.3.15, bash as `sh` and bash 3.2.57, which all still read `bar`. Neither
+// reading keeps both promises.
+//
+// One question over every attribute that has something to say about a value:
+// the shells that re-read `-i` fold `-u` and `-l` on the spot too — `d=MiXeD;
+// typeset -u d` is MIXED in ksh93 and zsh and MiXeD in bash — and the shell
+// that does not, does not. So the letters share an answer rather than each
+// having one.
+//
+// Asked only where the two readings differ. An attribute with nothing to say
+// about a value — `-x`, `-r`, `-a` — folds to itself and never gets here, and
+// neither does a value the fold leaves alone, so `a=7; typeset -i a` needs no
+// dialect.
+//
+// Not an assignment, which is why attributeFolded is called rather than
+// setVarAs: a readonly name is re-read rather than refused, measured `typeset
+// -r r=1; typeset -i r` as 1 at status 0. A scalar only — zsh keeps an array's
+// elements as they are under both case letters, measured `a b` from `arr=(a
+// b); typeset -u arr`, where ksh93 folds them; that divergence is recorded and
+// not modeled.
+func (r *Runner) rereadStandingValue(name string) {
+	// The value the name holds, wherever it is being held. A name the script
+	// never assigned is still holding what it was started with, and reading
+	// only the table skipped exactly that: `INHERITED=bar sh -c 'typeset -i
+	// INHERITED; echo "[$INHERITED]"'` is `[0]` in zsh 5.9.2 and was `[bar]`
+	// here, because the name lives in the inherited environment until
+	// something writes it. Found by a mutant: dropping the `ok` guard changed
+	// nothing any test could see, which is what said the guard was standing
+	// in front of a case nothing reached.
+	v, ok := r.Vars[name]
+	if !ok {
+		if v, ok = r.inheritedValue(name); !ok {
+			// An array or an associative table — declaredNameHolds counts
+			// those too — or an exported name with no value anywhere. A
+			// scalar re-read has nothing to say about any of them: measured,
+			// `arr=(a b); typeset -u arr` leaves `a b` in zsh where ksh93
+			// folds the elements, and that divergence is recorded and not
+			// modeled.
+			return
+		}
+	}
+	if !r.attributeWouldChange(name, v) {
+		return
+	}
+	if !r.ask(r.sem().AttributeRereadsTheValueItFinds,
+		"an attribute re-reading the value the name already holds") {
+		return
+	}
+	if folded, ok := r.attributeFolded(name, v); ok {
+		r.Vars[name] = folded
+	}
+}
+
+// attributeWouldChange reports whether re-reading a value through the name's
+// attributes could give anything other than the value itself — the only case
+// the two readings differ in, and so the only case worth a dialect.
+//
+// It has to answer **without evaluating**, because evaluating is exactly what
+// the shell that does not re-read never does, and this engine's evaluation
+// complains out loud. `FOO=08; typeset -i FOO` is the shape that proves it:
+// the expression is a bad octal digit and the complaint ends the command,
+// where bash reads `08` back with nothing said at all. Folding first to find
+// out whether to ask made the question's own answer conditional on the
+// dialect's, in the one direction that is loud.
+//
+// So the integer half asks a narrower question than the fold does: is this
+// text already the canonical decimal spelling of itself? That is the one shape
+// an integer attribute leaves alone, and anything else — `08`, `+7`, `3+4`,
+// `bar`, an empty string — reads differently under the two shells whether it
+// evaluates or not.
+func (r *Runner) attributeWouldChange(name, value string) bool {
+	if r.integer[name] {
+		n, err := strconv.Atoi(value)
+		if err != nil || itoa(n) != value {
+			return true
+		}
+	}
+	switch {
+	case r.lowered[name]:
+		return strings.ToLower(value) != value
+	case r.uppered[name]:
+		return strings.ToUpper(value) != value
+	}
+	return false
 }
 
 // declaredNameHolds reports whether the name already has something to lose:

@@ -325,6 +325,12 @@ func Semantics() interp.Semantics {
 	s.SelectTakesUnterminatedReply = interp.Yes
 	s.SelectEofPrintsNewline = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
+	// And an attribute added to a name that already holds a value re-reads
+	// it at once, as ksh93 does: `FOO=bar; typeset -i FOO` stores 0 and
+	// `d=MiXeD; typeset -u d` stores MIXED. A separate question from the
+	// one above, which this shell happens to answer the same way — bash
+	// answers both no and ksh93 answers them differently from each other.
+	s.AttributeRereadsTheValueItFinds = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	// A local does not inherit the export attribute of the name it shadows.
 	// Measured with a real child: `export FOO=bar; f() { local FOO=baz; env;

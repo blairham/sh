@@ -22,6 +22,13 @@ import (
 // layout, and the given diagnostics, and reports stdout, stderr and status.
 func declRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) (string, string, int) {
 	t.Helper()
+	return declRunEnv(t, src, set, dg, nil)
+}
+
+// declRunEnv is declRun with an environment the shell was started with, for
+// the one question that is about a name the script never assigned.
+func declRunEnv(t *testing.T, src string, set func(*Semantics), dg Diagnostics, env []string) (string, string, int) {
+	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -37,7 +44,7 @@ func declRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) (st
 	var out, errs bytes.Buffer
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
-		Dir: t.TempDir(), Name: "testsh",
+		Dir: t.TempDir(), Name: "testsh", Env: env,
 	})
 	// One arrangement for every test that says a function back; the tests
 	// about arrangements live with the dialects that own them.

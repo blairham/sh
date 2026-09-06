@@ -8277,6 +8277,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/integer-attribute-on-the-declaration` | `[]` **2>** `<shell>: 1: typeset: not found` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` |
 | `declare/integer-attribute-removed` | `[5+2]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` |
 | `declare/integer-attribute-with-text` | `[abc]` **2>** `<shell>: 1: typeset: not found` | `[0]` | `[0]` | `[0]` | `[0]` | `[0]` |
+| `declare/an-attribute-re-reads-the-value-the-name-already-holds` | `i[bar]~u[MiXeD]~l[MiXeD]` **2>** `<shell>: 1: typeset: not found~<shell>: 2: typeset: not found~<shell>: 3: typeset: not found` | `i[bar]~u[MiXeD]~l[MiXeD]` | `i[bar]~u[MiXeD]~l[MiXeD]` | `i[bar]~u[MiXeD]~l[MiXeD]` **2>** `<shell>: line 1: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 2: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `i[0]~u[MIXED]~l[mixed]` | `i[0]~u[MIXED]~l[mixed]` |
+| `declare/an-integer-attribute-over-a-number-written-oddly` | `1[08]~2[ 7 ]~3[+7]~4[5+2]~5[]` **2>** `<shell>: 1: typeset: not found~<shell>: 2: typeset: not found~<shell>: 3: typeset: not found~<shell>: 4: typeset: not found~<shell>: 5: typeset: not found` | `1[08]~2[ 7 ]~3[+7]~4[5+2]~5[]` | `1[08]~2[ 7 ]~3[+7]~4[5+2]~5[]` | `1[08]~2[ 7 ]~3[+7]~4[5+2]~5[]` | `1[8]~2[7]~3[7]~4[7]~5[0]` | `1[8]~2[7]~3[7]~4[7]~5[0]` |
+| `declare/an-attribute-that-would-change-nothing-needs-no-dialect` | `1[7]~2[abc]~3[MiXeD]` **2>** `<shell>: 1: typeset: not found~<shell>: 2: typeset: not found~<shell>: 3: typeset: not found` | `1[7]~2[abc]~3[MiXeD]` | `1[7]~2[abc]~3[MiXeD]` | `1[7]~2[abc]~3[MiXeD]` | `1[7]~2[abc]~3[MiXeD]` | `1[7]~2[abc]~3[MiXeD]` |
+| `declare/an-attribute-over-a-cell-a-function-just-shadowed` | **2>** `<shell>: 2: Syntax error: "}" unexpected` *(status 2)* | `in[UNSET]~out[5]` | `in[UNSET]~out[5]` | `in[UNSET]~out[5]` | `in[UNSET]~out[5]` | `in[0]~out[5]` |
+| `declare/an-attribute-added-to-an-exported-name-reaches-the-child` | `FOO=bar` **2>** `<shell>: 1: typeset: not found` | `FOO=bar` | `FOO=bar` | `FOO=bar` | `FOO=0` | `FOO=0` |
 | `declare/readonly-attribute-allows-its-own-value` | `[]~[2]` **2>** `<script>: 1: typeset: not found` | `[1]~[1]` **2>** `<script>: line 3: c: readonly variable` | `[1]` **2>** `<script>: line 3: c: readonly variable` *(status 1)* | `[1]~[1]` **2>** `<script>: line 3: c: readonly variable` | `[1]` **2>** `<script>: line 3: c: is read only` *(status 1)* | `[1]` **2>** `<script>:3: read-only variable: c` *(status 1)* |
 | `declare/print-a-scalar-back` | `st=127` **2>** `<shell>: 1: typeset: not found` | `declare -- v="a b"~declare -x e="E"~st=0` | `declare -- v="a b"~declare -x e="E"~st=0` | `declare -- v="a b"~declare -x e="E"~st=0` | `v='a b'~typeset -x e=E~st=0` | `typeset v='a b'~export e=E~st=0` |
 | `declare/print-arrays-back` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `declare -a arr='([0]="x" [1]="y")'~declare -a m='([0]="a b")'` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -a arr=(x y)~typeset -A m=([k]='a b')` | `typeset -a arr=( x y )~typeset -A m=( [k]='a b' )` |
@@ -8462,6 +8467,37 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/integer-attribute-with-text` — text that is not a number is not an error: `abc` is an expression whose value is an unset name, so the result is zero and nothing is said
   ```sh
   typeset -i n; n=abc; echo "[$n]"
+  ```
+- `declare/an-attribute-re-reads-the-value-the-name-already-holds` — whether an attribute added to a name that is already holding something reaches *backwards* to the value it found, or waits for the next assignment. ksh93 and zsh re-read at once — `bar` is an expression made of an unset name, so 0 is what is left, and `MiXeD` folds on the spot — where the three bash columns leave all three values standing. **Both answers lose data**, which is what makes it a field and not a rule: one destroys the text and the other leaves a name declared integer holding text that is not a number. The three letters are on one line because they share one answer per shell rather than each having one, which is the whole finding: the issue this closes recorded `-u` as unanimous and bash 5.3.15 does not fold it, and recorded zsh on bash's side of `-i` when it is on ksh93's. `declare/integer-attribute-added-to-a-name-with-a-value` and `declare/case-attribute-added-to-a-name-with-a-value` ask two of these of a value that is already a number or already mixed-case; this one asks all three of text, which is where the two answers part company hardest — one of them destroys it (#1000)
+  ```sh
+  FOO=bar; typeset -i FOO; echo "i[$FOO]"
+  d=MiXeD; typeset -u d; echo "u[$d]"
+  e=MiXeD; typeset -l e; echo "l[$e]"
+  ```
+- `declare/an-integer-attribute-over-a-number-written-oddly` — the same question over text that *is* a number written some other way, which is where a narrower reading of it goes wrong. The shells that re-read canonicalize all five — `08` is 8 and not an octal error, a padded `7` loses its spaces, `+7` its sign, `5+2` is 7 and an empty value is 0 — and the shells that do not leave every one of them as written. `08` is the row that decides how the *question* may be asked: a predicate that folded first to find out whether the readings differ would report a bad octal digit and fail, where the shells that keep the text say nothing at all, so the answer of the question would depend on the answer being asked for
+  ```sh
+  a=08; typeset -i a; echo "1[$a]"
+  b=" 7 "; typeset -i b; echo "2[$b]"
+  c=+7; typeset -i c; echo "3[$c]"
+  g=5+2; typeset -i g; echo "4[$g]"
+  h=; typeset -i h; echo "5[$h]"
+  ```
+- `declare/an-attribute-that-would-change-nothing-needs-no-dialect` — the control, and it is unanimous across all six columns: a value the attribute would read back unchanged, and two attributes that have nothing to say about a value at all. So the divergence above belongs to the *re-reading* and not to declaring — a reading under which a declaration empties or rewrites whatever it touches passes the rows above and fails this one, and an earlier one of ours emptied the name here
+  ```sh
+  a=7; typeset -i a; echo "1[$a]"
+  b=abc; typeset -x b; echo "2[$b]"
+  c=MiXeD; typeset -r c; echo "3[$c]"
+  ```
+- `declare/an-attribute-over-a-cell-a-function-just-shadowed` — the boundary: inside a function the cell the declaration just made is **new** whatever the caller was holding, so there is nothing standing in it to re-read. bash and ksh93 leave it unset and zsh gives it the empty-declaration value 0 — which is `DeclaredNameWithoutValueIsEmpty` and not this axis, and is why the two had to be separated: the re-read used to live inside that branch, so zsh got it by accident of answering that question yes and ksh93, which answers it no, never reached it. The caller's 5 is untouched in every column. The keyword spelling of the definition is load-bearing for one shell, where `typeset` makes a local only in that form
+  ```sh
+  v=5
+  function f { typeset -i v; echo "in[${v-UNSET}]"; }
+  f
+  echo "out[$v]"
+  ```
+- `declare/an-attribute-added-to-an-exported-name-reaches-the-child` — the same divergence seen from the only place it cannot be argued about: what the *child* is told. `FOO=0` in ksh93 and zsh and `FOO=bar` in the three bash columns, so the re-read is a change to the value and not a way of reading it back — a shell that merely rendered the name differently to its own expansions would answer this row `bar` everywhere
+  ```sh
+  export FOO=bar; typeset -i FOO; env | grep '^FOO='
   ```
 - `declare/readonly-attribute-allows-its-own-value` — the declaration assigns and then freezes, so its own value survives and the next assignment does not — applying both at once would refuse the value it was given
   ```sh

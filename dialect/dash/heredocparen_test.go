@@ -24,19 +24,30 @@ import (
 // for it, because the state is the one it already has a sentence for (#963).
 func TestADelimiterCarryingTheClosingParenLeavesTheSubstitutionOpen(t *testing.T) {
 	const want = `Syntax error: end of file unexpected (expecting ")")`
-	for _, c := range []struct{ name, src string }{
-		{"the delimiter carries the paren", "v=$(cat <<EOF\na\nEOF)\necho \"[$v]\"\n"},
-		{"a second here-document carries it", "v=$(cat <<A\nx\nA\ncat <<B\ny\nB)\n"},
-		{"two constructs close on the one line", "v=$(echo $(cat <<E\nz\nE))\n"},
-		{"the control: nothing closed the substitution at all", "v=$(echo hi\necho done\n"},
+	for _, c := range []struct {
+		name, src string
+		line      int
+	}{
+		{"the delimiter carries the paren", "v=$(cat <<EOF\na\nEOF)\necho x\n", 5},
+		{"a second here-document carries it", "v=$(cat <<A\nx\nA\ncat <<B\ny\nB)\necho x\n", 8},
+		{"two constructs close on the one line", "v=$(echo $(cat <<E\nz\nE))\necho x\n", 5},
+		{"the control: nothing closed the substitution at all", "v=$(echo hi\necho x\n", 3},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := syntax.Parse(c.src, dash.Dialect())
 			if err == nil {
 				t.Fatalf("%q parsed; this shell refuses it", c.src)
 			}
-			if got := dash.Diagnostics().ParseFailure(err); got != want {
+			d := dash.Diagnostics()
+			if got := d.ParseFailure(err); got != want {
 				t.Errorf("said %q, want %q", got, want)
+			}
+			// The whole of what this shell prints is that sentence and this
+			// number, and the number is the line the input ran out on —
+			// measured against /bin/dash on each of these. Located at the
+			// `)` instead it is three lines early on the first of them.
+			if got := d.ParseFailureLine(err); got != c.line {
+				t.Errorf("blamed line %d, want %d", got, c.line)
 			}
 		})
 	}

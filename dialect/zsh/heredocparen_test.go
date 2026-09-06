@@ -35,27 +35,33 @@ import (
 // the same parse error. Neither is what this case is about, and the corpus
 // rows are what grade them.
 func TestADelimiterCarryingTheClosingParenLeavesTheConstructOpen(t *testing.T) {
-	for _, c := range []struct{ name, src, want, control, controlWant string }{
+	for _, c := range []struct {
+		name, src, want string
+		line            int
+		control         string
+		controlWant     string
+		controlLine     int
+	}{
 		{
-			name:        "the delimiter carries the paren",
-			src:         "v=$(cat <<EOF\na\nEOF)\necho \"[$v]\"\n",
-			want:        "parse error near `$(cat <<EOF'",
-			control:     "v=$(echo hi\necho \"[$v]\"\n",
-			controlWant: "parse error near `$(echo hi'",
+			name: "the delimiter carries the paren",
+			src:  "v=$(cat <<EOF\na\nEOF)\necho x\n",
+			want: "parse error near `$(cat <<EOF'", line: 5,
+			control:     "v=$(echo hi\necho x\n",
+			controlWant: "parse error near `$(echo hi'", controlLine: 3,
 		},
 		{
-			name:        "a second here-document carries it",
-			src:         "v=$(cat <<A\nx\nA\ncat <<B\ny\nB)\n",
-			want:        "parse error near `$(cat <<A'",
+			name: "a second here-document carries it",
+			src:  "v=$(cat <<A\nx\nA\ncat <<B\ny\nB)\necho x\n",
+			want: "parse error near `$(cat <<A'", line: 8,
 			control:     "v=$(cat <<A\nx\nA\ncat <<B\ny\n",
-			controlWant: "parse error near `$(cat <<A'",
+			controlWant: "parse error near `$(cat <<A'", controlLine: 6,
 		},
 		{
-			name:        "parentheses that hold a program without a dollar sign",
-			src:         "cat <(cat <<EOF\na\nEOF)\necho done\n",
-			want:        "unterminated process substitution",
+			name: "parentheses that hold a program without a dollar sign",
+			src:  "cat <(cat <<EOF\na\nEOF)\necho done\n",
+			want: "unterminated process substitution", line: 0,
 			control:     "cat <(echo hi\necho done\n",
-			controlWant: "unterminated process substitution",
+			controlWant: "unterminated process substitution", controlLine: 0,
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -64,9 +70,19 @@ func TestADelimiterCarryingTheClosingParenLeavesTheConstructOpen(t *testing.T) {
 			if got := d.ParseFailure(err); got != c.want {
 				t.Errorf("said %q, want %q", got, c.want)
 			}
+			// The line is the one the input ran out on, measured against
+			// zsh 5.9.2 for each of these. Located at the `)` instead it is
+			// three lines early on the first. The `<( )` row has no line at
+			// all, which is this shell's own gap and is the control's too.
+			if got := d.ParseFailureLine(err); got != c.line {
+				t.Errorf("blamed line %d, want %d", got, c.line)
+			}
 			cerr := refuses(t, c.control)
 			if got := d.ParseFailure(cerr); got != c.controlWant {
 				t.Errorf("the control said %q, want %q", got, c.controlWant)
+			}
+			if got := d.ParseFailureLine(cerr); got != c.controlLine {
+				t.Errorf("the control blamed line %d, want %d", got, c.controlLine)
 			}
 			// And it is the same failure underneath, which is what says no
 			// new wording was needed: the kind and the token are what pick

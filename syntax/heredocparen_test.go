@@ -117,6 +117,56 @@ func TestABodyThatTookTheParenLeavesTheOrdinaryUnterminatedConstruct(t *testing.
 	}
 }
 
+// And the refusal is located where the input ran out, which is the line both
+// refusing shells name.
+//
+// The body took the `)` and everything after it, so the input ended inside
+// the construct — one line past the last, in the convention a shell reports
+// an end of input in. Locating it where the *reading stopped* instead blames
+// the delimiter's line, which is three lines early for the shape below and
+// was what six corpus rows caught.
+func TestTheRefusalIsLocatedWhereTheInputRanOut(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		src     string
+		endLine int
+		eofLine int
+		why     string
+	}{
+		{
+			name: "the delimiter carries the paren", endLine: 5, eofLine: 5,
+			src: "v=$(cat <<EOF\na\nEOF)\necho x\n",
+			why: "four lines and a final newline, so the end of the input is line 5 — not line 3, where the `)` is",
+		},
+		{
+			name: "the control: nothing closed it at all", endLine: 3, eofLine: 3,
+			src: "v=$(echo hi\necho x\n",
+			why: "the same convention reached the ordinary way, which is what says the shape is not being located by a rule of its own",
+		},
+		{
+			name: "a second here-document carries it", endLine: 8, eofLine: 8,
+			src: "v=$(cat <<A\nx\nA\ncat <<B\ny\nB)\necho x\n",
+			why: "seven lines and a final newline; the `)` is on line 6",
+		},
+		{
+			name: "the input stops mid-line", endLine: 4, eofLine: 3,
+			src: "v=$(cat <<EOF\na\nEOF)",
+			why: "with no final newline the two conventions part: the last line is 3 and the line after it is 4, and different shells name each",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			e := parseErr(t, c.src)
+			if e == nil {
+				t.Fatalf("%q: the refusal carries no line", c.src)
+			}
+			if e.EndLine != c.endLine || e.EofLine != c.eofLine {
+				t.Errorf("located at EndLine %d / EofLine %d, want %d / %d\n%s",
+					e.EndLine, e.EofLine, c.endLine, c.eofLine, c.why)
+			}
+		})
+	}
+}
+
 // A prompt has to know it may ask for another line rather than run with what
 // it has: the body is still open, which is exactly what the input running out
 // inside a construct means.

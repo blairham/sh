@@ -44,7 +44,7 @@ func completionFixture(t *testing.T) string {
 
 // typeAndTab presses Tab at the end of a typed line and reports what the line
 // became and what would be listed.
-func typeAndTab(t *testing.T, c completer, typed string) (string, []string) {
+func typeAndTab(t *testing.T, c Completer, typed string) (string, []string) {
 	t.Helper()
 	e := &editor{line: []rune(typed), pos: len([]rune(typed)), out: &strings.Builder{}}
 	listed := e.complete(c)

@@ -14,8 +14,12 @@ import (
 // without a filesystem or a PATH.
 type fakeCompleter struct{ cmds, paths []string }
 
-func (f fakeCompleter) commands(prefix string) []string { return withPrefix(f.cmds, prefix) }
-func (f fakeCompleter) files(prefix string) []string    { return withPrefix(f.paths, prefix) }
+func (f fakeCompleter) Complete(c Completion) []string {
+	if c.Command {
+		return withPrefix(f.cmds, c.Word)
+	}
+	return withPrefix(f.paths, c.Word)
+}
 
 func withPrefix(all []string, prefix string) []string {
 	var out []string

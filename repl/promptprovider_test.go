@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // recordingProvider keeps what it was told and answers with fixed text.
@@ -215,6 +217,47 @@ func TestAProviderIsToldTheExitStatus(t *testing.T) {
 	s.beforeReading(&pending)
 	if len(p.told) != 1 || p.told[0].Status != 3 {
 		t.Errorf("the provider was told %+v, want a status of 3", p.told)
+	}
+}
+
+// The job count a provider is told is what the shell is still looking after,
+// and a job that has finished is not one.
+//
+// Arranged by waiting rather than by asking while it runs: `sleep 0` can be
+// over before the question is, and asserting that it is still going is
+// asserting a race — which failed on Linux once already, for the sibling
+// assertion in promptcounts_test.go.
+func TestAProviderIsToldHowManyJobsTheShellIsLookingAfter(t *testing.T) {
+	r := newTestRunner(nil)
+	r.JobControl = true
+	r.Stdout = &syncBuffer{}
+	f := syntax.NewParser("sleep 0 &\n", syntax.Core()).Parse()
+	if err := r.RunPart(t.Context(), f); err != nil {
+		t.Fatal(err)
+	}
+	jobs := r.Jobs()
+	if len(jobs) == 0 {
+		t.Fatal("no job was started")
+	}
+
+	p := &recordingProvider{}
+	s := Shell{Runner: r, PromptProviders: []PromptProvider{p}}
+	var pending strings.Builder
+	s.beforeReading(&pending)
+
+	for _, j := range jobs {
+		j.Wait()
+	}
+	s.beforeReading(&pending)
+
+	if len(p.told) != 2 {
+		t.Fatalf("the provider was told %d times, want 2", len(p.told))
+	}
+	if p.told[0].Jobs != 1 {
+		t.Errorf("with a job running the provider was told %d jobs, want 1", p.told[0].Jobs)
+	}
+	if p.told[1].Jobs != 0 {
+		t.Errorf("after it finished the provider was told %d jobs, want 0", p.told[1].Jobs)
 	}
 }
 

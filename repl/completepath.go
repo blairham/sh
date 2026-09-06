@@ -33,7 +33,12 @@ func (s shellCompleter) paths(word string, keep func(dir string, e os.DirEntry) 
 	prefix := wordPrefix(word)
 	base := strings.TrimPrefix(dequote(word), dequote(prefix))
 	dir := s.readable(dequote(prefix))
-	entries, err := os.ReadDir(dir)
+	// Through the boundary, not through os: the directory being listed is one
+	// the person at the prompt typed, which is the definition of inside. A
+	// refusal comes back as an error and is answered here the way a directory
+	// that is not there is answered — no entries, and Tab offers nothing. See
+	// boundary.Boundary.ReadDir, which carries the argument.
+	entries, err := s.bound.ReadDir(s.context(), dir)
 	if err != nil {
 		return nil
 	}

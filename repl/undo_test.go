@@ -183,7 +183,7 @@ func TestWhereTheCursorLandsAfterAnUndo(t *testing.T) {
 // was edited on the line before it.
 func TestUndoDoesNotReachPastAnAcceptedLine(t *testing.T) {
 	var out strings.Builder
-	e := Shell{}.newEditor()
+	e := Shell{}.newEditor(t.Context())
 	e.in, e.out = strings.NewReader(": one two\x17\r\x1f: after\r"), &out
 	for _, want := range []string{": one ", ": after"} {
 		got, err := e.readLine(drawPrompt("$ "))
@@ -214,7 +214,7 @@ func TestControlCGetsOutOfAHalfTypedKey(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			var out strings.Builder
-			e := Shell{}.newEditor()
+			e := Shell{}.newEditor(t.Context())
 			e.in, e.out = strings.NewReader(": one two"+c.keys), &out
 			line, err := e.readLine(drawPrompt("$ "))
 			if !errors.Is(err, ErrInterrupted) {
@@ -244,7 +244,7 @@ func TestTheControlXPrefixTypesNothing(t *testing.T) {
 // the remainder of a sequence straight from the reader gives the same answers
 // today and is a second source of input for the next mode that wants one.
 func TestTheRestOfAKeyIsReadFromTheSamePlaceAsItsFirstByte(t *testing.T) {
-	e := Shell{}.newEditor()
+	e := Shell{}.newEditor(t.Context())
 	e.in = strings.NewReader("b")
 	e.pushBack('.')
 	if got, res := e.readByte(); res != keyContinues || got != '.' {

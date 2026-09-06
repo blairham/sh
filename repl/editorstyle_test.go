@@ -14,7 +14,7 @@ import "testing"
 func TestTheDialectsMarkReachesTheEditor(t *testing.T) {
 	for _, want := range []string{"^C", "", "<interrupted>"} {
 		s := Shell{Editor: EditorStyle{Interrupt: want}}
-		if got := s.newEditor().interrupt; got != want {
+		if got := s.newEditor(t.Context()).interrupt; got != want {
 			t.Errorf("editor marks with %q, want %q", got, want)
 		}
 	}
@@ -31,7 +31,7 @@ func TestTheDialectsWordsReachTheEditor(t *testing.T) {
 		KillWordBeforeCursorUsesWordCharacters: true,
 		ForwardWordStopsBeforeTheNextWord:      true,
 		TransposeAtTheStartSwapsTheFirstTwo:    true,
-	}}.newEditor()
+	}}.newEditor(t.Context())
 	if e.wordChars != chars {
 		t.Errorf("word characters are %q, want %q", e.wordChars, chars)
 	}
@@ -50,7 +50,7 @@ func TestTheDialectsWordsReachTheEditor(t *testing.T) {
 	}
 	// The zero value has to arrive as the zero value too, rather than as
 	// whatever the editor was built with.
-	zero := Shell{}.newEditor()
+	zero := Shell{}.newEditor(t.Context())
 	if zero.wordChars != "" || zero.wholeLineKill || zero.killBeforeCursorUsesWords ||
 		zero.forwardWordStopsBeforeNext || zero.transposeAtStart {
 		t.Errorf("a shell that said nothing got %+v", zero)
@@ -63,7 +63,7 @@ func TestTheDialectsUndoAnswersReachTheEditor(t *testing.T) {
 		UndoTakesBackOneKeystrokeAtATime:  true,
 		UndoRestoresTheCursorToWhereItWas: true,
 		LastArgumentStaysOnTheOldestLine:  true,
-	}}.newEditor()
+	}}.newEditor(t.Context())
 	for _, c := range []struct {
 		name string
 		got  bool
@@ -76,7 +76,7 @@ func TestTheDialectsUndoAnswersReachTheEditor(t *testing.T) {
 			t.Errorf("%s: the dialect's answer did not reach the editor", c.name)
 		}
 	}
-	zero := Shell{}.newEditor()
+	zero := Shell{}.newEditor(t.Context())
 	if zero.undoPerKeystroke || zero.undoRestoresCursor || zero.lastArgStaysOnOldest {
 		t.Errorf("a shell that said nothing got %+v", zero)
 	}

@@ -32,6 +32,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -222,6 +224,94 @@ func (b Boundary) reached(ctx context.Context, a *interp.Action, f *os.File) boo
 		return false
 	}
 	return true
+}
+
+// ReadDir lists a directory on the front end's behalf: consult the gate, open,
+// ask the kernel what the open reached, consult again if that is somewhere
+// else, and take the entries from that descriptor.
+//
+// It is here because completion reads directories, and the path it reads is
+// one a *person typed at the prompt*. This package's rule for what is inside
+// the boundary is who chose the path, and there is no reading of that rule on
+// which a script's `echo /srv/*` is inside and a person's `/srv/<Tab>` is
+// outside — the person is the policy's subject at least as much as the script
+// is. The interpreter's equivalent has been gated since the beginning as
+// ActionReadDir, so before this the same policy answered the same question two
+// different ways depending on which half of the shell was asked.
+//
+// The entries are returned rather than the descriptor, which is the same
+// property OpenFile has and is the point of both: there is no way to ask this
+// package's permission and then list something else.
+//
+// A refusal is ErrRefused, and what it means is the caller's as it is for an
+// open. Completion answers it the way it answers a directory that is not
+// there — no entries, no diagnostic — which is what ActionReadDir already
+// documents a denied listing as, and is the same quiet shape a denied stat
+// has. Tab offering nothing is what a person sees, and a person who may not
+// list a directory should see exactly that whether the policy hid it or the
+// operating system did.
+//
+// The listing is recorded, always, and is not coarsened or suppressed. What
+// that costs was measured rather than assumed: a Tab in the file position
+// makes one record, a Tab in the command position makes one per PATH entry,
+// and a single ordinary command line already makes more than that — a PATH
+// search stats a candidate per directory, so `ls | grep x` on this machine
+// raises 21 actions before either command starts. Completion runs on Tab and
+// on nothing else, not on every keystroke, so a long prefix costs nothing
+// until it is asked to complete. A person exploring the filesystem from the
+// prompt is precisely what an audit trail is for, and it would be a strange
+// stream that held every directory a glob descended into and none of the ones
+// a person looked at by hand.
+//
+// A gate that *prompts* is the objection worth taking seriously, and it does
+// not arise: Escalates in internal/acp — the only gate in this tree that asks
+// a person anything — already answers false for every read, ActionReadDir
+// included, and says why in the same words. An embedder's gate that chose to
+// prompt on a listing would already be prompting once per directory of every
+// glob a script writes, so Tab is not a new hazard for it; it is the same
+// action kind it has always been consulted about.
+func (b Boundary) ReadDir(ctx context.Context, path string) ([]os.DirEntry, error) {
+	if b.Gate == nil && b.Events == nil {
+		// Nothing is watching, so this is the call it always was.
+		return os.ReadDir(path)
+	}
+	a := interp.Action{ID: b.id(), Kind: interp.ActionReadDir, Path: path}
+	if b.Gate != nil && b.Gate.Allow(ctx, a) == interp.Deny {
+		b.emit(ctx, interp.Event{Kind: interp.EventDenied, Action: a})
+		return nil, ErrRefused
+	}
+	if b.Gate == nil {
+		// Watching without gating: there is nothing a verification could
+		// refuse, so the standard library's one-call form stands.
+		b.emit(ctx, interp.Event{Kind: interp.EventAccess, Action: a})
+		return os.ReadDir(path)
+	}
+	f, err := opened.Verified(path, os.O_RDONLY, 0, func(file *os.File) error {
+		if !b.reached(ctx, &a, file) {
+			return ErrRefused
+		}
+		return nil
+	})
+	if errors.Is(err, ErrRefused) {
+		// The verification refused, and recorded it with both names on it.
+		return nil, err
+	}
+	// Recorded after the open for the reason OpenFile is: a record written
+	// before there is a descriptor cannot say where the name went. And
+	// recorded whether or not the open worked, because out here the attempt is
+	// the auditable act — a directory a person half-typed is usually not
+	// there, and that is not an error.
+	b.emit(ctx, interp.Event{Kind: interp.EventAccess, Action: a})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	entries, err := f.ReadDir(-1)
+	// Sorted, because os.ReadDir sorts and both callers were written against
+	// that: completion offers its matches in name order and would otherwise
+	// offer them in whatever order the directory happens to be stored in.
+	slices.SortFunc(entries, func(x, y os.DirEntry) int { return strings.Compare(x.Name(), y.Name()) })
+	return entries, err
 }
 
 // Exec reports whether the front end may run a program, recording it either

@@ -139,6 +139,7 @@ func Semantics() interp.Semantics {
 	// three's is "the program came from standard input"; this is the one
 	// invocation where those two differ.
 	s.CommandStringShowsCInDollarDash = interp.Yes
+	s.LoginShowsLInDollarDash = interp.Yes
 	s.CommandStringShowsSInDollarDash = interp.Yes
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
 	// A negative exponent is a float answer here, not a refusal: `2**-1`

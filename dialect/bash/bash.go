@@ -172,6 +172,7 @@ func Semantics() interp.Semantics {
 	// not. The `s` of the standard-input route is not added under `-c`
 	// here — ksh93 alone does that.
 	s.CommandStringShowsCInDollarDash = interp.Yes
+	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.No
 	s.ArrayNameWithoutSubscriptIsTheList = interp.No

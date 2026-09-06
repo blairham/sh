@@ -415,6 +415,23 @@ type Runner struct {
 	// monitor on for `-i script.sh`, so the two do not move together.
 	Interactive bool
 
+	// LoginShell says this shell was started as a login shell — a dashed
+	// `argv[0]`, which is what `login` and a terminal emulator's "run as a
+	// login shell" does, or an explicit `-l` / `--login`.
+	//
+	// The front end's to set, and carried *in* for exactly the reason
+	// Interactive is: which word started the process and what it looked
+	// like is an invocation fact, and a library Runner reached through Run
+	// never saw an argument vector. `driver` decides it — see
+	// driver.LoginShell and source.loginShell, which take either route —
+	// and hands it over here.
+	//
+	// What reads it is `$-`, through Semantics.LoginShowsLInDollarDash,
+	// where the panel splits 4-2. Nothing else in this package does: which
+	// startup files a login shell reads is `driver`'s, and it has the fact
+	// first-hand there (#1034).
+	LoginShell bool
+
 	// Dynamic holds parameters whose value is produced when they are read,
 	// rather than stored: `LINENO` is wherever execution has reached, and
 	// `RANDOM` is a different number every time. A dialect fills in the ones

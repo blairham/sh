@@ -223,6 +223,7 @@ func Semantics() interp.Semantics {
 		SuppressAll: "-f --no-rcs",
 	}
 	s.CommandStringShowsCInDollarDash = interp.No
+	s.LoginShowsLInDollarDash = interp.Yes
 	s.CommandStringShowsSInDollarDash = interp.No
 	// The panel's holdout: `echo hi >&-` is status 0 here and 1 in the other
 	// three — the text is quietly lost and nothing is said about a simple

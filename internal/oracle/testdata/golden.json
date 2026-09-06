@@ -61816,6 +61816,50 @@
         "TimedOut": false
       }
     },
+    "whence/a-on-a-name-that-is-only-on-path": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: whence: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "ls is a tracked alias for /bin/ls~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "/bin/ls~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "whence/an-alias-answers-as-its-value": {
       "bash": {
         "Stdout": "",
@@ -62251,6 +62295,138 @@
       "zsh": {
         "Stdout": "st=1",
         "Stderr": "\u003cshell\u003e:where:1: bad option: -v",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/where-takes-the-letters-its-preset-left": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: where: command not found~\u003cshell\u003e: line 1: where: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: where: command not found~\u003cshell\u003e: line 1: where: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: where: command not found~\u003cshell\u003e: where: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: where: not found~\u003cshell\u003e: 1: where: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: where: not found~\u003cshell\u003e: where: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "/bin/echo~echo: builtin~echo: command~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/which-is-whence-with-c": {
+      "bash": {
+        "Stdout": "/bin/echo~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "/bin/echo~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "/bin/echo~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "/bin/echo~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "/bin/echo~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "echo: shell built-in command~ll: aliased to ls -l~nosuchcmd431 not found~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/which-refuses-the-letters-its-preset-decided": {
+      "bash": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "which: illegal option -- c~usage: which [-as] program ...~which: illegal option -- v~usage: which [-as] program ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "which: illegal option -- c~usage: which [-as] program ...~which: illegal option -- v~usage: which [-as] program ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "which: illegal option -- c~usage: which [-as] program ...~which: illegal option -- v~usage: which [-as] program ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "which: illegal option -- c~usage: which [-as] program ...~which: illegal option -- v~usage: which [-as] program ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "which: illegal option -- c~usage: which [-as] program ...~which: illegal option -- v~usage: which [-as] program ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cshell\u003e:which:1: bad option: -c~\u003cshell\u003e:which:1: bad option: -v",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

@@ -61,17 +61,48 @@ import (
 // `compgen` follows: an answer that cannot be generated is refused rather
 // than guessed.
 
-// whenceLetters are the option letters this builtin implements.
-const whenceLetters = "vpcawf"
+// The three names are one builtin with three option sets, which is what the
+// shell itself does: `which` is `whence -c` and `where` is `whence -ca`, and
+// each of them **stops offering the letters its preset already decided**.
+// Measured letter by letter against zsh 5.9.2, 2026-09-05:
+//
+//	whence  -v -p -c -a -w -f      and -m -s -x -S
+//	which      -p    -a -w         and -m -s -x -S   (-c -v -f are bad options)
+//	where      -p       -w         and -m -s -x -S   (-a -c -v -f are bad options)
+//
+// That is the rule and not a coincidence: `-c` is already on in both, so it
+// cannot be asked for; `-a` is already on in `where`; and `-v` and `-f` are
+// the two shapes `-c` displaces, so they go with it. Reading the three sets
+// off one table is what keeps them from drifting — `where` used to refuse
+// *every* dash word, which was right for `-v` and wrong for `-p` and `-w`,
+// both of which this shell answers.
+//
+// whenceLetters are the letters each name implements.
+const (
+	whenceLetters = "vpcawf"
+	whichLetters  = "paw"
+	whereLetters  = "pw"
+)
 
 // whenceUnimplemented are the letters zsh has that this one does not, kept
 // apart so they are refused as missing rather than as unknown — a script can
-// tell a shell that lacks something from a typo.
-const whenceUnimplemented = "msx"
+// tell a shell that lacks something from a typo. All three names take them,
+// and all three refuse them the same way.
+//
+// `-S` joined the list from the same measurement: it is `-s` that resolves
+// every step of a symlink chain rather than the last, and this shell answered
+// `bad option` where zsh takes it.
+const whenceUnimplemented = "msxS"
 
-// registerWhence installs both names.
+// registerWhence installs all three names.
+//
+// `which` is registered even though /usr/bin/which exists, because a builtin
+// shadowing a PATH command is what zsh itself does — #572 left it out on the
+// grounds that shadowing was not what it was asked for, and #633 is the
+// decision going the other way: the dialect is this shell or it is not.
 func registerWhence(r *interp.Runner) {
 	r.Register("whence", whenceBuiltin)
+	r.Register("which", whichBuiltin)
 	r.Register("where", whereBuiltin)
 }
 
@@ -86,26 +117,28 @@ type whenceMode struct {
 }
 
 func whenceBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
-	names, m, code := whenceOptions(r, args)
+	return whenceUnder(r, ctx, args, whenceLetters, whenceMode{})
+}
+
+// whichBuiltin is `whence -c` under its own name, with `-c` no longer on
+// offer because it is already on.
+func whichBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
+	return whenceUnder(r, ctx, args, whichLetters, whenceMode{csh: true})
+}
+
+// whereBuiltin is `whence -ca` the same way.
+func whereBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
+	return whenceUnder(r, ctx, args, whereLetters, whenceMode{csh: true, all: true})
+}
+
+// whenceUnder is the one body the three names share: read the letters this
+// name offers on top of the preset it was born with, then answer.
+func whenceUnder(r *interp.Runner, ctx context.Context, args []string, offered string, m whenceMode) int {
+	names, m, code := whenceOptions(r, args, offered, m)
 	if code != 0 || len(names) == 0 {
 		return code
 	}
 	return whenceNames(r, ctx, names, m)
-}
-
-// whereBuiltin is `whence -ca` under a name that parses no options at all.
-func whereBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
-	for _, a := range args {
-		if len(a) > 1 && a[0] == '-' {
-			r.Diagnosef("bad option: %s\n", a[:2])
-			return 1
-		}
-	}
-	if len(args) == 0 {
-		// Nothing to ask about: silence and 1, the same as a bare `whence`.
-		return 1
-	}
-	return whenceNames(r, ctx, args, whenceMode{csh: true, all: true})
 }
 
 func whenceNames(r *interp.Runner, ctx context.Context, names []string, m whenceMode) int {
@@ -124,7 +157,7 @@ func whenceNames(r *interp.Runner, ctx context.Context, names []string, m whence
 // it — measured, the operands are not reached. A letter this shell has and
 // this one does not is refused with its own wording, so the two cases stay
 // distinguishable.
-func whenceOptions(r *interp.Runner, args []string) (names []string, m whenceMode, code int) {
+func whenceOptions(r *interp.Runner, args []string, offered string, m whenceMode) (names []string, mode whenceMode, code int) {
 	rest := args
 	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") && rest[0] != "-" {
 		word := rest[0]
@@ -134,7 +167,7 @@ func whenceOptions(r *interp.Runner, args []string) (names []string, m whenceMod
 		}
 		for _, letter := range word[1:] {
 			switch {
-			case strings.ContainsRune(whenceLetters, letter):
+			case strings.ContainsRune(offered, letter):
 				setWhenceLetter(&m, byte(letter))
 			case strings.ContainsRune(whenceUnimplemented, letter):
 				r.Diagnosef("-%c is not implemented yet\n", letter)

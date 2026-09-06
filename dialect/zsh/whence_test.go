@@ -248,3 +248,82 @@ func runZshSplit(t *testing.T, dir, src string) (out string, status int, errs st
 	}
 	return o.String(), st, e.String()
 }
+
+// `which` is `whence -c` under its own name, registered even though
+// /usr/bin/which exists — a builtin shadowing a PATH command is what this
+// shell does, and the dialect is this shell or it is not (#633).
+//
+// The letters are the rule the three names share: a name stops offering what
+// its preset already decided. Measured against zsh 5.9.2, 2026-09-05.
+func TestWhichIsWhenceWithC(t *testing.T) {
+	dir, tool := whenceDir(t)
+	const setup = "f() { echo hi; }\nalias al='ls -l'\n"
+	for _, c := range []struct {
+		name, src, want string
+		st              int
+	}{
+		{"a builtin", "which echo", "echo: shell built-in command", 0},
+		{"a reserved word", "which if", "if: shell reserved word", 0},
+		{"an alias", "which al", "al: aliased to ls -l", 0},
+		{"a function is its body", "which f", "f () {\n\techo hi\n}", 0},
+		{"a file", "which tool431", tool, 0},
+		{"a name that is nothing", "which nosuchcmd431", "nosuchcmd431 not found", 1},
+
+		// The letters it does offer.
+		{"-a is every resolution", "which -a tool431", tool, 0},
+		{"-w is the bare kind", "which -w echo", "echo: builtin", 0},
+		{"-p is the PATH search alone", "which -p tool431", tool, 0},
+
+		// And the ones its preset already decided, which are refused as
+		// unknown rather than taken: `-c` is on, and `-v` and `-f` are the
+		// shapes it displaces.
+		{"-c is not on offer", "which -c echo", "zsh:which:3: bad option: -c", 1},
+		{"-v is not on offer", "which -v echo", "zsh:which:3: bad option: -v", 1},
+		{"-f is not on offer", "which -f echo", "zsh:which:3: bad option: -f", 1},
+
+		// A letter this shell has and this one does not stays distinguishable
+		// from a letter that is not a letter. The `:3:` is the setup's two
+		// lines above the command, which is the location the diagnostic
+		// carries and part of what is asserted.
+		{"-S is missing, not unknown", "which -S echo", "zsh:which:3: -S is not implemented yet", 1},
+		{"-z is unknown", "which -z echo", "zsh:which:3: bad option: -z", 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runZsh(t, dir, setup+c.src+"\n")
+			if strings.TrimSpace(out) != c.want || st != c.st {
+				t.Errorf("out %q status %d, want %q and %d", out, st, c.want, c.st)
+			}
+		})
+	}
+}
+
+// `where` keeps the letters its own preset left, which is the half a blanket
+// refusal got wrong: `-v` is not on offer there and `-p` and `-w` are.
+func TestWhereKeepsTheLettersItsPresetLeft(t *testing.T) {
+	dir, tool := whenceDir(t)
+	for _, c := range []struct {
+		name, src, want string
+		st              int
+	}{
+		{"-p is the PATH search", "where -p tool431", tool, 0},
+		{"-w is the bare kind, over every resolution", "where -w echo", "echo: builtin", 0},
+		{"-a is not on offer", "where -a echo", "zsh:where:1: bad option: -a", 1},
+		{"-c is not on offer", "where -c echo", "zsh:where:1: bad option: -c", 1},
+		{"-S is missing, not unknown", "where -S echo", "zsh:where:1: -S is not implemented yet", 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runZsh(t, dir, c.src+"\n")
+			if strings.TrimSpace(out) != c.want || st != c.st {
+				t.Errorf("out %q status %d, want %q and %d", out, st, c.want, c.st)
+			}
+		})
+	}
+}
+
+// A bare `which` with no operand is the same silent 1 a bare `whence` is.
+func TestWhichWithNoOperandIsASilentFailure(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), "which\n")
+	if out != "" || st != 1 {
+		t.Errorf("out %q status %d, want silence at 1", out, st)
+	}
+}

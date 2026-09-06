@@ -7,6 +7,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -188,12 +190,63 @@ type patternOpts struct {
 	// call sites that honor an option set it and the rest leave it off: the
 	// shell with the options keeps parameter expansion exact either way.
 	fold bool
+	// chars makes one unit of the subject a character rather than a byte, so
+	// `?` consumes a whole one, a bracket matches a whole one, and a `*`
+	// tries only the split points between them.
+	//
+	// A run-time answer like fold, and for a stronger reason: it is the
+	// dialect's MultibyteEncodingIsHonored *and* the locale in force, which
+	// interp/multibyte.go resolves together. The matcher is handed the
+	// conclusion because it has no Runner to ask — and because the answer
+	// only ever moves when the pattern or the subject holds a byte above
+	// ASCII, which is where the callers ask.
+	chars bool
 }
 
-// eqByte compares two bytes, without case when fold says so. ASCII only,
-// which is what the matcher is throughout: it walks patterns by byte.
+// unitWidth is how many bytes of a non-empty subject one `?` consumes, one
+// bracket matches, and one step of a `*` passes over.
+func (o patternOpts) unitWidth(s string) int {
+	if !o.chars {
+		return 1
+	}
+	return characterWidth(s)
+}
+
+// eqByte compares two bytes, without case when fold says so. ASCII only: the
+// folding a shell does inside a pattern is `nocasematch` and its kin, which
+// this implementation has never taken past ASCII, and which is its own
+// measurement rather than this one's.
 func eqByte(a, b byte, fold bool) bool {
 	return a == b || (fold && swapCase(a) == b)
+}
+
+// eqUnit compares two whole units — one byte each, or one character each.
+// Equal bytes are equal characters, so the multi-byte case needs nothing of
+// its own beyond comparing the whole run.
+func eqUnit(a, b string, fold bool) bool {
+	if len(a) == 1 && len(b) == 1 {
+		return eqByte(a[0], b[0], fold)
+	}
+	return a == b
+}
+
+// ordOf ranks one unit for a bracket range or a character class: its code
+// point, or its byte where the unit is one byte.
+//
+// It needs no answer about whether characters are being matched, and no case
+// for an undecodable byte, because a unit is never either of the two things
+// that would want one. unitWidth answers 1 for every byte where characters
+// are not being counted, and DecodeRuneInString answers a width above 1 only
+// for a sequence it decoded — so a unit longer than a byte is always a valid
+// character, and a byte that begins no sequence arrives here alone and ranks
+// as itself. Both were written as guards first and both are dead, which
+// mutation testing is what said.
+func ordOf(unit string) rune {
+	if len(unit) == 1 {
+		return rune(unit[0])
+	}
+	c, _ := utf8.DecodeRuneInString(unit)
+	return c
 }
 
 // swapCase is the other case of an ASCII letter, or the byte itself.
@@ -230,28 +283,36 @@ func matchHere(p, s string, o patternOpts) bool {
 			if p == "" {
 				return true
 			}
-			for i := 0; i <= len(s); i++ {
+			// The split points are between units, not between bytes: a `*`
+			// that stopped inside a character would hand the rest of the
+			// pattern a subject beginning with a continuation byte, which a
+			// following `?` would then take for a character of its own.
+			for i := 0; ; i += o.unitWidth(s[i:]) {
 				if matchHere(p, s[i:], o) {
 					return true
 				}
+				if i == len(s) {
+					return false
+				}
 			}
-			return false
 
 		case '?':
 			if s == "" {
 				return false
 			}
-			p, s = p[1:], s[1:]
+			w := o.unitWidth(s)
+			p, s = p[1:], s[w:]
 
 		case '[':
 			if s == "" {
 				return false
 			}
-			rest, ok := matchBracket(p, s[0], o)
+			w := o.unitWidth(s)
+			rest, ok := matchBracket(p, s[:w], o)
 			if !ok {
 				return false
 			}
-			p, s = rest, s[1:]
+			p, s = rest, s[w:]
 
 		case '\\':
 			// An escaped metacharacter is an ordinary character.
@@ -487,7 +548,7 @@ func matchesAnyArm(arms []string, s string, o patternOpts) bool {
 
 // matchBracket consumes a bracket expression from p and reports whether c is
 // in it, returning what is left of the pattern.
-func matchBracket(p string, c byte, o patternOpts) (rest string, ok bool) {
+func matchBracket(p string, c string, o patternOpts) (rest string, ok bool) {
 	i := 1
 	negate := false
 	// `!` is the portable negation, everywhere. `^` is an extension dash
@@ -516,7 +577,7 @@ func matchBracket(p string, c byte, o patternOpts) (rest string, ok bool) {
 			end := strings.Index(p[i:], ":]")
 			if end >= 0 {
 				if inClass(p[i+2:i+end], c) ||
-					(o.fold && inClass(p[i+2:i+end], swapCase(c))) {
+					(o.fold && inClass(p[i+2:i+end], swapUnitCase(c))) {
 					matched = true
 				}
 				i += end + 2
@@ -524,21 +585,32 @@ func matchBracket(p string, c byte, o patternOpts) (rest string, ok bool) {
 			}
 		}
 
-		lo := p[i]
+		// One unit of the *pattern*, which is a whole character where the
+		// subject's units are. A multi-byte character's bytes are all above
+		// ASCII, so none of them can be mistaken for the `-` of a range or
+		// the `]` that ends the expression, and the scan above stays a byte
+		// scan.
+		lw := o.unitWidth(p[i:])
+		lo := p[i : i+lw]
 		// A `-` is literal at the end, which is why `[a-]` matches a dash.
-		if i+2 < len(p) && p[i+1] == '-' && p[i+2] != ']' {
-			hi := p[i+2]
-			if (c >= lo && c <= hi) ||
-				(o.fold && swapCase(c) >= lo && swapCase(c) <= hi) {
+		if i+lw+1 < len(p) && p[i+lw] == '-' && p[i+lw+1] != ']' {
+			hw := o.unitWidth(p[i+lw+1:])
+			hi := p[i+lw+1 : i+lw+1+hw]
+			// Ranked rather than compared as text: `[a-é]` has to hold ç,
+			// which is between them by code point and is not between them
+			// byte for byte.
+			from, to := ordOf(lo), ordOf(hi)
+			if inRange(ordOf(c), from, to) ||
+				(o.fold && inRange(ordOf(swapUnitCase(c)), from, to)) {
 				matched = true
 			}
-			i += 3
+			i += lw + 1 + hw
 			continue
 		}
-		if eqByte(lo, c, o.fold) {
+		if eqUnit(lo, c, o.fold) {
 			matched = true
 		}
-		i++
+		i += lw
 	}
 	// An unterminated bracket is not a bracket expression, and what it is
 	// instead is the dialect's answer rather than this file's.
@@ -546,7 +618,7 @@ func matchBracket(p string, c byte, o patternOpts) (rest string, ok bool) {
 	case BracketLiteral:
 		// bash and ksh93: an ordinary `[`, and the rest of the pattern
 		// carries on from just after it.
-		return p[1:], c == '['
+		return p[1:], c == "["
 	case BracketBadPattern:
 		// zsh: not a pattern at all. Recorded rather than returned, because
 		// matchHere recurses and a second result would have to be threaded
@@ -581,7 +653,11 @@ func hasUnterminatedBracket(p string) bool {
 // panel. A name outside the twelve matches nothing, silently — the answer of
 // every panel shell but bash 3.2, which falls back to reading the characters
 // literally (see docs/spec/grammar/patterns.md).
-func inClass(name string, c byte) bool {
+func inClass(name string, unit string) bool {
+	if len(unit) > 1 {
+		return inWideClass(name, ordOf(unit))
+	}
+	c := unit[0]
 	switch name {
 	case "digit":
 		return isDigit(c)
@@ -611,6 +687,71 @@ func inClass(name string, c byte) bool {
 	return false
 }
 
+// inWideClass answers a class for a character outside ASCII.
+//
+// Measured 2026-09-05 under `LC_ALL=C.UTF-8`, and this is where the panel is
+// least uniform. bash 5.3, bash 3.2 and zsh agree on every class and every
+// character tried: `é` is alpha, alnum, lower, print and graph; `É` swaps
+// lower for upper; `日` is alpha, alnum, print and graph; `·` is punct, print
+// and graph. dash answers none of them, having no decoder. ksh93 answers
+// **alpha and nothing else** for all three letters and nothing at all for the
+// punctuation, which is a partial implementation rather than a different
+// reading of the classes — this follows the three that agree, and the corpus
+// records ksh93's answer beside it.
+//
+// digit is **false** and not unicode.IsNumber, which is measured and is where
+// the panel splits again: `case ٣ in [[:digit:]]` is a hit in bash 5.3 and 3.2
+// and a miss in ksh93, zsh and dash. POSIX says the digit class holds only the
+// digits 0 through 9 in every locale, so the standard and three of the four
+// agree, and bash is the one out. `[[:alnum:]]` still holds it, which is bash
+// and zsh together. That leaves the bash dialect deviating from bash on this
+// one class, which is #956 — either an axis or a decision written down, and
+// not something to inherit from a comment.
+//
+// xdigit, blank and cntrl are deliberately absent: no character outside ASCII
+// is in any of them in the shells measured, and Go's unicode tables would put
+// characters in cntrl that none of them do.
+//
+// graph excludes a space where print does not, which is the one place the two
+// part company: a non-breaking space is print in bash and zsh and graph in
+// neither, and Go counts it Graphic, so the space has to be taken back out.
+func inWideClass(name string, c rune) bool {
+	switch name {
+	case "alpha":
+		return unicode.IsLetter(c)
+	case "digit":
+		return false
+	case "alnum":
+		return unicode.IsLetter(c) || unicode.IsNumber(c)
+	case "upper":
+		return unicode.IsUpper(c)
+	case "lower":
+		return unicode.IsLower(c)
+	case "space":
+		return unicode.IsSpace(c)
+	case "punct":
+		return unicode.IsPunct(c) || unicode.IsSymbol(c)
+	case "graph":
+		return unicode.IsGraphic(c) && !unicode.IsSpace(c)
+	case "print":
+		return unicode.IsGraphic(c)
+	}
+	return false
+}
+
+// inRange reports whether a unit ranks inside a bracket range.
+func inRange(c, lo, hi rune) bool { return c >= lo && c <= hi }
+
+// swapUnitCase is swapCase over a whole unit. ASCII only, like swapCase: the
+// folding in a pattern is `nocasematch`, which this implementation has never
+// taken past ASCII.
+func swapUnitCase(unit string) string {
+	if len(unit) != 1 {
+		return unit
+	}
+	return string(swapCase(unit[0]))
+}
+
 func isLetter(c byte) bool { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') }
 
 func isDigit(c byte) bool { return c >= '0' && c <= '9' }
@@ -621,10 +762,17 @@ func isDigit(c byte) bool { return c >= '0' && c <= '9' }
 // parameter expansion and by globbing, where an unterminated bracket is
 // literal in every shell measured. Only `case` and `[[ ]]` ask it, through
 // matchPatternR.
-func (r *Runner) patternOpts(pattern string) patternOpts {
+//
+// subjects are the strings this pattern is about to be matched against, and
+// they are wanted for one reason: whether a unit is a character is a question
+// about both sides. `?` is one ASCII byte and still consumes a whole
+// character of the subject, so a caller that named only the pattern would
+// leave the axis unasked in exactly the case that needs it.
+func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 	return patternOpts{
 		caret:        r.caretNegates(pattern),
 		bracket:      BracketLiteral,
+		chars:        r.patternCountsCharacters(append([]string{pattern}, subjects...)...),
 		group:        r.dialect().PatternAlternation,
 		quantified:   r.readsQuantifiedGroups(false),
 		numericRange: r.dialect().NumericRangePattern,

@@ -4088,7 +4088,8 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		// serves — `case` and `[[ ]]` — and neither of the others: pathname
 		// expansion has a fold of its own, and parameter expansion stays
 		// exact. Which is why the fold sits here and not in patternOpts.
-		fold: r.MatchOption(MatchFoldsCase),
+		fold:  r.MatchOption(MatchFoldsCase),
+		chars: r.patternCountsCharacters(pattern, s),
 	}
 	var bad bool
 	if hasUnterminatedBracket(pattern) {

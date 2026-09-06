@@ -5715,12 +5715,22 @@ itself, which is unanimous: `s=$(printf 'a\200b')` has length 3 in every
 panel member, and zsh's `${s[2]}` is that byte rather than a replacement
 character.
 
-**Pattern matching does not yet follow.** `?`, `[…]` and the character
-classes still walk bytes here, so `${s#???}` on `héllo` is `llo` where
-bash, ksh93 and zsh give `lo` under a UTF-8 locale. That is the same
-axis reached through a different code path and is #905; the corpus
-records both the probe that separates the two readings and the
-`${s%??}` one that cannot.
+**Pattern matching follows the same axis** (#905). `?` consumes one
+character, a bracket matches one, and a `*` stops only between them, so
+`${s#???}` on `héllo` is `lo` under a UTF-8 locale and `llo` under a
+single-byte one — and `case héllo in ?????` matches under the first and
+not the second, though the pattern is five ASCII bytes either way. That
+is why the callers ask about the *subject* as well as the pattern, and
+why pathname expansion asks about the names in the directory.
+
+There is one matcher, and there always was: `case`, `[[ ]]`, `${x#pat}`,
+`${x%pat}`, `${x/pat/rep}`, the element-selection operators and pathname
+expansion all reach it. #899 read `${s%??}` giving `hél` as evidence
+that suffix removal was already rune-aware; the probe cannot
+discriminate, because `héllo` ends in two ASCII characters and two bytes
+off the end leave the same four. `../spec/grammar/patterns.md` has the
+range, the star and the character classes, each of which needed a
+measurement of its own.
 
 **`NegativeSubscriptPastTheStartInserts`** — bash no · dash unspecified · ksh93 no · zsh yes
 

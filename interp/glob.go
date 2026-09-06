@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -382,6 +383,13 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 	literal := globUnescape(pattern)
 	hidden := seeHidden || strings.HasPrefix(literal, ".")
 
+	// Whether a unit is a character is a question about the subject as well
+	// as the pattern, and here the subjects are the names in this directory —
+	// `?` is ASCII and still has to consume a whole character of a filename.
+	// Asked once for the listing rather than once per name, so a directory
+	// full of them earns one diagnostic from the core rather than one each.
+	o.chars = r.patternCountsCharacters(append(entryNames(entries), pattern)...)
+
 	var out []string
 	for _, e := range entries {
 		name := e.Name()
@@ -393,6 +401,15 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 		if matchPattern(pattern, name, o) {
 			out = append(out, filepath.Join(dir, name))
 		}
+	}
+	return out
+}
+
+// entryNames is the names of a directory listing, for the question above.
+func entryNames(entries []os.DirEntry) []string {
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, e.Name())
 	}
 	return out
 }

@@ -4838,6 +4838,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/a-length-of-an-array-element-in-a-utf8-locale` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[2][5][3]` | `[2][5][3]` | `[2][5][3]` | `[2][5][3]` | `[2][0][5]` |
 | `param/a-pattern-trims-the-same-either-way` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` | `[hél][héll]` |
 | `param/a-pattern-trims-characters-in-a-utf8-locale` | `[hél][llo]` | `[hél][lo]` | `[hél][lo]` | `[hél][lo]` | `[hél][lo]` | `[hél][lo]` |
+| `param/a-pattern-trims-bytes-in-a-single-byte-locale` | `[hél][llo]` | `[hél][llo]` | `[hél][llo]` | `[hél][llo]` | `[hél][llo]` | `[hél][llo]` |
+| `param/a-replacement-runs-over-characters` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[XXX][Xllo]` | `[XXX][Xllo]` | `[XXX][Xllo]` | `[XXX][Xllo]` | `[XXX][Xllo]` |
 | `param/case-change-is-bash-only` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ABC][abc]` | `[ABC][abc]` | **2>** `<shell>: ${x^^}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/case-toggle-is-newer-bash-still` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ABc][AbC][ABc]` | `[ABc][AbC][ABc]` | **2>** `<shell>: ${x~}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `~' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/indirection-diverges-four-ways` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[V]` | `[V]` | `[V]` | `[x]` | **2>** `<shell>:1: bad substitution` *(status 1)* |
@@ -5095,13 +5097,21 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   a=(héllo 日本語); echo "[${#a[@]}][${#a[0]}][${#a[1]}]"
   ```
-- `param/a-pattern-trims-the-same-either-way` — the suffix probe #899 cites as evidence that pattern matching is already rune-aware, pinned so that it stays where it is. It is unanimous, and it is also *not* discriminating: `héllo` ends in two ASCII characters, so two bytes and two characters off the end leave the same four bytes. `${s#???}` from the other end separates them and ours gives dash's answer — #905
+- `param/a-pattern-trims-the-same-either-way` — the suffix probe #899 cites as evidence that pattern matching is already rune-aware, pinned so that it stays where it is. It is unanimous, and it is also *not* discriminating: `héllo` ends in two ASCII characters, so two bytes and two characters off the end leave the same four bytes. `${s#???}` from the other end is what separates the readings, and is the pair of cases below (#905)
   ```sh
   s=héllo; echo "[${s%??}][${s%%?}]"
   ```
-- `param/a-pattern-trims-characters-in-a-utf8-locale` — the suffix probe beside the prefix one that separates the readings. Two characters off the end is the same four bytes either way, so `${s%??}` agrees with everyone; three off the front is `lo` under a UTF-8 locale and `llo` under a single-byte one, and dash gives `llo` in both. We give dash's answer, which is #905 — the length machinery reads the locale after #899 and the pattern matcher still walks bytes
+- `param/a-pattern-trims-characters-in-a-utf8-locale` — the suffix probe beside the prefix one that separates the readings. Two characters off the end is the same four bytes either way, so `${s%??}` agrees with everyone; three off the front is `lo` here and `llo` under a single-byte locale, and dash gives `llo` in both, having no decoder to consult the locale with. Paired with the single-byte row below so that a matcher which simply always counted characters would fail one of them (#905)
   ```sh
   s=héllo; echo "[${s%??}][${s#???}]"
+  ```
+- `param/a-pattern-trims-bytes-in-a-single-byte-locale` — the other half of the pair above, under the locale every case here runs in: three off the front is three *bytes*, `llo`, in all six including the four that answer `lo` when the locale names a multibyte encoding. Without it a matcher that counted characters unconditionally would look right — which is what the scalar subscript did before #899
+  ```sh
+  s=héllo; echo "[${s%??}][${s#???}]"
+  ```
+- `param/a-replacement-runs-over-characters` — replacement walks the subject looking for a match at each position, so it has the same unit question the trim has and one more: where it *restarts*. Three characters become three X here and nine under a single-byte locale, and the anchored form has to leave `llo` rather than a continuation byte in front of it — a scan that found matches by character and advanced by byte would answer neither
+  ```sh
+  s=日本語; t=héllo; echo "[${s//?/X}][${t/??/X}]"
   ```
 - `param/case-change-is-bash-only` — bash alone: ksh93 reports a syntax error and zsh a bad substitution, so it belongs to the bash dialect rather than the core
   ```sh
@@ -6075,6 +6085,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pat/only-a-leading-period-is-special` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` |
 | `pat/bracket-set-and-range` | `set range` | `set range` | `set range` | `set range` | `set range` | `set range` |
 | `pat/bracket-dash-at-an-edge-is-literal` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` |
+| `pat/a-question-mark-is-one-character` | `six` | `five` | `five` | `five` | `five` | `five` |
+| `pat/a-question-mark-is-one-byte-in-a-single-byte-locale` | `six` | `six` | `six` | `six` | `six` | `six` |
+| `pat/a-bracket-holds-a-whole-character` | `no~whole` | `lit~whole` | `lit~whole` | `lit~whole` | `lit~whole` | `lit~whole` |
+| `pat/a-bracket-range-is-ranked-by-code-point` | `out~out` | `in~in` | `in~in` | `in~in` | `in~in` | `in~in` |
+| `pat/a-character-class-outside-ascii` | *(no output, status 0)* | `alpha alnum lower print graph ` | `alpha alnum lower print graph ` | `alpha alnum lower print graph ` | `alpha ` | `alpha alnum lower print graph ` |
 | `pat/bracket-bang-negates-everywhere` | `negated` | `negated` | `negated` | `negated` | `negated` | `negated` |
 | `pat/bracket-caret-is-an-extension` | `no-caret` | `caret` | `caret` | `caret` | `caret` | `caret` |
 | `pat/character-class` | `class` | `class` | `class` | `class` | `class` | `class` |
@@ -6177,6 +6192,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pat/bracket-dash-at-an-edge-is-literal` — a dash first or last in a bracket expression is a character rather than a range, so [a-] matches a and a literal dash and nothing between
   ```sh
   case - in [a-]) echo trailing;; esac; case - in [-a]) echo leading;; esac; case a in [a-]) echo a;; esac; case b in [a-]) echo range;; *) echo not-b;; esac
+  ```
+- `pat/a-question-mark-is-one-character` — the shortest statement of the whole question: the pattern is five ASCII bytes and the answer still moves with the locale, because what a `?` consumes is one character of the *subject*. bash, ksh93 and zsh say five; dash says six, having no decoder
+  ```sh
+  s=héllo; case $s in ?????) echo five;; ??????) echo six;; esac
+  ```
+- `pat/a-question-mark-is-one-byte-in-a-single-byte-locale` — and the same pattern under the fixed locale, where every member of the panel says six. The pair is the axis; either row alone reads as a fact about `?`
+  ```sh
+  s=héllo; case $s in ?????) echo five;; ??????) echo six;; esac
+  ```
+- `pat/a-bracket-holds-a-whole-character` — a bracket matches one unit of the subject as `?` does, so a two-byte character is in a bracket that lists it and is *not* matched by a bracket holding either of its bytes' worth of ASCII. The second half is the one a byte matcher gets wrong in the direction nobody notices: it would take `é` for the `e` it starts near
+  ```sh
+  case é in [é]) echo lit;; *) echo no;; esac; case é in [ae]) echo half;; *) echo whole;; esac
+  ```
+- `pat/a-bracket-range-is-ranked-by-code-point` — the endpoints of a range are characters too, and the comparison is by code point rather than by text: ç is between a and é as a number and is not between them byte for byte, so a matcher that compared the encoded forms would answer the first of these wrongly and the second by luck
+  ```sh
+  case ç in [a-é]) echo in;; *) echo out;; esac; case é in [a-ÿ]) echo in;; *) echo out;; esac
+  ```
+- `pat/a-character-class-outside-ascii` — where the panel is least uniform. bash 5.3, bash 3.2 and zsh agree exactly — a letter outside ASCII is alpha, alnum, lower, print and graph — and dash answers none of them, having no decoder. ksh93 answers **alpha and nothing else**, which is a partial implementation rather than a different reading of the classes: it agrees with the other three on every ASCII character and on the name of the class it does implement. This follows the three that agree, so the ksh93 cell is a recorded difference rather than a modeled one
+  ```sh
+  for c in alpha alnum upper lower digit space punct print graph; do case é in [[:$c:]]) printf "%s " "$c";; esac; done; echo
   ```
 - `pat/bracket-bang-negates-everywhere` — ! is the portable negation
   ```sh

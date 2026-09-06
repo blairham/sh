@@ -78,6 +78,33 @@ The edges that tell the lookalikes apart are measured too
 but not `print`, and a space is `blank` and `print` but not `graph` —
 the pair an implementation that aliases `print` to `graph` gets wrong.
 
+**Outside ASCII the classes are the locale's**, and this is where the
+panel is least uniform (`pat/a-character-class-outside-ascii`).
+Measured under `LC_ALL=C.UTF-8`:
+
+| character | bash 5.3, bash 3.2, zsh | ksh93 | dash |
+| --- | --- | --- | --- |
+| `é` | alpha alnum lower print graph | alpha | — |
+| `É` | alpha alnum upper print graph | alpha | — |
+| `日` | alpha alnum print graph | alpha | — |
+| `·` | punct print graph | — | — |
+| non-breaking space | print space | — | — |
+
+This implementation follows the three that agree. ksh93 answering
+`alpha` and nothing else is a partial implementation rather than a
+different reading — it agrees with the other three on every ASCII
+character and on the one class it does implement — so it is recorded
+rather than modeled.
+
+Two answers in that table are not the ones Go's `unicode` tables give
+for free. `graph` has to *exclude* a space, which `print` keeps, and the
+two differ nowhere else. And **`digit` holds nothing outside ASCII**,
+though `alnum` holds the same character: POSIX says the digit class is
+the digits 0 through 9 in every locale, and `case ٣ in [[:digit:]]` is a
+miss in ksh93, zsh and dash — bash 5.3 and 3.2 call it a digit and are
+the ones out. That leaves the bash dialect deviating from bash on one
+class, which is #956 rather than something settled here.
+
 **A class name nothing defines matches nothing, silently** — no error,
 no diagnostic, the arm simply never fires — in dash, bash 5.3, ksh93
 and zsh alike (`pat/an-unknown-character-class`). bash 3.2 alone falls
@@ -87,6 +114,49 @@ intended — its column dates the behavior rather than vetoing it, per
 `../core.md`. This implementation answers with the four: an unknown
 class can never match, and nothing says so, which is one more of the
 silent divergences this document keeps a list of.
+
+## What a "single character" is
+
+`?` matches one character and a bracket matches one character, and
+**what a character is comes from the locale**, exactly as it does for
+`${#s}` and `${s:off:len}`. Measured 2026-09-05:
+
+| probe, `s=héllo` | `LC_ALL=C` | `LC_ALL=C.UTF-8` |
+| --- | --- | --- |
+| `case $s in ?????)` | no match anywhere | matches, and not in dash |
+| `${s#???}` | `llo` everywhere | `lo`, and `llo` in dash |
+| `${s//?/X}` on `日本語` | nine X everywhere | three X, and nine in dash |
+| `case é in [é])` | no match anywhere | matches, and not in dash |
+| `case ç in [a-é])` | no match anywhere | matches, and not in dash |
+| `case é in [[:alpha:]])` | no match anywhere | matches, and not in dash |
+
+The pattern in the first row is five ASCII bytes and the answer still
+moves, which is the shape of the whole question: a `?` says nothing
+about an encoding and what it *consumes* is one character of the
+subject. So the callers ask about the subject as well as the pattern —
+and pathname expansion asks about the names in the directory, which are
+its subjects.
+
+Semantics axis `MultibyteEncodingIsHonored`, the same one `../semantics.md`
+records for a length: this is that axis reached through a second code
+path (#899, #905), and nothing here is decided separately.
+
+Three parts of it are not settled by "step a character instead of a
+byte", and each was measured on its own:
+
+- **A range is ranked by code point**, not compared as encoded text.
+  `[a-é]` has to hold ç, which is between them as a number and is not
+  between them byte for byte.
+- **A `*` stops between characters and never inside one.** Measured, and
+  this is the one corner where the panel splits: with a raw continuation
+  byte written into a bracket, `case héllo in *[\251]llo)` is a hit in
+  bash 5.3 and a miss in ksh93 and zsh under a UTF-8 locale. This
+  implementation follows the two, which is also the only reading
+  consistent with `?` consuming a whole character — a matcher cannot
+  count characters in one operator and bytes in the operator beside it.
+  There is no corpus row, because the probe is a pattern nobody writes
+  and a row would pin a permanent disagreement with one column.
+- **The character classes**, below.
 
 ## Quoting decides whether text is a pattern at all
 

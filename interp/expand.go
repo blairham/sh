@@ -1304,7 +1304,7 @@ func (r *Runner) changeCaseWith(value, pattern string, e *syntax.ParamExpr) stri
 		e.Op == syntax.ParamLowerFirst ||
 		e.Op == syntax.ParamToggleFirst
 
-	o := r.patternOpts(pattern)
+	o := r.patternOpts(pattern, value)
 	var b strings.Builder
 	for i, c := range value {
 		if (pattern == "" || matchPattern(pattern, string(c), o)) &&
@@ -1317,19 +1317,6 @@ func (r *Runner) changeCaseWith(value, pattern string, e *syntax.ParamExpr) stri
 	return b.String()
 }
 
-// localeIsC reports an explicit C or POSIX locale, read the way POSIX ranks
-// the variables: LC_ALL over LC_CTYPE over LANG. Unset is not C here —
-// measured, a shell stripped of every locale variable still cases beyond
-// ASCII — so only asking for C narrows anything.
-func (r *Runner) localeIsC() bool {
-	for _, name := range []string{"LC_ALL", "LC_CTYPE", "LANG"} {
-		if v, ok := r.getVar(name); ok && v != "" {
-			return v == "C" || v == "POSIX"
-		}
-	}
-	return false
-}
-
 // toggleCase swaps a letter's case and leaves anything else alone.
 func toggleCase(c rune) rune {
 	if unicode.IsUpper(c) {
@@ -1339,7 +1326,7 @@ func toggleCase(c rune) rune {
 }
 
 func (r *Runner) trimWith(value, pattern string, op syntax.ParamOp) string {
-	return trim(value, pattern, op, r.patternOpts(pattern))
+	return trim(value, pattern, op, r.patternOpts(pattern, value))
 }
 
 // matchedWith is trimWith with the flag that keeps what the pattern took.
@@ -1348,7 +1335,7 @@ func (r *Runner) matchedWith(value, pattern string, op syntax.ParamOp) string {
 }
 
 func (r *Runner) replaceWith(value, pattern, with string, e *syntax.ParamExpr) string {
-	return replace(value, pattern, with, e, r.patternOpts(pattern))
+	return replace(value, pattern, with, e, r.patternOpts(pattern, value))
 }
 
 func trim(value, pattern string, op syntax.ParamOp, o patternOpts) string {
@@ -1393,10 +1380,7 @@ func trimEdge(value, pattern string, op syntax.ParamOp, o patternOpts) (int, boo
 	// Candidate split points, ordered so the first match found is the one
 	// wanted: shortest first for the single operators, longest first for the
 	// doubled ones.
-	idx := make([]int, 0, len(value)+1)
-	for i := 0; i <= len(value); i++ {
-		idx = append(idx, i)
-	}
+	idx := unitStops(value, o)
 	if (prefix && longest) || (!prefix && !longest) {
 		for l, r := 0, len(idx)-1; l < r; l, r = l+1, r-1 {
 			idx[l], idx[r] = idx[r], idx[l]
@@ -1420,16 +1404,22 @@ func trimEdge(value, pattern string, op syntax.ParamOp, o patternOpts) (int, boo
 //
 // The anchored forms match only at one end, which is what `/#` and `/%` mean.
 func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) string {
+	// Every position a match may start or end at, in order, and there is one
+	// more of them than there are units. They are unit boundaries rather than
+	// byte offsets, so a pattern is never handed half of a character —
+	// `${s//?/X}` on a three-character string is `XXX` and not `XXXXXXXXX`.
+	stops := unitStops(value, o)
+
 	switch e.Anchor {
 	case '#':
-		for i := len(value); i >= 0; i-- {
-			if matchPattern(pattern, value[:i], o) {
-				return with + value[i:]
+		for k := len(stops) - 1; k >= 0; k-- {
+			if matchPattern(pattern, value[:stops[k]], o) {
+				return with + value[stops[k]:]
 			}
 		}
 		return value
 	case '%':
-		for i := 0; i <= len(value); i++ {
+		for _, i := range stops {
 			if matchPattern(pattern, value[i:], o) {
 				return value[:i] + with
 			}
@@ -1438,21 +1428,22 @@ func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) st
 	}
 
 	var b strings.Builder
-	for i := 0; i <= len(value); {
+	for k := 0; k < len(stops); {
+		i := stops[k]
 		// The longest match at this position, so `*` behaves as it does
 		// everywhere else rather than matching empty and looping.
 		end := -1
-		for j := len(value); j >= i; j-- {
-			if matchPattern(pattern, value[i:j], o) {
-				end = j
+		for m := len(stops) - 1; m >= k; m-- {
+			if matchPattern(pattern, value[i:stops[m]], o) {
+				end = stops[m]
 				break
 			}
 		}
 		if end < 0 || end == i && pattern != "" && !matchPattern(pattern, "", o) {
 			if i < len(value) {
-				b.WriteByte(value[i])
+				b.WriteString(value[i:stops[k+1]])
 			}
-			i++
+			k++
 			continue
 		}
 		b.WriteString(with)
@@ -1463,14 +1454,29 @@ func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) st
 		if end == i {
 			// An empty match must still make progress.
 			if i < len(value) {
-				b.WriteByte(value[i])
+				b.WriteString(value[i:stops[k+1]])
 			}
-			i++
+			k++
 			continue
 		}
-		i = end
+		for stops[k] < end {
+			k++
+		}
 	}
 	return b.String()
+}
+
+// unitStops is every position a match may begin or end at: each unit boundary
+// of value, and the end of it. One byte apart where a unit is a byte, and one
+// character apart where a unit is a character.
+func unitStops(value string, o patternOpts) []int {
+	stops := make([]int, 0, len(value)+1)
+	for i := 0; ; i += o.unitWidth(value[i:]) {
+		stops = append(stops, i)
+		if i == len(value) {
+			return stops
+		}
+	}
 }
 
 // substringRange is `${x:…}`, which is a substring in three of the panel and

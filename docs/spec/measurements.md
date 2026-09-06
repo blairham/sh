@@ -3533,6 +3533,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/a-swallowed-quote-changes-the-program-rather-than-refusing-it` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` |
 | `core/what-a-nested-substitution-holds-is-not-a-delimiter` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` |
 | `core/the-older-substitution-spelling-brings-its-own-quoting-too` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` |
+| `core/a-case-arm-inside-backquotes-inside-an-expansion` | `[y]` | `[y]` | `[y]` | `[y]` | `[y]` | `[y]` |
 
 - `core/dollar-single-expands-escapes` — read as bytes, because the failure mode was a literal backslash-t that looks almost right in a terminal — the quoting was recorded and nothing decoded it
   ```sh
@@ -3589,6 +3590,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/the-older-substitution-spelling-brings-its-own-quoting-too` — the backquoted spelling of the same rule, and it is here as a measurement rather than as a symmetry: ksh93 refuses a single quote inside backquotes inside a double quote when the word stands on its own — `a="`echo 'e"f'`"` is a syntax error there — and accepts it inside a `${ }` body, so all six agree on this row and only on this row. A fix written for `$( )` alone leaves the older spelling refused in all four dialects while the un-nested one is accepted, which is one construct answered two ways
   ```sh
   printf '[%s]\n' "${x:-"`echo 'e"f'`"}"
+  ```
+- `core/a-case-arm-inside-backquotes-inside-an-expansion` — the `)` of a case arm closes nothing, which `$( )` learned on its own — and one level further in, inside backquotes, the counting scan is the only thing that can be reached. Unanimous across the panel. It is the row that says the older spelling holds a program too rather than a run of text with a delimiter somewhere in it: a scan that reads across the backquotes takes the arm's `)` as the substitution's, ends it in the middle of the `case`, and leaves the expansion with no `}`
+  ```sh
+  printf '[%s]\n' "${x:-"$( echo `case a in a) echo y;; esac` )"}"
   ```
 
 ## command language

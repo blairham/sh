@@ -213,6 +213,16 @@ func TestTheSkipCountsTheNestingRatherThanTakingTheFirstCloser(t *testing.T) {
 			"x:-\"`echo 'e\"f'`\"",
 			"echo 'e\"f'",
 		},
+		// And the older spelling is a *program* too, so the parentheses in
+		// it are the program's. A `case` arm's `)` closes nothing, and
+		// counting past it is what scanParens learned the hard way — the
+		// same lesson one level further in, where the backquotes are what
+		// hides it.
+		{
+			"echo \"${x:-\"$( echo `case a in a) echo y;; esac` )\"}\"",
+			"x:-\"$( echo `case a in a) echo y;; esac` )\"",
+			" echo `case a in a) echo y;; esac` ",
+		},
 	} {
 		f, err := Parse(c.src, Core())
 		if err != nil {

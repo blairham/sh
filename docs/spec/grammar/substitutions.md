@@ -96,6 +96,14 @@ quote character of the run:
     (core/what-a-nested-substitution-holds-is-not-a-delimiter)
     (core/the-older-substitution-spelling-brings-its-own-quoting-too)
 
+"Its own quoting" is the short way of saying "it is a program", and the
+parentheses go with it. A `case` arm's `)` closes nothing here either,
+one level further in than the rule above:
+
+    ${x:-"$( echo `case a in a) echo y;; esac` )"}   →  y   all six
+
+    (core/a-case-arm-inside-backquotes-inside-an-expansion)
+
 The scan for the closing `}` therefore has to step over such a
 substitution whole rather than read across it. A scan that does not takes
 the `"` in `'"'` as the run's closer, continues from the `'` after it as

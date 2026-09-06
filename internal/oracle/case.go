@@ -1032,6 +1032,11 @@ var Corpus = []Case{
 		Why:     "the backquoted spelling of the same rule, and it is here as a measurement rather than as a symmetry: ksh93 refuses a single quote inside backquotes inside a double quote when the word stands on its own — `a=\"`echo 'e\"f'`\"` is a syntax error there — and accepts it inside a `${ }` body, so all six agree on this row and only on this row. A fix written for `$( )` alone leaves the older spelling refused in all four dialects while the un-nested one is accepted, which is one construct answered two ways",
 	},
 	{
+		ID: "core/a-case-arm-inside-backquotes-inside-an-expansion", Category: "quoting",
+		Snippet: "printf '[%s]\\n' \"${x:-\"$( echo `case a in a) echo y;; esac` )\"}\"",
+		Why:     "the `)` of a case arm closes nothing, which `$( )` learned on its own — and one level further in, inside backquotes, the counting scan is the only thing that can be reached. Unanimous across the panel. It is the row that says the older spelling holds a program too rather than a run of text with a delimiter somewhere in it: a scan that reads across the backquotes takes the arm's `)` as the substitution's, ends it in the middle of the `case`, and leaves the expansion with no `}`",
+	},
+	{
 		ID: "core/append-assignment", Category: "parameters",
 		Snippet: `x=a; x+=b; echo "[$x]"`,
 		Why:     "dash has no += and reads the whole word as a command name, which is the divergence — the other three append",

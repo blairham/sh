@@ -756,6 +756,11 @@ type Runner struct {
 	// extraOptions are the `set -o` names this dialect has beyond the ones
 	// every shell has. Declared through AddSetOptions; see setoptions.go.
 	extraOptions map[string]bool
+	// promptUser is the login name the `%n` prompt escape reports, brought in
+	// by whoever is allowed to ask the system for it. Empty in a runner
+	// nobody told, where the escape is refused rather than guessed at.
+	// Installed through SetPromptUser; see extend.go.
+	promptUser string
 	// optionNamespace is the wider set of names `[[ -o name ]]` reads, for a
 	// dialect that has one. Nil in a shell whose option names are its
 	// `set -o` names and nothing more, which is where `[[ -o ]]` falls back

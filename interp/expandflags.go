@@ -392,13 +392,35 @@ func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr) (string, bool) {
 			}
 		case 'N':
 			b.WriteString(r.promptUnitName())
+		case 'n':
+			// The user the shell runs as. Answered only where somebody told
+			// this runner who that is (SetPromptUser); a runner nobody told
+			// refuses it with the rest rather than expanding to nothing,
+			// which would be a wrong answer wearing a success.
+			//
+			// Spelled as a call rather than a `break` into the default: a
+			// `break` inside a Go switch leaves the switch, so it would have
+			// produced exactly the silence this is here to avoid.
+			if r.promptUser == "" {
+				return r.refusePromptEscape(e, v[i])
+			}
+			b.WriteString(r.promptUser)
 		default:
-			r.diagf("${%s}: the %%%c prompt escape is not implemented\n", e.Src, v[i])
-			r.expandErr = true
-			return "", false
+			return r.refusePromptEscape(e, v[i])
 		}
 	}
 	return b.String(), true
+}
+
+// refusePromptEscape says, by name, that an escape is not carried here.
+//
+// One place rather than two, because the wording is the promise: it names the
+// escape the script asked for, so a reader can tell which of several in one
+// word was the one this shell could not answer.
+func (r *Runner) refusePromptEscape(e *syntax.ParamExpr, c byte) (string, bool) {
+	r.diagf("${%s}: the %%%c prompt escape is not implemented\n", e.Src, c)
+	r.expandErr = true
+	return "", false
 }
 
 // promptUnitName is `%N`: the name of the function, sourced file or script

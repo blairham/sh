@@ -379,6 +379,21 @@ func (r *Runner) NamedOption(name string) (on, known bool) {
 	return o.state(r), true
 }
 
+// SetPromptUser names the user the `%n` prompt escape reports.
+//
+// Carried in rather than read here, for the rule the package comment states:
+// the login name for a uid comes from the system, and a Runner embedded in
+// another program must not go asking. The shell binaries fill it in beside
+// the `$UID` they already read.
+//
+// It is deliberately *not* a variable, which is measured rather than assumed.
+// `%n` ignores `$USER`, `$LOGNAME` and `$USERNAME` — set inside the shell or
+// injected into its environment before it starts, in both `${(%)…}` and a
+// prompt, in zsh and in bash's `\u` alike. Reading one of those names would
+// have made `env USER=someone-else zsh` draw the wrong person, which is the
+// case that says this is a fact about the process and not about the script.
+func (r *Runner) SetPromptUser(name string) { r.promptUser = name }
+
 // SetOptionNamespace installs the names `[[ -o name ]]` reads, for a dialect
 // whose option namespace is wider than the `set -o` names it declares.
 //

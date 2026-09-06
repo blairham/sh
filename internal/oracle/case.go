@@ -4023,6 +4023,21 @@ echo "st=$?"`,
 		Why:     "the wild idiom for a file's own path — /opt/homebrew's ruby-lsp-activate.sh opens with it: the %-flag prompt escape %x names the file being read, and the empty parameter with a :- is how a bare string reaches the flags at all",
 	},
 	{
+		ID: "param/prompt-percent-names-the-user", Category: "parameter expansion",
+		Snippet: `[[ "${(%):-%n}" == "$(id -un)" ]] && echo matches-the-login-name || echo differs`,
+		Why:     "`%n` is the user the shell runs as, and the row is written as a comparison rather than a name so the record is a fact about the escape and not about the machine that made it. The first two lines of a real ~/.zshrc build the prompt theme's cache path out of it, twice",
+	},
+	{
+		ID: "param/prompt-percent-user-is-not-a-variable", Category: "parameter expansion",
+		Snippet: `USER=someone-else; LOGNAME=someone-else; case "${(%):-%n}" in someone-else) echo follows-the-variable;; *) echo ignores-it;; esac`,
+		Why:     "the half that decides how `%n` may be implemented: it is a fact about the *process*, not about the environment, so assigning `USER` or `LOGNAME` does not move it — and neither does injecting them before the shell starts, measured separately. Reading either name would make `env USER=someone-else zsh` draw the wrong person, and bash's `\\u` was measured to ignore them too",
+	},
+	{
+		ID: "param/prompt-percent-refuses-an-escape-by-name", Category: "parameter expansion",
+		Snippet: `echo "[${(%):-%zz}]"; echo "st=$?"`,
+		Why:     "an escape outside the prompt language: zsh expands `%z` to nothing at all and carries on at 0, so the shell that has the construct is *quieter* here than this one, which refuses it by name. The refusal is the deliberate difference — a wrong answer wearing a success is worse than a complaint — and this row is where it is written down rather than left to be discovered",
+	},
+	{
 		ID: "param/expansion-flags-quote-four-ways", Category: "parameter expansion",
 		Snippet: `x="a b'c"; printf "[%s]" "${(q)x}" "${(qq)x}" "${(qqq)x}" "${(qqqq)x}"; echo`,
 		Why:     "the q family is one flag repeated, and each repetition is a different quoting: backslashes, single quotes, double quotes, then $'…'. Repetition is what selects it, which is exactly what bash's @ family refuses",

@@ -6,11 +6,14 @@
 package repl
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -410,4 +413,128 @@ func TestNoStoreMeansNoCapture(t *testing.T) {
 			t.Errorf("%s: a session with no store built a capture", tc.name)
 		}
 	}
+}
+
+// The drain waits for the terminal, not for the command.
+//
+// The first version of this suite could not tell a conduit that drained from
+// one that did not: 4000 lines went through fast enough that the pump was
+// always finished before anything asked. A mutation run said so — removing the
+// drain left every test green — so the wait is made visible instead of hoped
+// for, by putting a sink behind the pump that cannot keep up.
+//
+// Deterministic, and that is the point. The sink is slow by construction, so a
+// conduit that does not wait *cannot* have delivered everything, and the
+// assertion below is about the bytes rather than about a duration.
+func TestTheDrainWaitsForTheTerminalToCatchUp(t *testing.T) {
+	sink := &slowSink{}
+	conduit := newTestConduit(t, sink)
+
+	// Written before the drain and not alongside it, which is the shape the
+	// real thing has: the command has *exited* by the time takeOutput asks, so
+	// everything it wrote is already in the queue. Writing from a goroutine
+	// instead would race the mark ahead of the payload and the drain would
+	// correctly return at once — which is how the first version of this test
+	// failed against working code.
+	//
+	// Enough to outrun a sink that pauses on every write, and far more than
+	// the terminal's own buffer, so the pump is still working when the last
+	// write returns.
+	const chunks, size = 64, 4096
+	payload := bytes.Repeat([]byte("z"), size)
+	for range chunks {
+		if _, err := conduit.Stream().Write(payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	conduit.drain()
+
+	if got, want := sink.len(), chunks*size; got != want {
+		t.Errorf("the terminal has %d bytes after the drain, want %d — the drain returned early", got, want)
+	}
+}
+
+// A mark split across two reads is still found.
+//
+// The pump reads in 32 KiB bites and the mark can land across any boundary. A
+// carry that was wrong would forward the first half to the terminal and then
+// never match the second, so the drain would hang and a NUL would appear on
+// screen — under a boundary landing inside a 26-byte token, which is to say
+// rarely and unreproducibly. A mutation run had this survive, because nothing
+// made the boundary land there on purpose.
+//
+// It lands there on purpose here, and the synchronization is on a mark in the
+// stream rather than on quiet: the sink receiving the leading byte is what
+// says the pump has already consumed the mark's first half.
+func TestAMarkSplitAcrossTwoReadsIsStillFound(t *testing.T) {
+	sink := &syncBuffer{}
+	conduit := newTestConduit(t, sink)
+
+	const split = 5
+	if _, err := conduit.Stream().Write(append([]byte("lead"), conduit.mark[:split]...)); err != nil {
+		t.Fatal(err)
+	}
+	// The pump has read that whole write, forwarded "lead" and is holding the
+	// mark's first five bytes back. Waiting on the leading byte is the proof;
+	// waiting on a pause would prove nothing.
+	waitFor(t, sink, "lead", "the bytes before a partial mark")
+
+	if _, err := conduit.Stream().Write(conduit.mark[split:]); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-conduit.reached:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the mark's two halves never came together, so a drain would hang here")
+	}
+	if got := sink.String(); got != "lead" {
+		t.Errorf("the terminal saw %q, want %q — part of the mark was forwarded", got, "lead")
+	}
+}
+
+// newTestConduit is a conduit writing into a sink of the caller's choosing,
+// with no shell around it.
+//
+// The conduit's own terminal is what these two tests are about, so they build
+// one directly rather than through a session: a session would put a prompt and
+// an editor between the assertion and the thing it is asserting on.
+func newTestConduit(t *testing.T, sink io.Writer) *ptyConduit {
+	t.Helper()
+	control, tty, err := pty.Open()
+	if err != nil {
+		t.Skipf("no pseudo-terminal: %v", err)
+	}
+	t.Cleanup(func() { _ = control.Close(); _ = tty.Close() })
+	// The capture is the identity here: these are about the conduit's own
+	// delivery, and a bounded copy in the way would make the assertion about
+	// the bound instead.
+	conduit, err := newPtyConduit(tty, sink, func(w io.Writer) io.Writer { return w })
+	if err != nil {
+		t.Skipf("no conduit: %v", err)
+	}
+	t.Cleanup(conduit.close)
+	return conduit
+}
+
+// slowSink is a terminal that cannot keep up.
+type slowSink struct {
+	mu sync.Mutex
+	n  int
+}
+
+func (s *slowSink) Write(p []byte) (int, error) {
+	// Long enough that a pump with sixty-four writes to make is still making
+	// them when a drain that did not wait would have returned, and short
+	// enough that the test is not a pause.
+	time.Sleep(time.Millisecond)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.n += len(p)
+	return len(p), nil
+}
+
+func (s *slowSink) len() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.n
 }

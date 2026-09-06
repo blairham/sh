@@ -73,6 +73,11 @@ func Dialect() syntax.Dialect {
 	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a
 	// literal `@` followed by a group here rather than an extended pattern.
 	d.PatternAlternation = true
+	// The same alternation reaching the `case` arm's own pattern list, where
+	// one of the alternatives may be written as nothing: `(|https|git|ftp)`
+	// matches one of those schemes or none at all. `~/.zi/bin/lib/zsh/install.zsh`
+	// is written that way and the other four shells refuse the line.
+	d.CasePatternMayBeEmpty = true
 	// `<->` is a number and `<1-9>` a bounded one, where every other panel
 	// shell reads the `<` as a redirection. Measured 2026-09-05 on zsh
 	// 5.9.2: `[[ 1 = <-> ]]` is 0 here and a syntax error in bash 5.3, bash

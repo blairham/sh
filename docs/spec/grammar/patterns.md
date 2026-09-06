@@ -247,6 +247,40 @@ Grammar flag: `ExtendedPattern` — core: off; `ksh`: on. bash's narrower
 `ExtendedPatternInCondition` turns them on inside `[[ ]]` and nowhere
 else, which is where bash reads them.
 
+### A group may stand for no text at all
+
+One repetition of an arm that matches nothing is nothing, so a group with
+such an arm may consume no characters — however it is quantified, and
+including not at all. Every shell with groups agrees, so this is the
+matcher's rule and not a dialect's.
+
+| probe | bash 5.3 | bash 3.2 | bash-as-`sh` | ksh93 |
+| --- | --- | --- | --- | --- |
+| `case b in @(\|a)b)` | match | match | match | match |
+| `case b in @(*)b)` | match | match | match | match |
+| `case "" in @(a\|))` | match | match | match | match |
+| `case "" in +(\|a))` | match | match | match | match |
+| `v=abc; ${v#@(\|a)}` | `abc` | `abc` | `abc` | `abc` |
+| `v=abc; ${v##@(\|a)}` | `bc` | `bc` | `bc` | `bc` |
+
+Measured 2026-09-06, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`
+and `shopt -s extglob` on a line of its own — on the same line as the
+probe it is not yet in force when the line is parsed, which reports the
+whole family as a syntax error and is the shape that made a first reading
+of this look like a bash/ksh93 split.
+
+The question is "can an arm match nothing", not "is an arm empty": the
+`@(*)b` row is the one that separates them, and a rule written the second
+way answers it wrong. It is also not the same rule as `?(…)` and `*(…)`
+allowing zero repetitions — those allow it whatever the arms are, where
+this allows one repetition that happens to consume nothing.
+
+Four of those six rows answered the opposite way here, silently and in
+every dialect, because the matcher tried the group against one character
+of the subject and upward. `${v#…}` is where the wrong answer is worst: it
+trimmed an `a` that the shells leave alone, so the *value* was wrong
+rather than a match being missed (#1083).
+
 ## A numeric range is one dialect's, and it reaches the lexer
 
     <->      any number

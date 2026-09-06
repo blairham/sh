@@ -989,6 +989,66 @@ unrelated construct is blamed: `;;&` in a dialect without that terminator
 gets a different diagnosis under dash, which is already past the `&` and
 complaining about the `esac` where the `)` should be.
 
+The slot is at **every** pattern position, not only the first, and that
+half was measured a size too small. Every line below runs in dash:
+
+    case a in (a|;) …      the arm still matches `a`
+    case a in (;|a) …      and still matches `a`
+    case a in (a|;|b) …    matches `a` and `b`
+    case a in (a|;|;|b) …  one operator per position, repeatable
+    case a in ()) …        the slot takes the `)`; the arm has no patterns
+    case a in (;;) …       `;;` is one operator
+
+It is one operator *per* position and not a run — `case a in (a|; ;)` is
+refused — and the operator never contributes a pattern, so none of those
+arms matches the empty subject. The slot reaching the `)` is what decides
+the wording of four refusals: `(a|b|)`, `(a|)`, `()` and a bare `)` are
+all `word unexpected (expecting ")")` in dash, because the slot swallows
+the paren and the complaint lands on the `echo` after it. Read as an
+operator at the *start* only, those four were reported as `")"
+unexpected` — the right refusal at the wrong token.
+
+### A pattern written as nothing
+
+    case $proto in (|https|git|http|ftp|ftps|rsync|ssh) … esac
+
+An alternative of the pattern list written as **nothing**, so the arm also
+matches the empty subject — the idiom for "one of these, or none".
+
+| line | dash | bash 5.3 | bash 3.2 | bash-as-`sh` | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `case a in (\|x\|y)` | error | error | error | error | error | **runs** |
+| `case a in \|x\|y)` | error | error | error | error | error | **runs** |
+| `case a in (x\|\|y)` | error | error | error | error | error | **runs** |
+| `case a in (x\|y\|)` | error | error | error | error | error | **runs** |
+| `case a in (\|)` | error | error | error | error | error | **runs** |
+| `case a in ()` | error | error | error | error | error | error |
+
+Measured 2026-09-06 with `-n` over a script file, `env -i
+PATH=/usr/bin:/bin` with a scratch `HOME`. zsh alone accepts it, so it is
+an additive grammar flag, `CasePatternMayBeEmpty`.
+
+The emptiness is read off the **separator** and not off the position,
+which the last row is the proof of: `()` is a parse error even in zsh, so
+"the list may be empty" is the wrong rule. A `|` may have no pattern
+before it, none after it, or none on either side; with no `|` there is
+nothing to read the emptiness from. The arm's leading `(` is optional
+here as everywhere, and spaces around the separators change nothing.
+
+`||` arrives from the lexer as one token, because nothing has yet said
+this is a pattern list, and the flag takes it apart into two separators
+with a pattern of nothing between. Where the flag is off it stays whole,
+which is why the four shells without this blame `||` and not `|`.
+
+Three shells word the refusal three ways at three statuses, and each
+blames a different token depending on where the emptiness is — bash
+`syntax error near unexpected token` at status 2, ksh93 `unexpected` at
+status 3, dash `word unexpected (expecting ")")` at status 2.
+
+This is the grammar half only. A pattern *group* with an arm matching no
+text already stands for no text in every shell that has groups at all —
+see `patterns.md`.
+
 ## `select`
 
 The menu loop, with a for-loop's header over a different loop:
@@ -1212,6 +1272,12 @@ So the AST needs to distinguish "no list" from "empty list", which a
 **A `case` pattern may carry a leading `(`.** `case x in (x) …` is
 accepted everywhere, and patterns alternate with `|`. A body may be empty,
 and a `case` matching nothing exits 0.
+
+A `pattern` in that production is a word, and a dialect may let it be
+nothing at all — `CasePatternMayBeEmpty`, zsh only, above. It reads off
+the separator, so the production is `[ '(' ] [ pattern ] { '|'
+[ pattern ] } ')'` there, with the extra rule that at least one `|` has
+to be present for any of the patterns to be left out.
 
 ## `[[ … ]]` and `(( … ))`
 

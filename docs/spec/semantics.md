@@ -4150,6 +4150,42 @@ respect. `type pushd` still answers `function`, because it is one; the
 question the seam answers is whose diagnostic it is, which is the
 question a location already asks.
 
+**Whose function a listing is asking about** (#1035). The same fact is
+what a *listing* needs, and it was needed second: `declare -F` against
+this dialect named `__dirs_rotate`, `dirs`, `popd` and `pushd` beside
+the two functions the snippet had defined. That is not a cosmetic
+surplus. A listing is how a caller captures a shell's state — an agent
+harness starts a login shell once, writes the functions, the shell
+options and the aliases to a file, and sources that file ahead of every
+later command — so a leaked name is recorded as the *person's*, handed
+to every later shell as though somebody had written it, and `pushd` is
+redefined on top of the prelude's on every command. Real bash has the
+three as builtins and lists none of them.
+
+The rule is the one above, asked by name instead of by declaration:
+
+- **A listing of the functions is the script's own.** `declare -f`,
+  `declare -F`, `typeset -f` and the function half of a bare `set`
+  leave out what the prelude defined. Deliberately no second record of
+  prelude-ness: the declaration is what is compared, so a script that
+  writes its own `pushd` is in the listing from that moment — its
+  function is its own, by the same rule that moves the diagnostic's
+  voice back to it. An empty listing is 0, not the 1 a name that is no
+  function answers.
+- **A name asked for is still answered.** `declare -F pushd` writes the
+  name and `declare -f pushd` writes the body, because there is a
+  function there and `type pushd` already says so. Real bash refuses
+  both with 1, having a builtin instead, and this is the divergence
+  taken knowingly: the alternative makes the prelude's implementation
+  unreachable by name and gives the shell two answers to whether
+  `pushd` is a function. One notion of prelude-ness, one answer.
+
+Still leaking, measured and not fixed here: `compgen -A function`
+enumerates through the public `Runner.FuncNames`, which is also what the
+line editor completes from — so narrowing it there would cost `pushd`
+its completion, and the two callers want different sets. Real bash
+answers `compgen -A function pu` with nothing.
+
 ### Out of scope, recorded rather than silent: newgrp
 
 `newgrp` — the one POSIX regular builtin still absent — replaces the

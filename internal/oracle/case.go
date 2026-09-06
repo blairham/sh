@@ -4888,6 +4888,31 @@ echo "st=$?"`,
 		Why:     "the parenthesized expansion flags are zsh's alone: it uppercases where bash and dash call the expansion a bad substitution at run time and ksh93 refuses it while reading — the same three-way split every unreadable expansion follows",
 	},
 	{
+		ID: "param/the-tilde-flag-is-one-dialects", Category: "parameter expansion",
+		Snippet: `touch inn1 inn2; g='inn*'; printf "[%s]" ${~g}; echo`,
+		Why:     "a `~` between the `${` and the parameter makes the substituted value eligible for filename generation: zsh matches the pattern where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading with the `~` named — the same three-way split every unreadable expansion follows. ~/.zi/bin/zi.zsh uses it eighteen times in nineteen lines and a refusal leaves eighteen variables empty",
+	},
+	{
+		ID: "param/the-tilde-flag-quoting-suppresses-it", Category: "parameter expansion",
+		Snippet: `touch inn1 inn2; g='inn*'; printf "[%s]" "${~g}" ${~g}; echo`,
+		Why:     "quoting suppresses the flag exactly as it suppresses ordinary filename generation, so the quoted form is the value unchanged and the unquoted one splits into as many words as the pattern matched — the two halves in one row, because a fix that produced the matches in both would look right in half the record",
+	},
+	{
+		ID: "param/the-tilde-flag-doubled-turns-it-off", Category: "parameter expansion",
+		Snippet: `touch inn1 inn2; g='inn*'; printf "[%s]" ${~g} ${~~g} ${~~~g}; echo`,
+		Why:     "the count is parity and not a toggle of the option: one tilde is on, two are off, three on again, and measured under GLOB_SUBST both ways the answer is the same — `${~~name}` is how a nested use says \"not here\"",
+	},
+	{
+		ID: "param/the-tilde-flag-expands-a-tilde", Category: "parameter expansion",
+		Snippet: `t='~/zz'; echo ${~t} | sed "s|$HOME|H|g"; echo ${t} | sed "s|$HOME|H|g"`,
+		Why:     "the other half of the same flag: the value's leading tilde becomes a home directory, which no shell in the panel does to an expansion's result on its own — the second line is the same value without the flag, so the row pins the difference rather than the machine's HOME",
+	},
+	{
+		ID: "param/the-tilde-flag-marks-a-pattern-operand", Category: "parameter expansion",
+		Snippet: "p='a*'\ncase abc in ${~p}) printf hit;; *) printf miss;; esac\ncase abc in ${p}) printf hit;; *) printf miss;; esac\nv=abc\nprintf \"[%s]\" \"${v#${~p}}\" \"${v#${p}}\"\necho",
+		Why:     "the pattern half is not about the filesystem: it is the same question that decides whether a `case` subject and a `${x#$p}` operand read a value's metacharacters as live, so the flag reaches all three or the implementation has three copies of one rule. One statement per *line* on purpose — a bad substitution abandons the rest of the line, so writing them with semicolons made the row about that abandonment instead, which two other rows already pin",
+	},
+	{
 		ID: "param/expansion-flags-split-and-join", Category: "parameter expansion",
 		Snippet: `x=a:b:c; printf "[%s]" ${(s.:.)x}; a=(1 2); printf "<%s>" "${(j.,.)a}"`,
 		Why:     "the s flag splits a scalar at its separator into real fields and j joins an array with its own — string-to-list and list-to-string, which no operator the other shells have can say",

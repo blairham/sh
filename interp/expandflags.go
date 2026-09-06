@@ -27,7 +27,10 @@ const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwW"
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
 // paths stay exactly as they were.
-func (r *Runner) expandFlagged(s syntax.Span) ([]string, bool) {
+// head has the meaning expandSpan gives it: whether this span stands at the
+// head of the word being built, which is what the `${~spec}` flag's tilde
+// half asks about.
+func (r *Runner) expandFlagged(s syntax.Span, head bool) ([]string, bool) {
 	e := s.Param
 	if e == nil || !e.HasFlags {
 		return nil, false
@@ -46,10 +49,14 @@ func (r *Runner) expandFlagged(s syntax.Span) ([]string, bool) {
 			// An unquoted expansion of an empty value is no field at all.
 			return nil, true
 		}
-		if !r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion") {
+		if !r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
 			v = globEscape(v)
 		}
-		return []string{v}, true
+		// `${(U)~g}` is measured: the group is read, the case applied, and
+		// the tilde marks what came out. The tilde may only follow the
+		// group — `${~(U)g}` is a bad substitution — so this is the one
+		// order there is.
+		return []string{r.tildeFlagHead(s, head, v)}, true
 	}
 	// Empty words are removed from a list result — measured on both sides:
 	// `${(s.:.)x}` on `a::b` is two words however it is quoted, and only
@@ -62,12 +69,12 @@ func (r *Runner) expandFlagged(s syntax.Span) ([]string, bool) {
 		if w == "" && !keepEmpty {
 			continue
 		}
-		if quoted || !r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion") {
+		if quoted || !r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
 			w = globEscape(w)
 		}
 		out = append(out, w)
 	}
-	return out, true
+	return r.tildeFlagElements(s, head, out), true
 }
 
 // flaggedWords runs the flag pipeline and returns the resulting words, raw.

@@ -192,6 +192,17 @@ type ParamExpr struct {
 	// node carries the position and Src carries the text.
 	FlagsErrPos int
 
+	// TildeFlags is how many `~` characters were written between the `${`
+	// and the rest of the expansion — `${~x}` carries 1 and `${~~x}` carries
+	// 2. Zero is the ordinary expansion.
+	//
+	// A count and not a bool because parity is the meaning: an odd number
+	// makes the result eligible for tilde expansion and filename generation
+	// and an even one refuses it, both regardless of the option that would
+	// otherwise decide, which is measured. Keeping the count also lets the
+	// printer write the span back exactly as written.
+	TildeFlags int
+
 	// Bad marks an expansion whose operator the grammar did not recognize,
 	// in a dialect that diagnoses that when the expansion is reached rather
 	// than when it is read. Src holds the inside of the braces for the
@@ -254,6 +265,15 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 		}
 	}
 
+	// A run of `~` stands between the flag group and everything else, which
+	// is where the shell that has it puts it: `${(U)~g}` reads, `${~(U)g}`
+	// is a bad substitution, and `${(U)~#g}` is a length — so after the
+	// group and in front of the `#` below.
+	for p.dialect.ParamTildeFlag && strings.HasPrefix(s, "~") {
+		e.TildeFlags++
+		s = s[1:]
+	}
+
 	switch {
 	case strings.HasPrefix(s, "#") && len(s) > 1:
 		e.Length = true
@@ -289,7 +309,7 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	if e.Inner == nil {
 		e.Name, s = scanParamName(s)
 	}
-	if e.Name == "" && !e.HasFlags && e.Inner == nil {
+	if e.Name == "" && !e.HasFlags && e.TildeFlags == 0 && e.Inner == nil {
 		if !p.dialect.BadSubstitutionAtParseTime {
 			// The majority defers an unreadable expansion to the run, the
 			// same way an unknown operator is deferred: a `${%x}` in a
@@ -308,6 +328,7 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	}
 	// With a flag group the name may be empty — `${(U)}` is an empty string
 	// and `${(%):-%x}` is all operator — so an operator may still follow.
+	// A tilde run relaxes it the same way: `${~}` is the empty string too.
 
 	// `${!name@}` and `${!name*}` are the names beginning with name, not a
 	// value at all. Only after `!`, and only when the whole rest is the one

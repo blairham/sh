@@ -460,6 +460,36 @@ type Dialect struct {
 	// when a flag group was read.
 	ParamExpansionFlags bool
 
+	// ParamTildeFlag enables a `~` written between the `${` and the
+	// parameter: `${~name}`, which makes the *result* of the substitution
+	// eligible for tilde expansion and filename generation whatever the
+	// `GLOB_SUBST` option says. zsh alone has it; to the other four a
+	// leading `~` is not a name and the whole expansion is unreadable, which
+	// BadSubstitutionAtParseTime already splits into a parse-time refusal
+	// for ksh93 (`` `~' unexpected ``) and a deferred runtime error for the
+	// rest.
+	//
+	// A grammar flag rather than a semantics axis, for the reason
+	// NestedParamExpansion is one: it decides where the word is cut. Without
+	// it there is no parameter at the front of `${~name}` at all, so the
+	// expansion is unreadable rather than differently read, and there is
+	// nothing for a value to switch between.
+	//
+	// The node carries the *count* of tildes rather than a bool, because
+	// parity is the whole of the meaning and it is not a toggle of the
+	// option: measured under `GLOB_SUBST` both ways, one tilde is yes and
+	// two are no from either starting point, and only a spec with no tilde
+	// consults the option. Counting in the parser keeps that arithmetic in
+	// one place and lets the printer write the span back as written.
+	//
+	// The flag also relaxes the name, the way ParamExpansionFlags does:
+	// `${~}` is the empty string in the shell that has the construct.
+	//
+	// It cannot collide with ParamCaseChange, and not only because no
+	// dialect has both: bash's case-toggle `~` follows the name — `${x~}` —
+	// and this one precedes it.
+	ParamTildeFlag bool
+
 	// ParamElementSelection enables the three operators that choose which
 	// *elements* of a value survive: `${a:#pattern}` drops the ones a
 	// pattern matches, `${a:|other}` the ones another array holds, and

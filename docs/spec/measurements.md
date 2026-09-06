@@ -5353,6 +5353,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/case-toggle-is-newer-bash-still` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[ABc][AbC][ABc]` | `[ABc][AbC][ABc]` | **2>** `<shell>: ${x~}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `~' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/indirection-diverges-four-ways` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[V]` | `[V]` | `[V]` | `[x]` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/expansion-flags-are-one-dialects` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(U)x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(U)x}: bad substitution` *(status 127)* | **2>** `<shell>: ${(U)x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `ABC` |
+| `param/the-tilde-flag-is-one-dialects` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${~g}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${~g}: bad substitution` *(status 127)* | **2>** `<shell>: ${~g}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `~' unexpected` *(status 3)* | `[inn1][inn2]` |
+| `param/the-tilde-flag-quoting-suppresses-it` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${~g}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${~g}: bad substitution` *(status 127)* | **2>** `<shell>: ${~g}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `~' unexpected` *(status 3)* | `[inn*][inn1][inn2]` |
+| `param/the-tilde-flag-doubled-turns-it-off` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${~g}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${~g}: bad substitution` *(status 127)* | **2>** `<shell>: ${~g}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `~' unexpected` *(status 3)* | `[inn1][inn2][inn*][inn1][inn2]` |
+| `param/the-tilde-flag-expands-a-tilde` | `~/zz` **2>** `<shell>: 1: Bad substitution` | `~/zz` **2>** `<shell>: line 1: ${~t}: bad substitution` | `~/zz` **2>** `<shell>: line 1: ${~t}: bad substitution` | `~/zz` **2>** `<shell>: ${~t}: bad substitution` | **2>** `<shell>: syntax error at line 1: `~' unexpected` *(status 3)* | `H/zz~~/zz` |
+| `param/the-tilde-flag-marks-a-pattern-operand` | **2>** `<shell>: 2: Bad substitution` *(status 2)* | `hit` **2>** `<shell>: line 2: ${~p}: bad substitution~<shell>: line 5: ${~p}: bad substitution` | **2>** `<shell>: line 2: ${~p}: bad substitution` *(status 127)* | `hit` **2>** `<shell>: line 1: ${~p}: bad substitution~<shell>: line 4: ${~p}: bad substitution` | **2>** `<shell>: syntax error at line 2: `~' unexpected` *(status 3)* | `hitmiss[bc][abc]` |
 | `param/expansion-flags-split-and-join` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(s.:.)x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(s.:.)x}: bad substitution` *(status 127)* | **2>** `<shell>: ${(s.:.)x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `[a][b][c]<1,2>` |
 | `param/prompt-percent-names-the-script` | **2>** `<script>: 1: Bad substitution` *(status 2)* | **2>** `<script>: line 1: ${(%):-%x}: bad substitution` *(status 1)* | **2>** `<script>: line 1: ${(%):-%x}: bad substitution` *(status 1)* | **2>** `<script>: line 1: ${(%):-%x}: bad substitution` *(status 1)* | **2>** `<script>: line 1: syntax error at line 1: `:-%x}' unexpected` *(status 3)* | `<script>` |
 | `param/prompt-percent-names-the-user` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(%):-%n}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(%):-%n}: bad substitution` *(status 127)* | **2>** `<shell>: ${(%):-%n}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `:-%n}' unexpected` *(status 3)* | `matches-the-login-name` |
@@ -5702,6 +5707,31 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/expansion-flags-are-one-dialects` — the parenthesized expansion flags are zsh's alone: it uppercases where bash and dash call the expansion a bad substitution at run time and ksh93 refuses it while reading — the same three-way split every unreadable expansion follows
   ```sh
   x=abc; echo ${(U)x}
+  ```
+- `param/the-tilde-flag-is-one-dialects` — a `~` between the `${` and the parameter makes the substituted value eligible for filename generation: zsh matches the pattern where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading with the `~` named — the same three-way split every unreadable expansion follows. ~/.zi/bin/zi.zsh uses it eighteen times in nineteen lines and a refusal leaves eighteen variables empty
+  ```sh
+  touch inn1 inn2; g='inn*'; printf "[%s]" ${~g}; echo
+  ```
+- `param/the-tilde-flag-quoting-suppresses-it` — quoting suppresses the flag exactly as it suppresses ordinary filename generation, so the quoted form is the value unchanged and the unquoted one splits into as many words as the pattern matched — the two halves in one row, because a fix that produced the matches in both would look right in half the record
+  ```sh
+  touch inn1 inn2; g='inn*'; printf "[%s]" "${~g}" ${~g}; echo
+  ```
+- `param/the-tilde-flag-doubled-turns-it-off` — the count is parity and not a toggle of the option: one tilde is on, two are off, three on again, and measured under GLOB_SUBST both ways the answer is the same — `${~~name}` is how a nested use says "not here"
+  ```sh
+  touch inn1 inn2; g='inn*'; printf "[%s]" ${~g} ${~~g} ${~~~g}; echo
+  ```
+- `param/the-tilde-flag-expands-a-tilde` — the other half of the same flag: the value's leading tilde becomes a home directory, which no shell in the panel does to an expansion's result on its own — the second line is the same value without the flag, so the row pins the difference rather than the machine's HOME
+  ```sh
+  t='~/zz'; echo ${~t} | sed "s|$HOME|H|g"; echo ${t} | sed "s|$HOME|H|g"
+  ```
+- `param/the-tilde-flag-marks-a-pattern-operand` — the pattern half is not about the filesystem: it is the same question that decides whether a `case` subject and a `${x#$p}` operand read a value's metacharacters as live, so the flag reaches all three or the implementation has three copies of one rule. One statement per *line* on purpose — a bad substitution abandons the rest of the line, so writing them with semicolons made the row about that abandonment instead, which two other rows already pin
+  ```sh
+  p='a*'
+  case abc in ${~p}) printf hit;; *) printf miss;; esac
+  case abc in ${p}) printf hit;; *) printf miss;; esac
+  v=abc
+  printf "[%s]" "${v#${~p}}" "${v#${p}}"
+  echo
   ```
 - `param/expansion-flags-split-and-join` — the s flag splits a scalar at its separator into real fields and j joins an array with its own — string-to-list and list-to-string, which no operator the other shells have can say
   ```sh

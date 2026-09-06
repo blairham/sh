@@ -89,6 +89,13 @@ func Dialect() syntax.Dialect {
 	// `${(%):-%x}` — which is this dialect's alone: the other three call
 	// the whole expansion a bad substitution.
 	d.ParamExpansionFlags = true
+	// A `~` between the `${` and the parameter, which makes the result of
+	// the substitution eligible for tilde expansion and filename generation.
+	// This shell alone: measured 2026-09-06, bash 5.3, bash 3.2 and dash all
+	// answer `bad substitution` when the expansion is reached and ksh93
+	// refuses it while reading. `~/.zi/bin/zi.zsh` uses it eighteen times in
+	// nineteen lines, and a refusal there leaves eighteen variables empty.
+	d.ParamTildeFlag = true
 	d.ParamElementSelection = true
 	// An expansion where a parameter name would be — `${${v}#a}`, which is
 	// how this shell applies one expansion to the result of another and is

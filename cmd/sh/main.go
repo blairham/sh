@@ -173,6 +173,24 @@ func run(argv []string, stdout, stderr io.Writer) int {
 	// argv[0] the way every dialect binary is named.
 	sh.Name = "sh"
 	sh = withHighlighting(sh, own)
+	if len(own.plugins) > 0 {
+		// A plugin host relays the plugin's standard error onto this one from
+		// a goroutine of its own, so from here on more than one goroutine
+		// writes these streams and they have to be serialized. See
+		// guardedStreams, and note that it is a no-op for the *os.File pair
+		// the shipped binary runs with — this is about an embedder's writer.
+		//
+		// Before installSeams and before the streams reach the front end, so
+		// there is one guarded pair rather than a guarded copy beside an
+		// unguarded one.
+		//
+		// The condition is a cost rather than a behavior, and is deliberately
+		// not covered: making it unconditional is a mutant that survives,
+		// because with no plugin there is no second goroutine and the guard
+		// excludes nothing that was not already excluded. It says what the
+		// lock is for.
+		stdout, stderr = guardedStreams(stdout, stderr)
+	}
 	sh, closer, err := installSeams(sh, own, stderr)
 	if err != nil {
 		// A policy that will not load is not a shell that runs unsandboxed.

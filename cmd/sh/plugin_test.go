@@ -4,11 +4,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // End to end, through the flag a person types, and through run() rather than
@@ -447,5 +450,151 @@ func TestNoPluginIsShownAnotherPluginsLaunch(t *testing.T) {
 					order.name, got.errs, path)
 			}
 		}
+	}
+}
+
+// chatterer is an observer plugin that writes to its standard error for as
+// long as the shell is up, rather than once per event.
+//
+// The background loop is the point of the fixture. A relay that writes one
+// line while a command happens to be writing another is what #1138 was: a
+// window narrow enough that five runs on darwin all pass and an unrelated
+// pull request's Linux job fails. Widening it is what makes the overlap a
+// thing a test can assert instead of a thing CI reports at random.
+const chatterer = `#!/bin/sh
+exec 3>&1
+send() { printf '%s\n' "$1" >&3; }
+while IFS= read -r line; do
+	case $line in
+	*'"method":"observer/event"'*)
+		continue
+		;;
+	esac
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"chatterer\",\"commands\":[],\"observer\":true}}"
+		(i=0; while [ $i -lt 200 ]; do printf 'chatter %s\n' "$i" >&2; i=$((i+1)); done) &
+		;;
+	esac
+done
+`
+
+// overlapProbe is an io.Writer that reports whether two goroutines were ever
+// inside Write at the same time.
+//
+// It answers the question directly rather than leaving it to `-race`, and that
+// is deliberate: a race detector reports what it happened to observe on the
+// scheduling it happened to get, so a test that relies on one is a test that
+// passes on darwin and fails on somebody else's Linux job — which is the whole
+// of #1138's cost. This fails on any run where the overlap occurs, with or
+// without the detector.
+//
+// It is not itself racy: the wrapped buffer is written under the same lock
+// that keeps the bookkeeping, so the probe never adds the fault it is looking
+// for. What it reports is whether the *caller* serialized, which is the
+// property under test.
+type overlapProbe struct {
+	mu         sync.Mutex
+	inside     int
+	overlapped bool
+	buf        strings.Builder
+	// hold is how long each write stays inside, which widens the window a
+	// real overlap has to land in. Without it the two goroutines have to be
+	// scheduled within microseconds of each other, which is exactly the
+	// coin-flip this test exists to stop depending on.
+	hold time.Duration
+}
+
+func (p *overlapProbe) Write(b []byte) (int, error) {
+	p.mu.Lock()
+	p.inside++
+	if p.inside > 1 {
+		p.overlapped = true
+	}
+	p.mu.Unlock()
+	time.Sleep(p.hold)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.inside--
+	return p.buf.Write(b)
+}
+
+func (p *overlapProbe) report() (string, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.buf.String(), p.overlapped
+}
+
+// A plugin's stderr relay and the shell's own writes never overlap on a
+// writer the caller supplied.
+//
+// #1138: the relay runs on a goroutine of the host's for as long as the plugin
+// lives, and an external command whose stderr is not an *os.File is copied
+// there by a goroutine of os/exec's. Two writers, one io.Writer, and the race
+// detector found the pair on Linux — a `fmt.Fprintf` from internal/plugin's
+// relay against an `io.Copy` from os/exec — on a pull request whose diff
+// touched no plugin code and no goroutine.
+//
+// The relay is *not* unjoined, which is worth saying because it looks like the
+// obvious cause: Host.Close waits on relayDone and run() calls it before
+// returning, so nothing reads the buffer while a goroutine is still writing
+// it. The two writes are simultaneous in the middle of the run, and there is
+// no ordering to restore — only an overlap to exclude, with a lock.
+func TestAPluginsRelayDoesNotWriteTheShellsStreamAtTheSameTimeAsTheShell(t *testing.T) {
+	path := writePlugin(t, chatterer)
+	errs := &overlapProbe{hold: 200 * time.Microsecond}
+	var out bytes.Buffer
+	code := run([]string{
+		"sh", "-dialect", "posix", "-plugin", path, "-c",
+		"i=0; while [ $i -lt 6 ]; do /bin/sh -c 'j=0; while [ $j -lt 40 ]; do echo noise >&2; j=$((j+1)); done'; i=$((i+1)); done",
+	}, &out, errs)
+	text, overlapped := errs.report()
+	if code != 0 {
+		t.Fatalf("status = %d, err = %q", code, text)
+	}
+	if overlapped {
+		t.Error("two goroutines were inside Write on the shell's stderr at once: " +
+			"the plugin's relay is not serialized against the shell's own writes")
+	}
+	// The run has to have exercised both writers, or the assertion above is
+	// about nothing at all.
+	if !strings.Contains(text, "chatterer: chatter") {
+		t.Errorf("errs = %q, want the plugin's relayed chatter in it", text)
+	}
+	if !strings.Contains(text, "noise") {
+		t.Errorf("errs = %q, want the command's own standard error in it", text)
+	}
+}
+
+// One writer handed to both streams is still one writer, and the guard has to
+// be one lock rather than one per field.
+//
+// The case is interp's `lockedWriter` note arrived at from outside: `Stdout`
+// and `Stderr` are two fields and need not be two objects, and an embedder
+// that wants what `2>&1` gives hands the same buffer to both. A lock per field
+// would then be two locks over one object, which excludes nothing — so this is
+// the same overlap as the test above with the relay racing the *output* copy
+// instead of the error one.
+func TestOneWriterHandedToBothStreamsIsGuardedByOneLock(t *testing.T) {
+	path := writePlugin(t, chatterer)
+	both := &overlapProbe{hold: 200 * time.Microsecond}
+	code := run([]string{
+		"sh", "-dialect", "posix", "-plugin", path, "-c",
+		"i=0; while [ $i -lt 6 ]; do /bin/sh -c 'j=0; while [ $j -lt 40 ]; do echo noise; j=$((j+1)); done'; i=$((i+1)); done",
+	}, both, both)
+	text, overlapped := both.report()
+	if code != 0 {
+		t.Fatalf("status = %d, output = %q", code, text)
+	}
+	if overlapped {
+		t.Error("two goroutines were inside Write at once on the one writer both streams were given: " +
+			"the guard is a lock per field rather than a lock over the stream")
+	}
+	if !strings.Contains(text, "chatterer: chatter") {
+		t.Errorf("output = %q, want the plugin's relayed chatter in it", text)
+	}
+	if !strings.Contains(text, "noise") {
+		t.Errorf("output = %q, want the command's own standard output in it", text)
 	}
 }

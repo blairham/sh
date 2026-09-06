@@ -140,6 +140,15 @@ func TestPromptOpenWords(t *testing.T) {
 		"elif": "elif", "{": "cursh", "function": "function", "(": "subsh",
 		"$(": "cmdsubst", "`": "bquote", "${": "braceparam", "<<": "heredoc",
 		"'": "quote", `"`: "dquote", "|": "pipe", "&&": "cmdand", "||": "cmdor",
+		// The two spellings of a bar are two words here, which is the only
+		// surface on which they are distinguishable to the person typing:
+		//
+		//	% PS2='[%_]'
+		//	% echo a |
+		//	[pipe]cat
+		//	% echo b |&
+		//	[errpipe]cat
+		"|&": "errpipe",
 	} {
 		if got := w[word].Text; got != want {
 			t.Errorf("%q draws %q, want %q", word, got, want)
@@ -150,7 +159,7 @@ func TestPromptOpenWords(t *testing.T) {
 			t.Errorf("%q follows its construct, want it to stand in place of it", clause)
 		}
 	}
-	for _, op := range []string{"|", "&&", "||"} {
+	for _, op := range []string{"|", "|&", "&&", "||"} {
 		if w[op].Replaces {
 			t.Errorf("%q stands in place of what it is inside, want it to follow", op)
 		}

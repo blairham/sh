@@ -13,6 +13,14 @@ Panel measurements as in `../oracle.md`.
     pipeline    →  [ ! ]  command  [ | command ]  …
     command     →  simple | compound | function definition
 
+Two dialects spell the bar a second way, `|&`, which joins the command
+before it to the one after it *and* carries that command's standard
+error along with its standard output. It is the same production with a
+second operator — the flag is `PipeBothStreams` and the measurement is in
+`tokenization.md` — and what it means is a `2>&1` appended to the left
+command's own redirections. ksh93 writes a coprocess with the same two
+characters and that is not this production at all; see `coproc` below.
+
 Each level binds tighter than the one above it. Two consequences are
 measured below and are the ones implementations get wrong.
 
@@ -1434,6 +1442,17 @@ descriptors; zsh has one anonymous coprocess addressed as `>&p` and
 `<&p`, and no name may be written at all — `coproc MY { cat; }` is a
 parse error there. ksh93 has the zsh model under a different spelling,
 `cat |&`, with no `coproc` word. Only bash's is this construct.
+
+ksh93's spelling is worth stating precisely, because two other shells use
+the same two characters for a pipe of both streams and picking either
+reading for the other shell would be a silent wrong answer. In ksh93 `|&`
+*terminates* a command the way `&` does rather than joining two:
+`echo one |& ; echo two` is accepted there and `echo one | ; echo two` is
+not, which is the measurement that tells the two apart (`tokenization.md`
+has the full table). So it takes a flag of its own beside this one, and
+not a second value of `PipeBothStreams`. Not implemented: the `ksh`
+preset therefore refuses `a |& b` rather than running it as the wrong
+construct.
 
 Grammar flag: `Coproc` (off in the core, on for `bash`). It is not core
 even though two shells have the keyword, because a switch that made the

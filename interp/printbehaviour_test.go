@@ -77,11 +77,12 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 // borrowing one made `interp`'s tests stop compiling without `dialect/bash`
 // (#491).
 //
-// Six of these are what the corpus cannot be *read* without, measured by
-// turning each off against the 1270 cases that are neither syntax errors nor
-// layout-sensitive: ParamIndirection (8 cases), Coproc (3), CaseContinue and
-// CoprocName (2 each), ExtendedPatternInCondition and FunctionKeywordParens
-// (1 each) — 15 between them, which is what the plain core cannot read. The
+// Seven of these are what the corpus cannot be *read* without, measured by
+// turning each off against the cases that are neither syntax errors nor
+// layout-sensitive: ParamIndirection (8 cases), Coproc (3), CaseContinue,
+// CoprocName and PipeBothStreams (2 each), ExtendedPatternInCondition and
+// FunctionKeywordParens (1 each) — 19 between them, which is what the plain
+// core cannot read. The
 // rest change what a case *means* rather than whether it parses, and they are
 // here because the printer should be exercised on those meanings rather than
 // on whatever a narrower reading turns them into.
@@ -102,6 +103,7 @@ func corpusGrammar() syntax.Dialect {
 	d.ParamCaseChange = true
 	d.ParamIndirection = true
 	d.ParamTransformations = true
+	d.PipeBothStreams = true
 	d.RegexTakesAlternation = true
 	d.TimePosixFlag = true
 	// A here-document whose delimiter carries the `)` that closes the

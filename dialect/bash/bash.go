@@ -75,6 +75,11 @@ func Dialect() syntax.Dialect {
 	// `time -p`, the POSIX report format. bash and ksh93 read the flag;
 	// zsh leaves `-p` to the pipeline, which is why it is not core.
 	d.TimePosixFlag = true
+	// `a |& b` — a pipe carrying the left side's standard error along with
+	// its standard output. A bash 4 feature: bash 3.2 lexes the two bytes as
+	// a bar and an ampersand and refuses the line, which is why this is not
+	// core and why the three bash columns of a measurement do not agree.
+	d.PipeBothStreams = true
 	// `coproc cat` with the near ends in COPROC. zsh's coprocess speaks
 	// `print -p` rather than an array and is a different feature.
 	d.Coproc = true

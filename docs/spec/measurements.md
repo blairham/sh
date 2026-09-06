@@ -6505,6 +6505,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/reading-through-a-wide-duplication-target` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1` **2>** `<shell>: line 1: 10: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 10: Bad file descriptor` | `st=1` **2>** `<shell>: 10: Bad file descriptor` | `st=1` **2>** `<shell>: 10: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 10: bad file descriptor` |
 | `redir/a-wide-duplication-target-with-a-leading-zero` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1` **2>** `<shell>: line 1: 8: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 8: Bad file descriptor` | `st=1` **2>** `<shell>: 8: Bad file descriptor` | `st=1` **2>** `<shell>: 08: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 8: bad file descriptor` |
 | `redir/a-duplication-target-that-expands-to-two-digits` | *(no output, status 2)* | `st=1` | `st=1` | `hi~st=0` | `st=1` | `st=1` |
+| `pipe/both-streams-is-a-pipe-in-two-shells-and-a-coprocess-in-one` | **2>** `<script>: 2: Syntax error: "&" unexpected` *(status 2)* | `<O>~<E>` | `<O>~<E>` | **2>** `<script>: line 2: syntax error near unexpected token `&'~<script>: line 2: `f \|& while read l; do echo "<$l>"; done'` *(status 2)* | **2>** `E` | `<O>~<E>` |
+| `pipe/both-streams-redirection-comes-last` | **2>** `<script>: 2: Syntax error: "&" unexpected` *(status 2)* | `<O>~<E>` | `<O>~<E>` | **2>** `<script>: line 2: syntax error near unexpected token `&'~<script>: line 2: `e 2>/dev/null \|& while read l; do echo "<$l>"; done'` *(status 2)* | *(no output, status 0)* | `<O>~<E>` |
+| `pipe/both-streams-takes-no-blank-between-its-two-bytes` | **2>** `<script>: 1: Syntax error: "&" unexpected` *(status 2)* | **2>** `<script>: line 1: syntax error near unexpected token `&'~<script>: line 1: `echo one \| & echo two'` *(status 2)* | **2>** `<script>: line 1: syntax error near unexpected token `&'~<script>: line 1: `echo one \| & echo two'` *(status 2)* | **2>** `<script>: line 1: syntax error near unexpected token `&'~<script>: line 1: `echo one \| & echo two'` *(status 2)* | *(no output, status 0)* | **2>** `<script>:1: parse error near `&'` *(status 1)* |
 | `redir/a-failed-redirection-inside-a-subshell` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `inner~after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `inner~after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `inner~after` **2>** `<shell>:1: no such file or directory: /nope/x` |
 
 - `procsub/reads-a-command-as-a-file` — `<(cmd)` runs cmd and expands to a path its output can be read from — the last of the core language, and the clearest case of a dialect being a runtime switch: bash 3.2 has it as `bash` and loses it as `sh`. dash has it in neither guise and reports the `(` as unexpected
@@ -6962,6 +6965,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/a-duplication-target-that-expands-to-two-digits` — the check is on the *expanded* word rather than on what was typed, which is what says it cannot be the lexer's: dash refuses `>&$n` once `n` holds two digits and takes it when `n` holds one. Standard error is put aside first because the shells name the target differently here — as written or as expanded — and the question is which of them stops
   ```sh
   exec 2>/dev/null; n=10; echo hi >&$n; echo "st=$?"
+  ```
+- `pipe/both-streams-is-a-pipe-in-two-shells-and-a-coprocess-in-one` — the two characters with two readings. bash 5.3 and zsh pipe both streams, so the reader brackets `O` and `E` alike; bash 3.2 has no `|&` at all and dash never had one, and both lex a bar and an ampersand and blame the ampersand; ksh93 reads a *coprocess* — the left side is backgrounded onto a pipe the shell would read with `read -p`, so the reader gets nothing and the coprocess's standard error reaches the terminal on its own. Three answers, one spelling, and the reason the ksh form cannot be this flag with another value. The reader brackets what reaches it so the row does not depend on which stream a column joins, and the `wait` is what makes the ksh column deterministic: without it the coprocess is racing the shell's exit and drops its line about once in ten
+  ```sh
+  f() { echo O; echo E >&2; }
+  f |& while read l; do echo "<$l>"; done
+  wait
+  ```
+- `pipe/both-streams-redirection-comes-last` — where in the list the `2>&1` goes, which is the whole of the operator and the only thing an implementation can get silently wrong. Written *after* the command's own redirections it overrides the `2>/dev/null` and `<E>` arrives; written before, the `2>/dev/null` would win and only `<O>` would. Both shells that have the operator bracket both lines, so the answer is unanimous where it exists — and the same pair of shells answer the mirror shape, `e >/dev/null |&`, with nothing at all, which is the other direction of the same rule
+  ```sh
+  e() { echo O; echo E >&2; }
+  e 2>/dev/null |& while read l; do echo "<$l>"; done
+  wait
+  ```
+- `pipe/both-streams-takes-no-blank-between-its-two-bytes` — the adjacency, which is what keeps the operator from taking a construct away from the shells that spell a background command with a bar before it: five of the six refuse this where four of them accept `|&` written closed up, and they refuse it in four wordings. ksh93 is the exception in both directions, because its `|&` is a coprocess rather than a pipe
+  ```sh
+  echo one | & echo two
   ```
 - `redir/a-failed-redirection-inside-a-subshell` — what `ends the shell` means where there is a process boundary: the three that stop lose `inner` and still print `after` at status 0, so the subshell ends and the parent does not — which our cloned-runner subshells have to reconstruct by hand
   ```sh

@@ -8726,6 +8726,28 @@ exit 7`,
 		Why:     "the check is on the *expanded* word rather than on what was typed, which is what says it cannot be the lexer's: dash refuses `>&$n` once `n` holds two digits and takes it when `n` holds one. Standard error is put aside first because the shells name the target differently here — as written or as expanded — and the question is which of them stops",
 	},
 	{
+		ID: "pipe/both-streams-is-a-pipe-in-two-shells-and-a-coprocess-in-one", Category: "redirection",
+		Script: true,
+		Snippet: `f() { echo O; echo E >&2; }
+f |& while read l; do echo "<$l>"; done
+wait`,
+		Why: "the two characters with two readings. bash 5.3 and zsh pipe both streams, so the reader brackets `O` and `E` alike; bash 3.2 has no `|&` at all and dash never had one, and both lex a bar and an ampersand and blame the ampersand; ksh93 reads a *coprocess* — the left side is backgrounded onto a pipe the shell would read with `read -p`, so the reader gets nothing and the coprocess's standard error reaches the terminal on its own. Three answers, one spelling, and the reason the ksh form cannot be this flag with another value. The reader brackets what reaches it so the row does not depend on which stream a column joins, and the `wait` is what makes the ksh column deterministic: without it the coprocess is racing the shell's exit and drops its line about once in ten",
+	},
+	{
+		ID: "pipe/both-streams-redirection-comes-last", Category: "redirection",
+		Script: true,
+		Snippet: `e() { echo O; echo E >&2; }
+e 2>/dev/null |& while read l; do echo "<$l>"; done
+wait`,
+		Why: "where in the list the `2>&1` goes, which is the whole of the operator and the only thing an implementation can get silently wrong. Written *after* the command's own redirections it overrides the `2>/dev/null` and `<E>` arrives; written before, the `2>/dev/null` would win and only `<O>` would. Both shells that have the operator bracket both lines, so the answer is unanimous where it exists — and the same pair of shells answer the mirror shape, `e >/dev/null |&`, with nothing at all, which is the other direction of the same rule",
+	},
+	{
+		ID: "pipe/both-streams-takes-no-blank-between-its-two-bytes", Category: "redirection",
+		Script: true, SyntaxError: true,
+		Snippet: `echo one | & echo two`,
+		Why:     "the adjacency, which is what keeps the operator from taking a construct away from the shells that spell a background command with a bar before it: five of the six refuse this where four of them accept `|&` written closed up, and they refuse it in four wordings. ksh93 is the exception in both directions, because its `|&` is a coprocess rather than a pipe",
+	},
+	{
 		ID: "redir/a-failed-redirection-inside-a-subshell", Category: "redirection",
 		Snippet: `( exec 3>/nope/x; echo inner ); echo after`,
 		Why:     "what `ends the shell` means where there is a process boundary: the three that stop lose `inner` and still print `after` at status 0, so the subshell ends and the parent does not — which our cloned-runner subshells have to reconstruct by hand",

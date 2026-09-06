@@ -762,22 +762,39 @@ func (p *Parser) parsePipeline() Expr {
 			if len(pl.Cmds) == 0 {
 				return nil
 			}
-			p.fail("expected a command after |")
+			// The token that stopped it is named, not the bar behind it.
+			// Every shell in the panel that refuses this quotes what it
+			// found — `;`, `&`, the end of input — and none of them says
+			// anything about the `|`, which by now is read and was never
+			// the problem. It reaches `|&` because a dialect without that
+			// operator lexes those two bytes as a bar and an ampersand, so
+			// the refusal lands on the `&` where bash 3.2's and dash's do.
+			//
+			// Not the operand form: a command *may* begin after a bar, so a
+			// reserved word standing there is reserved, and the dialect that
+			// names a word's class instead of quoting it quotes this one —
+			// `echo a | fi` is `"fi" unexpected` there and not `word
+			// unexpected`. The only words that reach here are stop words,
+			// which are exactly the reserved ones.
+			p.failUnexpected("")
 			return pl
 		}
 		// The bar has its command, so the pipeline is whole again: a failure
 		// after this has nothing to do with it.
 		p.open = p.open[:depth]
 		pl.Cmds = append(pl.Cmds, cmd)
-		if !p.at(TokPipe) {
+		if !p.at(TokPipe) && !p.at(TokPipeAmp) {
 			return pl
+		}
+		if p.at(TokPipeAmp) {
+			p.mergeStderr(cmd, p.tok.Pos)
 		}
 		// Pushed rather than opened as a clause: a clause displaces the
 		// clause before it, and a bar is not one of those — it belongs to
 		// the pipeline and not to whatever construct the pipeline is in. As
 		// a clause it evicted the `then` it was written inside, which then
 		// reported an `if` waiting for a bar.
-		p.open = append(p.open, opener{word: "|", line: p.tok.Pos.Line})
+		p.open = append(p.open, opener{word: p.tok.Kind.String(), line: p.tok.Pos.Line})
 		p.next()
 		p.skipNewlines()
 	}
@@ -958,6 +975,52 @@ func (p *Parser) withRedirs(c Command) Command {
 }
 
 func (r *redirs) addRedir(x *Redirect) { r.Redirs = append(r.Redirs, x) }
+
+func (c *SimpleCmd) addRedir(x *Redirect) { c.Redirs = append(c.Redirs, x) }
+
+// addRedir on a definition reaches its body, which is where the parser
+// already puts a written one: `f() { :; } 2>&1` reads the redirection as the
+// body compound's, and the definition itself has no list to hold it.
+func (c *FuncDecl) addRedir(x *Redirect) {
+	if h, ok := c.Body.(interface{ addRedir(*Redirect) }); ok {
+		h.addRedir(x)
+	}
+}
+
+// mergeStderr attaches the redirection `|&` stands for to the command before
+// it, at the end of that command's own list.
+//
+// At the end and not the start, which is the whole of the operator: both
+// shells that have it show the error for `e 2>/dev/null |& cat` and show
+// nothing for `e >/dev/null |& cat`, and only a `2>&1` written *after*
+// whatever the command wrote for itself gives that pair of answers.
+//
+// A command with nowhere to put a redirection is left alone. The one that
+// reaches here is a definition whose body never parsed, which is already an
+// error, and a definition writes nothing either way.
+func (p *Parser) mergeStderr(cmd Command, pos Pos) {
+	h, ok := cmd.(interface{ addRedir(*Redirect) })
+	if !ok {
+		return
+	}
+	h.addRedir(&Redirect{
+		N:        literalWord("2", pos),
+		Op:       TokGreatAmp,
+		OpPos:    pos,
+		Text:     "1",
+		Word:     literalWord("1", pos),
+		PipeBoth: true,
+	})
+}
+
+// literalWord is a word the grammar supplies rather than one the script
+// wrote, positioned at the operator it stands for.
+func literalWord(text string, pos Pos) *Word {
+	return &Word{
+		Spans: []Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: pos}},
+		Start: pos, Stop: pos,
+	}
+}
 
 func (p *Parser) word() *Word {
 	if p.tok.Kind != TokWord {

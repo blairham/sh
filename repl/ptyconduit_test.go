@@ -327,7 +327,17 @@ func TestWhichCaptureASessionGets(t *testing.T) {
 			// Two different destinations merged into one and written back to
 			// the first would send a command's diagnostics somewhere they
 			// were not addressed.
-			name: "two different streams take no conduit", streams: "split",
+			name: "a stream that is not a terminal takes no conduit", streams: "file",
+			wantCapture: false, wantChildFd1: "whatever it was",
+		},
+		{
+			// And the harder half: two streams that are *both* terminals and
+			// are not the same one. IsTerminal says yes to each, so the only
+			// thing that can refuse this is asking whether they are the same
+			// file — which is why that question is asked with SameFile rather
+			// than by comparing the two writers, and why this case exists
+			// beside the one above rather than instead of it.
+			name: "two different terminals take no conduit", streams: "two-terminals",
 			wantCapture: false, wantChildFd1: "whatever it was",
 		},
 	} {
@@ -345,13 +355,21 @@ func TestWhichCaptureASessionGets(t *testing.T) {
 				r.Stdout, r.Stderr = tty, tty
 			case "buffer":
 				r.Stdout, r.Stderr = &syncBuffer{}, &syncBuffer{}
-			case "split":
+			case "file":
 				other, err := os.CreateTemp(t.TempDir(), "err")
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer func() { _ = other.Close() }()
 				r.Stdout, r.Stderr = tty, other
+			case "two-terminals":
+				otherControl, otherTty, err := pty.Open()
+				if err != nil {
+					t.Skipf("no second pseudo-terminal: %v", err)
+				}
+				defer func() { _ = otherControl.Close() }()
+				defer func() { _ = otherTty.Close() }()
+				r.Stdout, r.Stderr = tty, otherTty
 			}
 			before := r.Stdout
 

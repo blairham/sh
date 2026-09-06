@@ -3668,6 +3668,63 @@ What was built, all through the extension seam — registered builtins in each
   letters zsh's `zmodload` does not have at all are `bad option: -q` and 1,
   which is this builtin's wording and `bindkey`'s, not `zstyle`'s `invalid
   option`. Corpus: `zmodload/*`.
+- **zsh `autoload`** (dialect/zsh/autoload.go): a name defined from
+  `$fpath` the first time it is called. Measured 2026-09-06 under `env -i`
+  with a scratch HOME and no startup files.
+
+  **The name becomes a function immediately**, before anything is read:
+  `autoload -Uz myfunc` is silent and 0, and `whence -w myfunc` answers
+  `myfunc: function` at once. The stub *is* the record, which is why
+  nothing keeps a separate list of pending names. The **call** is what
+  searches `$fpath`, and a name whose file is not there fails at the call
+  and not at the declaration — a shell that resolved early would report
+  the failure in the wrong place, and a script's `autoload || return`
+  would fire when nothing was wrong yet. The file's contents become the
+  function's *body*, so its `$*` is the call's arguments and a second call
+  runs the loaded body rather than searching again.
+
+  `$fpath` is walked in order and the first readable file wins; an entry
+  with no such file, or one that cannot be read at all, is a search that
+  goes on rather than a failure, which is what makes a stale entry
+  harmless. A name with a directory in it is read from where it says and
+  `$fpath` plays no part.
+
+  **`+X` and `-X` are two commands rather than one letter with a sign.**
+  `+X name…` resolves the names given and does not run them; `+X` with
+  nothing is silence and 0. `-X` takes *no* name — it means "the function
+  I am running inside" — so `autoload -X` at the top level and
+  `autoload -X foo` anywhere are both `bad autoload`. zsh ends the script
+  there and this shell reports and runs on: a dialect builtin has no way
+  to say "and stop" that this engine offers, and inventing one for a
+  spelling only the shell's own generated stub ever writes would be more
+  surface than the corner earns.
+
+  The one place this shows its own workings is `typeset -f NAME` on a name
+  that has not been called yet. zsh prints a stub of its own —
+  `builtin autoload -XUz`, where the shell re-enters the function after
+  `-X` has replaced it — and that re-entry is interpreter machinery rather
+  than anything a body can say. The stub here says the same thing in the
+  language it has: `builtin autoload +X NAME && NAME "$@"`, which resolves
+  and then calls what was resolved. It cannot recurse — `+X` either
+  replaces the definition or fails, and `&&` stops on the failure. The
+  behaviour is the same and the text is not.
+
+  Letters: zsh has `d k m r R t T U w W X z`, measured a letter at a time
+  against all fifty-two, and refuses every other as `bad option`. `-U`
+  (no alias expansion while the file is read) and `-z` (zsh-style
+  parsing) are accepted and change nothing here — an autoloaded file is
+  parsed with this shell's own grammar, which *is* zsh's, and every real
+  script writes `-Uz`. The other nine are named as missing: per-function
+  tracing (`-t`/`-T`), the ksh-style and pattern forms (`-d`/`-k`/`-m`),
+  resolving the path now (`-r`/`-R`) and compiled `.zwc` files
+  (`-w`/`-W`).
+
+  ksh93 has the word too — `autoload` is `typeset -fu` there — which is
+  why its corpus column is a `typeset` usage line rather than a
+  not-found; bash and dash have no such builtin. The seam this needed is
+  `interp.Runner.DefineFunction`, the write half of `FunctionText`: a
+  definition arriving from outside the script rather than from a
+  `f() { … }` the parser already read. Corpus: `autoload/*`.
 - **zsh `bindkey`** (dialect/zsh/bindkey.go): the line editor's key table.
   See below for why this moved out of the not-built list.
 

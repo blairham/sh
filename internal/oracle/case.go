@@ -6263,6 +6263,41 @@ echo unreachable`,
 		Why:     "the same question of a case letter, and the same split — `MIXED` in ksh93 and zsh, `MiXeD` in bash — which is what makes it a rule about attributes rather than about arithmetic. bash 3.2 has no `-u` at all and answers 2 while leaving the value where it is",
 	},
 	{
+		ID: "declare/unique-attribute-dedupes-an-array", Category: "declarations",
+		Snippet: `typeset -U a=(1 1 2 2 3 1); echo "a=[${a[*]}] st=$?"`,
+		Why:     "the letter one shell in the panel has: zsh keeps the first occurrence of each element and answers `1 2 3`. bash refuses `-U` with its usage line and 2, ksh93 answers `unknown option` with its own usage line, and because its `typeset` is special the refusal ends the script — so the row also records that this is a letter to refuse by name rather than an axis to answer",
+	},
+	{
+		ID: "declare/unique-attribute-dedupes-a-later-append", Category: "declarations",
+		Snippet: `typeset -U a=(1 2 3); a+=(2 4 4); echo "a=[${a[*]}] st=$?"`,
+		Why:     "the attribute is a property of the *name*, so the append is deduped too and against what is already there — `1 2 3 4`, not `1 2 3 2 4`. This is the row that separates the attribute from a one-off dedupe at the declaration, and it is the whole reason `path=( new \"${path[@]}\" )` does not grow a duplicate every time an rc file runs",
+	},
+	{
+		ID: "declare/unique-attribute-added-to-an-array-with-duplicates", Category: "declarations",
+		Snippet: `b=(1 1 2); typeset -U b; echo "b=[${b[*]}] st=$?"`,
+		Why:     "the attribute arriving after the value, the same question the integer and case rows ask: zsh dedupes what the name already holds on the spot and answers `1 2`. The answer no shell gives is the empty string, which is what a declaration reading `typeset -U b` as `typeset -U b=` would produce",
+	},
+	{
+		ID: "declare/unique-attribute-keeps-the-earlier-place", Category: "declarations",
+		Snippet: `typeset -U b=(1 2 3); b=(3 "${b[@]}"); echo "b=[${b[*]}] st=$?"`,
+		Why:     "which of two equal elements survives, put where a first-wins and a last-wins reading answer differently: zsh answers `3 1 2`, so the occurrence written *first* is kept where it stands and the later copy goes. A last-wins dedupe answers `1 2 3` to the same line and would pass every other row here",
+	},
+	{
+		ID: "declare/unique-attribute-removed", Category: "declarations",
+		Snippet: `typeset -U c=(1 2 3); typeset +U c; c+=(1); echo "c=[${c[*]}] st=$?"`,
+		Why:     "`+U` takes the attribute away and leaves the elements alone — `1 2 3 1` in zsh, the duplicate the append brought standing. It is also the tell that the dedupe happens when a value is written rather than when one is read: a read-time dedupe would still answer `1 2 3` here",
+	},
+	{
+		ID: "declare/unique-attribute-on-a-scalar", Category: "declarations",
+		Snippet: `typeset -U s=a:b:a; echo "s=[$s] st=$?"`,
+		Why:     "the letter is about an array's elements, and a colon-joined string is not elements: zsh leaves `a:b:a` exactly as written. Worth a row because the letter is used almost entirely on `path` and `fpath`, whose scalar halves *are* colon lists, and a shell that deduped the scalar too would look right on those names and wrong on every other",
+	},
+	{
+		ID: "declare/unique-attribute-listed-back", Category: "declarations",
+		Snippet: `typeset -aU q=(1 1 2); typeset -p q; echo "st=$?"`,
+		Why:     "where the attribute is said back: `typeset -aU q=( 1 2 )` in zsh — the letter written last of all of them, after the kind letter rather than before it. Narrowed to one name the case invents, because a whole listing is the machine's",
+	},
+	{
 		ID: "set/bare-set-and-a-hidden-value", Category: "builtins",
 		Snippet: `typeset -H zzh=hid; zzv=plain; set | grep '^zz'; echo "st=$?"`,
 		Why:     "the hiding letter reaches the other listing too: zsh writes the bare name `zzh` where every other shell writes `zzh=hid` or nothing, and the ordinary `zzv=plain` on the next line is what proves the listing ran rather than failing. Filtered to two names the script invents, because the rest of a bare `set` is the machine's",

@@ -185,52 +185,52 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		// freezes it; applying both up front made the declaration refuse its
 		// own value and leave the name empty.
 		r.applyAttributes(name, f)
-		if f.global {
-			// `-g` reaches past every local: the assignment lands on the
-			// global cell and no shadow is taken, so `declare -g x=new`
-			// inside a function survives its return even where a `local x`
-			// is standing in front of the name.
-			if f.assoc && !f.remove {
-				// And `-A` still has to be recorded on that global cell.
-				// It was not, and the two letters together are a common
-				// spelling: `typeset -gA t` declared nothing associative,
-				// so the very next `t[k]=v` was an *indexed* array being
-				// given a non-numeric subscript and was refused. The
-				// non-global path below has always marked it; this one
-				// returned before reaching that line.
-				r.markAssoc(name)
-			}
-			if hasValue {
-				r.setGlobalVar(name, value)
-				if r.unspecified || r.ctl == controlExit {
-					return r.status
-				}
-			}
-			if f.readonly && !f.remove {
-				r.markReadonly(name)
-			}
-			continue
-		}
 		// Declaring inside a function declares a local, which is unanimous
 		// among the three shells that have the name — subject to ksh93's
 		// rule about which functions have a scope at all.
-		fresh := r.shadowTypeset(name)
-		r.localExportAttribute(name, f.export)
-		if r.unspecified {
-			// See biLocal: an unanswered axis refuses the declaration
-			// rather than making it one way and saying so.
-			return r.status
+		//
+		// `-g` is the one thing that changes that: it takes no shadow, so
+		// the attributes and the value land on the global cell and `typeset
+		// -g x=new` inside a function survives its return even where a
+		// `local x` is standing in front of the name.
+		//
+		// Not taking the shadow is the *whole* of what the letter means, and
+		// every other step of the declaration is the same either way.
+		// Writing it as an early exit from the loop said otherwise: it made
+		// `-g` a second and shorter declaration that dropped every step
+		// below the exit. The associative attribute was one of them, and
+		// putting `markAssoc` back inside the exit fixed that one letter
+		// while leaving the shape that lost it — a valueless `typeset -g n`
+		// still brought no name into being, which is the whole of a
+		// `typeset -gA a b c` setup line (#989).
+		fresh := false
+		if !f.global {
+			fresh = r.shadowTypeset(name)
+			r.localExportAttribute(name, f.export)
+			if r.unspecified {
+				// See biLocal: an unanswered axis refuses the declaration
+				// rather than making it one way and saying so.
+				return r.status
+			}
+			r.shadowedExport(name, wasExported)
 		}
-		r.shadowedExport(name, wasExported)
 		if f.assoc && !f.remove {
 			// After the shadow, so that `typeset -A` inside a function
 			// declares a local table and the caller's absence comes back
-			// when it returns. `+A` does nothing rather than removing: two
-			// of the three shells with the attribute refuse to take it off
-			// a name, the same shape `+r` already has.
+			// when it returns — and, under `-g`, after the shadow that was
+			// deliberately *not* taken, which is what leaves the table on
+			// the global cell where the function's return cannot reach it.
+			// `+A` does nothing rather than removing: two of the three
+			// shells with the attribute refuse to take it off a name, the
+			// same shape `+r` already has.
 			r.markAssoc(name)
 		}
 		switch {
+		case hasValue && f.global:
+			r.setGlobalVar(name, value)
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
 		case hasValue:
 			r.setVarAs(name, value, assignedByDeclaration)
 			if r.ctl == controlExit {
@@ -242,6 +242,10 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		default:
+			// `-g` never takes a shadow, so the cell it declares into is
+			// never a fresh one — which is exactly the reading that leaves a
+			// standing value alone and brings only an absent name into
+			// being.
 			r.declareEmpty(name, fresh)
 		}
 		if f.readonly && !f.remove {

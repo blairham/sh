@@ -136,3 +136,61 @@ command -V nosuch; echo st=$?`)
 		t.Errorf("got %q, want the sentence, the bare complaint and status 1", out)
 	}
 }
+
+// `typeset -gA` is `typeset -A` at the global scope, and the associative
+// attribute has to survive the letter — measured against zsh 5.9.2 on
+// 2026-09-06, where every row below is what the real shell says. The letter
+// once skipped every step of the declaration but the assignment, so
+// `typeset -gA ZI` left an ordinary name and the `ZI[...]=` lines after it
+// were refused with `assignment to invalid subscript range` (#989).
+func TestGlobalAssociativeDeclaration(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"the subscript is a key at the top level",
+			"typeset -gA m\nm[k]=v\necho \"[$m[k]]\"", "[v]\n",
+		},
+		{
+			"the letters in either order",
+			"typeset -Ag m\nm[k]=v\necho \"[$m[k]]\"", "[v]\n",
+		},
+		{
+			"the declaration outlives the function that made it",
+			"f() { typeset -gA m; }\nf\nm[k]=v\necho \"[$m[k]]\"", "[v]\n",
+		},
+		{
+			// The whole line as a script writes it: several names, no values,
+			// and the elements assigned afterwards.
+			"several names on one line",
+			"typeset -gA m n\nm[a]=1\nn[b]=2\necho \"[$m[a]][$n[b]]\"", "[1][2]\n",
+		},
+		{
+			// The listing is what says the attribute is really there, rather
+			// than an index that happens to read back.
+			"the listing says associative",
+			"f() { typeset -gA m; }\nf\ntypeset -p m", "typeset -A m=( )\n",
+		},
+		{
+			"a valueless global declaration brings the name into being",
+			"typeset -g p\ntypeset -p p", "typeset p=''\n",
+		},
+		{
+			"a valueless global declaration leaves a standing value alone",
+			"p=1\ntypeset -g p\necho \"[$p]\"", "[1]\n",
+		},
+		{
+			// Declared and not assigned, which this shell's listing shows as
+			// an empty value — the same shape `typeset -x` without the letter
+			// already has.
+			"a valueless global export is listed with an empty value",
+			"typeset -gx e2\ncase \"$(export -p)\" in (*\"export e2=''\"*) echo yes;; (*) echo no;; esac",
+			"yes\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), c.src)
+			if out != c.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q", out, st, c.want)
+			}
+		})
+	}
+}

@@ -156,10 +156,17 @@ func TestAProcessSubstitutionInAPatternIsNotPerformed(t *testing.T) {
 	// pipe. Asserting on a variable the command sets would prove nothing —
 	// the command runs in a child, so an assignment it makes never comes
 	// back either way.
+	//
+	// The arm is where the word carries a process substitution at all: inside
+	// `${…}` the `<(` is ordinary text and never becomes one, so a test
+	// written there would assert about a branch it does not reach.
 	tmp := t.TempDir()
-	out, st := runGrammar(t, `v=abcd; printf "[%s]" "${v#<(:)}"`, patternGrammar,
-		func(r *Runner) { r.Env = append(r.Env, "TMPDIR="+tmp) })
-	if want := "[abcd]"; out != want || st != 0 {
+	out, st := runGrammar(t, `case abc in <(:)) printf "[hit]";; *) printf "[miss]";; esac`,
+		patternGrammar, func(r *Runner) { r.Env = append(withoutTMPDIR(r.Env), "TMPDIR="+tmp) })
+	// A miss either way — bash and zsh match `abc` against the path they made
+	// and do not match it either — so the outcome is the panel's and the
+	// question this pins is the one beside it.
+	if want := "[miss]"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
 	}
 	made, err := filepath.Glob(filepath.Join(tmp, "sh-procsub*"))
@@ -181,4 +188,17 @@ func runPatternAxis(t *testing.T, glob Answer, src string) (out string, status i
 		sem.GlobExpansionResults = glob
 		r.Semantics = &sem
 	})
+}
+
+// withoutTMPDIR drops the scratch directory the test helper supplies, so a
+// test naming its own is the one that answers. Appending a second entry is
+// not enough: a Runner reads the first it finds, which is the helper's.
+func withoutTMPDIR(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, "TMPDIR=") {
+			out = append(out, kv)
+		}
+	}
+	return out
 }

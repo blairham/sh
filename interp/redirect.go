@@ -30,6 +30,7 @@ import (
 // ignored.
 func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compound bool) ([]io.Closer, error) {
 	r.redirErr = false
+	r.badDupTarget = false
 	r.redirFds = nil
 	if len(rs) == 0 {
 		return nil, nil
@@ -138,8 +139,25 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// sends only stdout there, because the second one copied stdout
 		// before it was redirected. All four shells agree, and getting it
 		// right needs no special case: the loop already runs left to right.
-		if rd.Op == syntax.TokGreatAmp || rd.Op == syntax.TokLessAmp {
-			if rd.N == nil && rd.Op == syntax.TokLessAmp {
+		// `>&word` is the csh spelling of `&>word` in the dialects that kept
+		// it, and it is that spelling exactly: the same flags, the same both
+		// streams, the same `set -C`, the same words for an open that failed.
+		// Rebinding the operator rather than copying the open is the whole of
+		// it — a second copy is a second place to forget noclobber.
+		op := rd.Op
+		if r.greatAmpNamesAFile(rd, name) {
+			op = syntax.TokAmpGreat
+		} else if r.unspecified {
+			r.redirErr = true
+			return closers, nil
+		}
+
+		if op == syntax.TokGreatAmp || op == syntax.TokLessAmp {
+			if !isDescriptorSpec(name) {
+				r.refuseDupTarget(rd, name)
+				return closers, nil
+			}
+			if rd.N == nil && op == syntax.TokLessAmp {
 				fd = 0
 			}
 			// One dialect will not take a duplication target wider than a
@@ -214,10 +232,10 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		}
 
 		var flags int
-		switch rd.Op {
+		switch op {
 		case syntax.TokGreat, syntax.TokClobber:
 			flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-			if r.noclobber && rd.Op == syntax.TokGreat {
+			if r.noclobber && op == syntax.TokGreat {
 				// Under `set -C` a plain `>` refuses to truncate a file that
 				// already exists. `>|` is the documented override, and is
 				// the one operator on this list that means the same thing in
@@ -237,14 +255,22 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		case syntax.TokAmpGreat, syntax.TokAmpDGreat:
 			// Both streams to one file.
 			flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-			if rd.Op == syntax.TokAmpDGreat {
+			if op == syntax.TokAmpDGreat {
 				flags = os.O_WRONLY | os.O_CREATE | os.O_APPEND
+			} else if r.noclobber {
+				// `set -C` refuses this truncation exactly as it refuses a
+				// plain `>`, and unanimously: `set -C; : > f; echo hi &> f`
+				// is a refusal in all six of the panel, each in its own
+				// words. There is no override spelling to exempt — `>|&` is
+				// a syntax error in every one of them — so unlike `>` this
+				// needs no operator to ask about.
+				flags |= os.O_EXCL
 			}
 			fd = -1
 		default:
 			return closers, fmt.Errorf("not implemented yet: the %s redirection", rd.Op)
 		}
-		if rd.N == nil && (flags == os.O_RDONLY || rd.Op == syntax.TokLessGreat) {
+		if rd.N == nil && (flags == os.O_RDONLY || op == syntax.TokLessGreat) {
 			fd = 0
 		}
 		// The shell picks the descriptor: the next free number from ten up,
@@ -312,7 +338,8 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			if creating {
 				format, fallback = r.diag().CannotCreate, "cannot create %[1]s: %[2]s"
 			}
-			if r.noclobber && rd.Op == syntax.TokGreat && errors.Is(err, fs.ErrExist) &&
+			if r.noclobber && (op == syntax.TokGreat || op == syntax.TokAmpGreat) &&
+				errors.Is(err, fs.ErrExist) &&
 				r.diag().NoclobberRefusal != "" {
 				// Half the panel has a sentence for this one refusal — the
 				// file `set -C` would not overwrite — and the other half
@@ -943,4 +970,126 @@ func (r *Runner) markExecOpened(fds []int) {
 		}
 		r.execFds[fd] = true
 	}
+}
+
+// GreatAmpTargetForm is what `>&word` does with a word that is not a
+// descriptor number.
+//
+// A form rather than a flag because the three answers are three different
+// things, and because the difference between two of them is a word that
+// expanded to nothing — which is exactly what a script reaches when it writes
+// `>&"${COPROC[1]}"` in a shell that has no such array.
+//
+// Measured 2026-09-06 with `echo hi >&qq` in an empty directory: bash 5.3.15,
+// bash 3.2.57, bash 5.3.15 run as `sh` and zsh 5.9.2 create the file and put
+// `hi` in it; ksh93u+ refuses with `qq: bad file unit number` and carries on;
+// dash refuses the *word* while parsing, so nothing in the line runs. The
+// core is the intersection, and the intersection has no such form.
+type GreatAmpTargetForm int
+
+const (
+	// GreatAmpTargetUnspecified is no answer, and is refused like any other.
+	GreatAmpTargetUnspecified GreatAmpTargetForm = iota
+	// GreatAmpTargetIsADescriptor keeps `>&` a duplication and nothing else:
+	// a word that is neither a number nor `-` is refused. ksh93 and dash.
+	GreatAmpTargetIsADescriptor
+	// GreatAmpTargetNamesAFile reads a word that named something as a file
+	// and sends *both* output streams to it, which is the csh spelling of
+	// `&>word` — and it is that spelling exactly, down to honoring `set -C`
+	// and reporting a failed open in the ordinary words. A word that expanded
+	// to nothing is still refused, because there is no name in it. bash.
+	GreatAmpTargetNamesAFile
+	// GreatAmpTargetNamesAnyFile is the same, and takes a word that expanded
+	// to nothing as a name too: the open is attempted and fails on the empty
+	// path, which is why zsh answers `>&""` with `no such file or directory:`
+	// and nothing after the colon.
+	GreatAmpTargetNamesAnyFile
+)
+
+func (f GreatAmpTargetForm) String() string {
+	switch f {
+	case GreatAmpTargetIsADescriptor:
+		return "GreatAmpTargetIsADescriptor"
+	case GreatAmpTargetNamesAFile:
+		return "GreatAmpTargetNamesAFile"
+	case GreatAmpTargetNamesAnyFile:
+		return "GreatAmpTargetNamesAnyFile"
+	}
+	return "GreatAmpTargetUnspecified"
+}
+
+// isDescriptorSpec says the word after `>&` or `<&` is asking for a
+// descriptor rather than naming anything: a run of digits, or the `-` that
+// closes one.
+//
+// The width is not asked here. `>&10` is a descriptor spec everywhere, and
+// the one dialect that will not take a target wider than a digit refuses it
+// as a *number* it does not like — see refuseWideDupTarget — rather than by
+// reading it as a filename.
+func isDescriptorSpec(word string) bool {
+	return word == "-" || (word != "" && allDigits(word))
+}
+
+// greatAmpNamesAFile answers whether this `>&word` is the csh spelling of
+// `&>word` — see GreatAmpTargetForm.
+//
+// Only where the redirection names no descriptor of its own. `2>&qq` is a
+// duplication in every shell that has the form at all: bash calls it an
+// ambiguous redirect where the bare spelling writes a file, which is what
+// makes the leading number the whole of the question.
+func (r *Runner) greatAmpNamesAFile(rd *syntax.Redirect, target string) bool {
+	if rd.Op != syntax.TokGreatAmp || rd.N != nil || isDescriptorSpec(target) {
+		return false
+	}
+	switch r.greatAmpTarget() {
+	case GreatAmpTargetNamesAFile:
+		return target != ""
+	case GreatAmpTargetNamesAnyFile:
+		return true
+	}
+	return false
+}
+
+// greatAmpTarget resolves the axis, and only where a `>&` really does name
+// something other than a descriptor. `>&2` is nobody's question, so a dialect
+// that has not answered this still runs it.
+func (r *Runner) greatAmpTarget() GreatAmpTargetForm {
+	f := r.sem().GreatAmpTarget
+	if f == GreatAmpTargetUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("`>&` naming something that is not a descriptor")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return f
+}
+
+// refuseDupTarget reports the word after `>&` or `<&` that is not a
+// descriptor, in the dialect's own words.
+//
+// Two verbs, because the shells name two different things: `%[1]s` is the
+// target *as it was written* and `%[2]s` is what it expanded to. bash names
+// the first — `<&""` is `"": Bad file descriptor`, quotation marks and all —
+// and ksh93 names the second, which for that case is nothing at all.
+//
+// The empty word has a wording of its own wherever a shell gives it one,
+// because two of them do: bash calls a word that came to nothing a bad
+// descriptor and a word that came to something an ambiguous redirect, and
+// ksh93 says `: cannot open` for the first and `bad file unit number` for the
+// second. Leaving it empty means "the same thing either way", which is zsh's
+// answer.
+func (r *Runner) refuseDupTarget(rd *syntax.Redirect, target string) {
+	general := Wording(r.diag().DuplicationTargetIsNotADescriptor,
+		"%[2]s: ambiguous redirect", rd.Text, target)
+	if target == "" && r.diag().EmptyDuplicationTarget != "" {
+		general = Wording(r.diag().EmptyDuplicationTarget, "", rd.Text, target)
+	}
+	r.diagf("%s\n", general)
+	r.status = 1
+	r.redirErr = true
+	// One dialect ends the shell over this, and only when the command it is
+	// written on runs *in* the shell — see
+	// DuplicationTargetErrorOnABuiltinIsFatal. The command is not known here,
+	// so the fact travels to where it is.
+	r.badDupTarget = true
 }

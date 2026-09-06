@@ -481,6 +481,12 @@ func Semantics() interp.Semantics {
 	// refused.
 	s.MultiDigitDuplicationTargetIsAnError = interp.No
 	s.RedirectErrorOnSpecialBuiltinFatal = interp.No
+	// The same csh spelling, and one step further: a word that expanded to
+	// nothing is a name too, so `>&""` opens the empty path and fails on it
+	// rather than complaining about a descriptor.
+	s.GreatAmpTarget = interp.GreatAmpTargetNamesAnyFile
+	// And the reading side ends the shell, on a builtin alone.
+	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.Yes
 	// zsh takes it and sets a global instead of refusing.
 	s.LocalOutsideAFunctionIsAnError = interp.No
 	// Fatal to all three, which is the one place zsh is stricter than bash
@@ -718,6 +724,11 @@ func Diagnostics() interp.Diagnostics {
 		// nobody else's. Lowercased, which LowercaseReason already says.
 		// Same either way — zsh does not distinguish opening from creating.
 		CannotOpen:               "%[2]s: %[1]s",
+		// zsh names nobody: `cat <&qq` and `cat <&""` are both `file number
+		// expected`, so the wording uses neither verb and the empty case has
+		// nothing of its own to say. The writing side never reaches this —
+		// GreatAmpTarget sends it to the file.
+		DuplicationTargetIsNotADescriptor: "file number expected",
 		CannotCreate:             "%[2]s: %[1]s",
 		NotABuiltin:              "no such builtin: %[1]s",
 		CommandStringParsedWhole: true,

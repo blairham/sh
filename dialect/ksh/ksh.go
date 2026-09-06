@@ -393,6 +393,10 @@ func Semantics() interp.Semantics {
 	// word's — this shell has no width rule of its own here.
 	s.MultiDigitDuplicationTargetIsAnError = interp.No
 	s.RedirectErrorOnSpecialBuiltinFatal = interp.Yes
+	// `>&` is a duplication and nothing else here: `echo hi >&qq` is
+	// `qq: bad file unit number` and no file is made.
+	s.GreatAmpTarget = interp.GreatAmpTargetIsADescriptor
+	s.DuplicationTargetErrorOnABuiltinIsFatal = interp.No
 	// Fatal to `export` and `readonly` and not to `unset`, which prints the
 	// same kind of complaint, returns 1 and carries on. Not `unset` being
 	// less special: a bad *option* to it is fatal, just above.
@@ -609,6 +613,11 @@ func Diagnostics() interp.Diagnostics {
 		// A target that expanded to nothing gets neither the reason nor the
 		// "create" wording, whichever direction the redirection was.
 		EmptyRedirectTarget:  "%[1]s: cannot open",
+		// A word after `>&` or `<&` that is not a descriptor is refused as a
+		// bad unit number, and a word that came to nothing takes the same
+		// "cannot open" the ordinary empty target does.
+		DuplicationTargetIsNotADescriptor: "%[2]s: bad file unit number",
+		EmptyDuplicationTarget:            "%[2]s: cannot open",
 		CannotCreate:         "%[1]s: cannot create [%[2]s]",
 		NoclobberRefusal:     "%[1]s: file already exists [%[2]s]",
 		ArithFailureStatus:   1,

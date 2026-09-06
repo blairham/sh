@@ -240,7 +240,13 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	if r.openQuietlyDenied(action) {
 		return r.dotFailed(args[0], errRefused)
 	}
-	b, err := os.ReadFile(path)
+	b, err := r.readFileGated(ctx, action, path)
+	if errors.Is(err, errRefused) {
+		// A link that reached a file the policy withholds, reported exactly
+		// as the withheld name above is — same diagnostic, same fatality
+		// axis, and nothing said about where the link went.
+		return r.dotFailed(args[0], errRefused)
+	}
 	if err != nil {
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		return r.dotFailed(args[0], err)

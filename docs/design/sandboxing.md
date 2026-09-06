@@ -156,22 +156,101 @@ Incoming paths are cleaned lexically before matching, so `/srv/../etc/x`
 is matched as `/etc/x` and a `..` cannot be used to walk out of a
 pattern.
 
-**Symlinks defeat a name-based rule, and this is a real limit.** The
-gate matches names; it does not resolve links *when a decision is made*,
-and it could not do so honestly — resolving there would mean the policy
-performing filesystem reads of its own, outside the boundary, and the
-answer would still be a time-of-check race, because an attacker's link
-can be replaced between the check and the open. So `deny read /etc/**`
-does not stop `cat /tmp/link` where `/tmp/link` points into `/etc`,
-unless `/tmp` was not allowed in the first place. The mitigation is the
-posture: allow a subtree you control rather than deny one you do not.
-The general solution is an OS backend that enforces on the resolved
-inode, which is above this layer.
+### A name is not an object, so the open is verified after it happens
+
+**A symbolic link used to defeat a name-based rule.** `deny read
+/etc/**` did not stop `cat < link` where the link pointed into `/etc`,
+because the decision was made about the name the script wrote and the
+name was never the object. `> link` was worse: the file was emptied as
+part of the open, so a policy that refused afterwards would have
+reported a refusal over a file it had already destroyed.
+
+**Resolving the name before the open is still rejected**, and for the
+two reasons that were always given. It would mean the gate performing
+filesystem reads of its own, outside the boundary it is enforcing. And
+it would still be a time-of-check-to-time-of-use race, because the link
+can be replaced between the resolution and the open — the classic one,
+where the check and the use are about two different objects.
+
+**So the question is asked after the open, about the descriptor already
+in hand.** The kernel performed the traversal once, as part of the open
+the script asked for; this reads back the answer it arrived at, with
+`F_GETPATH` on Darwin and `/proc/self/fd` on Linux. Nothing here
+resolves anything: there is no `lstat` loop and no second walk of the
+name. And there is no window, because a descriptor pins an object —
+replacing the link afterwards changes what the *name* reaches and cannot
+change what this descriptor holds, so what was checked and what is used
+are the same thing.
+
+Where the two spellings differ, the gate is asked a second time, about
+the kernel's name for what was reached, and a denial there refuses the
+open. It is the same action to a consumer: same `actionId`, so the
+consultation and the record are one access with a name that resolved
+elsewhere.
+
+`O_TRUNC` is held back past that check and applied afterwards, on
+regular files only. That guard is measured rather than cautious: on
+Linux `open("/dev/null", O_WRONLY|O_TRUNC)` succeeds while `ftruncate`
+on the same descriptor answers `EINVAL`, as it does on a FIFO, so
+splitting the flag off without the guard would break `> /dev/null`.
+Darwin accepts both, which is why one machine is not enough to justify
+it.
+
+**The refusal names the link and not where it went.** A diagnostic that
+reported the target would hand the script the one fact the rule exists
+to withhold, and would let it map a hidden directory one link at a time
+by asking to be refused. So the script sees the ordinary refusal, naming
+the path as written, and the audit record carries what was actually
+reached — the same split the rest of *What a refusal looks like* is
+built on.
+
+#### What this closes, and what it does not
+
+Closed, on Darwin and Linux: a redirect that reads or writes through a
+link, `.` sourcing through one, and a glob enumerating a directory
+through one.
+
+Open, by construction and not by omission:
+
+- **Hard links and bind mounts.** Both names are real names for one
+  object, and the kernel answers with whichever the descriptor was
+  opened by, so there is no second name to notice. Closing these means
+  matching on *identity* rather than on paths, which is the operating-
+  system backend below. `TestAHardLinkIsNotCovered` asserts the current
+  behavior so that closing it has to come with a change to this page.
+- **`stat`, `[ -f x ]` and the rest of the probes.** A probe is answered
+  without opening anything, and opening a path in order to check a
+  question about it would be a heavier access than the one asked about:
+  it can block on a FIFO, and it fails for a file this process may stat
+  but not read. The disclosure is metadata rather than content.
+- **`exec` through a link.** Verifying it means opening the program to
+  look at it, and execute permission does not imply read permission.
+  `allow exec` is already total in the sense this page opens with.
+- **The front end's own opens** — `internal/boundary`, which covers the
+  script operand, startup files, `HISTFILE` and the block store. Those
+  do not go through the interpreter's open path and are not verified
+  yet.
+- **Platforms other than Darwin and Linux**, where there is no way to
+  ask the kernel and the gate matches the name alone, as it always did.
+
+**A compatibility consequence worth stating plainly.** Under a policy, a
+path reached through a link is now checked under the kernel's name for
+it, so a rule naming a directory that happens to be a symbolic link
+protects — and permits — less than its author may expect. On a
+merged-`/usr` Linux `allow read /bin/**` does not permit reading
+`/bin/ls`, because the object is `/usr/bin/ls`. That is deliberately not
+absorbed by the alias table below: `/bin -> usr/bin` is a
+distribution's arrangement rather than the platform's, and a table that
+assumed it would make one policy file mean two things. The fix is the
+posture this page already recommends — name the subtree you control —
+and the audit record says which name was refused.
 
 ### Platform aliases are expanded once, when the rule is read
 
-One case looks like the limit above and is not, and it is worth
-separating carefully because the two answers are opposite.
+One case looks like the section above and is answered somewhere else
+entirely, and it is worth separating carefully. That one is about a
+*decision*, made when a file is opened; this one is about a *rule*, and
+is settled when the file of rules is read.
 
 On macOS `/tmp` is a symbolic link to `/private/tmp`. Always, on every
 machine, installed by the operating system, and not something a script
@@ -208,7 +287,9 @@ rather than a gap: a distribution merging `/bin` into `/usr/bin` is a
 *distribution's* arrangement, absent on machines that predate or decline
 it, and a table that assumed it would make one policy file mean two
 things with nothing in the file to say so. An ordinary symbolic link
-somebody made stays the recorded limit above.
+somebody made is not widened here at all — it is caught at the open, by
+the section above, which is a different mechanism with a different
+answer.
 
 **What a rule normalized to is reported**, because a rule whose meaning
 is not in the file is a rule nobody can review. `cmd/sh` prints one line

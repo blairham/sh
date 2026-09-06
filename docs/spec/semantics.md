@@ -4034,8 +4034,8 @@ knows whether the command is a builtin, a function or a program.
 
 The settling now has a third trigger beside a process having started and the
 job having ended: **a background job is settled without a process id when it is
-about to open something that may never open** — a named pipe or a character
-device, which are the two an open itself waits on. Nothing has started there
+about to open something that may never open** — a named pipe with no peer,
+which is the one shape whose open waits by construction. Nothing has started there
 and while the job stands at that open nothing will, so zero is the truthful
 answer and not a lost one; it is the same zero this shell already reports for a
 background builtin or compound command.
@@ -4043,7 +4043,13 @@ background builtin or compound command.
 Only where the open can really wait, and the stat is the whole reason: settling
 before *every* redirection would cost a real answer, since `sleep 0.3 > log &`
 reports the sleep's process id here and a latch that fired on an ordinary file
-would report zero. The trade in the other direction is that a job settled at a
+would report zero. A character device was in the test for one draft, on the
+reasoning that a terminal's open can wait, and it was a regression rather than
+a completeness — `/dev/null` is a character device, so `sleep 1 > /dev/null &`
+began reporting no process id at all. The devices whose open really does wait
+are a terminal held by another process group and a serial line with no carrier,
+and a background job here is a goroutine in the shell's own process group, so
+neither is reachable. The trade in the other direction is that a job settled at a
 blocking open keeps its zero even if a writer arrives later and the job goes on
 to run a program — a pid that arrives after the shell has stopped waiting is
 dropped rather than recorded, because writing the field and closing the channel

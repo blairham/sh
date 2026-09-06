@@ -119,9 +119,18 @@ func (j *Job) settleNoPID() { j.settlePID(0) }
 // Only where the open can really block, and that is the whole reason for the
 // stat. Settling before *every* redirection would cost a real answer:
 // `sleep 0.3 > log & echo $!` prints the sleep's pid today, and a latch that
-// fired on the log file would print 0. A fifo and a character device are the
-// two the open itself waits on — a regular file's open returns whether or not
-// anything is at the other end.
+// fired on the log file would print 0.
+//
+// A named pipe and nothing else. A character device was in this test for one
+// draft and was a regression rather than a completeness: `/dev/null` is a
+// character device, so `sleep 1 > /dev/null & echo $!` — which is about as
+// ordinary as a background job gets — started reporting 0. The devices whose
+// open really does wait are a terminal claimed by another process group and a
+// serial line with no carrier, and neither is reachable from here: a
+// background job in this shell is a goroutine in the shell's own process
+// group, so it opens the shell's terminal as freely as the shell does. A fifo
+// with no peer is the one shape whose open waits by construction, and it is
+// the one the panel measurement is about.
 //
 // A pid that arrives later is dropped rather than recorded, and that is
 // deliberate: settlePID is one Once, so the field cannot be written after the
@@ -139,7 +148,7 @@ func (r *Runner) settleBackgroundJobBeforeABlockingOpen(path string) {
 		// than wait, and the job carries on to whatever it does next.
 		return
 	}
-	if fi.Mode()&(os.ModeNamedPipe|os.ModeCharDevice) == 0 {
+	if fi.Mode()&os.ModeNamedPipe == 0 {
 		return
 	}
 	r.bg.settleNoPID()

@@ -98,13 +98,21 @@ func TestAnAmpersandReturnsWhenTheJobBlocksBeforeStartingAProcess(t *testing.T) 
 // The cheap fix for the case above is to settle the pid as soon as the job
 // starts, and it costs a real answer: `$!` here is the process the job runs,
 // and a job settled early would report the zero of a job with none. So the
-// settling is only where the open can really wait — a named pipe or a
-// character device — and a redirection to an ordinary file must not reach it.
+// settling is only where the open can really wait — a named pipe with no peer
+// — and everything else a redirection can name must not reach it.
+//
+// `/dev/null` is the row that earns its place. A draft settled on a character
+// device as well as a fifo, on the reasoning that a terminal's open can wait,
+// and `sleep 1 > /dev/null &` — about as ordinary as a background job gets —
+// began reporting no pid at all. Nothing in the suite said so until this case
+// was written.
 func TestABackgroundJobsPidSurvivesARedirectionThatCannotBlock(t *testing.T) {
 	for _, w := range []struct{ name, src string }{
 		{"a redirection to a file", `/bin/sleep 1 > out.txt & printf "%s" "$!"`},
 		{"a subshell around one", `(/bin/sleep 1 > out.txt) & printf "%s" "$!"`},
 		{"no redirection at all", `/bin/sleep 1 & printf "%s" "$!"`},
+		{"a character device", `/bin/sleep 1 > /dev/null & printf "%s" "$!"`},
+		{"reading a character device", `/bin/sleep 1 < /dev/zero & printf "%s" "$!"`},
 	} {
 		t.Run(w.name, func(t *testing.T) {
 			got, _ := runLeavingJobsRunning(t, w.src, nil)

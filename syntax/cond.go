@@ -141,7 +141,9 @@ func (p *Parser) parseTestClause() Command {
 	// is what the two agree on.
 	p.skipNewlines()
 	c.Expr = p.condOr()
-	p.skipNewlines()
+	// No skip before the `]]` test: condAnd has already done it, for every
+	// closer at once. The one above is still needed — nothing has read
+	// anything yet at that point.
 	if c.Expr == nil && p.err == nil {
 		p.fail("expected a condition after [[")
 	}
@@ -225,7 +227,7 @@ func (p *Parser) condPrimary() CondExpr {
 			p.fail("expected a condition after (")
 			return nil
 		}
-		p.skipNewlines()
+		// Nor here, and for the same reason.
 		stop := p.tok.End
 		if !p.at(TokRightParen) {
 			p.fail("expected ) in a condition")

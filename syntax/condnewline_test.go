@@ -46,6 +46,12 @@ func TestANewlineContinuesACondition(t *testing.T) {
 		{"before && inside a group", "[[ ( -n x\n&& -z \"\" ) ]]"},
 		{"a comment then the operator", "[[ -n x # c\n&& -z \"\" ]]"},
 		{"both sides of the operator", "[[ -n x\n&&\n-z \"\" ]]"},
+		// A closed group with the newline outside it, which is the same
+		// speculative position one level up: the `)` is complete and either
+		// an operator or the `]]` may follow.
+		{"after a group closes", "[[ ( -n x )\n]]"},
+		{"after a group closes then &&", "[[ ( -n x )\n&& -n y ]]"},
+		{"nested groups closing across lines", "[[ ( ( -n x )\n)\n]]"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			p := syntax.NewParser(c.src, d)

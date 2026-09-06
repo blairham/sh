@@ -1197,6 +1197,21 @@ var Corpus = []Case{
 		Why:     "the short `for`, in both its body spellings. The parentheses say what `in` says and end the header as `in` does not, which is why this one takes a brace body with nothing between where `for i in a b { … }` cannot. One shell parses it and four call the `(` a syntax error",
 	},
 	{
+		ID: "core/a-for-name-that-is-an-expansion", Category: "command language", SyntaxError: true,
+		Snippet: `n=x; for $n in a b; do echo "[$x][$n]"; done`,
+		Why:     "a loop whose name comes out of an expansion, which all six columns refuse and every dialect of ours took: the loop bound a variable literally called `n`, so the script's own `$n` read the list's words and the name it meant to reach through the expansion stayed empty — at status 0 and with nothing said. The token's literal is what hid it, since a `$n` word reports `n` and satisfies the name test. The refusal has four wordings across the six columns and three statuses, and the two `echo`s are in the body so that a shell which *ran* the loop would be caught by the output rather than only by the number. Nothing follows the loop, because bash reports the complaint and goes on where the other five stop, which is #1110 and not this",
+	},
+	{
+		ID: "core/a-for-name-that-is-a-quoted-word", Category: "command language", SyntaxError: true,
+		Snippet: `for "i" in a b; do echo "[$i]"; done`,
+		Why:     "the axis beside it: ksh93 removes the quoting and binds `i`, and bash, bash as `sh`, bash 3.2, dash and zsh all refuse the same word. So the *quoting* of a loop's name is a dialect's answer where an expansion in it is core, and the two had to be separated in one predicate rather than being one plainness test — `for \"$n\"` is refused by the quoting shell too. `for 'i'`, `for i\"\"`, `for \"i\"x` and `for \\i` were measured beside this and answer alike in every column, so the escape travels with the quotes and the flag is one bit",
+	},
+	{
+		ID: "core/a-select-name-that-is-an-expansion", Category: "command language", SyntaxError: true,
+		Snippet: `n=x; select $n in a b; do break; done`,
+		Why:     "the menu loop's header is a for-loop's here too, and the same refusal reaches it — which is worth a row of its own because dash gets there differently: it has no `select` at all, so the word is a command, `$n in a b` are its arguments, and the complaint is about the `do`. Four wordings again and a fifth failure that is not this rule",
+	},
+	{
 		ID: "core/a-for-with-more-than-one-name", Category: "command language", SyntaxError: true,
 		Snippet: `for key value ( a 1 b 2 ) { echo "$key=$value" }`,
 		Why:     "a loop that names two variables takes two words from its list on every pass, so a flat list is walked as pairs — one shell has it and four call the second name or the `(` a syntax error. It is how a script reads a serialized key/value table, and it is what stopped a real zsh library's own parse. Both of the halves it could be confused with are already pinned: the parenthesized list is `core/a-for-over-a-parenthesized-list` and the brace body is `core/a-list-for-with-a-brace-body`, and this row is the *name count* and nothing else",

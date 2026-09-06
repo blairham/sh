@@ -100,6 +100,23 @@ type Dialect struct {
 	// expanded and not unquoted before being read as names.
 	ForMultipleNames bool
 
+	// ForNameMayBeQuoted lets a loop's variable be written with quoting or an
+	// escape in it, the quoting being removed before the word is read as a
+	// name: `for "i" in a b` binds `i`.
+	//
+	// ksh93u+ alone accepts it. Measured 2026-09-06, `env -i
+	// PATH=/usr/bin:/bin` with a scratch HOME, from a script file and through
+	// `-c`: `for "i"`, `for 'i'`, `for i""`, `for "i"x` and `for \i` all run
+	// there and all five are refused by bash 5.3.15, the same binary as `sh`,
+	// bash 3.2.57, dash and zsh 5.9.2. So the escape travels with the quotes
+	// rather than being a question of its own, and the flag is one bit.
+	//
+	// It is the *quoting* half only. A name coming out of an expansion —
+	// `for $n`, `for ${n}`, `for "$n"`, `for $(echo n)` — is refused by all
+	// six columns including this one, so that half is core and lives in
+	// [Parser.forName] rather than here (#1076).
+	ForNameMayBeQuoted bool
+
 	// ForBraceBody lets a `for` or `select` loop take a brace group where
 	// `do … done` stands: `for ((;;)) { echo hi; break; }`, and equally
 	// `for i in a b; { echo "$i"; }`. Absent from dash, which is the only

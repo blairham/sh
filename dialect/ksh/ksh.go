@@ -28,6 +28,13 @@ func Dialect() syntax.Dialect {
 		"typeset": true, "export": true, "readonly": true,
 	}
 	d.ParamIndirection = true
+	// A loop's variable may be written with quoting or an escape in it, and
+	// the quoting comes off before the word is read as a name: `for "i" in a
+	// b` binds `i` here and is refused by the other four. `for 'i'`,
+	// `for i""`, `for "i"x` and `for \i` too, so the escape travels with the
+	// quotes. A name out of an *expansion* is refused here as everywhere,
+	// which is why this is the quoting half alone (#1076).
+	d.ForNameMayBeQuoted = true
 	// A colon written before a trim is ignored here: `${v:#hel*}` is
 	// `${v#hel*}` and comes to `lo`, where zsh reads the same six characters
 	// as an element exclusion and bash refuses them as arithmetic. All four

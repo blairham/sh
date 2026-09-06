@@ -740,3 +740,15 @@ func TestDollarDashInteractiveStartupLetters(t *testing.T) {
 		t.Errorf("InteractiveOptionLetters = %q, want %q", got, want)
 	}
 }
+
+// Nothing is said when an interactive shell cannot have job control, which is
+// this dialect's answer and not an omission.
+//
+// zsh drops the monitor without a word. Measured with every stream redirected
+// on `-i script.sh`, `-i -c` and `-i -s`: `$-` loses its `m` and nothing is
+// written to either stream.
+func TestNothingIsSaidAboutJobControlAtStartup(t *testing.T) {
+	if got := zsh.Diagnostics().NoJobControlAtStartup; got != "" {
+		t.Errorf("NoJobControlAtStartup = %q, want empty — this shell says nothing", got)
+	}
+}

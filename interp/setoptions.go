@@ -261,7 +261,23 @@ func (r *Runner) SetInteractiveMonitor(hasTerminal bool) {
 	// that a terminal is needed and the monitor stays off.
 	if hasTerminal || r.sem().InteractiveMonitorNeedsATerminal == No {
 		r.monitor = true
+		return
 	}
+	// And an interactive shell that wanted the monitor and has no terminal
+	// says so, in two of the four. Here rather than in the front end because
+	// this is where the decision is, and because the two front-end routes
+	// that reach it — a prompt and `-i` with something to run — would
+	// otherwise each have to remember: measured, the same line comes out of
+	// `-i script.sh`, `-i -c` and `-i -s` alike, and out of no
+	// non-interactive route at all.
+	// Who is named is the dialect's: one of the two that speak names the
+	// script it was handed and the other names itself, and the Runner is
+	// holding both — `Name` is `$0` and `Invocation` is argv[0].
+	name := r.Invocation
+	if name == "" || r.diag().NoJobControlAtStartupNamesTheScript {
+		name = r.name()
+	}
+	r.errf("%s", r.diag().JobControlDiagnostic(name))
 }
 
 // SetInteractiveJobNotices gives this shell somebody to tell about its jobs

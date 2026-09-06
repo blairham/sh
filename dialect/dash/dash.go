@@ -365,6 +365,17 @@ func Diagnostics() interp.Diagnostics {
 		// the field's default, is what makes it a remark rather than an
 		// error.
 		MonitorDenied: "set: can't access tty; job control turned off",
+		// The same sentence without `set: ` in front of it, because nothing
+		// asked: this one is the shell's own decision at startup rather than a
+		// builtin refusing. It is located, like every other dash diagnostic —
+		// `<name>: 0: …`, at the line it has not reached yet, which
+		// InvocationNamesTheUnreadLine already spells.
+		NoJobControlAtStartup: "can't access tty; job control turned off",
+		// And it names the script it was handed rather than itself, which is
+		// `$0` — measured, `-i script.sh` writes the script's path here and
+		// `-i -c` and `-i -s` write dash's own. bash writes its own name on
+		// all three.
+		NoJobControlAtStartupNamesTheScript: true,
 		// Backticks alone: this shell numbers a `$( … )` body from the file
 		// like the other three, and a backquoted one from one.
 		BackquotedSubstitutionRestartsLines: true,

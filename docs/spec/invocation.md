@@ -289,23 +289,90 @@ is established. It is a different question from `Interactively`, which asks
 only about standard input because a prompt is drawn on the stream the lines
 come from.
 
-#### What is *not* claimed here
+#### One shell disagrees with itself
 
-Two things measured on the same route. The first is a question of its own and
-is #893; the second is a shell contradicting itself. The announcement, which
-was the third, has its own section below.
-
-**The remark.** bash and dash both say something when an interactive shell
-cannot have job control — bash `cannot set terminal process group (…):
-Inappropriate ioctl for device` and `no job control in this shell`, dash
-`can't access tty; job control turned off` — and zsh and ksh93 say nothing.
-Not reproduced: bash's line carries a pid, which is also why none of this can
-be a corpus case.
+The announcement and the remark were measured on this route too, and each has
+a section of its own below. What is left here is neither.
 
 **zsh disagrees with itself** and what is recorded is the state its other two
 readers report. With a terminal it puts `m` in `$-` and announces its jobs
 while `set -o` still lists `monitor off`. Ours is consistent across all three
 readers, which matches zsh on two of them.
+
+### An interactive shell that cannot have job control says so, in two of the six
+
+The monitor an interactive shell turns on for itself is one it can be denied,
+and two shells remark when they are.
+
+Measured 2026-09-05 with **no terminal on any of the three standard streams**,
+scratch `HOME` and scratch `HISTFILE`:
+
+| shell | what it says before the program runs |
+| --- | --- |
+| bash 5.3.15 | `bash: cannot set terminal process group (11143): Inappropriate ioctl for device` **and then** `bash: no job control in this shell` |
+| bash 3.2.57 | `bash: no job control in this shell` — that line **alone** |
+| bash 3.2 as `sh` | `sh: no job control in this shell` — that line alone, with its own name |
+| dash | `<name>: 0: can't access tty; job control turned off` |
+| ksh93u+ | nothing — it needs no terminal and runs the monitor anyway |
+| zsh 5.9.2 | nothing — it drops the monitor without a word |
+
+That is `Diagnostics.NoJobControlAtStartup`, empty for the two that stay quiet
+and empty in the base: the standard does not have the shell remark on this.
+
+**When it is said** is the same question the monitor answers, one step on: an
+interactive shell wanted the monitor and had no terminal to run one on, which
+is `Semantics.InteractiveMonitorNeedsATerminal` saying yes with no terminal
+anywhere. So it is written where that decision is made, and the two shells
+that stay quiet are the one that needs no terminal and the one that simply
+drops it.
+
+**On every interactive route and on none of the others.** Measured: the same
+line comes out of `-i script.sh`, `-i -c` and `-i -s` alike, and out of a plain
+script or a plain `-c` never.
+
+#### Who is named, which is not the same answer twice
+
+| shell | `-i script.sh` | `-i -c` and `-i -s` |
+| --- | --- | --- |
+| bash (all three) | its own name | its own name |
+| dash | the **script's** path | its own name |
+
+dash is naming `$0` on both, and bash is naming itself on both. That is
+`Diagnostics.NoJobControlAtStartupNamesTheScript`, dash alone — a field rather
+than a reading of `InvocationNamesTheUnreadLine`, which dash is also the only
+shell to set. One shell answering two questions the same way is not evidence
+that they are one question.
+
+Note that bash writes its name two ways in the same area: `bash` here, and the
+whole path it was invoked by for a script it could not open — `/opt/homebrew/bin/bash: /nonesuch/s.sh: No such file or directory`. This
+shell writes what it was invoked by throughout, which is the convention
+everywhere else in it and not a decision taken here.
+
+#### The pid line is not reproduced, and that is a decision
+
+bash 5.3.15 writes a line above the remark that carries its own process id:
+`bash: cannot set terminal process group (11143): Inappropriate ioctl for
+device`. It is left out, for three reasons in order of weight.
+
+1. **Two of the three bash members do not write it.** bash 3.2.57 and bash 3.2
+   run as `sh` write the second line alone. So it is one version's extra line
+   rather than bash's wording, and reproducing it would make this shell agree
+   with one member of the panel and disagree with two.
+2. **There is nothing here whose failure it would describe.** It is bash
+   reporting a `tcsetpgrp` that returned `ENOTTY`. This shell makes no such
+   call on this path, so the line would be a report of an event that did not
+   happen.
+3. **It carries a pid**, which no script can act on — it is the shell's own —
+   and which means no recording of it is the same twice.
+
+#### What the corpus cannot say about this
+
+Nothing, and the third reason above is why: the corpus runs bash 5.3.15, whose
+first line has a different number in it every run. `docs/spec/invocation.md`
+already records that as the reason none of the `-i script.sh` grid is a corpus
+case. The evidence is the table above, the per-dialect wordings in
+`dialect/*/`, and a driver test that runs the front end with files on all three
+streams and asserts the whole line.
 
 ### The announcement splits where the monitor does not
 

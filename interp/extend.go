@@ -7,6 +7,8 @@ import (
 	"context"
 	"io"
 	"sort"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // Builtin is a command the shell runs itself rather than executing.
@@ -394,6 +396,49 @@ func (r *Runner) ResolveName(name string) (NameKind, string) {
 		return NameFile, path
 	}
 	return NameNotFound, ""
+}
+
+// DefineFunction gives a name a body written as text, parsed with this
+// shell's own grammar.
+//
+// The write half of FunctionText, and the seam an *autoloading* builtin
+// needs: zsh's `autoload` makes a file's contents the body of a function
+// named after the file, which is a definition arriving from outside the
+// script rather than from a `f() { … }` the parser already read.
+//
+// The text is the body without its braces — what a file on `$fpath` holds —
+// and the grammar is this runner's, because what that text means here is
+// what this shell says it means. That is the same rule the environment's
+// imported functions follow, and this is deliberately the same three steps
+// they take.
+//
+// The result reports whether the text was a body this shell could read. A
+// caller that gets false has been handed something that is not a function,
+// and saying so is its business — this does not write a word.
+func (r *Runner) DefineFunction(name, body string) bool {
+	f, err := syntax.Parse(name+"() {\n"+body+"\n}", r.dialect())
+	if err != nil || len(f.Stmts) != 1 {
+		return false
+	}
+	pipe, ok := f.Stmts[0].Expr.(*syntax.Pipeline)
+	if !ok || len(pipe.Cmds) != 1 {
+		return false
+	}
+	decl, ok := pipe.Cmds[0].(*syntax.FuncDecl)
+	if !ok {
+		// Unreachable by construction: the text this builds is a definition,
+		// so a parse that got this far produced one. Kept because storing a
+		// nil declaration would turn a bad body into a crash on the next
+		// call rather than a false here, and a mutant that returns true
+		// instead survives for exactly that reason — there is no body that
+		// reaches it.
+		return false
+	}
+	if r.funcs == nil {
+		r.funcs = map[string]*syntax.FuncDecl{}
+	}
+	r.funcs[name] = decl
+	return true
 }
 
 // FunctionText is a function's definition written back the way this shell

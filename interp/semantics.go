@@ -1444,6 +1444,50 @@ type Semantics struct {
 	// before the letters were a question.
 	DeclareOptions string
 
+	// DeclareOptionsWithoutEffect names letters out of DeclareOptions that
+	// this engine models as doing nothing: accepted, silent, and 0.
+	//
+	// What it is for is a letter whose meaning *here* is not the meaning the
+	// substrate gives it. A letter the substrate has never heard of is
+	// already silent once DeclareOptions names it — that is what `-a` is —
+	// so this field earns its place only where the substrate would otherwise
+	// act, and taking the substrate's meaning away is the whole of what it
+	// does.
+	//
+	// It is the quiet counterpart of Diagnostics.UnimplementedOptionLetters,
+	// and the choice between the two is which lie is smaller. A letter that
+	// is refused puts a sentence into output a caller shows a person and
+	// ends a script under `set -e`; a letter accepted here changes what a
+	// value looks like when it is printed back and nothing else.
+	//
+	// `-F` in zsh is the letter this exists for, and it is a *float's*
+	// precision there rather than bash's function listing. Measured
+	// 2026-09-06: real zsh answers a bare `declare -F` with 0 and not one
+	// byte, on standard output or standard error, with or without an
+	// operand and whether the operand names a function or nothing at all.
+	// We refused it at 2, which is the dangerous half of the shape #1033
+	// measured: `declare -F` is how a state capture asks what functions
+	// exist, so a caller that trusted the status recorded a shell with no
+	// functions — and a caller that read the stream got a complaint from a
+	// shell that real zsh has nothing to say to.
+	//
+	// What it costs is written down rather than hidden: `typeset -F x=1.5`
+	// leaves `1.5` here where that shell prints `1.5000000000` back, since
+	// the precision is the whole of what the letter does and this engine
+	// has no float attribute to record it in. Strictly better than the
+	// refusal it replaces, which set the name to nothing at all.
+	//
+	// zsh's `-E` — the same float family, spelled for scientific notation —
+	// is deliberately *not* here and still refuses. Nothing measured asks
+	// for it, and the case for silence rests on `-F` being the letter a
+	// function listing is spelled with somewhere else, which is what makes
+	// refusing it a wrong answer to a question callers really ask.
+	//
+	// A letter listed here that is not in DeclareOptions does nothing: the
+	// dialect has to have the letter before this can decide what it means,
+	// which keeps the two fields from disagreeing about whether it exists.
+	DeclareOptionsWithoutEffect string
+
 	// TypesetBadOptionFatal ends the script over an option `typeset` does
 	// not have. ksh93 counts `typeset` among its special builtins and stops
 	// there; bash and zsh report it and carry on. Asked only when the

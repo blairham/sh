@@ -9120,6 +9120,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `harness/a-snapshot-file-is-sourced-then-the-command-runs` | `main` **2>** `alias: -- not found` | `main` | `main` | `main` | `main` | `main` |
 | `harness/the-snapshot-spelling-of-an-alias` | `st=1~g='echo one'` **2>** `alias: -- not found` | `st=0~alias g='echo one'` | `st=0~g='echo one'` | `st=0~alias g='echo one'` | `st=0~g='echo one'` | `st=0~g='echo one'` |
 | `harness/enumerating-every-function-at-once` | `st=127` **2>** `<shell>: 1: declare: not found` | `declare -f f~declare -f g~st=0` | `declare -f f~declare -f g~st=0` | `declare -f f~declare -f g~st=0` | `st=127` **2>** `<shell>: declare: not found` | `st=0` |
+| `harness/a-function-listing-that-says-nothing-at-all` | `spoke~st=127` | `spoke~st=0` | `spoke~st=0` | `spoke~st=0` | `spoke~st=127` | `silent~st=0` |
 | `harness/the-shells-own-functions-are-not-the-persons` | `0~0~st=1` | `0~1~st=0` | `0~1~st=0` | `0~1~st=0` | `0~0~st=1` | `0~0~st=1` |
 | `harness/asking-for-the-whole-option-table` | `st=127` **2>** `<shell>: 1: shopt: not found` | `st=0` | `st=0` | `st=0` | `st=127` **2>** `<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt` |
 | `harness/the-option-table-is-re-inputtable` | `0` *(status 1)* | `1` | `1` | `1` | `0` *(status 1)* | `0` *(status 1)* |
@@ -9176,6 +9177,13 @@ grades it and nothing drift-checks it either, for the same reason.
 - `harness/enumerating-every-function-at-once` — how a state capture asks what functions exist. Three answers rather than two, and the middle one is the dangerous shape: bash lists both names, dash and ksh93 have no `declare` at all and say so at 127, and zsh reads `-F` as a float's precision, has nothing to say about a bare one, and exits **0** — a caller that trusted the status would record a shell with no functions and never learn it had asked the wrong question. declare/capital-f-names-a-function asks the same thing of a *named* function; this asks for the listing, which is what a generator actually runs
   ```sh
   f() { echo hi; }; g() { echo bye; }; declare -F; echo "st=$?"
+  ```
+- `harness/a-function-listing-that-says-nothing-at-all` — the row above narrowed to the half a status cannot show: whether the shell said anything, on either stream. zsh is the finding and the silence is the whole of it — `-F` is a float's precision there, so it answers a bare one with **0 and not one byte**, which is the shape that lets a caller record a shell with no functions and never learn it asked the wrong question. The three bash columns speak because they list, and dash and ksh93 speak because they have no `declare`, so `spoke` covers two different reasons and the case is about the one column that does neither. Emptiness rather than a byte count: a command substitution strips trailing newlines, so this asks whether anything was written without the answer depending on how long the shell's own path is on the machine that ran it
+  ```sh
+  f() { echo hi; }
+  case $(declare -F 2>&1) in "") echo silent ;; *) echo spoke ;; esac
+  declare -F >/dev/null 2>&1
+  echo "st=$?"
   ```
 - `harness/the-shells-own-functions-are-not-the-persons` — the row above narrowed to two counts, because a listing grades everything already defined and this grades a slice the case sets itself. The first count is unanimous at 0 in all six: no shell in the panel names its own `dirs`, `popd` or `pushd` in a function listing, because in the two that have them at all they are builtins. The second splits with the first row's split — the three bash columns list the person's `f` and count 1 at 0, and the other three list nothing, count 0 and hand `grep`'s 1 on. Ours counted 3 on the first line: a dialect written as a prelude has those three as *functions*, and a state capture recorded them and `__dirs_rotate` as the person's own, then sourced them into a shell that already had them (#1035). The counts survive a prelude growing a function, which the whole listing does not
   ```sh

@@ -203,3 +203,101 @@ func TestDeclareLettersAreTheDialects(t *testing.T) {
 		t.Errorf("stdout %q status %d, want the refusal to end the script with 2", out, st)
 	}
 }
+
+// TestADeclareLetterWithoutEffectIsTakenInSilence: a letter the dialect has
+// and this engine models nothing for is accepted, decides nothing, and says
+// nothing — Semantics.DeclareOptionsWithoutEffect, the quiet counterpart of
+// Diagnostics.UnimplementedOptionLetters.
+//
+// Named for the axis rather than for a shell, as every test in this package
+// is. The letter used is `F`, because that is the interesting case: the
+// substrate gives it a meaning of its own — the function listing — and the
+// field has to take that meaning away rather than merely add silence to it.
+func TestADeclareLetterWithoutEffectIsTakenInSilence(t *testing.T) {
+	silent := func(s *Semantics) {
+		s.DeclareOptions = "aAfFgiprx"
+		s.DeclareOptionsWithoutEffect = "F"
+	}
+	// The letter's substrate meaning is gone: two functions are defined and
+	// the listing that would have named them writes nothing at all.
+	out, errs, st := declRun(t, "f() { echo hi; }\ng() { :; }\ntypeset -F", silent, Diagnostics{})
+	if out != "" || errs != "" || st != 0 {
+		t.Errorf("stdout %q stderr %q status %d, want not one byte written and 0", out, errs, st)
+	}
+
+	// With an operand it is still silent, where the substrate's meaning
+	// would have written the bare name.
+	out, errs, st = declRun(t, "f() { echo hi; }\ntypeset -F f", silent, Diagnostics{})
+	if out != "" || errs != "" || st != 0 {
+		t.Errorf("stdout %q stderr %q status %d, want not one byte written and 0", out, errs, st)
+	}
+
+	// And a name that is no function is 0 here, not the 1 the listing
+	// answers — the letter decides nothing, so there is nothing to fail.
+	_, _, st = declRun(t, "typeset -F nosuch", silent, Diagnostics{})
+	if st != 0 {
+		t.Errorf("status = %d, want 0", st)
+	}
+}
+
+// TestADeclareLetterWithoutEffectIsStillADeclaration: the silent letter must
+// not turn its command into the bare word, whose listing is a different
+// command entirely — see BareDeclarationListing.
+func TestADeclareLetterWithoutEffectIsStillADeclaration(t *testing.T) {
+	silent := func(s *Semantics) {
+		s.DeclareOptions = "aAfFgiprx"
+		s.DeclareOptionsWithoutEffect = "F"
+		s.BareTypesetListing = BareLocalListsEveryParameter
+	}
+	out, errs, st := declRun(t, "marked=here\ntypeset -F", silent, Diagnostics{})
+	if out != "" || errs != "" || st != 0 {
+		t.Errorf("stdout %q stderr %q status %d, want a silent 0 rather than a listing", out, errs, st)
+	}
+	// The control: the bare word does list under these semantics, so the
+	// row above says something about the letter.
+	out, _, st = declRun(t, "marked=here\ntypeset", silent, Diagnostics{})
+	if st != 0 || !strings.Contains(out, `marked="here"`) {
+		t.Errorf("bare typeset = %q status %d, want the name listed", out, st)
+	}
+	// And an operand beside the silent letter is still declared and
+	// assigned, which is what keeps it a declaration.
+	out, _, _ = declRun(t, "typeset -F v=1.5\necho \"[$v]\"", silent, Diagnostics{})
+	if out != "[1.5]\n" {
+		t.Errorf("stdout = %q, want the assignment carried out", out)
+	}
+}
+
+// TestADeclareLetterOutsideTheSilentSetStillRefuses: the field grants silence
+// to the letters it names and to no others, so a letter the dialect has and
+// this engine does not is still refused in the dialect's words — the loud
+// counterpart, which stays the answer wherever refusing is the smaller lie.
+func TestADeclareLetterOutsideTheSilentSetStillRefuses(t *testing.T) {
+	_, errs, st := declRun(t, "typeset -E v", func(s *Semantics) {
+		s.DeclareOptions = "aAfFgiprx" // the dialect has `E` and this does not
+		s.DeclareOptionsWithoutEffect = "F"
+		s.TypesetBadOptionFatal = No
+	}, Diagnostics{UnimplementedOptionLetters: map[string]string{"typeset": "E"}})
+	if want := "testsh: typeset: -E is not implemented yet\n"; errs != want {
+		t.Errorf("stderr = %q, want exactly %q", errs, want)
+	}
+	if st != 2 {
+		t.Errorf("status = %d, want 2", st)
+	}
+}
+
+// TestASilentLetterTheDialectDoesNotHaveGrantsNothing: the two fields cannot
+// disagree about whether a letter exists. DeclareOptions decides that; this
+// one only decides what a letter it already names means.
+func TestASilentLetterTheDialectDoesNotHaveGrantsNothing(t *testing.T) {
+	_, errs, st := declRun(t, "typeset -F v", func(s *Semantics) {
+		s.DeclareOptions = "aAiprx" // no F
+		s.DeclareOptionsWithoutEffect = "F"
+		s.TypesetBadOptionFatal = No
+	}, Diagnostics{BuiltinBadOption: "%[1]s: %[2]s: unknown option"})
+	if !strings.Contains(errs, "typeset: -F: unknown option") {
+		t.Errorf("stderr = %q, want the letter refused as one the dialect does not have", errs)
+	}
+	if st == 0 {
+		t.Errorf("status = %d, want a refusal", st)
+	}
+}

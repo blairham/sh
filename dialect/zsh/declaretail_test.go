@@ -22,14 +22,80 @@ typeset -f f`)
 	}
 }
 
-// `-F` is a float's precision here, not bash's function listing — a letter
-// this shell has and this engine does not, named as missing.
-func TestTypesetCapitalFIsUnimplemented(t *testing.T) {
-	out, _ := runZsh(t, t.TempDir(), `typeset -F v 2>&1; echo st=$?`)
+// `-F` is a float's precision here, not bash's function listing, and this
+// engine has no float attribute to record it in — so it is taken in silence
+// at 0, which is what the real shell answers to every shape of it (#1037).
+//
+// The assertions are on **both streams by byte**, not on the status. A check
+// that only read the status would pass against a shell that said something
+// harmless, and the whole shape this case exists for is the *silent* answer:
+// `declare -F` is how a state capture asks what functions exist, so a caller
+// gets nothing either way and must not also get a complaint in the output it
+// shows a person.
+func TestTypesetCapitalFIsTakenInSilence(t *testing.T) {
+	for _, c := range []struct{ name, src string }{
+		{"a bare listing, which is what a state capture writes", "declare -F"},
+		{"the same under the other name", "typeset -F"},
+		{"with a function's name, which is what it means elsewhere", "f() { :; }\ndeclare -F f"},
+		{"with a name that is nothing at all", "declare -F nosuch"},
+		{"a listing with functions already defined", "f() { :; }\ng() { :; }\ndeclare -F"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st, errs := runZshSplit(t, t.TempDir(), c.src)
+			if out != "" {
+				t.Errorf("stdout = %q, want not one byte written", out)
+			}
+			if errs != "" {
+				t.Errorf("stderr = %q, want not one byte written", errs)
+			}
+			if st != 0 {
+				t.Errorf("status = %d, want 0", st)
+			}
+		})
+	}
+}
+
+// The letter is silent and not *ignored*: a declaration carrying only it is
+// still a declaration, so it must not fall through to the bare word's
+// listing — which writes the whole variable table and is the one answer
+// worse than the refusal this replaced.
+func TestTypesetCapitalFIsNotTheBareWord(t *testing.T) {
+	out, st, errs := runZshSplit(t, t.TempDir(), "marked=here\ndeclare -F")
+	if out != "" || errs != "" || st != 0 {
+		t.Errorf("got stdout %q stderr %q status %d, want a silent 0", out, errs, st)
+	}
+	// The control: the bare word really does list, so the row above is a
+	// statement about the letter rather than about an engine that lists
+	// nothing.
+	bare, st, _ := runZshSplit(t, t.TempDir(), "marked=here\ndeclare")
+	if st != 0 || !strings.Contains(bare, "marked=here\n") {
+		t.Errorf("bare declare = %q (status %d), want the name listed", bare, st)
+	}
+}
+
+// What the silence costs, written down as a test so it cannot drift into a
+// claim nobody checks: the precision is the whole of what the letter does in
+// that shell, and a value declared with it reads back unformatted here. The
+// refusal it replaced set the name to nothing at all, so this is the better
+// of two wrong answers rather than a right one.
+func TestTypesetCapitalFDoesNotFormatTheValue(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `typeset -F v=1.5; echo "[$v]"`)
+	if out != "[1.5]\n" || st != 0 {
+		t.Errorf("got %q (status %d), want the value assigned and unformatted", out, st)
+	}
+}
+
+// `-E` is the same float family spelled for scientific notation, and it is
+// deliberately still refused: nothing measured asks for it, and the case for
+// silence rests on `-F` being the letter a *function* listing is spelled with
+// somewhere else.
+func TestTypesetCapitalEIsStillUnimplemented(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), `typeset -E v 2>&1; echo st=$?`)
 	// The builtin's name is in the location prefix here, as it is for every
 	// message this shell writes.
-	if !strings.Contains(out, "typeset:1: -F is not implemented yet") || !strings.Contains(out, "st=2") {
-		t.Errorf("got %q, want the letter named as missing with status 2", out)
+	wantWholeLines(t, out, "zsh:typeset:1: -E is not implemented yet")
+	if !strings.Contains(out, "st=2") {
+		t.Errorf("got %q, want status 2", out)
 	}
 }
 

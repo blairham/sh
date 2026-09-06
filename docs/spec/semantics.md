@@ -3760,7 +3760,8 @@ spelling `ReadOptions` uses — `Semantics.DeclareOptions` and
 
     declare/typeset
       bash   aAfFgilprux   plus -I -n -t, unimplemented here
-      zsh    aAfgHilpruUx  plus floats, padding, ties…, unimplemented
+      zsh    aAfFgHilpruUx plus floats, padding, ties…, unimplemented;
+                           -F taken in silence, see below
       ksh93  aAilprux      plus -f -F -b -n… and its own -H, unimplemented
       dash   —             no typeset at all
     local
@@ -3773,12 +3774,48 @@ spelling `ReadOptions` uses — `Semantics.DeclareOptions` and
 What the letters mean, where measured to agree, is implemented once:
 `-f` says the functions back and `-F` names them (`declare -f name` per
 function bare, the name alone once operands narrow it — and a float's
-precision in zsh and ksh93, where the letter is refused as missing);
+precision in zsh and ksh93, where zsh's is taken in silence and ksh93's
+is refused as missing; see "A letter taken in silence" below);
 `-g` declares a global from inside a function; `-l`/`-u` fold what is
 assigned to the name, the declaring assignment included. zsh stores the
 raw text and folds on *expansion* instead — every read agrees with the
 other two shells, and only its `typeset -p` betrays the difference by
 listing the raw value, which is deliberately not modeled.
+
+**A letter taken in silence: zsh's `-F`** (#1037). The letter is a
+float's *precision* there rather than bash's function listing, and this
+engine has no float attribute to record it in. Measured 2026-09-06: real
+zsh answers a bare `declare -F` with **0 and not one byte**, on either
+stream, and answers the same for `typeset -F`, for `declare -F f` where
+`f` is a function, and for `declare -F nosuch`. Only `-f nosuch` is 1,
+which is the letter we already had.
+
+We refused it at 2, and that is the wrong answer in the direction that
+matters: `declare -F` is how a state capture asks what functions exist,
+so a caller reading the status recorded a shell with no functions, and a
+caller reading the stream got a complaint from a shell that has nothing
+to say to it. `Semantics.DeclareOptionsWithoutEffect` is the quiet
+counterpart of `Diagnostics.UnimplementedOptionLetters`, and the choice
+between them is which lie is smaller: a refusal puts a sentence into
+output a caller shows a person and ends a script under `set -e`, where
+silence changes only how a value is printed back.
+
+What it costs is written down rather than hidden: `typeset -F v=1.5`
+leaves `1.5` here where that shell prints `1.5000000000`, since the
+precision is the whole of what the letter does. It is still better than
+the refusal it replaced, which set the name to nothing at all. And the
+silence is silence, not indifference — a declaration carrying only the
+letter is still a declaration, so it does not fall through to the bare
+word's listing of every parameter, which would be the one answer worse
+than refusing.
+
+zsh's `-E` — the same float family, spelled for scientific notation —
+stays refused. Nothing measured asks for it, and the case for silence
+rests on `-F` being the letter a *function* listing is spelled with
+somewhere else, which is what makes refusing it a wrong answer to a
+question callers really ask. ksh93's `-F` stays refused for the same
+reason: its `declare` does not exist at all, so no caller reaches the
+letter there.
 
 **`-H` is one letter and two attributes, and only one of them is
 built.** Measured 2026-09-06. In zsh it hides a name's *value* from every

@@ -566,6 +566,27 @@ type FuncDecl struct {
 	Start   Pos
 }
 
-func (c *FuncDecl) Pos() Pos     { return c.Start }
-func (c *FuncDecl) End() Pos     { return c.Body.End() }
+func (c *FuncDecl) Pos() Pos { return c.Start }
+
+// End is the body's end, or the declaration's own start where there is no
+// body.
+//
+// A definition the parser refused keeps its node — the name and the
+// parentheses were read, and the error is what the caller acts on — so a
+// [FuncDecl] with a nil body is a normal product of a failed parse rather
+// than a malformed tree. Two extent computations reach one through a failure
+// and neither can know it did: a coproc takes its own end from the command
+// after the word, and a short-form loop body takes it from the statement it
+// read. Both dereferenced the body that was never there (#911).
+//
+// The extent is empty rather than wrong. Nothing downstream of a failed parse
+// measures a declaration that has no body, and an empty extent at the name
+// keeps the one invariant a reader may hold: Pos is never past End.
+func (c *FuncDecl) End() Pos {
+	if c.Body == nil {
+		return c.Start
+	}
+	return c.Body.End()
+}
+
 func (c *FuncDecl) commandNode() {}

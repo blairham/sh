@@ -551,10 +551,91 @@ func (r *Runner) unsetReadonly(name string) int {
 	return 1
 }
 
+// unsetMatching is `unset -m`: each operand is a pattern, and every parameter
+// whose name it matches goes.
+//
+// The names are collected before anything is removed, because the tables are
+// what is being walked; and they are sorted so that a diagnostic from one
+// removal — a readonly name — arrives in the same order every run.
+func (r *Runner) unsetMatching(patterns []string) int {
+	if len(patterns) == 0 {
+		// Measured: zsh refuses the letter with nothing to match rather
+		// than treating it as `unset` with no operands, which is silent.
+		r.diagf("%s\n", Wording(r.diag().UnsetPatternUsage, "%[1]s: not enough arguments", "unset"))
+		return 1
+	}
+	status := 0
+	for _, pattern := range patterns {
+		// Collected before anything is removed, because what is being
+		// walked is the tables themselves; and sorted, so that a refusal
+		// from one removal arrives in the same order every run.
+		o := r.patternOpts(pattern)
+		for _, name := range r.parameterNames() {
+			if !matchPattern(pattern, name, o) {
+				continue
+			}
+			if code := r.unsetReadonly(name); code != 0 {
+				status = code
+				if r.ctl == controlExit {
+					return status
+				}
+				continue
+			}
+			r.unsetName(name)
+		}
+	}
+	return status
+}
+
+// parameterNames is every parameter this shell can see, once each and in
+// order. The same four sources [Runner.namesWithPrefix] reads, plus the two
+// array tables, which that one has no use for and this one does: `unset -m`
+// is about parameters rather than about strings.
+func (r *Runner) parameterNames() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(name string) {
+		if seen[name] || r.removed[name] {
+			return
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	for name := range r.Vars {
+		add(name)
+	}
+	for name := range r.Arrays {
+		add(name)
+	}
+	for name := range r.AssocArrays {
+		add(name)
+	}
+	for name := range r.Dynamic {
+		add(name)
+	}
+	for name := range r.inheritedEnv {
+		add(name)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func biUnset(r *Runner, _ context.Context, args []string) int {
-	args, opts, code := r.builtinOptions("unset", args, "vfn")
+	letters := r.sem().UnsetOptions
+	if letters == "" {
+		letters = "vf"
+	}
+	args, opts, code := r.builtinOptions("unset", args, letters)
 	if code != 0 {
 		return code
+	}
+	if strings.ContainsRune(opts, 'm') {
+		// `unset -m` reads its operands as patterns and unsets every
+		// parameter whose *name* matches one. Ahead of `-f`, because the
+		// two are the same question asked of two namespaces and only the
+		// variable one is measured here; and ahead of the name check,
+		// because a pattern is not a name and would not survive it.
+		return r.unsetMatching(args)
 	}
 	if strings.ContainsRune(opts, 'f') {
 		// `unset -f` is about functions and not about variables, unanimously
@@ -634,19 +715,28 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 			}
 			continue
 		}
-		delete(r.Vars, name)
-		delete(r.exported, name)
-		delete(r.Arrays, name)
-		delete(r.AssocArrays, name)
-		// Recorded as well as deleted: a name that came from the environment
-		// is not in Vars to begin with, and deleting nothing left it visible
-		// to every lookup — `unset PATH` did not clear PATH.
-		if r.removed == nil {
-			r.removed = map[string]bool{}
-		}
-		r.removed[name] = true
+		r.unsetName(name)
 	}
 	return status
+}
+
+// unsetName removes one whole parameter, whatever kind it is.
+//
+// Extracted so that the pattern form and the name form remove alike: the two
+// entered the builtin by different doors and would otherwise have been two
+// copies of this, which is how one of them ends up forgetting a table.
+func (r *Runner) unsetName(name string) {
+	delete(r.Vars, name)
+	delete(r.exported, name)
+	delete(r.Arrays, name)
+	delete(r.AssocArrays, name)
+	// Recorded as well as deleted: a name that came from the environment is
+	// not in Vars to begin with, and deleting nothing left it visible to
+	// every lookup — `unset PATH` did not clear PATH.
+	if r.removed == nil {
+		r.removed = map[string]bool{}
+	}
+	r.removed[name] = true
 }
 
 // biExport marks a name for the environment, and assigns when given a value.

@@ -100,6 +100,8 @@ func Semantics() interp.Semantics {
 	// argument, printed only to a terminal. The rest of bash's set (-s, the
 	// counts, -d, -t, -u) is refused as unknown here.
 	s.ReadOptions = "rp:"
+	// dash has the two POSIX letters and calls anything else illegal.
+	s.UnsetOptions = "vf"
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
 	// dash single-quotes every listed value; it has no declare, so this

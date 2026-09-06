@@ -2119,7 +2119,7 @@ func (p *Parser) parseFor() Command {
 // three of the four dialects quote the source text back and none of them
 // quotes the literal. `for $n` names `$n` and not `n`.
 func (p *Parser) forName(word string) (string, bool) {
-	if p.tok.Kind == TokWord && p.forNameIsUsable() {
+	if p.forNameIsUsable() {
 		return p.tok.Literal(), true
 	}
 	if p.err == nil {
@@ -2132,7 +2132,20 @@ func (p *Parser) forName(word string) (string, bool) {
 	return "", false
 }
 
-// forNameIsUsable is the predicate, on a word token.
+// forNameIsUsable is the predicate.
+//
+// A token that is not a word needs no test of its own: only a word has spans,
+// so its literal is empty and [isName] refuses it. A guard for it here read as
+// if it decided something and did not — the mutant that removed it survived,
+// which is the whole of the evidence that it was dead.
+//
+// What a non-word in that position *should* say is a separate answer and not a
+// second predicate. `for ; in a b` is an ordinary unexpected-token failure in
+// bash and ksh93 — status 2 and 3, with bash echoing the line — because those
+// two want only a word there and check the name when the loop runs; dash gives
+// it the same one sentence it gives every bad loop variable, and zsh's two
+// wordings coincide. That is the stage question of #1110 showing through, and
+// modeling it as its own axis would be modeling the symptom.
 func (p *Parser) forNameIsUsable() bool {
 	for _, sp := range p.tok.Spans {
 		if sp.Kind != Literal {

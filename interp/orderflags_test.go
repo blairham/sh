@@ -42,7 +42,7 @@ func TestTheOrderingFlags(t *testing.T) {
 		// it makes reachable keeps the order the elements were written in.
 		{"o is byte order, so case separates", `a=(B a C b); printf "[%s]" "${(@o)a}"`, "[B][C][a][b]"},
 		{"i folds the case", `a=(B a C b); printf "[%s]" "${(@oi)a}"`, "[a][B][b][C]"},
-		{"and a fold's tie is stable", `a=(b B); printf "[%s]" "${(@oi)a}"`, "[b][B]"},
+		{"a fold makes a tie, and four elements agree", `a=(b B); printf "[%s]" "${(@oi)a}"`, "[b][B]"},
 		{"i reverses with O like the rest", `a=(B a C b); printf "[%s]" "${(@Oi)a}"`, "[C][B][b][a]"},
 		{"i sorts on its own", `a=(c a b); printf "[%s]" "${(@i)a}"`, "[a][b][c]"},
 		{"i folds the numeric sort as well", `a=(B10 a9 A2); printf "[%s]" "${(@ni)a}"`, "[A2][a9][B10]"},
@@ -75,5 +75,26 @@ func TestTheOrderingFlags(t *testing.T) {
 				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
 			}
 		})
+	}
+}
+
+// The order of a tie is this implementation's choice and not a measurement.
+//
+// The shell with the construct does not order equal elements predictably: on
+// four it keeps the order they were written in, and on sixteen of the same
+// shape it reverses some of the pairs and not others — its sort algorithm
+// showing through. So the corpus pins the sizes where the two agree, and this
+// pins what we do at a size where they do not: a stable sort, because a
+// deterministic answer is worth more than an unpredictable match.
+//
+// Sixteen is not arbitrary. Go's unstable sort is its stable one below a
+// threshold, so a smaller array could not tell the two apart and the claim
+// would be untested.
+func TestATieKeepsTheOrderItWasWrittenIn(t *testing.T) {
+	const src = `a=(B1 b1 B2 b2 B3 b3 B4 b4 B5 b5 B6 b6 B7 b7 A1 a1); printf "[%s]" "${(@oi)a}"`
+	want := "[A1][a1][B1][b1][B2][b2][B3][b3][B4][b4][B5][b5][B6][b6][B7][b7]"
+	out, st := runGrammar(t, src, ordering, nil)
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
 	}
 }

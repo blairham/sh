@@ -3182,7 +3182,7 @@ echo "st=$?"`,
 	{
 		ID: "param/the-ordering-flags-and-case", Category: "parameter expansion",
 		Snippet: `a=(B a C b); printf "[%s]" "${(@o)a}"; printf "[%s]" "${(@oi)a}"; printf "[%s]" "${(@Oi)a}"; printf "[%s]" "${(@i)a}"; echo`,
-		Why:     "the sort is byte order under this corpus's locale, so the cases separate — and `i` folds them, which makes ties reachable for the first time and they keep the order the elements were written in. `(i)` alone sorts, which is what says it is not merely a modifier of `o`. The locale is the reason this row is worth pinning rather than reasoning about: outside `LC_ALL=C` the same shell orders by the collation instead and answers `a b B C` to the first",
+		Why:     "the sort is byte order under this corpus's locale, so the cases separate — and `i` folds them, which makes ties reachable for the first time. On these four the tie keeps the order the elements were written in; that is not a rule either shell states, and the same shape at sixteen elements comes back with some of the pairs reversed, so the row pins the size rather than the principle. `(i)` alone sorts, which is what says it is not merely a modifier of `o`. The locale is the reason this row is worth pinning rather than reasoning about: outside `LC_ALL=C` the same shell orders by the collation instead and answers `a b B C` to the first",
 	},
 	{
 		ID: "param/the-unique-flag-is-not-a-sort", Category: "parameter expansion",

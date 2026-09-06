@@ -534,3 +534,12 @@ func TestShiftReadsOnlyNonNumericDashWordsAsOptions(t *testing.T) {
 		}
 	}
 }
+
+// `\e` is the escape character here and `\E` is two characters — the opposite
+// of ksh93 (#908).
+func TestEchoTakesTheSmallEscapeAlone(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), "echo -e 'a\\eZ:a\\EZ'\n")
+	if out != "a\x1bZ:a\\EZ\n" || st != 0 {
+		t.Errorf("said % x status %d, want the small letter as ESC and the capital as written", out, st)
+	}
+}

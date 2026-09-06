@@ -1407,6 +1407,27 @@ func (sh Shell) executeLines(
 ) (int, ending) {
 	shown := 0
 	var echoed verbosePos
+	// say writes back the lines the shell has read, up to and including upTo,
+	// and then whatever the parser had to say about them.
+	//
+	// In that order, and it is one rule rather than three: **the shell writes
+	// back what it read before it says anything about it**. A line it could
+	// not parse is echoed and then complained about; a here-document the
+	// input ran out inside is echoed and then remarked on; and the tail after
+	// the last command is echoed before either. Measured unanimous across the
+	// panel from a script file, with the two streams captured apart and
+	// joined (#772) — the echo used to be driven by the lines the parser
+	// handed *back*, so a line the parser refused was never written at all.
+	//
+	// toTheEnd is the bound for input with no line to stop at.
+	say := func(upTo int) {
+		if upTo == toTheEnd {
+			sh.sayVerboseRest(r.Err(), pr.text(), echoed, r.Verbose())
+		} else {
+			echoed = sh.sayVerbose(r.Err(), pr.text(), upTo, echoed, r.Verbose())
+		}
+		shown = sh.sayRemarks(in.dg, in.diagName(), pr.remarks(), shown)
+	}
 	// A builtin can change the grammar for the lines after it — a run-time
 	// option can decide whether a quantified group is a group. The runner
 	// says so by replacing its Dialect, never by writing through it, so a
@@ -1419,9 +1440,6 @@ func (sh Shell) executeLines(
 			pr.setDialect(*dialect)
 		}
 		line, ok := pr.nextLine()
-		// Said as soon as it is known and before anything the line does,
-		// which is where the one shell that remarks puts it.
-		shown = sh.sayRemarks(in.dg, in.diagName(), pr.remarks(), shown)
 		if !ok {
 			if err := pr.err(); err != nil {
 				// The input ended part-way through something. Reported here
@@ -1434,6 +1452,7 @@ func (sh Shell) executeLines(
 				// so the shell that reads on and the shell that stops end
 				// the same way — measured, an unterminated quote piped in
 				// is one complaint and status 1 in all four.
+				say(verboseUpTo(pr.text(), err))
 				sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, err, pr.text()))
 				return in.dg.StatusForParseError(err), endingParseFailure
 			}
@@ -1442,12 +1461,13 @@ func (sh Shell) executeLines(
 			// reads. Blank lines and comments *between* commands come out
 			// with the line after them; the ones after the last command have
 			// no line after them and were dropped outright.
-			sh.sayVerboseRest(r.Err(), pr.text(), echoed, r.Verbose())
+			say(toTheEnd)
 			break
 		}
 		if err := pr.err(); err != nil {
 			// The line did not parse, so none of it runs — not even the
 			// statements before the failure, which is measured.
+			say(verboseUpTo(pr.text(), err))
 			sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, err, pr.text()))
 			if sh.readOn(r, pr, in, err) {
 				continue
@@ -1465,7 +1485,7 @@ func (sh Shell) executeLines(
 		// spent, not saved — the line that says `set -v` is not echoed by the
 		// shell it turns on — and the line after it can only be found once
 		// every line before it has been walked past.
-		echoed = sh.sayVerbose(r.Err(), pr.text(), line.Last.Line, echoed, r.Verbose())
+		say(line.Last.Line)
 		if err := r.RunPart(ctx, line); err != nil {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.
@@ -1585,6 +1605,52 @@ func (sh Shell) sayVerboseRest(w io.Writer, src string, at verbosePos, echo bool
 			echoLine(w, text)
 		}
 	}
+}
+
+// toTheEnd is the bound for an echo that has no line to stop at: the tail of
+// the input, where the parser has handed back everything it is going to.
+const toTheEnd = -1
+
+// verboseUpTo is how far the echo goes once a parse has failed: the last
+// physical line the parser read, bounded by the text in hand.
+//
+// Not the line the *dialect* blames, which is a different question with four
+// answers. bash puts an unterminated quote on the line it was opened on and
+// dash on the line after the input ended, and both of them write back every
+// line they read — measured, `echo one` / `cat "abc` / `echo three` echoes all
+// three in bash, dash and zsh alike while bash's complaint names line 2. The
+// bound is where the *reader* stopped, so it comes from the error's positions
+// rather than from the wording.
+//
+// Bounded by the text because those positions can run past it in two ways: a
+// dialect that counts the end of input as the line after the last, and an
+// alias body that added to the numbering while belonging to no text at all.
+//
+// One shell echoes more than this and is deliberately not modeled: ksh93 reads
+// ahead in blocks and writes back everything it had taken, so a line *after*
+// the offending one comes out too. The amount is a property of its buffer
+// rather than of the language; docs/spec/invocation.md records it.
+func verboseUpTo(text string, err error) int {
+	end := linesIn(text)
+	var se *syntax.Error
+	if !errors.As(err, &se) {
+		return end
+	}
+	return min(max(se.Pos.Line, se.EndLine, se.EofLine), end)
+}
+
+// linesIn counts the physical lines of text the way the echo walks them: the
+// piece after the last newline is a line for as long as it is the last of the
+// text.
+func linesIn(text string) int {
+	if text == "" {
+		return 0
+	}
+	n := strings.Count(text, "\n")
+	if !strings.HasSuffix(text, "\n") {
+		n++
+	}
+	return n
 }
 
 // echoLine writes one line of the input back, for `set -v`.

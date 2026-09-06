@@ -132,7 +132,26 @@ var zshOptions = []zshOption{
 	// routes into the shell it happens on is the parser's question and this
 	// is not it (syntax.Dialect.ExpandAliases); the state is that the shell
 	// does the thing, and it is not this shell's to switch off.
-	fixedConstant("aliases", true, true),
+	{
+		// `no_aliases` stops alias expansion for as long as it is off, which
+		// is what a prompt theme sets to protect its own code from a user's
+		// aliases — so refusing it is not cosmetic, it changes how the rest
+		// of that file is *parsed*.
+		//
+		// The option is not the same thing as whether this shell expands at
+		// all. The route decides that — measured, `zsh -c 'alias hi=…; hi'`
+		// does not expand and the same two lines in a file do — while the
+		// option reads `on` under `-c` all the same: `zsh -c '[[ -o aliases
+		// ]]'` is 0. So the state kept here is the option, and what reaches
+		// the parser is the option *and* the route.
+		base: "aliases", def: true,
+		get: func(r *interp.Runner) bool { return !recordedDeviates(r, "aliases") },
+		set: func(r *interp.Runner, on bool) int {
+			setRecordedDeviation(r, "aliases", !on)
+			r.SetAliasExpansion(on && r.AliasExpansionBase())
+			return 0
+		},
+	},
 	recorded("aliasfuncdef", false),
 	setOptBacked("allexport", false, "allexport", false),
 	recorded("alwayslastprompt", true),
@@ -611,6 +630,28 @@ func registerSetopt(r *interp.Runner) {
 	r.SetOptionNamespace(func(name string) (bool, bool) { return conditionOption(r, name) })
 }
 
+// setOption moves one option by name, reporting what `setopt` would. Shared
+// with `emulate`, whose `-o name` and `+o name` are the same request written
+// on another builtin's command line.
+func setOption(r *interp.Runner, name string, on bool) int {
+	o, inverted, ok := resolveOptionName(normalizeOption(name))
+	if !ok {
+		r.Diagnosef("no such option: %s\n", name)
+		return 1
+	}
+	want := on != inverted
+	if o.set != nil {
+		return o.set(r, want)
+	}
+	if o.get(r) == want {
+		// Already where it was asked to be: granted, the same bargain the
+		// substrate's own option table strikes.
+		return 0
+	}
+	r.Diagnosef("can't change option: %s\n", name)
+	return 1
+}
+
 // setoptBuiltin builds either half; they differ in the direction a bare base
 // name means and in what an empty command lists.
 func setoptBuiltin(setting bool) interp.Builtin {
@@ -621,26 +662,9 @@ func setoptBuiltin(setting bool) interp.Builtin {
 		}
 		status := 0
 		for _, arg := range args {
-			o, inverted, ok := resolveOptionName(normalizeOption(arg))
-			if !ok {
-				r.Diagnosef("no such option: %s\n", arg)
-				status = 1
-				continue
+			if code := setOption(r, arg, setting); code != 0 {
+				status = code
 			}
-			want := setting != inverted
-			if o.set != nil {
-				if code := o.set(r, want); code != 0 {
-					status = code
-				}
-				continue
-			}
-			if o.get(r) == want {
-				// Already where it was asked to be: granted, the same
-				// bargain the substrate's own option table strikes.
-				continue
-			}
-			r.Diagnosef("can't change option: %s\n", arg)
-			status = 1
 		}
 		return status
 	}

@@ -293,7 +293,10 @@ func Semantics() interp.Semantics {
 	s.EchoOptions = "neE"
 	s.EchoLastEscapeFlagWins = interp.No
 	s.EchoExpandsHexEscapes = interp.Yes
+	// `\e` is the escape character here and `\E` is two characters — the
+	// opposite of ksh93.
 	s.EchoExpandsEscEscape = interp.Yes
+	s.EchoExpandsCapitalEscEscape = interp.No
 	// read takes -r and -s, -A with the array as the first operand, and the
 	// same -d, -t and -u as the others — but no counts: -N is a bad option
 	// here and -n is a flag it reads and, outside completion widgets, acts
@@ -304,6 +307,11 @@ func Semantics() interp.Semantics {
 	// spelling is not modeled, so here it reads the word after it as its
 	// seconds.
 	s.ReadOptions = "rsnpAd:t:u:"
+	// `unset -m` reads its operands as patterns, which is this shell's
+	// alone; `-n` is not here, and that is measured rather than an
+	// omission — `unset -n x` is `bad option: -n` in zsh 5.9.2 where bash
+	// 5.3 and ksh93 take it.
+	s.UnsetOptions = "vfm"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutFinishesWhatItStarted
 	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ArithLeadingZeroIsOctal = interp.No
@@ -859,6 +867,7 @@ func Diagnostics() interp.Diagnostics {
 		UnaliasNotFound:        "no such hash table element: %[2]s",
 		UnaliasAllWithOperands: "-a: too many arguments",
 		UnaliasUsage:           "not enough arguments",
+		UnsetPatternUsage:      "%[1]s: not enough arguments",
 		UnaliasNoOperandStatus: 1,
 		// The builtin's name comes from the location here, as everywhere in
 		// zsh, so it is not in the wording.

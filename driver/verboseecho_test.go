@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -216,6 +217,93 @@ func TestVerboseWritesToTheDescriptorTheScriptPointsAt(t *testing.T) {
 			}
 			if errs.String() != c.wantErr {
 				t.Errorf("stderr = %q, want %q — %s", errs.String(), c.wantErr, c.why)
+			}
+		})
+	}
+}
+
+// TestVerboseEchoesWhatItReadBeforeItComplainsAboutIt is #772.
+//
+// The echo used to be driven by the logical lines the parser handed *back*, so
+// a line the parser refused was never written at all and the complaint arrived
+// alone. The panel writes the input back first — for a refusal, for input that
+// ran out, and for a remark alike — which is one rule and not three.
+//
+// The two streams are joined here on purpose, and that is the whole assertion:
+// this is an ordering question across two of them, and captured apart the same
+// bytes come out in the same order whichever way round the shell writes them.
+func TestVerboseEchoesWhatItReadBeforeItComplainsAboutIt(t *testing.T) {
+	for _, c := range []struct {
+		name, src, want, why string
+		code                 int
+	}{
+		{
+			name: "a line the parser refused",
+			src:  "echo one\nfi\n",
+			want: "echo one\none\nfi\n<script>: line 2: \"fi\" unexpected\n",
+			code: 2,
+			why:  "the offending line is written back and then complained about, and the walk has a bound: the line is there to name",
+		},
+		{
+			name: "and nothing after it",
+			src:  "echo one\nfi\necho three\n",
+			want: "echo one\none\nfi\n<script>: line 2: \"fi\" unexpected\n",
+			code: 2,
+			why:  "the reader stopped at the offending token, so the line after it was never read and is never written",
+		},
+		{
+			name: "input that ran out inside a construct",
+			src:  "echo one\nif true; then\n",
+			want: "echo one\none\nif true; then\n<script>: line 3: syntax error: unterminated if\n",
+			code: 2,
+			why:  "the second branch of the same bug: there is no offending line, so what was read runs to the end of the text",
+		},
+		{
+			name: "an unterminated quote that swallowed a later line",
+			src:  "echo one\ncat \"abc\necho three\n",
+			want: "echo one\none\ncat \"abc\necho three\n<script>: line 4: unterminated double quote\n",
+			code: 2,
+			why:  "the bound is where the *reader* stopped and not the line the dialect blames: three lines were read and all three are written back, while the vector here puts the complaint on line 4 and bash puts it on line 2",
+		},
+		{
+			name: "a first token that would not even lex",
+			src:  "\"abc\necho two\n",
+			want: "\"abc\necho two\n<script>: line 3: unterminated double quote\n",
+			code: 2,
+			why:  "the other branch of the same failure: the parser has nothing to hand back at all, which is what happens when the *first* token of a chunk will not lex. Both lines were read and both are written back",
+		},
+		{
+			name: "a text that does not end in a newline",
+			src:  "echo one\nfi",
+			want: "echo one\none\nfi\n<script>: line 2: \"fi\" unexpected\n",
+			code: 2,
+			why:  "the piece after the last newline is a line, so the bound has to count it — without that the offending line is one past the end of the text and is never written",
+		},
+		{
+			name: "a remark about input that ran out",
+			src:  "echo one\ncat <<END\nbody\n",
+			want: "echo one\none\ncat <<END\nbody\n<script>: line 3: warning: here-document at line 2 delimited by end-of-file (wanted `END')\nbody\n",
+			code: 0,
+			why:  "the same rule for something the shell accepted: the lines come out, then the remark, then what the command wrote",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var out strings.Builder
+			sh := shell()
+			// A location, so that a diagnostic is distinguishable from an
+			// echoed line, and a wording for the remark, since the zero
+			// vector's silence is an answer rather than a missing feature
+			// and would make the last case assert nothing.
+			sh.Diagnostics.Location = interp.LocationLineWord
+			sh.Diagnostics.HereDocumentAtEOF = "warning: here-document at line %[1]d delimited by end-of-file (wanted `%[2]s')"
+			sh.Stdout, sh.Stderr = &out, &out
+			path := writeScript(t, c.src)
+			code := driver.MainArgs(sh, []string{"testsh", "-v", path})
+			if code != c.code {
+				t.Errorf("status = %d, want %d", code, c.code)
+			}
+			if got := strings.ReplaceAll(out.String(), path, "<script>"); got != c.want {
+				t.Errorf("got %q, want %q — %s", got, c.want, c.why)
 			}
 		})
 	}

@@ -102,3 +102,87 @@ func TestTheOrderOfEAndCapitalEIsAnAxis(t *testing.T) {
 		t.Errorf("-E -e = %q, want the expansion without a question", got)
 	}
 }
+
+// The two spellings of the escape character are two axes, because the two
+// shells that split them split them in opposite directions: ksh93 has `\E`
+// and not `\e`, zsh has `\e` and not `\E`. One answer for both letters is
+// wrong for half the panel (#908).
+func TestEchoEscAndCapitalEscAreTwoQuestions(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		esc, capEs Answer
+		want       string
+	}{
+		{"bash has both", Yes, Yes, "a\x1bZ:a\x1bZ\n"},
+		{"dash and bash 3.2 have neither", No, No, "a\\eZ:a\\EZ\n"},
+		{"ksh93 has the capital alone", No, Yes, "a\\eZ:a\x1bZ\n"},
+		{"zsh has the small alone", Yes, No, "a\x1bZ:a\\EZ\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			sem.EchoOptions = "neE"
+			sem.EchoExpandsEscEscape = tc.esc
+			sem.EchoExpandsCapitalEscEscape = tc.capEs
+			out, st := run(t, `echo -e 'a\eZ:a\EZ'`, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// Each letter is asked only where its own spelling appears, so a `\E` alone
+// needs no answer about `\e` and the other way round.
+func TestEchoEscLettersAreAskedSeparately(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		esc, capEs Answer
+		src, want  string
+	}{
+		{
+			"a lowercase escape asks nothing about the capital",
+			Yes, Unspecified, `echo -e 'a\eZ'`, "a\x1bZ\n",
+		},
+		{
+			"a capital escape asks nothing about the lowercase",
+			Unspecified, Yes, `echo -e 'a\EZ'`, "a\x1bZ\n",
+		},
+		{
+			"neither letter asks either",
+			Unspecified, Unspecified, `echo -e 'a\tZ'`, "a\tZ\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			sem.EchoOptions = "neE"
+			sem.EchoExpandsEscEscape = tc.esc
+			sem.EchoExpandsCapitalEscEscape = tc.capEs
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// An unanswered letter is refused by name rather than guessed.
+func TestEchoEscUnansweredIsRefused(t *testing.T) {
+	for _, tc := range []struct{ name, src, axis, rest string }{
+		{"the lowercase", `echo -e 'a\eZ'`, "echo expanding \\e", `a\eZ`},
+		{"the capital", `echo -e 'a\EZ'`, "echo expanding \\E", `a\EZ`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			sem.EchoOptions = "neE"
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			// The whole rendered output: the refusal names the letter it
+			// could not answer for, and the escape stands as written after
+			// it rather than being guessed either way.
+			want := "sh: " + tc.axis + ": the shells disagree here and no dialect was chosen\n" +
+				tc.rest + "\n"
+			if out != want || st != 2 {
+				t.Errorf("got %q status %d, want %q and 2", out, st, want)
+			}
+		})
+	}
+}

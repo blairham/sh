@@ -21543,6 +21543,50 @@
         "TimedOut": false
       }
     },
+    "echo/the-two-spellings-of-the-escape-character": {
+      "bash": {
+        "Stdout": " 61 1b 5a 3a 61 1b 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " 61 1b 5a 3a 61 1b 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " 61 5c 65 5a 3a 61 5c 45 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " 2d 65 20 61 5c 65 5a 3a 61 5c 45 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " 61 5c 65 5a 3a 61 1b 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " 61 1b 5a 3a 61 5c 45 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "emulate/an-unknown-mode-is-passed-over": {
       "bash": {
         "Stdout": "st=127",
@@ -21625,6 +21669,138 @@
       },
       "zsh": {
         "Stdout": "inner~x*~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/dash-l-covers-a-later-setopt": {
+      "bash": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: emulate: command not found~\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=127~out=127",
+        "Stderr": "\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: emulate: not found~\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=0~out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/dash-l-lasts-as-long-as-the-function": {
+      "bash": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=127~out=127",
+        "Stderr": "\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=0~out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/dash-o-sets-an-option": {
+      "bash": {
+        "Stdout": "st=127~on=1~off=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~on=1~off=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~on=1~off=1",
+        "Stderr": "\u003cshell\u003e: emulate: command not found~\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~on=127~off=127",
+        "Stderr": "\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~on=1~off=1",
+        "Stderr": "\u003cshell\u003e: emulate: not found~\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~on=0~off=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -35014,6 +35190,50 @@
         "TimedOut": false
       }
     },
+    "opt/set-v-echoes-a-first-token-that-will-not-lex": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\"abc~echo two~\u003cscript\u003e: line 1: unexpected EOF while looking for matching `\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\"abc~echo two~\u003cscript\u003e: line 1: unexpected EOF while looking for matching `\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\"abc~echo two~\u003cscript\u003e: line 1: unexpected EOF while looking for matching `\"'~\u003cscript\u003e: line 3: syntax error: unexpected end of file",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\"abc~echo two~\u003cscript\u003e: 3: Syntax error: Unterminated quoted string",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\"abc~echo two~\u003cscript\u003e: syntax error at line 1: `\"' unmatched",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\"abc~echo two~\u003cscript\u003e:3: unmatched \"",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "opt/set-v-echoes-a-here-document-with-its-command": {
       "bash": {
         "Stdout": "after",
@@ -35058,6 +35278,94 @@
         "TimedOut": false
       }
     },
+    "opt/set-v-echoes-before-a-remark": {
+      "bash": {
+        "Stdout": "one~body",
+        "Stderr": "echo one~cat \u003c\u003cEND~body~~\u003cscript\u003e: line 4: warning: here-document at line 2 delimited by end-of-file (wanted `END')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~body",
+        "Stderr": "echo one~cat \u003c\u003cEND~body~~\u003cscript\u003e: line 4: warning: here-document at line 2 delimited by end-of-file (wanted `END')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~body",
+        "Stderr": "echo one~cat \u003c\u003cEND~body",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~body",
+        "Stderr": "echo one~cat \u003c\u003cEND~body",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~body",
+        "Stderr": "echo one~cat \u003c\u003cEND~body",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~body",
+        "Stderr": "echo one~cat \u003c\u003cEND~body",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/set-v-echoes-input-that-ran-out": {
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "echo one~if true; then~\u003cscript\u003e: line 3: syntax error: unexpected end of file from `if' command on line 2",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "echo one~if true; then~\u003cscript\u003e: line 3: syntax error: unexpected end of file from `if' command on line 2",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "echo one~if true; then~\u003cscript\u003e: line 3: syntax error: unexpected end of file",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "echo one~if true; then~\u003cscript\u003e: 3: Syntax error: end of file unexpected (expecting \"fi\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "echo one~if true; then~\u003cscript\u003e: syntax error at line 3: `then' unmatched",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "echo one~if true; then~\u003cscript\u003e:3: parse error near `\\n'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "opt/set-v-echoes-lines-as-read": {
       "bash": {
         "Stdout": "a~b",
@@ -35098,6 +35406,50 @@
         "Stdout": "a~b",
         "Stderr": "echo a~echo b",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/set-v-echoes-the-line-that-would-not-parse": {
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "echo one~fi~\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `fi'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "echo one~fi~\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `fi'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "echo one~fi~\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `fi'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "echo one~fi~\u003cscript\u003e: 2: Syntax error: \"fi\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "echo one~fi~\u003cscript\u003e: syntax error at line 2: `fi' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "echo one~fi~\u003cscript\u003e:2: parse error near `fi'",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -51558,6 +51910,50 @@
         "TimedOut": false
       }
     },
+    "setopt/no-aliases-stops-the-expansion": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: hi: command not found~\u003cscript\u003e: line 3: setopt: command not found~\u003cscript\u003e: line 4: hi: command not found~\u003cscript\u003e: line 5: setopt: command not found~\u003cscript\u003e: line 6: hi: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "expanded~expanded~expanded",
+        "Stderr": "\u003cscript\u003e: line 3: setopt: command not found~\u003cscript\u003e: line 5: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: hi: command not found~\u003cscript\u003e: line 3: setopt: command not found~\u003cscript\u003e: line 4: hi: command not found~\u003cscript\u003e: line 5: setopt: command not found~\u003cscript\u003e: line 6: hi: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "expanded~expanded~expanded",
+        "Stderr": "\u003cscript\u003e: 3: setopt: not found~\u003cscript\u003e: 5: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "expanded~expanded~expanded",
+        "Stderr": "\u003cscript\u003e: line 3: setopt: not found~\u003cscript\u003e: line 5: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "expanded~expanded",
+        "Stderr": "\u003cscript\u003e:4: command not found: hi",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "setopt/nonomatch-passes-the-glob-through": {
       "bash": {
         "Stdout": "x*~st=0",
@@ -61635,6 +62031,94 @@
       "zsh": {
         "Stdout": "[gone]",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unset/the-m-option-unsets-by-pattern": {
+      "bash": {
+        "Stdout": "st=2 [1][2][3]",
+        "Stderr": "\u003cshell\u003e: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 [1][2][3]",
+        "Stderr": "\u003cshell\u003e: line 0: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: Illegal option -m",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: unset: -m: unknown option~Usage: unset [-nfv] name...",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [gone][gone][3]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unset/the-n-option-splits-the-panel": {
+      "bash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: Illegal option -n",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:unset:1: bad option: -n",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

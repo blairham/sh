@@ -551,10 +551,97 @@ func (r *Runner) unsetReadonly(name string) int {
 	return 1
 }
 
+// unsetMatching is `unset -m`: each operand is a pattern, and every parameter
+// whose name it matches goes.
+//
+// The names are collected before anything is removed, because the tables are
+// what is being walked; and they are sorted so that a diagnostic from one
+// removal — a readonly name — arrives in the same order every run.
+func (r *Runner) unsetMatching(patterns []string) int {
+	if len(patterns) == 0 {
+		// Measured: zsh refuses the letter with nothing to match rather
+		// than treating it as `unset` with no operands, which is silent.
+		r.diagf("%s\n", Wording(r.diag().UnsetPatternUsage, "%[1]s: not enough arguments", "unset"))
+		return 1
+	}
+	status := 0
+	for _, pattern := range patterns {
+		// Collected before anything is removed, because what is being
+		// walked is the tables themselves; and sorted, so that a refusal
+		// from one removal arrives in the same order every run.
+		o := r.patternOpts(pattern)
+		for _, name := range r.parameterNames() {
+			if !matchPattern(pattern, name, o) {
+				continue
+			}
+			if code := r.unsetReadonly(name); code != 0 {
+				status = code
+				if r.ctl == controlExit {
+					return status
+				}
+				continue
+			}
+			r.unsetName(name)
+		}
+	}
+	return status
+}
+
+// parameterNames is every parameter this shell can see, once each and in
+// order. The same three sources [Runner.namesWithPrefix] reads.
+//
+// The array tables are deliberately not among them, and that is a fact about
+// this shell rather than an omission: an array's name is in Vars as well —
+// `a=(p q)` writes both — so walking Arrays and AssocArrays here added
+// nothing at all. It was written, and a mutant that deleted it survived every
+// test including the one about arrays, which is how the duplication was
+// found. Should the two tables ever come apart, this is one of the places
+// that has to be told.
+func (r *Runner) parameterNames() []string {
+	seen := map[string]bool{}
+	var out []string
+	// The `removed` half of the guard is the one no test can see, and it is
+	// here because a name `unset` has already taken away is not a parameter
+	// — not because anything would go wrong without it. Removing a name
+	// twice is removing it once, so a mutant that drops this clause passes
+	// everything, the same standing this codebase gives an escaped ordinary
+	// character. It is the *rule* that is being written down.
+	add := func(name string) {
+		if seen[name] || r.removed[name] {
+			return
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	for name := range r.Vars {
+		add(name)
+	}
+	for name := range r.Dynamic {
+		add(name)
+	}
+	for name := range r.inheritedEnv {
+		add(name)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func biUnset(r *Runner, _ context.Context, args []string) int {
-	args, opts, code := r.builtinOptions("unset", args, "vfn")
+	letters := r.sem().UnsetOptions
+	if letters == "" {
+		letters = "vf"
+	}
+	args, opts, code := r.builtinOptions("unset", args, letters)
 	if code != 0 {
 		return code
+	}
+	if strings.ContainsRune(opts, 'm') {
+		// `unset -m` reads its operands as patterns and unsets every
+		// parameter whose *name* matches one. Ahead of `-f`, because the
+		// two are the same question asked of two namespaces and only the
+		// variable one is measured here; and ahead of the name check,
+		// because a pattern is not a name and would not survive it.
+		return r.unsetMatching(args)
 	}
 	if strings.ContainsRune(opts, 'f') {
 		// `unset -f` is about functions and not about variables, unanimously
@@ -634,19 +721,28 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 			}
 			continue
 		}
-		delete(r.Vars, name)
-		delete(r.exported, name)
-		delete(r.Arrays, name)
-		delete(r.AssocArrays, name)
-		// Recorded as well as deleted: a name that came from the environment
-		// is not in Vars to begin with, and deleting nothing left it visible
-		// to every lookup — `unset PATH` did not clear PATH.
-		if r.removed == nil {
-			r.removed = map[string]bool{}
-		}
-		r.removed[name] = true
+		r.unsetName(name)
 	}
 	return status
+}
+
+// unsetName removes one whole parameter, whatever kind it is.
+//
+// Extracted so that the pattern form and the name form remove alike: the two
+// entered the builtin by different doors and would otherwise have been two
+// copies of this, which is how one of them ends up forgetting a table.
+func (r *Runner) unsetName(name string) {
+	delete(r.Vars, name)
+	delete(r.exported, name)
+	delete(r.Arrays, name)
+	delete(r.AssocArrays, name)
+	// Recorded as well as deleted: a name that came from the environment is
+	// not in Vars to begin with, and deleting nothing left it visible to
+	// every lookup — `unset PATH` did not clear PATH.
+	if r.removed == nil {
+		r.removed = map[string]bool{}
+	}
+	r.removed[name] = true
 }
 
 // biExport marks a name for the environment, and assigns when given a value.
@@ -1025,10 +1121,16 @@ func biEcho(r *Runner, _ context.Context, args []string) int {
 		// The two set extensions are asked only when their escapes appear.
 		hex := strings.Contains(out, `\x`) &&
 			r.ask(r.sem().EchoExpandsHexEscapes, "echo expanding \\xHH")
-		esc := (strings.Contains(out, `\e`) || strings.Contains(out, `\E`)) &&
+		// The two spellings of the escape character are two questions, and
+		// each is asked only where its own letter appears: ksh93 has `\E`
+		// and not `\e`, zsh has `\e` and not `\E`, so one answer for both
+		// was wrong for half the panel (#908).
+		esc := strings.Contains(out, `\e`) &&
 			r.ask(r.sem().EchoExpandsEscEscape, "echo expanding \\e")
+		capEsc := strings.Contains(out, `\E`) &&
+			r.ask(r.sem().EchoExpandsCapitalEscEscape, "echo expanding \\E")
 		var stopped bool
-		out, stopped = expandEchoEscapes(out, hex, esc)
+		out, stopped = expandEchoEscapes(out, hex, esc, capEsc)
 		if stopped {
 			// `\c` ends the output, newline included.
 			newline = false
@@ -1102,10 +1204,12 @@ func xsiEscape(c byte) (byte, bool) {
 }
 
 // expandEchoEscapes interprets the escapes `echo` expands where the dialect
-// says it does: the XSI set, with `\xHH` and `\e` admitted per dialect.
+// says it does: the XSI set, with `\xHH`, `\e` and `\E` admitted per
+// dialect — the last two separately, because ksh93 and zsh have one each and
+// not the other.
 // stopped reports a `\c`, which discards the rest of the output and the
 // closing newline with it.
-func expandEchoEscapes(s string, hex, esc bool) (expanded string, stopped bool) {
+func expandEchoEscapes(s string, hex, esc, capEsc bool) (expanded string, stopped bool) {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] != '\\' || i+1 >= len(s) {
@@ -1121,7 +1225,11 @@ func expandEchoEscapes(s string, hex, esc bool) (expanded string, stopped bool) 
 		case 'c':
 			return b.String(), true
 		case 'e', 'E':
-			if !esc {
+			admitted := esc
+			if s[i] == 'E' {
+				admitted = capEsc
+			}
+			if !admitted {
 				b.WriteByte('\\')
 				b.WriteByte(s[i])
 				break

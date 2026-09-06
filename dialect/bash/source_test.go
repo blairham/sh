@@ -647,3 +647,12 @@ func TestReadInitialValueIsTakenAndIgnored(t *testing.T) {
 		}
 	}
 }
+
+// Both spellings of the escape character are ESC here, which is this shell
+// alone in the panel: ksh93 has only `\E` and zsh only `\e` (#908).
+func TestEchoTakesBothSpellingsOfTheEscapeCharacter(t *testing.T) {
+	out, st := runBash(t, t.TempDir(), "echo -e 'a\\eZ:a\\EZ'\n")
+	if out != "a\x1bZ:a\x1bZ\n" || st != 0 {
+		t.Errorf("said % x status %d, want both letters as ESC", out, st)
+	}
+}

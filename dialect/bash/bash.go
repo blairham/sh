@@ -219,13 +219,20 @@ func Semantics() interp.Semantics {
 	s.EchoOptions = "neE"
 	s.EchoLastEscapeFlagWins = interp.Yes
 	s.EchoExpandsHexEscapes = interp.Yes
+	// Both spellings of the escape character, which is this shell alone in
+	// the panel: ksh93 has only `\E` and zsh only `\e`.
 	s.EchoExpandsEscEscape = interp.Yes
+	s.EchoExpandsCapitalEscEscape = interp.Yes
 	// read takes -r and -s plus the argument letters: -a names the array in
 	// the option's argument, -d a delimiter, -i the text a line editor would
 	// be seeded with, -n and -N the two counts, -p a prompt for when the
 	// input is a terminal, -t a timeout and -u a descriptor. A short -n
 	// keeps its text and reports 1; a short -N keeps its text too.
 	s.ReadOptions = "rsa:d:i:n:N:p:t:u:"
+	// `-n` unsets through a name reference. bash 3.2 does not have it —
+	// `unset -n x` is an invalid option there and under `--posix` — so
+	// this is 5.3's set, which is the binary the panel measures.
+	s.UnsetOptions = "vfn"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes

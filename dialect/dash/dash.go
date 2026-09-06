@@ -100,12 +100,19 @@ func Semantics() interp.Semantics {
 	// argument, printed only to a terminal. The rest of bash's set (-s, the
 	// counts, -d, -t, -u) is refused as unknown here.
 	s.ReadOptions = "rp:"
+	// dash has the two POSIX letters and calls anything else illegal.
+	s.UnsetOptions = "vf"
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
 	// dash single-quotes every listed value; it has no declare, so this
 	// style exists for the two -p listings alone.
 	s.DeclareValueQuoting = interp.ListingQuoteAlwaysEscaped
 	s.EchoInterpretsEscapes = interp.Yes
+	// Neither spelling of the escape character: this shell's set is the XSI
+	// list alone, so `\e` and `\E` are the two characters they are written
+	// as.
+	s.EchoExpandsEscEscape = interp.No
+	s.EchoExpandsCapitalEscEscape = interp.No
 	s.LengthOfSpecialIsCount = interp.No
 	s.UnterminatedBracket = interp.BracketNoMatch
 	// `.` with no filename at all is not an error here: dash does nothing and

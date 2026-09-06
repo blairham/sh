@@ -547,6 +547,11 @@ var Corpus = []Case{
 		Why:     "\\xHH is bash and zsh on top of the XSI set: ksh93 leaves it as written even under -e, and dash has no -e at all",
 	},
 	{
+		ID: "echo/the-two-spellings-of-the-escape-character", Category: "builtins",
+		Snippet: `echo -e 'a\eZ:a\EZ' | od -An -tx1 | tr -s " "`,
+		Why:     "read as bytes, because an ESC is invisible in a rendered table and this row is entirely about which of the two letters produces one. The two shells that split `\\e` from `\\E` split them in *opposite* directions — ksh93 has `\\E` and not `\\e`, zsh has `\\e` and not `\\E` — so one answer for both letters is wrong for half the panel. bash 5.3 has both and bash 3.2 neither, which is also the version line here; dash has no -e and prints it. The same asymmetry the `%b` site has, and the row that says `echo` cannot borrow one answer for the pair",
+	},
+	{
 		ID: "echo/the-order-of-e-and-capital-e", Category: "builtins",
 		Snippet: `echo -e -E 'm\tn'`,
 		Why:     "-e then -E: bash lets the last flag win and prints the backslash, zsh lets -e win and expands — the other order agrees everywhere and asks nothing",
@@ -1273,6 +1278,16 @@ var Corpus = []Case{
 		ID: "unset/takes-away-an-environment-name", Category: "parameters",
 		Snippet: `unset HOME; echo "[${HOME-gone}]"`,
 		Why:     "a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both",
+	},
+	{
+		ID: "unset/the-m-option-unsets-by-pattern", Category: "parameters",
+		Snippet: `x=1 xy=2 z=3; unset -m "x*"; echo "st=$? [${x-gone}][${xy-gone}][${z-gone}]"`,
+		Why:     "`unset -m` reads its operands as patterns rather than as names, and is one shell's alone — a prompt theme clears its whole namespace with it. The three values are what says the pattern is anchored at both ends of the *name*: `x*` takes `x` and `xy` and leaves `z`. The other four refuse the letter, in four wordings and at three statuses, and two of them print a usage line after it",
+	},
+	{
+		ID: "unset/the-n-option-splits-the-panel", Category: "parameters",
+		Snippet: `x=1; unset -n x; echo "st=$?"`,
+		Why:     "the letter beside it, and the row that says `unset`'s options are the dialect's rather than one set: bash 5.3 and ksh93 take `-n` where bash 3.2, bash-as-`sh`, dash and zsh refuse it, at three statuses and in four wordings. The *value* is deliberately not printed: what `-n` then does to a name that is not a reference splits the two shells that have the letter — bash removes nothing at all and ksh93 removes the variable — which is a second question, and one this shell does not yet answer",
 	},
 
 	// --- printf: the last builtin that was not one ------------------------
@@ -6159,6 +6174,34 @@ echo unreachable`,
 		Why:     "the descriptor is read at the moment of the echo, which decides three things at once: the line holding the `exec` goes to the descriptor it is about to replace, the lines after it disappear into what it was pointed at, and only the line after the restore comes back. Unanimous. The snippet ends without a newline because the harness adds one, and a trailing blank line is not the same question: one shell reads ahead in blocks and echoes that line *before* running the command above it",
 	},
 	{
+		ID: "opt/set-v-echoes-the-line-that-would-not-parse", Category: "shell options",
+		Args:        []string{"-v", ArgScript},
+		SyntaxError: true,
+		Snippet:     "echo one\nfi",
+		Why:         "the shell writes back what it read before it complains about it, so the offending line comes out and *then* the syntax error. Unanimous, and it is the line rather than the whole input: the walk stops where the reader did. The wordings and statuses differ — 2, 2, 3 and 1 — and the order does not. The letter is on the invocation rather than in the script, because one shell prefixes a syntax error with the line it had reached and only when the option was turned on from inside",
+	},
+	{
+		ID: "opt/set-v-echoes-a-first-token-that-will-not-lex", Category: "shell options",
+		Args:        []string{"-v", ArgScript},
+		SyntaxError: true,
+		Snippet:     "\"abc\necho two",
+		Why:         "the same rule where the parser has nothing at all to hand back — the *first* token of the input will not lex, so there is no logical line to drive an echo from. Both physical lines are still written back before the complaint, in all four; the line each of them blames is 1, 3, 1 and 3",
+	},
+	{
+		ID: "opt/set-v-echoes-input-that-ran-out", Category: "shell options",
+		Args:        []string{"-v", ArgScript},
+		SyntaxError: true,
+		Snippet:     "echo one\nif true; then",
+		Why:         "the second face of the same rule, where there is no offending line to name: what was read runs to the end of the text and is written back before the complaint. Unanimous",
+	},
+	{
+		ID: "opt/set-v-echoes-before-a-remark", Category: "shell options",
+		Args:       []string{"-v", ArgScript},
+		Unfinished: true,
+		Snippet:    "echo one\ncat <<END\nbody\n",
+		Why:        "and for input the shell *accepted*: the here-document's lines are written back, then the one shell that remarks on a delimiter that never arrived says so, then the command's own output. The order is the same rule as the two rows above, which is why they are three rows and one fix. The body ends in a newline because the printer round-trip needs one — a body without it is printed with the delimiter attached to its last line",
+	},
+	{
 		ID: "opt/set-o-verbose-echoes-what-is-read", Category: "shell options",
 		Snippet: "echo before\nset -o verbose\necho after\n",
 		Why:     "the long spelling of `set -v`: input is written back to stderr as it is read, and never the line that turned it on. From a file all four agree; a -c string is read differently — bash echoes it where dash and zsh do not — so the case pins the route every script uses",
@@ -7312,6 +7355,27 @@ exit 7`,
 		ID: "emulate/an-unknown-mode-is-passed-over", Category: "builtins",
 		Snippet: `emulate fish; echo "st=$?"; emulate`,
 		Why:     "a word naming no emulation is silence and 0 in zsh, the mode unchanged — measured, and strange enough to be worth pinning against the guess that it would complain",
+	},
+	{
+		ID: "emulate/dash-o-sets-an-option", Category: "builtins",
+		Snippet: `emulate zsh -o extendedglob; echo "st=$?"; [[ -o extendedglob ]]; echo "on=$?"; emulate zsh +o extendedglob; [[ -o extendedglob ]]; echo "off=$?"`,
+		Why:     "`{+|-}o name` names an option for the emulation to apply after it has placed its own defaults, which is the form a prompt theme opens every one of its functions with. The name is `setopt`'s and takes `setopt`'s spellings, underscores and all; `+o` is the same request the other way",
+	},
+	{
+		ID: "emulate/dash-l-lasts-as-long-as-the-function", Category: "builtins",
+		Snippet: `f() { emulate -L zsh -o extendedglob; [[ -o extendedglob ]]; echo "in=$?"; }; f; [[ -o extendedglob ]]; echo "out=$?"`,
+		Why:     "`-L` is LOCAL_OPTIONS: the emulation and everything moved after it last as long as the call. Written as a function on purpose — outside one the letter changes nothing, measured, so a case at the top level would pass with the letter ignored",
+	},
+	{
+		ID: "emulate/dash-l-covers-a-later-setopt", Category: "builtins",
+		Snippet: `f() { emulate -L zsh; setopt err_exit; [[ -o err_exit ]]; echo "in=$?"; }; f; [[ -o err_exit ]]; echo "out=$?"`,
+		Why:     "and it is the *call* that is restored rather than the emulation's own changes: an option set later in the same function goes back too, which is the whole of what the option is for and the half a snapshot taken after the emulation would miss",
+	},
+	{
+		ID: "setopt/no-aliases-stops-the-expansion", Category: "builtins",
+		Script:  true,
+		Snippet: "alias hi='echo expanded'\nhi\nsetopt no_aliases\nhi\nsetopt aliases\nhi\n",
+		Why:     "`no_aliases` is an option a script throws to protect its own code from a user's aliases, and it reaches the *parser*: the second `hi` is a command that does not exist. Run from a file because that is the route this shell expands on at all — under `-c` it never does, while `[[ -o aliases ]]` still reads on there, which is what makes the option and the route two questions",
 	},
 	{
 		ID: "whence/bare-is-the-resolution", Category: "builtins",

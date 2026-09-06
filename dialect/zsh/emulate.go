@@ -103,31 +103,44 @@ func registerEmulate(r *interp.Runner) {
 }
 
 func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
-	mode, code, hasCode, status := emulateArguments(r, args)
+	e, status := emulateArguments(r, args)
 	if status >= 0 {
 		return status
 	}
-	if mode == "" {
+	if e.mode == "" {
 		_, _ = fmt.Fprintf(r.Out(), "%s\n", currentEmulation(r))
 		return 0
 	}
-	if _, known := emulations[mode]; !known {
+	if _, known := emulations[e.mode]; !known {
 		// Measured: a word naming no emulation is passed over in silence,
 		// the mode unchanged — `emulate fish` and `emulate SH` alike.
 		return 0
 	}
-	if !hasCode {
-		applyEmulation(r, mode)
-		return 0
+	if !e.hasCode {
+		if e.local {
+			// `-L` is LOCAL_OPTIONS: the emulation, and everything moved
+			// after it, last as long as the enclosing function call. What
+			// is saved is the state *before* the emulation, so a `setopt`
+			// later in the same function is undone too — which is the
+			// option's whole point and is measured.
+			//
+			// Outside a function there is nothing to return to and the
+			// letter changes nothing: measured, `emulate -L zsh -o
+			// extendedglob` at the top level leaves the option on.
+			saved := saveEmulationState(r)
+			r.AtFunctionReturn(func() { saved.restore(r) })
+		}
+		applyEmulation(r, e.mode)
+		return e.applyOptions(r)
 	}
 	// `-c` runs the string under the emulation and restores everything after
 	// — measured, an option set before it comes back: `setopt no_glob;
 	// emulate sh -c '…'` still refuses to glob afterwards.
 	saved := saveEmulationState(r)
-	applyEmulation(r, mode)
-	st := 0
+	applyEmulation(r, e.mode)
+	st := e.applyOptions(r)
 	if eval, ok := r.Builtin("eval"); ok {
-		st = eval(r, ctx, []string{code})
+		st = eval(r, ctx, []string{e.code})
 	}
 	saved.restore(r)
 	return st
@@ -135,10 +148,33 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 
 // emulateArguments reads the command line. A status of -1 means "carry on";
 // anything else is the answer, already reported.
-func emulateArguments(r *interp.Runner, args []string) (mode, code string, hasCode bool, status int) {
-	local := false
+func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status int) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
+		if len(a) > 1 && a[0] == '+' {
+			// The `+` form. `+o name` is `-o name` the other way round and
+			// `+c` runs its string like `-c`; every other letter is
+			// *accepted and does nothing*, which is measured rather than
+			// assumed and is not what the `-` form does: `emulate zsh +X`
+			// is 0 where `emulate -X zsh` is `bad option: -X`, and a `+L`
+			// does not undo a `-L` — the emulation stays function-local.
+			for j := 1; j < len(a); j++ {
+				switch a[j] {
+				case 'o', 'c':
+					if i+1 >= len(args) {
+						r.Diagnosef("string expected after +%c\n", a[j])
+						return e, 1
+					}
+					i++
+					if a[j] == 'c' {
+						e.code, e.hasCode = args[i], true
+					} else {
+						e.options = append(e.options, emulateOption{name: args[i]})
+					}
+				}
+			}
+			continue
+		}
 		if len(a) > 1 && a[0] == '-' {
 			for _, letter := range a[1:] {
 				switch letter {
@@ -146,40 +182,80 @@ func emulateArguments(r *interp.Runner, args []string) (mode, code string, hasCo
 					// A plain emulation already resets the options —
 					// measured — so the strict form adds nothing here.
 				case 'L':
-					local = true
+					e.local = true
+				case 'o':
+					if i+1 >= len(args) {
+						r.Diagnosef("string expected after -o\n")
+						return e, 1
+					}
+					i++
+					e.options = append(e.options, emulateOption{name: args[i], on: true})
 				case 'c':
 					if i+1 >= len(args) {
 						r.Diagnosef("string expected after -c\n")
-						return "", "", false, 1
+						return e, 1
 					}
 					i++
-					code, hasCode = args[i], true
+					e.code, e.hasCode = args[i], true
 				default:
 					r.Diagnosef("bad option: -%c\n", letter)
-					return "", "", false, 1
+					return e, 1
 				}
 			}
 			continue
 		}
-		if mode != "" {
+		if e.mode != "" {
 			r.Diagnosef("unknown argument %s\n", a)
-			return "", "", false, 1
+			return e, 1
 		}
-		mode = a
+		e.mode = a
 	}
-	if mode == "" && len(args) > 0 {
+	if e.mode == "" && len(args) > 0 {
+		if len(e.options) > 0 {
+			// An option with no emulation to apply it to. Measured: real
+			// zsh answers `bad option: -o` here rather than complaining
+			// about the count, which is why this is not the line below.
+			r.Diagnosef("bad option: -o\n")
+			return e, 1
+		}
 		// Flags with nothing to emulate, which is what real zsh says before
 		// looking at the flags themselves.
 		r.Diagnosef("not enough arguments\n")
-		return "", "", false, 1
+		return e, 1
 	}
-	if local {
-		// The function-local form needs a restore on return, which this
-		// shell has no seam for. Refused rather than silently made global.
-		r.Diagnosef("emulate: -L is not implemented yet\n")
-		return "", "", false, 2
+	return e, -1
+}
+
+// emulateCall is one command line, read.
+type emulateCall struct {
+	mode    string
+	code    string
+	hasCode bool
+	// local is `-L`: the emulation, and every option moved after it, last
+	// only as long as the function it stands in.
+	local bool
+	// options are the `-o name` and `+o name` pairs, in the order written —
+	// order matters, because the same name may appear twice.
+	options []emulateOption
+}
+
+// emulateOption is one `{+|-}o name`.
+type emulateOption struct {
+	name string
+	on   bool
+}
+
+// apply sets the options this call names, after the emulation has placed its
+// own defaults. A name the option table does not have is refused and the rest
+// are still applied, which is what `setopt` does with a list.
+func (e emulateCall) applyOptions(r *interp.Runner) int {
+	status := 0
+	for _, o := range e.options {
+		if code := setOption(r, o.name, o.on); code != 0 {
+			status = code
+		}
 	}
-	return mode, code, hasCode, -1
+	return status
 }
 
 // emulationState is what `-c` puts back: the semantics vector by pointer, the

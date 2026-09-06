@@ -568,6 +568,12 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 			delete(r.removed, name)
 		}
 	}
+	// And whatever a dialect asked to have run when this call unwinds, in
+	// reverse order of registration, before the scope is dropped: the last
+	// thing registered is the innermost, the same order a defer stack has.
+	for i := len(sc.onReturn) - 1; i >= 0; i-- {
+		sc.onReturn[i]()
+	}
 	r.scopes = r.scopes[:len(r.scopes)-1]
 	// zsh runs an EXIT trap set *inside* a function when the function
 	// returns, and then forgets it; the other three keep it for the end of

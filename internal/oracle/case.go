@@ -5230,7 +5230,7 @@ echo "st=$?"`,
 	{
 		ID: "param/the-split-flag-is-one-dialects", Category: "parameter expansion",
 		Snippet: `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; v="a b c"; f ${v}; f ${=v}; echo`,
-		Why:     "an `=` between the `${` and the parameter splits the substituted value into words on IFS: zsh answers one field then three where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading with the `=` named — the same three-way split every unreadable expansion follows. Both readings in one row, because the field *count* is the whole of the behaviour and a row printing only the text would read the same either way. `is-at-least`, the version predicate in zsh's own function library, is `${=1}` and `${=2:-$ZSH_VERSION}`, and a refusal there answers \"at least\" for every version at status 0",
+		Why:     "an `=` between the `${` and the parameter splits the substituted value into words on IFS: zsh answers one field then three where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading with the `=` named — the same three-way split every unreadable expansion follows. Both readings in one row, because the field *count* is the whole of the behavior and a row printing only the text would read the same either way. `is-at-least`, the version predicate in zsh's own function library, is `${=1}` and `${=2:-$ZSH_VERSION}`, and a refusal there answers \"at least\" for every version at status 0",
 	},
 	{
 		ID: "param/the-split-flag-reaches-through-quotes", Category: "parameter expansion",

@@ -155,7 +155,7 @@ func TestTheSplitFlagReachesThroughQuotes(t *testing.T) {
 }
 
 // The split is on IFS, and the whole of IFS: set and empty disables it, a
-// separator of its own is honoured, and adjacent non-whitespace separators
+// separator of its own is honored, and adjacent non-whitespace separators
 // leave the empty field between them.
 func TestTheSplitFlagSplitsOnIFS(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{

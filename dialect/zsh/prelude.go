@@ -14,8 +14,9 @@ func Prelude() string { return identity + functions }
 // prelude carries, with the measured differences kept: this engine's `pushd`
 // and `popd` move in silence — only `dirs` prints, one line, current
 // directory first, $HOME abbreviated to `~`. An empty stack refuses `popd`
-// with status 1; the real engine locates that complaint the way it locates
-// any message, which a shell function cannot, so ours is the bare sentence.
+// with status 1, and says so through `diagnose`, which is what puts this
+// shell's own location — the builtin's name between the file and the line —
+// in front of a sentence written here (#603, interp/prelude.go).
 //
 // Rotation is the half that was missing (#468), and it is measured as
 // *identical* to bash's: `pushd +N` counts the current directory as entry 0
@@ -56,7 +57,7 @@ dirs() {
 				p) __lines=1 ;;
 				v) __lines=1; __numbers=1 ;;
 				*)
-					echo "dirs: bad option: -$__c" >&2
+					diagnose "bad option: -$__c"
 					return 1
 					;;
 				esac
@@ -99,7 +100,7 @@ dirs() {
 	fi
 }
 __dirs_rotate() {
-	local __name=$1 __spec=$2 __i __new
+	local __spec=$1 __i __new
 	set -- "$PWD" "${DIRSTACK[@]}"
 	case $__spec in
 	+*) __i=${__spec#+} ;;
@@ -108,7 +109,7 @@ __dirs_rotate() {
 	if [ "$__i" -lt 0 ] || [ "$__i" -ge $# ]; then
 		# One sentence for an index that is out of range and for a stack
 		# with nothing in it, where bash has two.
-		echo "$__name: no such entry in dir stack" >&2
+		diagnose "no such entry in dir stack"
 		return 1
 	fi
 	while [ "$__i" -gt 0 ]; do
@@ -131,7 +132,7 @@ pushd() {
 		esac
 	done
 	if [ -n "$__spec" ]; then
-		__dirs_rotate pushd "$__spec"
+		__dirs_rotate "$__spec"
 		return $?
 	fi
 	if [ $# -eq 0 ]; then
@@ -158,7 +159,7 @@ popd() {
 		esac
 	done
 	if [ ${#DIRSTACK[@]} -eq 0 ]; then
-		echo "popd: directory stack empty" >&2
+		diagnose "directory stack empty"
 		return 1
 	fi
 	set -- "$PWD" "${DIRSTACK[@]}"
@@ -169,7 +170,7 @@ popd() {
 		*)  __i=$(( $# - 1 - ${__spec#-} )) ;;
 		esac
 		if [ "$__i" -lt 0 ] || [ "$__i" -ge $# ]; then
-			echo "popd: no such entry in dir stack" >&2
+			diagnose "no such entry in dir stack"
 			return 1
 		fi
 	fi

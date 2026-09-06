@@ -6,8 +6,6 @@ package zsh_test
 import (
 	"strings"
 	"testing"
-
-	"github.com/blairham/sh/dialect/zsh"
 )
 
 // The job and lookup long tail, measured against zsh 5.9.2 (2026-09-04).
@@ -56,8 +54,7 @@ func TestTypePIsASentence(t *testing.T) {
 // The directory stack moves in silence here: only dirs prints.
 func TestDirectoryStackIsSilent(t *testing.T) {
 	home := t.TempDir()
-	out, _ := runZsh(t, home, zsh.Prelude()+`
-HOME=`+home+`
+	out, _ := runZshPrelude(t, home, `HOME=`+home+`
 cd
 pushd /tmp; echo st=$?
 dirs
@@ -66,9 +63,12 @@ popd; echo p2=$?`)
 	if !strings.Contains(out, "st=0\n/tmp ~\n") {
 		t.Errorf("got %q, want a silent pushd and the stack from dirs", out)
 	}
-	if !strings.Contains(out, "p=0\n") || !strings.Contains(out, "popd: directory stack empty\np2=1\n") {
-		t.Errorf("got %q, want a silent popd and the empty-stack refusal", out)
+	if !strings.Contains(out, "p=0\n") || !strings.Contains(out, "p2=1\n") {
+		t.Errorf("got %q, want a silent popd and a refusal at 1", out)
 	}
+	// Located this shell's way: the builtin's name between the file and the
+	// line, which is the half a prelude function could not reach.
+	wantWholeLines(t, out, "zsh:popd:6: directory stack empty")
 }
 
 // `jobs -p` is the one place the letter splits: zsh reads it as the job's
@@ -111,8 +111,7 @@ func TestJobsStateFiltersAddUp(t *testing.T) {
 // wording of a refusal, which is one sentence where bash has two.
 func TestDirectoryStackRotates(t *testing.T) {
 	home := t.TempDir()
-	out, _ := runZsh(t, home, zsh.Prelude()+`
-HOME=`+home+`
+	out, _ := runZshPrelude(t, home, `HOME=`+home+`
 cd /
 pushd /tmp >/dev/null; pushd /usr >/dev/null
 pushd +1; dirs; echo "pwd=$PWD"
@@ -134,22 +133,27 @@ popd +1; dirs; echo "pwd=$PWD"`)
 // goes home rather than refusing.
 func TestDirectoryStackRefusals(t *testing.T) {
 	home := t.TempDir()
-	out, _ := runZsh(t, home, zsh.Prelude()+`
-HOME=`+home+`
+	out, _ := runZshPrelude(t, home, `HOME=`+home+`
 cd /
 pushd /tmp >/dev/null
 pushd +9; echo "r=$?"
 popd -9; echo "o=$?"
 popd >/dev/null; pushd +1; echo "e=$?"
 dirs -q; echo "q=$?"
-pushd; echo "h=$? pwd=$PWD"`)
-	for _, want := range []string{
-		"pushd: no such entry in dir stack\nr=1\n",
-		"popd: no such entry in dir stack\no=1\n",
-		"pushd: no such entry in dir stack\ne=1\n",
-		"dirs: bad option: -q\nq=1\n",
-		"h=0 pwd=" + home + "\n",
-	} {
+pushd; echo "h=$? pwd=$PWD"
+pushd /no/such/dir-xyz; echo "c=$?"`)
+	// Whole lines, because the location in front of each is what is being
+	// asserted as much as the sentence: `zsh:pushd:4:` and not `pushd:`.
+	wantWholeLines(t, out,
+		"zsh:pushd:4: no such entry in dir stack",
+		"zsh:popd:5: no such entry in dir stack",
+		"zsh:pushd:6: no such entry in dir stack",
+		"zsh:dirs:7: bad option: -q",
+		// `cd` did the work and this shell names neither it nor the function
+		// it was called from — the word the script wrote is the word it says.
+		"zsh:pushd:9: no such file or directory: /no/such/dir-xyz",
+	)
+	for _, want := range []string{"r=1\n", "o=1\n", "e=1\n", "q=1\n", "c=1\n", "h=0 pwd=" + home + "\n"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("got %q, want %q in it", out, want)
 		}
@@ -160,8 +164,7 @@ pushd; echo "h=$? pwd=$PWD"`)
 // new stack rather than an index into the old one.
 func TestDirsLetters(t *testing.T) {
 	home := t.TempDir()
-	out, _ := runZsh(t, home, zsh.Prelude()+`
-HOME=`+home+`
+	out, _ := runZshPrelude(t, home, `HOME=`+home+`
 cd
 pushd / >/dev/null; pushd /tmp >/dev/null
 dirs -p; echo "--"

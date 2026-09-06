@@ -469,6 +469,9 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 		r.funcs = map[string]*syntax.FuncDecl{}
 	}
 	r.funcs[c.Name] = c
+	// And whether the dialect defined it or the script did, which decides
+	// whose voice its diagnostics carry — see prelude.go.
+	r.preludeDefined(c.Name, c)
 	// Where it was defined, which is the file its frame reports — a function
 	// declared in a sourced library and called from the script names the
 	// library, not the script.
@@ -494,6 +497,15 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 	}
 	saved, savedIn, savedLine := r.Params, r.inFunc, r.funcLine
 	r.Params, r.inFunc = args, fn.Name
+	// A function the dialect's prelude defined is the shell speaking rather
+	// than the script, so what it reports is named after it and located where
+	// it was called. The outermost such call owns both: a prelude helper it
+	// calls in turn adds nothing, because the script named the outer one.
+	savedSpeaker, savedSpeakerLine := r.speaker, r.speakerLine
+	if r.speaker == "" && r.speaksForTheShell(fn) {
+		r.speaker, r.speakerLine = fn.Name, r.line
+	}
+	defer func() { r.speaker, r.speakerLine = savedSpeaker, savedSpeakerLine }()
 	// Where the function was written, so a dialect that numbers a message
 	// from the function rather than from the file can subtract it.
 	r.funcLine = fn.Pos().Line

@@ -20138,42 +20138,42 @@
     "dirstack/clear-the-stack": {
       "bash": {
         "Stdout": "st=0~/usr~p=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 1: popd: directory stack empty",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "st=0~/usr~p=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 1: popd: directory stack empty",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
         "Stdout": "st=0~/usr~p=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 0: popd: directory stack empty",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "dash": {
         "Stdout": "st=127~p=127",
-        "Stderr": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: dirs: not found~\u003cshell\u003e: 1: dirs: not found",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: dirs: not found~\u003cshell\u003e: 1: dirs: not found~\u003cshell\u003e: 1: popd: not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
         "Stdout": "st=127~p=127",
-        "Stderr": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: pushd: not found~\u003cshell\u003e: dirs: not found~\u003cshell\u003e: dirs: not found",
+        "Stderr": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: pushd: not found~\u003cshell\u003e: dirs: not found~\u003cshell\u003e: dirs: not found~\u003cshell\u003e: popd: not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
         "Stdout": "st=0~/usr~p=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e:popd:1: directory stack empty",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -20182,42 +20182,42 @@
     "dirstack/dirs-a-letter-it-does-not-have": {
       "bash": {
         "Stdout": "st=2",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 1: dirs: -q: invalid number~dirs: usage: dirs [-clpv] [+N] [-N]",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "st=2",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 1: dirs: -q: invalid number~dirs: usage: dirs [-clpv] [+N] [-N]",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
         "Stdout": "st=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 0: dirs: -q: invalid number~dirs: usage: dirs [-clpv] [+N] [-N]",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "dash": {
         "Stdout": "st=127",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: 1: dirs: not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
         "Stdout": "st=127",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: dirs: not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
         "Stdout": "st=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e:dirs:1: bad option: -q",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -20358,42 +20358,42 @@
     "dirstack/popd-with-nothing-pushed": {
       "bash": {
         "Stdout": "st=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 1: popd: directory stack empty",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "st=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 1: popd: directory stack empty",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
         "Stdout": "st=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 0: popd: directory stack empty",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "dash": {
         "Stdout": "st=127",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: 1: popd: not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
         "Stdout": "st=127",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: popd: not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
         "Stdout": "st=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e:popd:1: directory stack empty",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -20443,24 +20443,24 @@
         "TimedOut": false
       }
     },
-    "dirstack/rotate-past-the-end-of-the-stack": {
+    "dirstack/pushd-into-a-directory-that-is-not-there": {
       "bash": {
-        "Stdout": "st=1~/tmp /",
-        "Stderr": "",
+        "Stdout": "st=1~/",
+        "Stderr": "\u003cshell\u003e: line 1: pushd: /no/such-xyz: No such file or directory",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "st=1~/tmp /",
-        "Stderr": "",
+        "Stdout": "st=1~/",
+        "Stderr": "\u003cshell\u003e: line 1: pushd: /no/such-xyz: No such file or directory",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "st=1~/tmp /",
-        "Stderr": "",
+        "Stdout": "st=1~/",
+        "Stderr": "\u003cshell\u003e: line 0: pushd: /no/such-xyz: No such file or directory",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -20480,8 +20480,52 @@
         "TimedOut": false
       },
       "zsh": {
+        "Stdout": "st=1~/",
+        "Stderr": "\u003cshell\u003e:pushd:1: no such file or directory: /no/such-xyz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/rotate-past-the-end-of-the-stack": {
+      "bash": {
         "Stdout": "st=1~/tmp /",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 1: pushd: +9: directory stack index out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~/tmp /",
+        "Stderr": "\u003cshell\u003e: line 1: pushd: +9: directory stack index out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~/tmp /",
+        "Stderr": "\u003cshell\u003e: line 0: pushd: +9: directory stack index out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: dirs: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: pushd: not found~\u003cshell\u003e: dirs: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~/tmp /",
+        "Stderr": "\u003cshell\u003e:pushd:1: no such entry in dir stack",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -20578,42 +20622,42 @@
     "dirstack/rotate-with-nothing-pushed": {
       "bash": {
         "Stdout": "st=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 1: pushd: directory stack empty",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "st=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 1: pushd: directory stack empty",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
         "Stdout": "st=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: line 0: pushd: directory stack empty",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "dash": {
         "Stdout": "st=127",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
         "Stdout": "st=127",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e: pushd: not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
         "Stdout": "st=1",
-        "Stderr": "",
+        "Stderr": "\u003cshell\u003e:pushd:1: no such entry in dir stack",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

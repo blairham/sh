@@ -585,6 +585,30 @@ func TestThePreludeIsInstalledBeforeTheScript(t *testing.T) {
 	}
 }
 
+// TestThePreludeReachesTheLocationThroughTheFrontEnd is the wiring half of
+// #603, and it is here rather than in interp because there is nothing else it
+// could be about: interp knows how a prelude function speaks, and the front
+// end is the only thing that tells it a prelude is what it is reading.
+//
+// Without the marking the seam is unreachable and the refusal comes out bare,
+// which is what a mutation of driver.Shell.source showed no other test could
+// see. The line is compared whole: the location is the assertion.
+func TestThePreludeReachesTheLocationThroughTheFrontEnd(t *testing.T) {
+	sh := shell()
+	sh.Diagnostics.Location = interp.LocationLineWord
+	sh.Prelude = "stack() {\n\tdiagnose \"nothing to pop\"\n\treturn 1\n}\n"
+
+	path := writeScript(t, "true\nstack\n")
+	_, errs, code := runArgs(t, sh, "testsh", path)
+	if code != 1 {
+		t.Fatalf("status %d, stderr %q, want the function's own 1", code, errs)
+	}
+	want := path + ": line 2: stack: nothing to pop\n"
+	if errs != want {
+		t.Errorf("stderr = %q, want %q", errs, want)
+	}
+}
+
 // TestABrokenPreludeIsTheDialectsFaultNotTheScripts keeps the two apart. A
 // prelude that fails means the dialect is broken, and reporting it as though
 // the script had failed would send someone to debug the wrong file.

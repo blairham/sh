@@ -55,6 +55,11 @@ type Preset struct {
 	Semantics   func() interp.Semantics
 	Diagnostics func() interp.Diagnostics
 	Apply       func(*interp.Runner)
+
+	// Prelude is the dialect written as shell, for the cases that are about
+	// what it defines. A function value like the rest, and read only by
+	// [Preset.CombinedWithPrelude].
+	Prelude func() string
 }
 
 // Base is what varies between one dialect test and the next. Everything a
@@ -120,6 +125,35 @@ func (p Preset) Combined(t testing.TB, b Base, src string) (out string, status i
 	var buf strings.Builder
 	b.Stdout, b.Stderr = &buf, &buf
 	r := p.Runner(b)
+	st, rerr := r.Run(context.Background(), f)
+	return buf.String(), st, rerr
+}
+
+// CombinedWithPrelude is [Preset.Combined] with the dialect's prelude installed
+// first, the way a front end installs it.
+//
+// Prepending Prelude() to the snippet is the other thing, and it is wrong for a
+// reason that only shows up in what the shell *says*: the functions then arrive
+// as the script's own, so they speak with no location in front of them and
+// cannot reach the seam that gives them one. A test written that way pins the
+// bare sentence and calls it the dialect's — which is how five corpus rows came
+// to be graded on status alone (#603).
+//
+// Two runs on one runner, which is exactly what driver.Shell does: the prelude
+// is not a special entry point, and the script's own line numbering starts
+// again at one because the prelude was never part of its text.
+func (p Preset) CombinedWithPrelude(t testing.TB, b Base, src string) (out string, status int, err error) {
+	t.Helper()
+	pre := p.Parse(t, p.Prelude())
+	f := p.Parse(t, src)
+	var buf strings.Builder
+	b.Stdout, b.Stderr = &buf, &buf
+	r := p.Runner(b)
+	r.SourcingPrelude(true)
+	if _, perr := r.Run(context.Background(), pre); perr != nil {
+		t.Fatalf("prelude: %v", perr)
+	}
+	r.SourcingPrelude(false)
 	st, rerr := r.Run(context.Background(), f)
 	return buf.String(), st, rerr
 }

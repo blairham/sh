@@ -114,7 +114,12 @@ core, not forked from it — and there are exactly three ways to do that:
 3. **Source a prelude.** Everything else. Functions shadow builtins and
    external commands alike, so a dialect can define, replace or wrap
    anything the core provides without touching it — portably, testably, and
-   without any way to break the substrate.
+   without any way to break the substrate. A function it defines *is* the
+   shell: what it reports is located where the script called it and named
+   after it, and `diagnose` is how it raises a complaint of its own. See
+   `interp/prelude.go` — before that, a prelude builtin's refusals were
+   silently mislabeled, and a test that pasted the prelude on the front of
+   its snippet could not see it (#603).
 
 `interp/extend_test.go` builds a miniature dialect with all three, as a
 working example rather than as prose.

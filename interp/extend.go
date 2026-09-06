@@ -47,6 +47,10 @@ type Builtin func(r *Runner, ctx context.Context, args []string) int
 // implementation of this language, can be tested with any shell, and cannot
 // break the substrate. Reach for Go when shell genuinely cannot express the
 // thing, and not before.
+//
+// Diagnostics used to be one of those things and are not any more: a function
+// the prelude defines speaks for the shell, so its refusals carry the location
+// and the name a builtin's carry, and `diagnose` writes one. See prelude.go.
 func (r *Runner) Register(name string, fn Builtin) {
 	if r.custom == nil {
 		r.custom = map[string]Builtin{}
@@ -92,6 +96,12 @@ func (r *Runner) lookupBuiltin(name string) (Builtin, bool) {
 	if fn, ok := r.custom[name]; ok {
 		// A nil entry is an explicit removal rather than a missing one.
 		return fn, fn != nil
+	}
+	if name == diagnoseCommand && r.speaker != "" {
+		// The prelude's diagnostics seam, and only there: a script running
+		// the word gets whatever the dialect it is written for would give
+		// it, which is a command that was not found. See prelude.go.
+		return biDiagnose, true
 	}
 	fn, ok := builtins[name]
 	return fn, ok

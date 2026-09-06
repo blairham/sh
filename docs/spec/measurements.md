@@ -3283,6 +3283,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/a-b-escape-splits-esc-from-capital-esc` | ` 61 5c 65 5a 3a 61 5c 45 5a ` | ` 61 1b 5a 3a 61 1b 5a ` | ` 61 1b 5a 3a 61 1b 5a ` | ` 61 1b 5a 3a 61 1b 5a ` | ` 61 5c 65 5a 3a 61 1b 5a ` | ` 61 1b 5a 3a 61 5c 45 5a ` |
 | `printf/a-b-escape-hex-with-no-digits` | ` 61 5c 78 5a ` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 0: printf: missing hex digit for \x` | ` 61 5c 78 5a ` | ` 61 00 5a ` |
 | `printf/backslash-c-in-a-b-escape-always-stops` | ` 61 ` | ` 61 ` | ` 61 ` | ` 61 ` | ` 61 ` | ` 61 ` |
+| `printf/a-b-escape-a-stop-cut-short-still-fills-its-field` | `[    a[a` | `[    a[a` | `[    a[a` | `[    a[a` | `[a[ab` | `[    a[a` |
+| `printf/a-b-escape-a-field-with-nothing-stopping-it` | `[   ab][a]` | `[   ab][a]` | `[   ab][a]` | `[   ab][a]` | `[   ab][a]` | `[   ab][a]` |
 | `printf/backslash-c-in-a-b-escape-ends-the-whole-printf` | `[aEND` | `[aEND` | `[aEND` | `[aEND` | `[aEND` | `[aEND` |
 | `printf/an-octal-escape-is-a-byte-and-not-a-code-point` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
 | `printf/a-quoted-escape-used-as-a-format` | ` 24 61 5c 78 63 30 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
@@ -3475,6 +3477,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `printf/backslash-c-in-a-b-escape-always-stops` — the one place the two tables converge where the format's diverges: \c ends the output in all six here, where the same two characters in a format are literal in bash and dash, control-X in ksh93 and a full stop in zsh
   ```sh
   printf '%b' 'a\cbZ' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-b-escape-a-stop-cut-short-still-fills-its-field` — what a `\c` leaves goes through the conversion's field like any other text in five of the six — padded to the width, cut to the precision — where ksh93 alone writes it as it stands. A property of the *stop*: with nothing stopping it that shell pads and truncates like the rest, which `printf/a-b-escape-a-field-with-nothing-stopping-it` is here to show
+  ```sh
+  printf '[%5b]' 'a\cb'; printf '[%.1b]' 'ab\cc'
+  ```
+- `printf/a-b-escape-a-field-with-nothing-stopping-it` — the control for the row above, and unanimous: a `%b` with no `\c` in it is padded and truncated by every shell in the panel. Without this row the other one reads as `ksh93 has no field for %b`, which is not what it does
+  ```sh
+  printf '[%5b][%.1b]' 'ab' 'abc'
   ```
 - `printf/backslash-c-in-a-b-escape-ends-the-whole-printf` — the stop is not confined to the conversion that read it: the format is abandoned where it stands, the operands after it go unused, and the reused format does not run again — unanimous, and the half of \c that a case reading only one conversion cannot see
   ```sh

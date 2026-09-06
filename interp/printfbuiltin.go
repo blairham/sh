@@ -253,12 +253,17 @@ func (r *Runner) printfVerb(spec string, verb byte, timeFmt string, next func() 
 		//
 		// A `\c` in the argument ends the whole `printf` and not only this
 		// conversion — `printf '[%b][%s]' 'a\cb' x` is `[a` in all six — so
-		// the flag is returned rather than dropped. Width and precision
-		// still apply to what was produced, which is five of the six: ksh93
-		// alone writes the partial text unpadded, and pads and truncates
-		// like everyone else when nothing stopped it.
+		// the flag is returned rather than dropped.
 		text, stop := r.expandBEscapes(arg)
-		return fmt.Sprintf(spec+"s", text), 0, stop
+		field := fmt.Sprintf(spec+"s", text)
+		if stop && field != text &&
+			!r.ask(r.sem().PrintfBStopIsPadded, "a `%b` a `\\c` cut short still going through its field") {
+			// ksh93 alone: what the stop left is written as it stands, width
+			// and precision and all. Asked only where the field would change
+			// the text, so a bare `printf '%b' 'a\cb'` needs no dialect.
+			return text, 0, true
+		}
+		return field, 0, stop
 	case 'c':
 		if arg == "" {
 			return "", 0, false

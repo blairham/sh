@@ -25,6 +25,7 @@ func printfSem() Semantics {
 	s.PrintfBEscEscape = No
 	s.PrintfBCapitalEscEscape = No
 	s.PrintfBOctalWithoutZero = No
+	s.PrintfBStopIsPadded = Yes
 	return s
 }
 
@@ -670,6 +671,9 @@ func TestPrintfBackslashCInABArgumentEndsTheWholePrintf(t *testing.T) {
 		{"the rest of the format", `printf '[%b][%s]' 'a\cb' x`, "[a"},
 		{"the format is not reused", `printf '[%b]' 'a\cb' yy`, "[a"},
 		{"a literal after the conversion", `printf '%b\n' 'a\cb'`, "a"},
+		// The field is PrintfBStopIsPadded's question and printfSem answers
+		// it Yes, which is five of the six; ksh93's No is
+		// TestPrintfBStopIsPaddedOrNot's.
 		{"width still applies to what was produced", `printf '[%5b]' 'a\cb'`, "[    a"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -678,5 +682,77 @@ func TestPrintfBackslashCInABArgumentEndsTheWholePrintf(t *testing.T) {
 				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
 			}
 		})
+	}
+}
+
+// What a `\c` leaves of a `%b` still goes through the conversion's field in
+// five of the six — the width, the precision and the left-justifying flag —
+// where ksh93 alone writes the partial text as it stands (#910).
+//
+// It is a property of the *stop*: with nothing stopping it every shell pads
+// and truncates, which the last two rows pin so the axis cannot be read as
+// "this shell has no field for `%b`".
+func TestPrintfBStopIsPaddedOrNot(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		padded Answer
+		src    string
+		want   string
+	}{
+		{"a width, padded", Yes, `printf '[%5b]' 'a\cb'`, "[    a"},
+		{"a width, not padded", No, `printf '[%5b]' 'a\cb'`, "[a"},
+		{"left-justified, padded", Yes, `printf '[%-5b]' 'a\cb'`, "[a    "},
+		{"left-justified, not padded", No, `printf '[%-5b]' 'a\cb'`, "[a"},
+		{"a precision, applied", Yes, `printf '[%.1b]' 'ab\cc'`, "[a"},
+		{"a precision, not applied", No, `printf '[%.1b]' 'ab\cc'`, "[ab"},
+		{"both, applied", Yes, `printf '[%5.1b]' 'ab\cc'`, "[    a"},
+		{"both, not applied", No, `printf '[%5.1b]' 'ab\cc'`, "[ab"},
+
+		// Nothing stopped these, so the field applies either way and the
+		// axis is not consulted at all.
+		{"a width with no stop, under yes", Yes, `printf '[%5b]' 'ab'`, "[   ab]"},
+		{"a width with no stop, under no", No, `printf '[%5b]' 'ab'`, "[   ab]"},
+		{"a precision with no stop, under no", No, `printf '[%.1b]' 'abc'`, "[a]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfBStopIsPadded = tc.padded
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The axis is asked only where a `\c` stopped a `%b` *and* the field would
+// change the text, so an ordinary stop with no field needs no dialect.
+func TestPrintfBStopPaddingIsAskedOnlyWhenItMatters(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a bare %b that stops", `printf '[%b]' 'a\cb'`, "[a"},
+		{"a width the text already fills", `printf '[%1b]' 'a\cb'`, "[a"},
+		{"a precision the text is already under", `printf '[%.5b]' 'a\cb'`, "[a"},
+		{"a %b with no stop at all", `printf '[%5b]' 'ab'`, "[   ab]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfBStopIsPadded = Unspecified
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0 with nothing asked", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// And it is refused by name where it does matter and no dialect answered.
+func TestPrintfBStopPaddingUnansweredIsRefused(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfBStopIsPadded = Unspecified
+	out, st := run(t, `printf '[%5b]' 'a\cb'`, func(r *Runner) { r.Semantics = &sem })
+	want := "sh: a `%b` a `\\c` cut short still going through its field: " +
+		"the shells disagree here and no dialect was chosen\n[a"
+	if out != want || st != 2 {
+		t.Errorf("got %q status %d, want %q and 2", out, st, want)
 	}
 }

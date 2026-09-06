@@ -1527,6 +1527,16 @@ var Corpus = []Case{
 		Why:     "the one place the two tables converge where the format's diverges: \\c ends the output in all six here, where the same two characters in a format are literal in bash and dash, control-X in ksh93 and a full stop in zsh",
 	},
 	{
+		ID: "printf/a-b-escape-a-stop-cut-short-still-fills-its-field", Category: "printf",
+		Snippet: `printf '[%5b]' 'a\cb'; printf '[%.1b]' 'ab\cc'`,
+		Why:     "what a `\\c` leaves goes through the conversion's field like any other text in five of the six — padded to the width, cut to the precision — where ksh93 alone writes it as it stands. A property of the *stop*: with nothing stopping it that shell pads and truncates like the rest, which `printf/a-b-escape-a-field-with-nothing-stopping-it` is here to show",
+	},
+	{
+		ID: "printf/a-b-escape-a-field-with-nothing-stopping-it", Category: "printf",
+		Snippet: `printf '[%5b][%.1b]' 'ab' 'abc'`,
+		Why:     "the control for the row above, and unanimous: a `%b` with no `\\c` in it is padded and truncated by every shell in the panel. Without this row the other one reads as `ksh93 has no field for %b`, which is not what it does",
+	},
+	{
 		ID: "printf/backslash-c-in-a-b-escape-ends-the-whole-printf", Category: "printf",
 		Snippet: `printf '[%b][%s]' 'a\cb' x; echo END`,
 		Why:     "the stop is not confined to the conversion that read it: the format is abandoned where it stands, the operands after it go unused, and the reused format does not run again — unanimous, and the half of \\c that a case reading only one conversion cannot see",

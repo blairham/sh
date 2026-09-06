@@ -470,3 +470,17 @@ func TestEchoTakesNeitherSpellingOfTheEscapeCharacter(t *testing.T) {
 		t.Errorf("said %q status %d, want both letters as written and the -e printed", out, st)
 	}
 }
+
+// The field applies to what a `\c` left here too (#910).
+func TestPrintfBStopIsPadded(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf '[%5b]' 'a\cb'`, "[    a"},
+		{`printf '[%.1b]' 'ab\cc'`, "[a"},
+		{`printf '[%5b]' 'ab'`, "[   ab]"},
+	} {
+		if out, st := runDash(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
+			t.Errorf("%s: said %q status %d, want %q and 0", tc.src, out, st, tc.want)
+		}
+	}
+}

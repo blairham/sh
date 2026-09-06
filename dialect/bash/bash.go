@@ -338,6 +338,9 @@ func Semantics() interp.Semantics {
 	// it. Not this shell's answer for an `echo` argument, where `\101` is
 	// four characters — the two sites are two tables.
 	s.PrintfBOctalWithoutZero = interp.Yes
+	// What a `\c` left goes through the conversion's field like any other
+	// text: `printf '[%5b]' 'a\cb'` is `[    a`.
+	s.PrintfBStopIsPadded = interp.Yes
 	// `%zX`, `%ld`, `%jd` and any run of the letters, all of them read and
 	// thrown away: `%hhd` with 300 is 300.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC99

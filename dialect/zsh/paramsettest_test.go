@@ -75,6 +75,14 @@ func TestTheSetTestFlagDoesNotTripNounset(t *testing.T) {
 	if out != `[0][1][alive]` || st != 0 {
 		t.Errorf("under set -u = %q (status %d), want `[0][1][alive]` at 0", out, st)
 	}
+	// And where a single word must result rather than a list — a quoted
+	// span, an arithmetic operand, a pattern — which is a second path
+	// through the expansion and had the check in front of it too.
+	out, st = runZsh(t, dir,
+		`set -u; q="${+NOPE}"; a=$(( ${+NOPE} )); case x in ${+NOPE}) ;; esac; printf "[%s][%s][alive]" "$q" "$a"`)
+	if out != `[0][0][alive]` || st != 0 {
+		t.Errorf("as a single word under set -u = %q (status %d), want `[0][0][alive]` at 0", out, st)
+	}
 	// Through the flag group as well, where the check has a second home and
 	// the answer has to come first there too: `(P)` resolves to a name that
 	// is not set, and asking about it is still asking.

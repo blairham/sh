@@ -96,13 +96,17 @@ func TestARealTerminalIsOne(t *testing.T) {
 
 // Asking does not change the file.
 //
-// `os.File.Fd` detaches a file from the runtime's poller and leaves it in
-// blocking mode for good, which is a real change to make to a pipe merely to
-// ask it a question it is going to answer no to. The borrow through SyscallConn
-// gives the number back.
+// A pipe that can still take a read deadline afterwards, which is the property
+// a descriptor detached from the runtime's poller loses.
 //
-// Measured on the thing that would break: a pipe read with a deadline, which is
-// only possible while the runtime still owns the descriptor.
+// **This no longer distinguishes the two ways of asking, and that is worth
+// knowing.** `os.File.Fd` used to detach the file; measured on the pinned
+// toolchain, go1.26.1, it does not, so this test passes for `Fd` too — a
+// mutation run found it surviving. The test is kept because the property it
+// asserts is one this package promises and a future toolchain could take back,
+// and because the reason for using SyscallConn is now the smaller one the
+// package comment states: the reference it holds for the length of the call,
+// which no test here can provoke without racing a Close on purpose.
 func TestAskingDoesNotDetachTheFile(t *testing.T) {
 	r, w, err := os.Pipe()
 	if err != nil {

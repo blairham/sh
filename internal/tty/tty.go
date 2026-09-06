@@ -50,11 +50,21 @@ import "os"
 
 // IsTerminal reports whether this open file is a terminal.
 //
-// The descriptor is borrowed rather than taken: `os.File.Fd` detaches the file
-// from the runtime's poller and leaves it in blocking mode for good, which is a
-// real change to make to a pipe merely to ask it a question it is going to
-// answer no to. `SyscallConn().Control` lends the number for the length of the
-// call and gives it back.
+// The descriptor is borrowed through SyscallConn rather than taken with Fd,
+// and the reason is not the one this code inherited. **The old reason has
+// expired**: `os.File.Fd` used to detach the file from the runtime's poller
+// and leave it in blocking mode for good, so asking a pipe a question it was
+// going to answer no to cost it its deadlines. Measured on the pinned
+// toolchain, go1.26.1, that is no longer true — a pipe still takes a
+// `SetReadDeadline` and still times out after `Fd` has been called on it. The
+// comment saying otherwise was written against an older Go and was carried
+// here from `repl` unexamined; a mutation run is what asked.
+//
+// The reason that has not expired is lifetime. `Control` holds a reference for
+// the length of the call, so a `Close` racing this cannot free the descriptor
+// number and let the ioctl land on whatever the kernel handed out next. `Fd`
+// gives a number and no such promise. That is a smaller claim than the old one
+// and it is the true one, so it is the one written down.
 func IsTerminal(f *os.File) bool {
 	if f == nil {
 		return false

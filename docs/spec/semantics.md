@@ -3619,23 +3619,42 @@ What was built, all through the extension seam — registered builtins in each
   Every zsh module is a set of named **features**, measured one module at a
   time with `zmodload -lF` after loading it: `+b:zparseopts` is a builtin,
   `+p:functions` a parameter, and `+c:`, `+f:` and `+a:` a condition, a
-  function and a math function. A module loads here exactly when this shell
-  already has every feature it names — the features being the ones it
-  implements anyway, under their own names — so the answer is mechanical
-  rather than a claim, and nothing is stubbed. `zsh/zutil` is refused today
-  because three of its four builtins are missing, and the day `zparseopts`,
-  `zformat` and `zregexparse` exist it will load with no change to the
-  builtin: the table says what the module *is* and the shell answers whether
-  it has it.
+  function and a math function. The table says what the module *is* and the
+  shell answers whether it has it, so the answer is mechanical rather than a
+  claim and nothing is stubbed.
+
+  **A module loads when everything it names is either implemented or refuses
+  by name on access, and nothing it names may read as empty when it is
+  absent.** That is one sentence about what a script is told, and it replaces
+  a first version that split on the kind of feature — builtins never held a
+  module shut, parameters always did. The reasoning was right and the wording
+  was not: what it was reaching for was never presence, it was **legibility**.
+
+  A missing builtin is `command not found: zregexparse` at the word that ran
+  it, so `zsh/zutil` loads with three of its four builtins and the fourth
+  refuses at its own call site. A missing parameter had no call site — a
+  `${#jobstates}` nobody implemented is `0` at status 0, a plausible answer to
+  a different question reaching the caller as data — so a module short of one
+  refused, and `zsh/parameter` stayed shut over twenty-eight parameters no
+  caller touched. A parameter can have a call site too, and now does:
+  `jobstates: parameter not implemented yet` at the expansion that read it,
+  with the command not run. Of that module's thirty-three, five are
+  implemented, ten are empty and right to be — nothing here can define a
+  global alias, disable a function or name a directory, so "none" is true —
+  and eighteen refuse.
+  A condition, a function and a math function have no call site of either
+  kind, so those still hold their module shut: `zsh/complete` is refused over
+  its four conditions and not over its two builtins.
 
   **Not a silent success**, which is the failure this builtin is most able to
   cause: a script told `zsh/zutil` loaded and then calling `zparseopts` fails
   several hundred lines later, in a function whose caller has gone, about a
   command nobody wrote. So a refusal names the module and the features it is
-  short of — `zformat, zparseopts and zregexparse are not implemented yet` —
-  up to six of them, beyond which the count speaks (`33 of its 33 features`),
-  because thirty-three parameter names on one line is not something a person
-  reads. The reason clause is the only part that is not zsh's: zsh's is a
+  short of — `after, between, prefix and suffix are not implemented yet` — up
+  to six of them, beyond which a count speaks instead, because thirty names on
+  one line is not something a person reads. Nothing in the table reaches that
+  count now that `zsh/parameter` loads; the rule is kept for the next large
+  module. The reason clause is the only part that is not zsh's: zsh's is a
   dlopen error naming the module directory of the running build, which is a
   fact about a machine rather than about a shell.
 

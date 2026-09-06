@@ -9148,8 +9148,9 @@ wait`,
 	// Each snippet loads the module first, because in zsh these parameters do
 	// not exist until it is loaded — and discards what that line says,
 	// because it is not what the row is about. This shell has the five from
-	// the start and its `zmodload zsh/parameter` still refuses over the
-	// twenty-eight it has not, which `zmodload/…` rows grade on their own.
+	// the start; since #1146 the module loads here too, over eighteen
+	// parameters that refuse by name and ten that are empty and right to be,
+	// which the two rows below grade on their own.
 	{
 		ID: "parameter/functions-is-a-view-of-the-function-table", Category: "variables",
 		Snippet: `zmodload zsh/parameter 2>/dev/null; echo "a=[${functions[g]:-ABSENT}] n=${#functions}"; g(){ :; }; echo "b=[${functions[g]:-ABSENT}] n=${#functions}"; unset -f g; echo "c=[${functions[g]:-ABSENT}] n=${#functions}"`,
@@ -9199,6 +9200,16 @@ wait`,
 		ID: "parameter/commands-is-a-view-of-the-path-search", Category: "variables",
 		Snippet: `zmodload zsh/parameter 2>/dev/null; echo "absent=[${commands[definitelynotacommand]:-ABSENT}]"; PATH=/bin; echo "a=[${commands[ls]:-ABSENT}]"; PATH=/nonexistent; echo "b=[${commands[ls]:-ABSENT}]"`,
 		Why:     "the association follows PATH, which is the property that makes it a view rather than a table filled in at startup: the same name resolves and then does not, in one shell, with nothing between the two reads but an assignment to PATH",
+	},
+	{
+		ID: "parameter/loading-the-module-is-silent-and-zero", Category: "variables",
+		Snippet: `zmodload zsh/parameter; echo "st=$?"; echo "n=${#functions}"`,
+		Why:     "the line a plugin manager writes second, and the one that decides whether the rest of the file runs at all. Silence and 0 in zsh. This shell answered 1 for four merges over twenty-eight parameters the caller never touches, so the row is what pins the agreement rather than the refusal",
+	},
+	{
+		ID: "parameter/a-parameter-of-the-module-nothing-here-provides", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; echo "n=${#jobstates} one=[${jobstates[x]}]"; echo "after=$?"`,
+		Why:     "**a recorded divergence, and the one this module's rule turns on.** zsh has the parameter and writes `n=0 one=[]`, which is the truth there — no jobs. This shell has not got it, and answering the same `0` would hand a caller an empty value for a question nobody answered, at status 0, in the spelling a plugin manager writes most (`${p[k]}` reaches no unset check at all). So it refuses by name at the expansion instead, and the row records the difference rather than leaving it to be discovered",
 	},
 	// The length of a one-element array, which is where `${#functions}` with
 	// one function defined lands and where this implementation was wrong.

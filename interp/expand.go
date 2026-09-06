@@ -560,6 +560,13 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		// shell it claims to be calls it a bad substitution.
 		return nil, false
 	}
+	if r.refuseAbsentParameter(s.Param) {
+		// Before every shape below, because the shape that loses the read is
+		// the subscript one: `${jobstates[x]}` is answered here with no
+		// fields at all and never reaches the scalar path, so a test placed
+		// where a value is fetched never sees it. See absentparam.go.
+		return nil, true
+	}
 	// A flag group changes what the whole expansion yields — how many
 	// fields, joined with what — so a node that carries one is answered by
 	// its own pipeline, before any of the shapes below are considered.
@@ -1268,6 +1275,13 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	}
 	if e.Bad {
 		r.reportBadSubstitution(e)
+		return ""
+	}
+	if r.refuseAbsentParameter(e) {
+		// A parameter a module of this shell's names and this shell has not
+		// got. Refused by name rather than expanded to nothing, and refused
+		// *here* rather than where a value would be fetched — see
+		// absentparam.go for why the fetch is the wrong place.
 		return ""
 	}
 	if e.HasFlags {

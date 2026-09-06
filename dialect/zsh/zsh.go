@@ -1159,8 +1159,9 @@ func Apply(r *interp.Runner) {
 	// running the real one: an option parser for shell functions, and a
 	// string formatter. `zregexparse`, the fourth, is a completion-system
 	// internal the manual describes in one sentence and is deliberately
-	// absent — so `zmodload zsh/zutil` still refuses, naming it alone. See
-	// zparseopts.go and zformat.go.
+	// absent — and `zmodload zsh/zutil` loads anyway, because a missing
+	// builtin refuses by name at the word that runs it. See zparseopts.go,
+	// zformat.go and the rule at the top of zmodload.go.
 	registerZparseopts(r)
 	registerZformat(r)
 	// And the line editor's key table, which a real rc file also reaches for.

@@ -461,6 +461,15 @@ type Runner struct {
 	// is a message to whatever produces it rather than a value of its own.
 	assigned map[string]string
 
+	// absentParams are the parameters a dialect's module *names* and this
+	// shell has not got, to the sentence a read of one is refused with.
+	//
+	// The fourth of the produced-parameter seams and the only one that
+	// produces nothing: the three above answer a read, and this one refuses
+	// it by name so that an absent parameter cannot read as empty. A
+	// dialect fills it in through SetAbsentParameter — see absentparam.go.
+	absentParams map[string]string
+
 	// started is when this runner was made, which is what `SECONDS` counts
 	// from in the dialects that have it.
 	started time.Time

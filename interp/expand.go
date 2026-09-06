@@ -713,40 +713,56 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy) (text string, split b
 		}
 		return globEscape(path), false
 	case syntax.ArithSubst:
-		// An empty expression is zero in three of the four and an error in
-		// dash, which wants a primary and stops the script. Asked only when
-		// the text really is empty.
-		if strings.TrimSpace(s.Value) == "" &&
-			r.ask(r.sem().EmptyArithExpressionIsAnError, "an empty arithmetic expression being an error") {
-			r.diagf("%s\n", Wording(r.diag().ArithEmptyExpression,
-				`arithmetic expression: expecting primary: ""`))
-			r.expandErr = true
+		v, ok := r.arithSpanValue(s)
+		if !ok {
 			return "", false
 		}
-		if r.unspecified {
-			r.expandErr = true
-			return "", false
-		}
-		tree, perr := r.arithTree(s.Arith, s.Value)
-		if perr != nil {
-			// A failure to *read* the expression, which can only happen once
-			// it has been expanded — so it is reported here rather than by
-			// the parser, exactly as the shells report it.
-			r.diagf("%s\n", r.diag().ParseFailure(perr))
-			r.expandErr = true
-			return "", false
-		}
-		v, err := r.evalNum(tree)
-		if err != nil {
-			r.diagf("%s\n", r.arithFailure(s.Value, err))
-			// The command must not run: `echo $((1/0))` fails in every shell
-			// in the panel rather than echoing an empty string.
-			r.expandErr = true
-			return "", false
-		}
-		return r.expansionResult(r.formatNum(v), unquoted, sp.answer(r.sem().SplitParamExpansion), "splitting an unquoted arithmetic expansion")
+		return r.expansionResult(v, unquoted, sp.answer(r.sem().SplitParamExpansion), "splitting an unquoted arithmetic expansion")
 	}
 	return "", false
+}
+
+// arithSpanValue evaluates an arithmetic substitution and returns its text,
+// reporting whether it produced one at all. A false means the expansion has
+// already failed and said so, and the command must not run.
+//
+// It is a function of its own because a pattern operand needs the same value —
+// `${v#$((1+1))}` strips a `2` in every shell in the panel — and the failures
+// below have to be reported identically wherever the expression stands rather
+// than once here and approximately somewhere else.
+func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
+	// An empty expression is zero in three of the four and an error in
+	// dash, which wants a primary and stops the script. Asked only when
+	// the text really is empty.
+	if strings.TrimSpace(s.Value) == "" &&
+		r.ask(r.sem().EmptyArithExpressionIsAnError, "an empty arithmetic expression being an error") {
+		r.diagf("%s\n", Wording(r.diag().ArithEmptyExpression,
+			`arithmetic expression: expecting primary: ""`))
+		r.expandErr = true
+		return "", false
+	}
+	if r.unspecified {
+		r.expandErr = true
+		return "", false
+	}
+	tree, perr := r.arithTree(s.Arith, s.Value)
+	if perr != nil {
+		// A failure to *read* the expression, which can only happen once
+		// it has been expanded — so it is reported here rather than by
+		// the parser, exactly as the shells report it.
+		r.diagf("%s\n", r.diag().ParseFailure(perr))
+		r.expandErr = true
+		return "", false
+	}
+	v, err := r.evalNum(tree)
+	if err != nil {
+		r.diagf("%s\n", r.arithFailure(s.Value, err))
+		// The command must not run: `echo $((1/0))` fails in every shell
+		// in the panel rather than echoing an empty string.
+		r.expandErr = true
+		return "", false
+	}
+	return r.formatNum(v), true
 }
 
 // expansionResult applies the two axes that govern what happens to the result

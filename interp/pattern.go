@@ -9,52 +9,125 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
-// patternOf renders a word as a pattern, escaping the parts that were quoted.
+// patternMeta is the set of characters that mean something in a pattern, and
+// so the set escaping has any effect on. Escaping is what carries "this text
+// was quoted, match it literally" into the matcher; a string holding none of
+// these escapes to itself.
+const patternMeta = `*?[\()`
+
+// escapePatternMeta marks every metacharacter in text as ordinary.
+//
+// The parentheses are in the set because they are metacharacters where the
+// dialect reads groups: without escaping them a `(b)` arriving from a variable
+// became a group in the shell that does not re-read an expansion as a pattern,
+// so `case b in $p` matched.
+//
+// They are escaped even where they are *not* metacharacters, and that is not
+// an oversight: an escaped ordinary character is that character, so the two
+// spellings match the same text and no test could tell a guard here from its
+// absence.
+func escapePatternMeta(text string) string {
+	if !strings.ContainsAny(text, patternMeta) {
+		return text
+	}
+	var b strings.Builder
+	for i := 0; i < len(text); i++ {
+		if strings.IndexByte(patternMeta, text[i]) >= 0 {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(text[i])
+	}
+	return b.String()
+}
+
+// patternOf renders a word as a pattern, expanding it and escaping the parts
+// that were quoted.
 //
 // docs/spec/grammar/patterns.md: quoting decides whether text is a pattern at
 // all. `$p` matches as a pattern where `"$p"` matches as a literal, so the
 // matcher cannot be handed a plain string — it has to be told which characters
 // were quoted, and escaping them here is how that is carried.
+//
+// **A pattern operand is expanded like any other word.** It expanded only its
+// parameters for a while, and every other substitution in one reached the
+// matcher as its own source text: `v=abcd; echo ${v#$(echo ab)}` answered
+// `abcd` where all six panel shells answer `cd`, because the pattern was the
+// five characters `echo ab`. That is the failure mode this repository exists
+// to avoid — a plausible wrong string and no diagnostic — and it reached
+// `case` and `[[ ]]` too, which share this function (#882).
 func (r *Runner) patternOf(w *syntax.Word) string {
 	if w == nil {
 		return ""
 	}
 	var b strings.Builder
 	for _, s := range w.Spans {
-		text := s.Value
-		if s.Kind == syntax.ParamExp {
-			text = r.expandParam(s.Param)
-		}
-		// Unquoted literal text is a pattern, and so is the *result* of an
-		// unquoted expansion where the dialect says so — the same axis that
-		// decides whether `x="et*"; echo $x` globs, reaching into `[[ ]]`.
-		// Escaping it unconditionally made `p="a*"; [[ abc == $p ]]` fail.
-		if s.Quoting == syntax.Unquoted &&
-			(s.Kind == syntax.Literal ||
-				r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion")) {
+		text, live := r.patternSpan(s)
+		if live {
 			b.WriteString(text)
 			continue
 		}
-		// Quoted text, and the result of an expansion in a quoted context,
-		// are literal: every metacharacter in them is escaped.
-		//
-		// The parentheses are in the set because they are metacharacters
-		// where the dialect reads groups: without escaping them a `(b)`
-		// arriving from a variable became a group in the shell that does not
-		// re-read an expansion as a pattern, so `case b in $p` matched.
-		//
-		// They are escaped even where they are *not* metacharacters, and that
-		// is not an oversight: an escaped ordinary character is that
-		// character, so the two spellings match the same text and no test
-		// could tell a guard here from its absence.
-		for i := 0; i < len(text); i++ {
-			if strings.IndexByte(`*?[\()`, text[i]) >= 0 {
-				b.WriteByte('\\')
-			}
-			b.WriteByte(text[i])
-		}
+		// Quoted text, and the result of an expansion the dialect does not
+		// re-read as a pattern, are literal: every metacharacter is escaped.
+		b.WriteString(escapePatternMeta(text))
 	}
 	return b.String()
+}
+
+// patternSpan expands one span of a pattern, reporting whether the
+// metacharacters in what comes back are live — a pattern — or ordinary text.
+func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
+	switch s.Kind {
+	case syntax.ParamExp:
+		return r.expansionPattern(r.expandParam(s.Param), s.Quoting)
+	case syntax.CommandSubst:
+		return r.expansionPattern(r.commandSubst(r.ctx, s), s.Quoting)
+	case syntax.ArithSubst:
+		v, ok := r.arithSpanValue(s)
+		if !ok {
+			return "", false
+		}
+		return r.expansionPattern(v, s.Quoting)
+	case syntax.ProcSubstIn, syntax.ProcSubstOut:
+		// Deliberately not performed, and deliberately not a pattern.
+		//
+		// The panel does not agree about this position and there is no
+		// intersection to implement: in `${v#<(cmd)}` only bash runs the
+		// command, in a `case` arm bash and zsh both do and ksh93 and dash
+		// cannot parse it, and in `[[ ]]` bash runs it where zsh refuses the
+		// word outright. So the substitution is left as the text it was
+		// written as rather than answered one shell's way (#882).
+		return s.Value, false
+	}
+	if s.Quoting == syntax.DollarSingleQuoted {
+		// `$'\t'` is a tab, and the lexer keeps both bytes so the source text
+		// stays recoverable. Decoding it is this function's job as much as it
+		// is expandSpan's: without it `v=$'\tx'; echo ${v#$'\t'}` kept the tab,
+		// which is the same silent wrong answer wearing a different span.
+		return r.expandDollarSingle(s.Value), false
+	}
+	// Unquoted literal text is a pattern; quoted literal text is not.
+	return s.Value, s.Quoting == syntax.Unquoted
+}
+
+// expansionPattern applies the one axis that decides what the *result* of an
+// expansion is worth in a pattern: whether its metacharacters stay live.
+//
+// Quoted, they never are — that is unanimous. Unquoted, it is the same
+// question that decides whether `x="et*"; echo $x` globs, which is why the
+// answer is asked for rather than assumed; escaping unconditionally made
+// `p="a*"; [[ abc == $p ]]` fail.
+//
+// The axis is asked only where the two answers differ. A result holding no
+// metacharacter escapes to itself, so `pat=ab; echo ${v#$pat}` — which every
+// shell in the panel answers the same way — is answered rather than refused.
+func (r *Runner) expansionPattern(v string, q syntax.Quoting) (string, bool) {
+	if q != syntax.Unquoted {
+		return v, false
+	}
+	if !strings.ContainsAny(v, patternMeta) {
+		return v, true
+	}
+	return v, r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion")
 }
 
 // matchPattern reports whether pattern matches the whole of s.

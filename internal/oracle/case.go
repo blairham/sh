@@ -3543,6 +3543,66 @@ echo "st=$?"`,
 		Why:     "the neighbor of the `[@]` rows and a question of its own: bash and ksh93 join the elements on IFS and split the result, which is why they answer three fields, while zsh does not join an *unquoted* `[*]` at all and answers two — the same two `${a[@]}` gives it. Quoted, all three join. So whether an unquoted `[*]` joins is not decided by whether the shell splits, and no arrangement of the splitting answer produces zsh's reading here",
 	},
 	{
+		ID: "expansion/an-at-list-joined-where-nothing-splits", Category: "semantics axes",
+		Snippet: `IFS=-; a=(x y z); v=${a[@]}; echo "[$v]"`,
+		Why:     "the character a list is joined with when it reaches a context that keeps no fields, which had never been asked: zsh joins on the first character of IFS and bash and ksh93 rejoin on a hard space. Silent in the shape that is hardest to see — the default IFS begins with a space, so every script that leaves IFS alone gets the right answer and the one that sets it gets a wrong one at status 0. The `*` spelling is a different question and is core; this is the `@` one",
+	},
+	{
+		ID: "expansion/an-at-list-joined-in-a-here-document", Category: "semantics axes",
+		Snippet: "IFS=-; a=(x y z); cat <<E\n[${a[@]}]\nE",
+		Why:     "the same answer in a second context, which is what says it is one axis rather than one per context: a here-document body is lexed as double-quoted text and expanded span by span, so a whole-array subscript in one reaches the scalar view rather than the list path and was joined by a third copy of the same hard space. All four never-splitting contexts — an assignment's value, a `case` subject, a `[[ ]]` operand and this — answer alike within each shell",
+	},
+	{
+		ID: "expansion/an-at-list-joined-into-a-pattern-operand", Category: "semantics axes",
+		Snippet: `IFS=-; set -- x y; v="Zx-y"; echo "[${v%$@}]"`,
+		Why:     "the quietest face of the join, because the joined string is a *pattern* and what it joins with decides whether it matches at all: on IFS the operand is the suffix `x-y` and the trim leaves `Z`, on a space it is `x y` and the trim silently does nothing. A trim that ran and changed nothing is indistinguishable from a pattern that did not match, and the status is 0 either way",
+	},
+	{
+		ID: "expansion/a-star-list-joined-where-nothing-splits", Category: "expansion",
+		Snippet: `IFS=-; a=(x y z); v=${a[*]}; echo "[$v]"`,
+		Why:     "the other spelling, and core rather than the axis: bash 5.3, ksh93 and zsh all join on the first character of IFS here, and ours joined on a space in every dialect. bash 3.2 is the panel's one deviation and is recorded rather than modeled — it joins this on a space while joining `$*` on IFS in the same build, so it disagrees with itself, and no dialect here is graded against 3.2. The pair with the `[@]` row is what says the spelling decides which question is asked",
+	},
+	{
+		ID: "expansion/a-star-list-of-parameters-joined-where-nothing-splits", Category: "expansion",
+		Snippet: `IFS=-; set -- x y z; v=$*; echo "[$v]"`,
+		Why:     "the bare spelling of the same core answer, unanimous across the whole panel including dash and bash 3.2 — the row that says the star half needs no dialect. It was a hard space here in every dialect, so this was the one shape wrong in all four at once against a panel that agrees completely",
+	},
+	{
+		ID: "expansion/an-empty-ifs-joins-an-unsplit-list-with-nothing", Category: "expansion",
+		Snippet: `IFS=""; a=(x y); v=${a[*]}; echo "[$v]"`,
+		Why:     "an IFS that is set and empty joins with *nothing* rather than falling back to a space: `xy`, in bash 5.3, ksh93 and zsh alike. It is the guard that separates this question from whether an unquoted list is joined before it is split — that one must not be asked when there is nothing to join with, and this one must, because the join happens either way and joining with nothing is a real answer",
+	},
+	{
+		ID: "expansion/a-star-subscript-as-a-redirection-target", Category: "expansion",
+		Snippet: `IFS=-; a=(x y); : > ${a[*]}; ls`,
+		Why:     "the fourth place the join was a hard space, and the one where the answer becomes a *filename*: ksh93 writes `x-y` where we wrote `x y`, so a script's redirection created a different file from the one the shell would have. bash refuses the target as ambiguous and zsh writes to both names, so ksh93 is the only member that reaches the joined reading — which is exactly why nothing here had ever measured it",
+	},
+	{
+		ID: "expansion/a-conditional-assignment-keeps-the-arrays-fields", Category: "expansion",
+		Snippet: `a=("x y" z); set -- "${a[@]:=d}"; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "`:=` comes to the *parameter* when its test does not fire, and the parameter is the whole array — so it keeps its fields exactly as `${a[@]:-d}` does. Every panel member with arrays answers two fields; joining them gives one holding `x y z`, which is a plausible string at status 0 and the reason the count is printed. The element holding a separator is what makes the bug visible at all: on `(one two)` the unquoted spelling joins on IFS and the split takes the fields straight back out, so it was right by coincidence wherever splitting is on",
+	},
+	{
+		ID: "expansion/a-conditional-error-keeps-the-arrays-fields", Category: "expansion",
+		Snippet: `a=("x y" z); set -- "${a[@]:?e}"; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the other operator with the same two outcomes, and the same answer when the test does not fire. It is a separate row because the firing side is a *fatal* one: an implementation that answered `the parameter` for a fired `?` would keep these fields and never raise the error, which is the one direction where being wrong loses a diagnostic the script asked for rather than a field boundary",
+	},
+	{
+		ID: "expansion/a-conditional-assignment-under-a-star-subscript-still-joins", Category: "expansion",
+		Snippet: `IFS=-; a=("x y" z); set -- "${a[*]:=d}"; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the guard on the half that must not move: `[*]` is one field with the elements joined on the first character of IFS, and it stays so under an operator. The pair with the `[@]` row above is what says the fix belongs to the subscript rather than to the operator — a reading that simply kept the fields under every conditional would answer this one wrongly, and it is quiet either way because both answers are the same characters differently divided",
+	},
+	{
+		ID: "expansion/a-bare-array-name-with-a-conditional-assignment", Category: "expansion",
+		Snippet: `a=(one two); printf "[%s]" ${a:=d}; echo`,
+		Why:     "the same operator reached through a bare name, which follows from the rewrite rather than from a second rule: where the name is the list the elements come through, and where it is `${a[0]}` the first alone does. zsh answers two fields and bash and ksh93 one. It was one joined field in all three, so the two spellings disagreed with the shell in opposite directions at once",
+	},
+	{
+		ID: "expansion/a-bare-array-name-with-a-conditional-error", Category: "expansion",
+		Snippet: `a=(one two); printf "[%s]" ${a:?e}; echo`,
+		Why:     "the fourth conditional through the bare name, recorded beside the third because the two are answered by one test and a drifting copy of it would part them. The test does not fire on a set array, so nothing is fatal here and the row is about the fields — which is exactly the shape that returns a plausible answer with no complaint",
+	},
+	{
 		ID: "expansion/element-exclusion-without-a-flag-group", Category: "expansion",
 		Snippet: `a=(one two three); echo "[${a:#two}]"`,
 		Why:     "the same operator with no `(@)` in front and inside quotes, where the array joins to one string first: the pattern is then matched against `one two three` as a whole, matches nothing, and the value is left standing. Not a no-op by accident — `${a:#*}` on the same array is empty — and it is what says the operator asks about *elements*, of which a joined scalar has one. ksh93 answers `one` from the same characters, which is `${a#two}` against a scalar that is only the first element, so the two shells agree on neither the operator nor what `$a` names",

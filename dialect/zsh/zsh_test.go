@@ -123,6 +123,11 @@ func TestSemantics(t *testing.T) {
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.No},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.No},
+		// And the join this shell does perform: an unquoted `@` list
+		// reaching a context that keeps no fields joins on the first
+		// character of IFS, so `IFS=-; a=(x y z); v=${a[@]}` is `x-y-z`
+		// where bash and ksh93 give `x y z`.
+		{"UnsplitAtListJoinsOnIFS", s.UnsplitAtListJoinsOnIFS, interp.Yes},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.No},
 		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.No},
 		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.Yes},

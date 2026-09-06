@@ -181,7 +181,7 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 		r.expandingSpan = i
 		head := b.Len() == 0
 		if parts, ok := r.expandAt(s, splitNever, head); ok {
-			b.WriteString(strings.Join(parts, " "))
+			b.WriteString(r.joinUnsplit(s.Param, parts))
 			continue
 		}
 		text, _ := r.expandSpan(s, splitNever, head)
@@ -219,7 +219,11 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 	for _, s := range w.Spans {
 		head := b.Len() == 0
 		if parts, ok := r.expandAt(s, splitAlways, head); ok {
-			b.WriteString(strings.Join(parts, " "))
+			// The plain view is the one that keeps no fields, so it is the
+			// one the separator rule applies to. The fields view below is
+			// untouched: whether the target is read as fields at all is the
+			// redirection's own axis, and it is asked by the caller.
+			b.WriteString(r.joinUnsplit(s.Param, parts))
 			if len(parts) == 0 {
 				continue
 			}
@@ -345,7 +349,16 @@ func (r *Runner) paramSource(e *syntax.ParamExpr) (value string, set, subscript 
 			// nil rather than empty is what says the element was not there:
 			// an element holding "" is set, and `${a[0]:-d}` has to tell the
 			// two apart.
-			return strings.Join(elems, " "), elems != nil, true
+			//
+			// The separator is the same question the two word-level callers
+			// ask, and this is the third place that was answering it with a
+			// hard space. It is what a here-document body reaches: the body
+			// is lexed as double-quoted text and expanded span by span, so a
+			// whole-array subscript in one arrives here rather than at
+			// expandAt, and `IFS=-; a=(x y z); cat <<E` printed `x y z`
+			// where zsh prints `x-y-z`. A single element joins with nothing,
+			// so every `${a[0]}` is unaffected by construction.
+			return r.joinUnsplit(e, elems), elems != nil, true
 		}
 	}
 	// A special parameter supplies a *value*; it does not skip the operators.
@@ -358,20 +371,42 @@ func (r *Runner) paramSource(e *syntax.ParamExpr) (value string, set, subscript 
 	return value, set, false
 }
 
-// yieldsTheArray reports whether a `-` or `+` expansion came to the parameter
-// rather than to its word.
+// yieldsTheArray reports whether one of the four conditional expansions came
+// to the parameter rather than to its word.
 //
 // The mirror of substitutedWordFields, and needed for the same reason:
 // `"${a[@]-${a[@]}}"` on a set array is the *array*, and it keeps its fields
 // exactly as `"${a[@]}"` does. Without this it fell to the scalar path and
 // came back as one joined string.
+//
+// All four of `-`, `=`, `?` and `+` have the same two outcomes — the word or
+// the parameter — so all four belong here. `=` and `?` were missing, and both
+// silently joined: `"${a[@]:=d}"` and `"${a[@]:?e}"` on a two-element array
+// were one field holding `one two` where every shell with arrays gives two,
+// and the bare-name spellings followed them down. Nothing failed, because a
+// joined array is a plausible string; the field count is the only tell, which
+// is why the tests count fields rather than compare text.
+//
+// The direction differs by operator and that is the whole content of the
+// switch. `-`, `=` and `?` substitute their word exactly when the test fires,
+// so the parameter is what is left when it does not. `+` is the other way
+// round — it substitutes the word when the test does *not* fire — and a fired
+// `+` yields nothing rather than the word, which the array path answers with
+// no fields at all.
+//
+// `=` and `?` are only ever the parameter on the non-firing side, so their
+// side effects stay where they are: a fired `=` still assigns down the scalar
+// path and a fired `?` is still fatal there. Answering true for a fired `?`
+// would take the array path and never raise the error — silently returning
+// the array a script asked to be told was missing.
 func (r *Runner) yieldsTheArray(e *syntax.ParamExpr) bool {
-	if e.Op != syntax.ParamDefault && e.Op != syntax.ParamAlternate {
-		return false
+	switch e.Op {
+	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamError:
+		return !r.testFires(e)
+	case syntax.ParamAlternate:
+		return r.testFires(e)
 	}
-	fires := r.testFires(e)
-	return (e.Op == syntax.ParamDefault && !fires) ||
-		(e.Op == syntax.ParamAlternate && fires)
+	return false
 }
 
 // testFires reports whether the `-`/`+` test fires: unset, or unset-or-empty
@@ -761,6 +796,76 @@ func (r *Runner) elementFields(elems []string, sp splitPolicy, glob Answer) []st
 		return joined
 	}
 	return perElement
+}
+
+// unsplitJoinSeparator is the character a list expansion is joined with when
+// it reaches a context that keeps no fields — an assignment's value, a `case`
+// subject, a `[[ ]]` operand, a here-document body, a redirection's target.
+//
+// It exists because those callers were joining on a hard space, chosen before
+// there was a rule. Silent in the shape that is hardest to see: the default
+// IFS begins with a space, so every script that leaves IFS alone got the right
+// answer and the one that sets it got a wrong one at status 0.
+//
+// Two spellings and two different questions:
+//
+//   - `*` — `$*`, `${a[*]}`, and a range subscript, which joins on the same
+//     side of that line as the name it was written on. The first character of
+//     IFS in every graded dialect's shell, so no answer is needed. bash 3.2
+//     joins an unquoted `${a[*]}` on a space instead, which is the one
+//     deviation in the panel and is recorded rather than modeled: it is a
+//     version this repository grades nothing against, and the same build
+//     joins `$*` on IFS, so the shell disagrees with itself.
+//   - `@` — `$@` and `${a[@]}`, which is UnsplitAtListJoinsOnIFS. bash and
+//     ksh93 rejoin on a space where zsh and dash use IFS.
+//
+// The separator is decided from the *node* rather than from the fields,
+// because the two spellings produce identical fields and differ only in what
+// the caller is entitled to do with them. That is also why the join lives at
+// the callers and not inside expandAt: expandAt returns fields on purpose,
+// and it is the caller that has decided not to keep them.
+//
+// Asked only where the two readings differ, which for this question is not
+// the guard listCouldJoinDifferently uses. The join happens either way here
+// and only its character is in doubt, so an IFS that is set and *empty* is a
+// live answer rather than a reason to stay quiet — joining with nothing is
+// what zsh does, and `IFS=""; a=(x y); v=$a` is `xy` there against `x y` in
+// bash. What does make the readings coincide is a first character that is
+// already a space, and a list too short to use a separator at all.
+func (r *Runner) unsplitJoinSeparator(star bool, n int) string {
+	sep := ifsFirst(r.ifs())
+	if n < 2 || sep == " " {
+		// No separator is used, or IFS already begins with the space the
+		// other reading would have supplied. Either way there is nothing to
+		// ask about, and asking would make every `v=${a[@]}` under the
+		// default IFS demand a dialect.
+		return " "
+	}
+	if star {
+		return sep
+	}
+	if r.ask(r.sem().UnsplitAtListJoinsOnIFS,
+		"an unquoted `@` list joining on IFS where nothing is split") {
+		return sep
+	}
+	return " "
+}
+
+// starSpelled reports whether a node is the `*` half of the pair — the half
+// whose separator needs no dialect.
+//
+// A range subscript joins on the same side of the line as the *name* it was
+// written on, which is the rule subscriptJoinsElements already carries for the
+// quoted spelling. Asking it here rather than restating it is what keeps the
+// two from drifting.
+func (r *Runner) starSpelled(e *syntax.ParamExpr) bool {
+	return e != nil && (e.Name == "*" || r.subscriptJoinsElements(e))
+}
+
+// joinUnsplit is unsplitJoinSeparator applied, for the callers that hold both
+// the node and the fields.
+func (r *Runner) joinUnsplit(e *syntax.ParamExpr, parts []string) string {
+	return strings.Join(parts, r.unsplitJoinSeparator(r.starSpelled(e), len(parts)))
 }
 
 // listCouldJoinDifferently is whether joining the elements could reach a
@@ -2018,21 +2123,27 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 			return in, true
 		}
 		return r.Name, true
-	case "*":
-		// `$*` joins with the *first character* of IFS, not with a space.
-		sep := " "
-		if v, set := r.ifs(); set {
-			if v == "" {
-				sep = ""
-			} else {
-				sep = v[:1]
-			}
-		}
-		return strings.Join(r.Params, sep), true
-	case "@":
-		// Reached only where expandAt declined — inside another expansion's
-		// operand, say — where joining is the sensible answer.
-		return strings.Join(r.Params, " "), true
+	case "*", "@":
+		// Reached where expandAt declined and one string is what the context
+		// wants: a here-document body, which is lexed as double-quoted text
+		// and expanded span by span, and an operator's operand — the pattern
+		// in `${v%$@}`, say.
+		//
+		// Which character joins them is the same question the word-level
+		// callers ask, and it is asked in one place rather than reimplemented
+		// here. `$*` joins on the first character of IFS in every shell in
+		// the panel and needs no answer; `$@` is the axis, and this branch
+		// had it hardcoded to a space — so `IFS=-; set -- x y; v="Zx-y";
+		// echo ${v%$@}` trimmed nothing where zsh and dash trim to `Z`, and
+		// a here-document body printed `x y` where they print `x-y`.
+		// The spelling comes from the name rather than through starSpelled,
+		// which reads the subscript and so reaches expandWord — a chain this
+		// function must stay out of, because the arithmetic evaluator calls
+		// it while the builtin table is still being built and Go reports the
+		// result as an initialization cycle. The name is the whole answer
+		// here regardless: a subscripted `${*[1,2]}` is answered by the array
+		// path and only reaches this line when it was not an array at all.
+		return strings.Join(r.Params, r.unsplitJoinSeparator(e.Name == "*", len(r.Params))), true
 	}
 	if n, ok := atoi(e.Name); ok && n >= 1 {
 		if n <= len(r.Params) {

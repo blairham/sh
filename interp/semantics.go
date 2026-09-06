@@ -88,6 +88,37 @@ type Semantics struct {
 	// in every shell measured. Both are core.
 	UnquotedListJoinsOnIFS Answer
 
+	// UnsplitAtListJoinsOnIFS decides the character an unquoted list spelled
+	// `@` is joined with when it reaches a context that keeps no fields: the
+	// first character of IFS, or a hard space.
+	//
+	// True in zsh and dash; false in bash, bash 3.2, bash as `sh` and ksh93.
+	// Measured 2026-09-06 in the four contexts that never split — an
+	// assignment's value, a `case` subject, a `[[ ]]` operand and a
+	// here-document body — with `IFS=-` and a three-element list:
+	//
+	//	IFS=-; a=(x y z); v=${a[@]}   zsh x-y-z · bash, ksh93 x y z
+	//	IFS=-; set -- x y z; v=${@}   zsh, dash x-y-z · bash, ksh93 x y z
+	//
+	// All four contexts answer alike within each shell, which is what makes
+	// this one axis rather than one per context.
+	//
+	// The `*` spelling is **not** this question and must not reach it. `$*`,
+	// `${a[*]}` and a range subscript join on the first character of IFS in
+	// every graded dialect's shell, so that half is core — see
+	// Runner.unsplitJoinSeparator, which answers the star before it asks.
+	//
+	// Asked only at the disagreement, and the guard is not the one
+	// UnquotedListJoinsOnIFS uses. Here the join happens either way and only
+	// its character is in question, so an IFS that is *set and empty* is a
+	// live answer rather than a reason not to ask: `IFS=""; a=(x y); v=$a`
+	// is `xy` in zsh against `x y` in bash, and joining with nothing is
+	// exactly what zsh does. What does make the readings coincide is an IFS
+	// whose first character is already a space — which is every script that
+	// leaves IFS alone, and the reason this is silent — and a list of fewer
+	// than two elements, which uses no separator at all.
+	UnsplitAtListJoinsOnIFS Answer
+
 	// GlobExpansionResults matches the *result* of an expansion against the
 	// filesystem. False in zsh, where only a pattern written literally in the
 	// source is expanded. The same rule decides whether `[[ abc == $p ]]`
@@ -3284,7 +3315,12 @@ func PosixSemantics() Semantics {
 		// reading that takes the elements one at a time — and it is dash's,
 		// the shell in the panel that targets this text. bash's join is the
 		// departure from it.
-		UnquotedListJoinsOnIFS:                   No,
+		UnquotedListJoinsOnIFS: No,
+		// POSIX makes an unquoted `$@` in a context that does not split
+		// behave as `$*` does, which is the join on IFS; dash, the shell in
+		// the panel that targets this text, complies. bash and ksh93 are the
+		// departure.
+		UnsplitAtListJoinsOnIFS:                  Yes,
 		GlobExpansionResults:                     Yes,
 		GlobNoMatchIsError:                       No,
 		AssignmentPrefixPersistsOnSpecialBuiltin: Yes,

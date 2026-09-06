@@ -295,6 +295,12 @@ func Semantics() interp.Semantics {
 	// printf "[%s]" ${a[*]}` is `[x][y]` here, and with `shwordsplit` on,
 	// `a=("x y" z)` is `[x][y][z]` — neither of which a join can produce.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// And the join this shell *does* perform: an unquoted `@` list reaching
+	// a context that keeps no fields is joined on the first character of
+	// IFS, so `IFS=-; a=(x y z); v=${a[@]}` is `x-y-z` where bash and ksh93
+	// give `x y z`. With IFS set and empty it is `xy`, which is what says
+	// the separator is read from IFS rather than defaulted to a space.
+	s.UnsplitAtListJoinsOnIFS = interp.Yes
 	s.GlobExpansionResults = interp.No
 	s.GlobNoMatchIsError = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No

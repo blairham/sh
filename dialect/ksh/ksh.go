@@ -87,6 +87,11 @@ func Semantics() interp.Semantics {
 	// join: `IFS=:; set -- "x:" y; printf "[%s]" $@` is `[x][y]` here and
 	// `[x][][y]` in bash, which joins to `x::y` first.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// bash's answer on the other join, against its own on the one above:
+	// `IFS=-; a=(x y z); v=${a[@]}` is `x y z` here where zsh gives
+	// `x-y-z`. The two axes partition the panel differently, which is why
+	// neither can stand in for the other.
+	s.UnsplitAtListJoinsOnIFS = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD

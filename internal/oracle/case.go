@@ -3648,6 +3648,21 @@ echo "st=$?"`,
 		Why:     "the same operator with no `(@)` in front and inside quotes, where the array joins to one string first: the pattern is then matched against `one two three` as a whole, matches nothing, and the value is left standing. Not a no-op by accident — `${a:#*}` on the same array is empty — and it is what says the operator asks about *elements*, of which a joined scalar has one. ksh93 answers `one` from the same characters, which is `${a#two}` against a scalar that is only the first element, so the two shells agree on neither the operator nor what `$a` names",
 	},
 	{
+		ID: "expansion/a-colon-before-a-trim-is-a-third-reading", Category: "expansion",
+		Snippet: `v=hello; printf "[%s]" "${v:#hel*}" "${v:##hel*}" "${v:%lo}" "${v:%%l*}"; echo`,
+		Why:     "the three readings of the same six characters, in the one shell whose reading had no implementation behind it: ksh93 ignores the colon entirely, so all four of these are the plain trims and answer `lo`, ``, `hel` and `he`. zsh reads `:#` as an element exclusion and matches the pattern against the whole value, and bash refuses it as arithmetic with `#hel*` named as the offending token. Four operators in one row because the shortest-against-longest distinction has to survive the colon — a reading that dropped it and then re-scanned gets all four, and one that named them over somewhere else can lose the doubling",
+	},
+	{
+		ID: "expansion/a-colon-before-a-trim-reaches-the-array-forms", Category: "expansion",
+		Snippet: `a=(foo bar baz); printf "[%s]" "${a[@]:#ba*}"; echo`,
+		Why:     "the same node, so the per-element mapping under `[@]` comes for free: ksh93 trims each element and answers `foo r z`, which is exactly what `${a[@]#ba*}` does there. zsh drops the elements the pattern matches and answers `foo`, and the two are one field apart with no diagnostic either way. It is the row that says the colon is *ignored* rather than recorded — a node carrying a flag downstream would have had to be taught this separately",
+	},
+	{
+		ID: "expansion/a-colon-before-anything-but-a-trim", Category: "expansion",
+		Snippet: `v=hello; printf "[%s]" "${v:2}" "${v:2:2}" "${v:-d}"; echo`,
+		Why:     "the boundary of the previous two rows, and what stops the colon from meaning nothing at all: an offset is still an offset in ksh93, a second colon is still a length, and `:-` is still a default. Unanimous across the panel, so a grammar that swallowed every colon rather than the four trims would break the shapes every shell shares while fixing the one only ksh93 has",
+	},
+	{
 		ID: "expansion/element-exclusion-empty-pattern", Category: "expansion",
 		Snippet: `a=("" one); printf "[%s]" "${(@)a:#}"; echo`,
 		Why:     "an operator with nothing after it, which the whole-match rule makes meaningful rather than degenerate: the empty pattern matches only the empty string, so exactly the empty element goes. A reading that treated an absent pattern as `*` would empty the array, and one that treated it as no operator at all would leave it whole",

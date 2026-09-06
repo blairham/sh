@@ -586,6 +586,19 @@ func (p *Parser) scanParamOp(s string, e *ParamExpr) (ParamOp, string, bool) {
 	case p.dialect.ParamElementSelection && len(s) >= 2 && s[0] == ':' &&
 		strings.IndexByte("#|*", s[1]) >= 0:
 		return elementSelectOp(s[1]), s[2:], true
+	// The colon before a trim is ignored in one shell, so the operator is
+	// the trim it would have been without it. After the element-selection
+	// case above, which is the other reading of `:#`; no shell sets both,
+	// and the order makes the pair defined rather than accidental.
+	//
+	// Read by dropping the colon and scanning again rather than by naming
+	// the four operators here, so `##` against `#` and `%%` against `%` stay
+	// decided in one place. The recursion cannot run away: it is entered
+	// only when the next character is `#` or `%`, and both of those return
+	// on the following pass.
+	case p.dialect.ParamColonBeforeTrimIsIgnored && len(s) >= 2 &&
+		s[0] == ':' && (s[1] == '#' || s[1] == '%'):
+		return p.scanParamOp(s[1:], e)
 	case s[0] == ':':
 		if !p.dialect.ParamSubstring {
 			return 0, "", false

@@ -57,6 +57,17 @@ type Lexer struct {
 	// exactly the same reason.
 	inPattern bool
 
+	// inArgument is set while the token being read stands where an
+	// *argument* may, rather than where a command may begin. One dialect
+	// reads a `(` there as part of the word — a pattern with a list of glob
+	// qualifiers — and command position is the whole of the difference:
+	// `( x )` written first is a subshell and written after a word is one
+	// argument. The lexer cannot tell which on its own, because `(` is in
+	// the operator table and a token beginning with one never reaches the
+	// word scanner, so the parser sets this before the token is read.
+	// Exactly the shape inPattern has, for exactly the same reason.
+	inArgument bool
+
 	// pending holds here-documents whose bodies have not been read yet.
 	//
 	// A body starts after the *next newline*, not after the operator — the
@@ -246,6 +257,16 @@ func (l *Lexer) Next() Token {
 	// starts `((`, and `[[ $k == ((a|b)|x) ]]` is a pattern rather than the
 	// one place in the grammar where two parentheses are one token.
 	if l.inPattern && l.peek() == '(' && l.opensPatternGroup() {
+		return l.scanWord(start)
+	}
+
+	// A `(` where an argument may stand belongs to the word in the dialect
+	// that reads glob qualifiers. It has to be seen before the operator
+	// table, which would otherwise take it — and before the arithmetic
+	// command below, because `echo ((1))` is one word there and not an
+	// expression: measured, `no matches found: ((1))`.
+	if l.dialect.GlobQualifiers && l.inArgument && l.peek() == '(' &&
+		l.opensPatternGroup() {
 		return l.scanWord(start)
 	}
 
@@ -675,6 +696,40 @@ func (l *Lexer) scanPatternGroup() string {
 	return l.src[start:l.off]
 }
 
+// scanArgumentGroup reads a `( … )` that stands for a whole word, stopping
+// where an operator ends the word rather than at the closing parenthesis.
+//
+// It is scanPatternGroup with one clause added, and the clause is measured:
+// `;`, `<`, `>` and `&` end the word where they appear, so `echo ( a <b )`
+// leaves the `)` to the parser and is `parse error near `)”. A `|` does not,
+// because a pattern group may hold an alternation — `echo ( a|b )` is one
+// word, which the shell then reports as matching nothing.
+//
+// Unterminated input is scanPatternGroup's business rather than an operator's,
+// so it delegates the whole scan when nothing stops it.
+func (l *Lexer) scanArgumentGroup() string {
+	start := l.off
+	depth := 0
+	for !l.eof() {
+		c := l.peek()
+		if depth > 0 && strings.IndexByte(";<>&", c) >= 0 {
+			return l.src[start:l.off]
+		}
+		l.advance()
+		switch c {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return l.src[start:l.off]
+			}
+		}
+	}
+	l.off = start
+	return l.scanPatternGroup()
+}
+
 // scanWord reads a word as a sequence of spans, one per run of uniform
 // quoting. The spans are the point: a"b c"d is one word of three spans, and
 // only the unquoted ones are subject to splitting and globbing later.
@@ -743,10 +798,23 @@ func (l *Lexer) scanWord(start Pos) Token {
 
 		case c == '(' && l.opensPatternGroup():
 			// A parenthesised group belongs to the word rather than ending
-			// it. Only mid-word: a leading `(` opens a subshell, or is the
-			// paren a `case` arm may carry, and neither is a pattern.
+			// it. Mid-word everywhere, and at the *start* of one only where
+			// an argument may stand in the dialect that reads qualifiers:
+			// elsewhere a leading `(` opens a subshell, or is the paren a
+			// `case` arm may carry, and neither is a pattern.
 			if lit.Len() == 0 {
 				litPos = l.pos()
+			}
+			if lit.Len() == 0 && l.inArgument {
+				// The group that stands for the whole word ends the word at
+				// a shell operator rather than swallowing it, which is
+				// measured: `echo ( a <b )` is a parse error at the `)`
+				// there, because the `<` ended the word and the `)` was
+				// left with nowhere to go. Nothing more is needed to stop
+				// the word — the loop's own end-of-word test answers for
+				// the operator on the next pass.
+				lit.WriteString(l.scanArgumentGroup())
+				continue
 			}
 			lit.WriteString(l.scanPatternGroup())
 

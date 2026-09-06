@@ -290,6 +290,105 @@ Measured: `pat/a-numeric-range-is-any-number`,
 `pat/a-numeric-range-in-a-case-arm`,
 `pat/a-numeric-range-against-the-filesystem`.
 
+## Glob qualifiers are one dialect's, and they reach the parser
+
+    *(.)     the regular files among the matches
+    *(/)     the directories
+    *(@)     the symbolic links, by their own type
+    *(^.)    `^` turns the sense of what follows
+    *(.,/)   `,` is an or; two qualifiers side by side are an and
+    *(N)     a miss is no error and the word is deleted
+    *(D)     the hidden names are matched too
+
+zsh alone has them. The list narrows what the pattern in front of it
+matched, so it is a **filter over the match set** rather than anything
+the matcher does character by character. Measured 2026-09-06 on zsh
+5.9.2 against a directory holding `d1/`, `f1`, `f2`, a link `l1` and a
+hidden `.dot`.
+
+**The disambiguation is exactly one character.** A group holding a `|`
+is the alternation `PatternAlternation` already reads, and a group
+without one is a qualifier list:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `echo f(1\|2)` | `f1 f2` — an alternation |
+| `echo f(1)` | `unknown file attribute: 1` — a list |
+| `echo f*(z\|y)` | an alternation that matched nothing |
+| `echo f*(.\|/)` | `bad pattern` — an alternation, badly formed |
+
+Being **last in the word** is a condition and not a convenience:
+`echo *(.)x` is `no matches found: *(.)x`, so a group with text after it
+is an alternation whatever is in it. And a list makes the field a
+pattern on its own — `echo f1(.)` sends a literal name to the
+filesystem, where the name alone is no pattern at all.
+
+**A character no qualifier claims is fatal and is named**, which is the
+answer the shell itself gives: `echo *(qqq)` is
+`unknown file attribute: q`. A space is such a character, and that is
+what makes the next part visible.
+
+### The parser has to say which position it is
+
+    echo MY ( x )      two words: `MY` and `( x )`
+    ( x )              a subshell running `x`
+
+`(` is an operator wherever a command may begin, so this is the second
+pattern construct that cannot be left to the matcher — and
+unlike a numeric range it cannot be left to the *lexer* either. **Command
+position is the whole of the difference**, measured: `( x )` written
+first runs `x` in a subshell, and the same three characters after a word
+are one argument, whose group is then read as a qualifier list —
+`unknown file attribute:` naming the space inside it. The lexer cannot
+tell the two apart on its own, so the parser sets a flag before the token
+is read, exactly as it does for a condition and for a pattern operand.
+
+**The group ends the word at a shell operator.** `echo ( a <b )` is
+``parse error near `)'`` there, with globbing on *and* off, because the
+`<` ended the word and left the `)` with nowhere to go. A `|` is the
+exception, a pattern group being allowed to hold an alternation. That is
+also what `coproc MY ( cat </dev/null )` runs into, which is why the
+complaint names the `)` and not the `(`.
+
+**`setopt no_glob` proves the split is lexical rather than
+interpretive.** With globbing off, `echo MY ( x )` *prints* `MY ( x )` —
+the same two words, and only what became of the group has changed. So
+the grammar half is unconditional under the flag and the qualifier
+reading lives in the expansion, after the point where whether a word is
+a pattern at all has already been decided. (`set -f` is not that option
+in this shell: `set -f; echo *` still lists the directory, and
+`set -o noglob` and `setopt no_glob` are the spellings that do not.)
+
+**Where the parentheses came from decides whether they are a group**, the
+same way it does for every other metacharacter: `echo "( x )"` is five
+characters, `echo *"(.)"` matches nothing, and `p="*(.)"; echo $p` prints
+four characters — this being also the shell that does not re-read an
+expansion's result as a pattern. `(` and `)` are in the escape set for
+that reason.
+
+Grammar flag: `GlobQualifiers` — core: off; `zsh`: on. The matcher reads
+the same flag, the way it reads `PatternAlternation` and
+`NumericRangePattern`. Measured:
+`pat/a-trailing-group-is-a-list-of-qualifiers`,
+`pat/a-qualifier-list-is-not-an-alternation`,
+`pat/a-paren-where-an-argument-stands`.
+
+### What is read and not implemented
+
+The type tests `.`, `/` and `@`, the `^` that turns them, the `,` that
+unions them, and `N` and `D`. Everything else in that language — the
+permission tests `r`, `w` and `x`, `p` and `=` and `%` for the other file
+types, the `-` prefix that follows a link before testing, `e` and `+` for
+a command's verdict, `o`, `O`, `Y` and `[n,m]` for ordering and counting,
+and the `(#q…)` form that needs `extended_glob` — is refused by name with
+the shell's own wording rather than answered wrong. `*(x)` here is
+`unknown file attribute: x`, where the shell would list the executable
+files.
+
+That refusal is what let this set be enumerated exactly, and it is
+asserted rather than assumed: see
+`TestAnUnknownQualifierIsRefusedByName`.
+
 ## Run-time switches over the language
 
 bash lets a script move some of these rules at run time, through `shopt`

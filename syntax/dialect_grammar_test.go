@@ -22,10 +22,16 @@ func mustParse(t *testing.T, src string, d Dialect, why string) {
 	}
 }
 
-// TestParenAfterAWordIsASyntaxError covers a rule the whole panel agrees on,
-// so it is core rather than a dialect flag. Without it `[[ ( -n x ) ]]` in a
+// TestParenAfterAWordIsASyntaxError covers a rule four of the five agree on,
+// so the refusal is what the core does. Without it `[[ ( -n x ) ]]` in a
 // dialect without `[[` ran as an ordinary command with surprising arguments
 // instead of failing.
+//
+// The fifth is the exception [Dialect.GlobQualifiers] names: there a `(`
+// where an argument stands is part of the word rather than a syntax error.
+// Asserted against POSIX() and Core() here for that reason — the rows below
+// are about what the core refuses, and globquals_test.go is about what the
+// flag allows.
 func TestParenAfterAWordIsASyntaxError(t *testing.T) {
 	for _, src := range []string{`echo (`, `echo a (b)`, `function f() { echo x; }`} {
 		mustFail(t, src, POSIX(), "paren after a word")

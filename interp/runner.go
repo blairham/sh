@@ -1044,6 +1044,16 @@ type Runner struct {
 	// and not expansion.
 	noglob bool
 
+	// globSuspended is pathname expansion switched off for one nested
+	// expansion, from the inside: the contexts where a word substitutes as
+	// *text* rather than as a pattern — an arithmetic operand, and a `:-`
+	// word in a position that has no matching.
+	//
+	// Separate from noglob rather than borrowing it, because that one is
+	// observable: `$-` reports the option, and a runner that flipped it for
+	// the length of an expansion answered for it while it was flipped.
+	globSuspended bool
+
 	// matchOptions is the run-time pattern behaviors a dialect's builtin has
 	// switched on, one bit per MatchOption. A plain value so a subshell's
 	// clone carries the state and its changes stay its own.

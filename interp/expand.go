@@ -158,6 +158,12 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 	}
 	r.expandTilde(w)
 	failed := r.expandErr
+	// "Without globbing" has to reach the *nested* expansions too, and it did
+	// not: a `:-` word builds its fields through expandWord, which matches,
+	// so `p=${u:-*}` assigned the directory listing where every shell in the
+	// panel assigns one asterisk. The promise this entry point makes is kept
+	// here rather than at each of the places that could break it.
+	defer r.withoutGlobbing()()
 	defer r.inWord(w)()
 	var b strings.Builder
 	for i, s := range w.Spans {
@@ -281,11 +287,34 @@ func (r *Runner) substitutedWordFields(s syntax.Span) ([]string, bool) {
 	// the difference between `"${a[@]+p q}"` being one field and
 	// `"${a[@]+${a[@]}}"` being two. Each span carries the quoting it was
 	// written with, so the outer quotes need no separate handling.
-	fields := r.expandWord(e.Arg)
 	if s.Quoting != syntax.Unquoted {
-		return escapeAll(fields), true
+		// Quoted, so the word substitutes as *text* and nothing in it is a
+		// pattern. Measured on zsh 5.9.2: `"${nosuch:-*}"` is one asterisk
+		// and `"${nosuch:-*(.)}"` is four characters, where this listed the
+		// directory — the escaping ran after the matching rather than
+		// instead of it, which no amount of escaping afterwards can undo.
+		//
+		// Switched off through the same field `set -f` uses, because it is
+		// the same question asked from a different place.
+		defer r.withoutGlobbing()()
+		return escapeAll(r.expandWord(e.Arg)), true
 	}
-	return fields, true
+	return r.expandWord(e.Arg), true
+}
+
+// withoutGlobbing suspends pathname expansion for one nested expansion, and
+// returns the restore. The contexts that want it are the ones where a word
+// substitutes as text rather than as a pattern: a quoted `:-` word, an
+// operand that is an arithmetic expression, and every word read through
+// expandWordNoSplit.
+//
+// Not `set -f`, which is the same effect and a different fact: that one is an
+// option the script chose and `$-` reports it, and borrowing it made `$-`
+// answer for a flag this had flipped underneath it.
+func (r *Runner) withoutGlobbing() func() {
+	saved := r.globSuspended
+	r.globSuspended = true
+	return func() { r.globSuspended = saved }
 }
 
 // paramSource is the value an expansion starts from and whether it was set at
@@ -662,6 +691,7 @@ func (r *Runner) elementFields(elems []string, sp splitPolicy) []string {
 	split := sp.answer(r.sem().SplitParamExpansion)
 	glob := r.sem().GlobExpansionResults
 	numericRange := r.dialect().NumericRangePattern
+	patternGroup := r.dialect().PatternAlternation
 	var out []string
 	for _, el := range elems {
 		if el == "" {
@@ -688,7 +718,7 @@ func (r *Runner) elementFields(elems []string, sp splitPolicy) []string {
 		// Before the split rather than after, as the scalar path does it:
 		// what the escape adds is backslashes, which no IFS puts a field
 		// boundary on.
-		if hasUnescapedMeta(el, numericRange) &&
+		if hasUnescapedMeta(el, numericRange, patternGroup) &&
 			!r.ask(glob, "globbing the result of an expansion") {
 			el = globEscape(el)
 		}
@@ -843,7 +873,7 @@ func (r *Runner) expansionResult(v string, unquoted bool, split Answer, axis str
 	if ifs, _ := r.ifs(); containsAnyOf(v, ifs) {
 		doSplit = r.ask(split, axis)
 	}
-	if hasUnescapedMeta(v, r.dialect().NumericRangePattern) &&
+	if hasUnescapedMeta(v, r.dialect().NumericRangePattern, r.dialect().PatternAlternation) &&
 		!r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion") {
 		// zsh does not treat the result of an expansion as a pattern. The
 		// same rule decides `[[ abc == $p ]]`, which is one behavior
@@ -1391,7 +1421,13 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 	if w == nil {
 		return 0
 	}
+	// An arithmetic expression is not a pathname, so the operand is expanded
+	// without matching anything: `${x:(i):2}` is an offset of `i`, and its
+	// parentheses are the expression's grouping rather than a pattern group
+	// that the dialect with glob qualifiers would read as a list.
+	restore := r.withoutGlobbing()
 	text := strings.TrimSpace(r.joinWord(w))
+	restore()
 	n, err := r.subscriptValue(text)
 	if err != nil {
 		// What is *blamed* is not always what was evaluated: one dialect

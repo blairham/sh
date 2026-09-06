@@ -74,6 +74,13 @@ func Dialect() syntax.Dialect {
 	// 3.2, bash-as-sh and ksh93, and dash — which has no `[[ ]]` — tries to
 	// open a file called `-`.
 	d.NumericRangePattern = true
+	// A `(` where an argument may stand belongs to the word: `echo MY ( x )`
+	// is two words there and a syntax error in the other four. Measured
+	// 2026-09-06 on zsh 5.9.2 — `unknown file attribute:` names the space
+	// inside the group, so the group was read as a qualifier list — and
+	// `setopt no_glob; echo MY ( x )` prints `MY ( x )`, which is what says
+	// the words are the same either way.
+	d.GlobQualifiers = true
 	// `cmd &!` and `cmd &|` background a job and let go of it. zsh's alone:
 	// bash 5.3 and ksh93 parse `&!` as `&` and a negation and keep the job,
 	// and `&|` is a syntax error in every bash and in dash.

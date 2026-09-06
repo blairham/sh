@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blairham/sh/internal/childguard"
+
 	. "github.com/blairham/sh/interp"
 )
 
@@ -201,6 +203,21 @@ func TestProcessSubstitutionCleanUpRemovesTheDirectory(t *testing.T) {
 	r.CleanUp()
 	if n := len(subdirs(t, dir)); n != 0 {
 		t.Errorf("%d directories left after CleanUp, want none", n)
+	}
+	// And nothing is still reading what was in it. Removing a directory says
+	// nothing about that on a Unix — a process holding a pipe open does not
+	// care that the name is gone — which is exactly the gap that let this
+	// test assert cleanup while leaking a `cat` per run (#972).
+	// Scoped to this test's own temporary directory rather than to the
+	// prefix: the whole-run guard in TestMain looks for the prefix, and
+	// asking the same question here would answer it about whatever else in
+	// the package still has a substitution in flight.
+	held, err := childguard.Holding(os.Getpid(), dir)
+	if err != nil {
+		t.Skipf("no process table here: %v", err)
+	}
+	for _, p := range held {
+		t.Errorf("process %d is still holding a pipe after CleanUp: %s", p.PID, p.Command)
 	}
 }
 

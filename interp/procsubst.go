@@ -170,6 +170,15 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	return path, true
 }
 
+// procSubDirPrefix names the directory a shell puts its substitution pipes in.
+//
+// A constant rather than a literal at the one place that makes the directory,
+// because a second reader depends on it: the guard that fails a test run
+// leaving a process holding one of these pipes finds it by this name in the
+// command line, and a prefix that changed in one place and not the other would
+// leave the guard quietly finding nothing. See internal/childguard.
+const procSubDirPrefix = "sh-procsub"
+
 // ownPipe reports whether path names one of the pipes this shell made for a
 // process substitution in the command it is running.
 //
@@ -281,7 +290,7 @@ func (r *Runner) procSubDir() (string, error) {
 		// live path of every substitution. It is the os.Getwd fallback the
 		// glob path used to have, in a second place.
 		//nolint:forbidigo // the parent is the Runner's, computed above; only MkdirTemp's empty-string form asks the process
-		r.procSubHome.dir, r.procSubHome.err = os.MkdirTemp(home, "sh-procsub")
+		r.procSubHome.dir, r.procSubHome.err = os.MkdirTemp(home, procSubDirPrefix)
 	})
 	return r.procSubHome.dir, r.procSubHome.err
 }

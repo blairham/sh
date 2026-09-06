@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/blairham/sh/internal/childguard"
 	"github.com/blairham/sh/internal/treeguard"
 	. "github.com/blairham/sh/interp"
 
@@ -28,7 +29,20 @@ import (
 // newTestRunner is the fix and this is the reason the fix cannot quietly stop
 // working: a test that builds its own Runner without a Dir, and writes, fails
 // the package here rather than leaving a file for the next `git add -A`.
-func TestMain(m *testing.M) { os.Exit(treeguard.Run(m)) }
+// And it guards the process table, because this package's tests are also the
+// ones that can leave a process behind. A process substitution is a pipe and a
+// command started beside the one that was given its path; a shell that stops
+// without closing its end leaves that command blocked in open(2) forever, and
+// nothing reported it — thirteen were found alive at once, aged half an hour
+// to five hours (#972). The test that leaked most sharply was the one
+// asserting the directory is cleaned up, which passed while leaking.
+//
+// A guard around the whole run rather than a kill in the three tests that were
+// leaking on the day, which is the argument #860 and #890 both landed on:
+// three corrected call sites do not stop the fourth.
+func TestMain(m *testing.M) {
+	os.Exit(treeguard.Run(childguard.Wrap(m, childguard.PipeMarker)))
+}
 
 // TestSurvivableShiftSpeaksOnlyWhereTheDialectHasWords names the field rather
 // than a shell, which is the rule for a test in this package.

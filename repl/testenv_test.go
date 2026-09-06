@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/internal/childguard"
 )
 
 // This file is the suite's environment, and it is here for the reason #890
@@ -62,11 +64,18 @@ var (
 // it is given, so the guard can be observed tripping.
 const touchHomeVar = "SH_TEST_TOUCH_HOME"
 
-func TestMain(m *testing.M) { os.Exit(runIsolated(m)) }
+// The process table as well as the scratch home. This package runs shells too,
+// so a process substitution that leaks its reader leaks it here — and the
+// argument for guarding every such package rather than the one where it was
+// first noticed is the one #860 and #890 landed on: correcting the sites that
+// were leaking on the day does not stop the next one.
+func TestMain(m *testing.M) {
+	os.Exit(runIsolated(childguard.Wrap(m, childguard.PipeMarker)))
+}
 
 // runIsolated assembles the environment, runs the suite in it, and then checks
 // that the home it handed out was never touched.
-func runIsolated(m *testing.M) int {
+func runIsolated(m interface{ Run() int }) int {
 	home, err := os.MkdirTemp("", "sh-repl-home-")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "repl tests: no scratch home: %v\n", err)

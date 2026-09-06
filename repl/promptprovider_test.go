@@ -6,6 +6,7 @@ package repl
 import (
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -223,15 +224,17 @@ func TestAProviderIsToldTheExitStatus(t *testing.T) {
 // The job count a provider is told is what the shell is still looking after,
 // and a job that has finished is not one.
 //
-// Arranged by waiting rather than by asking while it runs: `sleep 0` can be
-// over before the question is, and asserting that it is still going is
-// asserting a race — which failed on Linux once already, for the sibling
-// assertion in promptcounts_test.go.
+// Both halves are arranged rather than timed, and neither by a clock. `sleep
+// 0` is over before the first question is under any load worth the name, which
+// made the first reading 0 rather than 1; a sleep long enough to outlast a
+// loaded machine is one the test would then have to sit out. So the job is
+// started long and ended by hand, and the second reading waits for the end it
+// asked for rather than for a duration.
 func TestAProviderIsToldHowManyJobsTheShellIsLookingAfter(t *testing.T) {
 	r := newTestRunner(nil)
 	r.JobControl = true
 	r.Stdout = &syncBuffer{}
-	f := syntax.NewParser("sleep 0 &\n", syntax.Core()).Parse()
+	f := syntax.NewParser("sleep 30 &\n", syntax.Core()).Parse()
 	if err := r.RunPart(t.Context(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -239,12 +242,23 @@ func TestAProviderIsToldHowManyJobsTheShellIsLookingAfter(t *testing.T) {
 	if len(jobs) == 0 {
 		t.Fatal("no job was started")
 	}
+	// However this test ends, the sleep does not outlive it. Only while the
+	// job is unfinished, because an unreaped child is the one case where the
+	// pid is certainly still this test's to signal.
+	t.Cleanup(func() {
+		if !jobs[0].Finished() {
+			_ = syscall.Kill(jobs[0].PID, syscall.SIGKILL)
+		}
+	})
 
 	p := &recordingProvider{}
 	s := Shell{Runner: r, PromptProviders: []PromptProvider{p}}
 	var pending strings.Builder
 	s.beforeReading(&pending)
 
+	if err := syscall.Kill(jobs[0].PID, syscall.SIGKILL); err != nil {
+		t.Fatalf("ending the job: %v", err)
+	}
 	for _, j := range jobs {
 		j.Wait()
 	}

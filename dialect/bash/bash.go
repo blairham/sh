@@ -155,6 +155,7 @@ func Semantics() interp.Semantics {
 	s.CommandStringShowsCInDollarDash = interp.Yes
 	s.CommandStringShowsSInDollarDash = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.No
+	s.ArrayNameWithoutSubscriptIsTheList = interp.No
 	// A subscript inside a literal is an expression: `a=([1+1]=c)` lands at 2.
 	s.ArrayLiteralSubscriptIsAKey = interp.No
 	// The `@` family's letter is checked against the value rather than

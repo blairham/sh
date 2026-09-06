@@ -112,6 +112,7 @@ func TestSemantics(t *testing.T) {
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.No},
 		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.Yes},
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.Yes},
+		{"ArrayNameWithoutSubscriptIsTheList", s.ArrayNameWithoutSubscriptIsTheList, interp.Yes},
 		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.No},
 		{"SelectEofIsSuccess", s.SelectEofIsSuccess, interp.Yes},
 		{"SelectTakesUnterminatedReply", s.SelectTakesUnterminatedReply, interp.Yes},
@@ -765,5 +766,79 @@ func TestTheJobSpecThatNamesNothing(t *testing.T) {
 	}
 	if got, want := zsh.Diagnostics().NoSuchJobStatus, 127; got != want {
 		t.Errorf("NoSuchJobStatus = %d, want %d", got, want)
+	}
+}
+
+// TestABareArrayNameIsTheElements — this shell alone reads an array named
+// without a subscript as the array itself: `$a` is `${a[@]}` unquoted and the
+// joined value in quotes (#929).
+//
+// Here rather than in the substrate's own suite because two of the rows are
+// this grammar's: `${a:#p}` and `${a:|b}` do not parse anywhere else, and they
+// are the half of the bug that had already shipped — `:#` landed correct on
+// scalars and on `(@)` arrays and silently did nothing on a bare one.
+//
+// Every want is the exact field count and the exact values. The bug returns a
+// plausible string at status 0, so "no error" and "contains foo" both pass
+// against it.
+func TestABareArrayNameIsTheElements(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		// The bare name, unquoted: one field per element.
+		{`a=(one two); set -- $a; echo "n=$# [$1][$2]"`, "n=2 [one][two]"},
+		{`a=(one two); for f in $a; do printf "<%s>" "$f"; done; echo`, "<one><two>"},
+		// Not a join followed by a split: with IFS empty a join would give
+		// one field `xyz`.
+		{`IFS=; a=(x y z); set -- $a; echo "n=$# [$1][$3]"`, "n=3 [x][z]"},
+		{`IFS=-; a=(x y z); set -- $a; echo "n=$# [$1][$3]"`, "n=3 [x][z]"},
+		// Quoted, one field joined on the first character of IFS — not a
+		// hard space (#854) — and the same in a context that never splits.
+		{`IFS=-; a=(x y z); set -- "$a"; echo "n=$# [$1]"`, "n=1 [x-y-z]"},
+		{`IFS=-; a=(x y z); v=$a; echo "[$v]"`, "[x-y-z]"},
+		{`IFS=-; a=(x y z); case $a in "x-y-z") echo joined;; *) echo split;; esac`, "joined"},
+		// The operators inherit the subject.
+		{`a=(one two); set -- ${a#o}; echo "n=$# [$1][$2]"`, "n=2 [ne][two]"},
+		{`a=(one two three); set -- ${a:1}; echo "n=$# [$1][$2]"`, "n=2 [two][three]"},
+		// A slice of a one-element array is no element at all, where a
+		// substring of the same name would be `bcdef`. The row that says the
+		// question is asked at one element too.
+		{`a=(abcdef); set -- ${a:1}; echo "n=$#"`, "n=0"},
+		// `${a:#p}` filters elements. Joined first it matches nothing and
+		// hands the whole array back, which is the silent no-op.
+		{`a=(1 2 3); set -- ${a:#2}; echo "n=$# [$1][$2]"`, "n=2 [1][3]"},
+		{`a=(foo bar baz); set -- ${a:#ba*}; echo "n=$# [$1]"`, "n=1 [foo]"},
+		{`a=(x y z); b=(y); set -- ${a:|b}; echo "n=$# [$1][$2]"`, "n=2 [x][z]"},
+		// A `-` test that came to the *parameter* yields the parameter, so
+		// it yields the elements too.
+		{`a=(one two); set -- ${a:-d}; echo "n=$# [$1][$2]"`, "n=2 [one][two]"},
+		{`unset a; set -- ${a:-d}; echo "n=$# [$1]"`, "n=1 [d]"},
+		// A flag group answers for itself and must not be rewritten under it.
+		{`a=(foo bar baz); set -- ${(@)a:#ba*}; echo "n=$# [$1]"`, "n=1 [foo]"},
+		{`a=(one two); set -- "${(j:-:)a}"; echo "n=$# [$1]"`, "n=1 [one-two]"},
+		// Quoted, `:#` matches the joined string and the array survives —
+		// unchanged by the axis, and the guard that says it stayed that way.
+		{`a=(foo bar baz); set -- "${a:#ba*}"; echo "n=$# [$1]"`, "n=1 [foo bar baz]"},
+		// A one-element array and an empty one agree under both readings.
+		{`a=(only); set -- $a; echo "n=$# [$1]"`, "n=1 [only]"},
+		{`a=(); set -- $a; echo "n=$#"`, "n=0"},
+		// A scalar is not an array, and this shell does not split one.
+		{`v="x y"; set -- $v; echo "n=$# [$1]"`, "n=1 [x y]"},
+		{`v=abcdef; set -- ${v:1}; echo "n=$# [$1]"`, "n=1 [bcdef]"},
+		// `${#a}` is its own axis and keeps counting elements.
+		{`a=(one two); echo "[${#a}]"`, "[2]"},
+	} {
+		f, err := syntax.Parse(tc.src, zsh.Dialect())
+		if err != nil {
+			t.Fatalf("%s: %v", tc.src, err)
+		}
+		var out bytes.Buffer
+		s, d := zsh.Semantics(), zsh.Diagnostics()
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+		zsh.Apply(r)
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatalf("%s: %v", tc.src, err)
+		}
+		if got := strings.TrimSpace(out.String()); got != tc.want {
+			t.Errorf("%s:\n got %q\nwant %q", tc.src, got, tc.want)
+		}
 	}
 }

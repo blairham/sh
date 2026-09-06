@@ -71,6 +71,7 @@ func TestSemantics(t *testing.T) {
 		// arises; the scalar view of an array does.
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.Unspecified},
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.No},
+		{"ArrayNameWithoutSubscriptIsTheList", s.ArrayNameWithoutSubscriptIsTheList, interp.No},
 		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.Yes},
 		{"SelectEofIsSuccess", s.SelectEofIsSuccess, interp.No},
 		{"SelectTakesUnterminatedReply", s.SelectTakesUnterminatedReply, interp.No},

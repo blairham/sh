@@ -39,6 +39,172 @@ func TestArrayLengthWithoutASubscriptIsAnAxis(t *testing.T) {
 	}
 }
 
+// TestABareArrayNameBeingTheListIsAnAxis — an unquoted `$a` is the elements
+// in one shell and the first element in the others (#929).
+//
+// Every assertion names the exact fields, never the absence of a failure. The
+// bug this axis fixes returns a plausible string at status 0, so a test that
+// only checked for no diagnostic passed against it.
+func TestABareArrayNameBeingTheListIsAnAxis(t *testing.T) {
+	const src = `a=(one two); set -- $a; echo "n=$# [$1][$2]"`
+	out, _ := axisRun(t, src, func(s *Semantics) {
+		s.ArrayNameWithoutSubscriptIsTheList = Yes
+	})
+	if strings.TrimSpace(out) != "n=2 [one][two]" {
+		t.Errorf("got %q, want one field per element", out)
+	}
+	out, _ = axisRun(t, src, func(s *Semantics) {
+		s.ArrayNameWithoutSubscriptIsTheList = No
+	})
+	if strings.TrimSpace(out) != "n=1 [one][]" {
+		t.Errorf("got %q, want the one field the scalar reading gives", out)
+	}
+}
+
+// The list reading is not a join followed by a split. With IFS empty nothing
+// splits, so a join-then-split would give one field `xyz` where the elements
+// were never joined at all gives three.
+func TestABareArrayNameAsAListDoesNotJoinFirst(t *testing.T) {
+	out, _ := axisRun(t, `IFS=; a=(x y z); set -- $a; echo "n=$# [$1][$2][$3]"`,
+		func(s *Semantics) { s.ArrayNameWithoutSubscriptIsTheList = Yes })
+	if strings.TrimSpace(out) != "n=3 [x][y][z]" {
+		t.Errorf("got %q, want three fields with IFS empty", out)
+	}
+}
+
+// Quoted, the bare name is one field holding the joined value under either
+// answer — that is ArrayScalarIsTheWholeArray's question — and the join is on
+// the first character of IFS, not a hard space (#854). Both answers are
+// asserted so the field cannot quietly take over the quoted spelling.
+func TestABareArrayNameQuotedStillJoinsOnIfs(t *testing.T) {
+	for _, a := range []Answer{Yes, No} {
+		out, _ := axisRun(t, `IFS=-; a=(x y z); set -- "$a"; echo "n=$# [$1]"`,
+			func(s *Semantics) {
+				s.ArrayScalarIsTheWholeArray = Yes
+				s.ArrayNameWithoutSubscriptIsTheList = a
+			})
+		if strings.TrimSpace(out) != "n=1 [x-y-z]" {
+			t.Errorf("%v: got %q, want one field joined on IFS", a, out)
+		}
+	}
+}
+
+// And an unquoted bare name in a context that does not split is the joined
+// value too, measured — an assignment's value and a `case` subject among
+// them. Routing those through the list path would join them on a hard space.
+func TestABareArrayNameJoinsWhereNothingSplits(t *testing.T) {
+	out, _ := axisRun(t, `IFS=-; a=(x y z); v=$a; case $a in "x-y-z") echo joined;; *) echo split;; esac; echo "[$v]"`,
+		func(s *Semantics) {
+			s.ArrayScalarIsTheWholeArray = Yes
+			s.ArrayNameWithoutSubscriptIsTheList = Yes
+		})
+	if strings.TrimSpace(out) != "joined\n[x-y-z]" {
+		t.Errorf("got %q, want the joined value in both positions", out)
+	}
+}
+
+// Asked only where the readings differ. A one-element array is that element
+// either way, so an unanswered axis must still run rather than refuse — and
+// an empty one is no field at all under both.
+func TestABareArrayNameOfOneElementAsksNothing(t *testing.T) {
+	out, status := axisRun(t, `a=(only); set -- $a; echo "n=$# [$1]"`, func(*Semantics) {})
+	if strings.TrimSpace(out) != "n=1 [only]" || status != 0 {
+		t.Errorf("got %q at %d, want the element without a question", out, status)
+	}
+	out, status = axisRun(t, `a=(); set -- $a; echo "n=$#"`, func(*Semantics) {})
+	if strings.TrimSpace(out) != "n=0" || status != 0 {
+		t.Errorf("got %q at %d, want no field without a question", out, status)
+	}
+}
+
+// The operators inherit the subject. `${a:1}` is a slice of the list under one
+// answer and a substring of the joined scalar under the other, and a trim
+// applies to each element rather than to one joined string.
+//
+// `${a:#p}` — the element filter whose silent no-op the axis was opened for —
+// is not here: it is one shell's grammar, which the core has not got, so it is
+// measured in the corpus against that shell instead of asserted on a vector
+// that cannot parse it.
+func TestOperatorsOnABareArrayNameFollowTheAxis(t *testing.T) {
+	out, _ := axisRun(t, `a=(one two three); set -- ${a:1}; echo "n=$# [$1]"`,
+		func(s *Semantics) { s.ArrayNameWithoutSubscriptIsTheList = Yes })
+	if strings.TrimSpace(out) != "n=2 [two]" {
+		t.Errorf("got %q, want a slice of the list", out)
+	}
+	out, _ = axisRun(t, `a=(one two three); set -- ${a:1}; echo "n=$# [$1]"`,
+		func(s *Semantics) { s.ArrayNameWithoutSubscriptIsTheList = No })
+	if strings.TrimSpace(out) != "n=1 [ne]" {
+		t.Errorf("got %q, want a substring of the scalar", out)
+	}
+	out, _ = axisRun(t, `a=(one two); set -- ${a#o}; echo "n=$# [$1][$2]"`,
+		func(s *Semantics) { s.ArrayNameWithoutSubscriptIsTheList = Yes })
+	if strings.TrimSpace(out) != "n=2 [ne][two]" {
+		t.Errorf("got %q, want the trim applied to each element", out)
+	}
+	// The slice at *one* element, which is where the question has to be
+	// asked even though the name is that element either way: one element
+	// with the first dropped is no element at all, where the same offset
+	// against the characters leaves `bcdef`.
+	out, _ = axisRun(t, `a=(abcdef); set -- ${a:1}; echo "n=$# [$1]"`,
+		func(s *Semantics) { s.ArrayNameWithoutSubscriptIsTheList = Yes })
+	if strings.TrimSpace(out) != "n=0 []" {
+		t.Errorf("got %q, want the only element sliced away", out)
+	}
+	out, _ = axisRun(t, `a=(abcdef); set -- ${a:1}; echo "n=$# [$1]"`,
+		func(s *Semantics) { s.ArrayNameWithoutSubscriptIsTheList = No })
+	if strings.TrimSpace(out) != "n=1 [bcdef]" {
+		t.Errorf("got %q, want the characters after the first", out)
+	}
+}
+
+// The axis must not be asked for a spelling the list path never goes on to
+// answer. Nothing about the *value* would change if it were — the rewrite is
+// local — but an unanswered axis is a diagnostic, so a question asked too
+// widely turns ordinary shell into a refusal on a core that has chosen no
+// shell. Each row below is one such spelling, and each guard that keeps it out
+// is what mutation kills through this test.
+func TestABareArrayNameAsksNothingWhereTheListPathDoesNotAnswer(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		// `${#a}` is ArrayLengthWithoutSubscriptIsCount's question.
+		{`a=(one two); set -- ${#a}; echo "[$1]"`, "[2]"},
+		// The three operators the array path does not answer with elements.
+		{`a=(one two); set -- ${a:=d}; echo "[$1]"`, "[one two]"},
+		{`a=(one two); set -- ${a:?e}; echo "[$1]"`, "[one two]"},
+		{`a=(one two); set -- ${a=d}; echo "[$1]"`, "[one two]"},
+		// And a name that is not an array at all.
+		{`v=xy; set -- $v; echo "[$1]"`, "[xy]"},
+	} {
+		out, status := axisRun(t, tc.src, func(s *Semantics) {
+			// Answered so that only the axis under test can refuse.
+			s.ArrayScalarIsTheWholeArray = Yes
+			s.ArrayLengthWithoutSubscriptIsCount = Yes
+			s.SplitParamExpansion = No
+			s.GlobExpansionResults = No
+		})
+		if strings.Contains(out, "no dialect was chosen") {
+			t.Errorf("%s: refused over an axis it never uses: %q", tc.src, out)
+		}
+		if got := strings.TrimSpace(out); got != tc.want || status != 0 {
+			t.Errorf("%s: got %q at %d, want %q", tc.src, got, status, tc.want)
+		}
+	}
+}
+
+// A plain scalar is not an array and asks nothing, however the axis is
+// answered: the rewrite must key on the *store*, not on the spelling.
+func TestABareScalarNameIsNotAList(t *testing.T) {
+	for _, a := range []Answer{Yes, No} {
+		out, status := axisRun(t, `v="x y"; set -- $v; echo "n=$# [$1]"`,
+			func(s *Semantics) {
+				s.SplitParamExpansion = Yes
+				s.ArrayNameWithoutSubscriptIsTheList = a
+			})
+		if strings.TrimSpace(out) != "n=2 [x]" || status != 0 {
+			t.Errorf("%v: got %q at %d, want the scalar split as always", a, out, status)
+		}
+	}
+}
+
 func TestAnEmptyArrayQuotedAtIsAnAxis(t *testing.T) {
 	out, _ := axisRun(t, `a=(); set -- "${a[@]}"; echo "n=$#"`, func(s *Semantics) {
 		s.EmptyArrayAtIsOneEmptyField = Yes

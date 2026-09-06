@@ -124,6 +124,7 @@ func Semantics() interp.Semantics {
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.No
+	s.ArrayNameWithoutSubscriptIsTheList = interp.No
 	// A subscript inside a literal is the text between the brackets, and a
 	// literal written with one declares a keyed array: `typeset -p` answers
 	// `-A` and `${a[2]}` does not find what `[1+1]=c` stored.
@@ -242,11 +243,16 @@ func Semantics() interp.Semantics {
 	s.TypesetLocalNeedsKeywordFunction = interp.Yes
 	// There is no `local` here, so this is reached only through `typeset` in
 	// a keyword function — where a child is told nothing about the shadowed
-	// name, as in zsh. This shell arrives at that from further away: its
-	// `typeset` takes the export attribute off any name it assigns, at the
-	// top level as well as in a function, and only the local half is
-	// modeled.
+	// name, as in zsh. This shell arrives at that from further away, and the
+	// axis below is the rest of the road: its `typeset` takes the export
+	// attribute off any name it assigns, at the top level as well as in a
+	// function.
 	s.LocalInheritsTheExportAttribute = interp.No
+	// The unscoped half of the same behavior. `export FOO=bar; typeset
+	// FOO=baz` leaves this shell holding `baz` and telling no child about
+	// it, where the other two hand `baz` over; `export FOO` afterwards puts
+	// the attribute back.
+	s.DeclarationAssignmentClearsTheExportAttribute = interp.Yes
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithInvalidOctalDigitIsError = interp.No
 	s.IndirectionYieldsName = interp.Yes

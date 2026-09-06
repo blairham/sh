@@ -253,35 +253,94 @@ without a flag to disambiguate them.
 
 ## The output half
 
-### What capture costs, and why it is off by default
+### What capture costs, and what a pseudo-terminal buys
 
 `interp` hands a child `r.Stdout` directly. When that is an `*os.File`
 the child inherits the descriptor and **is on the terminal**; when it is
 anything else, `os/exec` builds a pipe and copies through it. Capturing
-output means the writer is no longer the terminal's file, and everything
-downstream of `isatty` changes:
+output through a wrapper means the writer is no longer a terminal file,
+and everything downstream of `isatty` changes:
 
 - `ls`, `grep` and `git` stop colorizing.
 - `git` and `man` stop paging.
 - A full-screen program — an editor, `top` — is broken outright.
 
 That is not a rough edge to file and move on from; it is the shell
-becoming worse at being a shell. So **output capture is opt-in**:
-`SH_BLOCKS_OUTPUT` non-empty turns it on, and it is empty by default.
-The command half runs regardless, because it costs nothing and breaks
-nothing.
+becoming worse at being a shell, which is why output capture shipped
+opt-in and why #720 said it could not be on by default until a
+pseudo-terminal backed it.
 
-The honest fix is a pseudo-terminal between the shell and its children,
-which is how an interactive surface built on blocks has to end up —
-`internal/pty` already exists and opens one. It is not this change, and
-the reason is job control rather than the pty: the repl hands the
-terminal to a foreground process group through `/dev/tty` today, and
-inserting a pty means the shell owns the real terminal and must forward
-window size, terminal ownership and the stop signals to the inner one.
-That is a rewrite of the job-control path rather than an addition to it,
-and doing it in the same change as the store would make both
-unreviewable. The store is designed so that arrival changes nothing
-about the format: a pty-captured body is a body.
+**One does now.** `repl.ptyConduit` puts a pseudo-terminal between the
+shell's children and the terminal a person is looking at: the child's
+fd 1 and fd 2 are the inner terminal, so `isatty` is true and nothing
+downstream of it changes; the shell reads the other end, writes it where
+it was going, and keeps a copy on the way past.
+
+#### The job-control rewrite this was waiting for does not arise
+
+This document predicted the blocker as job control rather than the pty:
+"the shell owns the real terminal and must forward window size, terminal
+ownership and the stop signals to the inner one … a rewrite of the
+job-control path rather than an addition to it".
+
+Measured on 2026-09-06, two of those three do not arise, because
+**standard input never moves.** A child's fd 0 is the same terminal the
+repl already hands to a foreground process group through `/dev/tty`, so
+terminal ownership, `^C` and `^Z` are exactly where they were and the
+conduit cannot move them. Only the output half is the inner terminal.
+The probe, a child with its stdin on one pseudo-terminal and its stdout
+on another:
+
+    test -t 0 && echo IN_TTY   →  IN_TTY
+    test -t 1 && echo OUT_TTY  →  OUT_TTY
+
+Both — which is what a child on a terminal sees, and what a captured
+child did not see before.
+
+What is left is the third item, window size, and it is one ioctl: the
+inner terminal is given the outer one's size when it is opened and again
+on every `SIGWINCH`. Without it a full-screen program asks fd 1 how wide
+the terminal is and is told 0 by 0.
+
+Two more things the inner terminal has to be told, both measured:
+
+- **Its output discipline is off** (`OPOST`), so it is a conduit and not
+  a second terminal doing the work twice. A pty slave translates `\n` to
+  `\r\n`; the real terminal then does it again to the `\n` that is left,
+  giving `\r\r\n`. The first probe above came back as
+  `"IN_TTY\r\nOUT_TTY\r\n"` through a slave in its default discipline.
+- **It has to be drained before the next prompt.** A pseudo-terminal is
+  a queue, so a command's last bytes may still be in it when the command
+  has exited; taking the capture then would put the tail of one block at
+  the head of the next, and draw the prompt on top of output still in
+  flight. The drain writes a private random token into the conduit after
+  the command has exited and waits for the pump to reach it — an in-band
+  mark, not a wait for quiet, which is the same discipline the pty tests
+  follow and for the same reason: a wait for quiet passes early on a slow
+  writer and hangs on a busy one, and neither failure is visible.
+
+#### So the default moved, and the setting grew a third answer
+
+`SH_BLOCKS_OUTPUT` now says one of three things:
+
+| value | what it means |
+| --- | --- |
+| unset | **the default** — keep output where a pseudo-terminal can carry it, and keep none where one cannot |
+| empty | keep none, whatever this session has. The gesture an empty `HISTFILE` already is |
+| anything else | keep output whatever it costs, wrapper and all — for a session recording a build in a pipeline, which has no terminal to preserve |
+
+The default keeps *nothing* rather than falling back to the wrapper,
+because the wrapper is the cost the whole issue was about. A session with
+no terminal, with its two streams going to two different places, or with
+no store to write a body to, keeps nothing unless it asked by name.
+
+Bodies are redacted through the same secret table the command line goes
+through and written 0600 inside a 0700 directory, which is what makes
+on-by-default a question about the terminal rather than about privacy.
+
+The command half runs regardless, because it costs nothing and breaks
+nothing. And the format did not move: the flag flipped, the schema did
+not, which is what #495 built it for.
 
 **The switch is read once, at session start.** Setting
 `SH_BLOCKS_OUTPUT` at the prompt takes effect in the next session, not

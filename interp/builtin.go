@@ -2076,7 +2076,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// shadow does nothing when there is no scope to save into, which is
 		// the dialect that took this as a global: there is nothing to put
 		// back, and it becomes a plain assignment.
-		r.shadow(name)
+		fresh := r.shadow(name)
 		r.localExportAttribute(name, f.export)
 		if r.unspecified {
 			// The declaration is not made at all: reporting the unanswered
@@ -2095,7 +2095,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		} else {
-			r.declareEmpty(name)
+			r.declareEmpty(name, fresh)
 		}
 		if f.readonly && !f.remove {
 			r.markReadonly(name)
@@ -2141,6 +2141,14 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			r.setVarAs(name, value, assignedByDeclaration)
 			if r.ctl == controlExit {
 				// See biExport.
+				return r.status
+			}
+			// `readonly` is one shell's `typeset -r` and behaves like it
+			// here: an assignment through it resets the export attribute
+			// where that shell's `typeset` does. See
+			// declarationAssignmentExport.
+			r.declarationAssignmentExport(name, false)
+			if r.unspecified {
 				return r.status
 			}
 		}

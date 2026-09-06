@@ -200,6 +200,7 @@ func Semantics() interp.Semantics {
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.Yes
+	s.ArrayNameWithoutSubscriptIsTheList = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.No
 	s.UnsetEndsTheProducedPipelineStatus = interp.Yes
 	s.SelectLayout = interp.SelectMenuColumns
@@ -585,8 +586,17 @@ func Semantics() interp.Semantics {
 	// `-F` is a *float's* precision here rather than bash's function-name
 	// listing, so it rides in Diagnostics.UnimplementedOptionLetters with
 	// the rest of what this shell has and this engine does not.
-	s.DeclareOptions = "aAfgilprux"
-	s.LocalOptions = "aAilprux"
+	//
+	// `-H` hides a name's *value* from every listing and changes nothing
+	// else — measured: `typeset -H h=v; echo $h` still says `v`, while
+	// `typeset -p h` says `typeset h`, `set` says `h`, and `typeset +H h`
+	// puts the value back. It is this shell's letter alone with that
+	// meaning: bash refuses `-H` outright under both `declare` and
+	// `typeset`, and ksh93's `-H` is a wholly different attribute — file
+	// name mapping — that does not hide, listing back as `typeset -H h=v`.
+	// So there is no axis here, only a letter one dialect has.
+	s.DeclareOptions = "aAfgHilprux"
+	s.LocalOptions = "aAHilprux"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
 	// `typeset -g x=new` with a `local x` in front assigns the *local* —
@@ -766,16 +776,17 @@ func Diagnostics() interp.Diagnostics {
 			"read": "kqeEzcl",
 			// typeset's letters this engine does not hold: floats (-E -F),
 			// namerefs (-n), padding and alignment (-L -R -Z), uniqueness,
-			// hiding, ties and the rest. The same set under both names, and
-			// for `local` too.
-			"typeset": "bcEFhHkLmnRtTUZ",
+			// ties and the rest. The same set under both names, and for
+			// `local` too. `-H` has left this list — it is implemented, in
+			// DeclareOptions above.
+			"typeset": "bcEFhkLmnRtTUZ",
 			"type":    "mvwsS",
 			// jobs' letters that are zsh's own: -d names the directory the
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.
 			"jobs":    "dzZ",
-			"declare": "bcEFhHkLmnRtTUZ",
-			"local":   "bcEFhHkLmnRtTUZ",
+			"declare": "bcEFhkLmnRtTUZ",
+			"local":   "bcEFhkLmnRtTUZ",
 		},
 		// The builtin's name is stripped to the location prefix as ever:
 		// `zsh:read:1: -p: no coprocess`, measured with no coprocess to

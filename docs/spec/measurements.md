@@ -262,6 +262,17 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/a-subscript-pair-with-three-parts` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]~after` | `[z]~after` | `[z]~after` | `[z]~after` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `expansion/element-exclusion-by-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#t*}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#t*}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#t*}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#t*}""' unexpected` *(status 3)* | `[one]` |
 | `expansion/element-exclusion-is-a-whole-match-not-a-prefix` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: v: #hel*: arithmetic syntax error: operand expected (error token is "#hel*")` *(status 1)* | **2>** `<shell>: line 1: v: #hel*: arithmetic syntax error: operand expected (error token is "#hel*")` *(status 1)* | **2>** `<shell>: v: #hel*: syntax error: operand expected (error token is "#hel*")` *(status 1)* | `[lo][lo][hello]` | `[][lo][hello]` |
+| `expansion/a-bare-array-name-unquoted` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one]` | `[one]` | `[one]` | `[one]` | `[one][two]` |
+| `expansion/a-bare-array-name-in-a-for-loop` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `<one>` | `<one>` | `<one>` | `<one>` | `<one><two>` |
+| `expansion/a-bare-array-name-quoted-joins-on-ifs` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[x-y-z]` |
+| `expansion/a-bare-array-name-unquoted-is-not-a-join-then-split` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[x][y][z]` |
+| `expansion/a-bare-array-name-in-a-context-that-does-not-split` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `split~[x]` | `split~[x]` | `split~[x]` | `split~[x]` | `joined~[x-y-z]` |
+| `expansion/a-bare-array-name-of-one-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[only]` | `[only]` | `[only]` | `[only]` | `[only]` |
+| `expansion/a-bare-array-name-trimmed` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[ne]` | `[ne]` | `[ne]` | `[ne]` | `[ne][two]` |
+| `expansion/a-bare-array-name-sliced` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[ne]` | `[ne]` | `[ne]` | `[ne]` | `[two][three]` |
+| `expansion/element-exclusion-on-a-bare-array-name` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: #2: arithmetic syntax error: operand expected (error token is "#2")` *(status 1)* | **2>** `<shell>: line 1: a: #2: arithmetic syntax error: operand expected (error token is "#2")` *(status 1)* | **2>** `<shell>: a: #2: syntax error: operand expected (error token is "#2")` *(status 1)* | `[1]` | `[1][3]` |
+| `expansion/element-exclusion-on-a-bare-array-name-by-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: #ba*: arithmetic syntax error: operand expected (error token is "#ba*")` *(status 1)* | **2>** `<shell>: line 1: a: #ba*: arithmetic syntax error: operand expected (error token is "#ba*")` *(status 1)* | **2>** `<shell>: a: #ba*: syntax error: operand expected (error token is "#ba*")` *(status 1)* | `[foo]` | `[foo]` |
+| `expansion/a-bare-array-name-with-a-default` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one]` | `[one]` | `[one]` | `[one]` | `[one][two]` |
 | `expansion/element-exclusion-without-a-flag-group` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: #two: arithmetic syntax error: operand expected (error token is "#two")` *(status 1)* | **2>** `<shell>: line 1: a: #two: arithmetic syntax error: operand expected (error token is "#two")` *(status 1)* | **2>** `<shell>: a: #two: syntax error: operand expected (error token is "#two")` *(status 1)* | `[one]` | `[one two three]` |
 | `expansion/element-exclusion-empty-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#}' unexpected` *(status 3)* | `[one]` |
 | `expansion/element-exclusion-pattern-out-of-a-parameter` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#$p}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#$p}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#$p}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#$p}""' unexpected` *(status 3)* | `[one][two]` |
@@ -664,6 +675,50 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expansion/element-exclusion-is-a-whole-match-not-a-prefix` — the sharpest row in the family, because two shells accept the same six characters and mean different things by them: zsh matches the pattern against the *whole* value and substitutes nothing when it hits, while ksh93 ignores the colon entirely and gives exactly what `${v#hel*}` gives — `lo`. bash refuses it as arithmetic. So `:#` is not `#` with a colon in front, and a dialect that treated it as one would silently answer ksh93's question in zsh's grammar
   ```sh
   v=hello; echo "[${v:#hel*}][${v#hel*}][${v:#xyz}]"
+  ```
+- `expansion/a-bare-array-name-unquoted` — the headline of the family: an array named without a subscript is the *elements* in zsh — one field each, exactly what `${a[@]}` gives — where bash and ksh93 read the bare name as `${a[0]}` and hand over one field. One shell against two, and it is silent in the direction that hurts: the joined reading answers at status 0 with a plausible string, so nothing says the loop that follows will run once instead of twice
+  ```sh
+  a=(one two); printf "[%s]" $a; echo
+  ```
+- `expansion/a-bare-array-name-in-a-for-loop` — the same rule where a script actually meets it. `for f in $files` is the idiom, and the two readings differ in how many times the body runs — twice in zsh, once in bash and ksh93 with the whole list in `$f`. Written as a loop and not only as a `printf` because the field count is the observable, and a body that receives one argument where it expected several is the damage the field count causes
+  ```sh
+  a=(one two); for f in $a; do printf "<%s>" "$f"; done; echo
+  ```
+- `expansion/a-bare-array-name-quoted-joins-on-ifs` — the guard on the other half: quoted, the bare name is one field in every shell that has arrays, and the shell that reads it as the whole array joins with the first character of IFS rather than a hard space. So `IFS=-` gives `x-y-z` and not `x y z`, the same rule `"${a[*]}"` follows. A reading that made the unquoted name a list by joining and then splitting would keep this row green while breaking the next one
+  ```sh
+  IFS=-; a=(x y z); printf "[%s]" "$a"; echo
+  ```
+- `expansion/a-bare-array-name-unquoted-is-not-a-join-then-split` — the row that tells the two implementations of the same answer apart, and the reason it is here rather than a duplicate of the first. With IFS empty nothing splits, so joining the elements first and splitting the result gives one field `xyz` — while zsh gives three, because the elements were never joined at all. bash and ksh93 give the first element, unaffected either way. An implementation that reached the right answer under the default IFS by the wrong route fails exactly here
+  ```sh
+  IFS=; a=(x y z); printf "[%s]" $a; echo
+  ```
+- `expansion/a-bare-array-name-in-a-context-that-does-not-split` — where the unquoted spelling stops being a list: an assignment's value and a `case` subject split in no shell, and measured, zsh joins the bare name there exactly as quotes do — on IFS, so `x-y-z`. This is what keeps the rule about *fields* from leaking into the contexts that have none, and it is the row a fix routed through the list path unconditionally would break, silently turning `v=$a` into a hard-space join
+  ```sh
+  IFS=-; a=(x y z); v=$a; case $a in "x-y-z") echo joined;; *) echo split;; esac; echo "[$v]"
+  ```
+- `expansion/a-bare-array-name-of-one-element` — the case the question is not asked in: with one element the array *is* that element under both readings, so all three shells agree and a dialect that had chosen neither still has an answer. It is recorded because a core with no shell behind it must run this rather than refuse it — an axis asked wider than the disagreement turns the ordinary way to read a one-element array into a diagnostic
+  ```sh
+  a=(only); printf "[%s]" $a; echo
+  ```
+- `expansion/a-bare-array-name-trimmed` — an operator on the bare name, which inherits whatever the name turned out to be: zsh trims each element and keeps the fields, bash and ksh93 trim the one element the name gave them. The operator is the same everywhere — this row is about its *subject*, and it is the neighbor the scope note asked for by name
+  ```sh
+  a=(one two); printf "[%s]" ${a#o}; echo
+  ```
+- `expansion/a-bare-array-name-sliced` — the sharpest of the operators, because the two readings do not merely differ in field count — they read the same offset against different things. Where the name is the list, `:1` drops the first *element* and leaves two; where it is a scalar, it drops the first *character* and leaves `ne`. Nothing in the spelling says which, and both answer at status 0
+  ```sh
+  a=(one two three); printf "[%s]" ${a:1}; echo
+  ```
+- `expansion/element-exclusion-on-a-bare-array-name` — the second failure the join causes, and the less obvious one: `:#` asks about *elements*, so a bare name that joined to one string first matches the pattern against `1 2 3` as a whole, fails, and hands the array back looking like a filter that found nothing. zsh drops the element and leaves two fields. ksh93 reads the same six characters as `${a#2}` on its own bare name and answers `1`, which is neither shell's other reading — so the operator and its subject diverge together
+  ```sh
+  a=(1 2 3); printf "[%s]" ${a:#2}; echo
+  ```
+- `expansion/element-exclusion-on-a-bare-array-name-by-pattern` — the same operator with a pattern that matches more than one element, which is what makes the no-op visible: two of three go in zsh. The joined reading cannot drop a *part* of its one string, so it drops nothing at all and the answer is indistinguishable from a pattern that simply did not match — the quiet shape this whole family is recorded to catch
+  ```sh
+  a=(foo bar baz); printf "[%s]" ${a:#ba*}; echo
+  ```
+- `expansion/a-bare-array-name-with-a-default` — the `-` test came to the parameter rather than to the word, so what it yields is the parameter under this shell's reading of it: the elements in zsh, the first alone in bash and ksh93. The row exists because the word side is already pinned elsewhere and the two must not be confused — a substitution that fires takes its fields from the *word*, and this one does not fire
+  ```sh
+  a=(one two); printf "[%s]" ${a:-d}; echo
   ```
 - `expansion/element-exclusion-without-a-flag-group` — the same operator with no `(@)` in front and inside quotes, where the array joins to one string first: the pattern is then matched against `one two three` as a whole, matches nothing, and the value is left standing. Not a no-op by accident — `${a:#*}` on the same array is empty — and it is what says the operator asks about *elements*, of which a joined scalar has one. ksh93 answers `one` from the same characters, which is `${a#two}` against a scalar that is only the first element, so the two shells agree on neither the operator nor what `$a` names
   ```sh
@@ -1112,6 +1167,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `mapfile/an-empty-delimiter-means-NUL` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `[a][b] n=2` | `[a][b] n=2` | `[] n=0` **2>** `<shell>: mapfile: command not found` | `[] n=0` **2>** `<shell>: mapfile: not found` | `[] n=0` **2>** `<shell>:1: command not found: mapfile` |
 | `mapfile/a-NUL-delimiter-is-stripped-without-t` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution~<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `len=1~len=2` | `len=1~len=2` | `len=0~len=0` **2>** `<shell>: mapfile: command not found~<shell>: mapfile: command not found` | `len=0~len=0` **2>** `<shell>: mapfile: not found~<shell>: mapfile: not found` | `len=0~len=0` **2>** `<shell>:1: command not found: mapfile~<shell>:1: command not found: mapfile` |
 | `mapfile/reads-a-descriptor` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x][y] n=2` | `[x][y] n=2` | `[] n=0` **2>** `<shell>: mapfile: command not found` | `[] n=0` **2>** `<shell>: mapfile: not found` | `[] n=0` **2>** `<shell>:1: command not found: mapfile` |
+| `set/bare-set-and-a-hidden-value` | `zzv='plain'~st=0` **2>** `<shell>: 1: typeset: not found` | `zzv=plain~st=0` **2>** `<shell>: line 1: typeset: -H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `zzv=plain~st=0` **2>** `<shell>: line 1: typeset: -H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `zzv=plain~st=0` **2>** `<shell>: line 0: typeset: -H: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `zzh=hid~zzv=plain~st=0` | `zzh~zzv=plain~st=0` |
 | `set/bare-set-lists-the-variables` | `v1='plain'~v2='has space'~v3='quo'"'"'te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1=plain~v2='has space'~v3=$'quo\'te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` |
 | `set/bare-set-and-the-functions` | `0~st=1` | `1~st=0` | `0~st=1` | `1~st=0` | `0~st=1` | `0~st=1` |
 | `command/capital-v-says-a-sentence` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a keyword~st=0` | `echo is a shell builtin~if is a reserved word~st=0` |
@@ -1683,6 +1739,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `mapfile/reads-a-descriptor` — -u reads the shell's own descriptor table rather than standard input, which is how the command is used without a pipe putting it in a subshell — the whole reason to prefer it to a while-read loop
   ```sh
   printf 'x\ny\n' > f; exec 3<f; mapfile -u 3 -t arr; printf "[%s]" "${arr[@]}"; echo " n=${#arr[@]}"
+  ```
+- `set/bare-set-and-a-hidden-value` — the hiding letter reaches the other listing too: zsh writes the bare name `zzh` where every other shell writes `zzh=hid` or nothing, and the ordinary `zzv=plain` on the next line is what proves the listing ran rather than failing. Filtered to two names the script invents, because the rest of a bare `set` is the machine's
+  ```sh
+  typeset -H zzh=hid; zzv=plain; set | grep '^zz'; echo "st=$?"
   ```
 - `set/bare-set-lists-the-variables` — one listing, three spellings of the same three values: bare-until-needed with `'\''` for the embedded quote, always-single-quoted with the quote doubled out, and `$'...'` — filtered to the script's own names because the rest of the listing is the machine's
   ```sh
@@ -4860,6 +4920,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/a-substring-modifier-chain` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[File.Txt]` | `[File.Txt]` | `[File.Txt]` | `[File.Txt]` | `[Dir]` |
 | `param/a-substring-modifier-with-something-after-it` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[/tmp/Dir/File.Txt]~after` | `[/tmp/Dir/File.Txt]~after` | `[/tmp/Dir/File.Txt]~after` | `[/tmp/Dir/File.Txt]~after` | **2>** `<shell>:1: unrecognized modifier` *(status 1)* |
 | `param/a-substring-offset-on-a-subscripted-parameter` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: a[@]: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `param/the-ordering-flags-sort-a-list` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@o)a}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@o)a}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@o)a}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a}' unexpected` *(status 3)* | `[1][10][9][9][10][1][1][9][10][10][9][1]` |
+| `param/the-ordering-flags-and-case` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@o)a}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@o)a}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@o)a}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a}' unexpected` *(status 3)* | `[B][C][a][b][a][B][b][C][C][B][b][a][a][B][b][C]` |
+| `param/the-unique-flag-is-not-a-sort` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@u)a}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@u)a}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@u)a}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a}' unexpected` *(status 3)* | `[b][a][c][a][b][c][c][b][a]` |
+| `param/where-the-ordering-step-sits` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@o)a#z}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@o)a#z}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@o)a#z}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a#z}' unexpected` *(status 3)* | `[b][ya][A][B][c-a-b][c a b]` |
 | `param/the-matching-flag-keeps-what-a-trim-took` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${(M)v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${(M)v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]: bad substitution` *(status 127)* | **2>** `<shell>: [${(M)v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]""' unexpected` *(status 3)* | `[hel][hell][lo][llo][][]` |
 | `param/the-matching-flag-inverts-the-exclusion` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(M@)a:#f2*}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(M@)a:#f2*}: bad substitution` *(status 127)* | **2>** `<shell>: ${(M@)a:#f2*}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#f2*}""' unexpected` *(status 3)* | `[f22]~[f1][f333]` |
 | `param/the-matching-flag-elsewhere-does-nothing` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${(M)v/l/L}][${(M)v:1}][${(M)v:-alt}][${(M)v}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${(M)v/l/L}][${(M)v:1}][${(M)v:-alt}][${(M)v}]: bad substitution` *(status 127)* | **2>** `<shell>: [${(M)v/l/L}][${(M)v:1}][${(M)v:-alt}][${(M)v}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `v/l/L}][${(M)v:1}][${(M)v:-alt}][${(M)v}]""' unexpected` *(status 3)* | `[heLlo][ello][hello][hello]` |
@@ -4867,6 +4931,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/nested-expansions-nest` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${${${v}}}][${${${v}#a}%c}][${${v#a}}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${${${v}}}][${${${v}#a}%c}][${${v#a}}]: bad substitution` *(status 127)* | **2>** `<shell>: [${${${v}}}][${${${v}#a}%c}][${${v#a}}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `!' unexpected` *(status 3)* | `[abc][b][bc]` |
 | `param/a-nested-expansion-takes-flags-and-a-substitution` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${(U)${v}}][${${(U)v}}][${$(echo xy)#x}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${(U)${v}}][${${(U)v}}][${$(echo xy)#x}]: bad substitution` *(status 127)* | **2>** `<shell>: [${(U)${v}}][${${(U)v}}][${$(echo xy)#x}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `!' unexpected` *(status 3)* | `[ABC][ABC][y]` |
 | `param/a-nested-expansion-is-the-whole-name` **(refusal)** | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${x${v}}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${x${v}}: bad substitution` *(status 127)* | **2>** `<shell>: ${x${v}}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `$' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/a-quoted-substitution-in-the-name-position` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(@f)"$(printf "a b\nc")"}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@f)"$(printf "a b\nc")"}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@f)"$(printf "a b\nc")"}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `"$(printf "a b\nc")"}' unexpected` *(status 3)* | `[a b][c]` |
+| `param/a-quoted-non-substitution-is-not-a-name` **(refusal)** | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: line 1: ${\"abc\"}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${\"abc\"}: bad substitution` *(status 127)* | **2>** `<shell>: ${\"abc\"}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `\' unexpected` *(status 3)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/a-nested-expansions-value-is-what-the-outer-operator-tests` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${${v}:-d}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${${v}:-d}]: bad substitution` *(status 127)* | **2>** `<shell>: [${${v}:-d}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `!' unexpected` *(status 3)* | `[d]~[abc]~[y]` |
 | `param/a-substring-offset-is-an-expression` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cd]` | `[cd]` | `[cd]` | `[cd]` | `[cd]` |
 | `param/colon-extends-the-test-unset` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` |
@@ -4997,6 +5063,22 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   a=(p q r); echo "[${a[@]:1+}]"; echo after
   ```
+- `param/the-ordering-flags-sort-a-list` — `o` and `O` sort a list up and down and `n` reads the words as numbers, and the data is `10 9 1` rather than three letters because that is the only kind that tells the two sorts apart: lexically 10 comes before 9. All four on one row, since the flags compose and a reading that got `O` as `reverse the input` rather than `reverse the order` passes the first two and fails the fourth
+  ```sh
+  a=(10 9 1); printf "[%s]" "${(@o)a}"; printf "[%s]" "${(@O)a}"; printf "[%s]" "${(@n)a}"; printf "[%s]" "${(@nO)a}"; echo
+  ```
+- `param/the-ordering-flags-and-case` — the sort is byte order under this corpus's locale, so the cases separate — and `i` folds them, which makes ties reachable for the first time. On these four the tie keeps the order the elements were written in; that is not a rule either shell states, and the same shape at sixteen elements comes back with some of the pairs reversed, so the row pins the size rather than the principle. `(i)` alone sorts, which is what says it is not merely a modifier of `o`. The locale is the reason this row is worth pinning rather than reasoning about: outside `LC_ALL=C` the same shell orders by the collation instead and answers `a b B C` to the first
+  ```sh
+  a=(B a C b); printf "[%s]" "${(@o)a}"; printf "[%s]" "${(@oi)a}"; printf "[%s]" "${(@Oi)a}"; printf "[%s]" "${(@i)a}"; echo
+  ```
+- `param/the-unique-flag-is-not-a-sort` — `u` keeps the first of each repeat and leaves the order alone, which is the row that fixes where it runs: with a sort beside it either order of the two gives the same answer, and only `u` on its own says which. It does not fold case either, so `(a A a)` keeps two
+  ```sh
+  a=(b a b c a); printf "[%s]" "${(@u)a}"; printf "[%s]" "${(@ou)a}"; printf "[%s]" "${(@uO)a}"; echo
+  ```
+- `param/where-the-ordering-step-sits` — where the step sits, in four answers that would each be different if it sat anywhere else: the operator has already run, so trimming `z` off `zb` puts it first; the case conversion has already run, so `(B a)` uppercased sorts as `A B` and not `B A`; a forced join has already made one word, which is in order however it was written; and the quoted join without `(@)` does the same. None of it is what the rule numbers suggest by name
+  ```sh
+  a=(zb ya); printf "[%s]" "${(@o)a#z}"; a=(B a); printf "[%s]" "${(@oU)a}"; a=(c a b); printf "[%s]" "${(oj.-.)a}"; printf "[%s]" "${(o)a}"; echo
+  ```
 - `param/the-matching-flag-keeps-what-a-trim-took` — one flag turns each of the four trims inside out: the same operator, the same match, and the *other* side of the split substituted. The operator still chooses how much — the doubled forms take the longest match here exactly as they drop the longest without the flag — so this is not a fifth and sixth operator but a second reading of the four. The last two are the rows that separate it from a no-op: a pattern that matches nothing leaves nothing, where the trim without the flag leaves the whole value, and an empty pattern takes the empty string
   ```sh
   v=hello; echo "[${(M)v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]"
@@ -5024,6 +5106,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/a-nested-expansion-is-the-whole-name` **(refusal)** — and the boundary, refused by every shell in the panel including the one that has the construct: the inner expansion is the whole of the name position, so text in front of it is not a longer name and `${${v}x}` is not a name with a suffix. Graded on the refusal because five shells decline the same characters in five wordings, which is what the Diagnostics vector is for
   ```sh
   v=abc; echo "${x${v}}"
+  ```
+- `param/a-quoted-substitution-in-the-name-position` — `${(@f)"$(cmd)"}` is *the* way to split a command's output into an array by line in the shell with the grammar, and it appears throughout real configuration. The quotes are not decoration: quoted, the inner comes to one field and `(f)` splits that on newlines; the same characters *without* them are a different program — `${(@f)$(printf "a b\nc")}` is three fields there, because an unquoted inner is split on IFS before the flag sees it. That spelling has no row of its own: this shell does not split an unquoted inner yet, which is #883's remaining half and is filed, and a row for it would record that gap rather than this one
+  ```sh
+  printf "[%s]" ${(@f)"$(printf "a b\nc")"}; echo
+  ```
+- `param/a-quoted-non-substitution-is-not-a-name` **(refusal)** — the boundary the quotes do not move: what may stand in the name position is a *substitution*, and quoting a string does not make it one. Refused by every shell in the panel, including the one that reads a quoted `${"${v}"}` two characters away — so the quotes are a wrapper on the shape rather than a shape of their own
+  ```sh
+  v=abc; echo "${\"abc\"}"
   ```
 - `param/a-nested-expansions-value-is-what-the-outer-operator-tests` — the conditional operators test what the inner expansion came to rather than whether some name is set, which is the whole reason the idiom exists: `${${0:#$ZSH_ARGZERO}:-${(%):-%N}}`, out of a plugin manager on this machine, is a default over the *result* of a pattern exclusion. An empty inner fires the colon test and a set one does not
   ```sh
@@ -7075,6 +7165,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/a-declaration-without-a-value-exports-nothing` | `(none)~(none)` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `(none)~BAR=` | `(none)~BAR=` | `FOO=~BAR=` | `(none)~BAR=` | `(none)~BAR=` |
 | `declare/a-declared-name-a-local-has-shadowed` | `(none)~(none)` **2>** `<shell>: 1: typeset: not found` | `(none)~(none)` | `(none)~(none)` | `FOO=~FOO=` | `(none)~(none)` **2>** `<shell>: local: not found` | `(none)~FOO=` |
 | `declare/local-shadowing-an-imported-name` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=dumb~TERM=dumb` **2>** `<shell>: local: not found` | `(none)~TERM=dumb` |
+| `declare/typeset-assignment-and-the-export-attribute` | `FOO=bar~read=[bar]` **2>** `<shell>: 1: typeset: not found` | `FOO=baz~read=[baz]` | `FOO=baz~read=[baz]` | `FOO=baz~read=[baz]` | `(none)~read=[baz]` | `FOO=baz~read=[baz]` |
+| `declare/typeset-assignment-and-the-export-attribute-put-back` | `FOO=bar` **2>** `<shell>: 1: typeset: not found` | `FOO=baz` | `FOO=baz` | `FOO=baz` | `FOO=baz` | `FOO=baz` |
+| `declare/readonly-assignment-and-the-export-attribute` | `FOO=baz~BAR=b` | `FOO=baz~BAR=b` | `FOO=baz~BAR=b` | `FOO=baz~BAR=b` | `(none)~BAR=b` | `FOO=baz~BAR=b` |
+| `declare/export-assignment-keeps-the-export-attribute` | `FOO=baz~FOO=qux` | `FOO=baz~FOO=qux` | `FOO=baz~FOO=qux` | `FOO=baz~FOO=qux` | `FOO=baz~FOO=qux` | `FOO=baz~FOO=qux` |
+| `declare/typeset-assignment-in-a-posix-function` | `FOO=bar~read=[bar]` **2>** `<shell>: 1: typeset: not found` | `FOO=bar~read=[bar]` | `FOO=bar~read=[bar]` | `FOO=bar~read=[bar]` | `(none)~read=[baz]` | `FOO=bar~read=[bar]` |
 | `declare/typeset-local-shadowing-an-exported-name` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `(none)~FOO=bar` | `(none)~FOO=bar` |
 | `declare/integer-attribute-evaluates-a-later-assignment` | `[5+2]` **2>** `<shell>: 1: typeset: not found` | `[7]` | `[7]` | `[7]` | `[7]` | `[7]` |
 | `declare/integer-attribute-on-the-declaration` | `[]` **2>** `<shell>: 1: typeset: not found` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` |
@@ -7094,7 +7189,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/global-letter-against-a-local` | `in=in~out=out` **2>** `<shell>: 1: typeset: not found` | `in=in~out=new` | `in=in~out=new` | `in=in~out=out` **2>** `<shell>: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: local: not found~<shell>: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `in=new~out=out` |
 | `declare/lower-case-attribute` | `v=~v2=DEF` **2>** `<shell>: 1: typeset: not found` | `v=abc~v2=def` | `v=abc~v2=def` | `v=~v2=DEF` **2>** `<shell>: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `v=abc~v2=def` | `v=abc~v2=def` |
 | `declare/upper-case-attribute` | `w=~st=0` **2>** `<shell>: 1: typeset: not found` | `w=ABC~st=0` | `w=ABC~st=0` | `w=~st=0` **2>** `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `w=ABC~st=0` | `w=ABC~st=0` |
+| `declare/hide-attribute-keeps-the-value` | `[] st=127` **2>** `<shell>: 1: typeset: not found` | `[] st=2` **2>** `<shell>: line 1: typeset: -H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `[] st=2` **2>** `<shell>: line 1: typeset: -H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `[] st=2` **2>** `<shell>: line 0: typeset: -H: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[hid] st=0` | `[hid] st=0` |
+| `declare/hide-attribute-keeps-the-value-out-of-a-listing` | `st=127` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `st=1` **2>** `<shell>: line 1: typeset: -H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~<shell>: line 1: typeset: h: not found` | `st=1` **2>** `<shell>: line 1: typeset: -H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~<shell>: line 1: typeset: h: not found` | `st=1` **2>** `<shell>: line 0: typeset: -H: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 0: typeset: h: not found` | `typeset -H h=hid~st=0` | `typeset h~st=0` |
+| `declare/hide-attribute-removed` | `st=127` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `st=1` **2>** `<shell>: line 1: typeset: -H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~<shell>: line 1: typeset: +H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~<shell>: line 1: typeset: h: not found` | `st=1` **2>** `<shell>: line 1: typeset: -H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~<shell>: line 1: typeset: +H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~<shell>: line 1: typeset: h: not found` | `st=1` **2>** `<shell>: line 0: typeset: -H: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 0: typeset: +H: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 0: typeset: h: not found` | `h=hid~st=0` | `typeset h=hid~st=0` |
+| `declare/hide-attribute-on-a-table` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `[v]~declare -a m=([0]="v")~st=0` **2>** `<shell>: line 1: typeset: -H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `[v]~declare -a m=([0]="v")~st=0` **2>** `<shell>: line 1: typeset: -H: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `[v]~declare -a m='([0]="v")'~st=0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[v]~typeset -A -H m=([k]=v)~st=0` | `[v]~typeset -A m~st=0` |
+| `declare/global-letter-with-the-table-attribute` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `[v] st=0` | `[v] st=0` | `[v] st=0` **2>** `<shell>: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `[v] st=0` |
+| `declare/integer-attribute-added-to-a-name-with-a-value` | `[5+2] st=127` **2>** `<shell>: 1: typeset: not found` | `[5+2] st=0` | `[5+2] st=0` | `[5+2] st=0` | `[7] st=0` | `[7] st=0` |
+| `declare/case-attribute-added-to-a-name-with-a-value` | `[MiXeD] st=127` **2>** `<shell>: 1: typeset: not found` | `[MiXeD] st=0` | `[MiXeD] st=0` | `[MiXeD] st=2` **2>** `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[MIXED] st=0` | `[MIXED] st=0` |
 | `declare/an-option-typeset-does-not-have` | `st=127` **2>** `<shell>: 1: typeset: not found` | `st=2` **2>** `<shell>: line 1: typeset: -q: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `st=2` **2>** `<shell>: line 1: typeset: -q: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `st=2` **2>** `<shell>: line 0: typeset: -q: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: typeset: -q: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `st=1` **2>** `<shell>:typeset:1: bad option: -q` |
+| `declare/an-option-written-with-a-plus` | `st=127` **2>** `<shell>: 1: typeset: not found` | `st=2` **2>** `<shell>: line 1: typeset: +q: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `st=2` **2>** `<shell>: line 1: typeset: +q: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `st=2` **2>** `<shell>: line 0: typeset: +q: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: typeset: +q: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `st=1` **2>** `<shell>:typeset:1: bad option: +q` |
 | `declare/an-option-local-does-not-have` | **2>** `<shell>: 1: local: -q: bad variable name` *(status 2)* | `in~st=0` **2>** `<shell>: line 1: local: -q: invalid option~local: usage: local [option] name[=value] ...` | `in~st=0` **2>** `<shell>: line 1: local: -q: invalid option~local: usage: local [option] name[=value] ...` | `in~st=0` **2>** `<shell>: line 0: local: -q: invalid option~local: usage: local name[=value] ...` | `in~st=0` **2>** `<shell>: local: not found` | `in~st=0` **2>** `f:local: bad option: -q` |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
@@ -7169,6 +7272,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/local-shadowing-an-imported-name` — the same question where the name arrived in the environment rather than being exported by hand, which is the route that made the two answers one: an imported name is exported by having been imported, so the local either inherits that or does not, and the split is the same either way
   ```sh
   f() { local TERM=changed; env | grep '^TERM=' || echo "(none)"; }; f; env | grep '^TERM='
+  ```
+- `declare/typeset-assignment-and-the-export-attribute` — whether a declaration that assigns takes the export attribute off the name it assigned to: one shell tells the child nothing and goes on holding the value, the other two hand the child the new value. Not about scope — this is the top level — and read through a real child, because the name keeps its value either way and only a command can see the difference
+  ```sh
+  export FOO=bar; typeset FOO=baz; env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"
+  ```
+- `declare/typeset-assignment-and-the-export-attribute-put-back` — a reset and not a refusal: naming the attribute again afterwards puts it back, so the shell that clears it has not decided the name may never be exported
+  ```sh
+  export FOO=bar; typeset FOO=baz; export FOO; env | grep '^FOO=' || echo "(none)"
+  ```
+- `declare/readonly-assignment-and-the-export-attribute` — the same question through `readonly`, which is that shell's `typeset -r` and answers it the same way — and the valueless half is the other end of the axis: with no value on the line the attribute is left alone everywhere, which is what makes the pair above a statement about assignment rather than about the builtin. Spelled with `readonly` rather than `typeset` because one shell *lists* a valueless `typeset` of a name it already has, which is a divergence of its own and not this one. dash reaches this case where it has no `typeset` to reach the others with
+  ```sh
+  export FOO=bar; readonly FOO=baz; env | grep '^FOO=' || echo "(none)"; export BAR=b; readonly BAR; env | grep '^BAR=' || echo "(none)"
+  ```
+- `declare/export-assignment-keeps-the-export-attribute` — the two spellings that never ask it: `export` names the attribute outright, and a plain assignment is not a declaration utility's doing at all. Both hand the child the new value in every shell, which is the boundary the axis is drawn at
+  ```sh
+  export FOO=bar; export FOO=baz; env | grep '^FOO=' || echo "(none)"; FOO=qux; env | grep '^FOO=' || echo "(none)"
+  ```
+- `declare/typeset-assignment-in-a-posix-function` — where the declaration reaches the caller rather than taking a scope, the attribute goes off for good — the pair with the keyword-function case below, where the same shell only takes it off for the function's duration
+  ```sh
+  export FOO=bar; f() { typeset FOO=baz; }; f; env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"
   ```
 - `declare/typeset-local-shadowing-an-exported-name` — the same question through `typeset` in a keyword function, which is the only form that asks it of ksh93 — and it answers as zsh does, by a road of its own: this shell's `typeset` takes the attribute off any name it assigns, at the top level as well as in a function
   ```sh
@@ -7249,9 +7372,41 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   typeset -u w=abc; echo "w=$w"; echo "st=$?"
   ```
+- `declare/hide-attribute-keeps-the-value` — the letter two shells have and split over. In zsh `-H` hides a name's value from listings and changes nothing about a read; in ksh93 the same letter is a wholly different attribute — file name mapping — and hides nothing at all. This row is the half they agree on: the name holds `hid` and `$h` says so in both, so nothing downstream of the declaration can tell them apart. bash refuses the letter under `typeset` and under `declare`, with the usage line and 2, and dash has no such builtin
+  ```sh
+  typeset -H h=hid; echo "[$h] st=$?"
+  ```
+- `declare/hide-attribute-keeps-the-value-out-of-a-listing` — and the half they disagree on, which is the whole of what the letter does in zsh: `typeset h` there, with no `=hid` after it, against ksh93's `typeset -H h=hid`, which writes the value *and* the letter back. So the attribute cannot be read as one thing with two spellings — one shell expresses it by omitting the value and the other by naming the flag, and a listing is the only place either of them says anything
+  ```sh
+  typeset -H h=hid; typeset -p h; echo "st=$?"
+  ```
+- `declare/hide-attribute-removed` — `+H` puts the value back in the listing, which is the tell that the value was there all along — and it is also the tell that a second declaration of a name that already holds one must not empty it, because a shell that re-declared `h` here would answer `typeset h=''` and look like it had merely un-hidden an empty name
+  ```sh
+  typeset -H h=hid; typeset +H h; typeset -p h; echo "st=$?"
+  ```
+- `declare/hide-attribute-on-a-table` — the spelling scripts actually use: the hiding letter bundled with the table letter, where the element still reads back and only the listing is short of it — `typeset -A m` in zsh against ksh93's `typeset -A -H m=([k]=v)`. bash 3.2 has no `-A` either, so the panel splits three ways over one word
+  ```sh
+  typeset -AH m; m[k]=v; echo "[${m[k]}]"; typeset -p m; echo "st=$?"
+  ```
+- `declare/global-letter-with-the-table-attribute` — the two letters together, which is not the sum of the rows that have each alone: the global letter says where the declaration lands and the table letter says what it is, and a shell that reads the first and drops the second leaves `m` an *indexed* array, so the very next `m[k]=v` is a non-numeric subscript and is refused. bash and zsh have both letters; ksh93 has no `-g` at all and, because its `typeset` is special, the refusal ends the script
+  ```sh
+  typeset -gA m; m[k]=v; echo "[${m[k]}] st=$?"
+  ```
+- `declare/integer-attribute-added-to-a-name-with-a-value` — the attribute arriving *after* the value, which is a different question from the two rows above it: bash leaves the four characters alone, while ksh93 and zsh read what the name already holds back through the attribute that just arrived and store 7. Either way the value survives — the answer no shell gives is the empty string, which is what a declaration that treated `typeset -i v` as `typeset -i v=` would produce
+  ```sh
+  v=5+2; typeset -i v; echo "[$v] st=$?"
+  ```
+- `declare/case-attribute-added-to-a-name-with-a-value` — the same question of a case letter, and the same split — `MIXED` in ksh93 and zsh, `MiXeD` in bash — which is what makes it a rule about attributes rather than about arithmetic. bash 3.2 has no `-u` at all and answers 2 while leaving the value where it is
+  ```sh
+  d=MiXeD; typeset -u d; echo "[$d] st=$?"
+  ```
 - `declare/an-option-typeset-does-not-have` — the refusal splits three ways: reported with a usage line and status 2, reported bare with 1, and fatal with the usage lines in the shell whose typeset failures end the script
   ```sh
   typeset -q v=1; echo "st=$?"
+  ```
+- `declare/an-option-written-with-a-plus` — the sign a refusal names is the one the word was written with — `+q` in all four shells that have the builtin, each in its own words and its own status. It is the only place a shell spells an option with a plus, so it is the only place the question can be asked, and a refusal that normalized the word to `-q` would be pointing at a word the script never wrote
+  ```sh
+  typeset +q v; echo "st=$?"
   ```
 - `declare/an-option-local-does-not-have` — the same question of `local`, where the shell with no letters reads `-q` as a name and dies on it, and the one with no `local` at all never reaches the question
   ```sh

@@ -3696,12 +3696,12 @@ spelling `ReadOptions` uses — `Semantics.DeclareOptions` and
 
     declare/typeset
       bash   aAfFgilprux   plus -I -n -t, unimplemented here
-      zsh    aAfgilprux    plus floats, padding, ties…, unimplemented
-      ksh93  aAilprux      plus -f -F -b -n…, unimplemented (see below)
+      zsh    aAfgHilprux   plus floats, padding, ties…, unimplemented
+      ksh93  aAilprux      plus -f -F -b -n… and its own -H, unimplemented
       dash   —             no typeset at all
     local
       bash   aAgilprux     plus -f -F -I -n -t, unimplemented
-      zsh    aAilprux
+      zsh    aAHilprux
       dash   (none)        `local -r x` declares a name `-r`, then refuses
                            it: `local: -r: bad variable name`, fatal
       ksh93  —             no local at all
@@ -3715,6 +3715,43 @@ assigned to the name, the declaring assignment included. zsh stores the
 raw text and folds on *expansion* instead — every read agrees with the
 other two shells, and only its `typeset -p` betrays the difference by
 listing the raw value, which is deliberately not modeled.
+
+**`-H` is one letter and two attributes, and only one of them is
+built.** Measured 2026-09-06. In zsh it hides a name's *value* from every
+listing that would write one: `typeset -H h=hid` leaves `$h` reading
+`hid`, and `typeset -p h` answers `typeset h` with no `=hid` after it —
+the attributes still speak, the value does not. `+H` gives it back. It
+reaches the other listings too: `export -p` writes `export ex`, bare
+`export` writes `ex`, and a bare `set` writes `zzh` where an ordinary
+name on the same listing is `zzv=plain`. So it is a listing attribute
+and nothing else, and it is implemented as one — recorded against the
+name and consulted where a value would be written, not accepted and
+dropped.
+
+ksh93 has the same letter for a different attribute: file name mapping,
+which does *not* hide. `typeset -H h=hid` there lists back as
+`typeset -H h=hid` — the value **and** the flag — and a bare listing
+calls the attribute `filename`. That letter stays refused by name; it is
+not the zsh one under another spelling, and modelling the two as one
+attribute with two renderings would be inventing a shared thing that is
+not there. bash refuses `-H` outright, under `declare` and `typeset`
+alike, with its usage line and 2; dash has no such builtin. There is
+therefore no axis — only a letter one dialect has, in
+`Semantics.DeclareOptions` and `LocalOptions`. Corpus:
+`declare/hide-attribute-*`, `set/bare-set-and-a-hidden-value`.
+
+**An attribute added to a name that already holds a value keeps it, and
+re-reads it.** A separate rule from the one above, and the one that
+makes `-H` safe: `typeset -H h` on an existing `h` must hide the value,
+not destroy it. What the name holds survives in all four shells that
+spell the builtin — and in zsh and ksh93 it is read back through the
+attribute that has just arrived, so `v=5+2; typeset -i v` is 7 and
+`d=MiXeD; typeset -u d` is `MIXED`, where bash leaves both alone. A
+compound value is not re-read anywhere: `arr=(a b); typeset -u arr`
+stays `a b`. This is not an assignment, so a readonly name meets no
+refusal — `typeset -r r=1; typeset -i r` is 1 with status 0. Corpus:
+`declare/integer-attribute-added-to-a-name-with-a-value`,
+`declare/case-attribute-added-to-a-name-with-a-value`.
 
 **`-g` has an axis inside it.** With no local in front of the name the
 two shells that spell the letter agree: the global is written. With a
@@ -5855,6 +5892,26 @@ Makes `${#a}` of an array the number of elements, which is zsh's
 reading; bash and ksh93 measure the element the bare name yields. Asked
 only where the two answers differ.
 
+**`ArrayNameWithoutSubscriptIsTheList`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Makes an unquoted bare array name the array itself — one field per
+element, a slice slicing the list and an element-wise operator applying
+to each — exactly as `${a[@]}` is. zsh reads it that way; bash and ksh93
+read the bare name as `${a[0]}` and hand over one field, and dash has no
+arrays, which is why the axis is absent rather than false there.
+
+The field-count half of what `ArrayScalarIsTheWholeArray` answers for the
+value, and separate from it because the same shell answers the two
+differently by quoting: `"$a"` is one joined field in zsh as well. So the
+divergence is exactly the *unquoted* spelling in a context that splits —
+an assignment's value, a `case` subject and a here-document body join it
+in every shell, measured.
+
+Asked only where the two readings differ: more than one element, or
+exactly one under an operator that still reads the list there — a slice,
+whose offset counts elements rather than characters, and the three
+element-selecting operators, which can leave the list empty.
+
 **`ArrayScalarIsTheWholeArray`** — bash no · dash unspecified · ksh93 no · zsh yes
 
 Decides what a plain `$a` gives when `a` is an array: zsh says every
@@ -6426,6 +6483,12 @@ Gives a name a value when it is declared without one: `local u` or
 UNSET in bash and ksh93 — the name exists in all three, but only zsh
 considers it set.
 
+It is about a name the declaration *creates*, and the cell rather than
+the name: a shadow a function's declaration takes is a new cell however
+much the caller held, and a second declaration in the same scope is
+writing over its own. A name that already holds a value keeps it — see
+"an attribute added to a name that already holds a value", above.
+
 **`ExportCarriesFunctions`** — bash yes · dash no · ksh93 no · zsh no
 
 Gives `export` its `-f`, which writes a function into a child's
@@ -6501,6 +6564,48 @@ This is the shape used to declare a local before assigning it
 conditionally, so the difference is silent: the function reads the
 caller's value where it expected nothing.
 
+**`DeclarationAssignmentClearsTheExportAttribute`** — bash no · dash absent · ksh93 yes · zsh no
+
+Takes the export attribute off a name a declaration utility assigns to.
+
+    export FOO=bar; typeset FOO=baz; env | grep '^FOO='
+
+    bash 5.3, bash 3.2, bash as sh, zsh   FOO=baz
+    ksh93                                 nothing, now and afterwards
+
+One shell resets it. The name goes on holding `baz` — `typeset -p` says
+so, `export -p` no longer lists it — and no child is told about it again
+until something names the attribute. That last part is what makes it a
+reset rather than a refusal: `export FOO` afterwards puts it back.
+
+**The value on the line is what asks it.** A valueless `typeset FOO`
+leaves the attribute alone in every shell, and so do the valueless
+declarations that change the value anyway — `typeset -i FOO` stores 0
+over a non-numeric value and `typeset -u FOO` folds what is there, and a
+child is told about both. `readonly FOO=baz` clears it, because in the
+shell that does this `readonly` *is* its `typeset -r`; `export FOO=baz`
+does not, because it names the attribute; and a plain `FOO=baz` does not
+in any shell, which is the boundary the axis is drawn at.
+
+Asked only where the name was already exported, where the declaration
+does not name the attribute itself, and where the declaration did **not**
+take a scope. The scoped half is `LocalInheritsTheExportAttribute` below
+— the same shell's answer arrived at from the other side — and the two
+must not both fire: in a keyword function the attribute comes back on
+return, and in a function whose declarations reach the caller it is gone
+for good.
+
+    export FOO=bar
+    f() { typeset FOO=baz; }             # no scope: gone for good
+    function f { typeset FOO=baz; }      # a scope: back on return
+
+dash is absent rather than no: it has no `typeset` at all. It does have
+`readonly`, and it keeps the attribute there, which is the one column
+that reaches this axis by the other spelling.
+
+The preset is no. POSIX has an exported name keep the attribute for the
+life of the shell, and both other shells with the builtin agree.
+
 **`LocalInheritsTheExportAttribute`** — bash yes · dash yes · ksh93 no · zsh no
 
 Gives a local declaration the export attribute of the name it shadows,
@@ -6518,9 +6623,10 @@ route.
 
 ksh93 has no `local`, so the question reaches it only through `typeset`
 in a keyword function — where the child is told nothing, as in zsh. It
-gets there from further away: that shell's `typeset` takes the export
-attribute off any name it assigns, at the top level as well as in a
-function, and only the local half is modeled.
+gets there from further away, and the axis above is the rest of the road:
+that shell's `typeset` takes the export attribute off any name it
+assigns, at the top level as well as in a function. Both halves are
+modeled, and each is asked where the other is not.
 
 Two neighbors are *not* this axis. What a valueless declaration leaves
 visible is `ValuelessDeclarationHidesTheOuterValue`, and the two compose:

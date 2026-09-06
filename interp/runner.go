@@ -1082,6 +1082,14 @@ type Runner struct {
 	// a property of the name that changes what a later assignment means.
 	lowered map[string]bool
 	uppered map[string]bool
+	// hidden names keep their value out of every listing that would write
+	// one — `typeset -H`. It is a property of the name like the others, but
+	// the only one that changes nothing about a read: `$h` and `${h[k]}`
+	// answer what they always did, and only a listing is any the wiser. One
+	// shell in the panel spells the letter with this meaning; another spells
+	// the same letter for a different attribute that does *not* hide, which
+	// is why the dialect decides who may set it — see Semantics.DeclareOptions.
+	hidden map[string]bool
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
 	// depth bounds function recursion, because a shell script can recurse
@@ -2741,6 +2749,38 @@ const (
 )
 
 // setVarAs sets a variable, knowing how the assignment was written.
+// attributeFolded is what a name's attributes make of a value: the integer
+// attribute evaluates it as an expression rather than storing the text, and
+// the case attributes fold it. The second result is false where the integer
+// evaluation failed and has already said so, in which case nothing is stored.
+//
+// Its own function because two callers need it and only one of them is an
+// assignment: applying `-i` or `-u` to a name that already holds a value
+// re-reads what it holds through the attribute that just arrived — see
+// declareEmpty — and that is not an assignment, so it must not meet the
+// readonly refusal or anything else setVarAs does around it.
+func (r *Runner) attributeFolded(name, value string) (string, bool) {
+	if r.integer[name] {
+		// The name was declared integer, so what is assigned to it is an
+		// expression rather than text.
+		v, ok := r.integerValue(value)
+		if !ok {
+			return "", false
+		}
+		value = v
+	}
+	// The case attributes, folded at assignment the way the integer
+	// attribute evaluates there: `declare -l v; v=ABC` stores `abc` in both
+	// shells that spell the letter.
+	switch {
+	case r.lowered[name]:
+		value = strings.ToLower(value)
+	case r.uppered[name]:
+		value = strings.ToUpper(value)
+	}
+	return value, true
+}
+
 func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if r.readonly[name] {
 		// Fatal everywhere but bash, measured with a plain assignment in a
@@ -2800,23 +2840,9 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if r.Vars == nil {
 		r.Vars = map[string]string{}
 	}
-	if r.integer[name] {
-		// The name was declared integer, so what is assigned to it is an
-		// expression rather than text.
-		v, ok := r.integerValue(value)
-		if !ok {
-			return
-		}
-		value = v
-	}
-	// The case attributes, folded at assignment the way the integer
-	// attribute evaluates there: `declare -l v; v=ABC` stores `abc` in both
-	// shells that spell the letter.
-	switch {
-	case r.lowered[name]:
-		value = strings.ToLower(value)
-	case r.uppered[name]:
-		value = strings.ToUpper(value)
+	value, ok := r.attributeFolded(name, value)
+	if !ok {
+		return
 	}
 	if _, dynamic := r.Dynamic[name]; dynamic {
 		// Assigning a produced parameter is a message to its producer rather

@@ -567,6 +567,14 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		return fields, true
 	}
 	e := s.Param
+	// `${+name}` is a count of set-ness and not a value, so none of the
+	// shapes below applies to it — and this stands in front of the bare-array
+	// rewrite in particular, which would otherwise turn `${+a}` into
+	// `${+a[@]}` and answer with one field per element.
+	if setTestAnswers(e) {
+		_, set, _ := r.paramSource(e)
+		return []string{setTestResult(set)}, true
+	}
 	// A bare array name is the *array* in one dialect, so the node is given
 	// the subscript that says so and the array path below answers it. See
 	// bareArrayAsList for why that is a rewrite rather than a path of its own.
@@ -1280,6 +1288,15 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			return ""
 		}
 		return strings.Join(words, ifsFirst(r.ifs()))
+	}
+	// `${+name}` is the is-it-set question, answered before anything reads a
+	// value: it takes the same source every conditional expansion takes, and
+	// it deliberately does *not* reach the nounset check below — asking
+	// whether a name is set without tripping `set -u` is the whole of what
+	// the construct is for.
+	if setTestAnswers(e) {
+		_, set, _ := r.paramSource(e)
+		return setTestResult(set)
 	}
 	// `${#v#a}` is the length of what the operator *leaves* — 2, not 3 —
 	// in the one grammar that accepts the pairing at all. The operator was

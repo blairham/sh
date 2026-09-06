@@ -1108,10 +1108,161 @@ flag:
   correct in both.
 
 Separately, `${}` and `x${}y` are the empty string in zsh and a `bad
-substitution` here, and `${+x}` — the is-it-set count — is unread. `${~}`
-is right because the tilde relaxes the empty-name rule the way a flag group
-does; the two plain forms are gaps of their own and `${~+x}` inherits the
-second of them.
+substitution` here. `${~}` is right because the tilde relaxes the empty-name
+rule the way a flag group does; `${}` is a gap of its own. `${+x}` — the
+is-it-set count — has its own section below, and `${~+x}` reads.
+
+## A `+` at the front: `${+name}` — zsh only
+
+A `+` written between the `${` and the parameter asks whether the parameter
+is **set**, and substitutes `1` or `0` rather than its value. zsh alone has
+it. The other four call the whole expansion unreadable, in the same
+three-way split every unreadable expansion follows: bash 5.3, bash 3.2,
+bash-as-sh and dash say `bad substitution` when the expansion is reached,
+ksh93 refuses it while reading (`` `+' unexpected ``) — which
+`BadSubstitutionAtParseTime` already records.
+
+**It never fails**, and that is the whole reason a script writes it: it is
+the guard that stands in front of everything else, so a shell that raises an
+error where the answer is `0` turns every guard into a hard stop rather than
+a false.
+
+Found in the wild, and this is the scale of it: `${+` appears **138 times**
+in `~/.zi/bin/zi.zsh`, 42 of them `${+functions[…]}` — an order of magnitude
+more than any other single construct that file gated on. The 42 are the
+spelling almost every caller uses to read `$functions`, so a shell with that
+parameter and without this flag cannot be asked the question the parameter
+exists to answer.
+
+All measurements below are of zsh 5.9.2 (Homebrew, arm64), taken 2026-09-06.
+
+### What it answers
+
+| written | result |
+| --- | --- |
+| `v=1; ${+v}` | `1` |
+| `${+NOPE}` | `0` |
+| `v=1; unset v; ${+v}` | `0` |
+| `v=; ${+v}` | `1` — **set-ness is not emptiness** |
+| `typeset v` (no value) | `1` |
+| `a=(x y z); ${+a}` | `1`, one field — not the element count and not the join |
+| `typeset -A m; ${+m}` | `1` |
+| `${+a[2]}`, `${+a[9]}` | `1`, `0` — an element rather than the name |
+| `${+m[k]}`, `${+m[nope]}` | `1`, `0` |
+| `${+functions[f]}` | `1` when the function is defined |
+| `${+aliases[x]}`, `${+commands[ls]}`, `${+options[xtrace]}` | the same question of each special table |
+| `set -- A B; ${+0} ${+1} ${+2} ${+3}` | `1 1 1 0` |
+| `${+10}` | `0` with two parameters — a positional may be several digits |
+
+`v=; ${+v}` is the row that separates this from `${v:+1}`, which fires on
+the empty value, and from `${v+1}`, which agrees here and disagrees
+elsewhere: an implementation that reused either would get most of the table
+right.
+
+### It does not trip `set -u`
+
+    set -u; echo ${+NOPE}     →  0, and the shell carries on
+    set -u; echo ${NOPE}      →  `NOPE: parameter not set`, fatal
+
+Asking whether a name exists without reading it is the whole of the
+construct. The same holds through a flag group: `set -u; v=nosuchvar;
+${(P)+v}` is `0`.
+
+### The name it may carry is a name or a positional, and nothing else
+
+Measured by asking for each, and the answer is not the one "is it set"
+suggests:
+
+| written | zsh |
+| --- | --- |
+| `${+x}`, `${+_x1}`, `${+0}`, `${+10}` | the count |
+| `${+@}` `${+*}` `${+#}` `${+?}` `${+$}` `${+!}` `${+-}` | `bad substitution` |
+| `${+}` | `bad substitution` — and `${~}` is the empty string, so this flag does *not* relax the empty name the way the tilde and the group do |
+| `${(U)+}`, `${~+}` | `bad substitution` as well |
+| `${++x}` | `bad substitution` — there is no doubled spelling, so no parity |
+| `${+${x}}` | `bad substitution` |
+
+The refusal is **deferred to the run**, like every other unreadable
+expansion in this dialect: `if false; then echo ${+?}; fi` is silent.
+
+### Where the `+` may be written
+
+After the parenthesized flag group and after the tilde run, and in front of
+everything else:
+
+| written | zsh |
+| --- | --- |
+| `${~+x}` | the count, with the tilde applied to it |
+| `${+~x}` | `bad substitution` — the tilde precedes, never follows |
+| `${=+x}` | the count; `${=x}`'s flag shares the tilde's slot and so precedes this one too |
+| `${+=x}` | `bad substitution` |
+| `${^+x}` | the count — the third character of that slot, and not a flag this implementation has |
+| `${+^x}` | `bad substitution` |
+| `${~=+x}`, `${=~+x}` | the count either way, since the slot's characters are interchangeable within it |
+| `${(U)+x}` | the count; a value transformation has nothing to transform |
+| `${+(U)x}` | `bad substitution` |
+| `${+#x}` | `bad substitution` — a length may not follow it |
+| `${#+x}` | **not this construct at all**: the `#` is read first, so this is `$#` with `+x` as an alternate word, and it is `x` for any set `#` |
+
+`(P)` is the one flag that reaches the answer, because it changes *which*
+parameter is being asked about rather than what its value becomes:
+
+    w=1; v=w;         ${(P)+v}  →  1
+    v=nosuchvar;      ${(P)+v}  →  0     (${(P)v} is empty, ${+v} is 1)
+    v=abc;            ${(U)+v}  →  1     (not an uppercased anything)
+    a=(1 2); ${(j.-.)+a}        →  1
+
+### Beside an operator it has no effect at all
+
+Not the answer, and not a refusal either — the expansion is exactly what it
+would have been without the `+`:
+
+    v=abc;  ${+v#a}    →  bc
+    v=abc;  ${+v:-x}   →  abc
+    v=abc;  ${+v+y}    →  y
+            ${+nope:-D}→  D
+            ${+nope#a} →  the empty string
+            ${+v=W}    →  W, and v is assigned
+    v=abc;  ${+v[2]#a} →  b
+
+So the count is the answer only for a plain reference. A length cannot
+co-occur — `${+#v}` is refused while reading and `${#+v}` never carries the
+flag — so the operator is the whole of the test.
+
+### Grammar
+
+The `+` is read only when the dialect's `ParamSetTestFlag` is on; elsewhere
+a leading `+` is not a name and the expansion follows the bad-substitution
+split above. The parsed node carries `SetTest`, a **bool** and not a count —
+which is the one place this differs from `ParamTildeFlag`, and it is
+measured rather than assumed: `${++x}` is a bad substitution, so there is no
+second `+` for a parity to be about. It asks a question rather than setting
+a mode.
+
+What may follow the `+` is checked where the `+` is read rather than after
+the name scan, because `${+#v}` would otherwise be read as a length over a
+set test — a shape the shell that has the construct does not have.
+
+The printer writes the span back raw, so the construct round-trips as
+source text.
+
+### What the corpus pins
+
+`param/the-set-test-flag-is-one-dialects` (the three-way split, with the
+empty-but-set name in the same row), `-does-not-trip-nounset` (with the
+`alive` that a shell which gave up could not print) and
+`-has-no-effect-beside-an-operator`.
+
+### What this implementation does not match
+
+`${+00}` is `1` in zsh and `0` here, which is inherited rather than the
+flag's: `${00}` is the shell's own name there and the empty string here, so
+a positional written with a leading zero is a gap of its own and this
+follows it.
+
+`${#+v}` is `v` in zsh — the `$#` reading above — and a `bad substitution`
+here, which is a gap this change neither opened nor closed: `${#}` taking
+an alternate word is the `${}` half of the same issue.
 
 ## An equals at the front: `${=spec}` — zsh only
 
@@ -1699,6 +1850,7 @@ implemented` are what they say instead.
     ParamExpansionFlags    ${(U)x}           — zsh only
     ParamTildeFlag         ${~x}, the tilde-and-filename flag — zsh only
     ParamSplitFlag         ${=x}, the split-into-words flag — zsh only
+    ParamSetTestFlag       ${+x}, the is-it-set count — zsh only
     ParamElementSelection  ${a:#pat} ${a:|b} ${a:*b} — zsh only
     BareSubscript          $a[1] and $#a, written without braces — zsh only
     ArraySubscriptFlags    ${a[(re)v]}, a flag group inside the brackets
@@ -1712,7 +1864,7 @@ implemented` are what they say instead.
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
 `ParamTransformations`, `ParamExpansionFlags`, `ParamTildeFlag`,
-`ParamSplitFlag` and
+`ParamSplitFlag`, `ParamSetTestFlag` and
 `ParamElementSelection` are false for `core`:
 the first and the last two are one shell's, and the `!` family is two
 shells' — neither is a common denominator. `BareSubscript` is false for

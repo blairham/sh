@@ -115,6 +115,7 @@ func Dialect() syntax.Dialect {
 	// and `${=2:-$ZSH_VERSION}` on lines 27 and 28 — refused, both version
 	// arrays are empty and the comparison answers true for every version.
 	d.ParamSplitFlag = true
+	d.ParamSetTestFlag = true
 	// A subscript's own parenthesized flag group: `${a[(re)value]}`, the
 	// first element equal to the operand. This shell alone — measured
 	// 2026-09-06, bash 5.3, bash 3.2, bash-as-sh and ksh93 all read the same

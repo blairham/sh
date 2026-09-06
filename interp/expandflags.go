@@ -116,6 +116,16 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 		words, set, isList = r.namedBase(strings.Join(words, " "), "")
 	}
 
+	// The is-it-set question, asked of whatever the base and `(P)` came to:
+	// measured, `v=nosuchvar; ${(P)+v}` is 0 while `${(P)v}` is empty and
+	// `${+v}` is 1, so the group's name resolution runs and its value
+	// transformations do not — `${(U)+v}` is `1` and not an uppercased
+	// anything. In front of the nounset check on purpose: `set -u` is not
+	// tripped by asking.
+	if setTestAnswers(e) {
+		return []string{setTestResult(set)}, false, true
+	}
+
 	if !set && e.Name != "" {
 		r.checkNounset(e)
 	}

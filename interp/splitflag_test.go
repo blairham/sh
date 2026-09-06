@@ -193,6 +193,13 @@ func TestTheSplitFlagSplitsTheListAsOneString(t *testing.T) {
 		{`set -- "p q" r; f "${=@}"`, `3:[p][q][r]`},
 		{`set -- "p q" r; f "${=*}"`, `3:[p][q][r]`},
 		{`set --; f "${=@}"`, `1:[]`},
+		// The join is on IFS's *first character* and not on a space, which
+		// only a value with no space in it can say: joined on a space these
+		// would come back as one field.
+		{`IFS=:; a=(x y); f "${=a[@]}"`, `2:[x][y]`},
+		{`IFS=:; a=(x y); f ${=a[@]}`, `2:[x][y]`},
+		{`IFS=:; a=("x:y" z); f "${=a[@]}"`, `3:[x][y][z]`},
+		{`IFS=:; set -- x y; f "${=@}"`, `2:[x][y]`},
 	} {
 		out, st := runSplitFlag(t, count+tc.src)
 		if out != tc.want || st != 0 {
@@ -260,9 +267,46 @@ func TestTheSplitFlagDoesNotReachAContextThatNeverSplits(t *testing.T) {
 		{`v="a b"; [[ ${=v} = "a b" ]] && printf SAME || printf DIFF`, `SAME`},
 		{`v="a b"; case ${=v} in "a b") printf JOINED;; a) printf FIRST;; esac`, `JOINED`},
 		{`v="a b"; x=${(U)=v}; printf "[%s]" "$x"`, `[A B]`},
+		// With a value the split would visibly change: an assignment keeps
+		// the spaces, where a group that split anyway and rejoined would
+		// have lost them.
+		{`v=" a "; x=${(U)=v}; printf "[%s]" "$x"`, `[ A ]`},
+		{`v=" a "; x=${=v}; printf "[%s]" "$x"`, `[ a ]`},
 		{`v="a b"; cat <<< ${=v}`, "a b\n"},
 	} {
 		out, st := runSplitFlag(t, tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// runSplitHomeSplitting is runSplitHome with the splitting axis answered yes,
+// for the rows about what the *option* splits rather than what the flag does.
+func runSplitHomeSplitting(t *testing.T, src string) (string, int) {
+	t.Helper()
+	home, dir := tildeFixture(t)
+	out, st := runGrammar(t, src, splitGrammar, func(r *Runner) {
+		sem := *r.Semantics
+		sem.SplitParamExpansion = Yes
+		sem.GlobExpansionResults = No
+		r.Semantics = &sem
+		r.Dir = dir
+		r.Env = append(r.Env, "HOME="+home)
+	})
+	return strings.ReplaceAll(out, home, "HOME"), st
+}
+
+// The tilde flag reaches every field the *option* split as well, which is one
+// rule and not two: `SH_WORD_SPLIT` and `${=spec}` make the same fields, and
+// each is at the head of a word of its own.
+func TestTheTildeFlagReachesTheFieldsTheOptionSplit(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`v="~/zz ~/qq"; f ${~v}`, `2:[HOME/zz][HOME/qq]`},
+		{`v="~/zz ~/qq"; f X${~v}`, `2:[X~/zz][HOME/qq]`},
+		{`v="~/zz ~/qq"; f "${~v}"`, `1:[~/zz ~/qq]`},
+	} {
+		out, st := runSplitHomeSplitting(t, count+tc.src)
 		if out != tc.want || st != 0 {
 			t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
 		}

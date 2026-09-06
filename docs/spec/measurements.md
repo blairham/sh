@@ -1080,6 +1080,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cd/pwd-p-resolves-symlinks` | `1~1` | `1~1` | `1~1` | `1~1` | `1~1` | `1~1` |
 | `type/a-function-and-its-body` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function` | `f is a shell function from zsh` |
 | `type/a-body-with-a-construct-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function` | `f is a shell function from zsh` |
+| `type/a-body-with-a-here-document-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    cat <<E~body~E~~    echo after~}` | `f is a function~f () ~{ ~    cat <<E~body~E~~    echo after~}` | `f is a function~f () ~{ ~    cat  <<E~body~E~~    echo after~}` | `f is a function` | `f is a shell function from <script>` |
 | `type/a-body-with-redirections-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function` | `f is a shell function from zsh` |
 | `type/what-a-name-would-run` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a keyword~ls is a tracked alias for /bin/ls` | `cd is a shell builtin~if is a reserved word~ls is /bin/ls` |
 | `type/a-name-that-is-nothing` | `nope: not found~st=127` | `st=1` **2>** `<shell>: line 1: type: nope: not found` | `st=1` **2>** `<shell>: line 1: type: nope: not found` | `st=1` **2>** `<shell>: line 0: type: nope: not found` | `st=1` **2>** `<shell>: whence: nope: not found` | `nope not found~st=1` |
@@ -1554,6 +1555,16 @@ grades it and nothing drift-checks it either, for the same reason.
 - `type/a-body-with-a-construct-in-it` — the layout is per construct and not one rule: a `then` stays on the line of its `if` where a `do` moves to a line of its own, and a body closed by a keyword ends with a `;` where one closed by a brace does not
   ```sh
   f(){ if true; then echo y; fi; }; type f
+  ```
+- `type/a-body-with-a-here-document-in-it` — the one shell that says a body back has to say a here-document back too, and the body's lines are not the shell's to arrange: they go out as they were read, between the operator's line and the delimiter's. What the arrangement does own is the seam — the `;` that would separate the next statement is dropped, because the delimiter's line has already ended, and a blank line is left where it was. A `;` written there is alone on a line of its own, which bash, dash and ksh93 all refuse to read back (#962). bash 3.2 writes a second space between the command and the operator where 5.3 writes one, which is the same tree said twice
+  ```sh
+  f(){
+  cat <<E
+  body
+  E
+  echo after
+  }
+  type f
   ```
 - `type/a-body-with-redirections-in-it` — the one shell that says a body back writes a redirection two ways, and the tree it prints from has forgotten which was typed. A file target takes a space after the operator and keeps only the descriptor that was written; a dup is written tight and has the descriptor it acts on filled in, so `>&2` comes back as `1>&2` and a close comes back as `>&-` whichever operator asked for it
   ```sh
@@ -4502,7 +4513,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/set-v-echoes-the-line-that-would-not-parse` | `one` **2>** `echo one~fi~<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one` **2>** `echo one~fi~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `fi'` *(status 2)* | `one` **2>** `echo one~fi~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `fi'` *(status 2)* | `one` **2>** `echo one~fi~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `fi'` *(status 2)* | `one` **2>** `echo one~fi~<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one` **2>** `echo one~fi~<script>:2: parse error near `fi'` *(status 1)* |
 | `opt/set-v-echoes-a-first-token-that-will-not-lex` | **2>** `"abc~echo two~<script>: 3: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `"abc~echo two~<script>: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `"abc~echo two~<script>: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `"abc~echo two~<script>: line 1: unexpected EOF while looking for matching `"'~<script>: line 3: syntax error: unexpected end of file` *(status 2)* | **2>** `"abc~echo two~<script>: syntax error at line 1: `"' unmatched` *(status 3)* | **2>** `"abc~echo two~<script>:3: unmatched "` *(status 1)* |
 | `opt/set-v-echoes-input-that-ran-out` | `one` **2>** `echo one~if true; then~<script>: 3: Syntax error: end of file unexpected (expecting "fi")` *(status 2)* | `one` **2>** `echo one~if true; then~<script>: line 3: syntax error: unexpected end of file from `if' command on line 2` *(status 2)* | `one` **2>** `echo one~if true; then~<script>: line 3: syntax error: unexpected end of file from `if' command on line 2` *(status 2)* | `one` **2>** `echo one~if true; then~<script>: line 3: syntax error: unexpected end of file` *(status 2)* | `one` **2>** `echo one~if true; then~<script>: syntax error at line 3: `then' unmatched` *(status 3)* | `one` **2>** `echo one~if true; then~<script>:3: parse error near `\n'` *(status 1)* |
-| `opt/set-v-echoes-before-a-remark` | `one~body` **2>** `echo one~cat <<END~body` | `one~body` **2>** `echo one~cat <<END~body~~<script>: line 4: warning: here-document at line 2 delimited by end-of-file (wanted `END')` | `one~body` **2>** `echo one~cat <<END~body~~<script>: line 4: warning: here-document at line 2 delimited by end-of-file (wanted `END')` | `one~body` **2>** `echo one~cat <<END~body` | `one~body` **2>** `echo one~cat <<END~body` | `one~body` **2>** `echo one~cat <<END~body` |
+| `opt/set-v-echoes-before-a-remark` | `one~body` **2>** `echo one~cat <<END~body` | `one~body` **2>** `echo one~cat <<END~body~<script>: line 3: warning: here-document at line 2 delimited by end-of-file (wanted `END')` | `one~body` **2>** `echo one~cat <<END~body~<script>: line 3: warning: here-document at line 2 delimited by end-of-file (wanted `END')` | `one~body` **2>** `echo one~cat <<END~body` | `one~body` **2>** `echo one~cat <<END~body` | `one~body` **2>** `echo one~cat <<END~body` |
 | `opt/set-o-verbose-echoes-what-is-read` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` |
 | `opt/pipefail-appears-in-the-plus-o-listing` | *(no output, status 0)* | `pipefail` | `pipefail` | `pipefail` | *(no output, status 0)* | `pipefail` |
 | `opt/pipefail-turned-on-is-listed-on` | *(no output, status 0)* | `pipefail` | `pipefail` | `pipefail` | `pipefail` | `pipefail` |
@@ -4746,7 +4757,7 @@ grades it and nothing drift-checks it either, for the same reason.
   echo one
   if true; then
   ```
-- `opt/set-v-echoes-before-a-remark` — and for input the shell *accepted*: the here-document's lines are written back, then the one shell that remarks on a delimiter that never arrived says so, then the command's own output. The order is the same rule as the two rows above, which is why they are three rows and one fix. The body ends in a newline because the printer round-trip needs one — a body without it is printed with the delimiter attached to its last line
+- `opt/set-v-echoes-before-a-remark` — and for input the shell *accepted*: the here-document's lines are written back, then the one shell that remarks on a delimiter that never arrived says so, then the command's own output. The order is the same rule as the two rows above, which is why they are three rows and one fix. The last line ends without a newline, which is the shape that found #962 — the printer wrote the delimiter onto it and the body became `bodyEND`
   ```sh
   echo one
   cat <<END
@@ -5414,6 +5425,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `heredoc/dash-does-not-strip-spaces-from-the-delimiter` | `body~    EOF` | `body~    EOF` **2>** `<script>: line 4: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `body~    EOF` **2>** `<script>: line 4: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `body~    EOF` | `body~    EOF` | `body~    EOF` |
 | `heredoc/the-body-follows-the-next-newline` | `one~after~done` | `one~after~done` | `one~after~done` | `one~after~done` | `one~after~done` | `one~after~done` |
 | `heredoc/two-on-one-line-collect-in-operator-order` | `first~second` | `first~second` | `first~second` | `first~second` | `first~second` | `first~second` |
+| `heredoc/two-on-one-command-and-the-last-is-read` | `b` | `b` | `b` | `b` | `b` | `a~b` |
+| `heredoc/a-body-that-never-ended-its-last-line` | `body` | `body` **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` | `body` | `body` |
 | `redir/the-shell-picks-the-descriptor` | **2>** `<shell>: 1: exec: {fd}: not found` *(status 127)* | `hi` | `hi` | **2>** `<shell>: line 0: exec: {fd}: not found` *(status 127)* | `hi` | `hi` |
 | `redir/a-picked-descriptor-may-outlive-its-command` | **2>** `<shell>: 3: Syntax error: Bad fd number` *(status 2)* | `one~two` | `one~two` | `dead~one {fd}` **2>** `<shell>: line 1: $fd: ambiguous redirect` | `one~dead` **2>** `<shell>[2]: 10: cannot open [Bad file descriptor]` | `one~two` |
 | `redir/closing-through-a-name-that-holds-nothing` | **2>** `<shell>: 1: exec: {nofd}: not found` *(status 127)* | `st=1` **2>** `<shell>: line 1: nofd: ambiguous redirect` | **2>** `<shell>: line 1: nofd: ambiguous redirect` *(status 1)* | **2>** `<shell>: line 0: exec: {nofd}: not found` *(status 127)* | `st=0` | `st=1` **2>** `<shell>:1: parameter nofd does not contain a file descriptor` |
@@ -5746,6 +5759,19 @@ grades it and nothing drift-checks it either, for the same reason.
   A
   second
   B
+  ```
+- `heredoc/two-on-one-command-and-the-last-is-read` — two here-documents on *one* command rather than on two, which is the shape that says what a second input redirection does to the first. Five of the six keep only the last, so `cat` reads B and prints `b`; zsh concatenates them and prints both, which is the input half of the same rule that makes two output redirections write to both files. The row is also the printer's: the second body follows the first delimiter's line, so a newline written in front of it opens B with a blank line and the command prints one before `b` (#962)
+  ```sh
+  cat <<A <<B
+  a
+  A
+  b
+  B
+  ```
+- `heredoc/a-body-that-never-ended-its-last-line` — `heredoc/no-delimiter-and-a-warning` with the final newline taken away, which is the only way to write a here-document body that does not end in one. What moves is where the remark is located: the line the input ran out on is 2 here and 3 there, so it is the line the last character sat on rather than the count of lines the file has. The body and the status are the same in all six. It is the shape that found #962 — the printer wrote the delimiter onto that unfinished last line and the body became `bodyEND` — and it is the round trip's only case of a here-document with no delimiter of its own
+  ```sh
+  cat <<X
+  body
   ```
 - `redir/the-shell-picks-the-descriptor` — three of the four allocate a descriptor for `{fd}` and assign its number to the variable; to dash the braces are a command word and exec goes looking for it
   ```sh

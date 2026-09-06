@@ -76,8 +76,13 @@ import "strings"
 // platform alias: it is not on every machine, it is not the operating system's,
 // and it can change while the shell runs. Expanding it would need a filesystem
 // read, which is the thing above that is rejected, and it would be a promise
-// this layer cannot keep. It remains the recorded limit, and the posture is the
-// mitigation: allow a subtree you control rather than deny one you do not.
+// this layer cannot keep. Such a link is answered elsewhere and later: the
+// interpreter checks what an open actually reached, against the descriptor it
+// already holds, which costs the gate no filesystem read and has no
+// time-of-check race in it. See interp/verifyopen.go and the section of
+// docs/design/sandboxing.md it implements. Nothing about that changes the
+// rule this file widens, and the posture stays the standing advice: allow a
+// subtree you control rather than deny one you do not.
 
 // alias is one stable two-name place: whatever is written, and the other name
 // for it. Both directions are expanded, because a policy naming the physical

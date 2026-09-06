@@ -150,11 +150,17 @@ func (r *Runner) reportRefusal(a Action) {
 // only then is the file emptied — which is the same sequence O_TRUNC is,
 // split at the point where a decision can be made.
 //
-// Only regular files are emptied, because O_TRUNC is a no-op in the kernel
-// for everything else and ftruncate is not: `> /dev/null` must stay the
-// commonplace it is. A truncation that fails is returned as the open's own
-// error, which is what it would have been — `> some-running-binary` reports
-// text-file-busy either way.
+// Only regular files are emptied, and that guard is measured rather than
+// cautious. On Linux `open("/dev/null", O_WRONLY|O_TRUNC)` succeeds and
+// `ftruncate` on the same descriptor answers EINVAL — as it does on a FIFO —
+// so splitting the flag off without the guard would break `> /dev/null`,
+// which is about the most common thing a script does. Darwin happens to
+// accept both, which is exactly why the guard cannot be justified by trying
+// it on one machine.
+//
+// A truncation that does fail is returned as the open's own error, which is
+// what it would have been: `> some-running-binary` reports text-file-busy
+// either way.
 //
 // A run with no gate takes the first line and nothing else, so its opens are
 // the calls they always were, flags included.

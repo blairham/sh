@@ -58,7 +58,7 @@ func TestOpenedPathAnswersForAFileAndNotForAPipe(t *testing.T) {
 
 // TestSamePlaceAbsorbsOnlyThePlatformsOwnSpelling. The suppression is what
 // keeps a Mac from consulting the gate twice for every temporary file, and it
-// is also the one place a hole could be hidden — so the neighbours are the
+// is also the one place a hole could be hidden — so the neighbors are the
 // cases worth writing down.
 func TestSamePlaceAbsorbsOnlyThePlatformsOwnSpelling(t *testing.T) {
 	if len(platformLinks) == 0 {
@@ -73,7 +73,7 @@ func TestSamePlaceAbsorbsOnlyThePlatformsOwnSpelling(t *testing.T) {
 		{"deeper", "/tmp/a/b/c", "/private/tmp/a/b/c", true},
 		{"a link inside it went elsewhere", "/tmp/x", "/private/tmp/elsewhere", false},
 		{"a link inside it left the tree", "/tmp/x", "/private/etc/passwd", false},
-		{"a neighbour whose name starts the same way", "/tmpfoo/x", "/private/tmpfoo/x", false},
+		{"a neighbor whose name starts the same way", "/tmpfoo/x", "/private/tmpfoo/x", false},
 		{"not under any of them", "/srv/x", "/other/x", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

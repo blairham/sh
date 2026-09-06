@@ -142,12 +142,27 @@ func TestASourcedLinkIsRefused(t *testing.T) {
 	if err := os.Symlink(script, link); err != nil {
 		t.Fatal(err)
 	}
-	out, st := run(t, ". "+link, hidesSecrets(nil))
+	var kinds []EventKind
+	out, st := run(t, ". "+link, func(r *Runner) {
+		hidesSecrets(nil)(r)
+		r.Events = SinkFunc(func(_ context.Context, e Event) {
+			if e.Action.Kind == ActionOpen {
+				kinds = append(kinds, e.Kind)
+			}
+		})
+	})
 	if strings.Contains(out, "ran-the-hidden-script") {
 		t.Fatalf("a link sourced a file the policy hides: %q", out)
 	}
 	if st == 0 {
 		t.Errorf("a refused `.` must fail, got %q status %d", out, st)
+	}
+	// The record has to say it was refused and not that the read failed. A
+	// policy decision reported as an I/O error is a decision nobody auditing
+	// the run can find, and the two are trivially confused here because both
+	// reach the same diagnostic.
+	if len(kinds) != 1 || kinds[0] != EventDenied {
+		t.Errorf("open events = %v, want one denial and no error", kinds)
 	}
 }
 

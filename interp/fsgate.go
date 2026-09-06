@@ -82,7 +82,7 @@ func (r *Runner) readLink(path string) (string, error) {
 // which is what the error below means to every caller: nothing to descend
 // into, nothing to match.
 //
-// Unlike its neighbours it opens the directory itself rather than handing the
+// Unlike its neighbors it opens the directory itself rather than handing the
 // path to os.ReadDir, and the reason is the one verifyopen.go sets out: a
 // name is not an object, so the listing is taken from a descriptor whose
 // object the gate has agreed to. `echo link/*` enumerating a denied directory

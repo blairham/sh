@@ -160,6 +160,33 @@ only if every named option is on; `-q` is that status with no output;
 around it are still switched; `-s` with `-u` is refused, status 1; an
 unknown flag prints a usage line, status 2.
 
+`expand_aliases` is the seventh wired name and the only one that is not a
+matcher option. It decides whether a word being *parsed* is replaced by
+what the alias table holds for it, so the state lives on the runner and
+the front end passes the parser a hook that reads it — measured, it is a
+switch and not a door: the word expands after `shopt -s`, is a command
+not found again after `shopt -u`, and the one-line-late rule `extglob`
+has applies to it for the same reason. Two things move it besides the
+builtin: the route the program arrived by, which is the dialect's
+`syntax.Dialect.ExpandAliases` and sets the base, and **POSIX mode**,
+which turns it on for as long as the mode lasts. Leaving the mode
+restores the base rather than what was set before entering — measured,
+`shopt -s expand_aliases; set -o posix; set +o posix; shopt
+expand_aliases` answers `off` in bash 5.3 — which is why the runner keeps
+two bits and not one.
+
+**The rest of the table is recognized, not implemented.** bash 5.3 lists
+59 names and this table holds all 59 — the same set, and a superset of
+bash 3.2's 34 — so nothing here is missing the way zsh's `setopt` names
+were (#856). What is missing is behavior: 52 of the 59 are held at the
+state this shell is already in, and asking one of them to *move* is
+refused out loud with `shopt: name: not implemented`, status 1. 46 refuse
+`-s` and six — `extquote`, `globasciiranges`, `globskipdots`,
+`interactive_comments`, `promptvars` and `sourcepath` — refuse `-u`,
+because the behavior they name is simply how this shell works. Asking for
+the state already held is granted in both directions, which is the same
+bargain `set +o posix` strikes.
+
 These are run-time states rather than semantics axes, which is why the
 core holds them as `interp.MatchOption` values and only the bash dialect
 maps names onto them. `failglob` is recorded here and deliberately not

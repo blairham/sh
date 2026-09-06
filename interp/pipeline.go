@@ -98,11 +98,11 @@ func (r *Runner) streamLocks() *streamLocks {
 }
 
 // lockedStdout and lockedStderr are the shell's streams, guarded.
-func (r *Runner) lockedStdout() *lockedWriter {
+func (r *Runner) lockedStdout() io.Writer {
 	return lockWriter(&r.streamLocks().write, r.stdout())
 }
 
-func (r *Runner) lockedStderr() *lockedWriter {
+func (r *Runner) lockedStderr() io.Writer {
 	return lockWriter(&r.streamLocks().write, r.stderr())
 }
 
@@ -114,7 +114,26 @@ func (r *Runner) lockedStderr() *lockedWriter {
 // stream stays guarded past the construct that guarded it — a background job
 // leaves the shell's own streams wrapped for as long as the job can write to
 // them, and a pipeline in the same shell afterwards would wrap them again.
-func lockWriter(mu *sync.Mutex, w io.Writer) *lockedWriter {
+//
+// A *os.File is left alone, which lockedStdin has always done for reads and
+// this had to learn for writes. Two goroutines writing one os.File are
+// serialized by the descriptor's own lock, and two *processes* writing it are
+// serialized by the kernel — which is the arrangement a real shell has, and
+// the one lockedWriter exists to imitate where a caller's writer cannot
+// provide it. So there is nothing there to guard against.
+//
+// And wrapping one costs something a shell should not spend. os/exec connects
+// a child directly to an *os.File and builds a pipe for anything else, so a
+// wrapped stream means every later command is handed a pipe — and a child
+// asking whether its output is a terminal gets a different answer for the rest
+// of the session. Measured before this: after `sleep 0.05 &`, `test -t 1` in a
+// child said no, where it said yes on the line before and says yes in all five
+// shells of the panel. That was the price #735 recorded for guarding both
+// sides of a construct, and it is not one that has to be paid.
+func lockWriter(mu *sync.Mutex, w io.Writer) io.Writer {
+	if _, ok := w.(*os.File); ok {
+		return w
+	}
 	if l, ok := w.(*lockedWriter); ok && l.mu == mu {
 		return l
 	}

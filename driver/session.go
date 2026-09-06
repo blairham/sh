@@ -59,6 +59,9 @@ func NewSession(sh Shell) (*Session, int) {
 	// the fatality another gives a readonly reassignment, and the route
 	// letters in `$-`.
 	r := sh.newRunner(sh.Name, nil, sh.Diagnostics, interp.RouteCommandString)
+	// Every input is a command string, so the route's answer is the same for
+	// all of them and is settled here rather than per input.
+	r.SetAliasExpansionBase(sh.Dialect.ExpandAliases.Has(syntax.AliasFromCommandString))
 	if sh.Prelude != "" {
 		if code := sh.source(r, sh.Name); code != 0 {
 			return nil, code
@@ -102,13 +105,15 @@ func (s *Session) run(ctx context.Context, src string) int {
 		}
 	}
 	pr := wholeProgram(src, s.dialect())
-	if s.sh.Dialect.ExpandAliases.Has(in.aliasRoute()) {
-		// Aliases are expanded when a line is parsed and the table is the
-		// runner's, so joining the two is the front end's job here exactly as
-		// it is for a script. An alias defined by one input is available to
-		// the next, which is the rule every shell has for a line.
-		pr.aliases = s.r.LookupAlias
-	}
+	// Aliases are expanded when a line is parsed and the table is the
+	// runner's, so joining the two is the front end's job here exactly as it
+	// is for a script. An alias defined by one input is available to the next,
+	// which is the rule every shell has for a line.
+	//
+	// Whether the shell expands at all is the runner's now and was decided
+	// once, in NewSession — not per input, which would undo a `shopt -u
+	// expand_aliases` the session ran earlier.
+	pr.aliases = s.r.ExpandingAlias
 	status, how := s.sh.executeLines(ctx, s.r, pr, in)
 	if how != endingRanOut {
 		// A parse failure or a refusal has a status of its own, and neither

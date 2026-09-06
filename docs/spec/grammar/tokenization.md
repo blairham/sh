@@ -417,6 +417,14 @@ on for a non-interactive shell, which is why the panel runs bash twice.
 All of them expand interactively, which the front end decides rather than
 the grammar.
 
+The table above is therefore the *base* and not the whole answer. Whether
+a word expands is a run-time switch on the runner that starts at what
+this table says for the route the program arrived by, and the two things
+that move it are `shopt -s`/`-u expand_aliases` and POSIX mode; leaving
+the mode restores the base rather than what was set before entering it.
+See `interp.Runner.ExpandingAlias`, which is the hook the front end hands
+the parser, and the `shopt/expand-aliases-*` corpus cases.
+
 **zsh does not fit a boolean**, and this was measured rather than
 inferred: the answer depends on how the program arrived, not on whether
 anyone is at the keyboard. A boolean gets one of zsh's three right, and

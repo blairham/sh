@@ -50,6 +50,12 @@ const (
 	// nothing else: `export -p` writes `export V='1'` and `readonly -p`
 	// writes `readonly R='2'`, with no flag cluster — the word is the flag.
 	DeclareListingCommandWord
+	// DeclareListingPlainAssignment writes the assignment and nothing else:
+	// `V='a b'`, `R=2`. No shell's `-p` writes this — a listing with no
+	// command word could not be read back as a declaration — and it is what
+	// ksh93 and zsh write for the *bare* `export` and `readonly`, which is
+	// why it is reachable only through BareDeclarationListing.
+	DeclareListingPlainAssignment
 )
 
 func (f DeclarationListingForm) String() string {
@@ -62,6 +68,8 @@ func (f DeclarationListingForm) String() string {
 		return "DeclareListingBareAssignments"
 	case DeclareListingCommandWord:
 		return "DeclareListingCommandWord"
+	case DeclareListingPlainAssignment:
+		return "DeclareListingPlainAssignment"
 	}
 	return "DeclarationListingUnspecified"
 }
@@ -230,6 +238,8 @@ func (r *Runner) listedDeclaration(form DeclarationListingForm, d declaration) s
 		return r.bareAssignmentDeclaration(d)
 	case DeclareListingCommandWord:
 		return r.commandWordDeclaration(d)
+	case DeclareListingPlainAssignment:
+		return r.plainAssignmentDeclaration(d)
 	}
 	return r.clusteredDeclaration(d)
 }
@@ -241,6 +251,32 @@ func (r *Runner) commandWordDeclaration(d declaration) string {
 		return head + "=" + r.declareQuoted(d.value)
 	}
 	return head
+}
+
+// plainAssignmentDeclaration is DeclareListingPlainAssignment — see the
+// constant. A name carrying an attribute and no value still lists, and lists
+// as a bare name, because there is no word left to say the attribute with.
+func (r *Runner) plainAssignmentDeclaration(d declaration) string {
+	if !d.hasValue {
+		return d.name
+	}
+	return d.name + "=" + r.declareQuoted(d.value)
+}
+
+// listedDeclarationValue spells a declaration's value alone — no name, no
+// command word — in the shape this dialect's `declare -p` gives a compound
+// one. For a listing whose attributes are words rather than flags.
+func (r *Runner) listedDeclarationValue(d declaration) string {
+	switch {
+	case d.isAssoc:
+		if len(d.assoc) == 0 {
+			return "( )"
+		}
+		return "( " + strings.Join(r.quotedTablePairs(d, r.clusteredKey), " ") + " )"
+	case d.isArr:
+		return "( " + strings.Join(r.quotedArrayElems(d), " ") + " )"
+	}
+	return r.declareQuoted(d.value)
 }
 
 // declareQuoted spells one listed value in the dialect's declaration style,
@@ -271,7 +307,7 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 			// Sorted keys are this implementation's choice: the shells
 			// promise no order at all, and a deterministic listing is worth
 			// having. See AssocArray.keys.
-			b.WriteString("[" + clusteredKey(k) + "]=" + r.declareQuoted(d.assoc[k]) + " ")
+			b.WriteString("[" + r.clusteredKey(k) + "]=" + r.declareQuoted(d.assoc[k]) + " ")
 		}
 		b.WriteString(")")
 		return b.String()
@@ -290,10 +326,10 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 // clusteredKey spells a subscript in the clustered form: bare when it is
 // plain, `$'...'` when it holds a control character, double-quoted otherwise —
 // the same reach the form's values make, without the always.
-func clusteredKey(k string) string {
+func (r *Runner) clusteredKey(k string) string {
 	switch {
 	case hasControl(k):
-		return dollarQuoted(k)
+		return r.dollarQuoted(k)
 	case listedValueIsBare(k):
 		return k
 	}

@@ -16,6 +16,12 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
+// parseZsh reads a program with this dialect's grammar and nothing else, for
+// the cases about what the parser refuses.
+func parseZsh(src string) (*syntax.File, error) {
+	return syntax.Parse(src, zsh.Dialect())
+}
+
 func runZsh(t *testing.T, dir, src string) (string, int) {
 	t.Helper()
 	f, err := syntax.Parse(src, zsh.Dialect())

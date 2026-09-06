@@ -1150,6 +1150,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `setopt/shwordsplit-is-an-option` | `n=2` **2>** `<shell>: 1: setopt: not found` | `n=2` **2>** `<shell>: line 1: setopt: command not found` | `n=2` **2>** `<shell>: line 1: setopt: command not found` | `n=2` **2>** `<shell>: setopt: command not found` | `n=2` **2>** `<shell>: setopt: not found` | `n=2` |
 | `setopt/nonomatch-passes-the-glob-through` | `x*~st=0` **2>** `<shell>: 1: unsetopt: not found` | `x*~st=0` **2>** `<shell>: line 1: unsetopt: command not found` | `x*~st=0` **2>** `<shell>: line 1: unsetopt: command not found` | `x*~st=0` **2>** `<shell>: unsetopt: command not found` | `x*~st=0` **2>** `<shell>: unsetopt: not found` | `x*~st=0` |
 | `setopt/errexit-is-the-same-switch-as-set-e` | `reached` **2>** `<shell>: 1: setopt: not found` | `reached` **2>** `<shell>: line 1: setopt: command not found` | `reached` **2>** `<shell>: line 1: setopt: command not found` | `reached` **2>** `<shell>: setopt: command not found` | `reached` **2>** `<shell>: setopt: not found` | *(no output, status 1)* |
+| `setopt/a-name-with-no-behavior-behind-it-is-still-recorded` | `st=127` **2>** `<shell>: 1: setopt: not found~<shell>: 1: setopt: not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | `st=127` **2>** `<shell>: setopt: command not found~<shell>: setopt: command not found` *(status 127)* | `st=127` **2>** `<shell>: setopt: not found~<shell>: setopt: not found` *(status 127)* | `st=0~autocd~nohashdirs~nolisttypes~sharehistory` |
+| `setopt/a-compat-spelling-lists-under-the-canonical-name` | **2>** `<shell>: 1: setopt: not found~<shell>: 1: setopt: not found` *(status 127)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | **2>** `<shell>: setopt: command not found~<shell>: setopt: command not found` *(status 127)* | **2>** `<shell>: setopt: not found~<shell>: setopt: not found` *(status 127)* | `globdots~nohashdirs` |
+| `setopt/the-no-prefix-reaches-a-compat-spelling` | **2>** `<shell>: 1: setopt: not found~<shell>: 1: setopt: not found` *(status 127)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | **2>** `<shell>: setopt: command not found~<shell>: setopt: command not found` *(status 127)* | **2>** `<shell>: setopt: not found~<shell>: setopt: not found` *(status 127)* | `nohashdirs~histnofunctions` |
+| `setopt/nullglob-wins-over-nomatch` | `[ zz* ]~st=0` **2>** `<shell>: 1: setopt: not found` | `[ zz* ]~st=0` **2>** `<shell>: line 1: setopt: command not found` | `[ zz* ]~st=0` **2>** `<shell>: line 1: setopt: command not found` | `[ zz* ]~st=0` **2>** `<shell>: setopt: command not found` | `[ zz* ]~st=0` **2>** `<shell>: setopt: not found` | `[ ]~st=0` |
+| `setopt/caseglob-is-the-globs-alone` | `d/b*~no` **2>** `<shell>: 1: unsetopt: not found` | `d/b*~no` **2>** `<shell>: line 1: unsetopt: command not found` | `d/b*~no` **2>** `<shell>: line 1: unsetopt: command not found` | `d/b*~no` **2>** `<shell>: unsetopt: command not found` | `d/b*~no` **2>** `<shell>: unsetopt: not found` | `d/B.txt~no` |
+| `setopt/globdots-brings-back-the-hidden-names` | `d/a` **2>** `<shell>: 1: setopt: not found` | `d/a` **2>** `<shell>: line 1: setopt: command not found` | `d/a` **2>** `<shell>: line 1: setopt: command not found` | `d/a` **2>** `<shell>: setopt: command not found` | `d/a` **2>** `<shell>: setopt: not found` | `d/.h d/a` |
+| `setopt/an-interactive-only-option-will-not-move` | `st=127~st=127` **2>** `<shell>: 1: setopt: not found~<shell>: 1: unsetopt: not found` | `st=127~st=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `st=127~st=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `st=127~st=127` **2>** `<shell>: setopt: command not found~<shell>: unsetopt: command not found` | `st=127~st=127` **2>** `<shell>: setopt: not found~<shell>: unsetopt: not found` | `st=1~st=0` **2>** `<shell>:setopt:1: can't change option: zle` |
+| `setopt/a-recorded-name-answers-the-condition-too` | `a=127~b=127~c=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: setopt: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `a=1~b=1~c=1` **2>** `<shell>: line 1: setopt: command not found` | `a=1~b=1~c=1` **2>** `<shell>: line 1: setopt: command not found` | `a=1~b=1~c=1` **2>** `<shell>: setopt: command not found` | `a=1~b=1~c=1` **2>** `<shell>: setopt: not found` | `a=1~b=0~c=1` |
+| `setopt/nounset-is-the-same-switch-as-set-u` | `~reached` **2>** `<shell>: 1: setopt: not found` | `~reached` **2>** `<shell>: line 1: setopt: command not found` | `~reached` **2>** `<shell>: line 1: setopt: command not found` | `~reached` **2>** `<shell>: setopt: command not found` | `~reached` **2>** `<shell>: setopt: not found` | **2>** `<shell>:1: zz: parameter not set` *(status 1)* |
 | `emulate/names-the-current-mode` | **2>** `<shell>: 1: emulate: not found~<shell>: 1: emulate: not found~<shell>: 1: emulate: not found` *(status 127)* | **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` *(status 127)* | **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` *(status 127)* | **2>** `<shell>: emulate: command not found~<shell>: emulate: command not found~<shell>: emulate: command not found` *(status 127)* | **2>** `<shell>: emulate: not found~<shell>: emulate: not found~<shell>: emulate: not found` *(status 127)* | `zsh~sh` |
 | `emulate/sh-moves-the-measured-axes` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2~x*~q` **2>** `<shell>: line 1: emulate: command not found` | `n=2~x*~q` **2>** `<shell>: line 1: emulate: command not found` | `n=2~x*~q` **2>** `<shell>: emulate: command not found` | `n=2~x*~q` **2>** `<shell>: emulate: not found` | `n=2~x*~q` |
 | `emulate/resets-the-options` | `reached` **2>** `<shell>: 1: setopt: not found~<shell>: 1: emulate: not found` | `reached` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found` | `reached` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found` | `reached` **2>** `<shell>: setopt: command not found~<shell>: emulate: command not found` | `reached` **2>** `<shell>: setopt: not found~<shell>: emulate: not found` | `reached` |
@@ -1838,6 +1847,42 @@ grades it and nothing drift-checks it either, for the same reason.
 - `setopt/errexit-is-the-same-switch-as-set-e` — setopt and set -o drive one table: err_exit ends the run exactly as set -e would, rather than being a second errexit that drifts
   ```sh
   setopt err_exit; false; echo reached
+  ```
+- `setopt/a-name-with-no-behavior-behind-it-is-still-recorded` — three of the sixteen names a real rc file writes at startup, none of them a feature this shell has: zsh takes them at 0 and then reports them back canonically spelled, which is what recognizing a name buys when implementing it is a separate job
+  ```sh
+  setopt auto_cd share_history no_list_types; echo "st=$?"; setopt
+  ```
+- `setopt/a-compat-spelling-lists-under-the-canonical-name` — zsh carries twelve sh and ksh spellings as second names for options it already has, and they are never what a listing prints: `dotglob` sets `globdots` and `globdots` is the line that comes back
+  ```sh
+  setopt dotglob; setopt
+  ```
+- `setopt/the-no-prefix-reaches-a-compat-spelling` — the prefix and the alias table compose, and the alias is the inverted kind: `nolog` is zsh's `histnofunctions` turned on, which is the name the listing then prints
+  ```sh
+  setopt nolog; setopt
+  ```
+- `setopt/nullglob-wins-over-nomatch` — the only ordering the two settings can have: deleting a word that matched nothing leaves nothing for `no matches found` to complain about, so zsh prints the brackets at 0 with nomatch still on
+  ```sh
+  setopt nullglob; echo "[" zz* "]"; echo "st=$?"
+  ```
+- `setopt/caseglob-is-the-globs-alone` — zsh's caseglob governs pathname expansion and nothing else — the glob folds case and the case statement still does not — which is what says it is not the same switch as bash's nocasematch
+  ```sh
+  mkdir d; : > d/B.txt; unsetopt caseglob; echo d/b*; case AB in ab) echo yes;; *) echo no;; esac
+  ```
+- `setopt/globdots-brings-back-the-hidden-names` — the leading period stops being special, and only that: `.h` joins the expansion where `.` and `..` still do not
+  ```sh
+  mkdir d; : > d/.h; : > d/a; setopt globdots; echo d/*
+  ```
+- `setopt/an-interactive-only-option-will-not-move` — five of zsh's 185 options refuse to be turned on in a shell that is not interactive and every other one is granted, measured name by name; turning one of the five off is asking for where it already is, which is granted
+  ```sh
+  setopt zle; echo "st=$?"; unsetopt zle; echo "st=$?"
+  ```
+- `setopt/a-recorded-name-answers-the-condition-too` — `[[ -o name ]]` reads the same namespace `setopt` writes, so a name the table only records still answers the condition — and the `no` prefix inverts the answer rather than being an unknown name. bash has the condition and not the namespace, which is what makes the pair worth one row
+  ```sh
+  [[ -o auto_cd ]]; echo "a=$?"; setopt auto_cd; [[ -o auto_cd ]]; echo "b=$?"; [[ -o no_auto_cd ]]; echo "c=$?"
+  ```
+- `setopt/nounset-is-the-same-switch-as-set-u` — zsh spells `set -u` as `unsetopt unset`, and it is one switch rather than two: an unset parameter ends the run exactly as `set -u` makes it, which is the pairing that says the dialect's own builtin has to reach the substrate's table
+  ```sh
+  setopt no_unset; echo "${zz}"; echo reached
   ```
 - `emulate/names-the-current-mode` — a bare emulate answers which shell zsh is currently being — zsh until something changes it, and the word that changed it after
   ```sh
@@ -4165,6 +4210,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shopt/globstar-crosses-directories` | `**/f` | `d/e/f` | `d/e/f` | `**/f` | `**/f` | `d/e/f` |
 | `shopt/nocasematch-folds-case` | `exact` | `hit` | `hit` | `hit` | `exact` | `exact` |
 | `shopt/query-answers-by-status` | `q=127~q=127` | `q=1~q=0` | `q=1~q=0` | `q=1~q=0` | `q=127~q=127` | `q=127~q=127` |
+| `shopt/expand-aliases-is-a-live-switch` | `hit~hit~st=0` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~hit~st=0` | `hit~hit~st=0` |
+| `shopt/expand-aliases-is-off-until-it-is-asked-for` | `hit~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `hit~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `hit~st=0` | `hit~st=0` |
+| `shopt/posix-mode-turns-alias-expansion-on` | *(no output, status 2)* | `hit~st=0` | `hit~st=0` | `hit~st=0` | *(no output, status 2)* | *(no output, status 1)* |
+| `shopt/leaving-posix-mode-drops-alias-expansion-again` | *(no output, status 2)* | `st=127` **2>** `<script>: line 5: a: command not found` | `st=127` **2>** `<script>: line 5: a: command not found` | `st=127` **2>** `<script>: line 5: a: command not found` | *(no output, status 2)* | *(no output, status 1)* |
 | `nounset/defaults-are-exempt` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` |
 | `nounset/empty-is-not-unset` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` |
 | `nounset/no-parameters-is-not-unset` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` |
@@ -4260,6 +4309,37 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shopt/query-answers-by-status` — -q answers by status alone — 1 while the option is off and 0 once -s has set it; the shells without the builtin answer 127 twice, which records what a probing script would see there
   ```sh
   shopt -q nullglob 2>/dev/null; echo q=$?; shopt -s nullglob 2>/dev/null; shopt -q nullglob 2>/dev/null; echo q=$?
+  ```
+- `shopt/expand-aliases-is-a-live-switch` — the option a bash script has to set before an alias means anything, and it is a switch rather than a door: the word expands after -s and is a command not found again after -u. The three shells that always expand ignore the missing builtin and expand both times, which is what makes the pair a divergence rather than a bash detail
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias a='echo hit'
+  a
+  shopt -u expand_aliases 2>/dev/null
+  a
+  echo "st=$?"
+  ```
+- `shopt/expand-aliases-is-off-until-it-is-asked-for` — the other half, and the reason the option exists: the identical script without the `shopt` line is a command not found in bash from a file, where dash, ksh93 and zsh all expand. Without both halves recorded, a shell that expanded unconditionally would pass the first
+  ```sh
+  alias a='echo hit'
+  a
+  echo "st=$?"
+  ```
+- `shopt/posix-mode-turns-alias-expansion-on` — the standard has aliases expand in a script, so the mode carries the option with it: bash expands here with no `shopt` written anywhere, which is also why the shell invoked as `sh` expands where the same binary called `bash` does not
+  ```sh
+  set -o posix 2>/dev/null
+  alias a='echo hit'
+  a
+  echo "st=$?"
+  ```
+- `shopt/leaving-posix-mode-drops-alias-expansion-again` — leaving the mode restores what the *route* said rather than what was set before entering it — measured, and the surprising half: the `shopt -s` on the first line does not survive the round trip, so the alias is a command not found
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  set -o posix 2>/dev/null
+  set +o posix 2>/dev/null
+  alias a='echo hit'
+  a
+  echo "st=$?"
   ```
 - `nounset/defaults-are-exempt` — a form that supplies a value, or asks whether one is set, is not a use of an unset one
   ```sh
@@ -5334,6 +5414,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `commands/coproc-names-a-compound` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `hi` | `hi` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `coproc MY { cat; }; echo hi >&"${MY[1]}"; read -r l <&"${MY[0]}"; echo "$l"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `}'` *(status 1)* |
 | `commands/coproc-names-a-subshell` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2` | `n=2` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `coproc MY ( cat </dev/null ); echo "n=${#MY[@]}"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `)'` *(status 1)* |
 | `commands/coproc-does-not-name-a-simple-command` | **2>** `<shell>: 1: coproc: not found~<shell>: 1: Bad substitution` *(status 2)* | `l=ran-MY COPROC=2 MY=0` | `l=ran-MY COPROC=2 MY=0` | `l= COPROC=0 MY=0` **2>** `<shell>: coproc: command not found~<shell>: 0: Bad file descriptor` | `l= COPROC=0 MY=0` **2>** `<shell>: coproc: not found~<shell>: : cannot open` | **2>** `<shell>:1: file number expected` *(status 1)* |
+| `commands/coproc-speaks-by-a-letter-where-it-has-no-array` | **2>** `<shell>: 1: coproc: not found~<shell>: 1: print: not found~<shell>: 1: read: arg count~<shell>: 1: Bad substitution` *(status 2)* | `l= COPROC=2` **2>** `<shell>: line 1: print: command not found` | `l= COPROC=2` **2>** `<shell>: line 1: print: command not found` | `l= COPROC=0` **2>** `<shell>: coproc: command not found~<shell>: print: command not found` | `l= COPROC=0` **2>** `<shell>: coproc: not found~<shell>: print: no query process [Bad file descriptor]~<shell>: read: no query process` | `l=hi COPROC=0` |
+| `commands/coproc-with-no-name-takes-a-compound` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `l=` **2>** `<shell>: line 1: print: command not found` | `l=` **2>** `<shell>: line 1: print: command not found` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `coproc { cat; }; print -p hi; read -p l; echo "l=$l"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | `l=hi` |
+| `commands/the-coprocess-letters-with-nothing-started` | `p=127~r=2` **2>** `<shell>: 1: print: not found~<shell>: 1: read: arg count` | `p=127~r=1` **2>** `<shell>: line 1: print: command not found` | `p=127~r=1` **2>** `<shell>: line 1: print: command not found` | `p=127~r=1` **2>** `<shell>: print: command not found` | `p=1~r=1` **2>** `<shell>: print: no query process [Bad file descriptor]~<shell>: read: no query process` | `p=1~r=1` **2>** `<shell>:print:1: -p: no coprocess~<shell>:read:1: -p: no coprocess` |
 
 - `exec/a-command-is-named-as-it-was-written` — a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else
   ```sh
@@ -5416,6 +5499,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `commands/coproc-does-not-name-a-simple-command` — the other side of the same rule, and the one worth pinning: before a *simple* command the first word is the command, so `coproc MY cat` runs MY and the array is the default COPROC. A function named MY is what makes that visible without a race — bash reports `MY: command not found` from the background job otherwise, whenever the job gets there — and the line read back is the function's own output, which no shell that had taken MY as a name could produce
   ```sh
   MY() { echo ran-MY; }; coproc MY cat; read -r l <&"${COPROC[0]}"; echo "l=$l COPROC=${#COPROC[@]} MY=${#MY[@]}"
+  ```
+- `commands/coproc-speaks-by-a-letter-where-it-has-no-array` — the other coprocess model, and the reason the word alone is not the whole feature: zsh starts one with the same keyword, gives it no name and publishes no array, and a script reaches its two ends with `print -p` and `read -p` — `l=hi` with COPROC still empty. bash has the array and neither letter, ksh93 has both letters and starts no coprocess for them, and bash 3.2 and dash have none of it
+  ```sh
+  coproc cat; print -p hi; read -p l; echo "l=$l COPROC=${#COPROC[@]}"
+  ```
+- `commands/coproc-with-no-name-takes-a-compound` — a compound command needs no name in front of it, which is what separates the two grammars rather than the keyword: the shell with no name for a coprocess still takes `{ … }` here, where the one that reads a name would have read `{` as the name's absence. bash 3.2, dash and ksh93 date the construct by refusing the `}`
+  ```sh
+  coproc { cat; }; print -p hi; read -p l; echo "l=$l"
+  ```
+- `commands/the-coprocess-letters-with-nothing-started` — the same two letters before any `coproc`, which is the refusal each shell keeps for the case: two sentences and 1 in the shell that has both letters and a coprocess, two others and 1 in the shell that has the letters and no way here to start one, and in the two without `print` a command that was not found at 127 with `-p` reading as a prompt
+  ```sh
+  print -p x; echo "p=$?"; read -p y; echo "r=$?"
   ```
 
 ## substitutions
@@ -5648,6 +5743,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | --- | --- | --- | --- | --- | --- | --- |
 | `cond/a-newline-continues-a-condition` | **2>** `<shell>: 1: [[: not found` *(status 127)* | `yes` | `yes` | `yes` | `yes` | `yes` |
 | `cond/a-newline-at-every-point` | **2>** `<shell>: 1: [[: not found~<shell>: 2: 1: not found~<shell>: 4: ]]: not found` *(status 127)* | `yes` | `yes` | `yes` | `yes` | `yes` |
+| `cond/a-newline-before-the-operator` | **2>** `<shell>: 1: [[: not found~<shell>: 2: Syntax error: "&&" unexpected` *(status 2)* | `yes` | `yes` | `yes` | `yes` | `yes` |
+| `cond/a-newline-before-the-operator-indented` | **2>** `<shell>: 1: [[: not found~<shell>: 2: Syntax error: "&&" unexpected` *(status 2)* | `yes` | `yes` | `yes` | `yes` | `yes` |
+| `cond/a-newline-before-a-second-operand-is-refused` | **2>** `<shell>: 1: [[: not found~<shell>: 2: -z: not found` *(status 127)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `-z'~<shell>: -c: line 2: syntax error near `-z'~<shell>: -c: line 2: `-z "" ]] && echo yes'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `-z'~<shell>: -c: line 2: syntax error near `-z'~<shell>: -c: line 2: `-z "" ]] && echo yes'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error in conditional expression~<shell>: -c: line 1: syntax error near `-z'~<shell>: -c: line 1: `-z "" ]] && echo yes'` *(status 2)* | **2>** `<shell>: syntax error at line 2: `-z' unexpected` *(status 3)* | **2>** `<shell>:1: unknown condition: -n` *(status 2)* |
 | `pat/star-matches-dot-in-case` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` |
 | `pat/star-skips-leading-dot-in-glob` | `[vis]` | `[vis]` | `[vis]` | `[vis]` | `[vis]` | `[vis]` |
 | `pat/star-matches-slash-in-case` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` |
@@ -5689,6 +5787,21 @@ grades it and nothing drift-checks it either, for the same reason.
   1 == 1 &&
   2 == 2
   ]] && echo yes
+  ```
+- `cond/a-newline-before-the-operator` — the other side of the operator, and the one the list of structural points was missing: the condition is complete at the end of the line and the operator leads the continuation. It is how a real prompt theme is written, and at the newline it is not yet known whether an operator or the `]]` follows
+  ```sh
+  [[ -n x
+  && -z "" ]] && echo yes
+  ```
+- `cond/a-newline-before-the-operator-indented` — the same with the continuation indented, which is the form in the wild — the leading whitespace is not what makes it work, and the case exists so that a fix keyed on a line beginning with the operator would fail here
+  ```sh
+  [[ -n x
+        && -z "" ]] && echo yes
+  ```
+- `cond/a-newline-before-a-second-operand-is-refused` — the boundary: skipping a newline before an operator must not become skipping one before anything at all. Every shell that has `[[ ]]` refuses two conditions with only a line between them, and each blames a different token on a different line
+  ```sh
+  [[ -n x
+  -z "" ]] && echo yes
   ```
 - `pat/star-matches-dot-in-case` — in case there is no filesystem, so nothing restricts the star
   ```sh

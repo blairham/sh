@@ -2048,6 +2048,45 @@ var Corpus = []Case{
 			"which records what a probing script would see there",
 	},
 	{
+		ID: "shopt/expand-aliases-is-a-live-switch", Category: "shell options",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias a='echo hit'
+a
+shopt -u expand_aliases 2>/dev/null
+a
+echo "st=$?"`,
+		Why: "the option a bash script has to set before an alias means anything, and it is a switch rather than a door: the word expands after -s and is a command not found again after -u. The three shells that always expand ignore the missing builtin and expand both times, which is what makes the pair a divergence rather than a bash detail",
+	},
+	{
+		ID: "shopt/expand-aliases-is-off-until-it-is-asked-for", Category: "shell options",
+		Script: true,
+		Snippet: `alias a='echo hit'
+a
+echo "st=$?"`,
+		Why: "the other half, and the reason the option exists: the identical script without the `shopt` line is a command not found in bash from a file, where dash, ksh93 and zsh all expand. Without both halves recorded, a shell that expanded unconditionally would pass the first",
+	},
+	{
+		ID: "shopt/posix-mode-turns-alias-expansion-on", Category: "shell options",
+		Script: true,
+		Snippet: `set -o posix 2>/dev/null
+alias a='echo hit'
+a
+echo "st=$?"`,
+		Why: "the standard has aliases expand in a script, so the mode carries the option with it: bash expands here with no `shopt` written anywhere, which is also why the shell invoked as `sh` expands where the same binary called `bash` does not",
+	},
+	{
+		ID: "shopt/leaving-posix-mode-drops-alias-expansion-again", Category: "shell options",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+set -o posix 2>/dev/null
+set +o posix 2>/dev/null
+alias a='echo hit'
+a
+echo "st=$?"`,
+		Why: "leaving the mode restores what the *route* said rather than what was set before entering it — measured, and the surprising half: the `shopt -s` on the first line does not survive the round trip, so the alias is a command not found",
+	},
+	{
 		ID: "readonly/reassignment-by-a-declaration", Category: "builtins",
 		Snippet: "readonly x=1; export x=2; echo after",
 		Why:     "the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one",
@@ -4241,6 +4280,27 @@ echo "st=$?"`,
 2 == 2
 ]] && echo yes`,
 		Why: "the same rule at three structural points at once — after `[[` itself, after `||`, and before `]]`. Unanimous in all three shells that have `[[ ]]`, and none of the three worked before",
+	},
+	{
+		ID: "cond/a-newline-before-the-operator", Category: "pattern matching",
+		// `&&` rather than `||` for the reason the case above gives: dash
+		// has no `[[`, so the clause fails and `&&` stops there.
+		Snippet: `[[ -n x
+&& -z "" ]] && echo yes`,
+		Why: "the other side of the operator, and the one the list of structural points was missing: the condition is complete at the end of the line and the operator leads the continuation. It is how a real prompt theme is written, and at the newline it is not yet known whether an operator or the `]]` follows",
+	},
+	{
+		ID: "cond/a-newline-before-the-operator-indented", Category: "pattern matching",
+		Snippet: `[[ -n x
+      && -z "" ]] && echo yes`,
+		Why: "the same with the continuation indented, which is the form in the wild — the leading whitespace is not what makes it work, and the case exists so that a fix keyed on a line beginning with the operator would fail here",
+	},
+	{
+		ID: "cond/a-newline-before-a-second-operand-is-refused", Category: "pattern matching",
+		SyntaxError: true,
+		Snippet: `[[ -n x
+-z "" ]] && echo yes`,
+		Why: "the boundary: skipping a newline before an operator must not become skipping one before anything at all. Every shell that has `[[ ]]` refuses two conditions with only a line between them, and each blames a different token on a different line",
 	},
 	{
 		ID: "decl/an-array-assignment-as-an-operand", Category: "parameter expansion",
@@ -6736,6 +6796,21 @@ out=$(CDPATH=./pool cd sub)
 		Why:     "the other side of the same rule, and the one worth pinning: before a *simple* command the first word is the command, so `coproc MY cat` runs MY and the array is the default COPROC. A function named MY is what makes that visible without a race — bash reports `MY: command not found` from the background job otherwise, whenever the job gets there — and the line read back is the function's own output, which no shell that had taken MY as a name could produce",
 	},
 	{
+		ID: "commands/coproc-speaks-by-a-letter-where-it-has-no-array", Category: "commands",
+		Snippet: `coproc cat; print -p hi; read -p l; echo "l=$l COPROC=${#COPROC[@]}"`,
+		Why:     "the other coprocess model, and the reason the word alone is not the whole feature: zsh starts one with the same keyword, gives it no name and publishes no array, and a script reaches its two ends with `print -p` and `read -p` — `l=hi` with COPROC still empty. bash has the array and neither letter, ksh93 has both letters and starts no coprocess for them, and bash 3.2 and dash have none of it",
+	},
+	{
+		ID: "commands/coproc-with-no-name-takes-a-compound", Category: "commands",
+		Snippet: `coproc { cat; }; print -p hi; read -p l; echo "l=$l"`,
+		Why:     "a compound command needs no name in front of it, which is what separates the two grammars rather than the keyword: the shell with no name for a coprocess still takes `{ … }` here, where the one that reads a name would have read `{` as the name's absence. bash 3.2, dash and ksh93 date the construct by refusing the `}`",
+	},
+	{
+		ID: "commands/the-coprocess-letters-with-nothing-started", Category: "commands",
+		Snippet: `print -p x; echo "p=$?"; read -p y; echo "r=$?"`,
+		Why:     "the same two letters before any `coproc`, which is the refusal each shell keeps for the case: two sentences and 1 in the shell that has both letters and a coprocess, two others and 1 in the shell that has the letters and no way here to start one, and in the two without `print` a command that was not found at 127 with `-p` reading as a prompt",
+	},
+	{
 		ID: "syntax/an-unmatched-double-quote", Category: "diagnostics",
 		SyntaxError: true,
 		Snippet:     `echo "abc`,
@@ -6899,6 +6974,51 @@ exit 7`,
 		ID: "setopt/errexit-is-the-same-switch-as-set-e", Category: "builtins",
 		Snippet: `setopt err_exit; false; echo reached`,
 		Why:     "setopt and set -o drive one table: err_exit ends the run exactly as set -e would, rather than being a second errexit that drifts",
+	},
+	{
+		ID: "setopt/a-name-with-no-behavior-behind-it-is-still-recorded", Category: "builtins",
+		Snippet: `setopt auto_cd share_history no_list_types; echo "st=$?"; setopt`,
+		Why:     "three of the sixteen names a real rc file writes at startup, none of them a feature this shell has: zsh takes them at 0 and then reports them back canonically spelled, which is what recognizing a name buys when implementing it is a separate job",
+	},
+	{
+		ID: "setopt/a-compat-spelling-lists-under-the-canonical-name", Category: "builtins",
+		Snippet: `setopt dotglob; setopt`,
+		Why:     "zsh carries twelve sh and ksh spellings as second names for options it already has, and they are never what a listing prints: `dotglob` sets `globdots` and `globdots` is the line that comes back",
+	},
+	{
+		ID: "setopt/the-no-prefix-reaches-a-compat-spelling", Category: "builtins",
+		Snippet: `setopt nolog; setopt`,
+		Why:     "the prefix and the alias table compose, and the alias is the inverted kind: `nolog` is zsh's `histnofunctions` turned on, which is the name the listing then prints",
+	},
+	{
+		ID: "setopt/nullglob-wins-over-nomatch", Category: "builtins",
+		Snippet: `setopt nullglob; echo "[" zz* "]"; echo "st=$?"`,
+		Why:     "the only ordering the two settings can have: deleting a word that matched nothing leaves nothing for `no matches found` to complain about, so zsh prints the brackets at 0 with nomatch still on",
+	},
+	{
+		ID: "setopt/caseglob-is-the-globs-alone", Category: "builtins",
+		Snippet: `mkdir d; : > d/B.txt; unsetopt caseglob; echo d/b*; case AB in ab) echo yes;; *) echo no;; esac`,
+		Why:     "zsh's caseglob governs pathname expansion and nothing else — the glob folds case and the case statement still does not — which is what says it is not the same switch as bash's nocasematch",
+	},
+	{
+		ID: "setopt/globdots-brings-back-the-hidden-names", Category: "builtins",
+		Snippet: `mkdir d; : > d/.h; : > d/a; setopt globdots; echo d/*`,
+		Why:     "the leading period stops being special, and only that: `.h` joins the expansion where `.` and `..` still do not",
+	},
+	{
+		ID: "setopt/an-interactive-only-option-will-not-move", Category: "builtins",
+		Snippet: `setopt zle; echo "st=$?"; unsetopt zle; echo "st=$?"`,
+		Why:     "five of zsh's 185 options refuse to be turned on in a shell that is not interactive and every other one is granted, measured name by name; turning one of the five off is asking for where it already is, which is granted",
+	},
+	{
+		ID: "setopt/a-recorded-name-answers-the-condition-too", Category: "builtins",
+		Snippet: `[[ -o auto_cd ]]; echo "a=$?"; setopt auto_cd; [[ -o auto_cd ]]; echo "b=$?"; [[ -o no_auto_cd ]]; echo "c=$?"`,
+		Why:     "`[[ -o name ]]` reads the same namespace `setopt` writes, so a name the table only records still answers the condition — and the `no` prefix inverts the answer rather than being an unknown name. bash has the condition and not the namespace, which is what makes the pair worth one row",
+	},
+	{
+		ID: "setopt/nounset-is-the-same-switch-as-set-u", Category: "builtins",
+		Snippet: `setopt no_unset; echo "${zz}"; echo reached`,
+		Why:     "zsh spells `set -u` as `unsetopt unset`, and it is one switch rather than two: an unset parameter ends the run exactly as `set -u` makes it, which is the pairing that says the dialect's own builtin has to reach the substrate's table",
 	},
 	{
 		ID: "emulate/names-the-current-mode", Category: "builtins",

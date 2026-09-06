@@ -3,7 +3,10 @@
 
 package interp
 
-import "sort"
+import (
+	"sort"
+	"strings"
+)
 
 // BareLocalListingForm is what `local` with no operands writes, in the three
 // shells that can reach it — ksh93 has no `local`, and the three answers are
@@ -20,10 +23,23 @@ const (
 	BareLocalListsLocals
 	// BareLocalListsNothing writes nothing and reports 0: dash.
 	BareLocalListsNothing
-	// BareLocalListsEveryParameter is zsh's answer: every parameter the
-	// shell has, special parameters and tied arrays included. That listing
-	// is a fact about zsh's parameter table rather than about the script's
-	// variables, and it is refused as unimplemented rather than approximated.
+	// BareLocalListsEveryParameter is zsh's answer, and it is neither of the
+	// other two: every parameter the shell has, not the scope's alone, each
+	// written as its attributes in *words* and then the assignment —
+	// `integer local readonly ir=5`, `array local a=( p q )`, `local x=1`.
+	// The words come in a fixed order, measured 2026-09-05 from one name per
+	// combination:
+	//
+	//	[array|association|integer] [local] [readonly] [exported] NAME=value
+	//
+	// A name with no attributes at all is the bare assignment, and one with
+	// no value still lists — as `=''`, since a shell that shows the attribute
+	// in words has no `--` to stand where a value is missing.
+	//
+	// Real zsh's listing also carries its special parameters and its tied
+	// arrays, which this parameter table has not got. That is a difference in
+	// what a shell *holds* rather than in what a listing looks like — the
+	// same thing SetListingAssignments says about a bare `set` there.
 	BareLocalListsEveryParameter
 )
 
@@ -37,6 +53,54 @@ func (f BareLocalListingForm) String() string {
 		return "BareLocalListsEveryParameter"
 	}
 	return "BareLocalListingUnspecified"
+}
+
+// attributeWordDeclaration is BareLocalListsEveryParameter's row — see the
+// constant for the word order and where it was measured.
+func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
+	var words []string
+	switch {
+	case d.isAssoc:
+		words = append(words, "association")
+	case d.isArr:
+		words = append(words, "array")
+	case d.integer:
+		words = append(words, "integer")
+	}
+	if isLocal {
+		words = append(words, "local")
+	}
+	if d.readonly {
+		words = append(words, "readonly")
+	}
+	if d.exported {
+		words = append(words, "exported")
+	}
+	head := ""
+	if len(words) > 0 {
+		head = strings.Join(words, " ") + " "
+	}
+	return head + d.name + "=" + r.listedDeclarationValue(d)
+}
+
+// innermostLocalNames is the set of names the running function made local,
+// which is the one attribute this listing carries that a declaration does not.
+func (r *Runner) innermostLocalNames() map[string]bool {
+	names := map[string]bool{}
+	if len(r.scopes) == 0 {
+		return names
+	}
+	sc := r.scopes[len(r.scopes)-1]
+	for name := range sc.saved {
+		names[name] = true
+	}
+	for name := range sc.savedArrays {
+		names[name] = true
+	}
+	for name := range sc.savedAssoc {
+		names[name] = true
+	}
+	return names
 }
 
 // bareLocalListing answers `local` with no operands, inside a function.
@@ -71,8 +135,12 @@ func (r *Runner) bareLocalListing() int {
 		}
 		return 0
 	case BareLocalListsEveryParameter:
-		r.diagf("local: listing every parameter of the shell is not implemented yet\n")
-		return 2
+		locals := r.innermostLocalNames()
+		for _, name := range r.declarableNames() {
+			d, _ := r.declarationOf(name)
+			r.printf("%s\n", r.attributeWordDeclaration(d, locals[name]))
+		}
+		return 0
 	}
 	r.diagf("%s\n", r.unanswered("what a bare `local` lists"))
 	r.status = 2

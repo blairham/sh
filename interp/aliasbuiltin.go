@@ -191,3 +191,48 @@ func (r *Runner) aliasLine(name string, forcePrefix bool) string {
 	}
 	return prefix + name + "=" + r.quoteListedValue(r.sem().AliasQuoting, "`alias`", r.aliases[name])
 }
+
+// ExpandingAlias is the parser's hook: what a name stands for when this shell
+// is expanding aliases at all, and nothing when it is not.
+//
+// [Runner.LookupAlias] is the table and this is the table plus the switch, and
+// they are two methods because two callers want different things. A builtin
+// that speaks for aliases — `alias`, `type`, `command -v` — asks about the
+// table, and gets the same answer whether or not a parse would use it: bash
+// with `expand_aliases` off still prints its aliases and still says `a is
+// aliased to …`, measured. A parser asks about the switch as well.
+//
+// The front end passes this one unconditionally now. It used to pass
+// LookupAlias only where the dialect's route table said the shell expands,
+// which made the answer a fact about how the program arrived and nothing
+// else — so `shopt -s expand_aliases` had nowhere to reach even once the name
+// was accepted.
+func (r *Runner) ExpandingAlias(name string) (string, bool) {
+	if !r.aliasExpansion {
+		return "", false
+	}
+	return r.LookupAlias(name)
+}
+
+// AliasExpansion reports whether a line parsed now would have its alias words
+// replaced, for the builtin that presents the switch under a name.
+func (r *Runner) AliasExpansion() bool { return r.aliasExpansion }
+
+// SetAliasExpansion moves the switch, which is what `shopt -s expand_aliases`
+// does. It does not move the base: a mode that turns it on and off again puts
+// back what the route decided, not this.
+func (r *Runner) SetAliasExpansion(on bool) { r.aliasExpansion = on }
+
+// SetAliasExpansionBase records the answer the route gives — the dialect's
+// syntax.Dialect.ExpandAliases against the route the program arrived by, or
+// true at a prompt, where the whole panel expands whatever the dialect says
+// about a script.
+//
+// It sets the live switch too, except that POSIX mode keeps it on: the front
+// end reads the route before it reads the name the shell was invoked under,
+// and `sh` means both. Writing the base without regard to order is what keeps
+// the two independent.
+func (r *Runner) SetAliasExpansionBase(on bool) {
+	r.aliasExpansionBase = on
+	r.aliasExpansion = on || r.posixMode
+}

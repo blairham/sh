@@ -78,8 +78,12 @@ func applyEmulation(r *interp.Runner, mode string) {
 			s.RedirectErrorOnSpecialBuiltinFatal = answer(e.redirFatal)
 		})
 	}
+	// The recorded names go back to their defaults in one write rather than
+	// 157 — the store holds deviations, so an empty store *is* every recorded
+	// option at its default.
+	setRecordedOptions(r, nil)
 	for _, o := range zshOptions {
-		if o.set == nil {
+		if o.set == nil || o.recorded {
 			continue
 		}
 		switch o.base {
@@ -185,12 +189,18 @@ type emulationState struct {
 	sem     *interp.Semantics
 	mode    string
 	options map[string]bool
+	// recorded is the recorded-option store as it stood, saved whole for the
+	// same reason applyEmulation clears it whole.
+	recorded []string
 }
 
 func saveEmulationState(r *interp.Runner) emulationState {
-	s := emulationState{sem: r.Semantics, mode: currentEmulation(r), options: map[string]bool{}}
+	s := emulationState{
+		sem: r.Semantics, mode: currentEmulation(r),
+		options: map[string]bool{}, recorded: recordedOptions(r),
+	}
 	for _, o := range zshOptions {
-		if o.set != nil {
+		if o.set != nil && !o.recorded {
 			s.options[o.base] = o.get(r)
 		}
 	}
@@ -199,8 +209,9 @@ func saveEmulationState(r *interp.Runner) emulationState {
 
 func (s emulationState) restore(r *interp.Runner) {
 	r.Semantics = s.sem
+	setRecordedOptions(r, s.recorded)
 	for _, o := range zshOptions {
-		if o.set == nil {
+		if o.set == nil || o.recorded {
 			continue
 		}
 		switch o.base {

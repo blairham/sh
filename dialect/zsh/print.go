@@ -67,8 +67,9 @@ import (
 //     to a line editor that is not running: the operands are consumed and the
 //     answer is 0, which is what non-interactive zsh answers too. `-S` takes
 //     at most one operand — `option -S takes a single argument`, 1.
-//   - `-p` writes to the coprocess, and this grammar has no `coproc` to start
-//     one: the only reachable answer is the measured `-p: no coprocess`, 1.
+//   - `-p` writes to the coprocess `coproc` started, and is the measured
+//     `-p: no coprocess` at 1 when none is running — the same shape `read -p`
+//     answers, in the same words.
 //   - `-f format` hands the whole command to printf — format reused over the
 //     operands, no terminator added.
 //   - `--` and a lone `-` both end the options.
@@ -397,8 +398,12 @@ func setPrintLetter(r *interp.Runner, letter byte, opts *printOptions) int {
 	case 'z':
 		opts.editor = true
 	case 'p':
-		r.Diagnosef("-p: no coprocess\n")
-		return 1
+		fd, running := r.CoprocWrite()
+		if !running {
+			r.Diagnosef("-p: no coprocess\n")
+			return 1
+		}
+		opts.fd = fd
 	}
 	return -1
 }

@@ -12,8 +12,17 @@ import (
 
 // coprocClause runs `coproc [NAME] command`: the command goes to the
 // background with a pipe on each of its named streams, and the shell keeps
-// the near ends in the array the name names — [0] to read what the command
-// writes, [1] to write what it reads — with the process in NAME_PID.
+// the near ends — one to read what the command writes, one to write what it
+// reads.
+//
+// How a script *reaches* those ends is the dialect's, and the two shells with
+// the word answer it differently. bash publishes them as the two elements of
+// an array, with the process in NAME_PID, and a script writes
+// `echo hi >&"${COPROC[1]}"`. zsh publishes nothing at all — it has no name
+// for a coprocess and no array — and a script speaks to it with `print -p`
+// and `read -p`. Measured 2026-09-05: `coproc cat; print -p hi; read -p l`
+// answers `hi` there, and `${COPROC[0]}` is empty. So the ends are kept on
+// the runner either way and the array is CoprocEndsInAnArray's question.
 //
 // Real pipes rather than in-process ones, because the command is usually an
 // external process and a pipe an os/exec child inherits is a descriptor, not
@@ -54,7 +63,14 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	sub.Stdout = childOut
 	// Only the two named streams go through the pipes; complaints still
 	// reach whoever is watching the shell.
+	//
+	// Both sides, as background() and procSub do, and for the reason
+	// background() states: the shell carries straight on while the coprocess
+	// runs, so a lock only the coprocess takes excludes nothing — and a child
+	// the shell runs next is copied into the caller's writer by os/exec on a
+	// goroutine with no share of it. See #735.
 	sub.Stderr = r.lockedStderr()
+	r.Stderr, r.Stdout = sub.Stderr, r.lockedStdout()
 	// Handed over however the goroutine ended, for the reason a background
 	// job's status is: the shell waits below for this job to report its
 	// process, and a coprocess whose ends stayed open is a shell reading a
@@ -87,9 +103,40 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	r.setFd(rfd, shellOwnedFd{shellR})
 	wfd := r.nextFreeFd()
 	r.setFd(wfd, shellOwnedFd{shellW})
-	r.setArrayElem(name, 0, "0", itoa(rfd))
-	r.setArrayElem(name, 1, "1", itoa(wfd))
-	r.setVar(name+"_PID", itoa(job.PID))
+	// Kept whichever dialect this is: `print -p` and `read -p` need them in
+	// the shell that has no array to find them in, and the shell that has one
+	// loses nothing by the record. A second `coproc` replaces the first,
+	// which is what the shell with the letters does — measured, the second
+	// one is the one `print -p` reaches.
+	r.coproc = &coprocEnds{read: rfd, write: wfd}
+	if r.ask(r.sem().CoprocEndsInAnArray, "a coprocess putting its ends in an array") {
+		r.setArrayElem(name, 0, "0", itoa(rfd))
+		r.setArrayElem(name, 1, "1", itoa(wfd))
+		r.setVar(name+"_PID", itoa(job.PID))
+	} else if r.unspecified {
+		return nil
+	}
 	r.status = 0
 	return nil
+}
+
+// coprocEnds is the pair of descriptors a running coprocess is reached by.
+type coprocEnds struct{ read, write int }
+
+// CoprocRead and CoprocWrite are the descriptors of the running coprocess, for
+// a dialect builtin that speaks to one by a letter rather than through an
+// array — `print -p` and `read -p`. The second result is false when no
+// coprocess has been started, which is the refusal both letters measure.
+func (r *Runner) CoprocRead() (int, bool) {
+	if r.coproc == nil {
+		return 0, false
+	}
+	return r.coproc.read, true
+}
+
+func (r *Runner) CoprocWrite() (int, bool) {
+	if r.coproc == nil {
+		return 0, false
+	}
+	return r.coproc.write, true
 }

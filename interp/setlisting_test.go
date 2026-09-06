@@ -114,43 +114,49 @@ func TestSetListingCanFollowWithTheFunctions(t *testing.T) {
 	}
 }
 
-// TestSetListingSpellsArraysTheWayDeclareDoes: subscripted double-quoted
-// elements in the clustering engine's shape, bare dense elements where the
-// values quote with `$'...'`.
+// TestSetListingSpellsArraysTheWayDeclareDoes: the shape follows the
+// dialect's `declare -p` and not its `set` quoting — subscripted
+// double-quoted elements where declarations cluster, dense between padding
+// spaces where an export is spelled out, and dense with no padding otherwise.
+// Measured from `a=(x 'y z')` in all three.
 func TestSetListingSpellsArraysTheWayDeclareDoes(t *testing.T) {
 	src := "a=(x 'y z')\nset"
-	out, _, _ := listRun(t, src, func(s *Semantics) {
-		s.SetListing = SetListingAssignments
-		s.SetListingQuoting = ListingQuoteWhenNeededEscaped
-		s.DeclareValueQuoting = ListingQuoteAlwaysDouble
-	})
-	if want := `a=([0]="x" [1]="y z")` + "\n"; !strings.Contains(out, want) {
-		t.Errorf("stdout = %q, want %q in it", out, want)
-	}
-	out, _, _ = listRun(t, src, func(s *Semantics) {
-		s.SetListing = SetListingAssignments
-		s.SetListingQuoting = ListingQuoteWhenNeededDollar
-		s.DeclareValueQuoting = ListingQuoteWhenNeededDollar
-	})
-	if want := "a=(x 'y z')\n"; !strings.Contains(out, want) {
-		t.Errorf("stdout = %q, want %q in it", out, want)
+	for _, tc := range []struct {
+		name string
+		form DeclarationListingForm
+		set  ListingQuotingStyle
+		val  ListingQuotingStyle
+		want string
+	}{
+		{
+			"clustered", DeclareListingClustered, ListingQuoteWhenNeededEscaped,
+			ListingQuoteAlwaysDouble, `a=([0]="x" [1]="y z")` + "\n",
+		},
+		{
+			"bare", DeclareListingBareAssignments, ListingQuoteWhenNeededDollar,
+			ListingQuoteWhenNeededDollar, "a=(x 'y z')\n",
+		},
+		{
+			"export-spelled", DeclareListingExportSpelled, ListingQuoteWhenNeededEscaped,
+			ListingQuoteWhenNeededEscaped, "a=( x 'y z' )\n",
+		},
+	} {
+		out, _, _ := listRun(t, src, func(s *Semantics) {
+			s.SetListing = SetListingAssignments
+			s.SetListingQuoting = tc.set
+			s.DeclareListing = tc.form
+			s.DeclareValueQuoting = tc.val
+		})
+		if !strings.Contains(out, tc.want) {
+			t.Errorf("%s: stdout = %q, want %q in it", tc.name, out, tc.want)
+		}
 	}
 }
 
-// TestSetListingRefusals: the form that lists every parameter of the shell
-// is refused as unimplemented, and no answer at all is refused as the
-// unanswered question it is.
+// TestSetListingRefusals: no answer at all is refused as the unanswered
+// question it is.
 func TestSetListingRefusals(t *testing.T) {
-	out, errs, st := listRun(t, "set", func(s *Semantics) {
-		s.SetListing = SetListingEveryParameter
-	})
-	if out != "" || st != 2 {
-		t.Errorf("stdout %q status %d, want a refusal with 2", out, st)
-	}
-	if !strings.Contains(errs, "not implemented yet") {
-		t.Errorf("stderr = %q, want the honest refusal", errs)
-	}
-	_, errs, st = listRun(t, "set", func(s *Semantics) {
+	_, errs, st := listRun(t, "set", func(s *Semantics) {
 		s.SetListing = SetListingUnspecified
 	})
 	if st != 2 || !strings.Contains(errs, "no dialect was chosen") {

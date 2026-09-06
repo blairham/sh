@@ -477,12 +477,14 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 	text := pending.String()
 
 	p := syntax.NewParser(text, s.Dialect)
-	// Unconditionally, unlike the script path: every shell in the panel
-	// expands aliases at a prompt, and the dialect's answer is only about a
-	// *non-interactive* one. This is the place that knows there is a person
-	// at the keyboard.
+	// The hook goes on unconditionally, unlike the script path: every shell
+	// in the panel expands aliases at a prompt, and the dialect's answer is
+	// only about a *non-interactive* one. This is the place that knows there
+	// is a person at the keyboard, and the front end has already told the
+	// runner so. Through ExpandingAlias rather than the table directly, so
+	// that `shopt -u expand_aliases` typed at the prompt is honored.
 	if s.Runner != nil {
-		p.Aliases = s.Runner.LookupAlias
+		p.Aliases = s.Runner.ExpandingAlias
 	}
 	stmts, err := collect(p)
 	// Incomplete rather than incomplete-and-failed: input can be unfinished

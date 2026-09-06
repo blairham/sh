@@ -1100,6 +1100,28 @@ type Semantics struct {
 	// parts ways with its own export listing and writes `typeset -r R=2`.
 	ReadonlyListing DeclarationListingForm
 
+	// CoprocEndsInAnArray publishes a started coprocess's near ends as the
+	// two elements of an array — `${COPROC[0]}` to read and `${COPROC[1]}` to
+	// write, with the process in `COPROC_PID` — which is bash's model and the
+	// reason its `coproc` takes a name. zsh answers no: it has no name for a
+	// coprocess and no array, and a script reaches the ends with `print -p`
+	// and `read -p` instead. Asked only when a coprocess is started, so a
+	// dialect without the word never meets it.
+	CoprocEndsInAnArray Answer
+
+	// BareDeclarationListing is the shape `export` and `readonly` write with
+	// no operands and no `-p` — which is not always the shape `-p` writes.
+	// dash and both bash builds answer the bare form exactly as they answer
+	// `-p`; ksh93 and zsh drop the command word for the bare form alone and
+	// write a plain `V='a b'`, which no `-p` anywhere writes because it could
+	// not be read back as a declaration. Measured across the panel from one
+	// exported and one readonly name.
+	//
+	// One field for both builtins, because no shell in the panel splits them:
+	// where the bare form differs from `-p` it differs for both, and by the
+	// same rule.
+	BareDeclarationListing DeclarationListingForm
+
 	// DeclarePrintReportsAMissingName makes `typeset -p nosuch` say so and
 	// fail. bash and zsh report it (with their own wording — see
 	// Diagnostics.DeclareNoSuchVariable) and answer 1 even when other names
@@ -1213,6 +1235,12 @@ type Semantics struct {
 	// the variables with every defined function, and one lists special
 	// parameters and tied arrays no other shell has.
 	SetListing SetListingForm
+
+	// ListingControlEscape is how a `$'...'` listing spells a control byte —
+	// see ControlEscapeStyle. A field of its own rather than a part of the
+	// quoting style, because two dialects that quote the same way spell a
+	// control byte differently.
+	ListingControlEscape ControlEscapeStyle
 
 	// SetListingQuoting is how that listing spells a value. The styles are
 	// the shared listing vocabulary: bash quotes only where it must and
@@ -2111,6 +2139,59 @@ type Semantics struct {
 	// only without one. Turning the option *off* is granted everywhere.
 	MonitorNeedsATerminal Answer
 
+	// InteractiveMonitorNeedsATerminal ties the monitor an *interactive*
+	// shell turns on for itself to having a terminal, which is a different
+	// question from the one above: that one is a script asking with `set -m`,
+	// and this one is nobody asking at all.
+	//
+	// The rule the answer qualifies is unanimous and is not an axis. Measured
+	// 2026-09-05 on `-i script.sh` with a scratch HOME and a pseudo-terminal:
+	// bash 5.3.15, dash, ksh93u+ and zsh 5.9.2 all report `monitor on` and
+	// all four put `m` in `$-`. So an interactive shell runs the monitor, and
+	// a front end that leaves it off is wrong on every route rather than in
+	// one dialect.
+	//
+	// What splits is the same invocation with no terminal anywhere: ksh93
+	// still reports `monitor on` and `imBE`, and bash, dash and zsh all
+	// report it off and leave `m` out. True in bash, dash and zsh; false in
+	// ksh93.
+	//
+	// The terminal that counts is a terminal on any of the three standard
+	// streams, and that is measured rather than assumed. A controlling
+	// terminal with all three redirected elsewhere is *not* enough — bash,
+	// dash and zsh all report the monitor off there — and a pseudo-terminal
+	// on any one of the three alone is enough for all three of them. So the
+	// question the front end has to answer is about the descriptors it was
+	// handed, which is the one it can answer.
+	//
+	// It is not MonitorNeedsATerminal read a second time, and bash is what
+	// separates them: `bash -c 'set -m'` with no terminal turns the monitor
+	// on, and `bash -i script.sh` with no terminal leaves it off. One shell,
+	// two answers, so an explicit request and an automatic one are two
+	// questions.
+	//
+	// The preset says a terminal *is* needed, and this is the rarer case
+	// where the text does not decide. XCU says of `-m` that it "shall be
+	// enabled by default for interactive shells" and puts no terminal in
+	// that sentence, but it also defines job control throughout in terms of
+	// a controlling terminal, so the sentence is silent about having none
+	// rather than permissive about it. Silent text gets the answer that
+	// claims less — a shell with no terminal does not report a monitor —
+	// which is three of the four as well.
+	//
+	// Read rather than `ask`ed, exactly as InteractiveOptionLetters is: the
+	// answer is wanted once at startup, before the program has run a line, so
+	// refusing over an unanswered field would put "the shells disagree here"
+	// ahead of every `-i script.sh` under a preset that has not chosen. An
+	// unanswered field reads as Yes — a terminal is needed and the monitor
+	// stays off, which is the majority and the quiet answer.
+	//
+	// zsh is worth knowing about and is not this axis. With a terminal it
+	// puts `m` in `$-` and announces its jobs while its own `set -o` still
+	// lists `monitor off` — it disagrees with itself, and what is recorded
+	// here is the state the other two readers report.
+	InteractiveMonitorNeedsATerminal Answer
+
 	// PunctuatedFunctionNameIsRefused stops the script when a function
 	// whose name carries `-` or `.` is defined. ksh93 alone: bash and zsh
 	// define and run it, and dash never parses the definition at all.
@@ -2969,10 +3050,20 @@ func PosixSemantics() Semantics {
 		// keep their zero values: no option letters, and a bad one reported
 		// rather than fatal — `typeset` is not one of the builtins POSIX
 		// marks special.
-		SetListing:            SetListingAssignments,
-		SetListingQuoting:     ListingQuoteAlwaysDoubled,
-		BareLocalListing:      BareLocalListsNothing,
-		TypesetBadOptionFatal: No,
+		SetListing:        SetListingAssignments,
+		SetListingQuoting: ListingQuoteAlwaysDoubled,
+		// dash quotes every listed value and never reaches `$'...'`, so the
+		// numeric fallback is never asked for there; the octal one is what
+		// POSIX's own `printf` writes, and is the reading to start from.
+		ListingControlEscape: ControlEscapeOctal,
+		// POSIX has the operand-less `export` and `readonly` write output
+		// "in a form that may be reused as input", which is the command word
+		// and the assignment — the same thing `-p` writes.
+		ExportListing:          DeclareListingCommandWord,
+		ReadonlyListing:        DeclareListingCommandWord,
+		BareDeclarationListing: DeclareListingCommandWord,
+		BareLocalListing:       BareLocalListsNothing,
+		TypesetBadOptionFatal:  No,
 		// POSIX gives `%string` and `%?string` outright, has `wait` answer
 		// for a job that is not there, and calls a string matching more
 		// than one job unspecified — refusing is the reading that invents
@@ -3022,9 +3113,18 @@ func PosixSemantics() Semantics {
 		SetHLetterTracksCommands: Yes,
 		// POSIX ties -m to process groups and job notices, not to a
 		// terminal; the two shells that want one override.
-		MonitorNeedsATerminal:           No,
-		TildePlusMinusExpands:           No,
-		UnderscoreTracksTheLastArgument: No,
+		MonitorNeedsATerminal: No,
+		// The standard does not answer this one. XCU says `-m` "shall be
+		// enabled by default for interactive shells" and names no terminal
+		// in that sentence, but it also defines job control throughout in
+		// terms of a controlling terminal — so the sentence is silent about
+		// the case where there is none rather than permissive about it.
+		// Where the text is silent the preset takes the answer that claims
+		// less: a shell with no terminal does not say it is running a
+		// monitor. It is also three of the four.
+		InteractiveMonitorNeedsATerminal: Yes,
+		TildePlusMinusExpands:            No,
+		UnderscoreTracksTheLastArgument:  No,
 		// POSIX has no `$_`, so nothing is written at startup and a name
 		// the environment carried is an ordinary variable that shows
 		// through — which is also the majority, five of the six.

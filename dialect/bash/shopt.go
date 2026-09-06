@@ -32,6 +32,25 @@ var shoptModes = map[string]interp.MatchOption{
 	"extglob":     interp.QuantifiedGroupsEverywhere,
 }
 
+// shoptSwitches are the names wired to a switch the core holds rather than to
+// the matcher — the second kind of "really implemented", and today one name.
+//
+// `expand_aliases` is the option a bash script has to set before an alias
+// means anything, which is why an alias case could not be written for bash at
+// all while this was refused (#632). It is implemented rather than recorded:
+// the alias is expanded afterwards and not expanded before, and `shopt -u`
+// mid-script stops it again — measured in bash 5.3 and bash 3.2 alike, on all
+// three non-interactive routes.
+var shoptSwitches = map[string]struct {
+	get func(*interp.Runner) bool
+	set func(*interp.Runner, bool)
+}{
+	"expand_aliases": {
+		get: (*interp.Runner).AliasExpansion,
+		set: (*interp.Runner).SetAliasExpansion,
+	},
+}
+
 // shoptStates are the rest of the names bash 5.3 lists, with the state this
 // implementation is in — not the state bash defaults to, the same rule
 // interp's set-option table follows. Asking for the state we already hold is
@@ -64,7 +83,6 @@ var shoptStates = map[string]bool{
 	"direxpand":               false,
 	"dirspell":                false,
 	"execfail":                false,
-	"expand_aliases":          false,
 	"extdebug":                false,
 	"extquote":                true,
 	"failglob":                false,
@@ -105,14 +123,20 @@ func shoptState(r *interp.Runner, name string) (on, known bool) {
 	if mode, ok := shoptModes[name]; ok {
 		return r.MatchOption(mode), true
 	}
+	if sw, ok := shoptSwitches[name]; ok {
+		return sw.get(r), true
+	}
 	on, known = shoptStates[name]
 	return on, known
 }
 
 // shoptNames is every name, sorted, for the listings.
 func shoptNames() []string {
-	names := make([]string, 0, len(shoptModes)+len(shoptStates))
+	names := make([]string, 0, len(shoptModes)+len(shoptSwitches)+len(shoptStates))
 	for n := range shoptModes {
+		names = append(names, n)
+	}
+	for n := range shoptSwitches {
 		names = append(names, n)
 	}
 	for n := range shoptStates {
@@ -231,6 +255,10 @@ func shoptApply(r *interp.Runner, names []string, on bool) int {
 	for _, name := range names {
 		if mode, ok := shoptModes[name]; ok {
 			r.SetMatchOption(mode, on)
+			continue
+		}
+		if sw, ok := shoptSwitches[name]; ok {
+			sw.set(r, on)
 			continue
 		}
 		if held, ok := shoptStates[name]; ok {

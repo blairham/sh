@@ -83,9 +83,31 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	// guard for the same reason: an io.Writer carries no promise of being
 	// safe to write from two places, and the shell is what created the
 	// concurrency.
+	//
+	// Both sides, which is background()'s rule and is here for the reason it
+	// gives: a lock one party takes and the other does not excludes nothing,
+	// and the shell that named the substitution is the other party. It left
+	// the shell writing raw — and a *child* of the shell too, because os/exec
+	// copies into a writer that is not a file on a goroutine of its own, with
+	// no share of this lock. `cat <(cmd)` raced on exactly that, and
+	// bytes.Buffer grows before it reads, so a child that writes nothing at
+	// all raced as well. That was #735.
+	//
+	// It costs nothing to wrap what is already a pipe: lockWriter leaves an
+	// *os.File alone, so a shell whose streams are files hands its children
+	// the descriptors, and one whose streams are not was giving them pipes
+	// either way.
+	//
+	// Both *streams*, not only the shared one, and that is the same argument
+	// again: an embedder may hand one writer to Stdout and Stderr both, so
+	// the substitution's diagnostic and the outer command's output are the
+	// same object. Guarding only stderr left `cat <(cmd)` racing on the
+	// stdout the shell had not wrapped — one mutex covers both streams for
+	// exactly this reason; see lockedWriter.
 	sub.Stderr = r.lockedStderr()
+	r.Stderr, r.Stdout = sub.Stderr, r.lockedStdout()
 	if kind == syntax.ProcSubstOut {
-		sub.Stdout = r.lockedStdout()
+		sub.Stdout = r.Stdout
 	}
 
 	// `>(cmd)` reads the command's input out of the pipe, and the shell can

@@ -145,8 +145,13 @@ func Semantics() interp.Semantics {
 	// silence, status 0, which is measured rather than a shortcut.
 	s.DeclareListing = interp.DeclareListingBareAssignments
 	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededDollar
+	s.ListingControlEscape = interp.ControlEscapeHex
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
+	// And the bare form is not the `-p` form here: the command word goes and
+	// what is left is a plain assignment — `export` writes `V='a b'` where
+	// `export -p` writes `export V='a b'`. Measured; zsh does the same.
+	s.BareDeclarationListing = interp.DeclareListingPlainAssignment
 	s.DeclarePrintReportsAMissingName = interp.No
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.Yes
@@ -401,6 +406,11 @@ func Semantics() interp.Semantics {
 	// line under it, and the script ends there.
 	s.ExportTakesTheAttributeOff = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
+	// The panel's dissenter, and the only cell of the interactive table that
+	// was measured and not reproduced: `monitor on` and `imBE` under
+	// `-i script.sh` with no terminal anywhere, announcing its background
+	// jobs into a pipe.
+	s.InteractiveMonitorNeedsATerminal = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.Yes

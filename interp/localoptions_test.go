@@ -85,10 +85,20 @@ func TestBareLocalLists(t *testing.T) {
 		t.Errorf("out %q errs %q status %d, want silence and 0", out, errs, st)
 	}
 
-	out, errs, st = declRun(t, "f() { local x=1; local; }\nf", func(s *Semantics) {
+	// The third form is neither of the other two: every parameter the shell
+	// holds, not the scope's alone, with the attributes written as words
+	// before the assignment and `local` among them for a name the running
+	// function made local.
+	out, errs, st = declRun(t, "f() { local x=1; readonly -p >/dev/null; local; }\nf", func(s *Semantics) {
 		s.BareLocalListing = BareLocalListsEveryParameter
 	}, Diagnostics{})
-	if out != "" || st != 2 || !strings.Contains(errs, "not implemented yet") {
-		t.Errorf("out %q errs %q status %d, want the honest refusal", out, errs, st)
+	if errs != "" || st != 0 {
+		t.Fatalf("errs %q status %d, want a listing and 0", errs, st)
+	}
+	if want := "local x=\"1\"\n"; !strings.Contains(out, want) {
+		t.Errorf("out %q, want %q in it", out, want)
+	}
+	if !strings.Contains(out, "\nOPTIND=") {
+		t.Errorf("out %q, want a global listed with no local word", out)
 	}
 }

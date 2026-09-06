@@ -1,0 +1,85 @@
+#!/bin/sh
+# Both roles at once, and the obligation that comes with taking them.
+#
+# A notification can arrive at any moment. It does not wait for a call to end,
+# and it does not wait for the gap between a host method and its reply — the
+# host writes events from a goroutine of its own. So every place this script
+# reads a line goes through `next`, which counts a record when it sees one and
+# tells its caller that is what this line was. A plugin that read the next line
+# and assumed it was the answer — which is what testdata/greet does, because
+# greet takes only the command role — would take an event for a reply the first
+# time the two crossed.
+#
+# `ask` sets a variable rather than printing into a command substitution, and
+# that is the second half of the same obligation: a command substitution is a
+# subshell, so a record counted inside one would be counted into a copy of the
+# counter and thrown away when it exited.
+#
+# It still serves one call at a time, which the host does not require and this
+# fixture does not fix — see testdata/greet.
+exec 3>&1
+send() { printf '%s\n' "$1" >&3; }
+b64() { printf '%s' "$1" | base64 | tr -d '\n'; }
+str_of() { printf '%s' "$2" | sed -n 's/.*"'"$1"'":"\([^"]*\)".*/\1/p'; }
+
+seen=0
+isevent=0
+
+# next reads one message into $line and says in $isevent whether it was a
+# record. One line per call and never more: a reader that kept going until it
+# found something addressed to it would block once the stream went quiet, which
+# is the whole difference between multiplexing and skipping.
+next() {
+	IFS= read -r line || return 1
+	isevent=0
+	case $line in
+	*'"method":"observer/event"'*)
+		isevent=1
+		seen=$((seen + 1))
+		;;
+	esac
+	return 0
+}
+
+# ask sends a host method and waits for its answer in $reply, letting records
+# past on the way.
+ask() {
+	send "{\"jsonrpc\":\"2.0\",\"id\":9000,\"method\":\"$1\",\"params\":$2}"
+	reply=
+	while next; do
+		[ "$isevent" -eq 1 ] && continue
+		case $line in
+		*'"id":9000'*)
+			reply=$line
+			return 0
+			;;
+		esac
+	done
+	return 1
+}
+
+while next; do
+	[ "$isevent" -eq 1 ] && continue
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"both\",\"commands\":[\"count\"],\"observer\":true}}"
+		;;
+	*'"method":"command/invoke"'*)
+		call=$(str_of call "$line")
+		want=$(printf '%s' "$line" | sed -n 's/.*"args":\["\([^"]*\)".*/\1/p')
+		# Reading the event stream from inside a call, which is the arrangement
+		# a plugin with both roles is in for as long as a command of its own is
+		# running.
+		while [ "$seen" -lt "$want" ]; do
+			next || break
+		done
+		# And a host method from the same place, to show that a reply is still
+		# found with records going past it.
+		ask shell/getVar "{\"call\":\"$call\",\"name\":\"GREETING\"}"
+		send "{\"jsonrpc\":\"2.0\",\"method\":\"command/output\",\"params\":{\"call\":\"$call\",\"stream\":\"out\",\"data\":\"$(b64 "$seen $(str_of value "$reply")
+")\"}}"
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"status\":0}}"
+		;;
+	esac
+done

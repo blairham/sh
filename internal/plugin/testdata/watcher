@@ -1,0 +1,45 @@
+#!/bin/sh
+# The observer role on its own: this plugin declares no commands at all and
+# only watches. A plugin like this is the reason the role exists — a shell's
+# event stream going somewhere that is not a file, in a language nobody had to
+# choose in advance.
+#
+# What it receives is an event.Record, unwrapped: the same JSON Lines schema an
+# audit file holds, at version 1, with the same five stability rules. So a
+# consumer of one is a consumer of the other, which is the whole of why this
+# role costs the protocol one method.
+#
+# The two fields worth naming here. `seq` is a total order of *emission* and
+# what it is for is gap detection: this plugin printing 1, 2, 3 and then 7 has
+# lost three records, and the host will have dropped them rather than blocked
+# the shell. And unknown fields are ignored — rule three — so a record carrying
+# something newer than this script knows about is still a record it can read.
+#
+# There is no call id anywhere in this file, and there is nothing missing. An
+# event names no call: it comes from whichever goroutine emitted it, in a
+# subshell this plugin has never been told about. The session and the action id
+# are what identify a record, and they are on it.
+exec 3>&1
+send() { printf '%s\n' "$1" >&3; }
+one_of() { printf '%s' "$2" | sed -n 's/.*"'"$1"'":"\([^"]*\)".*/\1/p'; }
+
+while IFS= read -r line; do
+	case $line in
+	*'"method":"observer/event"'*)
+		seq=$(printf '%s' "$line" | sed -n 's/.*"seq":\([0-9]*\).*/\1/p')
+		# Its own standard error, which the host relays prefixed. That is a
+		# real plugin's cheapest possible output and it is deliberately what
+		# this fixture uses: it goes through the same relay every other plugin
+		# diagnostic goes through, so nothing here is a test-only route.
+		printf 'saw %s %s seq=%s\n' \
+			"$(one_of event "$line")" "$(one_of action "$line")" "$seq" >&2
+		continue
+		;;
+	esac
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"watcher\",\"commands\":[],\"observer\":true}}"
+		;;
+	esac
+done

@@ -217,7 +217,12 @@ func TestManyLifecyclesLeaveNoGoroutinesBehind(t *testing.T) {
 	base := settled(t, 0)
 
 	for range 3 {
-		for _, name := range []string{"greet", "garbage", "noisy", "exitmid", "noinvoke"} {
+		// watcher is here for the observer role's own goroutine: it declares
+		// no commands, so its feed spends the whole lifecycle idle, waiting on
+		// a channel nothing will ever put anything on again. Close is the only
+		// thing that ends it, which is exactly the shape this test exists to
+		// catch.
+		for _, name := range []string{"greet", "garbage", "noisy", "exitmid", "noinvoke", "watcher"} {
 			h, err := plugin.Launch(t.Context(), plugin.Options{Path: fixture(t, name), Stderr: &syncBuffer{}})
 			if err != nil {
 				t.Fatalf("Launch(%s): %v", name, err)

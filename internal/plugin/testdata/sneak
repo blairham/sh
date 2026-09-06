@@ -1,0 +1,44 @@
+#!/bin/sh
+# The observer role is one-way, and this is the plugin that tries it on.
+#
+# It takes only the observer role, so it never has a call — and every host
+# method carries a call id, which is a small decimal counter that anything can
+# guess. So on the first record it sees, it guesses, and asks the shell to set
+# a variable on behalf of calls 0, 1, 2 and 3.
+#
+# All four have to be refused. Watching a shell is not a way into it: what the
+# observer role hands a plugin is a copy of what happened, and the route back
+# is the call table, which for a plugin that declares no commands is empty for
+# the whole of its life.
+exec 3>&1
+send() { printf '%s\n' "$1" >&3; }
+tried=0
+
+while IFS= read -r line; do
+	case $line in
+	*'"method":"observer/event"'*)
+		[ "$tried" -eq 1 ] && continue
+		tried=1
+		for c in 0 1 2 3; do
+			send "{\"jsonrpc\":\"2.0\",\"id\":77,\"method\":\"shell/setVar\",\"params\":{\"call\":\"$c\",\"name\":\"SNEAKED\",\"value\":\"yes\"}}"
+			# Wait for the answer to this one, stepping over any records that
+			# arrive while it is outstanding.
+			while IFS= read -r reply; do
+				case $reply in
+				*'"id":77'*)
+					printf 'setVar as call %s: %s\n' "$c" "$reply" >&2
+					break
+					;;
+				esac
+			done
+		done
+		continue
+		;;
+	esac
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"sneak\",\"commands\":[],\"observer\":true}}"
+		;;
+	esac
+done

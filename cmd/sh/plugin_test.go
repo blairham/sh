@@ -308,3 +308,144 @@ func TestAFailedLaunchClosesThePluginsAlreadyStarted(t *testing.T) {
 		t.Errorf("err = %q, want the plugin that did start to have been closed", got.errs)
 	}
 }
+
+// watcher is a whole observer plugin, and it is shorter than the greeter: it
+// declares no commands at all, takes the event stream, and writes what it saw
+// to its own standard error, which the host relays.
+//
+// The records it receives are event.Records, the same JSON Lines the audit file
+// holds. That is the point of the role costing one method: internal/event was
+// written as a shared contract, and a consumer of an audit stream is already a
+// consumer of this.
+const watcher = `#!/bin/sh
+exec 3>&1
+send() { printf '%s\n' "$1" >&3; }
+while IFS= read -r line; do
+	case $line in
+	*'"method":"observer/event"'*)
+		ev=$(printf '%s' "$line" | sed -n 's/.*"event":"\([^"]*\)".*/\1/p')
+		act=$(printf '%s' "$line" | sed -n 's/.*"action":"\([^"]*\)".*/\1/p')
+		path=$(printf '%s' "$line" | sed -n 's/.*"path":"\([^"]*\)".*/\1/p')
+		printf 'saw %s %s %s\n' "$ev" "$act" "$path" >&2
+		continue
+		;;
+	esac
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"watcher\",\"commands\":[],\"observer\":true}}"
+		;;
+	esac
+done
+`
+
+// The observer role, through the flag a person types: a plugin in another
+// language is told what this shell ran.
+func TestAnObserverPluginIsToldWhatTheShellRan(t *testing.T) {
+	path := writePlugin(t, watcher)
+	got := sandboxed(t, "posix", "-plugin", path, "-c", "/bin/echo hello")
+	if got.code != 0 {
+		t.Fatalf("status = %d, err = %q", got.code, got.errs)
+	}
+	if got.out != "hello\n" {
+		t.Errorf("out = %q, want the command's own output untouched", got.out)
+	}
+	// Records the shell emitted while running the command, relayed back
+	// through the plugin's standard error and prefixed with its name.
+	for _, want := range []string{
+		"sh: plugin watcher: saw command-start exec",
+		"sh: plugin watcher: saw command-end exec",
+	} {
+		if !strings.Contains(got.errs, want) {
+			t.Errorf("errs = %q, want %q", got.errs, want)
+		}
+	}
+}
+
+// A command plugin is not shown the event stream, and this is the bypass
+// written the way the gate checks are: the plugin says so out loud if it is
+// ever handed one.
+//
+// What is at stake is a disclosure rather than a capability. The stream is
+// every command the shell ran and every path it touched; a person who wanted
+// one word implemented in another language did not thereby ask for a copy of
+// their session to be sent to it. The role has to be declared, and this is the
+// declaration being load-bearing rather than decorative.
+func TestAPluginThatDidNotAskIsNotShownTheEventStream(t *testing.T) {
+	nosy := strings.Replace(greeter,
+		"\tcase $line in\n\t*'\"method\":\"initialize\"'*)",
+		"\tcase $line in\n\t*'\"method\":\"observer/event\"'*)\n\t\tprintf 'LEAKED\\n' >&2\n\t\t;;\n\t*'\"method\":\"initialize\"'*)", 1)
+	if nosy == greeter {
+		t.Fatal("the fixture was not rewritten: this test would pass without checking anything")
+	}
+	path := writePlugin(t, nosy)
+	got := sandboxed(t, "posix", "-plugin", path, "-c", "/bin/echo one; hail two")
+	if got.code != 0 {
+		t.Fatalf("status = %d, err = %q", got.code, got.errs)
+	}
+	if !strings.Contains(got.out, "hail two from a shell script") {
+		t.Fatalf("out = %q, want the plugin to have been running at all", got.out)
+	}
+	if strings.Contains(got.errs, "LEAKED") {
+		t.Errorf("errs = %q: a plugin that declared only commands was sent the event stream", got.errs)
+	}
+}
+
+// An observer plugin is composed onto the record the invocation already asked
+// for, never in place of it.
+//
+// A person who adds a plugin to a shell that was already keeping a trace did
+// not ask for the trace to stop, and an audit trail a plugin can silence is not
+// an audit trail. Both have to be there in one run.
+func TestAnObserverDoesNotSilenceTheRecordTheShellWasAlreadyKeeping(t *testing.T) {
+	path := writePlugin(t, watcher)
+	got := sandboxed(t, "posix", "-trace-events", "-plugin", path, "-c", "/bin/echo hello")
+	if got.code != 0 {
+		t.Fatalf("status = %d, err = %q", got.code, got.errs)
+	}
+	if !strings.Contains(got.errs, "trace: command-start exec") {
+		t.Errorf("errs = %q, want the trace the invocation asked for", got.errs)
+	}
+	if !strings.Contains(got.errs, "sh: plugin watcher: saw command-start exec") {
+		t.Errorf("errs = %q, want the plugin to have been told as well", got.errs)
+	}
+}
+
+// No plugin is shown another plugin's launch.
+//
+// Every -plugin is launched before any observer sink is composed, so the exec
+// that starts one is recorded to the trace and to the audit file and to no
+// plugin. The alternative would make what a plugin can see depend on where its
+// flag sat in the argument list, which is a disclosure rule nobody could read
+// off a command line — and it would mean that adding a second plugin quietly
+// widened what the first one is told.
+func TestNoPluginIsShownAnotherPluginsLaunch(t *testing.T) {
+	// Both orders, because the rule is that the order does not matter and a
+	// test that fixed one would only hold half of it: an observer named second
+	// is not yet composed when the first plugin starts *by accident of
+	// sequence*, and an observer named first is the case where composing as
+	// each launch happened would tell it about the next one.
+	for _, order := range []struct {
+		name           string
+		command, watch string
+	}{
+		{"the observer named second", greeter, watcher},
+		{"the observer named first", watcher, greeter},
+	} {
+		first := writePlugin(t, order.command)
+		second := writePlugin(t, order.watch)
+		got := sandboxed(t, "posix", "-plugin", first, "-plugin", second, "-c", "/bin/echo hi")
+		if got.code != 0 {
+			t.Fatalf("%s: status = %d, err = %q", order.name, got.code, got.errs)
+		}
+		if !strings.Contains(got.errs, "saw command-start exec /bin/echo") {
+			t.Fatalf("%s: errs = %q, want the observer to have been watching at all", order.name, got.errs)
+		}
+		for _, path := range []string{first, second} {
+			if strings.Contains(got.errs, path) {
+				t.Errorf("%s: errs = %q: an observer was shown the exec that launched %s",
+					order.name, got.errs, path)
+			}
+		}
+	}
+}

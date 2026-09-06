@@ -82,6 +82,23 @@ const (
 	// is going to fail either way. What it buys the plugin is the chance to
 	// stop cleanly before the host kills it.
 	MethodCancel = "command/cancel"
+	// MethodEvent is one record of the shell's event stream, for a plugin that
+	// declared the observer role.
+	//
+	// A notification, and it is the only message in this protocol that names no
+	// call — because an event names no call. Events come from every goroutine a
+	// shell has and from subshells the plugin has never been told about, so
+	// there is nothing for a call id to mean here. What identifies a record is
+	// what identifies it everywhere else in this repository: the session and
+	// the action id it carries, which is the pair internal/event owns.
+	//
+	// The params are an event.Record, unwrapped: the observer role sends
+	// exactly the records the JSON Lines schema already defines rather than a
+	// second shape meaning the same thing. That is the whole reason this role
+	// is nearly free — internal/event was written as a shared contract rather
+	// than as a feature of one consumer, and this is the third consumer taking
+	// it as it stands.
+	MethodEvent = "observer/event"
 )
 
 // The methods a plugin calls on the host. Each is here because a process that
@@ -128,6 +145,24 @@ type initializeResult struct {
 	ProtocolVersion int      `json:"protocolVersion"`
 	Name            string   `json:"name"`
 	Commands        []string `json:"commands"`
+	// Observer says the plugin takes the observer role and wants the shell's
+	// event stream. Absent is false, so every plugin written before this field
+	// existed goes on meaning exactly what it meant — rule three of the event
+	// schema's stability rules, which this protocol adopted wholesale.
+	//
+	// A boolean rather than a `roles` array, and the reason is that the array
+	// would be a second way to say something the message already says.
+	// Commands being non-empty *is* the declaration of the command role; a
+	// roles list beside it could disagree with it, and a protocol with two
+	// spellings of one fact has a case where they differ and no rule for it.
+	// So each role is declared by the field that carries it, and a plugin that
+	// declares neither is refused — see Host.handshake.
+	//
+	// Opt-in, and that is a disclosure decision rather than a default. The
+	// event stream is every command the shell runs, every path it touches and
+	// every refusal a policy made; a plugin that did not ask for it does not
+	// receive it, and Host.Sink answers nil for one that did not.
+	Observer bool `json:"observer"`
 }
 
 // invokeRequest is one call of one of the plugin's commands.

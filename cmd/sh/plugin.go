@@ -21,6 +21,16 @@ import (
 // whatever language its author chose. See docs/design/plugins.md for the
 // design and internal/plugin for the protocol.
 //
+// A plugin may also take the observer role, in which case it receives the
+// shell's event stream — interp.Sink, remoted. That is composed onto whatever
+// sink the invocation already asked for rather than replacing it: see watched.
+//
+// The two are ordered here and it matters which way. Every plugin is launched
+// before any of their sinks is composed, so no plugin is shown the exec that
+// started another one. The alternative would make what a plugin can see depend
+// on where its flag sat in the argument list, which is a disclosure rule nobody
+// could read off the command line.
+//
 // This is cmd/sh's flag and not driver's, for the reason -policy is: driver is
 // the shared front end for binaries that claim to *be* bash or zsh, and no
 // real shell has a -plugin, so putting it there would make `./bash -plugin`
@@ -114,7 +124,41 @@ func launchPlugins(sh driver.Shell, paths []string, stderr io.Writer) (driver.Sh
 			h.Register(r)
 		}
 	}
+	sh.Events = watched(sh.Events, hosts.hosts)
 	return sh, hosts, nil
+}
+
+// watched composes the observer plugins onto whatever sink the invocation
+// already installed.
+//
+// Composed and not replaced, which is the whole of what this function is for.
+// -audit writes a file and -trace-events writes to the terminal, and a person
+// who added a plugin to a shell that was already keeping a record did not ask
+// for the record to stop — an audit trail that a plugin can silence is not one.
+// So this is the same list-of-one-or-many shape installSeams uses, for the same
+// reason: one of a kind is installed as itself so the common case pays nothing
+// for the composition.
+//
+// A plugin that did not declare the observer role contributes nothing, and its
+// Sink is nil rather than a discard, so a shell running only command plugins
+// goes on emitting no events at all — which is what it did before any of this.
+func watched(already interp.Sink, hosts []*plugin.Host) interp.Sink {
+	var s sinks
+	if already != nil {
+		s = append(s, already)
+	}
+	for _, h := range hosts {
+		if sink := h.Sink(); sink != nil {
+			s = append(s, sink)
+		}
+	}
+	switch len(s) {
+	case 0:
+		return nil
+	case 1:
+		return s[0]
+	}
+	return s
 }
 
 // plugins is every plugin an invocation started, closed as one.

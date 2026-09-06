@@ -20,7 +20,7 @@ import (
 	"github.com/blairham/sh/internal/jsonrpc"
 )
 
-// The two bounded waits in this file, and there are exactly two.
+// The bounded waits in this file, and why each one is not a deadline on a call.
 //
 // docs/design/plugins.md forbids a per-call deadline and gives the reason:
 // #493 concluded that a deadline which "silently allows or refuses reports
@@ -35,15 +35,21 @@ import (
 // been given EOF, and what follows is a kill either way — the bound only
 // decides whether it gets to exit on its own first.
 //
-// cancelWait is the third and it is the same kind as shutdownWait rather than
-// a new kind. The call is already lost when it starts, so the bound is not
-// picking between two answers: it is deciding how long to let a plugin finish
-// tidying up before the host stops waiting and kills it. The answer reported
-// is the truth in both branches.
+// cancelWait and flushWait are the same kind as shutdownWait rather than new
+// kinds. Each names a moment where the thing being waited for is already lost
+// if the wait expires, so the bound is not picking between two answers: it is
+// deciding how long to let a plugin finish before the host stops waiting. The
+// answer reported is the truth in both branches.
 const (
 	handshakeWait = 10 * time.Second
 	shutdownWait  = 2 * time.Second
 	cancelWait    = 2 * time.Second
+	// flushWait is how long the observer feed gets to put the records it has
+	// already numbered on the wire before the shell stops waiting for it. Same
+	// kind as shutdownWait: the shell is ending, there is nothing left to
+	// cancel, and the answer reported is the truth in both branches — the
+	// plugin either received them or the stream stopped where it stopped.
+	flushWait = 2 * time.Second
 	// drainWait is how long the read loop gets to finish consuming what an
 	// exiting plugin already wrote before the host takes its output away. It
 	// exists because the last thing a plugin writes is usually the response to
@@ -102,6 +108,12 @@ type Host struct {
 	// stream; nothing can, and a plugin's diagnostics landing in the middle of
 	// a script's output is what the prefix is for.
 	relayMu sync.Mutex
+
+	// obs is the observer role's feed, or nil for a plugin that did not
+	// declare it. Written once during the handshake, before Launch returns and
+	// therefore before anything else can hold this host, and only read
+	// afterwards — see observer.go.
+	obs *observer
 
 	serveDone chan struct{}
 	relayDone chan struct{}
@@ -347,11 +359,31 @@ func (h *Host) handshake(ctx context.Context) error {
 		h.name = res.Name
 		h.mu.Unlock()
 	}
+	// A plugin somebody asked for that does nothing is a configuration error,
+	// and silence is the failure mode — the same reason a failed launch is
+	// fatal. This is the whole of what the observer role changed about the
+	// refusal: it used to be "declares no commands", because commands were the
+	// only surface there was.
+	if len(res.Commands) == 0 && !res.Observer {
+		return errors.New("it declared no surface at all: no commands, and not the observer role")
+	}
 	names, err := commandNames(res.Commands)
 	if err != nil {
 		return err
 	}
 	h.commands = names
+	// After the surface is settled, so a plugin that is about to be refused
+	// never has a goroutine started on its behalf: Launch closes the host on a
+	// handshake failure, and a feed created here would be one more thing that
+	// close has to be right about for no gain.
+	//
+	// The event stream is opt-in and this line is the whole of the opt. A
+	// plugin that did not declare the role is not fed one, is not composed into
+	// the shell's Sink by the front end, and answers false to Observes.
+	if res.Observer {
+		h.obs = newObserver(h)
+		go h.obs.feed()
+	}
 	return nil
 }
 
@@ -362,15 +394,11 @@ func (h *Host) handshake(ctx context.Context) error {
 // silently dropped one would resolve that word from PATH while the plugin
 // believed it owned it.
 //
-// A plugin declaring nothing is refused for the same reason a failed launch
-// is fatal: it is a plugin somebody asked for that does nothing, and silence
-// is the failure mode. When the observer role lands this becomes "declares no
-// surface at all" rather than "declares no commands", and the check is the
-// only line that changes.
+// Declaring none is not an error here any more, and that is the observer
+// role's arrival: a plugin that takes only that role has no commands and is a
+// complete plugin. What is still refused is a plugin that declares no surface
+// at all, and that check moved up to handshake, where both roles are visible.
 func commandNames(declared []string) ([]string, error) {
-	if len(declared) == 0 {
-		return nil, errors.New("it declared no commands")
-	}
 	seen := map[string]bool{}
 	out := make([]string, 0, len(declared))
 	for _, name := range declared {
@@ -434,8 +462,12 @@ func (h *Host) Err() error {
 // The sequence is fixed and each step is here because the one before it does
 // not always work:
 //
-//  1. Close the plugin's input. A cooperating plugin sees EOF and exits, which
-//     is how every well-behaved one goes.
+//  1. Let the observer feed, if there is one, put the records it has already
+//     numbered on the wire, bounded by flushWait; then close the plugin's
+//     input. A cooperating plugin sees EOF and exits, which is how every
+//     well-behaved one goes. The bound is what stops a plugin that has stopped
+//     reading from choosing how long a shutdown takes, and closing the input
+//     is what unblocks a feed already parked in a write to one.
 //
 //  2. Wait a bound for that to happen.
 //
@@ -463,6 +495,19 @@ func (h *Host) Err() error {
 func (h *Host) Close() error {
 	h.closeOnce.Do(func() {
 		h.die(errors.New("the shell shut it down"))
+		// Before the stream goes, so the feed stops choosing new records to
+		// write; and not instead of the stream going, because a feed already
+		// blocked inside a write to a plugin that stopped reading cannot see
+		// this. Closing the input below is what unblocks that one. Two reasons
+		// to return, and between them they cover both places the goroutine can
+		// be.
+		if h.obs != nil {
+			close(h.obs.closing)
+			select {
+			case <-h.obs.done:
+			case <-time.After(flushWait):
+			}
+		}
 		_ = h.in.Close()
 		select {
 		case <-h.procDone:
@@ -490,6 +535,16 @@ func (h *Host) Close() error {
 		case <-time.After(drainWait):
 			_ = h.errs.Close()
 			<-h.relayDone
+		}
+		if h.obs != nil {
+			// Belt and braces, and **not** covered: removing it is a mutant
+			// that survives. The feed's only remaining place to be is inside a
+			// write to a stream that has just been taken away, which returns,
+			// and the goroutine-count test polls precisely because a goroutine
+			// on its way out is not a leak. It stays because "every goroutine
+			// the host starts has a reason to return that the host controls" is
+			// worth less if the host does not wait to see it happen.
+			<-h.obs.done
 		}
 	})
 	return nil

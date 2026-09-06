@@ -654,6 +654,38 @@ type Dialect struct {
 	// grammar question, but which dialects have one to match is.
 	NumericRangePattern bool
 
+	// GlobQualifiers reads a parenthesized group where an *argument* may
+	// stand as part of the word rather than as anything of the shell's:
+	// `echo MY ( x )` is two words there, `MY` and `( x )`, and the second
+	// is a pattern carrying a list of qualifiers. zsh alone has it, and in
+	// the other four a `(` after a word is a syntax error.
+	//
+	// **Command position is the whole of the disambiguation**, measured
+	// 2026-09-06 on zsh 5.9.2: `( x )` written where a command begins is a
+	// subshell running `x`, and the same three characters after a word are
+	// one argument. So the parser has to say which it is — the flag alone
+	// cannot — exactly as it does for [Lexer.inPattern] and a condition.
+	//
+	// `setopt no_glob` is what proves the split is lexical rather than
+	// interpretive: with globbing off, `echo MY ( x )` *prints* `MY ( x )`,
+	// so the words are the same words and only what becomes of the group
+	// has changed. The grammar half is therefore unconditional under the
+	// flag, and the qualifier reading lives in the expansion, where whether
+	// a word is a pattern at all is already decided.
+	//
+	// The group ends the word at a shell operator, which is measured rather
+	// than assumed and is the reason it is not simply the balanced text:
+	// `echo ( a <b )` is `parse error near `)'` there, with globbing on or
+	// off, because the `<` ended the word and left the `)` with nowhere to
+	// go. A `|` is the exception — `echo ( a|b )` is one word — because a
+	// pattern group may hold an alternation.
+	//
+	// The matcher's half is read from here too, the way
+	// [Dialect.PatternAlternation] and [Dialect.NumericRangePattern] are:
+	// which dialects read a trailing group as qualifiers is a grammar
+	// question even though applying them is not.
+	GlobQualifiers bool
+
 	// DeclarationUtilities are the commands that may be given an array
 	// assignment as an operand: `local a=(x y)`, `typeset -a b=()`.
 	//

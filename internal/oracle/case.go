@@ -6608,6 +6608,26 @@ echo unreachable`,
 		Why:     "leading zeros belong to the run of digits and not to the number, so `007` is 7; and the run's length is decided by what follows it, which is why `<1-10>0` matches `100` and two ranges in a row split `12` between them. A matcher that took the longest run it could would fail both",
 	},
 	{
+		ID: "pat/a-substituted-default-in-an-assignment", Category: "pattern matching",
+		Snippet: `: > gf.a; : > gf.b; unset u; p=${u:-gf.*}; printf "[%s]" "$p"; unset v; printf "[%s]" ${v:-gf.*}; echo`,
+		Why:     "where a substituted word is matched against the filesystem and where it is not, unanimous in all five: the value an assignment stores is the pattern as written, and the same word standing as an argument is the two files. One row rather than two because either half alone reads as a rule about `:-` — it is the *position* that decides, and only the pair says so. This answered the listing on both sides until #995, the assignment's value having been built through the entry point that promises no matching while the substituted word inside it went through the one that does",
+	},
+	{
+		ID: "pat/a-trailing-group-is-a-list-of-qualifiers", Category: "pattern matching", SyntaxError: true,
+		Snippet: `mkdir -p qd/d1; : > qd/f1; : > qd/f2; ln -s f1 qd/l1; cd qd; printf "[%s]" *(.); printf "[%s]" *(/); printf "[%s]" *(@); printf "[%s]" *(^.); echo`,
+		Why:     "one shell reads the parentheses at the end of a pattern as a list of qualifiers narrowing what it matched, and the other four read `*(` as a syntax error. Four probes rather than one because a single type test cannot show that the list is a *filter*: the regular files, the directories, the symbolic links — `l1` points at a regular file and is still a link, so the test does not follow it — and then `^`, which turns the sense of what follows and answers with everything the first probe left out",
+	},
+	{
+		ID: "pat/a-qualifier-list-is-not-an-alternation", Category: "pattern matching", SyntaxError: true,
+		Snippet: `mkdir -p qd; : > qd/f1; : > qd/f2; cd qd; printf "[%s]" f1(.); printf "[%s]" f(1|2); printf "[%s]" zz*(N); echo; printf "[%s]" *(qq); echo after`,
+		Why:     "the disambiguation is exactly one character, and the row is four readings of the same three-character shape. A group with no `|` is a list — so `f1(.)` sends a literal name to the filesystem, a name being no pattern on its own. A group *with* one is the alternation that shell already had, and `f(1|2)` matches two files where `1` alone would be an unknown attribute. `N` makes a miss no error and deletes the word, which is why `printf` still writes its format once. And a character no qualifier claims is named and fatal, so `after` is not reached",
+	},
+	{
+		ID: "pat/a-paren-where-an-argument-stands", Category: "pattern matching", SyntaxError: true,
+		Snippet: `echo MY ( x ); echo after`,
+		Why:     "the same three characters are a syntax error after a word in four shells and one argument in the fifth, where they are a pattern carrying a qualifier list — the complaint names the *space* inside the group, which is what says it was read as a list and not as anything of the shell's. Command position is the whole of the difference there: `( x )` written where a command begins is still a subshell, which `core/two-subshells-with-nothing-between-them` still pins from the other side",
+	},
+	{
 		ID: "pat/a-quoted-numeric-range-is-four-characters", Category: "pattern matching",
 		Snippet: `[[ 1 = "<->" ]] && echo hit || echo miss; [[ "<->" = "<->" ]] && echo hit || echo miss; p="<->"; [[ 1 = $p ]] && echo hit || echo miss`,
 		Why:     "the same per-span quoting that decides whether `a*` is a pattern decides whether a range is one, and the shell that has ranges is also the one that does not re-read an expansion as a pattern — so the third answer is `miss` there for a reason unrelated to the first two. This is the case that keeps the fix from being `a `<` is always a range`, and it parses everywhere because the quotes take the `<` out of the grammar's hands",

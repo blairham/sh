@@ -99,6 +99,31 @@ func TestPathnameExpansion(t *testing.T) {
 	}
 }
 
+// A word read in a position that does not match is not matched, and the rule
+// has to reach the *nested* expansions or it is not a rule.
+//
+// `p=${u:-*}` assigns one asterisk in every shell in the panel. It assigned
+// the directory listing here, because the assignment's value went through the
+// entry point that promises no globbing while the `:-` word inside it built
+// its fields through the one that does. `x=*` was right all along, which is
+// what kept this hidden: only a *substituted* word reached the matcher.
+func TestASubstitutedWordInsideAnUnmatchedPositionIsNotMatched(t *testing.T) {
+	dir := globDir(t)
+	for _, tc := range []struct{ src, want string }{
+		{`unset u; p=${u:-*}; printf "[%s]" "$p"`, `[*]`},
+		{`unset u; p=${u:-vis}; printf "[%s]" "$p"`, `[vis]`},
+		{`x=*; printf "[%s]" "$x"`, `[*]`},
+		// And the positions that *do* match still do, which is what says
+		// this narrowed nothing it should not have.
+		{`unset u; printf "[%s]" ${u:-*}`, `[a.b][sub][vis]`},
+		{`printf "[%s]" *`, `[a.b][sub][vis]`},
+	} {
+		if got := runIn(t, dir, tc.src); got != tc.want {
+			t.Errorf("%s = %s, want %s", tc.src, got, tc.want)
+		}
+	}
+}
+
 func TestQuotingDecidesWhetherAFieldIsAPattern(t *testing.T) {
 	// The per-span quoting from tokenization reaching the last stage of the
 	// pipeline. A field has to remember which metacharacters were quoted.

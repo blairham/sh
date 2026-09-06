@@ -1249,6 +1249,11 @@ func isName(s string) bool {
 func (p *Parser) parseSimple() Command {
 	c := &SimpleCmd{Start: p.tok.Pos}
 	seenArg := false
+	// Argument position lasts as long as this command does. The token that
+	// ends it has already been read by the time this returns, so restoring
+	// the flag here is soon enough and is the only place that catches every
+	// way out.
+	defer func() { p.lex.inArgument = false }()
 
 	for p.err == nil {
 		switch {
@@ -1296,6 +1301,11 @@ func (p *Parser) parseSimple() Command {
 				continue
 			}
 			seenArg = true
+			// The token *after* this word stands where an argument may, and
+			// p.word() is what reads it — so the lexer is told before the
+			// call rather than after it. One dialect reads a `(` there as
+			// part of a word; everywhere else the flag changes nothing.
+			p.lex.inArgument = true
 			c.Args = append(c.Args, p.word())
 		case p.at(TokLeftParen) && (seenArg || len(c.Assigns) > 0 || len(c.Redirs) > 0):
 			// A `(` in command position opens a subshell; one *after* a word

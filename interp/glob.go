@@ -16,13 +16,21 @@ import (
 // quoting is what decides whether text is a pattern at all — `$p` globs and
 // `"$p"` does not. The fields expansion produces are therefore in this escaped
 // form and are unescaped once globbing has had its look.
-// `<` is in the set for the dialect that has numeric ranges, and marking it
-// where nothing reads one costs nothing: an escaped ordinary character is
-// that character, so `\<` and `<` match the same text everywhere else.
+// `<` is in the set for the dialect that has numeric ranges, and `(` and `)`
+// for the one that has pattern groups and glob qualifiers. Marking them where
+// nothing reads one costs nothing: an escaped ordinary character is that
+// character, so `\<` and `<` match the same text everywhere else.
+//
+// The parentheses are measured rather than added for symmetry. A `(` that
+// arrives from a *value* is never a group in the shell that has them:
+// `p="f(1|2)"; echo $p` prints `f(1|2)` and `p="*(.)"; echo $p` prints
+// `*(.)` without globbing at all, where the same text written literally is
+// an alternation and a qualifier list. Quoting says the same from the other
+// side — `echo "( x )"` is five characters.
 func globEscape(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
-		if strings.IndexByte(`*?[\<`, s[i]) >= 0 {
+		if strings.IndexByte(`*?[\<()`, s[i]) >= 0 {
 			b.WriteByte('\\')
 		}
 		b.WriteByte(s[i])
@@ -44,14 +52,27 @@ func globUnescape(s string) string {
 
 // hasUnescapedMeta reports whether a field is a pattern at all.
 //
-// numericRange says the dialect reads `<n-m>`, which is the one construct
-// here whose being a metacharacter is a dialect question rather than a
-// universal: a `<` is an ordinary character in a field everywhere else, and
-// in the four shells without ranges one never reaches a pattern at all.
-func hasUnescapedMeta(s string, numericRange bool) bool {
+// numericRange and patternGroup are the two constructs here whose being a
+// metacharacter is a dialect question rather than a universal: a `<` and a
+// `(` are ordinary characters in a field everywhere else, and in the shells
+// without ranges or bare groups neither ever reaches a pattern at all.
+//
+// The group is what makes `echo f(1|2)` list `f1` and `f2` — an alternation
+// with no `*` or `?` beside it is still a pattern — and it is the same
+// answer, read the other way round, that keeps `p="f(1|2)"; echo $p` printing
+// six characters: a field with a metacharacter in it is escaped where the
+// dialect does not glob the result of an expansion, and one with none is not
+// escaped because it has nothing to protect.
+func hasUnescapedMeta(s string, numericRange, patternGroup bool) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\\' {
 			i++
+			continue
+		}
+		if s[i] == '(' && patternGroup {
+			if closesGroup(s, i) {
+				return true
+			}
 			continue
 		}
 		if s[i] == '<' && numericRange {
@@ -95,6 +116,28 @@ func numericRangeWidth(s string) (int, bool) {
 	return len(s) - len(rest), true
 }
 
+// closesGroup reports whether the parenthesized group opened at i is closed,
+// counting the nested pairs and skipping the ones a backslash claims. An
+// unclosed `(` is an ordinary character, the same way an unterminated bracket
+// expression is.
+func closesGroup(s string, i int) bool {
+	depth := 0
+	for ; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // closesBracket reports whether the bracket expression opened at i is closed.
 //
 // A `!` or `^` directly after the bracket negates, and a `]` directly after
@@ -136,10 +179,21 @@ func closesBracket(s string, i int) bool {
 // distinct from a nil match list, which means the field was never a pattern
 // or should stand as written.
 func (r *Runner) glob(field string) ([]string, bool) {
-	if r.noglob {
-		// `set -f`. Only the filesystem half is switched off: a pattern in a
-		// `case` arm or after `==` still matches, which is measured and is
-		// why this is here rather than in the matcher.
+	if r.noglob || r.globSuspended {
+		// `set -f`, or a context that reads a word as text. Only the
+		// filesystem half is switched off: a pattern in a `case` arm or
+		// after `==` still matches, which is measured and is why this is
+		// here rather than in the matcher.
+		return nil, false
+	}
+	// The qualifier list a pattern may carry at its end, read before
+	// anything else looks at the field — it decides what the *pattern* is.
+	// After `set -f`, because a word globbing is the condition for the group
+	// being a list at all: measured, `setopt no_glob; echo MY ( x )` prints
+	// those five characters rather than naming a file attribute.
+	whole := field
+	field, quals, hasQuals, qok := r.fieldQualifiers(field)
+	if !qok {
 		return nil, false
 	}
 	if r.sem().UnterminatedBracket == BracketBadPattern &&
@@ -152,9 +206,13 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		r.fatalPattern(field, 1)
 		return nil, false
 	}
-	if !hasUnescapedMeta(field, r.dialect().NumericRangePattern) {
+	if !hasQuals && !hasUnescapedMeta(field, r.dialect().NumericRangePattern,
+		r.dialect().PatternAlternation) {
 		return nil, false
 	}
+	// A list makes the field a pattern whatever is in front of it: `f1(.)`
+	// is `f1` where the name alone is no pattern at all, so the qualifiers
+	// are what sent it to the filesystem.
 	defer func() {
 		if r.globMissed && r.ask(r.sem().GlobNoMatchIsError, "an unmatched pattern being an error") &&
 			!r.MatchOption(UnmatchedPatternIsEmpty) {
@@ -167,17 +225,25 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			// nullglob; echo "[" zz* "]"` prints `[ ]` at 0 in a zsh where
 			// nomatch is still on. The axis is still asked, so a dialect
 			// that answered nothing about it is still told so.
-			r.fatal("no matches found: %s\n", globUnescape(field))
+			r.fatal("no matches found: %s\n", globUnescape(whole))
 		}
 		r.globMissed = false
 	}()
 	// A miss is a miss wherever it is noticed, and what it means is decided
 	// once: the word is deleted if the option says so, kept otherwise.
 	missed := func() ([]string, bool) {
+		if quals.allowNoMatch {
+			// `N` is `null_glob` for one pattern: the word is deleted and
+			// nothing is said. Measured, `echo zz*(N)` prints an empty line
+			// at status 0 where `echo zz*` is fatal.
+			return nil, true
+		}
 		r.globMissed = true
 		return nil, r.MatchOption(UnmatchedPatternIsEmpty)
 	}
-	seeHidden := r.MatchOption(PatternsMatchHidden)
+	// `D` is `glob_dots` for one pattern, and the option is the other way
+	// into the same question.
+	seeHidden := r.MatchOption(PatternsMatchHidden) || quals.seeHidden
 	starstar := r.MatchOption(StarStarCrossesDirectories)
 	parts := strings.Split(field, "/")
 
@@ -246,6 +312,16 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			if len(dirs) == 0 {
 				return missed()
 			}
+		}
+	}
+
+	if hasQuals {
+		// Narrowed here, on the absolute paths the walk produced, because a
+		// type test is a question about a file and the relative names below
+		// are not what would answer it.
+		dirs = r.keepQualified(dirs, quals)
+		if len(dirs) == 0 {
+			return missed()
 		}
 	}
 

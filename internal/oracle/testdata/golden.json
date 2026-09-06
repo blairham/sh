@@ -7154,6 +7154,270 @@
         "TimedOut": false
       }
     },
+    "array/unsetting-a-character-from-the-end-of-a-scalar": {
+      "bash": {
+        "Stdout": "st=1 [hello]~st=1 [hello]~st=1 [hello]",
+        "Stderr": "\u003cshell\u003e: line 1: unset: a: not an array variable~\u003cshell\u003e: line 1: unset: b: not an array variable~\u003cshell\u003e: line 1: unset: c: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1 [hello]~st=1 [hello]~st=1 [hello]",
+        "Stderr": "\u003cshell\u003e: line 1: unset: a: not an array variable~\u003cshell\u003e: line 1: unset: b: not an array variable~\u003cshell\u003e: line 1: unset: c: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 [hello]~st=1 [hello]~st=1 [hello]",
+        "Stderr": "\u003cshell\u003e: line 0: unset: a: not an array variable~\u003cshell\u003e: line 0: unset: b: not an array variable~\u003cshell\u003e: line 0: unset: c: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: a[-1]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 [hello]~st=0 [hello]~st=0 [hello]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [hell]~st=0 [ello]~st=0 [hello]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/unsetting-a-subscript-of-a-name-holding-nothing": {
+      "bash": {
+        "Stdout": "st=0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: b[0]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/unsetting-a-subscript-of-a-scalar": {
+      "bash": {
+        "Stdout": "st=1 [hello]",
+        "Stderr": "\u003cshell\u003e: line 1: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1 [hello]",
+        "Stderr": "\u003cshell\u003e: line 1: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 [hello]",
+        "Stderr": "\u003cshell\u003e: line 0: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: a[2]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 [hello]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [hllo]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/unsetting-a-subscript-of-a-scalar-takes-the-attribute-too": {
+      "bash": {
+        "Stdout": "st=0~(none)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~(none)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~a=hello",
+        "Stderr": "\u003cshell\u003e: line 0: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: a[0]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~(none)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~a=hello",
+        "Stderr": "\u003cshell\u003e:1: a: assignment to invalid subscript range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/unsetting-a-subscript-of-an-empty-scalar": {
+      "bash": {
+        "Stdout": "st=1 []",
+        "Stderr": "\u003cshell\u003e: line 1: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1 []",
+        "Stderr": "\u003cshell\u003e: line 1: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 []",
+        "Stderr": "\u003cshell\u003e: line 0: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: a[1]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 []",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 []",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/unsetting-a-subscript-past-the-end-of-a-scalar": {
+      "bash": {
+        "Stdout": "st=1 [hello]",
+        "Stderr": "\u003cshell\u003e: line 1: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1 [hello]",
+        "Stderr": "\u003cshell\u003e: line 1: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 [hello]",
+        "Stderr": "\u003cshell\u003e: line 0: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: a[9]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 [hello]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [hello]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/unsetting-an-element-by-expression": {
       "bash": {
         "Stdout": "[x][y] n=2",
@@ -7457,6 +7721,50 @@
       "zsh": {
         "Stdout": "st=0~[x][y][z] n=3",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/unsetting-the-subscript-that-names-a-scalar": {
+      "bash": {
+        "Stdout": "st=0 [UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 [UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 [hello]",
+        "Stderr": "\u003cshell\u003e: line 0: unset: a: not an array variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: a[0]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 [UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 [hello]",
+        "Stderr": "\u003cshell\u003e:1: a: assignment to invalid subscript range",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

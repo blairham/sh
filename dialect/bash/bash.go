@@ -429,6 +429,13 @@ func Semantics() interp.Semantics {
 	s.UnsetNameOperands = interp.AnythingIsAName
 	s.DeclarationTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.Yes
+	// A single subscript on a name that is no array is refused rather than
+	// ignored: `a=v; unset "a[1]"` says `a: not an array variable` and fails,
+	// where the other shell that reads a subscript as an element says
+	// nothing. `a[0]` names the string itself and takes the whole name away
+	// in both — measured on 5.3.15. 3.2.57 refuses that one too, so a corpus
+	// case here splits the two bash columns; this column is the graded one.
+	s.UnsetSubscriptOnAScalarIsAnError = interp.Yes
 	// `unset a[@]` empties the array: `a=(x y z)` comes back with no elements
 	// and `${#a[@]}` is 0. Measured in both bash builds, and the same for
 	// `a[*]`. A name that holds a scalar is refused rather than emptied, and

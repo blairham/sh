@@ -14,12 +14,15 @@ import (
 // element turns on: the base, which decides which spelling can reach the
 // boundary, and the span policy, which decides whether `unset` removes or
 // blanks and so whether the negative spelling reaches it at all.
-func runUnsetBelowBase(t *testing.T, zeroBased Answer, p UnsetArraySpanPolicy, src string) (string, int) {
+func runUnsetBelowBase(t *testing.T, zeroBased Answer, p UnsetArraySpanPolicy, src string, set ...func(*Semantics)) (string, int) {
 	t.Helper()
 	return runGrammar(t, src, nil, func(r *Runner) {
 		sem := *r.Semantics
 		sem.ArrayBaseIsZero = zeroBased
 		sem.UnsetArraySpan = p
+		for _, f := range set {
+			f(&sem)
+		}
 		r.Semantics = &sem
 	})
 }
@@ -110,17 +113,32 @@ func TestARefusedUnsetSubscriptIsNamedAsWritten(t *testing.T) {
 	}
 }
 
-// Under the blanking answer a scalar is the single element it is — a span of
-// one is what `unset a[i]` means there — so it has a first element and a
-// subscript can be before it. The removing answer reads a scalar without
-// looking at the subscript at all, which is a different question.
-func TestUnsetBelowTheFirstElementOfAScalar(t *testing.T) {
-	const src = `a=v; unset "a[0]"; echo "st=$? [$a]"`
-	if out, _ := runUnsetBelowBase(t, No, UnsetArraySpanLeavesOneEmptyElement, src); !strings.Contains(out, "st=1 [v]") {
-		t.Errorf("blanking: %q, want a refusal at 1 with the value kept", out)
+// A scalar has a first *character*, and a subscript can be before it. Which
+// reading a subscripted string takes is ScalarSubscriptIsACharacter, and it is
+// that reading and not the span policy that brings a scalar to this boundary:
+// the readings that see an element there see the one element a scalar is, at
+// the base, and every other subscript is UnsetSubscriptOnAScalarIsAnError's
+// question rather than this one.
+func TestUnsetBelowTheFirstCharacterOfAScalar(t *testing.T) {
+	const src = `a=v; unset "a[0]"; echo "st=$? [${a-UNSET}]"`
+	out, _ := runUnsetBelowBase(t, No, UnsetArraySpanLeavesOneEmptyElement, src,
+		func(s *Semantics) { s.ScalarSubscriptIsACharacter = Yes })
+	if out != "sh: unset: [0]: bad array subscript\nst=1 [v]\n" {
+		t.Errorf("characters: %q, want a refusal at 1 with the value kept", out)
 	}
-	if out, _ := runUnsetBelowBase(t, Yes, UnsetArraySpanRemovesTheElements, src); strings.Contains(out, "subscript") {
-		t.Errorf("removing: %q, want no complaint about the subscript", out)
+	// The same subscript under the same base, read as an element: it names
+	// nothing, because the one element a scalar is sits at the base.
+	out, _ = runUnsetBelowBase(t, No, UnsetArraySpanLeavesOneEmptyElement, src,
+		func(s *Semantics) { s.ScalarSubscriptIsACharacter = No })
+	if out != "st=0 [v]\n" {
+		t.Errorf("elements, base 1: %q, want the subscript to name nothing", out)
+	}
+	// And under the base that puts the element at 0, it names the scalar and
+	// takes the name away.
+	out, _ = runUnsetBelowBase(t, Yes, UnsetArraySpanRemovesTheElements, src,
+		func(s *Semantics) { s.ScalarSubscriptIsACharacter = No })
+	if out != "st=0 [UNSET]\n" {
+		t.Errorf("elements, base 0: %q, want the whole name taken away", out)
 	}
 }
 

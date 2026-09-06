@@ -296,6 +296,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/unsetting-below-the-first-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~[y][z] n=2` | `st=0~[y][z] n=2` | `st=0~[y][z] n=2` | `st=0~[y][z] n=2` | `st=1~[x][y][z] n=3` **2>** `<shell>:1: a: assignment to invalid subscript range` |
 | `array/unsetting-past-the-start` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1~[x][y][z] n=3` **2>** `<shell>: line 1: unset: [-4]: bad array subscript` | `st=1~[x][y][z] n=3` **2>** `<shell>: line 1: unset: [-4]: bad array subscript` | `st=1~[x][y][z] n=3` **2>** `<shell>: line 0: [-4]: bad array subscript` | `st=1~[x][y][z] n=3` **2>** `<shell>: unset: a: subscript out of range` | `st=0~[x][y][z] n=3` |
 | `array/an-unset-subscript-refused-is-named-as-written` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1~n=3` **2>** `<shell>: line 1: unset: [x-9]: bad array subscript` | `st=1~n=3` **2>** `<shell>: line 1: unset: [x-9]: bad array subscript` | `st=1~n=3` **2>** `<shell>: line 0: [x-9]: bad array subscript` | `st=1~n=3` **2>** `<shell>: unset: a: subscript out of range` | `st=0~n=3` |
+| `array/unsetting-a-subscript-of-a-scalar` | **2>** `<shell>: 1: unset: a[2]: bad variable name` *(status 2)* | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0 [hello]` | `st=0 [hllo]` |
+| `array/unsetting-the-subscript-that-names-a-scalar` | **2>** `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=0 [UNSET]` | `st=0 [UNSET]` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0 [UNSET]` | `st=1 [hello]` **2>** `<shell>:1: a: assignment to invalid subscript range` |
+| `array/unsetting-a-subscript-of-a-scalar-takes-the-attribute-too` | **2>** `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=0~(none)` | `st=0~(none)` | `st=1~a=hello` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0~(none)` | `st=1~a=hello` **2>** `<shell>:1: a: assignment to invalid subscript range` |
+| `array/unsetting-a-subscript-of-a-name-holding-nothing` | **2>** `<shell>: 1: unset: b[0]: bad variable name` *(status 2)* | `st=0~st=0` | `st=0~st=0` | `st=0~st=0` | `st=0~st=0` | `st=0~st=0` |
+| `array/unsetting-a-character-from-the-end-of-a-scalar` | **2>** `<shell>: 1: unset: a[-1]: bad variable name` *(status 2)* | `st=1 [hello]~st=1 [hello]~st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable~<shell>: line 1: unset: b: not an array variable~<shell>: line 1: unset: c: not an array variable` | `st=1 [hello]~st=1 [hello]~st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable~<shell>: line 1: unset: b: not an array variable~<shell>: line 1: unset: c: not an array variable` | `st=1 [hello]~st=1 [hello]~st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable~<shell>: line 0: unset: b: not an array variable~<shell>: line 0: unset: c: not an array variable` | `st=0 [hello]~st=0 [hello]~st=0 [hello]` | `st=0 [hell]~st=0 [ello]~st=0 [hello]` |
+| `array/unsetting-a-subscript-past-the-end-of-a-scalar` | **2>** `<shell>: 1: unset: a[9]: bad variable name` *(status 2)* | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0 [hello]` | `st=0 [hello]` |
+| `array/unsetting-a-subscript-of-an-empty-scalar` | **2>** `<shell>: 1: unset: a[1]: bad variable name` *(status 2)* | `st=1 []` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 []` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 []` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=0 []` | `st=0 []` |
 | `array/unsetting-every-element-of-a-scalar` | **2>** `<shell>: 1: unset: a[@]: bad variable name` *(status 2)* | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: unset: @: arithmetic syntax error` | `st=0 []` |
 | `array/a-quoted-gap-is-one-field` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=3` | `n=3` | `n=3` | `n=3` | `n=3` |
 | `array/a-quoted-gap-keeps-its-place` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[][x][y]` |
@@ -811,6 +818,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/an-unset-subscript-refused-is-named-as-written` — what the refusal names on this route, which is not what it names on the assignment's: bash keeps the subscript as written but drops the array in front of it, ksh93 names the array alone, and both put the builtin's name before the sentence where neither does for an assignment. The expression is what tells the written text from the -9 it came to. zsh has nothing to refuse, a negative subscript reaching nothing being silent there
   ```sh
   a=(x y z); unset "a[x-9]"; echo "st=$?"; echo "n=${#a[@]}"
+  ```
+- `array/unsetting-a-subscript-of-a-scalar` — a single subscript on a name that is no array, where the three readings show what they mean and give three different answers: the shell that reads a subscript as a character takes that character out, the shell that reads it as an element finds none — a scalar is the one element at the base — and refuses, and the other element-reading shell says nothing at all. Nobody turns the scalar into an array, and the value is what tells them apart rather than the status
+  ```sh
+  a=hello; unset "a[2]"; echo "st=$? [${a-UNSET}]"
+  ```
+- `array/unsetting-the-subscript-that-names-a-scalar` — the one subscript the element reading answers to: at the base, a scalar *is* the element, and unsetting through it takes the whole name away — not the value, the name. Below the first character where the base is 1, so the shell that reads characters refuses the same line. bash 3.2 refuses it too, having read `${a[0]}` as the whole string moments earlier, so the two bash columns disagree here on purpose and the graded one is 5.3's
+  ```sh
+  a=hello; unset "a[0]"; echo "st=$? [${a-UNSET}]"
+  ```
+- `array/unsetting-a-subscript-of-a-scalar-takes-the-attribute-too` — it is the name that goes and not the value: after it, no child is told about `a` either. Read through a real child because a name that is unset and a name that is empty look alike to the shell's own `$a`
+  ```sh
+  export a=hello; unset "a[0]"; echo "st=$?"; env | grep '^a=' || echo "(none)"
+  ```
+- `array/unsetting-a-subscript-of-a-name-holding-nothing` — the boundary of all of it: a name holding nothing has neither an element nor a character for a subscript to name, and every shell is quiet about both spellings. Without this the refusals above read as being about the subscript rather than about the name having a value
+  ```sh
+  unset b; unset "b[0]"; echo "st=$?"; unset "b[1]"; echo "st=$?"
+  ```
+- `array/unsetting-a-character-from-the-end-of-a-scalar` — every negative within reach acts on a character, where on an *array* under the same shell only `-1` does — so a string is a character position and not a one-element array wearing one. Reaching back past the first character is quiet rather than refused, which is the other half of `array/unsetting-past-the-start` and the reason the boundary is not one rule for both signs
+  ```sh
+  a=hello; unset "a[-1]"; echo "st=$? [$a]"; b=hello; unset "b[-5]"; echo "st=$? [$b]"; c=hello; unset "c[-6]"; echo "st=$? [$c]"
+  ```
+- `array/unsetting-a-subscript-past-the-end-of-a-scalar` — past the end names nothing under the character reading and the string is untouched — where the element readings are still looking at a name that is no array and answer as they do for any other subscript. One line, and it separates 'the subscript found nothing' from 'the name is not an array'
+  ```sh
+  a=hello; unset "a[9]"; echo "st=$? [${a-UNSET}]"
+  ```
+- `array/unsetting-a-subscript-of-an-empty-scalar` — an empty string still has the one element a scalar is, and has no character at all — so where the base is 1 the character reading leaves the name empty and the element readings reach for a name that is not an array. Reading 'no characters' as 'no question' took the empty name away entirely, which is the bug this pins
+  ```sh
+  a=; unset "a[1]"; echo "st=$? [${a-UNSET}]"
   ```
 - `array/unsetting-every-element-of-a-scalar` — the same spelling on a name that is no array, which is where the two readings show what they mean: bash means take every element away, a scalar has none, and it refuses and says so at 1; zsh means the span becomes one empty string, a scalar is one such span, and it comes back empty at 0. ksh93 reports its bad subscript and leaves the value alone. Nobody turns the scalar into an array
   ```sh

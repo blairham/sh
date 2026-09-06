@@ -6676,6 +6676,71 @@ Asked only for an operand whose subscript actually failed. dash has no
 subscript to evaluate — `UnsetTakesASubscript` is no there — so the axis
 is absent rather than false.
 
+**`UnsetSubscriptOnAScalarIsAnError`** — bash yes · dash absent · ksh93 no · zsh unreachable
+
+Refuses `unset "a[1]"` where `a` holds a string, rather than leaving the
+name alone without a word.
+
+`unset` through a subscript on a name that is no array gets a different
+answer from every column, and none of the three is a rule of its own —
+they all fall out of what a subscripted name *means* there. Measured on
+`a=hello`:
+
+    probe            bash 5.3   bash 3.2   ksh93     zsh
+    unset a[0]       unset      refused    unset     refused
+    unset a[1]       refused    refused    silent    ello
+    unset a[2]       refused    refused    silent    hllo
+    unset a[-1]      refused    refused    silent    hell
+    unset a[-5]      refused    refused    silent    ello
+    unset a[-6]      refused    refused    silent    hello
+    unset a[9]       refused    refused    silent    hello
+
+**Where a subscript names a character**
+(`ScalarSubscriptIsACharacter` yes) the string loses that character and
+nothing else about the name changes. Past the end names none. Every
+negative *within reach* acts — which an array under the same shell does
+not do, where only `-1` does — so a string here is a character position
+and not a one-element array wearing one. And a negative reaching back
+past the first character is quiet, where the non-negative below the first
+is `array/unsetting-below-the-first-element`'s refusal reached through a
+string.
+
+**Where it names an element**, a scalar is the one element at the base.
+The subscript that names it takes the whole *name* away — the value, the
+attribute and the environment entry with it, which is `unset a` written
+the long way round. Every other subscript names nothing, and there the
+two element-reading shells part: this axis.
+
+Asked only there. An array with a gap takes the same subscript without a
+word everywhere — `a=(x y z); unset "a[9]"` is a success in all four — so
+what the refusing shell objects to is the *name* not being an array,
+which is what its wording says: `unset: %s: not an array variable`, the
+`Diagnostics.UnsetNotAnArray` the whole-array spelling already carries. A
+name holding nothing at all has neither an element nor a character for
+any subscript to name and is left alone under every reading, which is why
+`unset "b[0]"` on an unset `b` is quiet in all four.
+
+An empty string is asked too, and it is where the two readings are
+furthest apart from one line: it has the one element a scalar is and no
+character at all, so `a=; unset "a[1]"` leaves the name empty where the
+base is 1 and takes the name away where it is 0.
+
+The preset is no. POSIX has `unset` remove what it finds and say nothing
+about what it does not — `unset nosuchname` succeeds everywhere — and the
+quiet reading is that sentence read over a subscript.
+
+zsh is *unreachable* rather than no: its subscript on a string names a
+character, so it never gets here. dash is absent — `UnsetTakesASubscript`
+is no there, and `unset "a[0]"` is a bad variable name.
+
+bash 3.2 refuses the base subscript too, having read `${a[0]}` as the
+whole string moments earlier, so
+`array/unsetting-the-subscript-that-names-a-scalar` splits the two bash
+columns on purpose. The graded column is 5.3's, for the reason
+`LocalInheritsTheExportAttribute` gives at the same fork: the older build
+is not a second coherent model of the shape, it is the same build
+disagreeing with itself about what `a[0]` names.
+
 **`UnsetArraySpan`** — bash removes every element · dash unspecified · ksh93 a subscript · zsh leaves one empty element
 
 Is what `unset` does to the span of elements a subscript names — `a[@]`

@@ -1275,7 +1275,31 @@ type Diagnostics struct {
 
 	// NoSuchJob is a job spec that names nothing. Two verbs: the builtin and
 	// the spec as written.
+	//
+	// Measured 2026-09-05 on `jobs %9`, which is the one of the three
+	// builtins that reaches this in a script — `fg` and `bg` refuse for want
+	// of job control first in bash and zsh:
+	//
+	//	bash (all three)  jobs: %9: no such job
+	//	dash              jobs: No such job: %9
+	//	ksh93u+           jobs: no such job — no spec at all
+	//	zsh 5.9.2         jobs: %9: no such job
+	//
+	// So the shared default is bash's and zsh's, and the two that differ say
+	// so. ksh93's format uses neither verb, which Wording allows.
 	NoSuchJob string
+
+	// NoSuchJobStatus is what that reports. Zero means 1, which is bash's
+	// and ksh93's.
+	//
+	// Measured on the same probe, and it is the field that makes a slot
+	// answerable without reading a listing: `jobs %2 >/dev/null 2>&1; echo
+	// $?` is a yes/no about one slot with no text to race, and it grades
+	// nothing at all while the number is wrong. dash reports 2 and zsh
+	// reports 127 — the status of a command that is not there, which is what
+	// zsh takes a job that is not there to be, and the same number its `wait`
+	// uses for the same question.
+	NoSuchJobStatus int
 
 	PrintfUsage string
 	// PrintfUsageUnprefixed prints it bare, as ksh93 prints every usage.

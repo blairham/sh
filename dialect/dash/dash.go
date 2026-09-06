@@ -526,13 +526,21 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinBadOption:      "%[1]s: Illegal option %[2]s",
 		// The same sentence kill already had for its own missing argument,
 		// measured for the builtins' shared reader with `read -p`.
-		OptionNeedsArgument:   "%[1]s: No arg for -%[2]s option",
-		ShiftBadNumber:        "shift: Illegal number: %[1]s",
-		WaitBadJob:            "wait: Illegal number: %[1]s",
-		WaitBadJobStatus:      2,
-		WaitNoSuchJob:         "wait: No such job: %[1]s",
-		WaitNoSuchJobStatus:   2,
-		KillNoSuchJob:         "kill: No such job: %[1]s",
+		OptionNeedsArgument: "%[1]s: No arg for -%[2]s option",
+		ShiftBadNumber:      "shift: Illegal number: %[1]s",
+		WaitBadJob:          "wait: Illegal number: %[1]s",
+		WaitBadJobStatus:    2,
+		WaitNoSuchJob:       "wait: No such job: %[1]s",
+		WaitNoSuchJobStatus: 2,
+		KillNoSuchJob:       "kill: No such job: %[1]s",
+		// The same shape for `jobs`, `fg` and `bg`, which is dash's house
+		// order everywhere: the sentence first and the spec after it.
+		// Measured on `jobs %9`, `fg %9` and `bg %9` — dash is the one shell
+		// that reaches this for all three in a script.
+		NoSuchJob: "%[1]s: No such job: %[2]s",
+		// And dash's usage number rather than a plain failure, which is what
+		// it reports for every one of the three.
+		NoSuchJobStatus:       2,
 		LocalOutsideAFunction: "local: not in a function",
 		// One wording for all three, naming the part in front of any `=`.
 		BuiltinBadName: map[string]string{

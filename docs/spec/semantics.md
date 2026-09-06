@@ -4048,6 +4048,85 @@ as the record; a shell embedding this engine that needs it can register
 the builtin through the extension seam. Filed as part of #430's scope
 decision.
 
+## Asking about one slot in the jobs table, without reading a listing
+
+The jobs table's slot lifecycle produced no corpus case for a long time
+(#500, #783), and the reason is that **a listing is not stable enough to
+grade**. `jobs` with no operands prints a `Done` row for a reaped job on
+some runs of the same binary and not others, so the same snippet gives
+two different bodies from one shell. A family of such rows is a family
+nobody can use.
+
+The probe that works asks about **one slot at a time, through a status**:
+
+    jobs %2 >/dev/null 2>&1; echo "two=$?"
+
+Whether a slot is *occupied* is the whole of the allocation question, and
+a status has no text to race. Two things had to be true first.
+
+### The number has to be right, and it was not
+
+Measured 2026-09-05 on `jobs %9`, which is the one of the three job
+builtins that reaches this in a script — `fg` and `bg` refuse for want of
+job control first in bash and zsh:
+
+| shell | status | what it says |
+| --- | --- | --- |
+| bash 5.3.15 · 3.2.57 · as `sh` | 1 | `jobs: %9: no such job` |
+| dash | **2** | `jobs: No such job: %9` |
+| ksh93u+ | 1 | `jobs: no such job` — **no spec at all** |
+| zsh 5.9.2 | **127** | `jobs: %9: no such job` |
+
+Four statuses across the panel, where the field for this said "all four
+report 1". `Diagnostics.NoSuchJobStatus` carries the two that differ, and
+zsh's 127 is the same number its `wait` gives a job that is not there — a
+command that is not there. Until those were right the probe graded
+nothing: every dialect answered 1 and every "not there" looked alike.
+
+ksh93's wording uses neither verb, which is the shell and not a
+truncation: `%nope` produces the same line.
+
+### The timing has to be gone, not merely small
+
+A job that is *certainly still running* is one with seconds left, killed
+at the end of the case. A job that has *certainly finished* is one a
+`wait` has returned from. Neither is a guess about the scheduler, which
+is what a `sleep 0.2` raced against something else is.
+
+The corpus rows are `jobs/slot-a-running-job-occupies-its-slot`, its
+control `jobs/slot-a-status-query-does-not-consume-it` — a *listing*
+consumes what it reports, and a status query does not — and
+`jobs/slot-an-empty-table-has-no-first-slot`, which reads the four
+statuses with nothing else in the script that could have produced them.
+Each ends in `:` so the case is about slots rather than about what `kill
+%n` reports, which dash alone answers 1.
+
+`jobs/slot-the-last-background-pid-outlives-a-bare-wait` asks the `$!`
+half as a yes/no, because the pid is different every run.
+
+### What is measurable this way and still not taken
+
+Two lifecycle questions the probe reaches and this spec does not answer,
+recorded so the next attempt does not re-measure them. Both are stable
+across runs; neither is a race.
+
+**Whether a bare `wait` frees the slots it waited for.** `sleep 0 & wait;
+jobs %1` — bash 1, dash 0, ksh93 0, zsh 127. So bash and zsh free the
+slot and dash and ksh93 keep the finished job. It is not taken because it
+does not hold still under the neighbouring probes: **bash 5.3.15 and bash
+3.2.57 disagree with each other** on the same question without a `wait`
+(`sleep 0 & sleep 1; jobs %1` is 0 in 5.3 and 1 in 3.2), and ksh93 answers
+`wait` and `wait %1` differently — keeping the slot for the first and
+freeing it for the second.
+
+**Where the next job number goes when there is a hole.** bash allocates
+*after the highest occupied slot* rather than refilling; this
+implementation refills. The other three cannot be asked the same way,
+because they do not free the slot in the first place. And the obvious
+probe faults ksh93u+: `sleep 0 & wait; sleep 5 &; jobs %1; jobs %2` exits
+139 there, reproducibly — a segmentation fault, not an answer, so no
+corpus row can hold it.
+
 ## A `wait` a trapped signal cuts short
 
 Oracle runs, 2026-09-04, on macOS: bash 5.3, bash 3.2, dash, ksh93u+,

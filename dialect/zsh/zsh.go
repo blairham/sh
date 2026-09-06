@@ -898,8 +898,12 @@ func Diagnostics() interp.Diagnostics {
 		WaitBadJob:               "wait: job not found: %[1]s",
 		WaitBadJobStatus:         127,
 		// The builtin's name rides the location, as ever.
-		WaitNoSuchJob:                    "wait: %[1]s: no such job",
-		KillNoSuchJob:                    "kill: %[1]s: no such job",
+		WaitNoSuchJob: "wait: %[1]s: no such job",
+		KillNoSuchJob: "kill: %[1]s: no such job",
+		// The wording is the shared one; the number is not. Measured,
+		// `jobs %9` reports 127 — a command that is not there — which is the
+		// same number this shell's `wait` gives a job that is not there.
+		NoSuchJobStatus:                  127,
 		DisownNoCurrentJob:               "disown: no current job",
 		WaitNotOurChild:                  "wait: pid %[1]d is not a child of this shell",
 		TrapCouldNotParse:                "couldn't parse trap command",

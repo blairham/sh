@@ -1157,6 +1157,10 @@ func Apply(r *interp.Runner) {
 	// And the other half of a module system: a name defined from `$fpath`
 	// the first time it is called. See autoload.go.
 	registerAutoload(r)
+	// Five of `zsh/parameter`'s thirty-three: this shell's own tables read
+	// through as associations, produced when they are asked for rather than
+	// stored. See parameter.go.
+	registerParameterModule(r)
 	// This shell's richer `echo`, and not ksh93's builtin of the same
 	// spelling: different letters, a different escape set and different
 	// wordings, all measured side by side. See print.go.

@@ -1355,12 +1355,21 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		if e.Name == "@" || e.Name == "*" {
 			return itoa(r.specialLength())
 		}
-		if n, isArr := r.arrayElementCount(e.Name); isArr && n != 1 &&
+		if _, isArr := r.arrayElementCount(e.Name); isArr &&
 			r.ask(r.sem().ArrayLengthWithoutSubscriptIsCount, "`${#a}` of an array counting elements") {
 			// One dialect counts the elements where the others measure the
-			// scalar the bare name yields. Asked only where the two
-			// readings differ — a one-element array is its element either
-			// way.
+			// scalar the bare name yields.
+			//
+			// Asked for *every* array, one element included, and that is a
+			// correction: the reading was skipped at one element on the
+			// grounds that such an array is its own element either way,
+			// which is true of the value and false of its length. `a=(hello)`
+			// is `${#a}` of 1 in the shell that counts and 5 in the shells
+			// that measure, and answering 5 for both was a plausible number
+			// at status 0 — the failure this codebase minds most. It reached
+			// `$functions` with one function defined, where the count is what
+			// a script is asking for (#1060).
+			n, _ := r.arrayElementCount(e.Name)
 			return itoa(n)
 		}
 		n := r.stringLength(value)
@@ -1703,7 +1712,7 @@ func (r *Runner) elementOpApplier(e *syntax.ParamExpr) func(string) string {
 // subscriptsOf is what `${!a[@]}` yields: the subscripts of a stored array,
 // or a plain count for anything else that reads as one.
 func (r *Runner) subscriptsOf(name string, n int) []string {
-	if a, ok := r.AssocArrays[name]; ok {
+	if a, ok := r.assocFor(name); ok {
 		// An associative array's subscripts are its keys — in key order,
 		// because the shells promise no order and sorted is the one this
 		// implementation keeps everywhere.

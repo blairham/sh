@@ -443,6 +443,20 @@ type Runner struct {
 	// right. A dialect fills in the names it has through SetDynamicArray.
 	DynamicArrays map[string]func(*Runner) []string
 
+	// DynamicAssocs is the same again for *keyed* tables, and it is the one
+	// of the three that could not be faked with either of the others: a
+	// parameter that answers "which functions exist, and what is each one's
+	// body" is a name-to-value map read at the moment it is asked, and an
+	// indexed array of pairs is not the same thing to `${m[key]}`. A dialect
+	// fills in the names it has through SetDynamicAssoc.
+	DynamicAssocs map[string]func(*Runner) AssocArray
+
+	// dynamicAssocWriters is what an assignment to one element of a produced
+	// association does. Unexported because it is not a table anything reads
+	// back — see SetDynamicAssocWriter for why a produced association a
+	// script can write to must have one.
+	dynamicAssocWriters map[string]func(*Runner, string, string, bool)
+
 	// assigned holds what a script assigned to a *produced* parameter, which
 	// is a message to whatever produces it rather than a value of its own.
 	assigned map[string]string
@@ -3088,7 +3102,7 @@ func (r *Runner) getVar(name string) (string, bool) {
 		// are read off it rather than off the copy.
 		return r.arrayBareName(a)
 	}
-	if a, ok := r.AssocArrays[name]; ok && !r.removed[name] {
+	if a, ok := r.assocFor(name); ok && !r.removed[name] {
 		// The associative table answers alone rather than falling through:
 		// Vars may hold a scalar the name had before it was declared, and no
 		// shell reads that back once the attribute is on.

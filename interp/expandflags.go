@@ -284,7 +284,7 @@ func (r *Runner) namedBase(name, flags string) (words []string, set, isList bool
 	case "":
 		return []string{""}, false, false
 	}
-	if a, aok := r.AssocArrays[name]; aok {
+	if a, aok := r.assocFor(name); aok {
 		hasK := strings.ContainsRune(flags, 'k')
 		hasV := strings.ContainsRune(flags, 'v')
 		switch {

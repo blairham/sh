@@ -70,13 +70,17 @@ print -r -- "terminfo=$?"`)
 	}
 }
 
-// A module this shell has *no* part of counts instead of naming: thirty-three
-// parameters on one line is not something anyone can read.
-func TestZmodloadCountsTheFeaturesOfAModuleItHasNoneOf(t *testing.T) {
+// A module this shell has only *part* of counts instead of naming: twenty-eight
+// missing parameters on one line is not something anyone can read, and the two
+// numbers together are what say how far off it is. Five of `zsh/parameter`'s
+// thirty-three are here (#1060) and the module still refuses, which is the
+// rule for a parameter: an absent one reads empty at status 0 and reaches a
+// caller as data rather than as a diagnostic.
+func TestZmodloadCountsTheFeaturesOfAModuleItHasMostOfMissing(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/parameter 2>&1
 print -r -- "st=$?"`)
 	want := "zsh:1: failed to load module `zsh/parameter': " +
-		"33 of its 33 features are not implemented yet\nst=1\n"
+		"28 of its 33 features are not implemented yet\nst=1\n"
 	if out != want || st != 0 {
 		t.Errorf("zmodload zsh/parameter = %q (status %d), want %q", out, st, want)
 	}

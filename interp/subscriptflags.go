@@ -59,7 +59,7 @@ func (r *Runner) flaggedSubscript(e *syntax.ParamExpr) ([]string, bool) {
 		// Nothing to select by, so the operand is an ordinary subscript.
 		return nil, false
 	}
-	if _, isAssoc := r.AssocArrays[e.Name]; isAssoc {
+	if _, isAssoc := r.assocFor(e.Name); isAssoc {
 		// A search over an associative array reads its *keys* for `i` and
 		// `I` and its *values* for `r` and `R`, and `I` and `R` there answer
 		// with every match rather than one — a different construct wearing

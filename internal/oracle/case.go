@@ -9096,6 +9096,75 @@ exit 7`,
 	// sentence, it needs the completion system's own state to do anything,
 	// and a corpus row about a builtin that answers 2 to every invocation
 	// would record nothing.
+	// `zsh/parameter`'s five (#1060): this shell's own tables read through as
+	// associations. Every one of them is a *view* — the answer is produced
+	// when it is read — so the rows are written as read, mutate, read again
+	// in one shell. A row that only defined a function and then looked would
+	// pass against a snapshot taken late enough, which is the bug these
+	// parameters exist to not have.
+	//
+	// Each snippet loads the module first, because in zsh these parameters do
+	// not exist until it is loaded — and discards what that line says,
+	// because it is not what the row is about. This shell has the five from
+	// the start and its `zmodload zsh/parameter` still refuses over the
+	// twenty-eight it has not, which `zmodload/…` rows grade on their own.
+	{
+		ID: "parameter/functions-is-a-view-of-the-function-table", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; echo "a=[${functions[g]:-ABSENT}] n=${#functions}"; g(){ :; }; echo "b=[${functions[g]:-ABSENT}] n=${#functions}"; unset -f g; echo "c=[${functions[g]:-ABSENT}] n=${#functions}"`,
+		Why:     "three reads around two mutations, which is the shape a snapshot cannot satisfy at any instant: absent, then the body with its leading tab and a count of one, then absent again. A parameter filled in once and never updated answers the first pair three times and looks perfectly reasonable doing it. Nobody else has the module",
+	},
+	{
+		ID: "parameter/a-function-body-is-what-a-listing-prints-between-the-braces", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; f(){ echo one; if [[ 1 = 1 ]]; then echo two; fi; }; printf "[%s]" "$functions[f]"`,
+		Why:     "the value is the lines a listing puts between the braces — tab-indented, a nested block indented twice, no header line and no trailing newline. Every character that decides this row is whitespace, which is why it is bracketed and printed with `printf` rather than echoed",
+	},
+	{
+		ID: "parameter/assigning-to-functions-defines-one", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; functions[h]="echo made"; h; echo "n=${#functions}"; unset "functions[h]"; echo "gone=${#functions}"`,
+		Why:     "the association is written *through* to the function table in both directions: the assignment defines a function that then runs, and unsetting the element undefines it. A write that landed in an ordinary stored table would define nothing and — worse — would shadow the view from that moment, since a stored table is what a read finds first",
+	},
+	{
+		ID: "parameter/options-is-a-view-of-the-option-namespace", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; echo "n=${#options} a=$options[extendedglob]"; setopt extendedglob; echo "b=$options[extendedglob]"; unsetopt extendedglob; echo "c=$options[extendedglob]"`,
+		Why:     "197 names, and the state of one of them read on either side of a `setopt` and an `unsetopt`. The count is the part worth pinning beside the movement: it is the whole option namespace and not the couple of dozen names `set +o` writes, which is the same table under another name",
+	},
+	{
+		ID: "parameter/the-compat-option-spellings-are-keys-of-their-own", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; echo "[$options[log]] [$options[histnofunctions]]"; setopt histnofunctions; echo "[$options[log]] [$options[histnofunctions]]"`,
+		Why:     "the twelve sh and ksh compat spellings are keys here where the `setopt` and `unsetopt` listings never print them, which is what makes 197 rather than 185 — and a pair that means opposite states moves in opposite directions from one `setopt`. A table built from the listings alone is twelve keys short and cannot tell which way each of them reads",
+	},
+	{
+		ID: "parameter/assigning-to-options-is-setopt", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; options[extendedglob]=on; [[ -o extendedglob ]] && echo on-now; options[nosuchopt]=on; echo "unknown=$?"; options[extendedglob]=maybe; echo "bad=$? still=[$options[extendedglob]]"`,
+		Why:     "the assignment is `setopt` written another way, and its two complaints both leave the *command's* status at 0 — a name nobody has is `no such option` and a value that is neither on nor off is `invalid value`, with the option unmoved. The status is the surprise: a script testing `$?` after either learns nothing",
+	},
+	{
+		ID: "parameter/builtins-drops-one-that-is-switched-off", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; echo "a=[$builtins[cd]]"; disable cd; echo "b=[${builtins[cd]:-ABSENT}]"; enable cd; echo "c=[$builtins[cd]]"`,
+		Why:     "a builtin put aside with `disable` is not a key here at all — not a key with an empty value — which the default operator is what tells apart: a view that merely emptied the value would read identically to a caller using `$builtins[cd]` alone. zsh moves it to `dis_builtins`, which is one of the twenty-eight parameters of this module nothing here provides",
+	},
+	{
+		ID: "parameter/builtins-is-readonly", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; builtins[x]=y; echo "st=$?"`,
+		Why:     "`read-only variable: builtins` and a failure, where its four neighbors in this module all take an assignment. Worth a row because a produced association with no answer for a write has to have *some* answer: one that quietly stored the element would shadow the view it was written to",
+	},
+	{
+		ID: "parameter/aliases-is-a-view-of-the-alias-table", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; alias q=ls; echo "b=[$aliases[q]]"; unalias q; echo "c=[${aliases[q]:-ABSENT}]"; aliases[zz]="echo z"; alias zz`,
+		Why:     "the same table `alias` and `unalias` keep, read through and written through: an alias defined by the builtin is in the association, one removed by the builtin is gone from it, and one defined *by assignment* is what the builtin says back",
+	},
+	{
+		ID: "parameter/commands-is-a-view-of-the-path-search", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; echo "absent=[${commands[definitelynotacommand]:-ABSENT}]"; PATH=/bin; echo "a=[${commands[ls]:-ABSENT}]"; PATH=/nonexistent; echo "b=[${commands[ls]:-ABSENT}]"`,
+		Why:     "the association follows PATH, which is the property that makes it a view rather than a table filled in at startup: the same name resolves and then does not, in one shell, with nothing between the two reads but an assignment to PATH",
+	},
+	// The length of a one-element array, which is where `${#functions}` with
+	// one function defined lands and where this implementation was wrong.
+	{
+		ID: "length/of-a-one-element-array", Category: "expansion",
+		Snippet: `a=(hello); echo "one=${#a}"; a=(hello there); echo "two=${#a}"; a=(); echo "none=${#a}"`,
+		Why:     "the shells split on what `${#a}` of an array means — one counts the elements and the others measure the scalar a bare name yields — and the split is visible at *one* element as much as at two: 1 against 5 for `a=(hello)`. A reading that skipped the question at one element on the grounds that such an array is its own element is true of the value and false of its length, and answers a plausible number at status 0",
+	},
 	{
 		ID: "zparseopts/an-argument-in-an-element-of-its-own", Category: "builtins",
 		Snippet: `set -- -a val rest; zparseopts -D a:=x; echo "st=$? x=[${(j:|:)x}] argv=[${(j:|:)@}]"`,

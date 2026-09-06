@@ -45,8 +45,10 @@ func TestAnUnquotedListSplitsAndGlobsItsElements(t *testing.T) {
 			": > zz1\na=(\"b 2\" \"zz*\")\nset -- \"${a[@]}\"\necho \"n=$# [$1][$2]\"", "n=2 [b 2][zz*]\n",
 		},
 		{
-			// An empty element is no field, and that is not a splitting
-			// question — it holds on both sides of the axis.
+			// An empty element is no field under a whitespace IFS, and that
+			// is not a splitting question — it holds on both sides of the
+			// axis. A non-whitespace IFS is a different answer in this shell
+			// and is not what this row is about.
 			"an empty element is no field",
 			"a=(\"\" x)\nset -- ${a[@]}\necho \"n=$# [$1]\"", "n=1 [x]\n",
 		},

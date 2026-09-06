@@ -123,11 +123,15 @@ func TestUnquotedListElementsAskTheGlobbingAxis(t *testing.T) {
 	}
 }
 
-// TestUnquotedListDropsAnEmptyElement: an unquoted expansion that is empty is
-// no field at all, and that has nothing to do with splitting — it holds with
-// the splitting answer either way. It used to fall out of the splitter
-// returning nothing for an empty string, which is no longer where the empty
-// case is decided.
+// TestUnquotedListDropsAnEmptyElement: an unquoted empty element is no field,
+// and that has nothing to do with splitting — it holds with the splitting
+// answer either way. It used to fall out of the splitter returning nothing for
+// an empty string, which is no longer where the empty case is decided.
+//
+// Under a whitespace IFS, which is where the answer is unanimous. A
+// non-whitespace one is a separate disagreement this does not settle: the
+// shells that split keep the empty field there, and this path drops it as it
+// always has.
 func TestUnquotedListDropsAnEmptyElement(t *testing.T) {
 	const src = `a=("" x); set -- ${a[@]}; printf "%d" "$#"; printf "[%s]" "$@"`
 	for _, split := range []Answer{Yes, No} {

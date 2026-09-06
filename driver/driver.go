@@ -79,6 +79,17 @@ type Shell struct {
 	// in the substrate's own wording and records everything.
 	HistoryStyle repl.HistoryStyle
 
+	// PromptProviders contribute text to every prompt an interactive session
+	// draws, before the prompt parameter's own text. Nil is the common case
+	// and is what every dialect binary is: a prompt is a prompt parameter.
+	//
+	// Not a dialect's answer, which is why no dialect package sets one — a
+	// provider is a code path and a dialect is a table of values. It is here
+	// because this is where a *binary* composes a shell, and it is a binary
+	// that knows things a dialect cannot: cmd/sh knows whether the invocation
+	// carried a policy, and no shell's grammar has an opinion about that.
+	PromptProviders []repl.PromptProvider
+
 	// Register adds or removes builtins — the part of a dialect that shell
 	// cannot express. Nil means the dialect needs none, which is the common
 	// case now that cd, pwd and read live in the core.

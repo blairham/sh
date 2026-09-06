@@ -73,6 +73,27 @@ type Shell struct {
 	// substrate's own wording and filters nothing.
 	History HistoryStyle
 
+	// PromptProviders contribute text to every prompt this session draws, in
+	// order, before the prompt parameter's own text. Nil is a session whose
+	// prompt is the prompt parameter and nothing else, which is what a front
+	// end that has not said gets.
+	//
+	// Before rather than after, and that is the whole of the placement rule.
+	// The prompt parameter is the person's own text and the cursor sits
+	// immediately after it, so anything inserted between the two would move
+	// the thing they are typing away from the thing they set. A provider that
+	// wants a space before the prompt writes one.
+	//
+	// Not part of a dialect, for the reason Completers is not: a provider is
+	// a code path and a dialect is a table of values. What a dialect says
+	// about a prompt stays in PromptStyle, which is a table of what its codes
+	// mean.
+	//
+	// Drawn once per command rather than once per keystroke, which is what
+	// makes this a plausible plugin role later where completion is not. See
+	// promptprovider.go for the cost and failure rules.
+	PromptProviders []PromptProvider
+
 	// Completers are what answers Tab before this shell's own completion
 	// does, in order. Nil is a session that completes the way the substrate
 	// does, which is what a front end that has not said gets.
@@ -396,10 +417,74 @@ func (s Shell) runEach(ctx context.Context, stmts []*syntax.File) bool {
 func (s Shell) beforeReading(pending *strings.Builder) drawnPrompt {
 	continuing := pending.Len() > 0
 	s.reportFinishedJobs(continuing)
+	// The contributions and the parameter are rendered and then measured
+	// together, in one drawPrompt, because the markers that say "none of this
+	// is a column" have to be taken out of both and the count has to cover
+	// both. Two drawnPrompts added together would be a text of two halves and
+	// a width of one.
 	if continuing {
-		return drawPrompt(s.prompt("PS2", or(s.Style.DefaultContinued, "> ")))
+		return drawPrompt(s.contributed(true) + s.prompt("PS2", or(s.Style.DefaultContinued, "> ")))
 	}
-	return drawPrompt(s.prompt("PS1", or(s.Style.Default, "$ ")))
+	return drawPrompt(s.contributed(false) + s.prompt("PS1", or(s.Style.Default, "$ ")))
+}
+
+// contributed is what this session's prompt providers add, in order.
+//
+// Each behind the panic guard a typed line already runs behind, and separately
+// rather than all of them together, so that one provider with a bug costs its
+// own segment and not everybody else's. The reason to guard at all is the
+// reason the line is guarded: the process is the session, and a prompt that
+// took a shell down with it would end a session that has been open for hours
+// over a segment somebody wanted for decoration.
+//
+// A guarded panic leaves the segment empty and the diagnostic goes where every
+// other one does, so the person sees which shell complained and the prompt
+// still arrives.
+func (s Shell) contributed(continuing bool) string {
+	if len(s.PromptProviders) == 0 {
+		return ""
+	}
+	info := s.promptInfo(continuing)
+	guard := s.guard()
+	var b strings.Builder
+	for _, p := range s.PromptProviders {
+		if p == nil {
+			continue
+		}
+		var text string
+		if guard.Do(func() { text = p.Prompt(info) }) {
+			// It panicked. The report has already been written; the segment
+			// is whatever it managed before it did, which is nothing.
+			continue
+		}
+		b.WriteString(text)
+	}
+	return b.String()
+}
+
+// promptInfo is what every provider on one prompt is told.
+//
+// Built once and shared, rather than per provider, so that two providers on
+// the same prompt cannot disagree about what the last command was — which they
+// could, since a job finishing between them changes the count.
+func (s Shell) promptInfo(continuing bool) PromptInfo {
+	last := s.counted().last
+	return PromptInfo{
+		Continued: continuing,
+		Dir:       s.workingDir(),
+		Command:   last.command,
+		Status:    s.exitStatus(),
+		Duration:  last.duration,
+		Jobs:      s.liveJobs(),
+	}
+}
+
+// exitStatus is `$?`, and zero for a shell with no Runner.
+func (s Shell) exitStatus() int {
+	if s.Runner == nil {
+		return 0
+	}
+	return s.Runner.ExitStatus()
 }
 
 // reportFinishedJobs says what ended while the last command was running.

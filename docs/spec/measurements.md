@@ -1681,6 +1681,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `compgen/no-action-is-a-quiet-success` | `st=127` **2>** `<shell>: 1: compgen: not found` | `st=0` | `st=0` | `st=0` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` |
 | `compgen/the-first-word-is-the-one-matched` | `st=127` **2>** `<shell>: 1: compgen: not found` | `return~st=0` | `return~st=0` | `return~st=0` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` |
 | `compgen/an-action-name-that-is-not-one` | `st=127` **2>** `<shell>: 1: compgen: not found` | `st=2` **2>** `<shell>: line 1: compgen: nosuchaction: invalid action name` | `st=2` **2>** `<shell>: line 1: compgen: nosuchaction: invalid action name` | `st=2` **2>** `<shell>: line 0: compgen: nosuchaction: invalid action name` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` |
+| `compgen/a-function-listing-is-the-persons-own` | `0~0` **2>** `<shell>: 1: compgen: not found~<shell>: 1: compgen: not found` *(status 1)* | `0~1` | `0~1` | `0~1` | `0~0` **2>** `<shell>: compgen: not found~<shell>: compgen: not found` *(status 1)* | `0~0` **2>** `<shell>:1: command not found: compgen~<shell>:1: command not found: compgen` *(status 1)* |
+| `compgen/a-prefix-only-the-shells-own-names-have` | `st=127` **2>** `<shell>: 1: compgen: not found` | `st=1` | `st=1` | `st=1` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` |
+| `compgen/a-prefix-the-person-defined-over-the-shells-name` | `st=127` **2>** `<shell>: 1: compgen: not found` | `pushd~st=0` | `pushd~st=0` | `pushd~st=0` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` |
 | `compgen/an-action-this-shell-does-not-generate` | `st=127` **2>** `<shell>: 1: compgen: not found` | `st=1` | `st=1` | `st=1` | `st=127` **2>** `<shell>: compgen: not found` | `st=127` **2>** `<shell>:1: command not found: compgen` |
 | `shift/an-operand-that-was-never-given` | **2>** `<shell>: 1: shift: can't shift that many` *(status 2)* | `st=1` | `st=1` **2>** `<shell>: line 1: shift: shift count out of range` | `st=1` | **2>** `<shell>: shift: (null): bad number` *(status 1)* | `st=1` **2>** `<shell>:shift:1: shift count must be <= $#` |
 | `setopt/normalizes-zsh-spellings` | `st=127~x*` **2>** `<shell>: 1: setopt: not found` | `st=127~x*` **2>** `<shell>: line 1: setopt: command not found` | `st=127~x*` **2>** `<shell>: line 1: setopt: command not found` | `st=127~x*` **2>** `<shell>: setopt: command not found` | `st=127~x*` **2>** `<shell>: setopt: not found` | `st=0~x*` |
@@ -2509,6 +2512,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `compgen/an-action-name-that-is-not-one` — `invalid action name` at 2 — the wording that separates a typo from a shell that is missing something, which is the distinction the action table exists to keep
   ```sh
   compgen -A nosuchaction x; echo "st=$?"
+  ```
+- `compgen/a-function-listing-is-the-persons-own` — who owns a name a completion generator is offered, graded as two counts of a slice the case sets itself rather than as a listing — a listing grades everything a build happens to have defined. Both counts are unanimous where the command exists at all: 0 for the shell's own directory-stack commands, which are builtins in bash and therefore not functions, and 1 for the function the snippet wrote. Ours counted 3 on the first line, because a dialect written as shell has them as prelude functions and this generator read every function callable (#1081). The other three shells have no `compgen`, so both counts are grep's 0 and the pipeline's 1. `grep -cE` and not a BRE alternation: `^a$` + BRE alternation anchors only its last branch on this platform's grep, so an anchored BRE here counts 1 for three matching lines and could not have graded the first line at all
+  ```sh
+  f() { :; }; compgen -A function | grep -cE '^dirs$|^popd$|^pushd$'; compgen -A function | grep -c "^f$"
+  ```
+- `compgen/a-prefix-only-the-shells-own-names-have` — the silent half of the row above, and the one a status cannot hide. `pu` matches nothing in bash — no function begins with it — so the answer is nothing at **1**, and ours wrote `pushd` at **0**: a completer asking whether there is anything to offer was told yes and handed a name the person never defined. Nothing on stderr in any column, which is what makes it the silent kind
+  ```sh
+  compgen -A function pu; echo "st=$?"
+  ```
+- `compgen/a-prefix-the-person-defined-over-the-shells-name` — the same prefix once the person has written their own `pushd`, which is the control the row above is read against: bash offers it at 0, because there the function shadows the builtin and really is a function. So the answer turns on whose declaration is standing rather than on the name, which is the rule #603 and #1035 already set — and a fix that suppressed the name outright would pass the row above and fail this one
+  ```sh
+  pushd() { :; }; compgen -A function pu; echo "st=$?"
   ```
 - `compgen/an-action-this-shell-does-not-generate` — bash generates it and answers 1 for no match; this shell refuses it as not implemented at 2, and the divergence is recorded here deliberately — an action generated from a guess would be a promise the shell cannot keep, and the honest refusal is the answer docs/spec/semantics.md scopes
   ```sh

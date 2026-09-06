@@ -8008,8 +8008,8 @@ echo after`,
 	},
 	{
 		ID: "compgen/a-function-listing-is-the-persons-own", Category: "builtins",
-		Snippet: `f() { :; }; compgen -A function | grep -c "^dirs$\|^popd$\|^pushd$"; compgen -A function | grep -c "^f$"`,
-		Why:     "who owns a name a completion generator is offered, graded as two counts of a slice the case sets itself rather than as a listing — a listing grades everything a build happens to have defined. Both counts are unanimous where the command exists at all: 0 for the shell's own directory-stack commands, which are builtins in bash and therefore not functions, and 1 for the function the snippet wrote. Ours counted 3 on the first line, because a dialect written as shell has them as prelude functions and this generator read every function callable (#1081). The other three shells have no `compgen`, so both counts are grep's 0 and the pipeline's 1",
+		Snippet: `f() { :; }; compgen -A function | grep -cE '^dirs$|^popd$|^pushd$'; compgen -A function | grep -c "^f$"`,
+		Why:     "who owns a name a completion generator is offered, graded as two counts of a slice the case sets itself rather than as a listing — a listing grades everything a build happens to have defined. Both counts are unanimous where the command exists at all: 0 for the shell's own directory-stack commands, which are builtins in bash and therefore not functions, and 1 for the function the snippet wrote. Ours counted 3 on the first line, because a dialect written as shell has them as prelude functions and this generator read every function callable (#1081). The other three shells have no `compgen`, so both counts are grep's 0 and the pipeline's 1. `grep -cE` and not a BRE alternation: `^a$` + BRE alternation anchors only its last branch on this platform's grep, so an anchored BRE here counts 1 for three matching lines and could not have graded the first line at all",
 	},
 	{
 		ID: "compgen/a-prefix-only-the-shells-own-names-have", Category: "builtins",

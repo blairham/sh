@@ -676,9 +676,25 @@ func (r *Runner) declarationAssignmentExport(name string, namesTheAttribute bool
 // b); typeset -u arr`, where ksh93 folds them; that divergence is recorded and
 // not modeled.
 func (r *Runner) rereadStandingValue(name string) {
+	// The value the name holds, wherever it is being held. A name the script
+	// never assigned is still holding what it was started with, and reading
+	// only the table skipped exactly that: `INHERITED=bar sh -c 'typeset -i
+	// INHERITED; echo "[$INHERITED]"'` is `[0]` in zsh 5.9.2 and was `[bar]`
+	// here, because the name lives in the inherited environment until
+	// something writes it. Found by a mutant: dropping the `ok` guard changed
+	// nothing any test could see, which is what said the guard was standing
+	// in front of a case nothing reached.
 	v, ok := r.Vars[name]
 	if !ok {
-		return
+		if v, ok = r.inheritedValue(name); !ok {
+			// An array or an associative table — declaredNameHolds counts
+			// those too — or an exported name with no value anywhere. A
+			// scalar re-read has nothing to say about any of them: measured,
+			// `arr=(a b); typeset -u arr` leaves `a b` in zsh where ksh93
+			// folds the elements, and that divergence is recorded and not
+			// modeled.
+			return
+		}
 	}
 	if !r.attributeWouldChange(name, v) {
 		return

@@ -163,15 +163,22 @@ echo "a=[$a]"
 d=MiXeD
 typeset -u d
 echo "d=[$d]"
+e=MiXeD
+typeset -l e
+echo "e=[$e]"
 typeset -r r=1
 typeset -i r
 echo "r=[$r]"`
+	// All three letters, because they share one answer and a test that
+	// asserted one of them would leave the other two free: the mutant that
+	// made the lowering letter report no change at all survived on `-i` and
+	// `-u` alone.
 	for _, tc := range []struct {
 		answer Answer
 		want   string
 	}{
-		{Yes, "a=[7]\nd=[MIXED]\nr=[1]\n"},
-		{No, "a=[5+2]\nd=[MiXeD]\nr=[1]\n"},
+		{Yes, "a=[7]\nd=[MIXED]\ne=[mixed]\nr=[1]\n"},
+		{No, "a=[5+2]\nd=[MiXeD]\ne=[MiXeD]\nr=[1]\n"},
 	} {
 		set := func(s *Semantics) {
 			withHiding(s)
@@ -179,6 +186,77 @@ echo "r=[$r]"`
 			s.AttributeRereadsTheValueItFinds = tc.answer
 		}
 		out, errs, st := declRun(t, src, set, Diagnostics{})
+		if out != tc.want || st != 0 || errs != "" {
+			t.Errorf("%v: got %q (stderr %q, status %d), want %q", tc.answer, out, errs, st, tc.want)
+		}
+	}
+}
+
+// A number written some other way is still re-read, and this is where a
+// narrower predicate goes wrong: `08` and `+7` both parse as integers, so a
+// check that asked only "does this parse" would say the two readings agree and
+// leave them as written. What decides it is whether the text is already the
+// canonical spelling of itself.
+//
+// ` 7 ` and `5+2` do not parse at all and are caught either way, which is why
+// they are the control here rather than the subject.
+func TestANumberWrittenOddlyIsStillReread(t *testing.T) {
+	const src = `a=08
+typeset -i a
+b=+7
+typeset -i b
+c=" 7 "
+typeset -i c
+echo "[$a][$b][$c]"`
+	for _, tc := range []struct {
+		answer Answer
+		want   string
+	}{
+		{Yes, "[8][7][7]\n"},
+		{No, "[08][+7][ 7 ]\n"},
+	} {
+		set := func(s *Semantics) {
+			withHiding(s)
+			s.DeclaredNameWithoutValueIsEmpty = Yes
+			s.AttributeRereadsTheValueItFinds = tc.answer
+			// The two shells that re-read also read `08` as 8 rather than
+			// as a bad octal digit, so the combination this asserts is the
+			// one that exists. Set here rather than assumed, because a
+			// dialect answering yes to both would report an error where
+			// this expects a number — and none does.
+			s.ArithInvalidOctalDigitIsError = No
+		}
+		out, errs, st := declRun(t, src, set, Diagnostics{})
+		if out != tc.want || st != 0 || errs != "" {
+			t.Errorf("%v: got %q (stderr %q, status %d), want %q", tc.answer, out, errs, st, tc.want)
+		}
+	}
+}
+
+// A name the script never assigned is still holding what the shell was
+// started with, so the re-read has to reach the environment and not only the
+// table. Measured: `INHERITED=bar` in the environment and then `typeset -i
+// INHERITED` reads `0` in zsh 5.9.2 and `bar` in bash 5.3.15, and the value a
+// child is told changes with it.
+//
+// Found by a mutant. Dropping the guard that returned early when the table had
+// no entry changed nothing any test could see, which is what said the guard
+// was standing in front of a case nothing reached.
+func TestTheRereadReachesAnInheritedValue(t *testing.T) {
+	for _, tc := range []struct {
+		answer Answer
+		want   string
+	}{
+		{Yes, "[0]\n"},
+		{No, "[bar]\n"},
+	} {
+		set := func(s *Semantics) {
+			withHiding(s)
+			s.DeclaredNameWithoutValueIsEmpty = Yes
+			s.AttributeRereadsTheValueItFinds = tc.answer
+		}
+		out, errs, st := declRunEnv(t, `typeset -i INHERITED
+echo "[$INHERITED]"`, set, Diagnostics{}, []string{"INHERITED=bar"})
 		if out != tc.want || st != 0 || errs != "" {
 			t.Errorf("%v: got %q (stderr %q, status %d), want %q", tc.answer, out, errs, st, tc.want)
 		}

@@ -155,14 +155,23 @@ func cell(res Result) string {
 // process a signal ended — so printing the status of a signal death would be
 // printing the -1 that stands for its absence.
 //
-// The number and the system's word for it, because neither alone is enough:
-// the number is what the record keeps and it is not the same on two operating
-// systems for the signals above the standard set, and the word is the fact a
-// reader wants but is a description rather than a name — the word for SIGKILL
-// is "killed", which says nothing on its own.
+// The number and the recording machine's word for it, because neither alone is
+// enough: the number is not the same on two operating systems for the signals
+// above the standard set, and the word is the fact a reader wants but is a
+// description rather than a name — the word for SIGKILL is "killed", which
+// says nothing on its own.
+//
+// The word comes out of the record beside the number rather than from
+// syscall.Signal.String() here. Asking the local kernel meant the two halves
+// of one cell came from two machines — signal 30 is SIGUSR1 on macOS and
+// SIGPWR on Linux — and made this document not quite a pure function of the
+// record (#776). A record from before the field renders the bare number.
 func outcome(res Result) string {
 	if res.Signal != 0 {
-		return fmt.Sprintf("killed by signal %d (%s)", int(res.Signal), res.Signal)
+		if res.SignalName == "" {
+			return fmt.Sprintf("killed by signal %d", int(res.Signal))
+		}
+		return fmt.Sprintf("killed by signal %d (%s)", int(res.Signal), res.SignalName)
 	}
 	return fmt.Sprintf("status %d", res.Status)
 }

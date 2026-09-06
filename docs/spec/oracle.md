@@ -244,16 +244,23 @@ completely rather than sampling it. No shells are involved and no two
 machines can disagree, so this **blocks**: it is a test, and it runs in
 `make check` and in the required build.
 
-One thing in the rendered document is not a fact about the measurement,
-and the check found it by passing on macOS and failing on a Linux runner
-for a byte-identical tree. The *word* beside a signal number is
-`syscall.Signal.String()` — the reader's kernel — while the number is the
-one the recording machine used, and signal 30 is SIGUSR1 on macOS and
-SIGPWR on Linux. Deriving the word from the constant instead only moves
-the problem, because the constant's value is what differs. The word is
-computed from the number and adds nothing to it, so the comparison drops
-it from *both* sides: the document keeps its words for a reader, and the
-check stops treating them as evidence.
+One thing in the rendered document used not to be a fact about the
+measurement, and the check found it by passing on macOS and failing on a
+Linux runner for a byte-identical tree. The *word* beside a signal number
+came from `syscall.Signal.String()` — the reader's kernel — while the
+number is the one the recording machine used, and signal 30 is SIGUSR1 on
+macOS and SIGPWR on Linux. Deriving the word from the constant instead
+only moves the problem, because the constant's value is what differs.
+
+It was mitigated by dropping the word from *both* sides before comparing,
+which worked and left a field the gate could not see — a permanent hole in
+an instrument whose value is that it compares everything. The word is now
+recorded beside the number at measurement time (`Result.SignalName`), so
+it is a fact about the machine that measured, like every other cell, and
+the comparison is byte for byte with nothing excluded. A record written
+before the field renders the bare number, and the resulting disagreement
+with a document that still has the word is the right answer: the only way
+to learn the word is to measure again.
 
 It exists because the drift check compares *behavior* and a `Why` is
 prose. Editing one after `make oracle` had run left the document carrying

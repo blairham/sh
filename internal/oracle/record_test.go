@@ -138,37 +138,68 @@ func TestADocumentOfTheSameLengthStillHasToMatch(t *testing.T) {
 	}
 }
 
-// The document is a pure function of the record and the corpus with exactly
-// one exception, and the exception is why this check once passed on macOS and
-// failed on a Linux runner for a byte-identical tree: the word beside a signal
-// number comes from the reader's kernel, and the number in the record is the
-// recording machine's. Signal 30 is SIGUSR1 on one and SIGPWR on the other.
-func TestTheSystemsWordForASignalIsNotComparedAcrossMachines(t *testing.T) {
+// #776: the word beside a signal number is recorded, so the document is a pure
+// function of the record on every machine.
+//
+// It used not to be. The number was the recording machine's and the word was
+// syscall.Signal.String() evaluated by whoever rendered, and the two disagree —
+// signal 30 is SIGUSR1 on macOS and SIGPWR on Linux — so this check failed on a
+// Linux runner and passed on macOS for a byte-identical tree. It was mitigated
+// by dropping the word from both sides before comparing, which left a field the
+// gate could not see.
+//
+// The name below is a literal no kernel uses, which is the point: it stands for
+// a word recorded on some other machine, and this test asserts that a document
+// carrying it renders and compares identically wherever it runs. Running on
+// macOS and on Linux, both.
+func TestASignalsWordComesFromTheMachineThatMeasured(t *testing.T) {
+	cases := twoCases()
+	golden := recordOf(cases)
+	golden.Results["a/one"]["bash"] = Result{
+		Status: -1, Signal: 30, SignalName: "whatever that kernel called it",
+	}
+	doc := golden.Markdown(cases)
+	if !strings.Contains(doc, "killed by signal 30 (whatever that kernel called it)") {
+		t.Fatalf("the rendering did not use the recorded word:\n%s", doc)
+	}
+	// And it did not reach for the local kernel's word for 30, which is what
+	// it used to do and is a different string on each of the two platforms
+	// this runs on.
+	if local := syscall.Signal(30).String(); strings.Contains(doc, local) {
+		t.Errorf("the rendering used this kernel's word %q", local)
+	}
+	if rc := CheckRecord(golden, doc, cases); !rc.OK() {
+		t.Errorf("a document rendered from the record disagreed with it:\n%s", rc)
+	}
+
+	// The half that was forgiven before, and is not any more: the word is a
+	// recorded fact, so editing it in the document is a difference like any
+	// other. Under the old exclusion this passed.
+	edited := strings.ReplaceAll(doc, "whatever that kernel called it", "something else entirely")
+	if rc := CheckRecord(golden, edited, cases); rc.OK() {
+		t.Error("an edited signal name was accepted; the word is recorded and must be compared")
+	}
+	// The number is still the fact it always was.
+	changed := strings.ReplaceAll(doc, "killed by signal 30", "killed by signal 31")
+	if rc := CheckRecord(golden, changed, cases); rc.OK() {
+		t.Error("a changed signal number was accepted")
+	}
+}
+
+// A record written before the field renders the bare number rather than an
+// empty pair of parentheses, and the mismatch with a document that still has
+// the word is reported — which is the right answer, because the only way to
+// learn the word now is to measure again.
+func TestARecordWithNoSignalNameRendersTheNumberAlone(t *testing.T) {
 	cases := twoCases()
 	golden := recordOf(cases)
 	golden.Results["a/one"]["bash"] = Result{Status: -1, Signal: 30}
 	doc := golden.Markdown(cases)
-	if !strings.Contains(doc, "killed by signal 30") {
-		t.Fatalf("this test assumes the rendering names the signal:\n%s", doc)
+	if !strings.Contains(doc, "killed by signal 30)") && !strings.Contains(doc, "killed by signal 30*") {
+		t.Errorf("want the bare number, got:\n%s", doc)
 	}
-	// The same document as another kernel would have spelled it. The
-	// substitute is a literal no kernel uses rather than the other machine's
-	// real word, because this test runs on both of them: naming Linux's
-	// spelling made it a no-op on Linux, where it *is* the local spelling,
-	// and the test failed on the one platform it was written for.
-	elsewhere := strings.ReplaceAll(doc, "killed by signal 30 ("+syscall.Signal(30).String()+")",
-		"killed by signal 30 (whatever this kernel calls it)")
-	if elsewhere == doc {
-		t.Fatal("could not build the other machine's spelling")
-	}
-
-	if rc := CheckRecord(golden, elsewhere, cases); !rc.OK() {
-		t.Errorf("the same measurement spelled by another kernel was reported as a difference:\n%s", rc)
-	}
-	// The number is the fact, so it is still compared.
-	changed := strings.ReplaceAll(doc, "killed by signal 30", "killed by signal 31")
-	if rc := CheckRecord(golden, changed, cases); rc.OK() {
-		t.Error("a changed signal number was forgiven along with the word")
+	if strings.Contains(doc, "killed by signal 30 (") {
+		t.Errorf("an unrecorded name was invented:\n%s", doc)
 	}
 }
 

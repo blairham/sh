@@ -80,6 +80,13 @@ func Dialect() syntax.Dialect {
 	// bad substitution when it is reached, ksh93 refuses `[' while reading,
 	// dash says `Bad substitution`.
 	d.SpecialParamSubscript = true
+	// And `#` in arithmetic is the character-code operator: `$((#b))` on
+	// `zebra` is 122 and `$((##a))` is 97. Measured 2026-09-05 against the
+	// rest of the panel, every one of which calls the same text an arithmetic
+	// syntax error. Worth naming carefully, because it looks like a length
+	// and is not one — `a=(1 2); $((#a))` is 49, the code of the `1`, where
+	// the count is `$(( $#a ))`.
+	d.ArithCharacterCode = true
 	// A coprocess, spelled with the same word as bash's and with no name
 	// before it: `coproc MY { cat; }` is `parse error near `}'` here, because
 	// `MY {` is a simple command and the `}` closes nothing. The near ends
@@ -767,7 +774,10 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperandExpected:      "bad math expression: operand expected at `%[1]s'",
 		ArithExpressionRanOut:     "bad math expression: operand expected at end of string",
 		ArithOperatorExpected:     "bad math expression: operator expected at `%[1]s'",
-		SyntaxUnexpected:          "parse error near `%[1]s'",
+		// The operator names its two-character spelling whichever of the two
+		// was written: `$((#\))` says `after ##` as readily as `$((##))`.
+		ArithCharacterMissing: "bad math expression: character missing after ##",
+		SyntaxUnexpected:      "parse error near `%[1]s'",
 		// zsh names itself and stops when a function's body never began.
 		// `f() ;` reports as zsh: parse error near `;' where `if true` — an
 		// input that ran out just as much — reports the line as well, as

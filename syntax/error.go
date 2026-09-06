@@ -70,6 +70,13 @@ const (
 	// operator belonged and "invalid arithmetic operator" when the text could
 	// not be either. The other three have one wording for both.
 	ErrArithBadOperator
+	// ErrArithCharacterMissing is the character-code operator with nothing
+	// after it to take the code of: `$((##))`, or a backslash at the end of
+	// the expression. Its own kind because the one dialect that has the
+	// operator words it as neither an operand nor an operator failure —
+	// `character missing after ##` — and a dialect without the operator never
+	// reaches it at all.
+	ErrArithCharacterMissing
 	// ErrUnexpected is a token where the grammar wanted something else. The
 	// panel names the token three ways and one of them names its *class*
 	// instead — dash says "word unexpected" for an ordinary word and quotes

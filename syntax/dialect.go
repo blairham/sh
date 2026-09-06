@@ -659,6 +659,27 @@ type Dialect struct {
 	// them.
 	BareSubscript bool
 
+	// ArithCharacterCode enables `#name` and `##c` inside an arithmetic
+	// expression: the code of the first character of a parameter's value, and
+	// the code of a character written out.
+	//
+	// One shell in the panel. Measured 2026-09-05 on zsh 5.9.2, where
+	// `b=zebra; echo $((#b))` prints 122 and `echo $((##a))` prints 97
+	// — against bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93 and dash, every
+	// one of which calls the same text an arithmetic syntax error naming the
+	// operand it could not read. An operator five shells refuse and one has
+	// is the additive kind of split, so it is a flag here rather than a value
+	// on the semantics vector.
+	//
+	// It does not disturb the `base#digits` literal, which every shell with
+	// arithmetic has: that `#` follows digits and is read by the number, and
+	// this one stands where an operand belongs.
+	//
+	// Getting it backwards is the hazard the operator is worth recording for:
+	// `$((#a))` looks like a length and is not one. On `a=(1 2)` it is 49,
+	// the code of the `1`, where the count is `$(( $#a ))`.
+	ArithCharacterCode bool
+
 	// DoubleBracket enables `[[ ... ]]`.
 	//
 	// Consumed by the *parser*, not the lexer, and the reason is worth

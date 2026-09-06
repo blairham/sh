@@ -6082,6 +6082,45 @@ echo unreachable`,
 		Why:     "the subscript belongs to the assignment's target, so `a[1] = 9` writes an element rather than evaluating one and throwing it away",
 	},
 	{
+		ID: "arith/a-character-code-on-a-name", Category: "arithmetic",
+		Snippet: `b=zebra; echo "[$((#b))]"`,
+		Why:     "the leading `#` in an expression, which is a character code in zsh and an arithmetic syntax error in bash 5.3, bash 3.2, bash as sh, ksh93 and dash alike — every one of them naming the operand it could not read. One shell has an operator and five refuse it, so the split is additive and belongs in the grammar rather than on the semantics vector",
+		// Refused by the bash dialect the parser test grades against, as it is
+		// by bash itself — at a different moment, since this parser reads an
+		// expression while parsing where bash reads it while expanding. That
+		// difference is older than this operator and is not about it.
+		SyntaxError: true,
+	},
+	{
+		ID: "arith/a-character-code-is-not-a-length", Category: "arithmetic",
+		Snippet:     `a=(1 2); echo "[$((#a))]"`,
+		Why:         "the reason the operator is worth a case at all: `$((#a))` looks like a length and is not one. It is 49 in zsh — the code of the `1` that begins the array's first element — where the count is `$(( $#a ))`. An implementation that read it as a length would answer 2 here and pass every test written on a single-character value",
+		SyntaxError: true,
+	},
+	{
+		ID: "arith/a-character-code-with-nothing-to-take", Category: "arithmetic",
+		Snippet:     `b=; echo "[$((#nothing))][$((#b))]"`,
+		Why:         "the quiet edges, both zero in the shell that has the operator: a name never set, and a name holding the empty string. Neither reports, which is what makes an implementation that refused either one louder than the shell a script was written for. A third edge — a `#` with no operand at all — is left out of the corpus on purpose: `$(( # ))` makes bash lose the closing parenthesis of the whole word, so the row would be about its scanner rather than about the operator",
+		SyntaxError: true,
+	},
+	{
+		ID: "arith/a-character-code-on-a-character", Category: "arithmetic",
+		Snippet:     `echo "[$((##a))][$((##A))][$((##\n))][$((##\x41))]"`,
+		Why:         "the doubled spelling, which takes the character written out rather than a parameter — and decodes the escapes `$'…'` decodes, so the third is a newline and not the letter n. Four probes in one case because the escape table is where an implementation is most likely to stop early",
+		SyntaxError: true,
+	},
+	{
+		ID: "arith/a-character-code-missing-its-character", Category: "arithmetic",
+		Snippet:     `echo "[$((##))]"; echo after`,
+		Why:         "the operator with nothing after it, worded by the shell that has it as neither of the two failures the rest of arithmetic has — `character missing after ##` — and fatal to the command. The shells without the operator reach a refusal too, by the ordinary route, which is what makes this a row about wording rather than about behavior",
+		SyntaxError: true,
+	},
+	{
+		ID: "arith/a-radix-literal-is-not-a-character-code", Category: "arithmetic",
+		Snippet: `echo "[$((16#ff))][$((2#101))]"`,
+		Why:     "the one place the two spellings of `#` could collide: `base#digits` is a literal in every shell with arithmetic and its `#` follows digits, where the character code stands where an operand belongs. Unanimous except in dash, which has no based literal — and the row exists so that adding the operator cannot quietly cost the literal",
+	},
+	{
 		ID: "cond/a-group-in-a-regex", Category: "conditions",
 		Snippet: `[[ abc =~ ^(a|x)bc$ ]] && echo y || echo n`,
 		Why:     "the parentheses belong to the regular expression rather than to the shell, so the word does not end at one — which the lexer has to be told, since where a word ends is settled before any parser sees a token",

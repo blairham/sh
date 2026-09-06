@@ -9,6 +9,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -158,6 +159,9 @@ func (r *Runner) evalNum(e syntax.ArithExpr) (arithNum, error) {
 	case *syntax.ArithIndex:
 		return r.arithElement(x)
 
+	case *syntax.ArithCharCode:
+		return intNum(r.charCode(x)), nil
+
 	case *syntax.ArithUnary:
 		return r.evalUnary(x)
 
@@ -205,6 +209,60 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 		return intNum(0), nil
 	}
 	return r.parseArithNum(strings.TrimSpace(v))
+}
+
+// charCode answers the character-code operator, which is a *character* and
+// never a number: `$((#b))` on `zebra` is 122 and not 5, and the length is
+// spelled `$(( $#b ))`.
+//
+// Nothing here reports. Measured on zsh 5.9.2, every operand that names
+// nothing is zero: a parameter never set, one holding the empty string, a `#`
+// with nothing after it at all, and a name written with a subscript — which
+// the shell reads and then finds nothing under, so `$((#a[1]))` is 0 however
+// `${a[1]}` reads. The last of those is a fact about that shell rather than
+// something derived, and the quiet answer is the one to keep: a refusal here
+// would be louder than the shell a script was written for.
+func (r *Runner) charCode(x *syntax.ArithCharCode) int {
+	if x.Char != "" {
+		text := x.Char
+		if x.Op == "##" {
+			// The escapes are the ones `$'…'` decodes, against this dialect's
+			// table rather than a second copy of it. The single-`#` spelling
+			// has no escapes: a backslash there takes the next character as
+			// itself.
+			text = r.expandDollarSingle(text)
+		} else {
+			text = strings.TrimPrefix(text, `\`)
+		}
+		return firstCharCode(text)
+	}
+	if x.Name == "" || x.Subscripted {
+		return 0
+	}
+	v, ok := r.getVar(x.Name)
+	if !ok {
+		v, _ = r.specialParam(&syntax.ParamExpr{Name: x.Name})
+	}
+	return firstCharCode(v)
+}
+
+// firstCharCode is the code of the first character of a string, and 0 for a
+// string with no first character.
+//
+// A character and not a byte where the text holds one: `é` is 233 rather than
+// the 195 its first byte is. But a byte that is no character at all is its own
+// value — measured, a lone 0x80 is 128 — rather than the replacement rune,
+// which is a number no shell produces and which the decoder would otherwise
+// hand back for every high byte a `\x` escape can write.
+func firstCharCode(s string) int {
+	if s == "" {
+		return 0
+	}
+	c, size := utf8.DecodeRuneInString(s)
+	if c == utf8.RuneError && size <= 1 {
+		return int(s[0])
+	}
+	return int(c)
 }
 
 func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {

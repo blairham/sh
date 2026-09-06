@@ -154,6 +154,79 @@ Semantics axis: `ArithNegativeExponentIsError` — bash yes, ksh93 and zsh
 no. Unanswered in the core, and unreachable in `posix` and `dash`, where
 the grammar has no `**` to ask about.
 
+## The character code operator — zsh only
+
+zsh reads a leading `#` in an expression as a **character code**, and it
+is the one thing here that a reader is most likely to get backwards:
+`$((#a))` looks like a length and is not one.
+
+| probe | zsh 5.9.2 | bash 5.3.15 | bash 3.2.57 | bash-as-`sh` | ksh93 | dash |
+| --- | --- | --- | --- | --- | --- | --- |
+| `b=zebra; $((#b))` | `122` | error | error | error | error | error |
+| `a=(1 2); $((#a))` | `49` | error | error | error | error | error |
+| `a=(1 2); $(( $#a ))` | `2` | `0a` is not a number | — | — | — | — |
+| `$((##a))` | `97` | error | error | error | error | error |
+| `$((##))` | `character missing after ##` | error | error | error | error | error |
+| `$((16#ff))` | `255` | `255` | `255` | `255` | `255` | error |
+
+The refusal is the same sentence each shell writes for any operand it
+cannot read — bash `#b: arithmetic syntax error: operand expected (error
+token is "#b")` at 1 and 127 as `sh`, ksh93 `#b: arithmetic syntax error`
+at 1, dash `expecting primary: "#b"` at 2 — which is why the flag needs no
+diagnostic of its own: with it off the `#` is simply not an operand, and
+the ordinary route says so in each dialect's words.
+
+`#a` on the array `(1 2)` is **49**, the code of the `1` that begins the
+array's first element. The count is `$(( $#a ))`, which the brace-less
+length form makes spellable.
+
+Two spellings, and the operand is read differently by each:
+
+- **`#name`** — the code of the first character of that parameter's
+  *value*. The scan takes digits as readily as letters, so `$((#1))` is
+  the first character of `$1` and `$((#0))` of the shell's own name.
+  It does not recurse the way a bare name in an expression does:
+  `b=zebra; c=b; $((#c))` is 98, the `b` that is c's value, where
+  `$((c))` would read through to `zebra`.
+- **`##c`** — the code of the character written out, with the escapes
+  `$'…'` decodes: `$((##\n))` is 10, `$((##\x41))` and `$((##\101))` and
+  `$((##\U00000041))` are all 65. A single `#` before a backslash takes
+  the next character as itself instead, so `$((#\n))` is 110 — the letter
+  n.
+
+Exactly one character: `$((##ab))` is the code of `a` with a `b` left
+over, which is then refused as text where an operator belonged. And the
+character is a character, not a byte — `$((##é))` is 233. A byte that is
+no character at all is its own value, though: `$((##\x80))` is 128 and
+`$((##\xff))` is 255, which is also what a parameter holding such a byte
+gives.
+
+Everything with no answer is **zero and quiet**: a name never set, a name
+holding the empty string, a `#` with no operand at all, and a name written
+with a subscript. That last is measured rather than derived —
+`a=(xy z); $((#a))` is 120 and `$((#a[1]))` is 0, where `${a[1]}` is `xy`
+— and the quiet answer is kept because a refusal would be louder than the
+shell a script was written for.
+
+`$((##))` is the one failure the operator has of its own, and zsh words it
+as neither an operand nor an operator problem: `bad math expression:
+character missing after ##`, naming the doubled spelling whichever was
+written.
+
+The `base#digits` literal above is untouched, and could not collide: that
+`#` follows digits and is read by the number, where this one stands where
+an operand belongs.
+
+Recorded and not reproduced: zsh's key-binding escape notation reaches
+this operator too — `$((##^A))` is 1 and `$((##\M-a))` is 225 — and
+nothing else in this implementation reads `^X` or `\M-`, so a table for
+them would exist for one operator alone. `$(( # ))` is also left out of
+the corpus, though it is implemented: the spelling makes bash lose the
+closing parenthesis of the whole word, so the row would be about its
+scanner rather than about the operator.
+
+Grammar flag: `ArithCharacterCode` — core: off; `zsh`: on.
+
 ## Errors
 
 Division by zero is an error in every shell, unanimously, and it is a

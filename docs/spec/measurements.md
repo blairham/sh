@@ -1353,6 +1353,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `echo/the-order-of-e-and-capital-e` | `-e -E m	n` | `m\tn` | `m\tn` | `m\tn` | `-E m	n` | `m	n` |
 | `readonly/reassignment-by-a-declaration` | **2>** `<shell>: 1: export: x: is read only` *(status 2)* | `after` **2>** `<shell>: line 1: x: readonly variable` | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | `after` **2>** `<shell>: x: readonly variable` | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
 | `readonly/reassignment-from-a-command-string` | **2>** `<shell>: 1: x: is read only` *(status 2)* | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | **2>** `<shell>: line 1: x: readonly variable` *(status 127)* | **2>** `<shell>: x: readonly variable` *(status 1)* | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
+| `jobs/the-last-background-pid-before-any-job` | `[]` | `[]` | `[]` | `[]` | `[]` | `[0]` |
+| `jobs/an-unstarted-last-background-pid-under-set-u` | **2>** `<shell>: 1: !: parameter not set` *(status 2)* | **2>** `<shell>: line 1: $!: unbound variable` *(status 127)* | **2>** `<shell>: line 1: $!: unbound variable` *(status 127)* | **2>** `<shell>: $!: unbound variable` *(status 127)* | `[]~st=0` | `[0]~st=0` |
+| `jobs/the-last-background-pid-under-set-u-once-a-job-has-run` | `st=0 set=[yes]` | `st=0 set=[yes]` | `st=0 set=[yes]` | `st=0 set=[yes]` | `st=0 set=[yes]` | `st=0 set=[yes]` |
 | `jobs/a-disowned-job-is-not-in-the-listing` | **2>** `<shell>: 1: Syntax error: "\|" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `sleep 0.4 &\| jobs >j.txt; echo "n=$(grep -c . j.txt)"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `sleep 0.4 &\| jobs >j.txt; echo "n=$(grep -c . j.txt)"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `\|'~<shell>: -c: line 0: `sleep 0.4 &\| jobs >j.txt; echo "n=$(grep -c . j.txt)"'` *(status 2)* | `n=1` | `n=0` |
 | `jobs/a-background-job-outlives-the-shell` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` |
 | `jobs/a-background-external-command-outlives-the-shell` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` |
@@ -1616,6 +1619,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `readonly/reassignment-from-a-command-string` — an assignment to a name that cannot take one, given as an argument rather than read from a file. All four stop here — and one of them does not when the same three lines come from a file, which the case recorded elsewhere shows. So a readonly reassignment is fatal in three shells always and in the fourth by invocation, which is the second thing found to work that way after an expansion that failed
   ```sh
   readonly x=1; x=2; echo after
+  ```
+- `jobs/the-last-background-pid-before-any-job` — one line, no pid in it, and the whole `$!` grid's only machine-independent row (#937): what the parameter is before a background command has been started. Five columns write nothing and zsh writes `0`, a number nothing ever had — and zero is not the same answer as nothing here, because a background builtin has no process and a shell really can hold a recorded zero. Everything else about `$!` carries a pid and cannot be recorded
+  ```sh
+  echo "[$!]"
+  ```
+- `jobs/an-unstarted-last-background-pid-under-set-u` — the bigger split on the same parameter, and the one scripts rely on: `set -u` exists to stop exactly this read. bash stops with `$!: unbound variable` at 127 — the `$` written back, as it is for a positional — dash stops with `!: parameter not set` at 2, and ksh93 and zsh carry on, ksh93 with nothing and zsh with its zero. Two against two, and neither answer predicts the row above: zsh's zero is a value and ksh93's empty is a set parameter, so the two quiet columns are quiet for different reasons
+  ```sh
+  set -u; echo "[$!]"; echo "st=$?"
+  ```
+- `jobs/the-last-background-pid-under-set-u-once-a-job-has-run` — the control for the row above, and it is what says the refusal is about *nothing having been started* rather than about `$!`: with one job behind it the parameter is set in all six columns and `set -u` has nothing to say. Read into a variable and reported as a yes rather than printed, because the value is a pid and a pid is not the same twice
+  ```sh
+  set -u; sleep 0 & wait; x=$!; echo "st=$? set=[${x:+yes}]"
   ```
 - `jobs/a-disowned-job-is-not-in-the-listing` — `&|` starts a job in the background and lets go of it, so nothing lists it — one shell's, and the only shape of it a record can hold. The sibling spelling `&!` cannot be recorded at all: bash 5.3 and ksh93 read those two characters as `&` and the `!` that negates a pipeline, and what they then do with a bare `!` is a divergence of its own (#948), so a row about the disowning would carry four unrelated ones beside it. `&|` has no such second reading in bash or dash, which both refuse it outright. ksh93's cell is the exception and is not this change's: it parses `&|` and means something else again — `echo hi &| echo done` prints only `done` there. Counted rather than printed, because what a listing looks like is four other rows' question
   ```sh

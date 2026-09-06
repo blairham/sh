@@ -523,7 +523,7 @@ func Semantics() interp.Semantics {
 	// And it reads as nothing rather than as a zero: measured,
 	// `echo "[$!]"` writes `[]` in all three bash columns. Stated rather
 	// than left unanswered — the field is read without asking, so unanswered
-	// gives the same behaviour, but only a written answer says it was
+	// gives the same behavior, but only a written answer says it was
 	// measured.
 	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes

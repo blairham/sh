@@ -1064,6 +1064,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `print/a-lone-dash-ends-the-options` | **2>** `<shell>: 1: print: not found~<shell>: 1: print: not found` *(status 127)* | **2>** `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | **2>** `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | **2>** `<shell>: print: command not found~<shell>: print: command not found` *(status 127)* | `-n~-n` | `-n~-n` |
 | `print/f-is-printf` | `.` **2>** `<shell>: 1: print: not found` | `.` **2>** `<shell>: line 1: print: command not found` | `.` **2>** `<shell>: line 1: print: command not found` | `.` **2>** `<shell>: print: command not found` | `a\|b\|.` | `a\|b\|.` |
 | `print/the-coprocess-letter-with-nothing-there` | `st=127` **2>** `<shell>: 1: print: not found` | `st=127` **2>** `<shell>: line 1: print: command not found` | `st=127` **2>** `<shell>: line 1: print: command not found` | `st=127` **2>** `<shell>: print: command not found` | `st=1` **2>** `<shell>: print: no query process [Bad file descriptor]` | `st=1` **2>** `<shell>:print:1: -p: no coprocess` |
+| `print/l-and-n-are-the-separator-and-the-terminator` | `.` **2>** `<shell>: 1: print: not found~<shell>: 1: print: not found` | `.` **2>** `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` | `.` **2>** `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` | `.` **2>** `<shell>: print: command not found~<shell>: print: command not found` | `.` **2>** `<shell>: print: -l: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~<shell>: print: -l: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]` | `a~b~c~d.` |
+| `print/nul-separates-and-terminates` | **2>** `<shell>: 1: print: not found` | **2>** `<shell>: line 1: print: command not found` | **2>** `<shell>: line 1: print: command not found` | **2>** `<shell>: print: command not found` | **2>** `<shell>: print: -N: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]` | ` a \0 b \0 ` |
+| `print/the-escapes-this-builtin-has-beyond-echo-s` | **2>** `<shell>: 1: print: not found` | **2>** `<shell>: line 1: print: command not found` | **2>** `<shell>: line 1: print: command not found` | **2>** `<shell>: print: command not found` | ` \ 1 0 1 \ z x \ 1 \n ` | ` A z x 001 \n ` |
+| `print/capital-r-changes-the-option-parser` | **2>** `<shell>: 1: print: not found~<shell>: 1: print: not found` *(status 127)* | **2>** `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | **2>** `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | **2>** `<shell>: print: command not found~<shell>: print: command not found` *(status 127)* | `a b~-l c d` | `a~b~-l c d` |
+| `print/sorts-and-filters-its-operands` | **2>** `<shell>: 1: print: not found~<shell>: 1: print: not found~<shell>: 1: print: not found` *(status 127)* | **2>** `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | **2>** `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | **2>** `<shell>: print: command not found~<shell>: print: command not found~<shell>: print: command not found` *(status 127)* | **2>** `<shell>: print: -o: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~<shell>: print: -O: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~<shell>: print: -m: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]` *(status 2)* | `B C a~a C B~abc axy` |
+| `print/the-history-and-editor-letters-write-nowhere` | `s=127~z=127~S=127` **2>** `<shell>: 1: print: not found~<shell>: 1: print: not found~<shell>: 1: print: not found` | `s=127~z=127~S=127` **2>** `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` | `s=127~z=127~S=127` **2>** `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` | `s=127~z=127~S=127` **2>** `<shell>: print: command not found~<shell>: print: command not found~<shell>: print: command not found` | `s=0~z=2~S=2` **2>** `<shell>: print: -z: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]~<shell>: print: -S: unknown option~Usage: print [-enprsvC] [-f format] [-u fd] [string ...]` | `s=0~z=0~S=1` **2>** `<shell>:print:1: option -S takes a single argument` |
+| `print/e-is-echo-s-letter-in-only-one-of-them` | `st=127` **2>** `<shell>: 1: print: not found` | `st=127` **2>** `<shell>: line 1: print: command not found` | `st=127` **2>** `<shell>: line 1: print: command not found` | `st=127` **2>** `<shell>: print: command not found` | `a	b~st=0` | `st=1` **2>** `<shell>:print:1: bad option: -e` |
 | `caller/from-a-function-under-dash-c` | `st=127~st0=127` **2>** `<shell>: 1: caller: not found~<shell>: 1: caller: not found` | `1 NULL~st=0~st0=1` | `1 NULL~st=0~st0=1` | `st=1~st0=1` | `st=127~st0=127` **2>** `<shell>: caller: not found~<shell>: caller: not found` | `st=127~st0=127` **2>** `f: command not found: caller~f: command not found: caller` |
 | `caller/walks-a-script-s-stack` | `st=127` **2>** `<script>: 1: caller: not found~<script>: 1: caller: not found~<script>: 1: caller: not found~<script>: 1: caller: not found` | `2 <script>~2 g <script>~3 main <script>~st=1` | `2 <script>~2 g <script>~3 main <script>~st=1` | `2 <script>~2 g <script>~3 main <script>~st=1` | `st=127` **2>** `<script>: line 1: caller: not found~<script>: line 1: caller: not found~<script>: line 1: caller: not found~<script>: line 1: caller: not found` | `st=127` **2>** `f: command not found: caller~f: command not found: caller~f: command not found: caller~f: command not found: caller` |
 | `caller/refuses-what-is-not-a-depth` | `st=127` **2>** `<shell>: 1: caller: not found` | `st=2` **2>** `<shell>: line 1: caller: x: invalid number~caller: usage: caller [expr]` | `st=2` **2>** `<shell>: line 1: caller: x: invalid number~caller: usage: caller [expr]` | `st=1` | `st=127` **2>** `<shell>: caller: not found` | `st=127` **2>** `f: command not found: caller` |
@@ -1847,6 +1854,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `print/the-coprocess-letter-with-nothing-there` — -p writes to the coprocess, and with no |& in this grammar there is never one: ksh93's `no query process` at 1, the same shape read -p measured
   ```sh
   print -p x; echo "st=$?"
+  ```
+- `print/l-and-n-are-the-separator-and-the-terminator` — zsh's `-l` separates the operands with newlines and `-n` withholds the terminator, so the two compose rather than canceling: `c~d.` on one line after `a~b`. ksh93 has no `-l` at all and says so twice, which is the dialect boundary inside a builtin both shells have
+  ```sh
+  print -l a b; print -ln c d; echo .
+  ```
+- `print/nul-separates-and-terminates` — `-N` is zsh's alone and moves *both* settings: a NUL between the operands and a NUL after the last one, which is what makes `print -N` the writing half of `read -d ''`
+  ```sh
+  print -N a b | od -An -c | tr -s " "
+  ```
+- `print/the-escapes-this-builtin-has-beyond-echo-s` — the three ways zsh's print outruns its own echo and ksh93's print alike: a bare octal escape with no leading zero, an escape nobody knows losing its backslash rather than keeping it, and `\1` as one byte. ksh93 prints all three as written
+  ```sh
+  print '\101\zx\1' | od -An -c | tr -s " "
+  ```
+- `print/capital-r-changes-the-option-parser` — `-R` is raw in both shells and stops reading options in neither the same way: zsh reads the rest of the bundle as its own letters, so `-Rl` still lists one per line, while a later `-l` word is an operand. ksh93 reads no more letters at all and prints `a b`
+  ```sh
+  print -Rl a b; print -R -l c d
+  ```
+- `print/sorts-and-filters-its-operands` — zsh's operand-list letters, none of which ksh93 has: `-o` sorts, `-O` sorts backwards, and `-m` reads the first operand as a pattern and keeps only the operands it matches. The order is byte order, which is what LC_ALL=C gets
+  ```sh
+  print -o B a C; print -O B a C; print -m 'a*' abc bcd axy
+  ```
+- `print/the-history-and-editor-letters-write-nowhere` — `-s` and `-z` aim at a history and a line editor a non-interactive shell has not got: the operands are consumed and the answer is 0 in both shells for `-s`, while `-z` and `-S` are zsh's alone and `-S` refuses more than one operand
+  ```sh
+  print -s a b; echo "s=$?"; print -z c; echo "z=$?"; print -S x y; echo "S=$?"
+  ```
+- `print/e-is-echo-s-letter-in-only-one-of-them` — ksh93's `-e` puts escape expansion back after a `-r`, and zsh — whose print expands by default and spells the same idea only inside `-R` — calls the letter a bad option at 1. The sharpest place the two builtins under one spelling disagree
+  ```sh
+  print -e 'a\tb'; echo "st=$?"
   ```
 - `caller/from-a-function-under-dash-c` — bash's question about who called: under -c there is no script frame, so bare caller prints the call line and NULL at 0, and caller 0 — which needs a frame above — is silence at 1. The other three have no caller at all
   ```sh

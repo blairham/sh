@@ -6877,6 +6877,41 @@ exit 7`,
 		Why:     "-p writes to the coprocess, and with no |& in this grammar there is never one: ksh93's `no query process` at 1, the same shape read -p measured",
 	},
 	{
+		ID: "print/l-and-n-are-the-separator-and-the-terminator", Category: "builtins",
+		Snippet: `print -l a b; print -ln c d; echo .`,
+		Why:     "zsh's `-l` separates the operands with newlines and `-n` withholds the terminator, so the two compose rather than canceling: `c~d.` on one line after `a~b`. ksh93 has no `-l` at all and says so twice, which is the dialect boundary inside a builtin both shells have",
+	},
+	{
+		ID: "print/nul-separates-and-terminates", Category: "builtins",
+		Snippet: `print -N a b | od -An -c | tr -s " "`,
+		Why:     "`-N` is zsh's alone and moves *both* settings: a NUL between the operands and a NUL after the last one, which is what makes `print -N` the writing half of `read -d ''`",
+	},
+	{
+		ID: "print/the-escapes-this-builtin-has-beyond-echo-s", Category: "builtins",
+		Snippet: `print '\101\zx\1' | od -An -c | tr -s " "`,
+		Why:     "the three ways zsh's print outruns its own echo and ksh93's print alike: a bare octal escape with no leading zero, an escape nobody knows losing its backslash rather than keeping it, and `\\1` as one byte. ksh93 prints all three as written",
+	},
+	{
+		ID: "print/capital-r-changes-the-option-parser", Category: "builtins",
+		Snippet: `print -Rl a b; print -R -l c d`,
+		Why:     "`-R` is raw in both shells and stops reading options in neither the same way: zsh reads the rest of the bundle as its own letters, so `-Rl` still lists one per line, while a later `-l` word is an operand. ksh93 reads no more letters at all and prints `a b`",
+	},
+	{
+		ID: "print/sorts-and-filters-its-operands", Category: "builtins",
+		Snippet: `print -o B a C; print -O B a C; print -m 'a*' abc bcd axy`,
+		Why:     "zsh's operand-list letters, none of which ksh93 has: `-o` sorts, `-O` sorts backwards, and `-m` reads the first operand as a pattern and keeps only the operands it matches. The order is byte order, which is what LC_ALL=C gets",
+	},
+	{
+		ID: "print/the-history-and-editor-letters-write-nowhere", Category: "builtins",
+		Snippet: `print -s a b; echo "s=$?"; print -z c; echo "z=$?"; print -S x y; echo "S=$?"`,
+		Why:     "`-s` and `-z` aim at a history and a line editor a non-interactive shell has not got: the operands are consumed and the answer is 0 in both shells for `-s`, while `-z` and `-S` are zsh's alone and `-S` refuses more than one operand",
+	},
+	{
+		ID: "print/e-is-echo-s-letter-in-only-one-of-them", Category: "builtins",
+		Snippet: `print -e 'a\tb'; echo "st=$?"`,
+		Why:     "ksh93's `-e` puts escape expansion back after a `-r`, and zsh — whose print expands by default and spells the same idea only inside `-R` — calls the letter a bad option at 1. The sharpest place the two builtins under one spelling disagree",
+	},
+	{
 		ID: "caller/from-a-function-under-dash-c", Category: "builtins",
 		Snippet: `f() { caller; echo "st=$?"; caller 0; echo "st0=$?"; }; f`,
 		Why:     "bash's question about who called: under -c there is no script frame, so bare caller prints the call line and NULL at 0, and caller 0 — which needs a frame above — is silence at 1. The other three have no caller at all",

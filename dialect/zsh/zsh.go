@@ -873,6 +873,10 @@ func Apply(r *interp.Runner) {
 	// And the line editor's key table, which a real rc file also reaches for.
 	// See bindkey.go.
 	registerBindkey(r)
+	// This shell's richer `echo`, and not ksh93's builtin of the same
+	// spelling: different letters, a different escape set and different
+	// wordings, all measured side by side. See print.go.
+	registerPrint(r)
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
 	r.Unregister("complete")

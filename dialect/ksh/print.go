@@ -31,7 +31,11 @@ import (
 //     next word; a number nothing writable is open at — or a word that is no
 //     number at all — is `bad file unit number [Bad file descriptor]`, 1.
 //   - `--` ends the options, and so does a lone `-`: `print - -n` prints the
-//     word.
+//     word. Neither of them does after `-R`, where both print as words.
+//   - `-R` is `-r` plus the end of this shell's option parsing: the rest of
+//     its own bundle goes unread, and of the words after it only a bare `-n`
+//     is still an option — `print -R -e a` writes `-e a`, where zsh's `-R`
+//     would read the `-e` and put escape expansion back.
 //   - `-s` sends the operands to the history file. Non-interactive ksh93
 //     answers 0 and shows nothing, and with no history here that whole
 //     behavior is the reachable one: the operands are consumed, nothing is
@@ -100,7 +104,8 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 // anything else is the answer, already reported.
 func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest []string, code int) {
 	rest = args
-	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") && rest[0] != "-" && rest[0] != "--" {
+	echoMode := false
+	for !echoMode && len(rest) > 0 && strings.HasPrefix(rest[0], "-") && rest[0] != "-" && rest[0] != "--" {
 		word := rest[0][1:]
 		rest = rest[1:]
 		for i := 0; i < len(word); i++ {
@@ -109,6 +114,21 @@ func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest
 				opts.raw = false
 			case 'r':
 				opts.raw = true
+			case 'R':
+				// `-R` is raw *and* the end of this shell's own option
+				// parsing: the rest of the bundle is not read at all —
+				// `print -Rf %s a` prints `%s a` — and of the words after
+				// it only a bare `-n` is an option. Measured; the letter is
+				// not zsh's `-R`, which keeps reading `-e` and `-n` from
+				// every later word and ends on a lone `-`.
+				opts.raw, echoMode = true, true
+				// Of the rest of this bundle only `n` still counts:
+				// `print -Rn a` withholds the newline and `print -Rf %s a`
+				// writes `%s a` rather than reading a format.
+				if strings.ContainsRune(word[i+1:], 'n') {
+					opts.newline = false
+				}
+				i = len(word)
 			case 'n':
 				opts.newline = false
 			case 's':
@@ -146,6 +166,15 @@ func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest
 				return nil, 2
 			}
 		}
+	}
+	if echoMode {
+		// Neither `-` nor `--` ends the options here — both print as words —
+		// and one `-n` is read, so `print -R -n -n a` writes `-n a`.
+		if len(rest) > 0 && rest[0] == "-n" {
+			opts.newline = false
+			rest = rest[1:]
+		}
+		return rest, -1
 	}
 	if len(rest) > 0 && (rest[0] == "-" || rest[0] == "--") {
 		rest = rest[1:]

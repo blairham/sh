@@ -27923,6 +27923,94 @@
         "TimedOut": false
       }
     },
+    "heredoc/a-substitution-that-is-not-a-dollar-sign": {
+      "bash": {
+        "Stdout": "a~done",
+        "Stderr": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a~done",
+        "Stderr": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:6: parse error near `\u003c(cat \u003c\u003cEOF'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/a-substitutions-delimiter-is-remarked-on-before-it-runs": {
+      "bash": {
+        "Stdout": "done",
+        "Stderr": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "done",
+        "Stderr": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 6: Syntax error: end of file unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:6: parse error near `v=$(cat \u003c\u003cEOF'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "heredoc/an-unquoted-body-expands": {
       "bash": {
         "Stdout": "VAL VAL sub 3",

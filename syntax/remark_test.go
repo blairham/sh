@@ -91,3 +91,107 @@ func TestEachHereDocumentGetsItsOwn(t *testing.T) {
 		t.Errorf("tokens %q and %q, want A and B in order", rs[0].Token, rs[1].Token)
 	}
 }
+
+// TestARemarkFromInsideACommandSubstitutionSurvives is #785.
+//
+// A command substitution's contents are read by a parser of its own, and what
+// that read had to say was dropped with it: `v=$(cat <<EOF` … `EOF)` runs, `v`
+// is `a`, and the one thing a parser accepts and remarks on went nowhere.
+//
+// The two lines are the point. The here-document's input is the substitution's
+// own text, closing parenthesis included — so `EOF)` is a body line, the input
+// runs out at the substitution's last line, and both are lines of the
+// *program* rather than of the fragment.
+func TestARemarkFromInsideACommandSubstitutionSurvives(t *testing.T) {
+	rs := remarksOf(t, "v=$(cat <<EOF\na\nEOF)\necho \"v=[$v]\"\n")
+	if len(rs) != 1 {
+		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
+	}
+	if rs[0].At.Line != 1 {
+		t.Errorf("At.Line = %d, want 1 — the line the here-document began on", rs[0].At.Line)
+	}
+	if rs[0].Pos.Line != 3 {
+		t.Errorf("Pos.Line = %d, want 3 — the substitution's last line, not the script's", rs[0].Pos.Line)
+	}
+	if rs[0].Token != "EOF" {
+		t.Errorf("Token = %q, want EOF", rs[0].Token)
+	}
+}
+
+// TestTheLinesAreTheProgramsWhereverTheSubstitutionBegins: the fragment is
+// numbered from where it starts, so a substitution further down the file
+// reports the file's lines and not the fragment's.
+func TestTheLinesAreTheProgramsWhereverTheSubstitutionBegins(t *testing.T) {
+	rs := remarksOf(t, "echo before\nv=$(cat <<EOF\na\nEOF)\necho after\n")
+	if len(rs) != 1 {
+		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
+	}
+	if rs[0].At.Line != 2 || rs[0].Pos.Line != 4 {
+		t.Errorf("lines %d and %d, want 4 and 2", rs[0].Pos.Line, rs[0].At.Line)
+	}
+}
+
+// TestASubstitutionWhoseDelimiterArrivesSaysNothing is the control, and it is
+// the one that keeps this from being "every substitution is read twice and
+// remarked on": with the delimiter on a line of its own the substitution reads
+// cleanly the first time and there is nothing to say.
+func TestASubstitutionWhoseDelimiterArrivesSaysNothing(t *testing.T) {
+	if rs := remarksOf(t, "v=$(cat <<EOF\na\nEOF\n)\necho ok\n"); len(rs) != 0 {
+		t.Errorf("got %+v, want nothing said", rs)
+	}
+}
+
+// TestEachSubstitutionIsRemarkedOnOnce, so a script with two of them says two
+// things rather than one or four.
+func TestEachSubstitutionIsRemarkedOnOnce(t *testing.T) {
+	rs := remarksOf(t, "v=$(cat <<EOF\na\nEOF)\nw=$(cat <<XX\nb\nXX)\necho ok\n")
+	if len(rs) != 2 {
+		t.Fatalf("got %d remarks, want 2: %+v", len(rs), rs)
+	}
+	if rs[0].Token != "EOF" || rs[1].Token != "XX" {
+		t.Errorf("tokens %q and %q, want EOF and XX in order", rs[0].Token, rs[1].Token)
+	}
+	if rs[0].At.Line != 1 || rs[1].At.Line != 4 {
+		t.Errorf("At lines %d and %d, want 1 and 4", rs[0].At.Line, rs[1].At.Line)
+	}
+}
+
+// TestAProcessSubstitutionIsReadTheSameWay: the parentheses hold a program
+// there too, and bash remarks on `<(cat <<EOF` … `EOF)` exactly as it does on
+// the `$( )` form. Measured; without it the fix would have been about one
+// spelling rather than about what is inside.
+func TestAProcessSubstitutionIsReadTheSameWay(t *testing.T) {
+	d := syntax.Core()
+	d.ProcessSubstitution = true
+	p := syntax.NewParser("cat <(cat <<EOF\na\nEOF)\necho done\n", d)
+	p.Parse()
+	rs := p.Remarks()
+	if len(rs) != 1 {
+		t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
+	}
+	if rs[0].At.Line != 1 || rs[0].Pos.Line != 3 || rs[0].Token != "EOF" {
+		t.Errorf("remark = %+v, want EOF opened at line 1 and run out at line 3", rs[0])
+	}
+}
+
+// TestAnArithmeticSubstitutionIsNotAProgram is the other side of that line,
+// and it is the reason the line exists at all: `<<` is a **left shift** there.
+// Read as a program it is a here-document whose delimiter never arrives, and
+// the shell would warn about a script that has none.
+//
+// The shift is written across lines, and that is the whole of the case rather
+// than layout. A here-document's body is read at the newline that ends the
+// command, so a one-line `$(( 4 << 2 ))` never reaches the read and passes
+// whichever answer the code gives — which is exactly what it did while this
+// was written on one line, and what a mutation of the rule showed.
+func TestAnArithmeticSubstitutionIsNotAProgram(t *testing.T) {
+	for _, src := range []string{
+		"echo $(( 4 << 2 ))\necho $((a<<b))\n",
+		"echo $((\n4 << 2\n))\n",
+		"x=5\necho $(( x <<\n2 ))\n",
+	} {
+		if rs := remarksOf(t, src); len(rs) != 0 {
+			t.Errorf("%q: got %+v, want nothing said about a shift", src, rs)
+		}
+	}
+}

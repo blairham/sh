@@ -5202,6 +5202,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `heredoc/a-body-that-runs-to-the-end` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` |
 | `heredoc/the-delimiter-is-the-whole-line` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` |
 | `heredoc/a-delimiter-that-closes-a-command-substitution` | **2>** `<script>: 6: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `v=[a] st=0` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `v=[a] st=0` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `v=[a] st=0` | `v=[a] st=0` | **2>** `<script>:6: parse error near `v=$(cat <<EOF'` *(status 1)* |
+| `heredoc/a-substitutions-delimiter-is-remarked-on-before-it-runs` | **2>** `<script>: 6: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `done` | `done` | **2>** `<script>:6: parse error near `v=$(cat <<EOF'` *(status 1)* |
+| `heredoc/a-substitution-that-is-not-a-dollar-sign` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `a~done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `a~done` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `a~done` | `a~done` | **2>** `<script>:6: parse error near `<(cat <<EOF'` *(status 1)* |
 | `heredoc/a-delimiter-that-never-matches` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` |
 | `redir/open-failure-wording` | `st=2` **2>** `<shell>: 1: cannot open nosuchfile: No such file` | `st=1` **2>** `<shell>: line 1: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: line 1: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: nosuchfile: cannot open [No such file or directory]` | `st=1` **2>** `<shell>:1: no such file or directory: nosuchfile` |
 | `redir/failure-line-when-the-redirect-is-elsewhere` | `one~st=2` **2>** `<shell>: 2: cannot open nosuchfile: No such file` | `one~st=1` **2>** `<shell>: line 5: nosuchfile: No such file or directory` | `one~st=1` **2>** `<shell>: line 5: nosuchfile: No such file or directory` | `one~st=1` **2>** `<shell>: line 4: nosuchfile: No such file or directory` | `one~st=1` **2>** `<shell>: line 4: nosuchfile: cannot open [No such file or directory]` | `one~st=1` **2>** `<shell>:2: no such file or directory: nosuchfile` |
@@ -5335,6 +5337,20 @@ grades it and nothing drift-checks it either, for the same reason.
   a
   EOF)
   echo "v=[$v] st=$?"
+  ```
+- `heredoc/a-substitutions-delimiter-is-remarked-on-before-it-runs` — the remark about the same shape is a fact about *reading* rather than about running: the substitution is on the right of a `&&` that never reaches it, and the one shell that says anything still says it. Which is what makes it the parser's to produce and not the interpreter's
+  ```sh
+  false && v=$(cat <<EOF
+  a
+  EOF)
+  echo done
+  ```
+- `heredoc/a-substitution-that-is-not-a-dollar-sign` — the same shape spelled the other way. What decides the remark is that the parentheses hold a *program*, not which sigil opened them — bash 5.3 says the same thing here as for `$( )`, bash 3.2 and ksh93 stay silent as they do there, and the two that have no process substitution refuse the line outright. The counter-case is arithmetic: `$(( a << b ))` is a shift and reading it as a program would invent a here-document
+  ```sh
+  cat <(cat <<EOF
+  a
+  EOF)
+  echo done
   ```
 - `heredoc/a-delimiter-that-never-matches` — the terminator has a leading space, so it is not the delimiter and the body runs to the end of the input. Every shell takes it and runs the command — this made it a syntax error. Standard error is still discarded here, and the reason changed: the warning about it is now produced, but this body is inside a backquoted substitution, which the one shell that warns re-parses while carrying its line counter on from the outer input — so a three-line script is remarked on at line 5. The two cases above pin the warning where the lines are the file's own
   ```sh

@@ -4435,6 +4435,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `let/with-nothing-to-evaluate` | `st=127` **2>** `<shell>: 1: let: not found` | `st=1` **2>** `<shell>: line 1: let: expression expected` | `st=1` **2>** `<shell>: line 1: let: expression expected` | `st=1` **2>** `<shell>: line 0: let: expression expected` | `st=2` **2>** `Usage: let [ options ] [expr ...]` | `st=1` **2>** `<shell>:let:1: not enough arguments` |
 | `arith/a-command-expression-may-open-with-a-paren` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `arith/two-parens-at-command-position-are-not-a-subshell` | `hi~st=0` | `st=1` **2>** `<shell>: line 1: ((: echo hi: arithmetic syntax error in expression (error token is "hi")` | `st=1` **2>** `<shell>: line 1: ((: echo hi: arithmetic syntax error in expression (error token is "hi")` | `st=1` **2>** `<shell>: ((: echo hi: syntax error in expression (error token is "hi")` | **2>** `<shell>: echo hi: arithmetic syntax error` *(status 1)* | `st=2` **2>** `<shell>:1: bad math expression: operator expected at `hi'` |
+| `arith/a-command-in-a-branch-that-never-runs` | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` |
+| `arith/a-substitution-in-a-branch-that-never-runs` | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` |
+| `arith/a-for-header-in-a-branch-that-never-runs` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` | `reached st=1` |
+| `arith/a-substitution-that-will-not-read-is-fatal` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "echo hi"` *(status 2)* | **2>** `<shell>: line 1: echo hi: arithmetic syntax error in expression (error token is "hi")` *(status 1)* | **2>** `<shell>: line 1: echo hi: arithmetic syntax error in expression (error token is "hi")` *(status 127)* | **2>** `<shell>: echo hi: syntax error in expression (error token is "hi")` *(status 1)* | **2>** `<shell>: echo hi: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `hi'` *(status 1)* |
 | `arith/bare-name-is-a-variable` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` |
 | `arith/unset-is-zero` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
 | `arith/precedence-follows-c` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` |
@@ -4530,9 +4534,25 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   (( (1+2)*3 == 9 )); echo "st=$?"
   ```
-- `arith/two-parens-at-command-position-are-not-a-subshell` — outside a condition the distinction really is textual: with no space the three shells that have (( )) read an arithmetic command and fail on `echo`, while dash runs the nested subshell and prints hi. Marked a syntax error because *we* refuse it while reading, where all three refuse it while running — `bash -n` takes the file and `false && ((echo hi))` reaches the echo after it in every one of them
+- `arith/two-parens-at-command-position-are-not-a-subshell` — outside a condition the distinction really is textual: with no space the three shells that have (( )) read an arithmetic command and fail on `echo`, while dash runs the nested subshell and prints hi. It is not a syntax error in any of them — the expression is read when the command runs, so the failing one is a failed command and the script goes on to print its status (#865)
   ```sh
   ((echo hi)); echo "st=$?"
+  ```
+- `arith/a-command-in-a-branch-that-never-runs` — the consequence of *when* the expression is read, rather than of when a message arrives: on the right of a `&&` that never reaches it, so nothing ever reads it. All six print `reached st=1` — including dash, whose two subshells are equally unreached — which is what makes reading it while reading the file a program taken down for a command it was never going to run (#865)
+  ```sh
+  false && ((echo hi)); echo "reached st=$?"
+  ```
+- `arith/a-substitution-in-a-branch-that-never-runs` — the same, through the spelling dash has as well — so the row is unanimous for one reason rather than for two. `$(( ))` is in every shell in the panel and none of them reads the expression before the command that carries it runs
+  ```sh
+  false && echo "$((echo hi))"; echo "reached st=$?"
+  ```
+- `arith/a-for-header-in-a-branch-that-never-runs` — the third construct that carries an expression, and it defers too: bash, bash 3.2, ksh93 and zsh all print `reached st=1`. dash has no C-style `for` and refuses the line where the `(` is, which is the same answer it gives for the construct anywhere
+  ```sh
+  false && for ((echo hi;;)); do :; done; echo "reached st=$?"
+  ```
+- `arith/a-substitution-that-will-not-read-is-fatal` — and when it is reached, the two spellings part on how far the damage goes: a failed *expansion* ends the script in bash, ksh93 and zsh alike, so the line after it never runs, where the row above's failed arithmetic *command* is one failed command and the script carries on. dash reports its own wording and stops at 2
+  ```sh
+  echo "$((echo hi))"; echo "reached st=$?"
   ```
 - `arith/bare-name-is-a-variable` — a bare name inside arithmetic is a variable reference, which is why the contents cannot be lexed as ordinary words
   ```sh

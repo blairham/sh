@@ -151,8 +151,14 @@ func TestArithIntegerOperatorRefusesFloatIsAnAxis(t *testing.T) {
 // Without the grammar there are no floats at all, and the same text is a bad
 // operand rather than a number. One question, asked where each half needs it.
 func TestWithoutTheGrammarThereAreNoFloats(t *testing.T) {
-	if _, err := syntax.Parse(`echo $((1.5))`, syntax.Core()); err == nil {
-		t.Error("a float literal should not parse where the dialect has none")
+	// The flag gates the *expression*, read where the interpreter reads it:
+	// no shell in the panel refuses a file for an expression it cannot read
+	// (#865), and bash reports `1.5` when the command runs.
+	if err := arithErr(`1.5`, syntax.Core()); err == nil {
+		t.Error("a float literal should not be read where the dialect has none")
+	}
+	if _, err := syntax.Parse(`echo $((1.5))`, syntax.Core()); err != nil {
+		t.Errorf("the file should read whatever the expression turns out to be: %v", err)
 	}
 	// And a float arriving in a variable is refused at evaluation, which is
 	// the half the parser cannot answer.

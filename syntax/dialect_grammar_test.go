@@ -22,6 +22,37 @@ func mustParse(t *testing.T, src string, d Dialect, why string) {
 	}
 }
 
+// mustReadArith and mustRefuseArith are mustParse and mustFail for the inside
+// of `$(( ))`, asked where a shell asks it.
+//
+// Reading a file no longer refuses it for an expression it cannot read
+// (#865), so a grammar flag that gates something *inside* an expression no
+// longer gates the file: it gates the read the interpreter does when the
+// command runs, through the same entry point. The cases below assert both —
+// that the file reads either way, and that the expression is answered by the
+// flag.
+func mustReadArith(t *testing.T, expr string, d Dialect, why string) {
+	t.Helper()
+	if err := arithErr(expr, d); err != nil {
+		t.Errorf("%s: $((%s)): %v", why, expr, err)
+	}
+}
+
+func mustRefuseArith(t *testing.T, expr string, d Dialect, why string) {
+	t.Helper()
+	if err := arithErr(expr, d); err == nil {
+		t.Errorf("%s: $((%s)) was read, want a refusal", why, expr)
+	}
+}
+
+// arithErr reads one expression as this dialect and returns what the read had
+// to say, which is nil where it read cleanly.
+func arithErr(expr string, d Dialect) error {
+	p := NewParser("", d)
+	p.ParseArithFor(expr, Pos{})
+	return p.Err()
+}
+
 // TestParenAfterAWordIsASyntaxError covers a rule four of the five agree on,
 // so the refusal is what the core does. Without it `[[ ( -n x ) ]]` in a
 // dialect without `[[` ran as an ordinary command with surprising arguments
@@ -228,23 +259,27 @@ func TestABraceGroupNamesTheWordItStoppedOn(t *testing.T) {
 func TestArithFloatIsAGrammarFlag(t *testing.T) {
 	float := Core()
 	float.ArithFloat = true
-	for _, src := range []string{`echo $((1.5))`, `echo $((.5))`, `echo $((1.5e2))`, `echo $((3.0/2))`} {
-		mustParse(t, src, float, "a float literal where the dialect has them")
-		mustFail(t, src, Core(), "a float literal where it does not")
+	for _, expr := range []string{`1.5`, `.5`, `1.5e2`, `3.0/2`} {
+		mustReadArith(t, expr, float, "a float literal where the dialect has them")
+		mustRefuseArith(t, expr, Core(), "a float literal where it does not")
+		// And the file reads either way, which is what the flag stopped
+		// deciding: no shell in the panel refuses a program for an
+		// expression it cannot read.
+		mustParse(t, "echo $(("+expr+"))", Core(), "the file, whatever the expression turns out to be")
 	}
 	// `1e-3` is the exception, and it is why the corpus case for exponents is
 	// written with a point. It parses either way: the digit reader accepts
 	// `e` as a hex digit, so without floats the text is `1e` minus `3` — a
 	// perfectly good expression whose left operand is not a number, which
 	// fails when it is evaluated rather than when it is read.
-	mustParse(t, `echo $((1e-3))`, float, "an exponent where the dialect has floats")
-	mustParse(t, `echo $((1e-3))`, Core(), "the same text read as a subtraction")
+	mustReadArith(t, `1e-3`, float, "an exponent where the dialect has floats")
+	mustReadArith(t, `1e-3`, Core(), "the same text read as a subtraction")
 	// Integers parse either way, and a based literal is an integer whose
 	// digits may include an `e` — reading `0x1e` as an exponent would make it
 	// a different number.
-	for _, src := range []string{`echo $((3/2))`, `echo $((0x1e))`, `echo $((16#ff))`} {
-		mustParse(t, src, float, "an integer where the dialect has floats")
-		mustParse(t, src, Core(), "an integer where it does not")
+	for _, expr := range []string{`3/2`, `0x1e`, `16#ff`} {
+		mustReadArith(t, expr, float, "an integer where the dialect has floats")
+		mustReadArith(t, expr, Core(), "an integer where it does not")
 	}
 }
 
@@ -258,18 +293,18 @@ func TestLeftoverTextIsBlamedForWhatItCouldHaveBeen(t *testing.T) {
 		kind ErrorKind
 	}{
 		// An operand standing where an operator belonged.
-		{`echo $((1 2))`, ErrArithOperator},
-		{`echo $((1 x))`, ErrArithOperator},
+		{`1 2`, ErrArithOperator},
+		{`1 x`, ErrArithOperator},
 		// Text that could be neither.
-		{`echo $((1 @))`, ErrArithBadOperator},
-		{`echo $((1.5))`, ErrArithBadOperator},
+		{`1 @`, ErrArithBadOperator},
+		{`1.5`, ErrArithBadOperator},
 		// Nothing at all where a value belonged, which is a third thing —
 		// and a fourth, since a value wanted with text still to read is not
 		// the same failure as one wanted with the text exhausted.
-		{`echo $((.5))`, ErrArithOperand},
-		{`echo $((1 +))`, ErrArithOperandEnd},
+		{`.5`, ErrArithOperand},
+		{`1 +`, ErrArithOperandEnd},
 	} {
-		_, err := Parse(tc.src, Core())
+		err := arithErr(tc.src, Core())
 		var se *Error
 		if !errors.As(err, &se) {
 			t.Fatalf("%s: got %v, want a syntax error", tc.src, err)
@@ -406,9 +441,10 @@ func TestQuantifiedGroupsMayBeConditionOnly(t *testing.T) {
 // one question, asked in the two places that need it — `${a[i]}` and inside an
 // expression. A dialect with no arrays has neither.
 func TestAnArithmeticSubscriptNeedsTheSameFlag(t *testing.T) {
-	for _, src := range []string{`echo $(( a[0] ))`, `echo $(( a[i+1] ))`, `echo $(( a[0] = 1 ))`} {
-		mustParse(t, src, Core(), "a subscript where the dialect has them")
-		mustFail(t, src, POSIX(), "a subscript where it does not")
+	for _, expr := range []string{` a[0] `, ` a[i+1] `, ` a[0] = 1 `} {
+		mustReadArith(t, expr, Core(), "a subscript where the dialect has them")
+		mustRefuseArith(t, expr, POSIX(), "a subscript where it does not")
+		mustParse(t, "echo $(("+expr+"))", POSIX(), "the file, whatever the expression turns out to be")
 	}
 	// `(( … ))` is not the way to show it: a dialect without the arithmetic
 	// command reads that as two nested subshells running a command called
@@ -416,5 +452,5 @@ func TestAnArithmeticSubscriptNeedsTheSameFlag(t *testing.T) {
 	mustParse(t, `(( a[0] = 1 ))`, POSIX(), "nested subshells")
 	// Without the brackets it parses either way, which is what makes the
 	// flag about subscripts rather than about arithmetic.
-	mustParse(t, `echo $(( a ))`, POSIX(), "a plain name")
+	mustReadArith(t, ` a `, POSIX(), "a plain name")
 }

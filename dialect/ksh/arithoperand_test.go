@@ -6,21 +6,22 @@ package ksh_test
 import (
 	"strings"
 	"testing"
-
-	"github.com/blairham/sh/dialect/ksh"
-	"github.com/blairham/sh/syntax"
 )
 
-// arithSentence is what this dialect says about an expression it refused. The
-// refusal is found while parsing, so there is no run to observe it from.
-func arithSentence(t *testing.T, expr string) string {
+// arithLoc is what this shell writes in front of a complaint about an
+// expression, and arithLine is the whole line it writes.
+//
+// Observed from a run. It used to be observed from a parse, because the
+// expression was read as part of reading the file — which no shell in the
+// panel does: the complaint comes when the command runs (#865). The cases
+// below are about the sentence, and the location is asserted with it rather
+// than trimmed off, so a complaint that moved would be caught here too.
+const arithLoc = "sh: "
+
+func arithLine(t *testing.T, expr string) string {
 	t.Helper()
-	_, err := syntax.Parse(`echo "$((`+expr+`))"`, ksh.Dialect())
-	if err == nil {
-		t.Fatalf("$((%s)) parsed, want a failure", expr)
-	}
-	d := ksh.Diagnostics()
-	return d.ParseFailure(err)
+	out, _ := answersRun(t, `echo "$((`+expr+`))"`)
+	return out
 }
 
 // This shell words a missing operand two ways, and which one it says turns on
@@ -35,8 +36,8 @@ func TestAMissingOperandIsWordedTwoWays(t *testing.T) {
 		{"@", "@: arithmetic syntax error"},
 		{"1+&2", "1+&2: arithmetic syntax error"},
 	} {
-		if got := arithSentence(t, tc.src); got != tc.want {
-			t.Errorf("$((%s)): got %q, want %q", tc.src, got, tc.want)
+		if got := arithLine(t, tc.src); got != arithLoc+tc.want+"\n" {
+			t.Errorf("$((%s)): got %q, want %q", tc.src, got, arithLoc+tc.want+"\n")
 		}
 	}
 }

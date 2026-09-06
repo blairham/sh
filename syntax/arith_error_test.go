@@ -10,6 +10,15 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
+// arithErr reads one expression as this dialect and returns what the read had
+// to say — the route the interpreter takes when the command runs, which is
+// the only place a bad expression is refused now (#865).
+func arithErr(expr string, d syntax.Dialect) error {
+	p := syntax.NewParser("", d)
+	p.ParseArithFor(expr, syntax.Pos{})
+	return p.Err()
+}
+
 // A failure inside `$(( ))` is an arithmetic failure and not a syntax error.
 //
 // Every shell in the panel reports it the way it reports a division by zero —
@@ -23,13 +32,13 @@ func TestArithmeticFailureIsItsOwnKind(t *testing.T) {
 		expr  string
 		token string
 	}{
-		{`$((1 2))`, syntax.ErrArithOperator, "1 2", "2"},
-		{`$((a b))`, syntax.ErrArithOperator, "a b", "b"},
-		{`$((1+))`, syntax.ErrArithOperandEnd, "1+", "+"},
-		{`$((1*))`, syntax.ErrArithOperandEnd, "1*", "*"},
+		{`1 2`, syntax.ErrArithOperator, "1 2", "2"},
+		{`a b`, syntax.ErrArithOperator, "a b", "b"},
+		{`1+`, syntax.ErrArithOperandEnd, "1+", "+"},
+		{`1*`, syntax.ErrArithOperandEnd, "1*", "*"},
 	} {
 		t.Run(tc.src, func(t *testing.T) {
-			_, err := syntax.Parse("echo "+tc.src, syntax.Core())
+			err := arithErr(tc.src, syntax.Core())
 			var se *syntax.Error
 			if !errors.As(err, &se) {
 				t.Fatalf("got %v, want a *syntax.Error", err)
@@ -62,19 +71,19 @@ func TestAnOperandMissingIsTwoKinds(t *testing.T) {
 		kind  syntax.ErrorKind
 		token string
 	}{
-		{`$((1+))`, syntax.ErrArithOperandEnd, "+"},
-		{`$((~))`, syntax.ErrArithOperandEnd, "~"},
-		{`$((!))`, syntax.ErrArithOperandEnd, "!"},
-		{`$((1**))`, syntax.ErrArithOperandEnd, "**"},
-		{`$((a=))`, syntax.ErrArithOperandEnd, "="},
-		{`$((%))`, syntax.ErrArithOperand, "%"},
-		{`$((@))`, syntax.ErrArithOperand, "@"},
-		{`$((1+&2))`, syntax.ErrArithOperand, "&2"},
-		{`$((()))`, syntax.ErrArithOperand, ")"},
-		{`$((1+*))`, syntax.ErrArithOperand, "*"},
+		{`1+`, syntax.ErrArithOperandEnd, "+"},
+		{`~`, syntax.ErrArithOperandEnd, "~"},
+		{`!`, syntax.ErrArithOperandEnd, "!"},
+		{`1**`, syntax.ErrArithOperandEnd, "**"},
+		{`a=`, syntax.ErrArithOperandEnd, "="},
+		{`%`, syntax.ErrArithOperand, "%"},
+		{`@`, syntax.ErrArithOperand, "@"},
+		{`1+&2`, syntax.ErrArithOperand, "&2"},
+		{`()`, syntax.ErrArithOperand, ")"},
+		{`1+*`, syntax.ErrArithOperand, "*"},
 	} {
 		t.Run(tc.src, func(t *testing.T) {
-			_, err := syntax.Parse("echo "+tc.src, syntax.Core())
+			err := arithErr(tc.src, syntax.Core())
 			var se *syntax.Error
 			if !errors.As(err, &se) {
 				t.Fatalf("got %v, want a *syntax.Error", err)

@@ -86,13 +86,13 @@ import (
 // with the measured wording and status.
 
 // printLetters are the option letters implemented here.
-const printLetters = "rRnlNmoOiszSpuf"
+const printLetters = "rRnlNmoOiszSpufP"
 
 // printUnimplemented are the letters zsh's print has that this one does not:
 // the column layouts (`-a`, `-c`, `-C`), the bindkey-style escapes (`-b`), the
 // `~`-abbreviating one (`-D`), prompt expansion (`-P`), assignment to a
 // parameter (`-v`) and the tab-expanding pair (`-x`, `-X`).
-const printUnimplemented = "acCbDPvxX"
+const printUnimplemented = "acCbDvxX"
 
 // registerPrint installs the builtin.
 func registerPrint(r *interp.Runner) {
@@ -113,6 +113,7 @@ type printOptions struct {
 	history   bool
 	single    bool
 	editor    bool
+	prompt    bool
 	format    string
 	hasFormat bool
 	fd        int
@@ -173,7 +174,11 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		r.Diagnosef("bad file number: %d\n", opts.fd)
 		return 1
 	}
-	_, _ = io.WriteString(out, printText(opts, rest))
+	text, ok := printText(r, opts, rest)
+	if !ok {
+		return 1
+	}
+	_, _ = io.WriteString(out, text)
 	return 0
 }
 
@@ -184,24 +189,42 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 // instead of joining the next operand's letter into an escape. A `\c` ends the
 // command's output where it stands — the rest of that operand, every operand
 // after it, and the terminator.
-func printText(opts printOptions, words []string) string {
+//
+// `-P` runs the prompt escapes over each operand **after** the backslash
+// escapes and never over their own result, which is measured both ways round:
+// `print -P '\045n'` is the user's name — the `\045` became a `%` and the
+// prompt pass then read `%n` — while `print -P '%%n'` is the two characters
+// `%n`, because the `%` that `%%` produced is not looked at again. `-r`
+// suppresses the backslash pass and leaves this one: `print -rP 'a\tb %n'`
+// keeps the backslash and expands the name.
+//
+// The second result is false where an escape was refused, and the refusal has
+// already been written. Nothing is printed in that case — a `print` that
+// wrote the operands it managed and then complained would leave a script
+// holding a line it could not tell apart from a whole one.
+func printText(r *interp.Runner, opts printOptions, words []string) (string, bool) {
 	var b strings.Builder
 	for i, w := range words {
 		if i > 0 {
 			b.WriteString(opts.separator())
 		}
-		if opts.raw {
-			b.WriteString(w)
-			continue
+		expanded, stopped := w, false
+		if !opts.raw {
+			expanded, stopped = expandPrintEscapes(w)
 		}
-		expanded, stopped := expandPrintEscapes(w)
+		if opts.prompt {
+			var ok bool
+			if expanded, ok = r.PromptExpand(expanded); !ok {
+				return "", false
+			}
+		}
 		b.WriteString(expanded)
 		if stopped {
-			return b.String()
+			return b.String(), true
 		}
 	}
 	b.WriteString(opts.terminator())
-	return b.String()
+	return b.String(), true
 }
 
 // printMatching is `-m`: the first operand is a pattern and the rest are kept
@@ -397,6 +420,8 @@ func setPrintLetter(r *interp.Runner, letter byte, opts *printOptions) int {
 		opts.history, opts.single = true, true
 	case 'z':
 		opts.editor = true
+	case 'P':
+		opts.prompt = true
 	case 'p':
 		fd, running := r.CoprocWrite()
 		if !running {

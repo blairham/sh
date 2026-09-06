@@ -3406,6 +3406,50 @@ What was built, all through the extension seam — registered builtins in each
   descriptor table, `-f` delegating to printf, `-s` consumed against a
   history this shell does not keep, and `-p` refused with ksh93's own
   `no query process` — the same shape `read -p` measured.
+- **zsh `print -P`** (dialect/zsh/print.go): the prompt escapes over each
+  operand, and it is the **same expansion** `${(%)…}` is rather than a
+  second one — `interp.Runner.PromptExpand`, which is the `%` flag's own
+  code under an exported name. Two tables of prompt escapes is how two
+  answers to one question drift apart, and with four escapes carried the
+  drift would stay invisible until a script wrote the one they disagreed
+  about.
+
+  Two passes and their order, measured both ways round because one row
+  alone is satisfied by doing them backwards: the backslash escapes run
+  **first** and the prompt escapes over their result, so `print -P
+  '\045\045'` is one `%` — `\045` made a `%` each, and the prompt pass
+  read the pair. Neither pass reads its own result: `print -P '%%%%'` is
+  `%%`, not `%`. `-r` suppresses the backslash pass and leaves this one,
+  so the two letters are about different passes and folding them into one
+  `raw` flag would be wrong. `-f` wins over `-P` outright, measured:
+  `print -Pf '%s|%n\n' A` treats the format as printf's.
+
+  A `%` with nothing after it is **dropped**, not written — `print -P 'x%'`
+  is `x` and `${(%)v}` on `x%` is `x`. This was written through, which was
+  the one place the expansion said more than the shell it copies, and
+  fixing it fixed both spellings at once because there is only one.
+
+  What is carried is what the flag carried: `%%`, `%x`, `%N` and `%n`.
+  Everything else is refused **by name** — `the %q prompt escape is not
+  implemented` — where zsh drops an escape it does not know. Naming it is
+  the choice: a prompt quietly short of a field is the kind of wrong
+  answer nobody reports. The builtin's refusal is a status the script goes
+  on from and writes nothing at all, because a `print` that put out the
+  operands it managed and then complained would leave a script holding a
+  line it could not tell apart from a whole one; the expansion's ends the
+  script, which is the expansion's own rule for a word it could not
+  produce. Corpus: `print/prompt-escapes-*`, `print/a-trailing-percent-is-
+  dropped`, `print/a-prompt-escape-this-shell-has-not`,
+  `print/the-raw-letter-leaves-the-prompt-pass-alone`.
+
+  Note that `repl.PromptStyle` is a *second* table of these escapes, the
+  one the prompt drawer reads, and it is far larger — colors, visual
+  attributes, the clock. So this shell already answers `%F{196}` when
+  drawing a prompt and refuses it when a script writes `print -P
+  '%F{196}…'`. The two are not unified because the visual entries are the
+  *dialect's* measured byte sequences and `interp` cannot read `repl`;
+  hard-coding ANSI here would trade a missing answer for a wrong one. See
+  #1090.
 - **bash `caller`** (dialect/bash/caller.go): the stack the three
   `BASH_*` arrays already name, one step up, `NULL` and `main` where bash
   puts them.

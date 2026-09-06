@@ -419,17 +419,43 @@ func (r *Runner) convertCase(v string, upper bool) string {
 	return strings.Map(convert, v)
 }
 
+// PromptExpand is the prompt-escape language over one string, for a builtin
+// whose whole job is the `${(%)…}` flag under another spelling.
+//
+// Exported so that `print -P` is the *same* expansion rather than a second
+// one. Two tables of prompt escapes is how the two answers drift apart, and
+// the escapes this shell carries are few enough that the drift would be
+// invisible until a script wrote the one they disagreed about.
+//
+// The second result is false where an escape was refused; the refusal has
+// already been written, and the caller's business is only to stop.
+func (r *Runner) PromptExpand(text string) (string, bool) {
+	return r.promptEscapes(text, nil)
+}
+
 // promptEscapes is the `%` flag over one word. Only the escapes that name
 // the file being read are carried — `%x` and `%N`, the ones scripts use to
-// find their own path, plus the literal `%%` — and anything else is refused
-// by name rather than answered wrong: the construct's home shell implements
-// its entire prompt language here, and this slice does not pretend to.
+// find their own path, plus `%n` and the literal `%%` — and anything else is
+// refused by name rather than answered wrong: the construct's home shell
+// implements its entire prompt language here, and this slice does not pretend
+// to.
+//
+// e is the expansion this is the `%` flag of, and nil where a *builtin*
+// asked — see PromptExpand. It decides only how a refusal names the place it
+// happened.
 func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr) (string, bool) {
 	var b strings.Builder
 	for i := 0; i < len(v); i++ {
-		if v[i] != '%' || i+1 >= len(v) {
+		if v[i] != '%' {
 			b.WriteByte(v[i])
 			continue
+		}
+		if i+1 >= len(v) {
+			// A `%` with nothing after it is dropped, not written: measured,
+			// `${(%)v}` on `x%` is `x` and on `%` alone is empty. It was
+			// written through, which is the one place this expansion said
+			// more than the shell it copies.
+			break
 		}
 		i++
 		switch v[i] {
@@ -470,7 +496,23 @@ func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr) (string, bool) {
 // One place rather than two, because the wording is the promise: it names the
 // escape the script asked for, so a reader can tell which of several in one
 // word was the one this shell could not answer.
+//
+// The expansion route quotes the whole construct back, because `${(%)…}` can
+// hold several words and a reader needs to know which. A builtin has already
+// been named by the location the dialect writes, so it says the sentence
+// alone — and it does not set expandErr, because nothing is being expanded
+// and the builtin's own status is the answer.
+//
+// Setting it there would in fact change nothing observable: the flag is
+// cleared at the start of every command, so a builtin cannot leak it into
+// the next one, and the builtin's own operands were expanded before it ran.
+// It is left out because it would be false rather than because it would
+// break, and a mutation that puts it back survives for that reason.
 func (r *Runner) refusePromptEscape(e *syntax.ParamExpr, c byte) (string, bool) {
+	if e == nil {
+		r.diagf("the %%%c prompt escape is not implemented\n", c)
+		return "", false
+	}
 	r.diagf("${%s}: the %%%c prompt escape is not implemented\n", e.Src, c)
 	r.expandErr = true
 	return "", false

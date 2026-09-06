@@ -162,6 +162,12 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, quoted bool) (words []string,
 			}
 		}
 	}
+	// After the case conversion above and before the quoting below, which is
+	// where measurement puts it rather than where the rule numbers suggest:
+	// `${(@oU)a}` on `(B a)` is `A B`, so the conversion has already run.
+	if orderApplies(e) {
+		words = orderWords(e, words)
+	}
 	if strings.ContainsRune(e.Flags, '%') {
 		for i, w := range words {
 			v, pok := r.promptEscapes(w, e)

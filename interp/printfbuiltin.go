@@ -189,7 +189,7 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 		c := format[i]
 		switch {
 		case c == '\\':
-			text, n, stop := r.expandPrintfEscape(format[i:], true)
+			text, n, stop := r.expandPrintfEscape(format[i:])
 			b.WriteString(text)
 			i += n
 			if stop {
@@ -250,8 +250,15 @@ func (r *Runner) printfVerb(spec string, verb byte, timeFmt string, next func() 
 	case 'b':
 		// The one verb whose *argument* is escaped, where `%s` leaves it
 		// alone. Unanimous, and the difference people reach for `%b` to get.
-		text, _, _ := r.expandPrintfEscapes(arg)
-		return fmt.Sprintf(spec+"s", text), 0, false
+		//
+		// A `\c` in the argument ends the whole `printf` and not only this
+		// conversion — `printf '[%b][%s]' 'a\cb' x` is `[a` in all six — so
+		// the flag is returned rather than dropped. Width and precision
+		// still apply to what was produced, which is five of the six: ksh93
+		// alone writes the partial text unpadded, and pads and truncates
+		// like everyone else when nothing stopped it.
+		text, stop := r.expandBEscapes(arg)
+		return fmt.Sprintf(spec+"s", text), 0, stop
 	case 'c':
 		if arg == "" {
 			return "", 0, false
@@ -582,66 +589,114 @@ func (r *Runner) printfReport(kind printfErrorKind, operand string) int {
 	return orDefault(d.PrintfUsageStatus, 2)
 }
 
-// expandPrintfEscapes expands the escapes `printf` understands, which is a
-// longer list than `echo`'s and includes the one that stops output.
+// expandBEscapes expands the escapes a `%b` argument carries, which is a
+// different table from the one a format carries and not a subset of it.
 //
-// It reports the text, how much of the input it read, and whether `\c` ended
-// things — which is two ordinary characters in half the panel, so the caller
-// asks the dialect before believing it.
-func (r *Runner) expandPrintfEscapes(s string) (string, int, bool) {
+// The panel is unanimous that the two are separate, even where it disagrees
+// about the entries. `\0101` is an `A` in a `%b` argument and a backspace
+// followed by a `1` in a format, in all six shells measured — a `%b` reads
+// `\0` and up to three octal digits after it, which is the XSI escape `echo`
+// expands, where a format reads up to three digits with the zero optional.
+// Reading a `%b` with the format's reader produced neither answer (#798).
+//
+// The table, and where each entry is decided:
+//
+//	\a \b \f \n \r \t \v \\   the XSI set — unanimous, xsiEscape
+//	\0nnn                     one byte, unanimous
+//	\c                        ends the output, unanimous — where a format
+//	                          makes three different things of the same two
+//	                          characters (PrintfBackslashC)
+//	\nnn                      PrintfBOctalWithoutZero
+//	\e                        PrintfBEscEscape
+//	\E                        PrintfBCapitalEscEscape
+//	\xHH                      PrintfBHexEscape
+//	anything else             the backslash and the character, unanimous
+//
+// It reports the text and whether a `\c` ended things.
+func (r *Runner) expandBEscapes(s string) (string, bool) {
 	var b strings.Builder
 	for i := 0; i < len(s); {
-		if s[i] != '\\' {
+		if s[i] != '\\' || i+1 >= len(s) {
+			// A backslash with nothing after it is a backslash: unanimous.
 			b.WriteByte(s[i])
 			i++
 			continue
 		}
-		// No `\x` here. This is `%b`, whose argument is expanded with the set
-		// `echo` expands rather than with the format's — measured on the one
-		// shell where the two differ, ksh93, which reads `\x41` in a format
-		// and leaves it as written in a `%b`. Passing the format's answer
-		// through would give that shell an escape it does not have.
-		text, n, stop := r.expandPrintfEscape(s[i:], false)
-		b.WriteString(text)
-		i += n
-		if stop {
-			return b.String(), i, true
+		c := s[i+1]
+		if e, ok := xsiEscape(c); ok {
+			b.WriteByte(e)
+			i += 2
+			continue
+		}
+		switch c {
+		case 'c':
+			// Not PrintfBackslashC. That axis is the *format*'s question,
+			// where the same two characters are literal in bash and dash,
+			// control-X in ksh93 and a full stop in zsh; in a `%b` all six
+			// stop, so there is nothing to ask.
+			return b.String(), true
+		case 'e', 'E':
+			// One shape, asked twice, because ksh93 has `\E` and not `\e`
+			// and zsh has `\e` and not `\E`.
+			axis := r.sem().PrintfBEscEscape
+			if c == 'E' {
+				axis = r.sem().PrintfBCapitalEscEscape
+			}
+			if r.ask(axis, `printf: \`+string(c)+` in a %b argument`) {
+				b.WriteByte(0x1b)
+			} else {
+				b.WriteByte('\\')
+				b.WriteByte(c)
+			}
+			i += 2
+		case 'x':
+			text, n := r.hexEscapeText(r.bHexEscape(), s[i:])
+			b.WriteString(text)
+			i += n
+		case '0', '1', '2', '3', '4', '5', '6', '7':
+			// `\0` introduces up to three octal digits rather than being the
+			// first of them, which is what makes `\0101` an `A` and `\01011`
+			// an `A` and a `1`. Without the zero it is the same escape only
+			// where the dialect says so.
+			start := i + 2
+			if c != '0' {
+				if !r.ask(r.sem().PrintfBOctalWithoutZero, `printf: \nnn in a %b argument`) {
+					b.WriteByte('\\')
+					b.WriteByte(c)
+					i += 2
+					break
+				}
+				start = i + 1
+			}
+			n, used := scanBase(s[start:], 8, 3)
+			b.WriteByte(byte(n))
+			i = start + used
+		default:
+			b.WriteByte('\\')
+			b.WriteByte(c)
+			i += 2
 		}
 	}
-	return b.String(), len(s), false
+	return b.String(), false
 }
 
-// expandPrintfEscape expands the one escape at the front of s.
+// expandPrintfEscape expands the one escape at the front of a printf *format*.
 //
-// hex says whether this site reads `\xHH` at all, which is a property of the
-// site and not only of the dialect: a format has the escape and a `%b`
-// argument does not, in the one shell where those two tables differ.
-func (r *Runner) expandPrintfEscape(s string, hex bool) (string, int, bool) {
+// A `%b` argument is a different table and has expandBEscapes, which is the
+// shape #765 measured and #798 finished: the two share the XSI eight and
+// nothing else, and reading either one with the other's reader produces
+// answers no shell in the panel gives.
+func (r *Runner) expandPrintfEscape(s string) (string, int, bool) {
 	if len(s) < 2 {
 		return `\`, len(s), false
 	}
+	if e, ok := xsiEscape(s[1]); ok {
+		return string([]byte{e}), 2, false
+	}
 	switch c := s[1]; c {
 	case 'x':
-		if !hex {
-			break
-		}
-		return r.printfHexEscape(s)
-	case 'n':
-		return "\n", 2, false
-	case 't':
-		return "\t", 2, false
-	case 'r':
-		return "\r", 2, false
-	case 'a':
-		return "\a", 2, false
-	case 'b':
-		return "\b", 2, false
-	case 'f':
-		return "\f", 2, false
-	case 'v':
-		return "\v", 2, false
-	case '\\':
-		return `\`, 2, false
+		text, n := r.hexEscapeText(r.hexEscape(), s)
+		return text, n, false
 	case 'c':
 		// Three answers, and the middle one is why this is not a bool: ksh93
 		// reads `\cX` as control-X, which *looks* like truncation next to
@@ -685,15 +740,19 @@ func (r *Runner) expandPrintfEscape(s string, hex bool) (string, int, bool) {
 	return `\` + string(s[1]), 2, false
 }
 
-// printfHexEscape decodes the `\x` at the front of s, which is four readings.
+// hexEscapeText decodes the `\x` at the front of s under one of the four
+// readings, and is where both sites that have the escape meet: a format asks
+// PrintfHexEscape for its policy and a `%b` argument asks PrintfBHexEscape,
+// and ksh93 answers the two differently — but a shell that has the escape at
+// a site reads its digits there the way it reads a format's, so there is one
+// reader and two answers rather than two readers.
 //
 // The digits are scanned with the same reader `$'…'` uses, because there is
 // one hexadecimal escape and not two — the lesson #556 left, one escape
 // further along.
-func (r *Runner) printfHexEscape(s string) (string, int, bool) {
-	p := r.hexEscape()
+func (r *Runner) hexEscapeText(p PrintfHexEscapePolicy, s string) (string, int) {
 	if p == PrintfHexEscapeAbsent || r.unspecified {
-		return `\x`, 2, false
+		return `\x`, 2
 	}
 	n, used := 0, 0
 	if p == PrintfHexEscapeCodePoint {
@@ -716,17 +775,17 @@ func (r *Runner) printfHexEscape(s string) (string, int, bool) {
 		// and a zero.
 		d := r.diag()
 		r.diagf("%s\n", Wording(d.PrintfMissingHexDigit, `printf: missing hex digit for \x`))
-		return `\x`, 2, false
+		return `\x`, 2
 	case used == 0:
-		// An empty digit run is a zero, and a format is a counted string, so
-		// the NUL is written rather than ending anything.
-		return "\x00", 2, false
+		// An empty digit run is a zero, and neither site ends at a NUL, so
+		// the byte is written rather than stopping anything.
+		return "\x00", 2
 	case used <= 2:
-		return string([]byte{byte(n)}), 2 + used, false
+		return string([]byte{byte(n)}), 2 + used
 	case n < 0 || n > 0x10FFFF:
-		return "", 2 + used, false
+		return "", 2 + used
 	}
-	return string(rune(n)), 2 + used, false
+	return string(rune(n)), 2 + used
 }
 
 // printfWriter is the shell's output stream, held back or written through

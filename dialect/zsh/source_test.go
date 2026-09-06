@@ -461,3 +461,25 @@ func TestPrintfHexEscapeIsAByteOrANul(t *testing.T) {
 		}
 	}
 }
+
+// The `%b` escape table this shell answers for: `\e` is the escape character
+// and `\E` is two ordinary ones, which is the opposite of ksh93 and why one
+// axis could not answer for both letters. `\x` is here with the same NUL for
+// an empty digit run a format gives, and the bare octal wants its `\0`.
+func TestPrintfBEscapesAreZshs(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf '%b' 'a\0101Z'`, "aAZ"},
+		{`printf '%b' 'a\0300Z'`, "a\xc0Z"},
+		{`printf '%b' 'a\101Z'`, `a\101Z`},
+		{`printf '%b' 'a\eZ:a\EZ'`, "a\x1bZ:a\\EZ"},
+		{`printf '%b' 'a\x41Z'`, "aAZ"},
+		{`printf '%b' 'a\xZ'`, "a\x00Z"},
+		{`printf '%b' 'a\cbZ'`, "a"},
+		{`printf 'a\0101Z'`, "a\b1Z"},
+	} {
+		if out, st := runZsh(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
+			t.Errorf("%s: said % x status %d, want % x and 0", tc.src, out, st, tc.want)
+		}
+	}
+}

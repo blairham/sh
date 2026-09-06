@@ -1482,6 +1482,41 @@ var Corpus = []Case{
 		Why:     "the site matters and not only the shell: ksh93 reads \\x41 in a format and leaves it as written in a %b argument, which expands the set echo expands. bash and zsh have it in both and dash in neither, so ksh93 alone separates the two tables",
 	},
 	{
+		ID: "printf/an-octal-in-a-b-escape-is-not-the-formats", Category: "printf",
+		Snippet: `printf '%b' 'a\0101Z' | od -An -tx1 | tr -s " "; printf 'a\0101Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the two escape tables in one line, and unanimous in both halves: a %b reads \\0 and up to three octal digits after it, so \\0101 is an A, where a format reads up to three digits with the zero optional, so the same text is a backspace and a 1. Reading a %b the format's way gives neither answer",
+	},
+	{
+		ID: "printf/a-b-escape-octal-is-a-byte", Category: "printf",
+		Snippet: `printf '%b' 'a\0300Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the same byte-and-not-a-code-point rule a format's octal follows, asked at the other site: 0300 is the one byte 0xc0 in all six and never the two UTF-8 spells U+00C0 with",
+	},
+	{
+		ID: "printf/a-b-escape-octal-without-the-zero-diverges", Category: "printf",
+		Snippet: `printf '%b' 'a\101Z' | od -An -tx1 | tr -s " "`,
+		Why:     "whether the \\0 is required: bash and dash read a bare \\101 as an A, ksh93 and zsh write the four characters. Not the same grouping as the same text in an echo argument, where dash alone reads it — which is what makes this an axis of its own rather than echo's answer reused",
+	},
+	{
+		ID: "printf/a-b-escape-splits-esc-from-capital-esc", Category: "printf",
+		Snippet: `printf '%b' 'a\eZ:a\EZ' | od -An -tx1 | tr -s " "`,
+		Why:     "the two spellings of the escape character are two questions, because the two shells that split them split them in opposite directions: ksh93 has \\E and not \\e, zsh has \\e and not \\E, bash has both and dash neither. One answer for both letters is wrong for half the panel",
+	},
+	{
+		ID: "printf/a-b-escape-hex-with-no-digits", Category: "printf",
+		Snippet: `printf '%b' 'a\xZ' | od -An -tx1 | tr -s " "`,
+		Why:     "the empty digit run at the %b site rather than the format's: bash leaves the escape standing and warns without failing, zsh reads the run as a zero and writes a NUL, and ksh93 and dash have no \\x here at all — so ksh93's answer is the one that differs from its own format's",
+	},
+	{
+		ID: "printf/backslash-c-in-a-b-escape-always-stops", Category: "printf",
+		Snippet: `printf '%b' 'a\cbZ' | od -An -tx1 | tr -s " "`,
+		Why:     "the one place the two tables converge where the format's diverges: \\c ends the output in all six here, where the same two characters in a format are literal in bash and dash, control-X in ksh93 and a full stop in zsh",
+	},
+	{
+		ID: "printf/backslash-c-in-a-b-escape-ends-the-whole-printf", Category: "printf",
+		Snippet: `printf '[%b][%s]' 'a\cb' x; echo END`,
+		Why:     "the stop is not confined to the conversion that read it: the format is abandoned where it stands, the operands after it go unused, and the reused format does not run again — unanimous, and the half of \\c that a case reading only one conversion cannot see",
+	},
+	{
 		ID: "printf/an-octal-escape-is-a-byte-and-not-a-code-point", Category: "printf",
 		Snippet: `printf 'a\300Z' | od -An -tx1 | tr -s " "`,
 		Why:     "unanimous, and worth pinning as bytes: \\300 is the single byte 0xc0 in all six, never the two bytes UTF-8 gives the code point of the same number",

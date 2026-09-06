@@ -306,6 +306,15 @@ func Semantics() interp.Semantics {
 	// `f`. A `\x` with no digit after it stands as written, with a warning
 	// on standard error and a status that is still zero.
 	s.PrintfHexEscape = interp.PrintfHexEscapeByte
+	// A `%b` argument reads the same `\x` a format does here, and both of
+	// the escape-character spellings: `\e` and `\E` are both 0x1b.
+	s.PrintfBHexEscape = interp.PrintfHexEscapeByte
+	s.PrintfBEscEscape = interp.Yes
+	s.PrintfBCapitalEscEscape = interp.Yes
+	// `printf '%b' 'a\101Z'` is `aAZ`: the octal needs no `\0` to introduce
+	// it. Not this shell's answer for an `echo` argument, where `\101` is
+	// four characters — the two sites are two tables.
+	s.PrintfBOctalWithoutZero = interp.Yes
 	// `%zX`, `%ld`, `%jd` and any run of the letters, all of them read and
 	// thrown away: `%hhd` with 300 is 300.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC99

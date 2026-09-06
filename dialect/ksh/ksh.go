@@ -295,6 +295,17 @@ func Semantics() interp.Semantics {
 	// code point rather than a byte: `\xff` is one byte and `\x0ff` is
 	// U+00FF in UTF-8. An empty digit run is a zero.
 	s.PrintfHexEscape = interp.PrintfHexEscapeCodePoint
+	// And no `\x` at all in a `%b` argument, which is this shell alone and
+	// the reason the two sites are two axes: `printf '%b' 'a\x41Z'` is the
+	// six characters as written where the same escape in a format is an `A`.
+	s.PrintfBHexEscape = interp.PrintfHexEscapeAbsent
+	// `\E` is the escape character and `\e` is two characters — the opposite
+	// of zsh, which is why one axis could not answer for both letters.
+	s.PrintfBEscEscape = interp.No
+	s.PrintfBCapitalEscEscape = interp.Yes
+	// The octal wants its `\0`: `printf '%b' 'a\101Z'` is `a\101Z` and
+	// `a\0101Z` is `aAZ`.
+	s.PrintfBOctalWithoutZero = interp.No
 	// The same set bash takes, and ignored the same way. ksh93 will also
 	// read a width *after* the modifier — `%l5d` is a padded 42 there — but
 	// that is its free-order conversion prefix rather than this axis: `%5-d`

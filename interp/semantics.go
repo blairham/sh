@@ -522,9 +522,57 @@ type Semantics struct {
 	//	                  dash              a\xZ        not an escape at all
 	//
 	// Asked only where a `\x` is actually in the format. It is a question
-	// about the *format*: `%b` expands the escape set `echo` expands, where
-	// `\x` is a separate question with a different grouping.
+	// about the *format*, and never about a `%b` argument: that site has its
+	// own table and its own axis, PrintfBHexEscape below.
 	PrintfHexEscape PrintfHexEscapePolicy
+	// PrintfBHexEscape is how a `%b` argument reads `\x`, which is a
+	// different question from the one PrintfHexEscape answers: ksh93 reads
+	// `\x41` in a format and writes the four characters as they stand in a
+	// `%b`, so the site decides as much as the shell does.
+	//
+	//	printf '%b' 'a\x41Z'  bash, zsh    aAZ
+	//	                      dash, ksh93  a\x41Z
+	//	printf '%b' 'a\xZ'    bash         a\xZ, and the same complaint a
+	//	                                   format's empty digit run draws
+	//	                      zsh          a<0x00>Z
+	//	                      dash, ksh93  a\xZ
+	//
+	// The readings themselves are the format's four, which is why this is
+	// the same enumeration: a shell that has the escape here reads its
+	// digits the way it reads a format's.
+	//
+	// Asked only where a `%b` argument actually carries a `\x`.
+	PrintfBHexEscape PrintfHexEscapePolicy
+	// PrintfBEscEscape admits `\e` in a `%b` argument for the escape
+	// character: bash and zsh do, dash and ksh93 write the two characters.
+	//
+	// It is a separate axis from PrintfBCapitalEscEscape below because the
+	// two shells that split them split them in opposite directions, so no
+	// single answer describes either one: ksh93 has `\E` and not `\e`, and
+	// zsh has `\e` and not `\E`.
+	//
+	// Asked only where a `%b` argument actually carries a `\e`.
+	PrintfBEscEscape Answer
+	// PrintfBCapitalEscEscape admits `\E` in a `%b` argument: bash and ksh93
+	// do, dash and zsh write the two characters. See PrintfBEscEscape for
+	// why the two letters are two questions.
+	//
+	// Asked only where a `%b` argument actually carries a `\E`.
+	PrintfBCapitalEscEscape Answer
+	// PrintfBOctalWithoutZero reads a `%b` argument's `\nnn` as octal with no
+	// leading zero to introduce it. bash and dash do; ksh93 and zsh want the
+	// `\0` and write `\101` as the four characters it is.
+	//
+	// The `\0nnn` form itself is unanimous and asks nothing — it is the XSI
+	// escape `echo` expands, and reading it as a format's octal is what put
+	// a backspace and a `1` where every shell writes an `A` (#798).
+	//
+	// This one is not `echo`'s answer at the other site: an `echo` argument's
+	// `\101` is an escape in dash alone, where a `%b` argument's is an escape
+	// in bash too.
+	//
+	// Asked only where a `%b` argument actually carries such an escape.
+	PrintfBOctalWithoutZero Answer
 	// PrintfLengthModifiers is which C length modifiers a conversion may
 	// carry between its precision and its verb — `%zX`, `%ld`, `%jd`.
 	//
@@ -3393,6 +3441,23 @@ func (r *Runner) hexEscape() PrintfHexEscapePolicy {
 	if p == PrintfHexEscapeUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			r.unanswered(`printf: \x`)))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// bHexEscape resolves the `%b` site's `\x` reading, and only for an argument
+// that has a `\x` in it.
+//
+// Separate from hexEscape because the site is half the question: ksh93 reads
+// every digit of a format's `\x41` and writes the four characters as they
+// stand in a `%b`.
+func (r *Runner) bHexEscape() PrintfHexEscapePolicy {
+	p := r.sem().PrintfBHexEscape
+	if p == PrintfHexEscapeUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered(`printf: \x in a %b argument`)))
 		r.status = 2
 		r.unspecified = true
 	}

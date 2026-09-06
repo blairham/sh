@@ -61,6 +61,22 @@ print -r -- "st=$?"`)
 	}
 }
 
+// A feature that is neither a builtin nor a parameter has no registry to ask,
+// so it counts as missing and is *named* as missing. `zsh/complete` is the
+// module that shows it: two builtins and four conditions, and all six are
+// named. A shell that counted an unaskable feature as present would answer
+// `compadd and compset` here and look more capable than it is, which is the
+// silent success in miniature.
+func TestAFeatureThatCannotBeAskedAboutCountsAsMissing(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/complete 2>&1
+print -r -- "st=$?"`)
+	want := "zsh:1: failed to load module `zsh/complete': " +
+		"compadd, compset, after, between, prefix and suffix are not implemented yet\nst=1\n"
+	if out != want || st != 0 {
+		t.Errorf("zmodload zsh/complete = %q (status %d), want %q", out, st, want)
+	}
+}
+
 // A name that is in no table at all, and the proof that a load failure does
 // **not** carry the builtin's name in its location where every other message
 // this builtin writes does. That is measured in zsh: the module loader speaks

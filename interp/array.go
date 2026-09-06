@@ -969,13 +969,13 @@ func (r *Runner) subscriptYieldsAList(e *syntax.ParamExpr) bool {
 // was written on: everything but `@` joins, because `@` is the one parameter
 // whose fields survive quoting.
 func (r *Runner) subscriptJoinsElements(e *syntax.ParamExpr) bool {
-	idx := r.subscriptText(e.Index)
-	if e.Name == "@" || idx == "@" {
-		// Either spelling of the list keeps its fields, and one is enough:
-		// measured, `"${@[*]}"` is one field per parameter and so is
-		// `"${*[@]}"`, where `"${*[1,3]}"` — neither `@` — is one joined
-		// field.
+	if e.Name == "@" {
+		// The name keeps its fields however it is subscripted: measured,
+		// `"${@[*]}"` is one field per parameter, where `"${*[1,3]}"` —
+		// neither half of it `@` — is one joined field. The other spelling
+		// of the list needs no clause of its own: `[@]` is neither `*` nor a
+		// range, so it already falls through to one field each.
 		return false
 	}
-	return idx == "*" || r.subscriptIsARange(e)
+	return r.subscriptText(e.Index) == "*" || r.subscriptIsARange(e)
 }

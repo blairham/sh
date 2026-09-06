@@ -92,6 +92,30 @@ func TestAScalarSubscriptIsAnAxis(t *testing.T) {
 	}
 }
 
+// A string has no end to count back from, so under the element reading a
+// negative subscript names nothing: bash and ksh93 both answer empty, and bash
+// also warns `s: bad array subscript` where ksh93 is silent — the value is
+// what is unanimous.
+//
+// It answered the whole string, because the string went to the array path and
+// a one-element array's last element is its first. A plausible value with no
+// diagnostic near it.
+func TestANegativeSubscriptOnAStringNamesNothing(t *testing.T) {
+	for _, src := range []string{
+		`s=hello; printf "[%s]" "${s[-1]}"`,
+		`s=hello; printf "[%s]" "${s[-9]}"`,
+	} {
+		if out, st := runReading(t, Yes, No, No, src); out != "[]" || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", src, out, st, "[]")
+		}
+		// And the base still names the string itself, which is the reading
+		// this is the edge of rather than a refusal of the whole shape.
+		if out, _ := runReading(t, Yes, No, No, `s=hello; printf "[%s]" "${s[0]}"`); out != "[hello]" {
+			t.Errorf("the base = %q, want %q", out, "[hello]")
+		}
+	}
+}
+
 // Asked only where the readings differ: a one-character string at the
 // subscript both readings answer to is itself either way.
 func TestAOneCharacterStringAsksNothing(t *testing.T) {

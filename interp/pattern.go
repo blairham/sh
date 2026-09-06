@@ -94,15 +94,25 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 		}
 		return r.expansionPattern(v, s.Quoting)
 	case syntax.ProcSubstIn, syntax.ProcSubstOut:
-		// Deliberately not performed, and deliberately not a pattern.
+		// Performed, like any other substitution in a word, and the *path*
+		// is the pattern.
 		//
-		// The panel does not agree about this position and there is no
-		// intersection to implement: in `${v#<(cmd)}` only bash runs the
-		// command, in a `case` arm bash and zsh both do and ksh93 and dash
-		// cannot parse it, and in `[[ ]]` bash runs it where zsh refuses the
-		// word outright. So the substitution is left as the text it was
-		// written as rather than answered one shell's way (#882, #902).
-		return s.Value, false
+		// Which is what makes it never match anything a script would write
+		// down — that is the measured answer rather than a shortcut. It used
+		// to hand the matcher the substitution's *inner* text, so
+		// `case x in <(x))` matched, `${v#<(x)}` trimmed a bare `x`, and
+		// neither is anything a shell in the panel does (#902).
+		//
+		// Whether a `<(` in this position opens a substitution at all is the
+		// grammar's question and is answered before this: only bash reads
+		// one inside a `${…}` operand, so in the other dialects a span of
+		// this kind can only have come from a `case` arm or a condition,
+		// where bash and zsh both perform it.
+		path, ok := r.procSub(r.ctx, s.Kind, s.Value)
+		if !ok {
+			return "", false
+		}
+		return path, false
 	}
 	if s.Quoting == syntax.DollarSingleQuoted {
 		// `$'\t'` is a tab, and the lexer keeps both bytes so the source text

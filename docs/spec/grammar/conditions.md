@@ -157,6 +157,32 @@ the operator table, where this is about how a pattern operand is lexed.
 They are recorded in "What this does not cover" below rather than folded
 in here.
 
+## A process substitution as an operand — bash only
+
+    [[ x == <(:) ]]
+
+| shell | what happens |
+| --- | --- |
+| bash 3.2, 5.3 | the command runs and the operand is the path; the test is false |
+| zsh 5.9 | `process substitution <(:) cannot be used here`, status 2, and the rest of the input does not run |
+| ksh93 | ``syntax error … `<(' unexpected``, while reading |
+| dash | no `[[ ]]` at all |
+
+Three shells say no and differ only in *when* and in *what words*, which
+is exactly the line between the semantics vector and Diagnostics:
+`ProcessSubstitutionInCondition` is the axis — bash `Yes`, ksh93 and zsh
+`No`, unanswered in `core` — and `ProcessSubstitutionNotInCondition` is
+the sentence.
+
+The axis is asked **before** the word is expanded. A shell that refuses
+the operand must not have started the command first, and that is
+observable: the command has side effects, and a refusal that came after
+the expansion would leave them behind.
+
+What is not reproduced yet: ksh93 refuses while *reading*, at status 3,
+and this implementation reads the word and refuses it at the run, at
+status 2. Same answer, wrong moment.
+
 ## `-gt` is numeric and `>` is a string comparison
 
     [[ 10 -gt 9 ]]  →  true

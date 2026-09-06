@@ -863,6 +863,30 @@ them are unanimous across the panel:
 empty offset. A grammar that widened the rule by one character would
 break the shapes every shell shares rather than the ones only zsh has.
 
+## A process substitution in an operand — bash only
+
+    unset u
+    ${u:-<(:)}      →  /dev/fd/63   in bash
+                    →  <(:)         in ksh93, zsh and dash
+    v='<:'; ${v#<(:)}
+                    →  ``           in ksh93 and zsh — a `<` and the group `(:)`
+                    →  `<:`         in bash (the pattern is a path) and dash
+
+Whether `<(cmd)` opens a process substitution **inside a `${…}` operand**
+is a question about the position, not about the shell: ksh93 and zsh both
+have the construct in an ordinary word and neither reads one here. Every
+operand answers alike — the pattern of `${v#…}`, the replacement of
+`${v/…/…}` and the word of `${v:-…}`.
+
+Grammar flag: `ProcessSubstitutionInParamOperand` — bash only; false for
+`core` and `posix`, on the additive rule, since it is a construct one
+shell admits in a place the others do not.
+
+It matters most where the operand is a pattern, because there the wrong
+answer is silent: the text the substitution *encloses* is never the
+pattern in any column, and reading it that way trimmed a bare `x` off
+`${v#<(x)}` and matched `case x in <(x))` (#902).
+
 ## Dialect flags
 
     ParamSubstitution      ${x/pat/rep} and its anchored forms
@@ -876,6 +900,8 @@ break the shapes every shell shares rather than the ones only zsh has.
     BareSubscript          $a[1] and $#a, written without braces — zsh only
     SpecialParamSubscript  ${@[1]}, ${1[2]}, ${?[1]} — a subscript on a
                            parameter that is not a name — zsh only
+    ProcessSubstitutionInParamOperand
+                           ${u:-<(:)} carries one — bash only
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
 `ParamTransformations`, `ParamExpansionFlags` and

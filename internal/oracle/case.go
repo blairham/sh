@@ -5794,6 +5794,16 @@ echo unreachable`,
 		Why:     "and the case that keeps it from eating an array literal: a `(` straight after `=` opens one, never a group — `a=(b|c)` is a parse error in that shell rather than a pattern",
 	},
 	{
+		ID: "procsub/an-operand-of-an-expansion", Category: "pattern matching",
+		Snippet: `unset u; p=${u:-<(:)}; case "$p" in /*) echo pathy;; *) echo "[$p]";; esac`,
+		Why:     "whether `<(cmd)` opens a process substitution *inside* a `${…}` operand, which is a question about the position rather than about the shell: bash answers with a path and ksh93, zsh and dash with the five characters — and the last two have process substitution everywhere else, so this is not the construct being absent. The operand is a word here rather than a pattern, because a path is only visible in a value: as a pattern it merely fails to match, which the literal reading does too",
+	},
+	{
+		ID: "procsub/an-operand-that-is-a-pattern", Category: "pattern matching",
+		Snippet: `v='<:'; echo "[${v#<(:)}]"; v=':'; echo "[${v#<(:)}]"`,
+		Why:     "and the same question where the wrong answer is silent. Where the characters are not a substitution they are pattern text — a `<` and, in the two shells with bare groups, the group `(:)` — so the first line strips in ksh93 and zsh and leaves the value standing in bash and dash. The second line is the one that caught the bug: a reading that took the substitution's *inner* text as the pattern trimmed a bare `:` from `:`, which no column here does",
+	},
+	{
 		ID: "pat/an-operand-out-of-a-command-substitution", Category: "pattern matching",
 		Snippet: `v=abcd; echo "[${v#$(echo ab)}]"`,
 		Why:     "a pattern operand is a word and is expanded like one, unanimously across the panel — the row that was missing while `${v#$(echo ab)}` answered `abcd` here, stripping the five characters `echo ab` from a string that does not begin with them. No diagnostic, no status, a plausible string: exactly the shape the corpus exists to catch, and a variable holding the same pattern worked, which is what hid it",

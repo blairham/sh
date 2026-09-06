@@ -209,6 +209,13 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		return m != nil, nil
 
 	case "==", "=", "!=":
+		// A process substitution in this position is one shell's alone, and
+		// the question is asked before the word is expanded: a shell that
+		// refuses it must not have started the command first, which is
+		// observable because the command has side effects.
+		if err := r.condProcSubAllowed(x.Y); err != nil {
+			return false, err
+		}
 		// Unquoted, the right operand is a pattern; quoted, a literal. Only
 		// the spans still know which, which is why the tree keeps a word.
 		got := r.matchPatternR(r.patternOf(x.Y), left, true)
@@ -232,4 +239,54 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 // split or globbed, so joining is the whole of it.
 func (r *Runner) condOperand(w *syntax.Word) string {
 	return strings.Join(r.expandWordNoSplit(w), "")
+}
+
+// condProcSubAllowed refuses a process substitution standing as a condition's
+// operand where the dialect does not have one there.
+//
+// Measured: bash performs it and matches against the path, which never
+// matches anything a script would write down; zsh reads the word and then
+// refuses it — `process substitution <(x) cannot be used here`, status 2;
+// ksh93 refuses while reading and dash has no `[[ ]]` at all. Three shells
+// say no and only the moment and the wording differ, which is the line
+// between the axis and the Diagnostics vector.
+func (r *Runner) condProcSubAllowed(w *syntax.Word) error {
+	if w == nil {
+		return nil
+	}
+	for _, s := range w.Spans {
+		if s.Kind != syntax.ProcSubstIn && s.Kind != syntax.ProcSubstOut {
+			continue
+		}
+		answer := r.sem().ProcessSubstitutionInCondition
+		if r.ask(answer, "a process substitution standing as a condition's operand") {
+			return nil
+		}
+		if answer != No {
+			// Unanswered: ask has already refused by name, and the refusal
+			// is the substrate's rather than a shell's, so it stops at the
+			// condition the way every other unanswered axis does.
+			return condStatus{code: 2}
+		}
+		r.diagf("%s\n", Wording(r.diag().ProcessSubstitutionNotInCondition,
+			"process substitution %[1]s cannot be used here", procSubSource(s)))
+		// And the input is abandoned, not merely this condition. Measured:
+		// the rest of the command string does not run, and the status is 2
+		// — which is neither the 1 a condition that simply did not hold
+		// gives nor the status this dialect gives an ordinary fatal error,
+		// so it is written here rather than routed through either.
+		r.ctl = controlExit
+		return condStatus{code: 2}
+	}
+	return nil
+}
+
+// procSubSource is a process substitution as it was written. The span keeps
+// its inside and its direction, and a diagnostic names the whole of it.
+func procSubSource(s syntax.Span) string {
+	open := "<("
+	if s.Kind == syntax.ProcSubstOut {
+		open = ">("
+	}
+	return open + s.Value + ")"
 }

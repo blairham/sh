@@ -255,6 +255,11 @@ func Semantics() interp.Semantics {
 	s.BraceRangeNegativeStepReverses = interp.No
 	s.BracketCaretNegates = interp.Yes
 	s.LastPipelineElementInCurrentShell = interp.Yes
+	// Nor here. ksh93 refuses `[[ $v == <(cmd) ]]` earlier still — while
+	// reading, as `` `<(' unexpected `` — so the answer is the same no and
+	// only the moment differs. What this dialect does not yet reproduce is
+	// that moment: it reads the word and refuses it at the run.
+	s.ProcessSubstitutionInCondition = interp.No
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.ExitArgument = interp.ExitArgLenient
 	s.UnsetPositionalIsAllowed = interp.Yes

@@ -676,9 +676,12 @@ type Runner struct {
 	// with an empty table.
 	tracksCommands bool
 	// histIgnoreDups is zsh's histignoredups, which its `set -h`
-	// abbreviates. It governs a history this shell does not keep, and with
-	// no history there are no duplicates to ignore, so either state is kept
-	// truthfully.
+	// abbreviates. A script cannot see what it does, because a script has no
+	// history — but an interactive session does: repl reads it through the
+	// dialect's option namespace before it records a line, and a line
+	// repeating the one before it is then left out of the list and out of the
+	// file. So the state was kept truthfully here before anything read it,
+	// and is now read.
 	histIgnoreDups bool
 	// posixMode is `set -o posix`, and the posixSaved fields are the answers
 	// the axes it moves held before it was turned on, so turning it off

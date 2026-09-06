@@ -122,8 +122,9 @@ var extraSetOptions = map[string]setOption{
 		apply: func(r *Runner, on bool) { r.tracksCommands = on },
 		get:   func(r *Runner) bool { return r.tracksCommands },
 	},
-	// zsh's histignoredups, which its `set -h` abbreviates. It governs a
-	// history this shell does not keep, so either state is kept truthfully.
+	// zsh's histignoredups, which its `set -h` abbreviates. A script has no
+	// history for it to govern; an interactive session does, and reads this
+	// through the dialect's option namespace before recording a line.
 	"histignoredups": {
 		apply: func(r *Runner, on bool) { r.histIgnoreDups = on },
 		get:   func(r *Runner) bool { return r.histIgnoreDups },

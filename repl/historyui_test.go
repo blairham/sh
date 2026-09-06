@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/blairham/sh/internal/pty"
+	"github.com/blairham/sh/interp"
 )
 
 // The history surface through the loop that actually runs, on a real
@@ -29,6 +30,22 @@ import (
 
 // atThePrompt starts a session on a pseudo-terminal with a history of its own.
 func atThePrompt(t *testing.T, vars map[string]string, style HistoryStyle, seeded ...string) (*os.File, *syncBuffer, *syncBuffer, string, func()) {
+	t.Helper()
+	return atThePromptWith(t, vars, style, nil, seeded...)
+}
+
+// atThePromptWith is the same session with one more seam: prepare is handed
+// the Runner before the loop starts, for a test that needs the shell to know
+// something a variable cannot say — an option namespace is the case this was
+// added for, since a dialect's options are installed on the Runner and not
+// passed in beside it.
+func atThePromptWith(
+	t *testing.T,
+	vars map[string]string,
+	style HistoryStyle,
+	prepare func(*interp.Runner),
+	seeded ...string,
+) (*os.File, *syncBuffer, *syncBuffer, string, func()) {
 	t.Helper()
 	control, tty, err := pty.Open()
 	if err != nil {
@@ -49,6 +66,9 @@ func atThePrompt(t *testing.T, vars map[string]string, style HistoryStyle, seede
 	out, errs := &syncBuffer{}, &syncBuffer{}
 	r := newTestRunner(vars)
 	r.Stdout, r.Stderr = out, errs
+	if prepare != nil {
+		prepare(r)
+	}
 	s := Shell{Runner: r, In: tty, Out: out, Err: errs, Name: "sh", History: style}
 
 	done := make(chan error, 1)
@@ -226,5 +246,115 @@ func TestTheDialectsSearchReachesTheEditor(t *testing.T) {
 	}
 	if !ed.searchBelow {
 		t.Error("the placement was dropped on the way to the editor")
+	}
+}
+
+// A rule the dialect spells as an option reaches the loop, and reaches it
+// through the shell's own option namespace.
+//
+// zsh's `HIST_IGNORE_SPACE` is the case. A variable would not do here: the
+// namespace is installed on the Runner by the dialect, so a session that read
+// the option from anywhere else would pass every unit test in this package and
+// still ignore what `setopt` was told.
+//
+// Measured on 2026-09-06, zsh 5.9.2 with a scratch HOME, ZDOTDIR and HISTFILE:
+// with `setopt HIST_IGNORE_SPACE`, the space-led line is in neither `fc -l`
+// nor the file — the same answer bash gives `HISTCONTROL=ignorespace`, which
+// is why the up-arrow assertion below is the one the bash-shaped test makes.
+func TestTheTerminalLoopHonorsAnOptionSpelledKnob(t *testing.T) {
+	style := HistoryStyle{
+		IgnoreSpaceOption:            "HIST_IGNORE_SPACE",
+		IgnoreDupsOption:             "HIST_IGNORE_DUPS",
+		Ignore:                       "HISTORY_IGNORE",
+		IgnoreIsOnePattern:           true,
+		PatternIgnoredStaysInSession: true,
+	}
+	// A namespace shaped like a dialect's: it answers about the names it has
+	// and reports every other name unknown.
+	namespace := func(name string) (bool, bool) {
+		switch name {
+		case "HIST_IGNORE_SPACE":
+			return true, true
+		case "HIST_IGNORE_DUPS":
+			return false, true
+		}
+		return false, false
+	}
+	prepare := func(r *interp.Runner) { r.SetOptionNamespace(namespace) }
+	control, out, _, path, finish := atThePromptWith(t, nil, style, prepare, "echo seeded")
+
+	for _, line := range []string{" echo hidden\r", "echo kept\r"} {
+		if _, err := control.WriteString(line); err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, out, "$ ", "the prompt after the line ran")
+	}
+	// Two steps back reaches the seeded line, the space-led one having been
+	// dropped from the list as well as from the file.
+	if _, err := control.WriteString("\x1b[A\x1b[A"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, out, "$ echo seeded", "the entry before the kept one, the space-led line having been dropped")
+	if _, err := control.WriteString("\x03"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, out, "$ ", "the prompt after the line was abandoned")
+	finish()
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(raw), "echo seeded\necho kept\n"; got != want {
+		t.Errorf("the file holds %q, want %q", got, want)
+	}
+}
+
+// And the pattern knob in the same dialect gives the other answer: the line is
+// out of the file and still on the up arrow.
+//
+// This is the axis end to end, and it is the pair that says the axis belongs
+// to the knob rather than to the shell — one style, one session, two rules,
+// two different fates for the line.
+//
+// Measured on 2026-09-06, zsh 5.9.2: with `HISTORY_IGNORE='echo hidden'`,
+// `fc -l` lists `echo hidden` as entry 5 and the file written by `fc -W` goes
+// straight from `echo one` to `echo two`.
+func TestTheTerminalLoopKeepsAPatternIgnoredLineOnTheArrow(t *testing.T) {
+	style := HistoryStyle{
+		IgnoreSpaceOption:            "HIST_IGNORE_SPACE",
+		Ignore:                       "HISTORY_IGNORE",
+		IgnoreIsOnePattern:           true,
+		PatternIgnoredStaysInSession: true,
+	}
+	vars := map[string]string{"HISTORY_IGNORE": "echo hidden"}
+	prepare := func(r *interp.Runner) {
+		r.SetOptionNamespace(func(string) (bool, bool) { return false, false })
+	}
+	control, out, _, path, finish := atThePromptWith(t, vars, style, prepare, "echo seeded")
+
+	if _, err := control.WriteString("echo hidden\r"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, out, "hidden\n", "the ignored line still running")
+	waitFor(t, out, "$ ", "the prompt after the line ran")
+	// One step back is the ignored line itself, which is the half bash does
+	// not agree with.
+	if _, err := control.WriteString("\x1b[A"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, out, "$ echo hidden", "the ignored line, still on the arrow")
+	if _, err := control.WriteString("\x03"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, out, "$ ", "the prompt after the line was abandoned")
+	finish()
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(raw), "echo seeded\n"; got != want {
+		t.Errorf("the file holds %q, want %q — the ignored line was written", got, want)
 	}
 }

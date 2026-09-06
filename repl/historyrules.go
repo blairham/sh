@@ -12,12 +12,20 @@ import "strings"
 // `ls`, and the search is a way of finding one — so the knobs are part of the
 // navigation rather than beside it.
 //
-// Which variables say so is the dialect's, in HistoryStyle. What they mean is
-// here, because the meanings are shared: measured on 2026-09-05, bash 5.3.15
-// and zsh 5.9.2 agree that a leading space hides a line, that a "duplicate" is
-// the line immediately before it and not any earlier one, and that a pattern
-// is matched against the whole line. They disagree about one thing only —
-// whether an ignored line is still recallable — and that is the axis.
+// Which variable or option says so is the dialect's, in HistoryStyle. What
+// they mean is here, because the meanings are shared: measured on 2026-09-05
+// and re-measured on 2026-09-06, bash 5.3.15 and zsh 5.9.2 agree that a
+// leading space hides a line, that a "duplicate" is the line immediately
+// before it and not any earlier one, and that a pattern is matched against the
+// whole line. They disagree about one thing only — whether a line the
+// *pattern* knob rejected is still recallable — and that is the axis.
+//
+// Not whether an ignored line is recallable, which is what this said before
+// and is a knob narrower than it sounds. zsh answers that question both ways
+// in one shell: a line `HISTORY_IGNORE` rejected is still in `fc -l`, and a
+// line `HIST_IGNORE_SPACE` or `HIST_IGNORE_DUPS` rejected is not. So the space
+// and dups rules have no axis — every shell in the panel that has them at all
+// forgets the line outright — and keepIgnored below applies to patterns only.
 
 // historyRules is what one session was told to leave out.
 type historyRules struct {
@@ -37,8 +45,10 @@ type historyRules struct {
 	// whichever variable this dialect keeps them in.
 	patterns []string
 
-	// keepIgnored leaves an ignored line in the list the up arrow walks and
-	// takes it out of the file only. See HistoryStyle.IgnoredStaysInSession.
+	// keepIgnored leaves a line one of the patterns rejected in the list the
+	// up arrow walks and takes it out of the file only. Patterns only: see
+	// HistoryStyle.PatternIgnoredStaysInSession for the measurement that says
+	// so, and for why the other two rules do not get the same choice.
 	keepIgnored bool
 
 	// match is the dialect's own pattern matcher, so `HISTIGNORE='@(ls|pwd)'`
@@ -52,8 +62,32 @@ type historyRules struct {
 // Through the shell's own variables rather than the process environment, for
 // the reason HISTFILE is read that way: a person sets HISTCONTROL at the
 // prompt and means it from the next line on.
-func historyRulesFrom(style HistoryStyle, get func(string) (string, bool), match func(pattern, line string) bool) historyRules {
-	rules := historyRules{keepIgnored: style.IgnoredStaysInSession, match: match}
+// option reads one of this dialect's option names, and a session with no
+// shell to ask has no options — which is a session where every option-spelled
+// rule is off rather than one that guesses.
+func historyRulesFrom(
+	style HistoryStyle,
+	get func(string) (string, bool),
+	option func(string) (on, known bool),
+	match func(pattern, line string) bool,
+) historyRules {
+	rules := historyRules{keepIgnored: style.PatternIgnoredStaysInSession, match: match}
+	// The options first and the variable after, so that a dialect which
+	// somehow had both would let the variable it documents win the last word.
+	// No shell in the panel has both; the order is written down rather than
+	// left to whichever branch happens to run second.
+	if option != nil {
+		// The empty name is not asked about. A dialect with no such option
+		// leaves the field blank, and a namespace handed "" answers about
+		// whatever it makes of it — so the name is checked here rather than
+		// trusted to come back unknown.
+		//
+		// A name the namespace does not have leaves the rule off. That is the
+		// difference DialectOption's second result exists for: a dialect
+		// naming an option this build does not carry must not read as "on".
+		rules.ignoreSpace = optionOn(option, style.IgnoreSpaceOption)
+		rules.ignoreDups = optionOn(option, style.IgnoreDupsOption)
+	}
 	if style.Control != "" {
 		if v, ok := get(style.Control); ok {
 			// Colon-separated, and an unknown word is simply not one of the
@@ -91,15 +125,22 @@ func historyRulesFrom(style HistoryStyle, get func(string) (string, bool), match
 // line of a session is therefore never a duplicate — which is right even when
 // the file's last line happens to be the same text, because the two are
 // different sessions and the earlier one is already written.
-func (r historyRules) ignored(line, previous string) bool {
+// The second result is whether the line may still be recalled: false for
+// every rule but the patterns, and for those only where the dialect said so.
+// Meaningless when the first result is false, and false there so that a caller
+// reading it alone cannot mistake "not ignored" for "kept out of the file".
+func (r historyRules) ignored(line, previous string) (ignored, recallable bool) {
+	// A blank hides a line and a repeat hides a line, and in every shell that
+	// has either rule the line is gone from the list too. So these two return
+	// false for recallable regardless of what the dialect said about patterns.
 	if r.ignoreSpace && strings.HasPrefix(line, " ") {
-		return true
+		return true, false
 	}
 	if r.ignoreDups && previous != "" && line == previous {
-		return true
+		return true, false
 	}
 	if r.match == nil {
-		return false
+		return false, false
 	}
 	for _, pattern := range r.patterns {
 		// The whole line, anchored at both ends: measured, `HISTIGNORE=pwd`
@@ -109,8 +150,18 @@ func (r historyRules) ignored(line, previous string) bool {
 		// An empty pattern needs no guard: it matches only the empty string,
 		// and a blank line is never recorded by anything.
 		if r.match(pattern, line) {
-			return true
+			return true, r.keepIgnored
 		}
 	}
-	return false
+	return false, false
+}
+
+// optionOn reports whether a named option is on, for a name a dialect may have
+// left blank and a namespace may never have heard of.
+func optionOn(option func(string) (on, known bool), name string) bool {
+	if name == "" {
+		return false
+	}
+	on, known := option(name)
+	return known && on
 }

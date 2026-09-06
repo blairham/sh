@@ -303,3 +303,56 @@ func TestTheOptionTestFallsBackToTheSetOptionNames(t *testing.T) {
 		t.Errorf("got %q, want %q", out, want)
 	}
 }
+
+// DialectOption is the same lookup a caller outside the language can make, and
+// it must reach the namespace rather than the `set -o` names.
+//
+// The distinction is the whole of why it exists. A front end holding a setting
+// a shell spells as an option — zsh's HIST_IGNORE_SPACE — asks this; if it
+// read the `set -o` table instead, every name that lives only in the dialect's
+// namespace would come back unknown, and the setting would be silently off
+// with the shell reporting it on. `errexit` is the case that catches the
+// mistake in the other direction too: a namespace that does not claim it must
+// shadow the `set -o` name here exactly as it does for the condition.
+func TestDialectOptionReadsTheNamespaceAndNotTheSetONames(t *testing.T) {
+	var r *Runner
+	// A Runner the package's own harness built, so this asks the shell a
+	// script would get rather than one assembled here.
+	run(t, "true", func(got *Runner) { r = got })
+	if r == nil {
+		t.Fatal("no runner")
+	}
+	// With nothing installed the `set -o` names answer, which is the fallback
+	// half of the same method and is what a dialect with no namespace gets.
+	if on, known := r.DialectOption("errexit"); !known || on {
+		t.Errorf("before any namespace: errexit on=%v known=%v, want off and known", on, known)
+	}
+	r.SetOptionNamespace(func(name string) (on, known bool) {
+		switch name {
+		case "HIST_IGNORE_SPACE":
+			return true, true
+		case "hist_ignore_dups":
+			return false, true
+		}
+		return false, false
+	})
+	for _, tc := range []struct {
+		name      string
+		on, known bool
+		why       string
+	}{
+		{"HIST_IGNORE_SPACE", true, true, "a name only the namespace has, on"},
+		{"hist_ignore_dups", false, true, "a name only the namespace has, off"},
+		{"nobody_has_this", false, false, "a name nobody has"},
+		// The namespace replaces the lookup rather than layering over it, so
+		// a `set -o` name it does not claim is unknown through here — which is
+		// what a dialect with its own namespace means by installing one.
+		{"errexit", false, false, "a set -o name the namespace does not claim"},
+	} {
+		on, known := r.DialectOption(tc.name)
+		if on != tc.on || known != tc.known {
+			t.Errorf("%s: DialectOption(%q) = %v, %v; want %v, %v",
+				tc.why, tc.name, on, known, tc.on, tc.known)
+		}
+	}
+}

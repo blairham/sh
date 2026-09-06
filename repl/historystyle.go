@@ -54,14 +54,34 @@ type HistoryStyle struct {
 
 	// Control names the variable holding a colon-separated list of what not
 	// to record — `ignorespace`, `ignoredups`, `ignoreboth`. bash calls it
-	// HISTCONTROL; zsh spells the same two rules as `setopt` names, which is
-	// a different startup surface and is not read here.
+	// HISTCONTROL. zsh spells the same two rules as options rather than as a
+	// variable, which is IgnoreSpaceOption and IgnoreDupsOption below.
 	//
 	// Empty means this dialect has no such variable, and setting one by that
 	// name changes nothing. Measured: ksh93 with HISTIGNORE set records the
 	// lines anyway, and a variable a shell does not have is not a variable
 	// that half works.
 	Control string
+
+	// IgnoreSpaceOption and IgnoreDupsOption name the *options* a dialect
+	// spells these same two rules as, for a shell that keeps them in its
+	// option namespace instead of in a variable. zsh's are HIST_IGNORE_SPACE
+	// and HIST_IGNORE_DUPS.
+	//
+	// Two fields beside Control rather than one field with a mode, because
+	// they are two namespaces and not two spellings: a variable is read with
+	// GetVar and an option with DialectOption, the second folds case and
+	// underscores where the first does not, and a shell can have one, the
+	// other or neither. bash has the variable and no such options; zsh has
+	// the options and no such variable. Neither is a translation of the
+	// other, so neither is written as one.
+	//
+	// The name is passed to the dialect's namespace exactly as spelled here,
+	// so the table may hold the spelling the shell's own documentation uses.
+	// Empty is a dialect with no such option, and the rule is then off unless
+	// Control turns it on.
+	IgnoreSpaceOption string
+	IgnoreDupsOption  string
 
 	// Ignore names the variable holding the patterns a recorded line must not
 	// match — HISTIGNORE in bash, HISTORY_IGNORE in zsh. Empty is a dialect
@@ -73,17 +93,31 @@ type HistoryStyle struct {
 	// bash's HISTIGNORE is a list.
 	IgnoreIsOnePattern bool
 
-	// IgnoredStaysInSession keeps an ignored line in the list the up arrow
-	// walks, and leaves it out of the file only.
+	// PatternIgnoredStaysInSession keeps a line the *pattern* knob rejected
+	// in the list the up arrow walks, and leaves it out of the file only.
 	//
-	// This is the conflict the two shells have on identical intent, and it is
-	// an axis rather than a shared answer with two variable names. Measured
-	// on 2026-09-05: bash 5.3.15 given `HISTCONTROL=ignorespace` drops the
-	// line entirely — the up arrow at the next prompt recalls the line
-	// *before* it — while zsh 5.9.2 given `setopt HIST_IGNORE_SPACE` recalls
-	// the ignored line itself and simply does not write it down. One is
-	// "never recorded"; the other is "recorded, not saved".
-	IgnoredStaysInSession bool
+	// This is the panel's one conflict on identical intent, and re-measuring
+	// it narrowed it to this knob alone. On 2026-09-06, zsh 5.9.2, one shell,
+	// three probes, `fc -l` read before exiting and the file read after:
+	//
+	//	HISTORY_IGNORE='echo hidden'    fc -l LISTS `echo hidden`; the file
+	//	                                does not have it
+	//	setopt HIST_IGNORE_SPACE        fc -l does NOT list ` echo hidden`
+	//	setopt HIST_IGNORE_DUPS         fc -l does NOT list the repeat
+	//
+	// So zsh gives *both* answers, and which one it gives is decided by the
+	// knob rather than by the shell. bash 5.3.15, bash 3.2.57 and bash-as-sh
+	// drop the line from `history` under every one of their three rules, so
+	// the panel agrees about a blank and a duplicate and disagrees only about
+	// a pattern — which is why the space and dups rules take no axis at all
+	// and this one field carries the whole of the difference.
+	//
+	// The earlier reading of this had it as a property of the dialect and
+	// attributed the "kept" observation to HIST_IGNORE_SPACE. It is written
+	// down that way in this repository's own history: docs/spec/history.md
+	// said so, and so did the issue it came from. Two knobs were measured in
+	// one session and the answer of one was recorded against the other.
+	PatternIgnoredStaysInSession bool
 }
 
 // The substrate's own search wording, for a front end that has not said. It

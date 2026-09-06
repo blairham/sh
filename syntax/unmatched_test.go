@@ -10,7 +10,14 @@ import (
 
 // Input that runs out inside a quote or a substitution carries the whole
 // state a dialect might name: the opener, the closer that never came, the
-// text near the opener, and the line in both conventions.
+// text near it, and the line in both conventions.
+//
+// The near text is the **word** the construct was written in, to the end of
+// its line — not the construct. Every row here has the two coincide except
+// the quoted `${`, because `echo ` precedes the opener in all of them; the
+// rows that tell them apart live in the dialect that quotes it, where an
+// assignment prefix and a preceding quoted span both belong to the word
+// (#1022).
 func TestUnmatchedDelimitersCarryTheirState(t *testing.T) {
 	for _, c := range []struct {
 		src, opener, closer, near string
@@ -30,9 +37,11 @@ func TestUnmatchedDelimitersCarryTheirState(t *testing.T) {
 		{`echo ${x`, `${`, `}`, `${x`, 1, 1},
 		// A `${` opened inside a double quote blames the quote, which is
 		// what three of the panel do — the fourth's wording names the
-		// quote character too. The near text still starts at the `${`,
-		// because that is the scan that ran out; nothing words it here.
-		{`echo "${x"`, `"`, `"`, `${x"`, 1, 1},
+		// quote character too. The near text is the whole word either way:
+		// it used to start at the `${`, because that was the scan that ran
+		// out, and it starts at the word now. Nothing words this row, so it
+		// is here as the rule being uniform rather than as a measurement.
+		{`echo "${x"`, `"`, `"`, `"${x"`, 1, 1},
 		{"echo ok\necho \"abc\ndef", `"`, `"`, `"abc`, 2, 3},
 	} {
 		d := Core()

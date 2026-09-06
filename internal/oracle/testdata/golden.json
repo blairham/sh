@@ -73418,6 +73418,138 @@
         "TimedOut": false
       }
     },
+    "unterminated/a-substitution-in-a-word-of-its-own-quotes-only-itself": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: unexpected EOF while looking for matching `)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: unexpected EOF while looking for matching `)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: unexpected EOF while looking for matching `)'~\u003cscript\u003e: line 4: syntax error: unexpected end of file",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 4: Syntax error: end of file unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `(' unmatched",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:4: parse error near `$(echo hi'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unterminated/a-substitution-is-quoted-back-with-its-word": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: unexpected EOF while looking for matching `)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: unexpected EOF while looking for matching `)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: unexpected EOF while looking for matching `)'~\u003cscript\u003e: line 4: syntax error: unexpected end of file",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 4: Syntax error: end of file unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `(' unmatched",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:4: parse error near `a$(echo hi'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unterminated/a-word-is-not-cut-at-a-quoted-blank": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: unexpected EOF while looking for matching `)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: unexpected EOF while looking for matching `)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: unexpected EOF while looking for matching `)'~\u003cscript\u003e: line 4: syntax error: unexpected end of file",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 4: Syntax error: end of file unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `(' unmatched",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:4: parse error near `\"a b\"$(echo hi'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "unterminated/an-output-process-substitution-that-never-closes": {
       "bash": {
         "Stdout": "",

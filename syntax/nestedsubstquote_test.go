@@ -278,3 +278,39 @@ func TestASingleQuotedRunIsTakenLiterally(t *testing.T) {
 		}
 	}
 }
+
+// What the skip has to keep tracking once it is inside the substitution.
+//
+// The delimiter it is looking for can be written inside the program without
+// closing anything, and every way of writing it that way has to hold: in a
+// double-quoted string, behind a backslash, and in the single quotes this
+// file's subject is about. All four rows are unanimous across the panel.
+func TestTheSkipTracksQuotingInsideTheSubstitutionToo(t *testing.T) {
+	for _, c := range []struct{ src, inner string }{
+		// A `)` and a `}` inside a double-quoted string of the program.
+		{`echo "${x:-"$( echo "a)b" )"}"`, ` echo "a)b" `},
+		{`echo "${x:-"$( echo "a}b" )"}"`, ` echo "a}b" `},
+		// The same two behind a backslash rather than inside a quote.
+		{`echo "${x:-"$( echo \) )"}"`, ` echo \) `},
+		{`echo "${x:-"$( echo \" )"}"`, ` echo \" `},
+	} {
+		f, err := Parse(c.src, Core())
+		if err != nil {
+			t.Errorf("%s: %v", c.src, err)
+			continue
+		}
+		sc := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+		if len(sc.Args) != 2 {
+			t.Errorf("%s: %d words, want 2", c.src, len(sc.Args))
+			continue
+		}
+		span := sc.Args[1].Spans[0]
+		if span.Kind != ParamExp || span.Param.Arg == nil || len(span.Param.Arg.Spans) != 1 {
+			t.Errorf("%s: got %v, want an expansion whose operand is one span", c.src, span.Kind)
+			continue
+		}
+		if got := span.Param.Arg.Spans[0]; got.Kind != CommandSubst || got.Value != c.inner {
+			t.Errorf("%s: operand span is %v %q, want a command substitution %q", c.src, got.Kind, got.Value, c.inner)
+		}
+	}
+}

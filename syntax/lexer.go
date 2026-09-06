@@ -1743,16 +1743,11 @@ func (l *Lexer) skipSubstitution() bool {
 	}
 	l.advance() // $
 	l.advance() // (
-	depth := 1
-	if l.peek() == '(' {
-		// `$(( ))`, whose two closers are counted as two open parentheses so
-		// that one loop serves both spellings. An arithmetic body cannot
-		// hold an unbalanced parenthesis, so nothing is lost by not telling
-		// them apart here.
-		l.advance()
-		depth = 2
-	}
-	l.skipToDepth(depth)
+	// The arithmetic spelling needs no case of its own. Its second `(` is
+	// the next character skipToDepth reads, and counting it there is what
+	// makes both `)` at the other end belong to the construct — so one loop
+	// serves `$( )` and `$(( ))` alike.
+	l.skipToDepth(1)
 	return true
 }
 

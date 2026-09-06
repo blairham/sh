@@ -2956,6 +2956,26 @@ echo "st=$?"`,
 		Why:     "whether an unassigned subscript is an element. Two shells say an array is a map from subscript to value and this is an array of two; one walks the whole extent and finds the gap empty, giving five. Counting the gap as elements is what a list representation does, and it is nobody's answer",
 	},
 	{
+		ID: "array/a-bare-name-is-the-element-at-the-base", Category: "expansion",
+		Snippet: `a[5]=q; echo "bare=[${a-U}] set=[${a+S}] whole=[${a[@]+S}]"`,
+		Why:     "what a bare array name reads is the element at the *base* position and not the lowest subscript that happens to be assigned, so a name with nothing written where a bare name looks is unset while the array itself is set. Subscript 5 is the base in no shell with arrays, which is what keeps this a statement about the position rather than about the array base — bash and ksh93 answer `U` with `${a[@]+S}` still set, and zsh reads the list and is set either way. We answered `q`, the element nobody asked for, at every one of the three reads",
+	},
+	{
+		ID: "array/a-bare-name-after-the-base-element-is-removed", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[0]"; echo "bare=[${a-U}] len=${#a} quoted=[$a] at=[${a[@]}]"`,
+		Why:     "the four reads that go through one view, in one line: the two shells whose first element is 0 take the base element away and every read of the bare name then finds nothing — `U`, length 0, an empty quoted field — while `${a[@]}` still yields the two elements left. The removal itself was already right and the view behind it was not, so a case counting elements would have passed. zsh's cell is the refusal `array/a-subscript-below-the-first-element` records, since 0 is below its first element",
+	},
+	{
+		ID: "array/a-bare-name-in-arithmetic-after-the-base-element-is-removed", Category: "expansion",
+		Snippet: `a=(1 2 3); unset "a[0]"; echo "arith=$((a+5))"`,
+		Why:     "an arithmetic reference reads the same view, where an unset name is 0 — so the wrong reading is a wrong *number* rather than a wrong string. `5` in bash and ksh93 against the `7` reading the surviving element gave: a value that is plausible, silent and off by the element that was removed",
+	},
+	{
+		ID: "nounset/a-bare-array-name-whose-base-element-is-gone", Category: "shell options",
+		Snippet: `a=(x y z); unset "a[0]"; set -u; echo "[$a]"`,
+		Why:     "the loudest form of the same reading, and the one that fails in the opposite direction: with the base element gone the bare name is not set, so `set -u` refuses it and the shell gives up — 127 in bash through `-c` and 1 in ksh93, the statuses `nounset/unset-variable-from-a-command-string` already pins. ksh93's sentence names `a[0]` rather than `a`, which says out loud which element a bare name is. We printed a value and reported 0",
+	},
+	{
 		ID: "array/removing-one-element", Category: "expansion",
 		Snippet: `a=(p q r); unset "a[2]"; echo "n=${#a[@]} all=[${a[@]}]"`,
 		Why:     "the same question reached from the other side, and `unset a[i]` had been doing nothing at all: the subscript was read as part of the name, so a name that was never in the table was deleted from it. What the hole then looks like is the same axis",

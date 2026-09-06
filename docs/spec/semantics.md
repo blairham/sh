@@ -6057,9 +6057,35 @@ element-selecting operators, which can leave the list empty.
 **`ArrayScalarIsTheWholeArray`** — bash no · dash unspecified · ksh93 no · zsh yes
 
 Decides what a plain `$a` gives when `a` is an array: zsh says every
-element joined by a space, and bash and ksh93 say the first element
-alone. dash has no arrays, which is why the axis is absent rather than
-false there.
+element joined by the first character of `IFS`, and bash and ksh93 say
+the element at the base position alone. dash has no arrays, which is why
+the axis is absent rather than false there.
+
+It decides **whether the bare name is set**, and not only what it holds,
+because the two are one question. Where a bare name is the whole list it
+is set whenever the array is, an array with no elements included — that
+reads as the empty string. Where it is one element it *is* `${a[base]}`:
+the element at the base position, and **not the lowest subscript that
+happens to be assigned**. A name whose base element was removed, or was
+never written, is therefore unset while the array still holds elements.
+
+Measured 2026-09-06, from a script file and through `-c` alike, `env -i`
+with a scratch `HOME`. On `a=(x y z); unset "a[0]"`, bash 5.3.15, bash as
+`sh`, bash 3.2.57 and ksh93u+ all leave `${a-U}` at `U`, `${a+S}` empty,
+`${#a}` at 0, `"$a"` an empty field, `$((a+5))` at 5 and `set -u; $a` an
+unbound variable — while `${a[@]}` still yields `y z` and `${a[@]+S}` is
+still set, so it is the bare name that is unset and not the array.
+ksh93's `set -u` complaint names `a[0]` rather than `a`, which says the
+reading out loud. `a[5]=q`, where no base element was ever written, reads
+the same way, so it is the position and not the removal that decides.
+
+zsh asks nothing here: it reads the list, and its own `unset "a[1]"`
+leaves an empty element in place rather than a gap — see
+`UnsetArraySpan`.
+
+Reading the lowest assigned subscript instead answered `y` for the bare
+name and `7` for the arithmetic reference, both of them plausible values
+at status 0 (#998).
 
 **`ArraysAreSparse`** — bash yes · dash unspecified · ksh93 yes · zsh no
 

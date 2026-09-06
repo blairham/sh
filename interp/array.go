@@ -677,6 +677,46 @@ func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 	}
 }
 
+// arrayBareName is what a plain `$a` reads when `a` holds an array, and
+// whether the name is set at all. Both halves are one question, because the
+// axis that chooses the reading decides them together.
+//
+// Where a bare name is the whole list, the name is set whenever the array is
+// — an array with no elements included, which reads as the empty string.
+//
+// Where a bare name is one element it **is** `${a[base]}`: the element at the
+// base position, and not the lowest subscript that happens to be assigned. A
+// name whose base element was removed, or was never written, is therefore
+// unset while the array still holds elements, and reading the lowest assigned
+// subscript instead is the bug this replaces — `a=(x y z); unset "a[0]"` gave
+// `y` where every shell that reads one element gives nothing.
+//
+// Measured 2026-09-06, from a file and through `-c` alike, `env -i` with a
+// scratch HOME. On `a=(x y z); unset "a[0]"`, bash 5.3.15, bash as `sh`, bash
+// 3.2.57 and ksh93u+ all leave `${a-U}` at `U`, `"$a"` empty, `${#a}` at 0,
+// `$((a+5))` at 5 and `set -u; $a` an unbound variable, while `${a[@]}` still
+// yields `y z` and `${a[@]+S}` is still set. `a[5]=q` with no base element
+// ever written reads the same way, so it is the position and not the removal
+// that decides. ksh93's `set -u` complaint names `a[0]` rather than `a`,
+// which says the reading out loud. zsh asks nothing here: it reads the list,
+// and its own `unset "a[1]"` leaves an empty element in place rather than a
+// gap.
+func (r *Runner) arrayBareName(a Array) (string, bool) {
+	base, assigned := a[0]
+	// The two readings agree while the base element is the only element there
+	// is — which is `a=(x)` and every scalar-shaped array a script builds —
+	// so the axis is asked only where they part.
+	if assigned && len(a) == 1 {
+		return base, true
+	}
+	if r.ask(r.sem().ArrayScalarIsTheWholeArray, "a plain `$a` giving the whole array") {
+		// Joined with the first character of IFS, exactly as `$*` is: an
+		// empty array joins to the empty string, and the name is set.
+		return strings.Join(r.readArray(a), ifsFirst(r.ifs())), true
+	}
+	return base, assigned
+}
+
 // arrayScalar is what a plain `$a` gives when `a` is an array.
 //
 // Two answers: every element joined by a space, or the first element alone.

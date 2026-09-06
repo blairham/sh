@@ -210,6 +210,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `callstack/a-function-knows-it-is-one` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[f] n=1~outside=[]` | `[f] n=1~outside=[]` | `[f] n=1~outside=[]` | `[] n=0~outside=[]` | `[] n=0~outside=[]` |
 | `callstack/nesting-is-innermost-first` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `g f` | `g f` | `g f` | *(no output, status 0)* | *(no output, status 0)* |
 | `array/a-subscript-past-the-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2 all=[x y]` | `n=2 all=[x y]` | `n=2 all=[x y]` | `n=2 all=[x y]` | `n=5 all=[x    y]` |
+| `array/a-bare-name-is-the-element-at-the-base` | **2>** `<shell>: 1: a[5]=q: not found~<shell>: 1: Bad substitution` *(status 2)* | `bare=[U] set=[] whole=[S]` | `bare=[U] set=[] whole=[S]` | `bare=[U] set=[] whole=[S]` | `bare=[U] set=[] whole=[S]` | `bare=[    q] set=[S] whole=[S]` |
+| `array/a-bare-name-after-the-base-element-is-removed` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `bare=[U] len=0 quoted=[] at=[y z]` | `bare=[U] len=0 quoted=[] at=[y z]` | `bare=[U] len=0 quoted=[] at=[y z]` | `bare=[U] len=0 quoted=[] at=[y z]` | `bare=[x y z] len=3 quoted=[x y z] at=[x y z]` **2>** `<shell>:1: a: assignment to invalid subscript range` |
+| `array/a-bare-name-in-arithmetic-after-the-base-element-is-removed` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `arith=5` | `arith=5` | `arith=5` | `arith=5` | **2>** `<shell>:1: a: assignment to invalid subscript range~<shell>:1: bad math expression: operator expected at `2 3'` *(status 1)* |
 | `array/removing-one-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=3 all=[p  r]` |
 | `array/appending-to-an-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]~[x][yQ][z]` | `[x][yQ]~[x][yQ][z]` | **2>** `<shell>: a[-1]: bad array subscript` *(status 1)* | `[x][yQ]~[x][yQ][z]` | `[x][yQ]~[x][yQ][z]` |
 | `array/appending-to-an-element-inherits-the-base` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[xQ][y]` |
@@ -495,6 +498,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/a-subscript-past-the-end` — whether an unassigned subscript is an element. Two shells say an array is a map from subscript to value and this is an array of two; one walks the whole extent and finds the gap empty, giving five. Counting the gap as elements is what a list representation does, and it is nobody's answer
   ```sh
   a=(x); a[5]=y; echo "n=${#a[@]} all=[${a[@]}]"
+  ```
+- `array/a-bare-name-is-the-element-at-the-base` — what a bare array name reads is the element at the *base* position and not the lowest subscript that happens to be assigned, so a name with nothing written where a bare name looks is unset while the array itself is set. Subscript 5 is the base in no shell with arrays, which is what keeps this a statement about the position rather than about the array base — bash and ksh93 answer `U` with `${a[@]+S}` still set, and zsh reads the list and is set either way. We answered `q`, the element nobody asked for, at every one of the three reads
+  ```sh
+  a[5]=q; echo "bare=[${a-U}] set=[${a+S}] whole=[${a[@]+S}]"
+  ```
+- `array/a-bare-name-after-the-base-element-is-removed` — the four reads that go through one view, in one line: the two shells whose first element is 0 take the base element away and every read of the bare name then finds nothing — `U`, length 0, an empty quoted field — while `${a[@]}` still yields the two elements left. The removal itself was already right and the view behind it was not, so a case counting elements would have passed. zsh's cell is the refusal `array/a-subscript-below-the-first-element` records, since 0 is below its first element
+  ```sh
+  a=(x y z); unset "a[0]"; echo "bare=[${a-U}] len=${#a} quoted=[$a] at=[${a[@]}]"
+  ```
+- `array/a-bare-name-in-arithmetic-after-the-base-element-is-removed` — an arithmetic reference reads the same view, where an unset name is 0 — so the wrong reading is a wrong *number* rather than a wrong string. `5` in bash and ksh93 against the `7` reading the surviving element gave: a value that is plausible, silent and off by the element that was removed
+  ```sh
+  a=(1 2 3); unset "a[0]"; echo "arith=$((a+5))"
   ```
 - `array/removing-one-element` — the same question reached from the other side, and `unset a[i]` had been doing nothing at all: the subscript was read as part of the name, so a name that was never in the table was deleted from it. What the hole then looks like is the same axis
   ```sh
@@ -4899,6 +4914,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `status/an-assignment-can-read-the-previous-status` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` |
 | `status/an-assignment-reports-its-substitution` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` |
 | `errexit/assignment-takes-the-substitution` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
+| `nounset/a-bare-array-name-whose-base-element-is-gone` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: unbound variable` *(status 127)* | **2>** `<shell>: line 1: a: unbound variable` *(status 127)* | **2>** `<shell>: a: unbound variable` *(status 127)* | **2>** `<shell>: a[0]: parameter not set` *(status 1)* | `[x y z]` **2>** `<shell>:1: a: assignment to invalid subscript range` |
 | `opt/set-v-echoes-lines-as-read` | `a~b` **2>** `echo a~echo b` | `a~b` **2>** `echo a~echo b` | `a~b` **2>** `echo a~echo b` | `a~b` **2>** `echo a~echo b` | `a~b` **2>** `echo a~echo b` | `a~b` **2>** `echo a~echo b` |
 | `opt/set-e-carries-the-err-trap` | `done` **2>** `trap: ERR: bad trap` | `ERR~ERR~done` | `ERR~ERR~done` | `ERR~ERR~done` | *(no output, status 2)* | `ERR~done` |
 | `opt/set-n-reads-and-never-runs` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
@@ -5076,6 +5092,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `errexit/assignment-takes-the-substitution` — an assignment reports what the substitution reported, so this ends the script where `echo "$(false)"` does not
   ```sh
   set -e; x=$(false); echo reached
+  ```
+- `nounset/a-bare-array-name-whose-base-element-is-gone` — the loudest form of the same reading, and the one that fails in the opposite direction: with the base element gone the bare name is not set, so `set -u` refuses it and the shell gives up — 127 in bash through `-c` and 1 in ksh93, the statuses `nounset/unset-variable-from-a-command-string` already pins. ksh93's sentence names `a[0]` rather than `a`, which says out loud which element a bare name is. We printed a value and reported 0
+  ```sh
+  a=(x y z); unset "a[0]"; set -u; echo "[$a]"
   ```
 - `opt/set-v-echoes-lines-as-read` — the verbose option writes each line back as it is read — not the line that turned it on, which was spent before it took effect. Unanimous, and reachable only from a file: a -c string is read whole before it runs
   ```sh

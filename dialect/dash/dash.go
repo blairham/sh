@@ -106,6 +106,11 @@ func Semantics() interp.Semantics {
 	// style exists for the two -p listings alone.
 	s.DeclareValueQuoting = interp.ListingQuoteAlwaysEscaped
 	s.EchoInterpretsEscapes = interp.Yes
+	// Neither spelling of the escape character: this shell's set is the XSI
+	// list alone, so `\e` and `\E` are the two characters they are written
+	// as.
+	s.EchoExpandsEscEscape = interp.No
+	s.EchoExpandsCapitalEscEscape = interp.No
 	s.LengthOfSpecialIsCount = interp.No
 	s.UnterminatedBracket = interp.BracketNoMatch
 	// `.` with no filename at all is not an error here: dash does nothing and

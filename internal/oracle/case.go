@@ -547,6 +547,11 @@ var Corpus = []Case{
 		Why:     "\\xHH is bash and zsh on top of the XSI set: ksh93 leaves it as written even under -e, and dash has no -e at all",
 	},
 	{
+		ID: "echo/the-two-spellings-of-the-escape-character", Category: "builtins",
+		Snippet: `echo -e 'a\eZ:a\EZ' | od -An -tx1 | tr -s " "`,
+		Why:     "read as bytes, because an ESC is invisible in a rendered table and this row is entirely about which of the two letters produces one. The two shells that split `\\e` from `\\E` split them in *opposite* directions — ksh93 has `\\E` and not `\\e`, zsh has `\\e` and not `\\E` — so one answer for both letters is wrong for half the panel. bash 5.3 has both and bash 3.2 neither, which is also the version line here; dash has no -e and prints it. The same asymmetry the `%b` site has, and the row that says `echo` cannot borrow one answer for the pair",
+	},
+	{
 		ID: "echo/the-order-of-e-and-capital-e", Category: "builtins",
 		Snippet: `echo -e -E 'm\tn'`,
 		Why:     "-e then -E: bash lets the last flag win and prints the backslash, zsh lets -e win and expands — the other order agrees everywhere and asks nothing",

@@ -1218,10 +1218,11 @@ The rest of the table splits, and each split falls in a different place:
   `PrintfBEscEscape` and `PrintfBCapitalEscEscape`. The two shells that
   split them split them in **opposite** directions: ksh93 has `\E` and not
   `\e`, zsh has `\e` and not `\E`. bash has both, dash neither. A single
-  answer for both letters is wrong for half the panel, which is why the
-  existing `EchoExpandsEscEscape` — one axis for both — cannot be reused
-  here. (It is also wrong for those two shells at `echo`'s own site; see
-  the follow-up noted below.)
+  answer for both letters is wrong for half the panel, which is why one
+  `Echo…` axis could not be reused for the pair. `echo`'s own site has the
+  same asymmetry and was split the same way in #908 — the four dialects
+  give the same pair of answers at both sites, and the two sites are still
+  asked separately.
 - **`\x`.** `PrintfBHexEscape`, the section above.
 - **`\c` asks nothing.** All six end the output there, where the same two
   characters in a *format* are literal in bash and dash, control-X in ksh93
@@ -1255,11 +1256,10 @@ ignores a precision there too. With nothing stopping it ksh93 pads and
 truncates like the rest, so this is a property of the stop and not of the
 conversion. The five-shell answer is what is implemented.
 
-`echo`'s own `\e`/`\E` split is the same asymmetry the `%b` site has, and
-`EchoExpandsEscEscape` is one axis for both letters, so half of it is
-wrong: `echo -e 'a\EZ'` is `61 1b 5a` in ksh93 and `61 5c 45 5a` in zsh,
-where `echo -e 'a\eZ'` is the other way round. Both are follow-ups rather
-than part of #798.
+`echo`'s own `\e`/`\E` split is the same asymmetry the `%b` site has —
+`echo -e 'a\EZ'` is `61 1b 5a` in ksh93 and `61 5c 45 5a` in zsh, where
+`echo -e 'a\eZ'` is the other way round — and it was one axis for both
+letters until #908 split it. See `EchoExpandsCapitalEscEscape`.
 
 ### A format is a byte string, in every direction
 
@@ -4547,10 +4547,35 @@ and zsh does exactly the reverse. One field could not say that.
 
 ### `echo`
 
-**`EchoExpandsEscEscape`** — bash yes · dash no · ksh93 yes · zsh yes
+**`EchoExpandsEscEscape`** — bash yes · dash no · ksh93 no · zsh yes
 
-Admits `\e` and `\E` for the escape character: everyone with escapes but
-dash, whose set is the XSI list alone.
+Admits `\e` for the escape character in an `echo` argument.
+
+**`EchoExpandsCapitalEscEscape`** — bash yes · dash no · ksh93 yes · zsh no
+
+Admits `\E`, and it is a second axis because the two shells that split the
+letters split them in **opposite** directions. Measured with `od -An -tx1`
+(macOS, 2026-09-06):
+
+    echo -e 'a\eZ'   bash 5.3 61 1b 5a   zsh 61 1b 5a
+                     bash 3.2 61 5c 65 5a   ksh93 61 5c 65 5a
+                     dash (no -e) 61 5c 65 5a
+    echo -e 'a\EZ'   bash 5.3 61 1b 5a   ksh93 61 1b 5a
+                     bash 3.2 61 5c 45 5a   zsh 61 5c 45 5a
+                     dash (no -e) 61 5c 45 5a
+
+ksh93 has `\E` and not `\e`; zsh has `\e` and not `\E`. bash 5.3 has both
+and bash 3.2 neither, which is a version line rather than a dialect one.
+A single answer for the pair — which is what this was until #908 — is wrong
+for half the panel: it gave ksh93 an `\e` it does not have and zsh an `\E` it
+does not have.
+
+It is the same asymmetry the `%b` site has, asked separately there
+(`PrintfBEscEscape`, `PrintfBCapitalEscEscape`), and the four dialects give
+the same pair of answers at both sites. Each letter is asked only where its
+own spelling appears, so `echo -e 'a\EZ'` needs no answer about `\e`.
+
+Corpus: `echo/the-two-spellings-of-the-escape-character`.
 
 Re-measured for this catalog, bash 3.2 prints `\e` as written where bash
 5.3 writes ESC, so this too is a bash 4 addition — dating rather than

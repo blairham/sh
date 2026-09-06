@@ -293,7 +293,10 @@ func Semantics() interp.Semantics {
 	s.EchoOptions = "neE"
 	s.EchoLastEscapeFlagWins = interp.No
 	s.EchoExpandsHexEscapes = interp.Yes
+	// `\e` is the escape character here and `\E` is two characters — the
+	// opposite of ksh93.
 	s.EchoExpandsEscEscape = interp.Yes
+	s.EchoExpandsCapitalEscEscape = interp.No
 	// read takes -r and -s, -A with the array as the first operand, and the
 	// same -d, -t and -u as the others — but no counts: -N is a bad option
 	// here and -n is a flag it reads and, outside completion widgets, acts

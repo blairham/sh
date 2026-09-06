@@ -218,7 +218,10 @@ func Semantics() interp.Semantics {
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
 	// \x does not.
 	s.EchoOptions = "ne"
-	s.EchoExpandsEscEscape = interp.Yes
+	// `\E` is the escape character here and `\e` is two characters — the
+	// opposite of zsh, which is why one axis could not answer for both.
+	s.EchoExpandsEscEscape = interp.No
+	s.EchoExpandsCapitalEscEscape = interp.Yes
 	// read takes -r and -s plus -A, whose array is the first operand where
 	// bash's -a takes it as the option's argument, and the same -d, -n, -N,
 	// -t and -u. -p is a bare flag naming the coprocess as the source —

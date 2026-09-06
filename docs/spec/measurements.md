@@ -1010,6 +1010,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `echo/dash-e-and-capital-e` | `-e a	b~-E c	d` | `a	b~c\td` | `a	b~c\td` | `a	b~c\td` | `a	b~-E c\td` | `a	b~c\td` |
 | `echo/backslash-c-stops-the-output` | `pdone` | `p\cq~done` | `p\cq~done` | `p\cq~done` | `p\cq~done` | `pdone` |
 | `echo/hex-escape-diverges` | `-e A\x41B` | `AAB` | `AAB` | `AAB` | `A\x41B` | `AAB` |
+| `echo/the-two-spellings-of-the-escape-character` | ` 2d 65 20 61 5c 65 5a 3a 61 5c 45 5a 0a ` | ` 61 1b 5a 3a 61 1b 5a 0a ` | ` 61 1b 5a 3a 61 1b 5a 0a ` | ` 61 5c 65 5a 3a 61 5c 45 5a 0a ` | ` 61 5c 65 5a 3a 61 1b 5a 0a ` | ` 61 1b 5a 3a 61 5c 45 5a 0a ` |
 | `echo/the-order-of-e-and-capital-e` | `-e -E m	n` | `m\tn` | `m\tn` | `m\tn` | `-E m	n` | `m	n` |
 | `readonly/reassignment-by-a-declaration` | **2>** `<shell>: 1: export: x: is read only` *(status 2)* | `after` **2>** `<shell>: line 1: x: readonly variable` | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | `after` **2>** `<shell>: x: readonly variable` | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
 | `readonly/reassignment-from-a-command-string` | **2>** `<shell>: 1: x: is read only` *(status 2)* | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | **2>** `<shell>: line 1: x: readonly variable` *(status 127)* | **2>** `<shell>: x: readonly variable` *(status 1)* | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
@@ -1241,6 +1242,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `echo/hex-escape-diverges` — \xHH is bash and zsh on top of the XSI set: ksh93 leaves it as written even under -e, and dash has no -e at all
   ```sh
   echo -e 'A\x41B'
+  ```
+- `echo/the-two-spellings-of-the-escape-character` — read as bytes, because an ESC is invisible in a rendered table and this row is entirely about which of the two letters produces one. The two shells that split `\e` from `\E` split them in *opposite* directions — ksh93 has `\E` and not `\e`, zsh has `\e` and not `\E` — so one answer for both letters is wrong for half the panel. bash 5.3 has both and bash 3.2 neither, which is also the version line here; dash has no -e and prints it. The same asymmetry the `%b` site has, and the row that says `echo` cannot borrow one answer for the pair
+  ```sh
+  echo -e 'a\eZ:a\EZ' | od -An -tx1 | tr -s " "
   ```
 - `echo/the-order-of-e-and-capital-e` — -e then -E: bash lets the last flag win and prints the backslash, zsh lets -e win and expands — the other order agrees everywhere and asks nothing
   ```sh

@@ -30,7 +30,7 @@ import (
 // So this file parses under combinations rather than under presets. It cannot
 // be exhaustive, and it does not try; it takes the three edges of the lattice
 // that a bug of this shape has to sit on to be interesting — every flag, every
-// flag but one, and one flag alone is the presets' own neighbourhood — plus a
+// flag but one, and one flag alone is the presets' own neighborhood — plus a
 // fixed spread of mixtures. The generator reads the struct by reflection, so a
 // flag added tomorrow is covered by having been declared.
 

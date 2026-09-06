@@ -214,11 +214,11 @@ func Semantics() interp.Semantics {
 	s.EchoExpandsHexEscapes = interp.Yes
 	s.EchoExpandsEscEscape = interp.Yes
 	// read takes -r and -s plus the argument letters: -a names the array in
-	// the option's argument, -d a delimiter, -n and -N the two counts, -p a
-	// prompt for when the input is a terminal, -t a timeout and -u a
-	// descriptor. A short -n keeps its text and reports 1; a short -N keeps
-	// its text too.
-	s.ReadOptions = "rsa:d:n:N:p:t:u:"
+	// the option's argument, -d a delimiter, -i the text a line editor would
+	// be seeded with, -n and -N the two counts, -p a prompt for when the
+	// input is a terminal, -t a timeout and -u a descriptor. A short -n
+	// keeps its text and reports 1; a short -N keeps its text too.
+	s.ReadOptions = "rsa:d:i:n:N:p:t:u:"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
@@ -765,11 +765,15 @@ func Diagnostics() interp.Diagnostics {
 			// command with the job specs in its arguments replaced by
 			// process ids.
 			"jobs": "nx",
-			// What is left of read's letters: readline editing and the text
-			// -i seeds it with — about a line editor this runner does not
-			// hold. The -p prompt is implemented: parsed always, printed
-			// only to a terminal, which is the measured whole of it.
-			"read": "Eei",
+			// What is left of read's letters: readline editing, which is a
+			// line editor this runner does not hold. -i is off this list
+			// because there is nothing left for it to do — it seeds the
+			// editor -e opens, and with -e refused here there is never one
+			// to seed, which is also bash's own answer wherever the input
+			// is not a terminal. The -p prompt is implemented: parsed
+			// always, printed only to a terminal, which is the measured
+			// whole of it.
+			"read": "Ee",
 			// The nameref and trace attributes, under both of the builtin's
 			// names — and `local`'s extras: the same two, `-I` inheritance,
 			// and the function letters, which this shell takes and ignores

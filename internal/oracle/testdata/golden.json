@@ -46050,6 +46050,94 @@
         "TimedOut": false
       }
     },
+    "read/an-initial-value-is-not-a-default": {
+      "bash": {
+        "Stdout": "st=0 l=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 l=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 l=[keep]",
+        "Stderr": "\u003cshell\u003e: line 0: read: -i: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 l=[keep]",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -i",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 l=[keep]",
+        "Stderr": "\u003cshell\u003e: read: -i: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 l=[keep]",
+        "Stderr": "\u003cshell\u003e:read:1: bad option: -i",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/an-initial-value-with-nothing-after-it": {
+      "bash": {
+        "Stdout": "st=2 l=[keep]",
+        "Stderr": "\u003cshell\u003e: line 1: read: -i: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2 l=[keep]",
+        "Stderr": "\u003cshell\u003e: line 1: read: -i: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 l=[keep]",
+        "Stderr": "\u003cshell\u003e: line 0: read: -i: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 l=[keep]",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -i",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 l=[keep]",
+        "Stderr": "\u003cshell\u003e: read: -i: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 l=[keep]",
+        "Stderr": "\u003cshell\u003e:read:1: bad option: -i",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "read/an-unterminated-last-line-is-dropped": {
       "bash": {
         "Stdout": "\u003ca\u003e",

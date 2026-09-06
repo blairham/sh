@@ -1165,11 +1165,12 @@ the site matters — and `PrintfHexEscape` is put to a format and never to a
 ### The escapes a `%b` argument expands
 
 `%b` and a format are two escape tables, not one table read twice, and
-every shell in the panel means it. Measured with `/bin/bash` 3.2.57,
-`/opt/homebrew/bin/bash` 5.3.15, `/bin/bash` as `sh`, `/bin/ksh` 93u+
-2012-08-01, `/opt/homebrew/bin/zsh` 5.9.2 and `/bin/dash`, reading bytes
-with `od -An -tx1` (macOS, 2026-09-05). The three bash columns agree
-throughout except where noted, so they are one column here:
+every shell in the panel means it. Measured with `/opt/homebrew/bin/bash`
+5.3.15 (as `bash` and as `sh` — the corpus's `bash` and `bash-as-sh`),
+`/bin/bash` 3.2.57 (`bash32`), `/bin/ksh` 93u+ 2012-08-01,
+`/opt/homebrew/bin/zsh` 5.9.2 and `/bin/dash`, reading bytes with
+`od -An -tx1` (macOS, 2026-09-05). All three bash columns agree throughout
+except where noted, so they are one column here:
 
     printf '%b' 'a\0101Z'  bash 61 41 5a  ksh93 61 41 5a  zsh 61 41 5a
                            dash 61 41 5a
@@ -1186,8 +1187,10 @@ code point: `\0300` is `c0` and `\0400` is `00`.
 
 A `%b` and an `echo` argument are close but are not the same table either,
 and the panel says so twice over. bash 3.2 writes `61 1b 5a` for a `%b`
-argument's `\e` and `61 5c 65 5a` for an `echo` argument's, so one shell
-answers the two sites differently; and the bare octal below splits the two
+argument's `\e` and `61 5c 65 5a` for an `echo` argument's — that is
+`/bin/bash` 3.2.57, the corpus's `bash32` column, and not `bash-as-sh`,
+which is the 5.3 build under another name — so one shell answers the two
+sites differently; and the bare octal below splits the two
 sites for every bash. The four dialects modeled here happen to give the
 same answer at both sites for `\e`, `\E` and `\x` — bash 3.2 is a version
 and not a dialect — but they are separate questions and are asked
@@ -1238,10 +1241,11 @@ Two things measured here and **not** modeled.
 
 `\uHHHH` and `\UHHHHHHHH` are escapes in bash 5.3 and zsh at both sites,
 and in ksh93's *format* only. `printf '%b' 'a\u0041Z'` is `61 41 5a` in
-bash 5.3 and zsh and the characters as written in bash 3.2, bash as `sh`,
-dash and ksh93; `printf 'a\u0041Z'` moves ksh93 into the first group.
-Nothing here decodes them at either site, which is a gap the change for
-#798 left exactly where it found it.
+bash 5.3 — as `bash` and as `sh` alike, so this is a bash *version* and
+not a posix-mode question — and in zsh, and it is the characters as
+written in bash 3.2, dash and ksh93; `printf 'a\u0041Z'` moves ksh93 into
+the first group. Nothing here decodes them at either site, which is a gap
+the change for #798 left exactly where it found it.
 
 One more divergence is measured and not modeled, in the corner where the
 stop meets a field width. Five of the six pad and truncate the text a `\c`
@@ -2843,7 +2847,7 @@ Corpus: `help/a-builtin-answers-the-help-option`,
 whose argument follows it. Measured (oracle runs, 2026-09-04, bash 5.3 and
 3.2 agreeing throughout except where 3.2 lacks a letter):
 
-    bash   rsa:d:n:N:p:t:u:    plus -e -E -i, unimplemented here
+    bash   rsa:d:i:n:N:p:t:u:  plus -e -E, unimplemented here
     ksh93  rspAd:n:N:t:u:      plus -C -S -v and --version, unimplemented
     zsh    rsnpAd:t:u:         plus -e -E -k -q -z -c -l, unimplemented
     dash   rp:
@@ -2884,6 +2888,29 @@ The letters themselves diverge before the behaviors do:
   (`a\:b` to `:` is `a:b`) and still folds a backslash-newline away;
   ksh93 and zsh fold the escaped delimiter pair away entirely and keep a
   backslash-newline (both not modeled — the substrate follows bash here).
+- **The seed.** `-i text` is the text a *line editor* opens with, so it
+  has an effect only where there is a terminal with an editor on it.
+  bash's own answer with no terminal is to take the option, consume its
+  argument, and read the line as though the letter were not there:
+
+      printf "x\n"  | { l=keep; read -i pre -r l; ... }   bash  st=0 l=[x]
+      printf "\n"   | { l=keep; read -i pre -r l; ... }   bash  st=0 l=[]
+      read -i                                            bash  `-i: option
+                                                               requires an
+                                                               argument`, st=2
+
+  The second line is the reading that looks right and is not: the seed is
+  **not** a default for an empty line, in bash or in anything else. bash
+  3.2, bash as `sh`, dash, ksh93 and zsh have no such letter at all and
+  refuse it in four wordings at two statuses — bash 3.2 and dash and
+  ksh93 at 2, zsh alone at 1 — which the shared bad-option reader already
+  produces from each dialect's own words.
+
+  So the letter is implemented here as bash's no-terminal behavior, and
+  what stops that from being an option that lies is the *other* letter:
+  `-e`, which opens the editor a seed would go into, is still refused by
+  name as unimplemented. There is never an editor here for the seed to
+  reach (#761).
 - **The counts.** `-n N` reads at most N characters, the delimiter still
   ending it early, and the text splits as any read's does. Without -r the
   count is of characters as *delivered* in bash — `a\tbcd` under `-n 3` is

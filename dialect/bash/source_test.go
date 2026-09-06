@@ -566,3 +566,47 @@ func TestShiftReadsNoOptionsAndStillTakesTheMarker(t *testing.T) {
 		}
 	}
 }
+
+// `read -i` takes its argument and does nothing with it. The seed is the text
+// a line editor opens with, so it has an effect only where there is a
+// terminal and an editor on it, and `-e` — the letter that would open one —
+// is refused here as unimplemented. bash answers the same way wherever its
+// own input is not a terminal.
+//
+// The seed is not a *default* for an empty line, which is the reading of the
+// manual that looks right and is not: an empty line leaves the variable
+// empty.
+func TestReadInitialValueIsTakenAndIgnored(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		src  string
+		want string
+		st   int
+	}{
+		{`printf "x\n" | { l=keep; read -i pre -r l; echo "st=$? l=[$l]"; }`, "st=0 l=[x]\n", 0},
+		{`printf "\n" | { l=keep; read -i pre -r l; echo "st=$? l=[$l]"; }`, "st=0 l=[]\n", 0},
+		{`printf "x\n" | { l=keep; read -ipre -r l; echo "st=$? l=[$l]"; }`, "st=0 l=[x]\n", 0},
+		{
+			// The argument is consumed, so the word after it is not the
+			// variable name: without that `pre` would be assigned to.
+			`printf "x\n" | { pre=keep; read -i pre -r l; echo "pre=[$pre] l=[$l]"; }`,
+			"pre=[keep] l=[x]\n", 0,
+		},
+		{
+			`printf "x\n" | { read -i; echo "st=$?"; }`,
+			"bash: line 1: read: -i: option requires an argument\n" +
+				"read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]\n" +
+				"st=2\n", 0,
+		},
+		{
+			// The editor itself is still refused by name, which is what
+			// keeps the seed from ever having somewhere to go.
+			`printf "x\n" | { read -e -r l; echo "st=$?"; }`,
+			"bash: line 1: read: -e is not implemented yet\nst=2\n", 0,
+		},
+	} {
+		if out, st := runBash(t, dir, tc.src+"\n"); out != tc.want || st != tc.st {
+			t.Errorf("%s: said %q status %d, want %q and %d", tc.src, out, st, tc.want, tc.st)
+		}
+	}
+}

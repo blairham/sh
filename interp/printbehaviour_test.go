@@ -69,14 +69,24 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 }
 
 // corpusGrammar is the grammar the round-trip reads the corpus with: the core,
-// widened by every construct the corpus actually contains.
+// widened until it reads every case.
 //
 // Named here rather than taken from a dialect. What this test needs is a
-// grammar wide enough to reach the cases — which shell happens to have that
-// grammar is not the printer's business, and borrowing one made `interp`'s
-// tests stop compiling without `dialect/bash` (#491). The list is the corpus's
-// requirement and the check above is what keeps it honest: today it reads all
-// 1270 of the cases that are neither syntax errors nor layout-sensitive.
+// grammar wide enough to reach the cases and to mean what they meant — which
+// shell happens to have that grammar is not the printer's business, and
+// borrowing one made `interp`'s tests stop compiling without `dialect/bash`
+// (#491).
+//
+// Six of these are what the corpus cannot be *read* without, measured by
+// turning each off against the 1270 cases that are neither syntax errors nor
+// layout-sensitive: ParamIndirection (8 cases), Coproc (3), CaseContinue and
+// CoprocName (2 each), ExtendedPatternInCondition and FunctionKeywordParens
+// (1 each) — 15 between them, which is what the plain core cannot read. The
+// rest change what a case *means* rather than whether it parses, and they are
+// here because the printer should be exercised on those meanings rather than
+// on whatever a narrower reading turns them into.
+//
+// The unread count above is what keeps the six honest.
 func corpusGrammar() syntax.Dialect {
 	d := syntax.Core()
 	d.CaseContinue = true

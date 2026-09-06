@@ -2350,10 +2350,11 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 			r.status = 126
 			return nil
 		}
-		r.bg.PID = cmd.Process.Pid
 		// The pid is final now, so anything waiting to read `$!` may proceed
-		// while this goroutine blocks on the process.
-		r.bg.markReady()
+		// while this goroutine blocks on the process. Once, and setPID says
+		// why: a job that starts a second external command reaches this again,
+		// by which time the shell has already read the field.
+		r.bg.setPID(cmd.Process.Pid)
 		err := cmd.Wait()
 		r.status = r.exitStatus(err)
 		r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})

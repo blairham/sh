@@ -70,6 +70,13 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	// A copy of this binary re-executed as a shell, for the background-job
+	// tests. Here rather than at the top of the test, which is where the
+	// signal tests put theirs: those shells are killed and never return, so
+	// they never reach an os.Exit inside a test — and Go 1.26 panics on one
+	// that does. Measured the hard way: two of the four cases passed anyway,
+	// because their evidence was a child process that survived the panic.
+	bgRunningAsAShell()
 	if os.Getenv(tripwireHome) != "" {
 		// A shell half re-executed by a test above. Its environment was
 		// assembled by the parent and then aimed by the test that started it,

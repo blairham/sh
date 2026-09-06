@@ -2256,6 +2256,21 @@ echo "st=$?"`,
 		Why:     "`&|` starts a job in the background and lets go of it, so nothing lists it — one shell's, and the only shape of it a record can hold. The sibling spelling `&!` cannot be recorded at all: bash 5.3 and ksh93 read those two characters as `&` and the `!` that negates a pipeline, and what they then do with a bare `!` is a divergence of its own (#948), so a row about the disowning would carry four unrelated ones beside it. `&|` has no such second reading in bash or dash, which both refuse it outright. ksh93's cell is the exception and is not this change's: it parses `&|` and means something else again — `echo hi &| echo done` prints only `done` there. Counted rather than printed, because what a listing looks like is four other rows' question",
 	},
 	{
+		ID: "jobs/a-background-job-outlives-the-shell", Category: "builtins",
+		Snippet: `(sleep 0.2; echo LATE-42) & echo NOW-42`,
+		Why:     "the question nothing in this corpus asked before (#519): what happens to a `&` job *after* the shell ends. Every other job row waits for the job or inspects `jobs` first. All five keep it — a real shell forks, so the job is a process that outlives its parent by construction — and the order says the shell did not wait for it either. This shell prints only NOW-42: a background job here is a goroutine in this process, so the process ending takes the rest of the job with it. Recorded as a knowing difference rather than avoided",
+	},
+	{
+		ID: "jobs/a-background-external-command-outlives-the-shell", Category: "builtins",
+		Snippet: `sh -c 'sleep 0.2; echo LATE-42' & echo NOW-42`,
+		Why:     "the same question where the whole job is one external command, and this shell answers it correctly — the child is a real process and outliving the shell is what a real process does. The pair with the row above is what says the difference is about the *shell logic* in a job and not about `&`: a subshell, an and-list, a brace group and a function all lose their remainder, and a single command loses nothing",
+	},
+	{
+		ID: "jobs/wait-brings-a-background-job-back-before-the-shell-ends", Category: "builtins",
+		Snippet: `(sleep 0.2; echo LATE-42) & wait; echo NOW-42`,
+		Why:     "the same job with a `wait` in front of the ending, which every shell including this one gets right and which is the workaround the row above leaves a script needing. It is the pair that says the loss is about the shell *ending*, not about the job: nothing is wrong with the job while there is still a shell to run it",
+	},
+	{
 		ID: "jobs/a-running-background-job", Category: "builtins",
 		Snippet: `sleep 0.4 & jobs`,
 		Why:     "one line of a `jobs` listing, and four shells write it four ways — the marker spacing, the width of the state column, the case of the word, and whether the command is there at all. dash shows an empty column and ksh93 `<command unknown>`, because neither kept the text; bash puts the `&` back on",

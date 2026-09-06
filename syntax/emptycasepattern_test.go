@@ -147,3 +147,24 @@ func TestAnEmptyAlternativeIsLocatedAtItsSeparator(t *testing.T) {
 		t.Errorf("spans %v..%v, want an empty extent", first.Pos(), first.End())
 	}
 }
+
+// The two ways a pattern position may hold something other than a word are
+// asked in a fixed order, and no preset sets both — dash has the operator slot
+// and zsh has the empty alternative. So the order is unobservable in every
+// shell that exists, and this is the test that makes it observable at all: a
+// dialect with both must read `|` as the separator it is rather than as an
+// operator standing where a pattern belongs, because the other order consumes
+// the `|` and then finds a word where the `)` should be.
+func TestTheEmptyAlternativeIsAskedBeforeTheOperatorSlot(t *testing.T) {
+	d := emptyAlt()
+	d.CasePatternAcceptsOperator = true
+	got := casePatterns(t, "case a in (|x|y) echo m;; esac", d)
+	if want := ",x,y"; strings.Join(got, ",") != want {
+		t.Errorf("patterns = %q, want %q", got, want)
+	}
+	// The slot is still there for what it is for, and it still contributes
+	// no pattern: an operator is taken and the arm keeps the rest.
+	if got, want := casePatterns(t, "case a in (x| ; |y) echo m;; esac", d), "x,y"; strings.Join(got, ",") != want {
+		t.Errorf("patterns = %q, want %q", got, want)
+	}
+}

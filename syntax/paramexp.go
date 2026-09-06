@@ -139,6 +139,17 @@ type ParamExpr struct {
 	// each, or one field joined.
 	Prefix byte
 
+	// Inner is the expansion standing where a name would — the `${v}` of
+	// `${${v}#a}` — and is nil for the ordinary shape. Name is empty when it
+	// is set, because the inner expansion is the whole of that position:
+	// `${x${v}}` is a bad substitution rather than a name with one appended.
+	//
+	// A *word* rather than a ParamExpr, so the shape says only "an expansion
+	// stands here" — the inner may be a parameter expansion, a command
+	// substitution or an arithmetic one, and all three were measured
+	// accepted in the same position.
+	Inner *Word
+
 	Op ParamOp
 	// Colon records the `:` that extends the test from "unset" to "unset or
 	// empty". It is the whole difference between the two rows of
@@ -261,8 +272,19 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 		s = s[1:]
 	}
 
-	e.Name, s = scanParamName(s)
-	if e.Name == "" && !e.HasFlags {
+	if p.dialect.NestedParamExpansion && strings.HasPrefix(s, "$") {
+		if inner, rest, ok := p.scanNestedExpansion(s, start); ok {
+			// Src as well as the node: a diagnostic about a nested expansion
+			// names the text it was written as, and there is no parameter
+			// name here for it to name instead.
+			e.Inner, s, e.Src = inner, rest, src
+		}
+	}
+
+	if e.Inner == nil {
+		e.Name, s = scanParamName(s)
+	}
+	if e.Name == "" && !e.HasFlags && e.Inner == nil {
 		if !p.dialect.BadSubstitutionAtParseTime {
 			// The majority defers an unreadable expansion to the run, the
 			// same way an unknown operator is deferred: a `${%x}` in a
@@ -290,7 +312,12 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 		return e
 	}
 
-	if p.dialect.ArraySubscript && strings.HasPrefix(s, "[") && p.subscriptableName(e.Name) {
+	// A subscript after a nested expansion is read here and refused by name
+	// at the run, rather than left unconsumed: leaving it would make the
+	// operator scan fail and call the whole thing a bad substitution, which
+	// says the grammar cannot read what the grammar plainly can.
+	if p.dialect.ArraySubscript && strings.HasPrefix(s, "[") &&
+		(e.Inner != nil || p.subscriptableName(e.Name)) {
 		if i := closingBracket(s); i > 0 {
 			e.Index = p.wordFrom(s[1:i], start)
 			s = s[i+1:]
@@ -752,4 +779,44 @@ func (p *Parser) operandDialect() Dialect {
 	d := p.dialect
 	d.ProcessSubstitution = false
 	return d
+}
+
+// scanNestedExpansion peels one substitution off the front of s, for the
+// grammar where an expansion may stand where a parameter name would.
+//
+// The extent is measured by lexing rather than by counting braces here: the
+// lexer already knows that a `}` inside quotes does not close one and that
+// `$(` ends at its own parenthesis, and a second counter beside it would be a
+// second answer to the same question. What comes back has to be exactly one
+// substitution span at the front — anything else is not this shape, and the
+// caller then reads the text the ordinary way and fails the ordinary way.
+func (p *Parser) scanNestedExpansion(s string, at Pos) (inner *Word, rest string, ok bool) {
+	if p.depth >= maxParamDepth {
+		p.fail("expansions nested too deeply")
+		return nil, "", false
+	}
+	p.depth++
+	defer func() { p.depth-- }()
+
+	t := NewLexer(s, p.dialect).Next()
+	if t.Kind != TokWord || len(t.Spans) == 0 {
+		return nil, "", false
+	}
+	switch t.Spans[0].Kind {
+	case ParamExp, CommandSubst, ArithSubst:
+	default:
+		return nil, "", false
+	}
+	// Where the substitution ended: the next span's start, or the token's own
+	// end when it was the whole of it. A span records where it began and not
+	// where it stopped, and the neighbor's position is the same fact read
+	// from the other side.
+	end := t.End.Offset
+	if len(t.Spans) > 1 {
+		end = t.Spans[1].Pos.Offset
+	}
+	if end > len(s) {
+		return nil, "", false
+	}
+	return p.newWord(t.Spans[:1], at, at), s[end:], true
 }

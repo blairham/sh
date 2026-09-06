@@ -450,6 +450,24 @@ type Dialect struct {
 	// `${a:-x}` is still a default for the same reason.
 	ParamElementSelection bool
 
+	// NestedParamExpansion enables an expansion to stand where a parameter
+	// name would: `${${v}}` applies one expansion to the result of another,
+	// and `${${v}#a}` applies the outer operator to what the inner came to.
+	// One shell in the panel has it; bash and ksh93 refuse the same
+	// characters, in their own words and at their own moment.
+	//
+	// A grammar flag rather than a semantics axis, for the reason
+	// BareSubscript is one: it decides where the word is cut. Without it
+	// there is no parameter name at the front of `${${v}#a}` at all, so the
+	// expansion is unreadable rather than differently read — there is
+	// nothing for a value to switch between.
+	//
+	// The inner expansion is the *whole* of the name position. Measured:
+	// `${x${v}}` and `${${v}x}` are both a bad substitution in the shell that
+	// has the construct, so text either side of it is not a shape at all and
+	// an implementation that appended it would be inventing one.
+	NestedParamExpansion bool
+
 	// ParamIndirection enables `${!x}` to *parse*. bash and ksh93 accept it;
 	// dash and zsh reject it outright.
 	//

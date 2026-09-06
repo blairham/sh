@@ -218,6 +218,13 @@ func splitFlagged(w string, e *syntax.ParamExpr) []string {
 // flagBase is the value the pipeline starts from: the words, whether the
 // parameter was set, and whether the value is a list rather than a scalar.
 func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool) {
+	if e.Inner != nil {
+		// An expansion standing where a name would. The flags then apply to
+		// what it came to, which is the same rule they follow for a name —
+		// `${(U)${v}}` and `${${(U)v}}` are both `ABC`, measured.
+		words, set = r.nestedWords(e)
+		return words, set, false
+	}
 	if e.Index != nil {
 		if list, lok := r.arraySubscript(e); lok {
 			if wholeArraySubscript(r.subscriptText(e.Index)) {

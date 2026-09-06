@@ -2,61 +2,74 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package opened answers the one question a name-based gate cannot answer for
-// itself: what did the kernel actually give me?
+// itself: what path did this open actually go through?
 //
 // A rule matching names is defeated by a symbolic link, and the reason is not
 // that the matching is weak — it is that a name and an object are different
-// things, and only the kernel knows which object a name reached. `deny read
-// /etc/**` did not stop `cat < link` where the link pointed into /etc, because
-// nothing in the decision ever looked past the name the script wrote.
+// things, and the name the script wrote may not be the name the access went
+// by. `deny read /etc/**` did not stop `cat < link` where the link pointed
+// into /etc, because nothing in the decision ever looked past the name the
+// script wrote.
 //
-// So this asks the kernel, and it asks *after* the open, about the descriptor
-// already in hand. That ordering is the whole design, and it is what makes
-// the check honest where resolving before the open would not have been:
+// Two arrangements were tried and rejected before the one that is here, and
+// both rejections are the design:
 //
-//   - Nothing here resolves a path. There is no lstat loop, no readlink walk,
-//     no second traversal of the name. The kernel did the traversal once, as
-//     part of the open the caller asked for, and this reads back the answer
-//     it arrived at. The gate performs no filesystem reads of its own outside
-//     the boundary it is enforcing, which was the objection to resolving
-//     first.
+//   - **Resolve the name, then open it.** A time-of-check-to-time-of-use race
+//     in its classic form: between the resolution and the open the name is
+//     free to mean something else, so the check and the use are about two
+//     different objects.
 //
-//   - There is no time-of-check-to-time-of-use window on the *object*. A
-//     descriptor pins one. Replacing the link afterwards changes which object
-//     the *name* reaches and cannot change which object this descriptor
-//     holds, so what was checked and what is used are the same thing — which
-//     resolve-then-open could never promise, because between its resolution
-//     and its open the name is free to mean something else.
+//   - **Open, then read the answer back off the descriptor.** This was the
+//     arrangement for two releases, with F_GETPATH on Darwin and
+//     /proc/self/fd on Linux, on the premise that the kernel answers with
+//     whichever name the descriptor was opened by. A descriptor does pin an
+//     object — that half held, and replacing a link afterwards cannot change
+//     which object is in hand. But it does not pin a *name*, and a rule
+//     matches names. #1029 found the first hole and #1050 measured the
+//     second: on Darwin the vnode carries one name for an object however many
+//     the filesystem holds and any lookup re-stamps it, and on **both**
+//     platforms a rename moves the answer for a descriptor that has not
+//     moved. Measured, an ordinary allowed open carried a denied object past
+//     the gate at about a third of attempts. The two tests named at the
+//     bottom of this comment keep those measurements running.
 //
-//     The descriptor does not pin the object's *name*, and a rule matches
-//     names. That gap is not empty, and measuring it is what #1050 was: for
-//     an object with two names Darwin will answer with either, and for an
-//     object with *one* a rename moves the answer on both platforms. See
-//     Path, and the two subsections on it in docs/design/sandboxing.md for
-//     what each costs.
+// So the path is walked here, and the open is the last step of the walk. Each
+// component is opened O_NOFOLLOW, each symbolic link is read explicitly, a
+// descriptor is kept on every directory passed through so that `..` is a pop
+// rather than a lookup, and the final openat is made on a directory
+// descriptor held since that directory was checked. The name reported is
+// assembled from the components traversed rather than looked up anywhere, so:
+//
+//   - Nothing can make it report a path the walk did not take. A rename or a
+//     second hard link changes what a *name* leads to and cannot change a
+//     sequence of components already walked.
+//
+//   - The object opened is the object at the path reported, because the last
+//     openat is relative to a descriptor that no rename can move.
+//
+// resolve.go has the walk, the three details that are the actual work — which
+// flags a directory is opened with, the two errnos a symbolic link answers
+// with, the platform's own link budget — and the one thing a userspace walk
+// cannot follow.
 //
 // # What this is not
 //
 // It does not make a gate an inode policy. The answer is still a name — the
-// kernel's own name for the object rather than the caller's — so two names
-// that are both real names for one object are still two answers: a hard link
-// and a bind mount are out of scope by construction, and deliberately, since
-// closing them means matching on identity rather than on paths and that is
+// path the open went through rather than the one the caller wrote — so two
+// names that are both real names for one object are still two answers: a hard
+// link and a bind mount are out of scope by construction, and deliberately,
+// since closing them means matching on identity rather than on paths, and a
+// rule is a glob over a namespace where an identity has no patterns. That is
 // the OS backend docs/design/sandboxing.md points at.
 //
-// On Darwin that scope is not held by construction but by luck, which #1029
-// found and TestTwoNamesForOneObjectAndWhetherTheAnswerHolds now measures:
-// which of an object's names comes back is not fixed, so a hard link is
-// sometimes caught and — the direction that is not merely a flake — a hard
-// link in an allowed place sometimes carries an *other* name past the check,
-// symbolic links included.
-//
-// And on both platforms the scope is not held against a rename, which #1050
-// measured and TestARenameMovesTheAnswerForADescriptorThatHasNotMoved asserts:
-// an object parked under an allowed name for the length of one consultation
-// is judged there and read where it was. Neither is repaired by trusting the
-// platform call harder; the design page has the numbers and says what a
-// resolution nothing can move under would cost.
+// That scope is now held by construction on both platforms, which is what
+// #1114 changed. It was held by luck before, and TestTwoNamesForOneObject
+// AndWhetherTheAnswerHolds and TestARenameMovesTheAnswer
+// ForADescriptorThatHasNotMoved are why: they assert that the *platform* answer still moves, in the
+// direction each platform moves it. Nothing in the check depends on that any
+// more — Path has one caller left, the fail-closed fallback in Open — but a
+// kernel that stopped behaving this way is the moment to revisit the design
+// page rather than the moment to discover the claim had quietly changed.
 //
 // Nor does it reach a child process: an allowed exec makes its own system
 // calls and nothing here sees them.
@@ -91,6 +104,7 @@
 package opened
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -102,7 +116,12 @@ import (
 //
 // *A* name, not *the* name, and *now*, not for as long as the descriptor
 // lives. The distinction is a platform's rather than this function's, and it
-// has two parts.
+// is the reason the verification does not use this: the walk in resolve.go
+// does. What is left for Path is Open's fallback, where the question being
+// asked is not "what is this called" but "does this have a name at all", and
+// for that the answer moving does not matter.
+//
+// It has two parts.
 //
 // An object with several names has one answer on Linux — the name the
 // descriptor was opened through, which /proc holds per descriptor — and on
@@ -145,28 +164,91 @@ func Path(f *os.File) (string, bool) {
 	return path, ok
 }
 
-// Elsewhere is the kernel's name for what a descriptor holds, when that is a
-// different place from the name the caller asked about.
+// Open opens a path and reports what it opened, by resolving the path itself
+// rather than by asking afterwards.
+//
+// The walk in resolve.go is the whole of it on Darwin and Linux. Elsewhere
+// there is no walk and no way to ask, so this is the ordinary open with no name
+// attached — which is what the gate has always had on those platforms, and is
+// the limitation docs/design/sandboxing.md records rather than a new one.
+//
+// The fallback is the interesting part and it fails closed. A walk that has
+// followed a symbolic link and then failed may have met the one thing a
+// userspace resolution cannot follow: a magic link, of the sort /proc/<pid>/fd
+// holds, whose target is not a path at all — `pipe:[12345]`. The kernel
+// resolves those and the walk cannot, so `cat < /dev/fd/3` would stop working
+// under a policy while working without one, which is a policy breaking a
+// mechanism rather than refusing an access.
+//
+// So the ordinary open is tried, and then the platform is *asked* whether the
+// object it got has a name. If it has none, this is genuinely the nameless case
+// — no rule about names can be speaking about it, which is what Elsewhere has
+// always done with it. If it has one, the walk and the platform disagree about
+// a path that does have a name, and rather than pick a winner this returns the
+// walk's error: a disagreement here is either a bug in the walk or a filesystem
+// doing something neither of us understands, and neither is a thing to open a
+// file on.
+func Open(path string, flags int, perm fs.FileMode) (Reached, error) {
+	if !walkSupported {
+		f, err := os.OpenFile(path, flags, perm)
+		if err != nil {
+			return Reached{}, err
+		}
+		return Reached{File: f}, nil
+	}
+	r, err := walkOpen(path, flags, perm)
+	if err == nil || !errors.Is(err, errFollowedALink) {
+		return r, err
+	}
+	f, plainErr := os.OpenFile(path, flags, perm)
+	if plainErr != nil {
+		// The walk and the kernel agree that this does not open. The walk's
+		// error is the one to report, because it is the one built from the
+		// caller's own path.
+		return Reached{}, err
+	}
+	return nameless(f, err)
+}
+
+// nameless is the fallback's decision, and it is a function of its own because
+// it is the one place in this package that can fail open and so the one place
+// that has to be testable on its own. Its own test hands it a descriptor on an
+// ordinary file and a descriptor on a pipe and requires the two answers.
+//
+// A descriptor the platform has no name for is the nameless case: no rule about
+// names is speaking about it, which is what Elsewhere has always done with it.
+// A descriptor the platform *does* name is a disagreement about a path that has
+// a name, and the walk's error stands — the descriptor is closed rather than
+// returned, because a caller handed one would have an unchecked open.
+func nameless(f *os.File, walkErr error) (Reached, error) {
+	if _, ok := Path(f); ok {
+		_ = f.Close()
+		return Reached{}, walkErr
+	}
+	return Reached{File: f}, nil
+}
+
+// Elsewhere is where an open reached, when that is a different place from the
+// name the caller asked about.
 //
 // The false return is the ordinary case and covers three situations a caller
 // treats identically, because in all three the decision already made is the
 // decision about this object: the object has no name, the name the caller
-// wrote is the kernel's own name for it, or the two are the operating
+// wrote is the path the open went through, or the two are the operating
 // system's own two names for one place.
 //
 // The requested name is cleaned here rather than at each call site, so that
 // `dir//file` and `dir/./file` are not reported as having resolved somewhere
 // else — a caller that forgot would have handed its gate a second consultation
 // for every path a person typed carelessly.
-func Elsewhere(f *os.File, requested string) (string, bool) {
-	actual, ok := Path(f)
-	if !ok {
+func Elsewhere(r Reached, requested string) (string, bool) {
+	if r.Name == "" {
 		return "", false
 	}
-	if clean := filepath.Clean(requested); actual == clean || samePlace(clean, actual) {
+	if clean := filepath.Clean(requested); r.Name == clean || samePlace(clean, r.Name) {
 		return "", false
 	}
-	return actual, true
+	return r.Name, true
 }
 
 // Verified opens a file the way a gate needs it opened: with the truncation
@@ -181,7 +263,8 @@ func Elsewhere(f *os.File, requested string) (string, bool) {
 // the file emptied — which is the same sequence O_TRUNC is, split at the point
 // where a decision can be made.
 //
-// check is what the caller's gate says about the object the descriptor holds.
+// check is what the caller's gate says about the object the descriptor holds,
+// and it is handed the path the open went through as well as the descriptor.
 // It is called with the file open and before a byte has been written to it or
 // removed from it; the error it returns is returned here, and the file is
 // closed.
@@ -197,22 +280,22 @@ func Elsewhere(f *os.File, requested string) (string, bool) {
 // A truncation that does fail is returned as the open's own error, which is
 // what it would have been: `> some-running-binary` reports text-file-busy
 // either way.
-func Verified(path string, flags int, perm fs.FileMode, check func(*os.File) error) (*os.File, error) {
-	f, err := os.OpenFile(path, flags&^os.O_TRUNC, perm)
+func Verified(path string, flags int, perm fs.FileMode, check func(Reached) error) (*os.File, error) {
+	r, err := Open(path, flags&^os.O_TRUNC, perm)
 	if err != nil {
 		return nil, err
 	}
-	if err := check(f); err != nil {
-		_ = f.Close()
+	if err := check(r); err != nil {
+		_ = r.File.Close()
 		return nil, err
 	}
 	if flags&os.O_TRUNC != 0 {
-		if err := emptyRegular(f); err != nil {
-			_ = f.Close()
+		if err := emptyRegular(r.File); err != nil {
+			_ = r.File.Close()
 			return nil, err
 		}
 	}
-	return f, nil
+	return r.File, nil
 }
 
 // emptyRegular is the held-back half of O_TRUNC.

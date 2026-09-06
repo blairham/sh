@@ -112,9 +112,9 @@ caller, so nine call sites each did their own `os.Open` afterwards and
 the check was about a *name* while the read was about an object — the
 defect `docs/design/sandboxing.md` closes for the interpreter, still
 open for the shell. `HISTFILE` is the one a typed line can aim. The
-boundary makes the descriptor itself now and asks the kernel what the
-open reached, which is the only arrangement where the check cannot be
-forgotten: there is no longer a way to ask this package's permission and
+boundary makes the descriptor itself now, through the component-by-
+component walk `internal/opened` performs, which is the only
+arrangement where the check cannot be forgotten: there is no longer a way to ask this package's permission and
 then open something else. The platform half is shared with `interp`
 through `internal/opened` rather than copied, because a syscall wrapper
 that exists twice drifts and the copy that drifts is the one nobody is

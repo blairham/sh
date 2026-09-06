@@ -5,7 +5,6 @@ package interp
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -79,12 +78,9 @@ func (r *Runner) setListing() int {
 		r.printf("%s=%s\n", name, r.setListedValue(d))
 	}
 	if form == SetListingAssignmentsThenFunctions {
-		names := make([]string, 0, len(r.funcs))
-		for name := range r.funcs {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
+		// The same capture surface `declare -f` is, reached by the other
+		// name, so the same functions are the person's here (#1035).
+		for _, name := range r.scriptFuncNames() {
 			r.printf("%s\n", r.listedFunction(name, r.funcs[name]))
 		}
 	}

@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -88,6 +89,42 @@ func (r *Runner) preludeDefined(name string, decl *syntax.FuncDecl) {
 // nothing any test could see.
 func (r *Runner) speaksForTheShell(fn *syntax.FuncDecl) bool {
 	return fn != nil && r.preludeFuncs[fn.Name] == fn
+}
+
+// scriptFuncNames is every function a listing of "what functions exist" is
+// asking about: the script's own, sorted, with the prelude's left out.
+//
+// A listing is how a caller captures a shell's state and sources it back
+// later, so the prelude's functions being in it is not a cosmetic surplus —
+// it records the shell's own implementation as the person's, hands
+// `__dirs_rotate` to every later shell as though somebody had written it, and
+// redefines `pushd` on top of the prelude's on every command (#1035).
+//
+// It asks [Runner.speaksForTheShell] and nothing else. There is deliberately
+// no second record of prelude-ness for a listing to consult: the one already
+// here compares the *declaration*, so a script that redefines `pushd` is in
+// the listing from that moment — its function is its own, by the same rule
+// that moves the diagnostic's voice back to it. A parallel flag set at
+// definition time would have to be cleared on every route a redefinition can
+// arrive by, and this package does not see those from one place (#603).
+//
+// A name *asked for* is still answered: `declare -f pushd` says the prelude's
+// function back, because there is one and `type pushd` already says so. That
+// is the same call #603 made — a prelude function is the shell speaking, and
+// not a builtin in any other respect — rather than a second answer to whether
+// the name is a function. Real bash has the three as builtins and refuses
+// `declare -f pushd` with 1; the divergence is recorded in
+// docs/spec/semantics.md, where the reachability it buys is written down.
+func (r *Runner) scriptFuncNames() []string {
+	names := make([]string, 0, len(r.funcs))
+	for name, fn := range r.funcs {
+		if r.speaksForTheShell(fn) {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // speaking is the name a diagnostic belongs to: the prelude function the

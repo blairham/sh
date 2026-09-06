@@ -9103,6 +9103,14 @@ exit 7`,
 		Why:     "how a state capture asks what functions exist. Three answers rather than two, and the middle one is the dangerous shape: bash lists both names, dash and ksh93 have no `declare` at all and say so at 127, and zsh reads `-F` as a float's precision, has nothing to say about a bare one, and exits **0** — a caller that trusted the status would record a shell with no functions and never learn it had asked the wrong question. declare/capital-f-names-a-function asks the same thing of a *named* function; this asks for the listing, which is what a generator actually runs",
 	},
 	{
+		ID: "harness/the-shells-own-functions-are-not-the-persons", Category: "harness invocation",
+		Snippet: "f() { :; }\n" +
+			"declare -F 2>/dev/null | grep -c \"dirs\\|popd\\|pushd\"\n" +
+			"declare -F 2>/dev/null | grep -c \"^declare -f f$\"\n" +
+			`echo "st=$?"`,
+		Why: "the row above narrowed to two counts, because a listing grades everything already defined and this grades a slice the case sets itself. The first count is unanimous at 0 in all six: no shell in the panel names its own `dirs`, `popd` or `pushd` in a function listing, because in the two that have them at all they are builtins. The second splits with the first row's split — the three bash columns list the person's `f` and count 1 at 0, and the other three list nothing, count 0 and hand `grep`'s 1 on. Ours counted 3 on the first line: a dialect written as a prelude has those three as *functions*, and a state capture recorded them and `__dirs_rotate` as the person's own, then sourced them into a shell that already had them (#1035). The counts survive a prelude growing a function, which the whole listing does not",
+	},
+	{
 		ID: "harness/asking-for-the-whole-option-table", Category: "harness invocation",
 		Snippet: `shopt -p >/dev/null; echo "st=$?"`,
 		Why:     "the shell-options half of the same capture, and the half where failing is loud: `shopt` is bash's alone, so dash, ksh93 and zsh answer 127 in three different wordings while the three bash columns write the table and exit 0. Redirected away because the table is a hundred lines of whatever this build's defaults are; what is pinned is the status and the complaint",

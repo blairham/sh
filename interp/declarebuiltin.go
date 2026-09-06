@@ -5,7 +5,6 @@ package interp
 
 import (
 	"context"
-	"sort"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -391,11 +390,11 @@ func (r *Runner) setGlobalVar(name, value string) {
 func (r *Runner) declareFunctions(names []string, namesOnly bool) int {
 	named := len(names) > 0
 	if !named {
-		names = make([]string, 0, len(r.funcs))
-		for name := range r.funcs {
-			names = append(names, name)
-		}
-		sort.Strings(names)
+		// The script's own and not the prelude's: this listing is what a
+		// state capture reads, and the prelude's functions are the shell's
+		// (#1035, scriptFuncNames). A name asked for is still answered,
+		// which is why only this branch narrows.
+		names = r.scriptFuncNames()
 	}
 	status := 0
 	for _, name := range names {

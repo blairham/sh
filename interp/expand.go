@@ -2284,7 +2284,11 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set bool) {
 	// answered `${${v}}` on `a*b` with a backslash in it.
 	words = unescapeAll(words)
 	if len(words) == 0 {
-		return []string{""}, false
+		// No field is still a *value*: the empty string, and set. Measured —
+		// `a=(); ${${a[@]}-d}` is empty in the shell with the grammar, where
+		// `${nosuch-d}` is `d`, so the colon-less test finds something here
+		// however little the inner came to.
+		words = []string{""}
 	}
 	if len(words) > 1 {
 		// An inner expansion that came to a *list* keeps its fields in the

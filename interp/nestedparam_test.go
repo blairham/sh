@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
 	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -69,6 +68,11 @@ func TestAnExpansionStandsWhereANameWould(t *testing.T) {
 		// shell with the grammar, where `${u-d}` is `d`.
 		{"a colon-less default over an unset inner does not fire", `printf "[%s]" "${${nosuch}-d}"`, "[]"},
 		{"and the colon form does", `printf "[%s]" "${${nosuch}:-d}"`, "[d]"},
+		// The same from the emptiest end: an inner that produces no field at
+		// all still came to the empty string. `${${a[@]}-d}` on an empty
+		// array is empty in the shell with the grammar.
+		{"an inner that produced no field is still set", `a=(); printf "[%s]" "${${a[@]}-d}"`, "[]"},
+		{"and its colon form still fires", `a=(); printf "[%s]" "${${a[@]}:-d}"`, "[d]"},
 		// A metacharacter in the inner's value is a character of it. The
 		// marks the expander carries a pattern with are the expander's own
 		// bookkeeping, and an inner that kept them answered `a\*b`.
@@ -183,11 +187,38 @@ func TestTheOuterOperatorSeesTheInnersValue(t *testing.T) {
 func TestAModifierFollowsANestedExpansion(t *testing.T) {
 	out, st := runGrammar(t, `v=/a/b/c.txt; printf "[%s]" "${${v}:h}"`, nesting,
 		func(r *Runner) {
-			sem := bash.Semantics()
+			sem := testSemantics()
 			sem.SubstringRangeReadsModifiers = Yes
 			r.Semantics = &sem
 		})
 	if want := "[/a/b]"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
+	}
+}
+
+// The glob marks the expander carries a pattern with come off the inner's
+// value, and the axis that puts them there is the one to assert it under: a
+// dialect that reads an expansion's result as a pattern never escapes it, so
+// the test that matters is the one where it does.
+func TestANestedValueCarriesNoGlobMarks(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a bare nesting", `v="a*b"; printf "[%s]" "${${v}}"`, "[a*b]"},
+		{"and one with an operator", `v="a*b"; printf "[%s]" "${${v}#a}"`, "[*b]"},
+		{"and one through a flag group", `v="a*b"; printf "[%s]" "${${(U)v}}"`, "[A*B]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runGrammar(t, tc.src, nesting, func(r *Runner) {
+				sem := testSemantics()
+				// The answer that escapes an expansion's result, which is
+				// what leaves marks for this to take off. Asserted under it
+				// rather than under the answer where there is nothing to
+				// take off and the code below could be missing entirely.
+				sem.GlobExpansionResults = No
+				r.Semantics = &sem
+			})
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
 	}
 }

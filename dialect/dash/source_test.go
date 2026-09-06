@@ -436,3 +436,28 @@ func TestPrintfBEscapesAreDashs(t *testing.T) {
 		}
 	}
 }
+
+// `shift` here has neither options nor an end-of-options marker, so every
+// dash word is a number it calls illegal — `--` included, which is the one
+// answer in the panel that makes `shift -- 2` fail. A negative count is the
+// same complaint rather than a count out of range, and all of it ends the
+// script.
+func TestShiftHasNoOptionsAndNoMarker(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		src  string
+		want string
+		st   int
+	}{
+		{`set -- a b c; shift -- 2; echo "st=$? rest=[$*]"`, "dash: 1: shift: Illegal number: --\n", 2},
+		{`set -- a b c; shift --; echo "st=$? rest=[$*]"`, "dash: 1: shift: Illegal number: --\n", 2},
+		{`set -- a b c; shift -1; echo "st=$? n=$#"`, "dash: 1: shift: Illegal number: -1\n", 2},
+		{`set -- a b c; shift -x; echo "st=$? n=$#"`, "dash: 1: shift: Illegal number: -x\n", 2},
+		{`set -- a b c; shift +1; echo "st=$? rest=[$*]"`, "st=0 rest=[b c]\n", 0},
+		{`set -- a b c; shift -0; echo "st=$? rest=[$*]"`, "st=0 rest=[a b c]\n", 0},
+	} {
+		if out, st := runDash(t, dir, tc.src+"\n"); out != tc.want || st != tc.st {
+			t.Errorf("%s: said %q status %d, want %q and %d", tc.src, out, st, tc.want, tc.st)
+		}
+	}
+}

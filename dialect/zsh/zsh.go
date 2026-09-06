@@ -213,7 +213,12 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.No
 	s.SymbolicMaskTakesTheStickyLetter = interp.No
-	s.ShiftReadsOptions = interp.Yes
+	// A dash word is an option unless it is all digits, which is what
+	// separates this from ksh93: `shift -x` is a bad option and `shift -1` is
+	// a count it refuses for being below zero.
+	s.ShiftOptionWords = interp.ShiftOptionWordsNonNumeric
+	s.ShiftDoubleDashEndsOptions = interp.Yes
+	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.No
 	// Job specs by command text, a second match taken rather than refused;
 	// `wait` complains about a spec that names nothing, has no -n, and
@@ -814,7 +819,10 @@ func Diagnostics() interp.Diagnostics {
 		// it — the reverse of the other three.
 		// zsh alone says something for a shift it survives; bash says
 		// nothing, and the two that speak up here treat it as fatal.
-		ShiftTooMany:         "shift count must be <= $#",
+		ShiftTooMany: "shift count must be <= $#",
+		// A sentence of its own for the other end, naming neither the count
+		// nor the word.
+		ShiftNegativeCount:   "argument to shift must be non-negative",
 		StdinLocation:        interp.LocationNameOnly,
 		StdinBuiltinLocation: interp.LocationBuiltinNameOnly,
 		CannotExecute:        "%[2]s: %[1]s",

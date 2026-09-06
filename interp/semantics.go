@@ -1405,14 +1405,53 @@ type Semantics struct {
 	// Two fields because the two letters are not answered together.
 	SymbolicMaskTakesTheStickyLetter Answer
 
-	// ShiftReadsOptions reads a leading `-` word that is not a number as an
-	// option rather than as the count.
+	// ShiftOptionWords is which leading-`-` words `shift` reads as options
+	// rather than as its count, and it is three answers rather than a
+	// presence — see ShiftOptionWordPolicy.
 	//
-	// ksh93 and zsh do, and refuse it as one; bash and dash read it as the
-	// count and complain about the number. Same input, two different kinds
-	// of complaint — and both are fatal in the dialects where a special
-	// builtin's failure is, which `shift` is.
-	ShiftReadsOptions Answer
+	//	shift -x   bash, dash  -x: the count, and not a number
+	//	           ksh93, zsh  -x: an option, and not one they have
+	//	shift -1   bash, dash, zsh  -1: the count
+	//	           ksh93            -1: an option, and not one it has
+	//
+	// zsh is what makes this three: it refuses `-x` as an option and reads
+	// `-1` as a count that is out of range, so "reads options" and "reads
+	// every dash word as an option" are not the same answer.
+	//
+	// A lone `-` is not a dash word in any reading here and reaches the
+	// count, which is bash's and dash's answer for it; ksh93 and zsh each
+	// do something else with that one word and neither is modeled — see
+	// docs/spec/semantics.md. Nor is `--` a dash word, which is asked about
+	// separately — see ShiftDoubleDashEndsOptions.
+	//
+	// Asked only for a word that actually begins with a `-`.
+	ShiftOptionWords ShiftOptionWordPolicy
+	// ShiftDoubleDashEndsOptions takes `--` as the end-of-options marker and
+	// reads what follows as the count. bash, ksh93 and zsh do; dash calls
+	// `--` an illegal number, having no option parsing here for a marker to
+	// end.
+	//
+	// It is not ShiftOptionWords: bash reads no dash word as an option and
+	// still honors the marker, so the two questions have different answers
+	// in the same shell. Only the *first* `--` is the marker —
+	// `shift -- --` complains about the second in all three that take it.
+	//
+	// Asked only where the operand actually is `--`.
+	ShiftDoubleDashEndsOptions Answer
+	// ShiftNegativeIsOutOfRange reads a negative count as a number that is
+	// out of range rather than as a word that is not a number. bash, ksh93
+	// and zsh do, at status 1 and in three different wordings
+	// (Diagnostics.ShiftNegativeCount); dash calls `-1` an illegal number,
+	// which is the same complaint it makes about `-x`.
+	//
+	// It is the other end of ShiftTooMany — one count, out of range in two
+	// directions — so the same ShiftPastEndFatal decides whether it ends the
+	// script, and it does: fatal in dash and ksh93, survivable in bash and
+	// zsh, with `$#` untouched either way.
+	//
+	// Asked only where the count really is negative, which in ksh93 means
+	// only after a `--`: a bare `-1` is an option there.
+	ShiftNegativeIsOutOfRange Answer
 
 	// WaitReadsOptions reads a leading `-` word as an option rather than as
 	// a job to wait for. Three of the four do; zsh has none, and answers
@@ -3876,6 +3915,54 @@ func (r *Runner) fatalPattern(pattern string, status int) {
 	r.diagf("%s\n", Wording(r.diag().BadPattern, "bad pattern: %s", pattern))
 	r.status = status
 	r.ctl = controlExit
+}
+
+// ShiftOptionWordPolicy is which leading-`-` words `shift` reads as options.
+//
+// Three answers and not a bool, because the panel splits on *which* dash
+// words rather than on whether there are any: zsh refuses `-x` as an option
+// it does not have and reads `-1` as a count, so it is neither of the two
+// answers a bool could give.
+type ShiftOptionWordPolicy int
+
+const (
+	// ShiftOptionWordsUnspecified is no answer, and is refused like any
+	// other.
+	ShiftOptionWordsUnspecified ShiftOptionWordPolicy = iota
+	// ShiftOptionWordsNone reads every dash word as the count, so `shift -x`
+	// complains about a number: bash, dash.
+	ShiftOptionWordsNone
+	// ShiftOptionWordsNonNumeric reads a dash word as an option unless what
+	// follows the dash is all digits, so `shift -x` is an option and
+	// `shift -1` is a count: zsh.
+	ShiftOptionWordsNonNumeric
+	// ShiftOptionWordsAny reads every dash word as an option, digits and
+	// all, so `shift -1` and `shift -0` are both refused as options: ksh93.
+	ShiftOptionWordsAny
+)
+
+func (p ShiftOptionWordPolicy) String() string {
+	switch p {
+	case ShiftOptionWordsNone:
+		return "none: a dash word is the count"
+	case ShiftOptionWordsNonNumeric:
+		return "an option unless it is all digits"
+	case ShiftOptionWordsAny:
+		return "every dash word is an option"
+	}
+	return "unspecified"
+}
+
+// shiftOptionWords resolves the axis, and only for a word that begins with a
+// `-` and is neither a lone dash nor the end-of-options marker.
+func (r *Runner) shiftOptionWords() ShiftOptionWordPolicy {
+	p := r.sem().ShiftOptionWords
+	if p == ShiftOptionWordsUnspecified {
+		r.diagf("%s\n", r.unanswered("`shift -x` read as an option rather than as a count"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
 }
 
 func (r *Runner) ask(a Answer, axis string) bool {

@@ -183,7 +183,11 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.No
-	s.ShiftReadsOptions = interp.No
+	// No options and no marker: `shift -x`, `shift -1` and `shift --` are all
+	// numbers this shell calls illegal, which is the one wording it has here.
+	s.ShiftOptionWords = interp.ShiftOptionWordsNone
+	s.ShiftDoubleDashEndsOptions = interp.No
+	s.ShiftNegativeIsOutOfRange = interp.No
 	s.WaitReadsOptions = interp.Yes
 	// Only numbers, `%%`, `%+` and `%-` resolve here: a `%name` is a job
 	// that is not there. `wait` complains about it with its own wording and

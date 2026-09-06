@@ -809,10 +809,11 @@ func TestRegexModeEndsWithTheOperand(t *testing.T) {
 
 // TestShiftReadsALeadingDashTwoWays. The same operand is an *option* in two
 // dialects and a count in the other two, and the two complaints are different
-// kinds of thing rather than two wordings of one.
+// kinds of thing rather than two wordings of one. Which dash words are
+// options is a third question — see TestShiftOptionWordsAreThreeReadings.
 func TestShiftReadsALeadingDashTwoWays(t *testing.T) {
 	asOption := CoreSemantics()
-	asOption.ShiftReadsOptions = Yes
+	asOption.ShiftOptionWords = ShiftOptionWordsNonNumeric
 	asOption.BadOptionToSpecialBuiltinFatal = No
 	out, _ := run(t, `shift -x; echo "st=$?"`, func(r *Runner) {
 		dg := Diagnostics{BuiltinBadOption: "shift: bad option: %[2]s", BuiltinBadOptionStatus: 1}
@@ -823,7 +824,7 @@ func TestShiftReadsALeadingDashTwoWays(t *testing.T) {
 	}
 
 	asCount := CoreSemantics()
-	asCount.ShiftReadsOptions = No
+	asCount.ShiftOptionWords = ShiftOptionWordsNone
 	asCount.ShiftCountIsArithmetic = No
 	asCount.BadOptionToSpecialBuiltinFatal = No
 	out, _ = run(t, `shift -x; echo "st=$?"`, func(r *Runner) {
@@ -839,7 +840,7 @@ func TestShiftReadsALeadingDashTwoWays(t *testing.T) {
 // `--help` — the dashes are stripped and the letter after them named.
 func TestABundleIsRefusedByItsFirstLetter(t *testing.T) {
 	sem := CoreSemantics()
-	sem.ShiftReadsOptions = Yes
+	sem.ShiftOptionWords = ShiftOptionWordsNonNumeric
 	sem.BadOptionToSpecialBuiltinFatal = No
 	out, _ := run(t, `shift --help`, func(r *Runner) {
 		dg := Diagnostics{BuiltinBadOption: "shift: bad option: %[2]s"}
@@ -892,7 +893,7 @@ func TestAPlainNumberAsksNothing(t *testing.T) {
 // failure already gets — `shift` is one, and two of the four stop for it.
 func TestABadShiftOperandCanEndTheScript(t *testing.T) {
 	fatal := CoreSemantics()
-	fatal.ShiftReadsOptions = No
+	fatal.ShiftOptionWords = ShiftOptionWordsNone
 	fatal.ShiftCountIsArithmetic = No
 	fatal.BadOptionToSpecialBuiltinFatal = Yes
 	fatal.FatalErrorStatusIsOne = No
@@ -908,7 +909,7 @@ func TestABadShiftOperandCanEndTheScript(t *testing.T) {
 	}
 
 	carry := CoreSemantics()
-	carry.ShiftReadsOptions = No
+	carry.ShiftOptionWords = ShiftOptionWordsNone
 	carry.ShiftCountIsArithmetic = No
 	carry.BadOptionToSpecialBuiltinFatal = No
 	out, _ = run(t, `shift -x; echo after`, func(r *Runner) {
@@ -917,5 +918,190 @@ func TestABadShiftOperandCanEndTheScript(t *testing.T) {
 	})
 	if !strings.Contains(out, "after") {
 		t.Errorf("got %q, want the script to carry on", out)
+	}
+}
+
+// TestShiftOptionWordsAreThreeReadings. Which leading-`-` words `shift` reads
+// as options is not a presence: ksh93 refuses `-1` as an option and zsh reads
+// the same word as a count, so the shell that "reads options" and the shell
+// that reads *every* dash word as one are different answers.
+func TestShiftOptionWordsAreThreeReadings(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		policy ShiftOptionWordPolicy
+		src    string
+		want   string
+	}{
+		{"none takes a dash word as the count", ShiftOptionWordsNone, `shift -x; echo "st=$?"`, "sh: shift: -x: numeric argument required\nst=2"},
+		{"none takes a digit dash word as a count", ShiftOptionWordsNone, `set -- a b c; shift -1; echo "st=$? n=$#"`, "sh: shift: -1: out of range\nst=1 n=3"},
+		{"non-numeric refuses the letters", ShiftOptionWordsNonNumeric, `shift -x; echo "st=$?"`, "sh: shift: bad option: -x\nst=2"},
+		{"non-numeric keeps the digits a count", ShiftOptionWordsNonNumeric, `set -- a b c; shift -1; echo "st=$? n=$#"`, "sh: shift: -1: out of range\nst=1 n=3"},
+		{"any refuses the letters", ShiftOptionWordsAny, `shift -x; echo "st=$?"`, "sh: shift: bad option: -x\nst=2"},
+		{"any refuses the digits too", ShiftOptionWordsAny, `set -- a b c; shift -1; echo "st=$? n=$#"`, "sh: shift: bad option: -1\nst=2 n=3"},
+		{"any refuses a zero the same way", ShiftOptionWordsAny, `set -- a b c; shift -0; echo "st=$? n=$#"`, "sh: shift: bad option: -0\nst=2 n=3"},
+		{"a lone dash is never an option", ShiftOptionWordsAny, `shift -; echo "st=$?"`, "sh: shift: -: numeric argument required\nst=2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			sem.ShiftOptionWords = tc.policy
+			sem.ShiftCountIsArithmetic = No
+			sem.ShiftNegativeIsOutOfRange = Yes
+			sem.ShiftPastEndFatal = No
+			sem.BadOptionToSpecialBuiltinFatal = No
+			dg := Diagnostics{
+				BuiltinBadOption:   "shift: bad option: %[2]s",
+				ShiftNegativeCount: "shift: %[2]s: out of range",
+			}
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+			if out != tc.want+"\n" {
+				t.Errorf("got %q, want %q", out, tc.want+"\n")
+			}
+		})
+	}
+}
+
+// TestShiftDoubleDashEndsTheOptions, which is not the same question as which
+// dash words are options: bash reads none of them as options and still honors
+// the marker, so a dialect answers the two separately.
+func TestShiftDoubleDashEndsTheOptions(t *testing.T) {
+	base := func() Semantics {
+		s := CoreSemantics()
+		s.ShiftOptionWords = ShiftOptionWordsAny
+		s.ShiftCountIsArithmetic = No
+		s.ShiftNegativeIsOutOfRange = Yes
+		s.ShiftPastEndFatal = No
+		s.BadOptionToSpecialBuiltinFatal = No
+		return s
+	}
+	dg := Diagnostics{
+		BuiltinBadOption:   "shift: bad option: %[2]s",
+		ShiftNegativeCount: "shift: %[2]s: out of range",
+	}
+	for _, tc := range []struct {
+		name   string
+		marker Answer
+		words  ShiftOptionWordPolicy
+		src    string
+		want   string
+	}{
+		{"the marker before a count", Yes, ShiftOptionWordsAny, `set -- a b c; shift -- 2; echo "st=$? rest=[$*]"`, "st=0 rest=[c]\n"},
+		{"the marker alone still shifts one", Yes, ShiftOptionWordsAny, `set -- a b c; shift --; echo "st=$? rest=[$*]"`, "st=0 rest=[b c]\n"},
+		{"past the marker a dash word is an operand", Yes, ShiftOptionWordsAny, `set -- a b c; shift -- -1; echo "st=$? n=$#"`, "sh: shift: -1: out of range\nst=1 n=3\n"},
+		{"only the first marker is one", Yes, ShiftOptionWordsAny, `set -- a b c; shift -- --; echo "st=$? n=$#"`, "sh: shift: --: numeric argument required\nst=2 n=3\n"},
+		{"without the marker it is the count", No, ShiftOptionWordsNone, `set -- a b c; shift -- 2; echo "st=$? n=$#"`, "sh: shift: --: numeric argument required\nst=2 n=3\n"},
+		{"unanswered, and only for a `--`", Unspecified, ShiftOptionWordsAny, `set -- a b c; shift 2; echo "st=$? rest=[$*]"`, "st=0 rest=[c]\n"},
+		{
+			"unanswered with a `--` is refused", Unspecified, ShiftOptionWordsAny,
+			`set -- a b c; shift -- 2; echo "st=$? n=$#"`,
+			"sh: `shift --` read as the end of options: the shells disagree here and no dialect was chosen\nst=2 n=3\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := base()
+			sem.ShiftOptionWords = tc.words
+			sem.ShiftDoubleDashEndsOptions = tc.marker
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestANegativeShiftCountIsOutOfRangeOrNotANumber. The two ends of one range:
+// a count above `$#` and a count below zero take the same fatality rule and
+// leave `$#` alone, and are worded separately because the panel words them
+// separately. The one dialect that answers No calls a negative count a word
+// that is not a number instead.
+func TestANegativeShiftCountIsOutOfRangeOrNotANumber(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		outOfRange    Answer
+		fatal         Answer
+		src           string
+		want          string
+		wantAfterGone bool
+	}{
+		{
+			name: "out of range, survived", outOfRange: Yes, fatal: No,
+			src:  `set -- a b c; shift -1; echo "st=$? n=$#"`,
+			want: "sh: shift: -1: out of range\nst=1 n=3\n",
+		},
+		{
+			name: "out of range with no wording says nothing", outOfRange: Yes, fatal: No,
+			src:  `set -- a b c; shift -1; echo "st=$? n=$#"`,
+			want: "st=1 n=3\n",
+		},
+		{
+			name: "out of range, fatal", outOfRange: Yes, fatal: Yes,
+			src: `set -- a b c; shift -1; echo after`, want: "sh: shift: -1: out of range\n",
+		},
+		{
+			name: "not a number instead", outOfRange: No, fatal: No,
+			src:  `set -- a b c; shift -1; echo "st=$? n=$#"`,
+			want: "sh: shift: -1: numeric argument required\nst=2 n=3\n",
+		},
+		{
+			name: "a count of zero asks nothing", outOfRange: Unspecified, fatal: No,
+			src: `set -- a b c; shift 0; echo "st=$? n=$#"`, want: "st=0 n=3\n",
+		},
+		{
+			name: "unanswered, and only for a negative one", outOfRange: Unspecified, fatal: No,
+			src:  `set -- a b c; shift -1; echo "st=$? n=$#"`,
+			want: "sh: a negative `shift` count read as a count out of range: the shells disagree here and no dialect was chosen\nst=2 n=3\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			sem.ShiftOptionWords = ShiftOptionWordsNone
+			sem.ShiftCountIsArithmetic = No
+			sem.ShiftNegativeIsOutOfRange = tc.outOfRange
+			sem.ShiftPastEndFatal = tc.fatal
+			sem.BadOptionToSpecialBuiltinFatal = No
+			sem.FatalErrorStatusIsOne = No
+			dg := Diagnostics{ShiftNegativeCount: "shift: %[2]s: out of range"}
+			if tc.name == "out of range with no wording says nothing" {
+				dg = Diagnostics{}
+			}
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &dg })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestAShiftCountMayCarryASign, which is unanimous: `shift +1` moves one in
+// every shell in the panel, and the count reader had no sign at all — which
+// is also how a negative count reached a slice bound and panicked.
+func TestAShiftCountMayCarryASign(t *testing.T) {
+	sem := CoreSemantics()
+	sem.ShiftOptionWords = ShiftOptionWordsNone
+	sem.ShiftCountIsArithmetic = No
+	out, _ := run(t, `set -- a b c; shift +2; echo "st=$? rest=[$*]"`, func(r *Runner) {
+		dg := Diagnostics{}
+		r.Semantics, r.Diagnostics = &sem, &dg
+	})
+	if out != "st=0 rest=[c]\n" {
+		t.Errorf("got %q, want a plus sign to be read and nothing asked", out)
+	}
+}
+
+// TestANegativeShiftCountNeverSlices. An arithmetic count can be negative
+// however the axis is answered, and a negative index into the parameters is a
+// panic rather than a diagnostic — which is what `shift -1` was in two
+// dialects before the count was range-checked.
+func TestANegativeShiftCountNeverSlices(t *testing.T) {
+	sem := CoreSemantics()
+	sem.ShiftOptionWords = ShiftOptionWordsNone
+	sem.ShiftCountIsArithmetic = Yes
+	sem.ShiftNegativeIsOutOfRange = Yes
+	sem.ShiftPastEndFatal = No
+	out, _ := run(t, `set -- a b c; shift 0-1; echo "st=$? n=$#"`, func(r *Runner) {
+		dg := Diagnostics{ShiftNegativeCount: "shift: %[1]d: out of range"}
+		r.Semantics, r.Diagnostics = &sem, &dg
+	})
+	if out != "sh: shift: -1: out of range\nst=1 n=3\n" {
+		t.Errorf("got %q, want the complaint and no panic", out)
 	}
 }

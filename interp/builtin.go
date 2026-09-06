@@ -810,46 +810,97 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 	// reports the operand *as written*, and an operand that was never given
 	// is reported as `(null)` rather than as the default it stood in for.
 	operand := "(null)"
+	// Whether the marker was taken, which decides more than where the count
+	// starts: past it a dash word is an operand rather than an option, so
+	// ksh93 reads `shift -- -1` as a count below zero where it refuses a
+	// bare `-1` as an option it does not have.
+	marked := false
+	if len(args) > 0 && args[0] == "--" {
+		// The end-of-options marker, and only the first one: what follows is
+		// the count however it is spelled, so `shift -- -1` is a negative
+		// count in the three that take the marker and `shift -- --`
+		// complains about the second `--` as a count. Asked here rather than
+		// alongside the option words because bash answers the two
+		// differently — no dash word is an option there and the marker still
+		// works.
+		switch {
+		case r.ask(r.sem().ShiftDoubleDashEndsOptions, "`shift --` read as the end of options"):
+			args = args[1:]
+			marked = true
+		case r.unspecified:
+			return r.status
+		}
+	}
 	if len(args) > 0 {
 		operand = args[0]
-		if st, done := r.shiftCount(args[0], &n); done {
+		if st, done := r.shiftCount(args[0], marked, &n); done {
 			return st
 		}
 	}
+	if n < 0 {
+		// The other end of the range. Same fatality rule and the same
+		// untouched `$#`; only the wording differs, and dash never arrives
+		// here at all — a negative count is a word that is not a number
+		// there, which shiftCount has already said.
+		return r.shiftOutOfRange(r.diag().ShiftNegativeCount, n, operand)
+	}
 	if n > len(r.Params) {
-		// Fatal in dash and ksh93, survivable in bash and zsh.
-		if r.ask(r.sem().ShiftPastEndFatal, "shift past the end being fatal") {
-			// controlReturn only unwound a function, so at the top level the
-			// script carried on past an error the shell calls fatal.
-			r.fatal("%s\n", Wording(r.diag().ShiftTooMany, "shift: can't shift that many", n, operand))
-			return r.status
-		}
-		// Survivable, and still worth saying where the dialect says it: zsh
-		// prints its complaint and carries on, and bash prints nothing at
-		// all. No fallback here for that reason — an empty wording is bash's
-		// answer rather than a dialect that has not been asked.
-		if w := r.diag().ShiftTooMany; w != "" {
-			r.diagf("%s\n", Wording(w, w, n, operand))
-		}
-		return 1
+		return r.shiftOutOfRange(r.diag().ShiftTooMany, n, operand)
 	}
 	r.Params = r.Params[n:]
 	return 0
 }
 
+// shiftOutOfRange reports a count outside `0..$#`, in whichever direction.
+//
+// One rule for both ends: fatal in dash and ksh93, survivable in bash and
+// zsh, `$#` untouched either way, and status 1 where it is survived. The
+// wording is the caller's because the two directions are worded separately —
+// bash is silent above `$#` and complains below it, and zsh has a sentence
+// for each.
+func (r *Runner) shiftOutOfRange(wording string, n int, operand string) int {
+	if r.ask(r.sem().ShiftPastEndFatal, "shift past the end being fatal") {
+		// controlReturn only unwound a function, so at the top level the
+		// script carried on past an error the shell calls fatal.
+		r.fatal("%s\n", Wording(wording, "shift: can't shift that many", n, operand))
+		return r.status
+	}
+	// Survivable, and still worth saying where the dialect says it: zsh
+	// prints its complaint and carries on, and bash prints nothing at all
+	// for a count above `$#`. No fallback here for that reason — an empty
+	// wording is a dialect that has nothing to say rather than one that has
+	// not been asked.
+	if wording != "" {
+		r.diagf("%s\n", Wording(wording, wording, n, operand))
+	}
+	return 1
+}
+
 // shiftCount reads the operand, reporting whether the builtin is finished.
 //
-// A leading `-` that is not a number splits the panel in two. ksh93 and zsh
-// read it as an *option* and refuse it as one — `-x: unknown option` with a
-// usage line, `bad option: -x` — while bash and dash read it as the count and
-// complain about the number. Same input, two different kinds of complaint.
+// A leading `-` splits the panel three ways, which is ShiftOptionWords: ksh93
+// reads every dash word as an *option* and refuses it as one, zsh reads only
+// the ones that are not all digits that way, and bash and dash read them all
+// as the count and complain about the number. Same input, two different kinds
+// of complaint, and which input gets which differs again.
 //
 // Both refusals end the script in the two dialects where a special builtin's
 // failure is fatal, and `shift` is a special builtin, so that rule is the one
 // already in place rather than a new one.
-func (r *Runner) shiftCount(operand string, n *int) (int, bool) {
-	if len(operand) > 1 && operand[0] == '-' && !allDigits(operand[1:]) {
-		if r.ask(r.sem().ShiftReadsOptions, "`shift -x` read as an option rather than as a count") {
+//
+// A lone `-` is not a dash word in any of the three readings and reaches the
+// count, which is bash's and dash's answer for it. The marker `--` never gets
+// here: biShift has taken it off already, or the dialect does not have one
+// and the word is the count. marked says which — past a marker that was taken
+// there are no options left to read, so `shift -- -1` is a count in all three
+// dialects that have one.
+func (r *Runner) shiftCount(operand string, marked bool, n *int) (int, bool) {
+	if !marked && len(operand) > 1 && operand[0] == '-' {
+		p := r.shiftOptionWords()
+		if r.unspecified {
+			return r.status, true
+		}
+		if p == ShiftOptionWordsAny || (p == ShiftOptionWordsNonNumeric && !allDigits(operand[1:])) {
 			// The *first letter*, not the whole word: a leading `-` word is
 			// a bundle of single-letter options, so `shift --help` is
 			// refused as `-h` — the dashes are stripped and the first
@@ -857,15 +908,12 @@ func (r *Runner) shiftCount(operand string, n *int) (int, bool) {
 			// follow the same rule, measured the same way.
 			return r.badBuiltinOption("shift", "-"+firstOptionLetter(operand)), true
 		}
-		if r.unspecified {
-			return r.status, true
-		}
 	}
-	if v, ok := atoi(operand); ok {
-		// A plain number, which both readings agree on. Nothing is asked:
-		// `shift 2` is two everywhere and needs no dialect.
-		*n = v
-		return 0, false
+	if v, ok := atoiSigned(operand); ok {
+		// A plain number, which every reading agrees on. Nothing is asked
+		// for a count of zero or more: `shift 2` is two everywhere, and so
+		// is `shift +2` — the sign is unanimous.
+		return r.shiftTakeCount(v, operand, n)
 	}
 	if r.ask(r.sem().ShiftCountIsArithmetic, "`shift n` reading its count as an expression") {
 		// An expression rather than a number: `shift 1+1` moves two and
@@ -881,12 +929,35 @@ func (r *Runner) shiftCount(operand string, n *int) (int, bool) {
 		if err != nil {
 			return r.status, true
 		}
-		*n = v
-		return 0, false
+		return r.shiftTakeCount(v, operand, n)
 	}
 	if r.unspecified {
 		return r.status, true
 	}
+	return r.shiftBadNumber(operand)
+}
+
+// shiftTakeCount accepts a count that was read, asking about a negative one.
+//
+// Below zero is where the reading of the word itself is still in question:
+// bash, ksh93 and zsh have a count that is out of range, and dash has a word
+// that is not a number — the same complaint it makes about `-x`. Above or at
+// zero nothing is asked, which is why the ordinary `shift 2` needs no
+// dialect.
+func (r *Runner) shiftTakeCount(v int, operand string, n *int) (int, bool) {
+	if v < 0 && !r.ask(r.sem().ShiftNegativeIsOutOfRange, "a negative `shift` count read as a count out of range") {
+		if r.unspecified {
+			return r.status, true
+		}
+		return r.shiftBadNumber(operand)
+	}
+	*n = v
+	return 0, false
+}
+
+// shiftBadNumber is the complaint about an operand that is not a count, and
+// the end of the script where a special builtin's bad operand ends one.
+func (r *Runner) shiftBadNumber(operand string) (int, bool) {
 	d := r.diag()
 	r.diagf("%s\n", Wording(d.ShiftBadNumber, "shift: %[1]s: numeric argument required", operand))
 	status := orDefault(d.BuiltinBadOptionStatus, 2)

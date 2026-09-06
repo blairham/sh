@@ -1852,6 +1852,18 @@ type Diagnostics struct {
 	// ShiftTooMany is `shift` past the end. One verb: the count, as a
 	// number — which a format is free to ignore, and dash's does.
 	ShiftTooMany string
+	// ShiftNegativeCount is the other end of the same range: a count below
+	// zero, where ShiftTooMany is one above `$#`. Two verbs, the same pair
+	// ShiftTooMany's format is handed — %[1]d the count as a number, %[2]s
+	// the operand as written — because the panel picks different ones:
+	// bash names the word, zsh names neither, and ksh93 reuses the wording
+	// it gives a count that is too large.
+	//
+	// Empty means the dialect does not have this complaint, which is dash's
+	// answer: a negative count is a word that is not a number there, and
+	// ShiftBadNumber says so. ShiftNegativeIsOutOfRange is what decides
+	// which of the two is reached.
+	ShiftNegativeCount string
 	// ArithFloatDigits is how many significant digits a float is written to.
 	// ksh93 shows 15 and zsh 17, which is why `0.1+0.2` is 0.3 in one and
 	// 0.30000000000000004 in the other from the same arithmetic. Zero means

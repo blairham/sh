@@ -1099,6 +1099,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shift/past-the-end-with-a-count` | **2>** `<shell>: 1: shift: can't shift that many` *(status 2)* | `st=1 n=2 rest=[a b]` | `st=1 n=2 rest=[a b]` **2>** `<shell>: line 1: shift: 5: shift count out of range` | `st=1 n=2 rest=[a b]` | **2>** `<shell>: shift: 5: bad number` *(status 1)* | `st=1 n=2 rest=[a b]` **2>** `<shell>:shift:1: shift count must be <= $#` |
 | `shift/a-negative-count` | **2>** `<shell>: 1: shift: Illegal number: -1` *(status 2)* | `st=1 n=3` **2>** `<shell>: line 1: shift: -1: shift count out of range` | `st=1 n=3` **2>** `<shell>: line 1: shift: -1: shift count out of range` | `st=1 n=3` **2>** `<shell>: line 0: shift: -1: shift count out of range` | **2>** `<shell>: shift: -1: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `st=1 n=3` **2>** `<shell>:shift:1: argument to shift must be non-negative` |
 | `shift/a-double-dash-before-the-count` | **2>** `<shell>: 1: shift: Illegal number: --` *(status 2)* | `st=0 n=1 rest=[c]` | `st=0 n=1 rest=[c]` | `st=0 n=1 rest=[c]` | `st=0 n=1 rest=[c]` | `st=0 n=1 rest=[c]` |
+| `shift/a-double-dash-alone-still-shifts-one` | **2>** `<shell>: 1: shift: Illegal number: --` *(status 2)* | `st=0 n=2 rest=[b c]` | `st=0 n=2 rest=[b c]` | `st=0 n=2 rest=[b c]` | `st=0 n=2 rest=[b c]` | `st=0 n=2 rest=[b c]` |
+| `shift/a-negative-count-after-the-marker` | **2>** `<shell>: 1: shift: Illegal number: --` *(status 2)* | `st=1 n=3` **2>** `<shell>: line 1: shift: -1: shift count out of range` | `st=1 n=3` **2>** `<shell>: line 1: shift: -1: shift count out of range` | `st=1 n=3` **2>** `<shell>: line 0: shift: --: shift count out of range` | **2>** `<shell>: shift: -1: bad number` *(status 1)* | `st=1 n=3` **2>** `<shell>:shift:1: argument to shift must be non-negative` |
+| `shift/a-count-with-a-plus-sign` | `st=0 n=2 rest=[b c]` | `st=0 n=2 rest=[b c]` | `st=0 n=2 rest=[b c]` | `st=0 n=2 rest=[b c]` | `st=0 n=2 rest=[b c]` | `st=0 n=2 rest=[b c]` |
+| `shift/a-dash-zero-count` | `st=0 n=3` | `st=0 n=3` | `st=0 n=3` | `st=0 n=3` | **2>** `<shell>: shift: -0: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `st=0 n=3` |
 | `shift/a-leading-dash-that-is-not-a-number` | **2>** `<shell>: 1: shift: Illegal number: -x` *(status 2)* | `st=2` **2>** `<shell>: line 1: shift: -x: numeric argument required` | **2>** `<shell>: line 1: shift: -x: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: shift: -x: numeric argument required` *(status 1)* | **2>** `<shell>: shift: -x: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `st=1` **2>** `<shell>:shift:1: bad option: -x` |
 | `shift/a-count-that-is-an-expression` | **2>** `<shell>: 1: shift: Illegal number: 1+1` *(status 2)* | `[a b c] st=2` **2>** `<shell>: line 1: shift: 1+1: numeric argument required` | **2>** `<shell>: line 1: shift: 1+1: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: shift: 1+1: numeric argument required` *(status 1)* | `[c] st=0` | `[c] st=0` |
 | `shift/a-count-that-is-a-name` | **2>** `<shell>: 1: shift: Illegal number: nosuchname` *(status 2)* | `[a b c] st=2` **2>** `<shell>: line 1: shift: nosuchname: numeric argument required` | **2>** `<shell>: line 1: shift: nosuchname: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: shift: nosuchname: numeric argument required` *(status 1)* | `[a b c] st=0` | `[a b c] st=0` |
@@ -1643,6 +1647,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shift/a-double-dash-before-the-count` — the end-of-options marker in front of the count: five take it and shift two, and dash calls `--` an illegal number — it has no option parsing here for `--` to end. It is the counterpart of `shift/a-leading-dash-that-is-not-a-number`, which asks what a dash word that is *not* the marker does, and together they say which shells read options at all
   ```sh
   set -- a b c; shift -- 2; echo "st=$? n=$# rest=[$*]"
+  ```
+- `shift/a-double-dash-alone-still-shifts-one` — the marker with nothing after it: the count falls back to its default of one in the five that have a marker, so `--` is consumed rather than read as the operand. dash keeps calling it an illegal number, which is the same answer it gives the marker anywhere
+  ```sh
+  set -- a b c; shift --; echo "st=$? n=$# rest=[$*]"
+  ```
+- `shift/a-negative-count-after-the-marker` — what the marker is *for*, and the row that separates the two dash-word questions: past it ksh93 reads `-1` as a count and says `bad number` where a bare `-1` is an option it does not have. bash and zsh answer the same either way and dash still refuses the `--`
+  ```sh
+  set -- a b c; shift -- -1; echo "st=$? n=$#"
+  ```
+- `shift/a-count-with-a-plus-sign` — unanimous, and the other half of the sign: a `+` in front of the digits is read and the count is one, in all six. Worth a row beside the negative count because the same reader decides both, and one that has no sign at all calls this a word that is not a number
+  ```sh
+  set -- a b c; shift +1; echo "st=$? n=$# rest=[$*]"
+  ```
+- `shift/a-dash-zero-count` — a negative zero, which is the sharpest line between the two shells that read dash words as options: zsh takes it as a count of nothing and succeeds, ksh93 refuses `-0` as an option it does not have. bash and dash shift nothing too, so this row is ksh93 alone against the rest
+  ```sh
+  set -- a b c; shift -0; echo "st=$? n=$#"
   ```
 - `shift/a-leading-dash-that-is-not-a-number` — two of the four read it as an *option* and refuse it as one; the other two read it as the count and complain about the number. Same input, two kinds of complaint — and both end the script where a special builtin's failure is fatal
   ```sh

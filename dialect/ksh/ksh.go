@@ -319,6 +319,11 @@ func Semantics() interp.Semantics {
 	// The octal wants its `\0`: `printf '%b' 'a\101Z'` is `a\101Z` and
 	// `a\0101Z` is `aAZ`.
 	s.PrintfBOctalWithoutZero = interp.No
+	// This shell alone: what a `\c` left is written as it stands, so
+	// `printf '[%5b]' 'a\cb'` is `[a` where the other five pad it. A
+	// property of the stop — with nothing stopping it this shell pads and
+	// truncates like the rest.
+	s.PrintfBStopIsPadded = interp.No
 	// The same set bash takes, and ignored the same way. ksh93 will also
 	// read a width *after* the modifier — `%l5d` is a padded 42 there — but
 	// that is its free-order conversion prefix rather than this axis: `%5-d`

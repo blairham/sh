@@ -476,3 +476,23 @@ func TestEchoTakesTheCapitalEscapeAlone(t *testing.T) {
 		t.Errorf("said % x status %d, want the small letter as written and the capital as ESC", out, st)
 	}
 }
+
+// What a `\c` leaves of a `%b` is written as it stands here — no width, no
+// precision, no left-justifying — which is this shell alone in the panel
+// (#910). It is a property of the stop: with nothing stopping it this shell
+// pads and truncates like the rest.
+func TestPrintfBStopIsNotPadded(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf '[%5b]' 'a\cb'`, "[a"},
+		{`printf '[%-5b]' 'a\cb'`, "[a"},
+		{`printf '[%.1b]' 'ab\cc'`, "[ab"},
+		{`printf '[%5.1b]' 'ab\cc'`, "[ab"},
+		{`printf '[%5b]' 'ab'`, "[   ab]"},
+		{`printf '[%.1b]' 'abc'`, "[a]"},
+	} {
+		if out, st := runKsh(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
+			t.Errorf("%s: said %q status %d, want %q and 0", tc.src, out, st, tc.want)
+		}
+	}
+}

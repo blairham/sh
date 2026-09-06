@@ -141,6 +141,7 @@ func Semantics() interp.Semantics {
 	// The octal needs no `\0` here, which is the one thing this shell and
 	// bash agree on that ksh93 and zsh do not.
 	s.PrintfBOctalWithoutZero = interp.Yes
+	s.PrintfBStopIsPadded = interp.Yes
 	// None: `%ld` is the conversion `l`, which dash does not have.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersAbsent
 	// No `%(fmt)T`: `%(` is a directive this shell does not have.

@@ -1248,13 +1248,26 @@ written in bash 3.2, dash and ksh93; `printf 'a\u0041Z'` moves ksh93 into
 the first group. Nothing here decodes them at either site, which is a gap
 the change for #798 left exactly where it found it.
 
-One more divergence is measured and not modeled, in the corner where the
-stop meets a field width. Five of the six pad and truncate the text a `\c`
-cut short exactly as they would any other — `printf '[%5b]' 'a\cb'` is
-`[    a` — and ksh93 alone writes the partial text as it stands, `[a`, and
-ignores a precision there too. With nothing stopping it ksh93 pads and
-truncates like the rest, so this is a property of the stop and not of the
-conversion. The five-shell answer is what is implemented.
+One more divergence lives in the corner where the stop meets a conversion's
+field, and it is `PrintfBStopIsPadded`. Five of the six put the text a `\c`
+cut short through the field exactly as they would any other; ksh93 alone
+writes it as it stands:
+
+    printf '[%5b]'   'a\cb'    five  [    a      ksh93  [a
+    printf '[%-5b]'  'a\cb'    five  [a          ksh93  [a
+    printf '[%.1b]'  'ab\cc'   five  [a          ksh93  [ab
+    printf '[%5.1b]' 'ab\cc'   five  [    a      ksh93  [ab
+
+It is a property of the **stop** and not of the conversion: with nothing
+stopping it ksh93 pads and truncates like the rest — `printf '[%5b]' 'ab'`
+is `[   ab` in all six, and `printf '[%.1b]' 'abc'` is `[a` — which is the
+control row `printf/a-b-escape-a-field-with-nothing-stopping-it` exists to
+hold. Without it the axis reads as "ksh93 has no field for `%b`", which is
+not what it does.
+
+Asked only where a `\c` actually stopped a `%b` *and* the field would change
+the text, so `printf '%b' 'a\cb'` and `printf '[%1b]' 'a\cb'` need no
+dialect.
 
 `echo`'s own `\e`/`\E` split is the same asymmetry the `%b` site has —
 `echo -e 'a\EZ'` is `61 1b 5a` in ksh93 and `61 5c 45 5a` in zsh, where

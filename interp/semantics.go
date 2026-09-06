@@ -575,6 +575,22 @@ type Semantics struct {
 	//
 	// Asked only where a `%b` argument actually carries a `\E`.
 	PrintfBCapitalEscEscape Answer
+	// PrintfBStopIsPadded puts what a `\c` left of a `%b` argument through the
+	// conversion's field all the same — the width, the precision and the
+	// left-justifying flag. bash, dash and zsh do; ksh93 alone writes the
+	// partial text as it stands:
+	//
+	//	printf '[%5b]'   'a\cb'   five  [    a      ksh93  [a
+	//	printf '[%-5b]'  'a\cb'   five  [a          ksh93  [a
+	//	printf '[%.1b]'  'ab\cc'  five  [a          ksh93  [ab
+	//
+	// It is a property of the *stop* and not of the conversion: with nothing
+	// stopping it ksh93 pads and truncates like the rest, so `printf '[%5b]'
+	// 'ab'` is `[   ab` in all six.
+	//
+	// Asked only where a `\c` actually stopped a `%b` *and* the field would
+	// change the text, so an ordinary `printf '%b' 'a\cb'` needs no dialect.
+	PrintfBStopIsPadded Answer
 	// PrintfBOctalWithoutZero reads a `%b` argument's `\nnn` as octal with no
 	// leading zero to introduce it. bash and dash do; ksh93 and zsh want the
 	// `\0` and write `\101` as the four characters it is.

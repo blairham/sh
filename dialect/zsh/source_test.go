@@ -543,3 +543,18 @@ func TestEchoTakesTheSmallEscapeAlone(t *testing.T) {
 		t.Errorf("said % x status %d, want the small letter as ESC and the capital as written", out, st)
 	}
 }
+
+// The field applies to what a `\c` left, as in bash and dash and not in
+// ksh93 (#910).
+func TestPrintfBStopIsPadded(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf '[%5b]' 'a\cb'`, "[    a"},
+		{`printf '[%.1b]' 'ab\cc'`, "[a"},
+		{`printf '[%5b]' 'ab'`, "[   ab]"},
+	} {
+		if out, st := runZsh(t, dir, tc.src+"\n"); out != tc.want || st != 0 {
+			t.Errorf("%s: said %q status %d, want %q and 0", tc.src, out, st, tc.want)
+		}
+	}
+}

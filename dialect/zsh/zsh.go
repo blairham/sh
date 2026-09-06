@@ -398,6 +398,7 @@ func Semantics() interp.Semantics {
 	s.PrintfBCapitalEscEscape = interp.No
 	// The octal wants its `\0`, as in ksh93.
 	s.PrintfBOctalWithoutZero = interp.No
+	s.PrintfBStopIsPadded = interp.Yes
 	// One of `h`, `l` and `L`, which is C89's set: `%ld` is a decimal and
 	// `%lld`, `%zX` and `%jd` are invalid directives.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC89

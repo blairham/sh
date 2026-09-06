@@ -4,6 +4,7 @@
 package driver_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,40 +20,45 @@ import (
 // zsh 5.9.2 with a terminal puts `m` in `$-` and announces its jobs while its
 // own `set -o` still lists `monitor off`, so a test reading one reader would
 // call that shell right and this one wrong.
+//
+// It writes to a path of its own rather than to standard output, and that is
+// not tidiness: one of the cases below makes standard *output* the terminal,
+// and a probe that wrote there would have sent its answer to the terminal and
+// left the test reading an empty file — which passes whatever the shell
+// decided. Mutation caught exactly that: killing the decision outright left
+// the case green.
 const monitorProbe = `m=off
 case $- in *m*) m=on;; esac
-echo "m=$m"
-set -o | grep '^monitor'
+{ echo "m=$m"; set -o | grep '^monitor'; } > %s
 `
 
 // runInteractiveScript runs `-i script` with the streams the test gives it and
 // the axis answered, returning what the script wrote.
 func runInteractiveScript(t *testing.T, needsTerminal interp.Answer, in *os.File, out, errs *os.File) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "probe.sh")
-	if err := os.WriteFile(path, []byte(monitorProbe), 0o600); err != nil {
+	dir := t.TempDir()
+	collected := filepath.Join(dir, "answer")
+	path := filepath.Join(dir, "probe.sh")
+	if err := os.WriteFile(path, []byte(fmt.Sprintf(monitorProbe, collected)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	sh := shell()
 	sh.Semantics.InteractiveMonitorNeedsATerminal = needsTerminal
 
-	// A file for each stream, so the shell is asked the question it would be
-	// asked by a process: whether the descriptor it holds is a terminal.
-	collected := filepath.Join(t.TempDir(), "out")
-	sink, err := os.Create(collected)
+	// Real files for the streams the test did not hand a terminal, so the
+	// shell is asked the question a process would ask it: whether the
+	// descriptor it holds is a terminal.
+	sink, err := os.Create(filepath.Join(dir, "streams"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = sink.Close() }()
 	sh.Stdin = in
-	if out == nil {
-		sh.Stdout = sink
-	} else {
+	sh.Stdout, sh.Stderr = sink, sink
+	if out != nil {
 		sh.Stdout = out
 	}
-	if errs == nil {
-		sh.Stderr = sink
-	} else {
+	if errs != nil {
 		sh.Stderr = errs
 	}
 	if code := driver.MainArgs(sh, []string{"testsh", "-i", path}); code != 0 {
@@ -110,15 +116,12 @@ func TestATerminalOnAnyOneOfTheThreeStreamsIsEnough(t *testing.T) {
 			case 2:
 				in, out, errs = notATerminal(t), nil, tty
 			}
-			// Where the terminal is the sink, what the script wrote went to
-			// the terminal instead of the file, so the assertion is on the
-			// decision the shell made and not on the text.
+			// The same assertion in all three, because the probe writes to
+			// a path of its own: whichever stream is the terminal, the
+			// answer lands in the file.
 			got := runInteractiveScript(t, interp.Yes, in, out, errs)
-			if tc.which == 0 && got != "m=on\nmonitor        on\n" {
-				t.Errorf("wrote %q, want the monitor on", got)
-			}
-			if tc.which != 0 && got == "m=off\nmonitor        off\n" {
-				t.Errorf("wrote %q, want a terminal on this stream to have turned the monitor on", got)
+			if want := "m=on\nmonitor        on\n"; got != want {
+				t.Errorf("wrote %q, want %q — a terminal on this stream turns the monitor on", got, want)
 			}
 		})
 	}
@@ -160,21 +163,26 @@ func TestWithNoTerminalTheMonitorIsTheDialectsAnswer(t *testing.T) {
 // axis is answered. Unanimous, and the reason the axis is named for an
 // interactive shell: `sh script.sh` reports `monitor off` in all four.
 func TestAScriptThatIsNotInteractiveNeverRunsTheMonitor(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "probe.sh")
-	if err := os.WriteFile(path, []byte(monitorProbe), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	for _, needs := range []interp.Answer{interp.Yes, interp.No} {
+		dir := t.TempDir()
+		collected := filepath.Join(dir, "answer")
+		path := filepath.Join(dir, "probe.sh")
+		if err := os.WriteFile(path, []byte(fmt.Sprintf(monitorProbe, collected)), 0o600); err != nil {
+			t.Fatal(err)
+		}
 		sh := shell()
 		sh.Semantics.InteractiveMonitorNeedsATerminal = needs
 		_, tty := terminal(t)
 		sh.Stdin = tty
-		out, _, code := runArgs(t, sh, "testsh", path)
-		if code != 0 {
+		if _, _, code := runArgs(t, sh, "testsh", path); code != 0 {
 			t.Fatalf("status %d, want 0", code)
 		}
-		if want := "m=off\nmonitor        off\n"; out != want {
-			t.Errorf("with the axis %v: wrote %q, want %q", needs, out, want)
+		b, err := os.ReadFile(collected)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "m=off\nmonitor        off\n"; string(b) != want {
+			t.Errorf("with the axis %v: wrote %q, want %q", needs, string(b), want)
 		}
 	}
 }

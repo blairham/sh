@@ -2424,7 +2424,56 @@ func (r *Runner) environ() []string {
 			out = append(out, k+"="+v)
 		}
 	}
+	for k, v := range r.hiddenExports {
+		out = append(out, k+"="+v)
+	}
 	return out
+}
+
+// hiddenExports yields the names a declaration left with no value of their
+// own, and the value each one shadowed.
+//
+// A local that inherited the export attribute and was then left unset reaches
+// a command with the value it hid, rather than with nothing: the shell reads
+// `${FOO-UNSET}` as unset inside the function and a child is still told
+// `FOO=bar`. That is the one reading measured for the combination, and it is
+// reachable only from it — a dialect whose valueless declaration leaves the
+// outer value showing has nothing hidden to tell a child about, and one whose
+// local does not inherit the attribute records nothing here.
+//
+// The record dies with the scope that made it, which is what puts the outer
+// value back on return. Innermost first, because the value handed over is the
+// one the nearest declaration hid: two functions deep, the caller's local is
+// what the callee shadowed and the global is out of reach behind it.
+func (r *Runner) hiddenExports(yield func(name, value string) bool) {
+	var seen map[string]bool
+	for i := len(r.scopes) - 1; i >= 0; i-- {
+		for name, value := range r.scopes[i].exportedShadow {
+			if seen[name] {
+				continue
+			}
+			if seen == nil {
+				seen = map[string]bool{}
+			}
+			seen[name] = true
+			if _, own := r.Vars[name]; own {
+				// Assigned since, so the local has a value of its own and
+				// the loop above has already handed it over. Skipped rather
+				// than emitted and superseded: a duplicate name in an
+				// environment is settled by execve keeping the first, and
+				// this list is deduplicated the other way round.
+				continue
+			}
+			if !r.removed[name] {
+				// Still visible — the dialect's valueless declaration left
+				// the outer value showing — so the loops above have it.
+				continue
+			}
+			if !yield(name, value) {
+				return
+			}
+		}
+	}
 }
 
 // isExported says whether a name reaches a command's environment.
@@ -2521,6 +2570,11 @@ type scope struct {
 	// and what it said.
 	savedExported  map[string]bool
 	exportedSpoken map[string]bool
+	// exportedShadow is what an exported name held when this scope's
+	// declaration took it out of view — the value a child is told for a
+	// local that inherited the attribute and was left with none of its own.
+	// See hiddenExports.
+	exportedShadow map[string]string
 	// keyword records that the function was defined with the `function` word
 	// rather than with parentheses. ksh93 gives only those functions a local
 	// scope, so `typeset` needs to know which kind it is standing in.

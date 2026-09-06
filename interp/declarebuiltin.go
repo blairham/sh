@@ -157,6 +157,10 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
+		// Read before the attributes are applied, because `-x` on this very
+		// declaration would otherwise answer a question asked about the name
+		// it shadows. See shadowedExport.
+		wasExported := r.isExported(name)
 		// Attributes first, because `-i` changes what the assignment on the
 		// same line *means* — but readonly last, because it changes whether
 		// that assignment is allowed at all. `declare -r c=1` sets c and then
@@ -189,6 +193,7 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 			// rather than making it one way and saying so.
 			return r.status
 		}
+		r.shadowedExport(name, wasExported)
 		if f.assoc && !f.remove {
 			// After the shadow, so that `typeset -A` inside a function
 			// declares a local table and the caller's absence comes back
@@ -453,6 +458,68 @@ func (r *Runner) localExportAttribute(name string, explicit bool) {
 		r.exported = map[string]bool{}
 	}
 	r.exported[name] = false
+}
+
+// shadowedExport remembers what an exported name held when a declaration took
+// a scope in front of it.
+//
+// The shadowed binding does not stop being exported for having something
+// standing in front of it, so a command is told its value for as long as the
+// declaration has none of its own: the shell reads `${FOO-UNSET}` as unset
+// inside the function and a child is still handed `FOO=bar`. Measured on both
+// halves — an exported name and one that arrived in the environment — and on
+// two levels, where what a child is told is the *caller's* local rather than
+// the global behind it.
+//
+// Told what the name was rather than asking, because the attributes on this
+// very declaration have been applied by the time a scope exists to record
+// into: `FOO=bar; f() { local -x FOO; }` would otherwise read its own `-x`
+// as the shadowed name's and hand a child a value no shell hands it. Which is
+// the difference the measurement turns on — an exported name shadowed by a
+// valueless declaration reaches a child, and an unexported one does not,
+// whatever the declaration says about the local's own attribute. `+x` is the
+// proof that it is the shadowed binding speaking and not the local: it takes
+// the attribute off the local outright, and the child is still told the outer
+// value.
+//
+// Reached only where a local carries the attribute of the name it shadows at
+// all. The shell that answers LocalInheritsTheExportAttribute no tells a
+// child nothing under that name, and it tells it nothing here either — a
+// valueless declaration of an exported name is that same question and not a
+// second one. The axis is read rather than asked because the declaration
+// above has just asked it, and asking twice would report an unanswered one
+// twice.
+//
+// Not written once per scope: a second declaration of the same name hides
+// whatever the first one left, and the value that goes to a child is the one
+// that was just taken away rather than the one the scope will put back.
+func (r *Runner) shadowedExport(name string, exported bool) {
+	if !exported || len(r.scopes) == 0 {
+		return
+	}
+	if r.sem().LocalInheritsTheExportAttribute != Yes {
+		return
+	}
+	sc := r.scopes[len(r.scopes)-1]
+	if _, shadowed := sc.saved[name]; !shadowed {
+		// No scope was taken — a declaration at the top level, or one this
+		// dialect gives no scope to — so nothing is standing in front of
+		// anything.
+		return
+	}
+	value, ok := r.Vars[name]
+	if !ok {
+		if value, ok = r.inheritedValue(name); !ok {
+			// Exported with no value anywhere — `export FOO` and nothing
+			// more — and an exported name with no value reaches no child in
+			// any shell measured.
+			return
+		}
+	}
+	if sc.exportedShadow == nil {
+		sc.exportedShadow = map[string]string{}
+	}
+	sc.exportedShadow[name] = value
 }
 
 // hideVar takes a name out of view entirely — the tables and the environment

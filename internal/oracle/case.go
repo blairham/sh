@@ -5294,6 +5294,26 @@ echo unreachable`,
 		Why:     "whether the local inherits the export attribute of the name it shadows: bash and dash hand the child the local's value, zsh hands it nothing at all under that name, and ksh93 has no `local` to ask with. Read through a real child rather than through a listing, because what the attribute decides is what a command is told",
 	},
 	{
+		ID: "declare/valueless-local-shadowing-an-exported-name", Category: "declarations",
+		Snippet: `export FOO=bar; f() { echo "read=[${FOO-UNSET}]"; local FOO; echo "read=[${FOO-UNSET}]"; env | grep '^FOO=' || echo "(none)"; }; f`,
+		Why:     "what a child is told for an exported name a valueless declaration has taken out of view, which is where the two bash builds part company: 5.3 reads the name as unset and still hands a child the value it hid, and 3.2 hands it nothing. Both columns are right about their own build and the `bash` column is the one graded, so this case splits them on purpose",
+	},
+	{
+		ID: "declare/valueless-local-shadowing-an-imported-name", Category: "declarations",
+		Snippet: `f() { local TERM; echo "read=[${TERM-UNSET}]"; env | grep '^TERM=' || echo "(none)"; }; f`,
+		Why:     "the same question by the other route, and the one both bash builds answer the same way: a name is exported by having arrived in the environment, so a valueless local over it hands a child what arrived while the shell itself reads the name as unset",
+	},
+	{
+		ID: "declare/valueless-local-shadowing-a-callers-local", Category: "declarations",
+		Snippet: `export FOO=bar; g() { local FOO; env | grep '^FOO=' || echo "(none)"; }; f() { local FOO=mid; g; }; f`,
+		Why:     "which value it is: the caller's local rather than the global standing behind it, so the answer belongs to the scope that took the name and not to the name. The two readings differ only two functions deep, which is why the pair is here",
+	},
+	{
+		ID: "declare/valueless-local-over-an-unexported-name", Category: "declarations",
+		Snippet: `FOO=bar; f() { local -x FOO; env | grep '^FOO=' || echo "(none)"; }; f`,
+		Why:     "the other side of it: `-x` is the local's own attribute and says nothing about the name it shadows, so a shadowed name nothing exported reaches no child — an exported name with no value is told to nobody in any shell measured",
+	},
+	{
 		ID: "declare/local-shadowing-an-imported-name", Category: "declarations",
 		Snippet: `f() { local TERM=changed; env | grep '^TERM=' || echo "(none)"; }; f; env | grep '^TERM='`,
 		Why:     "the same question where the name arrived in the environment rather than being exported by hand, which is the route that made the two answers one: an imported name is exported by having been imported, so the local either inherits that or does not, and the split is the same either way",

@@ -6021,10 +6021,63 @@ Two neighbors are *not* this axis. What a valueless declaration leaves
 visible is `ValuelessDeclarationHidesTheOuterValue`, and the two compose:
 `local FOO` over an exported `FOO` shows dash's child the outer value,
 because dash hides nothing, and shows zsh's child nothing, because zsh
-exports nothing. bash is the residue and is a split within one shell —
-5.3 hands the child the outer value where its unset local has none of
-its own, and 3.2 hands it nothing — so it is recorded rather than
-modeled.
+exports nothing.
+
+bash is the residue, and it is not a third axis. Only a dialect that
+answers **both** of the two yes reaches the question at all — dash has
+nothing hidden to tell a child about and zsh has nothing exported — so
+there is one dialect here and no disagreement for a switch to hold. It
+is a value that dialect has to pick, and the two candidates are two
+builds of it:
+
+    export FOO=bar; f() { local FOO; env | grep '^FOO='; }; f
+
+    bash 5.3    FOO=bar     the value the local hid
+    bash 3.2    (nothing)
+
+**Ours is 5.3's**, and the reason is not that it is newer. Three
+measurements decided it:
+
+- POSIX mode is not the variable. The same 5.3 invoked as `sh` — the
+  panel's own `bash-as-sh` column, and a distinct member — gives the
+  same `FOO=bar`, and `/bin/sh` on this machine, which is 3.2, gives
+  nothing. Two of the six columns say the value and one says nothing.
+- 3.2 is not a coherent second model. It reports the opposite of what it
+  does — `export -p` inside the function lists `declare -x FOO=""` for a
+  name it then tells no child about — and it *does* hand a child a value
+  by the other route: for a name that arrived in the environment rather
+  than being exported by hand, `local TERM` shows the child `TERM=dumb`
+  in 3.2 as in 5.3. Choosing 3.2's answer means choosing between two
+  behaviors within 3.2 as well.
+- 5.3's answer is one rule and reaches further than the shape that
+  raised it. Two functions deep it is the *caller's* local that a child
+  is told, not the global behind it; `local -x` over an exported name
+  hands the value over and over an unexported one hands nothing; `+x`
+  takes the attribute off the local outright and the child is still told
+  the outer value. So it is the shadowed binding speaking rather than
+  the local, and both bash builds agree on the last of those.
+
+Written down as a rule: **an exported name a declaration shadows goes on
+reaching a command with the value it had, for as long as the declaration
+standing in front of it has none of its own.** What the shell reads and
+what a child is told part company there, which is why only a real child
+can measure it.
+
+Three neighbors of *that* are recorded rather than modeled, each one a
+place where bash reaches past a binding in a way a single variable table
+cannot see, and both builds agree on all three:
+
+- `local +x FOO=z` over an exported `FOO` hands a child `bar` and not
+  `z`. Taking the attribute off the local uncovers the binding behind
+  it, which needs an export attribute per binding rather than per name.
+  We hand the child nothing.
+- `local FOO` after a `local FOO=x` in the same scope leaves the value
+  standing — `${FOO-UNSET}` is `x` — where the same declaration in a
+  *new* scope hides it. We read it as unset. The child is told `x`
+  either way.
+- `unset` on such a local reads as unset in every build and still hands
+  a child the outer value. That one we match, by the rule above rather
+  than by a case of its own.
 
 
 ### `unset`

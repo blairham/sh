@@ -1877,6 +1877,9 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
+		// Before the attributes, for the reason biTypeset gives: `-x` here
+		// must not answer for the name this declaration shadows.
+		wasExported := r.isExported(name)
 		r.applyAttributes(name, f)
 		// shadow does nothing when there is no scope to save into, which is
 		// the dialect that took this as a global: there is nothing to put
@@ -1888,6 +1891,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// axis and then assigning anyway is the silent wrong answer.
 			return r.status
 		}
+		r.shadowedExport(name, wasExported)
 		if f.assoc && !f.remove {
 			// After the shadow, the same order `typeset -A` keeps: the
 			// caller's absence comes back when the function returns.

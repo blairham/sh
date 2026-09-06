@@ -6600,6 +6600,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/valueless-local-with-an-outer-value` | `[out]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[out]~after=[out]` **2>** `<script>: line 2: local: not found` | `[]~after=[out]` |
 | `declare/valueless-typeset-with-an-outer-value` | **2>** `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[]~after=[out]` |
 | `declare/local-shadowing-an-exported-name` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=bar~FOO=bar` **2>** `<shell>: local: not found` | `(none)~FOO=bar` |
+| `declare/valueless-local-shadowing-an-exported-name` | `read=[bar]~read=[bar]~FOO=bar` | `read=[bar]~read=[UNSET]~FOO=bar` | `read=[bar]~read=[UNSET]~FOO=bar` | `read=[bar]~read=[UNSET]~(none)` | `read=[bar]~read=[bar]~FOO=bar` **2>** `<shell>: local: not found` | `read=[bar]~read=[]~(none)` |
+| `declare/valueless-local-shadowing-an-imported-name` | `read=[dumb]~TERM=dumb` | `read=[UNSET]~TERM=dumb` | `read=[UNSET]~TERM=dumb` | `read=[UNSET]~(none)` | `read=[dumb]~TERM=dumb` **2>** `<shell>: local: not found` | `read=[]~(none)` |
+| `declare/valueless-local-shadowing-a-callers-local` | `FOO=mid` | `FOO=mid` | `FOO=mid` | `(none)` | `FOO=bar` **2>** `<shell>: local: not found~<shell>: local: not found` | `(none)` |
+| `declare/valueless-local-over-an-unexported-name` | **2>** `<shell>: 1: local: -x: bad variable name` *(status 2)* | `(none)` | `(none)` | `(none)` | `(none)` **2>** `<shell>: local: not found` | `(none)` |
 | `declare/local-shadowing-an-imported-name` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=dumb~TERM=dumb` **2>** `<shell>: local: not found` | `(none)~TERM=dumb` |
 | `declare/typeset-local-shadowing-an-exported-name` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `(none)~FOO=bar` | `(none)~FOO=bar` |
 | `declare/integer-attribute-evaluates-a-later-assignment` | `[5+2]` **2>** `<shell>: 1: typeset: not found` | `[7]` | `[7]` | `[7]` | `[7]` | `[7]` |
@@ -6667,6 +6671,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/local-shadowing-an-exported-name` — whether the local inherits the export attribute of the name it shadows: bash and dash hand the child the local's value, zsh hands it nothing at all under that name, and ksh93 has no `local` to ask with. Read through a real child rather than through a listing, because what the attribute decides is what a command is told
   ```sh
   export FOO=bar; f() { local FOO=baz; env | grep '^FOO=' || echo "(none)"; }; f; env | grep '^FOO='
+  ```
+- `declare/valueless-local-shadowing-an-exported-name` — what a child is told for an exported name a valueless declaration has taken out of view, which is where the two bash builds part company: 5.3 reads the name as unset and still hands a child the value it hid, and 3.2 hands it nothing. Both columns are right about their own build and the `bash` column is the one graded, so this case splits them on purpose
+  ```sh
+  export FOO=bar; f() { echo "read=[${FOO-UNSET}]"; local FOO; echo "read=[${FOO-UNSET}]"; env | grep '^FOO=' || echo "(none)"; }; f
+  ```
+- `declare/valueless-local-shadowing-an-imported-name` — the same question by the other route, and the one both bash builds answer the same way: a name is exported by having arrived in the environment, so a valueless local over it hands a child what arrived while the shell itself reads the name as unset
+  ```sh
+  f() { local TERM; echo "read=[${TERM-UNSET}]"; env | grep '^TERM=' || echo "(none)"; }; f
+  ```
+- `declare/valueless-local-shadowing-a-callers-local` — which value it is: the caller's local rather than the global standing behind it, so the answer belongs to the scope that took the name and not to the name. The two readings differ only two functions deep, which is why the pair is here
+  ```sh
+  export FOO=bar; g() { local FOO; env | grep '^FOO=' || echo "(none)"; }; f() { local FOO=mid; g; }; f
+  ```
+- `declare/valueless-local-over-an-unexported-name` — the other side of it: `-x` is the local's own attribute and says nothing about the name it shadows, so a shadowed name nothing exported reaches no child — an exported name with no value is told to nobody in any shell measured
+  ```sh
+  FOO=bar; f() { local -x FOO; env | grep '^FOO=' || echo "(none)"; }; f
   ```
 - `declare/local-shadowing-an-imported-name` — the same question where the name arrived in the environment rather than being exported by hand, which is the route that made the two answers one: an imported name is exported by having been imported, so the local either inherits that or does not, and the split is the same either way
   ```sh

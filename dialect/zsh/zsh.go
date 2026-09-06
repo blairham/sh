@@ -1194,6 +1194,7 @@ func Apply(r *interp.Runner) {
 	})
 	// A NUL as well as the three whitespace characters, which is zsh's alone.
 	r.SetSpecial("IFS", " \t\n\x00")
+	tieTheBuiltInPairs(r)
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
 	}

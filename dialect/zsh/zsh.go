@@ -1084,6 +1084,9 @@ func Apply(r *interp.Runner) {
 	// And the line editor's key table, which a real rc file also reaches for.
 	// See bindkey.go.
 	registerBindkey(r)
+	// The module loader, which answers per module rather than pretending to
+	// load anything. See zmodload.go.
+	registerZmodload(r)
 	// This shell's richer `echo`, and not ksh93's builtin of the same
 	// spelling: different letters, a different escape set and different
 	// wordings, all measured side by side. See print.go.

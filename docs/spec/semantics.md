@@ -3433,6 +3433,68 @@ What was built, all through the extension seam — registered builtins in each
   is measured one punctuation character at a time: `*?[(|#^<` make a
   pattern non-exact for the ordering and `~` does not, while `~` and `=`
   are among those `-L` quotes.
+- **zsh `zmodload`** (dialect/zsh/zmodload.go): the module loader, which
+  answers **per module** and never simulates one. This shell cannot load a
+  compiled module and never will, so the useful question is not how to load
+  one but what to say about one — and `command not found: zmodload` was the
+  wrong answer to a real rc file's
+
+      zmodload zsh/zutil || { print -P "…required, aborting"; return 1; }
+
+  because "no such command" is not something that line can act on.
+
+  Every zsh module is a set of named **features**, measured one module at a
+  time with `zmodload -lF` after loading it: `+b:zparseopts` is a builtin,
+  `+p:functions` a parameter, and `+c:`, `+f:` and `+a:` a condition, a
+  function and a math function. A module loads here exactly when this shell
+  already has every feature it names — the features being the ones it
+  implements anyway, under their own names — so the answer is mechanical
+  rather than a claim, and nothing is stubbed. `zsh/zutil` is refused today
+  because three of its four builtins are missing, and the day `zparseopts`,
+  `zformat` and `zregexparse` exist it will load with no change to the
+  builtin: the table says what the module *is* and the shell answers whether
+  it has it.
+
+  **Not a silent success**, which is the failure this builtin is most able to
+  cause: a script told `zsh/zutil` loaded and then calling `zparseopts` fails
+  several hundred lines later, in a function whose caller has gone, about a
+  command nobody wrote. So a refusal names the module and the features it is
+  short of — `zformat, zparseopts and zregexparse are not implemented yet` —
+  up to six of them, beyond which the count speaks (`33 of its 33 features`),
+  because thirty-three parameter names on one line is not something a person
+  reads. The reason clause is the only part that is not zsh's: zsh's is a
+  dlopen error naming the module directory of the running build, which is a
+  fact about a machine rather than about a shell.
+
+  What is measured and matched exactly: a fresh shell has `zsh/main` alone
+  loaded and nothing else, not `zsh/complete` and `zsh/zle` — those are
+  linked into the binary and `zmodload -e` says 1 for both. The bare listing
+  is one name per line and `-L` is the same set as `zmodload <name>` lines.
+  `-e` asks rather than loads, silently, and every module named must be
+  loaded for 0. **`-u`'s `no such module` means "not loaded", not "no such
+  name"**: `zmodload -u zsh/mathfunc` is `no such module zsh/mathfunc` and 1
+  for a module zsh certainly ships, and silence and 0 once it is loaded — so
+  a list of the modules zsh ships, which a first version of this carried to
+  tell "absent here" from "no such thing", answered no question the builtin
+  asks and is gone. A load attempts every module named and does not stop at
+  the first failure. `-s` silences the complaint and keeps the 1, which is
+  the whole of what a script can act on. `-lF` on a loaded module with no
+  features is `does not support features`, its own sentence and not the `is
+  not yet loaded` an absent one gets.
+
+  Where the two locations part: `bad option: -q` carries the builtin's name
+  — `zsh:zmodload:1:` — and a load failure does not, `zsh:1:`. Measured, and
+  it is one command writing both, so `interp.Runner.DiagnoseAsTheShellf`
+  exists for the second kind.
+
+  Refused by name: `-a` with `-b`/`-c`/`-f`/`-p` (autoloaded builtins,
+  conditions, functions and parameters), `-A` and `-R` (module aliases), `-d`
+  (the dependency table), `-m` (pattern arguments), `-I`, `-P`, and `-F`
+  without `-l` — a feature here is a builtin or a parameter the shell either
+  has or has not, and `+zparseopts` cannot conjure one. The twenty-two
+  letters zsh's `zmodload` does not have at all are `bad option: -q` and 1,
+  which is this builtin's wording and `bindkey`'s, not `zstyle`'s `invalid
+  option`. Corpus: `zmodload/*`.
 - **zsh `bindkey`** (dialect/zsh/bindkey.go): the line editor's key table.
   See below for why this moved out of the not-built list.
 

@@ -63,6 +63,12 @@ func TestAnExpansionStandsWhereANameWould(t *testing.T) {
 		{"a default over a set result", `v=abc; printf "[%s]" "${${v}:-d}"`, "[abc]"},
 		{"an alternate over a set result", `v=abc; printf "[%s]" "${${v}:+y}"`, "[y]"},
 		{"an unset inner is empty and not an error", `printf "[%s]" "${${nosuch}}"`, "[]"},
+		// A metacharacter in the inner's value is a character of it. The
+		// marks the expander carries a pattern with are the expander's own
+		// bookkeeping, and an inner that kept them answered `a\*b`.
+		{"a metacharacter in the value stays one character", `v="a*b"; printf "[%s]" "${${v}}"`, "[a*b]"},
+		{"and the operator matches against it", `v="a*b"; printf "[%s]" "${${v}#a}"`, "[*b]"},
+		{"a metacharacter through a flag group", `v="a*b"; printf "[%s]" "${${(U)v}}"`, "[A*B]"},
 		// The startup-file idiom the issue was filed from, with the pieces it
 		// needs: an exclusion inside a default, both nested.
 		{"a pattern exclusion inside a default", `z=/bin/zsh; printf "[%s]" "${${z:#/bin/*}:-fallback}"`, "[fallback]"},

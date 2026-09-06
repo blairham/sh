@@ -2272,11 +2272,17 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set bool) {
 	r.expandingSpan = 0
 	span := e.Inner.Spans[0]
 	if parts, ok := r.expandAt(span); ok {
-		words = unescapeAll(parts)
+		words = parts
 	} else {
 		text, _ := r.expandSpan(span, splitNever)
-		words = []string{globUnescape(text)}
+		words = []string{text}
 	}
+	// The marks come off once, whichever half produced the fields. The inner
+	// is an operand rather than a field of the command line, so a `*` in its
+	// value is a character the outer operator matches against and not a
+	// pattern the shell is about to escape for someone: leaving them on
+	// answered `${${v}}` on `a*b` with a backslash in it.
+	words = unescapeAll(words)
 	if len(words) == 0 {
 		return []string{""}, false
 	}

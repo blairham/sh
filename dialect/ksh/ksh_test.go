@@ -663,3 +663,15 @@ func TestDollarDashInteractiveStartupLetters(t *testing.T) {
 		t.Error("the monitor letter must come from the monitor, not from a startup string")
 	}
 }
+
+// Nothing is said when an interactive shell cannot have job control, which is
+// this dialect's answer and not an omission.
+//
+// ksh93 needs no terminal for the monitor — InteractiveMonitorNeedsATerminal
+// is No here — so there is never a moment where it wanted one and could not
+// have it, and measured with every stream redirected it writes nothing at all.
+func TestNothingIsSaidAboutJobControlAtStartup(t *testing.T) {
+	if got := ksh.Diagnostics().NoJobControlAtStartup; got != "" {
+		t.Errorf("NoJobControlAtStartup = %q, want empty — this shell says nothing", got)
+	}
+}

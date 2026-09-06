@@ -536,6 +536,13 @@ func Diagnostics() interp.Diagnostics {
 		// The target as it was written, not as it expanded.
 		AmbiguousRedirect: "%[1]s: ambiguous redirect",
 		JobStarted:        "[%[1]d] %[2]d",
+		// The one line all three members of the panel's bash write when an
+		// interactive shell has no terminal to run the monitor on: 5.3.15 and
+		// 3.2.57 as `bash`, and 3.2 run as `sh`, which writes it with its own
+		// name in front. 5.3.15 writes a further line above it about the
+		// terminal process group, and it is not reproduced — see
+		// Diagnostics.NoJobControlAtStartup.
+		NoJobControlAtStartup: "no job control in this shell",
 		// Silent for a count above `$#` — there is no ShiftTooMany here —
 		// and a sentence for one below zero, naming the word as written.
 		ShiftNegativeCount: "shift: %[2]s: shift count out of range",

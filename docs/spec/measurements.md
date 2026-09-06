@@ -1356,6 +1356,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `jobs/a-disowned-job-is-not-in-the-listing` | **2>** `<shell>: 1: Syntax error: "\|" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `sleep 0.4 &\| jobs >j.txt; echo "n=$(grep -c . j.txt)"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `sleep 0.4 &\| jobs >j.txt; echo "n=$(grep -c . j.txt)"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `\|'~<shell>: -c: line 0: `sleep 0.4 &\| jobs >j.txt; echo "n=$(grep -c . j.txt)"'` *(status 2)* | `n=1` | `n=0` |
 | `jobs/a-background-job-outlives-the-shell` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` |
 | `jobs/a-background-external-command-outlives-the-shell` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` |
+| `jobs/an-ampersand-returns-before-the-job-opens-a-fifo` | `NOW-42~GOT-hi` | `NOW-42~GOT-hi` | `NOW-42~GOT-hi` | `NOW-42~GOT-hi` | `NOW-42~GOT-hi` | `NOW-42~GOT-hi` |
+| `jobs/an-ampersand-returns-when-an-external-commands-redirection-blocks` | `NOW-42~hi` | `NOW-42~hi` | `NOW-42~hi` | `NOW-42~hi` | `NOW-42~hi` | `NOW-42~hi` |
 | `jobs/wait-brings-a-background-job-back-before-the-shell-ends` | `LATE-42~NOW-42` | `LATE-42~NOW-42` | `LATE-42~NOW-42` | `LATE-42~NOW-42` | `LATE-42~NOW-42` | `LATE-42~NOW-42` |
 | `jobs/a-running-background-job` | `[1] + Running                    ` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                 sleep 0.4 &` | `[1] +  Running                 <command unknown>` | `[1]  + running    sleep 0.4` |
 | `jobs/a-finished-background-job` | `[1] Done                       ~---` | `[1] Done                       sleep 0.05~---` | `[1] Done                       sleep 0.05~---` | `---` | `[1] Running                 <command unknown>~---` | `---` |
@@ -1628,6 +1630,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `jobs/a-background-external-command-outlives-the-shell` — the same question where the whole job is one external command, and this shell answers it correctly — the child is a real process and outliving the shell is what a real process does. The pair with the row above is what says the difference is about the *shell logic* in a job and not about `&`: a subshell, an and-list, a brace group and a function all lose their remainder, and a single command loses nothing
   ```sh
   sh -c 'sleep 0.2; echo LATE-42' & echo NOW-42
+  ```
+- `jobs/an-ampersand-returns-before-the-job-opens-a-fifo` — the question the three rows above it do not reach (#1003): what `&` does when the job's *first* act is to wait rather than to run. A named pipe with nobody at the other end is what makes the job block where it opens the redirection, before the shell knows whether the command is a builtin or a program — and every shell in the panel prints the marker at once, because a real shell forks before it opens anything. This shell printed nothing at all and timed out: starting a job waited for a process id that a job blocked before its first command was never going to have. The late write is what makes the case terminate instead of recording six timeouts, and the order is fixed by the pipe rather than by the scheduler — the job cannot get past its open until the write arrives, and the write does not happen until the marker is printed
+  ```sh
+  mkfifo p; (read x <p; echo "GOT-$x") & echo NOW-42; echo hi >p; wait
+  ```
+- `jobs/an-ampersand-returns-when-an-external-commands-redirection-blocks` — the same question where the job is one external command, and it is the row that says the fault was not about compound commands: `sh -c ... &` returns here because the child is a real process, but a program whose redirection blocks never becomes one, so the pid the shell was waiting for did not exist yet. The pair with the row above is what separates opening a redirection from dispatching a command — the open comes first in every shape
+  ```sh
+  mkfifo p; /bin/cat <p >o.txt & echo NOW-42; echo hi >p; wait; cat o.txt
   ```
 - `jobs/wait-brings-a-background-job-back-before-the-shell-ends` — the same job with a `wait` in front of the ending, which every shell including this one gets right and which is the workaround the row above leaves a script needing. It is the pair that says the loss is about the shell *ending*, not about the job: nothing is wrong with the job while there is still a shell to run it
   ```sh

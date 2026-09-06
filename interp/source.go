@@ -297,6 +297,17 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 		syntaxStatus: r.diag().sourcedSyntaxStatus(),
 		catchReturn:  true,
 	})
+	// An error the file gave up over, caught here in the dialects that make
+	// the file the boundary — the sourcing file then carries on at the
+	// command after the `.`, and this reports what the error cost. Before
+	// the RETURN trap, because a file given up over an error has still
+	// finished, and a controlExit still unwinding would keep the action from
+	// running at all.
+	if st, ok := r.caughtSourcedError(); ok {
+		r.status = st
+		r.runReturnTrap(ctx, sourcedFrame)
+		return r.status
+	}
 	// The RETURN trap fires as a sourced file finishes — wherever the trap
 	// was set, which is the half of the rule functions do not share. The
 	// action sees the file's status, and an `exit` of its own wins.
@@ -417,4 +428,32 @@ func (r *Runner) atDir(path string) string {
 func (r *Runner) readableFile(path string) bool {
 	st, err := r.stat(path)
 	return err == nil && !st.IsDir()
+}
+
+// caughtSourcedError catches an error the file `.` just read gave up over,
+// reporting the status the builtin should carry.
+//
+// Nothing is caught unless the dialect says the sourced file is the boundary,
+// and a request to stop is never caught — `exit 7` in a sourced file exits 7
+// in every shell in the panel, and so does errexit firing there.
+func (r *Runner) caughtSourcedError() (int, bool) {
+	if !r.pendingFileError() {
+		return 0, false
+	}
+	if !r.ask(r.sem().FatalErrorEndsTheSourcedFileOnly,
+		"an error inside a file `.` read ending that file rather than the shell") {
+		return 0, false
+	}
+	if r.abandon == abandonParamError &&
+		r.ask(r.sem().ParamErrorIsAnExitRequest, "`${x?word}` ending the shell rather than the file it is in") {
+		// The one operand a dialect calls a request to stop rather than an
+		// error, so the catch above does not apply to it.
+		return 0, false
+	}
+	status := r.status
+	r.takeFileError()
+	if n := r.diag().SourcedFatalStatus; n != 0 {
+		status = n
+	}
+	return status, true
 }

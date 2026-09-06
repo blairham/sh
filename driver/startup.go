@@ -292,6 +292,17 @@ func (sh Shell) sourceText(r *interp.Runner, path, text string) int {
 		sh.errf("%s", sh.Diagnostics.Report(path, 1, err.Error()+"\n"))
 		return usageStatus
 	}
+	// A startup file is a file of its own, so an error in it costs that file
+	// and not the session. Measured in both shells that read a startup file
+	// without a person on the other end: a `~/.zshenv` or a `$BASH_ENV` whose
+	// third line is `echo X${NOPE}` under `set -u` stops there, the startup
+	// files after it are still read — zsh goes on to `.zprofile`, `.zshrc`
+	// and `.zlogin` — and the script the shell was started for still runs.
+	//
+	// Not `exit`, which GiveUpTheFile deliberately does not catch: `exit 3`
+	// in a startup file exits 3 and the files after it are not read, which is
+	// the neighbouring rule the loop in startup already models on Exited.
+	r.GiveUpTheFile()
 	return 0
 }
 

@@ -2021,6 +2021,69 @@ type Semantics struct {
 	// Diagnostics.
 	BuiltinSyntaxErrorFatal Answer
 
+	// FatalErrorEndsTheSourcedFileOnly makes an error that would end a script
+	// end only the file `.` read it from, handing the builtin a status and
+	// letting the file that sourced it carry on.
+	//
+	// Measured with an error every shell in the panel words identically, so
+	// that the row is about the abandonment and not about the operator — a
+	// file whose third line is `echo X${NOPE}` under `set -u`, sourced by a
+	// file that prints afterwards:
+	//
+	//	dash, bash, bash-as-sh, bash32   the shell ends; nothing after the `.`
+	//	                                 runs, in the sourcing file or any
+	//	                                 file above it
+	//	ksh93                            `.` reports 1 and the sourcing file
+	//	                                 carries on
+	//	zsh                              `.` reports 126 and the sourcing file
+	//	                                 carries on
+	//
+	// Four measured facts make this one axis rather than several:
+	//
+	//	*Every* error that would end a script behaves this way in the two
+	//	shells that catch anything — a readonly assignment they call fatal, a
+	//	division by zero, a bad substitution, an unset parameter. So the axis
+	//	is about what a fatal error costs and not about expansion.
+	//
+	//	Only one file is given up. A file sourced from a file sourced from a
+	//	script loses the innermost file alone, and the middle one prints the
+	//	line after its own `.`.
+	//
+	//	It is the *running* `.` and not the file the text came from: a
+	//	function defined in a sourced file and called later from the script
+	//	ends the shell in every member of the panel, ksh93 and zsh included.
+	//	A `.` inside a function is the boundary, and the function body
+	//	resumes after it.
+	//
+	//	`exit`, and errexit firing, are not errors and are never caught —
+	//	unanimous. That is what separates this from the neighbouring rule
+	//	that `exit` in a startup file ends the shell and the files after it
+	//	are not read.
+	//
+	// The status the builtin reports is Diagnostics.SourcedFatalStatus,
+	// because the two shells that catch disagree about it and neither number
+	// is the status the error itself carried.
+	FatalErrorEndsTheSourcedFileOnly Answer
+
+	// ParamErrorIsAnExitRequest makes `${x?word}` and `${x:?word}` a request
+	// to stop rather than an error, so no boundary catches it.
+	//
+	// Asked only where the answers differ, which is at a boundary that gives
+	// up one file: measured, the same `${NOPE?msg}` inside a file `.` read
+	// reports and lets the sourcing file carry on in ksh93 and ends the whole
+	// shell in zsh, where an unset parameter under `set -u` two lines away is
+	// caught by both. The startup-file boundary splits the same way — at the
+	// top of a `$BASH_ENV` the operator stops that file and the script still
+	// runs, and at the top of a `~/.zshenv` it ends the shell before the
+	// script. At the top level of a script both operators end the shell in
+	// every member of the panel, so nothing there has a question to ask.
+	//
+	// zsh's own manual is the reason it reads as a request rather than as an
+	// inconsistency: the `?` form is documented to print the word and *exit
+	// the shell*, which is the same family as the `exit` builtin and not the
+	// family of a diagnostic.
+	ParamErrorIsAnExitRequest Answer
+
 	// DotWithNoOperandIsAnError decides whether `.` with no filename is a
 	// failure at all. False in dash, which does nothing and reports success;
 	// true in bash, ksh93 and zsh.
@@ -3563,6 +3626,19 @@ func PosixSemantics() Semantics {
 		// panel that still does it, and the preset follows the standard
 		// rather than the majority.
 		BuiltinSyntaxErrorFatal: Yes,
+		// An expansion error ends a non-interactive shell, which XCU states
+		// outright, and it says the same of an error in a special builtin —
+		// `.` is one. So the standard's answer is that nothing is caught at
+		// a `.`, and dash, the panel member that targets this text,
+		// complies. ksh93 and zsh are the departure.
+		FatalErrorEndsTheSourcedFileOnly: No,
+		// XCU's `${parameter?word}` says the shell writes the word and
+		// *exits*, in those words, so the standard reads the operator as a
+		// request to stop rather than as one more error. Nothing in the
+		// preset can observe the difference — a preset whose `.` catches
+		// nothing has no boundary to catch it at — but the answer is the
+		// standard's and is written down rather than left to a refusal.
+		ParamErrorIsAnExitRequest: Yes,
 		// POSIX makes a special builtin's failure fatal, and a bad option is
 		// one.
 		BadOptionToSpecialBuiltinFatal: Yes,

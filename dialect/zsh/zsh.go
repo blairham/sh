@@ -437,6 +437,15 @@ func Semantics() interp.Semantics {
 	// sourced, and goes back to the script's name when that call returns.
 	s.DollarZeroNamesTheInnermostCall = interp.Yes
 	s.BuiltinSyntaxErrorFatal = interp.No
+	// An error inside a file `.` read ends that file and nothing above it:
+	// measured, `.` reports 126 and the sourcing file runs the command after
+	// it. The status is Diagnostics.SourcedFatalStatus.
+	s.FatalErrorEndsTheSourcedFileOnly = interp.Yes
+	// Except `${x?word}`, which this shell's own manual documents as printing
+	// the word and *exiting the shell* — and measured to do exactly that from
+	// inside a sourced file, where an unset parameter under `set -u` two
+	// lines away is caught. So it is a request to stop rather than an error.
+	s.ParamErrorIsAnExitRequest = interp.Yes
 	s.DotMissingFileFatal = interp.No
 	s.DotPassesArguments = interp.Yes
 	// zsh and ksh93 drop the EXIT trap when an exec fails; dash and bash
@@ -962,10 +971,13 @@ func Diagnostics() interp.Diagnostics {
 		// zsh alone answers "a syntax error" differently depending on where it
 		// read the text: 1 from -c, 126 from a file `.` opened.
 		SourcedSyntaxErrorStatus: 126,
-		DotCannotOpen:            ".: no such file or directory: %[1]s",
-		DotCannotOpenStatus:      127,
-		DotNoOperand:             ".: not enough arguments",
-		DotNoOperandStatus:       1,
+		// And the same number for a sourced file given up over an *error*,
+		// where a fatal error that reaches the top of a script reports 1.
+		SourcedFatalStatus:  126,
+		DotCannotOpen:       ".: no such file or directory: %[1]s",
+		DotCannotOpenStatus: 127,
+		DotNoOperand:        ".: not enough arguments",
+		DotNoOperandStatus:  1,
 		// zsh leads with the reason, lowercased, and names the command after
 		// it — the reverse of the other three.
 		// zsh alone says something for a shift it survives; bash says

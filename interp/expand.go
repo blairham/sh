@@ -1411,7 +1411,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			// Fatal in all four, and with the same four statuses an unset
 			// parameter under `set -u` gets — so it goes through the same
 			// door rather than carrying a status of its own.
-			r.fatalExpansion("%s\n", Wording(r.diag().ParamErrorMessage, "%[1]s: %[2]s",
+			r.fatalParamError("%s\n", Wording(r.diag().ParamErrorMessage, "%[1]s: %[2]s",
 				e.Name, r.paramErrorWord(e, set)))
 			return ""
 		}

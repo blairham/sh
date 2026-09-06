@@ -14,6 +14,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/jsonrpc"
 )
 
 // terminal/* on the client side: a command the agent runs is a command *we*
@@ -262,13 +264,13 @@ func (c *Client) addTerminal(t *terminal) string {
 func (c *Client) named(params json.RawMessage, method string) (*terminal, error) {
 	var req TerminalRequest
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, Errorf(CodeInvalidParams, "%s: %v", method, err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: %v", method, err)
 	}
 	c.mu.Lock()
 	t, ok := c.running[req.TerminalID]
 	c.mu.Unlock()
 	if !ok {
-		return nil, Errorf(CodeInvalidParams, "%s: no terminal %q", method, req.TerminalID)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: no terminal %q", method, req.TerminalID)
 	}
 	return t, nil
 }
@@ -282,14 +284,14 @@ func (c *Client) named(params json.RawMessage, method string) (*terminal, error)
 // not leave one running.
 func (c *Client) createTerminal(ctx context.Context, params json.RawMessage) (any, error) {
 	if !c.Terminals {
-		return nil, Errorf(CodeMethodNotFound, "this client does not serve %s", MethodCreateTerminal)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "this client does not serve %s", MethodCreateTerminal)
 	}
 	var req CreateTerminalRequest
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, Errorf(CodeInvalidParams, "%s: %v", MethodCreateTerminal, err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: %v", MethodCreateTerminal, err)
 	}
 	if req.Command == "" {
-		return nil, Errorf(CodeInvalidParams, "%s: no command", MethodCreateTerminal)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: no command", MethodCreateTerminal)
 	}
 	// Counted here rather than after the gate, because the count is about the
 	// *route* and not about the outcome: an agent that asks and is refused
@@ -303,7 +305,7 @@ func (c *Client) createTerminal(ctx context.Context, params json.RawMessage) (an
 		// A refused create is a command that never started, and the agent is
 		// told so rather than handed a terminal id naming nothing — which it
 		// would then poll for output that will never come.
-		return nil, Errorf(CodeInvalidParams, "%s: permission denied", req.Command)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: permission denied", req.Command)
 	}
 	cmd := exec.CommandContext(ctx, req.Command, req.Args...)
 	cmd.Dir = req.Cwd
@@ -323,7 +325,7 @@ func (c *Client) createTerminal(ctx context.Context, params json.RawMessage) (an
 	cmd.Stdout, cmd.Stderr = t, t
 	if err := cmd.Start(); err != nil {
 		c.failed(ctx, interp.Action{Kind: interp.ActionExec, Path: req.Command, Args: argv}, err)
-		return nil, Errorf(CodeInvalidParams, "%s: %v", req.Command, err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: %v", req.Command, err)
 	}
 	go t.reap()
 	return CreateTerminalResponse{TerminalID: c.addTerminal(t)}, nil
@@ -351,7 +353,7 @@ func (c *Client) waitForExit(ctx context.Context, params json.RawMessage) (any, 
 	}
 	select {
 	case <-ctx.Done():
-		return nil, Errorf(CodeCancelled, "%s: %v", MethodWaitForExit, ctx.Err())
+		return nil, jsonrpc.Errorf(jsonrpc.CodeCancelled, "%s: %v", MethodWaitForExit, ctx.Err())
 	case <-t.done:
 	}
 	status := t.snapshot().ExitStatus
@@ -374,7 +376,7 @@ func (c *Client) killTerminal(ctx context.Context, params json.RawMessage) (any,
 		pid = t.cmd.Process.Pid
 	}
 	if !c.Boundary.Signal(ctx, pid, syscall.SIGKILL) {
-		return nil, Errorf(CodeInvalidParams, "%s: permission denied", MethodKillTerminal)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: permission denied", MethodKillTerminal)
 	}
 	t.kill()
 	return KillTerminalResponse{}, nil
@@ -393,14 +395,14 @@ func (c *Client) killTerminal(ctx context.Context, params json.RawMessage) (any,
 func (c *Client) releaseTerminal(ctx context.Context, params json.RawMessage) (any, error) {
 	var req TerminalRequest
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, Errorf(CodeInvalidParams, "%s: %v", MethodReleaseTerminal, err)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: %v", MethodReleaseTerminal, err)
 	}
 	c.mu.Lock()
 	t, ok := c.running[req.TerminalID]
 	delete(c.running, req.TerminalID)
 	c.mu.Unlock()
 	if !ok {
-		return nil, Errorf(CodeInvalidParams, "%s: no terminal %q", MethodReleaseTerminal, req.TerminalID)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: no terminal %q", MethodReleaseTerminal, req.TerminalID)
 	}
 	if t.cmd.Process != nil {
 		// Recorded through the boundary rather than beside it, so that the

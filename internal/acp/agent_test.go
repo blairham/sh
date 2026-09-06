@@ -16,12 +16,14 @@ import (
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/acp"
+
+	"github.com/blairham/sh/internal/jsonrpc"
 )
 
 // A client, for testing an agent against. It records what it was told and
 // answers what it was asked, which is the whole of a client's job.
 type client struct {
-	conn *acp.Conn
+	conn *jsonrpc.Conn
 
 	mu      sync.Mutex
 	updates []acp.SessionNotification
@@ -40,7 +42,7 @@ type client struct {
 
 func (c *client) Handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	if method != acp.MethodRequestPermission {
-		return nil, acp.Errorf(acp.CodeMethodNotFound, "client has no %s", method)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "client has no %s", method)
 	}
 	var raw map[string]any
 	_ = json.Unmarshal(params, &raw)
@@ -138,7 +140,7 @@ func connect(t *testing.T, c *client) (*client, string, string) {
 		driver.Shell{Name: "sh"},
 		acp.Implementation{Name: "sh", Version: "test"},
 	)
-	c.conn = acp.NewConn(b, b, c)
+	c.conn = jsonrpc.NewConn(b, b, c)
 	ctx, cancel := context.WithCancel(t.Context())
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -182,7 +184,7 @@ func TestInitializeAnswersTheVersionAndWhatIsClaimed(t *testing.T) {
 	t.Parallel()
 	a, b := net.Pipe()
 	agent := acp.NewAgent(driver.Shell{Name: "sh"}, acp.Implementation{Name: "sh", Version: "test"})
-	conn := acp.NewConn(b, b, nil)
+	conn := jsonrpc.NewConn(b, b, nil)
 	go func() { _ = agent.Serve(t.Context(), a, a) }()
 	go func() { _ = conn.Serve(t.Context()) }()
 	t.Cleanup(func() { _ = a.Close(); _ = b.Close() })
@@ -214,14 +216,14 @@ func TestAMethodBeforeInitializeIsRefused(t *testing.T) {
 	t.Parallel()
 	a, b := net.Pipe()
 	agent := acp.NewAgent(driver.Shell{Name: "sh"}, acp.Implementation{Name: "sh", Version: "test"})
-	conn := acp.NewConn(b, b, nil)
+	conn := jsonrpc.NewConn(b, b, nil)
 	go func() { _ = agent.Serve(t.Context(), a, a) }()
 	go func() { _ = conn.Serve(t.Context()) }()
 	t.Cleanup(func() { _ = a.Close(); _ = b.Close() })
 
 	err := conn.Call(t.Context(), acp.MethodNewSession, acp.NewSessionRequest{Cwd: t.TempDir()}, nil)
-	var rpcErr *acp.Error
-	if !errors.As(err, &rpcErr) || rpcErr.Code != acp.CodeInvalidRequest {
+	var rpcErr *jsonrpc.Error
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidRequest {
 		t.Errorf("err = %v, want an invalid-request error", err)
 	}
 }
@@ -403,8 +405,8 @@ func TestAnUnservedMethodIsMethodNotFound(t *testing.T) {
 
 	for _, m := range []string{"session/load", "authenticate", "session/set_mode"} {
 		err := c.conn.Call(t.Context(), m, map[string]any{}, nil)
-		var rpcErr *acp.Error
-		if !errors.As(err, &rpcErr) || rpcErr.Code != acp.CodeMethodNotFound {
+		var rpcErr *jsonrpc.Error
+		if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeMethodNotFound {
 			t.Errorf("%s: err = %v, want method not found", m, err)
 		}
 	}
@@ -426,8 +428,8 @@ func TestASecondTurnIsRefusedWhileOneIsRunning(t *testing.T) {
 	err := c.conn.Call(t.Context(), acp.MethodPrompt, acp.PromptRequest{
 		SessionID: id, Prompt: []acp.ContentBlock{acp.TextBlock("echo second")},
 	}, nil)
-	var rpcErr *acp.Error
-	if !errors.As(err, &rpcErr) || rpcErr.Code != acp.CodeInvalidParams {
+	var rpcErr *jsonrpc.Error
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams {
 		t.Errorf("err = %v, want the second turn refused", err)
 	}
 	close(held)
@@ -465,8 +467,8 @@ func TestAPromptForAnUnknownSessionIsRefused(t *testing.T) {
 	err := c.conn.Call(t.Context(), acp.MethodPrompt, acp.PromptRequest{
 		SessionID: "sess-nope", Prompt: []acp.ContentBlock{acp.TextBlock("echo hi")},
 	}, nil)
-	var rpcErr *acp.Error
-	if !errors.As(err, &rpcErr) || rpcErr.Code != acp.CodeInvalidParams {
+	var rpcErr *jsonrpc.Error
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams {
 		t.Errorf("err = %v, want an invalid-params error", err)
 	}
 }

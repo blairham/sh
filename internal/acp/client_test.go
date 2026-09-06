@@ -19,6 +19,8 @@ import (
 	"github.com/blairham/sh/internal/acp"
 	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/jsonrpc"
 )
 
 // loopback runs this shell's client against this shell's agent, which is worth
@@ -171,7 +173,7 @@ func allowOnce(context.Context, acp.RequestPermissionRequest) (acp.PermissionOut
 // agentSide is a stand-in agent, for the half of the protocol our own agent
 // does not exercise: the requests an agent makes *of* a client.
 type agentSide struct {
-	conn *acp.Conn
+	conn *jsonrpc.Conn
 
 	mu     sync.Mutex
 	saw    []json.RawMessage
@@ -192,7 +194,7 @@ func (a *agentSide) Handle(_ context.Context, method string, params json.RawMess
 	if method == acp.MethodInitialize {
 		return acp.InitializeResponse{ProtocolVersion: acp.Version, AuthMethods: []acp.AuthMethod{}}, nil
 	}
-	return nil, acp.Errorf(acp.CodeMethodNotFound, "no %s", method)
+	return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "no %s", method)
 }
 
 func (a *agentSide) Notify(context.Context, string, json.RawMessage) {}
@@ -200,10 +202,10 @@ func (a *agentSide) Notify(context.Context, string, json.RawMessage) {}
 // against wires a client to a stand-in agent and returns both, without a
 // handshake: the tests that use it are about what happens when the handshake
 // or the first call does not go the usual way.
-func against(t *testing.T, c *acp.Client, fake *agentSide) *acp.Conn {
+func against(t *testing.T, c *acp.Client, fake *agentSide) *jsonrpc.Conn {
 	t.Helper()
 	a, b := net.Pipe()
-	fake.conn = acp.NewConn(a, a, fake)
+	fake.conn = jsonrpc.NewConn(a, a, fake)
 	ctx, cancel := context.WithCancel(t.Context())
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -353,9 +355,9 @@ func TestAuthRequiredAndUnsupportedAreRecognized(t *testing.T) {
 		case acp.MethodInitialize:
 			return acp.InitializeResponse{ProtocolVersion: acp.Version}, nil
 		case acp.MethodNewSession:
-			return nil, acp.Errorf(acp.CodeAuthRequired, "Authentication required")
+			return nil, jsonrpc.Errorf(acp.CodeAuthRequired, "Authentication required")
 		}
-		return nil, acp.Errorf(acp.CodeMethodNotFound, "no %s", method)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "no %s", method)
 	}}
 	against(t, c, fake)
 
@@ -469,9 +471,9 @@ func offering(methods ...acp.AuthMethod) *agentSide {
 					return acp.NewSessionResponse{SessionID: "s1"}, nil
 				}
 			}
-			return nil, acp.Errorf(acp.CodeAuthRequired, "Authentication required")
+			return nil, jsonrpc.Errorf(acp.CodeAuthRequired, "Authentication required")
 		}
-		return nil, acp.Errorf(acp.CodeMethodNotFound, "no %s", method)
+		return nil, jsonrpc.Errorf(jsonrpc.CodeMethodNotFound, "no %s", method)
 	}}
 	return fake
 }

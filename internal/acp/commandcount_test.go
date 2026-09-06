@@ -8,6 +8,8 @@ import (
 
 	"github.com/blairham/sh/internal/acp"
 	"github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/jsonrpc"
 )
 
 // #786 measured that two of the three published adapters run their commands in
@@ -90,18 +92,18 @@ func TestARefusedCreateStillCountsAsHavingAsked(t *testing.T) {
 }
 
 // announce sends the update an agent sends when it has run something itself.
-func announce(t *testing.T, conn *acp.Conn, kind string) {
+func announce(t *testing.T, conn *jsonrpc.Conn, kind string) {
 	t.Helper()
 	notifyUpdate(t, conn, acp.UpdateToolCall, kind)
 }
 
 // update sends a change to a tool call already announced.
-func update(t *testing.T, conn *acp.Conn, kind string) {
+func update(t *testing.T, conn *jsonrpc.Conn, kind string) {
 	t.Helper()
 	notifyUpdate(t, conn, acp.UpdateToolCallUpdate, kind)
 }
 
-func notifyUpdate(t *testing.T, conn *acp.Conn, sessionUpdate, kind string) {
+func notifyUpdate(t *testing.T, conn *jsonrpc.Conn, sessionUpdate, kind string) {
 	t.Helper()
 	err := conn.Notify(acp.MethodSessionUpdate, map[string]any{
 		"sessionId": "s1",

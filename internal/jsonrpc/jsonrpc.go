@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package acp
+package jsonrpc
 
 import (
 	"bufio"
@@ -13,19 +13,33 @@ import (
 	"sync"
 )
 
-// JSON-RPC 2.0 over a newline-delimited stream, which is the transport ACP
-// specifies for stdio: the client launches the agent as a subprocess, messages
-// cross on the agent's standard input and standard output as UTF-8, one
-// message per line, and neither side writes anything else there.
+// Package jsonrpc is JSON-RPC 2.0 over a newline-delimited stream: one side
+// launches the other as a subprocess, messages cross on that process's
+// standard input and standard output as UTF-8, one message per line, and
+// neither side writes anything else there.
+//
+// **Nothing in here has a side.** A Conn is a peer: it answers what arrives
+// and can call out at the same time, on the same stream. Which end launched
+// which, and which methods either end serves, is the concern of the protocol
+// built on top.
+//
+// It was written for ACP (docs/design/acp.md) and lives in a package of its
+// own because a second protocol needs the same framing — see
+// docs/design/plugins.md, which chose this transport over gRPC and gives the
+// measured argument for it. A copy would have been a place for the decision to
+// go stale.
 //
 // It is written here rather than taken from a library because the whole of it
 // is below, and a dependency that arrives with a linter of its own (AGENTS.md)
 // has to be worth more than the file it replaces. encoding/json does the part
 // that is genuinely hard.
 
-// Standard JSON-RPC 2.0 error codes, plus the one ACP reserves for a request
-// that was abandoned. The rest of ACP's own range is unused here: nothing this
-// agent does needs authenticating, so it never answers -32000.
+// The standard JSON-RPC 2.0 error codes, plus -32800, which is the code a
+// request abandoned by its caller is answered with.
+//
+// The -32000 to -32099 block is reserved by the specification for the
+// application, so a code in it belongs to the protocol using this package and
+// not here: ACP's CodeAuthRequired is one, declared in internal/acp.
 const (
 	CodeParseError     = -32700
 	CodeInvalidRequest = -32600
@@ -52,10 +66,11 @@ func Errorf(code int, format string, args ...any) *Error {
 }
 
 // ErrClosed is what an outstanding call fails with when the connection ends
-// underneath it. It is deliberately distinguishable: a permission request that
-// ends this way is a denial, and the front end has to be able to tell that
-// apart from a client that answered.
-var ErrClosed = errors.New("acp: connection closed")
+// underneath it. It is deliberately distinguishable, because a caller has to
+// be able to tell "the peer is gone" from "the peer answered": an ACP
+// permission request that ends this way is a denial, and a plugin call that
+// ends this way is a command that visibly did not run.
+var ErrClosed = errors.New("jsonrpc: connection closed")
 
 // Handler answers what the peer sends. A request expects a result or an error;
 // a notification expects nothing and cannot fail, because there is nobody to
@@ -64,12 +79,12 @@ var ErrClosed = errors.New("acp: connection closed")
 // The two are dispatched differently, and both ways round are deliberate.
 //
 // A request is handled on a goroutine of its own, which is not an
-// optimization: an ACP agent answers session/prompt by doing work that itself
-// calls back to the client — a permission request before a consequential
-// action — and a handler running on the read loop could not receive the reply
-// to its own call.
+// optimization: a handler routinely does work that itself calls back to the
+// peer — an ACP agent answering session/prompt asks the client's permission
+// before a consequential action — and a handler running on the read loop
+// could not receive the reply to its own call.
 //
-// A notification is handled on the read loop, in order. Session updates are a
+// A notification is handled on the read loop, in order. Notifications are a
 // stream and their order is their meaning; a goroutine each would deliver the
 // chunks of what a command wrote in whatever order the scheduler chose. So
 // Notify must not block — it holds the connection while it runs — and a
@@ -121,10 +136,10 @@ type incoming struct {
 
 // Serve reads until the stream ends, dispatching as it goes.
 //
-// It returns nil at end of input, which is how a client says it is finished:
-// it closes the agent's standard input. ctx cancellation does not interrupt a
-// blocked read — there is no portable way to make it — so a caller that wants
-// to stop early closes the reader.
+// It returns nil at end of input, which is how the launching side says it is
+// finished: it closes the subprocess's standard input. ctx cancellation does
+// not interrupt a blocked read — there is no portable way to make it — so a
+// caller that wants to stop early closes the reader.
 func (c *Conn) Serve(ctx context.Context) error {
 	defer c.shutdown()
 	for {
@@ -138,7 +153,7 @@ func (c *Conn) Serve(ctx context.Context) error {
 				return nil
 			}
 			c.wg.Wait()
-			return fmt.Errorf("acp: read: %w", err)
+			return fmt.Errorf("jsonrpc: read: %w", err)
 		}
 	}
 }
@@ -230,9 +245,10 @@ func (c *Conn) deliver(m *incoming) {
 // Call sends a request and waits for its answer, unmarshaling the result into
 // result when one is given.
 //
-// It blocks, and that is the contract the gate depends on: a permission
-// request has to hold the goroutine that reached the action until a person
-// answers it.
+// It blocks, and that is the contract rather than an implementation detail: a
+// permission request has to hold the goroutine that reached the action until a
+// person answers it, and a builtin whose body is in another process has to
+// hold the goroutine running the command.
 func (c *Conn) Call(ctx context.Context, method string, params, result any) error {
 	ch := make(chan *incoming, 1)
 	c.mu.Lock()
@@ -256,7 +272,7 @@ func (c *Conn) Call(ctx context.Context, method string, params, result any) erro
 		c.mu.Lock()
 		delete(c.pending, id)
 		c.mu.Unlock()
-		return fmt.Errorf("acp: %s: %w", method, ctx.Err())
+		return fmt.Errorf("jsonrpc: %s: %w", method, ctx.Err())
 	case m := <-ch:
 		if m == nil {
 			return ErrClosed
@@ -268,7 +284,7 @@ func (c *Conn) Call(ctx context.Context, method string, params, result any) erro
 			return nil
 		}
 		if err := json.Unmarshal(m.Result, result); err != nil {
-			return fmt.Errorf("acp: %s: %w", method, err)
+			return fmt.Errorf("jsonrpc: %s: %w", method, err)
 		}
 		return nil
 	}
@@ -280,8 +296,8 @@ func (c *Conn) Notify(method string, params any) error {
 }
 
 // shutdown fails every outstanding call. A call left waiting on a connection
-// that has ended would wait forever, and a permission request that waits
-// forever is a shell that has stopped.
+// that has ended would wait forever, and a goroutine parked on a peer that no
+// longer exists is the leak class #690 is the standing example of.
 func (c *Conn) shutdown() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -319,7 +335,7 @@ type outErrorResponse struct {
 
 func (c *Conn) writeResult(id json.RawMessage, result any) {
 	if err := c.write(outResponse{JSONRPC: "2.0", ID: id, Result: result}); err != nil {
-		// A result that could not be marshaled is this agent's bug, and the
+		// A result that could not be marshaled is this side's bug, and the
 		// peer is still owed an answer to the id it sent.
 		c.writeError(id, Errorf(CodeInternalError, "%v", err))
 	}
@@ -344,13 +360,13 @@ func (c *Conn) writeError(id json.RawMessage, e *Error) {
 func (c *Conn) write(m any) error {
 	b, err := json.Marshal(m)
 	if err != nil {
-		return fmt.Errorf("acp: marshal: %w", err)
+		return fmt.Errorf("jsonrpc: marshal: %w", err)
 	}
 	b = append(b, '\n')
 	c.writes.Lock()
 	defer c.writes.Unlock()
 	if _, err := c.w.Write(b); err != nil {
-		return fmt.Errorf("acp: write: %w", err)
+		return fmt.Errorf("jsonrpc: write: %w", err)
 	}
 	return nil
 }

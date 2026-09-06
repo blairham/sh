@@ -401,7 +401,7 @@ front of the case with the most demand.
 
 **And the claim it rests on is false in this repository.** "You need
 gRPC to reach other languages" is falsified thirty lines away:
-`internal/acp/jsonrpc.go` is JSON-RPC 2.0 over a newline-delimited
+`internal/jsonrpc` is JSON-RPC 2.0 over a newline-delimited
 stdio stream, written with no third-party dependency, and
 `docs/design/acp.md` records it driving three separate agents — none of
 them written in Go, all three launched with `npx`. A stdio protocol

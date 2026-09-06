@@ -13,11 +13,13 @@ import (
 	"github.com/blairham/sh/internal/acp"
 	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/jsonrpc"
 )
 
 // withTerminals wires a client that serves terminal/* to a stand-in agent, and
 // returns the agent's end so a test can make the calls an agent would.
-func withTerminals(t *testing.T, seen *recorder) (*acp.Conn, *acp.Client) {
+func withTerminals(t *testing.T, seen *recorder) (*jsonrpc.Conn, *acp.Client) {
 	t.Helper()
 	c := &acp.Client{
 		Info:      acp.Implementation{Name: "test-client", Version: "1"},
@@ -31,7 +33,7 @@ func withTerminals(t *testing.T, seen *recorder) (*acp.Conn, *acp.Client) {
 }
 
 // create runs a command through the client and returns its terminal id.
-func create(t *testing.T, conn *acp.Conn, req acp.CreateTerminalRequest) string {
+func create(t *testing.T, conn *jsonrpc.Conn, req acp.CreateTerminalRequest) string {
 	t.Helper()
 	var resp acp.CreateTerminalResponse
 	if err := conn.Call(t.Context(), acp.MethodCreateTerminal, req, &resp); err != nil {

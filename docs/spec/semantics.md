@@ -31,6 +31,8 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | an EXIT trap set in a function fires there | no | no | no | **yes** |
 | a signal handler sees the earlier `$?` | no | no | no | **yes** |
 | an unset positional survives `set -u` | no | no | **yes** | no |
+| `$!` before any job is `0` | no | no | no | **yes** |
+| `$!` before any job is unset for `set -u` | yes | yes | **no** | **no** |
 | `set +x` traces itself | yes | yes | **no** | yes |
 | `set -f` turns off globbing | yes | yes | yes | **no** |
 | each assignment gets its own trace line | no | **yes** | **yes** | no |
@@ -5391,6 +5393,72 @@ not all agree. Three answers, and no two of them are the majority:
 bash reports success if it signaled anything at all, and zsh reports the
 number that failed — which is a status carrying a count rather than a
 verdict, and the reason this is a policy rather than a bool.
+
+**`LastBackgroundPidIsZeroBeforeAnyJob`** — bash no · dash no · ksh93 no · zsh yes
+
+Makes `$!` read `0` before a background command has been started. zsh
+alone, and it is a number nothing ever had: `sh -c 'echo "[$!]"'` writes
+`[0]` there and `[]` in bash 5.3.15, bash 3.2.57, bash 3.2 run as `sh`,
+dash and ksh93u+.
+
+Zero is not the same answer as nothing, which is why this is a switch
+and not a rendering: a background builtin runs in this process and its
+job carries no pid, so a shell really can hold a *recorded* zero, and a
+script could not tell that apart from zsh's if the two were spelled
+alike.
+
+Read without asking. A preset that has not chosen answers with nothing,
+which is what five of the six columns do; refusing a `$!` expansion over
+an unanswered field would break the `p=$!` of every script running under
+it, including before its first job, where the read is the ordinary one.
+
+**`LastBackgroundPidIsUnsetBeforeAnyJob`** — bash yes · dash yes · ksh93 no · zsh no
+
+Makes `$!` an *unset* parameter before a background command has been
+started, so `set -u` is fatal about it.
+
+A different split from the field above and the more useful one — two
+against two, and `set -u` is what scripts actually rely on:
+
+| shell | `set -u; echo "[$!]"; echo "st=$?"` |
+| --- | --- |
+| bash 5.3.15 | `$!: unbound variable`, status 127 |
+| bash 3.2.57 | `$!: unbound variable`, status 127 |
+| bash 3.2 as `sh` | `$!: unbound variable`, status 127 |
+| dash | `!: parameter not set`, status 2 |
+| ksh93u+ | `[]` then `st=0` — set, and empty |
+| zsh 5.9.2 | `[0]` then `st=0` — set, and zero |
+
+Neither field predicts the other. zsh's zero is a value and ksh93's
+empty is a set parameter, so the two quiet columns are quiet for
+different reasons, and a single field could say only one of those
+things. `TestTheTwoLastBackgroundPidAxesAreIndependent` runs all four
+combinations, the one no shell in the panel is included.
+
+Nor is it `UnsetPositionalIsAllowed` reached from another route. ksh93
+lets an unset `$1` be empty and lets `$!` be empty too, but zsh refuses
+`$1` and does not refuse `$!`, so the pair splits the panel differently.
+
+The wording and the status are the same two Diagnostics fields an unset
+positional reads, because measured they are the same two lines: bash
+writes the `$` back for `$!` exactly as it does for `$1`, which is
+`Diagnostics.UnboundPositional`, and dash's is its ordinary `parameter
+not set`. A third field would have held a copy of one of those in all
+four presets.
+
+Read without asking, for the reason above. Unanswered means the
+parameter is set and empty, which is what this shell did before the axis
+existed and what the two shells that carry on do.
+
+Corpus: `jobs/the-last-background-pid-before-any-job` reads the
+parameter, `jobs/an-unstarted-last-background-pid-under-set-u` asks
+`set -u` about it, and
+`jobs/the-last-background-pid-under-set-u-once-a-job-has-run` is the
+control that says the refusal is about nothing having been started
+rather than about `$!` — with one job behind it the parameter is set in
+all six columns. These are the whole `$!` grid's only recordable rows:
+everything else about the parameter carries a pid, which is not the same
+twice.
 
 **`MonitorNeedsATerminal`** — bash no · dash yes · ksh93 no · zsh yes
 

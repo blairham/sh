@@ -2306,6 +2306,21 @@ echo "st=$?"`,
 		Why:     "the other half of the same rule, and why the status cannot simply be set before the right-hand sides run: an assignment reports what a substitution in it reported, and reports success when there is none — even where a failing command came first",
 	},
 	{
+		ID: "jobs/the-last-background-pid-before-any-job", Category: "builtins",
+		Snippet: `echo "[$!]"`,
+		Why:     "one line, no pid in it, and the whole `$!` grid's only machine-independent row (#937): what the parameter is before a background command has been started. Five columns write nothing and zsh writes `0`, a number nothing ever had — and zero is not the same answer as nothing here, because a background builtin has no process and a shell really can hold a recorded zero. Everything else about `$!` carries a pid and cannot be recorded",
+	},
+	{
+		ID: "jobs/an-unstarted-last-background-pid-under-set-u", Category: "builtins",
+		Snippet: `set -u; echo "[$!]"; echo "st=$?"`,
+		Why:     "the bigger split on the same parameter, and the one scripts rely on: `set -u` exists to stop exactly this read. bash stops with `$!: unbound variable` at 127 — the `$` written back, as it is for a positional — dash stops with `!: parameter not set` at 2, and ksh93 and zsh carry on, ksh93 with nothing and zsh with its zero. Two against two, and neither answer predicts the row above: zsh's zero is a value and ksh93's empty is a set parameter, so the two quiet columns are quiet for different reasons",
+	},
+	{
+		ID: "jobs/the-last-background-pid-under-set-u-once-a-job-has-run", Category: "builtins",
+		Snippet: `set -u; sleep 0 & wait; x=$!; echo "st=$? set=[${x:+yes}]"`,
+		Why:     "the control for the row above, and it is what says the refusal is about *nothing having been started* rather than about `$!`: with one job behind it the parameter is set in all six columns and `set -u` has nothing to say. Read into a variable and reported as a yes rather than printed, because the value is a pid and a pid is not the same twice",
+	},
+	{
 		ID: "jobs/a-disowned-job-is-not-in-the-listing", Category: "builtins", SyntaxError: true,
 		Snippet: `sleep 0.4 &| jobs >j.txt; echo "n=$(grep -c . j.txt)"`,
 		Why:     "`&|` starts a job in the background and lets go of it, so nothing lists it — one shell's, and the only shape of it a record can hold. The sibling spelling `&!` cannot be recorded at all: bash 5.3 and ksh93 read those two characters as `&` and the `!` that negates a pipeline, and what they then do with a bare `!` is a divergence of its own (#948), so a row about the disowning would carry four unrelated ones beside it. `&|` has no such second reading in bash or dash, which both refuse it outright. ksh93's cell is the exception and is not this change's: it parses `&|` and means something else again — `echo hi &| echo done` prints only `done` there. Counted rather than printed, because what a listing looks like is four other rows' question",

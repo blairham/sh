@@ -191,6 +191,12 @@ func TestSemanticsAxesHaveTwoSides(t *testing.T) {
 			"[a][b]", "[a b]",
 		},
 		{
+			"`$!` before any job is zero",
+			`echo "[$!]"`,
+			func(s *Semantics, a Answer) { s.LastBackgroundPidIsZeroBeforeAnyJob = a },
+			"[0]\n", "[]\n",
+		},
+		{
 			"quoting a regex makes it a literal",
 			`[[ abc =~ "^a.c$" ]] && echo m || echo no`,
 			func(s *Semantics, a Answer) { s.RegexQuotingMakesLiteral = a },

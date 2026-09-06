@@ -156,6 +156,19 @@ func Semantics() interp.Semantics {
 	// `-i script.sh` through a pseudo-terminal, `[1] <pid>` as the job
 	// starts and `[1]  + done       sleep 0.3` as it ends.
 	s.InteractiveScriptAnnouncesJobs = interp.Yes
+	// `$!` before any background command is `0` here and empty in the other
+	// five columns — a number nothing ever had. Measured,
+	// `sh -c 'echo "[$!]"'` writes `[0]`.
+	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.Yes
+	// And that zero is *set*, so `set -u` carries on: measured,
+	// `set -u; echo "[$!]"; echo "st=$?"` writes `[0]` then `st=0`. It is the
+	// same side of that split as ksh93 and for a different reason — ksh93 has
+	// nothing there and does not mind, zsh has a value.
+	//
+	// Stated even though it is the unanswered default, because zsh refuses an
+	// unset `$1` and does not refuse `$!`, and a reader checking that pair
+	// needs to see the second answer written down.
+	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.No
 	// Measured: `echo $-` reports `569X` under -c, a script file and
 	// standard input alike — letters from zsh's own single-letter option
 	// namespace, which shares almost nothing with the other shells'. The

@@ -475,6 +475,21 @@ func Semantics() interp.Semantics {
 	// `-i script.sh` through a pseudo-terminal, `[1]\t<pid>` as the job
 	// starts and `[1] +  Done  sleep 0.3 &` as it ends.
 	s.InteractiveScriptAnnouncesJobs = interp.Yes
+	// `$!` before any background command is set and empty here, so `set -u`
+	// has nothing to say about it: measured, `set -u; echo "[$!]"; echo
+	// "st=$?"` writes `[]` and then `st=0`. Stated rather than left
+	// unanswered, because ksh93 is on the quiet side of a two-against-two
+	// split and an unanswered field would read as "not yet measured".
+	//
+	// Note this is *not* UnsetPositionalIsAllowed reached from another route.
+	// ksh93 does let an unset `$1` be empty, and it lets `$!` be empty too,
+	// but the two are separate answers: bash refuses both and dash refuses
+	// both, while zsh refuses `$1` and not `$!`.
+	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.No
+	// And it reads as nothing rather than as a zero: `echo "[$!]"` is `[]`,
+	// which is what makes ksh93's empty a *set* parameter with no value where
+	// zsh's is a value.
+	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.Yes

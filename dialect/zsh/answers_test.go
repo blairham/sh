@@ -73,6 +73,8 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"EqualsExpansion", s.EqualsExpansion, interp.Yes},
 		{"LastPipelineElementInCurrentShell", s.LastPipelineElementInCurrentShell, interp.Yes},
 		{"UnsetPositionalIsAllowed", s.UnsetPositionalIsAllowed, interp.No},
+		{"LastBackgroundPidIsUnsetBeforeAnyJob", s.LastBackgroundPidIsUnsetBeforeAnyJob, interp.No},
+		{"LastBackgroundPidIsZeroBeforeAnyJob", s.LastBackgroundPidIsZeroBeforeAnyJob, interp.Yes},
 		{"ExitTrapIsFunctionLocal", s.ExitTrapIsFunctionLocal, interp.Yes},
 		{"ArithNameValueRecurses", s.ArithNameValueRecurses, interp.Yes},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},

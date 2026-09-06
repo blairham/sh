@@ -1925,6 +1925,13 @@ type Diagnostics struct {
 	// operand standing in an operator's place; empty falls back to
 	// ArithOperatorExpected, which is what the other three want.
 	ArithBadOperator string
+	// ArithCharacterMissing is the reason when the character-code operator
+	// has nothing after it to take the code of: `$((##))`.
+	//
+	// Only the dialect with the operator can reach it, and it words the
+	// failure as neither an operand nor an operator one — `character missing
+	// after ##`, naming the two-character spelling whichever was written.
+	ArithCharacterMissing string
 	// ArithOperatorExpected is the reason when an expression has something
 	// left over: `$((1 2))`. Same verb, and one shell puts it inside the
 	// reason — "operator expected at `2'".
@@ -2323,6 +2330,8 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 			// be kept in step with the first.
 			reason, fallback = d.ArithOperandExpected, "operand expected"
 		}
+	case syntax.ErrArithCharacterMissing:
+		reason, fallback = d.ArithCharacterMissing, "character missing after ##"
 	case syntax.ErrArithOperator:
 		reason, fallback = d.ArithOperatorExpected, "operator expected"
 	case syntax.ErrArithBadOperator:
@@ -2383,7 +2392,8 @@ func (d Diagnostics) ParseFailure(err error) string {
 		// than as a substitution that was bad: %[1]s the operator it could
 		// not read, %[2]d the line.
 		return Wording(d.BadSubstitution, se.Msg, se.Token, se.Pos.Line)
-	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
+	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator,
+		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing:
 		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)
@@ -2702,7 +2712,8 @@ func (d Diagnostics) runtimeRefusal(err error) (int, bool) {
 		if d.ForNameStatus != 0 {
 			return d.ForNameStatus, true
 		}
-	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
+	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator,
+		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing:
 		// A malformed expression is found while expanding in bash, so the
 		// command fails rather than the script failing to parse. The same
 		// three consequences follow as for `for` with a bad name, which is

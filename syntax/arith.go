@@ -3,7 +3,10 @@
 
 package syntax
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // The arithmetic expression tree, from docs/spec/grammar/arithmetic.md.
 //
@@ -45,6 +48,42 @@ type ArithVar struct {
 func (n *ArithVar) Pos() Pos   { return n.Start }
 func (n *ArithVar) End() Pos   { return n.Stop }
 func (n *ArithVar) arithNode() {}
+
+// ArithCharCode is the character-code operator: `#name` is the code of the
+// first character of that parameter's value, and `##c` the code of the
+// character written out.
+//
+// Not a unary operator, because its operand is not an expression: `#b` reads
+// the *parameter* b rather than b's arithmetic value, and `##a` reads a
+// character where an expression would read a name. It is a primary, and the
+// two spellings differ in how the operand is read rather than in what the
+// result means.
+type ArithCharCode struct {
+	// Op is `#` or `##`, kept because it decides how Char is read: `$((##\n))`
+	// is a newline and `$((#\n))` the letter n.
+	Op string
+	// Name is the parameter whose first character is taken, empty when the
+	// operand is a character or when there is no operand at all. A `#` with
+	// nothing it can read is zero rather than a refusal, measured.
+	Name string
+	// Char is the character the operand spells out, as written — `a`, `\n`,
+	// `\x41`. The escapes are decoded where Op says they are, which is done
+	// against the dialect's table rather than here.
+	Char string
+	// Subscripted records a `[…]` written after the name. The shell reads it
+	// and then finds nothing under the whole of it, so `$((#a[1]))` is zero
+	// however `${a[1]}` reads — measured, and a fact about that shell rather
+	// than a rule anything derives.
+	Subscripted bool
+	// Src is the operand as written, subscript included.
+	Src   string
+	Start Pos
+	Stop  Pos
+}
+
+func (n *ArithCharCode) Pos() Pos   { return n.Start }
+func (n *ArithCharCode) End() Pos   { return n.Stop }
+func (n *ArithCharCode) arithNode() {}
 
 // ArithUnary is a prefix or postfix operator.
 type ArithUnary struct {
@@ -426,6 +465,9 @@ func (a *arithParser) primary() ArithExpr {
 		}
 		return x
 	}
+	if a.dial.ArithCharacterCode && a.src[a.off] == '#' {
+		return a.charCode(start)
+	}
 	if c := a.src[a.off]; c >= '0' && c <= '9' {
 		return a.number(start)
 	}
@@ -588,6 +630,121 @@ func (a *arithParser) subscript() ArithExpr {
 	// and whatever follows is the caller's problem to report.
 	a.off = open
 	return nil
+}
+
+// charCode reads `#name`, `#\c` and `##c`, where the dialect has them.
+//
+// The operand is not an expression and is read here rather than by recursing:
+// `#b` names the parameter b, and the reading stops at the name. Measured on
+// zsh 5.9.2, which is the whole panel for this — bash 5.3, bash 3.2, bash as
+// `sh`, ksh93 and dash all call `$((#b))` an arithmetic syntax error, and the
+// grammar without the flag reaches the same refusal by the same route.
+func (a *arithParser) charCode(start Pos) ArithExpr {
+	n := &ArithCharCode{Op: "#", Start: start, Stop: start}
+	a.off++
+	if a.off < len(a.src) && a.src[a.off] == '#' {
+		n.Op = "##"
+		a.off++
+	}
+	begin := a.off
+	switch {
+	case n.Op == "##" || (a.off < len(a.src) && a.src[a.off] == '\\'):
+		// One character, and exactly one: `$((##ab))` is the code of `a` with
+		// a `b` left over, which the caller then refuses as an operator it
+		// cannot read. An escape counts as the character it stands for, so
+		// `$((##\x41x))` is the same shape.
+		size := charCodeOperandLen(a.src[a.off:], n.Op == "##")
+		if size == 0 {
+			a.p.failKind(ErrArithCharacterMissing, "character missing after %s", n.Op)
+			return nil
+		}
+		a.off += size
+		n.Char = a.src[begin:a.off]
+	default:
+		// A parameter, which here includes the positional ones: `$((#1))` is
+		// the first character of `$1` and `$((#0))` of the shell's own name,
+		// so the scan takes digits as readily as letters.
+		for a.off < len(a.src) && isCharCodeNameByte(a.src[a.off]) {
+			a.off++
+		}
+		n.Name = a.src[begin:a.off]
+		if a.off < len(a.src) && a.src[a.off] == '[' {
+			if end := closingBracket(a.src[a.off:]); end > 0 {
+				a.off += end + 1
+				n.Subscripted = true
+			}
+		}
+	}
+	n.Src = a.src[begin:a.off]
+	n.Stop = start
+	return n
+}
+
+// isCharCodeNameByte reports whether a byte can stand in the parameter name
+// the character-code operator reads.
+func isCharCodeNameByte(c byte) bool {
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
+// charCodeOperandLen is how many bytes the one character after the operator
+// occupies, 0 when there is nothing there.
+//
+// Shapes and not meanings: what an escape *stands for* is the dialect's table,
+// decoded where the value is taken, and all this has to know is where the
+// operand ends. `escapes` is false for the single-`#` spelling, where a
+// backslash takes the next character as itself rather than beginning an escape
+// — measured, `$((#\n))` is the letter n where `$((##\n))` is a newline.
+func charCodeOperandLen(s string, escapes bool) int {
+	if s == "" {
+		return 0
+	}
+	if s[0] != '\\' {
+		_, size := utf8.DecodeRuneInString(s)
+		return size
+	}
+	if len(s) == 1 {
+		return 0
+	}
+	if !escapes {
+		_, size := utf8.DecodeRuneInString(s[1:])
+		return 1 + size
+	}
+	switch c := s[1]; {
+	case c == 'x':
+		return 2 + baseDigits(s[2:], 16, 2)
+	case c == 'u':
+		return 2 + baseDigits(s[2:], 16, 4)
+	case c == 'U':
+		return 2 + baseDigits(s[2:], 16, 8)
+	case c >= '0' && c <= '7':
+		return 1 + baseDigits(s[1:], 8, 3)
+	}
+	_, size := utf8.DecodeRuneInString(s[1:])
+	return 1 + size
+}
+
+// baseDigits counts how many of the first max bytes are digits in the base.
+func baseDigits(s string, base, max int) int {
+	n := 0
+	for n < len(s) && n < max {
+		c := s[n]
+		var v int
+		switch {
+		case c >= '0' && c <= '9':
+			v = int(c - '0')
+		case c >= 'a' && c <= 'f':
+			v = int(c-'a') + 10
+		case c >= 'A' && c <= 'F':
+			v = int(c-'A') + 10
+		default:
+			return n
+		}
+		if v >= base {
+			return n
+		}
+		n++
+	}
+	return n
 }
 
 func (a *arithParser) name() (string, bool) {

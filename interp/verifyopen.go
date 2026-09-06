@@ -37,7 +37,7 @@ import (
 // below reports the name as written, in the wording an ordinary refusal
 // already uses — a script cannot tell the two apart, which is the same
 // property a denied stat has for the same reason.
-func (r *Runner) verifyOpened(ctx context.Context, a Action, f *os.File) bool {
+func (r *Runner) verifyOpened(ctx context.Context, a *Action, f *os.File) bool {
 	if r.Gate == nil {
 		return true
 	}
@@ -50,9 +50,18 @@ func (r *Runner) verifyOpened(ctx context.Context, a Action, f *os.File) bool {
 		// object.
 		return true
 	}
-	a.Path = actual
-	if r.Gate.Allow(ctx, a) == Deny {
-		r.emit(ctx, Event{Kind: EventDenied, Action: a})
+	// The action gains where it went, and keeps the name it was raised about.
+	// The caller's record is the same value, so an *allowed* open now says
+	// both — which it did not, and which was the whole of #943.
+	a.Resolved = actual
+	// The gate is asked about the *object*, and about nothing else: Path is
+	// the kernel's name here, so a rule matches what was reached even if the
+	// Gate has never heard of Resolved. See the field's own comment for why
+	// the name as written is deliberately not handed over.
+	asked := *a
+	asked.Path = actual
+	if r.Gate.Allow(ctx, asked) == Deny {
+		r.emit(ctx, Event{Kind: EventDenied, Action: *a})
 		return false
 	}
 	return true
@@ -74,7 +83,7 @@ func (r *Runner) reportRefusal(a Action) {
 //
 // A run with no gate takes the first line and nothing else, so its opens are
 // the calls they always were, flags included.
-func (r *Runner) openGated(ctx context.Context, a Action, path string, flags int) (*os.File, error) {
+func (r *Runner) openGated(ctx context.Context, a *Action, path string, flags int) (*os.File, error) {
 	if r.Gate == nil {
 		return os.OpenFile(path, flags, 0o666)
 	}
@@ -91,7 +100,7 @@ func (r *Runner) openGated(ctx context.Context, a Action, path string, flags int
 // Split from openGated rather than layered on it because the two answer to
 // different callers: a redirect hands the descriptor to a command and needs
 // the flags, and `.` wants the bytes and closes the file itself.
-func (r *Runner) readFileGated(ctx context.Context, a Action, path string) ([]byte, error) {
+func (r *Runner) readFileGated(ctx context.Context, a *Action, path string) ([]byte, error) {
 	if r.Gate == nil {
 		return os.ReadFile(path)
 	}

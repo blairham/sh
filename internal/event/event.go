@@ -162,8 +162,18 @@ type Record struct {
 	Event  string    `json:"event"`
 	Action string    `json:"action"`
 	Path   string    `json:"path,omitempty"`
-	Args   []string  `json:"args,omitempty"`
-	Write  bool      `json:"write,omitempty"`
+	// Resolved is the kernel's own name for the object an open reached, when
+	// the name in Path reached somewhere else. Absent otherwise, which is
+	// almost always — a name is usually the object's own name.
+	//
+	// An added field, which is rule 3 of the stability rules rather than a
+	// version bump: a consumer written before it reads a record carrying it
+	// exactly as it did before. What it adds is the half of the fact each
+	// record was missing — an allowed open said the name and not the object,
+	// a refused one said the object and not the name.
+	Resolved string   `json:"resolved,omitempty"`
+	Args     []string `json:"args,omitempty"`
+	Write    bool     `json:"write,omitempty"`
 	// PID and Signal are set together, for a signal and nothing else. Pointers
 	// because both are meaningful at zero: 0 is a signal that delivers
 	// nothing, which is `kill -0` asking whether a process is there.
@@ -192,13 +202,14 @@ func Of(e interp.Event) Record {
 		Session:  e.Session,
 		ActionID: e.Action.ID,
 
-		Event:  e.Kind.String(),
-		Action: e.Action.Kind.String(),
-		Path:   e.Action.Path,
-		Args:   e.Action.Args,
-		Write:  e.Action.Write,
-		Line:   e.Line,
-		File:   e.File,
+		Event:    e.Kind.String(),
+		Action:   e.Action.Kind.String(),
+		Path:     e.Action.Path,
+		Resolved: e.Action.Resolved,
+		Args:     e.Action.Args,
+		Write:    e.Action.Write,
+		Line:     e.Line,
+		File:     e.File,
 	}
 	if e.Action.Kind == interp.ActionSignal {
 		pid, sig := e.Action.PID, int(e.Action.Signal)

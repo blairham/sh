@@ -127,7 +127,8 @@ func (f File) write() bool { return f.Flags&(os.O_WRONLY|os.O_RDWR) != 0 }
 // nobody is watching makes exactly the calls it always made.
 func (b Boundary) OpenFile(ctx context.Context, f File) (*os.File, error) {
 	a := interp.Action{ID: b.id(), Kind: interp.ActionOpen, Path: f.Path, Write: f.write()}
-	if !b.ask(ctx, a) {
+	if b.Gate != nil && b.Gate.Allow(ctx, a) == interp.Deny {
+		b.emit(ctx, interp.Event{Kind: interp.EventDenied, Action: a})
 		return nil, ErrRefused
 	}
 	if f.Parents {
@@ -135,10 +136,26 @@ func (b Boundary) OpenFile(ctx context.Context, f File) (*os.File, error) {
 			return nil, err
 		}
 	}
+	file, err := b.open(ctx, &a, f)
+	if errors.Is(err, ErrRefused) {
+		// The verification refused, and recorded it with both names on it.
+		return nil, err
+	}
+	// The auditable act out here is the *attempt*, which is why this is
+	// recorded whether or not the open worked: a startup file that is not
+	// there is the normal case and is not an error. It is recorded after the
+	// attempt rather than before it so that it can say where the name went —
+	// which a record written before there was a descriptor could not. See
+	// interp.Action.Resolved.
+	b.emit(ctx, interp.Event{Kind: interp.EventAccess, Action: a})
+	return file, err
+}
+
+// open is OpenFile's syscall half, once the gate has allowed the name.
+func (b Boundary) open(ctx context.Context, a *interp.Action, f File) (*os.File, error) {
 	if b.Gate == nil {
 		// Watching without gating: there is nothing a verification could
-		// refuse, so the standard library's own call stands. The record of the
-		// access is already emitted.
+		// refuse, so the standard library's own call stands.
 		return os.OpenFile(f.Path, f.Flags, f.Perm)
 	}
 	return opened.Verified(f.Path, f.Flags, f.Perm, func(file *os.File) error {
@@ -186,18 +203,22 @@ func (b Boundary) WriteFile(ctx context.Context, f File, data []byte) error {
 // the same access — a consumer joining the two records sees one open whose
 // name resolved elsewhere, not two opens. It is the same promise interp keeps
 // on its side of the boundary, made here in the same words on purpose.
-func (b Boundary) reached(ctx context.Context, a interp.Action, f *os.File) bool {
+func (b Boundary) reached(ctx context.Context, a *interp.Action, f *os.File) bool {
 	actual, elsewhere := opened.Elsewhere(f, a.Path)
 	if !elsewhere {
 		return true
 	}
-	a.Path = actual
-	if b.Gate.Allow(ctx, a) == interp.Deny {
-		// With the resolved path on it, which is the half of the split that
-		// belongs to whoever wrote the policy: the record has to say what was
-		// actually reached or it cannot be acted on. The caller reports the
-		// name as written.
-		b.emit(ctx, interp.Event{Kind: interp.EventDenied, Action: a})
+	// The action gains where it went and keeps the name it was raised about,
+	// so the caller's record says both. interp keeps the same promise on its
+	// side of the boundary, in the same words.
+	a.Resolved = actual
+	// The gate is asked about the object and about nothing else, so a rule
+	// matches what was reached even from a Gate that has never heard of the
+	// field. See interp.Action.Resolved.
+	asked := *a
+	asked.Path = actual
+	if b.Gate.Allow(ctx, asked) == interp.Deny {
+		b.emit(ctx, interp.Event{Kind: interp.EventDenied, Action: *a})
 		return false
 	}
 	return true
@@ -241,18 +262,20 @@ func (b Boundary) Record(ctx context.Context, a interp.Action) {
 	b.emit(ctx, interp.Event{Kind: interp.EventAccess, Action: a})
 }
 
-// ask is the whole of the three above: consult, record, answer.
+// ask is the whole of Exec and Signal: consult, record, answer.
+//
+// An open does not come through here, and the difference is one line: it has
+// something to add to the record afterwards — where the name went — so its
+// record is written once the descriptor is in hand. Both still record the
+// *attempt*, which is the rule out here and is not interp's: interp records a
+// successful open because a failed one already becomes an EventError with a
+// reason, while a startup file that is not there is the normal case and not an
+// error at all.
 func (b Boundary) ask(ctx context.Context, a interp.Action) bool {
 	if b.Gate != nil && b.Gate.Allow(ctx, a) == interp.Deny {
 		b.emit(ctx, interp.Event{Kind: interp.EventDenied, Action: a})
 		return false
 	}
-	// Recorded before the access rather than after it, unlike interp's, and
-	// the difference is what there is to say afterwards: interp records a
-	// *successful* open because a failed one already becomes an EventError
-	// with the reason. Out here a failure is often not an error — a startup
-	// file that is not there is the normal case — so the auditable act is
-	// the attempt, which is what a policy was asked about.
 	b.emit(ctx, interp.Event{Kind: interp.EventAccess, Action: a})
 	return true
 }

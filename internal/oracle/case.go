@@ -2907,7 +2907,7 @@ var Corpus = []Case{
 	{
 		ID: "array/a-subscript-on-a-positional-parameter", Category: "expansion",
 		Snippet: `set -- abcd; echo "[${1[2]}]"`,
-		Why:     "the same grammar flag reaching a parameter that holds a *value* rather than a list, which is the half that shows the flag is about the name and not about `@`: the character reading answers it, so `${1[2]}` is `b` where the flag is on and a bad substitution everywhere else. `array/a-subscript-without-braces-is-not-a-positional` is the neighbouring row and says the opposite about the *brace-less* spelling, which is a difference the two rows exist to hold apart",
+		Why:     "the same grammar flag reaching a parameter that holds a *value* rather than a list, which is the half that shows the flag is about the name and not about `@`: the character reading answers it, so `${1[2]}` is `b` where the flag is on and a bad substitution everywhere else. `array/a-subscript-without-braces-is-not-a-positional` is the neighboring row and says the opposite about the *brace-less* spelling, which is a difference the two rows exist to hold apart",
 	},
 	{
 		ID: "array/a-quoted-subscript-pair-joins", Category: "expansion",

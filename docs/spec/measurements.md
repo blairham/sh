@@ -618,7 +618,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   set -- a b c; echo "[${@[1]}][${*[2]}]"
   ```
-- `array/a-subscript-on-a-positional-parameter` — the same grammar flag reaching a parameter that holds a *value* rather than a list, which is the half that shows the flag is about the name and not about `@`: the character reading answers it, so `${1[2]}` is `b` where the flag is on and a bad substitution everywhere else. `array/a-subscript-without-braces-is-not-a-positional` is the neighbouring row and says the opposite about the *brace-less* spelling, which is a difference the two rows exist to hold apart
+- `array/a-subscript-on-a-positional-parameter` — the same grammar flag reaching a parameter that holds a *value* rather than a list, which is the half that shows the flag is about the name and not about `@`: the character reading answers it, so `${1[2]}` is `b` where the flag is on and a bad substitution everywhere else. `array/a-subscript-without-braces-is-not-a-positional` is the neighboring row and says the opposite about the *brace-less* spelling, which is a difference the two rows exist to hold apart
   ```sh
   set -- abcd; echo "[${1[2]}]"
   ```

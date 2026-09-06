@@ -262,6 +262,17 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/a-subscript-pair-with-three-parts` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]~after` | `[z]~after` | `[z]~after` | `[z]~after` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `expansion/element-exclusion-by-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#t*}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#t*}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#t*}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#t*}""' unexpected` *(status 3)* | `[one]` |
 | `expansion/element-exclusion-is-a-whole-match-not-a-prefix` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: v: #hel*: arithmetic syntax error: operand expected (error token is "#hel*")` *(status 1)* | **2>** `<shell>: line 1: v: #hel*: arithmetic syntax error: operand expected (error token is "#hel*")` *(status 1)* | **2>** `<shell>: v: #hel*: syntax error: operand expected (error token is "#hel*")` *(status 1)* | `[lo][lo][hello]` | `[][lo][hello]` |
+| `expansion/a-bare-array-name-unquoted` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one]` | `[one]` | `[one]` | `[one]` | `[one][two]` |
+| `expansion/a-bare-array-name-in-a-for-loop` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `<one>` | `<one>` | `<one>` | `<one>` | `<one><two>` |
+| `expansion/a-bare-array-name-quoted-joins-on-ifs` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[x-y-z]` |
+| `expansion/a-bare-array-name-unquoted-is-not-a-join-then-split` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[x][y][z]` |
+| `expansion/a-bare-array-name-in-a-context-that-does-not-split` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `split~[x]` | `split~[x]` | `split~[x]` | `split~[x]` | `joined~[x-y-z]` |
+| `expansion/a-bare-array-name-of-one-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[only]` | `[only]` | `[only]` | `[only]` | `[only]` |
+| `expansion/a-bare-array-name-trimmed` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[ne]` | `[ne]` | `[ne]` | `[ne]` | `[ne][two]` |
+| `expansion/a-bare-array-name-sliced` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[ne]` | `[ne]` | `[ne]` | `[ne]` | `[two][three]` |
+| `expansion/element-exclusion-on-a-bare-array-name` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: #2: arithmetic syntax error: operand expected (error token is "#2")` *(status 1)* | **2>** `<shell>: line 1: a: #2: arithmetic syntax error: operand expected (error token is "#2")` *(status 1)* | **2>** `<shell>: a: #2: syntax error: operand expected (error token is "#2")` *(status 1)* | `[1]` | `[1][3]` |
+| `expansion/element-exclusion-on-a-bare-array-name-by-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: #ba*: arithmetic syntax error: operand expected (error token is "#ba*")` *(status 1)* | **2>** `<shell>: line 1: a: #ba*: arithmetic syntax error: operand expected (error token is "#ba*")` *(status 1)* | **2>** `<shell>: a: #ba*: syntax error: operand expected (error token is "#ba*")` *(status 1)* | `[foo]` | `[foo]` |
+| `expansion/a-bare-array-name-with-a-default` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one]` | `[one]` | `[one]` | `[one]` | `[one][two]` |
 | `expansion/element-exclusion-without-a-flag-group` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a: #two: arithmetic syntax error: operand expected (error token is "#two")` *(status 1)* | **2>** `<shell>: line 1: a: #two: arithmetic syntax error: operand expected (error token is "#two")` *(status 1)* | **2>** `<shell>: a: #two: syntax error: operand expected (error token is "#two")` *(status 1)* | `[one]` | `[one two three]` |
 | `expansion/element-exclusion-empty-pattern` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#}' unexpected` *(status 3)* | `[one]` |
 | `expansion/element-exclusion-pattern-out-of-a-parameter` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a:#$p}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a:#$p}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a:#$p}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a:#$p}""' unexpected` *(status 3)* | `[one][two]` |
@@ -664,6 +675,50 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expansion/element-exclusion-is-a-whole-match-not-a-prefix` — the sharpest row in the family, because two shells accept the same six characters and mean different things by them: zsh matches the pattern against the *whole* value and substitutes nothing when it hits, while ksh93 ignores the colon entirely and gives exactly what `${v#hel*}` gives — `lo`. bash refuses it as arithmetic. So `:#` is not `#` with a colon in front, and a dialect that treated it as one would silently answer ksh93's question in zsh's grammar
   ```sh
   v=hello; echo "[${v:#hel*}][${v#hel*}][${v:#xyz}]"
+  ```
+- `expansion/a-bare-array-name-unquoted` — the headline of the family: an array named without a subscript is the *elements* in zsh — one field each, exactly what `${a[@]}` gives — where bash and ksh93 read the bare name as `${a[0]}` and hand over one field. One shell against two, and it is silent in the direction that hurts: the joined reading answers at status 0 with a plausible string, so nothing says the loop that follows will run once instead of twice
+  ```sh
+  a=(one two); printf "[%s]" $a; echo
+  ```
+- `expansion/a-bare-array-name-in-a-for-loop` — the same rule where a script actually meets it. `for f in $files` is the idiom, and the two readings differ in how many times the body runs — twice in zsh, once in bash and ksh93 with the whole list in `$f`. Written as a loop and not only as a `printf` because the field count is the observable, and a body that receives one argument where it expected several is the damage the field count causes
+  ```sh
+  a=(one two); for f in $a; do printf "<%s>" "$f"; done; echo
+  ```
+- `expansion/a-bare-array-name-quoted-joins-on-ifs` — the guard on the other half: quoted, the bare name is one field in every shell that has arrays, and the shell that reads it as the whole array joins with the first character of IFS rather than a hard space. So `IFS=-` gives `x-y-z` and not `x y z`, the same rule `"${a[*]}"` follows. A reading that made the unquoted name a list by joining and then splitting would keep this row green while breaking the next one
+  ```sh
+  IFS=-; a=(x y z); printf "[%s]" "$a"; echo
+  ```
+- `expansion/a-bare-array-name-unquoted-is-not-a-join-then-split` — the row that tells the two implementations of the same answer apart, and the reason it is here rather than a duplicate of the first. With IFS empty nothing splits, so joining the elements first and splitting the result gives one field `xyz` — while zsh gives three, because the elements were never joined at all. bash and ksh93 give the first element, unaffected either way. An implementation that reached the right answer under the default IFS by the wrong route fails exactly here
+  ```sh
+  IFS=; a=(x y z); printf "[%s]" $a; echo
+  ```
+- `expansion/a-bare-array-name-in-a-context-that-does-not-split` — where the unquoted spelling stops being a list: an assignment's value and a `case` subject split in no shell, and measured, zsh joins the bare name there exactly as quotes do — on IFS, so `x-y-z`. This is what keeps the rule about *fields* from leaking into the contexts that have none, and it is the row a fix routed through the list path unconditionally would break, silently turning `v=$a` into a hard-space join
+  ```sh
+  IFS=-; a=(x y z); v=$a; case $a in "x-y-z") echo joined;; *) echo split;; esac; echo "[$v]"
+  ```
+- `expansion/a-bare-array-name-of-one-element` — the case the question is not asked in: with one element the array *is* that element under both readings, so all three shells agree and a dialect that had chosen neither still has an answer. It is recorded because a core with no shell behind it must run this rather than refuse it — an axis asked wider than the disagreement turns the ordinary way to read a one-element array into a diagnostic
+  ```sh
+  a=(only); printf "[%s]" $a; echo
+  ```
+- `expansion/a-bare-array-name-trimmed` — an operator on the bare name, which inherits whatever the name turned out to be: zsh trims each element and keeps the fields, bash and ksh93 trim the one element the name gave them. The operator is the same everywhere — this row is about its *subject*, and it is the neighbor the scope note asked for by name
+  ```sh
+  a=(one two); printf "[%s]" ${a#o}; echo
+  ```
+- `expansion/a-bare-array-name-sliced` — the sharpest of the operators, because the two readings do not merely differ in field count — they read the same offset against different things. Where the name is the list, `:1` drops the first *element* and leaves two; where it is a scalar, it drops the first *character* and leaves `ne`. Nothing in the spelling says which, and both answer at status 0
+  ```sh
+  a=(one two three); printf "[%s]" ${a:1}; echo
+  ```
+- `expansion/element-exclusion-on-a-bare-array-name` — the second failure the join causes, and the less obvious one: `:#` asks about *elements*, so a bare name that joined to one string first matches the pattern against `1 2 3` as a whole, fails, and hands the array back looking like a filter that found nothing. zsh drops the element and leaves two fields. ksh93 reads the same six characters as `${a#2}` on its own bare name and answers `1`, which is neither shell's other reading — so the operator and its subject diverge together
+  ```sh
+  a=(1 2 3); printf "[%s]" ${a:#2}; echo
+  ```
+- `expansion/element-exclusion-on-a-bare-array-name-by-pattern` — the same operator with a pattern that matches more than one element, which is what makes the no-op visible: two of three go in zsh. The joined reading cannot drop a *part* of its one string, so it drops nothing at all and the answer is indistinguishable from a pattern that simply did not match — the quiet shape this whole family is recorded to catch
+  ```sh
+  a=(foo bar baz); printf "[%s]" ${a:#ba*}; echo
+  ```
+- `expansion/a-bare-array-name-with-a-default` — the `-` test came to the parameter rather than to the word, so what it yields is the parameter under this shell's reading of it: the elements in zsh, the first alone in bash and ksh93. The row exists because the word side is already pinned elsewhere and the two must not be confused — a substitution that fires takes its fields from the *word*, and this one does not fire
+  ```sh
+  a=(one two); printf "[%s]" ${a:-d}; echo
   ```
 - `expansion/element-exclusion-without-a-flag-group` — the same operator with no `(@)` in front and inside quotes, where the array joins to one string first: the pattern is then matched against `one two three` as a whole, matches nothing, and the value is left standing. Not a no-op by accident — `${a:#*}` on the same array is empty — and it is what says the operator asks about *elements*, of which a joined scalar has one. ksh93 answers `one` from the same characters, which is `${a#two}` against a scalar that is only the first element, so the two shells agree on neither the operator nor what `$a` names
   ```sh

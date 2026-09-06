@@ -5852,6 +5852,26 @@ Makes `${#a}` of an array the number of elements, which is zsh's
 reading; bash and ksh93 measure the element the bare name yields. Asked
 only where the two answers differ.
 
+**`ArrayNameWithoutSubscriptIsTheList`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Makes an unquoted bare array name the array itself — one field per
+element, a slice slicing the list and an element-wise operator applying
+to each — exactly as `${a[@]}` is. zsh reads it that way; bash and ksh93
+read the bare name as `${a[0]}` and hand over one field, and dash has no
+arrays, which is why the axis is absent rather than false there.
+
+The field-count half of what `ArrayScalarIsTheWholeArray` answers for the
+value, and separate from it because the same shell answers the two
+differently by quoting: `"$a"` is one joined field in zsh as well. So the
+divergence is exactly the *unquoted* spelling in a context that splits —
+an assignment's value, a `case` subject and a here-document body join it
+in every shell, measured.
+
+Asked only where the two readings differ: more than one element, or
+exactly one under an operator that still reads the list there — a slice,
+whose offset counts elements rather than characters, and the three
+element-selecting operators, which can leave the list empty.
+
 **`ArrayScalarIsTheWholeArray`** — bash no · dash unspecified · ksh93 no · zsh yes
 
 Decides what a plain `$a` gives when `a` is an array: zsh says every

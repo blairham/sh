@@ -222,3 +222,40 @@ func TestANestedValueCarriesNoGlobMarks(t *testing.T) {
 		})
 	}
 }
+
+// TestANestedBareArrayNameRefusesLikeTheSubscriptedOne — the bare spelling
+// reaches the same unbuilt shape, now that a bare array name is the list where
+// the dialect says so (#929).
+//
+// `${${a}}` and `${${a[@]}}` are one construct in the shell that has the
+// grammar — measured, both are `[one][two]` there — so they must not be one
+// refusal and one plausible answer here. Before #929 the bare inner joined to
+// a single field and this expansion returned `one two` at status 0, which is
+// the silent half of exactly the gap the diagnostic above exists to keep
+// findable.
+func TestANestedBareArrayNameRefusesLikeTheSubscriptedOne(t *testing.T) {
+	listly := func(r *Runner) {
+		sem := *r.Semantics
+		sem.ArrayScalarIsTheWholeArray = Yes
+		sem.ArrayNameWithoutSubscriptIsTheList = Yes
+		r.Semantics = &sem
+	}
+	for _, src := range []string{
+		`a=(one two); printf "[%s]" "${${a}}"`,
+		`a=(one two); printf "[%s]" "${${a}#o}"`,
+	} {
+		out, st := runGrammar(t, src, nesting, listly)
+		if !strings.Contains(out, "a nested expansion of a list is not implemented") {
+			t.Errorf("%s: got %q, want the list shape refused by name", src, out)
+		}
+		if st == 0 {
+			t.Errorf("%s: status 0, want the unbuilt shape refused", src)
+		}
+	}
+	// A one-element array is not a list and still answers, so the refusal is
+	// about the shape rather than about the name having been an array.
+	out, st := runGrammar(t, `a=(one); printf "[%s]" "${${a}#o}"`, nesting, listly)
+	if out != "[ne]" || st != 0 {
+		t.Errorf("got %q at %d, want [ne] at 0", out, st)
+	}
+}

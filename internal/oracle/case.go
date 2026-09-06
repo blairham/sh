@@ -3246,6 +3246,61 @@ echo "st=$?"`,
 		Why:     "the sharpest row in the family, because two shells accept the same six characters and mean different things by them: zsh matches the pattern against the *whole* value and substitutes nothing when it hits, while ksh93 ignores the colon entirely and gives exactly what `${v#hel*}` gives — `lo`. bash refuses it as arithmetic. So `:#` is not `#` with a colon in front, and a dialect that treated it as one would silently answer ksh93's question in zsh's grammar",
 	},
 	{
+		ID: "expansion/a-bare-array-name-unquoted", Category: "expansion",
+		Snippet: `a=(one two); printf "[%s]" $a; echo`,
+		Why:     "the headline of the family: an array named without a subscript is the *elements* in zsh — one field each, exactly what `${a[@]}` gives — where bash and ksh93 read the bare name as `${a[0]}` and hand over one field. One shell against two, and it is silent in the direction that hurts: the joined reading answers at status 0 with a plausible string, so nothing says the loop that follows will run once instead of twice",
+	},
+	{
+		ID: "expansion/a-bare-array-name-in-a-for-loop", Category: "expansion",
+		Snippet: `a=(one two); for f in $a; do printf "<%s>" "$f"; done; echo`,
+		Why:     "the same rule where a script actually meets it. `for f in $files` is the idiom, and the two readings differ in how many times the body runs — twice in zsh, once in bash and ksh93 with the whole list in `$f`. Written as a loop and not only as a `printf` because the field count is the observable, and a body that receives one argument where it expected several is the damage the field count causes",
+	},
+	{
+		ID: "expansion/a-bare-array-name-quoted-joins-on-ifs", Category: "expansion",
+		Snippet: `IFS=-; a=(x y z); printf "[%s]" "$a"; echo`,
+		Why:     "the guard on the other half: quoted, the bare name is one field in every shell that has arrays, and the shell that reads it as the whole array joins with the first character of IFS rather than a hard space. So `IFS=-` gives `x-y-z` and not `x y z`, the same rule `\"${a[*]}\"` follows. A reading that made the unquoted name a list by joining and then splitting would keep this row green while breaking the next one",
+	},
+	{
+		ID: "expansion/a-bare-array-name-unquoted-is-not-a-join-then-split", Category: "expansion",
+		Snippet: `IFS=; a=(x y z); printf "[%s]" $a; echo`,
+		Why:     "the row that tells the two implementations of the same answer apart, and the reason it is here rather than a duplicate of the first. With IFS empty nothing splits, so joining the elements first and splitting the result gives one field `xyz` — while zsh gives three, because the elements were never joined at all. bash and ksh93 give the first element, unaffected either way. An implementation that reached the right answer under the default IFS by the wrong route fails exactly here",
+	},
+	{
+		ID: "expansion/a-bare-array-name-in-a-context-that-does-not-split", Category: "expansion",
+		Snippet: `IFS=-; a=(x y z); v=$a; case $a in "x-y-z") echo joined;; *) echo split;; esac; echo "[$v]"`,
+		Why:     "where the unquoted spelling stops being a list: an assignment's value and a `case` subject split in no shell, and measured, zsh joins the bare name there exactly as quotes do — on IFS, so `x-y-z`. This is what keeps the rule about *fields* from leaking into the contexts that have none, and it is the row a fix routed through the list path unconditionally would break, silently turning `v=$a` into a hard-space join",
+	},
+	{
+		ID: "expansion/a-bare-array-name-of-one-element", Category: "expansion",
+		Snippet: `a=(only); printf "[%s]" $a; echo`,
+		Why:     "the case the question is not asked in: with one element the array *is* that element under both readings, so all three shells agree and a dialect that had chosen neither still has an answer. It is recorded because a core with no shell behind it must run this rather than refuse it — an axis asked wider than the disagreement turns the ordinary way to read a one-element array into a diagnostic",
+	},
+	{
+		ID: "expansion/a-bare-array-name-trimmed", Category: "expansion",
+		Snippet: `a=(one two); printf "[%s]" ${a#o}; echo`,
+		Why:     "an operator on the bare name, which inherits whatever the name turned out to be: zsh trims each element and keeps the fields, bash and ksh93 trim the one element the name gave them. The operator is the same everywhere — this row is about its *subject*, and it is the neighbor the scope note asked for by name",
+	},
+	{
+		ID: "expansion/a-bare-array-name-sliced", Category: "expansion",
+		Snippet: `a=(one two three); printf "[%s]" ${a:1}; echo`,
+		Why:     "the sharpest of the operators, because the two readings do not merely differ in field count — they read the same offset against different things. Where the name is the list, `:1` drops the first *element* and leaves two; where it is a scalar, it drops the first *character* and leaves `ne`. Nothing in the spelling says which, and both answer at status 0",
+	},
+	{
+		ID: "expansion/element-exclusion-on-a-bare-array-name", Category: "expansion",
+		Snippet: `a=(1 2 3); printf "[%s]" ${a:#2}; echo`,
+		Why:     "the second failure the join causes, and the less obvious one: `:#` asks about *elements*, so a bare name that joined to one string first matches the pattern against `1 2 3` as a whole, fails, and hands the array back looking like a filter that found nothing. zsh drops the element and leaves two fields. ksh93 reads the same six characters as `${a#2}` on its own bare name and answers `1`, which is neither shell's other reading — so the operator and its subject diverge together",
+	},
+	{
+		ID: "expansion/element-exclusion-on-a-bare-array-name-by-pattern", Category: "expansion",
+		Snippet: `a=(foo bar baz); printf "[%s]" ${a:#ba*}; echo`,
+		Why:     "the same operator with a pattern that matches more than one element, which is what makes the no-op visible: two of three go in zsh. The joined reading cannot drop a *part* of its one string, so it drops nothing at all and the answer is indistinguishable from a pattern that simply did not match — the quiet shape this whole family is recorded to catch",
+	},
+	{
+		ID: "expansion/a-bare-array-name-with-a-default", Category: "expansion",
+		Snippet: `a=(one two); printf "[%s]" ${a:-d}; echo`,
+		Why:     "the `-` test came to the parameter rather than to the word, so what it yields is the parameter under this shell's reading of it: the elements in zsh, the first alone in bash and ksh93. The row exists because the word side is already pinned elsewhere and the two must not be confused — a substitution that fires takes its fields from the *word*, and this one does not fire",
+	},
+	{
 		ID: "expansion/element-exclusion-without-a-flag-group", Category: "expansion",
 		Snippet: `a=(one two three); echo "[${a:#two}]"`,
 		Why:     "the same operator with no `(@)` in front and inside quotes, where the array joins to one string first: the pattern is then matched against `one two three` as a whole, matches nothing, and the value is left standing. Not a no-op by accident — `${a:#*}` on the same array is empty — and it is what says the operator asks about *elements*, of which a joined scalar has one. ksh93 answers `one` from the same characters, which is `${a#two}` against a scalar that is only the first element, so the two shells agree on neither the operator nor what `$a` names",

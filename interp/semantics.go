@@ -2299,6 +2299,28 @@ type Semantics struct {
 	// differ.
 	ArrayLengthWithoutSubscriptIsCount Answer
 
+	// ArrayNameWithoutSubscriptIsTheList makes an unquoted bare array name
+	// the array itself — one field per element, a slice slicing the list and
+	// an element-wise operator applying to each — exactly as `${a[@]}` is:
+	// zsh. bash and ksh93 read the bare name as `${a[0]}`, one field, and
+	// dash has no arrays at all.
+	//
+	// The field-count half of what ArrayScalarIsTheWholeArray answers for the
+	// value, and separate from it because the same shell answers the two
+	// differently by quoting: `"$a"` is one joined field in zsh as well, so
+	// the divergence is exactly the unquoted spelling in a context that
+	// splits. Its silence is the reason it is a P1 — `for f in $files` runs
+	// once over a joined string instead of once per element, every command
+	// inside gets one argument where it expected several, and the status is
+	// 0. The same join makes an element-wise operator a quiet no-op:
+	// `${a:#pattern}` matches the joined string, fails, and hands the whole
+	// array back looking like a filter that found nothing.
+	//
+	// Asked only where the two readings differ, which is more than one
+	// element — or exactly one under an operator that reads the list even
+	// then, a slice or one of the element-selecting three.
+	ArrayNameWithoutSubscriptIsTheList Answer
+
 	// EmptyArrayAtIsOneEmptyField hands a quoted "${a[@]}" of an empty
 	// array one empty field: ksh93 alone, and the reason careful scripts
 	// write "${a[@]+"${a[@]}"}".

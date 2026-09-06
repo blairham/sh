@@ -200,6 +200,7 @@ func Semantics() interp.Semantics {
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.Yes
+	s.ArrayNameWithoutSubscriptIsTheList = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.No
 	s.UnsetEndsTheProducedPipelineStatus = interp.Yes
 	s.SelectLayout = interp.SelectMenuColumns

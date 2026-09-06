@@ -3693,12 +3693,12 @@ spelling `ReadOptions` uses — `Semantics.DeclareOptions` and
 
     declare/typeset
       bash   aAfFgilprux   plus -I -n -t, unimplemented here
-      zsh    aAfgilprux    plus floats, padding, ties…, unimplemented
-      ksh93  aAilprux      plus -f -F -b -n…, unimplemented (see below)
+      zsh    aAfgHilprux   plus floats, padding, ties…, unimplemented
+      ksh93  aAilprux      plus -f -F -b -n… and its own -H, unimplemented
       dash   —             no typeset at all
     local
       bash   aAgilprux     plus -f -F -I -n -t, unimplemented
-      zsh    aAilprux
+      zsh    aAHilprux
       dash   (none)        `local -r x` declares a name `-r`, then refuses
                            it: `local: -r: bad variable name`, fatal
       ksh93  —             no local at all
@@ -3712,6 +3712,43 @@ assigned to the name, the declaring assignment included. zsh stores the
 raw text and folds on *expansion* instead — every read agrees with the
 other two shells, and only its `typeset -p` betrays the difference by
 listing the raw value, which is deliberately not modeled.
+
+**`-H` is one letter and two attributes, and only one of them is
+built.** Measured 2026-09-06. In zsh it hides a name's *value* from every
+listing that would write one: `typeset -H h=hid` leaves `$h` reading
+`hid`, and `typeset -p h` answers `typeset h` with no `=hid` after it —
+the attributes still speak, the value does not. `+H` gives it back. It
+reaches the other listings too: `export -p` writes `export ex`, bare
+`export` writes `ex`, and a bare `set` writes `zzh` where an ordinary
+name on the same listing is `zzv=plain`. So it is a listing attribute
+and nothing else, and it is implemented as one — recorded against the
+name and consulted where a value would be written, not accepted and
+dropped.
+
+ksh93 has the same letter for a different attribute: file name mapping,
+which does *not* hide. `typeset -H h=hid` there lists back as
+`typeset -H h=hid` — the value **and** the flag — and a bare listing
+calls the attribute `filename`. That letter stays refused by name; it is
+not the zsh one under another spelling, and modelling the two as one
+attribute with two renderings would be inventing a shared thing that is
+not there. bash refuses `-H` outright, under `declare` and `typeset`
+alike, with its usage line and 2; dash has no such builtin. There is
+therefore no axis — only a letter one dialect has, in
+`Semantics.DeclareOptions` and `LocalOptions`. Corpus:
+`declare/hide-attribute-*`, `set/bare-set-and-a-hidden-value`.
+
+**An attribute added to a name that already holds a value keeps it, and
+re-reads it.** A separate rule from the one above, and the one that
+makes `-H` safe: `typeset -H h` on an existing `h` must hide the value,
+not destroy it. What the name holds survives in all four shells that
+spell the builtin — and in zsh and ksh93 it is read back through the
+attribute that has just arrived, so `v=5+2; typeset -i v` is 7 and
+`d=MiXeD; typeset -u d` is `MIXED`, where bash leaves both alone. A
+compound value is not re-read anywhere: `arr=(a b); typeset -u arr`
+stays `a b`. This is not an assignment, so a readonly name meets no
+refusal — `typeset -r r=1; typeset -i r` is 1 with status 0. Corpus:
+`declare/integer-attribute-added-to-a-name-with-a-value`,
+`declare/case-attribute-added-to-a-name-with-a-value`.
 
 **`-g` has an axis inside it.** With no local in front of the name the
 two shells that spell the letter agree: the global is written. With a
@@ -6442,6 +6479,12 @@ Gives a name a value when it is declared without one: `local u` or
 `typeset u`. zsh alone says yes, so `${u-UNSET}` is empty there and
 UNSET in bash and ksh93 — the name exists in all three, but only zsh
 considers it set.
+
+It is about a name the declaration *creates*, and the cell rather than
+the name: a shadow a function's declaration takes is a new cell however
+much the caller held, and a second declaration in the same scope is
+writing over its own. A name that already holds a value keeps it — see
+"an attribute added to a name that already holds a value", above.
 
 **`ExportCarriesFunctions`** — bash yes · dash no · ksh93 no · zsh no
 

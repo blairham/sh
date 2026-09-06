@@ -90,6 +90,19 @@ type declaration struct {
 	exported bool
 	lower    bool
 	upper    bool
+	// hidden keeps the value out of the listing — `typeset -H`. Not a flag
+	// letter in any listed form: the shell that has the attribute says it by
+	// writing no value, and never writes an `H` back.
+	//
+	// Only the forms that shell reaches honor it — ExportSpelled, its
+	// `typeset -p` and `readonly -p`; CommandWord, its `export -p`; and
+	// PlainAssignment, its bare `export` and `readonly`. Clustered and
+	// BareAssignments are left alone on purpose rather than for want of
+	// effort: bash has no `-H` at all, and the letter ksh93 does have is a
+	// different attribute whose listing keeps the value — `typeset -H h=v`
+	// lists back as `typeset -H h=v` there. Hiding in those forms would be
+	// output no shell in the panel produces.
+	hidden bool
 }
 
 // declarationOf gathers what the runner knows about a name. The second result
@@ -103,8 +116,9 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		exported: r.isExported(name),
 		lower:    r.lowered[name],
 		upper:    r.uppered[name],
+		hidden:   r.hidden[name],
 	}
-	attributed := d.integer || d.readonly || d.exported || d.lower || d.upper
+	attributed := d.integer || d.readonly || d.exported || d.lower || d.upper || d.hidden
 	if r.removed[name] {
 		// `unset` took the value away; only a surviving attribute keeps the
 		// name listable.
@@ -167,6 +181,9 @@ func (r *Runner) declarableNames() []string {
 	for name := range r.uppered {
 		seen[name] = true
 	}
+	for name := range r.hidden {
+		seen[name] = true
+	}
 	for k := range r.inheritedEnv {
 		// isNameLike keeps the entries that are variables: an exported
 		// function travels in the environment under a decorated name no
@@ -177,7 +194,8 @@ func (r *Runner) declarableNames() []string {
 	}
 	for name := range seen {
 		if r.removed[name] && !r.readonly[name] && !r.integer[name] &&
-			!r.exported[name] && !r.lowered[name] && !r.uppered[name] {
+			!r.exported[name] && !r.lowered[name] && !r.uppered[name] &&
+			!r.hidden[name] {
 			delete(seen, name)
 		}
 	}
@@ -247,7 +265,7 @@ func (r *Runner) listedDeclaration(form DeclarationListingForm, d declaration) s
 // commandWordDeclaration is DeclareListingCommandWord — see the constant.
 func (r *Runner) commandWordDeclaration(d declaration) string {
 	head := r.inBuiltin + " " + d.name
-	if d.hasValue {
+	if d.hasValue && !d.hidden {
 		return head + "=" + r.declareQuoted(d.value)
 	}
 	return head
@@ -257,7 +275,7 @@ func (r *Runner) commandWordDeclaration(d declaration) string {
 // constant. A name carrying an attribute and no value still lists, and lists
 // as a bare name, because there is no word left to say the attribute with.
 func (r *Runner) plainAssignmentDeclaration(d declaration) string {
-	if !d.hasValue {
+	if !d.hasValue || d.hidden {
 		return d.name
 	}
 	return d.name + "=" + r.declareQuoted(d.value)
@@ -354,6 +372,13 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		head += " -" + flags
 	}
 	head += " " + d.name
+	if d.hidden {
+		// The whole of what `-H` does: the attributes still speak, the value
+		// does not — a scalar's, an array's and a table's alike. Measured
+		// `typeset -A C`, `typeset -a A`, `typeset -i n`, `typeset -r r` and
+		// `export e` back from names that all held values.
+		return head
+	}
 	switch {
 	case d.isAssoc:
 		if len(d.assoc) == 0 {

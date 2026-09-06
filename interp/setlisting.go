@@ -69,6 +69,13 @@ func (r *Runner) setListing() int {
 			// variable, and no shell lists it here.
 			continue
 		}
+		if d.hidden {
+			// `typeset -H` reaches this listing too: measured, a bare `set`
+			// writes the hidden name with no `=` and no value where an
+			// ordinary one writes `name=value`.
+			r.printf("%s\n", name)
+			continue
+		}
 		r.printf("%s=%s\n", name, r.setListedValue(d))
 	}
 	if form == SetListingAssignmentsThenFunctions {

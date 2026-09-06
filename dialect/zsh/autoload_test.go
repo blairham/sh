@@ -145,6 +145,42 @@ typeset -f inner`)
 	}
 }
 
+// A file that is found but is not a body this shell can read gets its own
+// complaint, not "not found" — saying otherwise would send somebody looking
+// for a file that is right there.
+//
+// zsh reports the parse error itself here — `badfn:1: parse error near 'fi'`
+// — where this says the definition was bad without saying why. Same status,
+// and the difference is recorded rather than hidden.
+func TestAFileThatIsNotAFunctionBodyIsItsOwnComplaint(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"badfn": "if then fi fi\n"})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+autoload -Uz badfn
+badfn 2>&1
+print -r -- "call st=$?"`)
+	want := "badfn:1: badfn: bad function definition\ncall st=1\n"
+	if out != want || st != 0 {
+		t.Errorf("a bad body = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `-X` acts on the **innermost** function, not the outermost: an autoloaded
+// name called from inside another function must resolve itself and not its
+// caller. One frame deep cannot tell the two apart.
+func TestMinusXResolvesTheInnermostFunction(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"innerfn": `print -r -- INNER`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+autoload -Uz innerfn
+outer() { innerfn; print -r -- "after st=$?"; }
+outer
+typeset -f outer`)
+	want := "INNER\nafter st=0\n" +
+		"outer () {\n\tinnerfn\n\tprint -r -- \"after st=$?\"\n}\n"
+	if out != want || st != 0 {
+		t.Errorf("a nested autoload = %q (status %d), want %q", out, st, want)
+	}
+}
+
 // The bare form lists the names still waiting, and only those: a name that
 // has been called is an ordinary function and this builtin has nothing left
 // to say about it.

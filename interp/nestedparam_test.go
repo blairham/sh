@@ -63,6 +63,12 @@ func TestAnExpansionStandsWhereANameWould(t *testing.T) {
 		{"a default over a set result", `v=abc; printf "[%s]" "${${v}:-d}"`, "[abc]"},
 		{"an alternate over a set result", `v=abc; printf "[%s]" "${${v}:+y}"`, "[y]"},
 		{"an unset inner is empty and not an error", `printf "[%s]" "${${nosuch}}"`, "[]"},
+		// The colon-less test asks whether the inner *came to* anything, and
+		// it always did: an inner naming nothing comes to the empty string,
+		// which is set. Measured — `${${u}-d}` on an unset u is empty in the
+		// shell with the grammar, where `${u-d}` is `d`.
+		{"a colon-less default over an unset inner does not fire", `printf "[%s]" "${${nosuch}-d}"`, "[]"},
+		{"and the colon form does", `printf "[%s]" "${${nosuch}:-d}"`, "[d]"},
 		// A metacharacter in the inner's value is a character of it. The
 		// marks the expander carries a pattern with are the expander's own
 		// bookkeeping, and an inner that kept them answered `a\*b`.

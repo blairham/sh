@@ -157,15 +157,11 @@ func (p *Parser) parseTestClause() Command {
 
 func (p *Parser) condOr() CondExpr {
 	x := p.condAnd()
-	for x != nil && p.err == nil {
-		// Speculatively, per parseTestClause: the operator may be on the next
-		// line. What is skipped here is given back by the caller, which skips
-		// newlines before the `]]` anyway — and a word that is neither
-		// operator nor closer is refused either way, only a line later.
-		p.skipNewlines()
-		if !p.at(TokOrOr) {
-			break
-		}
+	// No skip of its own before the test: every route to this operator runs
+	// through condAnd, which has already skipped whatever newlines stood
+	// between the condition and here. Skipping again would be a second
+	// spelling of the same rule, and one no input could tell from the first.
+	for x != nil && p.at(TokOrOr) && p.err == nil {
 		p.next()
 		p.skipNewlines()
 		y := p.condAnd()
@@ -181,6 +177,12 @@ func (p *Parser) condOr() CondExpr {
 func (p *Parser) condAnd() CondExpr {
 	x := p.condPrimary()
 	for x != nil && p.err == nil {
+		// Speculatively, per parseTestClause: a complete condition may be
+		// followed on the next line by `&&`, by `||`, by a group's `)` or by
+		// the `]]`, and all four tolerate newlines in front of them — so the
+		// newline can be consumed before it is known which of the four it
+		// was. This is the only place it happens for any of them, condOr and
+		// the group both reaching their operator through here.
 		p.skipNewlines()
 		if !p.at(TokAndAnd) {
 			break

@@ -142,6 +142,14 @@ type Semantics struct {
 	// coprocess as the source in ksh93 and zsh. Empty means `r`, the one
 	// letter POSIX gives the builtin.
 	ReadOptions string
+	// UnsetOptions is the same question asked of `unset`, spelled the same
+	// way. The letters split three ways and no two dialects have the same
+	// set: `-v` and `-f` are unanimous, `-n` is bash 5.3's and ksh93's — and
+	// is refused by bash 3.2, dash and zsh — and `-m`, which reads its
+	// operands as *patterns* and unsets every parameter whose name matches
+	// one, is zsh's alone. Measured 2026-09-05 across the panel. Empty means
+	// `vf`, which is what POSIX gives the builtin.
+	UnsetOptions string
 	// ReadZeroTimeout is what `read -t 0` asks of the stream — a poll, a
 	// read of what is already waiting, or a read that commits once it has
 	// begun. Asked only where `-t 0` is actually written; every other
@@ -3056,6 +3064,8 @@ func PosixSemantics() Semantics {
 		// the dialects add are theirs to add, and the two count axes are
 		// unreachable without the letters that raise them.
 		ReadOptions: "r",
+		// POSIX gives `unset` both letters and no others.
+		UnsetOptions: "vf",
 		// The POSIX jobs: -l and -p, and `-p` means the process ids alone.
 		// The state filters and the rest are the dialects' additions, and
 		// the two axes their letters raise are unreachable without them.

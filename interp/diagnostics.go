@@ -385,6 +385,11 @@ type Diagnostics struct {
 	// Empty means it prints nothing, which is dash.
 	UnaliasUsage string
 
+	// UnsetPatternUsage is what `unset -m` prints when given no pattern to
+	// match. One verb, the builtin's name. Only one dialect has the letter,
+	// so only one dialect can reach this.
+	UnsetPatternUsage string
+
 	// UnaliasUsageUnprefixed writes that without the shell and line in front.
 	UnaliasUsageUnprefixed bool
 

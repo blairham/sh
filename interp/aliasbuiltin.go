@@ -223,6 +223,12 @@ func (r *Runner) AliasExpansion() bool { return r.aliasExpansion }
 // back what the route decided, not this.
 func (r *Runner) SetAliasExpansion(on bool) { r.aliasExpansion = on }
 
+// AliasExpansionBase is the answer the route gave, for a dialect whose option
+// is a second input to the same question: one shell has an `aliases` option
+// that reads `on` even where the route does not expand, so turning it back on
+// restores what the route said rather than forcing expansion.
+func (r *Runner) AliasExpansionBase() bool { return r.aliasExpansionBase }
+
 // SetAliasExpansionBase records the answer the route gives — the dialect's
 // syntax.Dialect.ExpandAliases against the route the program arrived by, or
 // true at a prompt, where the whole panel expands whatever the dialect says

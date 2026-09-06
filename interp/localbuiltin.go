@@ -85,6 +85,26 @@ func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
 
 // innermostLocalNames is the set of names the running function made local,
 // which is the one attribute this listing carries that a declaration does not.
+// AtFunctionReturn asks for f to be run when the innermost function call
+// unwinds, and reports whether there was one to hang it on.
+//
+// False at the top level, and that is the answer a caller wants rather than an
+// error: the shell whose `emulate -L` this exists for applies globally there —
+// measured, `emulate -L zsh -o extendedglob` outside a function leaves the
+// option on afterwards — so "no scope" means "there is nothing to restore to",
+// not "this failed".
+//
+// The seam is here because the scope stack is what `local` is about, and this
+// is the same stack asked for a different thing: a moment rather than a name.
+func (r *Runner) AtFunctionReturn(f func()) bool {
+	if len(r.scopes) == 0 {
+		return false
+	}
+	sc := r.scopes[len(r.scopes)-1]
+	sc.onReturn = append(sc.onReturn, f)
+	return true
+}
+
 func (r *Runner) innermostLocalNames() map[string]bool {
 	names := map[string]bool{}
 	if len(r.scopes) == 0 {

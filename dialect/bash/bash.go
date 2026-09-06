@@ -229,6 +229,10 @@ func Semantics() interp.Semantics {
 	// input is a terminal, -t a timeout and -u a descriptor. A short -n
 	// keeps its text and reports 1; a short -N keeps its text too.
 	s.ReadOptions = "rsa:d:i:n:N:p:t:u:"
+	// `-n` unsets through a name reference. bash 3.2 does not have it —
+	// `unset -n x` is an invalid option there and under `--posix` — so
+	// this is 5.3's set, which is the binary the panel measures.
+	s.UnsetOptions = "vfn"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes

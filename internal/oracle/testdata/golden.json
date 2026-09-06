@@ -21675,6 +21675,138 @@
         "TimedOut": false
       }
     },
+    "emulate/dash-l-covers-a-later-setopt": {
+      "bash": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: emulate: command not found~\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=127~out=127",
+        "Stderr": "\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: emulate: not found~\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=0~out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/dash-l-lasts-as-long-as-the-function": {
+      "bash": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=127~out=127",
+        "Stderr": "\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=1~out=1",
+        "Stderr": "\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=0~out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/dash-o-sets-an-option": {
+      "bash": {
+        "Stdout": "st=127~on=1~off=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~on=1~off=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~on=1~off=1",
+        "Stderr": "\u003cshell\u003e: emulate: command not found~\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~on=127~off=127",
+        "Stderr": "\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~on=1~off=1",
+        "Stderr": "\u003cshell\u003e: emulate: not found~\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~on=0~off=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "emulate/names-the-current-mode": {
       "bash": {
         "Stdout": "",
@@ -51646,6 +51778,50 @@
         "TimedOut": false
       }
     },
+    "setopt/no-aliases-stops-the-expansion": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: hi: command not found~\u003cscript\u003e: line 3: setopt: command not found~\u003cscript\u003e: line 4: hi: command not found~\u003cscript\u003e: line 5: setopt: command not found~\u003cscript\u003e: line 6: hi: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "expanded~expanded~expanded",
+        "Stderr": "\u003cscript\u003e: line 3: setopt: command not found~\u003cscript\u003e: line 5: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: hi: command not found~\u003cscript\u003e: line 3: setopt: command not found~\u003cscript\u003e: line 4: hi: command not found~\u003cscript\u003e: line 5: setopt: command not found~\u003cscript\u003e: line 6: hi: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "expanded~expanded~expanded",
+        "Stderr": "\u003cscript\u003e: 3: setopt: not found~\u003cscript\u003e: 5: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "expanded~expanded~expanded",
+        "Stderr": "\u003cscript\u003e: line 3: setopt: not found~\u003cscript\u003e: line 5: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "expanded~expanded",
+        "Stderr": "\u003cscript\u003e:4: command not found: hi",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "setopt/nonomatch-passes-the-glob-through": {
       "bash": {
         "Stdout": "x*~st=0",
@@ -61723,6 +61899,94 @@
       "zsh": {
         "Stdout": "[gone]",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unset/the-m-option-unsets-by-pattern": {
+      "bash": {
+        "Stdout": "st=2 [1][2][3]",
+        "Stderr": "\u003cshell\u003e: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 [1][2][3]",
+        "Stderr": "\u003cshell\u003e: line 0: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: Illegal option -m",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: unset: -m: unknown option~Usage: unset [-nfv] name...",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [gone][gone][3]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unset/the-n-option-splits-the-panel": {
+      "bash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: Illegal option -n",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:unset:1: bad option: -n",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

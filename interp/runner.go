@@ -2579,6 +2579,17 @@ type scope struct {
 	// rather than with parentheses. ksh93 gives only those functions a local
 	// scope, so `typeset` needs to know which kind it is standing in.
 	keyword bool
+
+	// onReturn is what runs when this call unwinds, in reverse order of
+	// registration.
+	//
+	// The seam a dialect needs for state the substrate does not hold. One
+	// shell's `emulate -L` and its LOCAL_OPTIONS make every option change
+	// in a function last only as long as the call, and the options live in
+	// the dialect rather than here — so what this offers is the *moment*,
+	// not the state. Closures rather than a saved copy of anything, because
+	// the substrate cannot know what it would be copying.
+	onReturn []func()
 }
 
 // fatal reports an error that abandons the script.

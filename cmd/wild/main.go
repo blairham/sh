@@ -45,6 +45,10 @@ func main() {
 			"print the scripts the sweep would read, one per line, and stop")
 		run = flag.String("run", "",
 			"also RUN each script that parses, under this binary and the reference, and report where they disagree")
+		runargs = flag.String("runargs", "",
+			"space-separated flags the -run binary needs, before the script")
+		contained = flag.Bool("contained", false,
+			"hand the -run binary a policy allowing it to write only in the directory each run is given, so the sweep tests the boundary rather than the arrangement")
 		timeout = flag.Duration("timeout", 10*time.Second, "how long one run may take")
 	)
 	flag.Parse()
@@ -91,7 +95,8 @@ func main() {
 	}
 	report(rep, *verbose)
 	if *run != "" {
-		runSweep(*run, *reference, scope, rep, *timeout, *verbose)
+		under := wild.UnderTest{Path: *run, Args: strings.Fields(*runargs), Contained: *contained}
+		runSweep(under, *reference, scope, rep, *timeout, *verbose)
 	}
 	// A report rather than a gate: the count is the point, and failing here
 	// would fail on whichever machine happens to have the oddest scripts.
@@ -129,7 +134,7 @@ func report(rep wild.Report, verbose bool) {
 //
 // Only the ones that parse: a script this shell cannot read has already been
 // reported, and running it would say the same thing twice.
-func runSweep(ours, reference string, scope wild.Scope, parsed wild.Report, timeout time.Duration, verbose bool) {
+func runSweep(ours wild.UnderTest, reference string, scope wild.Scope, parsed wild.Report, timeout time.Duration, verbose bool) {
 	failed := map[string]bool{}
 	for _, f := range parsed.Failures {
 		failed[f.Path] = true
@@ -143,8 +148,16 @@ func runSweep(ours, reference string, scope wild.Scope, parsed wild.Report, time
 	}
 
 	rep := wild.RunSweep(context.Background(), paths, ours, reference, timeout)
-	fmt.Printf("\nran: %d   agreed: %d   timed out: %d   not the same twice: %d   disagreed: %d\n",
-		rep.Ran, rep.Agreed, rep.Timedout, rep.Unstable, len(rep.Mismatches))
+	// Said on the line with the numbers, because the numbers mean something
+	// different with it on: a disagreement under a policy may be the boundary
+	// refusing rather than the two shells differing, and a reader who did not
+	// know which run this was could not tell.
+	posture := ""
+	if ours.Contained {
+		posture = "   contained: writes only in each run's own directory"
+	}
+	fmt.Printf("\nran: %d   agreed: %d   timed out: %d   not the same twice: %d   disagreed: %d%s\n",
+		rep.Ran, rep.Agreed, rep.Timedout, rep.Unstable, len(rep.Mismatches), posture)
 	for _, m := range rep.Mismatches {
 		fmt.Printf("  %s %s\n", m.Path, strings.Join(m.Args, " "))
 		fmt.Printf("    ours   (%d) %s\n", m.OurStatus, show(m.Ours, verbose))

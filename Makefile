@@ -36,7 +36,7 @@ PREFIX ?= /usr/local
 SHELLDIR ?= $(PREFIX)/libexec/sh
 SHELLS := sh bash zsh ksh dash
 
-.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-dialects smoke startup install uninstall
+.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects wild wild-run wild-run-contained smoke startup install uninstall
 
 all: build
 
@@ -109,6 +109,11 @@ conformance: ## Grade the core driver against bash over the whole corpus
 	@go build -o $(BINDIR)/sh-under-test ./cmd/sh
 	@go run ./cmd/oracle -bin $(BINDIR)/sh-under-test -binargs "-dialect bash" $(ARGS)
 
+conformance-gated: ## Run the corpus twice — plain and under a sandbox policy — and report what the policy changed
+	@mkdir -p $(BINDIR)
+	@go build -o $(BINDIR)/sh-under-test ./cmd/sh
+	@go run ./cmd/oracle -bin $(BINDIR)/sh-under-test -binargs "-dialect bash" -gated $(ARGS)
+
 wild: ## Parse the shell scripts installed on this machine and report what fails
 	@go run ./cmd/wild $(ARGS)
 
@@ -116,6 +121,11 @@ wild-run: ## Also RUN each script that parses, under both shells, and report whe
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/wild-bash ./cmd/bash
 	@go run ./cmd/wild -run $(BINDIR)/wild-bash $(ARGS)
+
+wild-run-contained: ## wild-run with the shell under a policy: it may write only in the directory each run is given
+	@mkdir -p $(BINDIR)
+	@go build -o $(BINDIR)/wild-sh ./cmd/sh
+	@go run ./cmd/wild -run $(BINDIR)/wild-sh -runargs "-dialect bash" -contained $(ARGS)
 
 smoke: ## Drive a realistic interactive session through a pty and report, per feature, what works
 	@mkdir -p $(BINDIR)

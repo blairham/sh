@@ -39,8 +39,18 @@ func main() {
 		ref    = flag.String("against", "bash", "which panel shell to grade against")
 		vrb    = flag.Bool("v", false, "list the cases that do not match")
 		bargs  = flag.String("binargs", "", "space-separated flags the binary needs, before -c")
+		gated  = flag.Bool("gated", false, "run the corpus twice through -bin, with and without a sandbox policy, and report what the policy changed")
+		pol    = flag.String("policy", "", "the policy file -gated uses; empty generates one confining writes to the scratch directory")
 	)
 	flag.Parse()
+
+	if *gated {
+		if err := runGated(*bin, strings.Fields(*bargs), *pol, *vrb); err != nil {
+			fmt.Fprintln(os.Stderr, "oracle:", err)
+			os.Exit(exitFailure)
+		}
+		return
+	}
 
 	if *bin != "" {
 		rep, err := oracle.RunConformance(context.Background(), *bin, *ref, strings.Fields(*bargs), oracle.Corpus)
@@ -208,4 +218,31 @@ func byShell(drifts []oracle.Drift) string {
 		parts = append(parts, fmt.Sprintf("%s %d", name, n[name]))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// runGated is the sandbox column: the same corpus, run under a policy, with
+// the difference from the unpolicied run reported.
+//
+// It is not a gate and never exits nonzero for a case that changed. A denial
+// is the policy working, and a harness that failed on one would be a harness
+// that made the boundary unwatchable — the number is the artifact, and
+// somebody reading it is what turns a change in it into work. `make
+// conformance` is a report for the same reason and says so.
+func runGated(bin string, args []string, policy string, verbose bool) error {
+	cleanup := func() {}
+	if policy == "" {
+		var err error
+		policy, cleanup, err = oracle.WriteContainmentPolicy()
+		if err != nil {
+			return fmt.Errorf("writing the corpus policy: %w", err)
+		}
+	}
+	defer cleanup()
+
+	rep, err := oracle.RunGated(context.Background(), bin, args, policy, oracle.Corpus)
+	if err != nil {
+		return err
+	}
+	fmt.Print(rep.Summary(verbose))
+	return nil
 }

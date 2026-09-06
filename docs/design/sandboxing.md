@@ -753,6 +753,103 @@ build a `Boundary` go on building one independently. A shared counter
 would have to be threaded through all of them and the first that forgot
 would issue a duplicate.
 
+## Watching the boundary with the corpora
+
+The gate has unit tests, and unit tests of a boundary are written by
+somebody who already knows where the boundary is. The two corpora this
+repository already has are written by people who did not, which makes
+them the better instrument — so both can run under a policy, and both
+report rather than gate.
+
+Neither is a gate, for the reason `make conformance` is not one: a run
+that *failed* on a denial would be failing on the policy rather than on
+compatibility, and a boundary nobody can watch without breaking the
+build is a boundary people switch off. What is produced is a number, and
+somebody reading it is what turns a change in it into work.
+
+### `make conformance-gated` — the corpus, twice
+
+The same fourteen hundred cases run twice through the same binary, once
+plain and once with a policy, and the cases that answer differently are
+listed. No reference shell is consulted at all, which is what makes the
+number the same on a machine with a thin panel.
+
+**The posture is the decision worth arguing about**, and two were
+measured.
+
+*Deny everything and allow nothing* is the strongest statement and
+needs no argument about what to permit. It moves **497 of 1397** cases,
+because most of them run a program — and a wall of differences is not a
+signal, it is a second corpus nobody will read. It stays available by
+naming a policy file with `-policy`; it is not the default.
+
+*Writes are confined to the directory the harness gave the case* is the
+default, and it is the posture that makes a claim: a corpus case writes
+where it was put and nowhere else. Reads and execs are deliberately not
+confined — an allowed program is outside the boundary the instant it
+starts, so a policy refusing reads while permitting programs is telling
+itself a story. What can honestly be said is about writes, and it is
+said exactly.
+
+The scratch directory is named rather than assumed, because it is
+`/var/folders/…` on a Mac and `/tmp` on Linux, so the file is generated
+per run rather than committed.
+
+**Measured, that policy moves 18 of 1408 cases, 3 of them in more than
+the wording**, and the split is why the report has two headings:
+
+- **15 differ only in the wording of a diagnostic.** Each is a case that
+  redirects to a path that does not exist — `/nope/x` — to pin what a
+  failed redirection does. The policy refuses the write *before* the
+  open, so the shell never learns the path is missing and says `open:
+  refused` where it used to say `No such file or directory`. Same
+  standard output, same status. This is the design working: a gate that
+  let the kernel answer first would be leaking whether a denied path
+  exists.
+- **3 differ in what happened**, and all three are process
+  substitution. They are the finding, and they are recorded as one:
+  `<(cmd)` opens a FIFO the *interpreter* chose the path of, under the
+  shell's own temporary directory, and that open passes the gate. A
+  policy confining writes therefore refuses the mechanism rather than an
+  access the script asked for — which is exactly what `ActionOpen`'s
+  scaffolding exemption exists to prevent, applied to everything around
+  the pipe but not to the pipe. Left as it is and reported, because the
+  fix is a decision about the boundary and not about the harness.
+
+### `make wild-run-contained` — every script on the machine
+
+`make wild-run` executes third-party scripts, and its containment
+argument has been that each script runs under both shells with the same
+arguments, in a directory of its own, with no standard input and a
+timeout. With `-contained`, the shell under test is handed a policy
+naming that directory and nothing else to write to, which **turns the
+containment from a statement about the arrangement into a statement
+about the shell** — and turns every script on the machine into a test of
+the boundary, in bulk, written by people who did not know this
+implementation exists.
+
+Only the shell under test is contained. A real shell has no such flag
+and could not be given one, so a difference under `-contained` reads as
+"the policy refused something" rather than as "the shells disagree" —
+which is the asymmetry the comparison lives with, and the reason the
+posture is printed on the line with the numbers.
+
+**The first run of it found that the old containment argument was not
+true.** Over the default scope — 252 scripts, 501 runs — three write
+outside the directory the sweep gave them, on every probe:
+
+| script | writes to |
+| --- | --- |
+| `/usr/bin/imptrace` | `/tmp/imptrace.XXXXXX` |
+| `/usr/libexec/locate.mklocatedb` | `/tmp/mklocateXXXXXX/_mklocatedbNNNNN.list` |
+| `/opt/homebrew/bin/check_commit_msg.sh` | a `mktemp` file under the system temporary directory |
+
+Under the old arrangement all three wrote there and nothing noticed —
+"a directory of its own" is where a script is *started*, not where it
+can write. Under the policy the shell refuses and the diagnostic names
+the path. That is three files a `--help` left on the machine per sweep,
+found by the boundary and not by reading anything.
+
 ## Consequences a user meets immediately
 
 These follow from the decisions above and are listed so they are not

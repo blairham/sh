@@ -298,3 +298,87 @@ func lastOf(s, set string) byte {
 	}
 	return last
 }
+
+// flaggedAssignIndex is the element `a[(r)y]=Q` names, as a subscript.
+//
+// The read side answers a search with the element's *value* for `r` and `R`
+// and its *index* for `i` and `I`; an assignment wants the index either way,
+// which is the whole of the difference and the reason this is not
+// flaggedSubscript with a flag on it.
+//
+// Measured 2026-09-07 on zsh 5.9.2, which is the one shell with the
+// construct, with `b=(x y z)`:
+//
+//	b[(r)y]=Q          x Q z    the matched element is replaced
+//	b[(re)y]=Q         x Q z    and exact matching selects the same one
+//	b[(R)x]=Q          on (x y x): x y Q — the reverse search takes the last
+//	b[(i)y]=W          x W z
+//	b[(I)y]=W          x W z
+//	b[(i)nomatch]=W    x y z W  one past the last element, so it appends
+//	b[(r)y]+=Q         x yQ z   the element joined rather than replaced
+//
+// A search that finds nothing under `r` or `R` writes nowhere at all — those
+// two answer with an element and there is none — where `i` answers the index
+// after the last and `I` the one before the first. `I` missing is the index
+// no element has, and writing there is refused rather than guessed.
+func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
+	g := a.IndexFlags
+	e := &syntax.ParamExpr{Name: a.Name, Index: a.Index, IndexFlags: g}
+	for _, c := range g.Flags {
+		if !strings.ContainsRune(implementedSubscriptFlags, c) {
+			r.refuseSubscriptFlag(e, string(c), "")
+			return 0, false
+		}
+	}
+	search := lastOf(g.Flags, searchSubscriptFlags)
+	if search == 0 {
+		// Nothing to select by, so the operand is an ordinary subscript —
+		// which is the read side's rule and measured to be this side's too:
+		// `b[(e)2]=Q` on `(x y z)` is `x Q z` in the shell with the
+		// construct. The *empty* group is the one shape that is not, and it
+		// is `bad pattern` there and a parse error here, so neither writes.
+		idx, err := r.subscriptValue(r.joinWord(g.Arg))
+		if err != nil {
+			text := r.subscriptAsWritten(a.Index)
+			r.fatal("%s\n", r.subscriptFailure(text, err))
+			return 0, false
+		}
+		return idx, true
+	}
+	if _, isAssoc := r.assocFor(a.Name); isAssoc {
+		// The same refusal the read side gives, and for the same reason: the
+		// letters mean something else over a table, and answering with the
+		// ordered array's rule would write to a plausible wrong key. The
+		// shell refuses it too, as `attempt to set slice`.
+		r.refuseSubscriptFlag(e, string(search), " for an associative array")
+		return 0, false
+	}
+	elems, scalar, held := r.subscriptTarget(e)
+	if scalar && held {
+		// A search over a plain string names a *character* position there and
+		// the assignment replaces that character. Refused by name here, as
+		// the read side refuses it, rather than writing to an element.
+		r.refuseSubscriptFlag(e, string(search), " for a scalar")
+		return 0, false
+	}
+	at, found := r.searchElements(g, search, elems)
+	base := r.arrayBase()
+	if found {
+		return base + at, true
+	}
+	switch search {
+	case 'i', 'r':
+		// One past the last element, which is what makes both of these an
+		// append: measured, `b[(i)nomatch]=W` and `b[(r)nomatch]=Q` on
+		// `(x y z)` each leave four elements with the new one last.
+		return base + len(elems), true
+	}
+	// `R` and `I` missing are not the same answer as each other in the shell
+	// — the first is `assignment to invalid subscript range` and the second
+	// puts the value at the *front* — and neither is the index one before the
+	// first, which is what the read side answers and what an assignment
+	// cannot use. Refused by name rather than guessed at; see the issue the
+	// spec entry names.
+	r.refuseSubscriptFlag(e, string(search), " where nothing matched")
+	return 0, false
+}

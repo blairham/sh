@@ -1762,6 +1762,61 @@ They are different. `${nosucharray[(i)x]}` is **empty**, while a declared
 but empty array answers `${b[(i)x]}` with `1` and `${b[(I)x]}` with `0`.
 An unset name is not searched at all.
 
+### On the left of an assignment
+
+The same group names the element an assignment writes to, and the
+semantics need nothing new: `(r)` and `(i)` name an *index*, which is what
+a subscript on that side has always been. Measured 2026-09-07 with
+`b=(x y z)`:
+
+| probe | result |
+| --- | --- |
+| `b[(r)y]=Q` | `x Q z` — the element the search found |
+| `b[(re)y]=Q` | `x Q z` |
+| `b[(R)x]=Q` on `(x y x)` | `x y Q` — the reverse search takes the last |
+| `b[(i)y]=W` | `x W z` |
+| `b[(I)y]=W` | `x W z` |
+| `b[(i)nomatch]=W` | `x y z W` — one past the last, so it appends |
+| `b[(r)nomatch]=Q` | `x y z Q` — and so does a missed search |
+| `b[(r)y]+=Q` | `x yQ z` — the element joined rather than replaced |
+| `b[(e)1+1]=Q` | `x Q z` — no search flag, so an ordinary subscript |
+
+The operand is a word of its own here as it is on the read side, so
+`b[(r)$want]=Q` performs the substitution. And a group is only a group
+where the *source* wrote one: `g='(r)y'; b[$g]=Q` is `bad math expression`
+in the shell with the construct, because the operand behind a group is
+lexed as a word and a group that arrived from an expansion has no operand
+to lex.
+
+`${b[(r)]:=V}` is the same question from a third direction and answers
+the same way — with `b=(x "" z)` the search finds the empty element and
+the operator writes `V` there. All three sides have to agree or the same
+subscript names two different elements depending on which one wrote it.
+
+Four shapes are refused by name rather than written to a plausible wrong
+element, and each is one the shell declines or answers some other way:
+
+- a **table**: `m[(r)v]=Z` is `attempt to set slice of associative array`
+  there. The letters mean something else over keys, and the read side
+  refuses them for the same reason.
+- a **scalar**: `s=abc; s[(r)b]=Z` is `aZc` there — the search names a
+  character position and the assignment replaces the character, which is
+  a construct of its own. Refused here, as the read side refuses it.
+- `(R)` **missing**: `assignment to invalid subscript range` there.
+- `(I)` **missing**: puts the value at the *front* there — `b[(I)nomatch]=W`
+  on `(x y z)` gives `W x y z` with four elements — which is neither the
+  index one before the first, which is what a read answers, nor anything a
+  write can name. Note that this and the row above are not the same
+  answer as each other, which is why neither is guessed at.
+
+An **empty** group is `bad pattern` there and a parse error here — the
+lexer takes `()` for a function definition rather than a group, so the
+word ends at the parenthesis — so neither writes.
+
+`unset 'b[(r)y]'` is the one direction still unread: the subscript arrives
+as a *runtime string* rather than as a parsed word, so the group has
+nowhere to hang its operand. Filed rather than guessed.
+
 ### Grammar
 
 Grammar flag `ArraySubscriptFlags`. The group is read by the **parser**,
@@ -1784,6 +1839,14 @@ so `$a[(r)b]` was a syntax error naming the parenthesis — which is worse
 than a wrong answer, because it takes the whole file with it. A group the
 grammar can read is stepped over as a unit and nothing else about where a
 bare subscript ends changes.
+
+An assignment's subscript needs no lexer work of its own, which is not
+what the shape of the problem suggested: `a[(r)y]=Q` was once a parse
+error blaming the parenthesis, and the diagnosis written down at the time
+was that the word ended there. It does not — a `(` mid-word already opens
+a pattern group where the dialect has them — so what was missing was only
+the *scan*, and `Assign.IndexFlags` carries it exactly as
+`ParamExpr.IndexFlags` does for a read.
 
 ### What this implementation carries, and what it refuses by name
 

@@ -783,7 +783,16 @@ func (p *printer) assign(a *Assign) {
 	p.str(a.Name)
 	if a.Index != nil {
 		p.str("[")
-		p.word(a.Index)
+		if a.IndexFlags != nil {
+			// A flag group's parentheses belong to the subscript, exactly as
+			// a pattern's do inside `[[ … ]]`: escaping them would put a
+			// backslash where the reader expects a group, and `b[(r)y]=Q`
+			// would come back as `b[\(r\)y]=Q` — arithmetic again, and a
+			// failure rather than the element it named.
+			p.rawWord(a.Index)
+		} else {
+			p.word(a.Index)
+		}
 		p.str("]")
 	}
 	if a.Append {

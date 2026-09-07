@@ -1416,6 +1416,40 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 	return h, false
 }
 
+// assignIndexFlags reads the flag group an assignment's subscript may open
+// with, which is the same group a *read* takes and the same scanner.
+//
+// `a[(r)y]=Q` replaces the element whose value is `y`, and `a[(i)nomatch]=W`
+// appends, because `(i)` missing answers one past the last element and that is
+// the index an append writes to. The semantics need nothing new: the group
+// names an *index*, which is what a subscript on this side has always been.
+//
+// Only a group written as unquoted literal text at the front of the subscript
+// is one. That is the same rule the read side follows and it is what keeps
+// `a["(r)y"]=Q` and `a[$g]=Q` out: a group that arrives from an expansion is
+// text, since the operand behind it is lexed as a word of its own and a group
+// the source did not write has no operand to lex.
+func (p *Parser) assignIndexFlags(spans []Span) *SubscriptFlags {
+	if !p.dialect.ArraySubscriptFlags || len(spans) == 0 {
+		return nil
+	}
+	if spans[0].Kind != Literal || spans[0].Quoting != Unquoted {
+		return nil
+	}
+	g, rest, ok := scanSubscriptFlags(spans[0].Value)
+	if !ok {
+		return nil
+	}
+	// The operand is the rest of the first span plus every span after it, so
+	// a substitution in it is performed exactly as one in the subscript would
+	// be — `a[(re)$want]=Q` is the shape worth having.
+	operand := append([]Span{{
+		Kind: Literal, Value: rest, Quoting: Unquoted, Pos: spans[0].Pos,
+	}}, spans[1:]...)
+	g.Arg = p.newWord(operand, spans[0].Pos, spans[0].Pos)
+	return g
+}
+
 // toEnd is spanRange's toOff for "as far as the spans go".
 const toEnd = -1
 
@@ -1597,6 +1631,7 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 	a := &Assign{Name: h.name, Start: p.tok.Pos, Append: h.append}
 	if h.index != nil {
 		a.Index = p.newWord(h.index, h.index[0].Pos, p.tok.End)
+		a.IndexFlags = p.assignIndexFlags(h.index)
 	}
 	// The value is what is left of the span holding the `=`, plus every span
 	// after it — which is why the head reports a position rather than a count.

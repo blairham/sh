@@ -1517,6 +1517,21 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 // that the panel does not answer alike, and guessing at it would be worse than
 // leaving it alone.
 func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
+	if e.IndexFlags != nil {
+		// A flag group names the element, exactly as it does on the left of
+		// an ordinary assignment: `${b[(r)y]:=V}` writes where the search
+		// found, and `${b[(i)nomatch]:=V}` one past the last. The subscript
+		// behind the group is a *pattern* rather than an expression, so the
+		// arithmetic reading below cannot be reached with it.
+		n, ok := r.flaggedAssignIndex(&syntax.Assign{
+			Name: e.Name, Index: e.Subscript(), IndexFlags: e.IndexFlags,
+		})
+		if !ok {
+			return
+		}
+		r.setArrayElem(e.Name, n, r.subscriptAsWritten(e.Subscript()), v)
+		return
+	}
 	idx := r.subscriptText(e.Subscript())
 	if wholeArraySubscript(idx) {
 		// The rule above, made explicit for the associative path too — and

@@ -92,6 +92,7 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 // The unread count above is what keeps the six honest.
 func corpusGrammar() syntax.Dialect {
 	d := syntax.Core()
+	d.ArraySubscriptFlags = true
 	d.CaseContinue = true
 	// And zsh's spelling of the same terminator. No real shell has both —
 	// each refuses the other's — so this pair is a superset the printer is

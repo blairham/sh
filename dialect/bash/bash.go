@@ -90,6 +90,11 @@ func Dialect() syntax.Dialect {
 	// script this used to refuse, which is what a CI syntax check runs.
 	// interp.Semantics.ForNameWhenTheLoopRuns is what happens then (#1110).
 	d.ForNameCheckedWhenTheLoopRuns = true
+	// And where the variable is missing outright, the newline this shell
+	// terminates its input with is the token left standing: `for` alone is
+	// `syntax error near unexpected token `newline'` rather than the
+	// unfinished-construct wording a bare `while` gets (#1319).
+	d.ForNameEndOfInputIsANewline = true
 	// `coproc cat` with the near ends in COPROC. zsh's coprocess speaks
 	// `print -p` rather than an array and is a different feature.
 	d.Coproc = true

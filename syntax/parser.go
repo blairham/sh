@@ -2636,6 +2636,37 @@ func (p *Parser) forName(word string) (name, refused string, ok bool) {
 		// whether the word is a name is the loop's.
 		return "", p.forNameAsWritten(), true
 	}
+	if p.tok.Kind != TokWord && !p.dialect.ForNonWordIsANameError {
+		// Nothing that could be a name stands here at all, and the grammar
+		// gets to complain about the token before the loop gets to complain
+		// about the name. `for`, a newline after `for`, `for ;` — three of
+		// the four dialects call each of those what they call the same token
+		// anywhere else, so the failure is an ordinary one and the expected
+		// word is the one the header is heading for.
+		//
+		// It reached the name check with the end of input in hand instead,
+		// which named `end of input` as though a script had written it and
+		// carried ForNameStatus rather than the dialect's parse-error status
+		// — 1 where bash answers 2 and ksh93 answers 3 (#1319).
+		//
+		// The end of the input is a token like any other here, and goes
+		// through failUnexpected for the same reason every other construct's
+		// does: it is that call which knows an unterminated construct from an
+		// unwanted token, and the two are worded differently by every shell
+		// in the panel.
+		//
+		// Except where the input's end *is* a newline, which is one dialect's
+		// answer rather than a third classification: the token it names is the
+		// newline it appended, at the position the text ran out. Built here
+		// rather than lexed, because nothing else in the grammar could see it
+		// — every other position takes a newline and would consume this one.
+		if p.tok.Kind == TokEOF && p.dialect.ForNameEndOfInputIsANewline {
+			p.failUnexpectedAt(Token{Kind: TokNewline, Pos: p.tok.Pos}, "do", false)
+			return "", "", false
+		}
+		p.failUnexpected("do")
+		return "", "", false
+	}
 	if p.err == nil {
 		p.err = &Error{
 			Pos: p.tok.Pos, Kind: ErrForName,

@@ -991,10 +991,65 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 
 // closedFd is a descriptor that has been closed with `>&-`. Reading or writing
 // it fails the way the kernel would.
+//
+// It is a marker as much as a stream. Everything the shell does through the
+// descriptor itself already fails here, but the value also has to survive as
+// far as childIn and childOut, which is what tells an external command that
+// the number is closed rather than merely empty. So nothing wraps one — see
+// lockWriter, where the same rule already keeps a real file unwrapped.
 type closedFd struct{}
 
 func (closedFd) Write([]byte) (int, error) { return 0, syscall.EBADF }
 func (closedFd) Read([]byte) (int, error)  { return 0, syscall.EBADF }
+
+// closedInChild is the value that says *closed there* to a process this shell
+// starts, and it is a nil *os.File because that is the only spelling there is:
+// [os.ProcAttr] documents a nil entry in Files as the descriptor being closed
+// when the process starts, and os/exec hands an *os.File through to
+// [os.StartProcess] untouched. The table above descriptor 2 already says it
+// this way — see childFiles, where a gap is a nil and a nil is a close.
+//
+// Never assigned. It is a typed nil rather than an untyped one because the
+// type is the whole of what it carries.
+var closedInChild *os.File
+
+// childIn and childOut are a named stream on its way to an external command:
+// the stream itself, or a closed descriptor where the script closed one.
+//
+// Handing closedFd over unchanged is the silent-wrong-answer bug #1260, and
+// the mechanism is worth writing down because nothing about it looks wrong at
+// the call site. os/exec connects a child straight to an *os.File and builds a
+// pipe for anything else, copying between the two; closedFd is not a file, so
+// the child was given a pipe, and the first copy failed with EBADF and closed
+// it. The child then read **end-of-file** — an *empty* descriptor, which is a
+// different thing from a closed one and the one thing it must not be confused
+// with. `exec 0<&-; cat` reported success and printed nothing, where dash,
+// bash 5.3, bash 3.2, ksh93 and zsh all say `cat: stdin: Bad file descriptor`
+// and exit 1. Unanimous, so this is the core's answer and not a dialect's.
+//
+// Both directions, and the write side is the same hole rather than a
+// sympathetic fix: `exec 1>&-; /bin/echo hi` answered 0 in silence against a
+// unanimous `echo: fflush: Bad file descriptor` at 1.
+//
+// The two halves of the descriptor table already agreed on this and only the
+// named streams did not, which is why the fix is here and not deeper: a
+// *numbered* descriptor closed with `exec 3>&-` reaches a child closed, and so
+// does a named stream handed to a *replacement*, because both of those routes
+// go through the nil-is-a-close table. Only the forked child's 0, 1 and 2 are
+// built by os/exec, and that is the one place the marker was being spent.
+func childIn(v io.Reader) io.Reader {
+	if _, closed := v.(closedFd); closed {
+		return closedInChild
+	}
+	return v
+}
+
+func childOut(v io.Writer) io.Writer {
+	if _, closed := v.(closedFd); closed {
+		return closedInChild
+	}
+	return v
+}
 
 // fdVarValue reads the descriptor number a `{name}` token names.
 //

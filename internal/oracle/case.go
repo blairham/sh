@@ -4936,6 +4936,26 @@ echo "st=$?"`,
 		Why:     "the same rule on the reading side, and the case that tells a closed stream from an empty one: a replacement handed the shell's own input would read to end of file and report success",
 	},
 	{
+		ID: "redir/a-closed-stdin-is-closed-for-a-command", Category: "redirection",
+		Snippet: `exec 0<&-; cat 2>e; echo "st=$?"; test -s e && echo diagnosed || echo silent`,
+		Why:     "the ordinary forked command, which is where the replacement rows above had no counterpart and where the answer was wrong (#1260): a stream the script closed is closed for the child too, so the read fails with EBADF instead of reaching end of file. Unanimous at 1 with a complaint, and status alone would not have caught it — a believable 0 in silence is exactly what a child handed an *empty* descriptor produces. So the row records whether anything was said as well as the number, and it records only *that* something was, because the wording belongs to whatever /bin/cat is on the machine",
+	},
+	{
+		ID: "redir/a-closed-stdout-is-closed-for-a-command", Category: "redirection",
+		Snippet: `( exec 1>&-; /bin/echo hi ) 2>e; echo "st=$?"; test -s e && echo diagnosed || echo silent`,
+		Why:     "the writing half of the same hole, which is its own measurement rather than a consequence of the reading one: an empty descriptor and a closed one differ for a writer too, and a write into a pipe nobody reads succeeds. Unanimous at 1 with a complaint. The subshell keeps the close off the shell's own standard output, so the status and the diagnostic are still readable",
+	},
+	{
+		ID: "redir/a-per-command-close-reaches-the-command", Category: "redirection",
+		Snippet: `cat <&- 2>e; echo "st=$?"; test -s e && echo diagnosed || echo silent`,
+		Why:     "the same fact without `exec`, so the rule is about what a command is handed and not about what the shell parks across commands. It is the pair with `redir/a-dup-prefix-is-that-commands-alone`: a prefixed duplication does not outlive its command, and it still has to reach it",
+	},
+	{
+		ID: "redir/an-empty-stdin-is-not-a-closed-one", Category: "redirection",
+		Snippet: `exec 0</dev/null; cat 2>e; echo "st=$?"; test -s e && echo diagnosed || echo silent`,
+		Why:     "the control that makes the three rows above discriminating, and the distinction the bug collapsed: /dev/null is a descriptor with nothing in it, so the read reaches end of file and the command succeeds in silence — 0 and nothing said, unanimously. A shell that answers this and `exec 0<&-` identically is right here and wrong there, and nothing in either row alone can tell",
+	},
+	{
 		ID: "redir/an-inherited-descriptor-keeps-its-number", Category: "redirection",
 		Snippet: `exec 5>g; /bin/sh -c "echo three >&3" 2>/dev/null; /bin/sh -c "echo five >&5" 2>/dev/null; exec 5>&-; cat g`,
 		Why:     "the discriminating case for how the table crosses: with 3 and 4 never opened, the file parked on 5 is still on 5 in the child and 3 is a hole, so the file holds `five`. A table packed from the bottom would put it on 3 and the file would hold `three`",

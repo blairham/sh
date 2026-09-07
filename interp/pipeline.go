@@ -134,6 +134,15 @@ func lockWriter(mu *sync.Mutex, w io.Writer) io.Writer {
 	if _, ok := w.(*os.File); ok {
 		return w
 	}
+	// A closed descriptor is left alone for the first of those reasons and
+	// for one of its own. There is no state behind closedFd to serialize —
+	// every write to it fails with the same errno whoever is writing — and
+	// the value is also the marker childOut reads to tell a child the number
+	// is closed. Wrapped, it is a writer like any other, and `exec 1>&-;
+	// /bin/echo hi &` handed the child an ordinary pipe again (#1260).
+	if _, ok := w.(closedFd); ok {
+		return w
+	}
 	if l, ok := w.(*lockedWriter); ok && l.mu == mu {
 		return l
 	}
@@ -148,6 +157,12 @@ func lockWriter(mu *sync.Mutex, w io.Writer) io.Writer {
 func (r *Runner) lockedStdin() io.Reader {
 	in := r.In()
 	if _, ok := in.(*os.File); ok {
+		return in
+	}
+	// And a closed descriptor is left alone for the reasons lockWriter gives
+	// on the other side: nothing to serialize, and a marker childIn has to
+	// still be able to see.
+	if _, ok := in.(closedFd); ok {
 		return in
 	}
 	return &lockedReader{mu: &r.streamLocks().in, r: in}

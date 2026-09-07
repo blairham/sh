@@ -1029,8 +1029,12 @@ func Diagnostics() interp.Diagnostics {
 		Unterminated:                "parse error near `%[5]s'",
 		UnmatchedQuote:              "unmatched %[1]s",
 		UnmatchedCmdSubst:           "parse error near `%[3]s'",
-		UnmatchedBraceSubst:         "closing brace expected",
-		SyntaxErrorStatus:           1,
+		// This shell prints at most twenty bytes of the word and marks it,
+		// and marks it at exactly twenty as well — see the field. The other
+		// three print the whole word or none of it.
+		UnmatchedNearMaxBytes: 20,
+		UnmatchedBraceSubst:   "closing brace expected",
+		SyntaxErrorStatus:     1,
 		// zsh alone answers "a syntax error" differently depending on where it
 		// read the text: 1 from -c, 126 from a file `.` opened.
 		SourcedSyntaxErrorStatus: 126,

@@ -1719,6 +1719,29 @@ type Diagnostics struct {
 	UnmatchedProcSubst string
 	// UnmatchedBraceSubst is `${` the input ran out inside. Same verbs.
 	UnmatchedBraceSubst string
+	// UnmatchedNearMaxBytes cuts the quoted text — %[3]s above, the word a
+	// construct ran out inside — to at most this many bytes, appending
+	// `...` where it is that long or longer. Zero prints the whole of it,
+	// which is what three of the four dialects want and is also right for
+	// the two that never render the text at all.
+	//
+	// Measured on the one dialect that elides, 2026-09-07, bisected by
+	// length: nineteen bytes come back whole, twenty come back with `...`
+	// after them although nothing was cut, and everything longer is cut to
+	// twenty and marked. So the ellipsis says "twenty or more" rather than
+	// "something was removed", and a limit that appended it only when it
+	// cut would be wrong on exactly the boundary case.
+	//
+	// **Bytes, and it cuts between them.** `v=$(echo héllo wörld aaaaaaa`
+	// comes back as `v=$(echo hör…` — eighteen characters in twenty bytes
+	// — and pushing a multibyte character across the boundary splits it:
+	// measured, a word whose twentieth byte begins `é`, `€` or an emoji
+	// answers with that character's lead byte alone, `Ã`, `â`,
+	// `ð`, and the diagnostic is not valid UTF-8. So this is a byte
+	// slice and deliberately not a rune-aware one — rounding down to a
+	// character boundary would be a nicer diagnostic than the shell's and
+	// would not match it.
+	UnmatchedNearMaxBytes int
 	// UnmatchedReportedAtOpener puts an unmatched quote's diagnostic on
 	// the line the opener is on rather than the line the input ran out on.
 	UnmatchedReportedAtOpener bool
@@ -2638,6 +2661,19 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 	return msg
 }
 
+// nearText is the quoted word an unmatched construct ran out inside, cut to
+// the length this dialect prints.
+//
+// See UnmatchedNearMaxBytes for the measurement. The comparison is `>=` and
+// not `>` because the shell appends its ellipsis at exactly the limit, with
+// nothing removed, and the slice is by byte because the shell's is.
+func (d Diagnostics) nearText(text string) string {
+	if d.UnmatchedNearMaxBytes <= 0 || len(text) < d.UnmatchedNearMaxBytes {
+		return text
+	}
+	return text[:d.UnmatchedNearMaxBytes] + "..."
+}
+
 func (d Diagnostics) ParseFailure(err error) string {
 	var se *syntax.Error
 	if !errors.As(err, &se) {
@@ -2682,7 +2718,7 @@ func (d Diagnostics) ParseFailure(err error) string {
 			form = d.UnmatchedBraceSubst
 		}
 		return Wording(form, se.Msg,
-			se.Token, se.Expected, se.LastToken, se.Pos.Line, se.EofLine)
+			se.Token, se.Expected, d.nearText(se.LastToken), se.Pos.Line, se.EofLine)
 	case syntax.ErrUnterminated:
 		form := d.Unterminated
 		if se.Construct == "" && d.UnterminatedNoConstruct != "" {

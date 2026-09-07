@@ -127,6 +127,12 @@ func TestOneFieldIsNotEnoughToSayWhichReadingApplies(t *testing.T) {
 		// A split that found nothing to split leaves a string, and a join
 		// leaves one as well — both measured.
 		{"a split with one field is a string", `v=abc; printf "[%s]" ${${(f)v}[2]}`, "[b]"},
+		// Over an *array*, which is the discriminating half: the split joins
+		// its elements first and what it leaves is a string, where the name
+		// on its own is a list.
+		{"a split over an array leaves a string", `a=(hello); printf "[%s]" ${${(f)a}[2]}`, "[e]"},
+		{"an `s` split over one too", `a=(hello); printf "[%s]" ${${(s.,.)a}[2]}`, "[e]"},
+		{"and a `${=v}` split", `a=(hello); printf "[%s]" ${${=a}[2]}`, "[e]"},
 		{"a join is a string", `a=(pq rs); printf "[%s]" ${${(j.,.)a}[3]}`, "[,]"},
 		// A flag that neither splits nor joins keeps the list it was given.
 		{"a case flag keeps the list", `a=(abc); printf "[%s]" ${${(U)a}[2]}`, "[]"},
@@ -141,6 +147,10 @@ func TestOneFieldIsNotEnoughToSayWhichReadingApplies(t *testing.T) {
 		// a string, the next is a list.
 		{"a substituted word decides for itself", `a=(x y z); printf "[%s]" ${${a:+abc}[2]}`, "[b]"},
 		{"a substituted list stays a list", `a=(abc); unset u; printf "[%s]" ${${u:-$a}[2]}`, "[]"},
+		// The word's *own* spans decide, so a scalar in it is a string and
+		// quoting a list in it makes one.
+		{"a substituted scalar is a string", `v=abc; unset u; printf "[%s]" ${${u:-$v}[2]}`, "[b]"},
+		{"a substituted quoted list joins", `a=(x y z); unset u; printf "[%s]" ${${u:-"$a"}[2]}`, "[ ]"},
 		// `(A)` says outright that what it made is an array, where the value
 		// it was given was a string.
 		{"the (A) flag makes a list", `v=abc; printf "[%s]" ${${(A)v}[2]}`, "[]"},

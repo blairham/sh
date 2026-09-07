@@ -44,6 +44,49 @@ the core language, and no way to ask for a longer or shorter match —
 `${x#pat}` and `${x##pat}` choose that by doubling the *operator*, not by
 anything inside the pattern.
 
+### A backslash escapes every character, or only a metacharacter
+
+A backslash in a pattern marks the next character as ordinary. What the
+panel disagrees about is what happens when the next character was
+ordinary already.
+
+**Asking it takes care, because quote removal answers first.** An escape
+written in the source is spent before the matcher ever sees it, so a
+`case` pattern spelled `bet\a` is the pattern `beta` in all six shells
+and says nothing about this. What does ask it is a pattern the matcher
+receives with a *raw* backslash in it — a substituted one, in the five
+shells that match the result of an expansion, and the same two lines
+under `setopt globsubst` in the one that does not:
+
+    p='bet\a'; case beta in $p) … ;; esac
+
+| shell | |
+| --- | --- |
+| bash 5.3, bash as `sh`, bash 3.2, dash, ksh93 | matches — the backslash is spent |
+| zsh 5.9.2 | does not match; `bet\a` matches the five characters |
+
+`Semantics.PatternEscapeReaches` is that answer: the empty string means
+every character, and a set means a backslash before anything outside it
+is a literal backslash with the character after it standing on its own.
+zsh names its pattern metacharacters, measured character by character:
+
+    escaped:      - = ! * ? [ ] ( ) | ^ ~ # < >
+    not escaped:  letters, digits, _ . / + : % & @ , " ' space { } $
+
+The backslash itself is in the set — `x\\y` matches one backslash there
+and not two — which is what keeps a glob-escaped value literal.
+
+The reachable route in the zsh dialect is a subscript search operand,
+which is not a quoting context, so a backslash written in one arrives
+raw: `a=('bet\a' beta); ${a[(r)bet\a]}` is the first element there and
+would be the second under the other answer. See
+`parameter-expansion.md`.
+
+One row is deliberately not modeled. dash escapes every character **but
+`^`**: a pattern `x\^y` does not match `x^y` there, where `x\.y` matches
+`x.y`. One character of one shell, recorded in the corpus and filed
+rather than given a value.
+
 ## Bracket expressions
 
 | form | meaning | dash | bash | ksh93 | zsh |

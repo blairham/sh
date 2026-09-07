@@ -150,6 +150,7 @@ func TestSemantics(t *testing.T) {
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.No},
 		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.No},
 		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.Yes},
+		{"SubscriptIsAQuotingContext", s.SubscriptIsAQuotingContext, interp.No},
 		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.Yes},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.Yes},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.No},

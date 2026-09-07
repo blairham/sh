@@ -206,6 +206,18 @@ type patternOpts struct {
 	// only ever moves when the pattern or the subject holds a byte above
 	// ASCII, which is where the callers ask.
 	chars bool
+	// escapes is the set of characters a backslash escapes. Empty means
+	// every character, which is five of the six shells' answer; a set means
+	// a backslash before anything outside it is a literal backslash and the
+	// character after it stands on its own. See
+	// Semantics.PatternEscapeReaches, which is where it is measured.
+	escapes string
+}
+
+// escapeReaches reports whether a backslash escapes c rather than standing
+// for itself.
+func (o patternOpts) escapeReaches(c byte) bool {
+	return o.escapes == "" || strings.IndexByte(o.escapes, c) >= 0
 }
 
 // unitWidth is how many bytes of a non-empty subject one `?` consumes, one
@@ -323,6 +335,18 @@ func matchHere(p, s string, o patternOpts) bool {
 			// An escaped metacharacter is an ordinary character.
 			if len(p) < 2 {
 				return s == "\\"
+			}
+			if !o.escapeReaches(p[1]) {
+				// The escape does not reach this character in this
+				// dialect, so the backslash is a character of its own and
+				// what follows it is matched on its next turn round the
+				// loop — `bet\a` is five characters there and matches
+				// `beta` not at all.
+				if s == "" || s[0] != '\\' {
+					return false
+				}
+				p, s = p[1:], s[1:]
+				continue
 			}
 			if s == "" || !eqByte(p[1], s[0], o.fold) {
 				return false
@@ -797,6 +821,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		group:        r.dialect().PatternAlternation,
 		quantified:   r.readsQuantifiedGroups(false),
 		numericRange: r.dialect().NumericRangePattern,
+		escapes:      r.sem().PatternEscapeReaches,
 	}
 }
 

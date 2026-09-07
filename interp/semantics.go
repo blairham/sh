@@ -2267,6 +2267,70 @@ type Semantics struct {
 	// `${a[2,2]}` — one element under either — from needing an answer.
 	SubscriptCommaIsARange Answer
 
+	// SubscriptIsAQuotingContext runs an associative array's subscript
+	// through quote removal, so the key is the text *inside* its quotes and
+	// escapes. True in bash and ksh93; false in zsh, where the subscript is
+	// taken exactly as written — substitutions performed, and every other
+	// character, quotes and backslashes included, kept.
+	//
+	// Measured 2026-09-07. Storing under one spelling and reading with the
+	// other is what makes it visible, because a key that is one string in
+	// both shells hides it:
+	//
+	//	m["k"]=W; kk='"k"'   ${m[$kk]}  bash, ksh93 ""    zsh W
+	//	                     ${m[k]}    bash, ksh93 W     zsh ""
+	//	v=k; q[k]=K          ${q["$v"]} bash, ksh93 K     zsh ""
+	//	                     ${q[$v]}   bash, ksh93 K     zsh K
+	//
+	// The last pair is the crisp form of it: the substitution is performed
+	// under both answers and only the quote characters around it differ, so
+	// this is a rule about *quoting* and not about expansion.
+	//
+	// It is one rule with the search operand PR #1101 landed, reached from
+	// the other side — `${b[(r)"beta"]}` finds an element whose value is the
+	// six characters `"beta"` — which is why the two share
+	// Runner.searchOperand rather than reconstructing the text twice.
+	//
+	// Two things stay unanimous and must not move with it. A bare `@` or `*`
+	// is still the whole array in all three; *quoted*, it is a key, so
+	// `${n["@"]}` looks one up and finds nothing. And no shell in the panel
+	// space-trims an associative key: `${p[ s ]}` looks up three characters
+	// in all three, so a key stored under `s` is not found by it. dash has no
+	// arrays, which is why the axis is absent there rather than false.
+	SubscriptIsAQuotingContext Answer
+
+	// PatternEscapeReaches is the set of characters a backslash escapes
+	// inside a pattern. Empty means **every** character, which is bash's
+	// answer, bash 3.2's, bash as `sh`'s, dash's and ksh93's: `bet\a` matches
+	// `beta` there, the backslash spent on a character that needed none.
+	//
+	// zsh names a set instead, and it is exactly its pattern
+	// metacharacters — a backslash before anything else is a literal
+	// backslash *and* the character after it, so `bet\a` matches the five
+	// characters `bet\a` and matches `beta` not at all.
+	//
+	// Measured 2026-09-07 by handing the matcher a raw backslash, which is
+	// the only way to ask: quote removal takes an escape off a pattern
+	// written in the source before the matcher ever sees it, so a `case`
+	// pattern spelled `bet\a` is `beta` in all six and says nothing about
+	// this. What does ask it is a *substituted* pattern — `p='bet\a'; case
+	// beta in $p)` in the five shells that match the result of an expansion,
+	// and `setopt globsubst` with the same two lines in zsh, which does not.
+	//
+	//	escaped in zsh:      - = ! * ? [ ] ( ) | ^ ~ # < >
+	//	not escaped in zsh:  letters, digits, _ . / + : % & @ , " ' space { } $
+	//
+	// The set is written down rather than derived from the other pattern
+	// answers because it is not the same set: `-`, `=`, `!`, `^`, `~` and `#`
+	// are in it, and this matcher gives none of the six a meaning of its own
+	// in a pattern.
+	//
+	// One row is deliberately not modeled. dash escapes every character but
+	// `^`: a pattern `x\^y` does not match `x^y` there, where `x\.y` matches
+	// `x.y`. One character of one shell, recorded in the corpus and filed
+	// rather than given a value here.
+	PatternEscapeReaches string
+
 	// ScalarSubscriptIsACharacter reads `${s[2]}` on a plain string as its
 	// second character, rather than as an element of the one-element array a
 	// scalar reads as.
@@ -4898,8 +4962,9 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		// serves — `case` and `[[ ]]` — and neither of the others: pathname
 		// expansion has a fold of its own, and parameter expansion stays
 		// exact. Which is why the fold sits here and not in patternOpts.
-		fold:  r.MatchOption(MatchFoldsCase),
-		chars: r.patternCountsCharacters(pattern, s),
+		fold:    r.MatchOption(MatchFoldsCase),
+		chars:   r.patternCountsCharacters(pattern, s),
+		escapes: r.sem().PatternEscapeReaches,
 	}
 	var bad bool
 	if hasUnterminatedBracket(pattern) {

@@ -105,6 +105,11 @@ func Semantics() interp.Semantics {
 	// trailing separator makes no field — so this one answer is what the
 	// panel's two shapes of disagreement both come from.
 	s.UnquotedListJoinsOnIFS = interp.Yes
+	// An associative array's subscript is a quoting context here: the key is
+	// the text inside its quotes, so `m["k"]=W` stores under `k` and
+	// `${m["k"]}` reads it back. zsh takes the subscript as written and
+	// stores under the three characters.
+	s.SubscriptIsAQuotingContext = interp.Yes
 	// The other join, and the opposite answer: where an unquoted `@` list
 	// reaches a context that keeps no fields, this shell rejoins it on a
 	// hard space rather than on IFS. `IFS=-; a=(x y z); v=${a[@]}` is

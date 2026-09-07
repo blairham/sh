@@ -413,6 +413,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `assoc/the-subscript-is-not-arithmetic` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[1+1]=x: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x]` | `[x]` | `[x]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[x]` | `[x]` |
 | `assoc/values-in-some-order` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[b]=2: not found~<shell>: 1: m[a]=1: not found~<shell>: 1: Bad substitution~<shell>: 1: Bad substitution` *(status 2)* | `1 2 n=2` | `1 2 n=2` | `1 n=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1 2 n=2` | `1 2 n=2` |
 | `assoc/a-compound-literal-and-unset` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=1 b=2 a=gone` | `n=1 b=2 a=gone` | `n=0 b= a=gone` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `n=1 b=2 a=gone` | `n=1 b=2 a=gone` |
+| `assoc/a-quoted-key-keeps-its-quotes-or-does-not` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=W: not found~<shell>: 1: Bad substitution` *(status 2)* | `[][W]` | `[][W]` | **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: "k": syntax error: operand expected (error token is ""k"")` *(status 1)* | `[][W]` | `[W][]` |
+| `assoc/a-quoted-substitution-in-a-key` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: q[k]=K: not found~<shell>: 1: Bad substitution` *(status 2)* | `[K][K]` | `[K][K]` | `[K][K]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[K][K]` | `[K][]` |
+| `assoc/a-key-is-not-space-trimmed` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: p[s]=T: not found~<shell>: 1: Bad substitution` *(status 2)* | `[][T]` | `[][T]` | `[T][T]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[][T]` | `[][T]` |
+| `assoc/a-quoted-at-is-a-key` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: n[a]=1: not found~<shell>: 1: n[b]=2: not found~<shell>: 1: Bad substitution` *(status 2)* | `bare=2 quoted[]` | `bare=2 quoted[]` | `bare=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: @: syntax error: operand expected (error token is "@")` *(status 1)* | `bare=2 quoted[]` | `bare=2 quoted[]` |
+| `subscript/a-search-operand-keeps-a-backslash` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: (r)bet\a: arithmetic syntax error: invalid arithmetic operator (error token is "\a")` *(status 1)* | **2>** `<shell>: line 1: (r)bet\a: arithmetic syntax error: invalid arithmetic operator (error token is "\a")` *(status 1)* | **2>** `<shell>: (r)beta: syntax error in expression (error token is "beta")` *(status 1)* | **2>** `<shell>: (r)beta: arithmetic syntax error` *(status 1)* | `[bet\a]` |
 | `subst/a-case-inside-a-substitution` | `[yes]` | `[yes]` | `[yes]` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;;'~<shell>: -c: line 0: `x=$(case a in a) echo yes;; esac); echo "[$x]"'` *(status 2)* | `[yes]` | `[yes]` |
 | `subst/a-substitution-inside-an-arm` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` |
 | `glob/matches-are-in-order` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` |
@@ -1229,6 +1234,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `assoc/a-compound-literal-and-unset` — the `([k]=v …)` literal keys its elements rather than counting them, and `unset m[k]` takes one key rather than doing nothing — unanimous in the three that have the attribute, and the removed element is gone rather than empty
   ```sh
   typeset -A m; m=([a]=1 [b]=2); unset "m[a]"; echo "n=${#m[@]} b=${m[b]} a=${m[a]:-gone}"
+  ```
+- `assoc/a-quoted-key-keeps-its-quotes-or-does-not` — the two readings of a quoted subscript, told apart by storing under one spelling and reading with the other — a key that is one string under both would hide it. bash and ksh93 run the subscript through quote removal, so the key is `k` and the second read finds `W`; zsh takes it as written, so the key is the three characters and the *first* read finds it. dash has no attribute and refuses the line
+  ```sh
+  typeset -A m; m["k"]=W; kk='"k"'; printf '[%s]' "${m[$kk]}" "${m[k]}"; echo
+  ```
+- `assoc/a-quoted-substitution-in-a-key` — the crisp form of the same question: the substitution is performed under both readings and only the quote characters around it differ. bash and ksh93 find the element both ways; zsh finds it bare and not quoted, because there the key is `"k"`. So it is a rule about quoting rather than about expansion
+  ```sh
+  typeset -A q; q[k]=K; v=k; printf '[%s]' "${q[$v]}" "${q["$v"]}"; echo
+  ```
+- `assoc/a-key-is-not-space-trimmed` — unanimous in the three shells with the attribute, and the row this implementation answered wrongly: a subscript's blanks belong to the key, so `${p[ s ]}` looks up three characters and finds nothing. The trimming an *arithmetic* subscript can afford — the evaluator ignores blanks — is wrong here
+  ```sh
+  typeset -A p; p[s]=T; printf '[%s]' "${p[ s ]}" "${p[s]}"; echo
+  ```
+- `assoc/a-quoted-at-is-a-key` — the guard on the reading above: a *bare* `@` is still the whole array in all three, and a quoted one is a key — so the quoted spelling finds nothing, since nothing is stored under it. A fix that took the subscript as written everywhere would turn `${n[@]}` into a lookup and lose the whole-array spelling. The bare spelling is counted rather than printed, because the order an associative array yields its values in is not a fact this corpus can record
+  ```sh
+  typeset -A n; n[a]=1; n[b]=2; printf 'bare=%d' "${#n[@]}"; printf ' quoted[%s]' "${n["@"]}"; echo
+  ```
+- `subscript/a-search-operand-keeps-a-backslash` — the pattern half of the same rule, on the one construct that reaches it: a backslash before a character that needed no escaping is two characters of the pattern in zsh, so the operand finds the element whose value holds a backslash and does not find `beta`. The other five have no flag group in a subscript and read the whole thing as arithmetic, which is a diagnostic rather than an answer
+  ```sh
+  a=('bet\a' beta); printf '[%s]\n' "${a[(r)bet\a]}"
   ```
 - `subst/a-case-inside-a-substitution` — where a substitution ends is a question about the grammar and not about how many parentheses have been counted: an arm's `)` closes nothing, so counting stops early and takes half the arm with it. Unanimous, and the shape that made two installed scripts parse into a tree nobody wrote
   ```sh
@@ -7665,6 +7690,17 @@ grades it and nothing drift-checks it either, for the same reason.
 - `commands/an-and-or-operator-at-the-end-of-input` — the operator with nothing whatever after it, which is a question about the *route* and not only the grammar: zsh takes it here and prints `one`, and the same text typed at a terminal draws a continuation prompt in zsh, bash and ksh93 alike — measured through a pty. So the end of a `-c` string ends the list where the end of a line does not, and the four refusing columns each say the input ran out rather than naming a token. ksh93 refuses it while accepting the `;` form two cases up, which is what says its leniency is the separator's and not the list's
   ```sh
   echo one &&
+  ```
+
+## patterns
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `pattern/an-escape-before-an-ordinary-character` | `strips~no` | `strips~no` | `strips~no` | `strips~no` | `strips~no` | `keeps~literal` |
+
+- `pattern/an-escape-before-an-ordinary-character` — the pattern language's own answer, asked the only way it can be: quote removal spends an escape written in the source before the matcher sees it, so a `case` pattern spelled `bet\a` is `beta` in all six and says nothing. A *substituted* pattern asks it — five shells match the result of an expansion as a pattern, and the sixth does under the option this line sets. A backslash before a character that needed no escaping is spent in five and kept in zsh, where the pattern is five characters
+  ```sh
+  setopt globsubst 2>/dev/null; p='bet\a'; case beta in $p) echo strips;; *) echo keeps;; esac; case 'bet\a' in $p) echo literal;; *) echo no;; esac
   ```
 
 ## syntax errors

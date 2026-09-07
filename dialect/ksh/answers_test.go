@@ -78,6 +78,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.Yes},
 		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.Yes},
 		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.No},
+		{"SubscriptIsAQuotingContext", s.SubscriptIsAQuotingContext, interp.Yes},
 		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.No},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.Yes},

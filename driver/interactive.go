@@ -242,9 +242,21 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		Report: func(err error) string {
 			return dg.ParseDiagnostic(name, "", err, "")
 		},
-		Style:   sh.PromptStyle,
-		Editor:  sh.EditorStyle,
-		History: sh.HistoryStyle,
+		// And it leaves the same status behind that it would as a script,
+		// from the same table: what a shell answers `$?` with after a refused
+		// line is the number it would have exited with. Measured on five of
+		// the six panel columns; bash 3.2 alone answers 258 at a prompt where
+		// it exits 2, and 258 is not a number a process can exit with.
+		//
+		// Handing over the dialect's own function rather than a number keeps
+		// the two routes from drifting: a `for` whose name is not one is a
+		// parse failure to us and a run-time failure to bash, and it carries
+		// bash's run-time status through here for the same reason it does
+		// through a script.
+		ParseFailureStatus: dg.StatusForParseError,
+		Style:              sh.PromptStyle,
+		Editor:             sh.EditorStyle,
+		History:            sh.HistoryStyle,
 		// And what it runs between commands, which is one dialect's `precmd`
 		// and `preexec` and nothing at all for the other three.
 		Hooks: sh.HookStyle,

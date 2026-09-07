@@ -122,6 +122,12 @@ func TestSemantics(t *testing.T) {
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
 		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},
+		// The only shell in the panel that reports *every* option word `set`
+		// cannot use before it gives up, with one usage block after them all
+		// (#1170). Unpinned until mutation testing flipped this preset to No
+		// and nothing failed — the behavior had tests and the *answer* did
+		// not, which is the half a preset table exists to hold.
+		{"SetReportsEveryBadOption", s.SetReportsEveryBadOption, interp.Yes},
 		// The other shell with the array letter, and it leaves 1 on both
 		// routes — which is what makes the zero that shell's quirk rather
 		// than the letter's rule (#1172).

@@ -178,6 +178,10 @@ func TestSemantics(t *testing.T) {
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.Yes},
 		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},
+		// One line for a bad option word here, and the reason is the
+		// fatality rather than a rule: the loop never reaches the second
+		// word. Pinned so that staying on this answer is a decision (#1170).
+		{"SetReportsEveryBadOption", s.SetReportsEveryBadOption, interp.No},
 		// `set -A` refusing a name that is not one leaves 0 behind when the
 		// program came from an argument and 1 from a script file. Measured
 		// on every neighboring refusal too, all of which leave 1 (#1172).

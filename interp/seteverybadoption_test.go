@@ -212,3 +212,41 @@ func TestOnlyARefusalThatWantsAUsageBlockGetsOne(t *testing.T) {
 		t.Errorf("a letter behind a name:\n got %q\nwant %q", got, wantMixed)
 	}
 }
+
+// The axis is the *builtin's* and not the front end's.
+//
+// A shell's own option parse is a different surface with its own measured
+// quirks — the shell that reports every bad word here answers `ksh -q -z`
+// with a spurious `- : unknown option` between the two, and folds the whole
+// of the rest of argv into a `-o` complaint — so it keeps stopping at the
+// first word until those are settled. `reportsEveryBadSetOption` excludes
+// the invocation and environment routes for that reason, and dropping either
+// exclusion survived every test in the tree until this one.
+func TestReportingEveryBadOptionDoesNotReachTheInvocationRoute(t *testing.T) {
+	sem := PosixSemantics()
+	sem.SetReportsEveryBadOption = Yes
+	sem.BadSetOptionNameFatal = No
+	sem.FatalErrorStatusIsOne = No
+	dg := Diagnostics{
+		Location:               LocationNone,
+		SetInvalidOptionLetter: "set: %[2]s: unknown option",
+		SetInvalidOptionStatus: 2,
+		BuiltinUsage:           map[string]string{"set": "Usage: set [-abc]"},
+		BuiltinUsageUnprefixed: true,
+	}
+	var buf strings.Builder
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh",
+	})
+	// The front end's way in, which is what sets atInvocation.
+	r.SetOptionLetters("qz", true)
+	got := buf.String()
+	// One letter reported, not both: the invocation parse stops at the first
+	// the way every dialect's builtin used to.
+	if n := strings.Count(got, "unknown option"); n != 1 {
+		t.Errorf("reported %d bad letters at an invocation, want 1: %q", n, got)
+	}
+	if strings.Contains(got, "z: unknown option") {
+		t.Errorf("output %q, want only the first letter reported", got)
+	}
+}

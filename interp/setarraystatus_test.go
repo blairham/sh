@@ -66,7 +66,42 @@ func TestOnlySetArraysBadNameTakesTheZero(t *testing.T) {
 	}
 }
 
+// The zero is for a refusal that ended the shell, and only for that.
+//
+// The guard has two halves — the route, and the refusal having been fatal —
+// and the second is what this covers: in a dialect where a bad name is *not*
+// fatal, `set -A` still refuses the name and returns, and what it returns is
+// the refusal's own status rather than 0. A guard that only asked about the
+// route would zero that too, which is a `set` reporting a name it would not
+// take and telling its caller it succeeded.
+//
+// Found by mutation: dropping `r.ctl == controlExit` from the guard survived
+// every test in the tree.
+func TestTheZeroIsOnlyForARefusalThatEndedTheShell(t *testing.T) {
+	for _, tc := range []struct {
+		why   string
+		fatal Answer
+		want  int
+	}{
+		{"fatal, so the shell ends and leaves 0 behind", Yes, 0},
+		{"not fatal, so the refusal's own status stands", No, 1},
+	} {
+		_, errs, st := setArrayStatusRunFatality(t, "set -A 1bad v\n", Yes, RouteCommandString, tc.fatal)
+		if errs == "" {
+			t.Fatalf("%s: nothing was reported, so this row is not the refusal it names", tc.why)
+		}
+		if st != tc.want {
+			t.Errorf("%s: status %d, want %d", tc.why, st, tc.want)
+		}
+	}
+}
+
 func setArrayStatusRun(t *testing.T, src string, answer Answer, route Route) (string, string, int) {
+	t.Helper()
+	return setArrayStatusRunFatality(t, src, answer, route, Yes)
+}
+
+func setArrayStatusRunFatality(t *testing.T, src string, answer Answer, route Route, fatal Answer) (string, string, int) {
 	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
@@ -79,7 +114,7 @@ func setArrayStatusRun(t *testing.T, src string, answer Answer, route Route) (st
 	sem.SetArrayOptionsContinuePastTheName = No
 	sem.SetArrayWithNoValuesUnsetsTheName = No
 	sem.ArrayBaseIsZero = Yes
-	sem.BadNameToDeclarationFatal = Yes
+	sem.BadNameToDeclarationFatal = fatal
 	sem.BadSetOptionNameFatal = Yes
 	sem.FatalErrorStatusIsOne = Yes
 	sem.SetArrayBadNameLeavesZeroFromCommandString = answer

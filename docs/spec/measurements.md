@@ -7077,6 +7077,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/a-duplication-target-that-expands-to-two-digits` | *(no output, status 2)* | `st=1` | `st=1` | `hi~st=0` | `st=1` | `st=1` |
 | `pipe/both-streams-is-a-pipe-in-two-shells-and-a-coprocess-in-one` | **2>** `<script>: 2: Syntax error: "&" unexpected` *(status 2)* | `<O>~<E>` | `<O>~<E>` | **2>** `<script>: line 2: syntax error near unexpected token `&'~<script>: line 2: `f \|& while read l; do echo "<$l>"; done'` *(status 2)* | **2>** `E` | `<O>~<E>` |
 | `pipe/both-streams-redirection-comes-last` | **2>** `<script>: 2: Syntax error: "&" unexpected` *(status 2)* | `<O>~<E>` | `<O>~<E>` | **2>** `<script>: line 2: syntax error near unexpected token `&'~<script>: line 2: `e 2>/dev/null \|& while read l; do echo "<$l>"; done'` *(status 2)* | *(no output, status 0)* | `<O>~<E>` |
+| `pipe/a-coprocess-is-spelled-as-an-operator` | **2>** `<script>: 1: Syntax error: "&" unexpected` *(status 2)* | `got=[]` **2>** `<script>: line 2: print: command not found` | `got=[]` **2>** `<script>: line 2: print: command not found` | **2>** `<script>: line 1: syntax error near unexpected token `&'~<script>: line 1: `cat \|&'` *(status 2)* | `got=[hello]` | `got=[]` **2>** `<script>:print:2: -p: no coprocess~<script>:read:3: -p: no coprocess` |
+| `pipe/a-coprocess-operator-ends-the-whole-and-or` | **2>** `<script>: 1: Syntax error: "&" unexpected` *(status 2)* | `A~read=[]` | `A~read=[]` | **2>** `<script>: line 1: syntax error near unexpected token `&'~<script>: line 1: `echo A && cat \|&'` *(status 2)* | `read=[A]` | `A~read=[]` **2>** `<script>:read:2: -p: no coprocess` |
+| `pipe/a-second-coprocess-while-one-runs-is-refused` | **2>** `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `second=0~after` | `second=0~after` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `cat \|& cat \|& echo "second=$?"; echo after'` *(status 2)* | **2>** `<shell>: process already exists` *(status 1)* | `second=0~after` |
 | `pipe/both-streams-takes-no-blank-between-its-two-bytes` | **2>** `<script>: 1: Syntax error: "&" unexpected` *(status 2)* | **2>** `<script>: line 1: syntax error near unexpected token `&'~<script>: line 1: `echo one \| & echo two'` *(status 2)* | **2>** `<script>: line 1: syntax error near unexpected token `&'~<script>: line 1: `echo one \| & echo two'` *(status 2)* | **2>** `<script>: line 1: syntax error near unexpected token `&'~<script>: line 1: `echo one \| & echo two'` *(status 2)* | *(no output, status 0)* | **2>** `<script>:1: parse error near `&'` *(status 1)* |
 | `redir/a-failed-redirection-inside-a-subshell` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `inner~after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `inner~after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `inner~after` **2>** `<shell>:1: no such file or directory: /nope/x` |
 
@@ -7540,7 +7543,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   exec 2>/dev/null; n=10; echo hi >&$n; echo "st=$?"
   ```
-- `pipe/both-streams-is-a-pipe-in-two-shells-and-a-coprocess-in-one` — the two characters with two readings. bash 5.3 and zsh pipe both streams, so the reader brackets `O` and `E` alike; bash 3.2 has no `|&` at all and dash never had one, and both lex a bar and an ampersand and blame the ampersand; ksh93 reads a *coprocess* — the left side is backgrounded onto a pipe the shell would read with `read -p`, so the reader gets nothing and the coprocess's standard error reaches the terminal on its own. Three answers, one spelling, and the reason the ksh form cannot be this flag with another value. The reader brackets what reaches it so the row does not depend on which stream a column joins, and the `wait` is what makes the ksh column deterministic: without it the coprocess is racing the shell's exit and drops its line about once in ten
+- `pipe/both-streams-is-a-pipe-in-two-shells-and-a-coprocess-in-one` — the two characters with two readings. bash 5.3 and zsh pipe both streams, so the reader brackets `O` and `E` alike; bash 3.2 has no `|&` at all and dash never had one, and both lex a bar and an ampersand and blame the ampersand; ksh93 reads a *coprocess* — the left side is backgrounded onto a pipe the shell would read with `read -p`, so the reader gets nothing and the coprocess's standard error reaches the terminal on its own. Three answers, one spelling, and the reason the ksh form cannot be this flag with another value — the ksh93 column was red here on purpose until #1141 built the coprocess it was recording. The reader brackets what reaches it so the row does not depend on which stream a column joins, and the `wait` is what makes the ksh column deterministic: without it the coprocess is racing the shell's exit and drops its line about once in ten
   ```sh
   f() { echo O; echo E >&2; }
   f |& while read l; do echo "<$l>"; done
@@ -7552,7 +7555,24 @@ grades it and nothing drift-checks it either, for the same reason.
   e 2>/dev/null |& while read l; do echo "<$l>"; done
   wait
   ```
-- `pipe/both-streams-takes-no-blank-between-its-two-bytes` — the adjacency, which is what keeps the operator from taking a construct away from the shells that spell a background command with a bar before it: five of the six refuse this where four of them accept `|&` written closed up, and they refuse it in four wordings. ksh93 is the exception in both directions, because its `|&` is a coprocess rather than a pipe
+- `pipe/a-coprocess-is-spelled-as-an-operator` — the construct the operator *is*, where the three rows above only show what it is not. ksh93 backgrounds the command with a pipe on each of its named streams and `print -p` and `read -p` are how a script reaches them — there being no `coproc` word there and no name to publish under. bash 5.3 and zsh read the two bytes as a pipe of both streams instead, so `cat |&` needs a command after it and they refuse the newline; bash 3.2 and dash have no `|&` at all and blame the ampersand. One spelling, and the row that names the coprocess rather than the gap (#1141)
+  ```sh
+  cat |&
+  print -p hello
+  read -p line
+  echo "got=[$line]"
+  ```
+- `pipe/a-coprocess-operator-ends-the-whole-and-or` — which node the operator terminates, and it is the same one `&` terminates rather than the one a pipe binds to: `echo A`'s output arrives at the coprocess, so a `read -p` with nothing written to it still answers `A`. That is the row that says this cannot be a pipe operator with another meaning — a pipe joins the command in front of it, and this backgrounds everything before it
+  ```sh
+  echo A && cat |&
+  read -p l
+  echo "read=[$l]"
+  ```
+- `pipe/a-second-coprocess-while-one-runs-is-refused` — and the refusal that is the operator's own, where the `coproc` word replaces its predecessor silently in both shells that have it. ksh93 answers `process already exists` and ends the script, so `after` is never reached. Written on one line through `-c` deliberately: in a *file* ksh93 blames the line before the second operator rather than its own, which is an off-by-one in its reporting and not something worth reproducing — the divergence is written down in docs/spec/grammar/commands.md instead of copied (#1141)
+  ```sh
+  cat |& cat |& echo "second=$?"; echo after
+  ```
+- `pipe/both-streams-takes-no-blank-between-its-two-bytes` — the adjacency, which is what keeps the operator from taking a construct away from the shells that spell a background command with a bar before it: five of the six refuse this where four of them accept `|&` written closed up, and they refuse it in four wordings. ksh93 is the exception in both directions, because its `|&` is a coprocess rather than a pipe — and this row is the one of the three that stays red in the ksh93 column after #1141, the blank between the two bytes being a separate fact from the construct behind them
   ```sh
   echo one | & echo two
   ```

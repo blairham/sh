@@ -102,6 +102,11 @@ func Dialect() syntax.Dialect {
 	d.ExtendedPatternInCondition = true
 	// A bare `|` in a `=~` operand belongs to the regular expression.
 	d.RegexTakesAlternation = true
+	// `cmd |&` is this shell's coprocess: an operator that terminates a
+	// command, not the pipe carrying both streams that bash and zsh spell
+	// the same way. PipeBothStreams stays off, which is what keeps the two
+	// readings from ever both applying — see syntax.Dialect.
+	d.CoprocPipeOperator = true
 	// `time -p`, the POSIX report format, which bash also reads and zsh
 	// does not.
 	d.TimePosixFlag = true
@@ -935,8 +940,9 @@ func Diagnostics() interp.Diagnostics {
 			// letters for these two.
 			"wait": "-",
 			// What is left of read's letters: compound -C, -S's csv
-			// splitting and -v's default text. The -p coprocess is
-			// implemented as its measured refusal — see ReadNoCoprocess.
+			// splitting and -v's default text. `-p` is implemented: it
+			// reads the coprocess `cmd |&` started, and is
+			// ReadNoCoprocess's wording when none is running.
 			"read": "-CSv",
 			"type": "-qv",
 			// `jobs -n`: the jobs that have stopped or ended since this

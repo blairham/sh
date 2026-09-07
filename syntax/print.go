@@ -265,9 +265,14 @@ func (p *printer) stmt(st *Stmt) {
 		// the two goes back, which is the printer's usual bargain: `&!` and
 		// `&|` parse to the same tree, so there is nothing to choose
 		// between them and nothing a test could tell apart.
-		if st.Disown {
+		switch {
+		case st.Coprocess:
+			// The coprocess operator, which is a background terminator
+			// carrying two pipes rather than a pipe joining two commands.
+			p.str(" |&")
+		case st.Disown:
 			p.str(" &!")
-		} else {
+		default:
 			p.str(" &")
 		}
 	}

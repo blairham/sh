@@ -99,8 +99,9 @@ type Dialect struct {
 	// spells a *coprocess* with the same two characters, and it is not this
 	// construct with another meaning but another slot in the grammar: ksh93
 	// refuses `a | ; b` and accepts `a |& ; b`, so its `|&` terminates a
-	// command the way `&` does rather than joining two. A dialect for it
-	// wants its own flag beside `Coproc`, never a second value of this one.
+	// command the way `&` does rather than joining two. That reading is
+	// [Dialect.CoprocPipeOperator], a flag of its own beside Coproc and
+	// never a second value of this one.
 	//
 	// Where it is off, `a |& b` is not silently something else: the operator
 	// table falls back to `|` and then `&`, which is exactly what bash 3.2
@@ -1395,13 +1396,45 @@ type Dialect struct {
 	// Coproc is `coproc command`: the command runs in the background with a
 	// pipe on each of its named streams and the shell keeps the near ends.
 	// bash and zsh both have the word; ksh93 spells a coprocess `cmd |&`,
-	// which is a different construct, and dash has none.
+	// which is a different construct and is CoprocPipeOperator, and dash has
+	// none.
 	//
 	// How the shell reaches the ends is not this flag — bash puts them in an
 	// array and zsh speaks to them with `print -p` and `read -p` — because
 	// that is what a *running* coprocess offers rather than what the parser
 	// reads. It is interp.Semantics.CoprocEndsInAnArray.
 	Coproc bool
+
+	// CoprocPipeOperator is ksh93's `cmd |&`: the same coprocess Coproc
+	// starts, spelled as an **operator that terminates a command** rather
+	// than as a word in front of one. There is no `coproc` keyword in that
+	// shell and no name to give — the two bytes are the whole of the syntax.
+	//
+	// It is not a second reading of PipeBothStreams, and the measurement
+	// that separates them is what may *follow* the operator rather than what
+	// the command prints. Measured 2026-09-07, ksh93u+ 2012-08-01, `-n` over
+	// a script file under `env -i`:
+	//
+	//	probe                  bash 5.3   ksh93     zsh
+	//	echo one | ; echo two  error `;`  error `;` accepts
+	//	echo one |& ; echo two error `;`  accepts   accepts
+	//	echo one & ; echo two  error `;`  accepts   accepts
+	//
+	// A `|` needs a command after it and ksh93's `|&` does not, exactly as a
+	// bare `&` does not. zsh accepts all three because it is lenient about
+	// `;` after any control operator, so the ksh column alone decides it.
+	// ksh93 also takes `echo one | & echo two` with a blank between, where
+	// the other five refuse — another sign the two bytes are not that token.
+	//
+	// It terminates the whole **and-or**, the way `&` does rather than the
+	// way a pipe binds: `echo A && cat |&` puts `echo A`'s output into the
+	// coprocess pipe, which a later `read -p` answers with `A`. Measured the
+	// same day, and the same for `echo A | cat |&`.
+	//
+	// Where a dialect had both this and PipeBothStreams the pipe reading
+	// would win, because parsePipeline asks first. No preset does: the two
+	// are the two readings of one spelling and a dialect has one of them.
+	CoprocPipeOperator bool
 
 	// CoprocName lets a *name* stand between `coproc` and a compound
 	// command, and it is bash's alone: `coproc MY { cat; }` puts the near

@@ -33,13 +33,73 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	if name == "" {
 		name = "COPROC"
 	}
+	job, err := r.startCoproc(ctx, name, func(sub *Runner) error {
+		return sub.command(ctx, c.Cmd)
+	})
+	if err != nil || job == nil {
+		return err
+	}
+	if r.ask(r.sem().CoprocEndsInAnArray, "a coprocess putting its ends in an array") {
+		r.setArrayElem(name, 0, "0", itoa(r.coproc.read))
+		r.setArrayElem(name, 1, "1", itoa(r.coproc.write))
+		r.setVar(name+"_PID", itoa(job.PID))
+	} else if r.unspecified {
+		return nil
+	}
+	r.status = 0
+	return nil
+}
+
+// coprocStmt runs `cmd |&`, ksh93's spelling of the same construct: a
+// statement terminator rather than a word in front of a command, so what goes
+// to the background is the whole and-or and there is no name to publish the
+// ends under.
+//
+// **A second one while the first is still running is refused, and fatally.**
+// Measured on ksh93u+ 2012-08-01, 2026-09-07, from a script file under
+// `env -i`: two `cat |&` in a row answer `process already exists` and the
+// script ends at status 1 with the line after the second one unreached. It is
+// about a coprocess still *running* and not about one ever having been
+// started — `true |&`, a wait, then `cat |&` is accepted, status 0.
+//
+// That is the opposite of what the `coproc` word does, measured the same day:
+// a second `coproc cat` in bash 5.3.15 and in zsh 5.9.2 replaces the first,
+// silently, at status 0 and with the script carrying on. Two constructs, two
+// answers, both measured — which is why this lives on the operator's path
+// rather than becoming a dialect axis over one shared path.
+func (r *Runner) coprocStmt(ctx context.Context, st *syntax.Stmt) error {
+	if r.coproc != nil && r.coproc.job != nil && !r.coproc.job.Finished() {
+		// Named for the statement that was refused, the way a command's own
+		// complaints are: nothing has run for this statement yet, so the
+		// line the previous command left behind would be the wrong one.
+		r.line = r.lineOf(st.Pos())
+		r.fatal("%s\n", Wording(r.diag().CoprocessAlreadyRunning, "process already exists"))
+		return nil
+	}
+	if _, err := r.startCoproc(ctx, st.Text, func(sub *Runner) error {
+		return sub.expr(ctx, st.Expr)
+	}); err != nil {
+		return err
+	}
+	r.status = 0
+	return nil
+}
+
+// startCoproc is the machinery both spellings share: a pipe on each of the
+// command's named streams, the far ends handed to a background job and the
+// near ends kept in the shell's own descriptor table.
+//
+// It returns the job so the caller that has a name to publish can read its
+// process, and a nil job with a nil error when the pipes could not be made —
+// which is already reported and already status 1.
+func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner) error) (*Job, error) {
 	// What the command reads: the shell writes shellW, the command reads
 	// childIn. And the reverse for what it writes.
 	childIn, shellW, err := os.Pipe()
 	if err != nil {
 		r.diagf("%v\n", err)
 		r.status = 1
-		return nil
+		return nil, nil
 	}
 	shellR, childOut, err := os.Pipe()
 	if err != nil {
@@ -47,7 +107,7 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 		_ = shellW.Close()
 		r.diagf("%v\n", err)
 		r.status = 1
-		return nil
+		return nil, nil
 	}
 
 	job := &Job{
@@ -78,7 +138,7 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	// coprocess and no more.
 	status := internalErrorStatus
 	r.spawn(func() {
-		if err := sub.command(ctx, c.Cmd); err != nil {
+		if err := run(sub); err != nil {
 			sub.diagf("%v\n", err)
 		}
 		status = sub.status
@@ -108,20 +168,20 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	// loses nothing by the record. A second `coproc` replaces the first,
 	// which is what the shell with the letters does — measured, the second
 	// one is the one `print -p` reaches.
-	r.coproc = &coprocEnds{read: rfd, write: wfd}
-	if r.ask(r.sem().CoprocEndsInAnArray, "a coprocess putting its ends in an array") {
-		r.setArrayElem(name, 0, "0", itoa(rfd))
-		r.setArrayElem(name, 1, "1", itoa(wfd))
-		r.setVar(name+"_PID", itoa(job.PID))
-	} else if r.unspecified {
-		return nil
-	}
-	r.status = 0
-	return nil
+	r.coproc = &coprocEnds{read: rfd, write: wfd, job: job}
+	return job, nil
 }
 
-// coprocEnds is the pair of descriptors a running coprocess is reached by.
-type coprocEnds struct{ read, write int }
+// coprocEnds is the pair of descriptors a running coprocess is reached by,
+// with the job that is running behind them.
+//
+// The job is kept because one spelling asks whether the coprocess is still
+// alive rather than whether one was ever started: ksh93's `|&` refuses a
+// second while the first runs and accepts one after it has ended.
+type coprocEnds struct {
+	read, write int
+	job         *Job
+}
 
 // CoprocRead and CoprocWrite are the descriptors of the running coprocess, for
 // a dialect builtin that speaks to one by a letter rather than through an

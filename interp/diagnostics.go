@@ -527,9 +527,19 @@ type Diagnostics struct {
 	// and names the coprocess as the source — there being none to read
 	// from. Both shells with that shape report 1 and leave the variables
 	// untouched; the words differ: ksh93 says `no query process`, zsh says
-	// `-p: no coprocess`. Reached always in those dialects here, because
-	// neither one's coprocess construct is in this grammar.
+	// `-p: no coprocess`.
 	ReadNoCoprocess string
+
+	// CoprocessAlreadyRunning is a second `cmd |&` started while the first
+	// coprocess is still running, in the dialect that spells a coprocess as
+	// an operator. ksh93 says `process already exists` and it is fatal —
+	// measured, the script ends at status 1 with the next line unreached.
+	//
+	// Only that dialect reaches it: the `coproc` word replaces its
+	// predecessor silently in both shells that have it, so there is nothing
+	// for them to word. Zero is the same text, because the construct exists
+	// in one shell and its wording is not a variable.
+	CoprocessAlreadyRunning string
 
 	// BuiltinComplaintName is the name a builtin's complaints call it, by
 	// the name it was invoked as, for a dialect whose complaint names a

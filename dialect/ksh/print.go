@@ -134,8 +134,15 @@ func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest
 			case 's':
 				opts.history = true
 			case 'p':
-				r.Diagnosef("print: no query process [Bad file descriptor]\n")
-				return nil, 1
+				// The coprocess `cmd |&` started. The wording when none is
+				// running is the shell's own, and it names the descriptor
+				// the letter would have written to.
+				fd, running := r.CoprocWrite()
+				if !running {
+					r.Diagnosef("print: no query process [Bad file descriptor]\n")
+					return nil, 1
+				}
+				opts.fd = fd
 			case 'v', 'C':
 				r.Diagnosef("print: -%c is not implemented yet\n", word[i])
 				return nil, 2

@@ -50,7 +50,22 @@ type Stmt struct {
 	// third state of the first. A dialect without the operators never sets
 	// it.
 	Disown bool
-	Semi   Pos
+
+	// Coprocess is set when the terminator was `|&` in the dialect that
+	// spells a coprocess that way: the statement is started in the
+	// background with a pipe on each of its named streams, and the shell
+	// keeps the near ends.
+	//
+	// Always with Background, for the same reason Disown is and with the
+	// same shape: `|&` is `&` plus two pipes, so this is a second bool
+	// rather than a third state of the first. It sits on the *statement*
+	// because the operator terminates the whole and-or — measured,
+	// `echo A && cat |&` puts `echo A`'s output where a later `read -p`
+	// finds it. A dialect without [Dialect.CoprocPipeOperator] never sets
+	// it.
+	Coprocess bool
+
+	Semi Pos
 
 	// Text is the source this statement was written as, and is recorded only
 	// for a background one.

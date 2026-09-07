@@ -1660,9 +1660,49 @@ reading for the other shell would be a silent wrong answer. In ksh93 `|&`
 `echo one |& ; echo two` is accepted there and `echo one | ; echo two` is
 not, which is the measurement that tells the two apart (`tokenization.md`
 has the full table). So it takes a flag of its own beside this one, and
-not a second value of `PipeBothStreams`. Not implemented: the `ksh`
-preset therefore refuses `a |& b` rather than running it as the wrong
-construct.
+not a second value of `PipeBothStreams`: `CoprocPipeOperator`, on for the
+`ksh` preset, which leaves `PipeBothStreams` off.
+
+Both halves of that pair reproduce here, `#1142` having landed the `;`
+where a command belongs: `echo one |& ; echo two` parses under the `ksh`
+preset and `echo one | ; echo two` does not, with ksh93's own wording on
+the second. The first alone would be satisfied by a grammar that took a
+`;` anywhere, which is why the row is written as a pair.
+
+**It terminates the whole and-or.** Measured 2026-09-07 on ksh93u+:
+`echo A && cat |&` puts `echo A`'s output into the coprocess pipe, so a
+later `read -p` answers `A`, and the same for `echo A | cat |&`. That is
+the same node `&` terminates and not the one a pipe binds to, which is
+why it is a bool on the statement — `Stmt.Coprocess`, always beside
+`Background`, exactly as `Disown` is.
+
+**A second one while the first is still running is refused, and
+fatally.** Measured the same day, and it is the opposite of what the
+`coproc` word does:
+
+| written | answer |
+| --- | --- |
+| ksh93, two `cat \|&` in a row | `process already exists`, status 1, script ends |
+| ksh93, `true \|&` then a wait then `cat \|&` | accepted, status 0 |
+| bash 5.3, two `coproc cat` | the second replaces the first, silently, status 0 |
+| zsh 5.9.2, two `coproc cat` | the same |
+
+So the question is whether a coprocess is still *running*, not whether
+one was ever started — and the two constructs answer it differently,
+which is why the refusal lives on the operator's path rather than
+becoming a dialect axis over one shared path.
+
+One divergence is recorded rather than reproduced: in a **script file**
+ksh93 blames the line *before* the second operator — line 4 for a `|&`
+on line 5, line 1 for one on line 2 — where this names the statement that
+was refused. Under `-c` neither prints a line at all and the two agree
+byte for byte, which is the form the corpus row takes.
+
+Two things the operator has and this does not, both refused by name
+rather than answered wrong: `>&p` and `<&p`, the descriptor spellings of
+the near ends, are `p: bad file unit number` here; and `echo one | & echo
+two`, with a blank between the two bytes, which ksh93 accepts and the
+other five refuse.
 
 Grammar flag: `Coproc` (off in the core, on for `bash`). It is not core
 even though two shells have the keyword, because a switch that made the

@@ -7573,6 +7573,47 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "and the second element, which is a different parser state from the first — a word has been read, so a `(` after one had already to be told apart from the assignment's own. Worth its own row because a fix that only handled the leading position would leave this one counting",
 	},
 	{
+		ID: "pat/a-glob-flag-where-a-loop-item-begins", Category: "pattern matching", SyntaxError: true,
+		Snippet: `for x in (#i)zz; do echo "got=$x"; done; echo after`,
+		Why:     "the same rule two productions over: a loop's item stands where an argument does, so the `(` belongs to the item. Refused by bash 5.3, bash 3.2, dash and ksh93 at the `(` and read by zsh, which then reports the miss — the pattern matches nothing on purpose, so the row is about the item being *read* rather than about what it matched (#1161)",
+	},
+	{
+		ID: "pat/a-glob-flag-on-a-later-loop-item", Category: "pattern matching", SyntaxError: true,
+		Snippet: `for x in a (#i)zz; do echo "got=$x"; done; echo after`,
+		Why:     "and behind a word, which is the other parser state — the same pairing the array literal's two rows have, and for the same reason: a fix that only reached the leading position would leave this one refusing",
+	},
+	{
+		ID: "pat/a-glob-flag-where-a-select-item-begins", Category: "pattern matching", SyntaxError: true,
+		Snippet: `select x in (#i)zz; do :; done </dev/null; echo "st=$? after"`,
+		Why:     "the menu loop's list is the same list, and it had its own copy of the reader — which is what makes it worth a row of its own rather than an assumption. dash has no `select` at all and refuses the word before it can reach the paren, which is the row that shows the two refusals are different refusals",
+	},
+	{
+		ID: "pat/a-glob-flag-where-a-case-arm-begins", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case F.ZIP in (#i)*.zip) echo hit;; *) echo miss;; esac`,
+		Why:     "a `case` arm's pattern is the third position, and the hardest: the arm has an optional leading `(` of its own, so a group at the front of the pattern and the arm's own paren are the same character. zsh reads `(#i)*.zip` as the pattern and the `)` behind it as the arm's, where the four others refuse at the paren. The flag needs `extended_glob` to *match*, which no column has on here, so every one of them prints `miss` or refuses — the row is about the parse",
+	},
+	{
+		ID: "pat/a-case-arms-own-paren-in-front-of-a-group", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case b in ((a|b)) echo hit;; *) echo miss;; esac`,
+		Why:     "the same arm with its optional paren written as well, and **no `#` anywhere in it** — which is what says this half is not about the flag's spelling at all. Two parens where no command may begin were read as an arithmetic command here, and `parse error near 'arithmetic command'` is a complaint about something the script never wrote. zsh takes it as the arm's paren in front of an alternation group and matches `b`; bash, dash and ksh93 all refuse it, so this is the one row of the family that separates zsh from the whole rest of the panel (#1161)",
+	},
+	{
+		ID: "pat/a-case-arms-paren-in-front-of-an-expression", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case 1 in ((1)) echo hit;; *) echo miss;; esac`,
+		Why:     "the same shape with no pattern language in it whatsoever, which is the row that pins *why* the arithmetic reading was wrong rather than merely that it was: `((1))` is a perfectly good expression anywhere a command may begin, and an arm is not one of those places. The control for it is `case x in a) ((1));; esac`, where an arm's **body** is ordinary commands and the expression really is one — a suspension left on for the body would have broken that instead",
+	},
+	{
+		ID: "loop/no-word-in-an-item-list-is-reserved", Category: "commands",
+		Script:  true,
+		Snippet: "for x in do; do echo \"1=$x\"; done\nfor x in done; do echo \"2=$x\"; done\nfor x in a b\ndo echo \"3=$x\"; done\necho after\n",
+		Why:     "the item list ends at a `;` or a newline and at nothing else — no word in it is a reserved word — and this is **unanimous across all six columns**, so it is core and not a dialect's. A loop over a list holding the word `done` is not exotic: `for f in $(ls)` reaches it the moment a file is called that. This engine read `do` and `done` as stop words here and refused all three of these lines (#1161)",
+	},
+	{
+		ID: "loop/an-item-list-with-no-separator-before-do", Category: "commands", SyntaxError: true,
+		Snippet: `for x in a b do echo "got=$x"; done; echo after`,
+		Why:     "the other direction of the same rule, and the worse half: with no separator the `do` is an *item*, so `done` stands where `do` belongs and every one of the six refuses the line. This engine accepted it — the list stopped at the stop word — and then ran the body with `do` bound as a value and said nothing. A rule that only added the reserved words to the list would pass the row above and fail this one, which is why the pair is the measurement",
+	},
+	{
 		ID: "pat/a-paren-where-an-argument-stands", Category: "pattern matching", SyntaxError: true,
 		Snippet: `echo MY ( x ); echo after`,
 		Why:     "the same three characters are a syntax error after a word in four shells and one argument in the fifth, where they are a pattern carrying a qualifier list — the complaint names the *space* inside the group, which is what says it was read as a list and not as anything of the shell's. Command position is the whole of the difference there: `( x )` written where a command begins is still a subshell, which `core/two-subshells-with-nothing-between-them` still pins from the other side",

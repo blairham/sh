@@ -96696,23 +96696,23 @@
     },
     "zle/a-widget-cannot-be-called-from-a-script": {
       "bash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `{:}'~\u003cshell\u003e: -c: line 1: `f(){:}; zle -N w f; zle w; echo \"st=$?\"; zle; echo \"bare=$?\"'",
-        "Status": 2,
+        "Stdout": "st=127~bare=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `{:}'~\u003cshell\u003e: -c: line 1: `f(){:}; zle -N w f; zle w; echo \"st=$?\"; zle; echo \"bare=$?\"'",
-        "Status": 2,
+        "Stdout": "st=127~bare=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `{:}'~\u003cshell\u003e: -c: line 0: `f(){:}; zle -N w f; zle w; echo \"st=$?\"; zle; echo \"bare=$?\"'",
-        "Status": 2,
+        "Stdout": "st=127~bare=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
@@ -96740,23 +96740,23 @@
     },
     "zle/a-widget-is-defined-and-said-back": {
       "bash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `{:}'~\u003cshell\u003e: -c: line 1: `f(){:}; zle -N b f; zle -N a; echo \"st=$?\"; zle -l; zle -l -L'",
-        "Status": 2,
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `{:}'~\u003cshell\u003e: -c: line 1: `f(){:}; zle -N b f; zle -N a; echo \"st=$?\"; zle -l; zle -l -L'",
-        "Status": 2,
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `{:}'~\u003cshell\u003e: -c: line 0: `f(){:}; zle -N b f; zle -N a; echo \"st=$?\"; zle -l; zle -l -L'",
-        "Status": 2,
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 127,
         "Signal": 0,
         "TimedOut": false
       },
@@ -96784,23 +96784,23 @@
     },
     "zle/listing-by-name-is-a-question": {
       "bash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `{:}'~\u003cshell\u003e: -c: line 1: `f(){:}; zle -N a f; zle -l a; echo \"yes=$?\"; zle -l nosuch; echo \"no=$?\"; zle -l a nosuch; echo \"mixed=$?\"'",
-        "Status": 2,
+        "Stdout": "yes=127~no=127~mixed=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `{:}'~\u003cshell\u003e: -c: line 1: `f(){:}; zle -N a f; zle -l a; echo \"yes=$?\"; zle -l nosuch; echo \"no=$?\"; zle -l a nosuch; echo \"mixed=$?\"'",
-        "Status": 2,
+        "Stdout": "yes=127~no=127~mixed=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `{:}'~\u003cshell\u003e: -c: line 0: `f(){:}; zle -N a f; zle -l a; echo \"yes=$?\"; zle -l nosuch; echo \"no=$?\"; zle -l a nosuch; echo \"mixed=$?\"'",
-        "Status": 2,
+        "Stdout": "yes=127~no=127~mixed=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },

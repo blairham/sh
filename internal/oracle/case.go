@@ -11561,7 +11561,7 @@ echo "read=[$l]"`,
 	},
 	{
 		ID: "zle/a-widget-is-defined-and-said-back", Category: "builtins",
-		Snippet: `f(){:}; zle -N b f; zle -N a; echo "st=$?"; zle -l; zle -l -L`,
+		Snippet: `f() { :; }; zle -N b f; zle -N a; echo "st=$?"; zle -l; zle -l -L`,
 		Why:     "the row the whole feature rests on: a widget backed by a shell function is defined at status 0 and read back in both listing spellings — `name` and `name (fn)` plainly, and `zle -N name [fn]` under `-L` — sorted by widget name whatever order they arrived in. Without `zle` a config binding a plugin's own widget bound a name nothing ever answered to",
 	},
 	{
@@ -11571,7 +11571,7 @@ echo "read=[$l]"`,
 	},
 	{
 		ID: "zle/listing-by-name-is-a-question", Category: "builtins",
-		Snippet: `f(){:}; zle -N a f; zle -l a; echo "yes=$?"; zle -l nosuch; echo "no=$?"; zle -l a nosuch; echo "mixed=$?"`,
+		Snippet: `f() { :; }; zle -N a f; zle -l a; echo "yes=$?"; zle -l nosuch; echo "no=$?"; zle -l a nosuch; echo "mixed=$?"`,
 		Why:     "`zle -l name` prints nothing and answers in the status, which is what a plugin's `zle -l foo || zle -N foo` is asking — so it is a question with an answer rather than a listing that happens to be empty, and one name missing out of two is 1",
 	},
 	{
@@ -11581,7 +11581,7 @@ echo "read=[$l]"`,
 	},
 	{
 		ID: "zle/a-widget-cannot-be-called-from-a-script", Category: "builtins",
-		Snippet: `f(){:}; zle -N w f; zle w; echo "st=$?"; zle; echo "bare=$?"`,
+		Snippet: `f() { :; }; zle -N w f; zle w; echo "st=$?"; zle; echo "bare=$?"`,
 		Why:     "the line a widget would edit exists only while the editor is holding one, so invoking one from a script is `widgets can only be called when ZLE is active` at 1 — and `zle` with no arguments at all is status 1 and not one word, which is the only refusal in this builtin that says nothing",
 	},
 	{

@@ -244,6 +244,92 @@ An axis whose wrong answer is an error is self-limiting. An axis whose
 wrong answer is a different working program is not, and it is the case a
 dialect system exists to get right. See `grammar/tokenization.md`.
 
+## An assignment prefixed to a frozen name: one answer, and one axis not yet asked
+
+`readonly x=1` then `x=2 cmd` is two questions, and only the first of
+them is settled.
+
+**Reporting is unanimous.** Every column in the panel complains about the
+refused name, on every kind of command, with the sole exception of ksh93
+in front of a *regular builtin*, `command` naming one, or an alias that
+resolves to one. Ours complained on the builtin path only — the one path
+that stored the assignment and so the one that met the refusal — so a
+prefix to an external command or to a function was accepted in silence,
+status 0, and the external one handed the child the very value it had
+refused. That half is implemented: the complaint is written wherever the
+command is dispatched, and nothing else about the command moves.
+
+**What the refusal costs is not one answer, and it splits by the kind of
+command the prefix is attached to.** Measured 2026-09-07, script file,
+`env -i` with an isolated `HOME`, `ZDOTDIR`, `HISTFILE` and `ENV`; **R**
+is a refusal reported, **run** that the command ran, **fatal** that the
+script stopped:
+
+| prefix to | bash 5.3 | bash-as-sh | bash 3.2 | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| an external command | R, **run** | R, skipped | R, **run** | R, **fatal 2** | R, skipped | R, skipped |
+| `command` + external | R, **run** | R, skipped | R, **run** | R, fatal 2 | R, skipped | R, skipped |
+| `command` + builtin | R, **run** | R, skipped | R, **run** | R, fatal 2 | **no R**, **run** | R, skipped |
+| a regular builtin | R, **run** | R, skipped | R, **run** | R, fatal 2 | **no R**, **run** | R, **fatal 1** |
+| an alias for a builtin | R, not found | R, skipped | R, not found | R, fatal 2 | **no R**, **run** | R, **fatal 1** |
+| a special builtin | R, **run** | R, **fatal 1** | R, **run** | R, fatal 2 | R, **fatal 1** | R, **fatal 1** |
+| a function | R, **run** | R, skipped | R, **run** | R, fatal 2 | R, **fatal 1** | R, **fatal 1** |
+| a name that is not found | R, then looks | R, skipped | R, then looks | R, fatal 2 | R, never looks | R, never looks |
+
+Everything not marked fatal reaches the `echo after` on the line below
+and reports 0. *skipped* is the command not running while the script
+carries on, which the `/bin/echo RAN` spelling is what makes visible: the
+row is about whether `RAN` was printed.
+
+**The two lenient shells draw the line in opposite places.** ksh93 stops
+the script on a special builtin or a function and carries on for
+everything else, and says nothing at all where the word resolves to a
+regular builtin — which the alias row is the probe for, since `al` is a
+word of its own that resolves to `echo` only after alias expansion. zsh
+stops on everything internal and carries on for an external command *and
+for `command`*, whatever `command` names. So zsh reads the word that was
+written and ksh93 reads the kind it resolves to, which is why one probe
+cannot answer for both. bash and dash are uniform: bash 5.3 and bash 3.2
+report, run the command and carry on at 0 in every row; dash is fatal 2
+in every row.
+
+**bash invoked as `sh` is not bash here**, which the three-bash rows
+above are for: it reports and then gives up the rest of the list, so the
+command does not run, and it is fatal on a special builtin. With `;`
+separators it prints nothing after the refusal and with newlines it
+reaches the next line, which is what identifies *the list* as what it
+abandons.
+
+**Held fixed, and measured rather than assumed:** the route. The same
+square through `-c`, a script file and standard input agrees cell for
+cell, with one exception that belongs to the fatality question rather
+than to reporting — bash-as-sh answers 127 through `-c` where it answers
+1 through a file and through standard input, on a special builtin. How
+the name was frozen does not enter into it either: `readonly x`, with no
+value, and `typeset -r x=1` refuse exactly as `readonly x=1` does in
+every column that has the spelling.
+
+**So the consequence is not implemented, deliberately.** It needs the
+command kind to reach the refusal — which it does not today for an
+external command or a function, because the refusal happens nowhere near
+the dispatch — and it needs *two* answers rather than one, whether the
+script stops and whether the command still runs, with the line drawn in
+a different place per shell. Writing one axis from the bash rows would
+have given ksh93 the opposite answer for five kinds of nine, which is
+how this was first filed. `AssignmentPrefixPersistsOnSpecialBuiltin` is
+the nearest neighbour and shows the kind is knowable for a builtin; it
+is not knowable for the other two until the refusal moves.
+
+**One thing follows from reporting alone and is implemented with it.** A
+shell that carries on names *every* frozen name in the prefix, in written
+order; the shells that name only the first are the ones that give the
+command up at the first refusal. So the count is not a separate answer.
+
+Corpus: the twenty `roprefix/` rows, one per command kind and one per
+variable the construct turned out to depend on — including the control,
+an ordinary prefix to a name nothing froze, which complains about nothing
+in all six columns.
+
 ## One axis, two places
 
 The glob-expansion row governs more than pathname expansion. The same

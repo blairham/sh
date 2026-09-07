@@ -11677,4 +11677,107 @@ echo "read=[$l]"`,
 		Snippet: `shopt -s nullglob 2>/dev/null; shopt -p 2>/dev/null | grep -c "^shopt -s nullglob$"`,
 		Why:     "the property the capture depends on and the one nothing else in the corpus asks for: what `shopt -p` prints has to be a command that sets the option back. The three bash columns write the line exactly and count 1; the other three print nothing, so `grep -c` counts 0 and the pipeline's status is grep's 1. A shell that listed the option in any other layout would count 0 here while still answering 0 to the row above",
 	},
+	{
+		ID: "roprefix/in-front-of-an-external-command", Category: "semantics axes",
+		Snippet: `readonly x=1; x=2 /bin/echo RAN; echo after`,
+		Why:     "an assignment prefixed to a frozen name, on the command kind that reaches the shell's variables least — an external command, whose prefix becomes a child's environment and is never stored here at all. All six columns complain; we complained in none of the four dialects and reported 0, which is the silent shape (#1219). What each does next is a second question and it splits: bash and bash 3.2 run the command and carry on, bash-as-sh gives up the rest of the list, ksh93 and zsh report and skip the command but carry on, dash is fatal at 2",
+	},
+	{
+		ID: "roprefix/in-front-of-an-external-command-on-its-own-line", Category: "semantics axes",
+		Script:  true,
+		Snippet: "readonly x=1\nx=2 /bin/echo RAN\necho after",
+		Why:     "the same three commands with newlines where the row above has `;`, which is the only pair that can tell *fatal* from *gives up the rest of the list*: bash-as-sh prints `after` here and not there, so what it ends is the list. Every other column answers both cells the same way. The separator is the variable that decides it and the route is not — the same square through `-c` and through standard input agrees cell for cell",
+	},
+	{
+		ID: "roprefix/in-front-of-a-function", Category: "semantics axes",
+		Snippet: `readonly x=1; f() { echo INFUNC; }; x=2 f; echo after`,
+		Why:     "the other kind whose prefix never met the refusal: a function call is dispatched before any assignment happens, so this too was taken in silence. It is also where the two lenient shells part company — ksh93 is fatal on a function and carries on for an external, zsh is fatal on both a function and every other internal kind. bash and bash 3.2 report, run the body and carry on",
+	},
+	{
+		ID: "roprefix/in-front-of-a-function-on-its-own-line", Category: "semantics axes",
+		Script:  true,
+		Snippet: "readonly x=1\nf() { echo INFUNC; }\nx=2 f\necho after",
+		Why:     "the newline half of the function pair, for the same reason as the external one: bash-as-sh reaches `after` here and not with `;`, so it abandons the list rather than the script, while ksh93 and zsh reach neither and are fatal",
+	},
+	{
+		ID: "roprefix/in-front-of-a-regular-builtin", Category: "semantics axes",
+		Snippet: `readonly x=1; x=2 echo RAN; echo after`,
+		Why:     "the kind the refusal always reached, because a prefix to a builtin is stored in this shell. It is here as the row the first filing of #1219 was measured on and generalized from, and it is the least representative kind available: ksh93 does not complain at all on a regular builtin and is fatal on a special one, so a matrix built from this cell has ksh93 exactly backwards for five of the nine kinds",
+	},
+	{
+		ID: "roprefix/in-front-of-a-special-builtin", Category: "semantics axes",
+		Snippet: `readonly x=1; x=2 :; echo after`,
+		Why:     "the special builtin, which is where ksh93 and bash-as-sh become fatal and where POSIX says an assignment error ends a non-interactive shell. bash and bash 3.2 still report and carry on",
+	},
+	{
+		ID: "roprefix/in-front-of-command-and-an-external", Category: "semantics axes",
+		Snippet: `readonly x=1; x=2 command /bin/echo RAN; echo after`,
+		Why:     "`command` in front of an *external* name. ksh93 complains here",
+	},
+	{
+		ID: "roprefix/in-front-of-command-and-a-builtin", Category: "semantics axes",
+		Snippet: `readonly x=1; x=2 command echo RAN; echo after`,
+		Why:     "`command` in front of a *builtin* name, and the one cell in the whole matrix where a column says nothing: ksh93 reports no refusal and runs the command. Its neighbor above, the same `command` in front of an external name, does complain — so what ksh93 is quiet about is the kind the word resolves to and not the word `command`. This pair is why `command true`, which the first filing used, reads as a fact about `command` when it is a fact about `true` being a builtin. zsh reads the same pair the other way round: it is fatal on a bare `echo` and here it reports, skips the command and carries on, so the word `command` is what moves zsh where the kind the word resolves to is what moves ksh93. Two shells drawing the same line in two places is what makes the command kind an axis rather than a list of exceptions",
+	},
+	{
+		ID: "roprefix/in-front-of-an-alias", Category: "semantics axes",
+		Script:  true,
+		Snippet: "readonly x=1\nalias al='echo ALIASED'\nx=2 al\necho after",
+		Why:     "the last command kind, and the one that says what ksh93's silence is about: `al` is a word of its own that resolves, through the alias, to a *builtin*. ksh93 says nothing and runs it, exactly as it does for a bare `echo`, so its rule reads the kind the word resolves to after alias expansion rather than the word that was written. zsh is fatal here as it is on every internal kind. The three bash columns answer something else entirely — a non-interactive bash expands no alias, so `al` is a command it cannot find and their cells are that fact rather than this one, which is why this is its own row rather than another cell of the `command` pair above",
+	},
+	{
+		ID: "roprefix/in-front-of-a-command-that-does-not-exist", Category: "semantics axes",
+		Snippet: `readonly x=1; x=2 nosuchcmd_zz; echo after`,
+		Why:     "the refusal against a name that resolves to nothing, which separates the columns that report and then still look for the command — bash and bash 3.2, which add `command not found` — from ksh93 and zsh, which report the refusal and never look. Ours reported only the missing command, so the assignment error was invisible behind an unrelated complaint",
+	},
+	{
+		ID: "roprefix/two-frozen-names-are-both-reported", Category: "semantics axes",
+		Snippet: `readonly x=1 z=9; x=2 z=8 /bin/echo RAN; echo after`,
+		Why:     "how many complaints one prefix list makes. bash and bash 3.2 name every frozen name in it, in written order; ksh93 and zsh name only the first, because they give the command up at the first refusal. So the count is not a separate answer — it follows from whether the command is abandoned — and a shell that carries on has to name them all",
+	},
+	{
+		ID: "roprefix/an-unfrozen-name-beside-a-frozen-one", Category: "semantics axes",
+		Snippet: `readonly x=1; x=2 y=3 /usr/bin/printenv y; echo after`,
+		Why:     "the refusal is one name's and not the prefix list's: bash and bash 3.2 hand the child `y=3` and drop only `x`. The columns that skip the command print nothing for `y` because `printenv` never runs, which is the same fact read through the other question",
+	},
+	{
+		ID: "roprefix/the-child-is-not-handed-the-refused-value", Category: "semantics axes",
+		Snippet: `export x; readonly x=1; x=2 /usr/bin/printenv x; echo "st=$?"; echo after`,
+		Why:     "whether the refusal actually took, measured from outside the shell. The name is exported first because that is the only spelling where the child's environment can tell a refused assignment from an absent one: bash and bash 3.2 show the child `x=1`, and no column in the panel ever shows it `x=2`. We showed it `x=2` and said nothing — a refusal that hands the refused value on is not a refusal",
+	},
+	{
+		ID: "roprefix/the-body-is-not-handed-the-refused-value", Category: "semantics axes",
+		Snippet: `readonly x=1; f() { echo "in=[$x]"; }; x=2 f; echo after`,
+		Why:     "the same question for a function body, which reads the shell's own variables rather than an environment. Every column that runs the body at all shows it the old value",
+	},
+	{
+		ID: "roprefix/a-value-that-fails-to-expand", Category: "semantics axes",
+		Snippet: `readonly x=1; x=$((1/0)) /bin/echo RAN; echo after`,
+		Why:     "which of the two errors is reported, and it is the sharpest probe in the set because it can only be answered one way per shell: bash and bash 3.2 name `x` and never evaluate the expression at all, while dash, ksh93 and zsh name the division and never mention `x`. So bash checks the prefix before it expands the value and the other three expand first. Ours is on the expand-first side and stays there — the reporting fix waits for the value, deliberately, so that this cell is left as it was",
+	},
+	{
+		ID: "roprefix/a-value-that-fails-to-expand-in-front-of-a-function", Category: "semantics axes",
+		Snippet: `readonly x=1; f() { echo INFUNC; }; x=$((1/0)) f; echo after`,
+		Why:     "the same ordering question on a function, where it is compounded by a second gap: a prefix to a function is discarded entirely here rather than made visible to the body, so its value is never expanded and there is no expansion error to preempt the refusal. Every column reports something and we reported nothing; what we report now is bash's answer, which is the one the panel splits on",
+	},
+	{
+		ID: "roprefix/a-redirection-that-cannot-be-opened", Category: "semantics axes",
+		Snippet: `readonly x=1; x=2 /bin/echo RAN >/nope/f; echo after`,
+		Why:     "the same ordering question reached through a redirection instead of an expansion, and it splits the panel on the same line: bash and bash 3.2 complain about `x` and then about the file, and dash, ksh93 and zsh complain only about the file. Two probes agreeing on one boundary is what makes it a boundary rather than a quirk of arithmetic",
+	},
+	{
+		ID: "roprefix/a-name-frozen-with-no-value", Category: "semantics axes",
+		Snippet: `readonly x; x=2 /bin/echo RAN; echo after`,
+		Why:     "the attribute is what refuses the prefix and not the value standing behind it: `readonly x` with nothing assigned refuses exactly as `readonly x=1` does, in every column",
+	},
+	{
+		ID: "roprefix/a-name-frozen-by-typeset", Category: "semantics axes",
+		Snippet: `typeset -r x=1; x=2 /bin/echo RAN; echo after`,
+		Why:     "how the name was frozen does not enter into it: `typeset -r` and `readonly` are the same refusal wherever both spellings exist. Recorded so that the corpus says so rather than leaving it assumed — dash has neither spelling and answers with a missing command instead, which is the row's control",
+	},
+	{
+		ID: "roprefix/a-prefix-to-a-name-that-is-not-frozen", Category: "semantics axes",
+		Snippet: `x=1; x=2 /bin/echo RAN; echo "after x=[$x]"`,
+		Why:     "the control for the whole group, and the row that says a broken harness looks different from a finding: an ordinary prefix runs the command, is taken back afterwards and complains about nothing, identically in all six columns",
+	},
 }

@@ -2450,6 +2450,24 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 
 	// A function shadows a builtin and an external command alike.
 	if fn, ok := r.funcs[argv[0]]; ok {
+		// A prefix to a frozen name is refused here, because the call below
+		// is where this command ends: only the builtin path assigns through
+		// setVarAs, so only that path ever met the refusal, and a prefix to
+		// a function was taken in silence. `readonly x=1; x=2 f` reported 0
+		// with nothing on stderr where all six panel columns complain.
+		//
+		// A loop rather than a check on the first one, because bash and
+		// bash 3.2 name *every* frozen name in the prefix: `readonly x=1 z=9;
+		// x=2 z=8 cmd` writes two complaints, in the order they were written.
+		// The shells that name only the first are the ones that abandon the
+		// command at the first refusal, which is the question this leaves
+		// alone — so naming them all is what carrying on entails (#1219).
+		for _, a := range c.Assigns {
+			if a.Operand {
+				continue
+			}
+			r.refusePrefix(a.Name, true)
+		}
 		return r.callFunc(ctx, fn, argv[1:])
 	}
 
@@ -2564,7 +2582,26 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			// assignments are read, rather than in some of the places.
 			continue
 		}
-		env = append(env, a.Name+"="+strings.Join(r.expandWord(a.Value), " "))
+		value := strings.Join(r.expandWord(a.Value), " ")
+		// The report waits for the value to have expanded, because the order
+		// of the two is a dialect question and not this change's: bash checks
+		// the prefix before it expands anything and before it opens a
+		// redirection, so `x=$((1/0)) cmd` and `x=2 cmd >/nope/f` complain
+		// about `x` there and about the expansion and the file everywhere
+		// else. Ours is on the everywhere-else side on both, and staying
+		// there is what keeps this change to the half the panel agrees on.
+		if r.refusePrefix(a.Name, !r.expandErr) {
+			// Refused, so nothing is appended: the assignment did not happen,
+			// and the child is handed this shell's own environment for the
+			// name. The two are only distinguishable with the name exported,
+			// which is how it was measured — `export x; readonly x=1; x=2
+			// env` shows the child `x=1` in bash and bash 3.2, and no column
+			// in the panel ever shows it `x=2`. We showed it `x=2` and said
+			// nothing, which is the silent half of #1219: a refusal that
+			// hands the refused value on is not a refusal.
+			continue
+		}
+		env = append(env, a.Name+"="+value)
 	}
 	return r.exec(ctx, argv, env)
 }
@@ -3236,6 +3273,80 @@ func (r *Runner) readonlyRefusalNamesBuiltin(form assignForm) bool {
 	return r.diag().ReadonlyRefusalNamesBuiltin[r.inBuiltin]
 }
 
+// reportReadonlyRefusal writes the complaint a refused assignment makes, and
+// writes nothing else. What the refusal *costs* is the caller's, because it is
+// not one answer: a bare assignment gives up the rest of its list, a
+// declaration does not, and an assignment prefixed to a command splits by the
+// kind of command that follows it — so the sentence is shared and the
+// consequence is decided where the refusal happened (#1219).
+func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool) {
+	// Two arguments only where the wording asks for two: a format with no
+	// explicit indexes and a spare argument becomes "%!(EXTRA …)", which is
+	// what Wording's own note is about.
+	msg := Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name)
+	if form.declaresRatherThanAssigns() && r.diag().ReadonlyVariableInDeclaration != "" &&
+		r.readonlyRefusalNamesBuiltin(form) {
+		msg = Wording(r.diag().ReadonlyVariableInDeclaration, "", name, r.inBuiltin)
+	}
+	// The builtin has been taken for the wording above where a dialect wants
+	// it, and this message does not carry it in the *location* in the dialect
+	// that puts it there for everything else: zsh writes `zsh:1: read-only
+	// variable: x` from inside `export`, not `zsh:export:1:`. So it is put
+	// aside for the report and given back.
+	//
+	// Except where the dialect names the builtin for this very refusal, which
+	// is the one case where it belongs in the location too: ksh93 answers
+	// `set -A ro q` with `<script>[6]: set: ro: is read only` — its *builtin*
+	// location — against `<script>: line 2: ro: is read only` for a plain
+	// assignment to the same name. One table decides both, because a dialect
+	// that puts the name in the sentence is the dialect that keeps the
+	// builtin's location under it.
+	if !r.readonlyRefusalNamesBuiltin(form) {
+		outer := r.inBuiltin
+		r.inBuiltin = ""
+		defer func() { r.inBuiltin = outer }()
+	}
+	if fatal {
+		r.fatal("%s\n", msg)
+		return
+	}
+	r.diagf("%s\n", msg)
+}
+
+// refusePrefix refuses an assignment prefixed to a frozen name, and reports
+// whether it did — so its caller can leave the assignment undone rather than
+// deciding a second time whether the name is frozen.
+//
+// The report and nothing more, which is the whole of what the panel agrees
+// about here: all six columns complain, and what they do next splits by the
+// kind of command the prefix is attached to, with the two lenient shells
+// splitting opposite ways — ksh93 stops on a special builtin or a function
+// and carries on for an external command, zsh stops on everything internal
+// and carries on for an external one. Deciding that here would be inventing
+// an axis rather than measuring one, so this leaves the status, the rest of
+// the list and the script exactly as they were (#1219).
+//
+// report is the caller's, because a value that failed to expand has already
+// had a complaint of its own and which of the two a shell writes is a second
+// split: bash names the frozen name and never evaluates the value, and dash,
+// ksh93 and zsh name the expansion and never mention the name. The refusal
+// itself stands either way — a value that would not expand is not a value the
+// name may take.
+//
+// The form is assignedAnyhow and not a declaration's, which is what a prefix
+// is: it is never `export x=2`, so the declaration wording and the builtin's
+// name in the location are never this refusal's, whatever builtin happens to
+// be running the command it is prefixed to.
+func (r *Runner) refusePrefix(name string, report bool) bool {
+	if !r.readonly[name] {
+		return false
+	}
+	if report {
+		r.reportReadonlyRefusal(name, assignedAnyhow, false)
+	}
+	return true
+}
+
 // refuseReadonly reports whether an assignment to a frozen name is refused,
 // having said so and having decided what the refusal does to the script.
 //
@@ -3269,32 +3380,6 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	// against a file with newlines — which varied two things at once and is
 	// confirmatory for either reading (#1182).
 	//
-	// Two arguments only where the wording asks for two: a format with no
-	// explicit indexes and a spare argument becomes "%!(EXTRA …)", which is
-	// what Wording's own note is about.
-	msg := Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name)
-	if form.declaresRatherThanAssigns() && r.diag().ReadonlyVariableInDeclaration != "" &&
-		r.readonlyRefusalNamesBuiltin(form) {
-		msg = Wording(r.diag().ReadonlyVariableInDeclaration, "", name, r.inBuiltin)
-	}
-	// The builtin has been taken for the wording above where a dialect wants
-	// it, and this message does not carry it in the *location* in the dialect
-	// that puts it there for everything else: zsh writes `zsh:1: read-only
-	// variable: x` from inside `export`, not `zsh:export:1:`. So it is put
-	// aside for the report and given back.
-	//
-	// Except where the dialect names the builtin for this very refusal, which
-	// is the one case where it belongs in the location too: ksh93 answers
-	// `set -A ro q` with `<script>[6]: set: ro: is read only` — its *builtin*
-	// location — against `<script>: line 2: ro: is read only` for a plain
-	// assignment to the same name. One table decides both, because a dialect
-	// that puts the name in the sentence is the dialect that keeps the
-	// builtin's location under it.
-	if !r.readonlyRefusalNamesBuiltin(form) {
-		outer := r.inBuiltin
-		r.inBuiltin = ""
-		defer func() { r.inBuiltin = outer }()
-	}
 	fatal := r.sem().ReadonlyReassignmentFatal
 	switch {
 	case form.declaresRatherThanAssigns():
@@ -3304,10 +3389,10 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 		fatal = r.sem().ReadonlyReassignmentByDeclarationFatal
 	}
 	if r.ask(fatal, "a readonly reassignment being fatal") {
-		r.fatal("%s\n", msg)
+		r.reportReadonlyRefusal(name, form, true)
 		return true
 	}
-	r.diagf("%s\n", msg)
+	r.reportReadonlyRefusal(name, form, false)
 	r.status, r.assignFailed = 1, true
 	// Reported and not fatal, and the shell still gives up what it was
 	// running: `readonly r=1; r=2; echo one` never prints `one`, and the line

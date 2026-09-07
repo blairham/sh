@@ -1378,7 +1378,12 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		set       bool
 		subscript bool
 	)
-	if e.Index != nil {
+	if e.Index != nil && e.Inner == nil {
+		// A subscript on a *name*. The same brackets after a nested
+		// expansion index what the inner came to and are answered through
+		// paramSource below, which is the one route that expands the inner:
+		// reaching the name path with no name to read measured `${#${a}[1]}`
+		// as 0 rather than as the length of the element.
 		if elems, ok := r.arraySubscript(e); ok {
 			if e.Length { //nolint:nestif // the Length question is answered here on purpose
 				// `${#a[@]}` is the number of elements; `${#a[0]}` is the
@@ -2003,6 +2008,15 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 func (r *Runner) paramSubject(e *syntax.ParamExpr) string {
 	if e == nil {
 		return ""
+	}
+	if e.Src != "" {
+		// A nested expansion has no name to be the subject, and the text it
+		// was written as is the only thing a reader can find in the script:
+		// a refusal about `${${(P)h}[(x)y]}` names that rather than the
+		// `arr[(x)y]` the inner resolved to. Src is set for exactly the
+		// nodes with nothing else to name — a nesting, and an expansion the
+		// grammar could not read.
+		return e.Src
 	}
 	if e.Index == nil {
 		return e.Name
@@ -3219,45 +3233,24 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set bool) {
 		return []string{""}, false
 	}
 	if e.Index != nil {
-		// `${${v}[2]}` subscripts the *result*, which is a second question
-		// on top of this one — and the one the subscript work is already
-		// asking. Named rather than answered, so a script that meets it is
-		// told which construct is missing.
-		r.diagf("${%s}: a subscript on a nested expansion is not implemented\n", e.Src)
-		r.expandErr = true
-		return []string{""}, false
+		// `${${v}[2]}` subscripts what the inner came to, which is a second
+		// question on top of this one and is answered in interp/nestedsub.go
+		// — including which of the inner's shapes a subscript may follow at
+		// all. The fields below are the whole of what it reads.
+		return r.nestedSubscript(e)
 	}
-	// The inner is exactly one substitution span — the grammar admits nothing
-	// else in that position — so this is expandOneWord's loop with the loop
-	// taken out, and it keeps the fields that expandAt yields rather than
-	// joining them the way expandWordNoSplit does. Which of the two a nested
-	// expansion is, is the whole question below.
-	//
-	// splitByDialect, the ordinary word's policy, because this position keeps
-	// fields: a bare array name is the list here exactly as it is on a
-	// command line, so `${${a}}` reaches the same answer `${${a[@]}}` does
-	// rather than a joined string that looks like one field on purpose.
-	defer r.inWord(e.Inner)()
-	r.expandingSpan = 0
-	span := e.Inner.Spans[0]
-	if parts, ok := r.expandAt(span, splitByDialect, true); ok {
-		words = parts
-	} else {
-		text, _ := r.expandSpan(span, splitNever, true)
-		words = []string{text}
-	}
-	// The marks come off once, whichever half produced the fields. The inner
-	// is an operand rather than a field of the command line, so a `*` in its
-	// value is a character the outer operator matches against and not a
-	// pattern the shell is about to escape for someone: leaving them on
-	// answered `${${v}}` on `a*b` with a backslash in it.
-	words = unescapeAll(words)
+	words = r.nestedInnerFields(e)
 	if len(words) == 0 {
 		// No field is still a *value*: the empty string, and set. Measured —
 		// `a=(); ${${a[@]}-d}` is empty in the shell with the grammar, where
 		// `${nosuch-d}` is `d`, so the colon-less test finds something here
 		// however little the inner came to.
-		words = []string{""}
+		//
+		// Here rather than in nestedInnerFields, because a subscript counts
+		// what the inner came to and an empty list has no element to count:
+		// `a=(); ${${a[@]}[(i)x]}` is 1, the position an append would take,
+		// where a list holding one empty field would answer 2.
+		return []string{""}, true
 	}
 	if len(words) > 1 {
 		// An inner expansion that came to a *list* keeps its fields in the
@@ -3272,6 +3265,100 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set bool) {
 		return []string{""}, false
 	}
 	return words, true
+}
+
+// expandingQuoting is how *this* expansion was written, where it stands in a
+// word being expanded.
+//
+// A nested expansion's inner is expanded by the code that owns the inner
+// word, which has no way to see the quotes around the whole thing — and
+// quoting is exactly what decides whether an inner that came to a list joins.
+// The span is already tracked, for the same reason `${(q)…}` needs it: see
+// inWord, which saves and restores both halves.
+//
+// The node has to be the one that span holds, and the identity check is the
+// point rather than a guard: a command substitution runs a whole program
+// while the word around it is still the one being expanded, so a nested
+// expansion reached from inside it — in a here-document body, say — would
+// otherwise inherit the quoting of a word it is not in. Unquoted for
+// everything that did not come through a word, which is what the routes
+// with no word around them had before.
+func (r *Runner) expandingQuoting(e *syntax.ParamExpr) syntax.Quoting {
+	if r.expandingWord == nil || r.expandingSpan >= len(r.expandingWord.Spans) {
+		return syntax.Unquoted
+	}
+	s := r.expandingWord.Spans[r.expandingSpan]
+	if s.Kind != syntax.ParamExp || s.Param != e {
+		return syntax.Unquoted
+	}
+	return s.Quoting
+}
+
+// nestedInnerSpan is the inner substitution as it will be expanded: its own
+// span, carrying the quoting of the expansion around it where it was written
+// with none, and the splitting policy that quoting implies.
+func (r *Runner) nestedInnerSpan(e *syntax.ParamExpr) (syntax.Span, splitPolicy) {
+	span := e.Inner.Spans[0]
+	if span.Quoting != syntax.Unquoted {
+		// Written with quotes of its own, which is a different construct and
+		// is why `${(@f)"$(cmd)"}` differs from the same characters without
+		// them: quoted, the inner comes to one field and the flags split
+		// that. Nothing to inherit.
+		return span, splitNever
+	}
+	if q := r.expandingQuoting(e); q != syntax.Unquoted {
+		span.Quoting = q
+		return span, splitNever
+	}
+	return span, splitByDialect
+}
+
+// nestedInnerFields expands the inner and returns its fields, which is the
+// whole of what both the plain shape and a subscript on it read. One place,
+// so the two cannot expand it differently — or twice.
+func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
+	var words []string
+	// The inner is exactly one substitution span — the grammar admits nothing
+	// else in that position — so this is expandOneWord's loop with the loop
+	// taken out, and it keeps the fields that expandAt yields rather than
+	// joining them the way expandWordNoSplit does. Whether those fields are
+	// a list or one string is the caller's question: nestedWords refuses a
+	// list and nestedResultIsAList decides it for a subscript.
+	//
+	// splitByDialect, the ordinary word's policy, because this position keeps
+	// fields: a bare array name is the list here exactly as it is on a
+	// command line, so `${${a}}` reaches the same answer `${${a[@]}}` does
+	// rather than a joined string that looks like one field on purpose.
+	//
+	// Unless the expansion *around* it was quoted, in which case the inner
+	// is expanded quoted as well and the fields it keeps are the ones
+	// quoting keeps. Measured on zsh 5.9.2 with `a=(one two)`:
+	//
+	//	"${${a}}"       one two   the bare name joins, exactly as "$a" does
+	//	"${${a}#o}"     ne two    so the operator sees the joined value
+	//	"${#${a}}"      7         and a length measures it
+	//	IFS=-; "${${a}[2]}"  -    the join is on IFS, not on a hard space
+	//	"${${a[@]}[2]}" two       while `[@]` keeps its fields in quotes
+	//
+	// Which is not a rule of its own: it is what expandAt already does for
+	// a quoted span, so the quoting is handed to it rather than reimplemented
+	// here. An inner written with quotes of its own keeps them — that is a
+	// different construct, and `${(@f)"$(cmd)"}` is the reason it exists.
+	span, sp := r.nestedInnerSpan(e)
+	defer r.inWord(e.Inner)()
+	r.expandingSpan = 0
+	if parts, ok := r.expandAt(span, sp, true); ok {
+		words = parts
+	} else {
+		text, _ := r.expandSpan(span, splitNever, true)
+		words = []string{text}
+	}
+	// The marks come off once, whichever half produced the fields. The inner
+	// is an operand rather than a field of the command line, so a `*` in its
+	// value is a character the outer operator matches against and not a
+	// pattern the shell is about to escape for someone: leaving them on
+	// answered `${${v}}` on `a*b` with a backslash in it.
+	return unescapeAll(words)
 }
 
 // unescapeAll takes the glob marks off every field, for a caller that wants

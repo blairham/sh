@@ -114,36 +114,24 @@ func TestTextBesideANestedExpansionIsNotAName(t *testing.T) {
 	}
 }
 
-// Two shapes are read and not implemented, and each says which.
+// One shape is read and not implemented, and it says which.
 //
-// This is the half that keeps the gap findable. An inner that comes to a list
+// This is the half that keeps the gap findable: an inner that comes to a list
 // keeps its fields in the shell with the grammar and the outer operator then
-// applies to each; a subscript after the inner brace indexes the result. Both
-// are measured, neither is built, and joining or ignoring would answer with a
-// plausible value and say nothing — which is how the *last* gap on this
-// surface stayed hidden.
+// applies to each of them. Joining them would answer with one plausible field
+// and say nothing, which is how the *last* gap on this surface stayed hidden.
+//
+// The subscript that was refused beside it is built — see
+// interp/nestedsub_test.go, which carries the shapes *it* does not reach and
+// the same rule about naming them.
 func TestTheNestedShapesNotBuiltSayWhichTheyAre(t *testing.T) {
-	for _, tc := range []struct{ name, src, want string }{
-		{
-			"an inner that comes to a list",
-			`a=(one two); printf "[%s]" "${${a[@]}}"`,
-			"sh: ${${a[@]}}: a nested expansion of a list is not implemented\n",
-		},
-		{
-			"a subscript on the result",
-			`v=abc; printf "[%s]" "${${v}[2]}"`,
-			"sh: ${${v}[2]}: a subscript on a nested expansion is not implemented\n",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			out, st := runGrammar(t, tc.src, nesting, nil)
-			if out != tc.want {
-				t.Errorf("output = %q, want %q", out, tc.want)
-			}
-			if st == 0 {
-				t.Errorf("status 0, want the unbuilt shape refused")
-			}
-		})
+	const src = `a=(one two); printf "[%s]" "${${a[@]}}"`
+	out, st := runGrammar(t, src, nesting, nil)
+	if want := "sh: ${${a[@]}}: a nested expansion of a list is not implemented\n"; out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+	if st == 0 {
+		t.Errorf("status 0, want the unbuilt shape refused")
 	}
 }
 
@@ -233,6 +221,11 @@ func TestANestedValueCarriesNoGlobMarks(t *testing.T) {
 // a single field and this expansion returned `one two` at status 0, which is
 // the silent half of exactly the gap the diagnostic above exists to keep
 // findable.
+//
+// **Unquoted**, both of them, and that is the whole of what is left unbuilt:
+// quoted, the inner joins before the outer operator sees it — `"${${a}#o}"`
+// is `ne two` — which is a value rather than a list and is answered. See
+// nestedInnerSpan.
 func TestANestedBareArrayNameRefusesLikeTheSubscriptedOne(t *testing.T) {
 	listly := func(r *Runner) {
 		sem := *r.Semantics
@@ -241,8 +234,8 @@ func TestANestedBareArrayNameRefusesLikeTheSubscriptedOne(t *testing.T) {
 		r.Semantics = &sem
 	}
 	for _, src := range []string{
-		`a=(one two); printf "[%s]" "${${a}}"`,
-		`a=(one two); printf "[%s]" "${${a}#o}"`,
+		`a=(one two); printf "[%s]" ${${a}}`,
+		`a=(one two); printf "[%s]" ${${a}#o}`,
 	} {
 		out, st := runGrammar(t, src, nesting, listly)
 		if !strings.Contains(out, "a nested expansion of a list is not implemented") {
@@ -252,9 +245,15 @@ func TestANestedBareArrayNameRefusesLikeTheSubscriptedOne(t *testing.T) {
 			t.Errorf("%s: status 0, want the unbuilt shape refused", src)
 		}
 	}
+	// Quoted, the same characters are a joined value and the operator applies
+	// to it once, which is measured — so the refusal is about the list and
+	// not about the spelling.
+	if out, st := runGrammar(t, `a=(one two); printf "[%s]" "${${a}#o}"`, nesting, listly); out != "[ne two]" || st != 0 {
+		t.Errorf("quoted: got %q at %d, want [ne two] at 0", out, st)
+	}
 	// A one-element array is not a list and still answers, so the refusal is
 	// about the shape rather than about the name having been an array.
-	out, st := runGrammar(t, `a=(one); printf "[%s]" "${${a}#o}"`, nesting, listly)
+	out, st := runGrammar(t, `a=(one); printf "[%s]" ${${a}#o}`, nesting, listly)
 	if out != "[ne]" || st != 0 {
 		t.Errorf("got %q at %d, want [ne] at 0", out, st)
 	}

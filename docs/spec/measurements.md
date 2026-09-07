@@ -418,6 +418,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `glob/matches-are-in-order` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` |
 | `length/of-a-one-element-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `one=5~two=5~none=0` | `one=5~two=5~none=0` | `one=5~two=5~none=0` | `one=5~two=5~none=3` | `one=1~two=2~none=0` |
 | `length/of-an-array-holding-one-empty-string` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a x=([0]="")~one=0~two=0` | `declare -a x=([0]="")~one=0~two=0` | `declare -a x='([0]="")'~one=0~two=0` | `typeset -a x=('')~one=0~two=0` | `typeset -a x=( '' )~one=1~two=2` |
+| `length/a-hash-in-the-name-position-of-an-operator` | `[2][2][w][w][2]` | `[2][2][w][w][2]` | `[2][2][w][w][2]` | `[2][2][w][w][2]` | `[2][2][w][w][2]` | `[2][2][w][w][2]` |
+| `length/a-hash-with-a-trim-a-replacement-and-a-substring` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][][X][2]` | `[][][X][2]` | `[][][X][2]` | `[][][X][2]` | `[][][X][2]` |
+| `length/a-hash-then-a-name-is-a-length` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` | `[1][1][0][0]` |
+| `length/a-hash-then-a-name-and-a-word` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 
 - `expand/results-not-rescanned-quote` — a quote in expanded text is a literal quote
   ```sh
@@ -1250,6 +1254,22 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   x=(""); typeset -p x; echo "one=${#x}"; x=("" ""); echo "two=${#x}"
   ```
+- `length/a-hash-in-the-name-position-of-an-operator` — a `#` at the front of an expansion is the length prefix or the parameter `$#`, and behind an operator that cannot begin a name it is the parameter: all six shells answer `$#` here, so `${#=w}` is the ordinary default assignment with `#` standing where a name does — never firing, since `$#` is always set — and the word is not substituted. Unanimous, so it is core and not the one shell's reading it was first taken for
+  ```sh
+  set -- p q; printf '[%s]' "${#=w}" "${#:=w}" "${#+w}" "${#:+w}" "${#:?w}"; echo
+  ```
+- `length/a-hash-with-a-trim-a-replacement-and-a-substring` — the same reading with the operators that act on the *value* `$#` came to: `2` trimmed of a leading `2` is nothing, replaced is `X`, and its first character is `2`. dash has no `/` or `:off:len` and refuses the line at the first of them, which is that shell's own gap and not this question
+  ```sh
+  set -- p q; printf '[%s]' "${##2}" "${#%2}" "${#/2/X}" "${#:0:1}"; echo
+  ```
+- `length/a-hash-then-a-name-is-a-length` — the other side of the same two characters, and the row that says an operand is what the trim reading needs: `${##}` is the *length* of `$#` in all six, where `${##2}` is `$#` with a `2` stripped off. `?`, `@` and `*` are names there too, which is why `${#?}` is the length of `$?` rather than `$#` with a `?` operator
+  ```sh
+  printf '[%s]' "${##}" "${#?}" "${#@}" "${#*}"; echo
+  ```
+- `length/a-hash-then-a-name-and-a-word` — where the panel parts, and it parts on the *parse* rather than on a value: five shells read the `#` as the parameter and answer `$#`, and zsh reads a length over `$-` with a stray `w` after it and refuses. This implementation refuses with zsh — taking the five-shell side would replace one shell's loud refusal with a plausible number, which is the trade the spec entry names as open
+  ```sh
+  set -- p q; printf '[%s]' "${#-w}"; echo
+  ```
 
 ## semantics axes
 
@@ -1675,7 +1695,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `jobs/a-running-background-job` | `[1] + Running                    ` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                 sleep 0.4 &` | `[1] +  Running                 <command unknown>` | `[1]  + running    sleep 0.4` |
 | `jobs/a-finished-background-job` | `[1] Done                       ~---` | `[1] Done                       sleep 0.05~---` | `[1] Done                       sleep 0.05~---` | `---` | `[1] Running                 <command unknown>~---` | `---` |
 | `jobs/a-background-job-that-failed` | `[1] Done(1)                    ` | `[1] Exit 1                     false` | `[1] Done(1)                    false` | *(no output, status 0)* | `[1] Running                 <command unknown>` | *(no output, status 0)* |
-| `jobs/a-job-that-is-neither-current-nor-previous` | `[2][+] Done                       ~[1][+] Done(1)                    ` | `[1][+] Running                    false &` | `[1][ ] Done(1)                    false` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
+| `jobs/a-job-that-is-neither-current-nor-previous` | `[2][+] Done                       ~[1][+] Done(1)                    ` | `[1][ ] Exit 1                     false` | `[1][ ] Done(1)                    false` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `jobs/two-jobs-and-which-end-it-starts-from` | `[2] + Running                    ~[1] - Running                    ` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                 sleep 0.4 &~[2]+  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[1]  - running    sleep 0.4~[2]  + running    sleep 0.4` |
 | `jobs/dash-p-is-the-process-ids-alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `a listing with the id in it` |
 | `jobs/dash-l-puts-the-process-id-in-the-listing` | `[1] + PID Running ` | `[1]+ PID Running sleep 0.4 &` | `[1]+ PID Running sleep 0.4 &` | `[1]+ PID Running sleep 0.4 &` | `[1] + PID	 Running <command unknown>` | `[1] + PID running sleep 0.4` |

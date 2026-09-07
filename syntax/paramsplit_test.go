@@ -122,13 +122,15 @@ func TestParamSplitFlagFollowsTheFlagGroup(t *testing.T) {
 		t.Errorf(`${=(U)x}: read as %+v, want a bad substitution`, e)
 	}
 	// And an `=` behind the `#` is not the flag: `${#=word}` is the
-	// assignment on `$#` in the shell that has the construct, so the run is
-	// read in front of the `#` and nothing behind it is a flag. That
-	// expansion is a gap here either way — the point of the row is that the
-	// flag did not silently claim it.
+	// assignment on `$#`, in all six shells, so the run is read in front of
+	// the `#` and nothing behind it is a flag.
 	e = firstParam(t, `echo ${#=x}`, d)
 	if e.SplitFlags != 0 {
 		t.Errorf(`${#=x}: SplitFlags=%d, want 0 — the run precedes the "#"`, e.SplitFlags)
+	}
+	if e.Name != "#" || e.Op != ParamAssign || e.Length {
+		t.Errorf(`${#=x}: name=%q op=%v length=%v, want "#" %v false — the parameter, not a length`,
+			e.Name, e.Op, e.Length, ParamAssign)
 	}
 }
 

@@ -4272,6 +4272,24 @@ EOF
 		Why:     "the same failure from the same helper in the spelling only two of the panel have, and it is the row that says the closer belongs to the construct rather than to the wording: the shell that echoes the closer says `]` here and `)` for `$((`, so one sentence with the closer as a verb serves both and a sentence with `)` written into it would be wrong on this line. The other columns are the interesting half — the two shells without the construct do not refuse the line at all, one running it silently and the other accepting it with a warning about the `$`, which is a status of 0 where the two that have it stop",
 	},
 	{
+		ID: "unterminated/a-quote-inside-a-substitution-that-never-closes", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo $( echo \"hi\necho after\n",
+		Why:     "which construct is blamed when they nest, with the quote *inside* the substitution — the arrangement that tells the two readings apart, since the row below has them the other way round and a rule of \"always the quote\" or \"always the substitution\" satisfies one and not the pair. bash, dash and ksh93 name the innermost here and the innermost there; zsh names the enclosing one in both, and prints a second line about the outer construct that we still do not. Ours blamed the substitution in every dialect because the scan that steps over a quote returned quietly when the input ran out (#1151)",
+	},
+	{
+		ID: "unterminated/a-substitution-inside-a-quote-that-never-closes", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo \"${x:-\"$( echo hi\necho after\n",
+		Why:     "the same question with the nesting reversed and one construct deeper: a `$( )` inside a quote inside a `${ }`. Three of the four blame the substitution — exactly what they say for the un-nested `echo \"$( echo hi` — and the fourth blames the quote, which is what it says for that one too. So every column answers both shapes alike and ours answered them differently, which is the whole of the issue: the skip through the expansion's body reached end of input and said nothing, so the `${` scan blamed its own opener (#1151)",
+	},
+	{
+		ID: "unterminated/a-substitution-in-an-expansions-body", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo ${x:-$( echo hi\necho after\n",
+		Why:     "the same nesting without the quote around it, which is what says the body of a `${ }` holds a substitution rather than text: the three that name the innermost name the `$(` here as well, and a scan that counted only braces reached the end of the file with the `${` still open and blamed that. It is also the row that guards the other half of the same change — a `}` written inside the substitution must not close the expansion",
+	},
+	{
 		ID: "unterminated/a-process-substitution-that-never-closes", Category: "syntax errors", SyntaxError: true,
 		Script:  true,
 		Snippet: "cat <(echo hi\necho after\n",

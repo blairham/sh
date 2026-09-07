@@ -41,6 +41,12 @@ func Dialect() syntax.Dialect {
 	// out reports as parse error near `()' rather than naming the closing
 	// paren on its own.
 	d.EmptyParensAreOneToken = true
+	// When constructs nest and the input runs out inside them, this shell
+	// names the *enclosing* one where the other three name the innermost:
+	// `echo "$( echo hi` is `unmatched "` here, about a quote the script
+	// did write, and `unexpected EOF while looking for matching )` in bash.
+	// Measured with the nesting both ways round — see the flag (#1151).
+	d.UnmatchedBlamesTheOutermost = true
 	// `}` is reserved wherever a word may stand here, which is what lets a
 	// brace group close without a terminator — and what makes `echo }` a
 	// syntax error rather than a brace on the output.

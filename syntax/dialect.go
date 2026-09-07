@@ -1277,6 +1277,29 @@ type Dialect struct {
 	// way. `$(` and `${` are not quotes and still refuse.
 	CloseQuotesAtEOF bool
 
+	// UnmatchedBlamesTheOutermost names the *enclosing* construct when the
+	// input runs out inside nested ones, where the default names the
+	// innermost.
+	//
+	// Measured 2026-09-07, `-n` over a script file, with constructs nested
+	// both ways round so that neither reading can pass for the other:
+	//
+	//	echo $( echo "hi          `"` in bash, dash and ksh93
+	//	echo "${x:-"$( echo hi    `$(` in the same three
+	//	echo $(( 1 + `echo 2      the backquote in the same three
+	//	echo "$( echo hi          `$(` in the same three
+	//
+	// Three of the four name the innermost in every arrangement. zsh names
+	// the outermost in all of them — `echo "$( echo hi` is `unmatched "`
+	// there, about a quote the script did write, where bash is looking for a
+	// `)`.
+	//
+	// It is answered by the *order* the reports arrive in rather than by
+	// anything looking around: the scanners recurse, so the innermost to run
+	// out reports first and the enclosing ones follow it outwards. Keeping
+	// the first report is the default; this makes each replace the last.
+	UnmatchedBlamesTheOutermost bool
+
 	// Coproc is `coproc command`: the command runs in the background with a
 	// pipe on each of its named streams and the shell keeps the near ends.
 	// bash and zsh both have the word; ksh93 spells a coprocess `cmd |&`,

@@ -4,6 +4,8 @@
 package zsh_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -90,16 +92,166 @@ func TestALeftoverAfterAModifierIsRefusedWithoutAName(t *testing.T) {
 	}
 }
 
-// The modifiers this shell has and this implementation does not perform are
-// refused out loud, not passed through. Recorded rather than reproduced: each
-// needs the working directory, the disk, the command search or this shell's
-// quoting table, and a value that was never computed must not be handed back
-// as though it had been.
-func TestAModifierThatIsNotPerformedIsRefused(t *testing.T) {
-	for _, mod := range []string{"a", "A", "P", "c", "q", "Q", "s"} {
-		out, st := runZsh(t, t.TempDir(), `x=/tmp/a.b; echo "[${x:`+mod+`}]"`)
-		if !strings.Contains(out, "not implemented") || st == 0 {
-			t.Errorf(":%s = %q (status %d), want a refusal saying so", mod, out, st)
+// All thirteen are performed now, and this is the half of them that needs
+// something a string does not carry. Measured against zsh 5.9.2, 2026-09-07,
+// with a scratch HOME and no startup files.
+//
+// The values are chosen so no machine can disagree: an absolute path needs no
+// working directory, nothing exists under `/no/such`, and a name holding a
+// slash is never searched for. The cases that *do* need the disk get a
+// directory from the framework and compare against a path built from it.
+func TestTheModifiersThatNeedTheWorldArePerformed(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a", `x=/x/y/../z/.; echo "[${x:a}]"`, "[/x/z]\n"},
+		{"a leaves an empty value empty", `x=; echo "[${x:a}]"`, "[]\n"},
+		{"A on a path that is nowhere", `x=/no/such/path; echo "[${x:A}]"`, "[/no/such/path]\n"},
+		{"A drops a trailing slash", `x=/no/such/; echo "[${x:A}]"`, "[/no/such]\n"},
+		{"P keeps one it could not resolve", `x=/no/such/; echo "[${x:P}]"`, "[/no/such/]\n"},
+		{"c leaves what it cannot find", `x=nosuchcommand12345; echo "[${x:c}]"`, "[nosuchcommand12345]\n"},
+		{"c never touches a name with a slash", `x=./nosuch; echo "[${x:c}]"`, "[./nosuch]\n"},
+		{"q", `x="a b*c"; echo "[${x:q}]"`, "[a\\ b\\*c]\n"},
+		{"q on empty is empty, where the flag is two quotes", "x=; echo \"[${x:q}][${(q)x}]\"", "[]['']\n"},
+		{"Q", "x=\"'a b'\"; echo \"[${x:Q}]\"", "[a b]\n"},
+		{"q and Q round trip", `x="a b"; echo "[${x:q:Q}]"`, "[a b]\n"},
+		{"s", `x=aXbXc; echo "[${x:s/X/-/}]"`, "[a-bXc]\n"},
+		{"gs", `x=aXbXc; echo "[${x:gs/X/-/}]"`, "[a-b-c]\n"},
+		{"s with a colon delimiter", `x=aXbXc; echo "[${x:s:X:-:}]"`, "[a-bXc]\n"},
+		{"s puts the matched text where & is", `x=aXbXc; echo "[${x:s/X/[&]/}]"`, "[a[X]bXc]\n"},
+		{"s takes a literal, not a pattern", `x=abc; echo "[${x:s/?/Z/}]"`, "[abc]\n"},
+		{"and replaces it where it is really there", `x="a?c"; echo "[${x:s/?/Z/}]"`, "[aZc]\n"},
+		{"a chain after a substitution", `x=/tmp/Dir/f; echo "[${x:s/Dir/X/:h:t}]"`, "[X]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s\ngot  %q (status %d)\nwant %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// `:a` puts a relative value on the working directory, and `:A` resolves the
+// link the two of them are given. The directory comes from the framework, so
+// the expectation is built rather than written down.
+func TestAModifierResolvesAgainstTheDiskItIsGiven(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "real", "sub"), 0o700); err != nil {
+		t.Fatalf("making the tree: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(dir, "real"), filepath.Join(dir, "link")); err != nil {
+		t.Skipf("no symlinks here: %v", err)
+	}
+	out, st := runZsh(t, dir, `x=rel/f; echo "[${x:a}]"
+y=`+filepath.Join(dir, "link", "sub")+`; echo "[${y:A}]"
+z=`+filepath.Join(dir, "link", "sub")+`; echo "[${z:a}]"`)
+	if st != 0 {
+		t.Fatalf("status %d, out %q", st, out)
+	}
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("got %q, want three lines", out)
+	}
+	// `:a` is lexical, so it neither needs nor consults the link.
+	if !strings.HasPrefix(lines[0], "[/") || !strings.HasSuffix(lines[0], "/rel/f]") {
+		t.Errorf(":a on a relative path = %s, want an absolute path ending in /rel/f", lines[0])
+	}
+	// `:A` follows it; `:a` does not, and the pair is the whole difference.
+	if strings.Contains(lines[1], "/link/") {
+		t.Errorf(":A = %s, want the link resolved", lines[1])
+	}
+	if !strings.HasSuffix(lines[2], "/link/sub]") {
+		t.Errorf(":a = %s, want the link left alone", lines[2])
+	}
+}
+
+// `:c` finds a command on PATH and leaves alone everything that is not one.
+// A function is not a command here and a builtin resolves to the external
+// file of that name — both measured, and both the opposite of what a reader
+// would guess from the name.
+func TestACommandModifierSearchesPathAndNothingElse(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mycmd"), []byte("#!/bin/sh\n:\n"), 0o700); err != nil {
+		t.Fatalf("writing the command: %v", err)
+	}
+	want := "[" + filepath.Join(dir, "mycmd") + "]\n[myfn]\n[nosuchcommand12345]\n"
+	out, st := runZsh(t, dir, `x=mycmd; echo "[${x:c}]"
+myfn(){ :; }; y=myfn; echo "[${y:c}]"
+z=nosuchcommand12345; echo "[${z:c}]"`)
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A count after `h` or `t` counts separators — from the left and from the
+// right — rather than repeating the modifier, which is what it looks like.
+func TestACountCountsSeparators(t *testing.T) {
+	want := "[/][/a][/a/b][/a/b/c/d/e][d/e][a/b/c/d/e][/a/b/c/d/e]\n"
+	out, st := runZsh(t, t.TempDir(),
+		`x=/a/b/c/d/e; echo "[${x:h1}][${x:h2}][${x:h3}][${x:h9}][${x:t2}][${x:t5}][${x:t9}]"`)
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+	// A trailing run of slashes separates nothing, so this path has two
+	// separators and `:h3` is the whole value.
+	want = "[/a][/a/b//]\n"
+	if out, st := runZsh(t, t.TempDir(), `x=/a/b//; echo "[${x:h2}][${x:h3}]"`); out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The substitution is remembered for the shell, not for the parameter.
+func TestASubstitutionIsRememberedAcrossParameters(t *testing.T) {
+	got, status := runZsh(t, t.TempDir(),
+		`x=aXbXc; y=aXd; z=aXbXc; echo "[${x:s/X/-/}][${y:s//+/}][${z:&}]"`)
+	// The third is `a+bXc` and not `a-bXc`, which is the sharp end of the
+	// memory being one thing rather than a stack: `${y:s//+/}` did not only
+	// *read* the remembered pattern, it wrote the new replacement back — so
+	// `:&` afterwards repeats `X → +` and not the `X → -` two expansions
+	// earlier. Measured against zsh 5.9.2, and the expectation here was wrong
+	// before the shell was asked.
+	if got != "[a-bXc][a+d][a+bXc]\n" || status != 0 {
+		t.Errorf("got %q (status %d), want %q", got, status, "[a-bXc][a+d][a+bXc]\n")
+	}
+	// `:&` with nothing before it is a silent no-op, where an empty pattern
+	// with nothing before it is refused by name. The two reach for the same
+	// memory and answer differently when it is empty.
+	if got, status := runZsh(t, t.TempDir(), `x=aXbXc; echo "[${x:&}]"`); got != "[aXbXc]\n" || status != 0 {
+		t.Errorf("`:&` with no previous substitution = %q (status %d), want a silent no-op", got, status)
+	}
+	got, status = runZsh(t, t.TempDir(), `x=aXbXc; echo "[${x:s//+/}]"`)
+	if !strings.Contains(got, "no previous substitution") || status == 0 {
+		t.Errorf("an empty pattern with none before it = %q (status %d), want a refusal", got, status)
+	}
+}
+
+// The refusal names one byte. `${x:zz}` is a complaint about `z`; naming `zz`
+// would say the pair is the modifier that is missing.
+func TestAnUnrecognizedModifierNamesOneByte(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`x=/tmp/a.b; echo "[${x:zz}]"`, "zsh:1: unrecognized modifier `z'\n"},
+		{`x=/tmp/a.b; echo "[${x:iq}]"`, "zsh:1: unrecognized modifier `i'\n"},
+		{`x=/tmp/a.b; echo "[${x:g}]"`, "zsh:1: unrecognized modifier `g'\n"},
+		{`x=/tmp/a.b; echo "[${x:hzz}]"`, "zsh:1: unrecognized modifier\n"},
+	} {
+		if out, st := runZsh(t, t.TempDir(), tc.src); out != tc.want || st == 0 {
+			t.Errorf("%s\ngot  %q (status %d)\nwant %q", tc.src, out, st, tc.want)
 		}
+	}
+	// `${x:s}` is not a modifier complaint at all — a substitution with no
+	// body is a bad substitution, the same as any other malformed `${ }`.
+	if out, st := runZsh(t, t.TempDir(), `x=abc; echo "[${x:s}]"`); !strings.Contains(out, "bad substitution") || st == 0 {
+		t.Errorf("`${x:s}` = %q (status %d), want a bad substitution", out, st)
+	}
+}
+
+// A modifier after **both** an offset and a length, which the parser cannot
+// split on its own: a range is split once, so `5:t` arrived whole and reached
+// the evaluator as an expression.
+func TestAModifierMayFollowBothAnOffsetAndALength(t *testing.T) {
+	want := "[D][BCDEF][File.Txt.gz][mp]\n"
+	out, st := runZsh(t, t.TempDir(),
+		`x=/tmp/Dir/File.Txt.gz; y=abcdefgh; echo "[${x:1:5:t}][${y:1:5:u}][${x:2:t}][${x:2:2}]"`)
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }

@@ -3302,6 +3302,36 @@ echo "st=$?"`,
 		Why:     "a segment is one modifier and the letter is the whole of it, so a good modifier with a letter after it is refused — and refused *without naming anything*, where an unknown first letter is named. The two shapes of one sentence are why this is a case: `${x:i:2}` names `i` and this names nothing, and a single wording would have to pick one",
 	},
 	{
+		ID: "param/a-substring-modifier-that-needs-the-working-directory", Category: "parameter expansion",
+		Snippet: `x=/x/y/../z; a=1; echo "[${x:a}]"`,
+		Why:     "`:a` makes a path absolute lexically — `..` and `.` cancelled by name, no link followed — where the other three read `a` as an offset of 1 and take the substring. An absolute value on purpose, so the answer needs no working directory and no machine agrees or disagrees by accident",
+	},
+	{
+		ID: "param/a-substring-modifier-that-needs-the-command-search", Category: "parameter expansion",
+		Snippet: `x=/tmp/Dir/File; c=5; echo "[${x:c}]"`,
+		Why:     "`:c` is the path the command search would find, and a name holding a slash is left exactly as written — so the value comes back unchanged, where the other three take the substring from offset 5. The unchanged answer is the point: it is what a modifier does with a name that is not a bare command, and it is why the column that looks like a no-op is not one",
+	},
+	{
+		ID: "param/a-substring-modifier-that-needs-the-quoting-table", Category: "parameter expansion",
+		Snippet: `x="a b*c"; q=2; echo "[${x:q}]"`,
+		Why:     "`:q` quotes the value in that shell's own quoting — `a\\ b\\*c` — where the other three take the substring from offset 2. The same table `${(q)x}` uses, with one measured difference the flag does not share: an empty value is empty here and `''` there",
+	},
+	{
+		ID: "param/a-substring-modifier-that-substitutes", Category: "parameter expansion",
+		Snippet: `x=aXbXc; echo "[${x:s/X/-/}]"; echo "st=$?"`,
+		Why:     "`:s` replaces a **literal** substring, not a pattern — measured: `${x:s/?/Z/}` on `abc` answers `abc`, and the `?` is replaced only where the value really holds one. The other three read `s/X/-/` as arithmetic and refuse it, which is why the status is the second line",
+	},
+	{
+		ID: "param/a-substring-modifier-after-an-offset-and-a-length", Category: "parameter expansion",
+		Snippet: `x=/tmp/Dir/File.Txt.gz; t=0; echo "[${x:1:5:t}]"; echo "st=$?"`,
+		Why:     "a modifier after **both** an offset and a length, which is a third shape rather than a variation of either: the tail of the five characters from offset one. The parser splits a range once, so `5:t` arrives whole — it reached the evaluator as an expression here and was an arithmetic failure over a range the shell with modifiers reads without complaint",
+	},
+	{
+		ID: "param/a-substring-modifier-with-a-count", Category: "parameter expansion",
+		Snippet: `x=/a/b/c/d/e; h=0; echo "[${x:h1}][${x:h3}]"`,
+		Why:     "a digit after `h` counts **separators from the left**, not repetitions of the modifier: `:h1` is `/` where the head once is `/a/b/c/d` and three times over is `/a/b`. Both are here because `:h3` alone is `/a/b` under either reading, which is the coincidence that let the repetition reading survive being written down. The other three read `h1` as a name and take the substring from offset 0",
+	},
+	{
 		ID: "param/a-substring-offset-on-a-subscripted-parameter", Category: "parameter expansion",
 		Snippet: `a=(p q r); echo "[${a[@]:1+}]"; echo after`,
 		Why:     "the parameter a diagnostic names is the name and its subscript, not the name alone — `a[@]` — in the one shell that names it at all. The list form of the substring reaches the same evaluation as the string form, so this also says the two spellings share it",

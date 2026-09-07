@@ -2160,7 +2160,55 @@ func (r *Runner) substringRange(value string, e *syntax.ParamExpr) string {
 		}
 		return out
 	}
+	// Or a length *and then* a modifier list, which is a third shape and not
+	// a variation of either: `${x:1:5:t}` is the tail of the five characters
+	// from offset one. The parser splits a range once, so `5:t` arrives whole
+	// and reached the evaluator as an expression — an arithmetic failure over
+	// a range every shell with modifiers reads without complaint.
+	if lenWord, mods, ok := splitLengthFromModifiers(e.Arg2); ok &&
+		r.ask(r.sem().SubstringRangeReadsModifiers,
+			"a substring range beginning with a letter being a modifier list") {
+		sliced := substring(value, r.numOf(e.Arg, e, lenWord), &syntax.ParamExpr{
+			Name: e.Name, Op: e.Op, Arg: e.Arg, Arg2: lenWord,
+		}, r)
+		out, ok := r.applyModifiers(sliced, mods, e)
+		if !ok {
+			return ""
+		}
+		return out
+	}
 	return substring(value, r.numOf(e.Arg, e, e.Arg2), e, r)
+}
+
+// splitLengthFromModifiers separates a length from the modifier list behind
+// it, for the one shape the parser cannot split on its own.
+//
+// A range is split once, at its first colon, so `${x:1:5:t}` gives an offset
+// of `1` and a length word holding `5:t`. Splitting further here rather than
+// in the parser keeps a range's shape a question about this dialect and not
+// about the grammar, which is the same reason modifierSegments splits a
+// chain here.
+//
+// Only where the length is plain unquoted text, which is what the shape is:
+// `${x:1:$n:t}` puts an expansion where the split would be, and guessing at
+// its colons would be reading a value rather than a range. Such a word is
+// left to the evaluator exactly as it was.
+func splitLengthFromModifiers(w *syntax.Word) (*syntax.Word, []string, bool) {
+	if w == nil || len(w.Spans) != 1 {
+		return nil, nil, false
+	}
+	s := w.Spans[0]
+	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
+		return nil, nil, false
+	}
+	head, tail, found := strings.Cut(s.Value, ":")
+	if !found || head == "" || tail == "" {
+		return nil, nil, false
+	}
+	return &syntax.Word{
+		Spans: []syntax.Span{{Kind: syntax.Literal, Value: head}},
+		Start: w.Start, Stop: w.Stop,
+	}, strings.Split(tail, ":"), true
 }
 
 // substring takes a slice of the value.

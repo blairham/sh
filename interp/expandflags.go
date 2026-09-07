@@ -370,6 +370,18 @@ func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool
 				// one word made of all of them. And it is set even with no
 				// match — measured, `${m[(I)zz]-none}` is empty where
 				// `${m[zz]-none}` is `none`, so a search always answers.
+				//
+				// The `true` says that outright rather than reading it off
+				// the slice. It is the same value `list != nil` has here,
+				// because the only thing that reaches this branch is
+				// assocSearchWords and its result comes from `make`, which
+				// never yields nil — the two cases, no matches and some, are
+				// the whole of it. Written this way because the set-ness is a
+				// fact about the *construct* and would survive somebody
+				// changing what an empty search returns, and the non-nil
+				// slice is separately load-bearing next door: paramSource
+				// reads `elems != nil` for the same question on the route
+				// with no flag group.
 				return list, true, true
 			}
 			return []string{strings.Join(list, " ")}, list != nil, false

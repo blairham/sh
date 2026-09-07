@@ -1903,12 +1903,27 @@ itself is pinned nowhere.
 are not searches there at all: `${m[(k)a]}` is the value at the key `a`
 and `${m[(k)*]}` is nothing, because `*` is a key nobody assigned.
 
-An operator written on a search — `${m[(I)*]#p}` — follows the rule a
-range already follows here: quoted, the matches are joined and the
-operator applies once; unquoted, zsh applies it to each and this
-implementation applies it to the joined text. That last is a **pre-existing
-divergence shared with `${a[1,3]#p}`** rather than one this construct
-introduced, and it is filed separately.
+An operator written on a search follows the rule `${a[*]}` already
+follows, and the two halves are opposite. Measured with three matching
+keys `pa pb pc` and a trim of `#p`:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `"${m[(I)p*]#p}"` | `a pb pc` — joined, then trimmed once |
+| `${m[(I)p*]#p}` | `a`, `b`, `c` — one field each, each trimmed |
+| `"${(@)m[(I)p*]#p}"` | the same three, kept through the quotes |
+| `"${m[(I)p*]:#pa}"` | `pa pb pc` — the filter tests the joined text |
+| `"${m[(I)p*]:1}"` | `pb pc` — a slice slices the list |
+
+Both halves are carried. The quoted one is
+`OperatorDistributesOverStarSubscript` answered the way `[*]` answers it,
+which is why routing the search through the same path as `[*]` was the
+whole of the change rather than a special case beside it.
+
+Which match came first decides the quoted answer, so that row is asserted
+in a unit test against this implementation's own key order and is
+deliberately **not** in the corpus, where a key order neither shell
+promises may not be pinned.
 
 `a[(r)y]=Q` — a flag group on the left of an **assignment** — is a
 parse error here and an element replacement in zsh. The group is read

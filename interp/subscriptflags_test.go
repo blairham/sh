@@ -583,6 +583,34 @@ func TestTheAssociationSearchAPluginManagerAsksWith(t *testing.T) {
 	}
 }
 
+// A flag group that selects *nothing* leaves the ordinary reading alone over
+// an association exactly as it does over an ordered array, and an ordered
+// array's search is not list-shaped however the association's is. Both are
+// the boundary of the new reading rather than the reading itself, and both
+// are silent when they slip: a width answered as a count is `1` for a
+// five-character value, which is a number a script will happily use.
+func TestWhatIsNotAnAssociationSearch(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"an empty group over an association is still a key lookup",
+			`typeset -A m=(a hello); printf "[%s]" "${m[()a]}" "${#m[()a]}" "${m[(e)a]}"`,
+			"[hello][5][hello]",
+		},
+		{
+			"and an ordered array's search is one value, so # is its width",
+			`a=(alpha beta); printf "[%s]" "${#a[(r)alpha]}" "${#a[(i)beta]}" "${a[(r)zz]-none}"`,
+			"[5][1][none]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runAssoc(t, tc.src)
+			if out != tc.want || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, tc.want)
+			}
+		})
+	}
+}
+
 // The letters this still does not carry over an association are still refused
 // by name. `(k)` and `(K)` are not searches at all there — measured, `${m[(k)a]}`
 // is the value at the key `a` and `${m[(k)*]}` is nothing, because the star is

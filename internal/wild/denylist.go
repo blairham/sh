@@ -70,10 +70,86 @@ func looksLikeVersion(seg string) bool {
 	return seg != "" && seg[0] >= '0' && seg[0] <= '9'
 }
 
-// foreignTestDirs are the directory names projects keep their test files
-// under. vim's syntax tests use testdir; Go projects use testdata; tests is
-// everyone else's.
-var foreignTestDirs = map[string]bool{"testdir": true, "testdata": true, "tests": true}
+// foreignTestDirs are the directory names a project keeps its test files
+// under, matched against the whole name and against the name's first word.
+//
+// The list was three entries — testdir, testdata, tests — and singular `test`
+// was not one of them, so `<pkg>/share/ncurses/test` was swept like any other
+// directory and nine of another project's test scripts were in the population
+// on this machine every time `make wild` ran. Adding one entry would have
+// fixed that sighting and left the next one: the failure was not a missing
+// name, it was a list written from memory by someone who does not hold every
+// convention in it.
+//
+// So a name is also matched by its first word, split on the separators a name
+// is qualified with. That is what makes test-suite, test_data, tests.old and
+// spec-helpers denied without any of them being listed, and it is the half
+// that does not need anyone to have thought of them.
+var foreignTestDirs = map[string]bool{
+	// The word itself, and the forms that are one word rather than two: vim's
+	// syntax tests use testdir, Go uses testdata, autotools projects call it
+	// testsuite, and everyone else uses the plural.
+	"test": true, "tests": true, "testdata": true, "testdir": true,
+	"testing": true, "testsuite": true, "testsuites": true,
+	"testcase": true, "testcases": true,
+	// Names with no relation to the word. RSpec and shellspec use spec, and
+	// shellspec is how a shell project tests shell; jest uses __tests__ and
+	// __mocks__; BSD and Postgres call it regress; fixtures are a suite's
+	// inputs and are the same expression as the suite.
+	"spec": true, "specs": true,
+	"fixture": true, "fixtures": true,
+	"__tests__": true, "__mocks__": true,
+	"regress": true, "regression": true,
+	// Not `t`, which is Perl's and Raku's. It is also what macOS calls the
+	// per-user temporary directory, so the entry denied every path under
+	// $TMPDIR — including every scratch tree this package's own tests sweep,
+	// which is how it was found. A name one letter long carries no evidence
+	// of what it is for, and Perl's suites are not shell in any case.
+}
+
+// nameSeparators are what a directory name is qualified with, and so where its
+// first word ends.
+const nameSeparators = "-_."
+
+// foreignTestDir reports whether a directory segment names another project's
+// test directory.
+//
+// Case-folded, because the name is a convention and not an identifier: zsh
+// calls its own Test, a project vendored from elsewhere carries TestData, and
+// a rule exact about case would let every one of them through while looking
+// like it had them covered.
+//
+// A word rather than a prefix, and that was measured rather than assumed. A
+// prefix on the whole segment reads as the safer rule — over-skipping is the
+// direction to err, since a skipped file is counted rather than lost — and it
+// is not, because it does not stop at test directories. `test` as a prefix
+// denies testify, which is a library; /home/testuser, which is a person; and
+// every scratch directory the Go tool makes, which is named after the test
+// function and so begins with Test. Landing it took out twelve of this
+// package's own tests at once by denying the temporary directories they sweep,
+// which is a sweep reporting zero for a reason that has nothing to do with
+// what is installed — the failure this whole file exists to keep out of the
+// report. A word ends at a separator; testify and testuser are one word, and
+// test-suite is two.
+//
+// Deliberately not extended to examples. A project's examples are its own
+// programs, written to be read, and CLEANROOM.md's red list names test files
+// and testdata — the same line that leaves a third-party program in /usr/bin
+// readable. Denying examples would cost the sweep the population it exists for
+// and would not be this rule.
+func foreignTestDir(seg string) bool {
+	seg = strings.ToLower(seg)
+	if foreignTestDirs[seg] {
+		return true
+	}
+	// i > 0 rather than i >= 0 says a first word has to be a word. The two
+	// behave alike — a name beginning with a separator has an empty first
+	// word, which is in no list — and the comparison states the intent.
+	if i := strings.IndexAny(seg, nameSeparators); i > 0 {
+		return foreignTestDirs[seg[:i]]
+	}
+	return false
+}
 
 // Denied reports why CLEANROOM.md forbids opening the file at path, or ""
 // when it may be read.
@@ -164,7 +240,7 @@ func deniedSegments(dir string) string {
 		if shellTree(segs, i) {
 			return ReasonShellSource
 		}
-		if foreignTestDirs[seg] {
+		if foreignTestDir(seg) {
 			return ReasonTestData
 		}
 	}

@@ -294,3 +294,165 @@ func TestDeniedCoversAnInstalledShellDistribution(t *testing.T) {
 		}
 	}
 }
+
+// TestDeniedRefusesEveryShapeOfTestDirectory is the table the singular case
+// went missing from.
+//
+// The rule was three names long — testdir, testdata, tests — and plain `test`
+// was not one of them, so `<pkg>/share/ncurses/test` was swept like any other
+// directory and nine of another project's test scripts were in the population
+// on this machine every time `make wild` ran. One more entry would have fixed
+// that sighting and left the next one, because the failure was never a missing
+// name: it was that the list was written from memory, and nobody's memory
+// holds every convention.
+//
+// So the table is layouts rather than names, and it carries its own opposite.
+// Every allowed row is a word that *contains* a denied one — special, contest,
+// attest, t9 — because a rule broad enough to catch the conventions is one
+// substring away from refusing the whole machine, and a table with no allowed
+// rows cannot tell the two apart.
+func TestDeniedRefusesEveryShapeOfTestDirectory(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, want string
+	}{
+		// The sighting: a singular test directory in the sweep's own default
+		// roots, holding a package's own suite.
+		{
+			"a singular test directory, the miss this fixes",
+			"/opt/homebrew/opt/ncurses/share/ncurses/test/listused.sh", wild.ReasonTestData,
+		},
+		// The same shape one directory deeper, which is where a plugin tree
+		// keeps it and where the sweep is about to be pointed.
+		{
+			"a plugin's own test directory",
+			"/home/me/plugins/theme/share/test/prompt.zsh", wild.ReasonTestData,
+		},
+
+		// The three that were already covered, kept so a rewrite of the rule
+		// cannot drop them on the way past.
+		{"tests", "/opt/proj/tests/regress.sh", wild.ReasonTestData},
+		{"testdata", "/opt/proj/testdata/case.sh", wild.ReasonTestData},
+		{"testdir", "/usr/share/vim/vim91/syntax/testdir/input/sh_12.sh", wild.ReasonTestData},
+
+		// The rest of the family, which the stem catches without anyone
+		// having had to think of them.
+		{"testsuite", "/opt/proj/testsuite/run.sh", wild.ReasonTestData},
+		{"testsuites", "/opt/proj/testsuites/run.sh", wild.ReasonTestData},
+		{"testing", "/opt/proj/testing/helper.sh", wild.ReasonTestData},
+		{"testcase", "/opt/proj/testcase/01.sh", wild.ReasonTestData},
+		{"testcases", "/opt/proj/testcases/01.sh", wild.ReasonTestData},
+		{"regress", "/opt/proj/regress/bin/run.sh", wild.ReasonTestData},
+		{"regression", "/opt/proj/regression/run.sh", wild.ReasonTestData},
+
+		// Two words, which no entry names and none has to: a name is matched
+		// by its first word as well as whole.
+		{"test-suite", "/opt/proj/test-suite/run.sh", wild.ReasonTestData},
+		{"test_data", "/opt/proj/test_data/case.sh", wild.ReasonTestData},
+		{"tests.old", "/opt/proj/tests.old/case.sh", wild.ReasonTestData},
+		{"spec-helpers", "/opt/proj/spec-helpers/env.sh", wild.ReasonTestData},
+
+		// Names with no stem, which have to be spelled out.
+		{"spec", "/opt/proj/spec/x_spec.sh", wild.ReasonTestData},
+		{"specs", "/opt/proj/specs/x.sh", wild.ReasonTestData},
+		{"fixture", "/opt/proj/fixture/input.sh", wild.ReasonTestData},
+		{"fixtures", "/opt/proj/fixtures/input.sh", wild.ReasonTestData},
+		{"jest's __tests__", "/opt/proj/src/__tests__/hook.sh", wild.ReasonTestData},
+		{"jest's __mocks__", "/opt/proj/src/__mocks__/git.sh", wild.ReasonTestData},
+
+		// Case is a convention, not an identifier. zsh's own directory is
+		// Test, singular and capitalised, and a project vendored from
+		// elsewhere carries TestData.
+		{"Test", "/opt/proj/Test/A01grammar.sh", wild.ReasonTestData},
+		{"TESTS", "/opt/proj/TESTS/run.sh", wild.ReasonTestData},
+		{"TestData", "/opt/proj/TestData/case.sh", wild.ReasonTestData},
+		{"Spec", "/opt/proj/Spec/x.sh", wild.ReasonTestData},
+		{"Fixtures", "/opt/proj/Fixtures/x.sh", wild.ReasonTestData},
+
+		// A suite nested anywhere on the way down is still a suite.
+		{"nested", "/opt/proj/lib/spec/support/env.sh", wild.ReasonTestData},
+
+		// And the other half, which is what keeps the rule from being a
+		// prefix. Every row here begins with a word the rule knows and is a
+		// different word, and a prefix denied all of them: measured, that
+		// version refused twelve of this package's own tests by denying the
+		// scratch directories they sweep.
+		{"testify is a library", "/opt/proj/testify/x.sh", ""},
+		{"testuser is a person", "/home/testuser/bin/backup.sh", ""},
+		{"tester likewise", "/home/tester/bin/backup.sh", ""},
+		// What the Go tool names a scratch directory: the test function, and
+		// every test function begins with Test.
+		{
+			"a scratch directory named after a test function",
+			"/var/folders/5n/x/T/TestSweepFindsEveryScript1234/001/fine.sh", "",
+		},
+		{"special is not spec", "/opt/proj/special/x.sh", ""},
+		{"contest ends with a word, it does not begin with one", "/opt/proj/contest/x.sh", ""},
+		{"attest likewise", "/opt/proj/attest/x.sh", ""},
+		// Perl's t, left readable on purpose: macOS names the per-user
+		// temporary directory T, so denying one letter denied every path
+		// under $TMPDIR — every scratch tree this package's own tests sweep
+		// included.
+		{
+			"a one-letter name is macOS's temporary directory as often as Perl's suite",
+			"/var/folders/5n/x/T/build/fine.sh", "",
+		},
+		{"tools", "/opt/proj/tools/x.sh", ""},
+		// Examples are a project's own programs, written to be read. The red
+		// list names test files, the same line that leaves a third-party
+		// program in /usr/bin readable.
+		{"examples are not test data", "/opt/homebrew/opt/krb5/share/examples/kdc.sh", ""},
+		// Only directories classify a file. A file called test is a program.
+		{"a file named test", "/usr/local/bin/test", ""},
+		{"a file named spec", "/usr/local/bin/spec", ""},
+		// What the sweep is for, still flowing.
+		{"an ordinary script", "/usr/bin/ldd", ""},
+		{"an ordinary helper", "/opt/homebrew/opt/git/libexec/git-core/git-sh-setup", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := wild.Denied(tc.path, ""); got != tc.want {
+				t.Errorf("Denied(%q) = %q, want %q", tc.path, got, tc.want)
+			}
+			// Asked of the directory too. The walk stops on that question,
+			// and a rule that refused the file while letting the walk in
+			// would have opened every other file in the suite on the way to
+			// deciding.
+			if got := wild.DeniedDir(filepath.Dir(tc.path), ""); got != tc.want {
+				t.Errorf("DeniedDir(%q) = %q, want %q", filepath.Dir(tc.path), got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFindRefusesASingularTestDirectory is the same refusal through the walk,
+// with the files made unreadable so that "never opened" is asserted rather
+// than "not reported".
+//
+// The unit table above cannot say this. Denied is a pure function of a string
+// and would keep answering correctly while the walk read the file anyway —
+// which is how the sighting happened: the classifier was asked, said nothing,
+// and the sweep went in.
+func TestFindRefusesASingularTestDirectory(t *testing.T) {
+	dir := t.TempDir()
+	suite := filepath.Join(dir, "pkg", "share", "test")
+	if err := os.MkdirAll(suite, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write(t, suite, "listused.sh", "#!/bin/sh\necho hi\n")
+	write(t, suite, "savescreen.sh", "#!/bin/sh\necho hi\n")
+	for _, n := range []string{"listused.sh", "savescreen.sh"} {
+		if err := os.Chmod(filepath.Join(suite, n), 0o000); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The control: a script of the same package, outside the suite, which the
+	// sweep exists to read and must keep reading.
+	allowed := write(t, filepath.Join(dir, "pkg"), "helper.sh", "#!/bin/sh\necho hi\n")
+
+	paths, skipped := wild.Find(wild.Scope{Dirs: []string{dir}, Depth: 5})
+	if len(paths) != 1 || paths[0] != allowed {
+		t.Errorf("paths = %v, want just %s", paths, allowed)
+	}
+	if skipped[wild.ReasonTestData] != 2 {
+		t.Errorf("skipped[%q] = %d, want 2", wild.ReasonTestData, skipped[wild.ReasonTestData])
+	}
+}

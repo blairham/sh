@@ -3357,12 +3357,14 @@ The letters themselves diverge before the behaviors do:
   file gets no prompt and reads exactly as though the flag were absent,
   and the test follows `-u` — bash with a terminal on stdin and `-u 5` on
   a file prints nothing. In ksh93 and zsh the same letter is a bare flag
-  naming the coprocess as the source; neither's coprocess construct
-  (`|&`, zsh's `coproc`) is in this grammar, so the only reachable answer
-  is the measured refusal — `read: no query process` in ksh93, `-p: no
-  coprocess` in zsh, status 1 in both, and the variables left exactly as
-  they were: the read failed before reaching any input, so the
-  clear-on-EOF rule never fires. The optstring's shape carries the split
+  naming the coprocess as the source. Both constructs are in this grammar
+  now — zsh's `coproc` word and ksh93's `|&`, which is
+  `Dialect.CoprocPipeOperator` (#1141) — so the letter reads the running
+  coprocess's near end where there is one. With none running it is the
+  measured refusal, which is what a `-p` outside a coprocess still meets:
+  `read: no query process` in ksh93, `-p: no coprocess` in zsh, status 1
+  in both, and the variables left exactly as they were — the read failed
+  before reaching any input, so the clear-on-EOF rule never fires. The optstring's shape carries the split
   the way it does for `-n`; the refusal's words are
   `Diagnostics.ReadNoCoprocess`. **"Is a terminal" is the ioctl here too**
   (#525). It was `interp`'s own approximation until then — a character
@@ -3680,8 +3682,9 @@ What was built, all through the extension seam — registered builtins in each
 - **ksh93 `print`** (dialect/ksh/print.go): the measured escape set with
   `\c` stopping everything, `-r`/`-e`/`-n`, `-u fd` through the runner's
   descriptor table, `-f` delegating to printf, `-s` consumed against a
-  history this shell does not keep, and `-p` refused with ksh93's own
-  `no query process` — the same shape `read -p` measured.
+  history this shell does not keep, and `-p` writing to the coprocess
+  `cmd |&` started — ksh93's own `no query process` when none is running,
+  the same shape `read -p` measured.
 - **zsh `print -P`** (dialect/zsh/print.go): the prompt escapes over each
   operand, and it is the **same expansion** `${(%)…}` is rather than a
   second one — `interp.Runner.PromptExpand`, which is the `%` flag's own

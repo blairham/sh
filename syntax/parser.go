@@ -753,6 +753,32 @@ func (p *Parser) parseStmt() *Stmt {
 	}
 	st := &Stmt{Expr: expr, Semi: p.bodyTookTerm}
 	switch p.tok.Kind {
+	case TokPipeAmp:
+		// Only where the dialect reads the operator as a coprocess. Where it
+		// reads it as a pipe the token was consumed by parsePipeline and
+		// never arrives here, and where it has neither reading the lexer
+		// never made the token at all.
+		//
+		// Which makes the guard **equivalent rather than decisive today**,
+		// and it is kept for what it says: mutating it to `if false`
+		// survives the suite, and a probe of both other dialects says why —
+		// with the pipe reading, `cat |&`, `cat |& b`, `a && cat |&` and a
+		// trailing newline all answer exactly as they do without the mutant,
+		// because parsePipeline never leaves this token behind; with neither
+		// reading the lexer makes `|` and `&`. A dialect setting both flags
+		// is the only reachable difference, no preset does, and the pipe
+		// reading would win there anyway. Recorded so the next reader does
+		// not go looking for the row that would kill it.
+		if !p.dialect.CoprocPipeOperator {
+			break
+		}
+		// `&` plus two pipes, and it terminates the same thing `&` does: the
+		// whole and-or, measured — `echo A && cat |&` sends `echo A`'s
+		// output into the coprocess.
+		st.Background, st.Coprocess = true, true
+		st.Semi = p.tok.Pos
+		st.Text = p.textBetween(expr.Pos(), st.Semi)
+		p.next()
 	case TokAmp, TokAmpBang, TokAmpPipe:
 		// `&` belongs to the statement, not the command: `a && b &`
 		// backgrounds the whole and-or. `&!` and `&|` are the same
@@ -944,10 +970,16 @@ func (p *Parser) parsePipeline() Expr {
 		// after this has nothing to do with it.
 		p.open = p.open[:depth]
 		pl.Cmds = append(pl.Cmds, cmd)
-		if !p.at(TokPipe) && !p.at(TokPipeAmp) {
+		// `|&` joins two commands only where it is the *pipe* reading. Where
+		// it is the coprocess operator the pipeline is over and the token
+		// belongs to the statement, which is what makes `cat |& | wc -l` a
+		// refusal at the second bar — measured, ksh93 says
+		// ``syntax error … `|' unexpected``.
+		bothStreams := p.at(TokPipeAmp) && p.dialect.PipeBothStreams
+		if !p.at(TokPipe) && !bothStreams {
 			return pl
 		}
-		if p.at(TokPipeAmp) {
+		if bothStreams {
 			p.mergeStderr(cmd, p.tok.Pos)
 		}
 		// Pushed rather than opened as a clause: a clause displaces the

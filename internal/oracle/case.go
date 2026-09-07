@@ -9643,7 +9643,7 @@ exit 7`,
 		Snippet: `f() { echo O; echo E >&2; }
 f |& while read l; do echo "<$l>"; done
 wait`,
-		Why: "the two characters with two readings. bash 5.3 and zsh pipe both streams, so the reader brackets `O` and `E` alike; bash 3.2 has no `|&` at all and dash never had one, and both lex a bar and an ampersand and blame the ampersand; ksh93 reads a *coprocess* — the left side is backgrounded onto a pipe the shell would read with `read -p`, so the reader gets nothing and the coprocess's standard error reaches the terminal on its own. Three answers, one spelling, and the reason the ksh form cannot be this flag with another value. The reader brackets what reaches it so the row does not depend on which stream a column joins, and the `wait` is what makes the ksh column deterministic: without it the coprocess is racing the shell's exit and drops its line about once in ten",
+		Why: "the two characters with two readings. bash 5.3 and zsh pipe both streams, so the reader brackets `O` and `E` alike; bash 3.2 has no `|&` at all and dash never had one, and both lex a bar and an ampersand and blame the ampersand; ksh93 reads a *coprocess* — the left side is backgrounded onto a pipe the shell would read with `read -p`, so the reader gets nothing and the coprocess's standard error reaches the terminal on its own. Three answers, one spelling, and the reason the ksh form cannot be this flag with another value — the ksh93 column was red here on purpose until #1141 built the coprocess it was recording. The reader brackets what reaches it so the row does not depend on which stream a column joins, and the `wait` is what makes the ksh column deterministic: without it the coprocess is racing the shell's exit and drops its line about once in ten",
 	},
 	{
 		ID: "pipe/both-streams-redirection-comes-last", Category: "redirection",
@@ -9654,10 +9654,32 @@ wait`,
 		Why: "where in the list the `2>&1` goes, which is the whole of the operator and the only thing an implementation can get silently wrong. Written *after* the command's own redirections it overrides the `2>/dev/null` and `<E>` arrives; written before, the `2>/dev/null` would win and only `<O>` would. Both shells that have the operator bracket both lines, so the answer is unanimous where it exists — and the same pair of shells answer the mirror shape, `e >/dev/null |&`, with nothing at all, which is the other direction of the same rule",
 	},
 	{
+		ID: "pipe/a-coprocess-is-spelled-as-an-operator", Category: "redirection",
+		Script: true,
+		Snippet: `cat |&
+print -p hello
+read -p line
+echo "got=[$line]"`,
+		Why: "the construct the operator *is*, where the three rows above only show what it is not. ksh93 backgrounds the command with a pipe on each of its named streams and `print -p` and `read -p` are how a script reaches them — there being no `coproc` word there and no name to publish under. bash 5.3 and zsh read the two bytes as a pipe of both streams instead, so `cat |&` needs a command after it and they refuse the newline; bash 3.2 and dash have no `|&` at all and blame the ampersand. One spelling, and the row that names the coprocess rather than the gap (#1141)",
+	},
+	{
+		ID: "pipe/a-coprocess-operator-ends-the-whole-and-or", Category: "redirection",
+		Script: true,
+		Snippet: `echo A && cat |&
+read -p l
+echo "read=[$l]"`,
+		Why: "which node the operator terminates, and it is the same one `&` terminates rather than the one a pipe binds to: `echo A`'s output arrives at the coprocess, so a `read -p` with nothing written to it still answers `A`. That is the row that says this cannot be a pipe operator with another meaning — a pipe joins the command in front of it, and this backgrounds everything before it",
+	},
+	{
+		ID: "pipe/a-second-coprocess-while-one-runs-is-refused", Category: "redirection",
+		Snippet: `cat |& cat |& echo "second=$?"; echo after`,
+		Why:     "and the refusal that is the operator's own, where the `coproc` word replaces its predecessor silently in both shells that have it. ksh93 answers `process already exists` and ends the script, so `after` is never reached. Written on one line through `-c` deliberately: in a *file* ksh93 blames the line before the second operator rather than its own, which is an off-by-one in its reporting and not something worth reproducing — the divergence is written down in docs/spec/grammar/commands.md instead of copied (#1141)",
+	},
+	{
 		ID: "pipe/both-streams-takes-no-blank-between-its-two-bytes", Category: "redirection",
 		Script: true, SyntaxError: true,
 		Snippet: `echo one | & echo two`,
-		Why:     "the adjacency, which is what keeps the operator from taking a construct away from the shells that spell a background command with a bar before it: five of the six refuse this where four of them accept `|&` written closed up, and they refuse it in four wordings. ksh93 is the exception in both directions, because its `|&` is a coprocess rather than a pipe",
+		Why:     "the adjacency, which is what keeps the operator from taking a construct away from the shells that spell a background command with a bar before it: five of the six refuse this where four of them accept `|&` written closed up, and they refuse it in four wordings. ksh93 is the exception in both directions, because its `|&` is a coprocess rather than a pipe — and this row is the one of the three that stays red in the ksh93 column after #1141, the blank between the two bytes being a separate fact from the construct behind them",
 	},
 	{
 		ID: "redir/a-failed-redirection-inside-a-subshell", Category: "redirection",

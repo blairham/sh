@@ -1863,6 +1863,12 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 		return nil
 	}
 	r.statusBefore = r.status
+	if st.Coprocess {
+		// Before Background, because a coprocess is a background job with
+		// pipes on its named streams rather than an ordinary one, and the
+		// two ways of starting it differ in more than the streams.
+		return r.coprocStmt(ctx, st)
+	}
 	if st.Background {
 		return r.background(ctx, st)
 	}

@@ -417,7 +417,16 @@ right, and that is what says where the boundary was:
     files=( (#i)a )                         did not
 
 Mid-word the lexer folds a group without being told; only at the *front*
-of a word does it need to know what position it is in. The fix is the
+of a word does it need to know what position it is in.
+
+**Argument position has to be given back, and only a *run* can see it.**
+The flag is set before a list's first word is read and restored after, and
+the token behind the list is read while it is still on — so a `(` there
+would be folded into a word. Every spelling of that **parses** either way:
+a folded group is a perfectly good word, and `-n` cannot tell the two
+apart. `for x in a; do ( echo hi ); done` is the row, and it prints
+`unknown file attribute:` instead of `hi` when the flag leaks. Every
+parse-only assertion passed a mutant that leaked it (#1161). The fix is the
 flag this section is about, set while the elements are read and restored
 afterwards — an assignment is read at command position as well as after
 a word, and the token after the array is an argument in neither case.

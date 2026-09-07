@@ -75,6 +75,36 @@ for x in '(#i)a' b; do echo "got=[$x]"; done`)
 	}
 }
 
+// Argument position ends with the list, and this can only be seen by
+// **running** it.
+//
+// The flag is set before the list's first word is read and restored after,
+// and the token after the list is read while it is still on — so a `(` there
+// would be folded into a word. Every one of these *parses* either way: the
+// folded group is a perfectly good word, and `-n` cannot tell them apart. It
+// is the run that shows it — a mutant that left the flag on answers
+// `unknown file attribute:` where the loop should print `hi`, and every
+// parse-only row passed it.
+func TestArgumentPositionEndsWithTheList(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{"in list, subshell body", `for x in a; do ( echo hi ); done`},
+		{"in list, newline before do", "for x in a\ndo ( echo hi ); done"},
+		{"parenthesised list", `for x (a); do ( echo hi ); done`},
+		// The menu loop needs a choice on its input or the body never runs;
+		// `1` picks the only item.
+		{"select's list", "select x in a; do ( echo hi ); break; done <<< 1"},
+		{"case arm's pattern", `case a in (a) ( echo hi );; esac`},
+		{"case arm, group pattern", `case b in ((a|b)) ( echo hi );; esac`},
+	} {
+		out, st := runZsh(t, t.TempDir(), tc.src)
+		if !strings.Contains(out, "hi") || strings.Contains(out, "file attribute") {
+			t.Errorf("%s: %s = %q (status %d), want the subshell to have run — a "+
+				"leaked argument position folds the `(` into a word instead",
+				tc.name, tc.src, out, st)
+		}
+	}
+}
+
 // No word in the item list is a reserved word — unanimous across the panel,
 // so this is core seen through one dialect rather than a dialect's answer.
 func TestNoWordInTheItemListIsReserved(t *testing.T) {

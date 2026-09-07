@@ -103,6 +103,12 @@ func Semantics() interp.Semantics {
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
+	// This shell has no `typeset` and so no way to freeze a name that a
+	// `local` could then meet, but the answer is written down rather than
+	// left unspecified: an unanswered axis refuses, and a shell reaching a
+	// refusal it can never explain is worse than a shell with a rule it
+	// never uses.
+	s.DeclarationMayShadowAReadonly = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// $(( )) with nothing in it wants a primary and stops the script.
 	s.EmptyArithExpressionIsAnError = interp.Yes

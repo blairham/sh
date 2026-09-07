@@ -308,6 +308,14 @@ func Semantics() interp.Semantics {
 	// This shell alone — zsh refuses the word and ksh93 will not read it.
 	s.ProcessSubstitutionInCondition = interp.Yes
 	s.ShiftPastEndFatal = interp.No
+	// A declaration will not shadow a frozen name here: `typeset -r x=1;
+	// f() { local x=2; echo $x; }` says `local: x: readonly variable`, then
+	// prints the *outer* 1, and the function runs on — the builtin reports
+	// 1 and nothing is abandoned. zsh takes the shadow instead. Measured
+	// over `local x=2`, `local x`, `typeset x=3`, `local -r x=4` and
+	// `local y=1 x=5 z=2`, all five refused here and all five taken there,
+	// which is what makes it one field rather than five.
+	s.DeclarationMayShadowAReadonly = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// An attribute added to a name that already holds a value waits for the
 	// next assignment: `FOO=bar; typeset -i FOO` still reads `bar`, and
@@ -935,7 +943,14 @@ func Diagnostics() interp.Diagnostics {
 		// two POSIX has: `declare: r: readonly variable` against a plain
 		// `r: readonly variable` from `export`.
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: readonly variable",
-		ReadonlyRefusalNamesBuiltin:   map[string]bool{"declare": true, "typeset": true},
+		// `local` belongs here with the other two: `typeset -r x=1; f() {
+		// local x=2; }` says `local: x: readonly variable` in this shell,
+		// naming the word the script wrote. It was missing because `local`
+		// reached the refusal only through the assignment, where the
+		// builtin's name had already been put aside (#1159).
+		ReadonlyRefusalNamesBuiltin: map[string]bool{
+			"declare": true, "typeset": true, "local": true,
+		},
 		// `declare -p nosuch` — the name it was invoked by is in front,
 		// which declarePrint writes, so the wording carries only the rest.
 		DeclareNoSuchVariable:  "%[1]s: not found",

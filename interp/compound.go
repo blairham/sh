@@ -591,6 +591,14 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 			delete(r.AssocArrays, name)
 		}
 	}
+	// And the frozen attribute, where a declaration shadowed a readonly: the
+	// outer name is frozen again, so a function cannot thaw one for good.
+	for name := range sc.savedReadonly {
+		if r.readonly == nil {
+			r.readonly = map[string]bool{}
+		}
+		r.readonly[name] = true
+	}
 	// And the export attribute, where the dialect took it off for the local:
 	// the outer name goes back to whatever the shell had recorded about it,
 	// including having recorded nothing.

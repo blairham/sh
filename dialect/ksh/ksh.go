@@ -244,6 +244,11 @@ func Semantics() interp.Semantics {
 	s.MissingFileIsOlder = interp.Yes
 	s.TerminalTestRequiresANumber = interp.No
 	s.ArithNameValueRecurses = interp.Yes
+	// This shell has no `local` at all, and its `typeset` over a frozen name
+	// is fatal rather than a refusal that carries on — which is
+	// ReadonlyReassignmentFatal and not this field. So the shadow question
+	// is answered no: nothing here may declare over a frozen name.
+	s.DeclarationMayShadowAReadonly = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// But an attribute added to a name that already holds a value re-reads
 	// that value at once: `FOO=bar; typeset -i FOO` stores 0 over the text,

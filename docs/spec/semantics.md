@@ -4493,6 +4493,72 @@ opening brace a line of its own, zsh keeps it on the header's
 failures ends the script — a bad option included, usage lines and all:
 `Semantics.TypesetBadOptionFatal`.
 
+**A declaration may shadow a frozen name in one shell and not the
+other** — `Semantics.DeclarationMayShadowAReadonly`. Measured 2026-09-06,
+`env -i PATH=/usr/bin:/bin` with a scratch `HOME`, `ZDOTDIR` and
+`HISTFILE`, over a script file:
+
+    typeset -r x=1
+    f() { local x=2; echo "in=[$x]"; echo running; }
+    f; echo "st=$? out=[$x]"
+
+    zsh    in=[2]   running   st=0 out=[1]
+    bash   local: x: readonly variable   in=[1]   running   st=0 out=[1]
+
+ksh93 has no `local` and dash has no `typeset -r`, so bash and zsh are
+the two shells that can be asked and they disagree. **One field for the
+whole family**, not one per spelling: zsh takes `local x=2`, `local x`,
+`typeset x=3`, `local -r x=4` and `local y=1 x=5 z=2` alike, and bash
+refuses every one of them and reports 1 from the builtin each time.
+Splitting them would have been five fields whose answers can only ever
+agree.
+
+Where the answer is **yes** the shadow takes the attribute with it: the
+local cell is writable, and the outer name is **frozen again** when the
+function returns. That last part is only visible from outside the
+function and is what a shadow that merely cleared the attribute would get
+wrong — a readonly quietly thawed by a function call is a hole in the
+whole point of it.
+
+Where the answer is **no**, three things follow and all three were wrong
+here:
+
+- the refusal **names the builtin the script wrote** — `local: x:
+  readonly variable`, which is `Diagnostics.ReadonlyVariableInDeclaration`
+  and why `ReadonlyRefusalNamesBuiltin` now has a `local` entry alongside
+  `declare` and `typeset`;
+- the builtin **reports 1 and nothing is abandoned**: the rest of the
+  function runs, so `local x=2 || echo fired` prints `fired` and the next
+  line still runs. Ours gave up the function and reported 1 from it;
+- the **other operands are still declared**. `local y=1 x=5 z=2` over a
+  frozen `x` leaves `y` and `z` local in bash and refuses only `x`; a
+  refusal that gave up the command would have left both assigned
+  globally, which is a change to the caller's variables that nothing
+  said.
+
+**The valueless spelling is the one that used to slip past.** With
+nothing to assign there was no assignment to meet the refusal, so
+`local x` over a frozen name made the local in silence and the body saw
+an empty name where bash shows it the frozen value. Asked before the
+shadow rather than through the assignment — `Runner.declarationShadowRefused`
+— which is what makes the five spellings one answer.
+
+Asked only where a declaration meets a name that is *already* frozen, so
+an ordinary `local` never reaches it, and a frozen name assigned at top
+level is the plain readonly refusal and no part of this.
+
+**Ours was fatal in the zsh dialect where zsh carries on**, which for an
+interactive shell was the whole of it: `local EPOCHSECONDS=…` or
+`local builtins=…` in a function ended the session. `zi.zsh:2159` is
+`[[ $1 = burst ]] && local -h EPOCHSECONDS=$(( EPOCHSECONDS+10000 ))`,
+exactly that shape. It reaches two named refusals now — `local -h` and
+an association assigned whole — rather than a dead session.
+
+Corpus: `declare/a-local-that-shadows-a-readonly`,
+`declare/a-valueless-local-that-shadows-a-readonly`,
+`declare/a-refused-shadow-keeps-the-other-operands`,
+`declare/a-local-that-shadows-a-readonly-and-the-name-afterwards`.
+
 **`set -A name value …` assigns an array through a name a variable
 holds**, which is the thing `name=(…)` cannot do: the name is a literal
 there, so a script that holds it in a variable has no other spelling.

@@ -8666,6 +8666,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/an-attribute-that-would-change-nothing-needs-no-dialect` | `1[7]~2[abc]~3[MiXeD]` **2>** `<shell>: 1: typeset: not found~<shell>: 2: typeset: not found~<shell>: 3: typeset: not found` | `1[7]~2[abc]~3[MiXeD]` | `1[7]~2[abc]~3[MiXeD]` | `1[7]~2[abc]~3[MiXeD]` | `1[7]~2[abc]~3[MiXeD]` | `1[7]~2[abc]~3[MiXeD]` |
 | `declare/an-attribute-over-a-cell-a-function-just-shadowed` | **2>** `<shell>: 2: Syntax error: "}" unexpected` *(status 2)* | `in[UNSET]~out[5]` | `in[UNSET]~out[5]` | `in[UNSET]~out[5]` | `in[UNSET]~out[5]` | `in[0]~out[5]` |
 | `declare/an-attribute-added-to-an-exported-name-reaches-the-child` | `FOO=bar` **2>** `<shell>: 1: typeset: not found` | `FOO=bar` | `FOO=bar` | `FOO=bar` | `FOO=0` | `FOO=0` |
+| `declare/a-local-that-shadows-a-readonly` | `in=[2]~running~st=0 out=[]~after` **2>** `<script>: 1: typeset: not found` | `in=[1]~running~st=0 out=[1]~after` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~running~st=0 out=[1]~after` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~running~st=0 out=[1]~after` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~running~st=0 out=[1]~after` **2>** `<script>: line 2: local: not found` | `in=[2]~running~st=0 out=[1]~after` |
+| `declare/a-valueless-local-that-shadows-a-readonly` | `in=[UNSET]~st=0 out=[]` **2>** `<script>: 1: typeset: not found` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: not found` | `in=[]~st=0 out=[1]` |
+| `declare/a-refused-shadow-keeps-the-other-operands` | `in y=[1] x=[5] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: 1: typeset: not found` | `in y=[1] x=[1] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: x: readonly variable` | `in y=[1] x=[1] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: x: readonly variable` | `in y=[1] x=[1] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: x: readonly variable` | `in y=[outer] x=[1] z=[outer]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: not found` | `in y=[1] x=[5] z=[2]~out y=[outer] z=[outer]` |
+| `declare/a-local-that-shadows-a-readonly-and-the-name-afterwards` | `after=[9]` **2>** `<script>: 1: typeset: not found` | `after=[1]` **2>** `<script>: line 2: local: x: readonly variable~<script>: line 4: x: readonly variable` | **2>** `<script>: line 2: local: x: readonly variable~<script>: line 4: x: readonly variable` *(status 1)* | `after=[1]` **2>** `<script>: line 2: local: x: readonly variable~<script>: line 4: x: readonly variable` | **2>** `<script>: line 2: local: not found~<script>: line 4: x: is read only` *(status 1)* | **2>** `<script>:4: read-only variable: x` *(status 1)* |
 | `declare/readonly-attribute-allows-its-own-value` | `[]~[2]` **2>** `<script>: 1: typeset: not found` | `[1]~[1]` **2>** `<script>: line 3: c: readonly variable` | `[1]` **2>** `<script>: line 3: c: readonly variable` *(status 1)* | `[1]~[1]` **2>** `<script>: line 3: c: readonly variable` | `[1]` **2>** `<script>: line 3: c: is read only` *(status 1)* | `[1]` **2>** `<script>:3: read-only variable: c` *(status 1)* |
 | `declare/print-a-scalar-back` | `st=127` **2>** `<shell>: 1: typeset: not found` | `declare -- v="a b"~declare -x e="E"~st=0` | `declare -- v="a b"~declare -x e="E"~st=0` | `declare -- v="a b"~declare -x e="E"~st=0` | `v='a b'~typeset -x e=E~st=0` | `typeset v='a b'~export e=E~st=0` |
 | `declare/print-arrays-back` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `declare -a arr='([0]="x" [1]="y")'~declare -a m='([0]="a b")'` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -a arr=(x y)~typeset -A m=([k]='a b')` | `typeset -a arr=( x y )~typeset -A m=( [k]='a b' )` |
@@ -8918,6 +8922,37 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/an-attribute-added-to-an-exported-name-reaches-the-child` — the same divergence seen from the only place it cannot be argued about: what the *child* is told. `FOO=0` in ksh93 and zsh and `FOO=bar` in the three bash columns, so the re-read is a change to the value and not a way of reading it back — a shell that merely rendered the name differently to its own expansions would answer this row `bar` everywhere
   ```sh
   export FOO=bar; typeset -i FOO; env | grep '^FOO='
+  ```
+- `declare/a-local-that-shadows-a-readonly` — whether a declaration inside a function may make a local of a name the shell has frozen, and the two shells that can be asked answer opposite ways. zsh takes the shadow — `in=[2]`, the function runs on, and the outer 1 is back afterwards — where bash reports `local: x: readonly variable`, leaves the *outer* value in view and **still runs the rest of the function**. Three things ride on the refusal and each was wrong here: it names the builtin the script wrote, the builtin reports 1 rather than abandoning anything, and the outer value is what the body sees. ksh93 has no `local` and dash no `typeset -r`, so those two columns record the absence rather than an answer (#1159)
+  ```sh
+  typeset -r x=1
+  f() { local x=2; echo "in=[$x]"; echo running; }
+  f
+  echo "st=$? out=[$x]"
+  echo after
+  ```
+- `declare/a-valueless-local-that-shadows-a-readonly` — the same question with no value on the declaration, and it is the spelling that used to slip past: with nothing to assign there was no assignment to meet the refusal, so the local was made in **silence** and the body saw an empty name where bash shows it the frozen 1. Worth its own row because a fix reached only through the assignment passes the row above and fails this one. `in=[]` against `in=[UNSET]` in the shell that takes the shadow is `DeclaredNameWithoutValueIsEmpty`, a different question showing through
+  ```sh
+  typeset -r x=1
+  f() { local x; echo "in=[${x-UNSET}]"; }
+  f
+  echo "st=$? out=[$x]"
+  ```
+- `declare/a-refused-shadow-keeps-the-other-operands` — one frozen name among three, which pins that the refusal costs *that operand* and not the command: bash leaves `y` and `z` local and only `x` refused, so the caller's `y` and `z` are untouched when the function returns. A refusal that gave up the whole declaration would leave both of them assigned globally — a change to the caller's variables that nothing said out loud
+  ```sh
+  typeset -r x=1
+  y=outer; z=outer
+  f() { local y=1 x=5 z=2; echo "in y=[$y] x=[$x] z=[$z]"; }
+  f
+  echo "out y=[$y] z=[$z]"
+  ```
+- `declare/a-local-that-shadows-a-readonly-and-the-name-afterwards` — the other end of the shadow: the outer name is frozen **again** when the function returns, so the assignment after it is refused in every column. A shadow that merely took the attribute off would pass the rows above and leave a readonly quietly thawed by a function call, which is a hole in the whole point of the attribute — and it is only visible from outside the function, which is why this is a row of its own
+  ```sh
+  typeset -r x=1
+  f() { local x=2; }
+  f
+  x=9
+  echo "after=[$x]"
   ```
 - `declare/readonly-attribute-allows-its-own-value` — the declaration assigns and then freezes, so its own value survives and the next assignment does not — applying both at once would refuse the value it was given
   ```sh

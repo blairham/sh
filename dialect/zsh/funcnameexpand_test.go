@@ -55,6 +55,19 @@ func TestAFunctionNameMayHoldAnExpansion(t *testing.T) {
 		// parsed before the flag and stopped parsing with it, which is how
 		// it was found — a real plugin, not a hypothetical.
 		{`i=1; a=(x y z); a[$i]=(); print -r -- "n=$#a"`, "n=0"},
+		// A command word holding an expansion and *no* parentheses is a
+		// command, which is the far commoner thing to write and the control
+		// this needed: the parentheses are the whole announcement, and
+		// dropping that check left `$c HI` looking like a definition.
+		{`c=echo; $c HI`, "HI"},
+		{`c=echo; ${c} HI`, "HI"},
+		{`c=echo; $(echo echo) HI`, "HI"},
+		{`c=ec; ${c}ho HI`, "HI"},
+		// And an expansion producing *no* field at all defines nothing, at
+		// status 0 — the other end of the `$@` row above, and the one where
+		// falling back to the token's literal text would invent a function
+		// called `@`.
+		{`set --; $@() { echo HI; }; echo "st=$?"; print -rl -- ${(k)functions}`, "st=0"},
 		// And the ordinary name still works, which is the control.
 		{`plain() { echo HI; }; plain`, "HI"},
 	} {

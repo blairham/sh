@@ -1757,12 +1757,16 @@ func (p *Parser) declarationArray(c *SimpleCmd) (a *Assign, consumed bool) {
 
 // looksLikeFuncDef reports whether the current word begins `name()`.
 func (p *Parser) looksLikeFuncDef() bool {
+	// A quoted name is not a definition in any dialect, and quoting is not an
+	// expansion: `'q'() { :; }` is refused here as it was before the flag.
+	if p.tok.IsQuoted() {
+		return false
+	}
 	// One unquoted literal span is the ordinary name. Where the dialect
 	// expands a name, several spans are allowed and an expansion among them
-	// is the point — but quoting still is not, so `'q'()` is refused here as
-	// it was before.
-	expands := p.dialect.FunctionNameExpands && !p.tok.IsQuoted()
-	if p.tok.IsQuoted() || (!expands && (len(p.tok.Spans) != 1 || p.tok.Spans[0].Kind != Literal)) {
+	// is the point.
+	if !p.dialect.FunctionNameExpands &&
+		(len(p.tok.Spans) != 1 || p.tok.Spans[0].Kind != Literal) {
 		return false
 	}
 	if p.dialect.FuncDefAtParen {

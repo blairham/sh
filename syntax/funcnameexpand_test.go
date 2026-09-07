@@ -84,6 +84,27 @@ func TestAnExpandedFunctionNameKeepsItsWord(t *testing.T) {
 	}
 }
 
+// A dialect that commits to a definition at the paren checks the name once
+// the parens close, and a name that is not text yet cannot be checked there.
+//
+// No preset holds all three flags today, which is why this builds the
+// dialect rather than naming a shell: the guard is what stops the two
+// answers from colliding the moment one does, and without it every expanded
+// name in such a dialect is `Bad function name`.
+func TestAnExpandedNameIsNotCheckedAsTextAtTheParen(t *testing.T) {
+	d := nameExpands()
+	d.FuncDefAtParen = true
+	d.FunctionNamePunctuation = false
+	if _, err := Parse(`_p_${w}() { :; }`, d); err != nil {
+		t.Errorf("an expanded name where the paren commits: %v", err)
+	}
+	// And a plain name that is not one is still refused there, which is the
+	// control: the guard exempts the word, not the check.
+	if _, err := Parse(`f-g() { :; }`, d); err == nil {
+		t.Error("`f-g() { :; }` parsed; the name check still applies to text")
+	}
+}
+
 // Printed source has to mean the same thing, and this is exactly where it
 // would not: printing the literal names a different function.
 func TestAnExpandedFunctionNamePrintsBackAsAWord(t *testing.T) {
@@ -138,6 +159,20 @@ func TestTheFlagDoesNotWidenWhatADefinitionIs(t *testing.T) {
 		}
 		if _, isFunc := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*FuncDecl); isFunc {
 			t.Errorf("%s (%s): read as a function definition", tc.src, tc.why)
+		}
+	}
+	// The parentheses are the whole announcement where the name is a word,
+	// because "is this text a name" cannot be asked of a word before it is
+	// expanded. Without them the commonest line in any script — a command
+	// held in a variable — became a definition.
+	for _, src := range []string{`$c HI`, `${c} HI`, `$(echo echo) HI`, `${c}ho HI`} {
+		f, err := Parse(src, on)
+		if err != nil {
+			t.Errorf("%s: %v", src, err)
+			continue
+		}
+		if _, isFunc := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*FuncDecl); isFunc {
+			t.Errorf("%s: read as a function definition", src)
 		}
 	}
 	// A quoted name is not an expansion and stays refused, which is the

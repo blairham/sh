@@ -97,6 +97,141 @@ The first row is the whole test. An implementation that gives `&&` higher
 precedence produces no output and is silently wrong on a construct people
 write constantly.
 
+## A control operator with an empty right-hand side
+
+The productions above require a pipeline on both sides of a `&&` or a
+`||` and a command on both sides of a `|`. Two shells are lenient about
+that, and they are lenient in **different** ways — which is the whole
+finding, because a single rule stated for "control operators" gets one
+of them wrong in both directions.
+
+Measured 2026-09-07 with `-n` and then again with a run, over a script
+file, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`, `ZDOTDIR` and
+`HISTFILE`. The `-c` route was checked against the file route for every
+row and agrees on all of them.
+
+| probe | dash | bash 3.2 | bash 5 | bash as sh | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{ : && ⏎ }` | error | error | error | error | error | **runs** |
+| `{ : \|\| ⏎ }` | error | error | error | error | error | **runs** |
+| `( : \|\| )` | error | error | error | error | error | **runs** |
+| `if x; then : \|\| fi` | error | error | error | error | error | **runs** |
+| `while …; do : \|\| done` | error | error | error | error | error | **runs** |
+| `case x in x) : \|\| ;; esac` | error | error | error | error | error | **runs** |
+| `{ : \| ⏎ }` | error | error | error | error | error | error |
+| `( : \| )` | error | error | error | error | error | error |
+| `: && ; b` | error | error | error | error | **runs** | **runs** |
+| `: \|\| ; b` | error | error | error | error | **runs** | **runs** |
+| `: \| ; b` | error | error | error | error | error | **runs** |
+| `: \|& ; b` | error | error | error | error | **runs** | **runs** |
+| `: & ; b` | error | error | error | error | **runs** | **runs** |
+| `: ; ; b` | error | error | error | error | **runs** | **runs** |
+| `: && & b` | error | error | error | error | **runs**¹ | error |
+| `: && \| b` | error | error | error | error | error | error |
+| `: && && b` | error | error | error | error | error | error |
+| `: && fi` | error | error | error | error | error | error |
+| `: &&` at end of input | error | error | error | error | error | **runs** |
+| `: \|` at end of input | error | error | error | error | error | error |
+| `: \| ;` at end of input | error | error | error | error | error | error |
+
+¹ ksh93 parses it and runs neither side. `: && & echo two > f` then
+refuses the `>`, so whatever it read `echo two` as is not a command that
+could take a redirection. Recorded, not implemented.
+
+### Three separate rules, not one
+
+**The and-or list may end with its operator.** zsh alone, and it reaches
+every closing context — a `}`, a `)`, `fi`, `else`, `elif`, `done`,
+`esac`, `;;`, a function body's brace and a command substitution's paren.
+Grammar flag: `OpenEndedAndOr` — core: **off**; `zsh`: on.
+
+A **terminator** does not close the list for this purpose. `: || & b` and
+`: || ;;` with no `case` open are parse errors in zsh, so `&` and a bare
+`case` terminator are not among the tokens that may stand there. A `;` is
+the second rule's, below.
+
+The **pipeline does not take it, in any shell.** That is the
+discriminating half: zsh refuses `{ : | ⏎ }`, `( : | )` and `: |` at end
+of input while taking every `&&`/`||` row, so the leniency belongs to
+the and-or list alone. A flag written for control operators generally
+would accept three lines zsh rejects.
+
+**What the absence means: the operator is dropped.** The status is the
+left-hand side's, measured both ways:
+
+    { false || ⏎ } ; echo $?   →  1   in zsh
+    { true && ⏎ } ; echo $?   →  0   in zsh
+
+So it is neither an implicit `true` — that would make the first 0 — nor
+an implicit `false`, which would make the second non-zero. Each
+stand-in gets exactly one of the pair wrong. Nothing in the interpreter
+needs a value for this: the parser returns the left-hand side and there
+is no operator left in the tree.
+
+**A list separator may stand between a control operator and its
+right-hand side, and it is skipped.** zsh and ksh93. This is *not* an
+empty right-hand side, and the difference is measurable rather than
+notional — `false || ; echo two` prints `two` in both, and
+`true || ; echo two` prints nothing, so `echo two` is the `||`'s
+right-hand side and the `;` was absorbed the way the newline in
+`: || ⏎ b` already is everywhere.
+
+The two shells draw it around different operators. zsh skips a `;` after
+`&&`, `||` **and** `|`, any number of them, interleaved with newlines:
+`echo one | ; ; cat -n` numbers the line. ksh93 skips one, after `&&` and
+`||` only, and refuses `: | ; b` outright — the same asymmetry #1115
+found for its `|&`, and the probe that proves the two rules are not one.
+
+**What an absent operand means after a skipped separator is a third
+question, and the two lenient columns disagree.**
+
+    false || ; ⏎ echo $?   →  st=0   in ksh93
+                           →  st=1   in zsh
+
+An implicit success in one and a dropped operator in the other, over the
+same text. That is a semantics difference and not an additive grammar
+one, so it belongs to the interpreter's vector rather than to
+`syntax.Dialect`. ksh93 also reaches an absent operand *only* with the
+`;` present: `false ||` alone and `{ false || ⏎ }` are both syntax
+errors there.
+
+Not implemented: the separator rule and ksh93's meaning for it are
+#1142. `OpenEndedAndOr` covers the first rule only.
+
+### The end of input is a route question
+
+zsh takes `: &&` with nothing after it at all when it reads a script or
+a `-c` string, and draws a **continuation prompt** for the same text
+typed at a terminal. Measured through a pty: zsh, bash and ksh93 all
+prompt with PS2 there, so the terminal answer is unanimous and the
+disagreement is only about what a *file* ending on the operator means.
+
+Whether input that ran out ends the list therefore depends on the route
+it arrived by, the way alias expansion does (`AliasRoutes`), and it
+cannot be answered by a flag the parser reads on its own. Until it is
+asked where it is answered, input ending on `&&` stays **unfinished** in
+every dialect — right for the terminal in all six columns, and right for
+a file in five of the six.
+
+### The refusal names the token it found
+
+Where a dialect refuses, none of the panel mentions the operator behind
+the gap; each names what it met.
+
+| probe | dash | bash 5 | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `echo a && fi` | `Syntax error: "fi" unexpected` | ``syntax error near unexpected token `fi' `` | `` `fi' unexpected `` | ``parse error near `fi' `` |
+| `: && & b` | `Syntax error: "&" unexpected` | ``… token `&' `` | *accepts* | ``parse error near `&' `` |
+| `{ : \|\| ⏎ }` | `Syntax error: "}" unexpected` | ``… token `}' `` | `` `}' unexpected `` | *runs* |
+| `: &&` at EOF | `Syntax error: end of file unexpected` | `syntax error: unexpected end of file` | `` `end of file' unexpected `` | *runs* |
+
+A command may begin after `&&`, so a **reserved word standing there is
+reserved**: dash quotes the `fi` rather than calling it a word, which is
+the same distinction #1115 recorded for a bar. The substrate answered
+every row above with `expected a command after &&` — a sentence no shell
+in the panel writes, about a token already read — until this was fixed;
+#1115 corrected exactly that for the bar and did not reach the and-or.
+
 ## `!` negates the pipeline, not the command
 
     ! true | false ; echo $?   →  0   in all six

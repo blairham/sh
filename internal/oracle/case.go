@@ -8884,6 +8884,73 @@ out=$(CDPATH=./pool cd sub)
 		Why:     "the same two letters before any `coproc`, which is the refusal each shell keeps for the case: two sentences and 1 in the shell that has both letters and a coprocess, two others and 1 in the shell that has the letters and no way here to start one, and in the two without `print` a command that was not found at 127 with `-p` reading as a prompt",
 	},
 	{
+		ID: "commands/an-and-or-ending-with-its-operator", Category: "commands", SyntaxError: true,
+		Snippet: `{ : ||
+}
+echo after`,
+		Why: "an and-or list whose right-hand side is simply not there. zsh runs the group and prints `after`; the other five each name the closer they met and run nothing. `~/.zi/bin/lib/zsh/install.zsh` line 2048 ends with `|| \\` and the line after it closes the block, so this is the shape that decides whether that file can be read at all (#1174). The brace group is the minimal form and needs no `if`: a first attempt with `if true { : || }` measured the *opposite* answer, because with no `[[ ]]` to close the condition the `{` is read as an argument to `true`",
+	},
+	{
+		ID: "commands/an-and-or-ending-with-its-operator-reaches-every-closer", Category: "commands", SyntaxError: true,
+		Snippet: `if true; then echo one ||
+fi
+echo after`,
+		Why: "the same absence before a keyword rather than a brace, which is what says it is a property of the and-or list and not of brace groups: zsh prints `one` and `after` and the rest name the `fi`. Measured the same way for `( : || )`, `while …; do : || done`, `until`, `for`, `case x in x) : || ;; esac`, a function body's `}` and a command substitution's `)`",
+	},
+	{
+		ID: "commands/an-absent-and-or-operand-is-dropped-not-stood-in-for", Category: "commands", SyntaxError: true,
+		Snippet: `{ false ||
+}
+echo "st=$?"`,
+		Why: "what the absence *means*, which is the half a grammar flag alone would leave open. The status is the left-hand side's — `st=1` — so the missing operand is not an implicit `true`, which would answer 0 here. The next case is the other side of the pair, and the two together are why nothing in the interpreter needs a value for this: the operator is dropped and the left-hand side is the whole list",
+	},
+	{
+		ID: "commands/an-absent-and-or-operand-keeps-a-success-too", Category: "commands", SyntaxError: true,
+		Snippet: `{ true &&
+}
+echo "st=$?"`,
+		Why: "the other side: `st=0`, so the missing operand is not an implicit `false` either — that would answer non-zero here. One stand-in gets the case above wrong and the other gets this one wrong, which is what rules both of them out and leaves dropping the operator as the only reading that fits",
+	},
+	{
+		ID: "commands/an-open-ended-pipeline-is-refused-everywhere", Category: "commands", SyntaxError: true,
+		Snippet: `{ : |
+}
+echo after`,
+		Why: "the discriminating half of the same measurement: the leniency belongs to the and-or list alone and **no** shell in the panel extends it to a bar. zsh refuses this while taking `{ : || ⏎ }`, so a flag written for control operators in general would accept a line zsh rejects. Its own refusal names the `}`",
+	},
+	{
+		ID: "commands/an-and-or-with-a-terminator-after-it", Category: "commands", SyntaxError: true,
+		Snippet: `: || & echo two`,
+		Why:     "a `&` where the right-hand side belongs, which the shell that takes an absent operand still refuses, naming the `&` it found — so a terminator does not close the list for this purpose. ksh93 is the odd column: it parses the line and runs neither side of it, and `: || & echo two > f` then refuses the `>`, so whatever it read `echo two` as is not a command that could take a redirection. Recorded rather than implemented; it is not the same rule as the `;` two cases down",
+	},
+	{
+		ID: "commands/an-and-or-with-a-reserved-word-after-it", Category: "commands", SyntaxError: true,
+		Snippet: `echo a && fi`,
+		Why:     "a command may begin after `&&`, so a reserved word standing there is reserved — the shell that names a word's *class* instead of quoting it quotes this one rather than calling it a word. The same distinction #1115 found for a bar, and the row that catches the operand-form helper being used here. All six refuse it, including zsh: `fi` with no `if` open closes nothing, which is what separates this from the case above where the `fi` is the one the list was inside",
+	},
+	{
+		ID: "commands/an-and-or-with-a-separator-after-it", Category: "commands", SyntaxError: true,
+		Snippet: `false || ; echo two`,
+		Why:     "a `;` between a control operator and its right-hand side. zsh and ksh93 print `two` and the other four refuse the line — and the `;` is *skipped* rather than standing in for an absent operand, which is what `false` makes visible: `echo two` is the `||`'s right-hand side and runs because the left one failed. Writing `true` there prints nothing in both. So this is a separator rule and not the absence rule the cases above are about (#1142)",
+	},
+	{
+		ID: "commands/an-absent-and-or-operand-after-a-separator", Category: "commands", SyntaxError: true,
+		Snippet: `false || ;
+echo "st=$?"`,
+		Why: "the same `;` with nothing after it at all, and the row where the two lenient columns disagree about *meaning*: ksh93 answers `st=0` and zsh answers `st=1`. So an absent operand is an implicit success in one and a dropped operator in the other, which is a semantics question rather than a grammar one and cannot be a single additive flag. ksh93 also takes this shape only with the `;` present — `false ||` alone and `{ false || ⏎ }` are both syntax errors there — where zsh takes it either way",
+	},
+	{
+		ID: "commands/a-pipeline-with-a-separator-after-it", Category: "commands", SyntaxError: true,
+		Snippet: `echo one | ; cat -n`,
+		Why:     "the same separator after a bar, and this is where the two lenient columns part: zsh prints a numbered `one`, so `cat -n` really is the pipeline's right-hand side with the `;` skipped, and ksh93 refuses the `;` outright. It is the discriminating probe of the pair — a rule stated for control operators generally would have to accept it in ksh93 too. zsh skips any number of them, `echo one | ; ; cat -n` included, and still refuses `echo one | ;` with nothing after",
+	},
+	{
+		ID: "commands/an-and-or-operator-at-the-end-of-input", Category: "commands",
+		SyntaxError: true, Unfinished: true,
+		Snippet: `echo one &&`,
+		Why:     "the operator with nothing whatever after it, which is a question about the *route* and not only the grammar: zsh takes it here and prints `one`, and the same text typed at a terminal draws a continuation prompt in zsh, bash and ksh93 alike — measured through a pty. So the end of a `-c` string ends the list where the end of a line does not, and the four refusing columns each say the input ran out rather than naming a token. ksh93 refuses it while accepting the `;` form two cases up, which is what says its leniency is the separator's and not the list's",
+	},
+	{
 		ID: "syntax/an-unmatched-double-quote", Category: "diagnostics",
 		SyntaxError: true,
 		Snippet:     `echo "abc`,

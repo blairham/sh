@@ -540,6 +540,11 @@ var Corpus = []Case{
 		Why:     "what a value's backslash does to the character behind it when the result is a pattern, and the panel divides: bash, bash 3.2, bash-as-sh, dash and zsh match neither name and leave the word as written, so the `*` is not a metacharacter and the backslash is still in the text; ksh93 reads the backslash as data and the `*` as live, and matches `a\\b` — the axis that split is #1367's. Both files are present so that either reading has something to find — a directory holding neither would print the same word for both",
 	},
 	{
+		ID: "expand/a-value-backslash-before-an-ordinary-character-in-a-pattern", Category: "expansion",
+		Snippet: `mkdir -p bq && cd bq && : > 'a\bc' && : > 'ab' && v='a\b*' && set -- $v && printf "[%s]" "$@"`,
+		Why:     "the residue the row above leaves, and it is a three-way split. bash, bash-as-`sh`, bash 3.2 and dash read the value's backslash as a quote that is *not itself matched*, so the pattern is `ab*` and the answer is `ab`; ksh93 reads it as data and matches `a\\bc`; zsh globs no expansion result at all and leaves the word. It needs a backslash before an *ordinary* character with a live metacharacter still beside it — before a metacharacter there is nothing live left to glob, which is the unanimous row above. Recorded rather than fixed: the escaped form carries one backslash meaning and the bash reading needs two, since the same byte has to quote for the match and survive into the text a failed match restores (#1370)",
+	},
+	{
 		ID: "expand/brace", Category: "expansion",
 		Snippet: `echo {1..3}`,
 		Why:     "brace expansion is absent from dash",

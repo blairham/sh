@@ -56,7 +56,13 @@ func globEscape(s string) string {
 // neither the name holding a backslash nor the name holding an asterisk, so a
 // value's backslash takes the metacharacter status off what follows it while
 // staying in the text itself. ksh93 is the one shell that reads it the other
-// way, matching `a\b`; that difference is not this function's to settle.
+// way, matching `a\b`; that difference is an axis and is #1367's.
+//
+// What this form cannot express is #1370: where a live metacharacter is still
+// beside the backslash the field *is* globbed, and bash and dash want the
+// backslash to quote for the match and to reappear in the text a failed match
+// restores. One string cannot be both, since the fallback is the unescape of
+// the pattern — a backslash that quotes is removed by it, which was this bug.
 func escapeValueBackslashes(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {

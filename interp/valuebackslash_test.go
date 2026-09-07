@@ -103,3 +103,36 @@ func TestAValueBackslashTakesTheMetacharacterOffWhatFollowsIt(t *testing.T) {
 		})
 	}
 }
+
+// Where the dialect does not read an expansion result as a pattern, a value
+// carrying a backslash *and* a live metacharacter still comes out as it went
+// in.
+//
+// The branch its own test, because the two sides of `escapeResult` produce the
+// same answer for everything narrower than this: a value with no live
+// metacharacter never reaches the question, and one with no backslash is the
+// same string on both sides. This is the shape that separates them, and the
+// escaping has to be applied to the *value* rather than to the already-marked
+// form — marking twice doubles what the unescape then halves once, so the
+// backslash comes back multiplied instead of restored.
+//
+// Measured 2026-09-07, same conditions as above, in a directory holding
+// `a\bc` and `ab`: zsh 5.9.2 prints `a\b*` for `v='a\b*'; set -- $v`, since
+// it globs no expansion result at all.
+func TestAValueBackslashSurvivesWhereTheResultIsNotAPattern(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a backslash beside a live metacharacter", `v='a\b*'; set -- $v; printf '[%s]' "$@"`, `[a\b*]`},
+		{"a metacharacter with no backslash", `v='a*'; set -- $v; printf '[%s]' "$@"`, `[a*]`},
+		{"a backslash with no metacharacter", `v='a\b'; set -- $v; printf '[%s]' "$@"`, `[a\b]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := axisRun(t, tc.src, func(s *Semantics) { s.GlobExpansionResults = No })
+			if out != tc.want {
+				t.Errorf("out = %q, want %q", out, tc.want)
+			}
+			if st != 0 {
+				t.Errorf("status = %d, want 0", st)
+			}
+		})
+	}
+}

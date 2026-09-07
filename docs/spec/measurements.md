@@ -239,6 +239,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expand/tilde-plus-and-minus` | `~+ ~-~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~/tmp` |
 | `expand/tilde-after-a-colon-in-an-assignment` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` |
 | `expand/tilde-into-an-expansion-diverges` | `a:~/x` | `a:~/x` | `a:~/x` | `a:~/x` | `a:~/x` | `a:H/x` |
+| `param/a-replacement-is-literal-text` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a*cd]` | `[a*cd]` | `[a*cd]` | `[a*cd]` | `[a*cd]` |
+| `param/a-replacement-is-text-and-the-result-is-a-pattern` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[aQcd][axcd]` | `[aQcd][axcd]` | `[aQcd][axcd]` | `[aQcd][axcd]` | `[a*cd]` |
+| `param/a-bracket-expression-in-a-replacement` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[aQcd]` | `[aQcd]` | `[aQcd]` | `[aQcd]` | `[a[Q]cd]` |
 | `nounset/unset-variable-from-a-command-string` | **2>** `<shell>: 2: NOPE: parameter not set` *(status 2)* | **2>** `<shell>: line 2: NOPE: unbound variable` *(status 127)* | **2>** `<shell>: line 2: NOPE: unbound variable` *(status 127)* | **2>** `<shell>: line 1: NOPE: unbound variable` *(status 127)* | **2>** `<shell>: line 2: NOPE: parameter not set` *(status 1)* | **2>** `<shell>:2: NOPE: parameter not set` *(status 1)* |
 | `param/error-operator-on-an-unset-name` | **2>** `<script>: 1: V: parameter not set` *(status 2)* | **2>** `<script>: line 1: V: parameter not set` *(status 1)* | **2>** `<script>: line 1: V: parameter not set` *(status 1)* | **2>** `<script>: line 1: V: parameter null or not set` *(status 1)* | **2>** `<script>: line 1: V: parameter not set` *(status 1)* | **2>** `<script>:1: V: parameter not set` *(status 1)* |
 | `param/error-operator-default-word` | **2>** `<script>: 1: V: parameter not set or null` *(status 2)* | **2>** `<script>: line 1: V: parameter null or not set` *(status 1)* | **2>** `<script>: line 1: V: parameter null or not set` *(status 1)* | **2>** `<script>: line 1: V: parameter null or not set` *(status 1)* | **2>** `<script>: line 1: V: parameter null` *(status 1)* | **2>** `<script>:1: V: parameter not set` *(status 1)* |
@@ -549,6 +552,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expand/tilde-into-an-expansion-diverges` — a tilde whose segment runs into an expansion stays literal in three of the four; zsh alone expands it and then appends the value
   ```sh
   u=/x; v=a:~$u; echo "$v" | sed "s|$HOME|H|g"
+  ```
+- `param/a-replacement-is-literal-text` — the replacement is **text**, and the files are here so that a live `*` would have something to find: all five shells with the operator answer the four characters `a*cd`, and dash has no operator and refuses the line. Quoted deliberately — quoted, nothing the expansion produces is re-read as a pattern, so what prints is what the operator made and not what the surrounding field did with it. Ours substituted a directory listing into the middle of the value at status 0, which is the silent shape (#1337)
+  ```sh
+  mkdir -p g && cd g && : > axcd && : > aQcd && : > Q && x=abcd; printf "[%s]" "${x//b/*}"; echo
+  ```
+- `param/a-replacement-is-text-and-the-result-is-a-pattern` — the same replacement unquoted, which is where the panel splits and where the two rules have to be told apart: the replacement contributed the character, and then `GlobExpansionResults` decided what became of it. bash, that build as `sh`, bash 3.2 and ksh93 re-read the result and find the two files; zsh does not and prints `a*cd`. The row above is the control that says the difference is the result's and not the replacement's — one field and four characters in every column there
+  ```sh
+  mkdir -p g && cd g && : > axcd && : > aQcd && : > Q && x=abcd; printf "[%s]" ${x//b/*}; echo
+  ```
+- `param/a-bracket-expression-in-a-replacement` — the loud half of the same fault, and the shape it was noticed by: a bracket expression in the replacement. It lands as three characters, and the four shells that re-read an expansion's result then match the file `aQcd` with the whole word while zsh prints `a[Q]cd`. The file is named for the *result* and not for the operand, which is what the first run of this row got wrong: a directory holding only `Q` makes `a[Q]cd` match nothing, and every column then agrees for a reason that has nothing to do with the question. Ours read the operand itself as a pattern, so in the dialect where an unmatched pattern is fatal the whole command stopped with `no matches found: [Q]` — a replacement that names no file is not a failure anywhere in the panel
+  ```sh
+  mkdir -p g && cd g && : > aQcd && x=abcd; printf "[%s]" ${x//b/[Q]}; echo
   ```
 - `nounset/unset-variable-from-a-command-string` — the same two lines as the case above, given as an argument instead of read from a file. Three of the panel answer the same either way; one answers 127 here and 1 there, which is a fact about how the shell was started rather than about the expansion — and only the pair can show it
   ```sh

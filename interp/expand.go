@@ -1493,7 +1493,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		return r.trimWith(value, r.patternOf(e.Arg), e.Op)
 
 	case syntax.ParamReplace:
-		return r.replaceWith(value, r.patternOf(e.Arg), r.joinWord(e.Arg2), e)
+		return r.replaceWith(value, r.patternOf(e.Arg), r.replacementOf(e.Arg2), e)
 
 	case syntax.ParamSubstring:
 		return r.substringRange(value, e)
@@ -1782,7 +1782,7 @@ func (r *Runner) elementOpApplier(e *syntax.ParamExpr) func(string) string {
 		pattern := r.patternOf(e.Arg)
 		return func(v string) string { return r.trimWith(v, pattern, e.Op) }
 	case syntax.ParamReplace:
-		pattern, with := r.patternOf(e.Arg), r.joinWord(e.Arg2)
+		pattern, with := r.patternOf(e.Arg), r.replacementOf(e.Arg2)
 		return func(v string) string { return r.replaceWith(v, pattern, with, e) }
 	default:
 		pattern := r.patternOf(e.Arg)
@@ -2299,6 +2299,40 @@ func substring(value string, off int, e *syntax.ParamExpr, r *Runner) string {
 
 func (r *Runner) joinWord(w *syntax.Word) string {
 	return strings.Join(r.expandWord(w), " ")
+}
+
+// replacementOf is the text a `${x/pat/rep}` substitutes.
+//
+// **A replacement is text, not a pattern**, and this is the only reason it
+// cannot go through joinWord: that one expands a word the ordinary way, which
+// matches it against the filesystem and splits what comes back. So the `*` in
+// `${x//b/*}` listed the directory and the list was joined with spaces and
+// pushed into the middle of the value — a plausible string at status 0, with
+// nothing said (#1337). `${x//b/[Q]}` was the loud half of the same fault: the
+// bracket expression matched no file, and in the dialect where that is fatal
+// the whole command stopped.
+//
+// Measured 2026-09-07 across bash 5.3.15, that build as `sh`, bash 3.2.57,
+// ksh93 and zsh 5.9.2, in a directory holding a file the pattern would have
+// found: `x=abcd; y=${x//b/*}` puts `a*cd` in the variable in all five. The
+// tests here ask it through a *quoted* expansion instead, and that is not a
+// weaker assertion but the only one that works — an assignment's value is
+// expanded with pathname expansion suspended for the whole word, nested
+// operands included, so a row written `y=…; echo "$y"` passes with the fault
+// in place. The replacement is *expanded* like
+// any word — `${x/b/$r}` with `r="p q"` substitutes both words and one space —
+// and it is neither globbed nor split while it is being read: the five agree
+// on `ap qcd` in the variable, and bash and ksh93 then split the **whole
+// expansion** into `[ap]` and `[qcd]` when it is used unquoted, which is the
+// ordinary rule for an expansion's result and not the replacement's own.
+//
+// What happens to the metacharacters *after* they land is that same ordinary
+// rule, and it is already answered elsewhere: unquoted, bash and ksh93 read
+// the result as a pattern and `a*cd` finds `axcd`, while zsh does not and
+// prints the four characters. Both follow from GlobExpansionResults once the
+// replacement stops globbing on its own.
+func (r *Runner) replacementOf(w *syntax.Word) string {
+	return strings.Join(r.expandWordNoSplit(w), "")
 }
 
 // ifs returns the field separators. Unset means the default; set and empty

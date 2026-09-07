@@ -1152,6 +1152,47 @@ var Corpus = []Case{
 		Why:     "the third reading of a quote in a `${ }` operand, and the one the panel divides on: a *pattern* operand's quotes quote and are removed everywhere, and a **replacement** operand's do in bash 5.3, that build as `sh` and ksh93 while bash 3.2 and zsh keep them as characters. Unquoted all five agree again, which is what says the disagreement is about the quoted context and not about the operator. dash has no operator and refuses the line. Recorded rather than answered — it wants a semantics axis, and this row is what a fix routed through the word operand's rule would break",
 	},
 	{
+		ID: "param/a-replacement-is-literal-text", Category: "expansion",
+		Snippet: `mkdir -p g && cd g && : > axcd && : > aQcd && : > Q && ` +
+			`x=abcd; printf "[%s]" "${x//b/*}"; echo`,
+		Why: "the replacement is **text**, and the files are here so that a live " +
+			"`*` would have something to find: all five shells with the operator " +
+			"answer the four characters `a*cd`, and dash has no operator and refuses " +
+			"the line. Quoted deliberately — quoted, nothing the expansion produces " +
+			"is re-read as a pattern, so what prints is what the operator made and " +
+			"not what the surrounding field did with it. Ours substituted a directory " +
+			"listing into the middle of the value at status 0, which is the silent " +
+			"shape (#1337)",
+	},
+	{
+		ID: "param/a-replacement-is-text-and-the-result-is-a-pattern", Category: "expansion",
+		Snippet: `mkdir -p g && cd g && : > axcd && : > aQcd && : > Q && ` +
+			`x=abcd; printf "[%s]" ${x//b/*}; echo`,
+		Why: "the same replacement unquoted, which is where the panel splits and " +
+			"where the two rules have to be told apart: the replacement contributed " +
+			"the character, and then `GlobExpansionResults` decided what became of " +
+			"it. bash, that build as `sh`, bash 3.2 and ksh93 re-read the result and " +
+			"find the two files; zsh does not and prints `a*cd`. The row above is the " +
+			"control that says the difference is the result's and not the " +
+			"replacement's — one field and four characters in every column there",
+	},
+	{
+		ID: "param/a-bracket-expression-in-a-replacement", Category: "expansion",
+		Snippet: `mkdir -p g && cd g && : > aQcd && ` +
+			`x=abcd; printf "[%s]" ${x//b/[Q]}; echo`,
+		Why: "the loud half of the same fault, and the shape it was noticed by: a " +
+			"bracket expression in the replacement. It lands as three characters, and " +
+			"the four shells that re-read an expansion's result then match the file " +
+			"`aQcd` with the whole word while zsh prints `a[Q]cd`. The file is named " +
+			"for the *result* and not for the operand, which is what the first run of " +
+			"this row got wrong: a directory holding only `Q` makes `a[Q]cd` match " +
+			"nothing, and every column then agrees for a reason that has nothing to do " +
+			"with the question. Ours read the operand itself as a pattern, " +
+			"so in the dialect where an unmatched pattern is fatal the whole command " +
+			"stopped with `no matches found: [Q]` — a replacement that names no file " +
+			"is not a failure anywhere in the panel",
+	},
+	{
 		ID: "core/single-quotes-in-a-heredoc-expansion-body", Category: "quoting",
 		Snippet: "v=VAL; cat <<EOF\n[${u:-'$v'}]\nEOF",
 		Why:     "a here-document body is the same context reached by the other road: it expands like a double-quoted string, so the quotes are characters there too and the `$v` between them is substituted. Unanimous, and it is the row that says the answer is the context's rather than the double quote character's",

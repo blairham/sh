@@ -264,6 +264,43 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		return r.declarePrint(args)
 	}
 
+	// The operands are names, and this is where that is finally asked.
+	//
+	// `export`, `readonly`, `local`, `unset` and `set -A` all go through
+	// builtinNames and refuse a bad operand in the dialect's words; this
+	// builtin split each operand at `=` and got on with declaring whatever
+	// was on the left, so `typeset ':'` created a parameter called `:` and
+	// reported success where the shells it copies refuse — two of them
+	// fatally. Only the `-T` path asked, which is what made the wordings
+	// exist without anything else reading them (#1096).
+	//
+	// Below `-f`, `-F` and `-p` on purpose: those take function names and
+	// listing operands, which are not this rule — measured, `typeset -f 1x`
+	// is a silent 1 in every shell that has the word and `typeset -p 1x`
+	// gets a complaint about the *listing* rather than about the name.
+	//
+	// The complaint name rather than the invoked one, because one dialect
+	// renames this builtin in its own diagnostics: ksh93's `integer 1x` says
+	// `typeset: 1x: invalid variable name`, where zsh's says `integer`. That
+	// is Diagnostics.BuiltinComplaintName doing the job it already does for
+	// an unknown option.
+	args, code := r.builtinNames(r.builtinComplaintName(name), args, false)
+	if r.ctl == controlExit {
+		// Belt and braces, and provably so: builtinNames answers with no
+		// operands at all once a refusal has ended the script, so the loop
+		// below is empty either way and a mutation of this line cannot be
+		// killed. It is kept for the shape biLocal already has rather than
+		// for an effect it has here.
+		//
+		// That "no operands at all" is itself a divergence, filed rather
+		// than fixed with this: every shell in the panel declares the
+		// operands that *were* names beside the one that was not and only
+		// then stops, which a sourced file can see — real zsh's `. f` over
+		// `typeset ":" ok=1` leaves `ok` at 1 and this leaves it empty.
+		return code
+	}
+	status := code
+
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
 		// Read before the attributes are applied, because `-x` on this very
@@ -364,7 +401,10 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// See biExport.
 		return 1
 	}
-	return 0
+	// The refused operand's status, where one was refused and the dialect did
+	// not end the script over it: bash reports each bad name, declares the
+	// well-formed ones beside them and exits 1.
+	return status
 }
 
 // applyAttributes records what a name has been declared to be.

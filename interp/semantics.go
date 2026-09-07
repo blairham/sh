@@ -3729,6 +3729,16 @@ type Semantics struct {
 	// over that strictness gives all four.
 	DeclarationTakesASubscript Answer
 
+	// TypesetTakesASubscript is that same question for `typeset`, `declare`
+	// and `integer`, and it is a third field because the answer is per
+	// builtin here as well: measured, bash refuses `export a[1]=v` as a bad
+	// name and *takes* `typeset a[1]=v`, creating the element. ksh93 and zsh
+	// take both. So the declaration builtins are not one strictness with two
+	// spellings, and reading `typeset a[1]=v` through
+	// DeclarationTakesASubscript would have made bash start refusing a line
+	// it has always accepted.
+	TypesetTakesASubscript Answer
+
 	// UnsetTakesASubscript is the same question asked of `unset`, where the
 	// answers are not the same: bash, ksh93 and zsh take it and dash refuses
 	// it.

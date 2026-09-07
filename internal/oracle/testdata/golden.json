@@ -24579,6 +24579,50 @@
         "TimedOut": false
       }
     },
+    "declare/a-bad-operand-with-a-value-attached": {
+      "bash": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: `1x=v': not a valid identifier~\u003cshell\u003e: line 1: typeset: `:=v': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: `1x=v': not a valid identifier~\u003cshell\u003e: line 1: typeset: `:=v': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: `1x=v': not a valid identifier~\u003cshell\u003e: line 0: typeset: `:=v': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~st=127",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: 1x=v: invalid variable name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:typeset:1: not an identifier: 1x",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-declaration-without-a-value-exports-nothing": {
       "bash": {
         "Stdout": "(none)~BAR=",
@@ -25057,6 +25101,50 @@
       },
       "zsh": {
         "Stdout": "in y=[1] x=[5] z=[2]~out y=[outer] z=[outer]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-subscripted-operand-to-a-declaration": {
+      "bash": {
+        "Stdout": "st=0~declare -a a=([1]=\"v\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~declare -a a=([1]=\"v\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~declare -a a='([1]=\"v\")'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~\u003cshell\u003e: 1: typeset: not found",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~typeset -a a=([1]=v)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~typeset -a a=( v )",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -25719,6 +25807,138 @@
         "Stdout": "1[8]~2[7]~3[7]~4[7]~5[0]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-integer-declaration-with-an-operand-that-is-not-a-name": {
+      "bash": {
+        "Stdout": "st=127~A",
+        "Stderr": "\u003cshell\u003e: line 1: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~A",
+        "Stderr": "\u003cshell\u003e: line 1: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~A",
+        "Stderr": "\u003cshell\u003e: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~A",
+        "Stderr": "\u003cshell\u003e: 1: integer: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: 1x: invalid variable name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:integer:1: not an identifier: 1x",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-operand-that-is-not-a-name": {
+      "bash": {
+        "Stdout": "st=1~A",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~A",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~A",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~A",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: :: invalid variable name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:typeset:1: not valid in this context: :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-operand-that-starts-with-a-digit": {
+      "bash": {
+        "Stdout": "st=1~A",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: `1x': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~A",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: `1x': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~A",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: `1x': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~A",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: 1x: invalid variable name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:typeset:1: not an identifier: 1x",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

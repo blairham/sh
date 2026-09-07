@@ -492,6 +492,10 @@ func Semantics() interp.Semantics {
 	// refused all of them, so the panel's two bash columns differ here.
 	s.UnsetNameOperands = interp.AnythingIsAName
 	s.DeclarationTakesASubscript = interp.No
+	// And a *declaration* takes one where `export` does not, which is this
+	// shell alone splitting the two: `export a[1]=v` is `not a valid
+	// identifier` and `typeset a[1]=v` creates the element, measured.
+	s.TypesetTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
 	// A single subscript on a name that is no array is refused rather than
 	// ignored: `a=v; unset "a[1]"` says `a: not an array variable` and fails,
@@ -978,6 +982,11 @@ func Diagnostics() interp.Diagnostics {
 			"readonly": "%[1]s: `%[2]s': not a valid identifier",
 			"unset":    "%[1]s: `%[2]s': not a valid identifier",
 			"local":    "%[1]s: `%[2]s': not a valid identifier",
+			// The declaration builtins, which say the same as the rest. Named
+			// rather than left to the default so that the table is the whole
+			// answer for every builtin that asks it.
+			"typeset": "%[1]s: `%[2]s': not a valid identifier",
+			"declare": "%[1]s: `%[2]s': not a valid identifier",
 		},
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,

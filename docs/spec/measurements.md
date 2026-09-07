@@ -9114,6 +9114,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `declare/typeset-assigns` | `[]` **2>** `<shell>: 1: typeset: not found` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
+| `declare/an-operand-that-is-not-a-name` | `st=127~A` **2>** `<shell>: 1: typeset: not found` | `st=1~A` **2>** `<shell>: line 1: typeset: `:': not a valid identifier` | `st=1~A` **2>** `<shell>: line 1: typeset: `:': not a valid identifier` | `st=1~A` **2>** `<shell>: line 0: typeset: `:': not a valid identifier` | **2>** `<shell>: typeset: :: invalid variable name` *(status 1)* | **2>** `<shell>:typeset:1: not valid in this context: :` *(status 1)* |
+| `declare/an-operand-that-starts-with-a-digit` | `st=127~A` **2>** `<shell>: 1: typeset: not found` | `st=1~A` **2>** `<shell>: line 1: typeset: `1x': not a valid identifier` | `st=1~A` **2>** `<shell>: line 1: typeset: `1x': not a valid identifier` | `st=1~A` **2>** `<shell>: line 0: typeset: `1x': not a valid identifier` | **2>** `<shell>: typeset: 1x: invalid variable name` *(status 1)* | **2>** `<shell>:typeset:1: not an identifier: 1x` *(status 1)* |
+| `declare/a-bad-operand-with-a-value-attached` | `st=127~st=127` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `st=1~st=1` **2>** `<shell>: line 1: typeset: `1x=v': not a valid identifier~<shell>: line 1: typeset: `:=v': not a valid identifier` | `st=1~st=1` **2>** `<shell>: line 1: typeset: `1x=v': not a valid identifier~<shell>: line 1: typeset: `:=v': not a valid identifier` | `st=1~st=1` **2>** `<shell>: line 0: typeset: `1x=v': not a valid identifier~<shell>: line 0: typeset: `:=v': not a valid identifier` | **2>** `<shell>: typeset: 1x=v: invalid variable name` *(status 1)* | **2>** `<shell>:typeset:1: not an identifier: 1x` *(status 1)* |
+| `declare/a-subscripted-operand-to-a-declaration` | `st=127~<shell>: 1: typeset: not found` **2>** `<shell>: 1: typeset: not found` *(status 127)* | `st=0~declare -a a=([1]="v")` | `st=0~declare -a a=([1]="v")` | `st=0~declare -a a='([1]="v")'` | `st=0~typeset -a a=([1]=v)` | `st=0~typeset -a a=( v )` |
+| `declare/an-integer-declaration-with-an-operand-that-is-not-a-name` | `st=127~A` **2>** `<shell>: 1: integer: not found` | `st=127~A` **2>** `<shell>: line 1: integer: command not found` | `st=127~A` **2>** `<shell>: line 1: integer: command not found` | `st=127~A` **2>** `<shell>: integer: command not found` | **2>** `<shell>: typeset: 1x: invalid variable name` *(status 1)* | **2>** `<shell>:integer:1: not an identifier: 1x` *(status 1)* |
 | `declare/declare-is-the-second-name` | `[]` **2>** `<shell>: 1: declare: not found` | `[1]` | `[1]` | `[1]` | `[]` **2>** `<shell>: declare: not found` | `[1]` |
 | `declare/integer-is-the-third-name` | `[]~[5+2]` **2>** `<shell>: 1: integer: not found` | `[]~[5+2]` **2>** `<shell>: line 1: integer: command not found` | `[]~[5+2]` **2>** `<shell>: line 1: integer: command not found` | `[]~[5+2]` **2>** `<shell>: integer: command not found` | `[3]~[7]` | `[3]~[7]` |
 | `declare/integer-and-a-plus-form` | `i[3+4]~x[0]` **2>** `<script>: 1: integer: not found~<script>: 2: integer: not found~<script>: 5: integer: not found~<script>: 6: integer: not found` | `i[3+4]~x[0]` **2>** `<script>: line 1: integer: command not found~<script>: line 2: integer: command not found~<script>: line 5: integer: command not found~<script>: line 6: integer: command not found` | `i[3+4]~x[0]` **2>** `<script>: line 1: integer: command not found~<script>: line 2: integer: command not found~<script>: line 5: integer: command not found~<script>: line 6: integer: command not found` | `i[3+4]~x[0]` **2>** `<script>: line 1: integer: command not found~<script>: line 2: integer: command not found~<script>: line 5: integer: command not found~<script>: line 6: integer: command not found` | `i[7]~x[1]` | `i[3+4]~x[0]` |
@@ -9226,6 +9231,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
   ```sh
   typeset x=1; echo "[$x]"
+  ```
+- `declare/an-operand-that-is-not-a-name` — the operand check every other declaration builtin already had. Four sentences at three statuses across six columns: dash has no such builtin and reports a command it cannot find, bash quotes the operand back as `not a valid identifier` and carries on at 1, ksh93 says `invalid variable name` and stops the script, and zsh says `not valid in this context` and stops it too — so `echo A` is the half of the row that measures the fatality rather than the wording. Taking the operand silently creates a parameter called `:` and reports success, which is a shell answering yes to a line no shell in the panel accepts (#1096)
+  ```sh
+  typeset ':'; echo "st=$?"; echo A
+  ```
+- `declare/an-operand-that-starts-with-a-digit` — the same refusal for the other shape of bad name, and the row that separates the two shells with a second sentence for it: zsh says `not an identifier: 1x` here where it says `not valid in this context` for a punctuation operand, and bash and ksh93 say to both what they say to either. Written as its own case because a dialect carrying one wording for both would pass the punctuation row and fail nothing else
+  ```sh
+  typeset 1x; echo "st=$?"; echo A
+  ```
+- `declare/a-bad-operand-with-a-value-attached` — *which* part of the operand is quoted back, which is not the same question in every column: bash and ksh93 name the whole word — `1x=v` and `:=v` — and zsh names only the part before the `=`, so its second line is `not valid in this context: :` rather than `:=v`. An implementation that judged the name and then reported the name would be right in one column and one character short in two others
+  ```sh
+  typeset '1x=v'; echo "st=$?"; typeset ':=v'; echo "st=$?"
+  ```
+- `declare/a-subscripted-operand-to-a-declaration` — the operand a declaration takes that `export` does not, and the reason the name check needed a third answer rather than reusing `export`'s: bash refuses `export a[1]=v` as a bad name and *takes* this, creating the element, and ksh93 and zsh take both. Measured before the check was routed through, because a shared answer would have made bash start refusing a line it has always accepted
+  ```sh
+  typeset a[1]=v; echo "st=$?"; typeset -p a 2>&1
+  ```
+- `declare/an-integer-declaration-with-an-operand-that-is-not-a-name` — the same check under the third name, and the row that says whose name the complaint uses: ksh93's `integer` calls itself `typeset` in its own diagnostic where zsh's calls itself `integer`, so one shell renames the builtin in the sentence and the other does not. bash and dash have no such word at all
+  ```sh
+  integer 1x; echo "st=$?"; echo A
   ```
 - `declare/declare-is-the-second-name` — bash and zsh spell it `declare` as well, ksh93 only `typeset`, which makes the name a dialect's answer rather than an axis
   ```sh

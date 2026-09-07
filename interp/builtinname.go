@@ -100,8 +100,14 @@ func allDigits(s string) bool {
 // `readonly`, and the two builtins sit on different name strictnesses in
 // every shell, so no rule over that strictness gives all four.
 func (r *Runner) takesASubscript(builtin string) bool {
-	if builtin == "unset" {
+	switch builtin {
+	case "unset":
 		return r.ask(r.sem().UnsetTakesASubscript, "`unset a[0]` naming an array element")
+	case "typeset", "declare", "integer":
+		// A third answer rather than the declaration's, because bash gives a
+		// third answer: it refuses `export a[1]=v` and takes
+		// `typeset a[1]=v`. See Semantics.TypesetTakesASubscript.
+		return r.ask(r.sem().TypesetTakesASubscript, "`typeset a[0]=v` naming an array element")
 	}
 	return r.ask(r.sem().DeclarationTakesASubscript, "`export a[0]` naming an array element")
 }

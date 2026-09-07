@@ -379,6 +379,22 @@ func TestTheNestedSubscriptShapesNotBuiltSayWhichTheyAre(t *testing.T) {
 	}
 }
 
+// A refusal from inside the reference route names what the *script* wrote
+// rather than the name the reference resolved to.
+//
+// `${${(P)h}[(w)y]}` with `h=a` reads the subscript against `a`, so a refusal
+// naming its subject would say `a[(w)y]` — a construct the file does not
+// contain, and one a reader cannot search for.
+func TestARefusalThroughAReferenceNamesTheWrittenText(t *testing.T) {
+	out, st := runNestedSubscript(t, `a=(x y); h=a; printf "[%s]" "${${(P)h}[(w)y]}"`)
+	if !strings.Contains(out, "${${(P)h}[(w)y]}: the (w) subscript flag is not implemented") {
+		t.Errorf("got %q, want the refusal to name the written text", out)
+	}
+	if st == 0 {
+		t.Errorf("status 0, want the unimplemented flag refused")
+	}
+}
+
 // Without the subscript grammar the same characters are not this shape at
 // all: the brackets are part of the operand and the expansion is refused
 // rather than read one dialect's way.

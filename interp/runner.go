@@ -2099,7 +2099,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// Only what this pass just set. Testing r.ctl here as well made
 		// every *later* command in an already-abandoned script report a
 		// fresh failure of its own.
-		r.fatalQuiet()
+		r.failedExpansion()
 		return nil
 	}
 	var argv []string
@@ -2140,16 +2140,19 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		return nil
 	}
 	if r.expandErr {
-		// A failed arithmetic expansion is fatal to the script in every
-		// shell measured — dash, bash, ksh93 and zsh all abandon the rest of
-		// the list rather than run the next command. That much the core can
-		// decide, and running on was the silent wrong answer: the corpus case
-		// added for the status axis is what caught it.
+		// A failed expansion abandons the rest of the list rather than
+		// running the next command, in every shell measured — which is what
+		// the note here said and what the code did not do. It ended the
+		// *shell*, and the two readings are the same for a list that is the
+		// whole of a line: `echo $((1/0)); echo after` prints nothing more
+		// either way. On separate lines they part company, and one dialect
+		// prints `after` there — see FailedExpansionAbandonsTheLine, which
+		// is the axis, and #1171 for how a single-line probe hid it.
 		//
-		// *Which* non-zero status it carries is the axis, asked inside
-		// fatalQuiet. The diagnostic was already written by whoever failed,
-		// so this adds none.
-		r.fatalQuiet()
+		// *Which* non-zero status it carries is a second axis, asked inside.
+		// The diagnostic was already written by whoever failed, so this adds
+		// none.
+		r.failedExpansion()
 		return nil
 	}
 	if r.ctl == controlExit {
@@ -2890,11 +2893,7 @@ type scope struct {
 // been written independently at three sites.
 // fatalQuiet is fatal for a failure that has already reported itself.
 func (r *Runner) fatalQuiet() {
-	if r.ask(r.sem().FatalErrorStatusIsOne, "the exit status of a fatal error") {
-		r.status = 1
-	} else {
-		r.status = 2
-	}
+	r.setFatalStatus()
 	// An error rather than a request to stop, which is what lets a boundary
 	// reading a file of its own give up that file and carry on. Set here for
 	// the reason the status and the unwinding are: every fatal error comes
@@ -2905,6 +2904,46 @@ func (r *Runner) fatalQuiet() {
 func (r *Runner) fatal(format string, args ...any) {
 	r.diagf(format, args...)
 	r.fatalQuiet()
+}
+
+// failedExpansion ends what a command whose expansion failed should end.
+//
+// One dialect gives up the *line* and carries on at the next one where the
+// other three end the shell — see Semantics.FailedExpansionAbandonsTheLine
+// for the measurement, and controlAbandon for what the line means. The
+// diagnostic was already written by whoever failed, so this adds none.
+//
+// The status is the same either way and is FatalErrorStatusIsOne's, because
+// it is the same failure: the shell that abandons the line leaves 1 behind on
+// it, which is what the next command overwrites when it succeeds. That is why
+// `echo pre; echo "${(P)x}"; echo after` exits 1 and the same three commands
+// on three lines exit 0 — nothing about the status changed, only how much
+// stopped running.
+//
+// The axis is **read** rather than asked, which is Runner.setArrayLetter's
+// reason one construct over: where the answer is not yes, ending the shell is
+// what the standard describes, what three of the four shells do, and what
+// this path already did — so an unanswered axis has a correct answer to fall
+// back on rather than a missing one to complain about. It would also be the
+// second complaint on this path in a run with no dialect, since fatalQuiet
+// asks FatalErrorStatusIsOne and the core does not answer that either.
+func (r *Runner) failedExpansion() {
+	if r.sem().FailedExpansionAbandonsTheLine != Yes {
+		r.fatalQuiet()
+		return
+	}
+	r.setFatalStatus()
+	r.ctl, r.abandonLine = controlAbandon, r.line
+}
+
+// setFatalStatus is the status half of fatalQuiet, for the caller that wants
+// the number without the unwinding.
+func (r *Runner) setFatalStatus() {
+	if r.ask(r.sem().FatalErrorStatusIsOne, "the exit status of a fatal error") {
+		r.status = 1
+	} else {
+		r.status = 2
+	}
 }
 
 func (r *Runner) setVar(name, value string) { r.setVarAs(name, value, assignedAnyhow) }

@@ -1349,6 +1349,44 @@ type Semantics struct {
 	// `-c 'false; set -A 1bad v'` exits 0 too.
 	SetArrayBadNameLeavesZeroFromCommandString Answer
 
+	// FailedExpansionAbandonsTheLine ends the *line* a failed expansion
+	// happened on and carries on at the next one, rather than ending the
+	// shell. A bad substitution, a division by zero, a bad subscript and an
+	// arithmetic expression the parser refused are all this failure.
+	//
+	// True in bash and false in dash, ksh93 and zsh. Measured 2026-09-07
+	// over both invocation routes and both statement separators, which is
+	// the pairing this axis has to be measured on and the reason it was
+	// missed:
+	//
+	//	echo pre; echo "${(P)x}"; echo after     no `after`, status 1
+	//	echo pre / echo "${(P)x}" / echo after   `after` runs, status 0
+	//
+	// The same 2x2 by `-c` and by a script file, so the *route* has nothing
+	// to do with it. What ends is the command list, and a list ends at a
+	// newline — so `;` between the two commands puts them in the same unit
+	// and a newline does not. Every enclosing shape gives up the same way and
+	// the shell carries on at the next top-level statement: measured in a
+	// loop, a function body, an `if`, a group and a sourced file, where the
+	// commands after the `.` still run.
+	//
+	// It is controlAbandon, which is exactly this and was already in the
+	// tree for a readonly reassignment. Before this axis existed the failure
+	// was controlExit in every dialect, so one unreadable expansion ended
+	// the whole file — which is the shape that makes a diagnostic useless,
+	// since the point of naming a construct is that the next line still runs
+	// and the next gate becomes visible.
+	//
+	// Not the two parameter failures that look like it. `set -u` on an unset
+	// name and `${x?word}` end the *shell* in all four, by both routes and
+	// with either separator, so they are fatalExpansion's and stay there.
+	//
+	// The core leaves it unanswered: one shell against three is a
+	// disagreement, and this path already asks an unanswered axis there —
+	// FatalErrorStatusIsOne — so a core run says which dialect it needs
+	// rather than picking one.
+	FailedExpansionAbandonsTheLine Answer
+
 	// ReadonlyReassignmentFatalFromCommandString is the same question for a
 	// shell whose program came from an argument rather than from a file.
 	//
@@ -3875,8 +3913,11 @@ func PosixSemantics() Semantics {
 		SetReportsEveryBadOption:                   No,
 		ReadonlyReassignmentFatal:                  Yes,
 		ReadonlyReassignmentFatalFromCommandString: Yes,
-		ReadonlyReassignmentByDeclarationFatal:     Yes,
-		ArrayBaseIsZero:                            Yes,
+		// XCU makes an expansion error fatal to a non-interactive shell, so
+		// the standard's preset does not survive one.
+		FailedExpansionAbandonsTheLine:         No,
+		ReadonlyReassignmentByDeclarationFatal: Yes,
+		ArrayBaseIsZero:                        Yes,
 		// The standard has no subscript, and the nearest reading it does
 		// have is its arithmetic: a comma there is the operator whose value
 		// is its right operand, and a string is not a sequence a subscript

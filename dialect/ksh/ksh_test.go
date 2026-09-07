@@ -126,6 +126,8 @@ func TestSemantics(t *testing.T) {
 		// routes — which is what makes the zero that shell's quirk rather
 		// than the letter's rule (#1172).
 		{"SetArrayBadNameLeavesZeroFromCommandString", s.SetArrayBadNameLeavesZeroFromCommandString, interp.No},
+		// A failed expansion ends the shell here too (#1171).
+		{"FailedExpansionAbandonsTheLine", s.FailedExpansionAbandonsTheLine, interp.No},
 		{"ReadonlyReassignmentByDeclarationFatal", s.ReadonlyReassignmentByDeclarationFatal, interp.Yes},
 		{"UnsetFunctionChecksTheName", s.UnsetFunctionChecksTheName, interp.Yes},
 		{"UnsetFunctionReportsMissing", s.UnsetFunctionReportsMissing, interp.No},

@@ -790,6 +790,17 @@ var Corpus = []Case{
 		Snippet: `echo $((1/0)); echo "st=$?"`,
 		Why:     "dash exits 2 where bash, ksh93 and zsh exit 1; found by a test disagreeing with the conformance run, not by the sweep",
 	},
+	{
+		ID: "axis/failed-expansion-abandons-the-line", Category: "semantics axes",
+		Script:  true,
+		Snippet: "echo pre\necho $((1/0))\necho after\n",
+		Why:     "how far a failed expansion reaches, which every earlier row was the wrong shape to ask: `echo $((1/0)); echo \"st=$?\"` above puts both commands in one list, and giving up the list and giving up the shell print exactly the same thing there. On three lines they part — bash reports the failure and runs `after`, and dash, ksh93 and zsh stop — so this is the row that separates `Semantics.FailedExpansionAbandonsTheLine` from a fatal error, and the one whose absence let a single unreadable expansion end a whole file in the dialect that survives one (#1171)",
+	},
+	{
+		ID: "axis/failed-expansion-abandons-the-line-from-c", Category: "semantics axes",
+		Snippet: "echo pre\necho $((1/0))\necho after\n",
+		Why:     "the same three lines through `-c` rather than a script file, and it is a row about the *absence* of a route rule: the answer is byte-identical to the script one in all six columns. That is worth pinning because the neighboring readonly axis has a route field derived from comparing `-c` with a `;` against a file with newlines, which varied two things at once, and this pair is the shape that keeps the same mistake from being made here (#1171, #1182)",
+	},
 	// --- tokenization -----------------------------------------------------
 	{
 		ID: "token/spans-within-a-word", Category: "tokenization",

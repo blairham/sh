@@ -7563,6 +7563,16 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the disambiguation is exactly one character, and the row is four readings of the same three-character shape. A group with no `|` is a list — so `f1(.)` sends a literal name to the filesystem, a name being no pattern on its own. A group *with* one is the alternation that shell already had, and `f(1|2)` matches two files where `1` alone would be an unknown attribute. `N` makes a miss no error and deletes the word, which is why `printf` still writes its format once. And a character no qualifier claims is named and fatal, so `after` is not reached",
 	},
 	{
+		ID: "pat/a-qualifier-list-reads-the-permission-bits", Category: "pattern matching", SyntaxError: true,
+		Snippet: `mkdir -p pq; : > pq/plain; : > pq/prog; chmod 644 pq/plain; chmod 755 pq/prog; cd pq; printf "[%s]" *(x); echo; printf "[%s]" *(^x); echo; printf "[%s]" *(w); echo; printf "[%s]" *(W); echo after`,
+		Why:     "the nine permission letters, and the row is written to separate the three triples rather than to show one of them working. `x` is owner-execute, so 0755 passes and 0644 does not, and `^x` answers with the other file. `w` is owner-write and holds of both; `W` is *world*-write and holds of neither, which is the only difference between the two triples the fixture can show — and it makes the miss fatal, so `after` is not reached in the shell that has qualifiers either. The other four refuse `*(` while parsing (#1053)",
+	},
+	{
+		ID: "pat/a-bare-qualifier-list-names-the-word", Category: "pattern matching", SyntaxError: true,
+		Snippet: `mkdir -p bq; : > bq/prog; chmod 755 bq/prog; cd bq; printf "[%s]" prog(x); echo; printf "[%s]" (x); echo after`,
+		Why:     "a group standing for the whole word is a list over an *empty* pattern, and an empty pattern matches nothing — so `(x)` names the word and not the letter, where `prog(x)` sends a literal name to the filesystem and finds it. This was filed as the qualifier production winning where that shell reads an alternation, and it is neither: `x` is the owner-execute test, and the only thing wrong was refusing a letter the language has (#1053)",
+	},
+	{
 		ID: "pat/a-glob-flag-where-an-array-element-begins", Category: "pattern matching", SyntaxError: true,
 		Snippet: `files=( (#i)zz ); echo "n=${#files[@]}"; echo after`,
 		Why:     "the same rule as `a-paren-where-an-argument-stands`, one production over: an array literal's element stands where an argument does, so the `(` belongs to the element and not to the assignment. The assignment used to find its closing `)` by counting, and a flag opens one that is part of a word — `expected ) to close an array assignment` where the shell reaches the pattern and reports the miss. The pattern matches nothing on purpose: the row is about the element being *read*, and an unmatched pattern is fatal there, so `after` is never printed in any of the five",

@@ -989,9 +989,6 @@ func (r *Runner) listCouldJoinDifferently(elems []string) bool {
 func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) []string {
 	ifs, set := r.ifs()
 	split := sp.answer(r.sem().SplitParamExpansion)
-	numericRange := r.dialect().NumericRangePattern
-	patternGroup := r.dialect().PatternAlternation
-	extendedPattern := r.dialect().ExtendedPattern
 	var out []string
 	for _, el := range elems {
 		if el == "" {
@@ -1016,11 +1013,7 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) [
 		// Before the split rather than after, as the scalar path does it:
 		// what the escape adds is backslashes, which no IFS puts a field
 		// boundary on.
-		if hasUnescapedMeta(el, numericRange, patternGroup, extendedPattern,
-			r.MatchOption(ExtendedPatternOperators)) &&
-			!r.ask(glob, "globbing the result of an expansion") {
-			el = globEscape(el)
-		}
+		el = r.escapeResult(el, glob)
 		if doSplit {
 			out = append(out, r.splitFieldsAsk(el, ifs, set)...)
 			continue
@@ -1184,15 +1177,31 @@ func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, ax
 	if ifs, _ := r.ifs(); containsAnyOf(v, ifs) {
 		doSplit = r.ask(split, axis)
 	}
-	if hasUnescapedMeta(v, r.dialect().NumericRangePattern, r.dialect().PatternAlternation,
+	return r.escapeResult(v, glob), doSplit
+}
+
+// escapeResult puts one unquoted expansion result into the escaped form a
+// field is carried in.
+//
+// One function rather than one per caller: the scalar path and the list path
+// asked this same question with the same four dialect flags, and the second
+// copy is what would have kept #1222 alive for `${a[@]}` after the first was
+// fixed.
+func (r *Runner) escapeResult(v string, glob Answer) string {
+	// The value's own backslashes are marked whatever the answer below is —
+	// they are not metacharacters and no dialect disagrees about them, and
+	// marking them first is also what makes the question answerable, since a
+	// live metacharacter is one with no backslash in front of it.
+	esc := escapeValueBackslashes(v)
+	if hasUnescapedMeta(esc, r.dialect().NumericRangePattern, r.dialect().PatternAlternation,
 		r.dialect().ExtendedPattern, r.MatchOption(ExtendedPatternOperators)) &&
 		!r.ask(glob, "globbing the result of an expansion") {
 		// zsh does not treat the result of an expansion as a pattern. The
 		// same rule decides `[[ abc == $p ]]`, which is one behavior
 		// observed twice rather than two quirks.
-		v = globEscape(v)
+		return globEscape(v)
 	}
-	return v, doSplit
+	return esc
 }
 
 func containsAnyOf(s, chars string) bool {

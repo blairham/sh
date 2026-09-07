@@ -38,6 +38,42 @@ func globEscape(s string) string {
 	return b.String()
 }
 
+// escapeValueBackslashes puts an expansion result into the escaped form
+// without touching its live metacharacters.
+//
+// The escaped form spells "this character was quoted" as a backslash in front
+// of it, so `\` is the one byte a value cannot carry unmarked: a backslash
+// that was *in the value* is otherwise read as the mark for whatever follows
+// it and removed with the marks, which is how `v='a\b'; w=$v` assigned `ab`
+// and `v='a\\b'` assigned one backslash where every shell in the panel keeps
+// both (#1222). Only globEscape's caller knew to mark them, and it is the
+// caller that runs when the result is *not* a pattern — so the loss was
+// exactly on the path where the value stays live.
+//
+// The character behind the backslash is marked too, and that is measured
+// rather than symmetry. With files `a\b` and `a*` present, `v='a\*'; echo $v`
+// prints `a\*` in bash, bash 3.2, bash-as-sh, dash and zsh: the `*` matched
+// neither the name holding a backslash nor the name holding an asterisk, so a
+// value's backslash takes the metacharacter status off what follows it while
+// staying in the text itself. ksh93 is the one shell that reads it the other
+// way, matching `a\b`; that difference is not this function's to settle.
+func escapeValueBackslashes(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\\' {
+			b.WriteByte(s[i])
+			continue
+		}
+		b.WriteString(`\\`)
+		if i+1 < len(s) {
+			i++
+			b.WriteByte('\\')
+			b.WriteByte(s[i])
+		}
+	}
+	return b.String()
+}
+
 // globUnescape removes the marks, giving the literal field.
 func globUnescape(s string) string {
 	var b strings.Builder

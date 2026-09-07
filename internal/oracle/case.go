@@ -520,6 +520,26 @@ var Corpus = []Case{
 		Why:     "an unmatched pattern passes through, except in zsh where it is an error",
 	},
 	{
+		ID: "expand/a-value-backslash-survives-an-assignment", Category: "expansion",
+		Snippet: `v='a\b'; w=$v; u=$v$v; printf "[%s][%s][%s]" "$v" "$w" "$u"`,
+		Why:     "a backslash in a value is an ordinary character, and passing the value through a word being assembled does not consume it — unanimous. Printed directly beside the two that went through an expansion, because the direct read was right while the other two silently dropped it (#1222), and a case showing only the assignment could not say which half was at fault",
+	},
+	{
+		ID: "expand/a-value-doubled-backslash-is-not-halved", Category: "expansion",
+		Snippet: `v='a\\b'; w=$v; printf "[%s][%s]" "$v" "$w"`,
+		Why:     "the same rule counted rather than merely observed: two backslashes in a value stay two through an expansion. A single one going missing and a pair becoming one are the same fault, and only the pair tells an eaten character apart from a decoded escape",
+	},
+	{
+		ID: "expand/a-value-backslash-reaches-a-case-subject", Category: "expansion",
+		Snippet: `v='a\b'; case $v in 'a\b') echo esc;; ab) echo plain;; *) echo none;; esac`,
+		Why:     "the case subject is expanded without splitting or globbing, which is the same entry point an assignment's value uses — so a value's backslash has to reach the patterns intact. `ab` sits beside it as the answer a shell gives when the backslash was read as a quote and removed",
+	},
+	{
+		ID: "expand/a-value-backslash-before-a-metacharacter", Category: "expansion",
+		Snippet: `mkdir -p bs && cd bs && : > 'a\b' && : > 'a*' && v='a\*' && set -- $v && printf "[%s]" "$@"`,
+		Why:     "what a value's backslash does to the character behind it when the result is a pattern, and the panel divides: bash, bash 3.2, bash-as-sh, dash and zsh match neither name and leave the word as written, so the `*` is not a metacharacter and the backslash is still in the text; ksh93 reads the backslash as data and the `*` as live, and matches `a\\b`. Both files are present so that either reading has something to find — a directory holding neither would print the same word for both",
+	},
+	{
 		ID: "expand/brace", Category: "expansion",
 		Snippet: `echo {1..3}`,
 		Why:     "brace expansion is absent from dash",
@@ -4701,6 +4721,11 @@ echo "st=$?"`,
 		ID: "assoc/a-quoted-key-keeps-its-quotes-or-does-not", Category: "expansion",
 		Snippet: `typeset -A m; m["k"]=W; kk='"k"'; printf '[%s]' "${m[$kk]}" "${m[k]}"; echo`,
 		Why:     "the two readings of a quoted subscript, told apart by storing under one spelling and reading with the other — a key that is one string under both would hide it. bash and ksh93 run the subscript through quote removal, so the key is `k` and the second read finds `W`; zsh takes it as written, so the key is the three characters and the *first* read finds it. dash has no attribute and refuses the line",
+	},
+	{
+		ID: "assoc/a-substituted-key-keeps-its-backslash", Category: "expansion",
+		Snippet: `typeset -A m; kk='a\b'; m[$kk]=ESC; m[ab]=PLAIN; printf "%d" "${#m[@]}"`,
+		Why:     "two keys or one, which is the associative face of a value's backslash surviving a word: the substituted key is three characters in the three shells with the attribute, so the array holds two elements. Where the backslash is eaten on its way in the two keys collide and the array holds one — an array given two keys and holding one, at status 0 (#1222). dash and bash 3.2 have no such attribute and refuse the line",
 	},
 	{
 		ID: "assoc/a-quoted-substitution-in-a-key", Category: "expansion",

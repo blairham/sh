@@ -9618,6 +9618,182 @@
         "TimedOut": false
       }
     },
+    "axis/a-failed-case-subject": {
+      "bash": {
+        "Stdout": "pre~after",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "pre",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "pre~after",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pre",
+        "Stderr": "\u003cscript\u003e: 2: arithmetic expression: division by zero: \"1/0\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pre",
+        "Stderr": "\u003cscript\u003e: line 1: 1/0: divide by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pre",
+        "Stderr": "\u003cscript\u003e:2: division by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/a-failed-case-subject-from-c": {
+      "bash": {
+        "Stdout": "pre~after",
+        "Stderr": "\u003cshell\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "pre",
+        "Stderr": "\u003cshell\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "pre~after",
+        "Stderr": "\u003cshell\u003e: line 1: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pre",
+        "Stderr": "\u003cshell\u003e: 2: arithmetic expression: division by zero: \"1/0\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pre",
+        "Stderr": "\u003cshell\u003e: 1/0: divide by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pre",
+        "Stderr": "\u003cshell\u003e:2: division by zero",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/a-failed-for-word-list": {
+      "bash": {
+        "Stdout": "pre~after",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "pre",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "pre~after",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pre",
+        "Stderr": "\u003cscript\u003e: 2: arithmetic expression: division by zero: \"1/0\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pre",
+        "Stderr": "\u003cscript\u003e: line 2: 1/0: divide by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pre",
+        "Stderr": "\u003cscript\u003e:2: division by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/a-failed-for-word-list-from-c": {
+      "bash": {
+        "Stdout": "pre~after",
+        "Stderr": "\u003cshell\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "pre",
+        "Stderr": "\u003cshell\u003e: line 2: 1/0: division by 0 (error token is \"0\")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "pre~after",
+        "Stderr": "\u003cshell\u003e: line 1: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pre",
+        "Stderr": "\u003cshell\u003e: 2: arithmetic expression: division by zero: \"1/0\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pre",
+        "Stderr": "\u003cshell\u003e: line 2: 1/0: divide by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pre",
+        "Stderr": "\u003cshell\u003e:2: division by zero",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/arith-error-status": {
       "bash": {
         "Stdout": "",
@@ -42885,7 +43061,7 @@
     },
     "jobs/a-job-that-is-neither-current-nor-previous": {
       "bash": {
-        "Stdout": "[1][ ] Exit 1                     false",
+        "Stdout": "[1][+] Running                    false \u0026",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

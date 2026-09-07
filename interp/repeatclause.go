@@ -45,7 +45,14 @@ func (r *Runner) repeatCount(w *syntax.Word) (int64, bool) {
 	if w == nil {
 		return 0, false
 	}
+	r.beginHeading()
 	fields := r.expandOneWord(w)
+	if r.failedHeading() {
+		// The count is this loop's heading, so a failure in it costs the
+		// loop. Before the emptiness test below, which would otherwise read
+		// a failed expansion as a count of zero and exit 0 (#1215).
+		return 0, false
+	}
 	if len(fields) == 0 || fields[0] == "" {
 		return 0, false
 	}

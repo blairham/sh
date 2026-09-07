@@ -70,6 +70,11 @@ func Dialect() syntax.Dialect {
 	d.FuncBodyMustBeCompound = true
 	// And inside `[[ ]]`, which is the only place bash reads them.
 	d.ExtendedPatternInCondition = true
+	// `[[ -v name ]]`, which asks whether a parameter is set. Not core: bash
+	// 3.2 is the one panel shell with `[[ ]]` and without the operator, and it
+	// cannot read the line at all — `conditional binary operator expected`.
+	// This preset is 5.3, which has it.
+	d.ParameterIsSetTest = true
 	// A bare `|` in a `=~` operand belongs to the regular expression.
 	d.RegexTakesAlternation = true
 	// `time -p`, the POSIX report format. bash and ksh93 read the flag;
@@ -659,6 +664,12 @@ func Semantics() interp.Semantics {
 	s.CoprocEndsInAnArray = interp.Yes
 	s.SetListingQuoting = interp.ListingQuoteWhenNeededEscaped
 
+	// `[[ -v 1 ]]` and `[[ -v 0 ]]` ask about a positional parameter here,
+	// where ksh93 declines to read a digit as a name at all. The parameters
+	// spelled as one punctuation character are the other way round: `[[ -v ?
+	// ]]` is unset here and set in zsh. Measured on bash 5.3.15, and it is
+	// the operator rather than the lookup — `[[ -n ${?+s} ]]` is set here.
+	s.ParameterIsSetSeesPositionals = true
 	return s
 }
 

@@ -5428,6 +5428,31 @@ echo "st=$?"`,
 
 	// --- [[ ]] and (( )) ------------------------------------------------------
 	{
+		ID: "cond/an-is-set-test-asks-about-the-parameter", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `x=1; [[ -v x ]] && echo set || echo unset; y=; [[ -v y ]] && echo set || echo unset; [[ -v nope ]] && echo set || echo unset; x=1; unset x; [[ -v x ]] && echo set || echo unset`,
+		Why:     "`-v` asks whether a parameter is *set* and never anything about its value, which is why the second arm is the one that matters: a name holding the empty string is set. Not core by one column — bash 3.2 is the only panel shell with `[[ ]]` and no `-v`, and it cannot read the line at all rather than answering differently, so the head count that made `-o` core fails here. dash has no `[[ ]]` (#1255)",
+	},
+	{
+		ID: "cond/an-is-set-test-and-the-test-builtin-agree", Category: "[[ ]] and (( ))",
+		Snippet: `x=1; [ -v x ] && echo set || echo unset; [ -v nope ] && echo set || echo unset; y=; [ -v y ] && echo set || echo unset`,
+		Why:     "the same question through the builtin rather than the condition, and every shell that has the operator gives the two the same answer — which is what makes one implementation right and two a drift waiting to happen. The columns that lack it refuse by name here, `[: -v: unary operator expected`, and that refusal is the honest answer rather than a guess",
+	},
+	{
+		ID: "cond/an-is-set-test-reads-a-subscript", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `a=(x y z); [[ -v "a[1]" ]] && echo set || echo unset; [[ -v "a[9]" ]] && echo set || echo unset; [[ -v a ]] && echo set || echo unset`,
+		Why:     "a subscripted operand goes through the lookup `${name+word}` already uses, so the base an index counts from is not this operator's question: the middle arm is out of range everywhere and the first one splits between the shells for the same reason `${a[1]}` does. The third says the array itself is set",
+	},
+	{
+		ID: "cond/which-kinds-of-name-an-is-set-test-reads", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `set -- p q; [[ -v 1 ]] && echo pos || echo nopos; [[ -v 0 ]] && echo zero || echo nozero; [[ -v "?" ]] && echo special || echo nospecial; [[ -v @ ]] && echo at || echo noat; [[ -n ${1+s} ]] && echo there || echo notthere`,
+		Why:     "the two rows where the three shells that have the operator disagree, and the control that says why they are axes rather than lookups. A positional is a name to bash and zsh and not to ksh93; a parameter spelled as one punctuation character is a name to zsh alone. The parameters are *there* in all three either way, which the last arm shows — so it is the operator declining to read the name rather than the shell failing to find it. `@` is the row that keeps the second one from being 'the specials': it is unset everywhere, with parameters set",
+	},
+	{
+		ID: "cond/a-declaration-is-not-what-an-is-set-test-asks", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `typeset x; [[ -v x ]] && echo set || echo unset; [[ -n ${x+s} ]] && echo alsoset || echo alsounset`,
+		Why:     "the row that looked like a third axis and is not, kept because the mistake is the expensive one. `typeset x` with no value answers *set* in zsh and unset in bash and ksh93 — but that is the declaration and not the operator, and the second arm proves it: `${x+s}` splits exactly the same way, because zsh's valueless `typeset` really assigns the empty string. Modeling the difference here would have written a declaration rule into a set-ness one, which is the shape of #989",
+	},
+	{
 		ID: "cond/a-pattern-operand-may-start-with-a-group", Category: "[[ ]] and (( ))", SyntaxError: true,
 		Snippet: `k=a; [[ $k == (a|b) ]] && echo hit || echo miss; k=c; [[ $k == (a|b) ]] && echo hit || echo miss; k=a; [[ $k = (a|b) ]] && echo hit || echo miss; k=a; [[ $k != (a|b) ]] && echo hit || echo miss`,
 		Why:     "the commonest idiom in one shell's completion files, and a syntax error in the other four. A bare group already belonged to a word *mid*-pattern there; what was missing is the first character, since `(` is in the operator table and a token beginning with one never reaches the word scanner. All three pattern operators take it, which is what says the rule is about the operand being a pattern rather than about `==` (#826)",

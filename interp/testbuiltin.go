@@ -311,7 +311,7 @@ func (p *testParser) primary() (bool, error) {
 			return ok, err
 		}
 	}
-	if isTestUnary(p.args[p.pos]) {
+	if p.r.isTestUnary(p.args[p.pos]) {
 		if p.pos+1 >= len(p.args) {
 			return false, &testError{kind: errOperandExpected}
 		}
@@ -326,6 +326,20 @@ func (p *testParser) primary() (bool, error) {
 
 // isTestUnary reports whether a word is one of the unary operators, which is
 // what decides between "an operator and its operand" and "a bare string".
+//
+// All but one are unanimous. `-v` is the exception and is asked of the
+// dialect, so a shell without it keeps the refusal by name it already gave —
+// `[: -v: unary operator expected` — rather than answering a question it does
+// not have. That is the same head count that keeps `-v` out of the core
+// grammar: dash has neither the operator nor `[[ ]]`, and bash 3.2 answers
+// `[: -v: unary operator expected` too.
+func (r *Runner) isTestUnary(s string) bool {
+	if s == "-v" {
+		return r.dialect().ParameterIsSetTest
+	}
+	return isTestUnary(s)
+}
+
 func isTestUnary(s string) bool {
 	switch s {
 	case "-n", "-z", "-e", "-f", "-d", "-s", "-r", "-w", "-x", "-L", "-h",
@@ -352,6 +366,12 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 			return false, &testError{kind: errIntegerExpected, operand: operand, decided: true}
 		}
 		return false, nil
+	}
+	if op == "-v" && r.dialect().ParameterIsSetTest {
+		// The same question `[[ -v ]]` asks and the same answer: the two
+		// constructs agree in every shell that has the operator, so they
+		// share the function rather than each having one.
+		return r.parameterIsSet(operand)
 	}
 	if !isTestUnary(op) {
 		return false, &testError{kind: errUnaryExpected, operand: op}

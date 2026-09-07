@@ -7212,6 +7212,17 @@ grades it and nothing drift-checks it either, for the same reason.
 | `commands/coproc-speaks-by-a-letter-where-it-has-no-array` | **2>** `<shell>: 1: coproc: not found~<shell>: 1: print: not found~<shell>: 1: read: arg count~<shell>: 1: Bad substitution` *(status 2)* | `l= COPROC=2` **2>** `<shell>: line 1: print: command not found` | `l= COPROC=2` **2>** `<shell>: line 1: print: command not found` | `l= COPROC=0` **2>** `<shell>: coproc: command not found~<shell>: print: command not found` | `l= COPROC=0` **2>** `<shell>: coproc: not found~<shell>: print: no query process [Bad file descriptor]~<shell>: read: no query process` | `l=hi COPROC=0` |
 | `commands/coproc-with-no-name-takes-a-compound` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `l=` **2>** `<shell>: line 1: print: command not found` | `l=` **2>** `<shell>: line 1: print: command not found` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `coproc { cat; }; print -p hi; read -p l; echo "l=$l"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | `l=hi` |
 | `commands/the-coprocess-letters-with-nothing-started` | `p=127~r=2` **2>** `<shell>: 1: print: not found~<shell>: 1: read: arg count` | `p=127~r=1` **2>** `<shell>: line 1: print: command not found` | `p=127~r=1` **2>** `<shell>: line 1: print: command not found` | `p=127~r=1` **2>** `<shell>: print: command not found` | `p=1~r=1` **2>** `<shell>: print: no query process [Bad file descriptor]~<shell>: read: no query process` | `p=1~r=1` **2>** `<shell>:print:1: -p: no coprocess~<shell>:read:1: -p: no coprocess` |
+| `commands/an-and-or-ending-with-its-operator` | **2>** `<shell>: 2: Syntax error: "}" unexpected` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error near unexpected token `}'~<shell>: -c: line 2: `}'` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error near unexpected token `}'~<shell>: -c: line 2: `}'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `}'` *(status 2)* | **2>** `<shell>: syntax error at line 2: `}' unexpected` *(status 3)* | `after` |
+| `commands/an-and-or-ending-with-its-operator-reaches-every-closer` | **2>** `<shell>: 2: Syntax error: "fi" unexpected` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error near unexpected token `fi'~<shell>: -c: line 2: `fi'` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error near unexpected token `fi'~<shell>: -c: line 2: `fi'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `fi'` *(status 2)* | **2>** `<shell>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one~after` |
+| `commands/an-absent-and-or-operand-is-dropped-not-stood-in-for` | **2>** `<shell>: 2: Syntax error: "}" unexpected` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error near unexpected token `}'~<shell>: -c: line 2: `}'` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error near unexpected token `}'~<shell>: -c: line 2: `}'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `}'` *(status 2)* | **2>** `<shell>: syntax error at line 2: `}' unexpected` *(status 3)* | `st=1` |
+| `commands/an-absent-and-or-operand-keeps-a-success-too` | **2>** `<shell>: 2: Syntax error: "}" unexpected` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error near unexpected token `}'~<shell>: -c: line 2: `}'` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error near unexpected token `}'~<shell>: -c: line 2: `}'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `}'` *(status 2)* | **2>** `<shell>: syntax error at line 2: `}' unexpected` *(status 3)* | `st=0` |
+| `commands/an-open-ended-pipeline-is-refused-everywhere` | **2>** `<shell>: 2: Syntax error: "}" unexpected` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error near unexpected token `}'~<shell>: -c: line 2: `}'` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error near unexpected token `}'~<shell>: -c: line 2: `}'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `}'` *(status 2)* | **2>** `<shell>: syntax error at line 2: `}' unexpected` *(status 3)* | **2>** `<shell>:2: parse error near `}'` *(status 1)* |
+| `commands/an-and-or-with-a-terminator-after-it` | **2>** `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `&'~<shell>: -c: line 1: `: \|\| & echo two'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `&'~<shell>: -c: line 1: `: \|\| & echo two'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `: \|\| & echo two'` *(status 2)* | *(no output, status 0)* | **2>** `<shell>:1: parse error near `&'` *(status 1)* |
+| `commands/an-and-or-with-a-reserved-word-after-it` | **2>** `<shell>: 1: Syntax error: "fi" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `echo a && fi'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `echo a && fi'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `fi'~<shell>: -c: line 0: `echo a && fi'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `fi' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `fi'` *(status 1)* |
+| `commands/an-and-or-with-a-separator-after-it` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `false \|\| ; echo two'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `false \|\| ; echo two'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `false \|\| ; echo two'` *(status 2)* | `two` | `two` |
+| `commands/an-absent-and-or-operand-after-a-separator` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `false \|\| ;'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `false \|\| ;'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `false \|\| ;'` *(status 2)* | `st=0` | `st=1` |
+| `commands/a-pipeline-with-a-separator-after-it` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `echo one \| ; cat -n'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `echo one \| ; cat -n'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `echo one \| ; cat -n'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | `     1	one` |
+| `commands/an-and-or-operator-at-the-end-of-input` | **2>** `<shell>: 1: Syntax error: end of file unexpected` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `end of file' unexpected` *(status 3)* | `one` |
 
 - `exec/a-command-is-named-as-it-was-written` — a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else
   ```sh
@@ -7318,6 +7329,61 @@ grades it and nothing drift-checks it either, for the same reason.
 - `commands/the-coprocess-letters-with-nothing-started` — the same two letters before any `coproc`, which is the refusal each shell keeps for the case: two sentences and 1 in the shell that has both letters and a coprocess, two others and 1 in the shell that has the letters and no way here to start one, and in the two without `print` a command that was not found at 127 with `-p` reading as a prompt
   ```sh
   print -p x; echo "p=$?"; read -p y; echo "r=$?"
+  ```
+- `commands/an-and-or-ending-with-its-operator` — an and-or list whose right-hand side is simply not there. zsh runs the group and prints `after`; the other five each name the closer they met and run nothing. `~/.zi/bin/lib/zsh/install.zsh` line 2048 ends with `|| \` and the line after it closes the block, so this is the shape that decides whether that file can be read at all (#1174). The brace group is the minimal form and needs no `if`: a first attempt with `if true { : || }` measured the *opposite* answer, because with no `[[ ]]` to close the condition the `{` is read as an argument to `true`
+  ```sh
+  { : ||
+  }
+  echo after
+  ```
+- `commands/an-and-or-ending-with-its-operator-reaches-every-closer` — the same absence before a keyword rather than a brace, which is what says it is a property of the and-or list and not of brace groups: zsh prints `one` and `after` and the rest name the `fi`. Measured the same way for `( : || )`, `while …; do : || done`, `until`, `for`, `case x in x) : || ;; esac`, a function body's `}` and a command substitution's `)`
+  ```sh
+  if true; then echo one ||
+  fi
+  echo after
+  ```
+- `commands/an-absent-and-or-operand-is-dropped-not-stood-in-for` — what the absence *means*, which is the half a grammar flag alone would leave open. The status is the left-hand side's — `st=1` — so the missing operand is not an implicit `true`, which would answer 0 here. The next case is the other side of the pair, and the two together are why nothing in the interpreter needs a value for this: the operator is dropped and the left-hand side is the whole list
+  ```sh
+  { false ||
+  }
+  echo "st=$?"
+  ```
+- `commands/an-absent-and-or-operand-keeps-a-success-too` — the other side: `st=0`, so the missing operand is not an implicit `false` either — that would answer non-zero here. One stand-in gets the case above wrong and the other gets this one wrong, which is what rules both of them out and leaves dropping the operator as the only reading that fits
+  ```sh
+  { true &&
+  }
+  echo "st=$?"
+  ```
+- `commands/an-open-ended-pipeline-is-refused-everywhere` — the discriminating half of the same measurement: the leniency belongs to the and-or list alone and **no** shell in the panel extends it to a bar. zsh refuses this while taking `{ : || ⏎ }`, so a flag written for control operators in general would accept a line zsh rejects. Its own refusal names the `}`
+  ```sh
+  { : |
+  }
+  echo after
+  ```
+- `commands/an-and-or-with-a-terminator-after-it` — a `&` where the right-hand side belongs, which the shell that takes an absent operand still refuses, naming the `&` it found — so a terminator does not close the list for this purpose. ksh93 is the odd column: it parses the line and runs neither side of it, and `: || & echo two > f` then refuses the `>`, so whatever it read `echo two` as is not a command that could take a redirection. Recorded rather than implemented; it is not the same rule as the `;` two cases down
+  ```sh
+  : || & echo two
+  ```
+- `commands/an-and-or-with-a-reserved-word-after-it` — a command may begin after `&&`, so a reserved word standing there is reserved — the shell that names a word's *class* instead of quoting it quotes this one rather than calling it a word. The same distinction #1115 found for a bar, and the row that catches the operand-form helper being used here. All six refuse it, including zsh: `fi` with no `if` open closes nothing, which is what separates this from the case above where the `fi` is the one the list was inside
+  ```sh
+  echo a && fi
+  ```
+- `commands/an-and-or-with-a-separator-after-it` — a `;` between a control operator and its right-hand side. zsh and ksh93 print `two` and the other four refuse the line — and the `;` is *skipped* rather than standing in for an absent operand, which is what `false` makes visible: `echo two` is the `||`'s right-hand side and runs because the left one failed. Writing `true` there prints nothing in both. So this is a separator rule and not the absence rule the cases above are about (#1142)
+  ```sh
+  false || ; echo two
+  ```
+- `commands/an-absent-and-or-operand-after-a-separator` — the same `;` with nothing after it at all, and the row where the two lenient columns disagree about *meaning*: ksh93 answers `st=0` and zsh answers `st=1`. So an absent operand is an implicit success in one and a dropped operator in the other, which is a semantics question rather than a grammar one and cannot be a single additive flag. ksh93 also takes this shape only with the `;` present — `false ||` alone and `{ false || ⏎ }` are both syntax errors there — where zsh takes it either way
+  ```sh
+  false || ;
+  echo "st=$?"
+  ```
+- `commands/a-pipeline-with-a-separator-after-it` — the same separator after a bar, and this is where the two lenient columns part: zsh prints a numbered `one`, so `cat -n` really is the pipeline's right-hand side with the `;` skipped, and ksh93 refuses the `;` outright. It is the discriminating probe of the pair — a rule stated for control operators generally would have to accept it in ksh93 too. zsh skips any number of them, `echo one | ; ; cat -n` included, and still refuses `echo one | ;` with nothing after
+  ```sh
+  echo one | ; cat -n
+  ```
+- `commands/an-and-or-operator-at-the-end-of-input` — the operator with nothing whatever after it, which is a question about the *route* and not only the grammar: zsh takes it here and prints `one`, and the same text typed at a terminal draws a continuation prompt in zsh, bash and ksh93 alike — measured through a pty. So the end of a `-c` string ends the list where the end of a line does not, and the four refusing columns each say the input ran out rather than naming a token. ksh93 refuses it while accepting the `;` form two cases up, which is what says its leniency is the separator's and not the list's
+  ```sh
+  echo one &&
   ```
 
 ## syntax errors

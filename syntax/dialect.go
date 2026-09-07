@@ -971,6 +971,51 @@ type Dialect struct {
 	// in the panel takes an empty one.
 	EmptyCompoundBody bool
 
+	// OpenEndedAndOr lets an and-or list end with its operator: the
+	// right-hand side of a `&&` or a `||` may be absent where the list it is
+	// in closes.
+	//
+	// zsh alone, measured 2026-09-07 over a script file with a scratch
+	// `HOME`, `ZDOTDIR` and `HISTFILE`. `{ : || ⏎ }` runs there and is a
+	// syntax error in bash 5.3, bash 3.2, bash-as-`sh`, dash and ksh93, each
+	// of them naming the `}`. It reaches every closing context and is not a
+	// rule about braces: `( : || )`, `if x; then : || fi`, `while false; do
+	// : || done`, `until true; do : || done`, `case x in x) : || ;; esac`,
+	// `case x in x) : || esac`, `if x; then : || else … fi`, `… elif …`, a
+	// function body's `}` and a command substitution's `)` all take it.
+	//
+	// **The operator is dropped, not stood in for.** The status is the
+	// left-hand side's: `false ||` answers 1 and `true &&` answers 0, so an
+	// absent operand is neither an implicit `true` — which would make the
+	// first 0 — nor an implicit `false`, which would make the second
+	// non-zero. So nothing in the interpreter needs a value for this; the
+	// parser returns the left-hand side and there is no operator left.
+	//
+	// **The pipeline does not take it, in any shell.** The leniency belongs
+	// to the and-or list alone, which is the discriminating half of the
+	// measurement: zsh refuses `true |` at the end of input, `{ true | ; }`,
+	// `( true | )` and `true | )`, and names the token it found in each. A
+	// flag that covered every joining operator would accept four lines zsh
+	// rejects.
+	//
+	// **A terminator does not close the list for this purpose.** `true || &
+	// b` and `true || ;;` with no `case` open are parse errors in zsh, so
+	// `&` and a bare `case` terminator are not among the tokens that may
+	// stand there. The set that does is the one every enclosing construct
+	// stops on, which the parser's own atListEnd spells out.
+	//
+	// **The end of input is a separate question and not this flag.** zsh
+	// takes `true &&` with nothing after it at all when it reads a script or
+	// a `-c` string, and still draws a continuation prompt for the same text
+	// typed at a terminal — measured through a pty, where zsh, bash and
+	// ksh93 all prompt. So whether input that ran out ends the list depends
+	// on the route it arrived by, the way [Dialect.ExpandAliases] does, and
+	// it cannot be answered by a flag the parser reads on its own. Until it
+	// is asked where it is answered, input ending on `&&` stays unfinished
+	// in every dialect, which is right for the terminal in every column and
+	// right for four of the five dialects everywhere else.
+	OpenEndedAndOr bool
+
 	// RegexTakesAlternation makes a bare `|` part of a `=~` operand rather
 	// than the end of the word. bash and ksh93 say yes, so `[[ ab =~ a|b ]]`
 	// matches there; zsh says no and reports a parse error. Parentheses are

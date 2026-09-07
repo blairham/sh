@@ -249,6 +249,30 @@ func (p *Parser) atStopWord() bool {
 	return stopWords[p.tok.Literal()]
 }
 
+// atListEnd reports whether the current token closes the list the parser is
+// reading, rather than being something a command could begin with.
+//
+// The tokens are the ones every enclosing construct stops on: a stop word,
+// the `)` of a subshell or a `case` arm's pattern list, and a `case`
+// terminator. The end of input is deliberately not one of them — a caller
+// asking this is deciding whether a list *ended*, and input that ran out has
+// not ended, it has stopped, which is a separate answer with a continuation
+// prompt attached to it.
+//
+// A terminator is not one either. `;` and `&` end a statement rather than the
+// list holding it, and the shell that takes an and-or with no right-hand side
+// splits exactly there: measured 2026-09-07 on zsh 5.9.2, `{ true || ⏎ }`,
+// `( true || )`, `if x; then true || fi`, `while …; do true || done` and
+// `case x in x) true || ;; esac` all run, and `true || & b` is a parse error
+// naming the `&`.
+func (p *Parser) atListEnd() bool {
+	switch p.tok.Kind {
+	case TokRightParen, TokDSemi, TokSemiAmp, TokDSemiAmp:
+		return true
+	}
+	return p.atStopWord()
+}
+
 // tokenText names a token the way a diagnostic should: the word itself when
 // there is one, and the operator's spelling otherwise.
 func tokenText(tok Token) string {
@@ -724,7 +748,45 @@ func (p *Parser) parseAndOr() Expr {
 		p.skipNewlines()
 		right := p.parsePipeline()
 		if right == nil {
-			p.fail("expected a command after %s", op)
+			if p.dialect.OpenEndedAndOr && p.atListEnd() {
+				// The right-hand side is absent and the list ends here, so
+				// the operator is dropped: `{ : || ⏎ }` is `{ : ⏎ }`.
+				//
+				// Dropped rather than stood in for, which is measured. The
+				// status is the left-hand side's — `false ||` answers 1 and
+				// `true &&` answers 0 — so an absent operand is neither an
+				// implicit success nor an implicit failure. Either stand-in
+				// gets exactly one of that pair wrong.
+				//
+				// No check that parsing is still clean, deliberately: a
+				// failure already recorded is never cleared — every fail
+				// site returns early once p.err is set — so taking this
+				// branch cannot turn a refusal into an acceptance. A guard
+				// here was written and then removed as unreachable: nothing
+				// distinguished the two, because the only other thing this
+				// branch does is give up the openers below, and once a
+				// failure is recorded the prompt reads the snapshot ranOut
+				// took rather than the live stack.
+				p.open = p.open[:depth]
+				return left
+			}
+			// The token that stopped it is named, not the operator behind
+			// it — the same rule a bar follows, and wrong here for the same
+			// reason it was wrong there: the whole panel quotes what it
+			// found and none of them mentions the `&&`, which by now is
+			// read and was never the problem. `echo a && fi` is `"fi"
+			// unexpected` and `true && & b` blames the `&`.
+			//
+			// Not the operand form: a command *may* begin after `&&`, so a
+			// reserved word standing there is reserved, and the dialect that
+			// names a word's class instead of quoting it quotes this one.
+			//
+			// Input that ran out is unfinished rather than wrong, which
+			// failUnexpected already distinguishes: a line ending on `&&`
+			// is waiting for its other half, and every shell in the panel
+			// draws a continuation prompt for it — measured through a pty
+			// on all three that have one.
+			p.failUnexpected("")
 			return left
 		}
 		p.open = p.open[:depth]

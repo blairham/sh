@@ -68,6 +68,13 @@ func Dialect() syntax.Dialect {
 	// The same reach: a body may have nothing in it — `{ }`, `( )`, `while
 	// cond; do done`, and a condition too. Every shape, and this shell alone.
 	d.EmptyCompoundBody = true
+	// The same reach again, one level out: an and-or list may end with its
+	// operator, so `{ : || ⏎ }` is `{ : ⏎ }`. Measured 2026-09-07 in every
+	// closing context, and this shell alone — the other four name the closer
+	// they met. `~/.zi/bin/lib/zsh/install.zsh` line 2048 ends with `|| \`
+	// and the line after it closes the block, so a shell that refuses this
+	// cannot read the file.
+	d.OpenEndedAndOr = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
 	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a

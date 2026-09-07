@@ -270,6 +270,15 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// declaration would otherwise answer a question asked about the name
 		// it shadows. See shadowedExport.
 		wasExported := r.isExported(name)
+		if r.declarationShadowRefused(name) {
+			// Reported, and the next operand still declared: bash's
+			// `local y=1 x=5 z=2` over a frozen `x` leaves y and z local.
+			if r.unspecified {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		// Attributes first, because `-i` changes what the assignment on the
 		// same line *means* — but readonly last, because it changes whether
 		// that assignment is allowed at all. `declare -r c=1` sets c and then
@@ -926,6 +935,38 @@ func (r *Runner) hideVar(name string) {
 	r.removed[name] = true
 }
 
+// declarationShadowRefused reports whether a declaration of a frozen name is
+// refused, having said so and having decided what the refusal costs.
+//
+// Asked before the shadow, because the two answers are about whether the
+// shadow happens at all — see Semantics.DeclarationMayShadowAReadonly. Where
+// the shadow is allowed the attribute travels with the value and this reports
+// nothing; where it is not, the refusal is the one an assignment to a frozen
+// name already makes, in the declaration's form so that the builtin's name
+// reaches the sentence.
+//
+// One gate for `local` and for `typeset`/`declare` alike, because bash refuses
+// all of their spellings identically and zsh takes all of them. `local` used
+// to reach the refusal only through the assignment, which got three separate
+// things wrong: the valueless form met no check at all and shadowed the frozen
+// name in silence, the message lost the builtin's name, and the failure
+// abandoned the rest of the function where bash runs it (#1159).
+func (r *Runner) declarationShadowRefused(name string) bool {
+	if len(r.scopes) == 0 || !r.readonly[name] {
+		// Not a declaration into a scope, or nothing frozen to shadow.
+		// Assigning to a frozen name at top level is the ordinary refusal
+		// and is not this question.
+		return false
+	}
+	if r.ask(r.sem().DeclarationMayShadowAReadonly, "a declaration shadowing a readonly name") {
+		return false
+	}
+	if r.unspecified {
+		return true
+	}
+	return r.refuseReadonly(name, assignedByDeclaration)
+}
+
 // shadowTypeset is shadow for `typeset`, which unlike `local` does not always
 // get a scope to declare into.
 //
@@ -968,6 +1009,18 @@ func (r *Runner) shadow(name string) (fresh bool) {
 			sc.removedBefore = map[string]bool{}
 		}
 		sc.removedBefore[name] = r.removed[name]
+		if r.readonly[name] {
+			// The frozen attribute is displaced with the value, in the
+			// dialect that lets a declaration shadow one — the caller
+			// checked the axis before getting here. Saved so the outer name
+			// is frozen again on return: a function that thawed a readonly
+			// for good would be a hole in the whole point of the attribute.
+			if sc.savedReadonly == nil {
+				sc.savedReadonly = map[string]bool{}
+			}
+			sc.savedReadonly[name] = true
+			delete(r.readonly, name)
+		}
 	}
 	// Arrays live in a table of their own, so a name has to be saved from
 	// both. Saving only the scalar left `f() { local a; a=(x y); }` writing a

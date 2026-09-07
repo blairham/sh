@@ -340,6 +340,11 @@ func Semantics() interp.Semantics {
 	s.SelectEofIsSuccess = interp.Yes
 	s.SelectTakesUnterminatedReply = interp.Yes
 	s.SelectEofPrintsNewline = interp.No
+	// A declaration may shadow a frozen name here: `typeset -r x=1; f() {
+	// local x=2; echo $x; }` prints 2, the function runs on, and the outer
+	// 1 is back — and frozen again — when it returns. bash refuses every
+	// spelling of it.
+	s.DeclarationMayShadowAReadonly = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
 	// And an attribute added to a name that already holds a value re-reads
 	// it at once, as ksh93 does: `FOO=bar; typeset -i FOO` stores 0 and

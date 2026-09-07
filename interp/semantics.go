@@ -1301,6 +1301,45 @@ type Semantics struct {
 	// records.
 	ReadonlyReassignmentFatal Answer
 
+	// DeclarationMayShadowAReadonly lets a declaration inside a function
+	// make a local of a name the shell has frozen.
+	//
+	// Measured 2026-09-06, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
+	// ZDOTDIR and HISTFILE, over a script file:
+	//
+	//	typeset -r x=1
+	//	f() { local x=2; echo "in=[$x]"; echo running; }
+	//	f; echo "st=$? out=[$x]"
+	//
+	// zsh answers `in=[2]`, `running`, `st=0 out=[1]` — the local shadows
+	// the frozen name, the shadow is an ordinary local, and the outer value
+	// is untouched when the function returns. bash answers `local: x:
+	// readonly variable`, then `in=[1]` and `running` — it refuses the
+	// declaration, leaves the *outer* value in view, and **carries on**.
+	// ksh93 has no `local` and dash has no `typeset -r`, so bash and zsh are
+	// the two shells that can be asked and they disagree.
+	//
+	// It is one field for the whole family and not one per spelling: zsh
+	// takes `local x=2`, `local x`, `typeset x=3`, `local -r x=4` and
+	// `local y=1 x=5 z=2` alike, and bash refuses every one of them and
+	// reports 1 from the builtin each time. Splitting them would have been
+	// five fields whose answers can only ever agree.
+	//
+	// Where the answer is **no**, three things follow and all three were
+	// wrong here. The refusal names the builtin — `local: x: readonly
+	// variable`, which is ReadonlyVariableInDeclaration and the reason
+	// ReadonlyRefusalNamesBuiltin has entries for the declaration words. The
+	// builtin reports 1 and the *function* runs on, so `local x=2 || …`
+	// fires its right-hand side and the next line still runs. And the
+	// remaining operands are still declared: bash's `local y=1 x=5 z=2`
+	// leaves `y` and `z` local and only `x` refused.
+	//
+	// Where it is **yes** the shadow takes the attribute with it: the local
+	// cell is writable and the outer name is frozen again when the function
+	// returns. Asked only when a declaration meets a name that is already
+	// frozen, so nothing else reaches the question.
+	DeclarationMayShadowAReadonly Answer
+
 	// DeclaredNameWithoutValueIsEmpty gives a name a value when it is
 	// declared without one: `local u` or `typeset u`. zsh alone says yes, so
 	// `${u-UNSET}` is empty there and UNSET in bash and ksh93 — the name

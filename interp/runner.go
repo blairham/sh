@@ -2824,6 +2824,14 @@ type scope struct {
 	// much as what it held.
 	savedAssoc   map[string]AssocArray
 	assocExisted map[string]bool
+	// savedReadonly is whether a shadowed name was frozen when the
+	// declaration displaced it, for the dialect that lets a local shadow a
+	// readonly. Taking the attribute off is a change to the runner's record
+	// and has to be put back like the value — otherwise the outer name comes
+	// back assignable, which is a frozen name quietly thawed by a function
+	// call. One map rather than two, because r.readonly is a set: absent and
+	// false mean the same thing there.
+	savedReadonly map[string]bool
 	// savedExported and exportedSpoken are the export attribute a shadowed
 	// name had, for the dialects where a local does not inherit it. Taking
 	// the attribute off is a change to the runner's record and has to be put

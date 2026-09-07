@@ -2179,6 +2179,15 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// Before the attributes, for the reason biTypeset gives: `-x` here
 		// must not answer for the name this declaration shadows.
 		wasExported := r.isExported(name)
+		if r.declarationShadowRefused(name) {
+			// See biDeclare: the operand is refused and the rest are still
+			// declared, which is what the shell that refuses does.
+			if r.unspecified {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		r.applyAttributes(name, f)
 		// shadow does nothing when there is no scope to save into, which is
 		// the dialect that took this as a global: there is nothing to put

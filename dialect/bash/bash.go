@@ -649,6 +649,12 @@ func Semantics() interp.Semantics {
 	// refused and both words go on meaning what they meant — and there is no
 	// `integer` here at all, which is why IntegerOptions stays empty.
 	s.IntegerAttributeTakesABase = interp.No
+	s.IntegerBaseComesFromTheValueAssigned = interp.No
+	s.IntegerBaseNegativeIsTwosComplement = interp.No
+	// Answered for completeness rather than because a script can reach it:
+	// there is no base to be the absence of, `-i10` being an invalid option
+	// and a bare `10` not a valid identifier.
+	s.IntegerBaseTenIsNoBase = interp.No
 	// `declare -g x=new` writes the global cell even with a `local x`
 	// standing in front of the name.
 	s.DeclareGlobalReachesPastALocal = interp.Yes

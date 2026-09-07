@@ -884,6 +884,15 @@ func Semantics() interp.Semantics {
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#FF` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
+	// The alphabet this shell counts an output base in, and its length is
+	// the largest base it can spell — see Semantics.IntegerBaseDigits.
+	s.IntegerBaseDigits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	s.IntegerBaseComesFromTheValueAssigned = interp.Yes
+	s.IntegerBaseNegativeIsTwosComplement = interp.No
+	// Ten is a base like any other here: measured, `typeset -i10 d=255`
+	// lists back as `typeset -i10 d=255`, and a bare `typeset -i a` over a
+	// name declared `-i16` leaves it reading `16#FF`.
+	s.IntegerBaseTenIsNoBase = interp.No
 	// The letter is ordinary in this shell, so a plus word on `integer`
 	// means what it means on `typeset`: `integer n=5; integer +i n; n=3+4`
 	// is `3+4` here and `integer +x e` unexports, and `typeset -p n` says a
@@ -995,6 +1004,9 @@ func Diagnostics() interp.Diagnostics {
 		// named for what it is rather than by the variable it fills.
 		BadArrayLiteralSubscript: "bad subscript for direct array assignment: %[2]s",
 		DeclareNoSuchVariable:    "no such variable: %[1]s",
+		// Measured: `typeset -i64 a=100` and `typeset -i1 f=5` are both
+		// refused, the name is left with nothing, and the script carries on.
+		IntegerBadBase:           "invalid base (must be 2 to 36 inclusive): %[2]s",
 		LocationNamesTheFunction: true,
 		SetInvalidOptionName:     "no such option: %[1]s",
 		SetImmovableOptionName:   "can't change option: %[1]s",

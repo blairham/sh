@@ -96,11 +96,11 @@ func TestIntegerReadsTypesetsLettersAndSpeaksAsTypeset(t *testing.T) {
 	}
 }
 
-// An output base is refused by name rather than read and dropped. Measured:
-// `integer -i 16 b=255` is `16#ff` here and `typeset -i2 c=5` is `2#101`, and
-// this engine has nowhere to keep a base — so before this it reported 0, left
-// `255` standing, and turned the `16` into a variable of its own.
-func TestAnOutputBaseIsNamedAsMissingHere(t *testing.T) {
+// An output base is read and the name renders in it, in all three spellings
+// the base can be written in. Measured on 93u+: `16#ff` — lower case, where
+// zsh writes `16#FF` — and the value the shell holds *is* those five
+// characters, so a child is told them too.
+func TestAnOutputBaseIsRead(t *testing.T) {
 	if got := ksh.Semantics().IntegerAttributeTakesABase; got != interp.Yes {
 		t.Errorf("IntegerAttributeTakesABase = %v, want Yes", got)
 	}
@@ -109,10 +109,80 @@ func TestAnOutputBaseIsNamedAsMissingHere(t *testing.T) {
 		`typeset -i 16 b=255`,
 		`typeset -i16 b=255`,
 	} {
-		out, st := runKsh(t, t.TempDir(), src)
-		if !strings.Contains(out, "an output base is not implemented yet") || st != 2 {
-			t.Errorf("%s = %q (status %d), want the base named as missing", src, out, st)
+		out, st := runKsh(t, t.TempDir(), src+"\necho \"[$b]\"")
+		if out != "[16#ff]\n" || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q", src, out, st, "[16#ff]\n")
 		}
+	}
+}
+
+// This shell counts an output base in lower case and carries on into upper,
+// which is the whole of what its alphabet says: 61 is `Z`, 62 is `@` and 63
+// is `_`, so base 64 is one it can spell and `typeset -i64 a=100` is `64#1A`.
+// A base it cannot spell is taken in silence and rendered plain.
+func TestTheOutputBaseAlphabetGoesPastThirtySix(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`typeset -i36 b=100`, "[36#2s]\n"},
+		{`typeset -i64 b=100`, "[64#1A]\n"},
+		{`typeset -i64 b=63`, "[64#_]\n"},
+		{`typeset -i1 b=5`, "[5]\n"},
+		{`typeset -i10 b=255`, "[255]\n"},
+	} {
+		out, st := runKsh(t, t.TempDir(), tc.src+"\necho \"[$b]\"")
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// A negative value is the sixty-four-bit two's complement here, where zsh
+// puts a sign in front of the magnitude.
+func TestANegativeValueInAnOutputBaseIsTwosComplement(t *testing.T) {
+	out, st := runKsh(t, t.TempDir(), "typeset -i16 h=-255\necho \"[$h]\"")
+	want := "[16#ffffffffffffff01]\n"
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The base is a property of the *name*: a later assignment renders in it, and
+// a second declaration with a different base re-renders what the name already
+// holds.
+func TestTheOutputBaseBelongsToTheName(t *testing.T) {
+	out, st := runKsh(t, t.TempDir(), `typeset -i8 c
+c=64
+echo "[$c]"
+typeset -i i=5
+typeset -i16 i
+echo "[$i]"
+typeset -i16 h=255
+typeset -i8 h
+echo "[$h]"`)
+	want := "[8#100]\n[16#5]\n[8#377]\n"
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+}
+
+// This shell learns no base from the value it is given, which is where it
+// parts company with zsh: `0x10` under `-i` is `16` here and `16#10` there.
+func TestNoOutputBaseIsLearnedFromTheValue(t *testing.T) {
+	if got := ksh.Semantics().IntegerBaseComesFromTheValueAssigned; got != interp.No {
+		t.Errorf("IntegerBaseComesFromTheValueAssigned = %v, want No", got)
+	}
+	out, st := runKsh(t, t.TempDir(), "typeset -i b\nb=0x10\necho \"[$b]\"")
+	if out != "[16]\n" || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, "[16]\n")
+	}
+}
+
+// How the base says itself back: a word of its own after the letter, and the
+// value bare rather than quoted for the `#` in it.
+func TestTheOutputBaseSaysItselfBack(t *testing.T) {
+	out, st := runKsh(t, t.TempDir(), "typeset -i16 a=255\ntypeset -p a")
+	want := "typeset -i 16 a=16#ff\n"
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }
 
@@ -135,5 +205,47 @@ func TestIntegerIsABuiltinHere(t *testing.T) {
 	out, st := runKsh(t, t.TempDir(), `whence -v integer`)
 	if !strings.Contains(out, "integer is a shell builtin") || st != 0 {
 		t.Errorf("whence -v integer = %q (status %d), want it named a builtin", out, st)
+	}
+}
+
+// Ten is what the letter names when nothing is written here, so a bare
+// `typeset -i` — or `integer`, the same declaration under another word —
+// takes the base off a name that had one, and a written ten records nothing
+// at all: the listing has no base word. Measured on 93u+, where zsh keeps
+// `16#FF` on every one of these.
+func TestABareIntegerLetterTakesTheOutputBaseOff(t *testing.T) {
+	if got := ksh.Semantics().IntegerBaseTenIsNoBase; got != interp.Yes {
+		t.Errorf("IntegerBaseTenIsNoBase = %v, want Yes", got)
+	}
+	for _, tc := range []struct{ src, want string }{
+		{"typeset -i16 a=255\ntypeset -i a\necho \"[$a]\"", "[255]\n"},
+		{"typeset -i16 b=255\ninteger b\necho \"[$b]\"", "[255]\n"},
+		{"typeset -i16 e=255\ntypeset -i10 e\necho \"[$e]\"", "[255]\n"},
+		// The control: another letter is not this question, and the base
+		// stands.
+		{"typeset -i16 c=255\ntypeset -x c\necho \"[$c]\"", "[16#ff]\n"},
+		{"typeset -i10 d=255\ntypeset -p d", "typeset -i d=255\n"},
+	} {
+		out, st := runKsh(t, t.TempDir(), tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// Nothing is learned from the value here, so no listing carries a base it was
+// not given: `c=0x10` under `-i` is `16` and lists as a bare `typeset -i`.
+// The negative is the other half — the listing writes the text the name is
+// holding, which is the bit pattern.
+func TestNoLearnedBaseReachesTheListing(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"typeset -i c; c=0x10; typeset -p c", "typeset -i c=16\n"},
+		{"typeset -i b; b=10#5; typeset -p b", "typeset -i b=5\n"},
+		{"typeset -i16 f=-255; typeset -p f", "typeset -i 16 f=16#ffffffffffffff01\n"},
+	} {
+		out, st := runKsh(t, t.TempDir(), tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+		}
 	}
 }

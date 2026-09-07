@@ -1965,17 +1965,99 @@ type Semantics struct {
 	//
 	// ksh93 and zsh answer yes and store `16#ff` and `16#FF`; bash answers
 	// no, where `-i16` is an invalid option and a bare `16` is not a valid
-	// identifier. This engine models no output base, so where the answer is
-	// yes the base **refuses by name** rather than being read and dropped —
-	// a dropped base is the silent kind of wrong, and it was: before this
-	// field, `typeset -i 16 n=255` in the ksh and zsh dialects reported 0
-	// and left `255` standing where both shells print `16#ff`, and the `16`
-	// became a variable of its own.
+	// identifier.
+	//
+	// The base is a property of the *name* and not of the assignment that
+	// met it, so it is recorded like the attribute itself and consulted by
+	// every store afterwards: `typeset -i8 c; c=64` is `8#100`, and a second
+	// declaration with a different base re-renders what the name already
+	// holds — `typeset -i16 h=255; typeset -i8 h` is `8#377`.
+	//
+	// What is stored is the *rendered text*, which is what every read sees:
+	// `${#h}` is 5 for `16#ff`, `g=$h` copies those five characters, a child
+	// is told `h=16#ff`, and arithmetic parses it back — `$(( h + 1 ))` is
+	// 256. So it is a change to the value and not a way of printing it, and
+	// modeling it as a rendering would answer every one of those rows wrong.
+	//
+	// Base 10 and any base outside what the dialect can spell render plain —
+	// measured, ksh93 takes `-i1` and `-i0` in silence and prints `5` for
+	// both. Which bases a dialect *can* spell is IntegerBaseDigits, whose
+	// length is the largest, and whether it complains about the rest is
+	// Diagnostics.IntegerBadBase.
 	//
 	// Asked only when a base is actually written, so the ordinary `-i` never
 	// reaches it and a dialect that has no `typeset` never meets the
 	// question at all.
 	IntegerAttributeTakesABase Answer
+	// IntegerBaseDigits is the alphabet a dialect renders an output base in,
+	// and its length is the largest base it can spell.
+	//
+	// Two facts in one string, because they are one fact about the shell:
+	// ksh93 counts in lower case and carries on into upper — `16#ff`,
+	// `36#2s`, `64#1A` for 100 — so its alphabet is 62 long, and zsh counts
+	// in upper case and stops at 36, `16#FF` and `36#2S`. A dialect with no
+	// alphabet renders every base plain, which is what a shell without the
+	// feature does.
+	IntegerBaseDigits string
+	// IntegerBaseComesFromTheValueAssigned learns a name's output base from
+	// the radix prefix of the text assigned to it, where no base was named.
+	//
+	//	typeset -i b; b=0x10; echo "$b"     ksh93 `16`   zsh `16#10`
+	//	typeset -i d; d=8#7;  d=99          ksh93 `99`   zsh `8#143`
+	//	a=0x10; typeset -i a                ksh93 `16`   zsh `16#10`
+	//
+	// zsh alone, and it is the half of #1130 that is not about the letter:
+	// the base is remembered on the name either way, and what differs is
+	// only where the default comes from. It sticks — a later plain `5` under
+	// a name that learned 16 is `16#5` — which is what makes it the name's
+	// and not the assignment's.
+	//
+	// Only a *radix* prefix teaches it. A leading zero does not (`016` is
+	// `16` in both), and neither does a value that arrived already evaluated:
+	// `f=$((0x10))` is `16` in zsh too, the expansion having handed the
+	// assignment the four decimal characters.
+	IntegerBaseComesFromTheValueAssigned Answer
+	// IntegerBaseNegativeIsTwosComplement renders a negative integer in its
+	// output base as the bit pattern rather than as a sign and a magnitude.
+	//
+	//	typeset -i16 h; h=-255    ksh93 `16#ffffffffffffff01`   zsh `-16#FF`
+	//	typeset -i2 c=-5          ksh93 sixty-four binary digits   zsh `-2#101`
+	//
+	// ksh93 prints the sixty-four-bit two's complement and zsh puts the sign
+	// in front of the magnitude. Asked only for a negative value in a base
+	// that renders at all, so nothing else meets it.
+	IntegerBaseNegativeIsTwosComplement Answer
+	// IntegerBaseTenIsNoBase makes ten the *default* of the integer letter
+	// rather than a base like any other, so that naming it records nothing
+	// and writing the letter with no base at all takes off the base a name
+	// already has. Measured 2026-09-07:
+	//
+	//	typeset -i10 d=255; typeset -p d      ksh93 `typeset -i d=255`
+	//	                                      zsh   `typeset -i10 d=255`
+	//	typeset -i16 a=255; typeset -i a      ksh93 `255`   zsh `16#FF`
+	//	typeset -i16 b=255; integer b         ksh93 `255`   zsh `16#FF`
+	//	typeset -i16 c=255; typeset -x c      ksh93 `16#ff` zsh `16#FF`
+	//
+	// The two rows are one answer. ksh93's letter always names a base and
+	// ten is what it names when nothing is written, so a bare `-i` is `-i10`
+	// and ten is the absence of one — which is what #1130 asked when it
+	// asked whether "no base" is a state or just base ten, and the two
+	// shells answer it differently. In zsh ten is a state: it is recorded,
+	// its listing says `-i10` back, and a later bare `-i` leaves it alone.
+	//
+	// The value reads the same either way — `typeset -i10 e=255` is `255` in
+	// both, ten being the base nothing is written in — so this is not
+	// IntegerBaseDigits asked twice. What it changes is the *listing* and
+	// what a second declaration does to a base already there.
+	//
+	// Asked only where the answer changes something: where ten is written,
+	// and where the letter arrives bare over a name that has a base. An
+	// ordinary `typeset -i n` on a name with no base never meets it, which
+	// is nearly every declaration there is.
+	//
+	// The other letter is the control and needs no answer: `typeset -x` over
+	// a based name leaves the base alone in both.
+	IntegerBaseTenIsNoBase Answer
 
 	// IntegerPlusFormTakesAttributesOff decides whether a plus word on
 	// `integer` removes anything at all.

@@ -5,6 +5,7 @@ package interp
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -123,6 +124,12 @@ type declaration struct {
 	// missing the rest. Clustered and BareAssignments are the shells with
 	// no such attribute.
 	unique bool
+	// base is the output base an integer name renders in — `typeset -i16`.
+	// Zero where none was named, which is every name in a dialect without
+	// the feature. The two forms that write it write it differently and one
+	// of them decodes the value: see exportSpelledDeclaration and
+	// bareAssignmentDeclaration.
+	base int
 }
 
 // declarationOf gathers what the runner knows about a name. The second result
@@ -138,6 +145,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		upper:    r.uppered[name],
 		hidden:   r.hidden[name],
 		unique:   r.unique[name],
+		base:     r.integerBase[name],
 	}
 	d.tied, d.hasTie = r.tieOf(name)
 	attributed := d.integer || d.readonly || d.exported || d.lower || d.upper ||
@@ -367,6 +375,28 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 	return head
 }
 
+// listedInDecimal is a declaration's value with an output base decoded away.
+// Its own function because one listing form writes the number and the other
+// writes the text the name is holding, and both need to say which.
+func (r *Runner) listedInDecimal(d declaration) string {
+	if d.base == 0 {
+		return d.value
+	}
+	sign, text := "", d.value
+	if rest, cut := strings.CutPrefix(text, "-"); cut {
+		sign, text = "-", rest
+	}
+	at := strings.IndexByte(text, '#')
+	if at < 0 {
+		return d.value
+	}
+	v, err := strconv.ParseInt(text[at+1:], d.base, 64)
+	if err != nil {
+		return d.value
+	}
+	return sign + itoa(int(v))
+}
+
 // clusteredKey spells a subscript in the clustered form: bare when it is
 // plain, `$'...'` when it holds a control character, double-quoted otherwise —
 // the same reach the form's values make, without the always.
@@ -389,6 +419,12 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	// after that, measured: `typeset -arxU`, `export -iU`, `typeset -lU`,
 	// `export -UT`, `typeset -aUT`, `typeset -arT`.
 	flags := d.letters("aAilurxUT")
+	if d.base != 0 {
+		// The base rides on the letter here — `typeset -i16 h=255` — where
+		// the other listed form writes it as a word of its own. Measured in
+		// the one shell with this arrangement.
+		flags = strings.Replace(flags, "i", "i"+itoa(d.base), 1)
+	}
 	if d.exported && !d.isArr && !d.isAssoc {
 		// Only a scalar earns the `export` spelling; an exported array keeps
 		// the word and the letter.
@@ -452,7 +488,13 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		}
 		return head + "=( " + strings.Join(quoted, " ") + " )"
 	case d.hasValue:
-		return head + "=" + r.declareQuoted(d.value)
+		// A based value is decoded back to decimal for this listing, which
+		// is the one nuance of it: `typeset -i16 h=255` back from a name
+		// holding `16#FF`, and `typeset -i16 b=16` from one that learned its
+		// base from an `0x10`. What the *shell* holds is the based text —
+		// every read sees it and a child is told it — and only this listing
+		// writes the number.
+		return head + "=" + r.declareQuoted(r.listedInDecimal(d))
 	}
 	return head
 }
@@ -491,6 +533,12 @@ func (r *Runner) bareAssignmentDeclaration(d declaration) string {
 	}
 	if d.integer {
 		flags = append(flags, "-i")
+		if d.base != 0 {
+			// A word of its own after the letter — `typeset -i 16 h=16#ff` —
+			// where the other listed form attaches it. Measured in the one
+			// shell with this arrangement.
+			flags = append(flags, itoa(d.base))
+		}
 	}
 	value := ""
 	hasValue := true
@@ -520,6 +568,17 @@ func (r *Runner) bareAssignmentDeclaration(d declaration) string {
 			}
 		}
 		value = "(" + strings.Join(elems, " ") + ")"
+	case d.hasValue && d.base != 0:
+		// A based number lists bare here, where an ordinary value carrying a
+		// `#` is quoted: measured, `typeset -i 16 a=16#ff` against
+		// `b='#lead'`, `c='tail#'` and `d='a#b'` from the same shell. It
+		// reads the text as the number it is rather than as a word with a
+		// comment character in it.
+		//
+		// Conditioned on the name's base, which is narrower than what that
+		// shell does — it leaves a *plain* name holding `16#ff` bare too —
+		// and is the part this change measured. The wider rule is #1271.
+		value = d.value
 	case d.hasValue:
 		value = r.declareQuoted(d.value)
 	default:

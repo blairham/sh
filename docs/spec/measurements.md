@@ -9058,6 +9058,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/integer-attribute-evaluates-a-later-assignment` | `[5+2]` **2>** `<shell>: 1: typeset: not found` | `[7]` | `[7]` | `[7]` | `[7]` | `[7]` |
 | `declare/integer-attribute-on-the-declaration` | `[]` **2>** `<shell>: 1: typeset: not found` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` |
 | `declare/integer-attribute-removed` | `[5+2]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` |
+| `declare/unset-takes-the-integer-attribute-away` | `[3+4]` **2>** `<shell>: 1: typeset: not found` | `[3+4]` | `[3+4]` | `[3+4]` | `[3+4]` | `[3+4]` |
+| `declare/unset-takes-the-case-attributes-away` | `u[def]~l[GHI]` **2>** `<shell>: 1: typeset: not found~<shell>: 5: typeset: not found` | `u[def]~l[GHI]` | `u[def]~l[GHI]` | `u[def]~l[GHI]` **2>** `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 4: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `u[def]~l[GHI]` | `u[def]~l[GHI]` |
+| `declare/unset-takes-the-export-attribute-away` | `(gone)` **2>** `<shell>: 1: typeset: not found` | `(gone)` | `(gone)` | `(gone)` | `(gone)` | `(gone)` |
+| `declare/unset-takes-the-table-attribute-away` | `[plain] st=0` **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found` | `[plain] st=0` | `[plain] st=0` | `[plain] st=0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[plain] st=0` | `[plain] st=0` |
+| `declare/unset-of-an-element-is-not-unset-of-the-name` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[1 3 3] n=3` **2>** `<shell>: line 1: typeset: -U: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `[1 3 3] n=3` **2>** `<shell>: line 1: typeset: -U: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `[1 3 3] n=3` **2>** `<shell>: line 0: typeset: -U: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: typeset: -U: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `[ 2 3] n=3` |
+| `declare/unset-of-a-readonly-name-clears-nothing` | `st=0~[]` **2>** `<shell>: 1: typeset: not found` | `st=1~[1]` **2>** `<shell>: line 2: unset: r: cannot unset: readonly variable` | **2>** `<shell>: line 2: unset: r: cannot unset: readonly variable` *(status 1)* | `st=1~[1]` **2>** `<shell>: line 1: unset: r: cannot unset: readonly variable` | `st=1~[1]` **2>** `<shell>[2]: unset: warning: r: is read only` | **2>** `<shell>:2: read-only variable: r` *(status 1)* |
+| `declare/a-name-assigned-after-an-unset-lists-again` | `st=127~st=127` **2>** `<shell>: 1: typeset: not found~<shell>: 4: typeset: not found~<shell>: 8: typeset: not found` | `declare -- q="7"~st=0~declare -- PATHX="zz"~st=0` | `declare -- q="7"~st=0~declare -- PATHX="zz"~st=0` | `declare -- q="7"~st=0~declare -- PATHX="zz"~st=0` | `q=7~st=0~PATHX=zz~st=0` | `typeset q=7~st=0~typeset PATHX=zz~st=0` |
+| `declare/an-array-assigned-after-an-unset-lists-again` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a a=([0]="3" [1]="4")~1 st=0~declare -A m=([j]="w" )~2 st=0` | `declare -a a=([0]="3" [1]="4")~1 st=0~declare -A m=([j]="w" )~2 st=0` | `declare -a a='([0]="3" [1]="4")'~1 st=0~declare -a m='([0]="w")'~2 st=0` **2>** `<shell>: line 5: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 7: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -a a=(3 4)~1 st=0~typeset -A m=([j]=w)~2 st=0` | `typeset -a a=( 3 4 )~1 st=0~typeset -A m=( [j]=w )~2 st=0` |
 | `declare/integer-attribute-with-text` | `[abc]` **2>** `<shell>: 1: typeset: not found` | `[0]` | `[0]` | `[0]` | `[0]` | `[0]` |
 | `declare/an-attribute-re-reads-the-value-the-name-already-holds` | `i[bar]~u[MiXeD]~l[MiXeD]` **2>** `<shell>: 1: typeset: not found~<shell>: 2: typeset: not found~<shell>: 3: typeset: not found` | `i[bar]~u[MiXeD]~l[MiXeD]` | `i[bar]~u[MiXeD]~l[MiXeD]` | `i[bar]~u[MiXeD]~l[MiXeD]` **2>** `<shell>: line 1: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 2: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `i[0]~u[MIXED]~l[mixed]` | `i[0]~u[MIXED]~l[mixed]` |
 | `declare/an-integer-attribute-over-a-number-written-oddly` | `1[08]~2[ 7 ]~3[+7]~4[5+2]~5[]` **2>** `<shell>: 1: typeset: not found~<shell>: 2: typeset: not found~<shell>: 3: typeset: not found~<shell>: 4: typeset: not found~<shell>: 5: typeset: not found` | `1[08]~2[ 7 ]~3[+7]~4[5+2]~5[]` | `1[08]~2[ 7 ]~3[+7]~4[5+2]~5[]` | `1[08]~2[ 7 ]~3[+7]~4[5+2]~5[]` | `1[8]~2[7]~3[7]~4[7]~5[0]` | `1[8]~2[7]~3[7]~4[7]~5[0]` |
@@ -9285,6 +9293,77 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/integer-attribute-removed` — `+i` takes the attribute away, which is the one place a shell spells an option with a plus
   ```sh
   typeset -i n=1; typeset +i n; n=5+2; echo "[$n]"
+  ```
+- `declare/unset-takes-the-integer-attribute-away` — `unset` removes the name *and* what it was declared to be, so a name assigned afterwards is a plain new name: `3+4` and not 7. Unanimous across every column that has the letter, which is what makes it a rule rather than an axis — and it is the ground the other attribute rows stand on, because a shell whose attribute maps are keyed by name and are never deleted from gives the *old* attribute to the *new* value, silently and at status 0. `unset PATH; PATH=a:a:b` is the shape that made it visible (#1047)
+  ```sh
+  typeset -i n=5
+  unset n
+  n=3+4
+  echo "[$n]"
+  ```
+- `declare/unset-takes-the-case-attributes-away` — the same rule over the two case letters, which is where a per-letter fix would have stopped: `def` and `GHI` rather than `DEF` and `ghi`. Both letters on one row because they share the answer the way they share the re-read one. bash 3.2 has neither letter and answers with two usage lines while still printing the unfolded values, so the row says the same thing there for a different reason
+  ```sh
+  typeset -u u=abc
+  unset u
+  u=def
+  echo "u[$u]"
+  typeset -l l=ABC
+  unset l
+  l=GHI
+  echo "l[$l]"
+  ```
+- `declare/unset-takes-the-export-attribute-away` — the half only a child can see, and the only one of these attributes whose loss is invisible to the shell's own reads: after the `unset` the name is not exported, so a value assigned afterwards reaches no child. `(gone)` everywhere. A slice the case sets itself and greps for, because a listing of the whole environment would grade the machine
+  ```sh
+  typeset -x e=1
+  unset e
+  e=2
+  env | grep '^e=' || echo '(gone)'
+  ```
+- `declare/unset-takes-the-table-attribute-away` — the attribute that is not a flag but a *kind*: once the table is gone the name takes a scalar, so `m=plain` is an assignment and not a non-numeric subscript. `plain` at status 0 in the two columns that have `-A`; bash 3.2 has no `-A` and reaches the same answer having refused the letter, and ksh93's `typeset` is special so the row records what a fatal refusal does to the rest of the snippet
+  ```sh
+  typeset -A m; m[k]=v
+  unset m
+  m=plain
+  echo "[$m] st=$?"
+  ```
+- `declare/unset-of-an-element-is-not-unset-of-the-name` — the bound on the rule above, and the reason it cannot be written as `unset` clearing whatever it is handed: an element is not the name, so the attribute stands and the appended `3` is dropped as the duplicate it is — `[ 2 3]`, the hole the element unset left and three elements still. zsh is the only column with the letter; the three bash columns refuse it and answer `[1 3 3]` with the duplicate kept, and ksh93's refusal of it is fatal. Recorded through `-U` because it is the one attribute whose presence an *append* can prove — a fix that cleared the maps wherever `unset` was called would pass every row above and keep the duplicate here
+  ```sh
+  typeset -U u=(1 2 3)
+  unset 'u[1]'
+  u+=(3)
+  echo "[${u[@]}] n=${#u[@]}"
+  ```
+- `declare/unset-of-a-readonly-name-clears-nothing` — the other bound: the refusal stands in front of the removal, so a frozen name keeps its value *and* everything it was declared to be. `st=1` and `[1]` in bash, bash 3.2 and ksh93 — which calls it a warning and carries on — where bash as `sh` and zsh make the refusal fatal and never print either line. The row that says the clearing belongs behind the refusal rather than beside it, and no column reaches a cleared name to disagree about
+  ```sh
+  typeset -r r=1
+  unset r
+  echo "st=$?"
+  echo "[$r]"
+  ```
+- `declare/a-name-assigned-after-an-unset-lists-again` — the other record `unset` leaves behind, and the one only a listing can see: the value is gone *and* the name is marked gone, so whatever brings it back has to lift both. Every column that can be asked says the name back with the value it now holds and no attribute — bash's `declare -- q="7"`, ksh93's bare `q=7`, zsh's `typeset q=7` — and answers 0. The second half has no attribute anywhere in it, which is what says the mark and the attribute are two records rather than one: a shell that lifts only the attribute reports a name it is holding a value for as not found (#1047)
+  ```sh
+  typeset -i q=5
+  unset q
+  q=7
+  typeset -p q
+  echo "st=$?"
+  unset PATHX
+  PATHX=zz
+  typeset -p PATHX
+  echo "st=$?"
+  ```
+- `declare/an-array-assigned-after-an-unset-lists-again` — the same mark lifted by the two stores that are not the scalar table — an indexed array and a keyed one, each of which reaches its own store and neither of which goes through the scalar one. Both list back with their new elements and only their new elements: the `1 2` and the `[k]=v` are gone. Worth its own row because a fix to the scalar store passes the row above and leaves these two saying the name is not there, which is the shape a single-choke-point claim has to be tested against
+  ```sh
+  a=(1 2)
+  unset a
+  a=(3 4)
+  typeset -p a
+  echo "1 st=$?"
+  typeset -A m; m[k]=v
+  unset m
+  typeset -A m; m[j]=w
+  typeset -p m
+  echo "2 st=$?"
   ```
 - `declare/integer-attribute-with-text` — text that is not a number is not an error: `abc` is an expression whose value is an unset name, so the result is zero and nothing is said
   ```sh

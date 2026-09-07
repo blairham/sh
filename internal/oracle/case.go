@@ -7055,6 +7055,46 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "`+i` takes the attribute away, which is the one place a shell spells an option with a plus",
 	},
 	{
+		ID: "declare/unset-takes-the-integer-attribute-away", Category: "declarations",
+		Snippet: "typeset -i n=5\nunset n\nn=3+4\necho \"[$n]\"",
+		Why:     "`unset` removes the name *and* what it was declared to be, so a name assigned afterwards is a plain new name: `3+4` and not 7. Unanimous across every column that has the letter, which is what makes it a rule rather than an axis — and it is the ground the other attribute rows stand on, because a shell whose attribute maps are keyed by name and are never deleted from gives the *old* attribute to the *new* value, silently and at status 0. `unset PATH; PATH=a:a:b` is the shape that made it visible (#1047)",
+	},
+	{
+		ID: "declare/unset-takes-the-case-attributes-away", Category: "declarations",
+		Snippet: "typeset -u u=abc\nunset u\nu=def\necho \"u[$u]\"\ntypeset -l l=ABC\nunset l\nl=GHI\necho \"l[$l]\"",
+		Why:     "the same rule over the two case letters, which is where a per-letter fix would have stopped: `def` and `GHI` rather than `DEF` and `ghi`. Both letters on one row because they share the answer the way they share the re-read one. bash 3.2 has neither letter and answers with two usage lines while still printing the unfolded values, so the row says the same thing there for a different reason",
+	},
+	{
+		ID: "declare/unset-takes-the-export-attribute-away", Category: "declarations",
+		Snippet: "typeset -x e=1\nunset e\ne=2\nenv | grep '^e=' || echo '(gone)'",
+		Why:     "the half only a child can see, and the only one of these attributes whose loss is invisible to the shell's own reads: after the `unset` the name is not exported, so a value assigned afterwards reaches no child. `(gone)` everywhere. A slice the case sets itself and greps for, because a listing of the whole environment would grade the machine",
+	},
+	{
+		ID: "declare/unset-takes-the-table-attribute-away", Category: "declarations",
+		Snippet: "typeset -A m; m[k]=v\nunset m\nm=plain\necho \"[$m] st=$?\"",
+		Why:     "the attribute that is not a flag but a *kind*: once the table is gone the name takes a scalar, so `m=plain` is an assignment and not a non-numeric subscript. `plain` at status 0 in the two columns that have `-A`; bash 3.2 has no `-A` and reaches the same answer having refused the letter, and ksh93's `typeset` is special so the row records what a fatal refusal does to the rest of the snippet",
+	},
+	{
+		ID: "declare/unset-of-an-element-is-not-unset-of-the-name", Category: "declarations",
+		Snippet: "typeset -U u=(1 2 3)\nunset 'u[1]'\nu+=(3)\necho \"[${u[@]}] n=${#u[@]}\"",
+		Why:     "the bound on the rule above, and the reason it cannot be written as `unset` clearing whatever it is handed: an element is not the name, so the attribute stands and the appended `3` is dropped as the duplicate it is — `[ 2 3]`, the hole the element unset left and three elements still. zsh is the only column with the letter; the three bash columns refuse it and answer `[1 3 3]` with the duplicate kept, and ksh93's refusal of it is fatal. Recorded through `-U` because it is the one attribute whose presence an *append* can prove — a fix that cleared the maps wherever `unset` was called would pass every row above and keep the duplicate here",
+	},
+	{
+		ID: "declare/unset-of-a-readonly-name-clears-nothing", Category: "declarations",
+		Snippet: "typeset -r r=1\nunset r\necho \"st=$?\"\necho \"[$r]\"",
+		Why:     "the other bound: the refusal stands in front of the removal, so a frozen name keeps its value *and* everything it was declared to be. `st=1` and `[1]` in bash, bash 3.2 and ksh93 — which calls it a warning and carries on — where bash as `sh` and zsh make the refusal fatal and never print either line. The row that says the clearing belongs behind the refusal rather than beside it, and no column reaches a cleared name to disagree about",
+	},
+	{
+		ID: "declare/a-name-assigned-after-an-unset-lists-again", Category: "declarations",
+		Snippet: "typeset -i q=5\nunset q\nq=7\ntypeset -p q\necho \"st=$?\"\nunset PATHX\nPATHX=zz\ntypeset -p PATHX\necho \"st=$?\"",
+		Why:     "the other record `unset` leaves behind, and the one only a listing can see: the value is gone *and* the name is marked gone, so whatever brings it back has to lift both. Every column that can be asked says the name back with the value it now holds and no attribute — bash's `declare -- q=\"7\"`, ksh93's bare `q=7`, zsh's `typeset q=7` — and answers 0. The second half has no attribute anywhere in it, which is what says the mark and the attribute are two records rather than one: a shell that lifts only the attribute reports a name it is holding a value for as not found (#1047)",
+	},
+	{
+		ID: "declare/an-array-assigned-after-an-unset-lists-again", Category: "declarations",
+		Snippet: "a=(1 2)\nunset a\na=(3 4)\ntypeset -p a\necho \"1 st=$?\"\ntypeset -A m; m[k]=v\nunset m\ntypeset -A m; m[j]=w\ntypeset -p m\necho \"2 st=$?\"",
+		Why:     "the same mark lifted by the two stores that are not the scalar table — an indexed array and a keyed one, each of which reaches its own store and neither of which goes through the scalar one. Both list back with their new elements and only their new elements: the `1 2` and the `[k]=v` are gone. Worth its own row because a fix to the scalar store passes the row above and leaves these two saying the name is not there, which is the shape a single-choke-point claim has to be tested against",
+	},
+	{
 		ID: "declare/integer-attribute-with-text", Category: "declarations",
 		Snippet: `typeset -i n; n=abc; echo "[$n]"`,
 		Why:     "text that is not a number is not an error: `abc` is an expression whose value is an unset name, so the result is zero and nothing is said",

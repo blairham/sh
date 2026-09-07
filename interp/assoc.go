@@ -105,6 +105,10 @@ func (r *Runner) setAssocElem(name, key, value string) {
 		r.AssocArrays[name] = a
 	}
 	a[key] = value
+	// See nameIsBack: a keyed table is the one store that does not keep a
+	// scalar view, so it is the one that has to lift the mark itself. An
+	// indexed array keeps `$a` answering through setVar and lifts it there.
+	r.nameIsBack(name)
 }
 
 // unsetAssocElem removes one key, which is `unset m[k]` on a declared name.

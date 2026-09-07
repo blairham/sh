@@ -208,6 +208,12 @@ func TestACaseArmsLeadingParenMayBeThePatternsOwn(t *testing.T) {
 		// this was `parse error near `(''`.
 		`case x in (a|b)|(c|d)) :;; esac`,
 		`case x in (a|b) | (c|d)) :;; esac`,
+		// A `|` after the group settles it on its own: were the leading
+		// `(` the arm's, everything to the matching `)` would be inside
+		// its list and that `)` would have closed the arm, so a `|` behind
+		// it could only begin a body and no body begins with one.
+		`case x in (a|b)|c) :;; esac`,
+		`case x in (a|b)|c|d) :;; esac`,
 		// A group inside the group, so three `)` in a row.
 		`case x in ((a|b))) :;; esac`,
 		// Blanks before the arm's `)`, on both readings of what precedes
@@ -220,6 +226,20 @@ func TestACaseArmsLeadingParenMayBeThePatternsOwn(t *testing.T) {
 		mustParse(t, src, on, "a case arm's leading paren is the pattern's")
 		mustFail(t, src, off, "and it is not, without the flags")
 	}
+	// Which is also why there need not be a *word* after that `|`: an
+	// alternative may be written as nothing where the dialect says so, and
+	// this is the row that says the `|` settles the reading rather than
+	// leaving it open. Requiring a word there was wrong on five measured
+	// rows and was found by mutation; the empty one is the plain case.
+	empty := loopGlobQuals()
+	empty.CasePatternMayBeEmpty = true
+	mustParse(t, `case x in (a|b)|) :;; esac`, empty,
+		"an alternative written as nothing after a group")
+	// And it is an alternative rather than a license: `case x in (a|b)|;;`
+	// is refused here and in zsh 5.9.2 alike, so the `|` still wants the
+	// arm's `)` behind it.
+	mustFail(t, `case x in (a|b)|;; esac`, empty,
+		"a list that ends at the arm's terminator")
 }
 
 // The other half of the same decision, and the half a rule that always chose
@@ -246,6 +266,12 @@ func TestACaseArmsLeadingParenIsItsOwnWhenNoParenIsLeftForIt(t *testing.T) {
 	for _, src := range []string{
 		`case x in (a) b) :;; esac`,
 		`case x in (a|b) c) :;; esac`,
+		// A `|` commits to the group reading, so these are refused *there*
+		// rather than falling back to the arm's paren. The position is the
+		// content of the claim and it is asserted as wording in
+		// dialect/zsh; here it is only that they are still refused.
+		`case x in (a|b)|c :;; esac`,
+		`case x in (a|b)|c d) :;; esac`,
 	} {
 		mustFail(t, src, on, "neither reading leaves the arm a paren")
 	}

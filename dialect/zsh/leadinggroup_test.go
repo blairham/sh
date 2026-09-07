@@ -6,6 +6,9 @@ package zsh_test
 import (
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/syntax"
 )
 
 // A parenthesised group at the front of a loop item and of a `case` arm's
@@ -154,6 +157,16 @@ func TestACaseArmsLeadingParenMayBeThePatternsOwn(t *testing.T) {
 		{`case c in (a|b)|(c|d)) echo hit;; *) echo miss;; esac`, "hit"},
 		{`case x in (a|b)|(c|d)) echo hit;; *) echo miss;; esac`, "miss"},
 		{`case a in (a|b) | (c|d)) echo hit;; *) echo miss;; esac`, "hit"},
+		// An alternative written as nothing *after* the group. Distinct
+		// from the empty alternative *inside* one, which already worked:
+		// this needs the `|` to settle the reading on its own, and while
+		// it required a word after it the line was refused. Found by
+		// mutation, not by a case anyone wrote.
+		{`case a in (a|b)|) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case "" in (a|b)|) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case x in (a|b)|) echo hit;; *) echo miss;; esac`, "miss"},
+		{`case c in (a|b)|c) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case d in (a|b)|c|d) echo hit;; *) echo miss;; esac`, "hit"},
 		// Nested, so three `)` in a row.
 		{`case a in ((a|b))) echo hit;; *) echo miss;; esac`, "hit"},
 		{`case ab in ((a|b))) echo hit;; *) echo miss;; esac`, "miss"},
@@ -187,9 +200,51 @@ func TestACaseArmNeedsAParenLeftToCloseIt(t *testing.T) {
 	for _, src := range []string{
 		`case ab in (a) b) echo hit;; *) echo miss;; esac`,
 		`case ab in (a|b) c) echo hit;; *) echo miss;; esac`,
+		`case a in (a|b)|c echo hit;; *) echo miss;; esac`,
+		`case a in (a|b)|c d) echo hit;; *) echo miss;; esac`,
 	} {
 		if !parseFails(t, src) {
 			t.Errorf("%s: parsed, where no parenthesis is left to close the arm", src)
+		}
+	}
+}
+
+// A glob flag that is not followed by a closing `)` of its own has to be read
+// as the *pattern's* paren all the same, and the `#` is the whole of what
+// says so: `#` where a word may begin opens a comment, so the arm reading
+// swallows the rest of the line and the refusal ends up blaming the
+// parenthesis the script legitimately wrote.
+//
+// Asserted as the whole rendered line, position included, because the
+// position is the entire content of the claim — both readings refuse this
+// shape and they differ in nothing else. Dropping the `#` clause moves the
+// blame to “ `(' “ and is caught here and nowhere else.
+//
+// The refusal itself is not this dialect's final answer: zsh 5.9.2 reads the
+// pattern and complains about it at match time, `bad pattern: #i*`. That gap
+// is #1244, and a row asserting it would be asserting a feature nothing here
+// builds.
+func TestAGlobFlagsRefusalNamesTheTokenAfterThePattern(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`case abc in (#i*) echo Y;; esac`, "parse error near `echo'"},
+		{`case x in (#q) echo Y;; esac`, "parse error near `echo'"},
+		// A `|` commits to the group reading, and the position is the whole
+		// of what that buys: each of these is refused at the token after
+		// the pattern list, exactly as zsh 5.9.2 refuses it, where falling
+		// back to the arm's paren blamed the `|` instead.
+		{`case a in (a|b)|c echo Y;; esac`, "parse error near `echo'"},
+		{`case a in (a|b)| echo Y;; esac`, "parse error near `Y'"},
+		{`case a in (a|b) | echo Y;; esac`, "parse error near `Y'"},
+		{`case a in (a|b)|(c) echo Y;; esac`, "parse error near `echo'"},
+		{`case a in (a|b)|c d) echo Y;; esac`, "parse error near `d'"},
+	} {
+		_, err := syntax.Parse(tc.src, zsh.Dialect())
+		if err == nil {
+			t.Errorf("%s: parsed, want a refusal", tc.src)
+			continue
+		}
+		if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%s:\n  said %q\n  want %q", tc.src, got, tc.want)
 		}
 	}
 }

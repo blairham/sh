@@ -804,6 +804,19 @@ func (l *Lexer) leadingParenBelongsToTheWord() bool {
 //
 // It inherits that scanner's blind spot for a quoted `)` (#1241) rather than
 // working around it, so the two answer the same shape the same way.
+//
+// Two of its guards are equivalent mutants, measured rather than assumed,
+// and recorded so the next reader does not go looking for the row that would
+// kill them. Both survive because the *caller* asks more than this does:
+// nothing reaches here unless `opensPatternGroup` also says yes.
+//
+//	dropping the TokWord test      the leading `(` is folded into a word
+//	                               exactly when a group opens there, and
+//	                               where it is not — `()`, `((`) — the
+//	                               caller has already declined
+//	dropping the probe's Err test  the probe only fails where the real scan
+//	                               fails on the same bytes, so the reading
+//	                               it would have chosen never runs
 func (l *Lexer) caseArmParenOpensAGroup() bool {
 	probe := NewLexer(l.src[l.off:], l.dialect)
 	// An argument is exactly the position a pattern list stands in once the
@@ -820,7 +833,22 @@ func (l *Lexer) caseArmParenOpensAGroup() bool {
 			// pattern's.
 			return true
 		case TokPipe:
-			// More alternatives, and the question is unchanged.
+			// So is a `|`, and it settles the question rather than leaving
+			// it open. Were the leading `(` the arm's own, everything up to
+			// the matching `)` would already be inside its pattern list and
+			// the `)` would have closed the arm — so a `|` standing *after*
+			// that `)` could only begin a body, and no body begins with one.
+			// The group was one alternative of a longer list.
+			//
+			// Requiring another word after the `|` was wrong on five
+			// measured rows, and found by mutation. `case a in (a|b)|)` is
+			// the plain one: this dialect writes an alternative as nothing,
+			// so there need not be a word there at all, and zsh 5.9.2
+			// matches `a`. The other four are refusals whose *position*
+			// moved — `(a|b)|c echo`, `(a|b)| echo`, `(a|b)|(c) echo` and
+			// `(a|b)|c d)` are all refused there at the token after the
+			// list, and falling back to the arm reading blamed the `|`.
+			return true
 		default:
 			return false
 		}

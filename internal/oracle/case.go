@@ -8333,6 +8333,11 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "a whole list of groups rather than one, which is a separate read: the second alternative is reached after the first has been taken as a word, and while argument position was set only on the branch that consumed an arm paren, a list whose first pattern was a group left the rest of it in command position and answered `parse error near '|'`. A subject for each alternative and one outside both",
 	},
 	{
+		ID: "pat/an-alternative-written-as-nothing-after-a-group", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case a in (a|b)|) echo hit;; *) echo miss;; esac; case "" in (a|b)|) echo hit;; *) echo miss;; esac; case x in (a|b)|) echo hit;; *) echo miss;; esac`,
+		Why:     "a `|` standing after the group settles which paren was whose on its own, and this is the row that says so: were the leading `(` the arm's, everything to the matching `)` would already be inside its pattern list and that `)` would have closed the arm, so a `|` behind it could only begin a body and no body begins with one. Which means there need not be a *word* after it — this shell writes an alternative as nothing — and the empty subject matching is what separates the reading from a shell that merely tolerated the character. Found by mutation rather than by a script: requiring a word there was wrong on five rows, four of them refusals whose position moved",
+	},
+	{
 		ID: "pat/a-case-arm-needs-a-paren-left-to-close-it", Category: "pattern matching", SyntaxError: true,
 		Snippet: `case ab in (a) b) echo hit;; *) echo miss;; esac; echo after`,
 		Why:     "the discriminating half, and the shape a rule that always gave the leading `(` to the pattern would get wrong. The blank stops the group from going on being a word, so only the arm reading is left — and it then finds `b` where the arm's `)` belongs. Refused in all six, including the shell that takes every row above it, which is what says the choice is about what follows the list and not about the parenthesis",

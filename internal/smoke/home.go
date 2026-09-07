@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // The scratch home a session is given.
@@ -81,8 +82,18 @@ func home(root string, d Dialect) (string, error) {
 	return dir, nil
 }
 
-// rcText is what a person's rc file has in it, cut down to the four things
-// worth grading: something exported, an alias, a function and a prompt.
+// rcText is what a person's rc file has in it, cut down to what is worth
+// grading: something exported, an alias, a function, a prompt, and two key
+// rebindings — the plain one and the one written for the editing mode the file
+// selects, which is the shape of the file that opened #1352.
+//
+// The order of the last three lines is load-bearing rather than tidy. The mode
+// comes first and the plain binding after it, so that both bindings are
+// recorded in the keymap the mode makes current and both are live at the
+// prompt. Written the other way round the plain one would land in the map that
+// was current before the mode moved, and the row for it would fail for a
+// reason that is not the row's — which is the arrangement a real file happens
+// to have, and is worth its own row rather than being smuggled into these two.
 //
 // Each of them produces text that is *not* in the line that triggers it —
 // `alias-42-ok` from typing `smokealias`. A mark that is also in the typed
@@ -96,7 +107,10 @@ alias smokealias='echo alias-$((6 * 7))-ok'
 smokefunc() { echo function-$((6 * 7))-ok; }
 PS1='%s%s]%s'
 PS2='%s'
-`, rcPromptPrefix, d.CwdEscape, promptAnchor, continuationPrompt)
+%s
+%s
+`, rcPromptPrefix, d.CwdEscape, promptAnchor, continuationPrompt,
+		strings.Join(d.RebindKeyInViMode, "\n"), d.RebindKey)
 }
 
 // The foreground job the suspend checks use.

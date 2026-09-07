@@ -68,6 +68,24 @@ type Dialect struct {
 	// synchronizing on, so that a shell honoring neither PS1 nor its rc file
 	// is still one the other checks can be run against.
 	DefaultPrompt string
+	// RebindKey is the rc-file line that binds `^G` to the action that moves
+	// the cursor to the start of the line, in this shell's own spelling and
+	// this shell's own name for that action: `bind` and `beginning-of-line`
+	// in one, `bindkey` and `beginning-of-line` in the other — the same name
+	// here by coincidence, since both inherit readline's vocabulary, and not
+	// everywhere (`previous-history` against `up-line-or-history`).
+	RebindKey string
+
+	// RebindKeyInViMode is the pair of rc-file lines that select vi editing
+	// and bind `^O` to the same action in the keymap that mode makes current.
+	//
+	// Two lines rather than one, because it is two questions and a real rc
+	// file asks both: whether the mode is accepted at all, and whether a
+	// binding written for that mode's keymap is the live one afterwards. It
+	// is the shape of the file that opened #1352 — `set -o vi` and then
+	// `bind -m vi-insert`.
+	RebindKeyInViMode []string
+
 	// JobRunning and JobStopped are the words this shell lists a job's state
 	// with. They differ, and the difference is the point of having a column
 	// per dialect: bash writes `Running` and `Stopped`, zsh writes `running`
@@ -82,6 +100,14 @@ type Dialect struct {
 func Bash() Dialect {
 	return Dialect{
 		Name: "bash", RCFile: ".bashrc", CwdEscape: `\w`, DefaultPrompt: "$ ",
+		// The quoted form, which is the one that takes a whole sequence —
+		// measured, bash reads the left side of an unquoted `keyseq:function`
+		// as the name of a single key.
+		RebindKey: `bind '"\C-g": beginning-of-line'`,
+		RebindKeyInViMode: []string{
+			"set -o vi",
+			`bind -m vi-insert '"\C-o": beginning-of-line'`,
+		},
 		JobRunning: "Running", JobStopped: "Stopped",
 	}
 }
@@ -92,6 +118,14 @@ func Zsh() Dialect {
 	// lists a job in lower case.
 	return Dialect{
 		Name: "zsh", RCFile: ".zshrc", CwdEscape: "%~", DefaultPrompt: "% ",
+		// The caret notation, which is this shell's and not the other's.
+		RebindKey: "bindkey '^G' beginning-of-line",
+		// `bindkey -v` rather than `set -o vi`, which is how this shell's own
+		// rc files spell it.
+		RebindKeyInViMode: []string{
+			"bindkey -v",
+			"bindkey -M viins '^O' beginning-of-line",
+		},
 		JobRunning: "running", JobStopped: "suspended",
 	}
 }

@@ -766,6 +766,23 @@ type Runner struct {
 	// file. So the state was kept truthfully here before anything read it,
 	// and is now read.
 	histIgnoreDups bool
+	// editingMode is which of the two `set -o` editing modes is selected,
+	// and it is one field because the two names are one state: `set -o vi`
+	// in bash 5.3 and in ksh93 turns `emacs` off in the same breath.
+	//
+	// Three values and not a bool, which is the measurement rather than a
+	// generalization: `set +o vi` and `set +o emacs` both leave *both* names
+	// off in bash 5.3 and ksh93, so "neither" is a state a script can ask
+	// for and a bool could not hold. Turning one on is the only way back.
+	//
+	// What it selects is which keymap a dialect's binding builtin acts on and
+	// nothing more, because this editor has no command mode — the same
+	// documented partial the zsh dialect's keymaps keep. The mode is here
+	// rather than in repl because `set -o vi` is answerable in a script that
+	// has no editor at all, and it is in the core rather than a dialect
+	// because both names are the standard's and every shell in the panel has
+	// them.
+	editingMode EditingMode
 	// posixMode is `set -o posix`, and the posixSaved fields are the answers
 	// the axes it moves held before it was turned on, so turning it off
 	// restores the dialect's rather than asserting the standard's opposite.

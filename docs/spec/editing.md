@@ -397,8 +397,25 @@ the one seam a scheduled command reaches a prompt through.
 line it was measured on, and one more that `docs/spec/completion.md` owns; `dialect/bash/editorstyle.go` and
 `dialect/zsh/editorstyle.go` hold the answers.
 
-`vi` mode is not implemented. It is a separate surface with its own modes and
-its own key table, and it is not the default in either shell.
+`repl/defaultkeys.go` — the key each of these actions arrives on with nothing
+rebound, which is the editor's own dispatch stated as data so that a dialect's
+key-listing command has a whole keymap to print without keeping a copy of one.
+Its test types every key in the table and compares the accepted line against
+the same action reached through the override layer, which is what holds the
+table and the switch together; the one hand-written copy that preceded it had
+already drifted, and was missing `M-^H` and all four numbered spellings of Home
+and End. `dialect/zsh/bindkey.go` and `dialect/bash/bind.go` are the two
+vocabularies over it.
+
+**`vi` mode is a name and a keymap, and not a command mode.** `set -o vi` and
+`bindkey -v` are accepted, the mode is reported back, and it selects which
+keymap the shell's binding builtin acts on — `vi-insert` in bash, `viins` in
+zsh — so an rc file's `set -o vi` followed by `bind -m vi-insert` binds keys
+that are live afterwards. What is *not* built is the command mode itself:
+`Escape` does not leave insert, and `h`, `j`, `k`, `l`, `dw` and the rest
+insert themselves as they would in either mode here. Both dialects have the
+same gap and closing it would serve both at once, which is why it is filed on
+its own rather than carried by either.
 
 ## Measured, and deliberately not a field
 

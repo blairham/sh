@@ -1185,6 +1185,10 @@ func Apply(r *interp.Runner) {
 	registerCallStack(r)
 	// The same stack, one step up: see caller.go.
 	registerCaller(r)
+	// Rebinding a key, in readline's vocabulary. The editor performs the
+	// actions and this names them; see bind.go, and repl/widgets.go for why
+	// the two halves are apart.
+	registerBind(r)
 	// A function carried to a child through the environment, under the name
 	// bash gives it. The other three do not carry functions at all.
 	r.SetFunctionExport("BASH_FUNC_", "%%")

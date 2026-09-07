@@ -4488,6 +4488,26 @@ echo "st=$?"`,
 		Why:     "the guard on the reading above: a *bare* `@` is still the whole array in all three, and a quoted one is a key — so the quoted spelling finds nothing, since nothing is stored under it. A fix that took the subscript as written everywhere would turn `${n[@]}` into a lookup and lose the whole-array spelling. The bare spelling is counted rather than printed, because the order an associative array yields its values in is not a fact this corpus can record",
 	},
 	{
+		ID: "subscript/a-flag-group-on-the-left-of-an-assignment", Category: "expansion",
+		Snippet: `b=(x y z); b[(r)y]=Q; printf '[%s]' "${b[@]}"; echo`,
+		Why:     "the flag group a *read* takes, on the other side of the `=`: the search names an index and the assignment writes there, so the element whose value is `y` is replaced. zsh alone has the construct; the other five read the whole subscript as arithmetic and fail on the parenthesis, at three wordings and two statuses",
+	},
+	{
+		ID: "subscript/a-flag-group-that-matched-nothing-appends", Category: "expansion",
+		Snippet: `b=(x y z); b[(i)nomatch]=W; b[(r)alsono]=Q; printf '%d' "${#b[@]}"; printf '[%s]' "${b[@]}"; echo`,
+		Why:     "the row that makes this more than a lookup: `(i)` missing answers one past the last element and `(r)` missing does too, so both write where an append writes. The semantics need nothing new for it — the group names an index, and the index after the last is the one an append uses — which is why the count is printed with the elements",
+	},
+	{
+		ID: "subscript/a-flag-group-through-the-assigning-operator", Category: "expansion",
+		Snippet: `b=(x "" z); printf '[%s]' "${b[(r)]:=V}" "${b[@]}"; echo`,
+		Why:     "the same group reached from the third direction: the search finds the empty element, `:=` writes there because it is empty, and the value it wrote is what the expansion comes to. The reading has to be the same on all three sides or the same subscript names two different elements depending on which one wrote it",
+	},
+	{
+		ID: "subscript/a-flag-group-only-where-the-source-wrote-one", Category: "expansion",
+		Snippet: `g='(r)y'; b=(x y z); b[$g]=Q; printf '[%s]' "${b[@]}"; echo`,
+		Why:     "a group is only a group where the source wrote one: arriving from an expansion the same characters are an ordinary subscript, read as arithmetic and failing on the parenthesis. That is not a guard added here but a consequence of where the group is scanned — the operand behind it is lexed as a word of its own, and a group the source did not write has no operand to lex",
+	},
+	{
 		ID: "subscript/a-search-operand-keeps-a-backslash", Category: "expansion",
 		Snippet: `a=('bet\a' beta); printf '[%s]\n' "${a[(r)bet\a]}"`,
 		Why:     "the pattern half of the same rule, on the one construct that reaches it: a backslash before a character that needed no escaping is two characters of the pattern in zsh, so the operand finds the element whose value holds a backslash and does not find `beta`. The other five have no flag group in a subscript and read the whole thing as arithmetic, which is a diagnostic rather than an answer",

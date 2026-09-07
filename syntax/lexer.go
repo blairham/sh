@@ -735,7 +735,7 @@ func (l *Lexer) endsWord(c byte) bool {
 			return !l.dialect.RegexTakesAlternation
 		}
 	}
-	return c != '(' || !l.opensPatternGroup()
+	return c != '(' || (!l.opensPatternGroup() && !l.opensSubscriptFlags())
 }
 
 // opensPatternGroup reports whether a `(` here belongs to the word.
@@ -865,6 +865,22 @@ func (l *Lexer) caseArmParenOpensAGroup() bool {
 			return false
 		}
 	}
+}
+
+// opensSubscriptFlags reports whether the `(` at the cursor opens a
+// subscript's flag group — which is to say it stands immediately after the
+// `[` that opened a subscript, and reads as a group.
+//
+// The bracket is the whole of the context needed: a group is only ever at the
+// *front* of a subscript, so the character before it says which position this
+// is without a depth counter. A `(` anywhere else in a word is the pattern
+// group question and is answered below.
+func (l *Lexer) opensSubscriptFlags() bool {
+	if !l.dialect.ArraySubscriptFlags || l.off == 0 || l.src[l.off-1] != '[' {
+		return false
+	}
+	_, _, ok := scanSubscriptFlags(l.src[l.off:])
+	return ok
 }
 
 func (l *Lexer) opensPatternGroup() bool {
@@ -1075,6 +1091,20 @@ func (l *Lexer) scanWord(start Pos) Token {
 			for range width {
 				lit.WriteByte(l.advance())
 			}
+
+		case c == '(' && l.opensSubscriptFlags():
+			// A flag group at the front of a subscript belongs to the word,
+			// whatever the dialect says about pattern groups: `b[(r)y]=Q` is
+			// one word and the group is scanned off its text later.
+			//
+			// It is the *assignment* that needs saying here. The brace-less
+			// read `$a[(r)b]` is stepped over by bareSubscript and the braced
+			// one never reaches this scanner at all, so this is the third
+			// spelling and the one with no reader of its own — and it worked
+			// only by accident where the dialect also had bare pattern
+			// groups, which is a different flag answering a question that is
+			// not its.
+			lit.WriteString(l.scanPatternGroup())
 
 		case c == '(' && l.opensPatternGroup():
 			// A parenthesised group belongs to the word rather than ending

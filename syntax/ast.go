@@ -239,6 +239,12 @@ type Assign struct {
 	IsArray bool
 	// Index is the subscript of `name[i]=value`, nil otherwise.
 	Index *Word
+	// IndexFlags is the parenthesized flag group that subscript opened with,
+	// where the dialect has them — `a[(r)y]=Q` replaces the element whose
+	// value is `y`. The operand behind the group is IndexFlags.Arg, and Index
+	// still holds the whole subscript as written, so a reader that does not
+	// know about groups sees what the source said.
+	IndexFlags *SubscriptFlags
 	// Append is `name+=value`, which adds to what is there rather than
 	// replacing it — and adds to the *end* of an array rather than to its
 	// first element.

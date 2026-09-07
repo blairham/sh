@@ -59,6 +59,11 @@ func corpusDialect() syntax.Dialect {
 	// which for the `|` spellings is a syntax error, so the grammar that has
 	// to read every case is the one that takes them.
 	d.ClobberOverrideMarker = true
+	// `b[(r)y]=Q` — the subscript flag group, on the left of an assignment.
+	// One of the six takes it and the other five read the whole subscript as
+	// arithmetic and fail on the parenthesis; the corpus records both, so the
+	// grammar that has to *read* every case is the one that takes it.
+	d.ArraySubscriptFlags = true
 	return d
 }
 

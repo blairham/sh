@@ -3554,6 +3554,13 @@ func (r *Runner) assign(a *syntax.Assign) {
 			return
 		}
 		r.assignArrayLiteral(a.Name, a.Elems, a.Append)
+	case a.Index != nil && a.IndexFlags != nil && r.assocDeclared(a.Name):
+		// A group over a *table* is refused by name rather than stored under
+		// the text it was written with. Ahead of the ordinary keyed branch
+		// because that one would take `(r)v` for a key, which is a plausible
+		// wrong element and exactly what this construct must not produce; the
+		// shell with it refuses the line as `attempt to set slice`.
+		r.flaggedAssignIndex(a)
 	case a.Index != nil && r.assocDeclared(a.Name):
 		// A declared name takes its subscript as a string, expanded and
 		// never evaluated: `m[1+1]=x` stores under the three characters.
@@ -3568,6 +3575,21 @@ func (r *Runner) assign(a *syntax.Assign) {
 			value = r.AssocArrays[a.Name][key] + value
 		}
 		r.setAssocElem(a.Name, key, value)
+	case a.Index != nil && a.IndexFlags != nil:
+		// A flag group names the element instead of an expression naming it:
+		// `a[(r)y]=Q` replaces the element whose value is `y`, and
+		// `a[(i)nomatch]=W` appends, because `(i)` missing answers one past
+		// the last element. See Runner.flaggedAssignIndex.
+		idx, ok := r.flaggedAssignIndex(a)
+		if !ok {
+			return
+		}
+		text := r.subscriptAsWritten(a.Index)
+		if a.Append {
+			r.appendArrayElem(a.Name, idx, text, r.expandAssignValue(a.Value))
+			return
+		}
+		r.setArrayElem(a.Name, idx, text, r.expandAssignValue(a.Value))
 	case a.Index != nil:
 		// The subscript is an expression, and one that will not evaluate ends
 		// the script in every shell measured — the same complaint, worded the

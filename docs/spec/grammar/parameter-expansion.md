@@ -769,9 +769,10 @@ Details, each measured:
   and `${(ia)a}` are all `c a b` on that data, where a reading in which
   `o` still decided would answer `a b c`. `u` still runs ahead of it.
 
-  So `(a)` belongs with the sorts and not with `(A)` and `(e)`, which do
-  change what the subject is. The two differ only in case and in nothing
-  else, which is the mistake this note exists to stop.
+  So `(a)` belongs with the sorts and not with `(A)`, which changes what
+  an *assignment* leaves behind and the substituted value not at all. The
+  two differ only in case and in nothing else, which is the mistake this
+  note exists to stop.
 
   Where the step sits is measured rather than read off the rule numbers,
   and it is **last of the group**: after the operator
@@ -914,7 +915,9 @@ Details, each measured:
 - **`(k)`/`(v)` order.** zsh yields hash order, which it does not promise;
   this implementation yields sorted key order, the same deterministic
   answer `${m[@]}` already gives. `(k)` on anything that is not an
-  associative array is a no-op, and `(v)` matters only beside `(k)`.
+  associative array is a no-op, and `(v)` matters only beside `(k)` —
+  except over a subscript search, where `(v)` alone substitutes the
+  matched keys' values; see "A search over an associative array".
 - **`(%)` prompt escapes.** `%x` and `%N` both name the file being read:
   under `-c` the shell's own name (`zsh`), in a script the script's path,
   in a sourced file the sourced file's path. Inside a function `%N` is the
@@ -988,11 +991,49 @@ coin flip as evidence; the sorted order this implementation yields is
 stated above and asserted in its own unit test rather than against the
 panel.
 
+### The `(A)` flag is two halves
+
+`(A)` is the one flag whose whole job is a **side effect**. Measured on
+zsh 5.9.2:
+
+| written | zsh 5.9.2 | the same without the `A` |
+| --- | --- | --- |
+| `v="a b"; ${(A)#v}` | `3` | `3` |
+| `v="a b"; "${(A)v}"` | one field | one field |
+| `v="a\|b"; ${(As:\|:)v}` | `a b` | `a b` |
+| `v="a\|b"; ${(@Akons:\|:u)v}` | `a b` | `a b` |
+| `v=abc; ${(AA)v}` | `abc` | `abc` |
+| `${(A)nosuch:-x y}` | `x y`, and `nosuch` still unset | the same |
+| `unset u; ${(A)u=x y}` | `x y`, and `u` is `typeset -a u=( 'x y' )` | `u` is a scalar |
+| `unset u; ${(A)u::=x y}` | the same array | a scalar |
+| `unset u; ${(AA)u=k v}` | `bad set of key/value pairs …` | assigns a scalar |
+
+So the flag changes nothing at all unless the expansion carries an
+assignment operator — `=`, `:=` or `::=` — and where it does, it changes
+what kind of parameter the assignment leaves behind rather than what the
+expansion substitutes.
+
+**Both halves are answered here, and only one of them by doing
+something.** Every reading in the first block is carried by leaving the
+value alone, which is what the six lines a real plugin manager writes
+need; an expansion that assigns is refused by name —
+`${(A)u=x y}: the (A) expansion flag is not implemented for an
+assignment` — because a scalar left where the script asked for an array
+is read as empty by the first `${u[2]}` and by nothing before it.
+
+The unit test asserts the first block as *pairs* rather than as recorded
+values: each row runs the expansion with the flag and without it and
+requires the two to agree. A recorded value would pass for an `(A)` that
+quietly did something, as long as somebody had written down what it did.
+
+`(a)` and `(A)` differ only in case and mean unrelated things — one
+orders a list by its index — which is why they are described apart.
+
 ### What this implementation refuses
 
-Flags zsh has and this slice does not — `(A)` (array assignment), `(e)`
-(expand the result again), `(z)` (split by shell parsing), `(t)`, `(D)`,
-padding, and the rest of the alphabet, plus the `q-`/`q+` variants and
+Flags zsh has and this slice does not — `(e)` (expand the result again),
+`(z)` (split by shell parsing), `(t)`, `(D)`, padding, and the rest of the
+alphabet, plus the `q-`/`q+` variants and
 `(qqq…)` beyond four — are refused at run time naming the flag, with the
 same fatal shape as an unrecognized one. Refusing loudly is the honest
 answer where imitating would answer wrong, and the refusal is asserted
@@ -1008,11 +1049,8 @@ measurements are here so the next change starts from them:
   and arithmetic. `w=zz; v='$w'; ${(e)v}` is `zz` and
   `v='$(echo hi)'; ${(e)v}` is `hi`; a bare `1+2` is *not* arithmetic and
   stays `1+2`.
-- **`(A)`** makes an assignment an array assignment:
-  `${(A)x::=a b c}` substitutes `a b c` and leaves `x` an array of three,
-  which `${(t)x}` reports as `array`. It needs the assignment side of
-  the expansion rather than the value side, which is why it is not
-  beside the others.
+- **`(A)`** is carried, and the half of it that is carried is the half
+  that does nothing. See "The `(A)` flag is two halves" below.
 - **`(z)`** splits the value the way the shell reads a line, keeping the
   quoting: `v='echo "a b" c'` is three words, the middle one still
   `"a b"` — which is the pair `${(Q)${(z)line}}` real configuration is
@@ -1787,8 +1825,8 @@ bare subscript ends changes.
 
 ### What this implementation carries, and what it refuses by name
 
-`r R i I e n b` are carried, for an ordinary array and for the positional
-parameters.
+`r R i I e n b` are carried, for an ordinary array, for an associative
+array and for the positional parameters.
 
 `w f p k K s` are read by the grammar and **refused by name** when the
 subscript is reached — `${a[(w)x]}: the (w) subscript flag is not
@@ -1796,16 +1834,81 @@ implemented` — for the reason the expansion flags are: a subscript flag
 answered wrong returns a plausible element at status 0, which is the one
 failure this repository exists to avoid.
 
-Two more refusals are about the *target* rather than the letter, and both
-replace a silent wrong answer:
+One refusal is about the *target* rather than the letter, and it replaces
+a silent wrong answer: on a **scalar** a search is a search for a
+substring and what comes back is a character position —
+`s="one two three"; ${s[(r)two]}` is `t` and `s=hello; ${s[(i)l]}` is
+`3`, which is no element of anything.
 
-- On an **associative array** a search reads keys for `i` and `I` and
-  values for `r` and `R`, and `I` and `R` there answer with *every* match
-  rather than one, in the hash's order. A different construct wearing the
-  same letters. Before this, `${h[(r)v1]}` looked up a key literally
-  called `(r)v1` and quietly found nothing.
-- On a **scalar** a search is a search for a substring and what comes
-  back is a character position: `s="one two three"; ${s[(r)two]}` is `t`.
+#### A search over an associative array
+
+The same four letters, a different construct. Measured on zsh 5.9.2 with
+`typeset -A m=(a 1 b 2)`:
+
+| written | zsh 5.9.2 | what it selected |
+| --- | --- | --- |
+| `${m[(i)a]}` | `a` | the first matching **key**, not an index |
+| `${m[(i)*]}` | `a` | still one key |
+| `${m[(I)*]}` | `a b` | **every** matching key |
+| `${m[(r)2]}` | `2` | the first value whose **value** matched |
+| `${m[(r)a]}` | *(nothing)* | a key is not a value |
+| `${m[(R)*]}` | `1 2` | every matching value |
+
+So the case of the letter is **how many** matches come back rather than
+which end the search started from — there is no "last match" here to be
+the mirror of a first — and the letter itself says which half of the pair
+is searched: `i` and `I` read the keys, `r` and `R` the values.
+
+**Nothing matched is nothing, and it is still an answer.** `${m[(I)zz]}`
+and `${m[(i)zz]}` are both empty rather than the out-of-range index an
+ordered array answers with, and the empty is *set*: `${m[(I)zz]-none}` is
+empty where `${m[zz]-none}` is `none` and `${a[(r)zz]-none}` on an ordered
+array is `none` too. A script reading a hook table cannot tell an
+unimplemented flag from a table with no such hook by the value, so the
+distinction that carries the difference is the diagnostic and the status —
+a refusal writes a line naming the flag and exits non-zero; an answer of
+no keys writes nothing and exits 0.
+
+**Two of the modifiers are ignored**, measured rather than assumed: with
+three matching keys, `${m[(in:3:)a*]}` and `${m[(ib:2:)a*]}` are both the
+*first* of them, so neither `(n:expr:)` nor `(b:expr:)` moves the search.
+`(e)` is read — `${m[(Ie)a*]}` finds the key spelled `a*` and not the key
+`aa`.
+
+**The search names several elements, so it is a list**, and the three
+readings that ask have to agree: `${#m[(I)*]}` is the match count,
+`"${m[(I)*]}"` is one field with the matches joined on IFS, `${m[(I)*]}`
+unquoted is one field each with any spaces in a key intact, and
+`${(@)m[(I)*]}` keeps the fields through quotes. That last shape is why
+`${(on)m[(I)pat]}` sorts the matches instead of sorting one word made of
+all of them, which is the reading a real plugin manager writes twenty-six
+times.
+
+**Which half of each matched pair is substituted is the expansion's own
+flag group**, and the answer does not depend on which letter searched:
+`${(k)m[(R)*]}` is the keys, `${(v)m[(i)*]}` the value of the one match,
+and `${(kv)m[(I)*]}` key and value as two consecutive words each. Without
+`k` or `v` the search's own half is what comes back.
+
+**The order several matches come back in is the table's key order.** zsh's
+is its hash's — `typeset -A m=(one 1 two 2 three 3); ${m[(I)*]}` is
+`one two three`, which is neither sorted nor the order assigned — and it
+promises none, so nothing here imitates it. This implementation answers in
+its own key order, which is sorted, for the reason `AssocArray.keys()`
+gives. The **invariant** both shells hold and the corpus may rely on is
+that `${m[(I)*]}` is `${(k)m}` filtered to the matches; the sequence
+itself is pinned nowhere.
+
+`(k)` and `(K)` are still refused by name over an association, and they
+are not searches there at all: `${m[(k)a]}` is the value at the key `a`
+and `${m[(k)*]}` is nothing, because `*` is a key nobody assigned.
+
+An operator written on a search — `${m[(I)*]#p}` — follows the rule a
+range already follows here: quoted, the matches are joined and the
+operator applies once; unquoted, zsh applies it to each and this
+implementation applies it to the joined text. That last is a **pre-existing
+divergence shared with `${a[1,3]#p}`** rather than one this construct
+introduced, and it is filed separately.
 
 `a[(r)y]=Q` — a flag group on the left of an **assignment** — is a
 parse error here and an element replacement in zsh. The group is read

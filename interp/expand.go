@@ -628,7 +628,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// element dropped, which is no field at all. The corpus caught that.
 	if e.Index != nil && e.Inner == nil && !e.Length &&
 		(e.Op == syntax.ParamNone ||
-			(r.listShapedOp(e) && r.wholeArrayIndex(e))) {
+			(r.listShapedOp(e) && (r.wholeArrayIndex(e) || r.assocSearchSubscript(e)))) {
 		if elems, ok := r.arraySubscript(e); ok {
 			if e.Indirect {
 				// `${!a[@]}` is the array's *subscripts*, not its elements —
@@ -684,7 +684,8 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 				for i, el := range elems {
 					mapped[i] = apply(el)
 				}
-				if r.joinedArrayIndex(e) && s.Quoting != syntax.Unquoted {
+				if (r.joinedArrayIndex(e) || r.assocSearchSubscript(e)) &&
+					s.Quoting != syntax.Unquoted {
 					// `"${a[*]#p}"` splits the panel: two shells trim each
 					// element and join what is left, the third joins first
 					// and trims the joined string once. Asked only when the

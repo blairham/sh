@@ -104,10 +104,6 @@ func TestTheUnbuiltFlagsAreStillRefusedByName(t *testing.T) {
 		{"t", `v=x; printf "[%s]" "${(t)v}"`, "sh: ${(t)v}: the (t) expansion flag is not implemented\n"},
 		{"z", `v=x; printf "[%s]" "${(z)v}"`, "sh: ${(z)v}: the (z) expansion flag is not implemented\n"},
 		{"D", `v=x; printf "[%s]" "${(D)v}"`, "sh: ${(D)v}: the (D) expansion flag is not implemented\n"},
-		// `A` is the one that is easiest to lose here, because `a` beside it
-		// *is* built and the two differ only in case: one orders a list by
-		// its index and the other makes an assignment an array assignment.
-		{"A", `printf "[%s]" "${(A)x::=a b c}"`, "sh: ${(A)x::=a b c}: the (A) expansion flag is not implemented\n"},
 		// One built letter beside an unbuilt one still names the unbuilt
 		// one, which is the half that would rot as the set grows.
 		{"beside a built one", `a=(b a); printf "[%s]" "${(Uz)a}"`, "sh: ${(Uz)a}: the (z) expansion flag is not implemented\n"},
@@ -120,6 +116,60 @@ func TestTheUnbuiltFlagsAreStillRefusedByName(t *testing.T) {
 			}
 			if st == 0 {
 				t.Errorf("status 0, want the unbuilt flag refused")
+			}
+		})
+	}
+}
+
+// `A` is refused for the half of it that does anything, and only that half.
+//
+// The flag makes an *assignment* an array assignment and does nothing at all
+// where the expansion assigns nothing — measured on zsh 5.9.2, where
+// `${(A)#v}` is the string's length and `${(As:|:)v}` is `${(s:|:)v}`. So the
+// letter is carried by leaving the value alone, and the assignment it exists
+// for is named rather than left to look as though it worked: a scalar where
+// the script asked for an array is read as empty by the first `${u[2]}` and
+// by nothing before it.
+//
+// It is the letter easiest to lose, because `a` beside it *is* built and the
+// two differ only in case: one orders a list by its index.
+func TestTheArrayFlagIsRefusedOnlyForTheAssignment(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"an assignment is refused by name", `printf "[%s]" "${(A)x=a b c}"`, "sh: ${(A)x=a b c}: the (A) expansion flag is not implemented for an assignment\n"},
+		{"and a colon assignment too", `printf "[%s]" "${(A)x:=a b c}"`, "sh: ${(A)x:=a b c}: the (A) expansion flag is not implemented for an assignment\n"},
+		{"an association assignment names the same flag", `printf "[%s]" "${(AA)x=k v}"`, "sh: ${(AA)x=k v}: the (A) expansion flag is not implemented for an assignment\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runGrammar(t, tc.src, selectingWithFlags, nil)
+			if out != tc.want {
+				t.Errorf("output = %q, want %q", out, tc.want)
+			}
+			if st == 0 {
+				t.Errorf("status 0, want the assignment refused")
+			}
+		})
+	}
+	// The other half answers, and answers exactly what the flag-less
+	// spelling answers — which is the whole claim, so every row asserts the
+	// *pair* rather than a value copied out of a run. A value would pass for
+	// an `(A)` that quietly did something as long as somebody wrote down what
+	// it did; the pair cannot.
+	for _, tc := range []struct{ name, with, without, want string }{
+		{"a length is the string's", `"${(A)#v}"`, `"${#v}"`, "[3]"},
+		{"a split splits", `"${(As:|:)v}"`, `"${(s:|:)v}"`, "[a][b]"},
+		{"the cluster a plugin manager writes", `"${(@Akons:|:u)v}"`, `"${(@kons:|:u)v}"`, "[a][b]"},
+		{"a repeated A is the same nothing", `"${(AA)v}"`, `"${v}"`, "[a|b]"},
+		{"and an alternative is no assignment", `"${(A)nosuchvar:-x y}"`, `"${nosuchvar:-x y}"`, "[x y]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const v = `v="a|b"; `
+			with, st := runGrammar(t, v+`printf "[%s]" `+tc.with, selectingWithFlags, nil)
+			without, wst := runGrammar(t, v+`printf "[%s]" `+tc.without, selectingWithFlags, nil)
+			if with != without {
+				t.Errorf("%s = %q, the same without the flag = %q", tc.with, with, without)
+			}
+			if with != tc.want || st != 0 || wst != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", with, st, tc.want)
 			}
 		})
 	}

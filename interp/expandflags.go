@@ -22,7 +22,7 @@ import (
 // else the grammar accepted is refused *by name* when the expansion is
 // reached, because the only thing worse than refusing a flag is answering it
 // wrong with status 0.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwW"
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwWA"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -105,6 +105,34 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 			r.expandErr = true
 			return nil, false, false
 		}
+	}
+	if strings.ContainsRune(e.Flags, 'A') && e.Op == syntax.ParamAssign {
+		// `(A)` is the one flag whose whole job is a *side effect*: it makes
+		// the name an array — `(AA)` an association — where the expansion
+		// assigns, and does nothing at all where it does not. Measured on
+		// zsh 5.9.2, both halves:
+		//
+		//	unset u; ${(A)u=x y}   leaves `typeset -a u=( 'x y' )`
+		//	unset u; ${(A)u:-x y}  leaves u unset, `:-` being no assignment
+		//	v="a b"; ${(A)#v}      3, the string's length, exactly as ${#v}
+		//	v="a b"; "${(A)v}"     one field, exactly as "${v}"
+		//	v="a|b"; ${(As:|:)v}   `a b`, exactly as ${(s:|:)v}
+		//
+		// So the flag is carried by *not* acting on the six lines the panel's
+		// plugin managers actually write, which are all the second kind, and
+		// the assignment it exists for is refused by name here rather than
+		// left to look like it worked: an assignment silently making a
+		// scalar where the script asked for an array is the shape a later
+		// `${u[2]}` reads as empty.
+		//
+		// Refused for the *operator* rather than for the assignment actually
+		// firing, which is deliberate. `${(A)u=x y}` assigns nothing when `u`
+		// is already set, so a check on whether it fired would refuse a line
+		// on one run and carry it on the next, and the reader would have
+		// nothing to go on. The refusal is a statement about the construct.
+		r.diagf("${%s}: the (A) expansion flag is not implemented for an assignment\n", e.Src)
+		r.expandErr = true
+		return nil, false, false
 	}
 	if strings.Count(e.Flags, "q") > 4 {
 		r.diagf("${%s}: the (%s) expansion flag is not implemented\n",
@@ -335,6 +363,14 @@ func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool
 		if list, lok := r.arraySubscript(e); lok {
 			if r.wholeArrayIndex(e) {
 				return list, list != nil, true
+			}
+			if r.assocSearchSubscript(e) {
+				// A search over an association hands the group a *list*, so
+				// `${(on)m[(I)pat]}` sorts the matches rather than sorting
+				// one word made of all of them. And it is set even with no
+				// match — measured, `${m[(I)zz]-none}` is empty where
+				// `${m[zz]-none}` is `none`, so a search always answers.
+				return list, true, true
 			}
 			return []string{strings.Join(list, " ")}, list != nil, false
 		}

@@ -3669,6 +3669,53 @@ echo "st=$?"`,
 		Snippet: `a=(alpha beta gamma); printf "[%s]" "${a[(r)be*]}" "${a[(re)be*]}" "${a[(re)beta]}"; echo`,
 		Why:     "`(e)` is what turns the operand from a pattern into a string, and `(re)` — the combination every real script writes — is \"the first element *equal* to this\". The three together are the whole difference: without the `e` the pattern matches, with it the same text matches nothing, and the literal spelling still finds its element",
 	},
+	// The same four letters over an *association*, which is a different
+	// construct and needs rows of its own. Every row below matches at most
+	// one key, or asks a question whose answer cannot depend on the order —
+	// a count, or a list the row sorts itself. zsh yields its hash's order
+	// for several matches and promises none, so a row that printed two keys
+	// unsorted would record a coin flip as evidence, exactly as the `(k)`
+	// row above says.
+	{
+		ID: "assoc/a-subscript-search-selects-keys", Category: "expansion",
+		Snippet: `typeset -A m=(alpha one); printf "[%s]" "${m[(i)alpha]}" "${m[(i)al*]}" "${m[(I)al*]}" "${m[(r)one]}" "${m[(r)alpha]}"; echo`,
+		Why:     "over an association the four selecting flags are a different construct wearing the same letters: `i` and `I` answer with the matching *key* rather than with an index, and `r` searches the *values*, so the key `alpha` is found by `(i)alpha` and not by `(r)alpha`. One pair only, because key order is promised by nobody",
+	},
+	{
+		ID: "assoc/a-subscript-search-with-no-match-is-empty-and-still-set", Category: "expansion",
+		Snippet: `typeset -A m=(a 1); printf "[%s]" "${m[(I)zz]}" "${m[(I)zz]-none}" "${m[zz]-none}"; echo`,
+		Why:     "a search that matched nothing is empty rather than the out-of-range index an ordered array answers with — and it is *set*: the `-` alternative does not fire for it where it does fire for a key that is simply absent. The three together are the whole distinction, and a row pinning only the first would pass for a shell that reported the table as having no such name",
+	},
+	{
+		ID: "assoc/a-subscript-search-is-a-list-of-its-matches", Category: "expansion",
+		Snippet: `typeset -A m=(ab 2 aa 1 b 3); printf "[%s]" "${#m[(I)a*]}" "${#m[(I)zz]}" "${(o)m[(I)a*]}"; printf "[%s]" ${(o)m[(I)a*]}; echo`,
+		Why:     "a search names several elements, so the readings that ask whether a subscript is a list have to agree: `${#…}` is the match count, a quoted expansion is one field with the matches joined, and unquoted it is one field each. The two that show the matches sort them, so the row records the set rather than the hash order neither shell promises",
+	},
+	{
+		ID: "assoc/a-subscript-search-ignores-nth-and-begin", Category: "expansion",
+		Snippet: `typeset -A m=(aa 1 ab 2 ac 3); printf "[%s]" "${m[(in:3:)a*]}" "${m[(ib:2:)a*]}" "${#m[(In:2:)a*]}"; echo`,
+		Why:     "two of the three modifiers an ordered array's search reads do nothing over an association: with three matching keys, asking for the third match and starting at the second both still answer with the first, and neither changes how many `I` returns. Ignoring them is measured rather than assumed, and it is the kind of thing that looks like an oversight and gets \"fixed\" into a divergence",
+	},
+	{
+		ID: "assoc/a-subscript-search-keeps-a-key-holding-a-space", Category: "expansion",
+		Snippet: `typeset -A e=('z-annex subcommand:wait' w other o); printf "[%s]" "${e[(I)z-annex subcommand:wait]}" "${e[(I)z-annex subcommand:nope]}"; echo`,
+		Why:     "the shape a plugin manager reaches before it has defined anything, twenty-six times over one hook table: a key holding spaces, searched for by its literal name. The answer is the key itself where it is there and nothing where it is not, and the space never becomes a field boundary",
+	},
+	{
+		ID: "assoc/an-operator-on-a-subscript-search", Category: "expansion",
+		Snippet: `typeset -A m=(pa 1 qb 2); printf "[%s]" "${m[(I)p*]#p}" "${m[(I)q*]#q}" "${m[(I)zz]#z}" "${#m[(I)?a]}"; echo`,
+		Why:     "an operator written on a search reaches what the search *found* rather than the table or the subscript: the trim takes the prefix off the matched key, a search that matched nothing has nothing to trim, and the length still counts matches. One match per field on purpose — how a quoted operator treats *several* matches is a join-then-apply question whose answer depends on which match came first, so it is pinned in a unit test against this implementation's own key order and cannot honestly be pinned here",
+	},
+	{
+		ID: "assoc/a-subscript-search-and-the-key-and-value-flags", Category: "expansion",
+		Snippet: `typeset -A m=(alpha one); printf "[%s]" "${(k)m[(i)al*]}" "${(v)m[(i)al*]}" "${(kv)m[(i)al*]}" "${(k)m[(r)one]}"; echo`,
+		Why:     "which half of a matched pair is substituted is the *expansion's* flag group and not the search's, and the answer does not depend on which letter searched: `k` is the key and `v` the value whether the search read the keys or the values, and the two together interleave. One match, so no order is pinned",
+	},
+	{
+		ID: "array/a-subscript-search-over-a-scalar-is-a-character-position", Category: "expansion",
+		Snippet: `s=hello; printf "[%s]" "${s[(i)l]}" "${s[(I)l]}" "${s[(r)l]}"; echo`,
+		Why:     "the third target a search can be written on, and the one this implementation still refuses by name: over a plain string the search is for a *substring* and what comes back is a character position rather than an element, so `(i)` and `(I)` are the first and last position of the letter. Recorded so the refusal has the measurement it would need to become an answer",
+	},
 	{
 		ID: "array/a-subscript-flag-group-unknown-flag-is-arithmetic", Category: "expansion",
 		Snippet: `a=(alpha beta gamma); printf "[%s]" "${a[(z)2]}"; echo`,
@@ -5832,6 +5879,16 @@ echo "st=$?"`,
 		ID: "param/expansion-flags-keys-and-values", Category: "parameter expansion",
 		Snippet: `typeset -A m=(k1 v1); printf "<%s>" ${(k)m} ${(kv)m}; echo`,
 		Why:     "(k) yields an associative array's keys and (v) beside it interleaves key and value. Probed with a single pair on purpose: zsh yields hash order for more, which it does not promise and a golden record must not pin",
+	},
+	{
+		ID: "param/the-array-flag-without-an-assignment-changes-nothing", Category: "parameter expansion",
+		Snippet: `v="a|b"; printf "[%s]" "${(@Akons:|:u)v}" "${(@kons:|:u)v}"; w="a b"; printf "[%s]" "${(A)#w}" "${#w}" "${(AA)w}" "${w}"; echo`,
+		Why:     "`(A)` is the one flag whose whole job is a side effect, so where the expansion assigns nothing it does nothing at all — every pair here is the flag beside the same expansion without it, and the two halves of each pair have to agree. Written as pairs rather than as values because a recorded value would pass for an `(A)` that quietly did something, as long as somebody had written down what it did. The first pair is the cluster a plugin manager writes three times",
+	},
+	{
+		ID: "param/the-array-flag-on-an-assignment", Category: "parameter expansion",
+		Snippet: `unset u; printf "[%s]" "${(A)u=x y}"; printf "<%s>" "${(@)u}"; echo`,
+		Why:     "the other half of `(A)`, and the half it exists for: with an assignment operator it makes the assigned name an *array*, so the one word `x y` is substituted and the name is left holding one element rather than a scalar. Recorded as the measurement a refusal would need to become an answer — this implementation refuses the assignment by name and carries the value-side half above",
 	},
 	{
 		ID: "param/expansion-flags-run-after-the-operator", Category: "parameter expansion",

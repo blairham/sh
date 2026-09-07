@@ -27,6 +27,11 @@ import (
 // rather than a pattern, `(n:expr:)` asks for the expr'th match rather than
 // the first, and `(b:expr:)` moves where the search starts.
 //
+// That is the reading over an *ordered* array. Over an association the same
+// four letters are a different construct — see searchAssoc, where the case of
+// the letter is how many matches come back rather than which end the search
+// started from, and two of the three modifiers are ignored.
+//
 // A group with *no* selecting letter changes nothing about the reading:
 // `${a[()2]}` and `${a[(e)2]}` are both the second element, measured. That is
 // why this reports whether it handled the subscript rather than answering
@@ -59,15 +64,8 @@ func (r *Runner) flaggedSubscript(e *syntax.ParamExpr) ([]string, bool) {
 		// Nothing to select by, so the operand is an ordinary subscript.
 		return nil, false
 	}
-	if _, isAssoc := r.assocFor(e.Name); isAssoc {
-		// A search over an associative array reads its *keys* for `i` and
-		// `I` and its *values* for `r` and `R`, and `I` and `R` there answer
-		// with every match rather than one — a different construct wearing
-		// the same letters, and one whose order is the hash's. Refused by
-		// name rather than answered with the ordered array's rule, which
-		// would be a plausible wrong element.
-		r.refuseSubscriptFlag(e, string(search), " for an associative array")
-		return nil, true
+	if a, isAssoc := r.assocFor(e.Name); isAssoc {
+		return r.searchAssoc(e, a, g, search), true
 	}
 	elems, scalar, held := r.subscriptTarget(e)
 	if !held {
@@ -78,8 +76,10 @@ func (r *Runner) flaggedSubscript(e *syntax.ParamExpr) ([]string, bool) {
 	}
 	if scalar {
 		// A search over a plain string is a search for a *substring*, and
-		// what comes back is a character position rather than an element.
-		// Refused by name for the reason the associative array is.
+		// what comes back is a character position rather than an element:
+		// measured, `s=hello; ${s[(i)l]}` is 3 and `${s[(I)l]}` is 4.
+		// Refused by name rather than answered out of the one-element list a
+		// scalar is otherwise read as, which is a plausible wrong element.
 		r.refuseSubscriptFlag(e, string(search), " for a scalar")
 		return nil, true
 	}
@@ -278,6 +278,106 @@ func (r *Runner) searchNth(g *syntax.SubscriptFlags) int {
 		return 1
 	}
 	return nth
+}
+
+// searchAssoc answers a flag group's search over an associative array, which
+// is a different construct from the ordered array's search wearing the same
+// four letters. Measured against zsh 5.9.2 with `m=(a 1 b 2)`:
+//
+//	${m[(i)a]}   a       the first matching *key*, not an index
+//	${m[(I)*]}   a b     *every* matching key, not the last one
+//	${m[(r)2]}   2       the first value whose *value* matched
+//	${m[(R)*]}   1 2     every such value
+//
+// So the case of the letter is the count rather than the direction — there is
+// no "last match" here to be the mirror of a first — and which half of the
+// pair is searched is the letter itself: `i` and `I` read the keys, `r` and
+// `R` the values. `${m[(i)zzz]}` and `${m[(I)zzz]}` are both nothing at all
+// rather than the out-of-range index an ordered array answers with, and that
+// nothing is a *set* empty list: measured, `${m[(I)zz]-none}` is empty where
+// `${m[zz]-none}` is `none`, so the search always has an answer even when the
+// answer is no keys.
+//
+// Two of the modifiers the ordered array's search reads are *ignored* here,
+// which is measured rather than assumed and is why searchStart and searchNth
+// are not called: with three matching keys `${m[(in:3:)a*]}` and
+// `${m[(ib:2:)a*]}` are both the first of them, so neither `(n:expr:)` nor
+// `(b:expr:)` moves the search. `(e)` is read, through the same matcher the
+// ordered search uses: `${m[(Ie)a*]}` finds the key spelled `a*` and not the
+// key `aa`.
+//
+// The order the matches come back in is the order the table lists its keys —
+// zsh's is its hash's, ours is sorted, and the two agree on the *invariant*
+// that `${m[(I)*]}` is `${(k)m}` filtered rather than on any particular
+// sequence. AssocArray.keys() says why a deterministic order is worth having
+// where the shells promise none.
+func (r *Runner) searchAssoc(e *syntax.ParamExpr, a AssocArray, g *syntax.SubscriptFlags, search byte) []string {
+	matches := r.subscriptMatcher(g)
+	byKey := search == 'i' || search == 'I'
+	every := search == 'I' || search == 'R'
+	found := make([]string, 0, len(a))
+	for _, k := range a.keys() {
+		subject := a[k]
+		if byKey {
+			subject = k
+		}
+		if !matches(subject) {
+			continue
+		}
+		found = append(found, k)
+		if !every {
+			break
+		}
+	}
+	return assocSearchWords(e, a, found, byKey)
+}
+
+// assocSearchWords is which half of each matched pair the expansion asked
+// for, which the *expansion's* own flag group decides where it wrote one.
+//
+// Measured, and the same answer whichever letter did the searching:
+// `${(k)m[(R)*]}` is the keys, `${(v)m[(i)*]}` the value of the one match,
+// and `${(kv)m[(I)*]}` key and value as two consecutive words each. Without
+// either letter the search's own half is what comes back — keys for `i` and
+// `I`, values for `r` and `R` — which is the rule the four letters carry on
+// their own.
+func assocSearchWords(e *syntax.ParamExpr, a AssocArray, keys []string, byKey bool) []string {
+	hasK := e.HasFlags && strings.ContainsRune(e.Flags, 'k')
+	hasV := e.HasFlags && strings.ContainsRune(e.Flags, 'v')
+	out := make([]string, 0, 2*len(keys))
+	for _, k := range keys {
+		switch {
+		case hasK && hasV:
+			out = append(out, k, a[k])
+		case hasK:
+			out = append(out, k)
+		case hasV || !byKey:
+			out = append(out, a[k])
+		default:
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// assocSearchSubscript reports whether this subscript is a flag group
+// searching an associative array, which is the one subscript that names
+// *several* elements without being written `[@]` or `[*]` or as a range.
+//
+// Three readings ask, and they have to agree or the same expansion is a list
+// in one and a string in another: `${#m[(I)*]}` is the match count,
+// `"${m[(I)*]}"` is one field with the matches joined, and `${(on)m[(I)*]}`
+// hands the flag group a list to sort. The third is the shape a real plugin
+// manager writes, twenty-six times.
+func (r *Runner) assocSearchSubscript(e *syntax.ParamExpr) bool {
+	if e.IndexFlags == nil {
+		return false
+	}
+	if lastOf(e.IndexFlags.Flags, searchSubscriptFlags) == 0 {
+		return false
+	}
+	_, isAssoc := r.assocFor(e.Name)
+	return isAssoc
 }
 
 // refuseSubscriptFlag says which flag was not carried, naming the subscript

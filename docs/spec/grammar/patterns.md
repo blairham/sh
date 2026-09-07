@@ -757,6 +757,41 @@ nothing beside it:
 | `globstar` | `**` standing alone as a component matches zero or more directory levels: `**/f` finds `f`, `d/f` and `d/e/f`; a trailing `d/**` lists `d/` itself and then everything beneath it; hidden entries are neither listed nor descended into without `dotglob`; a symbolic link is listed and never followed; `a**` and a quoted `**` are ordinary patterns |
 | `extglob` | the quantified groups above are read **everywhere**, and read at parse time |
 
+### `**` is two questions, and the panel splits on the second
+
+`globstar` above answers both of them at once, which hid the fact that
+they are separate until zsh was measured beside it. Measured 2026-09-07,
+in a directory holding `ax`, `bx`, `cx/ax` and `cx/dx/ax`:
+
+| pattern | bash 5.3 `-s globstar` | ksh93 `-o globstar` | zsh 5.9.2, no option |
+| --- | --- | --- | --- |
+| `**/a*` | `ax cx/ax cx/dx/ax` | `ax cx/ax cx/dx/ax` | `ax cx/ax cx/dx/ax` |
+| `**` | `ax bx cx cx/ax cx/dx cx/dx/ax` | the same | `ax bx cx` |
+| `cx/**` | `cx/ cx/ax cx/dx cx/dx/ax` | `cx/ax cx/dx cx/dx/ax` | `cx/ax cx/dx` |
+
+So the **slashed** form is one behavior in three shells — zero or more
+directory levels, the starting directory included — and it needs no
+option in zsh, which has no `setopt` name that turns it off. The **bare**
+form is not: bash and ksh93 reach every level, and zsh answers what `*`
+answers.
+
+A slash is what tells them apart, rather than "nothing follows": `**/`
+written at the very end still crosses levels in all three, because the
+component after it is empty and *written*. `cx/**/` is `cx/ cx/dx/` in
+bash and zsh.
+
+Two run-time switches follow, `StarStarCrossesDirectories` and
+`StarStarAloneCrossesDirectories`, and the second is consulted only where
+the first is on — a shell that does not read `**` as level-crossing at
+all reads it as `*` in every position. bash's `globstar` sets both; the
+zsh dialect sets the first and leaves the second off. zsh's
+`globstarshort`, which is the name that would move the second, is
+recorded and not acted on.
+
+Reading it as one question is what made `**/a*` come back **short at
+status 0** in the zsh dialect, with the match in the starting directory
+missing and nothing said (#1339).
+
 `extglob` is the odd one, because it changes the grammar. bash parses a
 line before running any of it, so the option takes effect on the *next*
 line: `shopt -s extglob; echo @(x)` on one line is a syntax error and

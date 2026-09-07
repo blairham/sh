@@ -6294,6 +6294,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `nounset/unset-variable-is-an-error` | **2>** `<script>: 2: NOPE: parameter not set` *(status 2)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: parameter not set` *(status 1)* | **2>** `<script>:2: NOPE: parameter not set` *(status 1)* |
 | `shopt/nullglob-empties-a-miss` | `zz*zz~done` | `~done` | `~done` | `~done` | `zz*zz~done` | **2>** `<shell>:1: no matches found: zz*zz` *(status 1)* |
 | `shopt/globstar-crosses-directories` | `**/f` | `d/e/f` | `d/e/f` | `**/f` | `**/f` | `d/e/f` |
+| `shopt/globstar-includes-the-starting-directory` | `**/a*` | `ax cx/dx/ax` | `ax cx/dx/ax` | `**/a*` | `**/a*` | `ax cx/dx/ax` |
+| `shopt/globstar-with-nothing-behind-it` | `ax cx` | `ax cx cx/dx cx/dx/ax` | `ax cx cx/dx cx/dx/ax` | `ax cx` | `ax cx` | `ax cx` |
 | `shopt/nocasematch-folds-case` | `exact` | `hit` | `hit` | `hit` | `exact` | `exact` |
 | `shopt/query-answers-by-status` | `q=127~q=127` | `q=1~q=0` | `q=1~q=0` | `q=1~q=0` | `q=127~q=127` | `q=127~q=127` |
 | `shopt/expand-aliases-is-a-live-switch` | `hit~hit~st=0` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~hit~st=0` | `hit~hit~st=0` |
@@ -6399,6 +6401,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shopt/globstar-crosses-directories` — with the option, `**` alone as a component crosses directory levels in bash; zsh crosses natively without any option, and dash and ksh93 read `**` as `*` and leave the unmatched pattern standing
   ```sh
   shopt -s globstar 2>/dev/null; mkdir -p d/e; touch d/e/f; echo **/f
+  ```
+- `shopt/globstar-includes-the-starting-directory` — the zero-level half of the component, and the one whose absence is silent: `**/` stands for **zero or more** directory levels, so the `ax` in the starting directory is part of the answer. bash 5.3 with the option and zsh with none list `ax cx/dx/ax`; bash 3.2 has no such option name, and ksh93 and dash never had the builtin, so all three read `**` as `*` and leave the unmatched pattern standing. The deepest match is what separates this from a component that reached exactly one level — that reading answers neither `ax` nor `cx/dx/ax` (#1339)
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/dx/ax && shopt -s globstar 2>/dev/null; echo **/a*
+  ```
+- `shopt/globstar-with-nothing-behind-it` — the same component with no slash after it, which is where the panel splits: bash with the option reaches every level, and zsh answers `ax cx` with no option at all — what `*` answers. So the crossing is two questions rather than one, and this is the row that stops the fix for the one above from turning a bare `**` into a recursive listing here. bash 3.2, ksh93 and dash read it as `*` for want of the option
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/dx/ax && shopt -s globstar 2>/dev/null; echo **
   ```
 - `shopt/nocasematch-folds-case` — the option folds `case` and `[[ ]]` matching in bash and nothing else has it: the other three keep matching exact because the command that would have changed it was never theirs
   ```sh

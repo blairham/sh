@@ -1376,6 +1376,21 @@ func Apply(r *interp.Runner) {
 	// How zsh scripts actually change options, and how they change shells.
 	// See setopt.go and emulate.go.
 	registerSetopt(r)
+	// `**/` crosses directory levels here with no option asked for, and
+	// there is no `setopt` name that turns it off — which is why this is a
+	// state the dialect sets rather than a name registered above. Measured
+	// 2026-09-07 against zsh 5.9.2 in a directory holding `ax`, `bx` and
+	// `cx/dx/ax`: `**/a*` is `ax cx/ax cx/dx/ax`, so the component stands
+	// for **zero or more** levels and the match in the starting directory is
+	// part of the answer. Without this the component read as `*` and the
+	// listing came back short at status 0 (#1339).
+	//
+	// Only the slashed form. Bare `**` is an ordinary pattern here — `echo
+	// **` is `ax bx cx`, which is what `*` answers — so
+	// StarStarAloneCrossesDirectories stays off, and `setopt globstarshort`,
+	// which is the name that would move it, remains recorded rather than
+	// acted on (see setopt.go).
+	r.SetMatchOption(interp.StarStarCrossesDirectories, true)
 	registerEmulate(r)
 	// This shell's own question about a name, under two names: `whence` and
 	// `where`. Not ksh93's builtin under the same spelling — the stream, the

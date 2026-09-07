@@ -212,6 +212,20 @@ func TestShoptGlobstarThroughTheBuiltin(t *testing.T) {
 	if got := strings.TrimSpace(out); got != "**/f" {
 		t.Errorf("without globstar gave %q, want the literal pattern", got)
 	}
+	// The option covers `**` with nothing behind it as well, which is the
+	// half zsh answers the other way — measured 2026-09-07, `shopt -s
+	// globstar; echo d/**` in bash 5.3.15 lists the directory itself and
+	// every level under it, and `echo **` in zsh 5.9.2 lists one level.
+	// The substrate asks the two separately, so this row is what says
+	// `globstar` still answers both of them here (#1339).
+	out, _ = runBash(t, dir, `shopt -s globstar; echo d/**`)
+	if got := strings.TrimSpace(out); got != "d/ d/e d/e/f" {
+		t.Errorf("globstar on a bare ** gave %q, want d/ d/e d/e/f", got)
+	}
+	out, _ = runBash(t, dir, `echo d/**`)
+	if got := strings.TrimSpace(out); got != "d/e" {
+		t.Errorf("without globstar a bare ** gave %q, want the one level", got)
+	}
 }
 
 // `shopt -s expand_aliases` is implemented and not merely recognized: the

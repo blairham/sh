@@ -42,7 +42,27 @@ const (
 	// component as the directory itself and everything beneath it, however
 	// deep. Anything else about the component — `a**`, a quoted star — makes
 	// it an ordinary pattern, where adjacent stars collapse to one.
+	//
+	// It governs a `**` that has another component behind it — `**/a*` — and
+	// StarStarAloneCrossesDirectories decides the one that has not.
 	StarStarCrossesDirectories
+
+	// StarStarAloneCrossesDirectories extends the reading above to a `**`
+	// with nothing after it, so `d/**` reaches every level rather than
+	// listing the one directory. Consulted only where
+	// StarStarCrossesDirectories is already on: a shell that does not read
+	// `**` as a level-crossing component at all reads it as `*` in every
+	// position.
+	//
+	// The two are separate because the panel splits on exactly this and on
+	// nothing else about `**`. Measured 2026-09-07 in a directory holding
+	// `ax`, `bx` and `cx/dx/ax`: `**/a*` is `ax cx/ax cx/dx/ax` in bash 5.3
+	// under `shopt -s globstar`, in ksh93 under `set -o globstar`, and in zsh
+	// with no option at all — so the slashed form is one behavior in three
+	// shells. Bare `**` is not: bash and ksh93 list every level, and zsh
+	// answers `ax bx cx`, which is what `*` answers. That is why turning the
+	// crossing on for zsh needs this second question rather than one flag.
+	StarStarAloneCrossesDirectories
 
 	// ExtendedPatternOperators reads the pattern operators one shell keeps
 	// behind an option of its own: the parenthesized flag groups `(#…)`, the

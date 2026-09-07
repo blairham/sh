@@ -316,6 +316,12 @@ func Semantics() interp.Semantics {
 	// `local y=1 x=5 z=2`, all five refused here and all five taken there,
 	// which is what makes it one field rather than five.
 	s.DeclarationMayShadowAReadonly = interp.No
+	// And the attribute cannot be taken off again: `typeset +r x` on a
+	// frozen name is refused with the builtin named, reports 1 and leaves
+	// the freeze standing. True of bash 3.2 and of the same binary under
+	// argv[0] of `sh` alike, and of a name the shell was *started* frozen
+	// with — `typeset +r UID` draws the identical refusal.
+	s.ReadonlyAttributeCanBeRemoved = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// An attribute added to a name that already holds a value waits for the
 	// next assignment: `FOO=bar; typeset -i FOO` still reads `bar`, and

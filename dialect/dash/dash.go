@@ -103,12 +103,23 @@ func Semantics() interp.Semantics {
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
-	// This shell has no `typeset` and so no way to freeze a name that a
-	// `local` could then meet, but the answer is written down rather than
-	// left unspecified: an unanswered axis refuses, and a shell reaching a
-	// refusal it can never explain is worse than a shell with a rule it
-	// never uses.
+	// This shell has no `typeset`, but it can still be asked and it answers:
+	// `readonly` is POSIX and `local` is the one declaration here, so the
+	// two words that make the question both exist. Measured 2026-09-07:
+	//
+	//	readonly x=1
+	//	f() { local x=2; echo "in=[$x]"; }
+	//	f
+	//	→ local: x: is read only, and the script ends
+	//
+	// So `No`, and now for a measured reason rather than because the
+	// question looked out of reach — it was reached with the shell's own
+	// spelling of the freeze rather than with bash's.
 	s.DeclarationMayShadowAReadonly = interp.No
+	// ReadonlyAttributeCanBeRemoved stays unanswered: there is no `typeset`
+	// or `declare` here to write a plus form with, and `readonly +r x` is a
+	// bad variable name rather than an option — so nothing can ask it, and
+	// nothing will reach the refusal an unanswered axis makes.
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// $(( )) with nothing in it wants a primary and stops the script.
 	s.EmptyArithExpressionIsAnError = interp.Yes
@@ -480,14 +491,18 @@ func Diagnostics() interp.Diagnostics {
 		BadSubstitution:     "Bad substitution",
 		// The builtin in front, which its plain form does not have.
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
-		ReadonlyRefusalNamesBuiltin:   map[string]bool{"export": true, "readonly": true},
-		ReadonlyVariable:              "%s: is read only",
-		UnsetReadonly:                 "unset: %s: is read only",
-		InvalidNumber:                 "Illegal number: %s",
-		NumericArgument:               "%[1]s: Illegal number: %[2]s",
-		ArithError:                    "arithmetic expression: %[2]s: \"%[1]s\"",
-		FileNotFound:                  "No such file",
-		TestNamesFirstOperand:         true,
+		// And `local`, the third and last declaration this shell has:
+		// measured 2026-09-07, `readonly x=1; f() { local x=2; }; f` is
+		// `local: x: is read only`. It names all three of them, where bash
+		// names only the two POSIX has not got (#1168).
+		ReadonlyRefusalNamesBuiltin: map[string]bool{"export": true, "readonly": true, "local": true},
+		ReadonlyVariable:            "%s: is read only",
+		UnsetReadonly:               "unset: %s: is read only",
+		InvalidNumber:               "Illegal number: %s",
+		NumericArgument:             "%[1]s: Illegal number: %[2]s",
+		ArithError:                  "arithmetic expression: %[2]s: \"%[1]s\"",
+		FileNotFound:                "No such file",
+		TestNamesFirstOperand:       true,
 		// 2 rather than the 1 the other three report, for a read and a write
 		// alike. Not fatal — the script carries on — so this is a different
 		// question from FatalErrorStatusIsOne, which is about a failure that

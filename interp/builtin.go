@@ -2344,8 +2344,10 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		wasExported := r.isExported(name)
 		if r.declarationShadowRefused(name) {
 			// See biDeclare: the operand is refused and the rest are still
-			// declared, which is what the shell that refuses does.
-			if r.unspecified {
+			// declared, which is what the shell that refuses does — and the
+			// fatal answer keeps its own status, which the `return 1` at the
+			// end of this would otherwise overwrite.
+			if r.unspecified || r.ctl == controlExit {
 				return r.status
 			}
 			r.assignFailed = true
@@ -2368,6 +2370,22 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// caller's absence comes back when the function returns.
 			r.markAssoc(name)
 		}
+		if f.readonly && f.readonlyOff {
+			// `local +r y` after this same call's `local -r y=1`, which is
+			// the one shape that reaches this with a freeze still standing:
+			// the shadow above clears an attribute it *displaced*, and a
+			// second declaration of a name this scope already shadowed
+			// finds the copy made and nothing left to displace. Measured
+			// 2026-09-07 — zsh answers `in=[2]`, bash refuses the
+			// declaration before it gets here, and the two shells without
+			// `local` never arrive.
+			if code := r.removeReadonly(name, hasValue); code != 0 {
+				return code
+			}
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+		}
 		if hasValue {
 			r.setVar(name, value)
 			if r.ctl == controlExit {
@@ -2383,7 +2401,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// business, and nothing could exercise it either way.
 			r.declareEmpty(name, fresh, f.export || f.readonly)
 		}
-		if f.readonly && !f.remove {
+		if f.readonly && !f.readonlyOff {
 			r.markReadonly(name)
 		}
 	}

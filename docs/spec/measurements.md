@@ -1312,6 +1312,16 @@ grades it and nothing drift-checks it either, for the same reason.
 | `readonly/a-scalar-over-a-frozen-array-is-refused` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: readonly variable` *(status 1)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: a` *(status 1)* |
 | `readonly/a-refused-array-operand-gives-up-the-line` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `two` **2>** `<script>: line 3: a: readonly variable` | `two` **2>** `<script>: line 3: a: readonly variable` | `two` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: a` *(status 1)* |
 | `readonly/a-refused-declaration-operand-reports-one` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | `st=1 all=[x y]~after` **2>** `<script>: line 3: a: readonly variable` | **2>** `<script>: line 3: a: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: a` *(status 1)* |
+| `axis/declaration-shadows-a-readonly-keyword-function` | **2>** `<script>: 1: typeset: not found~<script>: 2: Syntax error: "}" unexpected` *(status 2)* | `in=[1]~st=0 out=[1]~end` **2>** `<script>: line 2: typeset: x: readonly variable` | `in=[1]~st=0 out=[1]~end` **2>** `<script>: line 2: typeset: x: readonly variable` | `in=[1]~st=0 out=[1]~end` **2>** `<script>: line 2: typeset: x: readonly variable` | `in=[2]~st=0 out=[1]~end` | `in=[2]~st=0 out=[1]~end` |
+| `axis/declaration-shadows-a-readonly-posix-spelling` | **2>** `<script>: 2: local: x: is read only` *(status 2)* | `in=[1]~st=0 out=[1]~end` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]~end` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]~end` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]~end` **2>** `<script>: line 2: local: not found` | `in=[2]~st=0 out=[1]~end` |
+| `axis/readonly-attribute-removed` | `d=127~st=0 s1=[9]~end` **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found` | `d=1~st=1 s1=[1]~end` **2>** `<script>: line 2: typeset: s1: readonly variable~<script>: line 4: s1: readonly variable` | `d=1` **2>** `<script>: line 2: typeset: s1: readonly variable~<script>: line 4: s1: readonly variable` *(status 1)* | `d=1~st=1 s1=[1]~end` **2>** `<script>: line 2: typeset: s1: readonly variable~<script>: line 4: s1: readonly variable` | **2>** `<script>[2]: typeset: s1: is read only` *(status 1)* | `d=0~st=0 s1=[9]~end` |
+| `axis/readonly-attribute-removed-declare-spelling` | `b=[9] st=0~end` **2>** `<script>: 1: typeset: not found~<script>: 2: declare: not found` | `b=[1] st=1~end` **2>** `<script>: line 2: declare: b: readonly variable~<script>: line 3: b: readonly variable` | **2>** `<script>: line 2: declare: b: readonly variable~<script>: line 3: b: readonly variable` *(status 1)* | `b=[1] st=1~end` **2>** `<script>: line 2: declare: b: readonly variable~<script>: line 3: b: readonly variable` | **2>** `<script>: line 2: declare: not found~<script>: line 3: b: is read only` *(status 1)* | `b=[9] st=0~end` |
+| `axis/readonly-attribute-removed-with-a-value` | `d=127 x=[]~end` **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found` | `d=1 x=[1]~end` **2>** `<script>: line 2: typeset: x: readonly variable` | `d=1 x=[1]~end` **2>** `<script>: line 2: typeset: x: readonly variable` | `d=1 x=[1]~end` **2>** `<script>: line 2: typeset: x: readonly variable` | **2>** `<script>: line 2: x: is read only` *(status 1)* | `d=0 x=[5]~end` |
+| `axis/readonly-removal-on-a-free-name` | `d=127~st=0 a=[2]~end` **2>** `<script>: 2: typeset: not found` | `d=0~st=0 a=[2]~end` | `d=0~st=0 a=[2]~end` | `d=0~st=0 a=[2]~end` | `d=0~st=0 a=[2]~end` | `d=0~st=0 a=[2]~end` |
+| `axis/readonly-removal-on-a-startup-frozen-name` | `d=127~st=0~changed~end` **2>** `<script>: 2: typeset: not found` | `d=1~st=1~unchanged~end` **2>** `<script>: line 2: typeset: UID: readonly variable~<script>: line 4: UID: readonly variable` | `d=1` **2>** `<script>: line 2: typeset: UID: readonly variable~<script>: line 4: UID: readonly variable` *(status 1)* | `d=1~st=1~unchanged~end` **2>** `<script>: line 2: typeset: UID: readonly variable~<script>: line 4: UID: readonly variable` | `d=0~st=0~changed~end` | `d=0` **2>** `<script>:4: failed to change user ID: operation not permitted` *(status 1)* |
+| `core/readonly-letter-carries-its-own-sign` | `st=0 n=[2]~end` **2>** `<script>: 2: typeset: not found` | `st=1 n=[1]~end` **2>** `<script>: line 3: n: readonly variable` | **2>** `<script>: line 3: n: readonly variable` *(status 1)* | `st=1 n=[1]~end` **2>** `<script>: line 3: n: readonly variable` | **2>** `<script>: line 3: n: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: n` *(status 1)* |
+| `axis/readonly-removed-by-local-in-the-same-call` | **2>** `<script>: 1: local: -r: bad variable name` *(status 2)* | `st=1~end` **2>** `<script>: line 1: local: y: readonly variable~<script>: line 1: y: readonly variable` | **2>** `<script>: line 1: local: y: readonly variable~<script>: line 1: y: readonly variable` *(status 1)* | `st=1~end` **2>** `<script>: line 1: local: y: readonly variable~<script>: line 1: y: readonly variable` | `in=[2]~st=0~end` **2>** `<script>: line 1: local: not found~<script>: line 1: local: not found` | `in=[2]~st=0~end` |
+| `core/a-plus-word-beside-the-readonly-letter-removes-nothing` | `d=127~st=0 x=[2]~end` **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found` | `d=0~st=1 x=[1]~end` **2>** `<script>: line 4: x: readonly variable` | `d=0` **2>** `<script>: line 4: x: readonly variable` *(status 1)* | `d=0~st=1 x=[1]~end` **2>** `<script>: line 4: x: readonly variable` | `d=0` **2>** `<script>: line 4: x: is read only` *(status 1)* | `d=0` **2>** `<script>:4: read-only variable: x` *(status 1)* |
 | `axis/export-a-subscripted-operand` | **2>** `<script>: 1: export: a[0]: bad variable name` *(status 2)* | `st=1~after` **2>** `<script>: line 1: export: `a[0]': not a valid identifier` | **2>** `<script>: line 1: export: `a[0]': not a valid identifier` *(status 1)* | `st=1~after` **2>** `<script>: line 1: export: `a[0]': not a valid identifier` | `st=0~after` | **2>** `<script>:1: a: assignment to invalid subscript range` *(status 1)* |
 | `axis/readonly-a-subscripted-operand` | **2>** `<script>: 1: readonly: a[0]: bad variable name` *(status 2)* | `st=1~after` **2>** `<script>: line 1: readonly: `a[0]': not a valid identifier` | **2>** `<script>: line 1: readonly: `a[0]': not a valid identifier` *(status 1)* | `st=1~after` **2>** `<script>: line 1: readonly: `a[0]': not a valid identifier` | `st=0~after` | **2>** `<script>:readonly:1: a[0]: can't create readonly array elements` *(status 1)* |
 | `axis/unset-a-subscripted-operand` | **2>** `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` |
@@ -1634,6 +1644,89 @@ grades it and nothing drift-checks it either, for the same reason.
   typeset -a a=(p q)
   echo "st=$? all=[${a[*]}]"
   echo after
+  ```
+- `axis/declaration-shadows-a-readonly-keyword-function` — ksh93 has no `local` and answers the shadow question all the same, through `typeset` in a keyword function — where it agrees with zsh and not with bash. Written `f() { … }` the same shell has no scope to shadow into and the declaration is the ordinary fatal refusal, which is TypesetLocalNeedsKeywordFunction rather than this; reading that fatality as the answer had ksh93 down as a refusal it does not make
+  ```sh
+  typeset -r x=1
+  function f { typeset x=2; echo "in=[$x]"; }
+  f
+  echo "st=$? out=[$x]"
+  echo end
+  ```
+- `axis/declaration-shadows-a-readonly-posix-spelling` — and dash answers too, asked with the freeze POSIX spells rather than with `typeset -r`: `local: x: is read only`, and the script ends. Both shells the axis was written down as unable to ask do answer it, and they answer on opposite sides
+  ```sh
+  readonly x=1
+  f() { local x=2; echo "in=[$x]"; }
+  f
+  echo "st=$? out=[$x]"
+  echo end
+  ```
+- `axis/readonly-attribute-removed` — zsh alone lets `+r` take the readonly attribute off; bash refuses and carries on, and ksh93 refuses and ends the script. A different split from the shadow rows above — ksh93 crosses to bash's side — which is what makes the two separate questions rather than one
+  ```sh
+  typeset -r s1=1
+  typeset +r s1
+  echo "d=$?"
+  s1=9
+  echo "st=$? s1=[$s1]"
+  echo end
+  ```
+- `axis/readonly-attribute-removed-declare-spelling` — the same word under its other spelling, which is also the one bash names in the refusal
+  ```sh
+  typeset -r b=1
+  declare +r b
+  b=9
+  echo "b=[$b] st=$?"
+  echo end
+  ```
+- `axis/readonly-attribute-removed-with-a-value` — the freeze comes off before the same command's own assignment in zsh, so 5 lands. And ksh93 refuses this one in its plain *line* form where the valueless `typeset +r x` names the builtin — one word, two shapes, and the value is what tells them apart
+  ```sh
+  typeset -r x=1
+  typeset +r x=5
+  echo "d=$? x=[$x]"
+  echo end
+  ```
+- `axis/readonly-removal-on-a-free-name` — a plus form on a name nothing froze reports 0 and says nothing in every shell that spells it — the shape a script actually writes, to make sure a name is writable, and the one an engine must not reach an axis for
+  ```sh
+  a=1
+  typeset +r a
+  echo "d=$?"
+  a=2
+  echo "st=$? a=[$a]"
+  echo end
+  ```
+- `axis/readonly-removal-on-a-startup-frozen-name` — a name the shell was *started* frozen with rather than one the script froze: bash refuses `+r` on its own UID exactly as it refuses it on a script's name, so the answer is about the attribute and not about who set it. The row is the panel's rather than a target — this engine has no startup-frozen parameters at all, so it reads the plus form on an unset name and reports 0
+  ```sh
+  was=$UID
+  typeset +r UID
+  echo "d=$?"
+  UID=99
+  echo "st=$?"
+  [ "$UID" = "$was" ] && echo unchanged || echo changed
+  echo end
+  ```
+- `core/readonly-letter-carries-its-own-sign` — the sign that decides the readonly attribute is the letter's and not the last option word's: every shell with both letters freezes n here, so reading the word's sign would have made this a request to unfreeze — a refusal where the panel is unanimously silent
+  ```sh
+  n=1
+  typeset -r +x n
+  n=2
+  echo "st=$? n=[$n]"
+  echo end
+  ```
+- `axis/readonly-removed-by-local-in-the-same-call` — the plus form spelled `local`, over a freeze the same call made — the one shape where shadowing cannot answer, since a name this scope has already shadowed has nothing left to displace. zsh takes the attribute off and reads 2; bash refuses the declaration before the question arises, and the two shells without `local` never reach it
+  ```sh
+  f() { local -r y=1; local +r y; y=2; echo "in=[$y]"; }
+  f
+  echo "st=$?"
+  echo end
+  ```
+- `core/a-plus-word-beside-the-readonly-letter-removes-nothing` — the other side of `core/readonly-letter-carries-its-own-sign`, over a name that is already frozen: silent, status 0, and the freeze still standing in bash, ksh93 and zsh alike. Reading the last option word's sign rather than the letter's would make this a removal — a refusal in two of those shells and a thawed name in the third, and it is the shape that tells the two readings apart
+  ```sh
+  typeset -r x=1
+  typeset -r +x x
+  echo "d=$?"
+  x=2
+  echo "st=$? x=[$x]"
+  echo end
   ```
 - `axis/export-a-subscripted-operand` — ksh93 takes it, bash and dash refuse it in the words they give any bad name, and zsh has a complaint of its own about the subscript — naming the base rather than the operand, and without naming the builtin in the location where its other messages do
   ```sh
@@ -3440,6 +3533,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `unterminated/a-word-is-not-cut-at-a-quoted-blank` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: parse error near `"a b"$(echo hi'` *(status 1)* |
 | `diag/a-line-worth-naming` | `one~st=127` **2>** `<shell>: 2: nosuchcmd: not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 1: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: not found` | `one~st=127` **2>** `<shell>:2: command not found: nosuchcmd` |
 | `diag/a-command-after-an-operator` | `one~st=127` **2>** `<shell>: 3: nosuchcmd: not found` | `one~st=127` **2>** `<shell>: line 3: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 3: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 3: nosuchcmd: not found` | `one~st=127` **2>** `<shell>:3: command not found: nosuchcmd` |
+| `axis/readonly-removal-refusal-names-the-builtin` | `end` **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found` | `end` **2>** `<script>: line 2: typeset: s1: readonly variable` | `end` **2>** `<script>: line 2: typeset: s1: readonly variable` | `end` **2>** `<script>: line 2: typeset: s1: readonly variable` | **2>** `<script>[2]: typeset: s1: is read only` *(status 1)* | `end` |
 | `syntax/an-unmatched-double-quote` | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected EOF while looking for matching `"'~<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `abc` | **2>** `<shell>:1: unmatched "` *(status 1)* |
 | `syntax/standard-input-reads-on-past-a-parse-failure` | `one` **2>** `<shell>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one` **2>** `<shell>: line 2: syntax error near unexpected token `fi'~<shell>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<shell>: line 2: syntax error near unexpected token `fi'~<shell>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<shell>: line 2: syntax error near unexpected token `fi'~<shell>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<shell>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one~three` **2>** `<shell>: parse error near `fi'` |
 | `syntax/a-file-stops-at-the-same-parse-failure` | `one` **2>** `<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one` **2>** `<script>:2: parse error near `fi'` *(status 1)* |
@@ -3572,6 +3666,12 @@ grades it and nothing drift-checks it either, for the same reason.
   false ||
   nosuchcmd
   echo "st=$?"
+  ```
+- `axis/readonly-removal-refusal-names-the-builtin` — the valueless half of that pair: ksh93 answers it in its builtin location with `typeset` named — the shape `set -A` gets — where `typeset s1=2` on the same name is `<script>: line 2: s1: is read only`. bash names the builtin for both and needs no second answer
+  ```sh
+  typeset -r s1=1
+  typeset +r s1
+  echo end
   ```
 - `syntax/an-unmatched-double-quote` — one end of file, three sentences and a silence: bash wants the matching mark, dash calls the string unterminated, zsh calls the opener unmatched — and ksh93 closes the quote, runs the command, and prints abc
   ```sh
@@ -9111,6 +9211,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/a-valueless-local-that-shadows-a-readonly` | `in=[UNSET]~st=0 out=[]` **2>** `<script>: 1: typeset: not found` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: not found` | `in=[]~st=0 out=[1]` |
 | `declare/a-refused-shadow-keeps-the-other-operands` | `in y=[1] x=[5] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: 1: typeset: not found` | `in y=[1] x=[1] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: x: readonly variable` | `in y=[1] x=[1] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: x: readonly variable` | `in y=[1] x=[1] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: x: readonly variable` | `in y=[outer] x=[1] z=[outer]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: not found` | `in y=[1] x=[5] z=[2]~out y=[outer] z=[outer]` |
 | `declare/a-local-that-shadows-a-readonly-and-the-name-afterwards` | `after=[9]` **2>** `<script>: 1: typeset: not found` | `after=[1]` **2>** `<script>: line 2: local: x: readonly variable~<script>: line 4: x: readonly variable` | **2>** `<script>: line 2: local: x: readonly variable~<script>: line 4: x: readonly variable` *(status 1)* | `after=[1]` **2>** `<script>: line 2: local: x: readonly variable~<script>: line 4: x: readonly variable` | **2>** `<script>: line 2: local: not found~<script>: line 4: x: is read only` *(status 1)* | **2>** `<script>:4: read-only variable: x` *(status 1)* |
+| `declare/a-freeze-a-declaration-adds-ends-with-the-call` | **2>** `<script>: 1: local: -r: bad variable name` *(status 2)* | `in=[1]~st=0 y=[2]~end` | `in=[1]~st=0 y=[2]~end` | `in=[1]~st=0 y=[2]~end` | `in=[]~st=0 y=[2]~end` **2>** `<script>: line 1: local: not found` | `in=[1]~st=0 y=[2]~end` |
+| `declare/a-freeze-a-typeset-adds-ends-with-the-call` | **2>** `<script>: 1: Syntax error: "}" unexpected` *(status 2)* | `in=[1]~st=0 y=[2]~end` | `in=[1]~st=0 y=[2]~end` | `in=[1]~st=0 y=[2]~end` | `in=[1]~st=0 y=[2]~end` | `in=[1]~st=0 y=[2]~end` |
 | `declare/readonly-attribute-allows-its-own-value` | `[]~[2]` **2>** `<script>: 1: typeset: not found` | `[1]~[1]` **2>** `<script>: line 3: c: readonly variable` | `[1]` **2>** `<script>: line 3: c: readonly variable` *(status 1)* | `[1]~[1]` **2>** `<script>: line 3: c: readonly variable` | `[1]` **2>** `<script>: line 3: c: is read only` *(status 1)* | `[1]` **2>** `<script>:3: read-only variable: c` *(status 1)* |
 | `declare/print-a-scalar-back` | `st=127` **2>** `<shell>: 1: typeset: not found` | `declare -- v="a b"~declare -x e="E"~st=0` | `declare -- v="a b"~declare -x e="E"~st=0` | `declare -- v="a b"~declare -x e="E"~st=0` | `v='a b'~typeset -x e=E~st=0` | `typeset v='a b'~export e=E~st=0` |
 | `declare/print-arrays-back` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `declare -a arr='([0]="x" [1]="y")'~declare -a m='([0]="a b")'` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -a arr=(x y)~typeset -A m=([k]='a b')` | `typeset -a arr=( x y )~typeset -A m=( [k]='a b' )` |
@@ -9500,6 +9602,22 @@ grades it and nothing drift-checks it either, for the same reason.
   f
   x=9
   echo "after=[$x]"
+  ```
+- `declare/a-freeze-a-declaration-adds-ends-with-the-call` — the third end of it, and the one that goes the other way: the attribute a declaration *adds* inside a function is the call's and goes away with it. bash, ksh93 and zsh all leave y writable after the return, so this is core and not an axis — and the shadow that puts a *displaced* freeze back does nothing for a freeze the declaration itself made, which left a `local -r` freezing the caller's name for the rest of the script
+  ```sh
+  f() { local -r y=1; echo "in=[$y]"; }
+  f
+  y=2
+  echo "st=$? y=[$y]"
+  echo end
+  ```
+- `declare/a-freeze-a-typeset-adds-ends-with-the-call` — the same through the word ksh93 has, in the function form that gives it a scope — the row that says this is unanimous rather than a two-shell agreement
+  ```sh
+  function f { typeset -r y=1; echo "in=[$y]"; }
+  f
+  y=2
+  echo "st=$? y=[$y]"
+  echo end
   ```
 - `declare/readonly-attribute-allows-its-own-value` — the declaration assigns and then freezes, so its own value survives and the next assignment does not — applying both at once would refuse the value it was given
   ```sh

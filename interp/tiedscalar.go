@@ -217,7 +217,7 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	// reason: it decides whether the assignment below is allowed at all, and
 	// applying it up front made a declaration refuse its own value.
 	defer func() {
-		if f.readonly && !f.remove {
+		if f.readonly && !f.readonlyOff {
 			r.markReadonly(scalar)
 			r.markReadonly(array)
 		}

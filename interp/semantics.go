@@ -1447,8 +1447,28 @@ type Semantics struct {
 	// is untouched when the function returns. bash answers `local: x:
 	// readonly variable`, then `in=[1]` and `running` — it refuses the
 	// declaration, leaves the *outer* value in view, and **carries on**.
-	// ksh93 has no `local` and dash has no `typeset -r`, so bash and zsh are
-	// the two shells that can be asked and they disagree.
+	// All four members answer, each asked in the words it has — which is
+	// what makes this a four-shell question rather than the two-shell one it
+	// looks like from `typeset -r` and `local` alone (#1168):
+	//
+	//	zsh    typeset -r x=1; f() { local x=2; …; }; f      → in=[2]
+	//	bash   the same three words                          → refused
+	//	ksh93  typeset -r x=1; function f { typeset x=2; }   → in=[2]
+	//	dash   readonly x=1; f() { local x=2; …; }; f        → refused
+	//
+	// ksh93 has no `local` and answers through `typeset` in a keyword
+	// function, which is a local there — see
+	// TypesetLocalNeedsKeywordFunction. Asked through `f() { … }` instead it
+	// has no scope to shadow into and the declaration is the ordinary
+	// refusal, which is that field and ReadonlyReassignmentFatal rather than
+	// this one; reading that fatality as this axis's answer had ksh93 down
+	// as a `No`. dash has no `typeset -r` and answers through `readonly`,
+	// which is the freeze POSIX spells.
+	//
+	// Two each way, so it stays an axis — and a different split from
+	// ReadonlyAttributeCanBeRemoved below, where ksh93 crosses to bash's
+	// side. That the two questions divide the panel differently is what
+	// makes them two questions.
 	//
 	// It is one field for the whole family and not one per spelling: zsh
 	// takes `local x=2`, `local x`, `typeset x=3`, `local -r x=4` and
@@ -1470,6 +1490,47 @@ type Semantics struct {
 	// returns. Asked only when a declaration meets a name that is already
 	// frozen, so nothing else reaches the question.
 	DeclarationMayShadowAReadonly Answer
+
+	// ReadonlyAttributeCanBeRemoved lets a plus form take the readonly
+	// attribute off a name — `typeset +r x` — leaving it writable again.
+	//
+	// Measured 2026-09-07, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
+	// ZDOTDIR and HISTFILE, over a script file:
+	//
+	//	typeset -r s=1; typeset +r s; s=9; echo "st=$? s=[$s]"
+	//
+	//	zsh    silent, status 0, then s=[9] — the attribute is gone
+	//	bash   typeset: s: readonly variable, status 1, and carries on
+	//	ksh93  typeset: s: is read only, and the script ends
+	//	dash   no `typeset` or `declare`, so nothing here can ask
+	//
+	// `declare +r` is the same word under its other spelling wherever both
+	// exist, and zsh's `export +r` is too — `export` is `typeset -gx` there.
+	// `readonly +r` is not: that builtin takes no `r` in any shell, since
+	// the attribute is the whole of what it means.
+	//
+	// zsh alone allows it, so this splits the panel differently from
+	// DeclarationMayShadowAReadonly above, where ksh93 is on zsh's side.
+	// Two questions rather than one, and the ksh93 row is what proves it.
+	//
+	// A shell that says no still has to say *which* no, and it already
+	// does: the refusal is the ordinary readonly refusal through a
+	// declaration, so the wording and the fatality come from
+	// ReadonlyReassignmentByDeclarationFatal and the diagnostics beside it
+	// rather than from anything of this field's own. That is measured and
+	// not an economy — ksh93 ends the script over `typeset +r` exactly as it
+	// ends one over `export x=2`, and bash carries on from both.
+	//
+	// Asked only for a plus form on a name that is *already* frozen. A
+	// `typeset +r` on a free name reports 0 and says nothing in all three
+	// shells that spell it, which is the shape a script actually writes —
+	// making sure a name is writable — and it must not reach an axis.
+	//
+	// zsh's yes has one limit that is not an axis: a *special* parameter
+	// refuses the change there whatever this says — `typeset +r
+	// EPOCHSECONDS` is `can't change type of a special parameter` — which is
+	// a fact about specials rather than about the attribute.
+	ReadonlyAttributeCanBeRemoved Answer
 
 	// DeclaredNameWithoutValueIsEmpty gives a name a value when it is
 	// declared without one: `local u` or `typeset u`. zsh alone says yes, so

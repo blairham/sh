@@ -10014,6 +10014,94 @@
         "TimedOut": false
       }
     },
+    "axis/declaration-shadows-a-readonly-keyword-function": {
+      "bash": {
+        "Stdout": "in=[1]~st=0 out=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: x: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[1]~st=0 out=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: x: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[1]~st=0 out=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: x: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[2]~st=0 out=[1]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[2]~st=0 out=[1]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/declaration-shadows-a-readonly-posix-spelling": {
+      "bash": {
+        "Stdout": "in=[1]~st=0 out=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 2: local: x: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[1]~st=0 out=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 2: local: x: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[1]~st=0 out=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 2: local: x: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: local: x: is read only",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[1]~st=0 out=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 2: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[2]~st=0 out=[1]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/dollar-zero-in-a-file-found-on-path": {
       "bash": {
         "Stdout": "in=[\u003cscript\u003e]",
@@ -10718,6 +10806,138 @@
         "TimedOut": false
       }
     },
+    "axis/readonly-attribute-removed": {
+      "bash": {
+        "Stdout": "d=1~st=1 s1=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: s1: readonly variable~\u003cscript\u003e: line 4: s1: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "d=1",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: s1: readonly variable~\u003cscript\u003e: line 4: s1: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "d=1~st=1 s1=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: s1: readonly variable~\u003cscript\u003e: line 4: s1: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "d=127~st=0 s1=[9]~end",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[2]: typeset: s1: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "d=0~st=0 s1=[9]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/readonly-attribute-removed-declare-spelling": {
+      "bash": {
+        "Stdout": "b=[1] st=1~end",
+        "Stderr": "\u003cscript\u003e: line 2: declare: b: readonly variable~\u003cscript\u003e: line 3: b: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: declare: b: readonly variable~\u003cscript\u003e: line 3: b: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "b=[1] st=1~end",
+        "Stderr": "\u003cscript\u003e: line 2: declare: b: readonly variable~\u003cscript\u003e: line 3: b: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "b=[9] st=0~end",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: declare: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: declare: not found~\u003cscript\u003e: line 3: b: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "b=[9] st=0~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/readonly-attribute-removed-with-a-value": {
+      "bash": {
+        "Stdout": "d=1 x=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: x: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "d=1 x=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: x: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "d=1 x=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: x: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "d=127 x=[]~end",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: x: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "d=0 x=[5]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/readonly-reassign": {
       "bash": {
         "Stdout": "survived",
@@ -11110,6 +11330,182 @@
         "Stdout": "",
         "Stderr": "\u003cscript\u003e:2: read-only variable: r",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/readonly-removal-on-a-free-name": {
+      "bash": {
+        "Stdout": "d=0~st=0 a=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "d=0~st=0 a=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "d=0~st=0 a=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "d=127~st=0 a=[2]~end",
+        "Stderr": "\u003cscript\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "d=0~st=0 a=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "d=0~st=0 a=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/readonly-removal-on-a-startup-frozen-name": {
+      "bash": {
+        "Stdout": "d=1~st=1~unchanged~end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: UID: readonly variable~\u003cscript\u003e: line 4: UID: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "d=1",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: UID: readonly variable~\u003cscript\u003e: line 4: UID: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "d=1~st=1~unchanged~end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: UID: readonly variable~\u003cscript\u003e: line 4: UID: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "d=127~st=0~changed~end",
+        "Stderr": "\u003cscript\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "d=0~st=0~changed~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "d=0",
+        "Stderr": "\u003cscript\u003e:4: failed to change user ID: operation not permitted",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/readonly-removal-refusal-names-the-builtin": {
+      "bash": {
+        "Stdout": "end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: s1: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: s1: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "end",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: s1: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "end",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[2]: typeset: s1: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/readonly-removed-by-local-in-the-same-call": {
+      "bash": {
+        "Stdout": "st=1~end",
+        "Stderr": "\u003cscript\u003e: line 1: local: y: readonly variable~\u003cscript\u003e: line 1: y: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: local: y: readonly variable~\u003cscript\u003e: line 1: y: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~end",
+        "Stderr": "\u003cscript\u003e: line 1: local: y: readonly variable~\u003cscript\u003e: line 1: y: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: local: -r: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[2]~st=0~end",
+        "Stderr": "\u003cscript\u003e: line 1: local: not found~\u003cscript\u003e: line 1: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[2]~st=0~end",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -21499,6 +21895,50 @@
         "TimedOut": false
       }
     },
+    "core/a-plus-word-beside-the-readonly-letter-removes-nothing": {
+      "bash": {
+        "Stdout": "d=0~st=1 x=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 4: x: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "d=0",
+        "Stderr": "\u003cscript\u003e: line 4: x: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "d=0~st=1 x=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 4: x: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "d=127~st=0 x=[2]~end",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "d=0",
+        "Stderr": "\u003cscript\u003e: line 4: x: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "d=0",
+        "Stderr": "\u003cscript\u003e:4: read-only variable: x",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-select-name-that-is-an-expansion": {
       "bash": {
         "Stdout": "",
@@ -23391,6 +23831,50 @@
         "TimedOut": false
       }
     },
+    "core/readonly-letter-carries-its-own-sign": {
+      "bash": {
+        "Stdout": "st=1 n=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 3: n: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 3: n: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 n=[1]~end",
+        "Stderr": "\u003cscript\u003e: line 3: n: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0 n=[2]~end",
+        "Stderr": "\u003cscript\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 3: n: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:3: read-only variable: n",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/single-quotes-in-a-heredoc-expansion-body": {
       "bash": {
         "Stdout": "['VAL']",
@@ -24353,6 +24837,94 @@
       },
       "zsh": {
         "Stdout": "(none)~FOO=",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-freeze-a-declaration-adds-ends-with-the-call": {
+      "bash": {
+        "Stdout": "in=[1]~st=0 y=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[1]~st=0 y=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[1]~st=0 y=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: local: -r: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[]~st=0 y=[2]~end",
+        "Stderr": "\u003cscript\u003e: line 1: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[1]~st=0 y=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-freeze-a-typeset-adds-ends-with-the-call": {
+      "bash": {
+        "Stdout": "in=[1]~st=0 y=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[1]~st=0 y=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[1]~st=0 y=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[1]~st=0 y=[2]~end",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[1]~st=0 y=[2]~end",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

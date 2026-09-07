@@ -7209,6 +7209,87 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the other end of the shadow: the outer name is frozen **again** when the function returns, so the assignment after it is refused in every column. A shadow that merely took the attribute off would pass the rows above and leave a readonly quietly thawed by a function call, which is a hole in the whole point of the attribute — and it is only visible from outside the function, which is why this is a row of its own",
 	},
 	{
+		ID: "declare/a-freeze-a-declaration-adds-ends-with-the-call", Category: "declarations",
+		Script:  true,
+		Snippet: "f() { local -r y=1; echo \"in=[$y]\"; }\nf\ny=2\necho \"st=$? y=[$y]\"\necho end\n",
+		Why:     "the third end of it, and the one that goes the other way: the attribute a declaration *adds* inside a function is the call's and goes away with it. bash, ksh93 and zsh all leave y writable after the return, so this is core and not an axis — and the shadow that puts a *displaced* freeze back does nothing for a freeze the declaration itself made, which left a `local -r` freezing the caller's name for the rest of the script",
+	},
+	{
+		ID: "declare/a-freeze-a-typeset-adds-ends-with-the-call", Category: "declarations",
+		Script:  true,
+		Snippet: "function f { typeset -r y=1; echo \"in=[$y]\"; }\nf\ny=2\necho \"st=$? y=[$y]\"\necho end\n",
+		Why:     "the same through the word ksh93 has, in the function form that gives it a scope — the row that says this is unanimous rather than a two-shell agreement",
+	},
+	{
+		ID: "axis/declaration-shadows-a-readonly-keyword-function", Category: "semantics axes",
+		Script:  true,
+		Snippet: "typeset -r x=1\nfunction f { typeset x=2; echo \"in=[$x]\"; }\nf\necho \"st=$? out=[$x]\"\necho end\n",
+		Why:     "ksh93 has no `local` and answers the shadow question all the same, through `typeset` in a keyword function — where it agrees with zsh and not with bash. Written `f() { … }` the same shell has no scope to shadow into and the declaration is the ordinary fatal refusal, which is TypesetLocalNeedsKeywordFunction rather than this; reading that fatality as the answer had ksh93 down as a refusal it does not make",
+	},
+	{
+		ID: "axis/declaration-shadows-a-readonly-posix-spelling", Category: "semantics axes",
+		Script:  true,
+		Snippet: "readonly x=1\nf() { local x=2; echo \"in=[$x]\"; }\nf\necho \"st=$? out=[$x]\"\necho end\n",
+		Why:     "and dash answers too, asked with the freeze POSIX spells rather than with `typeset -r`: `local: x: is read only`, and the script ends. Both shells the axis was written down as unable to ask do answer it, and they answer on opposite sides",
+	},
+	{
+		ID: "axis/readonly-attribute-removed", Category: "semantics axes",
+		Script:  true,
+		Snippet: "typeset -r s1=1\ntypeset +r s1\necho \"d=$?\"\ns1=9\necho \"st=$? s1=[$s1]\"\necho end\n",
+		Why:     "zsh alone lets `+r` take the readonly attribute off; bash refuses and carries on, and ksh93 refuses and ends the script. A different split from the shadow rows above — ksh93 crosses to bash's side — which is what makes the two separate questions rather than one",
+	},
+	{
+		ID: "axis/readonly-attribute-removed-declare-spelling", Category: "semantics axes",
+		Script:  true,
+		Snippet: "typeset -r b=1\ndeclare +r b\nb=9\necho \"b=[$b] st=$?\"\necho end\n",
+		Why:     "the same word under its other spelling, which is also the one bash names in the refusal",
+	},
+	{
+		ID: "axis/readonly-attribute-removed-with-a-value", Category: "semantics axes",
+		Script:  true,
+		Snippet: "typeset -r x=1\ntypeset +r x=5\necho \"d=$? x=[$x]\"\necho end\n",
+		Why:     "the freeze comes off before the same command's own assignment in zsh, so 5 lands. And ksh93 refuses this one in its plain *line* form where the valueless `typeset +r x` names the builtin — one word, two shapes, and the value is what tells them apart",
+	},
+	{
+		ID: "axis/readonly-removal-refusal-names-the-builtin", Category: "diagnostics",
+		Script:  true,
+		Snippet: "typeset -r s1=1\ntypeset +r s1\necho end\n",
+		Why:     "the valueless half of that pair: ksh93 answers it in its builtin location with `typeset` named — the shape `set -A` gets — where `typeset s1=2` on the same name is `<script>: line 2: s1: is read only`. bash names the builtin for both and needs no second answer",
+	},
+	{
+		ID: "axis/readonly-removal-on-a-free-name", Category: "semantics axes",
+		Script:  true,
+		Snippet: "a=1\ntypeset +r a\necho \"d=$?\"\na=2\necho \"st=$? a=[$a]\"\necho end\n",
+		Why:     "a plus form on a name nothing froze reports 0 and says nothing in every shell that spells it — the shape a script actually writes, to make sure a name is writable, and the one an engine must not reach an axis for",
+	},
+	{
+		ID: "axis/readonly-removal-on-a-startup-frozen-name", Category: "semantics axes",
+		Script: true,
+		// The value is compared rather than printed: this shell's own UID is
+		// whatever machine recorded the row, and a case that echoed it could
+		// only ever match the one that wrote it.
+		Snippet: "was=$UID\ntypeset +r UID\necho \"d=$?\"\nUID=99\necho \"st=$?\"\n[ \"$UID\" = \"$was\" ] && echo unchanged || echo changed\necho end\n",
+		Why:     "a name the shell was *started* frozen with rather than one the script froze: bash refuses `+r` on its own UID exactly as it refuses it on a script's name, so the answer is about the attribute and not about who set it. The row is the panel's rather than a target — this engine has no startup-frozen parameters at all, so it reads the plus form on an unset name and reports 0",
+	},
+	{
+		ID: "core/readonly-letter-carries-its-own-sign", Category: "semantics axes",
+		Script:  true,
+		Snippet: "n=1\ntypeset -r +x n\nn=2\necho \"st=$? n=[$n]\"\necho end\n",
+		Why:     "the sign that decides the readonly attribute is the letter's and not the last option word's: every shell with both letters freezes n here, so reading the word's sign would have made this a request to unfreeze — a refusal where the panel is unanimously silent",
+	},
+	{
+		ID: "axis/readonly-removed-by-local-in-the-same-call", Category: "semantics axes",
+		Script:  true,
+		Snippet: "f() { local -r y=1; local +r y; y=2; echo \"in=[$y]\"; }\nf\necho \"st=$?\"\necho end\n",
+		Why:     "the plus form spelled `local`, over a freeze the same call made — the one shape where shadowing cannot answer, since a name this scope has already shadowed has nothing left to displace. zsh takes the attribute off and reads 2; bash refuses the declaration before the question arises, and the two shells without `local` never reach it",
+	},
+	{
+		ID: "core/a-plus-word-beside-the-readonly-letter-removes-nothing", Category: "semantics axes",
+		Script:  true,
+		Snippet: "typeset -r x=1\ntypeset -r +x x\necho \"d=$?\"\nx=2\necho \"st=$? x=[$x]\"\necho end\n",
+		Why:     "the other side of `core/readonly-letter-carries-its-own-sign`, over a name that is already frozen: silent, status 0, and the freeze still standing in bash, ksh93 and zsh alike. Reading the last option word's sign rather than the letter's would make this a removal — a refusal in two of those shells and a thawed name in the third, and it is the shape that tells the two readings apart",
+	},
+	{
 		ID: "declare/readonly-attribute-allows-its-own-value", Category: "declarations",
 		Script:  true,
 		Snippet: "typeset -r c=1\necho \"[$c]\"\nc=2\necho \"[$c]\"\n",

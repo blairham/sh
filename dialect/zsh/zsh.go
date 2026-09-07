@@ -391,6 +391,13 @@ func Semantics() interp.Semantics {
 	// 1 is back — and frozen again — when it returns. bash refuses every
 	// spelling of it.
 	s.DeclarationMayShadowAReadonly = interp.Yes
+	// And this is the one shell in the panel where `typeset +r` takes the
+	// attribute back off: `typeset -r s=1; typeset +r s; s=9` leaves 9
+	// there, silently and with status 0. `declare +r` is the same word. A
+	// *special* parameter still refuses — `typeset +r EPOCHSECONDS` is
+	// `can't change type of a special parameter` — which this engine has no
+	// specials to reach.
+	s.ReadonlyAttributeCanBeRemoved = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
 	// And an attribute added to a name that already holds a value re-reads
 	// it at once, as ksh93 does: `FOO=bar; typeset -i FOO` stores 0 and

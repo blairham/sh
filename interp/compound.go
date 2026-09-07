@@ -191,6 +191,22 @@ func (r *Runner) loop(ctx context.Context, c *syntax.LoopClause) error {
 
 func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
+		if c.RefusedName != "" {
+			// The word standing where the variable belonged is not a name,
+			// and this dialect carried it here rather than refusing the
+			// parse — see ForNameRunForm.
+			//
+			// **Inside the redirections and not before them**, which was
+			// measured because the first guess was wrong: the loop never
+			// runs, so it looked as though its `>f` should not be opened
+			// either. It is. `for 1x in a b; do :; done > madefile` leaves
+			// `madefile` behind in bash 5.3, bash 3.2, bash-as-`sh` and
+			// ksh93 alike — all four report the name, all four create the
+			// file — so the redirection belongs to the *clause* and is made
+			// before anything about the variable is asked.
+			r.refuseForName(c.RefusedName, len(c.Redirs) > 0)
+			return nil
+		}
 		// An absent word list iterates the positional parameters; an empty
 		// one iterates nothing. HasItems is what tells them apart, and a nil
 		// slice could not.

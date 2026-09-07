@@ -2370,11 +2370,15 @@ func (p *Parser) parseFor() Command {
 	}
 	c := &ForClause{Start: start}
 	p.next()
-	name, ok := p.forName("for")
+	name, refused, ok := p.forName("for")
 	if !ok {
 		return c
 	}
-	c.Names = []string{name}
+	if refused != "" {
+		c.RefusedName = refused
+	} else {
+		c.Names = []string{name}
+	}
 	nameEnd := p.tok.End
 	p.next()
 	nameEnd = p.moreForNames(c, nameEnd, "for")
@@ -2495,9 +2499,22 @@ func (p *Parser) itemList(items *[]*Word, end Pos) Pos {
 // The name is reported **as written**, quotes, escapes, expansion and all:
 // three of the four dialects quote the source text back and none of them
 // quotes the literal. `for $n` names `$n` and not `n`.
-func (p *Parser) forName(word string) (string, bool) {
+func (p *Parser) forName(word string) (name, refused string, ok bool) {
 	if p.forNameIsUsable() {
-		return p.tok.Literal(), true
+		return p.tok.Literal(), "", true
+	}
+	if p.dialect.ForNameCheckedWhenTheLoopRuns && p.tok.Kind == TokWord {
+		// The parse succeeds and the word is carried to the interpreter,
+		// which is the whole of #1110: `bash -n` accepts this, so refusing
+		// it here reported a working script as broken.
+		//
+		// A *word* only. `for ; in a b` is an ordinary unexpected-token
+		// failure in both shells that get here — status 2 and 3, with bash
+		// echoing the line — because what they want in that position is a
+		// word, and the name is checked afterwards. So the two questions
+		// stay apart: whether a word may stand there is the grammar's, and
+		// whether the word is a name is the loop's.
+		return "", p.forNameAsWritten(), true
 	}
 	if p.err == nil {
 		p.err = &Error{
@@ -2506,7 +2523,7 @@ func (p *Parser) forName(word string) (string, bool) {
 			Msg: "expected a name after `" + word + "`",
 		}
 	}
-	return "", false
+	return "", "", false
 }
 
 // forNameIsUsable is the predicate.
@@ -2585,9 +2602,27 @@ func (p *Parser) moreForNames(c *ForClause, end Pos, word string) Pos {
 		return end
 	}
 	for p.tok.Kind == TokWord && !p.atStopWord() && !p.atWord("in") && !p.atWord("{") {
-		name, ok := p.forName(word)
+		name, refused, ok := p.forName(word)
 		if !ok {
 			return end
+		}
+		if refused != "" {
+			// The **first** refused word is the one kept, because that is
+			// the one a complaint will quote and a later bad word would
+			// otherwise displace it silently.
+			//
+			// No shell in the panel is both of these — multiple names are
+			// zsh's and zsh refuses the word while parsing — so the answer
+			// is this repository's own rather than a measurement, and it is
+			// written down in a test against a dialect assembled for it. A
+			// mutant that let the later word win survived every row until
+			// that test existed.
+			if c.RefusedName == "" {
+				c.RefusedName = refused
+			}
+			end = p.tok.End
+			p.next()
+			continue
 		}
 		c.Names = append(c.Names, name)
 		end = p.tok.End
@@ -2703,11 +2738,15 @@ func (p *Parser) parseForeach() Command {
 	c := &ForClause{Start: p.tok.Pos}
 	defer p.opens("foreach")()
 	p.next()
-	name, ok := p.forName("foreach")
+	name, refused, ok := p.forName("foreach")
 	if !ok {
 		return c
 	}
-	c.Names = []string{name}
+	if refused != "" {
+		c.RefusedName = refused
+	} else {
+		c.Names = []string{name}
+	}
 	end := p.tok.End
 	p.next()
 	end = p.moreForNames(c, end, "foreach")
@@ -2736,11 +2775,15 @@ func (p *Parser) parseSelect() Command {
 	c := &SelectClause{Start: p.tok.Pos}
 	defer p.opens("select")()
 	p.next()
-	name, ok := p.forName("select")
+	name, refused, ok := p.forName("select")
 	if !ok {
 		return c
 	}
-	c.Name = name
+	if refused != "" {
+		c.RefusedName = refused
+	} else {
+		c.Name = name
+	}
 	nameEnd := p.tok.End
 	p.next()
 	p.skipNewlines()

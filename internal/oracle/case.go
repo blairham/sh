@@ -1491,6 +1491,37 @@ var Corpus = []Case{
 		Why:     "a loop whose name comes out of an expansion, which all six columns refuse and every dialect of ours took: the loop bound a variable literally called `n`, so the script's own `$n` read the list's words and the name it meant to reach through the expansion stayed empty — at status 0 and with nothing said. The token's literal is what hid it, since a `$n` word reports `n` and satisfies the name test. The refusal has four wordings across the six columns and three statuses, and the two `echo`s are in the body so that a shell which *ran* the loop would be caught by the output rather than only by the number. Nothing follows the loop, because bash reports the complaint and goes on where the other five stop, which is #1110 and not this",
 	},
 	{
+		ID: "core/a-refused-loop-name-still-parses-in-four-columns", Category: "command language", SyntaxError: true,
+		Args: []string{"-n", ArgScript},
+		Snippet: `n=x
+for $n in a b; do echo body; done
+echo "reached-after st=$?"`,
+		Why: "the **stage**, asked with the shell's own syntax check and nothing else running. bash 5.3, bash as `sh`, bash 3.2 and ksh93 accept this file silently at 0 — they parse the loop and check the name when they reach it — where dash and zsh refuse it while parsing. So `-n` is what makes the difference observable, and it is the difference that matters most: a syntax check is what a CI job runs, so refusing the parse reported a working script as broken (#1110)",
+	},
+	{
+		ID: "core/a-refused-loop-name-costs-the-loop-or-the-script", Category: "command language", SyntaxError: true,
+		Script: true,
+		Snippet: `n=x
+for $n in a b; do echo body; done
+echo "reached-after st=$?"`,
+		Why: "and what happens when the loop *is* reached, which is three answers among the four columns that get there. bash under its own name reports the complaint, gives the loop 1 and runs the line after it, so the script exits 0; bash as `sh` reports the same sentence and stops at 2, which is POSIX mode and not the build — `set -o posix` in bash 5.3 answers the same way; ksh93 reports its own sentence and stops at 1. dash and zsh never run any of it. `body` is in the loop so a column that ran it would be caught by the output rather than only by the number",
+	},
+	{
+		ID: "core/a-redirection-on-a-refused-loop-is-not-fatal-in-one-shell", Category: "command language", SyntaxError: true,
+		Script: true,
+		Snippet: `for 1x in a b; do echo body; done > out
+echo "reached-after st=$?"`,
+		Why: "a redirection on the clause, which changes the answer in exactly one column: ksh93 reports the same sentence, prints `reached-after st=1` and exits 0, where the same loop without one ends the script at 1. Any redirection does it — `2>&1` behaves as `> out` does — and the `select` spelling behaves the same way. bash as `sh` stops at 2 with a redirection and without one, so it is not a rule about clauses in general; and all four columns that reach the loop *create* the file, which is what says the redirection is made before the variable is looked at",
+	},
+	{
+		ID: "core/a-refused-select-name-answers-as-the-loop-does", Category: "command language", SyntaxError: true,
+		Script: true,
+		Snippet: `n=x
+select $n in a b; do echo body; done
+echo "reached-after st=$?"`,
+		Why: "the menu loop, and the row #1110 had the other way round: it recorded ksh93 as fatal for `for` and not for `select`. Re-measured 2026-09-07 on 93u+ with stdin closed, both spellings end the script at 1 with the line after the loop unreached — so the loop keyword is not an axis, and the fatality half has two answers rather than three. dash reaches its own failure, having no `select` at all",
+	},
+	{
 		ID: "core/a-for-name-that-is-a-quoted-word", Category: "command language", SyntaxError: true,
 		Snippet: `for "i" in a b; do echo "[$i]"; done`,
 		Why:     "the axis beside it: ksh93 removes the quoting and binds `i`, and bash, bash as `sh`, bash 3.2, dash and zsh all refuse the same word. So the *quoting* of a loop's name is a dialect's answer where an expansion in it is core, and the two had to be separated in one predicate rather than being one plainness test — `for \"$n\"` is refused by the quoting shell too. `for 'i'`, `for i\"\"`, `for \"i\"x` and `for \\i` were measured beside this and answer alike in every column, so the escape travels with the quotes and the flag is one bit",

@@ -195,10 +195,21 @@ func (r *Runner) SetPosixMode(on bool) {
 		return
 	}
 	redir, unsetRO := r.posixSaved, r.posixSavedUnsetReadonly
+	forName := r.posixSavedForName
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
 		r.posixSavedUnsetReadonly = r.sem().UnsetReadonlyFatal
+		r.posixSavedForName = r.sem().ForNameWhenTheLoopRuns
 		redir, unsetRO = Yes, Yes
+		forName = ForNameEndsTheScriptAsASyntaxError
+		if r.posixSavedForName == ForNameRunUnspecified {
+			// A dialect that never answered keeps its silence: the mode
+			// moves an answer and does not invent one, so a script that
+			// depends on the axis is still refused by name rather than
+			// getting POSIX's answer to a question its shell never took a
+			// position on. See ForNameRunForm.
+			forName = ForNameRunUnspecified
+		}
 	}
 	r.swapSemantics(func(s *Semantics) {
 		s.RedirectErrorOnSpecialBuiltinFatal = redir
@@ -209,6 +220,18 @@ func (r *Runner) SetPosixMode(on bool) {
 		// carries on past a failed redirection and stops here — so one
 		// remembered value could not put both back.
 		s.UnsetReadonlyFatal = unsetRO
+		// The third axis the mode moves, and the one that needs a saved
+		// value most: the dialect answers with a *form* rather than a bool,
+		// and only one of that form's three values belongs to the mode. A
+		// loop variable that is not a name fails the loop and lets the
+		// script carry on under bash's own name, and ends the script at the
+		// syntax-error status under `sh` — measured, and `set -o posix` in
+		// bash 5.3 moves it exactly as the name does, which is what makes it
+		// a mode and not a build. Unanswered stays unanswered in both
+		// directions — the entering half is above, and this half is what
+		// puts the dialect's own answer back rather than the standard's
+		// opposite (#1110).
+		s.ForNameWhenTheLoopRuns = forName
 	})
 	r.posixMode = on
 	// The standard has aliases expand in a script, so the mode turns the

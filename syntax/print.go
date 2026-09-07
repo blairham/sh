@@ -378,7 +378,15 @@ func (p *printer) command(c Command) {
 		// is zsh's, and no other dialect has a spelling for it — so the
 		// printer writes what the construct is rather than something
 		// portable it is not.
-		p.str("for " + strings.Join(x.Names, " "))
+		// A refused name is written back as it stood, which is what keeps
+		// the printer's promise on a clause that parsed and will fail when
+		// it runs: printed and re-read, it fails the same way. There is no
+		// name to join, so it stands in for the list rather than beside it.
+		if x.RefusedName != "" {
+			p.str("for " + x.RefusedName)
+		} else {
+			p.str("for " + strings.Join(x.Names, " "))
+		}
 		if len(x.Body) == 0 {
 			p.parenItems(x.HasItems, x.Items)
 			p.redirs(x.Redirs)
@@ -415,7 +423,11 @@ func (p *printer) command(c Command) {
 		p.keyword("done")
 		p.redirs(x.Redirs)
 	case *SelectClause:
-		p.str("select " + x.Name)
+		if x.RefusedName != "" {
+			p.str("select " + x.RefusedName)
+		} else {
+			p.str("select " + x.Name)
+		}
 		if len(x.Body) == 0 {
 			p.parenItems(x.HasItems, x.Items)
 			p.redirs(x.Redirs)

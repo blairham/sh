@@ -469,6 +469,17 @@ type ForClause struct {
 	Items    []*Word
 	HasItems bool
 	Body     []*Stmt
+	// RefusedName is the word standing where a name belonged when it was not
+	// one, in the dialect that checks it when the loop runs — see
+	// [Dialect.ForNameCheckedWhenTheLoopRuns]. It is the source text, quotes
+	// and expansion and all, because that is what the complaint quotes:
+	// `for $n` refuses `$n` and not `n`.
+	//
+	// Set instead of Names rather than beside it: there is no name to bind,
+	// so a clause carrying one would be a clause the interpreter could try
+	// to run. Empty is the ordinary case and the only one in five of the six
+	// dialects.
+	RefusedName string
 	// Header is `for i in 1 2` as written, kept for the same reason
 	// ArithCmdClause keeps its expression: it is what a diagnostic quotes.
 	// bash prints it under `set -x` unexpanded — `for i in $x`, quotes and
@@ -491,6 +502,11 @@ func (c *ForClause) commandNode() {}
 // Sharing a node would have made every use of one ask which it was.
 type SelectClause struct {
 	Name string
+	// RefusedName is ForClause.RefusedName for the menu loop, and the same
+	// two shells check it at the same stage: measured, `select $n in a b`
+	// and `select 1x in a b` parse in bash and ksh93 and are refused while
+	// parsing by dash and zsh, exactly as the `for` spellings are.
+	RefusedName string
 	// Items and HasItems carry the same distinction as ForClause's: with `in`
 	// omitted the menu is built from the positional parameters.
 	Items    []*Word

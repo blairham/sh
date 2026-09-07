@@ -773,6 +773,7 @@ type Runner struct {
 	posixMode               bool
 	posixSaved              Answer
 	posixSavedUnsetReadonly Answer
+	posixSavedForName       ForNameRunForm
 
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or

@@ -169,6 +169,39 @@ type Dialect struct {
 	// [Parser.forName] rather than here (#1076).
 	ForNameMayBeQuoted bool
 
+	// ForNameCheckedWhenTheLoopRuns makes a `for` or `select` whose variable
+	// is not a name **parse**, with the word carried on the clause and the
+	// complaint raised when the loop is reached.
+	//
+	// A stage and not a wording, which is the point: `bash -n` accepts a
+	// script this refused. Measured 2026-09-06 and re-measured 2026-09-07,
+	// `env -i PATH=/usr/bin:/bin` with a scratch HOME, over a script file
+	// holding `n=x`, `for $n in a b; do echo body; done` and
+	// `echo "reached-after st=$?"`:
+	//
+	//	shell        -n over that file   a run
+	//	bash 5.3.15  accepts, silent, 0  the complaint, then reached-after st=1
+	//	bash-as-sh   accepts, silent, 0  the complaint, and stops at 2
+	//	bash 3.2.57  accepts, silent, 0  the complaint, then reached-after st=1
+	//	dash         refuses, 2          the complaint, and stops
+	//	ksh93u+      accepts, silent, 0  the complaint, and stops at 1
+	//	zsh 5.9.2    refuses, 1          the complaint, and stops
+	//
+	// So four of the six parse it and `for 1x` behaves identically in every
+	// column — the expansion is not what makes the difference, which is why
+	// this is one flag and not one per spelling.
+	//
+	// A syntax check is what a CI job runs, so a script that works reported
+	// as broken is the visible cost; and stopping where bash carries on is
+	// the worse of the two remaining directions, because the output goes
+	// missing rather than coming out wrong (#1110).
+	//
+	// What happens when the loop *is* reached is not this flag —
+	// interp.Semantics.ForNameWhenTheLoopRuns — because three answers among
+	// the two shells that get here is a behavior question and not a grammar
+	// one.
+	ForNameCheckedWhenTheLoopRuns bool
+
 	// ForBraceBody lets a `for` or `select` loop take a brace group where
 	// `do … done` stands: `for ((;;)) { echo hi; break; }`, and equally
 	// `for i in a b; { echo "$i"; }`. Absent from dash, which is the only

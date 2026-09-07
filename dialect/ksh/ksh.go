@@ -56,6 +56,10 @@ func Dialect() syntax.Dialect {
 	// quotes. A name out of an *expansion* is refused here as everywhere,
 	// which is why this is the quoting half alone (#1076).
 	d.ForNameMayBeQuoted = true
+	// And a word that is not a name at all parses, the complaint coming when
+	// the loop is reached — so `ksh -n` accepts a script this used to refuse.
+	// interp.Semantics.ForNameWhenTheLoopRuns is what happens then (#1110).
+	d.ForNameCheckedWhenTheLoopRuns = true
 	// A colon written before a trim is ignored here: `${v:#hel*}` is
 	// `${v#hel*}` and comes to `lo`, where zsh reads the same six characters
 	// as an element exclusion and bash refuses them as arithmetic. All four
@@ -340,6 +344,11 @@ func Semantics() interp.Semantics {
 	// the attribute back.
 	s.DeclarationAssignmentClearsTheExportAttribute = interp.Yes
 	s.FatalErrorStatusIsOne = interp.Yes
+	// A loop variable that is not a name parses here and ends the script when
+	// the loop is reached, at 1. The same for `select`: re-measured on 93u+
+	// with stdin closed, `select $n in a b` stops the script exactly as
+	// `for $n in a b` does, so the loop keyword is not an axis (#1110).
+	s.ForNameWhenTheLoopRuns = interp.ForNameEndsTheScript
 	// The one shell in the panel that reports *every* option word `set`
 	// cannot use before it gives up, with a single usage block after them
 	// all. The other four stop at the first, which three of them do because

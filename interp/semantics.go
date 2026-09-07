@@ -352,6 +352,15 @@ type Semantics struct {
 	// with no side effect is every other here-document and the shells agree
 	// about it, so an unanswered dialect must still be able to run one.
 	HeredocExpandsInTheCommandsProcess Answer
+	// ForNameWhenTheLoopRuns is what a `for` or `select` does when it is
+	// reached and the word standing where its variable belongs is not a
+	// name. Asked only where the grammar carried the word this far —
+	// syntax.Dialect.ForNameCheckedWhenTheLoopRuns — which is bash and
+	// ksh93; the other four refuse it while parsing and build no clause to
+	// run. Three answers among those two, and POSIX mode is the third; see
+	// ForNameRunForm (#1110).
+	ForNameWhenTheLoopRuns ForNameRunForm
+
 	// FatalErrorStatusIsOne is the status a fatal shell error carries.
 	// True in bash, ksh93 and zsh; dash alone exits 2.
 	//

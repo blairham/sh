@@ -338,6 +338,11 @@ func TestQuotingReachesTheInnerExpansion(t *testing.T) {
 		{"the `(@)` flag keeps them", `a=(p q r); printf "[%s]" "${${(@)a}[2]}"`, "[q]"},
 		{"another flag does not", `a=(p q r); printf "[%s]" "${${(o)a}[2]}"`, "[ ]"},
 		// A split still runs after the join, so its fields survive quoting.
+		// A count is a string in quotes too, which is a rule of its own:
+		// `flagKeepsFields` would say an `[@]` subscript keeps its fields,
+		// and a count is not its parameter's shape whatever the subscript
+		// under it says.
+		{"a count in quotes is still a string", `a=(1 2 3 4 5 6 7 8 9 10); printf "[%s]" "${${#a[@]}[2]}"`, "[0]"},
 		{"a split keeps its fields", `v="aa
 bb"; printf "[%s]" "${${(f)v}[2]}"`, "[bb]"},
 		// An inner written with quotes of its own is the same rule, reached

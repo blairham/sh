@@ -4198,6 +4198,11 @@ echo "st=$?"`,
 		Why:     "the quotes around a nested expansion reach the *inner*, and they decide whether a result that is a list still has fields for a subscript to count: quoted, a bare array name joins exactly as `\"$a\"` does and the subscript then counts characters of the join, while `[@]` keeps its fields inside quotes exactly as it does outside them. `IFS=-` is what makes the difference legible — the join is on IFS and not on a hard space, so the first bracket is a separator rather than an invisible blank — and the third is the same rule with an operator instead of a subscript, which is the shape a plugin manager writes. An implementation expanding the inner unquoted answers `q` for the first and a two-field list for the third, both at status 0",
 	},
 	{
+		ID: "param/a-subscripted-reference-transforms-the-name", Category: "parameter expansion",
+		Snippet: `ARR=(x y); arr=(hello); h=arr; echo "[${(UP)h}][${${(UP)h}[1]}][${${(P)h}[1]}]"`,
+		Why:     "the sharpest row on the reference reading, because the same eight characters mean two things one bracket apart: `${(UP)h}` on its own is the *value* uppercased, and subscripted it is `${ARR[1]}` — the letters beside the `P` transform the **name**, and the two parameters here differ only in case so the answer says which happened. `hello` in the second bracket would be a name resolved before the letters ran and `h` would be one resolved after, both plausible; `x` is the measurement. The third bracket is the plain reference beside it, so the row grades the transform against the untransformed name in one run",
+	},
+	{
 		ID: "expansion/element-exclusion-by-pattern", Category: "expansion",
 		Snippet: `a=(one two three); printf "[%s]" "${(@)a:#t*}"; echo`,
 		Why:     "`:#` drops the elements a pattern matches, which is one shell's alone: to bash the characters after the colon are an offset and `#t*` is arithmetic it refuses, and ksh93 refuses the flag group before it gets that far. The shape a startup file on this machine uses to take a hook out of a list, and the one that produced `operand expected at ``#fig_precmd''` here",

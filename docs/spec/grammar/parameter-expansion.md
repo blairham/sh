@@ -2230,9 +2230,20 @@ own shape through:
     ${"${(P)h}"[2]}      →  y        for `a=(x y)`: quoting does not undo it
 
 So a subscript after a `(P)` reads the parameter the value names, exactly
-as if the name had been written out. Only when the group is exactly
-`(P)`: another letter beside it transforms the value, and a transformed
-value names nothing.
+as if the name had been written out.
+
+**The name is the inner expansion with `P` struck out of its group**, and
+the letters left transform the *name* rather than what the name holds.
+Measured with `ARR=(x y)`, `arr=(hello)` and `h=arr`:
+
+    ${(UP)h}           →  HELLO    the value, uppercased, unsubscripted
+    ${${(UP)h}[1]}     →  x        subscripted it is `${ARR[1]}`
+    g=h; ${${(UP)${g}}[2]}  →  `${H[2]}`, through the group's own base
+    ${${(P)h:-d}[2]}   →  `${arr[2]}` — the operator runs on the name
+
+An implementation that resolved the name first and applied the remaining
+letters afterwards answers `hello` and `h` for the first two, which are
+plausible and wrong.
 
 Everywhere else the subscript reads what the inner **came to**, and the
 one question that adds is whether that result is a *list*, where the

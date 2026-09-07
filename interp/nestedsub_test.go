@@ -28,6 +28,7 @@ import (
 func nestedSubscriptGrammar(d *syntax.Dialect) {
 	nesting(d)
 	d.ArraySubscriptFlags = true
+	d.ParamSplitFlag = true
 }
 
 // runNestedSubscript runs src with that grammar and with every axis the
@@ -137,6 +138,17 @@ func TestOneFieldIsNotEnoughToSayWhichReadingApplies(t *testing.T) {
 		// a string, the next is a list.
 		{"a substituted word decides for itself", `a=(x y z); printf "[%s]" "${${a:+abc}[2]}"`, "[b]"},
 		{"a substituted list stays a list", `a=(abc); unset u; printf "[%s]" ${${u:-$a}[2]}`, "[]"},
+		// `(A)` says outright that what it made is an array, where the value
+		// it was given was a string.
+		{"the (A) flag makes a list", `v=abc; printf "[%s]" ${${(A)v}[2]}`, "[]"},
+		// The other two splits, which reach the same rule by other letters.
+		{"an `s` split with one field is a string", `v=abc; printf "[%s]" ${${(s.,.)v}[2]}`, "[b]"},
+		{"an `=` split with one field is a string", `v=abc; printf "[%s]" ${${=v}[2]}`, "[b]"},
+		// A bare array name of one element, which is the list reading
+		// reached without a subscript on the inner.
+		{"a bare name of one element is a list", `a=(abc); printf "[%s]" ${${a}[2]}`, "[]"},
+		// And the depth does not make a list of a string.
+		{"a nested inner is still a string", `v=abc; printf "[%s]" ${${${v}}[2]}`, "[b]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runNestedSubscript(t, tc.src)
@@ -226,6 +238,35 @@ func TestASubscriptThroughAParameterReferenceReadsTheParameter(t *testing.T) {
 	}
 }
 
+// The name a `(P)` resolves to is the inner expansion with `P` struck out of
+// its group, and the letters left transform the *name* rather than what the
+// name holds.
+//
+// The discriminating pair is two parameters whose names differ only in case:
+// with `ARR=(x y)`, `arr=(hello)` and `h=arr`, `${(UP)h}` on its own is
+// `HELLO` — the value, uppercased — where the same group *subscripted* is
+// `${ARR[1]}`, which is `x`. An implementation that resolved the name first
+// and applied the letters afterwards answers `hello` and `h` respectively,
+// both of them plausible.
+func TestTheOtherLettersBesideAReferenceTransformTheName(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the uppercased name is the parameter", `ARR=(x y); arr=(hello); h=arr; printf "[%s]" "${${(UP)h}[1]}"`, "[x]"},
+		{"and its other elements", `ARR=(x y); arr=(hello); h=arr; printf "[%s]" "${${(UP)h}[2]}"`, "[y]"},
+		{"a name nothing is stored under is empty", `arr=(hello); h=arr; printf "[%s]" "${${(UP)h}[1]}"`, "[]"},
+		{"the group's own base is resolved first", `H=(m n); h=arr; g=h; printf "[%s]" "${${(UP)${g}}[2]}"`, "[n]"},
+		{"an operator runs on the name too", `a=(x y z); h=a; printf "[%s]" "${${(P)h:-d}[2]}"`, "[y]"},
+		{"and its word where the test fires", `a=(x y z); unset h; printf "[%s]" "${${(P)h:-a}[2]}"`, "[y]"},
+		{"a search through a transformed name", `ARR=(x y z); arr=(q); h=arr; printf "[%s]" "${${(UP)h}[(I)y]}"`, "[2]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runNestedSubscript(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
 // The reference reaches an association's key, which is the sharpest half:
 // an association's *fields* are its values, and a key is no position in them.
 func TestAParameterReferenceSubscriptReadsAKey(t *testing.T) {
@@ -235,6 +276,15 @@ func TestAParameterReferenceSubscriptReadsAKey(t *testing.T) {
 		})
 	if out != "[v][none]" || st != 0 {
 		t.Errorf("got %q (status %d), want [v][none] at 0", out, st)
+	}
+	// Written as a *value* instead, the same table is its values — a list,
+	// which is what the subscript then counts through, so a one-key table
+	// has no second element where its one value has a second character.
+	out, st = runGrammar(t, `printf "[%s]" ${${m}[2]}`, nestedSubscriptGrammar, func(r *Runner) {
+		r.AssocArrays = map[string]AssocArray{"m": {"k": "abc"}}
+	})
+	if out != "[]" || st != 0 {
+		t.Errorf("as a value: got %q (status %d), want [] at 0", out, st)
 	}
 }
 

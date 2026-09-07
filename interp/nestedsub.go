@@ -95,13 +95,24 @@ func (r *Runner) nestedSubscriptResult(e *syntax.ParamExpr, elems []string) ([]s
 	return elems, true
 }
 
-// nestedParamReference reports the name a `${(P)name}` inner resolves to.
+// nestedParamReference reports the name a `${(P)…}` inner resolves to.
 //
-// `(P)` reads the value it is given as a further *name*, so an expansion that
-// is nothing but a `(P)` is a parameter reference and the subscript belongs
-// to that parameter. Only when the group is exactly `(P)`: another letter
-// beside it transforms the value, and a transformed value is no longer the
-// name of anything.
+// `(P)` reads the value it is given as a further *name*, so an inner carrying
+// one is a parameter reference and the subscript belongs to that parameter.
+//
+// **The name is the inner expansion with `P` struck out of its group**, which
+// is measured rather than assumed and is the whole content of this function.
+// The other letters transform the *name* and not what the name holds, and
+// with `ARR=(x y)`, `arr=(hello)` and `h=arr`:
+//
+//	${(UP)h}          HELLO   the value, uppercased, with no subscript
+//	${${(UP)h}[1]}    x       but subscripted it is `${ARR[1]}`
+//	g=h; ${${(UP)${g}}[2]}    `${H[2]}`, through the group's own base
+//	${${(P)h:-d}[2]}          `${arr[2]}`, the operator running on the name
+//
+// So the resolution is the whole flag pipeline over the base, minus the one
+// letter the subscript takes over — which is also why the base is expanded
+// here and nowhere else: `${(P)$(cmd)}` runs its command once.
 //
 // Quoted as well as unquoted, measured: `${"${(P)h}"[2]}` on `arr=(a b c)` is
 // `b`, the same element the bare spelling answers with, where quoting an
@@ -111,18 +122,22 @@ func (r *Runner) nestedParamReference(span syntax.Span) (string, bool) {
 		return "", false
 	}
 	e := span.Param
-	if e.Bad || !e.HasFlags || e.Flags != "P" {
+	if e.Bad || !e.HasFlags || !strings.ContainsRune(e.Flags, 'P') {
 		return "", false
 	}
-	if e.Op != syntax.ParamNone || e.Length || e.Indirect || e.Prefix != 0 ||
-		e.SetTest || e.Index != nil || e.TildeFlags != 0 || e.SplitFlags != 0 {
+	if e.Length || e.SetTest {
+		// A count and a set test are numbers rather than names, so neither
+		// is a reference to anything.
 		return "", false
 	}
-	// The base of the group, which is the same value expandFlagged hands to
-	// its own `(P)` step — a name, or another expansion resolving to one, so
-	// `${${(P)${(P)g}}[2]}` reaches through both.
-	base, _, _ := r.flagBase(e)
-	return strings.Join(base, " "), true
+	ref := *e
+	ref.Flags = strings.ReplaceAll(e.Flags, "P", "")
+	words, _, ok := r.flaggedWords(&ref, splitNever, false)
+	if !ok {
+		// The group failed, and it has said so.
+		return "", false
+	}
+	return strings.Join(words, " "), true
 }
 
 // nestedSubscriptSource is what the subscript reads when the inner is a value
@@ -238,25 +253,20 @@ func (r *Runner) paramIsAList(e *syntax.ParamExpr) bool {
 
 // nameIsAList reports whether a name holds several values rather than one.
 //
-// The same four sources subscriptTarget and namedBase read, asked as a
-// question about the shape rather than for the values: the positional
-// parameters, an association, a stored array and a produced one.
+// Asked of subscriptTarget, which is the function a subscript on that name
+// would have reached: its scalar flag is exactly this question — false for
+// the positional parameters, a stored array and a produced one, true for a
+// value read as an array of one — so the two cannot come to different
+// answers about the same name.
+//
+// The association is the one source that function does not answer for, since
+// arraySubscript takes an association down its own path before reaching it.
 func (r *Runner) nameIsAList(name string) bool {
-	switch name {
-	case "@", "*":
-		return true
-	}
 	if _, isAssoc := r.assocFor(name); isAssoc {
 		return true
 	}
-	if _, isArray := r.Arrays[name]; isArray {
-		return true
-	}
-	if _, dynamic := r.DynamicArrays[name]; dynamic {
-		return true
-	}
-	_, produced := r.pipelineStatuses(name)
-	return produced
+	_, scalar, held := r.subscriptTarget(&syntax.ParamExpr{Name: name})
+	return held && !scalar
 }
 
 // wordIsAList reports whether a word contributes several fields, which is

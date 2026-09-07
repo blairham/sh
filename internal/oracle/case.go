@@ -8992,6 +8992,11 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the scalar half of the family, and its own switch: `(#m)` fills MATCH, MBEGIN and MEND with the whole match and `(#M)` turns it back off, so the shell with the flags prints `[abc][1][3]` and then `[zz]` — the value the script put there, untouched. The `MATCH=zz` is what makes the second half discriminating: without it the first match's value is still standing and a shell that ignored `(#M)` would print `[abc]` twice and look right once",
 	},
 	{
+		ID: "pat/a-whole-match-flag-in-mid-pattern", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; MATCH=zz; [[ abc == a(#m)bc ]]; print -r -- "[$MATCH]"; MATCH=zz; [[ abc == *(#m)* ]]; print -r -- "[$MATCH]"`,
+		Why:     "the same flag in the same *position* — after something and before something — twice, with the something changed from a run of ordinary characters to a star. zsh answers `[zz]` then `[abc]`: it fills MATCH for the second and not the first. Recorded because it cannot be derived: no rule stated in terms of where the flag stands separates the two rows, and working the difference out would mean reasoning about how a pattern is compiled rather than about what the language does, which CLEANROOM.md forbids. This implementation honors the flag wherever it is in effect at the end of the pattern's top level, so it answers `[abc]` twice and this row is a **deliberate divergence** — see docs/spec/grammar/patterns.md. Every use of the flag in the plugin tree it was measured against writes it at the front, where the two readings agree",
+	},
+	{
 		ID: "pat/nothing-is-written-without-a-match", Category: "pattern matching", SyntaxError: true,
 		Snippet: `setopt extendedglob 2>/dev/null; match=(zz); [[ abc == (#b)abc ]]; print -r -- "[$match[1]]"; [[ abc == (#b)(x)zz ]]; print -r -- "[$match[1]]"`,
 		Why:     "the other direction of the same rule: a `(#b)` with no group and a `(#b)` that does not match both leave the array exactly as the script left it, so the shell with the flag prints `[zz]` twice. An implementation that published on every match would *empty* an array its own script filled, which is a wrong answer in the opposite direction from the one the refusal was guarding",

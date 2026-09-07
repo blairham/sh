@@ -195,3 +195,35 @@ func TestAnEmptyIFSReachesNeitherReadEdgeQuestion(t *testing.T) {
 		t.Errorf("an empty IFS: got %q status %d, want %q at 0 with nothing said", out, st, want)
 	}
 }
+
+// One unanswered axis at a time. A closing run that holds a non-whitespace
+// separator *and* ends in whitespace reaches both questions, and the first one
+// going unanswered has to stop the second from being put — two refusals for
+// one construct name a disagreement that is really one.
+//
+// `IFS=': '` with `a: ` is the only shape that can ask it: the run separates
+// on the colon, so the neighboring question is put, and it ends in a space,
+// so this one would be.
+func TestAnUnansweredNeighborStopsTheClosingRunQuestion(t *testing.T) {
+	src := `IFS=": "; printf 'a: \n' | { read -r -A r; ` + countElems + `; }`
+	out, st := runGrammar(t, src, func(d *syntax.Dialect) {
+		d.ArraySubscript = true
+		d.ArrayLiteral = true
+	}, func(r *interp.Runner) {
+		sem := interp.CoreSemantics()
+		sem.ReadOptions = "rA"
+		sem.LastPipelineElementInCurrentShell = interp.Yes
+		sem.EmptyArrayAtIsOneEmptyField = interp.No
+		sem.ReadNoFieldsIsOneEmptyElement = interp.No
+		// Both left unanswered: the first is asked, and the second must not
+		// be reached once it has said so.
+		r.Semantics = &sem
+	})
+	// One line and not two, and the array is left alone rather than filled
+	// with a count the shell just refused to choose.
+	want := "sh: a trailing IFS separator opening a field of its own: " +
+		"the shells disagree here and no dialect was chosen\nn=0"
+	if out != want || st != 0 {
+		t.Errorf("both unanswered = %q (status %d), want %q at 0", out, st, want)
+	}
+}

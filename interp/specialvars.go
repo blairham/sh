@@ -307,6 +307,46 @@ func (r *Runner) SetDynamic(name string, value func(*Runner) string) {
 	r.Dynamic[name] = value
 }
 
+// SetDynamicWriter says what happens when a script assigns to a produced
+// scalar parameter.
+//
+// The write half of SetDynamic, and required rather than optional for any
+// produced scalar a script is allowed to assign to. The failure it prevents is
+// the one SetDynamicAssocWriter documents for a table: the producer answers
+// ahead of the stored value, so an assignment with nowhere to go is accepted
+// in silence and then read back as whatever the producer says. Nothing about
+// the name changes and no diagnostic is written — the script simply finds that
+// setting the parameter did nothing.
+//
+// A produced scalar a script must *not* assign to is marked readonly instead,
+// which refuses with a sentence. And a producer that only wants to *know* what
+// was last assigned needs neither: Assigned already holds it, which is how
+// SECONDS counts from a value it was given.
+func (r *Runner) SetDynamicWriter(name string, write func(r *Runner, value string)) {
+	if r.dynamicWriters == nil {
+		r.dynamicWriters = map[string]func(*Runner, string){}
+	}
+	r.dynamicWriters[name] = write
+}
+
+// UnsetDynamic takes a produced parameter away again, writer and all.
+//
+// The counterpart of SetDynamic for a parameter that exists only while
+// something is happening. A dialect whose parameters are those of a *call* —
+// the line a line editor is holding while it runs an action of the shell's
+// own, say — has to be able to end them, because a produced parameter answers
+// every read and a script that finds one outside the call would be told a
+// value where the shell being modeled says nothing at all.
+//
+// It leaves no trace: not the removal `unset` records, which would keep a
+// later SetDynamic from answering, and not the message Assigned holds, which
+// belongs to a call that is over.
+func (r *Runner) UnsetDynamic(name string) {
+	delete(r.Dynamic, name)
+	delete(r.dynamicWriters, name)
+	delete(r.assigned, name)
+}
+
 // SetSpecial gives a parameter a fixed value unless a script has already set
 // one, which is how a dialect supplies something like UID.
 func (r *Runner) SetSpecial(name, value string) {

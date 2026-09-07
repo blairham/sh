@@ -118,7 +118,29 @@ type Shell struct {
 	// It takes the Runner rather than being a table because the table is
 	// *state*: it changes while the session runs, and a value collected here
 	// would be the one the shell started with.
-	KeyBindings func(*interp.Runner) map[string]repl.Widget
+	KeyBindings func(*interp.Runner) map[string]repl.Binding
+
+	// RunWidget runs one of this dialect's own editing actions — what a key
+	// bound to something the shell was told about at run time does. Nil is a
+	// dialect where a key can only name what the editor already does, which
+	// is all four but one.
+	//
+	// From the Runner for the reason KeyBindings is: the definition is a
+	// builtin's state, and so is the line the action is given, since the
+	// dialect publishes it under the parameters its own shell names.
+	RunWidget func(*interp.Runner, context.Context, string, repl.Line) (repl.Line, bool)
+
+	// RunScheduled runs whatever this dialect had set aside for a time that
+	// has now passed. It is called at every prompt, before the prompt is
+	// drawn. Nil is a dialect with nothing that can be scheduled, which is
+	// three of the four.
+	//
+	// A call rather than a list of commands handed back, because what a
+	// scheduled entry *is* differs by shell — a command line in one, and
+	// nothing at all in the others — and running one is the dialect's to do.
+	// What this package and repl contribute is the moment: between one
+	// command and the next is a boundary only the session knows about.
+	RunScheduled func(*interp.Runner, context.Context)
 
 	// Stdin is where the shell reads from: the lines a person types, and the
 	// program itself where the invocation named nothing to run. It is handed

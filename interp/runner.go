@@ -457,6 +457,13 @@ type Runner struct {
 	// script can write to must have one.
 	dynamicAssocWriters map[string]func(*Runner, string, string, bool)
 
+	// dynamicWriters is the same for a produced *scalar*, and it exists for
+	// the same reason: a parameter a script both reads and writes cannot have
+	// its writes land in the stored table, because the producer answers ahead
+	// of that table and the write would go somewhere nothing reads. See
+	// SetDynamicWriter.
+	dynamicWriters map[string]func(*Runner, string)
+
 	// assigned holds what a script assigned to a *produced* parameter, which
 	// is a message to whatever produces it rather than a value of its own.
 	assigned map[string]string
@@ -3466,6 +3473,14 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		}
 		r.assigned[name] = value
 		delete(r.removed, name)
+		// And where the producer has a writer, the message is delivered
+		// rather than merely left for it to find. The two are not
+		// alternatives: SECONDS reads what was assigned the next time it is
+		// asked, and a parameter whose assignment *does* something has to act
+		// now — see SetDynamicWriter.
+		if write, ok := r.dynamicWriters[name]; ok {
+			write(r, value)
+		}
 		return
 	}
 	if name == "OPTIND" {

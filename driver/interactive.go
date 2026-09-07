@@ -132,11 +132,30 @@ func (sh Shell) session(argv []string, in source) int {
 //
 // A nil function rather than one returning an empty table, because repl tells
 // the two apart to skip the lookup entirely — see bindings.go.
-func (sh Shell) keyBindings(r *interp.Runner) func() map[string]repl.Widget {
+func (sh Shell) keyBindings(r *interp.Runner) func() map[string]repl.Binding {
 	if sh.KeyBindings == nil {
 		return nil
 	}
-	return func() map[string]repl.Widget { return sh.KeyBindings(r) }
+	return func() map[string]repl.Binding { return sh.KeyBindings(r) }
+}
+
+// runWidget and runScheduled do the same for the other two seams a dialect
+// reaches the session through, and are nil for the same reason: repl asks
+// whether it has one before it does the work of asking one.
+func (sh Shell) runWidget(r *interp.Runner) func(context.Context, string, repl.Line) (repl.Line, bool) {
+	if sh.RunWidget == nil {
+		return nil
+	}
+	return func(ctx context.Context, name string, in repl.Line) (repl.Line, bool) {
+		return sh.RunWidget(r, ctx, name, in)
+	}
+}
+
+func (sh Shell) runScheduled(r *interp.Runner) func(context.Context) {
+	if sh.RunScheduled == nil {
+		return nil
+	}
+	return func(ctx context.Context) { sh.RunScheduled(r, ctx) }
 }
 
 // hasTerminal reports whether any of this shell's three standard streams is a
@@ -270,7 +289,12 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// at the prompt takes effect on the next line rather than the next
 		// shell.
 		KeyBindings: sh.keyBindings(r),
-		Name:        name,
+		// And how a key bound to one of the dialect's own actions runs, and
+		// what it had set aside for a time that has passed. Both bound to
+		// this runner, for the reason the bindings are.
+		RunWidget:    sh.runWidget(r),
+		RunScheduled: sh.runScheduled(r),
+		Name:         name,
 		// The same policy and observer the Runner is given, because a
 		// session gated for what a script does and ungated for what the
 		// prompt does has a hole shaped exactly like `HISTFILE=/somewhere`.

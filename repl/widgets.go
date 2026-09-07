@@ -28,8 +28,8 @@ package repl
 type Widget int
 
 // The actions this editor performs. WidgetNone is the zero value and is what a
-// binding to nothing means — see Bindings, where it is how a removed binding
-// is spelled.
+// binding to nothing means — see Binding below, whose zero value is how a
+// removed binding is spelled.
 const (
 	WidgetNone Widget = iota
 	WidgetBeginningOfLine
@@ -54,6 +54,36 @@ const (
 	WidgetUndo
 	WidgetInsertLastWord
 )
+
+// Binding is what a key sequence was rebound to.
+//
+// One of two things, and never both: an action this editor performs, or the
+// name of an action the *shell* performs — see shellwidget.go, and Function
+// there for why a name and not a callable. The zero value is a key bound to
+// nothing, which is how a removed binding is spelled.
+//
+// A struct rather than the Widget alone because the two cannot be one value: a
+// shell action has no constant, since it is code the shell was handed at run
+// time and there is nothing for this package to enumerate. Both live in one
+// table rather than two, because the table is read by *prefix* — a key that
+// begins a longer sequence is waited for — and two tables would be two
+// answers to "does anything start with this byte" with no way to be sure they
+// agreed.
+type Binding struct {
+	// Widget is the editor's own action, where the key names one.
+	Widget Widget
+
+	// Function is the name of an action the shell performs, where the key
+	// names one of those instead. Empty is the ordinary case.
+	//
+	// A name rather than a function value, and that is the seam rather than a
+	// convenience: what running it means — finding the definition, giving it
+	// the line under whatever this shell calls the line, putting the shell's
+	// status back afterwards — is the dialect's, and Shell.RunWidget is where
+	// the dialect is asked. A callable here would have made this package the
+	// one holding a shell's idea of a call.
+	Function string
+}
 
 // runWidget performs one action and redraws where the action changed the line.
 //

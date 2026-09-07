@@ -120,6 +120,10 @@ var zmodloadFeatures = map[string][]string{
 	zmodloadAlwaysLoaded: nil,
 	"zsh/zutil":          {"b:zformat", "b:zparseopts", "b:zregexparse", "b:zstyle"},
 	"zsh/zle":            {"b:bindkey", "b:vared", "b:zle"},
+	// Both of `zsh/sched`'s features are here, which makes it the second
+	// module after `zsh/datetime` that loads because everything it names is
+	// implemented rather than because a rule forgave it. See sched.go.
+	"zsh/sched": {"b:sched", "p:zsh_scheduled_events"},
 	"zsh/complete": {
 		"b:compadd", "b:compset",
 		"c:after", "c:between", "c:prefix", "c:suffix",

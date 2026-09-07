@@ -96,15 +96,52 @@ type Shell struct {
 	Editor EditorStyle
 
 	// KeyBindings is what a person has rebound, as a table from the bytes a
-	// key sends to the action it should perform. Nil — and an empty table —
-	// is a session where every key does what the editor does by default,
-	// which is what a caller without a `bindkey` gets.
+	// key sends to what it should do — one of this editor's actions, or the
+	// name of one the shell performs itself. Nil — and an empty table — is a
+	// session where every key does what the editor does by default, which is
+	// what a caller without a `bindkey` gets.
 	//
 	// A function rather than a value because it is asked per keystroke: the
 	// command that changes it is one a person runs at the prompt, and a value
 	// read once at the start of a session would take effect on the next
 	// shell. See bindings.go for what the editor does with it.
-	KeyBindings func() map[string]Widget
+	KeyBindings func() map[string]Binding
+
+	// RunWidget runs one of the shell's own editing actions — a key bound to
+	// something the shell was told about at run time rather than to one of
+	// this editor's Widgets. It is given the line as the editor holds it and
+	// answers with the line as the action left it; false is an action this
+	// shell will not run, and leaves the line alone.
+	//
+	// Nil is a session where a key can only be bound to what this editor
+	// does, which is what a front end that has not said gets. See
+	// shellwidget.go, which carries the split and the two seams deliberately
+	// not offered beside it.
+	RunWidget func(ctx context.Context, name string, in Line) (Line, bool)
+
+	// RunScheduled runs whatever the shell had set aside for a time that has
+	// now passed. It is called once at every prompt, before the prompt is
+	// drawn, in the terminal's own line discipline — the same place and the
+	// same discipline a hook fires in, and for the same reasons. Nil is a
+	// session with nothing that can be scheduled.
+	//
+	// **The moment is what this package contributes, and it is the whole of
+	// it.** A shell that can put a command aside until a time needs somewhere
+	// to notice that the time has come, and between one command and the next
+	// is the only place that has one: a script has no such boundary and a
+	// prompt is made of them. What a scheduled entry is, how its time was
+	// spelled and what running it means are the dialect's, which is why this
+	// hands back nothing and is told nothing.
+	//
+	// **Not while waiting for a key.** The shell being modeled fires an
+	// elapsed entry from the *idle* read, so a command set aside for two
+	// seconds runs two seconds later whether or not anybody types; here it
+	// runs at the next prompt, which for an idle terminal is later — and for
+	// a person who is typing, sooner is impossible either way. Firing on time
+	// means this loop waiting on more than the terminal, which is a change to
+	// how a key is read rather than an addition beside it, and it is not made
+	// here.
+	RunScheduled func(ctx context.Context)
 
 	// History is how this dialect draws a search of the session's history and
 	// what it declines to put in it. The zero value searches in the
@@ -613,6 +650,7 @@ func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending 
 	// last one ended.
 	s.inLineDiscipline(state, func() {
 		s.reportUnfiredHooks()
+		s.runElapsed(ctx)
 		s.fireBeforePrompt(ctx, continuing)
 		s.settled()
 	})
@@ -1281,6 +1319,9 @@ func (s Shell) newEditor(ctx context.Context) *editor {
 		lastArgStaysOnOldest: s.Editor.LastArgumentStaysOnTheOldestLine,
 		// And what a person rebound, asked fresh for every key.
 		bindings: s.KeyBindings,
+		// And how one of the shell's own actions is run, with this session's
+		// context closed over.
+		runFunc: s.shellWidgets(ctx),
 		// The width comes from the input, which is the terminal; the output
 		// may be a file the session was started with, and its size is not the
 		// screen's.

@@ -121,7 +121,13 @@ type editor struct {
 	// `bindkey` is a command run at the prompt as well as in an rc file. Nil,
 	// or an empty table, is a session where nothing was rebound and every key
 	// reaches the dispatch below. See bindings.go.
-	bindings func() map[string]Widget
+	bindings func() map[string]Binding
+
+	// runFunc runs one of the shell's own actions over the line, where the
+	// front end gave this session a way to. Nil is a session with no such
+	// way, and a key bound to one then does nothing — see
+	// runShellWidget.
+	runFunc func(name string, in Line) (Line, bool)
 
 	// width is how many columns the terminal has, asked each time it is
 	// needed; nil, or an answer of 0, means it will not say. row is which
@@ -181,11 +187,16 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// above and not before it, because those two lines are about the
 		// keystroke that came *last* and hold whatever this one turns out to be.
 		// See bindings.go.
-		switch w, claimed, got := e.matchBinding(buf[0]); {
+		switch b, claimed, got := e.matchBinding(buf[0]); {
 		case got == keyAbandoned:
 			return e.abandon(prompt)
+		case claimed && b.Function != "":
+			// An action of the shell's own rather than one of this editor's.
+			// See shellwidget.go.
+			e.runShellWidget(b.Function, prompt)
+			continue
 		case claimed:
-			e.runWidget(w, prompt)
+			e.runWidget(b.Widget, prompt)
 			continue
 		}
 		switch c := buf[0]; c {

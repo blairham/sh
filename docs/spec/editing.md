@@ -323,6 +323,66 @@ What the editor owes that table is arithmetic:
 - **Editing is by character.** One backspace removes a whole `日`, and one
   `^B` steps over it; the width is the screen's business and not the text's.
 
+## An editing action the shell performs
+
+A key can be bound to something the editor does not implement: a shell
+function, run with the line in front of it and allowed to change it. That is
+what every interactive shell with a line editor offers a person, and it is why
+the vocabulary of `repl.Widget` constants cannot be the whole story — the
+action is code the shell was handed at run time, so there is nothing to
+enumerate.
+
+**The capability is the round trip and nothing else.** The editor hands out the
+line as it stands, something outside it runs, and the line comes back:
+`repl.Line` is the whole exchange — the buffer and a cursor counted in
+characters from 0 — and `repl.Shell.RunWidget` is the one seam. A binding is
+therefore `repl.Binding`, which is either one of the editor's actions or the
+*name* of one of the shell's; a name rather than a callable, because what
+running it means is the dialect's. `repl/shellwidget.go` carries the split.
+
+Both halves of the answer are put back in range rather than trusted, since an
+action that walked off the end of the line is asking for the end, and the
+redraw afterwards is unconditional — an opaque action may have moved the
+cursor, rewritten the line, printed something, or none of the three, and there
+is no way to tell which.
+
+What each shell calls this is that shell's. `zle -N` defines one in zsh and the
+line arrives in `$BUFFER` with the cursor in `$CURSOR`; `dialect/zsh/zle.go`
+holds all of it, along with the measurement of what a widget can read and write
+and what the four line parameters do to each other. bash's `bind -x` is the
+same capability under a different name and is not built — #1352.
+
+Two spellings that would need more than this seam are refused by name rather
+than half-built, which is the rule the tree keeps for a gap:
+
+- **A callback on a descriptor** — zsh's `zle -F`, and how a plugin in that
+  shell does asynchrony. It needs this read loop to wait on more than the
+  terminal.
+- **An action of the shell's asking the editor to perform one of the
+  editor's** — `zle end-of-line` from inside a widget. The editor's actions
+  read the terminal and redraw, so running one from inside a call is
+  re-entering the read loop rather than transforming the line.
+
+## Work put aside until a time
+
+A shell can be told to run a command later — zsh's `sched`. Nothing about that
+is the line editor's, and it is here because the *moment* is: a shell can only
+notice that a time has passed at a boundary between commands, a script has no
+such boundary, and a prompt is made of them. So `repl.Shell.RunScheduled` is
+called once before every prompt, ahead of the prompt hook and in the terminal's
+own line discipline, and it is told nothing and hands back nothing — what a
+scheduled entry is and what running one means belong to the dialect that has
+one.
+
+**One measured difference is not implemented and is written down rather than
+papered over.** Driven through a pseudo-terminal, zsh fires an elapsed entry
+from the *idle* read: `sched +2` at an untouched prompt runs about two seconds
+later with nobody typing, so its wait for a key has a timeout on it. Here the
+entry runs at the next prompt. For a person who is typing that is the same
+moment or near enough; for an idle terminal it is later, and for one never
+touched again it is never. Firing on time needs the same change to how a key is
+read that `zle -F` needs, which is why both are named instead of approximated.
+
 ## Where it lives
 
 `repl/editor.go` — the read loop, the redraw and `place`, which is the row and
@@ -331,7 +391,9 @@ see `docs/spec/prompt.md`, which is the same question asked about the text the
 shell was given rather than the text the person is typing. `repl/words.go` — word boundaries, the kills and the
 yank. `repl/escape.go` — the sequence reader. `repl/undo.go` — the snapshot
 stack and where the cursor lands. `repl/lastarg.go` — the `M-.` walk and the
-word it inserts. `repl/editorstyle.go` — the fields, each carrying the
+word it inserts. `repl/shellwidget.go` — the round trip an action outside the editor gets, and
+the one seam a scheduled command reaches a prompt through.
+`repl/editorstyle.go` — the fields, each carrying the
 line it was measured on, and one more that `docs/spec/completion.md` owns; `dialect/bash/editorstyle.go` and
 `dialect/zsh/editorstyle.go` hold the answers.
 

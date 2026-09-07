@@ -1345,6 +1345,33 @@ command, and not "any command failed":
     if false; true; then echo yes; else echo no; fi   →  yes
     if true; false; then echo yes; else echo no; fi   →  no
 
+**No word in the item list is a reserved word**, and the list ends at a
+`;` or a newline and at nothing else. Unanimous across all six columns,
+measured 2026-09-06 with `-n` over a script file under
+`env -i PATH=/usr/bin:/bin`:
+
+    for x in do; do :; done        taken by all six
+    for x in done; do :; done      taken by all six
+    for x in a b<newline>do …      taken by all six
+    for x in a b do :; done        refused by all six
+    select x in a b do :; done     refused by all five that have `select`
+    foreach x in a b end           taken by the shell that has the loop
+
+This engine read `do`, `done` and the rest of the reserved words as stop
+words there and had **both directions wrong at once**: it accepted the
+fourth line and refused the first two. A list holding the word `done` is
+not exotic — `for f in $(ls)` reaches it the moment a file is called
+that — and the accepted-malformed half is the worse one, because the body
+then ran with `do` bound as a value and nothing was said.
+
+It is the same evidence the brace-body paragraph above already rests on:
+"with nothing between, `{` is another *item* of the list". The rule was
+written down there for `{` and applied to no other word (#1161).
+
+`for`, `select` and `foreach` share one reader — `Parser.itemList` — and
+the parenthesized `for x (…)` list gets the same answer:
+`for x (do)` and `for x (a do)` are taken by the shell that has the form.
+
 **`for` may omit its word list, and omitting it is not the same as an
 empty one.** With the list absent the loop iterates over the positional
 parameters; with `in` present and nothing after it, over nothing:
@@ -1358,6 +1385,15 @@ So the AST needs to distinguish "no list" from "empty list", which a
 **A `case` pattern may carry a leading `(`.** `case x in (x) …` is
 accepted everywhere, and patterns alternate with `|`. A body may be empty,
 and a `case` matching nothing exits 0.
+
+That paren and a pattern-group at the front of the pattern are the same
+character, and which one it is has to be decided before the token is
+read — see *The parser has to say which position it is* in `patterns.md`, where
+the measurement and the discriminator live. Two consequences belong here:
+an arm suspends the `((` arithmetic-command reading, because no command
+may begin where a pattern belongs, and the suspension is the **arm's**
+and not the construct's — an arm's body is ordinary commands and
+`case x in a) ((1));; esac` is an expression there.
 
 A `pattern` in that production is a word, and a dialect may let it be
 nothing at all — `CasePatternMayBeEmpty`, zsh only, above. It reads off

@@ -84,6 +84,24 @@ type Lexer struct {
 	// Exactly the shape inPattern has, for exactly the same reason.
 	inArgument bool
 
+	// inCaseArm is set while the token that *begins* a `case` arm is read.
+	//
+	// Two things are different there, and both are about a `(` the arm may
+	// carry. `((` is not an arithmetic command — `case x in ((a|b))` is an
+	// arm's paren in front of a group in the dialect that takes it, where
+	// this lexer read the whole of `((a|b))` as one expression and the
+	// parser then complained about an arithmetic command that the script
+	// never wrote. And a leading `(` belongs to the *pattern* rather than
+	// being the arm's own paren exactly when it opens a glob flag: `(#i)a)`
+	// is the pattern `(#i)a` with the arm's `)` behind it, while `((#i)a)` is
+	// the arm's paren in front of that same pattern. Which of the two it is
+	// cannot be seen from the character alone, and `case x in (a)` — one
+	// paren, an ordinary pattern — is the row that says so.
+	//
+	// Exactly the shape inCondition has: a position only the parser knows
+	// about, told to the lexer before the token is read.
+	inCaseArm bool
+
 	// pending holds here-documents whose bodies have not been read yet.
 	//
 	// A body starts after the *next newline*, not after the operator — the
@@ -295,7 +313,7 @@ func (l *Lexer) Next() Token {
 	// table, which would otherwise take it — and before the arithmetic
 	// command below, because `echo ((1))` is one word there and not an
 	// expression: measured, `no matches found: ((1))`.
-	if l.dialect.GlobQualifiers && l.inArgument && l.peek() == '(' &&
+	if l.dialect.GlobQualifiers && l.leadingParenBelongsToTheWord() && l.peek() == '(' &&
 		l.opensPatternGroup() {
 		return l.scanWord(start)
 	}
@@ -312,7 +330,14 @@ func (l *Lexer) Next() Token {
 	// The condition is the only context in the grammar that suspends the
 	// rule, which is why the flag rather than a command-position test is
 	// what asks (#859).
-	if l.dialect.ArithCommand && !l.inCondition && l.peek() == '(' && l.peekAt(1) == '(' {
+	// A `case` arm suspends it for the same reason a condition does: no
+	// command may begin where a pattern belongs, so there is no arithmetic
+	// command to be had and `((` is the arm's paren in front of a group.
+	// Measured on zsh 5.9.2: `case x in ((a|b))`, `case x in ((a))` and
+	// `case x in ((1))` are all accepted there and were all `parse error
+	// near 'arithmetic command'` here (#1161).
+	if l.dialect.ArithCommand && !l.inCondition && !l.inCaseArm &&
+		l.peek() == '(' && l.peekAt(1) == '(' {
 		return l.scanArithCommand(start)
 	}
 
@@ -675,6 +700,34 @@ func (l *Lexer) endsWord(c byte) bool {
 // to start one. `(` is in the operator table, so a token beginning with it is
 // taken as an operator and scanWord is never entered on one — a guard for it
 // would be a line no test could distinguish.
+// leadingParenBelongsToTheWord reports whether a `(` at the *front* of a
+// token is part of the word rather than an operator.
+//
+// Where an argument may stand it always is, which is what `inArgument` says.
+// At the start of a `case` arm it is only where the paren opens a **glob
+// flag**, because the arm has a paren of its own and the two are otherwise
+// indistinguishable. Measured on zsh 5.9.2:
+//
+//	case x in (a)          the arm's paren, pattern `a`
+//	case x in ((a|b))      the arm's paren, pattern `(a|b)`
+//	case x in (#i)a)       *no* arm paren, pattern `(#i)a`
+//	case x in ((#i)a)      the arm's paren, pattern `(#i)a`
+//
+// So the `#` is the discriminator and not the depth: the first two rows and
+// the last differ from the third in nothing else. Two shapes that reading
+// leaves refused are written down in the spec rather than guessed at —
+// `case x in (a)b)` and `case x in (#i*)`, which that shell also takes.
+//
+// Read only where the *operator table* would otherwise take the paren. Once
+// the token is known to be a word, `inArgument` alone decides how a leading
+// group is scanned; see the note at that call.
+func (l *Lexer) leadingParenBelongsToTheWord() bool {
+	if l.inArgument {
+		return true
+	}
+	return l.inCaseArm && l.peek() == '(' && l.peekAt(1) == '#'
+}
+
 func (l *Lexer) opensPatternGroup() bool {
 	// An empty `()` is a function definition and not a group, which is how
 	// `f() { … }` survives the rule: the shell that takes bare groups rejects
@@ -843,6 +896,14 @@ func (l *Lexer) scanWord(start Pos) Token {
 			if lit.Len() == 0 {
 				litPos = l.pos()
 			}
+			// `inArgument` and not leadingParenBelongsToTheWord: the
+			// difference between the two group scanners is only whether the
+			// group ends the word at a shell operator, and at a `case` arm
+			// that is unobservable — `case x in (#i;a)b)` and
+			// `case x in (#i<a)b)` are refused by that shell either way, and
+			// by this one under both readings. A mutant swapping them
+			// survived every row, which is the evidence that the wider
+			// condition decided nothing here (#1161).
 			if lit.Len() == 0 && l.inArgument {
 				// The group that stands for the whole word ends the word at
 				// a shell operator rather than swallowing it, which is

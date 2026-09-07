@@ -417,7 +417,16 @@ right, and that is what says where the boundary was:
     files=( (#i)a )                         did not
 
 Mid-word the lexer folds a group without being told; only at the *front*
-of a word does it need to know what position it is in. The fix is the
+of a word does it need to know what position it is in.
+
+**Argument position has to be given back, and only a *run* can see it.**
+The flag is set before a list's first word is read and restored after, and
+the token behind the list is read while it is still on — so a `(` there
+would be folded into a word. Every spelling of that **parses** either way:
+a folded group is a perfectly good word, and `-n` cannot tell the two
+apart. `for x in a; do ( echo hi ); done` is the row, and it prints
+`unknown file attribute:` instead of `hi` when the flag leaks. Every
+parse-only assertion passed a mutant that leaked it (#1161). The fix is the
 flag this section is about, set while the elements are read and restored
 afterwards — an assignment is read at command position as well as after
 a word, and the token after the array is an argument in neither case.
@@ -435,15 +444,77 @@ the same flag, the way it reads `PatternAlternation` and
 `pat/a-qualifier-list-is-not-an-alternation`,
 `pat/a-paren-where-an-argument-stands`,
 `pat/a-glob-flag-where-an-array-element-begins`,
-`pat/a-glob-flag-on-a-later-array-element`.
+`pat/a-glob-flag-on-a-later-array-element`,
+`pat/a-glob-flag-where-a-loop-item-begins`,
+`pat/a-glob-flag-on-a-later-loop-item`,
+`pat/a-glob-flag-where-a-select-item-begins`,
+`pat/a-glob-flag-where-a-case-arm-begins`,
+`pat/a-case-arms-own-paren-in-front-of-a-group`,
+`pat/a-case-arms-paren-in-front-of-an-expression`.
 
-**Two positions still count rather than read**, measured and filed rather
-than fixed here: a `case` arm whose pattern begins with a group —
-`case x in ((#i)*.zip)` and even the flagless `case x in ((a|b))`, both
-accepted by that shell and both `parse error near 'arithmetic command'`
-here — and `;` as an element separator inside an array literal, which
-that shell and ksh93 accept. The first is the line
-`~/.zi/bin/lib/zsh/install.zsh` stops on once the array form parses.
+**A loop's item and a `case` arm's pattern are the other three
+positions**, and they read the flag now too — `for`, `select` and
+`foreach` share one item reader, and the parenthesised `for x (…)` list
+is the fourth place the same two answers apply:
+
+    for x in (#i)a; do :; done              accepted
+    for x in a (#i)b; do :; done            accepted
+    select x in (#i)a; do :; done           accepted
+    for x (a (#i)b); do :; done             accepted
+    for x ((#i)a); do :; done               *refused* — see below
+    case x in (#i)a) :;; esac               accepted
+    case x in ((#i)a) :;; esac              accepted
+    case x in ((#i)*.zip) :;; esac          accepted
+
+**The `case` arm is the hardest of them, and it splits in two.** The arm
+carries an optional `(` of its own, so a group at the front of a pattern
+and the arm's own paren are the same character. What tells them apart is
+measured, and it is the `#`:
+
+    case x in (a)          the arm's paren, pattern `a`
+    case x in ((a|b))      the arm's paren, pattern `(a|b)`
+    case x in (#i)a)       *no* arm paren, pattern `(#i)a`
+    case x in ((#i)a)      the arm's paren, pattern `(#i)a`
+
+The first two rows and the last differ from the third in nothing else, so
+a leading `(` belongs to the pattern exactly when it opens a glob flag —
+`Lexer.leadingParenBelongsToTheWord`.
+
+The second half is **not about the flag's spelling at all**, and
+`case x in ((a|b))` is the row that says so: two parens where no command
+may begin were read as an *arithmetic command*, so the complaint named
+something the script had never written. An arm suspends that reading the
+way a condition already does — `Lexer.inCaseArm`, and
+`case x in ((1))` is the row with no pattern language in it whatsoever.
+The suspension belongs to the arm and not to the construct: an arm's
+**body** is ordinary commands and `case x in a) ((1));; esac` is an
+expression there, which is what a flag left on for the body would have
+broken.
+
+That is what `~/.zi/bin/lib/zsh/install.zsh:1580` — `((#i)*.zip)` — was
+stopping on. With these positions reading the flag the file parses to
+line **2048**, 468 lines further, where a `||` with a line continuation
+in front of a block's closing brace is the next thing it wants.
+
+**Two shapes in an arm are still refused**, measured and written down
+rather than guessed at: `case x in (a)b)`, where the pattern's group is
+followed by more pattern text and the arm's `)` is the second one, and
+`case x in (#i*)`, where the flag's own group swallows the arm's paren.
+Both are accepted by that shell. Neither is a regression — both were
+refused before as well — and neither is derivable from the rule above,
+which is why they are named here instead of being answered wrong.
+
+**And the parenthesised list's own opening paren**, which is a lexing
+question rather than a word-position one: `for x ((#i)a)` reaches the
+lexer as `((`, is taken for an arithmetic command, and never gets as far
+as being a list at all. A *later* element there does read the flag —
+`for x (a (#i)b)` — because its paren stands after a word. The suspension
+a `case` arm gets would fix it, and it wants a position of its own to be
+told about; nothing measured needs it, so it is named here instead.
+
+**`;` as an element separator inside an array literal** is the other
+thing still outstanding from this family, which that shell and ksh93
+accept.
 
 ### What is read and not implemented
 

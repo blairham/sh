@@ -2140,13 +2140,7 @@ func (p *Parser) parseFor() Command {
 		c.Items, end = p.shortItems()
 	case p.atWord("in"):
 		c.HasItems = true
-		p.next()
-		for p.tok.Kind == TokWord && !p.atStopWord() {
-			c.Items = append(c.Items, p.word())
-		}
-		if n := len(c.Items); n > 0 {
-			end = c.Items[n-1].End()
-		}
+		end = p.itemList(&c.Items, end)
 	}
 	c.Header = p.slice(c.Start, end)
 	if body, stop, short := p.shortBodyAfterHeader(parens || !c.HasItems); short {
@@ -2172,6 +2166,52 @@ func (p *Parser) parseFor() Command {
 	c.Stop = p.tok.End
 	p.expectWord("done")
 	return c
+}
+
+// itemList reads the word list after `in` — for a `for` loop, for `select`
+// and for `foreach` alike — and returns where the last word ends.
+//
+// **No word in the list is a reserved word.** The list ends at a `;` or a
+// newline and at nothing else, which is unanimous across the panel. Measured
+// 2026-09-06, `env -i PATH=/usr/bin:/bin` with a scratch HOME and `-n` over a
+// script file:
+//
+//	for x in a b do :; done       refused by all five — `do` is a *word*
+//	                              there, so `done` stands where `do` belongs
+//	for x in do; do :; done        taken by all five
+//	for x in done; do :; done      taken by all five
+//	select x in a b do :; done     refused by all five
+//	foreach x in a b end           taken by the shell that has the loop
+//
+// This read `do`, `done` and the rest of the reserved words as stop words
+// here, which got both directions wrong at once: it accepted the first line,
+// where every shell refuses it, and refused the next two, which every shell
+// takes. A list holding the word `done` is not exotic — `for f in $(ls)`
+// reaches it the moment a file is called that — and the accepted-malformed
+// half is the worse one, because the body then runs with `do` bound as a
+// value and nothing is said.
+//
+// One reader for all three loops, because the three headers are the same
+// grammar and each had its own copy of it (#1161).
+func (p *Parser) itemList(items *[]*Word, end Pos) Pos {
+	// Set before the `p.next()` that reads the first word, because that is
+	// the token the flag has to reach. Each word stands where an argument
+	// does, so a `(` that begins one belongs to it in the dialect that reads
+	// glob qualifiers — the answer an array literal's element already gets
+	// (#1149). Restored rather than cleared: a loop header is read at
+	// command position, and the token after the list is not an argument
+	// either way.
+	saved := p.lex.inArgument
+	p.lex.inArgument = true
+	p.next()
+	for p.tok.Kind == TokWord && p.err == nil {
+		*items = append(*items, p.word())
+	}
+	p.lex.inArgument = saved
+	if n := len(*items); n > 0 {
+		end = (*items)[n-1].End()
+	}
+	return end
 }
 
 // forName reads the word standing where a loop's variable belongs and reports
@@ -2313,12 +2353,21 @@ func (p *Parser) shortItemsFollow() bool {
 // split and globbed like the words after `in` — and an empty list is legal
 // and iterates nothing.
 func (p *Parser) shortItems() (items []*Word, end Pos) {
+	// The same two answers the `in` list gets, and for the same reasons: no
+	// word in the list is a reserved word — `for x (do)`, `for x (done)` and
+	// `for x (a do)` are all taken by the shell that has the form — and each
+	// word stands where an argument does, so `for x ((#i)a)` reads the flag.
+	// Measured 2026-09-06 on zsh 5.9.2; see itemList, which cannot be shared
+	// here because this list is closed by a paren rather than by a separator.
+	saved := p.lex.inArgument
+	p.lex.inArgument = true
 	p.next() // (
 	p.skipNewlines()
-	for p.tok.Kind == TokWord && !p.atStopWord() {
+	for p.tok.Kind == TokWord && p.err == nil {
 		items = append(items, p.word())
 		p.skipNewlines()
 	}
+	p.lex.inArgument = saved
 	end = p.tok.End
 	if !p.at(TokRightParen) {
 		p.failUnexpected(")")
@@ -2416,13 +2465,7 @@ func (p *Parser) parseForeach() Command {
 		c.Items, end = p.shortItems()
 	case p.atWord("in"):
 		c.HasItems = true
-		p.next()
-		for p.tok.Kind == TokWord && !p.atStopWord() {
-			c.Items = append(c.Items, p.word())
-		}
-		if n := len(c.Items); n > 0 {
-			end = c.Items[n-1].End()
-		}
+		end = p.itemList(&c.Items, end)
 	}
 	c.Header = p.slice(c.Start, end)
 	if p.tok.Kind == TokSemi || p.tok.Kind == TokNewline {
@@ -2457,13 +2500,7 @@ func (p *Parser) parseSelect() Command {
 		c.Items, end = p.shortItems()
 	case p.atWord("in"):
 		c.HasItems = true
-		p.next()
-		for p.tok.Kind == TokWord && !p.atStopWord() {
-			c.Items = append(c.Items, p.word())
-		}
-		if n := len(c.Items); n > 0 {
-			end = c.Items[n-1].End()
-		}
+		end = p.itemList(&c.Items, end)
 	}
 	c.Header = p.slice(c.Start, end)
 	if body, stop, short := p.shortBodyAfterHeader(parens || !c.HasItems); short {
@@ -2497,19 +2534,39 @@ func (p *Parser) parseCase() Command {
 	}
 	p.skipNewlines()
 	inEnd := p.tok.End
+	// An arm begins where no command may, so `((` there is the arm's own
+	// paren in front of a group rather than an arithmetic command, and a
+	// leading `(` may belong to the pattern. Told to the lexer before the
+	// token is read — and `expectWord` is what reads it, the first arm's
+	// first token arriving with the `in` — and taken back before the arm's
+	// *body* is read, a body being ordinary commands in which `((1))` really
+	// is an expression. See Lexer.inCaseArm.
+	p.lex.inCaseArm = true
+	defer func() { p.lex.inCaseArm = false }()
 	p.expectWord("in")
 	c.Header = p.slice(c.Start, inEnd)
 	p.skipNewlines()
 
 	for p.err == nil && !p.atWord("esac") && !p.at(TokEOF) {
+		p.lex.inCaseArm = false
 		it := &CaseItem{Start: p.tok.Pos}
-		// A pattern may carry a leading open paren.
+		// A pattern may carry a leading open paren. Where the paren opened a
+		// glob flag instead the lexer has already folded it into the word, so
+		// this sees no paren at all and the pattern arrives whole.
+		saved := p.lex.inArgument
 		if p.at(TokLeftParen) {
+			// Each pattern stands where an argument does from here on, so a
+			// `(` beginning one belongs to it — `case x in ((a|b))` is the
+			// arm's paren and then a group. Set before the `p.next()` that
+			// reads the first pattern, which is the token it has to reach.
+			p.lex.inArgument = true
 			p.next()
 		}
 		if !p.casePatterns(it) {
+			p.lex.inArgument = saved
 			return c
 		}
+		p.lex.inArgument = saved
 		if !p.at(TokRightParen) {
 			p.failUnexpectedOperand(")")
 			return c
@@ -2520,6 +2577,9 @@ func (p *Parser) parseCase() Command {
 		switch p.tok.Kind {
 		case TokDSemi, TokSemiAmp, TokDSemiAmp:
 			it.Term, it.TermPos = p.tok.Kind, p.tok.Pos
+			// The terminator's own `p.next()` reads the *next arm's* first
+			// token, so the flag goes back on in front of it.
+			p.lex.inCaseArm = true
 			p.next()
 		default:
 			// The last arm may omit its terminator before `esac`.
@@ -2543,8 +2603,10 @@ func (p *Parser) parseCase() Command {
 			}
 		}
 		c.Items = append(c.Items, it)
+		p.lex.inCaseArm = true
 		p.skipNewlines()
 	}
+	p.lex.inCaseArm = false
 	c.Stop = p.tok.End
 	p.expectWord("esac")
 	return c

@@ -33,6 +33,34 @@ const (
 // route, which is what it knows.
 func (a AliasRoutes) Has(route AliasRoutes) bool { return a&route != 0 }
 
+// SeparatorSkip is how far a dialect will step over a `;` written where the
+// grammar wants a command. See [Dialect.SeparatorWhereACommandBelongs].
+//
+// A count and a place rather than a bool, because the two shells that allow
+// this draw it differently and a single yes/no could not be given a value for
+// either of them without accepting lines the other refuses.
+type SeparatorSkip uint8
+
+const (
+	// NoSeparatorWhereACommandBelongs is the core answer: a `;` where a
+	// command belongs is a syntax error. dash, bash 5.3, bash 3.2 and
+	// bash-as-`sh`.
+	NoSeparatorWhereACommandBelongs SeparatorSkip = iota
+
+	// OneSeparatorExceptAfterABar steps over a single `;`, and not at all
+	// after a `|`. ksh93, and both halves are measured rather than assumed:
+	// `a || ; ; b` is `` `;' unexpected `` there where `a || ; b` runs, and
+	// `a | ; b` is refused where `a || ; b` and `a |& ; b` are taken — the
+	// same asymmetry #1115 found for that shell's `|&`, and the probe that
+	// says the bar is a separate question from the and-or.
+	OneSeparatorExceptAfterABar
+
+	// AnySeparatorWhereACommandBelongs steps over as many as are written,
+	// anywhere, the bar included. zsh: `echo one | ; ; cat -n` numbers the
+	// line, and so does `echo one | ; ⏎ ; cat -n`.
+	AnySeparatorWhereACommandBelongs
+)
+
 // Dialect says which constructs the lexer accepts.
 //
 // Fields are named for the construct rather than for the shell that wants it,
@@ -1040,6 +1068,63 @@ type Dialect struct {
 	// in every dialect, which is right for the terminal in every column and
 	// right for four of the five dialects everywhere else.
 	OpenEndedAndOr bool
+
+	// SeparatorWhereACommandBelongs lets a `;` stand where the grammar wants
+	// a command, and steps over it.
+	//
+	// One rule rather than several, which is what the measurement says and is
+	// the whole finding. Every shape two of the panel shells accept and the
+	// other four refuse is the same thing seen in a different position:
+	//
+	//	; b                a list beginning with one
+	//	a ; ; b            one between two statements
+	//	a & ; b            the same after a `&` rather than a `;`
+	//	a |& ; b           and after ksh93's coprocess terminator (#1141)
+	//	a && ; b           where an and-or's right-hand side belongs
+	//	a || ; b           the same for the other operator
+	//	a | ; b            where a pipeline's right-hand command belongs
+	//
+	// **The `;` is skipped, not stood in for**, which `false` makes visible
+	// and `true` hides: `false || ; echo two` prints `two` in both shells and
+	// `true || ; echo two` prints nothing, so `echo two` really is the `||`'s
+	// right-hand side and the `;` was absorbed the way the newline in
+	// `a || ⏎ b` already is everywhere. Nothing runs for the separator itself
+	// — `false ; ; echo $?` answers 1 in both, so it does not even set a
+	// status.
+	//
+	// Measured 2026-09-07 over a script file with a scratch `HOME`, `ZDOTDIR`
+	// and `HISTFILE`, `-n` and then a run. dash, bash 5.3, bash 3.2 and
+	// bash-as-`sh` refuse every line above; ksh93 and zsh differ from each
+	// other in exactly two ways, which is what the values below record.
+	SeparatorWhereACommandBelongs SeparatorSkip
+
+	// AbsentAndOrOperandIsAnEmptyCommand supplies a command that does nothing
+	// and succeeds where an and-or's right-hand side is missing after a
+	// separator was stepped over.
+	//
+	// ksh93's answer, and it is not [Dialect.OpenEndedAndOr]'s: the two
+	// shells disagree about the *meaning* of the same text, which the
+	// operator's short-circuit makes visible from one side only.
+	//
+	//	false || ;   ⏎ echo $?   →  0   ksh93     1   zsh
+	//	false && ;   ⏎ echo $?   →  1   ksh93     1   zsh
+	//
+	// So it is an implicit success in ksh93 — `false || :` — and a dropped
+	// operator in zsh, where the status is the left-hand side's. The `&&` row
+	// agrees in both because the left-hand side failed and nothing on the
+	// right was going to run either way, which is why the `||` row is the
+	// only one that separates them.
+	//
+	// It is spelled here rather than in the interpreter's vector because the
+	// difference is what *stands* in the tree and not what the tree means: an
+	// empty command already runs and already answers 0, so this puts one
+	// there and nothing downstream needs to know why.
+	//
+	// Only reachable where a separator was stepped over. ksh93 refuses
+	// `false ||` and `{ false || ⏎ }` outright — an and-or may not simply end
+	// with its operator there — so this is not that shell's spelling of
+	// OpenEndedAndOr, and setting both would accept lines neither shell does.
+	AbsentAndOrOperandIsAnEmptyCommand bool
 
 	// RegexTakesAlternation makes a bare `|` part of a `=~` operand rather
 	// than the end of the word. bash and ksh93 say yes, so `[[ ab =~ a|b ]]`

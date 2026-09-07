@@ -28,6 +28,27 @@ func Dialect() syntax.Dialect {
 		"typeset": true, "export": true, "readonly": true,
 	}
 	d.ParamIndirection = true
+	// A single `;` written where a command belongs is stepped over — `; b`,
+	// `a ; ; b`, `a & ; b`, `a |& ; b`, `a && ; b` and `a || ; b` all run —
+	// and it is stepped over rather than standing in for anything: `false ||
+	// ; echo two` prints `two` where `true || ; echo two` prints nothing, so
+	// the command after it is the operator's own right-hand side.
+	//
+	// Both limits are measured, and both separate this shell from zsh, which
+	// takes every one of them: a *second* one is refused, `a || ; ; b` being
+	// `` `;' unexpected ``, and it is refused after a **bar**, `a | ; b`
+	// being the same — while `a |& ; b` is taken, because that spelling
+	// terminates a command here rather than joining two (#1141). That last
+	// pair is the same asymmetry #1115 found, and it is what says the bar is
+	// a separate question from the and-or rather than one rule about control
+	// operators.
+	d.SeparatorWhereACommandBelongs = syntax.OneSeparatorExceptAfterABar
+	// And where a separator was stepped over and nothing came after it at
+	// all, an empty command stands there and succeeds: `false || ;` answers
+	// 0 here and 1 in zsh, which drops the operator instead. The `&&` row
+	// agrees in both — 1 either way, because the left-hand side failed — so
+	// the `||` is the only shape that tells the two readings apart.
+	d.AbsentAndOrOperandIsAnEmptyCommand = true
 	// A loop's variable may be written with quoting or an escape in it, and
 	// the quoting comes off before the word is read as a name: `for "i" in a
 	// b` binds `i` here and is refused by the other four. `for 'i'`,

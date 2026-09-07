@@ -551,6 +551,12 @@ func (p *Parser) NextLine() (*File, bool) {
 	}
 	f := &File{}
 	for p.err == nil {
+		// A `;` where a command belongs, for the dialects that step over one:
+		// `; echo two` and `true ; ; echo two` alike, since the second
+		// statement of a line begins here as much as the first does.
+		if p.skipSeparators(false) {
+			p.skipNewlines()
+		}
 		st := p.parseStmt()
 		if st == nil {
 			if p.err == nil && !p.at(TokEOF) {
@@ -609,6 +615,53 @@ func (p *Parser) skipNewlines() {
 	}
 }
 
+// skipSeparators steps over a `;` written where a command belongs, as far as
+// the dialect goes, and reports whether it stepped over any.
+//
+// A newline *before* one is stepped over by the caller and always was —
+// `a || ⏎ b` is core — so `a || ⏎ ; b` runs wherever `a || ; b` does. A
+// newline **after** one is the dialect's own question and the two shells
+// answer it differently, which is measured:
+//
+//	true || ; ⏎ echo two   →  two        ksh93
+//	                       →  (nothing)  zsh
+//
+// zsh reads on and makes `echo two` the right-hand side, so the `true`
+// short-circuits past it. ksh93 stops at the newline, the and-or ends with
+// nothing on its right, and `echo two` is the next statement — which is why
+// only the wider value steps over what follows.
+//
+// afterBar says the caller is a pipeline looking for the command after its
+// bar, which is the one position ksh93 will not take.
+func (p *Parser) skipSeparators(afterBar bool) bool {
+	limit := 0
+	crossNewlines := false
+	switch p.dialect.SeparatorWhereACommandBelongs {
+	case OneSeparatorExceptAfterABar:
+		if afterBar {
+			return false
+		}
+		limit = 1
+	case AnySeparatorWhereACommandBelongs:
+		limit = -1
+		crossNewlines = true
+	default:
+		return false
+	}
+	skipped := false
+	for limit != 0 && p.at(TokSemi) {
+		p.next()
+		if crossNewlines {
+			p.skipNewlines()
+		}
+		skipped = true
+		if limit > 0 {
+			limit--
+		}
+	}
+	return skipped
+}
+
 // parseList reads statements until a stop word, a closing paren, or the end —
 // and until a statement that was written with no terminator after it.
 //
@@ -629,6 +682,13 @@ func (p *Parser) skipNewlines() {
 func (p *Parser) parseList() []*Stmt {
 	var out []*Stmt
 	p.skipNewlines()
+	if p.skipSeparators(false) {
+		// A newline after the separator ends nothing here: between two
+		// statements it is an ordinary terminator, which every shell takes.
+		// It is only where an and-or's right-hand side belongs that one shell
+		// stops at it.
+		p.skipNewlines()
+	}
 	for p.err == nil && !p.at(TokEOF) && !p.atStopWord() && !p.at(TokRightParen) {
 		st := p.parseStmt()
 		if st == nil {
@@ -639,6 +699,9 @@ func (p *Parser) parseList() []*Stmt {
 			break
 		}
 		p.skipNewlines()
+		if p.skipSeparators(false) {
+			p.skipNewlines()
+		}
 	}
 	return out
 }
@@ -746,8 +809,44 @@ func (p *Parser) parseAndOr() Expr {
 		p.open = append(p.open, opener{word: op.String(), line: pos.Line})
 		p.next()
 		p.skipNewlines()
+		skipped := p.skipSeparators(false)
 		right := p.parsePipeline()
 		if right == nil {
+			if skipped && p.dialect.AbsentAndOrOperandIsAnEmptyCommand &&
+				(p.at(TokEOF) || p.at(TokNewline) || p.atListEnd()) {
+				// A separator stood where the right-hand side belongs and
+				// the list ended there, so a command that does nothing and
+				// succeeds stands in its place: `false || ;` answers 0.
+				//
+				// The end of input counts here where it does not for
+				// OpenEndedAndOr, and that is measured rather than assumed:
+				// through a pty, ksh93 answers `false || ;` at its prompt
+				// with **another PS1** and `$?` of 0 — the line is finished —
+				// where `false ||` alone draws PS2 and waits. zsh draws PS2
+				// for both, which is why its end-of-input answer stays the
+				// route question #1174 left open and this one does not.
+				//
+				// A newline counts too, and only here: `true || ; ⏎ echo two`
+				// prints `two` in this shell, so the and-or ended at the
+				// newline and the `echo` is the statement after it — where
+				// zsh reads on and makes it the right-hand side.
+				//
+				// A second separator is none of the three, so `a || ; ; b`
+				// still fails on the one it found, which is what this shell
+				// does.
+				//
+				// A node rather than an answer the interpreter reads, because
+				// an empty command already runs and already succeeds — the
+				// difference between this dialect and the one that drops the
+				// operator is what is *in* the tree.
+				p.open = p.open[:depth]
+				empty := &SimpleCmd{Start: p.tok.Pos, Stop: p.tok.Pos}
+				left = &BinaryExpr{
+					X: left, Op: op, OpPos: pos,
+					Y: &Pipeline{Cmds: []Command{empty}},
+				}
+				continue
+			}
 			if p.dialect.OpenEndedAndOr && p.atListEnd() {
 				// The right-hand side is absent and the list ends here, so
 				// the operator is dropped: `{ : || ⏎ }` is `{ : ⏎ }`.
@@ -859,6 +958,10 @@ func (p *Parser) parsePipeline() Expr {
 		p.open = append(p.open, opener{word: p.tok.Kind.String(), line: p.tok.Pos.Line})
 		p.next()
 		p.skipNewlines()
+		// And a `;` written where the command after the bar belongs, for the
+		// one dialect that steps over one there. ksh93 will not: it takes
+		// `a || ; b` and refuses `a | ; b`, which is why this asks.
+		p.skipSeparators(true)
 	}
 }
 

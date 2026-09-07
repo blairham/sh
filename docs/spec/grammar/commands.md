@@ -140,6 +140,9 @@ could take a redirection. Recorded, not implemented.
 
 ### Three separate rules, not one
 
+All three are implemented now: the first is #1174's and the other two are
+#1142's.
+
 **The and-or list may end with its operator.** zsh alone, and it reaches
 every closing context — a `}`, a `)`, `fi`, `else`, `elif`, `done`,
 `esac`, `;;`, a function body's brace and a command substitution's paren.
@@ -168,35 +171,71 @@ stand-in gets exactly one of the pair wrong. Nothing in the interpreter
 needs a value for this: the parser returns the left-hand side and there
 is no operator left in the tree.
 
-**A list separator may stand between a control operator and its
-right-hand side, and it is skipped.** zsh and ksh93. This is *not* an
-empty right-hand side, and the difference is measurable rather than
-notional — `false || ; echo two` prints `two` in both, and
-`true || ; echo two` prints nothing, so `echo two` is the `||`'s
-right-hand side and the `;` was absorbed the way the newline in
-`: || ⏎ b` already is everywhere.
+**A `;` may stand where a command belongs, and it is skipped.** zsh and
+ksh93. This is *not* an empty right-hand side, and the difference is
+measurable rather than notional — `false || ; echo two` prints `two` in
+both, and `true || ; echo two` prints nothing, so `echo two` is the
+`||`'s right-hand side and the `;` was absorbed the way the newline in
+`: || ⏎ b` already is everywhere. Nothing runs for it either:
+`false ; ; echo $?` answers 1 in both, so the separator does not even set
+a status.
 
-The two shells draw it around different operators. zsh skips a `;` after
-`&&`, `||` **and** `|`, any number of them, interleaved with newlines:
-`echo one | ; ; cat -n` numbers the line. ksh93 skips one, after `&&` and
-`||` only, and refuses `: | ; b` outright — the same asymmetry #1115
-found for its `|&`, and the probe that proves the two rules are not one.
+**One rule, not one per operator.** Every shape the two shells accept and
+the other four refuse is this rule seen in a different position, which is
+why the flag names the position rather than the operator:
 
-**What an absent operand means after a skipped separator is a third
-question, and the two lenient columns disagree.**
+    ; b                a list beginning with one
+    a ; ; b            one between two statements
+    a & ; b            the same after a `&` rather than a `;`
+    a |& ; b           and after ksh93's coprocess terminator (#1141)
+    a && ; b           where an and-or's right-hand side belongs
+    a || ; b           the same for the other operator
+    a | ; b            where a pipeline's right-hand command belongs
+
+Grammar flag: `SeparatorWhereACommandBelongs` — core: **none**;
+`ksh`: one, and never after a bar; `zsh`: any number, anywhere.
+
+The two shells differ in exactly two ways, and both are measured. **How
+many**: `a || ; ; b` runs in zsh and is `` `;' unexpected `` in ksh93.
+**Whether a bar's counts**: `a | ; b` runs in zsh and is refused in
+ksh93, which takes `a || ; b` and `a |& ; b` in the same breath — the
+same asymmetry #1115 found for that shell's `|&`, and the probe that
+says the bar is a separate position rather than one rule about control
+operators.
+
+**What an absent operand means after a skipped separator, the two
+columns disagree about.**
 
     false || ; ⏎ echo $?   →  st=0   in ksh93
                            →  st=1   in zsh
 
 An implicit success in one and a dropped operator in the other, over the
-same text. That is a semantics difference and not an additive grammar
-one, so it belongs to the interpreter's vector rather than to
-`syntax.Dialect`. ksh93 also reaches an absent operand *only* with the
-`;` present: `false ||` alone and `{ false || ⏎ }` are both syntax
-errors there.
+same text. The `&&` row agrees in both — 1 either way, because the
+left-hand side failed and nothing on the right was going to run — so the
+`||` is the only shape that tells the two readings apart.
 
-Not implemented: the separator rule and ksh93's meaning for it are
-#1142. `OpenEndedAndOr` covers the first rule only.
+Grammar flag: `AbsentAndOrOperandIsAnEmptyCommand` — core and `zsh`:
+**off**; `ksh`: on. It is a grammar flag rather than a semantics one
+because the difference is what *stands* in the tree and not what the tree
+means: an empty command already runs and already answers 0, so the parser
+puts one there and nothing downstream needs to know why. zsh reaches the
+same position through `OpenEndedAndOr`, which drops the operator instead,
+and setting both would accept lines neither shell does — ksh93 refuses
+`false ||` and `{ false || ⏎ }` outright.
+
+**And the end of input is a route question for one of them and not the
+other**, which is measured through a pty rather than assumed:
+
+    % ksh
+    P> false || ;
+    P> echo $?
+    0
+
+ksh93 answers with **another PS1** — the line is finished — where
+`false ||` alone draws PS2 and waits. zsh draws PS2 for both, so its
+answer at the end of a file stays the question the next section leaves
+open. That is why `AbsentAndOrOperandIsAnEmptyCommand` reaches the end of
+input and `OpenEndedAndOr` does not.
 
 ### The end of input is a route question
 

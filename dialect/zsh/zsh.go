@@ -81,6 +81,13 @@ func Dialect() syntax.Dialect {
 	// and the line after it closes the block, so a shell that refuses this
 	// cannot read the file.
 	d.OpenEndedAndOr = true
+	// A `;` written where a command belongs is stepped over, as many as are
+	// written and anywhere — `; b`, `a ; ; b`, `a & ; b`, `a && ; b` and
+	// `a | ; b` all run here. The `;` is absorbed rather than standing in for
+	// anything: `false || ; echo two` prints `two` and `true || ; echo two`
+	// prints nothing, so the command after it really is the operator's
+	// right-hand side.
+	d.SeparatorWhereACommandBelongs = syntax.AnySeparatorWhereACommandBelongs
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
 	// The bytes this shell's arithmetic reader refuses as part of no token at

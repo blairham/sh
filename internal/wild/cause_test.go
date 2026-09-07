@@ -27,17 +27,22 @@ func TestCausesGroupsAndRanks(t *testing.T) {
 		write(t, dir, name, "#!/bin/zsh\n[[ -prefix - ]]\n")
 	}
 	// A different gap, and one this parser is not about to close either:
-	// that shell takes an empty body where a list belongs, so `then` may be
-	// followed straight by the `;` this parser refuses. It was
-	// `repeat 3 { echo x; }` until #827 implemented that, and
+	// `;|` is that shell's spelling of the case terminator that keeps
+	// testing later patterns, and nothing in the grammar reads it (#1188).
+	//
+	// It was `repeat 3 { echo x; }` until #827 implemented that,
 	// `echo (aa|bb)` until #995 made a bare group where a *word* stands part
-	// of the word — twice now the fixture has been overtaken by the thing it
-	// was standing in for, which is the hazard this comment exists to pass
-	// on. The two gaps also have to be refused at *different* token classes:
+	// of the word, and `if true; then; fi` until #1142 let a `;` stand where
+	// a command belongs — **three times now** the fixture has been overtaken
+	// by the thing it was standing in for, which is the hazard this comment
+	// exists to pass on. Whatever replaces this one, check it against the
+	// real shell and against this parser before trusting it.
+	//
+	// The two gaps also have to be refused at *different* token classes:
 	// `{ … } always { … }` is a real gap too and was no use here, because it
 	// is reported as an unexpected word exactly as the first three are, and
 	// the report would then have had one cause rather than two.
-	write(t, dir, "d", "#!/bin/zsh\nif true; then; fi\n")
+	write(t, dir, "d", "#!/bin/zsh\ncase x in a) : ;| b) : ;; esac\n")
 
 	rep := wild.Sweep(context.Background(), wild.Scope{Dirs: []string{dir}, Shells: wild.ZshScope},
 		zsh.Dialect(), "/usr/bin/true")

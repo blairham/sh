@@ -81038,6 +81038,138 @@
         "TimedOut": false
       }
     },
+    "sched/an-empty-table-says-nothing": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: sched: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: sched: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: sched: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: sched: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: sched: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "sched/refuses-each-mistake-its-own-way": {
+      "bash": {
+        "Stdout": "none=127~zero=127~short=127~bad=127~opt=127",
+        "Stderr": "\u003cshell\u003e: line 1: sched: command not found~\u003cshell\u003e: line 1: sched: command not found~\u003cshell\u003e: line 1: sched: command not found~\u003cshell\u003e: line 1: sched: command not found~\u003cshell\u003e: line 1: sched: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "none=127~zero=127~short=127~bad=127~opt=127",
+        "Stderr": "\u003cshell\u003e: line 1: sched: command not found~\u003cshell\u003e: line 1: sched: command not found~\u003cshell\u003e: line 1: sched: command not found~\u003cshell\u003e: line 1: sched: command not found~\u003cshell\u003e: line 1: sched: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "none=127~zero=127~short=127~bad=127~opt=127",
+        "Stderr": "\u003cshell\u003e: sched: command not found~\u003cshell\u003e: sched: command not found~\u003cshell\u003e: sched: command not found~\u003cshell\u003e: sched: command not found~\u003cshell\u003e: sched: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "none=127~zero=127~short=127~bad=127~opt=127",
+        "Stderr": "\u003cshell\u003e: 1: sched: not found~\u003cshell\u003e: 1: sched: not found~\u003cshell\u003e: 1: sched: not found~\u003cshell\u003e: 1: sched: not found~\u003cshell\u003e: 1: sched: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "none=127~zero=127~short=127~bad=127~opt=127",
+        "Stderr": "\u003cshell\u003e: sched: not found~\u003cshell\u003e: sched: not found~\u003cshell\u003e: sched: not found~\u003cshell\u003e: sched: not found~\u003cshell\u003e: sched: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "none=1~zero=1~short=1~bad=1~opt=1",
+        "Stderr": "\u003cshell\u003e:sched:1: not that many entries~\u003cshell\u003e:sched:1: usage for delete: sched -\u003citem#\u003e.~\u003cshell\u003e:sched:1: not enough arguments~\u003cshell\u003e:sched:1: bad time specifier~\u003cshell\u003e:sched:1: bad option: -x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "sched/the-table-is-sorted-by-time-and-the-number-is-a-position": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: sched: command not found~\u003cshell\u003e: line 1: sched: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: sched: command not found~\u003cshell\u003e: line 1: sched: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: sched: command not found~\u003cshell\u003e: sched: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "n=0~1=~2=",
+        "Stderr": "\u003cshell\u003e: sched: not found~\u003cshell\u003e: sched: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "n=2~1=echo early~2=echo late",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "select/an-unterminated-final-reply": {
       "bash": {
         "Stdout": "~st=1",
@@ -96600,6 +96732,270 @@
       },
       "zsh": {
         "Stdout": "st=0 [yes]~expr=0 [y]~word=0 [n]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/a-definition-does-not-need-its-function-yet": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~zle -N foo",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/a-widget-cannot-be-called-from-a-script": {
+      "bash": {
+        "Stdout": "st=127~bare=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~bare=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~bare=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~bare=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~bare=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~bare=1",
+        "Stderr": "\u003cshell\u003e:zle:1: widgets can only be called when ZLE is active",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/a-widget-is-defined-and-said-back": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~a~b (f)~zle -N a~zle -N b f",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/listing-by-name-is-a-question": {
+      "bash": {
+        "Stdout": "yes=127~no=127~mixed=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "yes=127~no=127~mixed=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "yes=127~no=127~mixed=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "yes=127~no=127~mixed=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "yes=127~no=127~mixed=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "yes=0~no=1~mixed=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/refuses-each-mistake-its-own-way": {
+      "bash": {
+        "Stdout": "opt=127~short=127~long=127~del=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "opt=127~short=127~long=127~del=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "opt=127~short=127~long=127~del=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "opt=127~short=127~long=127~del=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "opt=127~short=127~long=127~del=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "opt=1~short=1~long=1~del=1",
+        "Stderr": "\u003cshell\u003e:zle:1: bad option: -Q~\u003cshell\u003e:zle:1: not enough arguments for -N~\u003cshell\u003e:zle:1: too many arguments for -N~\u003cshell\u003e:zle:1: no such widget `nosuch'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/the-line-parameters-are-not-there-outside-a-widget": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[UNSET][UNSET][UNSET][UNSET]~[hi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[UNSET][UNSET][UNSET][UNSET]~[hi]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

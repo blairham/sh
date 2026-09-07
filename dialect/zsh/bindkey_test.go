@@ -242,13 +242,13 @@ func TestOnlyTheChangesReachTheEditor(t *testing.T) {
 
 	r = bindkeyRunner(t, "bindkey '^G' beginning-of-line\n")
 	got := zsh.KeyBindings(r)
-	if want := (map[string]repl.Widget{"\a": repl.WidgetBeginningOfLine}); len(got) != 1 || got["\a"] != want["\a"] {
+	if want := (map[string]repl.Binding{"\a": {Widget: repl.WidgetBeginningOfLine}}); len(got) != 1 || got["\a"] != want["\a"] {
 		t.Errorf("table = %v, want %v", got, want)
 	}
 
 	r = bindkeyRunner(t, "bindkey '^G' history-substring-search-up\n")
 	got = zsh.KeyBindings(r)
-	if w, present := got["\a"]; !present || w != repl.WidgetNone {
+	if b, present := got["\a"]; !present || b != (repl.Binding{}) {
 		t.Errorf("table = %v, want the unknown widget present and doing nothing", got)
 	}
 
@@ -256,7 +256,7 @@ func TestOnlyTheChangesReachTheEditor(t *testing.T) {
 	// absent: absent would leave the editor's own default running.
 	r = bindkeyRunner(t, "bindkey -r '^A'\n")
 	got = zsh.KeyBindings(r)
-	if w, present := got["\x01"]; !present || w != repl.WidgetNone {
+	if b, present := got["\x01"]; !present || b != (repl.Binding{}) {
 		t.Errorf("table = %v, want the removed key present and doing nothing", got)
 	}
 

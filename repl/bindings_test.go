@@ -19,10 +19,10 @@ import (
 // typedBound runs a line through an editor with a table of overrides in front
 // of it, built the way the front end builds one so the wiring is exercised
 // rather than the editor alone.
-func typedBound(t *testing.T, table map[string]Widget, keys string) string {
+func typedBound(t *testing.T, table map[string]Binding, keys string) string {
 	t.Helper()
 	var out strings.Builder
-	e := Shell{KeyBindings: func() map[string]Widget { return table }}.newEditor(t.Context())
+	e := Shell{KeyBindings: func() map[string]Binding { return table }}.newEditor(t.Context())
 	e.in, e.out = strings.NewReader(keys), &out
 	line, err := e.readLine(drawPrompt("$ "))
 	if err != nil {
@@ -37,7 +37,7 @@ func typedBound(t *testing.T, table map[string]Widget, keys string) string {
 // ^G is the key, because the editor does nothing with it by itself — so a pass
 // here cannot be the default dispatch having done the work.
 func TestAnOverriddenKeyRunsItsWidget(t *testing.T) {
-	table := map[string]Widget{"\a": WidgetBeginningOfLine}
+	table := map[string]Binding{"\a": {Widget: WidgetBeginningOfLine}}
 	if got, want := typedBound(t, table, "world\aecho hello \n"), "echo hello world"; got != want {
 		t.Errorf("line = %q, want %q", got, want)
 	}
@@ -54,7 +54,7 @@ func TestAnOverriddenKeyRunsItsWidget(t *testing.T) {
 // ahead at all: the sequences people bind are `^X` plus something, and a
 // two-byte binding must not act on the first byte of it.
 func TestAMultiByteSequenceIsMatchedWhole(t *testing.T) {
-	table := map[string]Widget{"\x18\x01": WidgetBeginningOfLine}
+	table := map[string]Binding{"\x18\x01": {Widget: WidgetBeginningOfLine}}
 	if got, want := typedBound(t, table, "world\x18\x01echo hello \n"), "echo hello world"; got != want {
 		t.Errorf("line = %q, want %q", got, want)
 	}
@@ -68,7 +68,7 @@ func TestAMultiByteSequenceIsMatchedWhole(t *testing.T) {
 // either way. So the line is composed to be wrong in a visible way if the
 // default won.
 func TestAnOverrideBeatsTheEditorsOwnKey(t *testing.T) {
-	table := map[string]Widget{"\x01": WidgetEndOfLine}
+	table := map[string]Binding{"\x01": {Widget: WidgetEndOfLine}}
 	// Type `ab`, go to the start with ^B^B, then ^A. With the override ^A ends
 	// at the far end and `!` lands after `ab`; with the default it would land
 	// before it.
@@ -84,7 +84,7 @@ func TestAnOverrideBeatsTheEditorsOwnKey(t *testing.T) {
 // from an absent one. WidgetNone is present in the table and does nothing,
 // which must not fall through to the default the key used to have.
 func TestAKeyBoundToNothingStopsDoingWhatItDid(t *testing.T) {
-	table := map[string]Widget{"\x01": WidgetNone}
+	table := map[string]Binding{"\x01": {Widget: WidgetNone}}
 	if got, want := typedBound(t, table, "ab\x01!\n"), "ab!"; got != want {
 		t.Errorf("line = %q, want %q", got, want)
 	}
@@ -97,7 +97,7 @@ func TestAKeyBoundToNothingStopsDoingWhatItDid(t *testing.T) {
 // If the lookup read ahead on every key, the `b` would be swallowed looking
 // for a sequence and the line would come back short.
 func TestAnUnboundByteIsNotReadPast(t *testing.T) {
-	table := map[string]Widget{"\x18\x01": WidgetBeginningOfLine}
+	table := map[string]Binding{"\x18\x01": {Widget: WidgetBeginningOfLine}}
 	if got, want := typedBound(t, table, "ab\n"), "ab"; got != want {
 		t.Errorf("line = %q, want %q", got, want)
 	}
@@ -107,7 +107,7 @@ func TestAnUnboundByteIsNotReadPast(t *testing.T) {
 // reading by shape: `^X` followed by a byte no binding continues to takes both
 // with it rather than typing the stray byte into the line.
 func TestAStartedSequenceThatGoesNowhereIsDroppedWhole(t *testing.T) {
-	table := map[string]Widget{"\x18\x01": WidgetBeginningOfLine}
+	table := map[string]Binding{"\x18\x01": {Widget: WidgetBeginningOfLine}}
 	if got, want := typedBound(t, table, "a\x18zb\n"), "ab"; got != want {
 		t.Errorf("line = %q, want %q", got, want)
 	}
@@ -123,7 +123,7 @@ func TestAStartedSequenceThatGoesNowhereIsDroppedWhole(t *testing.T) {
 // jump the cursor to the start, which is what `^A` would have done had the
 // lookup declined the key after eating the byte behind it.
 func TestAnAbandonedSequenceDoesNotRunItsFirstKey(t *testing.T) {
-	table := map[string]Widget{"\x01\x02": WidgetEndOfLine}
+	table := map[string]Binding{"\x01\x02": {Widget: WidgetEndOfLine}}
 	if got, want := typedBound(t, table, "ab\x01z!\n"), "ab!"; got != want {
 		t.Errorf("line = %q, want %q", got, want)
 	}
@@ -133,9 +133,9 @@ func TestAnAbandonedSequenceDoesNotRunItsFirstKey(t *testing.T) {
 // Both `^X` and `^X^A` are bound; `^X` acts at once rather than waiting to
 // find out whether the second byte was coming.
 func TestAnExactMatchWinsOverALongerOne(t *testing.T) {
-	table := map[string]Widget{
-		"\x18":     WidgetBeginningOfLine,
-		"\x18\x01": WidgetEndOfLine,
+	table := map[string]Binding{
+		"\x18":     {Widget: WidgetBeginningOfLine},
+		"\x18\x01": {Widget: WidgetEndOfLine},
 	}
 	if got, want := typedBound(t, table, "ab\x18!\n"), "!ab"; got != want {
 		t.Errorf("line = %q, want %q", got, want)
@@ -149,8 +149,8 @@ func TestAnExactMatchWinsOverALongerOne(t *testing.T) {
 // rather than the key.
 func TestInterruptPartWayThroughABindingAbandonsTheLine(t *testing.T) {
 	var out strings.Builder
-	table := map[string]Widget{"\x18\x01": WidgetBeginningOfLine}
-	e := Shell{KeyBindings: func() map[string]Widget { return table }}.newEditor(t.Context())
+	table := map[string]Binding{"\x18\x01": {Widget: WidgetBeginningOfLine}}
+	e := Shell{KeyBindings: func() map[string]Binding { return table }}.newEditor(t.Context())
 	e.in, e.out = strings.NewReader("ab\x18\x03"), &out
 	if _, err := e.readLine(drawPrompt("$ ")); !errors.Is(err, ErrInterrupted) {
 		t.Errorf("err = %v, want the line abandoned", err)
@@ -163,8 +163,8 @@ func TestInterruptPartWayThroughABindingAbandonsTheLine(t *testing.T) {
 // gets a history, and asserts the word actually arrives.
 func TestTheLastWordWidgetNeedsAHistoryToShowItsWork(t *testing.T) {
 	var out strings.Builder
-	table := map[string]Widget{"\a": WidgetInsertLastWord}
-	e := Shell{KeyBindings: func() map[string]Widget { return table }}.newEditor(t.Context())
+	table := map[string]Binding{"\a": {Widget: WidgetInsertLastWord}}
+	e := Shell{KeyBindings: func() map[string]Binding { return table }}.newEditor(t.Context())
 	e.history = []string{"echo one two"}
 	e.in, e.out = strings.NewReader("ls \a\n"), &out
 	line, err := e.readLine(drawPrompt("$ "))
@@ -218,7 +218,7 @@ func TestEveryWidgetIsReachable(t *testing.T) {
 		{WidgetYank, "ab\x0b\x0b\x07", "ab"},
 	}
 	for _, c := range cases {
-		table := map[string]Widget{"\a": c.widget}
+		table := map[string]Binding{"\a": {Widget: c.widget}}
 		if got := typedBound(t, table, c.typed+"\n"); got != c.want {
 			t.Errorf("widget %d: line = %q, want %q", c.widget, got, c.want)
 		}
@@ -230,7 +230,7 @@ func TestEveryWidgetIsReachable(t *testing.T) {
 	for _, w := range []Widget{
 		WidgetPreviousHistory, WidgetNextHistory, WidgetClearScreen, WidgetComplete, WidgetSearchHistoryBackward,
 	} {
-		table := map[string]Widget{"\a": w}
+		table := map[string]Binding{"\a": {Widget: w}}
 		if got, want := typedBound(t, table, "ab\a\n"), "ab"; got != want {
 			t.Errorf("widget %d: line = %q, want %q", w, got, want)
 		}

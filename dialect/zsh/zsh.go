@@ -1498,6 +1498,14 @@ func Apply(r *interp.Runner) {
 	// And the line editor's key table, which a real rc file also reaches for.
 	// See bindkey.go.
 	registerBindkey(r)
+	// And the other half of it: defining what a key can be bound *to*. The
+	// table was here without it, so an rc file that bound a plugin's own
+	// widget bound a name nothing ever answered to. See zle.go.
+	registerZle(r)
+	// Timed commands, which is what a plugin manager's deferred loading is
+	// built on. Independent of the line editor despite arriving with it. See
+	// sched.go.
+	registerSched(r)
 	// The module loader, which answers per module rather than pretending to
 	// load anything. See zmodload.go.
 	registerZmodload(r)

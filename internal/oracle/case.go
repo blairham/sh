@@ -11570,6 +11570,51 @@ echo "read=[$l]"`,
 		Why:     "the keymap list a config's `bindkey -M` has to name one of, and what a name outside it costs: `no such keymap` with zsh's own backtick-and-quote spelling, at 1",
 	},
 	{
+		ID: "zle/a-widget-is-defined-and-said-back", Category: "builtins",
+		Snippet: `f() { :; }; zle -N b f; zle -N a; echo "st=$?"; zle -l; zle -l -L`,
+		Why:     "the row the whole feature rests on: a widget backed by a shell function is defined at status 0 and read back in both listing spellings — `name` and `name (fn)` plainly, and `zle -N name [fn]` under `-L` — sorted by widget name whatever order they arrived in. Without `zle` a config binding a plugin's own widget bound a name nothing ever answered to",
+	},
+	{
+		ID: "zle/a-definition-does-not-need-its-function-yet", Category: "builtins",
+		Snippet: `zle -N foo; echo "st=$?"; zle -l -L`,
+		Why:     "what makes the order in a real startup file work: `zle -N` naming a function that is nowhere is status 0 and silence, and the definition is stored. A plugin defines its widgets and its functions in whichever order suits it, so a shell that required the function here would fail half of them",
+	},
+	{
+		ID: "zle/listing-by-name-is-a-question", Category: "builtins",
+		Snippet: `f() { :; }; zle -N a f; zle -l a; echo "yes=$?"; zle -l nosuch; echo "no=$?"; zle -l a nosuch; echo "mixed=$?"`,
+		Why:     "`zle -l name` prints nothing and answers in the status, which is what a plugin's `zle -l foo || zle -N foo` is asking — so it is a question with an answer rather than a listing that happens to be empty, and one name missing out of two is 1",
+	},
+	{
+		ID: "zle/refuses-each-mistake-its-own-way", Category: "builtins",
+		Snippet: `zle -Q; echo "opt=$?"; zle -N; echo "short=$?"; zle -N a b c; echo "long=$?"; zle -D nosuch; echo "del=$?"`,
+		Why:     "this builtin's four wordings: `bad option: -Q`, which is bindkey's and zmodload's rather than zstyle's `invalid option`; usage complaints that name the letter that was short or long, which zstyle's do not; and `no such widget` in zsh's own backtick-and-quote spelling. All at 1",
+	},
+	{
+		ID: "zle/a-widget-cannot-be-called-from-a-script", Category: "builtins",
+		Snippet: `f() { :; }; zle -N w f; zle w; echo "st=$?"; zle; echo "bare=$?"`,
+		Why:     "the line a widget would edit exists only while the editor is holding one, so invoking one from a script is `widgets can only be called when ZLE is active` at 1 — and `zle` with no arguments at all is status 1 and not one word, which is the only refusal in this builtin that says nothing",
+	},
+	{
+		ID: "zle/the-line-parameters-are-not-there-outside-a-widget", Category: "builtins",
+		Snippet: `print -r -- "[${BUFFER-UNSET}][${CURSOR-UNSET}][${LBUFFER-UNSET}][${WIDGET-UNSET}]"; BUFFER=hi; print -r -- "[$BUFFER]"`,
+		Why:     "the parameters a widget reads the line as are `local` to its call — `${(t)BUFFER}` says `scalar-local-special` — so a script that is not running a widget finds them unset and assigning to one there is an ordinary variable assignment. A shell that registered them for the session would answer a plugin's `[[ -n $BUFFER ]]` wrongly at every prompt",
+	},
+	{
+		ID: "sched/refuses-each-mistake-its-own-way", Category: "builtins",
+		Snippet: `sched -1; echo "none=$?"; sched -0; echo "zero=$?"; sched +5; echo "short=$?"; sched bogus x; echo "bad=$?"; sched -x; echo "opt=$?"`,
+		Why:     "five wordings that are this builtin's own, all at 1: `not that many entries` for a deletion past the end of the table, `usage for delete: sched -<item#>.` for item zero — a sentence rather than the `bad option` an unparsable `-0` would otherwise get — `not enough arguments` for a time with no command, `bad time specifier`, and `bad option: -x`",
+	},
+	{
+		ID: "sched/an-empty-table-says-nothing", Category: "builtins",
+		Snippet: `sched; echo "st=$?"`,
+		Why:     "listing an empty schedule is silence at 0 rather than a heading or a complaint, which is what a startup file's `sched` in a conditional reads",
+	},
+	{
+		ID: "sched/the-table-is-sorted-by-time-and-the-number-is-a-position", Category: "builtins",
+		Snippet: `sched +5 echo late; sched +3 echo early; e=("${zsh_scheduled_events[@]}"); print -r -- "n=${#e[@]}"; print -r -- "1=${e[1]#*::}"; print -r -- "2=${e[2]#*::}"`,
+		Why:     "the entry scheduled for the *earlier* time is first however late it was added, which is what makes `sched -1` mean the next one rather than the first one added. Read through `$zsh_scheduled_events` rather than through the listing so the row does not carry a clock: the parameter's `<epoch>:<options>:<command>` has the time in a field a substitution can strip, and the middle field is empty for every spelling this builtin has",
+	},
+	{
 		ID: "print/prompt-escapes-run-after-the-backslash-ones", Category: "builtins",
 		Snippet: `print -P '\045\045'; echo "st=$?"`,
 		Why:     "the order of `print -P`'s two passes, put where only one order can produce the answer: `\045` is a backslash escape for `%`, so the backslash pass makes `%%` and the prompt pass then reads that as one `%`. A shell doing the prompt pass first sees no `%` at all and prints `%%`. zsh alone has `print -P`; ksh93 has `print` and refuses `-P` with its usage line, and bash and dash have no `print`",

@@ -455,3 +455,97 @@ func TestTheMonitorLetterComesFromTheMonitorAndNotFromTheVector(t *testing.T) {
 		t.Errorf("with the monitor really on: got %q, want %q", out, want)
 	}
 }
+
+// The write half of a produced parameter, which is the same failure
+// SetDynamicAssocWriter exists for one shape down: without it an assignment
+// lands where nothing reads, because the producer answers ahead of the stored
+// table, and the script is told nothing.
+func TestAWriteToAProducedParameterCannotShadowIt(t *testing.T) {
+	setup := func(r *Runner) {
+		held := "held"
+		r.SetDynamic("VIEW", func(*Runner) string { return held })
+		// Deliberately not what it was given, so a write that went through
+		// the hook can be told from one that went into a stored table.
+		r.SetDynamicWriter("VIEW", func(_ *Runner, value string) { held = "through:" + value })
+	}
+	out, _ := run(t, `echo "$VIEW"
+VIEW=7
+echo "$VIEW"
+VIEW+=!
+echo "$VIEW"`, setup)
+	want := "held\nthrough:7\nthrough:through:7!\n"
+	if out != want {
+		t.Errorf("writes through a produced parameter = %q, want %q", out, want)
+	}
+}
+
+// Two produced parameters can share one piece of state, each an arithmetic
+// view of it, and each assignment is live in what the other answers next.
+//
+// This is the shape a line editor's line needs — the whole line, and the halves
+// either side of the cursor — and it is the reason the write half is a hook
+// rather than a reconciliation once whatever was running has finished: the
+// script reads the other view back inside the same call.
+func TestProducedParametersShareStateLive(t *testing.T) {
+	setup := func(r *Runner) {
+		whole := "abcdef"
+		at := 2
+		r.SetDynamic("WHOLE", func(*Runner) string { return whole })
+		r.SetDynamicWriter("WHOLE", func(_ *Runner, v string) {
+			whole = v
+			at = min(at, len(v))
+		})
+		r.SetDynamic("HEAD", func(*Runner) string { return whole[:at] })
+		r.SetDynamicWriter("HEAD", func(_ *Runner, v string) {
+			whole, at = v+whole[at:], len(v)
+		})
+	}
+	out, _ := run(t, `echo "[$WHOLE][$HEAD]"
+HEAD=XY
+echo "[$WHOLE][$HEAD]"
+WHOLE=z
+echo "[$WHOLE][$HEAD]"`, setup)
+	want := "[abcdef][ab]\n[XYcdef][XY]\n[z][z]\n"
+	if out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+// And a produced parameter can be taken away again, writer and all, which is
+// what a parameter that exists only for the length of something happening
+// needs: outside it the name has to read as unset rather than as whatever the
+// producer would say.
+func TestAProducedParameterCanBeTakenAway(t *testing.T) {
+	setup := func(r *Runner) {
+		r.SetDynamic("BRIEF", func(*Runner) string { return "here" })
+		r.SetDynamicWriter("BRIEF", func(*Runner, string) {})
+	}
+	out, _ := run(t, `echo "[${BRIEF-gone}]"`, setup)
+	if want := "[here]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+	// Taken away between two runs on one runner, which is what a caller
+	// bracketing a call does.
+	out, _ = run(t, `echo "[${BRIEF-gone}]"`, func(r *Runner) {
+		setup(r)
+		r.UnsetDynamic("BRIEF")
+	})
+	if want := "[gone]\n"; out != want {
+		t.Errorf("after UnsetDynamic got %q, want %q", out, want)
+	}
+	// And it leaves no trace: neither the removal `unset` records, which
+	// would keep a later SetDynamic from answering, nor the message Assigned
+	// holds, which belonged to a call that is over.
+	out, _ = run(t, `echo "[${BRIEF-gone}]"`, func(r *Runner) {
+		setup(r)
+		r.SetVar("BRIEF", "assigned")
+		r.UnsetDynamic("BRIEF")
+		if v, ok := r.Assigned("BRIEF"); ok {
+			t.Errorf("Assigned still holds %q after UnsetDynamic", v)
+		}
+		r.SetDynamic("BRIEF", func(*Runner) string { return "again" })
+	})
+	if want := "[again]\n"; out != want {
+		t.Errorf("re-registered got %q, want %q", out, want)
+	}
+}

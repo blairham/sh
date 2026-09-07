@@ -4209,6 +4209,11 @@ What was built, all through the extension seam — registered builtins in each
   `f() { … }` the parser already read. Corpus: `autoload/*`.
 - **zsh `bindkey`** (dialect/zsh/bindkey.go): the line editor's key table.
   See below for why this moved out of the not-built list.
+- **zsh `zle`** (dialect/zsh/zle.go): defining an editing action in shell,
+  and running one. The other half of `bindkey`, and it moved off the
+  not-built list for the same reason and by the same rule — see below.
+- **zsh `sched`** (dialect/zsh/sched.go): a command line put aside until a
+  time. Unrelated to the line editor despite arriving with it; see below.
 
 Deliberately **not** built, so the next sweep counts each as scoped rather
 than missing:
@@ -4217,12 +4222,25 @@ than missing:
   table of refusals.
 - zsh `autoload` (and `fpath`): function-file loading is an interactive
   startup mechanism; a non-interactive core sources files by name.
-- zsh `vared` and `zle`: the line editor's, and the line editor's key
-  handling is the front end's concern, not the interpreter's. `bindkey` was
-  on this list for the same reason and has come off it, because the reason
-  stopped being true: the front end now *has* a key table worth binding to
-  (#811, #835), so `bindkey` is built, and it is built the way the rule
-  says rather than against it. `repl` names the *actions* — a Widget
+- zsh `vared`: the line editor as a callable, editing a variable's value
+  rather than a command line. `zle` was on this list beside it and has come
+  off — see below — but `vared` needs something else again: the editor
+  entered from inside a running command, with the line it is holding
+  belonging to a parameter. `zcompile` is on this list too, further down.
+- zsh `zle -F`, `zle -R`, `zle -M` and `zle reset-prompt`: the descriptor
+  callback and the three spellings of redisplay. `zle` itself is built (see
+  below) and these refuse by name inside it, which is the whole point of
+  having built it: a `zle` that accepted everything would be worse than the
+  `command not found` it replaced, because a plugin would then believe its
+  widget existed. `-F` is the one that matters — it is how a plugin in this
+  shell does asynchrony, and #1320 records that without it there is no async
+  in a zsh theme at all. It needs the read loop to wait on more than the
+  terminal, which is a change to how a key is read rather than an addition
+  beside it.
+- zsh `zle <one of the editor's own actions>` from inside a widget — `zle
+  end-of-line`. The name resolves; what it would take is a shell function
+  reaching back into the editor mid-keystroke, which is re-entering the read
+  loop rather than transforming the line. It refuses by name. `repl` names the *actions* — a Widget
   vocabulary of what the editor does — and `dialect/zsh` maps this shell's
   names onto them, which it has to, because the two shells with a line
   editor disagree: the key that walks history back is `up-line-or-history`

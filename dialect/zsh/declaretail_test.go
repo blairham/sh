@@ -187,6 +187,11 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // `epochtime`, bare, between `R=2` and the rest by name (#1154). The `-Ar`
 // against the bare `-r` is the association attribute showing through.
 //
+// `zsh_scheduled_events` is the seventh and arrived with `sched` (#1376),
+// readonly for the same reason and readonly in zsh too — measured,
+// `zmodload zsh/sched; readonly` there writes the name bare, exactly as it
+// writes `epochtime`.
+//
 // zsh writes a kind letter with the readonly one — `-Fr`, `-ir`, `-ar` — and
 // this shell writes `-r` alone, because a produced parameter has no integer
 // or float attribute here to show. Recorded rather than pinned: it is a
@@ -197,10 +202,12 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		`export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
 	want := "V='a b'\nEPOCHREALTIME\nEPOCHSECONDS\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
+		"zsh_scheduled_events\n" +
 		"export V='a b'\n" +
 		"typeset -r EPOCHREALTIME\ntypeset -r EPOCHSECONDS\ntypeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
-		"typeset -r dis_patchars\ntypeset -r dis_reswords\ntypeset -r epochtime\n"
+		"typeset -r dis_patchars\ntypeset -r dis_reswords\ntypeset -r epochtime\n" +
+		"typeset -r zsh_scheduled_events\n"
 	if st != 0 || out != want {
 		t.Errorf("got %q status %d, want %q at 0", out, st, want)
 	}

@@ -179,17 +179,26 @@ func registerBindkey(r *interp.Runner) {
 //
 // The dialect's answer to driver.Shell.KeyBindings, and it reports only the
 // *changes*: a key nobody mentioned is absent, and reaches the editor's own
-// dispatch. A key bound to a widget this editor has not got is present and
-// maps to WidgetNone, which is what makes it do nothing rather than fall
-// through to what it used to do — measured, that is zsh's answer too, since it
-// stores the unknown name and the key stops working.
-func KeyBindings(r *interp.Runner) map[string]repl.Widget {
-	out := map[string]repl.Widget{}
+// dispatch. A key bound to a widget this editor has not got and nothing
+// defined is present and bound to nothing, which is what makes it do nothing
+// rather than fall through to what it used to do — measured, that is zsh's
+// answer too, since it stores the unknown name and the key stops working.
+//
+// **A widget somebody defined wins over one of the editor's own names.** That
+// is what redefining one means, and it is the order `zle -N accept-line
+// my-accept` in a real startup file asks for; it is also the only order in
+// which a plugin's wrapper around a standard widget can work. See zle.go.
+func KeyBindings(r *interp.Runner) map[string]repl.Binding {
+	out := map[string]repl.Binding{}
 	for seq, widget := range readBindings(r) {
 		if def, standard := defaultBindings[seq]; standard && def == widget {
 			continue
 		}
-		out[seq] = bindkeyWidgets[widget]
+		if _, defined := widgetFunction(r, widget); defined {
+			out[seq] = repl.Binding{Function: widget}
+			continue
+		}
+		out[seq] = repl.Binding{Widget: bindkeyWidgets[widget]}
 	}
 	return out
 }

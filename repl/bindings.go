@@ -37,52 +37,52 @@ package repl
 //     waiting — it is a key that does nothing until another is pressed.
 
 // matchBinding reads as much of a bound sequence as has been started and
-// returns the widget it names.
+// returns what it is bound to.
 //
 // The first byte has already been read and is passed in. The second return is
 // whether a binding claimed the key at all: false leaves the editor's own
 // dispatch to handle the byte, which is what happens for every key nobody
 // rebound.
-func (e *editor) matchBinding(first byte) (Widget, bool, keyRead) {
+func (e *editor) matchBinding(first byte) (Binding, bool, keyRead) {
 	if e.bindings == nil {
-		return WidgetNone, false, keyContinues
+		return Binding{}, false, keyContinues
 	}
 	table := e.bindings()
 	if len(table) == 0 {
-		return WidgetNone, false, keyContinues
+		return Binding{}, false, keyContinues
 	}
 	seq := string(first)
 	if !anyBindingStartsWith(table, seq) {
-		return WidgetNone, false, keyContinues
+		return Binding{}, false, keyContinues
 	}
 	for {
-		if w, bound := table[seq]; bound {
-			return w, true, keyContinues
+		if b, bound := table[seq]; bound {
+			return b, true, keyContinues
 		}
 		// Nothing is bound to what has been read, but something longer starts
 		// with it, or the check above would have failed. So there is a byte
 		// worth waiting for.
-		b, got := e.readByte()
+		next, got := e.readByte()
 		if got != keyContinues {
 			// The key is claimed either way: the bytes behind it are gone, so
 			// handing the first one back to the dispatch would run a key
 			// nobody finished pressing.
-			return WidgetNone, true, got
+			return Binding{}, true, got
 		}
-		seq += string(b)
+		seq += string(next)
 		if !anyBindingStartsWith(table, seq) {
 			// The sequence turned into one nothing is waiting for. The bytes
 			// are dropped rather than typed into the line, which is what the
 			// editor does with any escape sequence it does not recognize —
 			// see escape.go, where reading a key whole is the point.
-			return WidgetNone, true, keyContinues
+			return Binding{}, true, keyContinues
 		}
 	}
 }
 
 // anyBindingStartsWith reports whether the table holds a sequence beginning
 // with the one given, the exact sequence included.
-func anyBindingStartsWith(table map[string]Widget, seq string) bool {
+func anyBindingStartsWith(table map[string]Binding, seq string) bool {
 	for bound := range table {
 		if len(bound) >= len(seq) && bound[:len(seq)] == seq {
 			return true

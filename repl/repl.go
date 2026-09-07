@@ -687,10 +687,14 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outpu
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
 	for {
-		s.errf("%s", s.beforeReading(ctx, nil, &pending).text)
+		drawn := s.beforeReading(ctx, nil, &pending)
 		if s.Runner.Exited() {
+			// A prompt hook called `exit`, exactly as in the other loop:
+			// measured, zsh's session ends there and draws no prompt, so
+			// the prompt this had ready is not written either.
 			return s.status(), nil
 		}
+		s.errf("%s", drawn.text)
 
 		line, err := in.ReadString('\n')
 		if line == "" && err != nil {

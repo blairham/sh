@@ -68,9 +68,14 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 	// fields, the outer two empty. That is the same rule `(@)` asks for,
 	// reached by a different flag.
 	keepEmpty := quoted && (r.flagKeepsFields(e) || splitFlagInGroup(e, sp))
+	// And a quoted `(f)` or `(s)` keeps the empty field at each *edge* while
+	// still dropping the interior ones, which is the same rule `${=spec}`
+	// already follows for an IFS split and was measured separately for these
+	// two flags — see splitFlagEdges.
+	edges := !keepEmpty && splitFlagEdges(e, quoted)
 	out := make([]string, 0, len(words))
-	for _, w := range words {
-		if w == "" && !keepEmpty {
+	for i, w := range words {
+		if w == "" && !keepEmpty && !(edges && (i == 0 || i == len(words)-1)) {
 			continue
 		}
 		if quoted || !r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
@@ -267,6 +272,16 @@ func splitFlagged(w string, e *syntax.ParamExpr) []string {
 		sep = e.SplitSep
 	}
 	if sep == "" {
+		if w == "" {
+			// One empty field rather than none. `strings.Split` on any
+			// non-empty separator already answers this way — `${(f)v}` and
+			// `${(s.:.)v}` on an empty value are one empty field — and the
+			// character split has to agree, because whether the field
+			// survives is then the *edge* question and not a second rule.
+			// Measured: `v=""; set -- "${(s::)v}"` is one parameter in the
+			// shell that has the flag, and none unquoted.
+			return []string{""}
+		}
 		out := make([]string, 0, len(w))
 		for _, c := range w {
 			out = append(out, string(c))
@@ -274,6 +289,36 @@ func splitFlagged(w string, e *syntax.ParamExpr) []string {
 		return out
 	}
 	return strings.Split(w, sep)
+}
+
+// splitFlagEdges reports whether this expansion keeps the empty field at each
+// edge of what `(f)` or `(s)` split.
+//
+// Measured against zsh 5.9.2 with `(s.:.)` and a colon separator, quoted and
+// without `@`, which is the reading that has an answer of its own — `(@)`
+// keeps every empty field and unquoted keeps none:
+//
+//	""       1  ['']            an empty value is one empty field
+//	":"      2  ['' '']         both edges, and no interior field between
+//	"::"     2  ['' '']         the interior one is dropped
+//	":::"    2  ['' '']         and so is a run of them
+//	"a:"     2  ['a' '']        the trailing edge is kept
+//	":a"     2  ['' 'a']        so is the leading one
+//	":a:"    3  ['' 'a' '']     both, around a field that is not empty
+//	"a::b"   2  ['a' 'b']       the interior one is dropped
+//	"a:::b"  2  ['a' 'b']
+//	"a::"    2  ['a' '']        interior dropped, trailing kept
+//	"::a"    2  ['' 'a']        leading kept, interior dropped
+//
+// So it is the edges that are kept and the interior that goes, which is the
+// same shape `${=spec}` already had for an IFS split (splitFieldsEdges) and
+// is why this is a rule about *which* empty field rather than about whether
+// empty fields survive at all. Dropping every one of them answered `n=0` for
+// `":"` where the shell says 2, and 0 for an empty value where it says 1 —
+// a plausible count at status 0, which is the failure this codebase minds
+// most (#1097).
+func splitFlagEdges(e *syntax.ParamExpr, quoted bool) bool {
+	return quoted && strings.ContainsAny(e.Flags, "fs")
 }
 
 // flagBase is the value the pipeline starts from: the words, whether the

@@ -100,6 +100,7 @@ func corpusGrammar() syntax.Dialect {
 	// dialect narrow enough to be a shell could not read all of it.
 	d.CaseContinuePipe = true
 	d.ClobberOverrideMarker = true
+	d.CasePatternListSpansNewlines = true
 	d.Coproc = true
 	d.CoprocName = true
 	d.CurrentShellSubstitution = true

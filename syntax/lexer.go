@@ -85,6 +85,12 @@ type Lexer struct {
 	// Exactly the shape inPattern has, for exactly the same reason.
 	inArgument bool
 
+	// inCaseParenList is set while the token being read stands inside a
+	// `case` arm's parenthesized pattern list — between the paren the arm
+	// carries and the one that closes it. One dialect reads a newline there
+	// as text; see newlineIsText.
+	inCaseParenList bool
+
 	// inCaseArm is set while the token that *begins* a `case` arm is read.
 	//
 	// Two things are different there, and both are about a `(` the arm may
@@ -309,7 +315,7 @@ func (l *Lexer) Next() Token {
 		return Token{Kind: TokEOF, Pos: start, End: start}
 	}
 
-	if l.peek() == '\n' {
+	if l.peek() == '\n' && !l.newlineIsText() {
 		l.advance()
 		// The newline is where any pending here-document bodies begin.
 		l.readHeredocs()
@@ -735,7 +741,22 @@ func (l *Lexer) endsWord(c byte) bool {
 			return !l.dialect.RegexTakesAlternation
 		}
 	}
+	if c == '\n' && l.newlineIsText() {
+		return false
+	}
 	return c != '(' || (!l.opensPatternGroup() && !l.opensSubscriptFlags())
+}
+
+// newlineIsText reports whether a newline here is an ordinary character of
+// the word rather than the end of one.
+//
+// One position only: inside a `case` arm's parenthesized pattern list, where
+// one dialect reads the whole list as a single alternation word. See
+// Dialect.CasePatternListSpansNewlines, which is where it is measured — and
+// note that a *blank* is unaffected either way, so `(a | b)` is still two
+// alternatives there and only the newline changes hands.
+func (l *Lexer) newlineIsText() bool {
+	return l.inCaseParenList && l.dialect.CasePatternListSpansNewlines
 }
 
 // opensPatternGroup reports whether a `(` here belongs to the word.

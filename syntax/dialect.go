@@ -376,6 +376,41 @@ type Dialect struct {
 	// have such an alternative written into it.
 	CasePatternMayBeEmpty bool
 
+	// CasePatternListSpansNewlines makes a newline inside a `case` arm's
+	// **parenthesized** pattern list an ordinary character of the pattern
+	// rather than the end of a word or a statement.
+	//
+	// zsh alone. Measured 2026-09-07 over a script file, with a scratch HOME
+	// and ZDOTDIR:
+	//
+	//	case a in (a|      zsh: `m`, status 0
+	//	b) echo m;; *) echo no;; esac
+	//
+	// and every other shell in the panel refuses the line — bash 5.3.15, the
+	// same binary as `sh`, and bash 3.2.57 blame the newline, dash blames the
+	// word on the next line, ksh93u+ blames the newline at line 2. Three
+	// wordings and three statuses.
+	//
+	// What zsh matched is the *first* alternative, and the second is two
+	// characters — a newline and a `b`. Four probes say so and no fewer will:
+	// subject `a` gives `m`, subject `b` gives `no`, subject `""` gives `no`,
+	// and a subject holding a newline before the `b` gives `m`. `functions`
+	// on a function carrying the arm prints the newline back inside the
+	// pattern, which is the same fact from the writing side.
+	//
+	// It is not a rule about the `|`. A newline anywhere inside the list is
+	// text: `(a` newline `)` is the two-character pattern, so subject `a`
+	// does *not* match it, and `(a` newline `|b)` puts the newline on the end
+	// of the first alternative. And it needs the arm's **paren**: `case a in
+	// a|` newline `b)` is a parse error in zsh too, so what opens this is the
+	// parenthesis and not the position.
+	//
+	// This is #1083's `|` seen from the other side and a bigger claim than
+	// that one. `CasePatternMayBeEmpty` lets an alternative be *written* as
+	// nothing, which is a rule about the list; this says the separator does
+	// not end the word at all, which reaches the lexer.
+	CasePatternListSpansNewlines bool
+
 	// FuncDefAtParen commits to a function definition as soon as a name is
 	// followed by `(`, rather than requiring the `()` pair.
 	//

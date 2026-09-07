@@ -258,6 +258,56 @@ expansion, and the third measured instance of it.
 `${a[i]}` inherits the array-base axis from `semantics.md`: with
 `a=(p q r)`, `${a[1]}` is `q` in bash and ksh93 and `p` in zsh.
 
+### A replacement is text, and the pattern beside it is a pattern
+
+The two operands of `${x/pat/rep}` are read differently, and the second
+one is the half with no metacharacters in it at all. Measured 2026-09-07
+across bash 5.3.15, that build as `sh`, bash 3.2.57, ksh93u+ and zsh
+5.9.2, in a directory holding files named `axcd` and `aQcd` so that a
+pattern would have something to find — and asserting **what lands in the
+variable**, so that the surrounding field does not answer first:
+
+    x=abcd
+    y=${x//b/*}     →  a*cd      in all five
+    y=${x//b/[Q]}   →  a[Q]cd    in all five
+    y=${x//b/?}     →  a?cd      in all five
+
+The replacement is still *expanded* — it is a word, like every other
+operand — and what an expansion produces is text rather than more
+syntax: with `r="p q"`, `y=${x/b/$r}` is `ap qcd` in all five, one field
+and one space.
+
+What happens to those characters **after** they land is the ordinary rule
+for an expansion's result and not the replacement's own, which is why the
+unquoted uses split the panel where the assignments do not:
+
+| probe | bash, `sh`, bash 3.2, ksh93 | zsh |
+| --- | --- | --- |
+| `printf "[%s]" ${x//b/*}` | `[aQcd][axcd]` | `[a*cd]` |
+| `printf "[%s]" "${x//b/*}"` | `[a*cd]` | `[a*cd]` |
+| `r="p q"; printf "[%s]" ${x/b/$r}` | `[ap][qcd]` | `[ap qcd]` |
+
+Both columns follow from axes already recorded: `GlobExpansionResults`
+says whether an unquoted expansion's result is re-read as a pattern, and
+`SplitParamExpansion` whether it is split. Neither of them is a question
+about the replacement, and the quoted row is the control that says so —
+one field, four characters, everywhere.
+
+**An assignment cannot be used to check this here**, which is worth
+writing down because it is the obvious probe and it does not work: an
+assignment's value is expanded with pathname expansion suspended for the
+*whole word*, nested operands included, so a replacement stops globbing
+in that position for a reason of its own. The rows above are facts about
+the panel, where the fault does not exist; a row asking the same question
+of this implementation has to use a **quoted** expansion, which switches
+off the result's globbing and nothing else.
+
+Reading the replacement as a pattern is a **silent** wrong answer in the
+shape this document treats as the worst: `${x//b/*}` substituted a
+directory listing into the middle of a string at status 0, and the
+bracket expression that made it noticeable was the same fault reaching a
+dialect where an unmatched pattern is fatal (#1337).
+
 ## The `!` that lists names instead of following one
 
 Two more spellings open with `!` and are not indirection:

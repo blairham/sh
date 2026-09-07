@@ -372,9 +372,14 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 		o.where = w
 	}
 	w.total, w.caps = len(subject), newCaptures(w.plan)
-	// A trial's answers are about *this* subject, so they are dropped with
-	// the captures rather than carried into the next one.
-	w.asked, w.dead = 0, nil
+	// The captures are this trial's and are always replaced. The memo is
+	// about the pattern and the subject, so it survives a trial and is
+	// dropped only when one of those changes — see matchWhere.
+	if !w.ready || w.pattern != pattern || w.subject != subject {
+		w.ready, w.pattern, w.subject = true, pattern, subject
+		w.asked, w.dead, w.deadWide = 0, nil, nil
+		w.packable = len(pattern) < packBase && len(subject) < packBase
+	}
 	if !matchHere(pattern, piece, 0, base, o) {
 		return false, matchReport{}
 	}
@@ -420,17 +425,13 @@ func matchHere(p, s string, pp, at int, o patternOpts) bool {
 	if w.asked <= memoThreshold {
 		return matchBranch(p, s, pp, at, o)
 	}
-	k := matchKey{pp: pp, plen: len(p), at: at, slen: len(s), fold: o.litFold}
-	if _, dead := w.dead[k]; dead {
+	if w.known(pp, len(p), at, len(s), o.litFold) {
 		return false
 	}
 	if matchBranch(p, s, pp, at, o) {
 		return true
 	}
-	if w.dead == nil {
-		w.dead = make(map[matchKey]struct{})
-	}
-	w.dead[k] = struct{}{}
+	w.remember(pp, len(p), at, len(s), o.litFold)
 	return false
 }
 

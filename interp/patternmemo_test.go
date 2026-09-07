@@ -245,3 +245,95 @@ func TestOneOptionsValueAnswersManySubjects(t *testing.T) {
 		}
 	}
 }
+
+// TestThePackedKeyIsInjective is the whole safety argument for packing five
+// numbers into one, made by enumeration rather than by inspecting the
+// arithmetic.
+//
+// A memo key has exactly one requirement: two different questions must not
+// get the same number. A packed key that aliases answers a question nobody
+// asked, and does it silently — the failure is a wrong match, not a panic.
+// The first version of this packing was written with 16-bit shifts and then
+// multiplied by four to make room for the folding, which pushed the top field
+// past bit 63 and aliased every pattern offset above 16383. Nothing would
+// have noticed on the patterns in this file, because they are short.
+func TestThePackedKeyIsInjective(t *testing.T) {
+	seen := map[uint64]matchKey{}
+	// Values chosen around every boundary the packing has: zero, one, the
+	// byte and 14-bit edges the broken version aliased at, and the top of
+	// the field.
+	vals := []int{0, 1, 2, 255, 256, 16383, 16384, 16385, 32766, packBase - 1}
+	folds := []caseFolding{caseExact, caseEither, caseLowerEither}
+	for _, pp := range vals {
+		for _, plen := range vals {
+			for _, at := range vals {
+				for _, slen := range vals {
+					for _, f := range folds {
+						k := matchKey{pp: pp, plen: plen, at: at, slen: slen, fold: f}
+						n := packKey(pp, plen, at, slen, f)
+						if prev, ok := seen[n]; ok {
+							t.Fatalf("packKey aliases %+v and %+v both to %d", prev, k, n)
+						}
+						seen[n] = k
+					}
+				}
+			}
+		}
+	}
+	t.Logf("%d distinct questions, %d distinct keys", len(seen), len(seen))
+}
+
+// TestTheWideMemoAnswersLikeThePackedOne exercises the fallback, which no
+// ordinary test reaches because it only runs for a pattern or subject of
+// 32,768 bytes or more.
+//
+// An unreached branch in a memo is the worst kind: it is correct-looking code
+// that only ever runs on the inputs nobody tested, and the symptom of it being
+// wrong is a wrong answer rather than a crash. So the same cross-product that
+// checks the packed path is run again with packing forced off, and the two
+// have to agree with each other and with no memo at all.
+func TestTheWideMemoAnswersLikeThePackedOne(t *testing.T) {
+	was := memoThreshold
+	t.Cleanup(func() { memoThreshold = was })
+	wide := 0
+	for _, pattern := range memoPatterns {
+		for _, subject := range memoSubjects {
+			memoThreshold = 1 << 30
+			off := memoTestOpts(pattern)
+			wantOK, wantReport := matchPatternIn(pattern, subject, subject, 0, off)
+
+			memoThreshold = 0
+			packed := memoTestOpts(pattern)
+			gotOK, gotReport := matchPatternIn(pattern, subject, subject, 0, packed)
+
+			forced := memoTestOpts(pattern)
+			// matchPatternIn sets packable from the lengths, so it is
+			// overridden after the first question has established the rest.
+			forced.where.pattern, forced.where.subject = pattern, subject
+			forced.where.packable = false
+			forced.where.total = len(subject)
+			forced.where.caps = newCaptures(forced.where.plan)
+			wideOK := matchHere(pattern, subject, 0, 0, forced)
+
+			if !packed.where.packable {
+				t.Errorf("%q vs %q was not packable, so the packed path was not the one compared", pattern, subject)
+			}
+			if len(forced.where.dead) != 0 {
+				t.Errorf("%q vs %q wrote a packed entry with packing forced off", pattern, subject)
+			}
+			if len(forced.where.deadWide) > 0 {
+				wide++
+			}
+			if gotOK != wantOK || !sameReport(gotReport, wantReport) {
+				t.Errorf("%q vs %q: packed memo disagrees with no memo", pattern, subject)
+			}
+			if wideOK != wantOK {
+				t.Errorf("%q vs %q: wide memo says %v, no memo says %v", pattern, subject, wideOK, wantOK)
+			}
+		}
+	}
+	if wide*4 < len(memoPatterns)*len(memoSubjects) {
+		t.Errorf("only %d pairs used the wide memo, so most of this proves nothing", wide)
+	}
+	t.Logf("%d pairs went through the wide memo", wide)
+}

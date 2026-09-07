@@ -171,27 +171,36 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // The bare `export` and `readonly` drop the command word, which their own
 // `-p` does not — and this shell's `readonly -p` is not even `readonly`.
 //
-// **Four produced parameters are in both readonly listings and carry no value
-// in either**, which is measured rather than an artifact: each is a readonly
-// parameter this shell *produces*, and each is readonly in zsh too — `set`
-// there writes the bare name and `typeset -r` writes the bare name, because
-// the parameter is hidden. Writing the table out instead would put every
-// builtin this shell has into a listing a caller sources back (#1060).
+// **Seven produced parameters are in both readonly listings and carry no
+// value in either**, which is measured rather than an artifact: each is a
+// readonly parameter this shell *produces*, and each is readonly in zsh too —
+// `set` there writes the bare name and `typeset -r` writes the bare name,
+// because the parameter is hidden. Writing the table out instead would put
+// every builtin this shell has into a listing a caller sources back (#1060).
 //
-// `builtins` is the one with contents. The other three are `zsh/parameter`'s
+// `builtins` is the one with contents. Three are `zsh/parameter`'s
 // empty-and-right-to-be ones that zsh marks readonly — `dis_functions_source`,
 // `dis_patchars` and `dis_reswords` — and readonly is what keeps a write from
-// leaving a stored table in front of the view (#1146). The `-Ar` against the
-// bare `-r` is the association attribute showing through: two of the four are
-// arrays.
+// leaving a stored table in front of the view (#1146). The last three are
+// `zsh/datetime`'s clock reads, readonly for the same reason and readonly in
+// zsh too, where they list exactly here: `EPOCHREALTIME`, `EPOCHSECONDS` and
+// `epochtime`, bare, between `R=2` and the rest by name (#1154). The `-Ar`
+// against the bare `-r` is the association attribute showing through.
+//
+// zsh writes a kind letter with the readonly one — `-Fr`, `-ir`, `-ar` — and
+// this shell writes `-r` alone, because a produced parameter has no integer
+// or float attribute here to show. Recorded rather than pinned: it is a
+// letter in a listing of a hidden name, and the alternative is an attribute
+// seam nothing else wants.
 func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
 		`export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
-	want := "V='a b'\nR=2\n" +
-		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\n" +
-		"export V='a b'\ntypeset -r R=2\n" +
+	want := "V='a b'\nEPOCHREALTIME\nEPOCHSECONDS\nR=2\n" +
+		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
+		"export V='a b'\n" +
+		"typeset -r EPOCHREALTIME\ntypeset -r EPOCHSECONDS\ntypeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
-		"typeset -r dis_patchars\ntypeset -r dis_reswords\n"
+		"typeset -r dis_patchars\ntypeset -r dis_reswords\ntypeset -r epochtime\n"
 	if st != 0 || out != want {
 		t.Errorf("got %q status %d, want %q at 0", out, st, want)
 	}

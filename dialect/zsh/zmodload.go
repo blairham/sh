@@ -128,6 +128,10 @@ var zmodloadFeatures = map[string][]string{
 		"b:comparguments", "b:compdescribe", "b:compfiles", "b:compgroups",
 		"b:compquote", "b:comptags", "b:comptry", "b:compvalues",
 	},
+	// All four implemented, which is the only module here that can say so:
+	// three clock reads and a formatter, none of which needs a seam this
+	// shell has not got. See datetime.go.
+	"zsh/datetime": {"b:strftime", "p:EPOCHSECONDS", "p:EPOCHREALTIME", "p:epochtime"},
 	"zsh/terminfo": {"b:echoti", "p:terminfo"},
 	"zsh/termcap":  {"b:echotc", "p:termcap"},
 	"zsh/system": {
@@ -236,12 +240,12 @@ func zmodloadLoaded(r *interp.Runner) []string {
 		return []string{zmodloadAlwaysLoaded}
 	}
 	out := append([]string(nil), stored...)
-	// Sorted because that is the order zsh's listing is in, and *not*
-	// because a test can see it: only a module with no features loads in
-	// this shell and there is exactly one of those, so no script can get two
-	// names into this list. Kept rather than dropped so the order is right
-	// the day a second module can load — see the surviving mutant noted in
-	// the pull request rather than left for somebody to rediscover.
+	// Sorted because that is the order zsh's listing is in. This was once
+	// unobservable — only a module with no features loaded, and there is
+	// exactly one of those — and it is observable now: `zsh/datetime` has
+	// all four of its features here, so `zmodload zsh/datetime; zmodload`
+	// writes two names and the order is the shell's answer rather than a
+	// map's (#1154).
 	sort.Strings(out)
 	return out
 }

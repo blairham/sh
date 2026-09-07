@@ -104,3 +104,23 @@ func TestAnElementIsReadAsAnOperandLikeAName(t *testing.T) {
 		})
 	}
 }
+
+// A subscript a write refuses is named as it was *written*, in an expression
+// exactly as in a plain assignment.
+//
+// The expression path had only the evaluated number to hand and quoted that:
+// `a[-1]: bad array subscript` where the shell says `a[x-2]`. It is the
+// difference between a diagnostic a person can find in their script and one
+// they cannot — `-1` appears nowhere in the line that failed. Measured on
+// bash 5.3, which is the dialect in the panel that quotes the subscript back.
+func TestARefusedSubscriptInAnExpressionIsNamedAsWritten(t *testing.T) {
+	for _, src := range []string{
+		`x=1; (( a[x-2] = 5 ))`,
+		`x=1; (( a[x-2]++ ))`,
+	} {
+		out, _ := run(t, src, nil)
+		if !strings.Contains(out, "a[x-2]: bad array subscript") {
+			t.Errorf("%s = %q, want the subscript named as written", src, out)
+		}
+	}
+}

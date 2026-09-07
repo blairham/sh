@@ -1800,6 +1800,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `zmodload/the-features-of-a-module-with-none` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=1` **2>** `<shell>:zmodload:1: module `zsh/main' does not support features` |
 | `zmodload/the-feature-letter-needs-the-listing-letter` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=1` **2>** `<shell>:zmodload:1: -l is only allowed with -F` |
 | `zmodload/the-feature-letter-needs-a-module` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=1` **2>** `<shell>:zmodload:1: -F requires a module name` |
+| `zmodload/loading-the-clock-module` | `st=127~e=127` **2>** `<shell>: 1: zmodload: not found~<shell>: 1: zmodload: not found~<shell>: 1: zmodload: not found` *(status 127)* | `st=127~e=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: zmodload: command not found~<shell>: line 1: zmodload: command not found` *(status 127)* | `st=127~e=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: zmodload: command not found~<shell>: line 1: zmodload: command not found` *(status 127)* | `st=127~e=127` **2>** `<shell>: zmodload: command not found~<shell>: zmodload: command not found~<shell>: zmodload: command not found` *(status 127)* | `st=127~e=127` **2>** `<shell>: zmodload: not found~<shell>: zmodload: not found~<shell>: zmodload: not found` *(status 127)* | `st=0~e=0~zsh/datetime~zsh/main` |
+| `datetime/the-seconds-are-a-clock-read` | `0 1` **2>** `<shell>: 1: zmodload: not found` | `1 1` **2>** `<shell>: line 1: zmodload: command not found` | `1 1` **2>** `<shell>: line 1: zmodload: command not found` | `0 1` **2>** `<shell>: zmodload: command not found` | `0 1` **2>** `<shell>: zmodload: not found` | `1 1` |
+| `datetime/the-real-time-and-how-many-places-it-carries` | `places=0 set=` | `places=6 set=yes` | `places=6 set=yes` | `places=0 set=` | `places=0 set=` | `places=10 set=yes` |
+| `datetime/the-pair-is-seconds-and-nanoseconds` | **2>** `<shell>: 1: zmodload: not found~<shell>: 1: Bad substitution` *(status 2)* | `n=0 0 1` **2>** `<shell>: line 1: zmodload: command not found` | `n=0 0 1` **2>** `<shell>: line 1: zmodload: command not found` | `n=0 0 1` **2>** `<shell>: zmodload: command not found` | `n=0 0 1` **2>** `<shell>: zmodload: not found` | `n=2 1 1` |
+| `datetime/strftime-writes-an-epoch` | `st=127` **2>** `<shell>: 1: zmodload: not found~<shell>: 1: strftime: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: strftime: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: strftime: command not found` | `st=127` **2>** `<shell>: zmodload: command not found~<shell>: strftime: command not found` | `st=127` **2>** `<shell>: zmodload: not found~<shell>: strftime: not found` | `2026-09-06 12:34:56~st=0` |
+| `datetime/strftime-assigns-and-drops-the-newline` | `\|~v= st=127` **2>** `<shell>: 1: zmodload: not found~<shell>: 1: strftime: not found~<shell>: 1: strftime: not found` | `\|~v= st=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: strftime: command not found~<shell>: line 1: strftime: command not found` | `\|~v= st=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: strftime: command not found~<shell>: line 1: strftime: command not found` | `\|~v= st=127` **2>** `<shell>: zmodload: command not found~<shell>: strftime: command not found~<shell>: strftime: command not found` | `\|~v= st=127` **2>** `<shell>: zmodload: not found~<shell>: strftime: not found~<shell>: strftime: not found` | `2026\|~v=12:34 st=0` |
+| `datetime/strftime-reads-a-header-back` | `v= st=127` **2>** `<shell>: 1: zmodload: not found~<shell>: 1: strftime: not found` | `v= st=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: strftime: command not found` | `v= st=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: strftime: command not found` | `v= st=127` **2>** `<shell>: zmodload: command not found~<shell>: strftime: command not found` | `v= st=127` **2>** `<shell>: zmodload: not found~<shell>: strftime: not found` | `v=1788698096 st=0` |
+| `datetime/strftime-refuses-by-name` | `st=127~st=127~st=127~after` **2>** `<shell>: 1: zmodload: not found~<shell>: 1: strftime: not found~<shell>: 1: strftime: not found~<shell>: 1: strftime: not found` | `st=127~st=127~st=127~after` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: strftime: command not found~<shell>: line 1: strftime: command not found~<shell>: line 1: strftime: command not found` | `st=127~st=127~st=127~after` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: strftime: command not found~<shell>: line 1: strftime: command not found~<shell>: line 1: strftime: command not found` | `st=127~st=127~st=127~after` **2>** `<shell>: zmodload: command not found~<shell>: strftime: command not found~<shell>: strftime: command not found~<shell>: strftime: command not found` | `st=127~st=127~st=127~after` **2>** `<shell>: zmodload: not found~<shell>: strftime: not found~<shell>: strftime: not found~<shell>: strftime: not found` | `st=1~st=1~st=1~after` **2>** `<shell>:strftime:1: not enough arguments~<shell>:strftime:1: too many arguments~<shell>:strftime:1: abc: invalid argument` |
 | `zmodload/a-letter-the-builtin-does-not-have` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=1` **2>** `<shell>:zmodload:1: bad option: -q` |
 | `zmodload/autoloading-a-builtin-from-a-module` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=0` |
 | `zmodload/loading-by-feature` | `st=127` **2>** `<shell>: 1: zmodload: not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: line 1: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: command not found` | `st=127` **2>** `<shell>: zmodload: not found` | `st=0` |
@@ -2859,6 +2867,38 @@ grades it and nothing drift-checks it either, for the same reason.
 - `zmodload/the-feature-letter-needs-a-module` — and `-F` with nothing to act on is `-F requires a module name` and 1, where the bare builtin with no letters at all is a listing and 0 — so the operand is required by the letter rather than by the builtin
   ```sh
   zmodload -F; echo "st=$?"
+  ```
+- `zmodload/loading-the-clock-module` — the line `zi.zsh` guards its whole scheduler on — `if { zmodload zsh/datetime } { … }` — and the listing after it, which is where a second loaded module first became observable: until this one there was exactly one loadable module, so nothing could tell the sorted listing from an unsorted one
+  ```sh
+  zmodload zsh/datetime; echo "st=$?"; zmodload -e zsh/datetime; echo "e=$?"; zmodload
+  ```
+- `datetime/the-seconds-are-a-clock-read` — a value, not a shape: the seconds are past a date already gone and never go backwards between two reads. Asked this way because the number itself is different every time the corpus runs, and a case that pinned one would have to be rewritten daily — where a shell answering `0` for an unset parameter fails both halves
+  ```sh
+  zmodload zsh/datetime; a=$EPOCHSECONDS; echo "$(( a > 1700000000 )) $(( EPOCHSECONDS >= a ))"
+  ```
+- `datetime/the-real-time-and-how-many-places-it-carries` — how many decimal places the fraction carries, which is a dialect answer and not a shape: zsh's is `typeset -F`'s ten and bash's own `$EPOCHREALTIME` — it has one, from 5.0 — is six. bash 3.2, ksh93 and dash have no such parameter and the count is of an empty string, which the `set=` half tells apart from a real zero. Counted rather than printed because the digits are a clock and a recorded value would be stale the second after
+  ```sh
+  zmodload zsh/datetime 2>/dev/null; d=${EPOCHREALTIME#*.}; echo "places=${#d} set=${EPOCHREALTIME:+yes}"
+  ```
+- `datetime/the-pair-is-seconds-and-nanoseconds` — the third parameter is the same clock with the nanoseconds beside the seconds instead of inside them — two elements, and the first of them is the same number `$EPOCHSECONDS` is
+  ```sh
+  zmodload zsh/datetime; echo "n=${#epochtime[@]} $(( epochtime[1] > 1700000000 )) $(( epochtime[2] >= 0 ))"
+  ```
+- `datetime/strftime-writes-an-epoch` — a fixed epoch through the format language `printf '%(fmt)T'` also writes, so the two spellings of one job cannot drift. The zone is pinned because the answer is a wall clock and the record would otherwise be about the machine that made it
+  ```sh
+  zmodload zsh/datetime; strftime "%Y-%m-%d %H:%M:%S" 1788698096; echo "st=$?"
+  ```
+- `datetime/strftime-assigns-and-drops-the-newline` — the two letters that change where the answer goes rather than what it is — `-n` writes no newline and `-s` writes no output at all. A shell that treated `-s` as a formatting flag would print the time *and* set the variable, which the `|` and the `v=` between them catch
+  ```sh
+  zmodload zsh/datetime; strftime -n "%Y" 1788698096; echo "|"; strftime -s v "%H:%M" 1788698096; echo "v=$v st=$?"
+  ```
+- `datetime/strftime-reads-a-header-back` — the direction and the exact format `lib/zsh/install.zsh` reads an HTTP `Last-Modified` header with, `-r` and `-s` in one word as it writes them. The month is a name rather than a number, which is the part a numeric-only reading would refuse
+  ```sh
+  zmodload zsh/datetime; strftime -rs v "%d %b %Y %H:%M:%S GMT" "06 Sep 2026 12:34:56 GMT"; echo "v=$v st=$?"
+  ```
+- `datetime/strftime-refuses-by-name` — three usage refusals in a row, each at 1 and none of them fatal — the `after` is what says so. Two of the three are counted before any argument is looked at, so a shell checking the format first would word them differently
+  ```sh
+  zmodload zsh/datetime; strftime; echo "st=$?"; strftime "%Y" 1 2 3; echo "st=$?"; strftime "%Y" abc; echo "st=$?"; echo after
   ```
 - `zmodload/a-letter-the-builtin-does-not-have` — `bad option: -q` and 1 — this builtin's wording, which is `bindkey`'s and not `zstyle`'s `invalid option`, measured in all three. `-q` is one of twenty-two letters zsh's zmodload does not have, against the seventeen it does
   ```sh
@@ -5064,6 +5104,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/negative-exponent-diverges` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "2**-1"` *(status 2)* | **2>** `<shell>: line 1: 2**-1: exponent less than 0 (error token is "1")` *(status 1)* | **2>** `<shell>: line 1: 2**-1: exponent less than 0 (error token is "1")` *(status 127)* | **2>** `<shell>: 2**-1: exponent less than 0 (error token is "1")` *(status 1)* | `[0.5]` | `[0.5]` |
 | `arith/division-by-zero-is-a-runtime-error` | **2>** `<shell>: 1: arithmetic expression: division by zero: "1/0"` *(status 2)* | **2>** `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | **2>** `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 127)* | **2>** `<shell>: 1/0: division by 0 (error token is "0")` *(status 1)* | **2>** `<shell>: 1/0: divide by zero` *(status 1)* | **2>** `<shell>:1: division by zero` *(status 1)* |
 | `arith/non-numeric-variable-diverges` | **2>** `<shell>: 1: Illegal number: abc` *(status 2)* | `[1]` | `[1]` | `[1]` | **2>** `<shell>: abc: parameter not set` *(status 1)* | `[1]` |
+| `arith/increment-through-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[5]` | `[5]` | `[5]` | `[5]` | `[4]` |
+| `arith/increment-through-a-key` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=1: not found~<shell>: 1: m[k]++: not found~<shell>: 1: Bad substitution` *(status 2)* | `[2]` | `[2]` | `[2]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[2]` | `[2]` |
+| `arith/a-key-is-not-an-index-in-an-expression` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=7: not found~<shell>: 1: m[0]=99: not found~<shell>: 1: arithmetic expression: expecting EOF: " m[k] "` *(status 2)* | `[7]` | `[7]` | `[99]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[7]` | `[7]` |
+| `arith/an-element-holding-a-name-is-chased` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[5]` | `[5]` | `[5]` | `[5]` | `[0]` |
 | `arith/integer-division-stays-integer` | `1` | `1` | `1` | `1` | `1` | `1` |
 | `arith/one-float-makes-the-expression-float` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "3.0/2"` *(status 2)* | **2>** `<shell>: line 1: 3.0/2: arithmetic syntax error: invalid arithmetic operator (error token is ".0/2")` *(status 1)* | **2>** `<shell>: line 1: 3.0/2: arithmetic syntax error: invalid arithmetic operator (error token is ".0/2")` *(status 127)* | **2>** `<shell>: 3.0/2: syntax error: invalid arithmetic operator (error token is ".0/2")` *(status 1)* | `1.5` | `1.5` |
 | `arith/a-whole-float-keeps-its-point` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "1.5+2.5"` *(status 2)* | **2>** `<shell>: line 1: 1.5+2.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5+2.5")` *(status 1)* | **2>** `<shell>: line 1: 1.5+2.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5+2.5")` *(status 127)* | **2>** `<shell>: 1.5+2.5: syntax error: invalid arithmetic operator (error token is ".5+2.5")` *(status 1)* | `4` | `4.` |
@@ -5286,6 +5330,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `arith/non-numeric-variable-diverges` — three answers: dash and ksh93 error differently, while bash and zsh re-evaluate the value as an expression and reach 0
   ```sh
   x=abc; printf "[%s]" "$((x+1))"
+  ```
+- `arith/increment-through-a-subscript` — `++` took a bare name and nothing else, so this was `++ needs a variable` in every dialect while `(( a[1] += 1 ))` on the same element was fine. A name that can be assigned to can be incremented; the three shells with arrays all say so, and they differ here only by where the first element is
+  ```sh
+  a=(3 4 5); (( a[1]++ )); printf "[%s]" "${a[1]}"
+  ```
+- `arith/increment-through-a-key` — the spelling a real script reached — a counter kept in an association, incremented in place. The declared attribute makes the subscript a key on the way in *and* on the way out, so the operator has to know which kind of array it is writing to; dash and bash 3.2 have no `-A` and split the panel
+  ```sh
+  typeset -A m; m[k]=1; (( m[k]++ )); printf "[%s]" "${m[k]}"
+  ```
+- `arith/a-key-is-not-an-index-in-an-expression` — the case that tells the two readings apart, and the reason it was worth a row of its own: evaluating the subscript answered 99 with no diagnostic at all, which is a wrong value a script cannot see. The three shells with the attribute all read the key
+  ```sh
+  typeset -A m; m[k]=7; m[0]=99; k=0; printf "[%s]" "$(( m[k] ))"
+  ```
+- `arith/an-element-holding-a-name-is-chased` — the chase a bare name already got, asked of an element: the storage an operand came out of is not what decides how it reads. bash and ksh93 reach 5 here and zsh counts from 1 so its element 0 is nothing, which is the same split `${a[0]}` shows and not a second rule
+  ```sh
+  y=5; a=(y); printf "[%s]" "$(( a[0] ))"
   ```
 - `arith/integer-division-stays-integer` — whole numbers mean the same thing everywhere, floats or not — an expression is integer until a float enters it, which is why the shells with floats still answer 1 here
   ```sh

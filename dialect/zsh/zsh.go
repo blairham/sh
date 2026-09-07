@@ -1178,6 +1178,10 @@ func Apply(r *interp.Runner) {
 	// through as associations, produced when they are asked for rather than
 	// stored. See parameter.go.
 	registerParameterModule(r)
+	// And `zsh/datetime`'s four, all of which this shell can answer honestly:
+	// three clock reads through Runner.Now and a formatter over the same
+	// format language `printf '%(fmt)T'` writes. See datetime.go.
+	registerDatetimeModule(r)
 	// This shell's richer `echo`, and not ksh93's builtin of the same
 	// spelling: different letters, a different escape set and different
 	// wordings, all measured side by side. See print.go.

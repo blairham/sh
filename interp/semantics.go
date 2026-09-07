@@ -4069,6 +4069,43 @@ type Semantics struct {
 	// it.
 	UnsetTakesASubscript Answer
 
+	// SubscriptedOperandTakesTheIntegerAttribute lets `typeset -i a[1]=0x10`
+	// give the array the integer attribute and write the element with it.
+	//
+	// Measured 2026-09-07: bash 5.3 and ksh93u+ both store 16 and list the
+	// array back with the attribute on it; zsh 5.9.2 refuses the operand
+	// outright, because an element is not a name and the attribute belongs to
+	// the name. Asked only when the letter was written, so the plain
+	// declaration needs no answer from anyone.
+	SubscriptedOperandTakesTheIntegerAttribute Answer
+
+	// SubscriptedOperandTakesALocalDeclaration lets `typeset a[1]=v` inside a
+	// function make the array local and write the element into the local one.
+	//
+	// The same split, and a separate field because it is a different thing
+	// being done to the variable: bash 5.3 declares a local array holding the
+	// element and the caller's array comes back on return; ksh93u+ has no
+	// scope for it to take and writes the caller's; zsh 5.9.2 refuses. A
+	// dialect could answer one of the two and not the other, and folding them
+	// would give zsh's refusal to whichever the other shell was measured for.
+	//
+	// Asked only where there is a scope to take, so a declaration at the top
+	// level never reaches it.
+	SubscriptedOperandTakesALocalDeclaration Answer
+
+	// ReadonlyElement is what a declaration does when it would freeze the
+	// array whose element its operand names — `readonly a[1]=v` and
+	// `typeset -r a[1]=v`.
+	//
+	// Three answers rather than two, which is why it is not an Answer:
+	// ksh93u+ writes the element and freezes the array over it, zsh 5.9.2
+	// refuses the operand, and bash 5.3 does a third thing — it creates the
+	// array frozen and *empty* and then reports the element write it has just
+	// made impossible, at status 0. The third is measured and recorded and
+	// deliberately not implemented here; bash reaches this by `typeset -r`
+	// alone, since it refuses `readonly a[1]=v` as a bad name long before.
+	ReadonlyElement ReadonlyElementPolicy
+
 	// BadSubscriptToUnsetFatal ends the script when an `unset` operand's
 	// subscript will not evaluate. True in bash, where a bad expression ends
 	// it wherever one is written; false in ksh93 and zsh, which leave a failed
@@ -4523,6 +4560,13 @@ func PosixSemantics() Semantics {
 		// rather than an element, which is bash's and dash's answer.
 		DeclarationTakesASubscript: No,
 		UnsetTakesASubscript:       Yes,
+		// `local` reads the declaration question rather than the export one,
+		// and the standard gives it to nobody, so the core answers it the
+		// same way it answers the neighboring one: a declaration names a
+		// variable. Left unset it would refuse `local a[1]=v` as an
+		// unanswered axis, which is a refusal about a construct the core
+		// already had an answer for.
+		TypesetTakesASubscript: No,
 		// And `unset` says nothing about what is not there: the standard has
 		// it remove what it finds and succeed either way, which read over a
 		// subscript is the quiet answer.
@@ -5422,6 +5466,34 @@ func (r *Runner) fatalPattern(pattern string, status int) {
 
 // ShiftOptionWordPolicy is which leading-`-` words `shift` reads as options.
 //
+// ReadonlyElementPolicy is what a declaration does to a subscripted operand it
+// would also have to freeze.
+//
+// Three answers and not a bool, and only two of them modeled: see
+// Semantics.ReadonlyElement for the third and for what is measured.
+type ReadonlyElementPolicy uint8
+
+const (
+	// ReadonlyElementUnspecified is no answer, and is refused like any other.
+	ReadonlyElementUnspecified ReadonlyElementPolicy = iota
+	// ReadonlyElementWritten writes the element and freezes the array over
+	// it, so `readonly a[1]=v` leaves `a` holding v and immutable: ksh93.
+	ReadonlyElementWritten
+	// ReadonlyElementRefused refuses the operand and ends the script,
+	// because an element cannot carry the attribute a name carries: zsh.
+	ReadonlyElementRefused
+)
+
+func (p ReadonlyElementPolicy) String() string {
+	switch p {
+	case ReadonlyElementWritten:
+		return "the element is written and the array frozen over it"
+	case ReadonlyElementRefused:
+		return "the operand is refused"
+	}
+	return "unspecified"
+}
+
 // Three answers and not a bool, because the panel splits on *which* dash
 // words rather than on whether there are any: zsh refuses `-x` as an option
 // it does not have and reads `-1` as a count, so it is neither of the two

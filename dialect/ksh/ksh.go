@@ -533,6 +533,14 @@ func Semantics() interp.Semantics {
 	// splits them.
 	s.TypesetTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
+	// And nothing a declaration carries makes it refuse the element:
+	// measured 2026-09-07, `typeset -i a[1]=0x10` reads back 16,
+	// `readonly a[1]=v` writes v and freezes `a` over it, and a declaration
+	// inside a function writes the caller's array, which is this shell's
+	// answer about scope rather than about subscripts.
+	s.SubscriptedOperandTakesTheIntegerAttribute = interp.Yes
+	s.SubscriptedOperandTakesALocalDeclaration = interp.Yes
+	s.ReadonlyElement = interp.ReadonlyElementWritten
 	// `@` is not a spelling for the whole array here. The brackets hold an
 	// arithmetic expression as they do everywhere else, `@` is not one, and
 	// the operand is reported as a bad subscript with the array left as it

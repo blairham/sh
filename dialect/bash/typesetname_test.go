@@ -58,18 +58,23 @@ func TestADeclarationOperandThatIsNotAName(t *testing.T) {
 // `export` already had.
 func TestADeclarationTakesASubscriptWhereExportDoesNot(t *testing.T) {
 	dir := t.TempDir()
-	// Not refused, which is the whole of what the axis decides here. What
-	// the operand then *does* is a separate gap and is not asserted: real
-	// bash creates the element and this shell declares nothing, which is
-	// filed rather than fixed here — routing the check through must not
-	// start refusing the line, and that is what this pins.
-	out, st := runBash(t, dir, `typeset a[1]=v; echo "st=$?"`)
-	if want := "st=0\n"; out != want || st != 0 {
+	// Taken, and the element created with it — measured, `declare -p a`
+	// reads back `declare -a a=([1]="v")`. It used to be accepted and do
+	// nothing, which is what #1203 was.
+	out, st := runBash(t, dir, `typeset a[1]=v; echo "[${a[1]}] st=$?"`)
+	if want := "[v] st=0\n"; out != want || st != 0 {
 		t.Errorf("typeset a[1]=v = %q (status %d), want %q at 0", out, st, want)
 	}
+	// And refused by `export`, which quotes back the *name* rather than the
+	// whole operand — the one place this shell stops quoting the value with
+	// it, measured against `export 1x=v`, which does quote it.
 	out, st = runBash(t, dir, `export b[1]=v; echo "st=$?"`)
-	if want := "bash: line 1: export: `b[1]=v': not a valid identifier\nst=1\n"; out != want || st != 0 {
+	if want := "bash: line 1: export: `b[1]': not a valid identifier\nst=1\n"; out != want || st != 0 {
 		t.Errorf("export b[1]=v = %q (status %d), want %q at 0", out, st, want)
+	}
+	out, st = runBash(t, dir, `export 1x=v; echo "st=$?"`)
+	if want := "bash: line 1: export: `1x=v': not a valid identifier\nst=1\n"; out != want || st != 0 {
+		t.Errorf("export 1x=v = %q (status %d), want %q at 0", out, st, want)
 	}
 	if got := bash.Semantics().TypesetTakesASubscript; got != interp.Yes {
 		t.Errorf("TypesetTakesASubscript = %v, want Yes", got)

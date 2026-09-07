@@ -747,11 +747,24 @@ func Semantics() interp.Semantics {
 	s.UnsetReadonlyFatal = interp.Yes
 	s.DeclarationNameOperands = interp.NamesAndSpecialParameters
 	s.UnsetNameOperands = interp.NamesAndPositionals
-	s.DeclarationTakesASubscript = interp.No
+	// `export a[1]=v` sets the element and reports success here, measured
+	// 2026-09-07 — and so does `readonly a[1]=v` as far as the *name* check
+	// goes, which then refuses it for a reason about elements rather than
+	// about names. This read No, which was never reachable: the operand was
+	// glob-matched before the builtin saw it and the line died as
+	// `no matches found` (#1203).
+	s.DeclarationTakesASubscript = interp.Yes
 	// The declaration builtins take one: `typeset a[1]=v` sets the element
 	// and reports success, measured.
 	s.TypesetTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
+	// An element is not a name, so a declaration that would freeze, type or
+	// localize the *array* refuses the operand instead of doing half of it —
+	// and it ends the script. Three wordings for the three, measured
+	// 2026-09-07, which is how a script tells which of them it ran into.
+	s.SubscriptedOperandTakesTheIntegerAttribute = interp.No
+	s.SubscriptedOperandTakesALocalDeclaration = interp.No
+	s.ReadonlyElement = interp.ReadonlyElementRefused
 	// `unset a[@]` replaces the elements with a single empty one, which is
 	// this shell's reading of `unset` on a span rather than a special rule
 	// for `[@]`: `unset a[2]` leaves an empty element in place too. A scalar
@@ -1085,11 +1098,20 @@ func Diagnostics() interp.Diagnostics {
 		// at 4, and a group that runs out of text errors just past the end.
 		ExpansionFlagsError: "error in flags near position %[1]d in '%[2]s'",
 		BadPattern:          "bad pattern: %s",
-		BuiltinBadSubscript: map[string]string{
-			"export":   "%[3]s: assignment to invalid subscript range",
-			"readonly": "%[2]s: can't create readonly array elements",
-		},
-		SubscriptRefusalNamesBuiltin: map[string]bool{"readonly": true},
+		// An element a declaration will not create, in the three ways this
+		// shell will not create one — measured 2026-09-07. The base and the
+		// subscript are the verbs, so what is quoted back is `a[1]` and not
+		// the whole operand.
+		//
+		// There is no BuiltinBadSubscript here any more. The two entries it
+		// held were reachable only through a path that never ran: a
+		// declaration's operand was glob-matched before the builtin saw it,
+		// and `export a[0]=v`'s complaint turned out to belong to the array
+		// store rather than to the name check — it is what a bare
+		// `a[0]=v` says, since the first element is number one (#1203).
+		ReadonlyElementRefusal: "%[1]s[%[2]s]: can't create readonly array elements",
+		IntegerElementRefusal:  "%[1]s[%[2]s]: inconsistent array element or slice assignment",
+		LocalElementRefusal:    "%[1]s[%[2]s]: can't create local array elements",
 		// `set -A 1v q` does not name the builtin in its location where
 		// `unset 1x` and `typeset 1w` from this same shell do.
 		BadNameRefusalHidesTheBuiltin: map[string]bool{"set": true},

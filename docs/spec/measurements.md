@@ -10031,6 +10031,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/an-operand-that-starts-with-a-digit` | `st=127~A` **2>** `<shell>: 1: typeset: not found` | `st=1~A` **2>** `<shell>: line 1: typeset: `1x': not a valid identifier` | `st=1~A` **2>** `<shell>: line 1: typeset: `1x': not a valid identifier` | `st=1~A` **2>** `<shell>: line 0: typeset: `1x': not a valid identifier` | **2>** `<shell>: typeset: 1x: invalid variable name` *(status 1)* | **2>** `<shell>:typeset:1: not an identifier: 1x` *(status 1)* |
 | `declare/a-bad-operand-with-a-value-attached` | `st=127~st=127` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `st=1~st=1` **2>** `<shell>: line 1: typeset: `1x=v': not a valid identifier~<shell>: line 1: typeset: `:=v': not a valid identifier` | `st=1~st=1` **2>** `<shell>: line 1: typeset: `1x=v': not a valid identifier~<shell>: line 1: typeset: `:=v': not a valid identifier` | `st=1~st=1` **2>** `<shell>: line 0: typeset: `1x=v': not a valid identifier~<shell>: line 0: typeset: `:=v': not a valid identifier` | **2>** `<shell>: typeset: 1x=v: invalid variable name` *(status 1)* | **2>** `<shell>:typeset:1: not an identifier: 1x` *(status 1)* |
 | `declare/a-subscripted-operand-to-a-declaration` | `st=127~<shell>: 1: typeset: not found` **2>** `<shell>: 1: typeset: not found` *(status 127)* | `st=0~declare -a a=([1]="v")` | `st=0~declare -a a=([1]="v")` | `st=0~declare -a a='([1]="v")'` | `st=0~typeset -a a=([1]=v)` | `st=0~typeset -a a=( v )` |
+| `declare/a-subscripted-operand-is-not-a-pattern` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: Bad substitution` *(status 2)* | `[v] a1=[]` | `[v] a1=[]` | `[v] a1=[]` | `[v] a1=[]` | `[v] a1=[]` |
+| `declare/a-subscripted-operand-with-an-expanded-subscript` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: Bad substitution` *(status 2)* | `[v]` | `[v]` | `[v]` | `[v]` | `[v]` |
+| `declare/a-subscripted-operand-with-the-integer-attribute` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: Bad substitution` *(status 2)* | `st=0 [16]` | `st=0 [16]` | `st=0 [16]` | `st=0 [16]` | **2>** `<shell>:typeset:1: a[1]: inconsistent array element or slice assignment` *(status 1)* |
+| `declare/a-subscripted-operand-inside-a-function` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `in=[v]~out=[y]` | `in=[v]~out=[y]` | `in=[v]~out=[y]` | `in=[v]~out=[v]` | **2>** `f:typeset: a[1]: can't create local array elements` *(status 1)* |
+| `declare/a-readonly-subscripted-operand` | **2>** `<shell>: 1: readonly: a[1]: bad variable name` *(status 2)* | `st=1 []` **2>** `<shell>: line 1: readonly: `a[1]': not a valid identifier` | **2>** `<shell>: line 1: readonly: `a[1]': not a valid identifier` *(status 1)* | `st=1 []` **2>** `<shell>: line 0: readonly: `a[1]': not a valid identifier` | `st=0 [v]` | **2>** `<shell>:readonly:1: a[1]: can't create readonly array elements` *(status 1)* |
+| `declare/an-exported-subscripted-operand` | **2>** `<shell>: 1: export: a[1]: bad variable name` *(status 2)* | `st=1 []` **2>** `<shell>: line 1: export: `a[1]': not a valid identifier` | **2>** `<shell>: line 1: export: `a[1]': not a valid identifier` *(status 1)* | `st=1 []` **2>** `<shell>: line 0: export: `a[1]': not a valid identifier` | `st=0 [v]` | `st=0 [v]` |
+| `local/a-subscripted-operand-to-local` | **2>** `<script>: 1: Bad substitution` *(status 2)* | `in=[v] st=0~out=[]` | `in=[v] st=0~out=[]` | `in=[v] st=0~out=[]` | `in=[] st=127~out=[]` **2>** `<script>: line 1: local: not found` | **2>** `f:local: a[1]: can't create local array elements` *(status 1)* |
 | `declare/an-integer-declaration-with-an-operand-that-is-not-a-name` | `st=127~A` **2>** `<shell>: 1: integer: not found` | `st=127~A` **2>** `<shell>: line 1: integer: command not found` | `st=127~A` **2>** `<shell>: line 1: integer: command not found` | `st=127~A` **2>** `<shell>: integer: command not found` | **2>** `<shell>: typeset: 1x: invalid variable name` *(status 1)* | **2>** `<shell>:integer:1: not an identifier: 1x` *(status 1)* |
 | `declare/declare-is-the-second-name` | `[]` **2>** `<shell>: 1: declare: not found` | `[1]` | `[1]` | `[1]` | `[]` **2>** `<shell>: declare: not found` | `[1]` |
 | `declare/integer-is-the-third-name` | `[]~[5+2]` **2>** `<shell>: 1: integer: not found` | `[]~[5+2]` **2>** `<shell>: line 1: integer: command not found` | `[]~[5+2]` **2>** `<shell>: line 1: integer: command not found` | `[]~[5+2]` **2>** `<shell>: integer: command not found` | `[3]~[7]` | `[3]~[7]` |
@@ -10181,6 +10188,39 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/a-subscripted-operand-to-a-declaration` — the operand a declaration takes that `export` does not, and the reason the name check needed a third answer rather than reusing `export`'s: bash refuses `export a[1]=v` as a bad name and *takes* this, creating the element, and ksh93 and zsh take both. Measured before the check was routed through, because a shared answer would have made bash start refusing a line it has always accepted
   ```sh
   typeset a[1]=v; echo "st=$?"; typeset -p a 2>&1
+  ```
+- `declare/a-subscripted-operand-is-not-a-pattern` — the discriminator for whether a declaration's subscripted operand goes through pathname expansion, and the only shape that can tell: a file literally named `a1=v` is on disk, so the operand *has* a match. Every column still assigns the element and leaves `a1` empty, in the shell that would refuse a pattern with no match as much as in the four that would leave it as written — so the operand is an assignment there as much as `n=3` is. Reading only the first span of the word could not see it either way, and this shell read the word as a pattern and set a scalar called `a1` (#1203)
+  ```sh
+  : > 'a1=v'; typeset a[1]=v; echo "[${a[1]}] a1=[$a1]"
+  ```
+- `declare/a-subscripted-operand-with-an-expanded-subscript` — the same operand with the subscript arriving as three spans rather than one — `a[`, the expansion, `]=v` — which is where the `=` that ends the name is in the *last* of them. Unanimous, and it is the row that keeps the split from being written as a test of the first span alone
+  ```sh
+  i=1; typeset a[$i]=v; echo "[${a[1]}]"
+  ```
+- `declare/a-subscripted-operand-with-the-integer-attribute` — what a declaration may do to the *array* beside writing one element, and the first of three questions the panel does not answer together: bash and ksh93 give the array the attribute and store the converted 16, and zsh refuses the operand — `inconsistent array element or slice assignment` — and ends the script over it. An element is not a name there, so an attribute that belongs to the name cannot ride on one
+  ```sh
+  typeset -i a[1]=0x10; echo "st=$? [${a[1]}]"
+  ```
+- `declare/a-subscripted-operand-inside-a-function` — the second of the three, and the one that needs the caller's array standing to be readable at all: bash makes the array local and the caller's `y` comes back on return, ksh93 has no scope for it to take and writes the caller's, and zsh refuses — `can't create local array elements`. Three answers from one line, and the first two are this panel's ordinary scope split rather than anything about subscripts
+  ```sh
+  a=(x y)
+  f() { typeset a[1]=v; echo in=[${a[1]}]; }
+  f
+  echo out=[${a[1]}]
+  ```
+- `declare/a-readonly-subscripted-operand` — the third, and the one with three answers of its own: ksh93 writes the element and freezes the array over it, zsh refuses it (`can't create readonly array elements`) and stops, and bash never reaches the question — it refuses `readonly a[1]=v` as a bad *name*, which is the split `export` and `typeset` already have here. The `typeset -r` spelling is what makes bash's third answer visible and is deliberately not modeled (#1203)
+  ```sh
+  readonly a[1]=v; echo "st=$? [${a[1]}]"
+  ```
+- `declare/an-exported-subscripted-operand` — the export attribute is the one of the four that no shell refuses on an element: ksh93 and zsh both write it and report success, and bash and dash refuse the operand as a bad name long before. It is the control for the three rows above — without it, `typeset -x` and `export` would look like they were refused for the same reason the others are
+  ```sh
+  export a[1]=v; echo "st=$? [${a[1]}]"
+  ```
+- `local/a-subscripted-operand-to-local` — which of the two name questions `local` reads, and the row that says it is the declaration's rather than `export`'s: bash takes the operand and makes a local array holding the element, zsh takes it and then refuses it for its own reason about elements, and dash refuses it as a bad name. Reading it through the `export` answer made this shell refuse a line bash has always accepted
+  ```sh
+  f() { local a[1]=v; echo in=[${a[1]}] st=$?; }
+  f
+  echo out=[${a[1]}]
   ```
 - `declare/an-integer-declaration-with-an-operand-that-is-not-a-name` — the same check under the third name, and the row that says whose name the complaint uses: ksh93's `integer` calls itself `typeset` in its own diagnostic where zsh's calls itself `integer`, so one shell renames the builtin in the sentence and the other does not. bash and dash have no such word at all
   ```sh

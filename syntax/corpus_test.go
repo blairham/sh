@@ -31,6 +31,12 @@ func corpusDialect() syntax.Dialect {
 	// reason above — the grammar that has to *read* every case is wider
 	// than any one shell, and the corpus records both spellings.
 	d.CaseContinuePipe = true
+	// `case a in (a|` newline `b)` — the arm whose parenthesized pattern
+	// list spans a newline. One of the six takes it and the other five call
+	// the line a syntax error, and the corpus records both; the grammar that
+	// has to *read* every case is the one that takes the construct, which is
+	// the same argument as DollarBracketArith above.
+	d.CasePatternListSpansNewlines = true
 	// `function f() { …; }`, both markers at once.
 	d.FunctionKeywordParens = true
 	// `[[ x == @(a|b) ]]` — extended patterns where a condition reads them.

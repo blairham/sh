@@ -2958,21 +2958,31 @@ func (p *Parser) parseCase() Command {
 		// left the rest of it in command position, where `(` is an operator
 		// and `(a|b)|(c|d))` was `parse error near `(''`.
 		saved := p.lex.inArgument
+		savedList := p.lex.inCaseParenList
 		p.lex.inArgument = true
 		if p.at(TokLeftParen) {
-			// Set before the `p.next()` that reads the first pattern, which
-			// is the token it has to reach.
+			// The paren is what puts one dialect's newline inside the
+			// pattern rather than ending it. Only here: an arm written
+			// *without* the paren is a parse error there too, so this is the
+			// parenthesis's rule and not the position's. Set before the
+			// `p.next()` that reads the first pattern, which is the token it
+			// has to reach.
+			p.lex.inCaseParenList = true
 			p.next()
 		}
 		if !p.casePatterns(it) {
-			p.lex.inArgument = saved
+			p.lex.inArgument, p.lex.inCaseParenList = saved, savedList
 			return c
 		}
 		p.lex.inArgument = saved
 		if !p.at(TokRightParen) {
+			p.lex.inCaseParenList = savedList
 			p.failUnexpectedOperand(")")
 			return c
 		}
+		// Cleared before the read that follows, which is the arm's *body* —
+		// ordinary commands, where a newline is a statement separator again.
+		p.lex.inCaseParenList = savedList
 		p.next()
 		it.Body = p.parseList()
 

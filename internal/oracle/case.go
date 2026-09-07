@@ -7104,6 +7104,31 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 			"Read from a file rather than from `-c` on purpose: bash numbers the same failure 127 over `-c` and 1 over a script, and the number this row is about is the one a script gets",
 	},
 	{
+		ID: "case/a-newline-in-a-parenthesized-pattern-list", Category: "compound shapes",
+		Snippet: "case a in (a|\nb) echo m;; *) echo no;; esac",
+		Why:     "a `case` arm's parenthesized pattern list is one alternation *word* in zsh, so a newline in it is a character of the pattern: the arm runs there and every other shell in the panel refuses the line — three wordings and three statuses, each blaming a different token. It is #1083's `|` from the other side and a bigger claim, since the separator does not end the word at all",
+	},
+	{
+		ID: "case/what-the-newline-joined", Category: "compound shapes",
+		Snippet: "m(){ case \"$1\" in (a|\nb) printf m;; *) printf .;; esac; }; m a; m b; m ''; m \"$(printf '\\nb')\"; echo",
+		Why:     "which alternative the newline joined, which parsing alone cannot say: the subject `a` matches, `b` does not, the empty string does not, and a value beginning with a newline does — so the second alternative is the two characters newline and `b`. The five shells that refuse the line print nothing at all, which is the fact this row records for them",
+	},
+	{
+		ID: "case/a-newline-before-the-separator", Category: "compound shapes",
+		Snippet: "case a in (a\n|b) echo m;; *) echo no;; esac",
+		Why:     "the same newline on the other side of the `|`, and the row that says the rule is not about the separator: it joins the *first* alternative there, so the subject `a` matches neither and zsh answers `no` where a rule about the `|` alone would answer `m`",
+	},
+	{
+		ID: "case/a-newline-with-no-separator-in-the-list", Category: "compound shapes",
+		Snippet: "case a in (a\n) echo m;; *) echo no;; esac",
+		Why:     "and with no `|` in the list at all the newline is still text, so the pattern is two characters and the subject `a` does not match it. A reading that only looked either side of a separator would take this line as an ordinary arm and answer `m`",
+	},
+	{
+		ID: "case/a-newline-in-a-list-with-no-paren", SyntaxError: true, Category: "compound shapes",
+		Snippet: "case a in a|\nb) echo m;; *) echo no;; esac",
+		Why:     "the paren is what opens the reading and the position is not: written without it, the line is a parse error in **all six** shells, zsh included. So this is the parenthesis's rule, which is what makes it a flag on the arm rather than on the pattern list",
+	},
+	{
 		ID: "case/an-operator-where-a-pattern-belongs", SyntaxError: true, Category: "compound shapes",
 		Snippet: `case a in & ) echo hit;; *) echo miss;; esac`,
 		Why:     "dash parses this and prints miss: one operator is accepted where the pattern list would start, and the arm it opens matches nothing at all — not `&`, not the empty string. The other three refuse at the `&`. Measured rather than inferred from the diagnostic, because a shell that only worded the error differently would still not reach the esac",

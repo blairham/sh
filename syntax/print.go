@@ -1249,7 +1249,22 @@ func escapeBare(s string) string {
 			i += n
 			continue
 		}
-		if strings.IndexByte(" \t\n\"'\\$`|&;<>()", s[i]) >= 0 {
+		if s[i] == '\n' {
+			// A backslash before a newline is a *line continuation*, which
+			// the next read removes — so escaping it that way is the one
+			// case where protecting a character loses it. Single quotes keep
+			// it, and keep it as the same character: a newline is literal
+			// text under either quoting, so nothing that matched the word
+			// before stops matching it.
+			//
+			// Reachable only from a `case` arm whose parenthesized pattern
+			// list spans one; nothing else in the grammar puts a bare
+			// newline inside a word.
+			b.WriteString("'\n'")
+			i++
+			continue
+		}
+		if strings.IndexByte(" \t\"'\\$`|&;<>()", s[i]) >= 0 {
 			b.WriteByte('\\')
 		}
 		b.WriteByte(s[i])

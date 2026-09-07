@@ -140,6 +140,12 @@ func Dialect() syntax.Dialect {
 	// is written with it and was the last file in that tree we could not
 	// parse.
 	d.CaseContinuePipe = true
+	// And the same `|` from the other side: this shell reads a parenthesized
+	// pattern list as one alternation word, so a newline in it is a character
+	// of the pattern. `case a in (a|` newline `b)` runs the arm here for
+	// subject `a`, and its second alternative is the two characters newline
+	// and `b`; every other shell in the panel refuses the line.
+	d.CasePatternListSpansNewlines = true
 	// `<->` is a number and `<1-9>` a bounded one, where every other panel
 	// shell reads the `<` as a redirection. Measured 2026-09-05 on zsh
 	// 5.9.2: `[[ 1 = <-> ]]` is 0 here and a syntax error in bash 5.3, bash

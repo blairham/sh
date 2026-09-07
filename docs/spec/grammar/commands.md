@@ -1592,6 +1592,60 @@ This is the grammar half only. A pattern *group* with an arm matching no
 text already stands for no text in every shell that has groups at all —
 see `patterns.md`.
 
+### A newline in a parenthesized pattern list
+
+The same `|` from the other side, and a bigger claim: in zsh the
+separator does not end the *word* at all, so a newline inside the list is
+a character of the pattern.
+
+    case a in (a|
+    b) echo m;; *) echo no;; esac
+
+zsh 5.9.2 prints `m` at status 0. bash 5.3.15, that binary as `sh`, bash
+3.2.57, dash and ksh93u+ all refuse the line, in three wordings at three
+statuses, each blaming a different token. Grammar flag
+`CasePatternListSpansNewlines`, zsh only.
+
+Parsing is the cheap half of the measurement. **What the newline joined**
+is the part only a subject can say, and four subjects say it: with the arm
+above, `a` matches, `b` does not, `""` does not, and a value beginning
+with a newline does. So the second alternative is the two characters
+newline and `b`, and `functions` on a function carrying the arm prints the
+newline back inside the pattern — the same fact from the writing side.
+
+Two rows bound it, and each is one a rule about the `|` would get wrong:
+
+| probe | zsh | reading |
+| --- | --- | --- |
+| `case a in (a` nl `\|b)` | `no` | the newline joined the *first* alternative |
+| `case a in (a` nl `)` | `no` | text with no separator in the list at all |
+
+And the arm's **paren** is what opens it. Written without one,
+`case a in a|` newline `b)` is a parse error in all six shells, zsh
+included — so this belongs to the parenthesis and not to the position.
+
+`CasePatternMayBeEmpty` and this flag do not interfere: with both on,
+`case a in (|a|` newline `b)` has three alternatives — nothing, `a`, and
+newline-then-`b` — because the emptiness is still read off the separator.
+
+### What this implementation does not match
+
+The list is **one word** in zsh, and a newline is not the only thing that
+follows from that. A *blank* inside the parentheses is part of the pattern
+there too, and each alternative has its outer blanks trimmed:
+
+| probe | zsh |
+| --- | --- |
+| `case "a b" in (a b)` | matches — the pattern is the three characters |
+| `case a in (a b)` | does not |
+| `case a in (a \| ` nl ` b)` | matches; the second alternative is nl-space-`b` |
+
+This implementation reads a blank as ending a pattern, so all three of
+those are parse errors here — loud rather than silently wrong, and the
+first two are parse errors in the other five shells as well. It is a
+larger claim than the newline and is filed on its own rather than
+guessed at.
+
 ## `select`
 
 The menu loop, with a for-loop's header over a different loop:

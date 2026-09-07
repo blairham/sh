@@ -126,21 +126,65 @@ func (r *Runner) unsetAssocElem(name, key string) {
 // the element stored under the three characters, measured unanimous in the
 // shells that have the attribute.
 func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
-	switch key := r.subscriptText(e.Subscript()); key {
-	case "@", "*":
+	// A bare `@` or `*` is the whole array in every shell in the panel, and a
+	// *quoted* one is a key — `${n["@"]}` looks one up and finds nothing.
+	// So the whole-array spelling is decided on the subscript as written,
+	// before any reading of quotes, and never on the key the axis produced:
+	// under the quote-removing answer that key is `@` too, and the two
+	// spellings would collapse into one.
+	if w := r.searchOperand(e.Subscript()); w == "@" || w == "*" {
 		// Non-nil even when empty: the array exists, so `${m[@]:-d}` on an
 		// empty one is zero fields rather than the default — the same answer
 		// an empty indexed array gives.
 		return a.values()
-	default:
-		if v, ok := a[key]; ok {
-			return []string{v}
-		}
-		// nil says the element was not there, exactly as the indexed path
-		// does: a value of "" is set and `${m[k]:-d}` has to tell the two
-		// apart.
-		return nil
 	}
+	if v, ok := a[r.assocKey(e.Subscript())]; ok {
+		return []string{v}
+	}
+	// nil says the element was not there, exactly as the indexed path does: a
+	// value of "" is set and `${m[k]:-d}` has to tell the two apart.
+	return nil
+}
+
+// assocKey is the key an associative array's subscript names.
+//
+// Two readings, and the axis is SubscriptIsAQuotingContext. Where the
+// subscript *is* a quoting context the key is the text inside its quotes,
+// which is bash's and ksh93's answer; where it is not, the key is the
+// subscript exactly as written — substitutions performed, and every other
+// character, quotes and backslashes included, kept. That second reading is
+// Runner.searchOperand, which already renders a subscript that way for the
+// search flags PR #1101 landed; one rule reached from two sides rather than
+// two renderings that could drift.
+//
+// Neither reading trims. The space-trimming this used to do belongs to the
+// arithmetic subscript, where the evaluator ignores blanks anyway, and it is
+// wrong here in every shell in the panel: with `p[s]=T`, `${p[ s ]}` looks up
+// three characters and finds nothing in bash, ksh93 and zsh alike, where this
+// found `T`.
+//
+// Asked only where the two readings differ, so a key with no quote or
+// backslash in it — which is nearly every key a script writes — never demands
+// a dialect for the question.
+func (r *Runner) assocKey(w *syntax.Word) string {
+	quoted := r.expandKeyQuoted(w)
+	asWritten := r.searchOperand(w)
+	if quoted == asWritten {
+		return quoted
+	}
+	if r.ask(r.sem().SubscriptIsAQuotingContext, "an array subscript being a quoting context") {
+		return quoted
+	}
+	return asWritten
+}
+
+// expandKeyQuoted is the key under the reading that removes quotes: the
+// subscript expanded as a word, joined, and not trimmed.
+func (r *Runner) expandKeyQuoted(w *syntax.Word) string {
+	if w != nil && len(w.Spans) == 1 && w.Spans[0].Kind == syntax.Literal {
+		return w.Spans[0].Value
+	}
+	return strings.Join(r.expandWordNoSplit(w), "")
 }
 
 // assocScalar is what a plain `$m` gives on an associative array.

@@ -1598,6 +1598,41 @@ the question never arises.
 It is never matched against the *filesystem*: `${a[(re)be*]}` in a
 directory with no `be*` in it is empty rather than `no matches found`.
 
+**The same rule reaches an associative key**, which is the other thing a
+subscript can be, and there it divides the panel rather than being one
+shell's construct. Measured 2026-09-07:
+
+| probe | bash 5.3, bash as `sh`, ksh93 | zsh 5.9.2 |
+| --- | --- | --- |
+| `m["k"]=W; kk='"k"'; ${m[$kk]}` | `` | `W` |
+| the same, `${m[k]}` | `W` | `` |
+| `q[k]=K; v=k; ${q[$v]}` | `K` | `K` |
+| the same, `${q["$v"]}` | `K` | `` |
+| `m[a\b]=B; ${m[ab]}` | `B` | `` |
+
+`Semantics.SubscriptIsAQuotingContext` is that answer: where the
+subscript *is* a quoting context the key is the text inside its quotes
+and escapes, and where it is not the key is the text as written. bash 3.2
+has no associative arrays and dash has no arrays, so the axis is absent
+in both rather than false.
+
+The third and fourth rows are the crisp form: the substitution is
+performed under both answers, so what differs is only whether the two
+quote characters around it are part of the key. That is what makes this a
+rule about quoting and not about expansion.
+
+Two neighbors stay unanimous and must not move with it:
+
+- a **bare** `@` or `*` is the whole array in all three, and a *quoted*
+  one is a key — `${n["@"]}` looks one up and finds nothing, and on an
+  *indexed* array it is an arithmetic error, since `@` is no number. So
+  the whole-array spelling is read off the subscript as written and never
+  off the key quote removal produced.
+- a key is **not** space-trimmed. With `p[s]=T`, `${p[ s ]}` looks up
+  three characters and is empty in all three. The trimming an arithmetic
+  subscript can afford — the evaluator ignores blanks anyway — is wrong
+  here.
+
 ### `n` and `b`, measured
 
 Both arguments are arithmetic expressions rather than numerals, and

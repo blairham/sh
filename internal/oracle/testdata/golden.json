@@ -9178,6 +9178,50 @@
         "TimedOut": false
       }
     },
+    "assoc/a-key-is-not-space-trimmed": {
+      "bash": {
+        "Stdout": "[][T]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[][T]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[T][T]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: p[s]=T: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[][T]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[][T]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "assoc/a-missing-key-quoted-is-one-field": {
       "bash": {
         "Stdout": "n=1",
@@ -9216,6 +9260,138 @@
       },
       "zsh": {
         "Stdout": "n=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "assoc/a-quoted-at-is-a-key": {
+      "bash": {
+        "Stdout": "bare=2 quoted[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "bare=2 quoted[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "bare=1",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: @: syntax error: operand expected (error token is \"@\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: n[a]=1: not found~\u003cshell\u003e: 1: n[b]=2: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "bare=2 quoted[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "bare=2 quoted[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "assoc/a-quoted-key-keeps-its-quotes-or-does-not": {
+      "bash": {
+        "Stdout": "[][W]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[][W]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: \"k\": syntax error: operand expected (error token is \"\"k\"\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: m[k]=W: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[][W]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[W][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "assoc/a-quoted-substitution-in-a-key": {
+      "bash": {
+        "Stdout": "[K][K]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[K][K]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[K][K]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: q[k]=K: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[K][K]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[K][]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -57894,6 +58070,50 @@
         "TimedOut": false
       }
     },
+    "pattern/an-escape-before-an-ordinary-character": {
+      "bash": {
+        "Stdout": "strips~no",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "strips~no",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "strips~no",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "strips~no",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "strips~no",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "keeps~literal",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pipe/both-streams-is-a-pipe-in-two-shells-and-a-coprocess-in-one": {
       "bash": {
         "Stdout": "\u003cO\u003e~\u003cE\u003e",
@@ -73004,6 +73224,50 @@
       },
       "zsh": {
         "Stdout": "st=1~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "subscript/a-search-operand-keeps-a-backslash": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: (r)bet\\a: arithmetic syntax error: invalid arithmetic operator (error token is \"\\a\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: (r)bet\\a: arithmetic syntax error: invalid arithmetic operator (error token is \"\\a\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: (r)beta: syntax error in expression (error token is \"beta\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: (r)beta: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[bet\\a]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

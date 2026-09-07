@@ -4184,6 +4184,36 @@ echo "st=$?"`,
 		Why:     "the `([k]=v …)` literal keys its elements rather than counting them, and `unset m[k]` takes one key rather than doing nothing — unanimous in the three that have the attribute, and the removed element is gone rather than empty",
 	},
 	{
+		ID: "assoc/a-quoted-key-keeps-its-quotes-or-does-not", Category: "expansion",
+		Snippet: `typeset -A m; m["k"]=W; kk='"k"'; printf '[%s]' "${m[$kk]}" "${m[k]}"; echo`,
+		Why:     "the two readings of a quoted subscript, told apart by storing under one spelling and reading with the other — a key that is one string under both would hide it. bash and ksh93 run the subscript through quote removal, so the key is `k` and the second read finds `W`; zsh takes it as written, so the key is the three characters and the *first* read finds it. dash has no attribute and refuses the line",
+	},
+	{
+		ID: "assoc/a-quoted-substitution-in-a-key", Category: "expansion",
+		Snippet: `typeset -A q; q[k]=K; v=k; printf '[%s]' "${q[$v]}" "${q["$v"]}"; echo`,
+		Why:     "the crisp form of the same question: the substitution is performed under both readings and only the quote characters around it differ. bash and ksh93 find the element both ways; zsh finds it bare and not quoted, because there the key is `\"k\"`. So it is a rule about quoting rather than about expansion",
+	},
+	{
+		ID: "assoc/a-key-is-not-space-trimmed", Category: "expansion",
+		Snippet: `typeset -A p; p[s]=T; printf '[%s]' "${p[ s ]}" "${p[s]}"; echo`,
+		Why:     "unanimous in the three shells with the attribute, and the row this implementation answered wrongly: a subscript's blanks belong to the key, so `${p[ s ]}` looks up three characters and finds nothing. The trimming an *arithmetic* subscript can afford — the evaluator ignores blanks — is wrong here",
+	},
+	{
+		ID: "assoc/a-quoted-at-is-a-key", Category: "expansion",
+		Snippet: `typeset -A n; n[a]=1; n[b]=2; printf 'bare=%d' "${#n[@]}"; printf ' quoted[%s]' "${n["@"]}"; echo`,
+		Why:     "the guard on the reading above: a *bare* `@` is still the whole array in all three, and a quoted one is a key — so the quoted spelling finds nothing, since nothing is stored under it. A fix that took the subscript as written everywhere would turn `${n[@]}` into a lookup and lose the whole-array spelling. The bare spelling is counted rather than printed, because the order an associative array yields its values in is not a fact this corpus can record",
+	},
+	{
+		ID: "subscript/a-search-operand-keeps-a-backslash", Category: "expansion",
+		Snippet: `a=('bet\a' beta); printf '[%s]\n' "${a[(r)bet\a]}"`,
+		Why:     "the pattern half of the same rule, on the one construct that reaches it: a backslash before a character that needed no escaping is two characters of the pattern in zsh, so the operand finds the element whose value holds a backslash and does not find `beta`. The other five have no flag group in a subscript and read the whole thing as arithmetic, which is a diagnostic rather than an answer",
+	},
+	{
+		ID: "pattern/an-escape-before-an-ordinary-character", Category: "patterns",
+		Snippet: `setopt globsubst 2>/dev/null; p='bet\a'; case beta in $p) echo strips;; *) echo keeps;; esac; case 'bet\a' in $p) echo literal;; *) echo no;; esac`,
+		Why:     "the pattern language's own answer, asked the only way it can be: quote removal spends an escape written in the source before the matcher sees it, so a `case` pattern spelled `bet\\a` is `beta` in all six and says nothing. A *substituted* pattern asks it — five shells match the result of an expansion as a pattern, and the sixth does under the option this line sets. A backslash before a character that needed no escaping is spent in five and kept in zsh, where the pattern is five characters",
+	},
+	{
 		ID: "subst/a-case-inside-a-substitution", Category: "expansion",
 		Snippet: `x=$(case a in a) echo yes;; esac); echo "[$x]"`,
 		Why:     "where a substitution ends is a question about the grammar and not about how many parentheses have been counted: an arm's `)` closes nothing, so counting stops early and takes half the arm with it. Unanimous, and the shape that made two installed scripts parse into a tree nobody wrote",

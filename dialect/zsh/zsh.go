@@ -396,6 +396,22 @@ func Semantics() interp.Semantics {
 	// printf "[%s]" ${a[*]}` is `[x][y]` here, and with `shwordsplit` on,
 	// `a=("x y" z)` is `[x][y][z]` — neither of which a join can produce.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// A subscript is not a quoting context here — it is taken exactly as
+	// written, with substitutions performed and every other character kept.
+	// So `m["k"]=W` stores under the three characters `"k"` and `${m[k]}`
+	// finds nothing, and `${q["$v"]}` looks up a key with two quote
+	// characters in it where `${q[$v]}` looks up the value's own text. It is
+	// one rule with the search operand's, which is why both go through
+	// Runner.searchOperand.
+	s.SubscriptIsAQuotingContext = interp.No
+	// And a backslash in a pattern reaches only a metacharacter here: before
+	// anything else it is a literal backslash, so a raw `bet\\a` matches the
+	// five characters and not `beta`. The set is this shell's pattern
+	// metacharacters, measured under `setopt globsubst`, which is the only
+	// way to hand this matcher a backslash the lexer has not already spent.
+	// The backslash itself is in the set — `x\\y` matches one backslash there
+	// and not two — which is what keeps a glob-escaped value literal.
+	s.PatternEscapeReaches = `-=!*?[]()|^~#<>\`
 	// And the join this shell *does* perform: an unquoted `@` list reaching
 	// a context that keeps no fields is joined on the first character of
 	// IFS, so `IFS=-; a=(x y z); v=${a[@]}` is `x-y-z` where bash and ksh93

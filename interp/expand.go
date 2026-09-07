@@ -1702,19 +1702,35 @@ func wholeArraySubscript(idx string) bool { return idx == "@" || idx == "*" }
 // reading that asks has to ask about the node rather than about the text —
 // asking about the text is how `${a[(r)@]}` came to be shaped like a list
 // while answering with one element.
+// A **quoted** `@` takes them away as well, and that is measured rather than
+// reasoned: `${n["@"]}` on an associative array looks up a key and finds
+// nothing in bash, ksh93 and zsh alike, and on an indexed one it is an
+// arithmetic error in all three, because `@` is no number. So the two
+// spellings are read off the subscript *as written* — searchOperand's text,
+// with substitutions performed and quotes kept — and never off the key quote
+// removal produced, which is `@` under one of the two readings the axis
+// offers and would make the whole array of a lookup.
 func (r *Runner) wholeArrayIndex(e *syntax.ParamExpr) bool {
-	return e.IndexFlags == nil && wholeArraySubscript(r.subscriptText(e.Subscript()))
+	return e.IndexFlags == nil && wholeArraySubscript(r.subscriptAsWritten(e.Subscript()))
 }
 
 // joinedArrayIndex is `[*]`, the spelling that joins, asked the same way.
 func (r *Runner) joinedArrayIndex(e *syntax.ParamExpr) bool {
-	return e.IndexFlags == nil && r.subscriptText(e.Subscript()) == "*"
+	return e.IndexFlags == nil && r.subscriptAsWritten(e.Subscript()) == "*"
 }
 
 // atArrayIndex is `[@]`, the spelling that keeps its fields, asked the same
 // way.
 func (r *Runner) atArrayIndex(e *syntax.ParamExpr) bool {
-	return e.IndexFlags == nil && r.subscriptText(e.Subscript()) == "@"
+	return e.IndexFlags == nil && r.subscriptAsWritten(e.Subscript()) == "@"
+}
+
+// subscriptAsWritten is the subscript's text with its substitutions performed
+// and nothing else touched, trimmed of the blanks a whole-array spelling never
+// has anyway. It is searchOperand under a name that says what the
+// whole-array readings want of it.
+func (r *Runner) subscriptAsWritten(w *syntax.Word) string {
+	return strings.TrimSpace(r.searchOperand(w))
 }
 
 // elementOp reports the operators that apply to each element when the

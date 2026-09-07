@@ -101,6 +101,9 @@ func Semantics() interp.Semantics {
 	// join: `IFS=:; set -- "x:" y; printf "[%s]" $@` is `[x][y]` here and
 	// `[x][][y]` in bash, which joins to `x::y` first.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// An associative array's subscript is a quoting context here, as it is
+	// in bash: `m["k"]=W` stores under `k`.
+	s.SubscriptIsAQuotingContext = interp.Yes
 	// bash's answer on the other join, against its own on the one above:
 	// `IFS=-; a=(x y z); v=${a[@]}` is `x y z` here where zsh gives
 	// `x-y-z`. The two axes partition the panel differently, which is why

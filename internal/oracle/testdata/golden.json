@@ -23347,6 +23347,50 @@
         "TimedOut": false
       }
     },
+    "core/a-for-header-with-nothing-after-it-ends-the-file": {
+      "bash": {
+        "Stdout": "before",
+        "Stderr": "\u003cscript\u003e: line 3: syntax error: unexpected end of file from `for' command on line 2",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "before",
+        "Stderr": "\u003cscript\u003e: line 3: syntax error: unexpected end of file from `for' command on line 2",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "before",
+        "Stderr": "\u003cscript\u003e: line 3: syntax error: unexpected end of file",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "before",
+        "Stderr": "\u003cscript\u003e: 3: Syntax error: end of file unexpected (expecting \"do\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "before",
+        "Stderr": "\u003cscript\u003e: syntax error at line 3: `for' unmatched",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "before",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-for-name-that-is-a-quoted-word": {
       "bash": {
         "Stdout": "",

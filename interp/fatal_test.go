@@ -25,7 +25,6 @@ func TestFatalErrorsAbandonTheScript(t *testing.T) {
 	shiftSurvives.ShiftPastEndFatal = No
 	readonlySurvives := permissive()
 	readonlySurvives.ReadonlyReassignmentFatal = No
-	readonlySurvives.ReadonlyReassignmentFatalFromCommandString = No
 
 	tests := []struct {
 		name, src string

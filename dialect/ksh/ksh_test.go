@@ -121,7 +121,6 @@ func TestSemantics(t *testing.T) {
 		{"MonitorNeedsATerminal", s.MonitorNeedsATerminal, interp.No},
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
-		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},
 		// The only shell in the panel that reports *every* option word `set`
 		// cannot use before it gives up, with one usage block after them all
 		// (#1170). Unpinned until mutation testing flipped this preset to No

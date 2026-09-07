@@ -147,7 +147,6 @@ func TestSemantics(t *testing.T) {
 		{"MonitorNeedsATerminal", s.MonitorNeedsATerminal, interp.Yes},
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
-		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},
 		// A failed expansion ends the shell here, which is the standard's
 		// answer and this preset's by inheritance (#1171).
 		{"FailedExpansionAbandonsTheLine", s.FailedExpansionAbandonsTheLine, interp.No},

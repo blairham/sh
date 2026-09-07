@@ -26,7 +26,6 @@ func refusedRun(t *testing.T, src string) (string, int) {
 	}
 	sem := permissive()
 	sem.ReadonlyReassignmentFatal = No
-	sem.ReadonlyReassignmentFatalFromCommandString = No
 	sem.ReadonlyReassignmentByDeclarationFatal = No
 	var out, errs bytes.Buffer
 	dir := t.TempDir()

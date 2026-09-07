@@ -177,7 +177,6 @@ func TestSemantics(t *testing.T) {
 		{"MonitorNeedsATerminal", s.MonitorNeedsATerminal, interp.Yes},
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.Yes},
-		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},
 		// One line for a bad option word here, and the reason is the
 		// fatality rather than a rule: the loop never reaches the second
 		// word. Pinned so that staying on this answer is a decision (#1170).

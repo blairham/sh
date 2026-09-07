@@ -81,35 +81,104 @@ func cmdStringStatus(t *testing.T, src string, commandString bool, answer int) i
 	return st
 }
 
-// A readonly reassignment is fatal in three of the panel either way, and in
-// the fourth only when the program came from an argument.
+// A readonly reassignment answers the **same** whichever route the program
+// arrived by, and the separator between the statements is what decides how
+// much it ends.
 //
-// Only for an assignment standing as a command of its own: the dialect that
-// splits is not fatal for `export x=2` or `x=2 cmd` by either route, so
-// those keep the ordinary answer.
-func TestAReadonlyReassignmentMayAnswerByHowTheShellStarted(t *testing.T) {
+// This replaces a field that said otherwise. `ReadonlyReassignmentFatalFromCommandString`
+// was measured from two cells — `-c` with a `;` against a file with newlines
+// — which is the *diagonal* of route-by-separator and is confirmatory for
+// either reading. The full square says the route decides nothing (#1182):
+//
+//	                 file+`;`   -c+`;`   file+NL   -c+NL
+//	bash 5.3            1         1         0        0
+//	bash-as-`sh`        1         1         0        0
+//	bash 3.2            1         1         0        0
+//	dash                2         2         2        2
+//	ksh93               1         1         1        1
+//	zsh                 1         1         1        1
+//
+// So both routes are asserted here against the same program, and the pair is
+// the shape: a single cell cannot tell a route rule from a separator one.
+func TestAReadonlyReassignmentAnswersTheSameByEitherRoute(t *testing.T) {
 	for _, c := range []struct {
-		name              string
-		base, fromCommand Answer
-		commandString     bool
-		carried           bool
+		name    string
+		src     string
+		fatal   Answer
+		carried bool
 	}{
-		{"fatal either way, from a file", Yes, Yes, false, false},
-		{"fatal either way, from an argument", Yes, Yes, true, false},
-		{"and one that is not, from a file", No, Yes, false, true},
-		{"but is from an argument", No, Yes, true, false},
+		{"fatal, on separate lines", "readonly x=1\nx=2\necho after\n", Yes, false},
+		{
+			"not fatal, on separate lines — the line is given up and the next runs",
+			"readonly x=1\nx=2\necho after\n", No, true,
+		},
+		{"fatal, in one list", "readonly x=1; x=2; echo after\n", Yes, false},
+		{
+			"not fatal, in one list — the rest of the list goes with it",
+			"readonly x=1; x=2; echo after\n", No, false,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for _, fromCommand := range []bool{false, true} {
+				var buf strings.Builder
+				sem := PosixSemantics()
+				sem.ReadonlyReassignmentFatal = c.fatal
+				sem.FatalErrorStatusIsOne = Yes
+				r := newTestRunner(t, &Runner{
+					Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+					Route: routeFor(fromCommand), Stdout: &buf, Stderr: &buf,
+				})
+				f, err := syntax.Parse(c.src, syntax.Core())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := r.Run(context.Background(), f); err != nil {
+					t.Fatal(err)
+				}
+				if carried := strings.Contains(buf.String(), "after"); carried != c.carried {
+					t.Errorf("fromCommand=%v: said %q; carried on = %v, want %v",
+						fromCommand, buf.String(), carried, c.carried)
+				}
+			}
+		})
+	}
+}
+
+// An assignment standing as a command of its own and a *declaration*
+// assigning to the same name are two questions, which is what is left of the
+// "two questions" the removed field was thought to make three of.
+func TestOnlyAnAssignmentStandingAloneAsksTheOrdinaryQuestion(t *testing.T) {
+	for _, c := range []struct {
+		name, src           string
+		base, byDeclaration Answer
+		carried             bool
+	}{
+		{
+			"a bare assignment reads the ordinary answer",
+			"readonly x=1\nx=2\necho after\n", Yes, No, false,
+		},
+		{
+			// The same two answers, and the declaration takes the other one:
+			// if it read the ordinary answer this row would stop.
+			"a declaration reads its own, even when the ordinary one is fatal",
+			"readonly x=1\nexport x=2\necho after\n", Yes, No, true,
+		},
+		{
+			"and the other way round, so neither is a default",
+			"readonly x=1\nexport x=2\necho after\n", No, Yes, false,
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			var buf strings.Builder
 			sem := PosixSemantics()
 			sem.ReadonlyReassignmentFatal = c.base
-			sem.ReadonlyReassignmentFatalFromCommandString = c.fromCommand
+			sem.ReadonlyReassignmentByDeclarationFatal = c.byDeclaration
 			sem.FatalErrorStatusIsOne = Yes
 			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
-				Route: routeFor(c.commandString), Stdout: &buf, Stderr: &buf,
+				Route: RouteCommandString, Stdout: &buf, Stderr: &buf,
 			})
-			f, err := syntax.Parse("readonly x=1\nx=2\necho after\n", syntax.Core())
+			f, err := syntax.Parse(c.src, syntax.Core())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -120,37 +189,6 @@ func TestAReadonlyReassignmentMayAnswerByHowTheShellStarted(t *testing.T) {
 				t.Errorf("said %q; carried on = %v, want %v", buf.String(), carried, c.carried)
 			}
 		})
-	}
-}
-
-// The command-string answer is for an assignment standing alone. Setting a
-// name any other way keeps the ordinary one, which is what makes the two
-// questions two rather than one.
-func TestOnlyAnAssignmentStandingAloneAsksTheOtherQuestion(t *testing.T) {
-	var buf strings.Builder
-	sem := PosixSemantics()
-	sem.ReadonlyReassignmentFatal = No
-	sem.ReadonlyReassignmentFatalFromCommandString = Yes
-	// A declaration has a question of its own, and this test is about the
-	// command-string one not reaching it — so that one says carry on.
-	sem.ReadonlyReassignmentByDeclarationFatal = No
-	sem.FatalErrorStatusIsOne = Yes
-	r := newTestRunner(t, &Runner{
-		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
-		Route: RouteCommandString, Stdout: &buf, Stderr: &buf,
-	})
-	// `export x=2` is an assignment, but not one standing as a command of
-	// its own — and the dialect that splits is not fatal for it by either
-	// route.
-	f, err := syntax.Parse("readonly x=1\nexport x=2\necho after\n", syntax.Core())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := r.Run(context.Background(), f); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(buf.String(), "after") {
-		t.Errorf("said %q, want the ordinary answer for a name set some other way", buf.String())
 	}
 }
 
@@ -177,10 +215,9 @@ func TestAReadonlyReassignmentByADeclaration(t *testing.T) {
 			t.Run(c.name, func(t *testing.T) {
 				var buf strings.Builder
 				sem := PosixSemantics()
-				// The other two answers say nothing about this one, so they
-				// are set the other way round to prove it.
+				// The other answer says nothing about this one, so it is
+				// set the other way round to prove it.
 				sem.ReadonlyReassignmentFatal = No
-				sem.ReadonlyReassignmentFatalFromCommandString = No
 				sem.ReadonlyReassignmentByDeclarationFatal = c.byDeclaration
 				sem.FatalErrorStatusIsOne = Yes
 				r := newTestRunner(t, &Runner{

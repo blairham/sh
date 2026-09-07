@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -27,7 +28,6 @@ func readonlyElementSemantics() Semantics {
 	{
 		s := permissive()
 		s.ReadonlyReassignmentFatal = No
-		s.ReadonlyReassignmentFatalFromCommandString = No
 		s.ReadonlyReassignmentByDeclarationFatal = No
 		// Two axes the setup lines below would otherwise leave unanswered:
 		// `typeset -A m` declares without a value, and a function body wants
@@ -54,13 +54,15 @@ func runReadonlyElementWith(t *testing.T, src string, route Route, d Diagnostics
 // runReadonlyElementFromCommandString answers the two fatality axes in
 // opposite directions and says the program came from `-c`, so which of them
 // the refusal consulted is visible in whether the script carried on.
-func runReadonlyElementFromCommandString(t *testing.T, src string) (out string, status int) {
+func runReadonlyElementSemantics(t *testing.T, src string, set func(*Semantics)) (out string, status int) {
 	t.Helper()
 	return run(t, src, func(r *Runner) {
 		s := readonlyElementSemantics()
-		s.ReadonlyReassignmentFatalFromCommandString = Yes
 		s.FatalErrorStatusIsOne = Yes
-		r.Semantics, r.Route = &s, RouteCommandString
+		if set != nil {
+			set(&s)
+		}
+		r.Semantics = &s
 	})
 }
 
@@ -350,27 +352,50 @@ echo two`
 	}
 }
 
-// The element path asks the same fatality axes the scalar path does, rather
-// than a second set of its own.
+// The element path asks the same fatality axis the scalar path does, rather
+// than a second one of its own.
 //
-// The two are told apart by the route: an assignment standing alone consults
-// ReadonlyReassignmentFatalFromCommandString when the program came from `-c`
-// and ReadonlyReassignmentFatal otherwise, and anything reaching the refusal
-// by some other route — a builtin, `read`, the shell itself — asks only the
-// second. Answering them in opposite directions is what makes which one was
-// asked visible; with both answered alike, an element write that consulted
-// neither correctly would still look right.
-func TestTheElementPathAsksTheCommandStringAxis(t *testing.T) {
+// The two axes are answered in **opposite directions**, which is what makes
+// which one was asked visible: an element write is an assignment standing on
+// its own, so it must read ReadonlyReassignmentFatal and not the declaration
+// answer. With both answered alike, a write that consulted neither correctly
+// would still look right.
+//
+// This used to be discriminated by the route, through a field that has since
+// been removed — it was measured on the diagonal of route-by-separator and
+// the route decides nothing here (#1182). The declaration axis is the
+// discriminator that survives, and it is a better one: it is a real split in
+// the panel rather than an artifact.
+func TestTheElementPathAsksTheAssignmentAxisAndNotTheDeclarationOne(t *testing.T) {
 	const src = `typeset -A m; m[a]=1; typeset -r m
 m[k]=v
 echo after`
 
-	out, st := runReadonlyElementFromCommandString(t, src)
+	// Fatal for a bare assignment, not for a declaration: the element write
+	// must stop.
+	out, st := runReadonlyElementSemantics(t, src, func(s *Semantics) {
+		s.ReadonlyReassignmentFatal = Yes
+		s.ReadonlyReassignmentByDeclarationFatal = No
+	})
 	if want := "sh: m: readonly variable\n"; out != want {
-		t.Errorf("wrote %q, want %q — `after` printing means the axis was never asked", out, want)
+		t.Errorf("wrote %q, want %q — `after` printing means the declaration answer was read", out, want)
 	}
 	if st != 1 {
 		t.Errorf("status %d, want the 1 of a fatal error", st)
+	}
+
+	// And the other way round, so neither answer is a default: not fatal for
+	// a bare assignment, fatal for a declaration. The write is refused and
+	// the shell carries on.
+	out, _ = runReadonlyElementSemantics(t, src, func(s *Semantics) {
+		s.ReadonlyReassignmentFatal = No
+		s.ReadonlyReassignmentByDeclarationFatal = Yes
+	})
+	if !strings.Contains(out, "after") {
+		t.Errorf("wrote %q, want the shell to carry on — the declaration answer was read", out)
+	}
+	if !strings.Contains(out, "readonly variable") {
+		t.Errorf("wrote %q, want the refusal still reported", out)
 	}
 }
 

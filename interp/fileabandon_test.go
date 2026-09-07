@@ -505,7 +505,6 @@ func TestAGivenUpStatementDoesNotEndBorrowedText(t *testing.T) {
 		// The refusal reports and gives up the statement rather than the
 		// script, which is the shape this is about.
 		sem.ReadonlyReassignmentFatal = No
-		sem.ReadonlyReassignmentFatalFromCommandString = No
 		dg := abandonDiagnostics()
 		dg.ReadonlyVariable = "%s: readonly variable"
 		out, _ := sourceRun(t, dir,
@@ -532,7 +531,6 @@ func TestAGivenUpStatementDoesNotEndBorrowedText(t *testing.T) {
 func TestAGivenUpStatementTakesTheRestOfItsLineInsideBorrowedText(t *testing.T) {
 	sem := abandonSemantics(Yes, No)
 	sem.ReadonlyReassignmentFatal = No
-	sem.ReadonlyReassignmentFatalFromCommandString = No
 	dg := abandonDiagnostics()
 	dg.ReadonlyVariable = "%s: readonly variable"
 

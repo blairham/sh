@@ -279,16 +279,19 @@ echo "[$INHERITED]"`, set, Diagnostics{}, []string{"INHERITED=bar"})
 // back. The associative table below is where the same slip is visible, and it
 // is what a mutant needed before it would die.
 //
-// What the panel does here is three different things and none of them is
-// modeled — `arr=(a b); typeset -i arr` is `a b` in bash 5.3.15, `0 0` in
-// ksh93u+ and a single `0` in zsh 5.9.2, and `-u` folds the elements in ksh93
-// alone. This asserts the substrate's answer, which is to touch nothing.
+// What the panel does here is three different things, and which of them a
+// dialect does is CompoundAttribute's to say — see
+// TestACompoundValueMeetingANewAttribute. What this pins is that the *scalar*
+// axis decides nothing about it: both of its answers leave the array as it
+// stands under the answer that keeps the elements, so the scalar copy is
+// never rewritten behind the array's back.
 func TestAnAttributeOverAnArrayNameTouchesNothing(t *testing.T) {
 	for _, answer := range []Answer{Yes, No} {
 		set := func(s *Semantics) {
 			withHiding(s)
 			s.DeclaredNameWithoutValueIsEmpty = Yes
 			s.AttributeRereadsTheValueItFinds = answer
+			s.CompoundAttribute = CompoundAttributeKeepsTheElements
 		}
 		out, errs, st := declRun(t, `arr=(a b)
 typeset -i arr
@@ -321,6 +324,10 @@ func TestAnAttributeOverAnAssociativeTableInventsNoScalar(t *testing.T) {
 			// this reads back.
 			s.ArrayScalarIsTheWholeArray = No
 			s.ArrayNameWithoutSubscriptIsTheList = No
+			// The compound answer that keeps the elements, which is the one
+			// this is about: under it nothing may appear in the scalar table
+			// either, and a mutant that wrote there is what this catches.
+			s.CompoundAttribute = CompoundAttributeKeepsTheElements
 		}
 		out, errs, st := declRun(t, `typeset -A m
 m[k]=v

@@ -462,15 +462,27 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 func (r *Runner) bareAssignmentDeclaration(d declaration) string {
 	var flags []string
 	// Not the clustered order: this engine leads with what the name *is
-	// for* — export first — and puts the kind last.
+	// for* — export first, then readonly — and follows with what it is.
 	if d.exported {
 		flags = append(flags, "-x")
 	}
 	if d.readonly {
 		flags = append(flags, "-r")
 	}
-	// The case letters sit between readonly and integer here — measured,
-	// `typeset -x -r -l -i` back from a name declared with all four.
+	// The kind letter comes next and the value letters after it — measured
+	// from a name declared with every one: `typeset -x -r -a -u q=(1)` and
+	// `typeset -x -A -i w=([k]=1)`.
+	//
+	// It read `-x -r -l -i -a` here until an array could carry a value
+	// letter at all, which was measured on a *scalar* — where the kind
+	// letter is absent and any order for it passes. `typeset -a -i` back as
+	// `typeset -i -a` is what made the order visible.
+	if d.isArr {
+		flags = append(flags, "-a")
+	}
+	if d.isAssoc {
+		flags = append(flags, "-A")
+	}
 	if d.lower {
 		flags = append(flags, "-l")
 	}
@@ -479,12 +491,6 @@ func (r *Runner) bareAssignmentDeclaration(d declaration) string {
 	}
 	if d.integer {
 		flags = append(flags, "-i")
-	}
-	if d.isArr {
-		flags = append(flags, "-a")
-	}
-	if d.isAssoc {
-		flags = append(flags, "-A")
 	}
 	value := ""
 	hasValue := true

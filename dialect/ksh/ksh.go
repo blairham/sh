@@ -302,6 +302,9 @@ func Semantics() interp.Semantics {
 	// assignment.
 	s.AttributeRereadsTheValueItFinds = interp.Yes
 	s.InheritedValueSurvivesADeclaredType = interp.No
+	s.CompoundElementsGoThroughTheAttribute = interp.Yes
+	s.CompoundAttribute = interp.CompoundAttributeFoldsEveryElement
+	s.ArrayLiteralAssignmentStartsTheNameOver = interp.Yes
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
 	// \x does not.
 	s.EchoOptions = "ne"

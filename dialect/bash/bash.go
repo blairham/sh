@@ -334,6 +334,9 @@ func Semantics() interp.Semantics {
 	// the spot and store 0 and MIXED.
 	s.AttributeRereadsTheValueItFinds = interp.No
 	s.InheritedValueSurvivesADeclaredType = interp.Yes
+	s.CompoundElementsGoThroughTheAttribute = interp.Yes
+	s.CompoundAttribute = interp.CompoundAttributeKeepsTheElements
+	s.ArrayLiteralAssignmentStartsTheNameOver = interp.No
 	// `local u` hides the caller's `u` — the local exists unset.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No

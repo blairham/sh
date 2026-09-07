@@ -7394,6 +7394,41 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the control that says the question is about where the value *lives* and not about the export attribute: the script assigns the name its own value first — the same value it already had — and every column then answers the plain re-read question. `0` in ksh93 and zsh and `bar` in the three bash columns, exported in all six. A shell that keyed the discard off the export bit would answer this row the same as the one above it, and no shell does",
 	},
 	{
+		ID: "declare/an-attribute-over-an-array-is-three-answers", Category: "declarations",
+		Snippet: "arr=(a b); typeset -i arr; echo \"i=[${arr[@]}] n=${#arr[@]}\"\nbrr=(a b); typeset -u brr; echo \"u=[${brr[@]}] n=${#brr[@]}\"",
+		Why:     "the compound half of the re-read, and it splits the panel **three** ways where the scalar question splits it two — with the two shells that share the scalar answer disagreeing with each other about what reaching back into an array even means. bash leaves both alone; ksh93 re-reads every element in place, `0 0` and `A B`, keeping the length; zsh replaces the array with a single scalar under `-i`, so `${#arr[@]}` is **1**, and leaves it alone under `-u`. Three answers to the first column and no two shells alike across both, which is what makes it a field of its own rather than a widening of the scalar one (#1120)",
+	},
+	{
+		ID: "declare/an-attribute-over-a-keyed-table", Category: "declarations",
+		Snippet: "typeset -A m; m[k]=v\ntypeset -i m\necho \"[${m[k]}] n=${#m[@]}\"\nexport m\nenv | grep '^m=' || echo '(no child)'",
+		Why:     "the fourth shape, and the one where the answer reaches a *child*: bash keeps `v`, ksh93 folds the element to `0` under its own key, and zsh discards the table for a scalar — so `${m[k]}` is empty and the child is told `m=0` for a name that has no scalar value at all — the only column that tells a child anything here. The last column is the one a scalar-only reading cannot produce: an array keeps its first element in the scalar table and hides the slip, and a table keeps nothing there, so this is where inventing a scalar shows",
+	},
+	{
+		ID: "declare/an-array-becoming-a-scalar-keeps-nothing", Category: "declarations",
+		Snippet: "a=(7 8); typeset -i a; echo \"1 n=${#a[@]} [${a[@]}]\"\nb=(x y); typeset -i b; echo \"2 [${b[@]}]\"\nc=(0x10 9); typeset -i c; echo \"3 [${c[@]}]\"",
+		Why:     "which of the three answers each column gives, read off values that tell them apart. `(7 8)` is already canonical, so only a shell that *replaces* the array changes it — and zsh answers `0` for all three, which says the scalar is a **fresh** name of the declared type and not a fold of anything the array held. ksh93 folds each element and the arithmetic shows: `(x y)` is `0 0` and `(0x10 9)` is `16 9`. bash leaves every one of them as written",
+	},
+	{
+		ID: "declare/an-element-written-through-the-names-attribute", Category: "declarations",
+		Snippet: "typeset -ia a=(1 2); a[1]=3+4; echo \"1 [${a[@]}]\"\ntypeset -ua q=(ab cd); q[1]=ef; echo \"2 [${q[@]}]\"\ntypeset -A m; typeset -i m; m[k]=7+7; echo \"3 [${m[k]}]\"",
+		Why:     "the other half of the same surface, and a *later write* rather than a reach-back: a scalar assignment through an attributed name needs no dialect anywhere, and an element is where the panel splits. bash and ksh93 fold every element write — `1 7`, `AB EF`, `14` — and zsh folds an array's elements not at all: its case letters reach a scalar's expansion and stop there, and its integer letter never meets an array, having replaced it above. So `[ef cd]` there, with the first element the write did not touch still lower-case",
+	},
+	{
+		ID: "declare/an-append-and-a-declarations-own-literal-both-fold", Category: "declarations",
+		Snippet: "typeset -ia d=(5+5 6+6); echo \"1 [${d[@]}]\"\ntypeset -ia e; e+=(7+7); echo \"2 [${e[@]}]\"\ntypeset -ia f=(1); f+=(8+8); echo \"3 [${f[@]}]\"\ntypeset -ua g; g=(ab cd); echo \"4 [${g[@]}]\"",
+		Why:     "the two spellings that are **not** the replacement below, which is what makes the replacement a question rather than a rule: a declaration's own array literal and an append both fold in bash 5.3 and ksh93 alike — `10 12`, `14`, `1 16`, `AB CD`. `syntax.Assign.Operand` is what tells the first from a plain assignment of the same shape, and `Append` the second, and a reading that took every whole-array assignment as re-creating the name would lose all four. bash 3.2 splits the two: it folds the appends and leaves the declaration's own literal as written, which is a version fact rather than a fifth answer",
+	},
+	{
+		ID: "declare/a-whole-array-assignment-re-creates-the-name", Category: "declarations",
+		Snippet: "typeset -ia z=(1)\nz=(5+5 6+6)\ntypeset -p z\nz[0]=3+4\necho \"[${z[@]}]\"",
+		Why:     "replacing a whole array is a *new name* in one shell and new elements in the other, and the listing is what says which: bash keeps `declare -ai z=([0]=\"10\" [1]=\"12\")` and folds the element write after it to 7, where ksh93 lists `typeset -a z=(5+5 6+6)` — the `-i` gone — and leaves the later `3+4` as written. The element write is the load-bearing half: it says the attribute is **gone** rather than merely bypassed by the one assignment that replaced the elements",
+	},
+	{
+		ID: "declare/a-keyed-table-replaced-keeps-its-attribute", Category: "declarations",
+		Snippet: "typeset -A m; typeset -i m; m[k]=1\nm=([j]=2+2)\nm[k]=3+3\necho \"[${m[k]}][${m[j]}]\"",
+		Why:     "the bound on the row above, and the reason it is about *this spelling* rather than about replacing a compound value in general: the keyed literal keeps the attribute in both columns that have `-A`, so `2+2` folds to 4 as it lands and `3+3` folds to 6 after it. A wider reading of the rule would take the attribute off a table no shell takes it off. bash 3.2 has no `-A` and answers `[6][6]` for two plain scalars instead; zsh refuses the line, its `-i` having made `m` a scalar already",
+	},
+	{
 		ID: "declare/a-local-that-shadows-a-readonly", Category: "declarations",
 		Script:  true,
 		Snippet: "typeset -r x=1\nf() { local x=2; echo \"in=[$x]\"; echo running; }\nf\necho \"st=$? out=[$x]\"\necho after\n",

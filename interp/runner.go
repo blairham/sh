@@ -3397,6 +3397,52 @@ func (r *Runner) assignOperands(c *syntax.SimpleCmd) {
 	}
 }
 
+// arrayLiteralStartsTheNameOver reports whether `a=(x y)` re-creates the name
+// rather than replacing its elements, having asked the dialect.
+//
+// Asked only where the answer could be seen: the name has to be carrying one
+// of the attributes there is something to lose, the literal has to be the
+// plain assignment spelling rather than a declaration's own operand, and it
+// must not be an append. Each of those was measured — see the field.
+func (r *Runner) arrayLiteralStartsTheNameOver(a *syntax.Assign) bool {
+	if a.Append || a.Operand {
+		return false
+	}
+	if !r.integer[a.Name] && !r.lowered[a.Name] && !r.uppered[a.Name] {
+		return false
+	}
+	if !r.compoundNameHolds(a.Name) {
+		// No compound value to start over. The *first* array literal a
+		// declared name receives keeps the letter and folds — measured,
+		// `typeset -ia b; b=(5+5 6+6)` is `10 12` and lists as `typeset -a
+		// -i b=(10 12)` — so what re-creates the name is replacing an array
+		// it is already holding.
+		//
+		// The array and not "anything", deliberately: a valueless
+		// declaration gives the name the empty string in one dialect and
+		// nothing in the others, so a guard that asked whether the name held
+		// *a value* would have made this axis's answer depend on
+		// DeclaredNameWithoutValueIsEmpty's. That coupling is the bug #979
+		// was, and it was in the first draft of this line.
+		return false
+	}
+	return r.ask(r.sem().ArrayLiteralAssignmentStartsTheNameOver,
+		"a whole-array assignment re-creating the name it writes")
+}
+
+// clearTypeAttributes takes off the letters that say what a name's values
+// *are* — the integer letter and the two case letters.
+//
+// Narrower than clearAttributes, which `unset` uses: this is not the name
+// going away, so what is measured to go is measured to go, and nothing else
+// is guessed at. The listing after a re-creating assignment keeps the array
+// letter and loses these three, which is what the field records.
+func (r *Runner) clearTypeAttributes(name string) {
+	delete(r.integer, name)
+	delete(r.lowered, name)
+	delete(r.uppered, name)
+}
+
 // assign performs one assignment, which is three different things wearing the
 // same syntax: a scalar, a whole array, or one element of one.
 func (r *Runner) assign(a *syntax.Assign) {
@@ -3430,6 +3476,16 @@ func (r *Runner) assign(a *syntax.Assign) {
 		// output — and a `[sub]=value` element places its value instead.
 		// `a+=(d)` adds to the end rather than to the first element, which is
 		// what makes append two operations sharing a spelling rather than one.
+		if r.arrayLiteralStartsTheNameOver(a) {
+			// One dialect reads this spelling as a *new* name rather than as
+			// new elements for the one that is there, so the attributes go
+			// before the elements land — see
+			// Semantics.ArrayLiteralAssignmentStartsTheNameOver.
+			r.clearTypeAttributes(a.Name)
+		}
+		if r.unspecified {
+			return
+		}
 		r.assignArrayLiteral(a.Name, a.Elems, a.Append)
 	case a.Index != nil && r.assocDeclared(a.Name):
 		// A declared name takes its subscript as a string, expanded and

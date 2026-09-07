@@ -1977,6 +1977,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `jobs/a-background-external-command-outlives-the-shell` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` |
 | `jobs/an-ampersand-returns-before-the-job-opens-a-fifo` | `NOW-42~GOT-hi` | `NOW-42~GOT-hi` | `NOW-42~GOT-hi` | `NOW-42~GOT-hi` | `NOW-42~GOT-hi` | `NOW-42~GOT-hi` |
 | `jobs/an-ampersand-returns-when-an-external-commands-redirection-blocks` | `NOW-42~hi` | `NOW-42~hi` | `NOW-42~hi` | `NOW-42~hi` | `NOW-42~hi` | `NOW-42~hi` |
+| `jobs/an-ampersand-returns-when-the-job-only-loops` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` | `NOW-42~LATE-42` |
+| `jobs/the-last-background-pid-of-a-job-that-only-loops` | `pid` | `pid` | `pid` | `pid` | `pid` | `pid` |
 | `jobs/wait-brings-a-background-job-back-before-the-shell-ends` | `LATE-42~NOW-42` | `LATE-42~NOW-42` | `LATE-42~NOW-42` | `LATE-42~NOW-42` | `LATE-42~NOW-42` | `LATE-42~NOW-42` |
 | `jobs/a-running-background-job` | `[1] + Running                    ` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                 sleep 0.4 &` | `[1] +  Running                 <command unknown>` | `[1]  + running    sleep 0.4` |
 | `jobs/a-finished-background-job` | `[1] Done                       ~---` | `[1] Done                       sleep 0.05~---` | `[1] Done                       sleep 0.05~---` | `---` | `[1] Running                 <command unknown>~---` | `---` |
@@ -2348,6 +2350,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `jobs/an-ampersand-returns-when-an-external-commands-redirection-blocks` — the same question where the job is one external command, and it is the row that says the fault was not about compound commands: `sh -c ... &` returns here because the child is a real process, but a program whose redirection blocks never becomes one, so the pid the shell was waiting for did not exist yet. The pair with the row above is what separates opening a redirection from dispatching a command — the open comes first in every shape
   ```sh
   mkfifo p; /bin/cat <p >o.txt & echo NOW-42; echo hi >p; wait; cat o.txt
+  ```
+- `jobs/an-ampersand-returns-when-the-job-only-loops` — the shape the two rows above cannot reach (#1283): a job whose body neither reads nor ever runs a program, so there is no point in it where it waits on anything outside the shell. Every shell in the panel prints the marker at once because it forked before the body ran a thing; this shell printed nothing at all and timed out, having waited for a process id a job that only spins was never going to have. The loop turns on a file the *script* creates after the `&`, which is what makes the order a fact about the shell rather than about the scheduler — the job cannot leave the loop until the shell has got past the job — and it is also what keeps the case from leaving a spinning process behind in five of the six columns, which `while :; do :; done` would
+  ```sh
+  { while [ ! -f p ]; do :; done; echo LATE-42; } & echo NOW-42; : > p; wait
+  ```
+- `jobs/the-last-background-pid-of-a-job-that-only-loops` — what the row above costs, recorded rather than left to be found. A real shell forks and knows the child's process id before the body runs, so a loop that ends after one pass takes nothing from `$!`; this shell learns a job's process from the first program the job starts, and a job standing at the back edge of a loop whose end cannot be seen has started none — so it settles on `0` here where all five name a process. A bounded computation written as a conditional loop is the shape that pays it, and the alternative was a shell that never returned at all. The pid itself cannot be recorded, so the case asks only which of the three answers it is
+  ```sh
+  { i=0; while [ $i -lt 1 ]; do i=1; done; sleep 0.2; } & case "$!" in 0) echo zero;; "") echo none;; *) echo pid;; esac; wait
   ```
 - `jobs/wait-brings-a-background-job-back-before-the-shell-ends` — the same job with a `wait` in front of the ending, which every shell including this one gets right and which is the workaround the row above leaves a script needing. It is the pair that says the loss is about the shell *ending*, not about the job: nothing is wrong with the job while there is still a shell to run it
   ```sh

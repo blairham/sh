@@ -343,3 +343,91 @@ func TestTheElementsGroupDoesNotSwallowTheAssignmentsParen(t *testing.T) {
 		t.Error("parsed, want the stray `)` refused")
 	}
 }
+
+// condGlobQuals is globQuals with `[[ ]]`, which is what the pattern
+// operand's rows need and which Core() has but this file's dialect did not
+// have to say until now.
+func condGlobQuals() Dialect {
+	d := globQuals()
+	d.DoubleBracket = true
+	return d
+}
+
+// A *pattern operand's* leading group ends at an operator too, which is the
+// second route into scanArgumentGroup and was answered wrong until #1175.
+//
+// This is the route the `inArgument` guard used to divert: `[[ $k == (a<b) ]]`
+// took the group whole and matched, where zsh refuses the `<` while parsing.
+// Measured on zsh 5.9.2, 2026-09-07, from a script file under `env -i`, each
+// probe in a file of its own so the first refusal does not hide the rest:
+//
+//	k='a<b'; [[ $k == (a<b) ]]    parse error near `<'
+//	k='a>b'; [[ $k == (a>b) ]]    parse error near `>'
+//	k='a;b'; [[ $k == (a;b) ]]    parse error near `;'
+//	k='a&b'; [[ $k == (a&b) ]]    parse error near `&'
+//	k=a;     [[ $k == (a|b) ]]    matches, status 0
+//
+// The whole rendered line is asserted, location included, because the
+// position is the claim: the word ended *at the operator*, so the complaint
+// has to land on the operator and not on the `(` in front of it or the `)`
+// behind it.
+func TestAPatternOperandsLeadingGroupEndsAtAnOperator(t *testing.T) {
+	d := condGlobQuals()
+	for _, tc := range []struct{ src, want string }{
+		{`[[ $k == (a<b) ]]`, `1:12: "<" unexpected`},
+		{`[[ $k == (a>b) ]]`, `1:12: ">" unexpected`},
+		{`[[ $k == (a;b) ]]`, `1:12: ";" unexpected`},
+		{`[[ $k == (a&b) ]]`, `1:12: "&" unexpected`},
+	} {
+		_, err := Parse(tc.src, d)
+		if err == nil {
+			t.Errorf("%s: parsed, want the operator refused", tc.src)
+			continue
+		}
+		if got := err.Error(); got != tc.want {
+			t.Errorf("%s: error = %q, want %q", tc.src, got, tc.want)
+		}
+	}
+	// And the `|` still belongs to the group, which is what keeps this from
+	// being "an operand may not hold a parenthesis".
+	mustParse(t, `[[ $k == (a|b) ]]`, d, "an alternation in a pattern operand")
+	// The same four are refused without the qualifier flag as well: this
+	// route is `inPattern`, which rests on PatternAlternation alone, so the
+	// rows above are not secretly about GlobQualifiers.
+	bare := Core()
+	bare.PatternAlternation = true
+	if _, err := Parse(`[[ $k == (a<b) ]]`, bare); err == nil {
+		t.Error("without GlobQualifiers: parsed, want the `<` refused")
+	}
+}
+
+// A *regular expression's* operand is the other answer, and it does not reach
+// scanArgumentGroup at all — scanWord takes a regex group whole at a case of
+// its own, ahead of the one this file is about.
+//
+// The four shells with `=~` agree, measured 2026-09-07 over a script file
+// under `env -i`. `[[ 'a<b' =~ (a<b) ]]` and `[[ 'a;b' =~ (a;b) ]]` both
+// match in bash 5.3.15, bash 3.2.57, bash-as-`sh` and ksh93u+, and
+// `[[ 'ab' =~ (a<b) ]]` does not — so the `<` is regex text there rather than
+// a redirection. zsh is the dissenter and refuses the `<` while parsing,
+// which is a wording question for that preset and not this rule.
+//
+// It is asserted here because #1175's whole complaint was that nothing did:
+// a guard whose only live branch is untested reads as though it decided
+// something.
+func TestARegexOperandsLeadingGroupKeepsItsOperators(t *testing.T) {
+	d := condGlobQuals()
+	for _, src := range []string{
+		`[[ $k =~ (a<b) ]]`,
+		`[[ $k =~ (a>b) ]]`,
+		`[[ $k =~ (a;b) ]]`,
+		`[[ $k =~ (a&b) ]]`,
+	} {
+		mustParse(t, src, d, "a regex group holds its operators")
+	}
+	// Without the pattern-group flags either, because the regex route is
+	// `inRegex` and rests on neither.
+	for _, src := range []string{`[[ $k =~ (a<b) ]]`, `[[ $k =~ (a;b) ]]`} {
+		mustParse(t, src, Core(), "a regex group holds its operators in the core")
+	}
+}

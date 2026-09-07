@@ -916,6 +916,13 @@ type Dialect struct {
 	// go. A `|` is the exception — `echo ( a|b )` is one word — because a
 	// pattern group may hold an alternation.
 	//
+	// That is a rule about a group **starting a word** rather than about
+	// this flag: a pattern operand's leading group ends at the same four
+	// characters — `[[ $k == (a<b) ]]` is `parse error near `<'` there and
+	// needs only [Dialect.PatternAlternation] — where a *regular
+	// expression's* operand keeps them, in all four shells that have `=~`.
+	// See Lexer.scanArgumentGroup, which holds both measurements (#1175).
+	//
 	// The matcher's half is read from here too, the way
 	// [Dialect.PatternAlternation] and [Dialect.NumericRangePattern] are:
 	// which dialects read a trailing group as qualifiers is a grammar

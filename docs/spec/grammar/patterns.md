@@ -405,6 +405,31 @@ exception, a pattern group being allowed to hold an alternation. That is
 also what `coproc MY ( cat </dev/null )` runs into, which is why the
 complaint names the `)` and not the `(`.
 
+**And it is a rule about a group starting a word, not about this
+construct.** A *pattern operand's* leading group ends at the same four
+characters, which needs only bare groups and no qualifiers at all —
+measured on zsh 5.9.2, 2026-09-07, each probe in a script file of its
+own so the first refusal does not hide the rest:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `[[ $k == (a<b) ]]` | ``parse error near `<'`` |
+| `[[ $k == (a>b) ]]` | ``parse error near `>'`` |
+| `[[ $k == (a;b) ]]` | ``parse error near `;'`` |
+| `[[ $k == (a&b) ]]` | ``parse error near `&'`` |
+| `[[ $k == (a\|b) ]]` | matches — the `\|` is the group's |
+
+A **regular expression's** operand is the other answer and owns its
+operators: `[[ 'a<b' =~ (a<b) ]]` and `[[ 'a;b' =~ (a;b) ]]` both match
+in bash 5.3, bash 3.2, bash-as-`sh` and ksh93, and `[[ ab =~ (a<b) ]]`
+does not — so those characters are regex text there rather than a
+redirection or a terminator. zsh alone refuses the `<` while parsing.
+
+So the two operands differ in nothing a reader can see and the shells
+still separate them, which is why both are written down. Measured:
+`cond/a-pattern-operands-group-ends-at-an-operator`,
+`cond/a-regex-operands-group-keeps-its-operators`.
+
 **`setopt no_glob` proves the split is lexical rather than
 interpretive.** With globbing off, `echo MY ( x )` *prints* `MY ( x )` —
 the same two words, and only what became of the group has changed. So

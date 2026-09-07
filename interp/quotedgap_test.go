@@ -108,6 +108,38 @@ func TestAQuotedAtOnAnAbsentNameIsTheAxisAlone(t *testing.T) {
 	}
 }
 
+// A list that exists and is empty without any *array store* behind it, which
+// is the third shape the guard has to get right and the one no assignment can
+// reach: a produced array whose producer has nothing to produce yet.
+//
+// Written because a guard keyed on the array table rather than on what the
+// name holds passes every stored-array row above and fails only here — and
+// the shells this substrate presets have such parameters, empty until a
+// `disable` or an `alias -g` fills them, so the dialect that answers yes
+// would hand every read of one a field it has not got.
+func TestAProducedArrayWithNothingToProduceIsNoField(t *testing.T) {
+	for _, answer := range []Answer{Yes, No} {
+		out, _ := runGrammar(t, `set -- "${produced[@]}"; echo "n=$#"`, nil, func(r *Runner) {
+			sem := *r.Semantics
+			sem.UnsetNameAtIsOneEmptyField = answer
+			r.Semantics = &sem
+			r.SetDynamicArray("produced", func(*Runner) []string { return nil })
+		})
+		if got := strings.TrimSpace(out); got != "n=0" {
+			t.Errorf("%v: got %q, want n=0 — the name holds a list, it is only empty", answer, got)
+		}
+	}
+	// The control: the same producer with something to produce keeps its
+	// fields, so the row above is not passing because the parameter is
+	// unreachable.
+	out, _ := runGrammar(t, `set -- "${produced[@]}"; echo "n=$#"`, nil, func(r *Runner) {
+		r.SetDynamicArray("produced", func(*Runner) []string { return []string{"x", "y"} })
+	})
+	if got := strings.TrimSpace(out); got != "n=2" {
+		t.Errorf("a producer with two elements gave %q, want n=2", got)
+	}
+}
+
 // runUnsetAtAxis runs src with UnsetNameAtIsOneEmptyField set to answer.
 func runUnsetAtAxis(t *testing.T, answer Answer, src string) string {
 	t.Helper()

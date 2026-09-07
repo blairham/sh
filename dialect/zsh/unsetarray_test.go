@@ -29,6 +29,13 @@ func TestAQuotedAtAsksWhetherTheNameExists(t *testing.T) {
 		{"empty literal", `f() { echo "n=$#"; }; a=(); f "${a[@]}"`, "n=0"},
 		{"typeset -a", `f() { echo "n=$#"; }; typeset -a a; f "${a[@]}"`, "n=0"},
 		{"empty association", `f() { echo "n=$#"; }; typeset -A m; f "${m[@]}"`, "n=0"},
+		// Two more lists that exist and are empty without any array store
+		// behind them, because the guard is about what a name *holds* and
+		// not about which table it is in: the positional parameters with
+		// none set, and one of this shell's produced arrays that has
+		// nothing to produce yet.
+		{"no positional parameters", `f() { echo "n=$#"; }; set --; f "${@[@]}"`, "n=0"},
+		{"a produced array with nothing in it", `f() { echo "n=$#"; }; f "${dis_patchars[@]}"`, "n=0"},
 		// The scalar reading the first half is an instance of, spelled out:
 		// a name holding the empty string is one field in every shell, and it
 		// is the answer an undeclared name borrows here.

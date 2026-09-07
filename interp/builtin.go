@@ -823,9 +823,6 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 	// After `-f`, so that a function name keeps its own laxer rule: bash
 	// takes `unset -f 1x` without a word where it refuses `unset 1x`.
 	args, status, ended := r.builtinNames("unset", args, strings.ContainsRune(opts, 'v'))
-	if r.unspecified {
-		return status
-	}
 	for _, name := range args {
 		base, sub, subscripted := r.subscriptOperand(name)
 		if !subscripted {
@@ -908,7 +905,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		// The names that were names are removed first and the script stops
 		// after them: measured, a fatal `unset ":" ok1 ok2` leaves neither
 		// ok1 nor ok2 standing in the shell that ends the script over it.
-		return r.endAfterABadName(status)
+		return r.endAfterABadName()
 	}
 	return status
 }
@@ -1065,9 +1062,6 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			func(d declaration) bool { return d.exported })
 	}
 	args, status, ended := r.builtinNames("export", args, false)
-	if r.unspecified {
-		return status
-	}
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
 		if base, sub, subscripted := r.subscriptOperand(name); subscripted && hasValue {
@@ -1099,7 +1093,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 	}
 	if ended {
 		// See biDeclare: the names are exported and then the script stops.
-		return r.endAfterABadName(status)
+		return r.endAfterABadName()
 	}
 	if r.assignFailed && status == 0 {
 		// A name it refused to assign is the builtin's failure, not just a
@@ -2424,9 +2418,6 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		return r.bareLocalListing()
 	}
 	args, status, ended := r.builtinNames("local", args, false)
-	if r.unspecified {
-		return status
-	}
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
 		if base, sub, subscripted := r.subscriptOperand(name); subscripted && hasValue {
@@ -2507,7 +2498,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	if ended {
 		// See biDeclare: `local` is the same declaration under another word
 		// and gives up the same amount of the line.
-		return r.endAfterABadName(status)
+		return r.endAfterABadName()
 	}
 	if r.assignFailed && status == 0 {
 		// See biExport.
@@ -2540,9 +2531,6 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			func(d declaration) bool { return d.readonly })
 	}
 	args, status, ended := r.builtinNames("readonly", args, false)
-	if r.unspecified {
-		return status
-	}
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
 		if base, sub, subscripted := r.subscriptOperand(name); subscripted {
@@ -2585,7 +2573,7 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 	}
 	if ended {
 		// See biDeclare.
-		return r.endAfterABadName(status)
+		return r.endAfterABadName()
 	}
 	if r.assignFailed && status == 0 {
 		// See biExport.

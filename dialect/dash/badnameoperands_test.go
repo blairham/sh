@@ -26,3 +26,15 @@ func TestAFatalBadNameKeepsOnlyTheOperandsInFrontOfIt(t *testing.T) {
 		}
 	}
 }
+
+// The same rule when the operand it refuses is a *subscripted* one, which
+// reaches the refusal by a different door and had a discard of its own:
+// `export ok1=1 "a[1]=v" ok2=2` leaves ok1 set and ok2 unset here.
+func TestASubscriptedOperandRefusedAmongNamesKeepsTheOnesInFront(t *testing.T) {
+	out, st := runDash(t, t.TempDir(),
+		`trap 'echo "[${ok1-U}][${ok2-U}]"' EXIT; export ok1=1 "a[1]=v" ok2=2; echo NOT-FATAL`)
+	want := "dash: 1: export: a[1]: bad variable name\n[1][U]\n"
+	if out != want || st != 2 {
+		t.Errorf("a subscripted bad operand = %q (status %d), want %q at 2", out, st, want)
+	}
+}

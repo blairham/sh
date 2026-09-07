@@ -135,10 +135,26 @@ func (r *Runner) nameRules(builtin string) (fatal Answer, takes NameOperands) {
 // needing a rule of its own.
 //
 // **A fatal refusal does not throw the operands away.** Every shell in the
-// panel declares the names that *were* names and only then stops, so this
-// hands them back and reports the give-up separately for the caller to raise
-// once it has done what they ask — see namesAfterARefusal for what the
-// dialects disagree about and endAfterABadName for the raising (#1211).
+// panel declares the names that *were* names and only then stops, so the
+// give-up is held back and reported as `ended` for the caller to raise once
+// it has done what those operands ask (#1211).
+//
+// How much of the list goes with the refusal is where the panel splits, and
+// the *position* of the bad name is what shows it. Measured 2026-09-07 from a
+// script file over `export`, `readonly`, `typeset` and `unset`, reading the
+// names back from an EXIT trap because the fatality ends everything written
+// after it:
+//
+//   - ksh93 and zsh declare **every** well-formed operand, wherever the bad
+//     one stood: `export ok1=1 ":" ok2=2` leaves both set in each.
+//   - bash-as-`sh` and dash declare only the ones **in front of** it, so the
+//     same line leaves ok1 set and ok2 unset, and the bad name first leaves
+//     neither.
+//
+// With the bad name *last* the two answers agree, which is why a probe that
+// only ever put it there could not have found the axis. bash proper never
+// arrives: its refusal is not fatal, so it reports each bad operand and
+// declares all the good ones by carrying on.
 //
 // Whether a subscripted operand is a name is its own question, and it is
 // answered per builtin as well as per dialect: bash refuses `export a[0]`
@@ -153,13 +169,8 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 	if explicitVariable && takes == AnythingIsAName {
 		takes = PlainNamesOnly
 	}
-	for i, a := range args {
+	for _, a := range args {
 		name, _, _ := strings.Cut(a, "=")
-		// A subscript on something that is not a name is not a subscripted
-		// operand at all: measured, `typeset 1x[0]=v` is a bad name in every
-		// column that has the word, and bash quotes the *whole* operand back
-		// there where it quotes only `a[1]` for a well-formed base. So the
-		// brackets are read as a subscript only once the base is a name.
 		if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) {
 			if r.takesASubscript(builtin) {
 				rest = append(rest, a)
@@ -168,85 +179,59 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 			if r.unspecified {
 				return nil, 2, false
 			}
-			status = r.badSubscriptOperand(builtin, a, name, fatal)
-			if r.ctl == controlExit {
-				return r.namesAfterARefusal(builtin, rest, args[i+1:], takes), status, true
+			if ended {
+				// Judged in silence: one diagnostic is what every column
+				// that stops writes, however many bad operands follow the
+				// first — measured with `export ":" ok1=1 "1x" ok2=2`.
+				continue
 			}
-			continue
+			status = r.badSubscriptOperand(builtin, a, name, fatal)
 		} else if r.isBuiltinName(name, takes) {
 			rest = append(rest, a)
 			continue
-		}
-		if r.unspecified {
-			return nil, 2, false
-		}
-		status = r.badBuiltinName(builtin, a, name, fatal)
-		if r.ctl == controlExit {
-			return r.namesAfterARefusal(builtin, rest, args[i+1:], takes), status, true
-		}
-	}
-	return rest, status, false
-}
-
-// namesAfterARefusal puts the give-up aside and answers which operands the
-// caller still has to declare.
-//
-// The refusal has already been reported and has already ended the script;
-// what the panel disagrees about is how much of the line goes with it.
-// Measured 2026-09-07 with the bad name first, in the middle and last, over
-// `export`, `readonly`, `typeset` and `unset`, reading the names back from an
-// EXIT trap so the fatality could not hide the answer:
-//
-//   - ksh93 and zsh declare **every** well-formed operand, wherever the bad
-//     one stood: `export ok1=1 ":" ok2=2` leaves both set in each.
-//   - bash-as-`sh` and dash declare only the ones **in front of** it, so the
-//     same line leaves ok1 set and ok2 unset, and the bad name first leaves
-//     neither.
-//
-// bash proper never arrives: its refusal is not fatal, so it reports each bad
-// operand and declares all the good ones by carrying on.
-//
-// The operands after the refusal are collected in silence. One diagnostic is
-// what every fatal column writes however many bad names follow the first —
-// measured with `export ":" ok1=1 "1x" ok2=2` — so reporting them here would
-// add a line no shell writes.
-func (r *Runner) namesAfterARefusal(builtin string, kept, remaining []string, takes NameOperands) []string {
-	// Put aside rather than cleared: the caller raises it again through
-	// endAfterABadName once the operands below have been declared. Holding
-	// it is what lets the caller's loop run at all — every step of it stops
-	// on controlExit, which is right for a failure of its own and wrong for
-	// one that has already happened.
-	r.ctl, r.abandon = controlNone, abandonRequested
-	if !r.ask(r.sem().BadNameDeclaresTheOperandsAfterIt,
-		"a fatal bad name leaving the operands after it declared") {
-		return kept
-	}
-	for _, a := range remaining {
-		name, _, _ := strings.Cut(a, "=")
-		if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) {
-			if r.takesASubscript(builtin) {
-				kept = append(kept, a)
+		} else {
+			if r.unspecified {
+				return nil, 2, false
 			}
+			if ended {
+				continue
+			}
+			status = r.badBuiltinName(builtin, a, name, fatal)
+		}
+		if r.ctl != controlExit {
 			continue
 		}
-		if r.isBuiltinName(name, takes) {
-			kept = append(kept, a)
+		ended = true
+		// Put the give-up aside rather than carrying it out of here: the
+		// caller declares the operands that *were* names and raises it again
+		// through endAfterABadName. Holding it is what lets the caller's loop
+		// run at all — every step of it stops on controlExit, which is right
+		// for a failure of its own and wrong for one that has already
+		// happened.
+		r.ctl, r.abandon = controlNone, abandonRequested
+		if !r.ask(r.sem().BadNameDeclaresTheOperandsAfterIt,
+			"a fatal bad name leaving the operands after it declared") {
+			if r.unspecified {
+				// Nothing was decided, so nothing is declared — and the
+				// script still stops, which the refusal already asked for.
+				return nil, status, true
+			}
+			return rest, status, true
 		}
 	}
-	return kept
+	return rest, status, ended
 }
 
-// endAfterABadName raises the give-up namesAfterARefusal held back.
+// endAfterABadName raises the give-up builtinNames held back.
 //
-// Called by every builtin that takes names, after its own loop: the operands
-// that were names have been declared and the script stops here. A failure of
-// the loop's own has already ended it and keeps its own status, which is the
-// same rule the readonly refusal follows one function over.
-func (r *Runner) endAfterABadName(status int) int {
-	if r.ctl == controlExit {
-		return r.status
-	}
-	r.status = status
+// Called by every builtin on the shared name check, after its own loop: the
+// operands that were names have been declared and the script stops here.
+//
+// No status is passed in and none is needed. fatalQuiet asks the dialect what
+// a fatal error exits with — 1 in three columns and 2 in the fourth — and
+// writes it over whatever the builtin was carrying, which is exactly what the
+// refusal itself did before the give-up was held back.
+func (r *Runner) endAfterABadName() int {
 	r.fatalQuiet()
 	return r.status
 }

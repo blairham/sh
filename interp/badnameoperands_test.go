@@ -138,3 +138,31 @@ func TestASurvivableBadNameDeclaresEverythingWithoutAskingTheAxis(t *testing.T) 
 		t.Errorf("survivable refusal = %q (status %d), want %q at 0", out, status, want)
 	}
 }
+
+// A subscripted operand the dialect will not take reaches the refusal by a
+// different door in the same check, and answers the axis the same way.
+func TestASubscriptedOperandRefusedAmongNamesReadsTheSameAxis(t *testing.T) {
+	for _, tc := range []struct {
+		after Answer
+		want  string
+	}{{Yes, "[1][2]\n"}, {No, "[1][U]\n"}} {
+		out, status := runBadName(t,
+			readBack+`export ok1=1 "a[1]=v" ok2=2; echo NOT-FATAL`, tc.after)
+		if !strings.HasSuffix(out, tc.want) || status == 0 {
+			t.Errorf("with the axis %v = %q (status %d), want it to end %q and fail",
+				tc.after, out, status, tc.want)
+		}
+	}
+}
+
+// A bad operand behind the refusal is dropped rather than declared, which the
+// environment is what can see: a name nothing in the language can read back is
+// still a name a child process gets handed.
+func TestABadOperandBehindTheRefusalIsNotExported(t *testing.T) {
+	out, _ := runBadName(t,
+		`trap '/usr/bin/env | /usr/bin/grep -c "^1x=" || true' EXIT; `+
+			`export ":" ok1=1 "1x=9"`, Yes)
+	if want := "0\n"; !strings.HasSuffix(out, want) {
+		t.Errorf("a bad operand behind the refusal = %q, want it to end %q", out, want)
+	}
+}

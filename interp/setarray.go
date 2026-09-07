@@ -43,7 +43,7 @@ func (r *Runner) setArrayOperands(name string, front bool, values []string) int 
 		// One operand and nothing behind it, so there is nothing to declare
 		// before the give-up: raised straight away, and everything below
 		// reads the control flag as it always did.
-		r.endAfterABadName(status)
+		r.endAfterABadName()
 	}
 	if r.ctl == controlExit || len(rest) == 0 {
 		if status == 0 {

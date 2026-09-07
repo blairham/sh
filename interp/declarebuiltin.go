@@ -324,11 +324,6 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	// leaves `ok` at 1, and this left it empty until the give-up was held
 	// back (#1211). The flag is raised below the loop.
 	args, code, ended := r.builtinNames(r.builtinComplaintName(name), args, false)
-	if r.unspecified {
-		// An unanswered axis inside the name check is not a refusal to carry
-		// past: nothing was decided, so nothing is declared.
-		return code
-	}
 	status := code
 
 	for _, a := range args {
@@ -453,7 +448,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	if ended {
 		// The operands that were names have been declared; now the script
 		// stops, which is what the refusal above asked for.
-		return r.endAfterABadName(status)
+		return r.endAfterABadName()
 	}
 	if r.assignFailed {
 		// See biExport.

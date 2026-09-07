@@ -74,6 +74,15 @@ func TestReadIntoAnArrayAsksAboutAClosingWhitespaceRun(t *testing.T) {
 			`n=1[a ]`, `n=1[a ]`,
 		},
 		{
+			// A closing *non-whitespace* separator is the neighboring
+			// question's and not this one's, so this answer decides nothing
+			// there — the helper answers that one No, and the count stays
+			// one however this is answered.
+			"a closing non-whitespace separator",
+			`IFS=:; printf 'a:\n' | { read -r -A r; ` + countElems + `; }`,
+			`n=1[a]`, `n=1[a]`,
+		},
+		{
 			// Nothing at the tail to ask about, so the two answers agree —
 			// the control that keeps the rows above honest.
 			"no trailing separator",

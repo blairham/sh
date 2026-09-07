@@ -97,13 +97,12 @@ func (r *Runner) readFieldsTail(fields []string, s string, literal []bool, ifs s
 // there at all with only whitespace in it. An escaped separator is data and
 // ends the run, the same rule the other follows, so `read -A` on `a\ ` is one
 // field in every reading.
+// No guard for an IFS set to nothing and none for an IFS that is unset, and
+// both are provable rather than overlooked: with `IFS=` the membership test at
+// the end can never succeed, and Runner.ifs already hands an unset IFS back as
+// the default three characters. Either as a line of its own was a branch no
+// mutation could kill.
 func trailingRunIsWhitespace(w string, literal []bool, ifs string, ifsSet bool) bool {
-	if ifsSet && ifs == "" {
-		return false
-	}
-	if !ifsSet {
-		ifs = " \t\n"
-	}
 	i := len(w) - 1
 	if i < 0 || (literal != nil && literal[i]) {
 		return false

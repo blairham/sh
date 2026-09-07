@@ -3079,7 +3079,13 @@ echo "st=$?"`,
 	{
 		ID: "setarray/a-name-that-is-not-a-name", Category: "builtins",
 		Snippet: `set -A 1bad v; echo "st=$? after"`,
-		Why:     "the name operand goes through the same check every other builtin's operands go through, fatality included: both shells that have the letter end the script there, and word it their own way — `set: 1bad: invalid variable name` against `not an identifier: 1bad`. The location is the finding: zsh does *not* name the builtin here where `unset 1x` and `typeset 1w` from the same shell are `<script>:unset:1:` and `<script>:typeset:1:`, so the sentence and the location are decided separately",
+		Why:     "the name operand goes through the same check every other builtin's operands go through, fatality included: both shells that have the letter end the script there, and word it their own way — `set: 1bad: invalid variable name` against `not an identifier: 1bad`. The location is the finding: zsh does *not* name the builtin here where `unset 1x` and `typeset 1w` from the same shell are `<script>:unset:1:` and `<script>:typeset:1:`, so the sentence and the location are decided separately. This row is the `-c` route, and its *status* is the second finding — zsh leaves 0 behind here where the script-file row below leaves 1 (#1172)",
+	},
+	{
+		ID: "setarray/a-name-that-is-not-a-name-in-a-script", Category: "builtins",
+		Script:  true,
+		Snippet: "set -A 1bad v\necho \"st=$? after\"\n",
+		Why:     "the same refusal from a script file, and the pair is what makes the status a measurement rather than an assumption: the stderr is byte-identical on both routes and `after` runs on neither, so the refusal is fatal either way and the only thing that moves is the number the shell leaves behind — 1 here against 0 from `-c` in zsh, and 1 on both in ksh93. A single row could not have seen it, and the neighboring refusals were all measured to check the rule is this one's and not the letter's or the route's (#1172)",
 	},
 	{
 		ID: "setarray/over-a-frozen-name", Category: "builtins",

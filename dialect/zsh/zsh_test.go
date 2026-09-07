@@ -178,6 +178,10 @@ func TestSemantics(t *testing.T) {
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.Yes},
 		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},
+		// `set -A` refusing a name that is not one leaves 0 behind when the
+		// program came from an argument and 1 from a script file. Measured
+		// on every neighboring refusal too, all of which leave 1 (#1172).
+		{"SetArrayBadNameLeavesZeroFromCommandString", s.SetArrayBadNameLeavesZeroFromCommandString, interp.Yes},
 		{"ReadonlyReassignmentByDeclarationFatal", s.ReadonlyReassignmentByDeclarationFatal, interp.Yes},
 		{"UnsetFunctionChecksTheName", s.UnsetFunctionChecksTheName, interp.No},
 		{"UnsetFunctionReportsMissing", s.UnsetFunctionReportsMissing, interp.Yes},

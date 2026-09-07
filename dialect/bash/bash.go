@@ -524,6 +524,19 @@ func Semantics() interp.Semantics {
 	// identifier` and `typeset a[1]=v` creates the element, measured.
 	s.TypesetTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
+	// And what a declaration of an element may also do to the array: the
+	// integer attribute lands on it and the element is stored converted —
+	// `typeset -i a[1]=0x10` reads back 16 — and inside a function the array
+	// becomes local, holding the element, with the caller's array back on
+	// return. Both measured 2026-09-07.
+	//
+	// Semantics.ReadonlyElement is deliberately left unanswered: bash's
+	// answer is a third one — `typeset -r a[1]=v` creates the array frozen
+	// and empty, reports `a: readonly variable` and reports success — and
+	// naming it here would need the refusal to run after the freeze rather
+	// than instead of it (#1203).
+	s.SubscriptedOperandTakesTheIntegerAttribute = interp.Yes
+	s.SubscriptedOperandTakesALocalDeclaration = interp.Yes
 	// A single subscript on a name that is no array is refused rather than
 	// ignored: `a=v; unset "a[1]"` says `a: not an array variable` and fails,
 	// where the other shell that reads a subscript as an element says

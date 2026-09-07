@@ -569,6 +569,20 @@ type Diagnostics struct {
 	// this is a set rather than following NamesBuiltinInLocation.
 	SubscriptRefusalNamesBuiltin map[string]bool
 
+	// ReadonlyElementRefusal, IntegerElementRefusal and LocalElementRefusal
+	// are what a declaration says about a subscripted operand whose element
+	// cannot carry what the declaration is asking the *variable* to be. Two
+	// verbs each: %[1]s the base name, %[2]s the subscript as written.
+	//
+	// One dialect has all three and the others have none, because the others
+	// take the operand — see Semantics.ReadonlyElement and its two
+	// neighbors. Three strings rather than one because the shell that has
+	// them words the three differently, and it is the wording that tells a
+	// script which of the three it ran into.
+	ReadonlyElementRefusal string
+	IntegerElementRefusal  string
+	LocalElementRefusal    string
+
 	// UmaskBadOption is an option `umask` does not have. One verb.
 	UmaskBadOption string
 

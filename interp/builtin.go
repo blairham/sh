@@ -26,7 +26,6 @@ var builtins = map[string]Builtin{
 	"true":     biTrue,
 	"false":    biFalse,
 	"set":      biSet,
-	"export":   biExport,
 	"echo":     biEcho,
 	"cd":       biCd,
 	"pwd":      biPwd,
@@ -34,9 +33,6 @@ var builtins = map[string]Builtin{
 	"wait":     biWait,
 	"exit":     biExit,
 	"trap":     biTrap,
-	"local":    biLocal,
-	"typeset":  biDeclare,
-	"readonly": biReadonly,
 	"break":    biBreak,
 	"continue": biContinue,
 	"return":   biReturn,
@@ -1068,6 +1064,18 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
+		if base, sub, subscripted := r.subscriptOperand(name); subscripted && hasValue {
+			// `export a[1]=v` in the two dialects that take the operand:
+			// measured, ksh93u+ and zsh 5.9.2 both write the element, and
+			// neither puts the array in the environment. See
+			// declareelement.go.
+			r.declareElement(base, sub, value, declareFlags{}, false)
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.exported[base] = !strings.ContainsRune(opts, 'n')
+			continue
+		}
 		if hasValue {
 			r.setVarAs(name, value, assignedByDeclaration)
 			if r.ctl == controlExit {
@@ -1096,7 +1104,17 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 // an expression in two dialects, which reaches the evaluator, which reaches
 // the runner, which reaches the table — a cycle Go refuses to order. Two
 // other builtins are registered this way for the same kind of reason.
-func init() { builtins["shift"] = biShift }
+//
+// The four declaration builtins joined them when a subscripted operand
+// started naming an element: a subscript is an expression, so reading one
+// reaches the evaluator by exactly the route `shift` does.
+func init() {
+	builtins["shift"] = biShift
+	builtins["export"] = biExport
+	builtins["local"] = biLocal
+	builtins["typeset"] = biDeclare
+	builtins["readonly"] = biReadonly
+}
 
 // firstOptionLetter is the letter a bundle of single-letter options is
 // refused by: the dashes are stripped and the first rune after them taken, so
@@ -2401,6 +2419,15 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
+		if base, sub, subscripted := r.subscriptOperand(name); subscripted && hasValue {
+			// `local a[1]=v` is `typeset a[1]=v` under the other word, and
+			// the scope is the whole of what it adds — see declareelement.go.
+			r.declareElement(base, sub, value, f, true)
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			continue
+		}
 		// Before the attributes, for the reason biTypeset gives: `-x` here
 		// must not answer for the name this declaration shadows.
 		wasExported := r.isExported(name)
@@ -2503,6 +2530,27 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
+		if base, sub, subscripted := r.subscriptOperand(name); subscripted {
+			// The readonly attribute on an element is the axis with three
+			// answers — see Semantics.ReadonlyElement. Only the two dialects
+			// that take a subscripted operand at all arrive here.
+			//
+			// Asked without a value as well, because the refusal is about
+			// the attribute rather than about the assignment: measured,
+			// `readonly "a[1]"` is refused in the same words as
+			// `readonly a[1]=v`. Nothing else changes for the valueless
+			// form, which falls through to the path it always took.
+			if hasValue {
+				r.declareElement(base, sub, value, declareFlags{readonly: true}, false)
+				if r.unspecified || r.ctl == controlExit {
+					return r.status
+				}
+				continue
+			}
+			if r.elementDeclarationRefused(base, sub, declareFlags{readonly: true}, false) {
+				return r.status
+			}
+		}
 		if hasValue {
 			r.setVarAs(name, value, assignedByDeclaration)
 			if r.ctl == controlExit {

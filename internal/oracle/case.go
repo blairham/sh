@@ -7575,6 +7575,43 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the operand a declaration takes that `export` does not, and the reason the name check needed a third answer rather than reusing `export`'s: bash refuses `export a[1]=v` as a bad name and *takes* this, creating the element, and ksh93 and zsh take both. Measured before the check was routed through, because a shared answer would have made bash start refusing a line it has always accepted",
 	},
 	{
+		ID: "declare/a-subscripted-operand-is-not-a-pattern", Category: "declarations",
+		Snippet: `: > 'a1=v'; typeset a[1]=v; echo "[${a[1]}] a1=[$a1]"`,
+		Why:     "the discriminator for whether a declaration's subscripted operand goes through pathname expansion, and the only shape that can tell: a file literally named `a1=v` is on disk, so the operand *has* a match. Every column still assigns the element and leaves `a1` empty, in the shell that would refuse a pattern with no match as much as in the four that would leave it as written — so the operand is an assignment there as much as `n=3` is. Reading only the first span of the word could not see it either way, and this shell read the word as a pattern and set a scalar called `a1` (#1203)",
+	},
+	{
+		ID: "declare/a-subscripted-operand-with-an-expanded-subscript", Category: "declarations",
+		Snippet: `i=1; typeset a[$i]=v; echo "[${a[1]}]"`,
+		Why:     "the same operand with the subscript arriving as three spans rather than one — `a[`, the expansion, `]=v` — which is where the `=` that ends the name is in the *last* of them. Unanimous, and it is the row that keeps the split from being written as a test of the first span alone",
+	},
+	{
+		ID: "declare/a-subscripted-operand-with-the-integer-attribute", Category: "declarations",
+		Snippet: `typeset -i a[1]=0x10; echo "st=$? [${a[1]}]"`,
+		Why:     "what a declaration may do to the *array* beside writing one element, and the first of three questions the panel does not answer together: bash and ksh93 give the array the attribute and store the converted 16, and zsh refuses the operand — `inconsistent array element or slice assignment` — and ends the script over it. An element is not a name there, so an attribute that belongs to the name cannot ride on one",
+	},
+	{
+		ID: "declare/a-subscripted-operand-inside-a-function", Category: "declarations",
+		Script:  true,
+		Snippet: "a=(x y)\nf() { typeset a[1]=v; echo in=[${a[1]}]; }\nf\necho out=[${a[1]}]\n",
+		Why:     "the second of the three, and the one that needs the caller's array standing to be readable at all: bash makes the array local and the caller's `y` comes back on return, ksh93 has no scope for it to take and writes the caller's, and zsh refuses — `can't create local array elements`. Three answers from one line, and the first two are this panel's ordinary scope split rather than anything about subscripts",
+	},
+	{
+		ID: "declare/a-readonly-subscripted-operand", Category: "declarations",
+		Snippet: `readonly a[1]=v; echo "st=$? [${a[1]}]"`,
+		Why:     "the third, and the one with three answers of its own: ksh93 writes the element and freezes the array over it, zsh refuses it (`can't create readonly array elements`) and stops, and bash never reaches the question — it refuses `readonly a[1]=v` as a bad *name*, which is the split `export` and `typeset` already have here. The `typeset -r` spelling is what makes bash's third answer visible and is deliberately not modeled (#1203)",
+	},
+	{
+		ID: "declare/an-exported-subscripted-operand", Category: "declarations",
+		Snippet: `export a[1]=v; echo "st=$? [${a[1]}]"`,
+		Why:     "the export attribute is the one of the four that no shell refuses on an element: ksh93 and zsh both write it and report success, and bash and dash refuse the operand as a bad name long before. It is the control for the three rows above — without it, `typeset -x` and `export` would look like they were refused for the same reason the others are",
+	},
+	{
+		ID: "local/a-subscripted-operand-to-local", Category: "declarations",
+		Script:  true,
+		Snippet: "f() { local a[1]=v; echo in=[${a[1]}] st=$?; }\nf\necho out=[${a[1]}]\n",
+		Why:     "which of the two name questions `local` reads, and the row that says it is the declaration's rather than `export`'s: bash takes the operand and makes a local array holding the element, zsh takes it and then refuses it for its own reason about elements, and dash refuses it as a bad name. Reading it through the `export` answer made this shell refuse a line bash has always accepted",
+	},
+	{
 		ID: "declare/an-integer-declaration-with-an-operand-that-is-not-a-name", Category: "declarations",
 		Snippet: `integer 1x; echo "st=$?"; echo A`,
 		Why:     "the same check under the third name, and the row that says whose name the complaint uses: ksh93's `integer` calls itself `typeset` in its own diagnostic where zsh's calls itself `integer`, so one shell renames the builtin in the sentence and the other does not. bash and dash have no such word at all",

@@ -8557,16 +8557,99 @@ zsh is the only one that takes anything more: the special parameters are
 names to it, which is why `export -` is a complaint in three of the four
 and not in the fourth.
 
-**`DeclarationTakesASubscript`** — bash no · dash no · ksh93 yes · zsh no
+**`DeclarationTakesASubscript`** — bash no · dash no · ksh93 yes · zsh yes
 
 Accepts `export a[0]` and `readonly a[0]`, naming an element rather than
-a variable. ksh93 does; bash and dash refuse it in the words they give
-any other bad name.
+a variable. ksh93 and zsh do; bash and dash refuse it in the words they
+give any other bad name.
 
 A separate question from the name strictness above, because the answer
 is per builtin: bash refuses it here and takes it for `unset`, and the
 two builtins sit on different strictnesses in every shell, so no rule
 over that strictness gives all four.
+
+zsh's cell read *no* until 2026-09-07 and was never reachable: a
+declaration's operand went through pathname expansion first, so
+`export a[1]=v` died as `no matches found` before the name check ran
+(#1203). `local` reads this family's *other* answer,
+`TypesetTakesASubscript`, which is what bash needs — it takes
+`local a[1]=v` and refuses `export a[1]=v`.
+
+### A declaration whose operand names an element
+
+`typeset a[1]=v` writes the element in every column that takes the
+operand at all, and its name half is never a pattern — measured with a
+file literally named `a1=v` on disk, which is the only shape that can
+tell an assignment from a word that happens to have no match. What the
+declaration does to the *array* beside writing that one element is where
+the panel splits, and it splits three separate ways.
+
+Measured 2026-09-07, `env -i` with a scratch `HOME`, `ZDOTDIR`,
+`HISTFILE` and `ENV`, from a script file.
+
+| declaration | bash 5.3 / as-`sh` / 3.2 | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `typeset a[1]=v` | `[v]` | `[v]` | `[v]` |
+| `typeset -x a[1]=v` | `[v]` | `[v]` | `[v]` |
+| `typeset -g a[1]=v` | `[v]` | *no `-g`* | `[v]` |
+| `export a[1]=v` | bad name | `[v]` | `[v]` |
+| `typeset -i a[1]=0x10` | `[16]` | `[16]` | **refused** |
+| `typeset a[1]=v` in a function | local array | the caller's | **refused** |
+| `readonly a[1]=v` | bad name | `[v]`, then frozen | **refused** |
+| `typeset -r a[1]=v` | frozen empty, then `a: readonly variable`, status 0 | `[v]`, then frozen | **refused** |
+
+zsh words the three refusals differently, which is how a script tells
+which of them it ran into: `can't create readonly array elements`,
+`inconsistent array element or slice assignment` and `can't create local
+array elements`. All three end the script.
+
+**`SubscriptedOperandTakesTheIntegerAttribute`** — bash yes · dash absent · ksh93 yes · zsh no
+
+Lets `typeset -i a[1]=0x10` give the array the integer attribute and
+store the converted value under the element. zsh refuses the operand
+instead: an element is not a name there, and the attribute belongs to
+the name.
+
+**`SubscriptedOperandTakesALocalDeclaration`** — bash yes · dash absent · ksh93 yes · zsh no
+
+The same split for a declaration inside a function, and a separate field
+because it is a different thing being done to the variable. bash makes
+the array local and holds the element in the local one; ksh93 has no
+scope to take and writes the caller's array, which is its ordinary answer
+about scope rather than anything about subscripts; zsh refuses.
+
+Asked only where there is a scope to take, so a declaration at the top
+level never reaches it. Folding the two fields into one would have given
+zsh's refusal to whichever of the two the other shell was measured for.
+
+**`ReadonlyElement`** — bash unspecified · dash absent · ksh93 written · zsh refused
+
+What a declaration does when it would freeze the array whose element its
+operand names. Three answers rather than two, which is why it is a policy
+and not an `Answer`, and only two of the three are modeled.
+
+bash's is the third: `typeset -r a[1]=v` creates the array **frozen and
+empty**, then reports `a: readonly variable` about the element write it
+has just made impossible, and reports success — `declare -p a` reads back
+`declare -ar a=()` and `$?` is 0. Implementing it needs the freeze to
+happen before the write rather than instead of it, which is a change to
+the order every other declaration keeps; it is measured and recorded here
+and left unanswered, so the combination refuses by name in that dialect
+rather than doing something plausible in silence. `readonly a[1]=v` never
+reaches the question in bash, which refuses the operand as a bad name.
+
+The refusal is asked without a value as well — `readonly "a[1]"` is
+refused in the same words as `readonly a[1]=v` — because it is about the
+attribute rather than about the assignment.
+
+Pinned by `declare/a-subscripted-operand-to-a-declaration`,
+`declare/a-subscripted-operand-is-not-a-pattern`,
+`declare/a-subscripted-operand-with-an-expanded-subscript`,
+`declare/a-subscripted-operand-with-the-integer-attribute`,
+`declare/a-subscripted-operand-inside-a-function`,
+`declare/a-readonly-subscripted-operand`,
+`declare/an-exported-subscripted-operand` and
+`local/a-subscripted-operand-to-local`.
 
 **`DeclareListing`** — bash DeclareListingClustered · dash DeclarationListingUnspecified · ksh93 DeclareListingBareAssignments · zsh DeclareListingExportSpelled
 

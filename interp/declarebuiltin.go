@@ -337,6 +337,17 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
+		if base, sub, subscripted := r.subscriptOperand(name); subscripted && hasValue {
+			// The operand names an element, so the attributes and the scope
+			// are about `a` and the value is about `a[1]`. Splitting at the
+			// `=` and handing `a[1]` to the variable store made the whole
+			// line a no-op at status 0 — see declareelement.go.
+			r.declareElement(base, sub, value, f, true)
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			continue
+		}
 		// Read before the attributes are applied, because `-x` on this very
 		// declaration would otherwise answer a question asked about the name
 		// it shadows. See shadowedExport.
@@ -1491,30 +1502,124 @@ func (r *Runner) declares(name string) bool {
 	return declarationUtilities[name] || r.declaring[name]
 }
 
-// assignShaped reports whether a word begins with a literal `name=`.
+// assignShaped reports whether a word begins with a literal `name=` — where
+// the name may carry a subscript.
 //
 // The name has to be literal: `$x=1` is not an assignment in any shell, and
 // neither is `"a"=1`. Only what the word says before any expansion counts.
+//
+// A subscript is part of the name, which is what keeps `typeset a[1]=v` off
+// the pattern path: measured with a file literally named `a1=v` on disk, all
+// six columns still assign the element and none of them matches the file, so
+// the operand is an assignment there as much as `n=3` is. Reading only span
+// zero could not see it — `a[$i]=v` reaches this as three spans, and the `=`
+// that ends the name is in the last of them.
 func assignShaped(w *syntax.Word) bool {
-	if w == nil || len(w.Spans) == 0 {
-		return false
-	}
-	s := w.Spans[0]
-	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
-		return false
-	}
-	name, _, ok := strings.Cut(s.Value, "=")
-	return ok && name != "" && isNameLike(name)
+	_, _, ok := assignNameSplit(w)
+	return ok
 }
 
-// expandAssignArg expands `name=value` given to a declaration utility, leaving
-// the name alone and expanding the value as an assignment's.
-func (r *Runner) expandAssignArg(w *syntax.Word) string {
+// assignNameSplit finds the `=` that ends a declaration operand's name and
+// answers where it is: the span it lives in and its offset within that span.
+//
+// Only an unquoted literal `=` counts, and only one outside the brackets: the
+// subscript is part of the name, so `a[k=1]=v` is the element `k=1` of `a`
+// rather than a name of `a[k`. Depth is tracked rather than assumed, because
+// a subscript is an expression and an expression may index another array.
+//
+// Everything that is not an unquoted literal is allowed only inside the
+// brackets. That is what still refuses `$x=1` and `"a"=1` while taking
+// `a[$i]=v` and `m["k"]=v`, which is the split every shell in the panel makes.
+func assignNameSplit(w *syntax.Word) (span, off int, ok bool) {
+	if w == nil || len(w.Spans) == 0 {
+		return 0, 0, false
+	}
 	head := w.Spans[0]
-	name, first, _ := strings.Cut(head.Value, "=")
-	rest := *w
-	rest.Spans = append([]syntax.Span{{
-		Kind: syntax.Literal, Value: first, Quoting: head.Quoting, Pos: head.Pos,
-	}}, w.Spans[1:]...)
-	return name + "=" + r.expandAssignValue(&rest)
+	if head.Kind != syntax.Literal || head.Quoting != syntax.Unquoted {
+		return 0, 0, false
+	}
+	depth, closed, name := 0, false, ""
+	for i, s := range w.Spans {
+		if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
+			if depth == 0 {
+				return 0, 0, false
+			}
+			continue
+		}
+		for j := 0; j < len(s.Value); j++ {
+			switch c := s.Value[j]; {
+			case c == '[':
+				if depth == 0 && closed {
+					// One subscript and no more: `a[1][2]=v` is not a name
+					// this engine knows, and neither is `a[1]x=v`, so the
+					// word goes back to being an ordinary operand.
+					return 0, 0, false
+				}
+				depth++
+			case c == ']':
+				if depth > 0 {
+					depth--
+					closed = depth == 0
+				}
+			case c == '=' && depth == 0:
+				// The one name test, and it is enough for the bracket as
+				// well: nothing is added to `name` once a subscript has
+				// closed, so the text judged here is exactly the text in
+				// front of the `[`. A second test there could only refuse
+				// what this one refuses — `[1]=v` and `a-b[1]=v` both arrive
+				// with the same `name` either way — which is why there is
+				// not one.
+				if !isPlainName(name) {
+					return 0, 0, false
+				}
+				return i, j, true
+			default:
+				if depth == 0 {
+					if closed {
+						return 0, 0, false
+					}
+					name += string(c)
+				}
+			}
+		}
+	}
+	return 0, 0, false
+}
+
+// expandAssignArg expands `name=value` given to a declaration utility,
+// expanding the value as an assignment's and the name as the name it is.
+//
+// The name half is expanded rather than taken as written because a subscript
+// may hold one — `typeset a[$i]=v` names an element every shell in the panel
+// works out first — and it is expanded as an assignment's *value* is, so the
+// brackets are never a pattern and the text is never split.
+func (r *Runner) expandAssignArg(w *syntax.Word) string {
+	i, j, ok := assignNameSplit(w)
+	if !ok {
+		// Never, from the one caller: assignShaped asked this same question.
+		return r.expandAssignValue(w)
+	}
+	name := *w
+	name.Spans = append(append([]syntax.Span{}, w.Spans[:i]...), syntax.Span{
+		Kind: syntax.Literal, Value: w.Spans[i].Value[:j],
+		Quoting: w.Spans[i].Quoting, Pos: w.Spans[i].Pos,
+	})
+	value := *w
+	value.Spans = append([]syntax.Span{{
+		Kind: syntax.Literal, Value: w.Spans[i].Value[j+1:],
+		Quoting: w.Spans[i].Quoting, Pos: w.Spans[i].Pos,
+	}}, w.Spans[i+1:]...)
+	return r.expandAssignName(&name) + "=" + r.expandAssignValue(&value)
+}
+
+// expandAssignName expands the name half of a declaration's operand.
+//
+// As an assignment's value is expanded — never split, never matched against
+// the filesystem — because a subscript may hold an expansion and everything
+// else in the name half is literal by the time it gets here. A fast path for
+// the wholly literal name was written first and then removed: it could not be
+// told from this, since a literal word expands to itself, so it was a branch
+// no mutation could kill.
+func (r *Runner) expandAssignName(w *syntax.Word) string {
+	return r.expandAssignValue(w)
 }

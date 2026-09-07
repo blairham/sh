@@ -103,10 +103,17 @@ func (r *Runner) takesASubscript(builtin string) bool {
 	switch builtin {
 	case "unset":
 		return r.ask(r.sem().UnsetTakesASubscript, "`unset a[0]` naming an array element")
-	case "typeset", "declare", "integer":
+	case "typeset", "declare", "integer", "local":
 		// A third answer rather than the declaration's, because bash gives a
 		// third answer: it refuses `export a[1]=v` and takes
 		// `typeset a[1]=v`. See Semantics.TypesetTakesASubscript.
+		//
+		// `local` is on this side of the split rather than with `export`:
+		// measured 2026-09-07, bash 5.3 takes `local a[1]=v` and creates a
+		// local array holding the element, and zsh 5.9.2 takes the operand
+		// too — it refuses it afterwards, for a reason of its own about
+		// elements rather than about names. Reading it through the export
+		// question made this shell refuse a line bash has always accepted.
 		return r.ask(r.sem().TypesetTakesASubscript, "`typeset a[0]=v` naming an array element")
 	}
 	return r.ask(r.sem().DeclarationTakesASubscript, "`export a[0]` naming an array element")
@@ -142,7 +149,12 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 	}
 	for _, a := range args {
 		name, _, _ := strings.Cut(a, "=")
-		if _, _, subscripted := r.subscriptOperand(name); subscripted {
+		// A subscript on something that is not a name is not a subscripted
+		// operand at all: measured, `typeset 1x[0]=v` is a bad name in every
+		// column that has the word, and bash quotes the *whole* operand back
+		// there where it quotes only `a[1]` for a well-formed base. So the
+		// brackets are read as a subscript only once the base is a name.
+		if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) {
 			if r.takesASubscript(builtin) {
 				rest = append(rest, a)
 				continue
@@ -183,7 +195,12 @@ func (r *Runner) badSubscriptOperand(builtin, operand, name string, fatal Answer
 	d := r.diag()
 	wording := d.BuiltinBadSubscript[builtin]
 	if wording == "" {
-		return r.badBuiltinName(builtin, operand, name, fatal)
+		// The *name* rather than the whole operand, even in the dialect
+		// whose bad-name complaint quotes what it was given: measured,
+		// bash 5.3 answers `export 1x=v` with `` `1x=v' `` and
+		// `export a[1]=v` with `` `a[1]' ``, so a subscript is where it
+		// stops quoting the value back.
+		return r.badBuiltinName(builtin, name, name, fatal)
 	}
 	base, _, _ := r.subscriptOperand(name)
 	if !d.SubscriptRefusalNamesBuiltin[builtin] {

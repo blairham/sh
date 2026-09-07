@@ -49,11 +49,17 @@ type acpClient struct {
 	asked  []acp.RequestPermissionRequest
 	stdout strings.Builder
 	stderr strings.Builder
-	// calls is the title of every tool call update, which is what the
-	// session's *event sink* produces. What a command wrote arrives on a
-	// different route — the runner's writers — so a client can be shown
-	// output by a session that reports no actions at all.
-	calls []string
+	// calls is the title of every tool call the client was told about, and
+	// progress is the status of every update to one.
+	//
+	// The two are worth keeping apart because they come from different
+	// places: a tool call is announced when the *gate* asks about an action,
+	// and the updates that follow it — in progress, completed, failed — are
+	// the session's *event sink* speaking. So a client that is asked
+	// permission still sees a tool call from a session whose sink goes
+	// nowhere, and only the second list is evidence about the sink.
+	calls    []string
+	progress []string
 }
 
 func (c *acpClient) Handle(_ context.Context, method string, params json.RawMessage) (any, error) {
@@ -84,9 +90,14 @@ func (c *acpClient) Notify(_ context.Context, method string, params json.RawMess
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if raw.Update["sessionUpdate"] == acp.UpdateToolCall {
+	switch raw.Update["sessionUpdate"] {
+	case acp.UpdateToolCall:
 		title, _ := raw.Update["title"].(string)
 		c.calls = append(c.calls, title)
+		return
+	case acp.UpdateToolCallUpdate:
+		status, _ := raw.Update["status"].(string)
+		c.progress = append(c.progress, status)
 		return
 	}
 	if raw.Update["sessionUpdate"] != acp.UpdateAgentMessageChunk {
@@ -126,6 +137,14 @@ func (c *acpClient) reported() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]string(nil), c.calls...)
+}
+
+// followed is the status of every tool call update, which is what the
+// session's event sink produced.
+func (c *acpClient) followed() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.progress...)
 }
 
 // served runs `sh -acp …` through run(), with this test on the other end of
@@ -348,11 +367,22 @@ func TestAnAuditedACPSessionStillWritesTheRecord(t *testing.T) {
 	}
 	// And the client is still told, which is the other half of composing
 	// rather than replacing: a fix that fed the file by taking the connection
-	// out of the stream would pass everything above. The chunks a command
-	// writes arrive by another route entirely, so this asks for the thing the
-	// *sink* produces.
+	// out of the stream would pass everything above.
+	//
+	// The assertion is on how the command *ended* rather than on it being
+	// announced, and the difference is the whole point. A tool call is
+	// announced when the gate asks, and what a command wrote arrives on the
+	// runner's own writers — so both survive a session whose sink goes
+	// nowhere. Only the updates that follow a tool call are the sink
+	// speaking, which mutation testing is how this was learned: dropping the
+	// session from the pair passed a test that asserted the first two.
 	if !slices.ContainsFunc(c.reported(), func(s string) bool { return strings.Contains(s, "/bin/echo") }) {
 		t.Errorf("the client was told about %q, want the exec reported to it as well as to the file",
 			c.reported())
+	}
+	if !slices.Contains(c.followed(), "completed") {
+		t.Errorf("the client saw tool call updates %q, want the session's sink still reporting how the\n"+
+			"\tcommand ended: an audited session must feed the file *and* the connection",
+			c.followed())
 	}
 }

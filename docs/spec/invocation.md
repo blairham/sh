@@ -775,6 +775,60 @@ Panel: bash 5.3.15, bash 3.2.57, dash, ksh93u+ 2012-08-01, zsh 5.9.2, on macOS
 it: the file route as the control, `exit 7` after the bad line for the status,
 and a program whose last line is the bad one for the other half of it.
 
+## A refused line at a prompt sets `$?`
+
+**The rule.** A line the parser refuses at an interactive prompt is reported,
+nothing runs, and `$?` becomes the dialect's parse-failure status. The session
+goes on to the next line.
+
+    false
+    fi
+    echo "st=$?"
+
+    bash 5.3    → the complaint, st=2
+    bash-as-sh  → the complaint, st=2
+    bash 3.2    → the complaint, st=258
+    dash        → the complaint, st=2
+    ksh93       → the complaint, st=3
+    zsh 5.9.2   → the complaint, st=1
+
+**It is a status being set, not one being left.** Substituting `true` for
+`false`, or `(exit 5)`, moves no cell: every column answers the same number
+whatever ran before the refused line. That is what makes it worth stating —
+ours left `$?` where the previous command put it, so a refused line reported
+the status of the command *before* it, and `$?` is not only read by the next
+command. It is what a prompt draws a failure indicator from and what the prompt
+hooks are handed, so the shell said "the last thing succeeded" at the exact
+moment it did not.
+
+**It is the same number the shell would have exited with**, which is why the
+front end asks `Diagnostics.StatusForParseError` here rather than carrying a
+second answer: the same table decides a script's exit status, standard input's
+recorded status in the section above, and this. One column parts company —
+bash 3.2 answers 258 at a prompt where it exits 2 — and 258 is not a number a
+process can exit with, so this is a bash 3.2 quirk about the number's width
+rather than a second question. No dialect here targets bash 3.2.
+
+**The error is what is asked about, not just the fact of one.** Some failures
+this parser finds while reading are *run*-time failures to a panel shell — a
+`for` whose name is not a name is bash's example — and carry that shell's
+run-time status instead of its syntax status. Handing the front end the
+dialect's function rather than a number is what keeps the prompt and the script
+from drawing that line in different places.
+
+**Route.** Measured through a pseudo-terminal and again with `-i` on a pipe;
+the two agree in every column but one. dash with `-i` on a *pipe* stops at the
+complaint and exits 2 rather than reading on, and dash at a terminal reports 2
+and carries on — so the terminal is the route this rule is about, and the pipe
+is standard input's question in the section above.
+
+### Measured
+
+Panel: bash 5.3.15, bash 3.2.57, dash, ksh93u+ 2012-08-01, zsh 5.9.2, on macOS
+25.5 — measured 2026-09-07, with an isolated `HOME`, `ZDOTDIR`, `HISTFILE` and
+`ENV=/dev/null`. Not in the corpus: it drives no prompt, and every route it has
+is a non-interactive one.
+
 ## Writing the input back: `set -v`
 
 **The rule.** Under `-v` the shell writes each **physical line of its input**

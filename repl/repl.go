@@ -59,6 +59,34 @@ type Shell struct {
 	// the error plainly, which is what a caller without a dialect gets.
 	Report func(err error) string
 
+	// ParseFailureStatus is what `$?` becomes after a line this dialect's
+	// parser refused. Nil leaves the status alone, which is what a caller
+	// without a dialect gets — the same fallback Report has, and for the same
+	// reason: there is no value that is right for every shell.
+	//
+	// There is one, per shell, and it is not a constant across them. Measured
+	// through a pseudo-terminal and again with `-i` on a pipe, `false`, then a
+	// line the parser refuses, then `$?`: 2 in bash 5.3 and in the same bash
+	// invoked as sh, 2 in dash, 3 in ksh93, 1 in zsh, and 258 in bash 3.2 —
+	// which is the one column that answers a *different* number here than it
+	// does as a program's exit status, since 258 cannot be one. The value does
+	// not depend on what ran before: `true` in place of `false` moves no cell,
+	// so this is a status being set rather than one being left.
+	//
+	// A function of the error rather than a number, because the dialect
+	// already answers it that way for a script and the two routes must not
+	// drift: some failures a shell finds while parsing are *run*-time errors
+	// to it — a `for` with a name that is not one — and carry a different
+	// status from a syntax error. driver hands this the same answer it gives a
+	// script, so one table decides both.
+	//
+	// Ours left `$?` where the last command put it, which is the shape a
+	// missing status always has: a refused line reported the status of the
+	// command *before* it, so a prompt drawing a failure indicator, and the
+	// hooks a prompt hands `$?` to, read "the last thing succeeded" at the
+	// exact moment it did not (#1299).
+	ParseFailureStatus func(err error) int
+
 	// Style is what this dialect does to a prompt parameter's value before
 	// it is drawn. The zero value draws it as it stands.
 	Style PromptStyle
@@ -368,7 +396,11 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// Not a block either, and for the same reason it is not a command:
 			// nothing ran. The store records what a shell did, and a line the
 			// parser refused never became something it could do.
+			//
+			// The status is the refusal's, though, and that is the half this
+			// loop used to leave out — see refused.
 			s.errf("%s", s.report(perr))
+			s.refused(perr)
 			continue
 		}
 		b := s.beginBlock(text)
@@ -718,6 +750,7 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outpu
 		}
 		if perr != nil {
 			s.errf("%s", s.report(perr))
+			s.refused(perr)
 			continue
 		}
 		b := s.beginBlock(text)
@@ -975,6 +1008,24 @@ func (s Shell) workingDir() string {
 }
 
 func (s Shell) status() int { return s.Runner.ExitStatus() }
+
+// refused sets the status a line the parser would not read leaves behind.
+//
+// Both loops call it, immediately after the complaint and in place of running
+// anything, because a refused line is a failure the shell has to be able to
+// report and the complaint alone is not that: a status left unchanged is
+// undetectable to everything downstream of it — `$?` on the next line, the
+// prompt's failure indicator, and the hooks the prompt hands the status to,
+// which is where this was found (#1299).
+//
+// Nothing else about the line moves. It is not remembered as a block and it is
+// not a command, so nothing here begins one; only the number changes.
+func (s Shell) refused(err error) {
+	if s.ParseFailureStatus == nil {
+		return
+	}
+	s.Runner.SetExitStatus(s.ParseFailureStatus(err))
+}
 
 func (s Shell) report(err error) string {
 	if s.Report != nil {

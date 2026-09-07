@@ -2466,6 +2466,16 @@ An implementation that resolved the name first and applied the remaining
 letters afterwards answers `hello` and `h` for the first two, which are
 plausible and wrong.
 
+A **count** and a **set test** are names too, which is the sharp end of
+"the whole pipeline". With `set -- abc def` and `hh=zz`:
+
+    ${${(P)#hh}[1]}   →  d     `${#hh}` is 2, and `${2[1]}` is `d`
+    ${${(P)+h}[1]}    →  a     `${+h}` is 1, and `${1[1]}` is `a`
+
+A rule excluding them — on the grounds that a number is not a name —
+looks obviously right and is wrong: the number *is* the name, and the
+name is a positional parameter.
+
 Everywhere else the subscript reads what the inner **came to**, and the
 one question that adds is whether that result is a *list*, where the
 subscript counts elements, or one *string*, where it counts characters.

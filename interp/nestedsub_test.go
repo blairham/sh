@@ -29,6 +29,7 @@ func nestedSubscriptGrammar(d *syntax.Dialect) {
 	nesting(d)
 	d.ArraySubscriptFlags = true
 	d.ParamSplitFlag = true
+	d.ParamSetTestFlag = true
 }
 
 // runNestedSubscript runs src with that grammar and with every axis the
@@ -121,23 +122,35 @@ func TestOneFieldIsNotEnoughToSayWhichReadingApplies(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		// A one-element list has no second element, where the string `abc`
 		// has a second character.
-		{"a list of one stays a list", `a=(abc); printf "[%s]" "${${a[@]}[2]}"`, "[]"},
-		{"a string stays a string", `v=abc; printf "[%s]" "${${v}[2]}"`, "[b]"},
+		{"a list of one stays a list", `a=(abc); printf "[%s]" ${${a[@]}[2]}`, "[]"},
+		{"a string stays a string", `v=abc; printf "[%s]" ${${v}[2]}`, "[b]"},
 		// A split that found nothing to split leaves a string, and a join
 		// leaves one as well — both measured.
-		{"a split with one field is a string", `v=abc; printf "[%s]" "${${(f)v}[2]}"`, "[b]"},
-		{"a join is a string", `a=(pq rs); printf "[%s]" "${${(j.,.)a}[3]}"`, "[,]"},
+		{"a split with one field is a string", `v=abc; printf "[%s]" ${${(f)v}[2]}`, "[b]"},
+		// Over an *array*, which is the discriminating half: the split joins
+		// its elements first and what it leaves is a string, where the name
+		// on its own is a list.
+		{"a split over an array leaves a string", `a=(hello); printf "[%s]" ${${(f)a}[2]}`, "[e]"},
+		{"an `s` split over one too", `a=(hello); printf "[%s]" ${${(s.,.)a}[2]}`, "[e]"},
+		{"and a `${=v}` split", `a=(hello); printf "[%s]" ${${=a}[2]}`, "[e]"},
+		{"a join is a string", `a=(pq rs); printf "[%s]" ${${(j.,.)a}[3]}`, "[,]"},
 		// A flag that neither splits nor joins keeps the list it was given.
 		{"a case flag keeps the list", `a=(abc); printf "[%s]" ${${(U)a}[2]}`, "[]"},
 		// A count is a string, whatever it counted.
-		{"a count is a string", `a=(x y z); printf "[%s]" "${${#a[@]}[1]}"`, "[3]"},
+		// A count of ten or more is where the two readings part: `10` has a
+		// second character and a list of one has no second element.
+		{"a count is a string", `a=(1 2 3 4 5 6 7 8 9 10); printf "[%s]" ${${#a[@]}[2]}`, "[0]"},
 		// One element selected out of an array is that element, read as the
 		// string it is.
-		{"an element is a string", `a=(abc); printf "[%s]" "${${a[1]}[2]}"`, "[b]"},
+		{"an element is a string", `a=(abc); printf "[%s]" ${${a[1]}[2]}`, "[b]"},
 		// And a conditional's substituted word is its own value: this one is
 		// a string, the next is a list.
-		{"a substituted word decides for itself", `a=(x y z); printf "[%s]" "${${a:+abc}[2]}"`, "[b]"},
+		{"a substituted word decides for itself", `a=(x y z); printf "[%s]" ${${a:+abc}[2]}`, "[b]"},
 		{"a substituted list stays a list", `a=(abc); unset u; printf "[%s]" ${${u:-$a}[2]}`, "[]"},
+		// The word's *own* spans decide, so a scalar in it is a string and
+		// quoting a list in it makes one.
+		{"a substituted scalar is a string", `v=abc; unset u; printf "[%s]" ${${u:-$v}[2]}`, "[b]"},
+		{"a substituted quoted list joins", `a=(x y z); unset u; printf "[%s]" ${${u:-"$a"}[2]}`, "[ ]"},
 		// `(A)` says outright that what it made is an array, where the value
 		// it was given was a string.
 		{"the (A) flag makes a list", `v=abc; printf "[%s]" ${${(A)v}[2]}`, "[]"},
@@ -257,6 +270,13 @@ func TestTheOtherLettersBesideAReferenceTransformTheName(t *testing.T) {
 		{"an operator runs on the name too", `a=(x y z); h=a; printf "[%s]" "${${(P)h:-d}[2]}"`, "[y]"},
 		{"and its word where the test fires", `a=(x y z); unset h; printf "[%s]" "${${(P)h:-a}[2]}"`, "[y]"},
 		{"a search through a transformed name", `ARR=(x y z); arr=(q); h=arr; printf "[%s]" "${${(UP)h}[(I)y]}"`, "[2]"},
+		// A count and a set test are names too, which is the sharp end of
+		// "the whole pipeline": `${#hh}` is 2, so the subscript reads the
+		// *second positional parameter* — and a guard excluding them looked
+		// obviously right and was wrong.
+		{"a count is a name", `set -- abc def; hh=zz; printf "[%s]" "${${(P)#hh}[1]}"`, "[d]"},
+		{"and a set test is one", `set -- abc; h=zz; printf "[%s]" "${${(P)+h}[1]}"`, "[a]"},
+		{"a name nothing answers to is empty", `set -- abc; h=zz; printf "[%s]" "${${(P)#h}[1]}"`, "[]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runNestedSubscript(t, tc.src)
@@ -318,6 +338,11 @@ func TestQuotingReachesTheInnerExpansion(t *testing.T) {
 		{"the `(@)` flag keeps them", `a=(p q r); printf "[%s]" "${${(@)a}[2]}"`, "[q]"},
 		{"another flag does not", `a=(p q r); printf "[%s]" "${${(o)a}[2]}"`, "[ ]"},
 		// A split still runs after the join, so its fields survive quoting.
+		// A count is a string in quotes too, which is a rule of its own:
+		// `flagKeepsFields` would say an `[@]` subscript keeps its fields,
+		// and a count is not its parameter's shape whatever the subscript
+		// under it says.
+		{"a count in quotes is still a string", `a=(1 2 3 4 5 6 7 8 9 10); printf "[%s]" "${${#a[@]}[2]}"`, "[0]"},
 		{"a split keeps its fields", `v="aa
 bb"; printf "[%s]" "${${(f)v}[2]}"`, "[bb]"},
 		// An inner written with quotes of its own is the same rule, reached
@@ -376,6 +401,23 @@ func TestTheNestedSubscriptShapesNotBuiltSayWhichTheyAre(t *testing.T) {
 				t.Errorf("status 0, want the unbuilt shape refused")
 			}
 		})
+	}
+}
+
+// An expansion the grammar could not read is not a reference to anything.
+//
+// `@Q` is not in this grammar, so the node is marked unreadable and the run
+// reports it — where taking it as a reference would resolve the name its base
+// happened to hold and answer with an element of *that*, at status 0. It is
+// the same guard `expandAtList` keeps for the same reason, one construct
+// over: a `Bad` node is not a shape.
+func TestAnUnreadableInnerIsNotAReference(t *testing.T) {
+	out, st := runNestedSubscript(t, `a=(x y); h=a; printf "[%s]" "${${(P)h@Q}[1]}"`)
+	if !strings.Contains(out, "bad substitution") {
+		t.Errorf("got %q, want the unreadable inner reported", out)
+	}
+	if st == 0 {
+		t.Errorf("status 0, want the unreadable inner refused")
 	}
 }
 

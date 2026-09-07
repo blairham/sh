@@ -46,6 +46,16 @@ func TestNestedExpansionsAreThisDialects(t *testing.T) {
 			"[ABC]",
 		},
 		{
+			// An association's *values* are what a subscript over the result
+			// counts through, where the reference route reads it by key —
+			// and `typeset -A` is the dialect's, so this is the only place
+			// the pair can be written. A one-key table has no second
+			// element; its one value has a second character.
+			"an association as a value rather than as a name",
+			`typeset -A m=(k abc); h=m; printf "[%s]" ${${m}[2]}; printf "[%s]" ${${(P)h}[k]}`,
+			"[][abc]",
+		},
+		{
 			// A subscript on the result, which is the same construct one
 			// bracket further on. The preset is what pairs the nesting with
 			// a subscript that may carry a flag group; either flag alone

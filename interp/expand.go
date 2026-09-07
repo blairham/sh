@@ -3295,6 +3295,15 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set bool) {
 // otherwise inherit the quoting of a word it is not in. Unquoted for
 // everything that did not come through a word, which is what the routes
 // with no word around them had before.
+//
+// Both halves are belt and braces, and neither is observable on its own
+// today: every route into a nested expansion either runs inside the word
+// that holds it or arrives with no word at all, and the kind test alone
+// turns away the one shape that could carry a stale index — a substitution
+// span, which is what a here-document inside a word is reached through. They
+// are written as the invariant rather than as the cheapest test that passes,
+// because the failure they prevent is silent: a value joined on IFS where
+// the script asked for a field.
 func (r *Runner) expandingQuoting(e *syntax.ParamExpr) syntax.Quoting {
 	if r.expandingWord == nil || r.expandingSpan >= len(r.expandingWord.Spans) {
 		return syntax.Unquoted

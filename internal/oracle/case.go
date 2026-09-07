@@ -4199,8 +4199,8 @@ echo "st=$?"`,
 	},
 	{
 		ID: "param/a-subscripted-reference-transforms-the-name", Category: "parameter expansion",
-		Snippet: `ARR=(x y); arr=(hello); h=arr; echo "[${(UP)h}][${${(UP)h}[1]}][${${(P)h}[1]}]"`,
-		Why:     "the sharpest row on the reference reading, because the same eight characters mean two things one bracket apart: `${(UP)h}` on its own is the *value* uppercased, and subscripted it is `${ARR[1]}` — the letters beside the `P` transform the **name**, and the two parameters here differ only in case so the answer says which happened. `hello` in the second bracket would be a name resolved before the letters ran and `h` would be one resolved after, both plausible; `x` is the measurement. The third bracket is the plain reference beside it, so the row grades the transform against the untransformed name in one run",
+		Snippet: `set -- abc def; ARR=(x y); arr=(hello); h=arr; hh=zz; echo "[${(UP)h}][${${(UP)h}[1]}][${${(P)h}[1]}][${${(P)#hh}[1]}]"`,
+		Why:     "the sharpest row on the reference reading, because the same eight characters mean two things one bracket apart: `${(UP)h}` on its own is the *value* uppercased, and subscripted it is `${ARR[1]}` — the letters beside the `P` transform the **name**, and the two parameters here differ only in case so the answer says which happened. `hello` in the second bracket would be a name resolved before the letters ran and `h` would be one resolved after, both plausible; `x` is the measurement. The third bracket is the plain reference beside it, so the row grades the transform against the untransformed name in one run — and the fourth is the sharp end of the same rule: `${#hh}` is 2, so `${${(P)#hh}[1]}` is the first character of the *second positional parameter*. A count reads as a name there, which a rule excluding numbers gets wrong while looking obviously right",
 	},
 	{
 		ID: "expansion/element-exclusion-by-pattern", Category: "expansion",

@@ -57897,21 +57897,21 @@
     "param/a-subscripted-reference-transforms-the-name": {
       "bash": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: line 1: [${(UP)h}][${${(UP)h}[1]}][${${(P)h}[1]}]: bad substitution",
+        "Stderr": "\u003cshell\u003e: line 1: [${(UP)h}][${${(UP)h}[1]}][${${(P)h}[1]}][${${(P)#hh}[1]}]: bad substitution",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: line 1: [${(UP)h}][${${(UP)h}[1]}][${${(P)h}[1]}]: bad substitution",
+        "Stderr": "\u003cshell\u003e: line 1: [${(UP)h}][${${(UP)h}[1]}][${${(P)h}[1]}][${${(P)#hh}[1]}]: bad substitution",
         "Status": 127,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: [${(UP)h}][${${(UP)h}[1]}][${${(P)h}[1]}]: bad substitution",
+        "Stderr": "\u003cshell\u003e: [${(UP)h}][${${(UP)h}[1]}][${${(P)h}[1]}][${${(P)#hh}[1]}]: bad substitution",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false
@@ -57931,7 +57931,7 @@
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "[HELLO][x][hello]",
+        "Stdout": "[HELLO][x][hello][d]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

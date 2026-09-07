@@ -481,6 +481,58 @@ type Semantics struct {
 	// a script that reads an argument it was not given carries on there and
 	// stops everywhere else.
 	UnsetPositionalIsAllowed Answer
+	// BackgroundJobInput is the standard input a job started with `&` reads,
+	// and it is three answers rather than a switch.
+	//
+	// The probe reads one descriptor twice, so the answers come out in
+	// opposite orders and neither can be mistaken for the other:
+	//
+	//	printf 'DATA\n' > f
+	//	<shell> -c '/bin/cat & wait; echo ---; /bin/cat' < f
+	//
+	// Measured 2026-09-07 it writes `---` and then `DATA` in dash, bash
+	// 5.3.15, bash 5.3.15 as `sh`, bash 3.2.57 and ksh93u+ — the job read
+	// nothing and the script kept its line — and `DATA` then `---` in zsh
+	// 5.9.2, where the job ate it. `ls -l /dev/fd/0` inside the job names
+	// what the five handed it: a character device with `/dev/null`'s rdev in
+	// the four, and the file itself in zsh. Same answer whether the shell's
+	// input is a file or a pipe; `/dev/null` cannot tell the two apart, which
+	// is why the probe uses neither.
+	//
+	// POSIX XCU 2.9.3, Asynchronous Lists, says a background command's
+	// standard input "shall be assigned to an empty file or /dev/null" while
+	// job control is disabled, so the majority is the specified answer and
+	// zsh is the divergence. It is also the direction that *steals*: the job
+	// and the script read the same descriptor, so every byte the job consumes
+	// is one the script's own `read` never sees —
+	//
+	//	while read -r line; do process "$line" & done < input.txt
+	//
+	// silently loses lines, at status 0, with nothing said.
+	//
+	// The third answer is what a *closed* descriptor does, and it splits the
+	// five: `exec 0<&-; /bin/cat & wait` is silent at 0 in dash and bash,
+	// which substitute the empty input even there, and
+	// `cat: stdin: Bad file descriptor` in ksh93u+, which substitutes only
+	// what it can dup and leaves a closed fd 0 closed. zsh says the same as
+	// ksh93 there, for the different reason that it never substitutes at all.
+	// Four columns against one, and it is the sub-answer rather than a second
+	// axis: it is the same decision, asked of an input that is not there.
+	//
+	// Only while job control is off. That is the condition XCU 2.9.3 states,
+	// and it is measured rather than inherited: on a pty,
+	// `bash -i -c '/bin/cat & sleep 0.3; jobs'` lists the job `Stopped` and
+	// zsh lists it `suspended (tty input)`. Both handed it the *terminal* and
+	// let the kernel stop it with SIGTTIN, which an empty input can never
+	// produce — so stdin's kind is an axis of the measurement rather than a
+	// detail of it, and a shell with someone to tell substitutes nothing.
+	//
+	// Read without asking, for the reason the field below gives: an
+	// unanswered axis here would have to refuse `&` itself, and backgrounding
+	// a command is ordinary where a background job that reads standard input
+	// is rare. Unanswered is the POSIX answer, which puts a preset that has
+	// chosen nothing in the column five of the six shells are in.
+	BackgroundJobInput BackgroundJobInputPolicy
 	// LastBackgroundPidIsZeroBeforeAnyJob makes `$!` read `0` before a
 	// background command has been started. zsh alone, and it is a number
 	// nothing ever had: `sh -c 'echo "[$!]"'` writes `[0]` there and `[]` in
@@ -4753,6 +4805,37 @@ func (r *Runner) swapSemantics(change func(*Semantics)) {
 	s := r.sem()
 	change(&s)
 	r.Semantics = &s
+}
+
+// BackgroundJobInputPolicy is what a job started with `&` reads for standard
+// input while job control is off.
+type BackgroundJobInputPolicy int
+
+const (
+	// BackgroundJobInputUnspecified is no answer, and reads as
+	// BackgroundJobInputEmpty rather than being refused — see the field.
+	BackgroundJobInputUnspecified BackgroundJobInputPolicy = iota
+	// BackgroundJobInputEmpty hands the job an empty stream whatever the
+	// shell's own input was, a closed descriptor included: dash and bash.
+	BackgroundJobInputEmpty
+	// BackgroundJobInputEmptyUnlessClosed hands the job an empty stream, but
+	// leaves a closed descriptor closed so the job reports EBADF: ksh93.
+	BackgroundJobInputEmptyUnlessClosed
+	// BackgroundJobInputIsTheShells hands the job the shell's own standard
+	// input, which is the descriptor the script goes on reading: zsh.
+	BackgroundJobInputIsTheShells
+)
+
+func (b BackgroundJobInputPolicy) String() string {
+	switch b {
+	case BackgroundJobInputEmpty:
+		return "empty"
+	case BackgroundJobInputEmptyUnlessClosed:
+		return "empty unless closed"
+	case BackgroundJobInputIsTheShells:
+		return "the shell's"
+	}
+	return "unspecified"
 }
 
 // ExitArgumentPolicy is how strict `exit` is about its argument.

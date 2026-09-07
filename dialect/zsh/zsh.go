@@ -299,6 +299,13 @@ func Semantics() interp.Semantics {
 	// `-i script.sh` through a pseudo-terminal, `[1] <pid>` as the job
 	// starts and `[1]  + done       sleep 0.3` as it ends.
 	s.InteractiveScriptAnnouncesJobs = interp.Yes
+	// A job started with `&` reads the shell's own standard input here, where
+	// the other five hand it an empty one — measured 2026-09-07,
+	// `sh -c '/bin/cat & wait; echo ---; /bin/cat' < f` writes the file's line
+	// *before* the marker in zsh 5.9.2 and after it in the other five. POSIX
+	// XCU 2.9.3 specifies the majority; this is the divergence, and it is
+	// this shell's to keep.
+	s.BackgroundJobInput = interp.BackgroundJobInputIsTheShells
 	// `$!` before any background command is `0` here and empty in the other
 	// five columns — a number nothing ever had. Measured,
 	// `sh -c 'echo "[$!]"'` writes `[0]`.

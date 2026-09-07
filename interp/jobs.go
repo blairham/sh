@@ -176,6 +176,13 @@ func (r *Runner) settleBackgroundJobBeforeABlockingOpen(path string) {
 // stream to be one that waits — `{ read x } &` under `/dev/null` finishes at
 // once and only hangs when standard input is a pipe with a writer and no data.
 //
+// Which the axis below has since narrowed rather than removed: a dialect that
+// hands a `&` job an empty stream reaches a read that answers at once, so the
+// `&` route only arrives here under the answer that hands the job the shell's
+// own descriptor. The coprocess route is untouched — its pipe is the shell's
+// and no dialect substitutes for it — and so is `wait` on either. See
+// backgroundStdin.
+//
 // The stream is asked rather than assumed, with the poll a shell already has
 // for `read -t 0`: a regular file, a here-document and an exhausted stream all
 // answer at once, so the job is left alone and `{ read x < file; sleep 1 } &`
@@ -240,6 +247,68 @@ func (r *Runner) settleBackgroundJobAtALoopsBackEdge() {
 		return
 	}
 	r.bg.settleNoPID()
+}
+
+// backgroundStdin is the standard input a job started with `&` reads.
+//
+// POSIX XCU 2.9.3 says a background command's standard input "shall be
+// assigned to an empty file or /dev/null" while job control is disabled, and
+// five of the six columns do exactly that: measured 2026-09-07,
+// `<shell> -c '/bin/cat & wait; echo ---; /bin/cat' < f` writes `---` and then
+// the file's line in dash, bash 5.3.15, bash-as-`sh`, bash 3.2.57 and ksh93u+,
+// and `ls -l /dev/fd/0` inside the job names `/dev/null` by its rdev. zsh alone
+// hands the job the shell's own descriptor, and there the line comes out
+// *before* the marker because the job ate it.
+//
+// Which is why the empty stream is the fix and not a nicety. The two readers
+// share one descriptor, so this is the direction that loses data rather than
+// merely disagreeing about it, and the shape a script writes is the loop:
+//
+//	while read -r line; do process "$line" & done < input.txt
+//
+// Anything `process` reads is a line the loop never sees, at status 0, with
+// nothing said.
+//
+// An empty io.Reader rather than an opened `/dev/null`, because a file opened
+// here has no owner to close it — the job outlives the statement that started
+// it — and the two are indistinguishable to a reader: os/exec hands a child
+// the read end of a pipe whose writer sees EOF at once, so an external command
+// in the job reads end-of-file exactly as it would from the device. It is also
+// what a nil Stdin already means in this package, so the job's input is the
+// same kind of empty as a runner that was never given one.
+//
+// A closed descriptor is the sub-answer, and one column keeps it closed:
+// `exec 0<&-; /bin/cat & wait` is silent at 0 in dash and bash and
+// `cat: stdin: Bad file descriptor` in ksh93u+ and zsh. It is read through the
+// same field rather than a second one — it is the same decision asked of an
+// input that is not there — and the marker it turns on is the one
+// lockedStdin already passes through untouched, so the job is handed the
+// closed descriptor rather than a stand-in for it.
+//
+// Only while job control is off. That is the condition XCU 2.9.3 states, and
+// it is measured rather than inherited: on a pty, `bash -i -c '/bin/cat &
+// sleep 0.3; jobs'` reports the job `Stopped` and zsh reports it `suspended
+// (tty input)`. Both handed it the *terminal* and let the kernel stop it with
+// SIGTTIN — which is an answer an empty input can never produce, so a shell
+// with someone to tell must not substitute one.
+//
+// A redirection on the job still wins, because it is opened inside the job's
+// own runner after this: `cat < f &` reads `f` in every dialect, and only the
+// *inherited* descriptor is the one the shells disagree about.
+func (r *Runner) backgroundStdin() io.Reader {
+	in := r.lockedStdin()
+	if r.JobControl {
+		return in
+	}
+	switch r.sem().BackgroundJobInput {
+	case BackgroundJobInputIsTheShells:
+		return in
+	case BackgroundJobInputEmptyUnlessClosed:
+		if _, closed := in.(closedFd); closed {
+			return in
+		}
+	}
+	return emptyReader{}
 }
 
 // Finished reports whether the job has ended, without waiting for it.
@@ -320,10 +389,15 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// so a stream that is still guarded once the job has gone costs a mutex
 	// nobody contends.
 	r.Stdout, r.Stderr = sub.Stdout, sub.Stderr
-	// And its input, for the same reason in the other direction: a
-	// background job and whatever runs next both read the shell's stdin, and
-	// os/exec copies from a caller's io.Reader on a goroutine of its own.
-	sub.Stdin = r.lockedStdin()
+	// And its input, which is where the shells part company: five of the six
+	// hand a `&` job an empty stream and zsh hands it the shell's own. See
+	// backgroundStdin, and Semantics.BackgroundJobInput.
+	//
+	// Where the shell's input *is* handed over it is guarded, for the same
+	// reason in the other direction: a background job and whatever runs next
+	// both read the same stream, and os/exec copies from a caller's io.Reader
+	// on a goroutine of its own.
+	sub.Stdin = r.backgroundStdin()
 	// The job is finished however the goroutine ended, which is what keeps an
 	// interpreter bug on it from costing more than the job. The shell is
 	// blocked on <-job.ready below and `wait` blocks on the same job

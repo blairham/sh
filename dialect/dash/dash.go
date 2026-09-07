@@ -88,6 +88,10 @@ func Semantics() interp.Semantics {
 	// `set -u; echo "[$!]"` writes `!: parameter not set` — the name without
 	// its `$` — and stops at 2.
 	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.Yes
+	// A job started with `&` reads an empty standard input, not the shell's:
+	// measured 2026-09-07, `dash -c '/bin/cat & wait; echo ---; /bin/cat' < f`
+	// writes `---` and then the file's line. POSIX XCU 2.9.3.
+	s.BackgroundJobInput = interp.BackgroundJobInputEmpty
 	// And it reads as nothing rather than as a zero: `echo "[$!]"` is `[]`.
 	s.LastBackgroundPidIsZeroBeforeAnyJob = interp.No
 	// DefaultOptionLetters stays empty on purpose: measured, dash's `$-`

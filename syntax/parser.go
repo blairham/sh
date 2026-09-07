@@ -1045,7 +1045,7 @@ func (p *Parser) parseCommand() Command {
 	case p.at(TokArithCmd):
 		return p.withRedirs(p.parseArithCmd())
 	case p.atWord("{"):
-		return p.withRedirs(p.parseGroup(body))
+		return p.withRedirs(p.parseGroupOrTry(body))
 	case p.atWord("if"):
 		return p.withRedirs(p.parseIf())
 	case p.atWord("while"), p.atWord("until"):
@@ -1832,6 +1832,14 @@ func (p *Parser) parseAnonFunc(keyword bool) Command {
 		p.next()
 	}
 	p.skipNewlines()
+	// A nameless function's body is a function body, which is what says the
+	// try-always keyword may not follow it: measured 2026-09-07, `() { echo
+	// anon; } always { echo A; }` is a parse error on the `}` in the shell
+	// that has both constructs — the `always` and the `{` after it are read
+	// as *arguments* to the call, which is what the word loop below already
+	// does. Without saying so here, the brace group is offered the keyword
+	// the way one standing as a command is (#1216).
+	p.funcBody = true
 	fn.Body = p.parseCommand()
 	if fn.Body == nil {
 		if keyword {
@@ -1950,6 +1958,47 @@ func (p *Parser) parseGroup(funcBody bool) Command {
 	c.Stop = p.tok.End
 	p.next()
 	return c
+}
+
+// parseGroupOrTry reads a brace group, and the `always` block after it where
+// the dialect has one.
+//
+// The keyword is read *here* rather than from the command dispatch or from the
+// stop-word set, and that placement is the production: `always` is an ordinary
+// word everywhere else, so a shell with this construct still runs `always`,
+// defines a function called it, and prints it as an argument. Measured — see
+// [Dialect.TryAlways] for the shapes that are refused and why.
+//
+// A function body is not offered the keyword. `f() { :; } always { … }` is a
+// parse error in the shell that has the construct, and funcBody is how the
+// dispatch already says which brace group is a body; the loop bodies are
+// refused by construction, since [Parser.braceLoopBody] reads its group
+// directly rather than through the dispatch.
+func (p *Parser) parseGroupOrTry(funcBody bool) Command {
+	c := p.parseGroup(funcBody)
+	if funcBody || !p.dialect.TryAlways || p.err != nil || !p.atWord("always") {
+		return c
+	}
+	g, ok := c.(*Group)
+	if !ok {
+		return c
+	}
+	t := &TryClause{Try: g.List, Start: g.Start, Stop: g.Stop}
+	p.next()
+	if !p.atWord("{") {
+		// The second half has to be a brace group. `{ echo t; } always echo
+		// a` is a parse error on the `echo` in the shell that has the
+		// construct rather than on the keyword, which is what naming the
+		// token we actually stopped on gives.
+		p.failUnexpected("")
+		return t
+	}
+	always, ok := p.parseGroup(false).(*Group)
+	if !ok {
+		return t
+	}
+	t.Always, t.Stop = always.List, always.Stop
+	return t
 }
 
 func (p *Parser) parseArithCmd() Command {
@@ -2271,9 +2320,16 @@ func exprEndsItself(e Expr) bool {
 // row, which is a fact about that shell rather than a rule anyone could
 // derive. A pipeline of more than one command is refused by exprEndsItself
 // above, for the same measured reason.
+//
+// A try-always block closes as well, measured 2026-09-07: `if { true; } always
+// { :; } { echo A; }; echo after` prints A and after in zsh 5.9.2, where
+// leaving the construct out of the set would call the body's `{` a syntax
+// error. The trailing statement is not decoration — a command string whose
+// last byte is the `}` of a short body is a parse error there whatever
+// precedes it, so a probe without one cannot tell the readings apart.
 func commandEndsItself(c Command) bool {
 	switch c.(type) {
-	case *TestClause, *ArithCmdClause, *Group, *Subshell, *CaseClause:
+	case *TestClause, *ArithCmdClause, *Group, *Subshell, *CaseClause, *TryClause:
 		return true
 	}
 	return false

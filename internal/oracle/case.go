@@ -1296,6 +1296,145 @@ var Corpus = []Case{
 		Snippet: `x=1; () { local x=2; echo in=$x }; echo out=$x; function { echo fanon; }`,
 		Why:     "and it is a function rather than a group, which `local` is the test for: the name is restored on the way out where a brace group would have left it changed. The `function` word with no name after it is the other spelling of the same thing",
 	},
+	// --- the try-always block (#1216) -------------------------------------
+	//
+	// `{ … } always { … }`. One column has it and five refuse the keyword
+	// where it stands; nine files in a real ~/.zi plugin tree are unparseable
+	// without it, including zsh-autosuggestions, powerlevel10k's gitstatus
+	// and F-Sy-H. Measured 2026-09-07 against zsh 5.9.2.
+	{
+		ID: "core/a-block-with-a-cleanup-half", Category: "command language", SyntaxError: true,
+		Snippet: `{ echo t; } always { echo a; }; echo "?=$?"`,
+		Why:     "the construct: a brace group whose second half runs after the first whatever happened. Five shells call the keyword a syntax error where it stands and one runs both halves",
+	},
+	{
+		ID: "core/the-cleanup-keyword-is-positional-not-reserved", Category: "command language",
+		Snippet: `always() { echo fn; }; always; echo always; x=always; echo $x`,
+		Why:     "the word is reserved *nowhere*, which is what says the production hangs off the brace group rather than off the lexer: it names a function, runs as a command, prints as an argument and assigns as a value in all six columns alike. A dialect that made it a keyword would break every one of those four",
+	},
+	{
+		ID: "core/a-separator-takes-the-cleanup-keyword-away", Category: "command language",
+		Snippet: `{ echo t; }; always`,
+		Why:     "the other half of the same rule, and the row that says the keyword is read only where the brace has *just* closed: with a `;` between them all six columns run `always` as a command and report it missing",
+	},
+	{
+		ID: "core/the-cleanup-half-belongs-to-a-brace-group-alone", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: "if true; then echo t; fi always { echo a; }",
+		Why:     "no other compound command takes the keyword, measured against the column that has the construct: an `if`, a subshell, a loop, a loop's brace body and a function definition are each a parse error there. A rule about brace groups and not about compound commands",
+	},
+	{
+		ID: "core/the-cleanup-half-must-be-a-brace-group", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: "{ echo t; } always echo a",
+		Why:     "and the second half is a group and never one command, which the shell that has the construct says by blaming the `echo` rather than the keyword — so the keyword was consumed and a `{` was what it wanted",
+	},
+	{
+		ID: "core/a-cleanup-block-does-not-replace-the-status", Category: "command language", SyntaxError: true,
+		Snippet: `{ false; } always { true; }; echo "one=$?"; { true; } always { false; }; echo "two=$?"`,
+		Why:     "both diagonals of the same 2x2, because either alone is confirmatory: the first half's status survives the second half's, so one=1 and two=0. A row measuring only the matching case cannot tell that from `$?` being whatever ran last",
+	},
+	{
+		ID: "core/a-cleanup-block-sees-the-status-it-cleans-up-after", Category: "command language", SyntaxError: true,
+		Snippet: `{ (exit 5); } always { echo "inner=$?"; }; echo "outer=$?"`,
+		Why:     "`$?` inside the second half is the first half's, which real code depends on: powerlevel10k's gitstatus.plugin.zsh opens its cleanup half with `local -i ret=$?`",
+	},
+	{
+		ID: "core/a-return-runs-the-cleanup-block-and-still-returns", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: "f(){ { echo t; return 3; } always { echo \"A ?=$?\"; }; echo NOT-REACHED; }; f; echo \"?=$?\"",
+		Why:     "a `return` out of the first half is caught long enough to run the second and then goes on returning, carrying its own value — the shape F-Sy-H's plugin is written in. NOT-REACHED is what says the return was not swallowed",
+	},
+	{
+		ID: "core/a-cleanup-blocks-own-return-keeps-the-first-halfs-status", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: "f(){ { (exit 5); } always { echo A; return 4; }; echo NOT-REACHED; }; f; echo \"?=$?\"",
+		Why:     "the reverse: a `return` written in the *second* half leaves the function but its value is discarded, so the status is the first half's 5 and not 4. With `return` alone the two readings agree, which is why the value is written down",
+	},
+	{
+		ID: "core/an-exit-inside-a-function-runs-the-cleanup-block", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: "f(){ { echo t; exit 7; } always { echo A; }; }; f; echo NOT-REACHED",
+		Why:     "an `exit` unwinding a function frame runs the cleanup halves on its way out and still exits 7",
+	},
+	{
+		ID: "core/an-exit-at-the-top-level-skips-the-cleanup-block", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: "{ echo t; exit 7; } always { echo A; }\necho NOT-REACHED",
+		Why:     "the off-diagonal of the row above, and the discriminating one: the same `exit` with no function frame around the cleanup half skips it entirely. So the variable is where the *cleanup half* sits, not where the `exit` came from — a compound command, an `eval` or a sourced file at the top level all skip it too",
+	},
+	{
+		ID: "core/break-and-continue-reach-the-cleanup-block", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: "for i in 1 2 3; do { echo t$i; [[ $i == 2 ]] && break; } always { echo A$i; }; done; echo after",
+		Why:     "a `break` out of the first half runs the second and then breaks, so the loop stops after two passes with both cleanups done",
+	},
+	{
+		ID: "core/a-cleanup-block-that-continues-outranks-a-break", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: "for i in 1 2 3; do { echo t$i; break; } always { echo A$i; continue; }; echo body$i; done; echo after",
+		Why:     "when both halves transfer, the more far-reaching one wins and it does not matter which half wrote it: a `continue` in the cleanup half beats a `break` in the first, so the loop runs all three passes. The other diagonal — `continue` first, `break` in the cleanup — is the same three passes, and \"whichever half went first wins\" predicts one pass here, which is what makes this the discriminating row",
+	},
+	// The four counts and the two sticky rows below were found by mutating
+	// controlWins: it decided ties with `>` and a survivor pointed here.
+	{
+		ID: "core/two-cleanup-counts-take-the-second-halfs", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `for i in 1 2; do for j in a b; do { echo t$i$j; break; } always { echo A$i$j; break 2; }; echo body; done; echo inner$i; done; echo after`,
+		Why:     "when both halves ask a *loop* for something the second half's count is what takes effect, so the outer loop stops too. Written with unequal counts, because equal ones cannot tell this from either half winning whole",
+	},
+	{
+		ID: "core/two-cleanup-counts-take-the-second-halfs-the-other-way", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `for i in 1 2; do for j in a b; do { echo t$i$j; break 2; } always { echo A$i$j; break; }; echo body; done; echo inner$i; done; echo after`,
+		Why:     "the same claim with the counts swapped, which is what says it is the second half's count and not the larger of the two: only the inner loop stops here",
+	},
+	{
+		ID: "core/a-cleanup-halfs-continue-count-decides-too", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `for i in 1 2; do for j in a b; do { echo t$i$j; continue; } always { echo A$i$j; continue 2; }; echo body; done; echo inner$i; done; echo after`,
+		Why:     "and a `continue` takes its count from the second half the same way, so the outer loop advances rather than the inner one",
+	},
+	{
+		ID: "core/a-cleanup-halfs-continue-count-the-other-way", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `for i in 1 2; do for j in a b; do { echo t$i$j; continue 2; } always { echo A$i$j; continue; }; echo body; done; echo inner$i; done; echo after`,
+		Why:     "the counts swapped again, and the inner loop advances. The four rows together are what say the count comes from one side",
+	},
+	{
+		ID: "core/continue-ness-is-sticky-across-the-halves", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `for i in 1 2; do for j in a b; do { echo t$i$j; continue; } always { echo A$i$j; break 2; }; echo body; done; echo inner$i; done; echo after`,
+		Why:     "the discriminating row, and the reason no rule that takes one half's transfer *whole* fits: the first half asks to continue and the second asks to break two, and what happens is a **continue** two — the count from the second half and the continue-ness from the first. Taking the second half whole would stop both loops, which is a different program",
+	},
+	{
+		ID: "core/continue-ness-is-sticky-the-other-way", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: `for i in 1 2; do for j in a b; do { echo t$i$j; break 2; } always { echo A$i$j; continue; }; echo body; done; echo inner$i; done; echo after`,
+		Why:     "the mirror, and the second half of the same claim: a `break 2` in the first half and a plain `continue` in the second give a continue at one, so the continue-ness survives whichever half wrote it and the count does not. Taking the first half whole would stop both loops",
+	},
+	{
+		ID: "core/a-redirection-on-a-try-always-block-reaches-both-halves", Category: "command language", SyntaxError: true,
+		Snippet: `{ echo t; } always { echo a; } > /dev/null; echo done`,
+		Why:     "the redirection belongs to the construct rather than to either half, so neither `t` nor `a` is seen. Written after the *first* half instead it ends it, and the keyword is then a syntax error — so there is one place to put one",
+	},
+	{
+		ID: "core/try-always-blocks-nest-in-both-halves", Category: "command language", SyntaxError: true,
+		Snippet: `{ { echo t; } always { echo a; }; } always { echo b; }`,
+		Why:     "the construct is an ordinary compound command in both of its own halves, which is what a script wrapping a cleanup in a cleanup relies on",
+	},
+	{
+		ID: "core/a-failed-expansion-in-a-try-half-still-runs-the-cleanup", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: "f(){ { for i in a $((1/0)) b; do echo $i; done; } always { echo \"A$((1+1))\"; }; echo NOT-REACHED; }; f",
+		Why:     "the neighbor #1220 left: a failed expansion in a *heading* inside the try half stops the loop before its body, the cleanup half still runs, and its own expansion is not poisoned by the flag the failure left — `A2` rather than a second complaint. The construct has no heading of its own, so this is the row that says it needs none",
+	},
+	{
+		ID: "core/a-try-always-block-ends-a-condition", Category: "command language",
+		Script: true, SyntaxError: true,
+		Snippet: "if { true; } always { :; } { echo A; }; echo after",
+		Why:     "it closes the way a brace group and a `case` do, so a short body may follow it directly where the shell has one. From a file, because a command string whose last byte is the `}` of a short body is a parse error in the shell that has the construct",
+	},
 	{
 		ID: "core/a-tested-brace-group-is-not-a-body", Category: "command language", SyntaxError: true,
 		Snippet: `i=0; while [ $i -lt 2 ]; { echo $i; i=$((i+1)); [ $i -lt 4 ]; }`,

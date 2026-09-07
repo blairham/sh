@@ -314,6 +314,28 @@ func (p *printer) expr(e Expr) {
 	}
 }
 
+// braceGroup writes `{ … }` around a list, in whichever arrangement the layout
+// asks for.
+//
+// Factored out because two constructs are spelled with one: a brace group and
+// both halves of a [TryClause]. The space after `{` and the `;` before `}` are
+// both required — they are what make it a reserved word rather than the start
+// of a name.
+func (p *printer) braceGroup(list []*Stmt) {
+	if p.layout.Lines {
+		p.str("{" + p.layout.BraceOpenSuffix)
+		// The outermost brace — a function's own — is the one that differs; a
+		// brace inside one opens a line in every arrangement measured.
+		p.bodyAt(list, false, p.layout.OutermostBraceOpensALine || p.depth > 0)
+		p.str("\n" + p.pad() + "}")
+		return
+	}
+	p.str("{ ")
+	p.stmts(list)
+	p.terminate()
+	p.str("}")
+}
+
 func (p *printer) command(c Command) {
 	switch x := c.(type) {
 	case *SimpleCmd:
@@ -326,22 +348,15 @@ func (p *printer) command(c Command) {
 		p.str(" )")
 		p.redirs(x.Redirs)
 	case *Group:
-		// The space after `{` and the `;` before `}` are both required: they
-		// are what make it a reserved word rather than the start of a name.
-		if p.layout.Lines {
-			p.str("{" + p.layout.BraceOpenSuffix)
-			// The outermost brace — a function's own — is the one that
-			// differs; a brace inside one opens a line in every arrangement
-			// measured.
-			p.bodyAt(x.List, false, p.layout.OutermostBraceOpensALine || p.depth > 0)
-			p.str("\n" + p.pad() + "}")
-			p.redirs(x.Redirs)
-			return
-		}
-		p.str("{ ")
-		p.stmts(x.List)
-		p.terminate()
-		p.str("}")
+		p.braceGroup(x.List)
+		p.redirs(x.Redirs)
+	case *TryClause:
+		// The redirections go after the *second* half, because they belong to
+		// the whole construct: writing one after the try half is what ends it
+		// and makes the `always` a syntax error.
+		p.braceGroup(x.Try)
+		p.str(" always ")
+		p.braceGroup(x.Always)
 		p.redirs(x.Redirs)
 	case *IfClause:
 		p.ifClause(x)

@@ -248,6 +248,38 @@ type Dialect struct {
 	// to the list.
 	Foreach bool
 
+	// TryAlways is `{ … } always { … }`: a brace group whose second half runs
+	// however the first half ended. One shell in the panel has it; the other
+	// five call the word a syntax error where it stands.
+	//
+	// **It is positional and not a reserved word, which is the whole of the
+	// grammar.** Measured 2026-09-07 against zsh 5.9.2: `always` alone is
+	// `command not found`, `always() { :; }` defines a function, `echo
+	// always` prints it and `x=always` assigns it — so the word may not join
+	// stopWords or reservedWords. It is read only where a brace group has
+	// just closed, and nothing else there will do:
+	//
+	//	{ echo t; } always { echo a; }     the construct
+	//	{ echo t; }; always { … }          `always` is a command name again
+	//	{ echo t; }
+	//	always { … }                       a newline is a separator too
+	//	{ echo t; } "always" { … }         quoting takes the keyword away
+	//	{ echo t; } > /dev/null always {}  a redirection ends the try half
+	//	{ echo t; } always echo a          the second half must be a group
+	//	{ echo t; } always {} always {}    and there is exactly one of them
+	//	if true; then :; fi always { … }   no other compound command takes it
+	//	for i in a; { :; } always { … }    including a loop's brace body
+	//	f() { :; } always { … }            nor a function definition's
+	//
+	// Every one of those is a parse error in the shell that has the
+	// construct, and the first two run there as two commands. So the flag
+	// gates one production hanging off the brace group and never the lexer.
+	//
+	// Redirections belong to the whole construct rather than to either half:
+	// `{ echo t; } always { echo a; } > /dev/null` prints nothing at all.
+	// Nesting works in both halves.
+	TryAlways bool
+
 	// AnonymousFunction is `() { … }` and `function { … }`: a function with
 	// no name, defined and run where it stands, with the words after it as
 	// its positional parameters. One shell in the panel has it; in the other

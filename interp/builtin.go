@@ -70,7 +70,7 @@ func biContinue(r *Runner, _ context.Context, args []string) int {
 }
 
 func biReturn(r *Runner, _ context.Context, args []string) int {
-	if r.inFunc == "" && r.sourceDepth == 0 {
+	if !r.hasSomethingToReturnFrom() {
 		// Nothing to return from. Three of the panel end the script here
 		// with the status given; bash refuses and carries on, which is a
 		// difference in *where the script stops* rather than in wording.

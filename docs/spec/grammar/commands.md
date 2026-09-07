@@ -1094,8 +1094,8 @@ a `;` before `else` ends the whole `if` and leaves the `else` with
 nothing to attach to.
 
 **What ends a condition is a measured set rather than a tidy one.** A
-group, a subshell and a `case … esac` close as well, a `!` in front
-changes nothing, and a **loop does not**: `if for i in a; do true; done
+group, a subshell, a `case … esac` and a try-always block close as well,
+a `!` in front changes nothing, and a **loop does not**: `if for i in a; do true; done
 { … }` is a syntax error in the shell that takes every other row, which
 is a fact about that shell rather than a rule anyone could derive. A
 pipeline is judged on its **last** command: `if [[ -n x ]] | cat { … }`
@@ -1208,6 +1208,159 @@ Corpus: `core/a-condition-that-ended-itself-takes-its-body`,
 `core/a-for-over-a-parenthesized-list`,
 `core/a-for-header-that-ends-itself-needs-no-body`,
 `core/a-short-loop-redirection-is-the-bodys`.
+
+## The try-always block
+
+`{ … } always { … }`. One shell in the panel has it; the other five call
+the keyword a syntax error where it stands. Measured 2026-09-07 against
+zsh 5.9.2, and it is `TryAlways`.
+
+Nine files in a real `~/.zi` plugin tree were unparseable without it, and
+they are the plugins a zsh daily driver actually loads: zsh-autosuggestions,
+powerlevel10k's gitstatus, its `worker.zsh`, `wizard.zsh` and
+`configure.zsh`, F-Sy-H, and zi's own `autoload.zsh` (#1216).
+
+### It is a positional keyword, not a reserved word
+
+This is the whole of the grammar, and it decides whether the lexer or the
+parser owns the word. `always` is reserved **nowhere**: all six columns
+run `always` as a command, define a function called it, print it as an
+argument and assign it as a value. So the production hangs off the brace
+group and the reserved-word tables are untouched.
+
+The word is read only where a brace group has *just* closed, and nothing
+else there will do. Each of these is a parse error in the shell that has
+the construct, and the first two run there as two commands:
+
+    { echo t; }; always { … }          a separator takes the keyword away
+    { echo t; }
+    always { … }                       a newline is a separator too
+    { echo t; } "always" { … }         so does quoting or escaping it
+    { echo t; } > /dev/null always {}  a redirection ends the try half
+    { echo t; } always echo a          the second half must be a group
+    { echo t; } always {} always {}    and there is exactly one of them
+    if true; then :; fi always { … }   no other compound command takes it
+    ( echo t ) always { … }
+    for i in a; do :; done always { … }
+    for i in a; { :; } always { … }    including a loop's brace body
+    f() { :; } always { … }            nor a function definition's
+    () { :; } always { … }             named or nameless
+
+Both halves nest, and a redirection written after the second half belongs
+to the **construct**: `{ echo t; } always { echo a; } > /dev/null` prints
+nothing at all. There is nowhere else to write one, which is what the
+redirection row above says. The block also **closes itself**, so a header
+that has ended may be followed straight by it and by a short body where
+the dialect has one: `if { true; } always { :; } { echo A; }; echo after`
+prints A and after.
+
+### Four separate questions at run time
+
+None of them became a semantics axis, and that is the measurement rather
+than an omission: an axis records a *disagreement* about identical
+syntax, and there is only one column to ask.
+
+**Does the second half run?** Nearly always — an ordinary failure, a
+`return`, a `break`, a `continue` and an error the shell reported all
+reach it. What does not is a transfer with nothing above the construct to
+catch it, and "nothing above it" is two different questions:
+
+- An `exit` is caught by a function frame of **this** shell. So
+  `f(){ { exit 7; } always { echo A; }; }; f` prints A and the same block
+  at the top level does not — and the variable is where the *second half*
+  sits rather than where the `exit` came from, which took a 2x2 to
+  establish. A `for`, a `while`, a `case`, an `if`, a nested group, an
+  `eval` and a sourced file at the top level all skip it; a nameless
+  function does not. A subshell is a shell of its own here, so
+  `f(){ ( { exit 7; } always { echo A; } ); }; f` prints nothing while a
+  function called *within* that subshell still runs its own.
+- A `return` is caught by anything there is to return from, a subshell's
+  inherited frame included. `{ return 3; } always { echo A; }` at the top
+  level skips it and the same block inside a sourced file does not.
+
+`${x?word}`, which that shell documents as exiting outright, skips the
+second half even inside a function. `set -e` firing skips it too, and
+that one is **not modeled** — see #1238 for why the distinction from a
+script's own `exit` is not `abandonKind`'s to draw.
+
+**What `$?` is inside it.** The try half's status, including the value a
+propagating `return` carried. Real code depends on this: gitstatus opens
+its cleanup half with `local -i ret=$?`.
+
+**What `$?` is afterwards.** The try half's again — the second half's own
+status is discarded. `{ false; } always { true; }` leaves 1 and
+`{ true; } always { false; }` leaves 0, and both diagonals are needed:
+either alone cannot be told from `$?` being whatever ran last.
+
+**Which transfer wins** when both halves make one. A severity order —
+exit, then a reported error, then `return`, then `continue`, then
+`break` — and it does not matter which half wrote the winner. Measured
+in both directions for each neighboring pair:
+
+    { return 3; } always { break; }      the return, and the loop runs on
+    { break; }    always { return 4; }   the return again
+    { continue; } always { break; }      the continue: three passes
+    { break; }    always { continue; }   the continue again: three passes
+    { exit 7; }   always { return 4; }   the exit, status 7
+    { return 3; } always { exit 9; }     the exit, status 9
+
+The middle pair is the discriminating one. "The try half wins unless the
+second half returns or exits" fits every other row and predicts one pass
+for `{ break; } always { continue; }`, which runs three.
+
+**`break` and `continue` in *both* halves are the exception, and then
+neither half wins whole.** The second half's **count** takes effect and
+the continue-ness is *sticky* — once either half has asked to continue,
+the result is a continue at that count. Measured over two nested loops,
+and all six rows are needed:
+
+    { break; }      always { break 2; }     both loops stop
+    { break 2; }    always { break; }       only the inner one stops
+    { continue; }   always { continue 2; }  the outer loop advances
+    { continue 2; } always { continue; }    the inner loop advances
+    { continue; }   always { break 2; }     the outer loop advances
+    { break 2; }    always { continue; }    the inner loop advances
+
+The last two rule out both simpler readings: taking the second half's
+transfer whole makes row five a `break 2` and stops both loops, and
+taking the first half's whole does the same to row six. What happens is
+the count from one side and the continue-ness from either, which is the
+shape a count plus a flag has. Found by mutating the rank comparison.
+
+A reported error is the one asymmetry: the try half's is **re-raised**
+behind the second half, so the statement is still given up, while one
+raised *by* the second half is **cleared** and the caller carries on.
+That is the construct's purpose — a cleanup block that trips over
+something must not turn a reported failure into a lost one, and must not
+abandon its caller either. An `exit` in the second half still beats it.
+
+`TRY_BLOCK_ERROR` and `TRY_BLOCK_INTERRUPT` — the parameters that shell
+exposes for reading and clearing that error state — are not implemented;
+#1234 records what they do.
+
+Corpus: `core/a-block-with-a-cleanup-half`,
+`core/the-cleanup-keyword-is-positional-not-reserved`,
+`core/a-separator-takes-the-cleanup-keyword-away`,
+`core/the-cleanup-half-belongs-to-a-brace-group-alone`,
+`core/the-cleanup-half-must-be-a-brace-group`,
+`core/a-cleanup-block-does-not-replace-the-status`,
+`core/a-cleanup-block-sees-the-status-it-cleans-up-after`,
+`core/a-return-runs-the-cleanup-block-and-still-returns`,
+`core/a-cleanup-blocks-own-return-keeps-the-first-halfs-status`,
+`core/an-exit-inside-a-function-runs-the-cleanup-block`,
+`core/an-exit-at-the-top-level-skips-the-cleanup-block`,
+`core/break-and-continue-reach-the-cleanup-block`,
+`core/a-cleanup-block-that-continues-outranks-a-break`,
+`core/two-cleanup-counts-take-the-second-halfs`,
+`core/two-cleanup-counts-take-the-second-halfs-the-other-way`,
+`core/a-cleanup-halfs-continue-count-decides-too`,
+`core/a-cleanup-halfs-continue-count-the-other-way`,
+`core/continue-ness-is-sticky-across-the-halves`,
+`core/continue-ness-is-sticky-the-other-way`,
+`core/a-failed-expansion-in-a-try-half-still-runs-the-cleanup`,
+`core/a-redirection-on-a-try-always-block-reaches-both-halves`,
+`core/try-always-blocks-nest-in-both-halves`,
+`core/a-try-always-block-ends-a-condition`.
 
 ## `case`
 

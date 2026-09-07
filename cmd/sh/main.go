@@ -685,6 +685,11 @@ func printNode(w io.Writer, n syntax.Node, depth int) {
 		printf(w, "%s%-8s group\n", pad, x.Pos())
 		printList(w, x.List, depth+1)
 		printRedirs(w, x.Redirs, pad, depth)
+	case *syntax.TryClause:
+		printf(w, "%s%-8s try\n", pad, x.Pos())
+		printBranch(w, "try", x.Try, depth+1)
+		printBranch(w, "always", x.Always, depth+1)
+		printRedirs(w, x.Redirs, pad, depth)
 	case *syntax.IfClause:
 		printf(w, "%s%-8s if\n", pad, x.Pos())
 		printBranch(w, "cond", x.Cond, depth+1)

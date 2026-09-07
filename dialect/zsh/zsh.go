@@ -70,6 +70,14 @@ func Dialect() syntax.Dialect {
 	d.ForMultipleNames = true
 	d.Repeat = true
 	d.Foreach = true
+	// `{ … } always { … }`, the try-always block. Measured 2026-09-07: the
+	// word is positional and not reserved here — `always` alone is `command
+	// not found`, `always() { :; }` defines a function and `echo always`
+	// prints it — so what the flag adds is one production hanging off a brace
+	// group. Nine files in a real `~/.zi` plugin tree are unparseable without
+	// it, including zsh-autosuggestions, powerlevel10k's gitstatus and F-Sy-H
+	// (#1216).
+	d.TryAlways = true
 	d.AnonymousFunction = true
 	// The same reach: a body may have nothing in it — `{ }`, `( )`, `while
 	// cond; do done`, and a condition too. Every shape, and this shell alone.

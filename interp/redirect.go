@@ -27,7 +27,22 @@ import (
 // File redirections, descriptor duplication, here-strings and here-document
 // bodies are all here; what the shell cannot express is refused rather than
 // ignored.
-func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compound bool) ([]io.Closer, error) {
+func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compound, ownProcess bool) ([]io.Closer, error) {
+	// Whose process these redirections are for, saved and put back rather
+	// than cleared, so a command reached from inside a here-document body
+	// cannot leave its own answer behind for the next redirection in this
+	// list.
+	//
+	// Defensive rather than load-bearing today, and that is measured: a
+	// mutant that clears the field instead of restoring it survives the
+	// whole of interp/ and dialect/, because every route from a body to
+	// another command — a command substitution, a process substitution —
+	// goes through clone(), which copies this field by value and cannot
+	// write back. Restoring costs one word and is what keeps that true of a
+	// site that one day does not clone.
+	outerOwn := r.redirForOwnProcess
+	r.redirForOwnProcess = ownProcess
+	defer func() { r.redirForOwnProcess = outerOwn }()
 	r.redirErr = false
 	r.badDupTarget = false
 	r.redirFds = nil
@@ -121,6 +136,13 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		if rd.Op.IsHeredoc() || rd.Op == syntax.TokTLess {
 			body := r.heredocBody(rd)
 			r.Stdin = strings.NewReader(body)
+			if r.redirErr {
+				// The body could not be expanded, and the process the
+				// redirection was for is where that happened — so the
+				// command is what was given up, not the shell. See
+				// heredocGiveUpTheCommand.
+				return closers, nil
+			}
 			continue
 		}
 
@@ -542,6 +564,18 @@ func atoi(s string) (int, bool) {
 // record it rather than resolve it. A quoted delimiter makes the whole body
 // literal; an unquoted one leaves it subject to expansion.
 func (r *Runner) heredocBody(rd *syntax.Redirect) string {
+	if !r.redirForOwnProcess {
+		return r.heredocText(rd)
+	}
+	// The redirection belongs to a command this shell runs as a process of
+	// its own, so the body is expanded the way that process would expand it.
+	// See heredocprocess.go for the measurement that draws the line there.
+	return r.confineToTheProcess(func() string { return r.heredocText(rd) })
+}
+
+// heredocText is the expansion itself, with nothing said about whose process
+// it happens in.
+func (r *Runner) heredocText(rd *syntax.Redirect) string {
 	if rd.Op == syntax.TokTLess {
 		// A here-string is one line, and its word is expanded like any other.
 		return strings.Join(r.expandWordNoSplit(rd.Word), "") + "\n"

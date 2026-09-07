@@ -981,6 +981,13 @@ type Runner struct {
 	// location does not name it for that message.
 	redirectForBuiltin string
 
+	// redirForOwnProcess says the redirections being opened belong to a
+	// command this shell will run as a process of its own, which is where a
+	// real shell has already forked and so where a here-document body's
+	// expansion happens somewhere the shell cannot see. Owned by
+	// applyRedirs, which saves and restores it. See heredocprocess.go.
+	redirForOwnProcess bool
+
 	// abandonLine is the line the statement that gave up was on, so the rest
 	// of that *line* is given up with it. Measured: `r=2; echo one` on one
 	// line prints nothing, and `r=2` with `echo one` on the line after it
@@ -1321,7 +1328,10 @@ func (r *Runner) clone() *Runner {
 // compound node carries its own list because a redirection on one applies to
 // everything inside it.
 func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body func() error) error {
-	closers, err := r.applyRedirs(ctx, rs, true)
+	// A compound command's body runs in this shell, so its here-documents
+	// expand here — measured, `while read x; do :; done <<END` with a body
+	// of `$(( n++ ))` leaves the increment behind in all four shells.
+	closers, err := r.applyRedirs(ctx, rs, true, false)
 	defer func() {
 		for _, c := range closers {
 			_ = c.Close()
@@ -2293,7 +2303,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		if len(c.Redirs) > 0 {
 			r.traceCommand(argv)
 
-			closers, err := r.applyRedirs(ctx, c.Redirs, false)
+			// Assignments and a redirection with no command name. There is
+			// no other process for a here-document body to expand in.
+			closers, err := r.applyRedirs(ctx, c.Redirs, false, false)
 			for _, cl := range closers {
 				_ = cl.Close()
 			}
@@ -2321,7 +2333,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			r.redirectForBuiltin = argv[0]
 		}
 	}
-	closers, err := r.applyRedirs(ctx, c.Redirs, false)
+	// And whether the command is one this shell runs itself, which decides
+	// where a here-document body is expanded — see heredocprocess.go.
+	closers, err := r.applyRedirs(ctx, c.Redirs, false, !r.commandRunsInThisShell(argv))
 	r.redirectForBuiltin = ""
 	// Read here rather than in the defer: a builtin that runs a program of its
 	// own — `eval`, `.` — applies redirections of its own on the way, and this

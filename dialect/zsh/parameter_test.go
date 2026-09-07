@@ -329,24 +329,27 @@ func TestAnAbsentParameterRefusesByNameOnEveryReadRoute(t *testing.T) {
 	}
 }
 
-// **A here-document is the one place a refused value still lands**, and it does
-// so for an ordinary unset name under `set -u` in exactly the same way.
+// **A here-document refuses by name**, and it does so for an ordinary unset
+// name under `set -u` in exactly the same way.
 //
-// It is also the route that proves the refusal is asked in *two* places and
-// not one. Every spelling in the table above is answered by the list path,
-// which reaches its own test; a here-document body is expanded span by span
-// down the scalar path alone, and a mutant that deleted the scalar site
-// survived every other test in this file and failed only this one.
-//
-// The body is expanded as the redirection is arranged, so the file is written and
-// the command is reached before the failed expansion stops anything: run with
-// `cat` on PATH, both print `[]`.
+// It is the route that proves the refusal is asked in *two* places and not
+// one. Every spelling in the table above is answered by the list path, which
+// reaches its own test; a here-document body is expanded span by span down
+// the scalar path alone, and a mutant that deleted the scalar site survived
+// every other test in this file and failed only this one.
 //
 // Asserted as a *parity* rather than as a behavior worth having, which is the
 // only honest way to write it down: this is the substrate's here-document
 // route and not this parameter's, and a refusal that behaved differently here
 // would be a second answer to a question already answered. The diagnostic
 // still names the parameter, which is the part this change is responsible for.
+//
+// The parity used to be the *wrong* one and said so: the body was expanded in
+// this shell as the redirection was arranged, so both spellings reported and
+// then reached the command anyway — run with `cat` on PATH, both printed `[]`.
+// That was the substrate's here-document route, and #1157 fixed it. Both
+// spellings now stop at the diagnostic, because a body fed to a program is
+// expanded in that program's process and a failure there costs the command.
 func TestAHereDocumentNamesAnAbsentParameterTheWayItNamesAnUnsetOne(t *testing.T) {
 	absent, ast := runZsh(t, t.TempDir(), "cat <<E\n[$jobstates]\nE\n")
 	unset, ust := runZsh(t, t.TempDir(), "set -u\ncat <<E\n[$nosuchvar]\nE\n")
@@ -356,13 +359,14 @@ func TestAHereDocumentNamesAnAbsentParameterTheWayItNamesAnUnsetOne(t *testing.T
 	if !strings.Contains(unset, "nosuchvar: parameter not set") {
 		t.Errorf("a here-document reading an unset name under set -u = %q (status %d), want it named", unset, ust)
 	}
-	// And the parity itself: in both, the command the here-document was for
-	// is still *reached* — the redirection was arranged before the expansion
-	// failed. `cat` is not on this test's PATH, so what says it ran is the
-	// shell's own complaint about it, and it is the same complaint in both.
-	if !strings.HasSuffix(absent, "command not found: cat\n") ||
-		!strings.HasSuffix(unset, "command not found: cat\n") {
-		t.Errorf("the two here-documents differ in shape: absent %q, unset %q", absent, unset)
+	// And the parity itself: in neither is the command the here-document was
+	// for reached, because the body could not be expanded and the process it
+	// was being expanded for is not this shell. `cat` is not on this test's
+	// PATH, so the shell's own complaint about it is what would say it had
+	// been tried — and neither spelling produces one.
+	if strings.Contains(absent, "command not found: cat") ||
+		strings.Contains(unset, "command not found: cat") {
+		t.Errorf("the command was reached: absent %q, unset %q", absent, unset)
 	}
 }
 

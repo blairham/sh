@@ -328,6 +328,30 @@ type Semantics struct {
 	// it is one hundred. The quietest divergence measured — nothing warns,
 	// both are plausible numbers, and file modes are written this way.
 	ArithLeadingZeroIsOctal Answer
+	// HeredocExpandsInTheCommandsProcess confines what a here-document body's
+	// expansion writes to the command the body feeds, where that command is
+	// one the shell runs as a process of its own.
+	//
+	// True in bash, ksh93 and zsh; dash alone lets the write escape.
+	// Measured with `unset u` and a body of `${u:=zz}` fed to `cat`: `u` is
+	// unset afterwards in the three, and holds `zz` in dash. With `$(( n++ ))`
+	// instead — which dash has not got — the three are unanimous again.
+	//
+	// It is one axis rather than one per construct because the split is a
+	// property of *where the shell expands a body*, and every construct
+	// downstream of that follows: a builtin, a function, a compound command,
+	// `exec`, `eval` and `.` all leave the write behind in all four shells,
+	// because the shell runs them itself and there is no other process for
+	// it to land in. Nothing is asked for those.
+	//
+	// Silent either way, which is the reason it is here: a counter advanced
+	// inside a template's here-document reads one too high on the next line
+	// under the wrong answer, and nothing about the output says so.
+	//
+	// Asked only when the body actually wrote something. A here-document
+	// with no side effect is every other here-document and the shells agree
+	// about it, so an unanswered dialect must still be able to run one.
+	HeredocExpandsInTheCommandsProcess Answer
 	// FatalErrorStatusIsOne is the status a fatal shell error carries.
 	// True in bash, ksh93 and zsh; dash alone exits 2.
 	//

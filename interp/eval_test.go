@@ -197,6 +197,12 @@ func TestSemanticsAxesHaveTwoSides(t *testing.T) {
 			"[0]\n", "[]\n",
 		},
 		{
+			"a here-document body's write reaches the shell that fed it",
+			"n=1\ncat <<END >/dev/null\n$(( n++ ))\nEND\nprintf 'after=%s' \"$n\"",
+			func(s *Semantics, a Answer) { s.HeredocExpandsInTheCommandsProcess = a },
+			"after=1", "after=2",
+		},
+		{
 			"quoting a regex makes it a literal",
 			`[[ abc =~ "^a.c$" ]] && echo m || echo no`,
 			func(s *Semantics, a Answer) { s.RegexQuotingMakesLiteral = a },

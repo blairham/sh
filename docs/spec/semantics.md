@@ -6404,7 +6404,13 @@ so bash 3.2 is a column in the golden record and not a dialect.
   empty indexed array: `${#a[@]}` is 1 for it and `unset "a[-1]"` says
   nothing. We model `a=()` as an empty array, so our ksh refuses that one
   spelling where ksh93 does not. The difference is what `a=()` builds
-  rather than where the boundary is.
+  rather than where the boundary is. The same fact retired an axis —
+  `UnsetNameAtIsOneEmptyField` below, which was `EmptyArrayAtIsOneEmptyField`
+  and was measured from `a=()` counting one field in ksh93 (#1379). This
+  entry and the table in `grammar/commands.md` were each enough to refuse
+  that measurement; neither was consulted, because the corpus row that fed
+  it counted fields and never printed one. **Cross-reference an entry here
+  before reading a divergence off a count.**
 - zsh blanks a **scalar** through an in-range subscript — `a=v; unset
   "a[1]"` leaves `a` empty at 0 — where we leave the value standing. It is
   the blanking reading applied to a name that is no array, and a separate
@@ -7800,6 +7806,9 @@ each shell's own way of declaring an empty array:
 | `unset a; f "${a[@]}"` | *n/a* | 0 | 0 | 0 | 0 | **1** |
 | declared, no elements | *n/a* | 0 | 0 | 0 | 0 | 0 |
 | `f "${a[@]}"` on one element | *n/a* | 1 | 1 | 1 | 1 | 1 |
+
+The compound variable is not new evidence: it is in `grammar/commands.md`'s
+array-literal table and in the "recorded rather than reproduced" list above.
 
 The declared row is spelled `a=()` for bash and zsh and `set -A a` for
 ksh93, and the difference is the whole reason this axis is named for

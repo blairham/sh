@@ -4173,6 +4173,31 @@ echo "st=$?"`,
 		Why:     "the conditional operators test what the inner expansion came to rather than whether some name is set, which is the whole reason the idiom exists: `${${0:#$ZSH_ARGZERO}:-${(%):-%N}}`, out of a plugin manager on this machine, is a default over the *result* of a pattern exclusion. An empty inner fires the colon test and a set one does not",
 	},
 	{
+		ID: "param/a-subscript-on-a-nested-expansions-result", Category: "parameter expansion",
+		Snippet: `a=(x y z); echo "[${${a[@]}[2]}][${${a[@]}[-1]}][${${a[@]}[(I)y]}][${${a[@]}[(r)y]}]"`,
+		Why:     "a subscript applied to what a nested expansion came to, which is the construct `add-zsh-hook` is written on: its line 84 is `(( ${${(P)hook}[(I)$fn]} == 0 ))`, and while the subscript was refused the arithmetic was left with an empty operand, the function printed its usage, and a real session exited without a prompt. Four readings in one row because they are one construct and not four — a subscript, a negative one, a search for an index and a search for an element — and none of them is new on its own: `${a[(I)y]}` on a *name* already answered 2 here. The other five shells have no expansion in the name position at all, so the row records the grammar's absence beside its readings",
+	},
+	{
+		ID: "param/the-index-of-no-match-in-a-nested-expansion-is-zero", Category: "parameter expansion",
+		Snippet: `a=(x y z); echo "[$(( ${${a[@]}[(I)zz]} == 0 ))][$(( ${${a[@]}[(I)y]} == 0 ))][$(( ${${a[@]}[(i)zz]} ))]"`,
+		Why:     "the trap this construct sets, recorded as arithmetic rather than as text: a search that matched nothing answers *zero*, and the idiom that reads it does `(( … == 0 ))`. An implementation answering empty instead satisfies a text comparison in some spellings and still leaves the caller with `operand expected`, so the row asks the arithmetic the caller asks. The third bracket is the other end — `(i)` with no match is one *past* the last element, which is what makes `a[(i)new]=v` an append",
+	},
+	{
+		ID: "param/a-nested-parameter-reference-is-a-name", Category: "parameter expansion",
+		Snippet: `a=("" y); g=a; typeset -A m 2>/dev/null; m=(k v); h=m; echo "[${${(P)g}[1]}][${${a}[1]}][${${(P)h}[k]}][${${m}[k]}]"`,
+		Why:     "`${(P)h}` reads its value as a further *name*, so a subscript after it reads that parameter rather than the fields it would expand to — and a parameter is more than its fields. Both halves are in the row twice over, once each way: the reference finds the empty first element where the same array's *fields* have dropped it and answer `y`, and it finds the value under a key where the fields of an association are its values and a key is no position in them. So the two brackets that differ are the whole content, and an implementation that expanded the reference to fields first would answer `y` and nothing at status 0",
+	},
+	{
+		ID: "param/a-subscript-on-a-nested-result-tells-a-list-from-a-string", Category: "parameter expansion",
+		Snippet: `v=abc; a=(hello); b=(aa bb); echo "[${${v}[2]}][${${(f)v}[2]}][${${a[@]}[2]}][${${(j.,.)b}[3]}][${${#b[@]}[1]}]"`,
+		Why:     "the one question the construct adds, and the field count does not answer it: a list holding one element and a string are both one field, and a subscript counts elements in the first and characters in the second. Five spellings that all come to one field and do not agree — a string, a split that found nothing to split, a one-element list, a join, and a count — so an implementation reading the shape off the count gets three of them wrong at status 0 with a plausible character in hand",
+	},
+	{
+		ID: "param/quoting-reaches-a-nested-inner", Category: "parameter expansion",
+		Snippet: `a=(p q r); IFS=-; echo "[${${a}[2]}][${${a[@]}[2]}][${${a}#p}]"`,
+		Why:     "the quotes around a nested expansion reach the *inner*, and they decide whether a result that is a list still has fields for a subscript to count: quoted, a bare array name joins exactly as `\"$a\"` does and the subscript then counts characters of the join, while `[@]` keeps its fields inside quotes exactly as it does outside them. `IFS=-` is what makes the difference legible — the join is on IFS and not on a hard space, so the first bracket is a separator rather than an invisible blank — and the third is the same rule with an operator instead of a subscript, which is the shape a plugin manager writes. An implementation expanding the inner unquoted answers `q` for the first and a two-field list for the third, both at status 0",
+	},
+	{
 		ID: "expansion/element-exclusion-by-pattern", Category: "expansion",
 		Snippet: `a=(one two three); printf "[%s]" "${(@)a:#t*}"; echo`,
 		Why:     "`:#` drops the elements a pattern matches, which is one shell's alone: to bash the characters after the colon are an offset and `#t*` is arithmetic it refuses, and ksh93 refuses the flag group before it gets that far. The shape a startup file on this machine uses to take a hook out of a list, and the one that produced `operand expected at ``#fig_precmd''` here",

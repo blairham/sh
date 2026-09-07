@@ -2193,21 +2193,109 @@ spelling does not, which is measured rather than assumed — ``${`echo x`#a}``
 is a bad substitution in zsh, so the two spellings of command
 substitution part company exactly here.
 
+### A subscript on the result — and on the name a `(P)` names
+
+    a=(x y z)
+    ${${a[@]}[2]}        →  y        the element, counted from the base
+    ${${a[@]}[-1]}       →  z
+    ${${a[@]}[(I)y]}     →  2        the index the search found
+    ${${a[@]}[(I)zz]}    →  0        and one before the base for no match
+    ${${a[@]}[(i)zz]}    →  4        one past the end, the append position
+    v=abc; ${${v}[2]}    →  b        a string is read by character
+
+Both halves of that were already built — the subscript with its flag
+group, and the nesting — and what was missing was applying the one to the
+result of the other. It is not a corner: `add-zsh-hook` line 84 is
+
+    if (( ${${(P)hook}[(I)$fn]} == 0 )); then
+
+which is how essentially every zsh plugin installs a `precmd` or a
+`preexec`, and the refusal left that arithmetic with an empty operand, so
+the function printed its usage and gave up and a real session exited
+without drawing a prompt (#1381). **`0` and empty are not
+interchangeable there**, which is why the index of no match is recorded
+above as an arithmetic value rather than as text.
+
+**`${(P)h}` is a name, and every other inner is a value.** The split is
+measured, and the reference reading is the one that carries a parameter's
+own shape through:
+
+    typeset -A m=(k v); h=m
+    ${${(P)h}[k]}        →  v        a key, which no field position is
+    a=('' y); h=a
+    ${${(P)h}[1]}        →  ``       the empty element is there …
+    ${${a}[1]}           →  y        … where the *fields* have dropped it
+    a=(hello); h=a
+    ${${(P)h}[2]}        →  ``       a list of one is still a list
+    ${"${(P)h}"[2]}      →  y        for `a=(x y)`: quoting does not undo it
+
+So a subscript after a `(P)` reads the parameter the value names, exactly
+as if the name had been written out. Only when the group is exactly
+`(P)`: another letter beside it transforms the value, and a transformed
+value names nothing.
+
+Everywhere else the subscript reads what the inner **came to**, and the
+one question that adds is whether that result is a *list*, where the
+subscript counts elements, or one *string*, where it counts characters.
+The field count does not answer it — a list of one element and a string
+are both one field — so the shape is the inner expansion's. Measured
+with `[2]` against a result of one field:
+
+    a=(hello);   ${${a[@]}[2]}      →  ``   a one-element list
+    x=abc;       ${${(f)x}[2]}      →  b    a split that found nothing to
+                                            split leaves a string
+    a=(aa bb);   ${${(j.,.)a}[2]}   →  a    and a join leaves one too
+    a=(hello);   ${${(U)a}[2]}      →  ``   a flag doing neither keeps the
+                                            list it was given
+    a=(x y z);   ${${a:+abc}[2]}    →  b    a substituted word is its own
+                                            value, and this one is a string
+    a=(hello);   ${${x:+$a}[2]}     →  ``   while this one is a list
+    a=(x y z);   ${${#a[@]}[1]}     →  3    a count is a string
+    s=hello;     ${${(A)s}[2]}      →  ``   and `(A)` says outright that
+                                            what it made is an array
+
+A missing element leaves the expansion **unset** rather than empty:
+`${${a[@]}[9]-none}` is `none`.
+
+**Quoting reaches the inner**, and it is what decides whether a result that
+is a list still has fields to count. Measured with `a=(p q r)`:
+
+    "${${a}[2]}"        →  ` `      the bare name joins, as `"$a"` does
+    IFS=-; "${${a}[2]}" →  `-`      and the join is on IFS, not a space
+    "${${a[@]}[2]}"     →  q        `[@]` keeps its fields in quotes
+    "${${*}[2]}"        →  ` `      while `$*` joins and `$@` does not
+    "${${(@)a}[2]}"     →  q        and so does the `(@)` flag
+    a=(one two); "${${a}#o}" → `ne two`
+
+That is one predicate — `@`, an `[@]` subscript, `(@)` — and it is the same
+one the rest of the expansion machinery follows for `"$@"` against `"$*"`.
+The last line is the same rule without a subscript: a quoted inner that
+joins is a *value*, so the operator applies to it once, which is why only
+the **unquoted** list shape is refused below.
+
 ### What is read and not implemented
 
-Two shapes are recognized and refused **by name**, because answering them
-approximately is the failure this document exists to prevent:
+Three shapes are recognized and refused **by name**, because answering
+them approximately is the failure this document exists to prevent:
 
-    ${${a[@]}}     an inner that comes to a list
-    ${${v}[2]}     a subscript on the result
+    ${${a[@]}}          an unquoted inner that comes to a list
+    ${${a[@]}[@]}       a subscript that comes to one
+    ${$(cmd)[2]}        a subscript on a command substitution
 
 In zsh the first keeps its fields and the outer operator applies to each
 of them — `${${a}#o}` on `(one two)` is `ne` and `two` — and the second
-indexes the string the inner came to. Joining the first would answer with
-one plausible field, and dropping the second would answer with the
-unindexed value; both would be silent. `a nested expansion of a list is
-not implemented` and `a subscript on a nested expansion is not
-implemented` are what they say instead.
+is a list for the same reason. Joining either would answer with one
+plausible field and say nothing, so both say `a nested expansion of a
+list is not implemented`.
+
+The third is refused for a reason that is recorded rather than guessed
+at. An unquoted command substitution is a **list** in that position even
+when it comes to one word — `${$(echo abc)[2]}` is empty where a string
+would have answered `b`, and `${$((6*7))[1]}` is `42` where a string
+would have answered `4` — and this tree does not field-split an unquoted
+substitution in the name position yet (#976), so the fields a subscript
+would count are not the shell's. Its quoted spelling is refused with it,
+since the same gap decides what `${"$(cmd)"[2]}` came to.
 
 ## Dialect flags
 

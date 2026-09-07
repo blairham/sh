@@ -45,11 +45,57 @@ func TestNestedExpansionsAreThisDialects(t *testing.T) {
 			`v=abc; printf "[%s]" "${(U)${(L)v}}"`,
 			"[ABC]",
 		},
+		{
+			// A subscript on the result, which is the same construct one
+			// bracket further on. The preset is what pairs the nesting with
+			// a subscript that may carry a flag group; either flag alone
+			// leaves this a bad substitution.
+			"a subscript on the result of an expansion",
+			`a=(x y z); h=a; printf "[%s]" "${${(P)h}[2]}"`,
+			"[y]",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if out, _ := runZsh(t, t.TempDir(), tc.src); out != tc.want {
 				t.Errorf("got %q, want %q", out, tc.want)
 			}
 		})
+	}
+}
+
+// The line a hook installer actually writes, in the dialect that has to run
+// it.
+//
+// `add-zsh-hook` asks `(( ${${(P)hook}[(I)$fn]} == 0 ))` before adding a
+// function to a hook array, and every plugin that installs a `precmd` or a
+// `preexec` goes through it. Until the subscript on a nested expansion
+// landed, that expansion was refused, the arithmetic was left with an empty
+// operand, the function printed its usage and gave up — and in a real
+// session the scheduler that follows it failed and the shell exited without
+// drawing a prompt (#1381).
+//
+// Asserted through the arithmetic rather than through the expansion's text,
+// because that is where the caller breaks: an implementation answering
+// *empty* for a search that found nothing satisfies a text comparison in
+// some spellings and still leaves `(( … == 0 ))` a bad math expression.
+func TestTheHookInstallerIdiomRuns(t *testing.T) {
+	const src = `typeset -ga precmd_functions
+precmd_functions=(other_hook)
+add_one() {
+  local hook=$1 fn=$2
+  if (( ${${(P)hook}[(I)$fn]} == 0 )); then
+    eval "${hook}+=( $fn )"
+    print -r -- "added $fn"
+  else
+    print -r -- "already there: $fn"
+  fi
+}
+add_one precmd_functions mine
+add_one precmd_functions mine
+print -r -- "hooks=${precmd_functions[*]}"`
+	out, st := runZsh(t, t.TempDir(), src)
+	want := "added mine\nalready there: mine\nhooks=other_hook mine\n"
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
 	}
 }

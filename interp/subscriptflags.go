@@ -52,20 +52,16 @@ const searchSubscriptFlags = "rRiI"
 // flaggedSubscript answers a subscript that carries a flag group, reporting
 // whether it answered at all.
 func (r *Runner) flaggedSubscript(e *syntax.ParamExpr) ([]string, bool) {
-	g := e.IndexFlags
-	for _, c := range g.Flags {
-		if !strings.ContainsRune(implementedSubscriptFlags, c) {
-			r.refuseSubscriptFlag(e, string(c), "")
-			return nil, true
-		}
+	search, ok := r.subscriptSearch(e)
+	if !ok {
+		return nil, true
 	}
-	search := lastOf(g.Flags, searchSubscriptFlags)
 	if search == 0 {
 		// Nothing to select by, so the operand is an ordinary subscript.
 		return nil, false
 	}
 	if a, isAssoc := r.assocFor(e.Name); isAssoc {
-		return r.searchAssoc(e, a, g, search), true
+		return r.searchAssoc(e, a, e.IndexFlags, search), true
 	}
 	elems, scalar, held := r.subscriptTarget(e)
 	if !held {
@@ -74,6 +70,32 @@ func (r *Runner) flaggedSubscript(e *syntax.ParamExpr) ([]string, bool) {
 		// one-past-the-end an *empty* array answers with.
 		return nil, true
 	}
+	return r.searchSubscript(e, search, subscriptSource{name: e.Name, elems: elems, scalar: scalar})
+}
+
+// subscriptSearch reads the flag group and says which letter selects, having
+// refused by name any letter this does not carry.
+//
+// A zero letter with ok is a group that says only how a search it never asked
+// for would have run — `${a[(e)2]}` is the second element — and its caller
+// falls back to the ordinary reading.
+func (r *Runner) subscriptSearch(e *syntax.ParamExpr) (search byte, ok bool) {
+	g := e.IndexFlags
+	for _, c := range g.Flags {
+		if !strings.ContainsRune(implementedSubscriptFlags, c) {
+			r.refuseSubscriptFlag(e, string(c), "")
+			return 0, false
+		}
+	}
+	return lastOf(g.Flags, searchSubscriptFlags), true
+}
+
+// searchSubscript answers a search subscript against values already in hand,
+// so that a name's elements and an expansion's result are searched by the
+// same code. See subscriptSource.
+func (r *Runner) searchSubscript(e *syntax.ParamExpr, search byte, src subscriptSource) ([]string, bool) {
+	g := e.IndexFlags
+	elems, scalar := src.elems, src.scalar
 	if scalar {
 		// A search over a plain string is a search for a *substring*, and
 		// what comes back is a character position rather than an element:

@@ -887,12 +887,42 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if !ok {
 		return nil, true
 	}
+	return r.subscriptOver(e, subscriptSource{name: e.Name, elems: elems, scalar: scalar})
+}
+
+// subscriptSource is what a subscript reaches into: the values it counts
+// through, and whether those are one string read as characters rather than a
+// list of elements.
+//
+// It exists because a subscript is written on two different things. A
+// *parameter* supplies one, and so does the result of an expansion —
+// `${${(f)x}[2]}` counts through fields that no name holds. Everything below
+// this line asks about the values rather than about where they came from,
+// which is why the name is carried here rather than read off the node again:
+// it is empty for an expansion's result, and the one thing that reads it —
+// elemAt — is asking whether a *stored* sparse array compacted a gap out of
+// the elements, which an expansion's result has none of.
+type subscriptSource struct {
+	name   string
+	elems  []string
+	scalar bool
+}
+
+// subscriptOver answers a subscript against values already in hand.
+//
+// Every reading below is the source's rather than a name's, so the same code
+// answers `${a[2]}` and the subscript on a nested expansion's result. The
+// scalar flag is what the character reading needs, and it says nothing about
+// how many values there are: an array holding one element is not a scalar,
+// and reading it as characters would be wrong however short it is.
+func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]string, bool) {
+	elems, scalar := src.elems, src.scalar
 	idx := r.subscriptText(e.Subscript())
 	if r.wholeArrayIndex(e) {
 		return elems, true
 	}
 	if lo, hi, isRange := splitSubscriptRange(idx); isRange {
-		return r.rangeSubscript(e, elems, scalar, idx, lo, hi)
+		return r.rangeSubscript(src, idx, lo, hi)
 	}
 	if at, extra := topLevelComma(idx); at >= 0 && extra &&
 		r.sem().SubscriptCommaIsARange == Yes {
@@ -923,7 +953,7 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 		}
 		return nil, true
 	}
-	if v, ok := r.elemAt(e.Name, elems, n); ok {
+	if v, ok := r.elemAt(src.name, elems, n); ok {
 		return []string{v}, true
 	}
 	return nil, true
@@ -1032,13 +1062,13 @@ func topLevelComma(idx string) (at int, extra bool) {
 // only when they disagree — `${a[2,2]}` is the second element whether the
 // comma separates a range or joins two expressions, so it needs no answer, and
 // neither does a pair either reading refuses.
-func (r *Runner) rangeSubscript(e *syntax.ParamExpr, elems []string, scalar bool, idx, lo, hi string) ([]string, bool) {
-	span, spanOK := r.rangeElems(elems, scalar, lo, hi)
+func (r *Runner) rangeSubscript(src subscriptSource, idx, lo, hi string) ([]string, bool) {
+	span, spanOK := r.rangeElems(src.elems, src.scalar, lo, hi)
 	whole, wholeErr := r.subscriptValue(idx)
 	var one []string
 	oneOK := wholeErr == nil
 	if oneOK {
-		if v, found := r.elemAt(e.Name, elems, whole); found {
+		if v, found := r.elemAt(src.name, src.elems, whole); found {
 			one = []string{v}
 		}
 	}

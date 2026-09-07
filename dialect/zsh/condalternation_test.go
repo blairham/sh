@@ -118,3 +118,82 @@ func TestAGroupIsRefusedWhereNoPatternIsRead(t *testing.T) {
 		}
 	}
 }
+
+// A numeric range inside a group that *starts* a pattern, end to end through
+// this dialect. It is the version gate every powerlevel10k config opens with,
+// and none of that configuration ever loaded because the line would not parse
+// (#1217).
+//
+// Behavioral rather than a parse check, because parsing is not the promise:
+// the group is passed to the matcher as text, so a scanner that took the
+// right bytes and handed on the wrong ones would parse perfectly and match
+// the wrong subject. The `miss` rows are what make that visible.
+func TestANumericRangeMayStartAPatternGroup(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		// The gate itself, on both sides of every bound.
+		{`k=5.9; [[ $k == (5.<1->*|<6->.*) ]] && echo hit || echo miss`, "hit"},
+		{`k=6.1; [[ $k == (5.<1->*|<6->.*) ]] && echo hit || echo miss`, "hit"},
+		{`k=4.3; [[ $k == (5.<1->*|<6->.*) ]] && echo hit || echo miss`, "miss"},
+		{`k=5.0; [[ $k == (5.<1->*|<6->.*) ]] && echo hit || echo miss`, "miss"},
+		// All four spellings of the range, each with the subject that says
+		// the *bounds* were read and not merely the shape.
+		{`k=6; [[ $k == (<->) ]] && echo hit || echo miss`, "hit"},
+		{`k=x; [[ $k == (<->) ]] && echo hit || echo miss`, "miss"},
+		{`k=5; [[ $k == (<1-9>) ]] && echo hit || echo miss`, "hit"},
+		{`k=10; [[ $k == (<1-9>) ]] && echo hit || echo miss`, "miss"},
+		{`k=7; [[ $k == (<6->) ]] && echo hit || echo miss`, "hit"},
+		{`k=5; [[ $k == (<6->) ]] && echo hit || echo miss`, "miss"},
+		{`k=4; [[ $k == (<-9>) ]] && echo hit || echo miss`, "hit"},
+		{`k=40; [[ $k == (<-9>) ]] && echo hit || echo miss`, "miss"},
+		// A group nested inside the leading one: the outer group is what the
+		// word-leading scanner reads, so it has to carry the inner `<`.
+		{`k=x6; [[ $k == (x(<6->)) ]] && echo hit || echo miss`, "hit"},
+		{`k=x5; [[ $k == (x(<6->)) ]] && echo hit || echo miss`, "miss"},
+		{`k=6; [[ $k == ((<6->)|x) ]] && echo hit || echo miss`, "hit"},
+		{`k=y; [[ $k == ((<6->)|x) ]] && echo hit || echo miss`, "miss"},
+		// The same scanner from a `case` arm, whose own paren makes the
+		// group's `((`.
+		{`case 6 in ((<6->)) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case 4 in ((<6->)) echo hit;; *) echo miss;; esac`, "miss"},
+		// Quoted it is four characters, which is the per-span rule a group
+		// and a `*` already have.
+		{`k=6; [[ $k == "(<6->)" ]] && echo hit || echo miss`, "miss"},
+		{`k="(<6->)"; [[ $k == "(<6->)" ]] && echo hit || echo miss`, "hit"},
+	} {
+		out, _ := answersRun(t, tc.src)
+		if got := strings.TrimSpace(out); got != tc.want {
+			t.Errorf("%s: said %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}
+
+// And the boundary, from the same end: admitting the range must not admit
+// every `<`. Each of these still fails to parse in this dialect, as it does
+// in zsh 5.9.2 — measured 2026-09-07, each in a script file of its own under
+// `env -i`.
+//
+// Asserted as a refusal through the dialect rather than as a message, because
+// the wording is #1111's business; what this pins is that the shape test is
+// the whole of the exception.
+func TestOnlyTheRangeShapeSurvivesALeadingGroup(t *testing.T) {
+	for _, src := range []string{
+		`k=x; [[ $k == (a<b) ]] && echo hit || echo miss`,
+		`k=x; [[ $k == (a>b) ]] && echo hit || echo miss`,
+		`k=x; [[ $k == (a;b) ]] && echo hit || echo miss`,
+		`k=x; [[ $k == (a&b) ]] && echo hit || echo miss`,
+		`k=x; [[ $k == (<a-b>) ]] && echo hit || echo miss`,
+		`k=x; [[ $k == (<1-2-3>) ]] && echo hit || echo miss`,
+		`k=x; [[ $k == (<-->) ]] && echo hit || echo miss`,
+		`k=x; [[ $k == (<>) ]] && echo hit || echo miss`,
+		`k=x; [[ $k == (<1) ]] && echo hit || echo miss`,
+		// Each half of the shape, separately: `<1-2` is missing its `>`
+		// and `<12>` its `-`, and dropping either test from the scanner
+		// survived the suite until these two rows.
+		`k=x; [[ $k == (<1-2) ]] && echo hit || echo miss`,
+		`k=x; [[ $k == (<12>) ]] && echo hit || echo miss`,
+	} {
+		if !parseFails(t, src) {
+			t.Errorf("%s: parsed, where the `<` is not a range and ends the word", src)
+		}
+	}
+}

@@ -5155,6 +5155,21 @@ echo "st=$?"`,
 		Why:     "the exception to `a-group-is-one-word-whitespace-and-all`: the scanner takes a blank and stops at `;`, `<`, `>` or `&`, so the word ended at the `<` and the rest of the group was left with nowhere to go. Every column refuses it and the row is about *where* — the shell with bare groups blames the `<`, the three bashes blame the `(` they could not read as an operand, ksh93 blames the `(` as an operator and dash has no `[[ ]]` at all. It parsed here and matched until #1175, which is the guard this pins",
 	},
 	{
+		ID: "cond/a-numeric-range-may-start-a-pattern-group", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `k=5.9; [[ $k == (5.<1->*|<6->.*) ]] && echo hit || echo miss; k=6.1; [[ $k == (5.<1->*|<6->.*) ]] && echo hit || echo miss; k=4.3; [[ $k == (5.<1->*|<6->.*) ]] && echo hit || echo miss`,
+		Why:     "the version gate every powerlevel10k config opens with, and the whole of its configuration never loaded because of it. A range parses bare and a group parses without one; the range *inside* a group that starts the operand did not, because the scanner for a word-leading group stops at `;`, `<`, `>` and `&` and the range's `<` is none of those — it is pattern text. Eight of the twenty-two remaining parse failures in a real plugin tree were this one line (#1217)",
+	},
+	{
+		ID: "cond/a-leading-groups-numeric-range-has-four-shapes", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `k=6; [[ $k == (<->) ]] && echo bare || echo no; [[ $k == (<1-9>) ]] && echo both || echo no; [[ $k == (<6->) ]] && echo lower || echo no; [[ $k == (<-9>) ]] && echo upper || echo no; k=x6; [[ $k == (x(<6->)) ]] && echo nested || echo no`,
+		Why:     "all four spellings reach the range lexer from inside a leading group, and so does a group nested in one — the nested row is the sharp half, because the outer group is what the word-leading scanner reads and it has to carry the inner one's `<` through. Only the shell with bare pattern groups has ranges at all, so the other five refuse the `(` as they always did",
+	},
+	{
+		ID: "cond/a-leading-groups-range-shape-is-exact", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `k=x; [[ $k == (<a-b>) ]] && echo hit || echo miss; echo after`,
+		Why:     "the discriminating half of `a-numeric-range-may-start-a-pattern-group`: `<` digits `-` digits `>` is the entire disambiguation, so a `<` that is not one still ends the word exactly as `a-pattern-operands-group-ends-at-an-operator` records. Measured on zsh 5.9.2 — `(<a-b>)`, `(<1-2-3>)`, `(<-->)` and `(<1)` are all still parse errors there, so admitting the range must not admit them. Written with `<a-b>` because it is the shape a reader is most likely to assume works",
+	},
+	{
 		ID: "cond/a-regex-operands-group-keeps-its-operators", Category: "[[ ]] and (( ))",
 		Snippet: `k='a<b'; [[ $k =~ (a<b) ]]; echo "lt=$?"; k2='a;b'; [[ $k2 =~ (a;b) ]]; echo "semi=$?"; [[ ab =~ (a<b) ]]; echo "no=$?"`,
 		Why:     "and the operand that does *not* end there, which is the pair that makes the rule a rule about two constructs rather than about parentheses. A regular expression owns its `<` and its `;`: all four shells with `=~` match `a<b` and `a;b` against those groups and fail `ab` against the first, so the characters are regex text and not a redirection or a terminator. zsh is the dissenter and refuses the `<` while parsing, which is where its wording layer answers; dash has no `[[ ]]`. Written beside the pattern operand's row deliberately — the two differ in nothing a reader can see, and the shells still separate them (#1175)",
@@ -8066,6 +8081,16 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		ID: "pat/a-numeric-range-in-a-case-arm", Category: "pattern matching", SyntaxError: true,
 		Snippet: `case 42 in <->) echo num;; *) echo other;; esac; case abc in <->) echo num;; *) echo other;; esac`,
 		Why:     "the same pattern where a `case` arm stands, which is a different production from the condition's operand and had to be measured on its own — dash reports a word where it wanted `)` and the rest report the `<`",
+	},
+	{
+		ID: "pat/a-numeric-range-in-a-group-starting-a-case-arm", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case 6 in ((<6->)) echo up;; *) echo notup;; esac; case 4 in ((<6->)) echo up;; *) echo notup;; esac; case 6 in ((6|7)) echo alt;; *) echo noalt;; esac`,
+		Why:     "the same word-leading group scanner reached from a `case` arm rather than from a condition, which is what says the gap was the scanner's and not `[[ ]]`'s. The arm has a paren of its own, so a group that starts the pattern is written `((` — the shape #1161 already had to keep away from the arithmetic command — and the third arm is the control that had always worked",
+	},
+	{
+		ID: "pat/a-numeric-range-in-a-group-starting-an-argument", Category: "pattern matching", SyntaxError: true,
+		Snippet: `touch v5 v6 va; echo v<5-6>; echo v(<5-6>); echo after`,
+		Why:     "the third route into the same scanner, and the one whose answer is not a match: where a group *starts* a word in argument position the shell with bare groups reads its parentheses as glob qualifiers instead, so `v(<5-6>)` is `unknown file attribute` rather than a pattern — while the bare range beside it expands. Recorded because the fix for #1217 has to reach that reading rather than turn it into a parse error, and a silent expansion there would be the wrong answer at status 0",
 	},
 	{
 		ID: "pat/a-numeric-range-against-the-filesystem", Category: "pattern matching", SyntaxError: true,

@@ -6345,6 +6345,21 @@ echo "st=$?"`,
 		Why:     "the other half of `(A)`, and the half it exists for: with an assignment operator it makes the assigned name an *array*, so the one word `x y` is substituted and the name is left holding one element rather than a scalar. Recorded as the measurement a refusal would need to become an answer — this implementation refuses the assignment by name and carries the value-side half above",
 	},
 	{
+		ID: "param/the-print-flag-reads-a-separators-escapes", Category: "parameter expansion",
+		Snippet: `a=(x y); printf "[%s]" "${(pj:\t:)a}" "${(j:\t:)a}"; echo`,
+		Why:     "`(p)` is a modifier and not a transformation: it makes the *argument* of a flag behind it take `print`-style escapes, so the pair here is one join separator read two ways — a real tab and the two characters. Written as a pair because a recorded value would pass for an implementation that ignored the letter, which is exactly the shape a `(p)` read as a no-op has: a plausible answer at status 0",
+	},
+	{
+		ID: "param/the-print-flag-must-precede-what-it-reads", Category: "parameter expansion",
+		Snippet: `a=(x y); printf "[%s]" "${(pj:\t:)a}" "${(j:\t:p)a}"; echo`,
+		Why:     "the order is the rule and not a convention — a `p` written *behind* the flag it would modify modifies nothing, so the second half of this pair is the unescaped two characters. The row a reading that merely looked for the letter anywhere in the group would fail",
+	},
+	{
+		ID: "param/the-print-flag-substitutes-a-sole-parameter", Category: "parameter expansion",
+		Snippet: `s=-; a=(x y); printf "[%s]" "${(pj:$s:)a}" "${(pj:A$s:)a}" "${(j:$s:)a}"; echo`,
+		Why:     "the flag's other half, and how narrow it is: an argument that is *exactly* `$name` is substituted, one with a character in front of it is not, and without the flag neither is. Three readings of the same two characters in one row, because the middle one is what a reading that expanded the argument would get wrong while passing the first",
+	},
+	{
 		ID: "param/expansion-flags-run-after-the-operator", Category: "parameter expansion",
 		Snippet: `x=hello; printf "[%s]" "${(U)x#h}" "${(U)nope:-def}"; y=val; z=y; printf "<%s>" "${(P)z:-def}"; echo`,
 		Why:     "the operator runs first and the flags transform what it produced — ${(U)x#h} is ELLO, not a trim of HELLO — with (P) the exception, resolving the name before the default can fire",

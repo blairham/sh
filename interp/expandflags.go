@@ -100,7 +100,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 		return nil, false, false
 	}
 	for _, c := range e.Flags {
-		if !strings.ContainsRune(implementedParamFlags, c) {
+		if !r.paramFlagCarried(c) {
 			r.diagf("${%s}: the (%c) expansion flag is not implemented\n", e.Src, c)
 			r.expandErr = true
 			return nil, false, false
@@ -218,7 +218,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 				split = append(split, r.splitFieldsAsking(w, nil, ifs, set, quoted)...)
 				continue
 			}
-			split = append(split, splitFlagged(w, e)...)
+			split = append(split, r.splitFlagged(w, e)...)
 		}
 		words, isList = split, true
 	}
@@ -287,17 +287,132 @@ func (r *Runner) flagKeepsFields(e *syntax.ParamExpr) bool {
 // the first character of IFS — a space by default — when not.
 func (r *Runner) flagJoinSep(e *syntax.ParamExpr) string {
 	if strings.ContainsRune(e.Flags, 'j') {
-		return e.JoinSep
+		return r.flagArgument(e, 'j', e.JoinSep)
 	}
 	return ifsFirst(r.ifs())
 }
 
+// SetFlagArgumentEscapes installs the escape set the `(p)` expansion flag
+// reads a following flag's argument with, so `${(pj:\n:)a}` joins on a real
+// newline.
+//
+// A function the dialect supplies rather than a table here, because "the
+// escapes" is not one answer even inside one shell: the same shell's `echo`
+// keeps the backslash on a letter it does not know and needs `\0` in front of
+// an octal number, where its `print` drops the backslash and takes `\101`. A
+// flag argument is read with the second of those, measured — and with one
+// documented exception, which the decoder handed here has to carry: `\c` ends
+// `print`'s output and is an ordinary unknown escape in a flag argument, so
+// `${(pj:A\cB:)a}` joins on `AcB`.
+//
+// Nil is the runner nobody told, and there `(p)` is refused by name. That is
+// deliberate: a `(p)` read as a no-op joins on a backslash and an `n` at
+// status 0, which is the plausible-answer failure this codebase minds most.
+func (r *Runner) SetFlagArgumentEscapes(decode func(string) string) {
+	r.flagArgEscapes = decode
+}
+
+// paramFlagCarried reports whether this runner carries a flag letter.
+//
+// All but one are answered by the constant above. `p` is answered by whether
+// the dialect supplied the escape set its arguments are read with, because
+// that set is a measurement about one shell and this package holds nobody's —
+// so a runner nobody told refuses the letter by name instead of reading it as
+// a no-op that joins on a backslash and an `n` at status 0.
+func (r *Runner) paramFlagCarried(c rune) bool {
+	if c == 'p' {
+		return r.flagArgEscapes != nil
+	}
+	return strings.ContainsRune(implementedParamFlags, c)
+}
+
+// flagArgument is what an argument-taking flag's argument comes to: the text
+// as written, unless a `p` was written *in front of that flag*, which is the
+// whole of what the `(p)` flag does.
+//
+// Two readings, and they are alternatives rather than steps. Measured
+// 2026-09-07 on zsh 5.9.2, the only shell in the panel with the flag, with
+// `a=(x y)`:
+//
+//	s=-;     ${(pj:$s:)a}    x-y       an argument that is one `$name`
+//	s='\n';  ${(pj:$s:)a}    x\ny      and the value is *not* then escaped
+//	         ${(pj:\n:)a}     x<LF>y    an argument with an escape in it
+//	         ${(pj:\$s:)a}    x$sy      which is why the name is read raw
+//	         ${(pj:$s\t:)a}   x$s<TAB>  and why one `$name` means the whole
+//	         ${(j:\n:)a}      x\ny      no `p`: neither reading runs
+//	         ${(j:$s:p)a}     x$sy      and `p` behind the flag is neither
+//
+// The fourth row is what fixes the order: `\$s` decodes to `$s`, so a reading
+// that escaped first and looked for a name second would substitute there, and
+// the shell does not. The second says the substituted value is handed over
+// verbatim. So: one `$name` that is set, else the escapes, never both.
+//
+// The name may be a variable, an array — whose elements arrive joined — or a
+// positional. Anything else stays as written, `$#` and `$@` and a bare `$`
+// included, and so does a name that is not set: measured, `${(pj:$nosuch:)a}`
+// joins on the five characters `$nosuch`.
+func (r *Runner) flagArgument(e *syntax.ParamExpr, flag rune, raw string) string {
+	if !precededByPrintFlag(e.Flags, flag) {
+		return raw
+	}
+	if name, ok := soleParameterReference(raw); ok {
+		if isPositional(name) {
+			// A positional is always substituted, out of range included,
+			// where a *name* has to be set. Measured with `set -- P Q`:
+			// `${(pj:$2:)a}` joins on `Q`, `${(pj:$9:)a}` joins on nothing
+			// at all, and `${(pj:$nosuch:)a}` joins on the seven characters
+			// `$nosuch`. `$0` is a positional here and answers with the
+			// script's own name.
+			v, _ := r.specialParam(&syntax.ParamExpr{Name: name})
+			return v
+		}
+		if v, set := r.getVar(name); set {
+			return v
+		}
+	}
+	return r.flagArgEscapes(raw)
+}
+
+// precededByPrintFlag reports whether a `p` was written before this flag in
+// the group. The order is the rule and not a convenience: measured,
+// `${(pj:\n:)a}` joins on a newline and `${(j:\n:p)a}` on a backslash and an
+// `n`, so a `p` behind the flag it would modify modifies nothing.
+func precededByPrintFlag(flags string, flag rune) bool {
+	for _, c := range flags {
+		if c == flag {
+			return false
+		}
+		if c == 'p' {
+			return true
+		}
+	}
+	return false
+}
+
+// soleParameterReference reports the name in an argument that is exactly
+// `$name`, and false for anything else.
+//
+// Exactly: `$s` is the name and `A$s`, `$sA`, `$s $s`, `$s\t`, `${s}`, `$M[k]`,
+// `$(echo -)` and a bare `$` are all not — every one of them measured left as
+// written. So this is a narrow reading on purpose, and widening it to
+// "expand the argument" would substitute in six places the shell does not.
+func soleParameterReference(arg string) (string, bool) {
+	name, ok := strings.CutPrefix(arg, "$")
+	if !ok || name == "" {
+		return "", false
+	}
+	if !isNameLike(name) && !isPositional(name) {
+		return "", false
+	}
+	return name, true
+}
+
 // splitFlagged splits one word the way the group asked: `f` at newlines, `s`
 // at its separator, and an empty separator into characters.
-func splitFlagged(w string, e *syntax.ParamExpr) []string {
+func (r *Runner) splitFlagged(w string, e *syntax.ParamExpr) []string {
 	sep := "\n"
 	if strings.ContainsRune(e.Flags, 's') {
-		sep = e.SplitSep
+		sep = r.flagArgument(e, 's', e.SplitSep)
 	}
 	if sep == "" {
 		if w == "" {

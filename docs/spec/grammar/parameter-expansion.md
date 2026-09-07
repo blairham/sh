@@ -793,6 +793,7 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(c)` | with `${#…}`: characters, joined | `a=(abc de f); ${(c)#a}` | `8` |
 | `(w)` | with `${#…}`: words | `v="a b  c"; ${(w)#v}` | `3` |
 | `(W)` | with `${#…}`: words, empties too | `v="a b  c"; ${(W)#v}` | `4` |
+| `(p)` | read the next flags' arguments with escapes | `a=(x y); ${(pj:\n:)a}` | `x`, newline, `y` |
 
 Details, each measured:
 
@@ -1079,6 +1080,95 @@ quietly did something, as long as somebody had written down what it did.
 `(a)` and `(A)` differ only in case and mean unrelated things — one
 orders a list by its index — which is why they are described apart.
 
+### `(p)` is a modifier, and it modifies the flags behind it
+
+`(p)` produces nothing of its own. It changes how the flags **after** it
+read their arguments, which is the whole of what it does — so it is
+listed with the flags and behaves like an option on them.
+
+Measured 2026-09-07 on zsh 5.9.2 with `a=(x y)`:
+
+| written | result | why |
+| --- | --- | --- |
+| `${(j:\n:)a}` | `x\ny` | no `p`: the argument is a backslash and an `n` |
+| `${(pj:\n:)a}` | `x`, newline, `y` | the escape is read |
+| `${(j:\n:p)a}` | `x\ny` | a `p` **behind** the flag modifies nothing |
+| `${(ppj:\n:)a}` | `x`, newline, `y` | doubling adds nothing; it is not parity |
+| `${(p)v}` | the value | `p` with no argument-taking flag is a no-op |
+| `${(pj:$s:s:$s:)a}` | two fields | it reaches every such flag after it |
+
+**The escape set is `print`'s, not `echo`'s.** The two differ inside one
+shell, and the difference is measurable here:
+
+| written | result |
+| --- | --- |
+| `${(pj:\101:)a}` | `xAy` — octal with no leading zero, up to three digits |
+| `${(pj:\0101:)a}` | `x`, `\010`, `1`, `y` — so three digits is the limit |
+| `${(pj:\x41:)a}` | `xAy` |
+| `${(pj:\u0041:)a}` | `xAy` |
+| `${(pj:\M-a:)a}` | the high bit set on `a` |
+| `${(pj:\C-a:)a}` | `\001` |
+| `${(pj:\M-\C-a:)a}` | `\201` — the pair applied in turn |
+| `${(pj:\q:)a}` | `xqy` — an escape it does not know loses its backslash |
+| `${(pj:x\:)a}` | `xx\y` — a trailing backslash is a backslash |
+
+with **one exception, and it is the one `print` is asked about most**:
+
+| written | `print` | a flag argument |
+| --- | --- | --- |
+| `A\cB` | `A` — the rest of the output is dropped | `AcB` — an unknown escape |
+| `\\c` | `\c` | `\c` |
+
+So `\c` is the only place the two readings part, and this implementation
+takes the one decoder and tells it which of the two it is rather than
+keeping a second copy of forty escapes to hold the difference.
+
+### And `(p)` substitutes an argument that is exactly `$name`
+
+The second half of the flag, and it is narrow. Measured, with `s=-`:
+
+| written | result |
+| --- | --- |
+| `${(pj:$s:)a}` | `x-y` |
+| `${(j:$s:)a}` | `x$sy` — without `p`, nothing is substituted |
+| `${(pj:A$s:)a}` | `xA$sy` — not the whole argument, so not substituted |
+| `${(pj:$sA:)a}` | `x$sAy` |
+| `${(pj:$s $s:)a}` | `x$s $sy` |
+| `${(pj:$s\t:)a}` | `x$s`, tab, `y` — the escape is read, the name is not |
+| `${(pj:\$s:)a}` | `x$sy` — which fixes the *order* |
+| `${(pj:${s}:)a}` | `x${s}y` — no braces |
+| `${(pj:$M[k]:)a}` | `x$M[k]y` — no subscript |
+| `${(pj:$(echo -):)a}` | as written — no command substitution |
+| `${(pj:~:)a}` | `x~y` — no tilde |
+| `${(pj:$nosuch:)a}` | `x$nosuchy` — an unset **name** stays as written |
+| `${(pj:$:)a}`, `${(pj:$#:)a}`, `${(pj:$@:)a}` | as written |
+
+The `\$s` row is what settles the order: it decodes to `$s`, so a reading
+that ran the escapes first and looked for a name second would substitute
+there and the shell does not. So the two halves are **alternatives**: one
+`$name` that resolves, else the escapes, never both — which the value
+confirms from the other side, since `s='\n'; ${(pj:$s:)a}` is `x\ny` and
+the substituted value is handed over unread.
+
+A positional is the one parameter substituted whether or not it is there.
+With `set -- P Q`: `${(pj:$2:)a}` joins on `Q`, `${(pj:$9:)a}` joins on
+nothing at all, and `$0` answers with the script's name — where the unset
+*name* two rows above stays as the seven characters it was written with.
+
+### Where `(p)` cannot be carried yet
+
+`(l)` and `(r)`, the padding pair, take arguments `(p)` would reach and
+are not built, so `${(pl:5::\0:)v}` is refused for the `l` rather than
+answered. The refusal fires on the letter that is missing, which is the
+honest report: the padding is what is absent, not the escapes.
+
+`(z)` is refused at the same two sites `(p)` was — the grammar reads the
+whole flag alphabet, and the interpreter refuses a letter it does not
+carry when the expansion is reached — and that is the whole of what they
+share. `(p)` reads *arguments*; `(z)` splits a *value* the way the shell
+reads a line, and needs the lexical decision recorded under "What this
+implementation refuses" below. Building one does not move the other.
+
 ### What this implementation refuses
 
 Flags zsh has and this slice does not — `(e)` (expand the result again),
@@ -1128,6 +1218,15 @@ run time via the `Bad` node everywhere but the parse-time dialect. The
 parsed node carries the flag letters in order plus the two separators
 (`SplitSep`, `JoinSep`); the printer writes the span back raw, so the
 construct round-trips.
+
+The separators are kept **as written**, escapes and all, and that is what
+lets `(p)` be answered entirely in the interpreter: the letter order in
+`Flags` says which flags a `p` stands in front of, and the raw text is
+still there to read them with. The escape set itself is a function the
+dialect installs through `interp.Runner.SetFlagArgumentEscapes`, because
+"the escapes" is not one answer even inside one shell — the same shell's
+`echo` and `print` disagree — and a runner nobody told refuses `(p)` by
+name rather than reading it as a no-op.
 
 ## A tilde at the front: `${~spec}` — zsh only
 

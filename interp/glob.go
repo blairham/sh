@@ -318,6 +318,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// into the same question.
 	seeHidden := r.MatchOption(PatternsMatchHidden) || quals.seeHidden
 	starstar := r.MatchOption(StarStarCrossesDirectories)
+	starstarAlone := r.MatchOption(StarStarAloneCrossesDirectories)
 	parts := strings.Split(field, "/")
 
 	// An absolute pattern starts at the root; a relative one at the working
@@ -340,7 +341,14 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			continue
 		}
 		var next []string
-		if starstar && part == "**" {
+		// The two questions a `**` component raises, and they are separate:
+		// whether it crosses levels at all, and whether it still does with
+		// nothing behind it. A **slash** is what the second one asks about,
+		// so the index is the test rather than lastComponent — `**/` has a
+		// component after it, empty and written, and is level-crossing in
+		// all three shells that have the construct, where bare `**` is not.
+		slashed := i < len(parts)-1
+		if starstar && part == "**" && (slashed || starstarAlone) {
 			// The component is the directory itself and everything beneath
 			// it. Exactly `**`: anything more — `a**`, an escaped star — is
 			// an ordinary component, where adjacent stars collapse to one.

@@ -2553,6 +2553,30 @@ echo "reached-after st=$?"`,
 			"read `**` as `*` and leave the unmatched pattern standing",
 	},
 	{
+		ID: "shopt/globstar-includes-the-starting-directory", Category: "shell options",
+		Snippet: `mkdir -p g/cx/dx && cd g && : > ax && : > cx/dx/ax && ` +
+			`shopt -s globstar 2>/dev/null; echo **/a*`,
+		Why: "the zero-level half of the component, and the one whose absence is " +
+			"silent: `**/` stands for **zero or more** directory levels, so the `ax` " +
+			"in the starting directory is part of the answer. bash 5.3 with the " +
+			"option and zsh with none list `ax cx/dx/ax`; bash 3.2 has no such option " +
+			"name, and ksh93 and dash never had the builtin, so all three read `**` " +
+			"as `*` and leave the unmatched pattern standing. The deepest match is " +
+			"what separates this from a component that reached exactly one level — " +
+			"that reading answers neither `ax` nor `cx/dx/ax` (#1339)",
+	},
+	{
+		ID: "shopt/globstar-with-nothing-behind-it", Category: "shell options",
+		Snippet: `mkdir -p g/cx/dx && cd g && : > ax && : > cx/dx/ax && ` +
+			`shopt -s globstar 2>/dev/null; echo **`,
+		Why: "the same component with no slash after it, which is where the panel " +
+			"splits: bash with the option reaches every level, and zsh answers " +
+			"`ax cx` with no option at all — what `*` answers. So the crossing is two " +
+			"questions rather than one, and this is the row that stops the fix for " +
+			"the one above from turning a bare `**` into a recursive listing here. " +
+			"bash 3.2, ksh93 and dash read it as `*` for want of the option",
+	},
+	{
 		ID: "shopt/nocasematch-folds-case", Category: "shell options",
 		Snippet: `shopt -s nocasematch 2>/dev/null; case A in a) echo hit;; *) echo exact;; esac`,
 		Why: "the option folds `case` and `[[ ]]` matching in bash and nothing " +

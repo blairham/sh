@@ -139,26 +139,64 @@ func treeDir(t *testing.T) string {
 func TestStarStarCrossesDirectories(t *testing.T) {
 	dir := treeDir(t)
 	for _, tc := range []struct {
-		on   bool
-		src  string
-		want string
+		on    bool
+		alone bool
+		src   string
+		want  string
 	}{
 		// Zero levels and every deeper one, so the top-level f is a match.
-		{true, `echo **/f`, "d/e/f d/f f"},
-		{true, `echo d/**/f`, "d/e/f d/f"},
+		{true, false, `echo **/f`, "d/e/f d/f f"},
+		{true, false, `echo d/**/f`, "d/e/f d/f"},
 		// As the last component: the directory itself, slash-marked, then
-		// everything beneath it.
-		{true, `echo d/**`, "d/ d/e d/e/f d/f"},
-		{true, `echo **`, "d d/e d/e/f d/f f"},
+		// everything beneath it — and that reading is the second option's,
+		// which is why every row above leaves it off.
+		{true, true, `echo d/**`, "d/ d/e d/e/f d/f"},
+		{true, true, `echo **`, "d d/e d/e/f d/f f"},
 		// Only exactly `**`: adjacent stars otherwise collapse to one.
-		{true, `echo ***/f`, "d/f"},
-		{true, `echo "**"/f`, "**/f"},
+		{true, false, `echo ***/f`, "d/f"},
+		{true, false, `echo "**"/f`, "**/f"},
 		// Off, `**` is `*` — one directory level, as everywhere else.
-		{false, `echo **/f`, "d/f"},
+		{false, false, `echo **/f`, "d/f"},
+		{false, true, `echo **/f`, "d/f"},
 	} {
-		out, _ := run(t, tc.src, withOption(StarStarCrossesDirectories, tc.on, inDir(dir)))
+		opt := withOption(StarStarCrossesDirectories, tc.on,
+			withOption(StarStarAloneCrossesDirectories, tc.alone, inDir(dir)))
+		out, _ := run(t, tc.src, opt)
 		if got := strings.TrimSpace(out); got != tc.want {
-			t.Errorf("on=%v %s = %q, want %q", tc.on, tc.src, got, tc.want)
+			t.Errorf("on=%v alone=%v %s = %q, want %q", tc.on, tc.alone, tc.src, got, tc.want)
+		}
+	}
+}
+
+// TestStarStarAloneIsItsOwnQuestion is the split the panel measures: the
+// slashed form crosses levels in bash, ksh93 and zsh alike, and the bare form
+// crosses in the first two and is an ordinary pattern in the third. So the
+// crossing being on says nothing about `**` with a slash *behind* it, and a
+// `**/` written at the very end is the slashed form — the component after it
+// is empty and written, which is what the index test in glob asks about and
+// what a "nothing but empties follow" test would get wrong.
+func TestStarStarAloneIsItsOwnQuestion(t *testing.T) {
+	dir := treeDir(t)
+	for _, tc := range []struct {
+		alone bool
+		src   string
+		want  string
+	}{
+		{false, `echo **`, "d f"},
+		{true, `echo **`, "d d/e d/e/f d/f f"},
+		{false, `echo d/**`, "d/e d/f"},
+		{true, `echo d/**`, "d/ d/e d/e/f d/f"},
+		// Written with the slash, and level-crossing either way.
+		{false, `echo **/`, "d d/e"},
+		{true, `echo **/`, "d d/e"},
+		{false, `echo **/f`, "d/e/f d/f f"},
+		{true, `echo **/f`, "d/e/f d/f f"},
+	} {
+		opt := withOption(StarStarCrossesDirectories, true,
+			withOption(StarStarAloneCrossesDirectories, tc.alone, inDir(dir)))
+		out, _ := run(t, tc.src, opt)
+		if got := strings.TrimSpace(out); got != tc.want {
+			t.Errorf("alone=%v %s = %q, want %q", tc.alone, tc.src, got, tc.want)
 		}
 	}
 }
@@ -173,12 +211,15 @@ func TestStarStarSkipsHiddenUnlessAsked(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	on := withOption(StarStarCrossesDirectories, true, inDir(dir))
+	// Bare `**`, so the walk needs the second option as well as the first.
+	on := withOption(StarStarCrossesDirectories, true,
+		withOption(StarStarAloneCrossesDirectories, true, inDir(dir)))
 	if out, _ := run(t, `echo **`, on); strings.TrimSpace(out) != "vis" {
 		t.Errorf("echo ** = %q, want the hidden tree skipped", out)
 	}
 	both := withOption(StarStarCrossesDirectories, true,
-		withOption(PatternsMatchHidden, true, inDir(dir)))
+		withOption(StarStarAloneCrossesDirectories, true,
+			withOption(PatternsMatchHidden, true, inDir(dir))))
 	if out, _ := run(t, `echo **`, both); strings.TrimSpace(out) != ".h .h/x vis" {
 		t.Errorf("echo ** with hidden = %q, want the hidden tree walked", out)
 	}

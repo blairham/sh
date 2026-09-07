@@ -2797,6 +2797,16 @@ echo "st=$?"`,
 		Why:     "the same question where the job is one external command, and it is the row that says the fault was not about compound commands: `sh -c ... &` returns here because the child is a real process, but a program whose redirection blocks never becomes one, so the pid the shell was waiting for did not exist yet. The pair with the row above is what separates opening a redirection from dispatching a command — the open comes first in every shape",
 	},
 	{
+		ID: "jobs/an-ampersand-returns-when-the-job-only-loops", Category: "builtins",
+		Snippet: `{ while [ ! -f p ]; do :; done; echo LATE-42; } & echo NOW-42; : > p; wait`,
+		Why:     "the shape the two rows above cannot reach (#1283): a job whose body neither reads nor ever runs a program, so there is no point in it where it waits on anything outside the shell. Every shell in the panel prints the marker at once because it forked before the body ran a thing; this shell printed nothing at all and timed out, having waited for a process id a job that only spins was never going to have. The loop turns on a file the *script* creates after the `&`, which is what makes the order a fact about the shell rather than about the scheduler — the job cannot leave the loop until the shell has got past the job — and it is also what keeps the case from leaving a spinning process behind in five of the six columns, which `while :; do :; done` would",
+	},
+	{
+		ID: "jobs/the-last-background-pid-of-a-job-that-only-loops", Category: "builtins",
+		Snippet: `{ i=0; while [ $i -lt 1 ]; do i=1; done; sleep 0.2; } & case "$!" in 0) echo zero;; "") echo none;; *) echo pid;; esac; wait`,
+		Why:     "what the row above costs, recorded rather than left to be found. A real shell forks and knows the child's process id before the body runs, so a loop that ends after one pass takes nothing from `$!`; this shell learns a job's process from the first program the job starts, and a job standing at the back edge of a loop whose end cannot be seen has started none — so it settles on `0` here where all five name a process. A bounded computation written as a conditional loop is the shape that pays it, and the alternative was a shell that never returned at all. The pid itself cannot be recorded, so the case asks only which of the three answers it is",
+	},
+	{
 		ID: "jobs/wait-brings-a-background-job-back-before-the-shell-ends", Category: "builtins",
 		Snippet: `(sleep 0.2; echo LATE-42) & wait; echo NOW-42`,
 		Why:     "the same job with a `wait` in front of the ending, which every shell including this one gets right and which is the workaround the row above leaves a script needing. It is the pair that says the loss is about the shell *ending*, not about the job: nothing is wrong with the job while there is still a shell to run it",

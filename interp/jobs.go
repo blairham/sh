@@ -197,6 +197,51 @@ func (r *Runner) settleBackgroundJobBeforeABlockingRead(in io.Reader) {
 	r.bg.settleNoPID()
 }
 
+// settleBackgroundJobAtALoopsBackEdge settles a background job's pid once the
+// job has run a whole pass of a loop whose end the shell cannot see.
+//
+// The fifth and last trigger, and the one the four before it cannot reach.
+// Each of those is a point where the job waits on something *outside* the
+// shell — a process it started, a fifo with no peer, a stream with nothing on
+// it — or where it has ended. A body that only runs builtins in a loop reaches
+// none of them, so `&` waited for an answer that was never coming and the
+// shell never ran the next command at all: measured 2026-09-07,
+// `{ while :; do :; done } & echo AFTER` printed nothing here and printed
+// `AFTER` at once in every shell in the panel — dash, bash 5.3.15, that bash
+// as `sh`, bash 3.2.57, ksh93u+ and zsh 5.9.2 — all of which fork before the
+// body runs a thing. The issue's own repro,
+// `{ while :; do :; done } & sleep 0.2; kill %1; echo reached`, never reached.
+//
+// The back edge and not the start of the body, which is the whole of why this
+// costs less than the contract #1283 considered. Settling the moment a job
+// begins would make `{ echo hi; sleep 1 } & echo $!` print 0 where it prints
+// the sleep's pid today — a real answer lost on the most ordinary shape there
+// is. A pass that has *completed* says something narrower and truer: the job
+// has already run a whole round of a loop without starting a process, and the
+// shell has no way to learn whether it ever will.
+//
+// Only the loops whose end the shell cannot see, which is what keeps the
+// ordinary shapes intact. A `for` over a word list and a `repeat` count know
+// how many passes they have before the first one, and a `select` reads on
+// every pass and so is already the trigger above; only `while`, `until` and
+// `for ((;;))` can run forever on nothing at all. So
+// `{ for i in 1 2 3; do :; done; sleep 1 } & echo $!` still prints the sleep's
+// pid, and it is `{ i=0; while [ $i -lt 3 ]; do i=$((i+1)); done; sleep 1 } &`
+// that now prints 0 — the same trade, paid on the rarer shape.
+//
+// A pid that arrives later is dropped rather than recorded, exactly as it is
+// in the two triggers above: settlePID is one Once, so a job the shell has
+// stopped waiting for cannot be handed a different pid behind its back. Which
+// is also why a loop whose *first* pass starts a program keeps that program's
+// pid — `{ while :; do sleep 1; done } & echo $!` settles on the sleep before
+// this is ever reached.
+func (r *Runner) settleBackgroundJobAtALoopsBackEdge() {
+	if r.bg == nil {
+		return
+	}
+	r.bg.settleNoPID()
+}
+
 // Finished reports whether the job has ended, without waiting for it.
 //
 // Not the same question as Stopped: a stopped job has not ended and is

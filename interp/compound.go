@@ -185,6 +185,11 @@ func (r *Runner) loop(ctx context.Context, c *syntax.LoopClause) error {
 			if stop := r.loopControl(); stop {
 				return nil
 			}
+			// A whole pass, and the loop is about to take another. A
+			// background job standing here has run a round on nothing the
+			// shell can watch, so its pid is as settled as it will get —
+			// see settleBackgroundJobAtALoopsBackEdge (#1283).
+			r.settleBackgroundJobAtALoopsBackEdge()
 		}
 	})
 }
@@ -331,6 +336,12 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 			if stop := r.loopControl(); stop {
 				return nil
 			}
+			// The same back edge as the conditional loop above, and the same
+			// reason: `for ((;;))` is the other loop whose end the shell
+			// cannot see before it runs. Before the step rather than after
+			// it, so a step that fails does not decide whether the job
+			// settled.
+			r.settleBackgroundJobAtALoopsBackEdge()
 			if _, ok := r.forArithPart(c.Post, c.PostText); !ok {
 				return nil
 			}

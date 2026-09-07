@@ -5386,11 +5386,41 @@ the settling is a call each of them makes rather than something written
 into `read`. Both spellings of a coprocess get it, `coproc` and ksh93's
 `|&` alike, because both start the job through one path.
 
-What stays: a job whose body neither reads nor ever runs a program —
-`{ while :; do :; done } &` — still never settles, and starting it still
-does not return. That is the same missing fork, with no point in it where
-the job can be said to be waiting on anything outside the shell, and it is
-#1283 rather than something papered over here.
+**And a fifth, filed as #1283.** A job whose body neither reads nor ever
+runs a program reached none of the four: `{ while :; do :; done } & echo
+AFTER` printed nothing here and prints the marker at once in every shell
+in the panel, and the issue's own repro —
+`{ while :; do :; done } & sleep 0.2; kill %1; echo reached` — never
+reached. There is no point in such a body where the job waits on anything
+*outside* the shell, so the four triggers above cannot be stretched to
+cover it.
+
+So: **a background job is settled without a process id once it has
+completed a pass of a loop whose end the shell cannot see.** The back edge
+and not the start of the body, which is what makes it cost less than the
+contract #1283 weighed: settling the moment a job begins would make
+`{ echo hi; sleep 1 } & echo $!` print 0 where it prints the sleep's
+process id today, on the most ordinary shape there is. A pass that has
+*completed* says something narrower — the job has already run a whole
+round of a loop without starting a process, and the shell has no way to
+learn whether it ever will.
+
+Only the loops whose end the shell cannot see. A `for` over a word list
+and a `repeat` count know how many passes they have before the first one,
+and a `select` reads on every pass and so is the fourth trigger already;
+`while`, `until` and `for ((;;))` are the three that can run forever on
+nothing at all. So `{ for i in 1 2 3; do :; done; sleep 1 } & echo $!`
+still prints the sleep's process id, and a loop whose *first* pass starts
+a program keeps that program's — the process starts before the back edge
+is reached.
+
+What it costs, stated rather than discovered: a bounded computation
+written as a conditional loop settles at its first back edge, so
+`{ i=0; while [ $i -lt 1 ]; do i=1; done; sleep 0.2; } & echo $!` reads 0
+where every shell in the panel names a process. That is the trade, paid
+on the rarer shape — a hang has no status to check and no diagnostic to
+read, and a job reported as having no process of its own is the answer
+this shell already gives for every background builtin.
 
 **`wait -n`** is bash's: block until whichever job finishes first, report
 its status, 127 in silence with no jobs at all

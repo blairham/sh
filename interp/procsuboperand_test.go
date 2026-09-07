@@ -57,12 +57,20 @@ func TestAProcessSubstitutionInAParamOperandIsAGrammarQuestion(t *testing.T) {
 
 // With the grammar answer the other way the operand really is a substitution:
 // the command runs and the operand is the path it made.
+//
+// Written **unquoted**, which is the whole of what the grammar flag reaches:
+// re-measured 2026-09-07, `p=${nosuch:-<(:)}` is a path in bash 5.3.15 and
+// 3.2.57 and `p="${nosuch:-<(:)}"` is the five characters, because a `${ }`
+// body inside double quotes is double-quoted content and no process
+// substitution is written there (#1150). The quoted spelling this row used to
+// carry measured the wrong thing and agreed with the binary by accident, since
+// the flag was the only reason it produced a path at all.
 func TestAProcessSubstitutionInAParamOperandIsPerformedWhereTheGrammarHasOne(t *testing.T) {
 	tmp := t.TempDir()
 	// `${u:-<(:)}` rather than a pattern operand, because the *value* is
 	// what a path is visible in — a pattern operand's path simply fails to
 	// match, which is true of the literal reading too.
-	out, st := runGrammar(t, `printf "[%s]" "${nosuch:-<(:)}"`, procsubOperand,
+	out, st := runGrammar(t, `printf "[%s]" ${nosuch:-<(:)}`, procsubOperand,
 		func(r *Runner) { r.Env = append(withoutTMPDIR(r.Env), "TMPDIR="+tmp) })
 	if st != 0 {
 		t.Fatalf("status %d, want 0", st)
@@ -82,11 +90,17 @@ func TestAProcessSubstitutionInAParamOperandIsPerformedWhereTheGrammarHasOne(t *
 	}
 }
 
-// And without it, the same operand is the five characters it was written as.
+// And without it, the same operand is the five characters it was written as —
+// as it also is *with* it once the expansion is quoted, which is the other way
+// to reach the same text and a different reason for it.
 func TestAProcessSubstitutionInAParamOperandIsTextWithoutTheGrammar(t *testing.T) {
-	out, st := runGrammar(t, `printf "[%s]" "${nosuch:-<(:)}"`, procsubPlain, tellTheRunner(procsubPlain))
+	out, st := runGrammar(t, `printf "[%s]" ${nosuch:-<(:)}`, procsubPlain, tellTheRunner(procsubPlain))
 	if want := "[<(:)]"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
+	}
+	out, st = runGrammar(t, `printf "[%s]" "${nosuch:-<(:)}"`, procsubOperand, tellTheRunner(procsubOperand))
+	if want := "[<(:)]"; out != want || st != 0 {
+		t.Errorf("quoted, with the grammar: got %q (status %d), want %q at 0", out, st, want)
 	}
 }
 

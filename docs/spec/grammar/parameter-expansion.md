@@ -45,6 +45,66 @@ So the AST cannot store it as a string. It is a nested word, which is why
 `substitutions.md` keeps the inner text raw rather than flattening it:
 whatever parses `${ }` has to parse a word inside it.
 
+### And it is a word in the quoting the expansion stands in
+
+A `${ }` written inside double quotes has a body that is double-quoted
+**content**, not a fresh unquoted word. What that changes is the single
+quote: there it is an ordinary character, so it quotes nothing, it is not
+removed, and what stands between two of them is still substituted.
+
+Measured 2026-09-07, unanimous across bash 5.3.15, bash 3.2.57, that build
+invoked as `sh`, dash, ksh93u+ and zsh 5.9.2, with `v=VAL`:
+
+| probe | result |
+| --- | --- |
+| `"${u:-'$v'}"` | `'VAL'` |
+| `"${u:-'$(echo hi)'}"` | `'hi'` |
+| `"${u:-''}"` | `''` |
+| `"${u:-'\$v'}"` | `'$v'` |
+| `${u:-'$v'}` unquoted | `$v` |
+
+The second row is the one that settles *how far* the shell looks: the
+substitution inside those quotes is recognized and **performed**, rather
+than scanned past to find where the body ends. The last row is what says
+the rule belongs to the enclosing context and not to the body — the same
+characters unquoted are an ordinary single-quoted run, quotes removed and
+nothing substituted.
+
+The same fact reaches the **parse**, and there the panel refuses as one:
+
+    printf '[%s]' "${x:-'a$(b'}"
+
+With the `'` an ordinary character there is nothing to close the `$(`, and
+every shell in the panel fails the line — on six different wordings and
+four different statuses, which is a diagnostics question rather than a
+grammar one.
+
+Two things are *not* this rule, and each is a row that a reading which
+went further would get wrong.
+
+A **double** quote in the same position does not follow it: unescaped, it
+opens a run of its own and is removed, so `"${u:-"$v"}"` is `VAL` where
+`"${u:-'$v'}"` is `'VAL'`. The two quote characters part company here.
+
+A **pattern** operand does not follow it either. Its quotes quote, and are
+removed: with `s=xay`, `"${s#'x'}"` trims the `x` and is `ay`, and
+`"${s#'a$(b'}"` has no substitution in it to leave open. So it is the
+*word* operands — `-`, `:-`, `=`, `:=`, `+`, `:+`, `?`, `:?` — that take
+the enclosing quoting, and `#`, `##`, `%`, `%%`, `/`, the case operators
+and a subscript that do not.
+
+A here-document body is the same context reached by the other road: it
+expands as a double-quoted string does, so `${u:-'$v'}` in one is `'VAL'`
+in all six.
+
+One consequence worth writing down, because it looked like a rule of its
+own: a **process substitution** in a `${ }` operand is performed in bash
+only where the expansion is unquoted. `p=${u:-<(:)}` is a path there and
+`p="${u:-<(:)}"` is the five characters `<(:)`, in 5.3 and 3.2 alike —
+which is not a second answer about operands but this one, since a
+process substitution is no more written inside double quotes here than
+anywhere else.
+
 ## Pattern removal
 
     ${x#pat}   shortest matching prefix removed

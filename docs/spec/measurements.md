@@ -3748,6 +3748,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/a-swallowed-quote-changes-the-program-rather-than-refusing-it` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` | `[a"b][c'd]` |
 | `core/what-a-nested-substitution-holds-is-not-a-delimiter` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` | `[2][a")b]` |
 | `core/the-older-substitution-spelling-brings-its-own-quoting-too` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` | `[e"f]` |
+| `core/single-quotes-in-a-quoted-expansion-body` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` | `['VAL']['']` |
+| `core/a-substitution-inside-those-quotes-is-performed` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` | `['hi']['bq']` |
+| `core/an-unbalanced-substitution-inside-those-quotes` | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: command substitution: line 2: unexpected EOF while looking for matching `''` *(status 1)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `''` *(status 2)* | **2>** `<shell>: bad substitution: no closing `)' in 'a$(b'` *(status 1)* | **2>** `<shell>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<shell>:1: unmatched '~<shell>:1: unmatched "` *(status 1)* |
+| `core/single-quotes-in-an-unquoted-expansion-body` | `[$v]` | `[$v]` | `[$v]` | `[$v]` | `[$v]` | `[$v]` |
+| `core/double-quotes-in-a-quoted-expansion-body` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` | `[VAL][xyz]` |
+| `core/single-quotes-in-a-quoted-pattern-operand` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | `[ay][xay]` | **2>** `<shell>:1: unmatched '~<shell>:1: unmatched "` *(status 1)* |
+| `core/quotes-in-a-quoted-replacement-operand` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[xZy][x$vy][x$vy]` | `[xZy][x$vy][x$vy]` | `[xZy][x'VAL'y][x$vy]` | `[xZy][x$vy][x$vy]` | `[xZy][x'VAL'y][x$vy]` |
+| `core/single-quotes-in-a-heredoc-expansion-body` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` | `['VAL']` |
 | `core/a-case-arm-inside-backquotes-inside-an-expansion` | `[y]` | `[y]` | `[y]` | `[y]` | `[y]` | `[y]` |
 
 - `core/dollar-single-expands-escapes` — read as bytes, because the failure mode was a literal backslash-t that looks almost right in a terminal — the quoting was recorded and nothing decoded it
@@ -3805,6 +3813,40 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/the-older-substitution-spelling-brings-its-own-quoting-too` — the backquoted spelling of the same rule, and it is here as a measurement rather than as a symmetry: ksh93 refuses a single quote inside backquotes inside a double quote when the word stands on its own — `a="`echo 'e"f'`"` is a syntax error there — and accepts it inside a `${ }` body, so all six agree on this row and only on this row. A fix written for `$( )` alone leaves the older spelling refused in all four dialects while the un-nested one is accepted, which is one construct answered two ways
   ```sh
   printf '[%s]\n' "${x:-"`echo 'e"f'`"}"
+  ```
+- `core/single-quotes-in-a-quoted-expansion-body` — a `${ }` body written inside double quotes is double-quoted *content*, so a single quote in it is an ordinary character rather than a quote: all six shells keep the two quote characters and substitute the `$v` between them. The empty pair is the guard on the same fact — `''` is two characters here where a quoting reading makes it nothing
+  ```sh
+  v=VAL; printf '[%s]' "${u:-'$v'}" "${w:-''}"; echo
+  ```
+- `core/a-substitution-inside-those-quotes-is-performed` — the row that says the substitution inside those quotes is *recognized and run* rather than merely scanned past for the delimiter, which is the question the two readings could not otherwise be told apart on. Both spellings of a command substitution, and all six shells run both
+  ```sh
+  printf '[%s]' "${u:-'$(echo hi)'}" "${w:-'`echo bq`'}"; echo
+  ```
+- `core/an-unbalanced-substitution-inside-those-quotes` — the same fact reaching the parse, and unanimous as a refusal: with the `'` an ordinary character there is nothing to close the `$(`, so every shell in the panel fails the line. They part company only on the wording and the status, which makes this a diagnostics row as well as a grammar one
+  ```sh
+  printf '[%s]' "${x:-'a$(b'}"; echo
+  ```
+- `core/single-quotes-in-an-unquoted-expansion-body` — the contrast that says the rule belongs to the enclosing context and not to the body: unquoted, the same characters are an ordinary single-quoted run in all six — the quotes removed and the `$v` never substituted. Without this row a fix could take the quotes literally everywhere and still pass the quoted one
+  ```sh
+  v=VAL; printf '[%s]' ${u:-'$v'}; echo
+  ```
+- `core/double-quotes-in-a-quoted-expansion-body` — the other quote character in the same position, and it does *not* follow the same rule: an unescaped one there opens a run of its own and is removed, so `"$v"` comes to `VAL` where `'$v'` comes to `'VAL'`. The two quote characters part company inside a quoted body, and a reading that made both literal answers this row wrongly
+  ```sh
+  v=VAL; printf '[%s]' "${u:-"$v"}" "${w:-x"y"z}"; echo
+  ```
+- `core/single-quotes-in-a-quoted-pattern-operand` — the guard that keeps the rule off the operand it does not govern: a *pattern* operand's quotes quote and are removed, so the first trims the `x` and the unbalanced substitution in the second is no substitution at all. Five shells answer both; zsh refuses the second, which is its own divergence and not this one
+  ```sh
+  s=xay; printf '[%s]' "${s#'x'}" "${s#'a$(b'}"; echo
+  ```
+- `core/quotes-in-a-quoted-replacement-operand` — the third reading of a quote in a `${ }` operand, and the one the panel divides on: a *pattern* operand's quotes quote and are removed everywhere, and a **replacement** operand's do in bash 5.3, that build as `sh` and ksh93 while bash 3.2 and zsh keep them as characters. Unquoted all five agree again, which is what says the disagreement is about the quoted context and not about the operator. dash has no operator and refuses the line. Recorded rather than answered — it wants a semantics axis, and this row is what a fix routed through the word operand's rule would break
+  ```sh
+  s=xay; v=VAL; printf '[%s]' "${s/'a'/Z}" "${s/a/'$v'}" ${s/a/'$v'}; echo
+  ```
+- `core/single-quotes-in-a-heredoc-expansion-body` — a here-document body is the same context reached by the other road: it expands like a double-quoted string, so the quotes are characters there too and the `$v` between them is substituted. Unanimous, and it is the row that says the answer is the context's rather than the double quote character's
+  ```sh
+  v=VAL; cat <<EOF
+  [${u:-'$v'}]
+  EOF
   ```
 - `core/a-case-arm-inside-backquotes-inside-an-expansion` — the `)` of a case arm closes nothing, which `$( )` learned on its own — and one level further in, inside backquotes, the counting scan is the only thing that can be reached. Unanimous across the panel. It is the row that says the older spelling holds a program too rather than a run of text with a delimiter somewhere in it: a scan that reads across the backquotes takes the arm's `)` as the substitution's, ends it in the middle of the `case`, and leaves the expansion with no `}`
   ```sh

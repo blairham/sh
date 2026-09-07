@@ -1205,7 +1205,7 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 	for i := range out {
 		switch {
 		case out[i].Kind == ParamExp && out[i].Param == nil:
-			out[i].Param = p.parseParamExp(out[i].Value, out[i].Pos)
+			out[i].Param = p.parseParamExp(out[i].Value, out[i].Pos, out[i].Quoting)
 		case out[i].Kind == ArithSubst && out[i].Arith == nil:
 			// Deferring, like the arithmetic command: a `$(( ))` whose
 			// expression will not read does not refuse the file. Both
@@ -2839,8 +2839,14 @@ func (p *Parser) emptyPattern() *Word {
 // ParseParamExpFor parses the inside of a `${ }` that was captured outside the
 // normal word path — a here-document body, which is read as raw text and
 // expanded only when the command runs.
+//
+// The body is double-quoted context, which is what decides how the operand of
+// a `${x:-word}` in it reads: `cat <<EOF` with `${u:-'$v'}` in the body prints
+// `'VAL'` in every shell in the panel — the quotes two characters of the
+// output and the `$v` between them still substituted, exactly as inside a
+// pair of double quotes.
 func (p *Parser) ParseParamExpFor(src string, at Pos) *ParamExpr {
-	return p.parseParamExp(src, at)
+	return p.parseParamExp(src, at, DoubleQuoted)
 }
 
 // ParseArithFor is ParseParamExpFor for `$(( ))`.

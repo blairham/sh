@@ -273,7 +273,7 @@ const specialParams = "@*#?-$!0123456789"
 //
 // The lexer already found the matching brace, tracking quoting so a `}` inside
 // quotes did not end it early, so src here is exactly the inside.
-func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
+func (p *Parser) parseParamExp(src string, start Pos, q Quoting) *ParamExpr {
 	e := &ParamExpr{Start: start, Stop: start}
 	s := src
 
@@ -417,14 +417,14 @@ scan:
 		(e.Inner != nil || p.subscriptableName(e.Name)) {
 		if i := closingBracket(s); i > 0 {
 			inner := s[1:i]
-			e.Index = p.wordFrom(inner, start)
+			e.Index = p.wordFrom(inner, start, Unquoted)
 			if p.dialect.ArraySubscriptFlags {
 				if g, rest, isGroup := scanSubscriptFlags(inner); isGroup {
 					// The operand is lexed as a word of its own, so a
 					// substitution inside it is performed exactly as one in
 					// the subscript would be: `${path[(re)${ZPFX}/bin]}` is
 					// the whole of why this construct is worth having.
-					g.Arg = p.wordFrom(rest, start)
+					g.Arg = p.wordFrom(rest, start, Unquoted)
 					e.IndexFlags = g
 				}
 			}
@@ -482,7 +482,7 @@ scan:
 		return e
 	}
 	e.Op = op
-	p.fillParamArgs(e, rest, start)
+	p.fillParamArgs(e, rest, start, q)
 	return e
 }
 
@@ -801,35 +801,48 @@ func elementSelectOp(c byte) ParamOp {
 }
 
 // fillParamArgs splits the operand text according to the operator.
-func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos) {
+func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) {
+	// Only a *word* operand takes the enclosing quoting; a pattern does not.
+	// Measured 2026-09-07, unanimous across the panel with `s=xay`:
+	// `"${s#'x'}"` is `ay`, so the quotes in a pattern quote and are removed,
+	// while `"${u:-'$v'}"` is `'VAL'`, where they are two characters of the
+	// result and the `$v` between them is still substituted. The two readings
+	// are the same characters and different rules, and asking which operand
+	// this is is the only way to tell them apart.
+	word := q
 	switch e.Op {
 	case ParamReplace:
 		// The separator is an unquoted slash, so a slash inside quotes or
 		// after a backslash belongs to the pattern.
 		if i := indexUnquoted(rest, '/'); i >= 0 {
-			e.Arg = p.wordFrom(rest[:i], start)
-			e.Arg2 = p.wordFrom(rest[i+1:], start)
+			e.Arg = p.wordFrom(rest[:i], start, Unquoted)
+			e.Arg2 = p.wordFrom(rest[i+1:], start, Unquoted)
 		} else {
 			// Omitting the replacement deletes the match.
-			e.Arg = p.wordFrom(rest, start)
+			e.Arg = p.wordFrom(rest, start, Unquoted)
 		}
 	case ParamSubstring:
 		if i := indexUnquoted(rest, ':'); i >= 0 {
-			e.Arg = p.wordFrom(rest[:i], start)
-			e.Arg2 = p.wordFrom(rest[i+1:], start)
+			e.Arg = p.wordFrom(rest[:i], start, Unquoted)
+			e.Arg2 = p.wordFrom(rest[i+1:], start, Unquoted)
 		} else {
-			e.Arg = p.wordFrom(rest, start)
+			e.Arg = p.wordFrom(rest, start, Unquoted)
 		}
 	case ParamUpper, ParamLower, ParamToggle,
 		ParamUpperFirst, ParamLowerFirst, ParamToggleFirst:
 		// What follows is the pattern saying which characters to convert.
 		// Empty means every one of them, which is what `?` would say.
 		if rest != "" {
-			e.Arg = p.wordFrom(rest, start)
+			e.Arg = p.wordFrom(rest, start, Unquoted)
+		}
+	case ParamTrimPrefix, ParamTrimPrefixLong, ParamTrimSuffix, ParamTrimSuffixLong,
+		ParamExclude, ParamSetDifference, ParamSetIntersection:
+		if rest != "" {
+			e.Arg = p.wordFrom(rest, start, Unquoted)
 		}
 	default:
 		if rest != "" {
-			e.Arg = p.wordFrom(rest, start)
+			e.Arg = p.wordFrom(rest, start, word)
 		}
 	}
 }
@@ -856,7 +869,7 @@ func indexUnquoted(s string, c byte) int {
 
 // wordFrom lexes text as a word, so an operand keeps its structure: the word
 // in `${x:-word}` is itself expanded, and `${u:-$(echo sub)}` yields sub.
-func (p *Parser) wordFrom(text string, at Pos) *Word {
+func (p *Parser) wordFrom(text string, at Pos, q Quoting) *Word {
 	if text == "" {
 		return &Word{Start: at, Stop: at}
 	}
@@ -866,6 +879,10 @@ func (p *Parser) wordFrom(text string, at Pos) *Word {
 	}
 	p.depth++
 	defer func() { p.depth-- }()
+
+	if q == DoubleQuoted {
+		return p.quotedWordFrom(text, at)
+	}
 
 	sub := NewLexer(text, p.operandDialect())
 	w := &Word{Start: at, Stop: at}
@@ -902,6 +919,40 @@ func (p *Parser) wordFrom(text string, at Pos) *Word {
 		w.Spans = append(w.Spans, Span{Kind: Literal, Value: t.Text, Pos: at})
 	}
 	return w
+}
+
+// quotedWordFrom is wordFrom for an operand that stands inside double quotes.
+//
+// Its text is read as double-quoted *content* rather than as a word, because
+// that is what the enclosing quotes made it. The difference shows on a single
+// quote: there it is an ordinary character rather than a quote, and what is
+// written between two of them is still substituted. Measured 2026-09-07,
+// unanimous across bash 5.3.15, bash 3.2.57, that build invoked as `sh`, dash,
+// ksh93u+ and zsh 5.9.2:
+//
+//	v=VAL; printf '[%s]' "${u:-'$v'}"          ['VAL']
+//	printf '[%s]' "${u:-'$(echo hi)'}"         ['hi']
+//	printf '[%s]' "${u:-''}"                   ['']
+//	printf '[%s]' "${u:-'a$(b'}"               a substitution that never closes
+//
+// So the substitution inside the quotes is *recognized and performed*, not
+// merely scanned past for a delimiter — the first two rows are what separate
+// those two readings, and the last is the same fact reaching the parse: with
+// the `'` an ordinary character there is nothing to end the `$(` and every
+// shell in the panel refuses the line.
+//
+// There is no closing quote to find, because the one that opened the context
+// is outside this text: running out of input is the end of the operand rather
+// than an unterminated quote.
+func (p *Parser) quotedWordFrom(text string, at Pos) *Word {
+	sub := NewLexer(text, p.operandDialect())
+	spans := sub.scanDoubleBody(at, false)
+	if err := sub.Err(); err != nil && p.err == nil {
+		p.err = err
+	}
+	// Through newWord, so a nested ${ } in the operand is parsed too — and
+	// parsed knowing it is in this same quoting, since the spans carry it.
+	return p.newWord(spans, at, at)
 }
 
 // firstRune is the one character a diagnostic names when the operator it

@@ -6563,6 +6563,33 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "bash and zsh spell it `declare` as well, ksh93 only `typeset`, which makes the name a dialect's answer rather than an axis",
 	},
 	{
+		ID: "declare/integer-is-the-third-name", Category: "declarations",
+		Snippet: `integer n=3; echo "[$n]"; n=5+2; echo "[$n]"`,
+		Why:     "the other pairing of the family: `integer` is the declaration with the integer attribute already decided, and it is ksh93's and zsh's where `declare` is bash's and zsh's — so which names exist is a dialect's answer three times over rather than an axis. The second line is what the word is *for*: the attribute arrived without the letter, so a later assignment is an expression. bash and dash report a command they cannot find, which is what they really do with the word (#1155)",
+	},
+	{
+		ID: "declare/integer-and-a-plus-form", Category: "declarations",
+		Script:  true,
+		Snippet: "integer n=5\ninteger +i n\nn=3+4\necho \"i[$n]\"\ninteger -x e=1\ninteger +x e\necho \"x[$(env | grep -c '^e=1$')]\"\n",
+		Why:     "whether a plus word on `integer` removes anything at all, and the two shells that have the word answer opposite ways: zsh prepends the letter to an ordinary declaration, so `+i` cancels it and `+x` unexports, where ksh93 has a declaration command whose type the word itself fixes and a plus form reaches neither. **One question about the word and not one per letter** — both rows move together, which is what makes it a single field. ksh93's own `typeset +x` does unexport, so this is not the letter's answer being asked twice",
+	},
+	{
+		ID: "declare/integer-with-an-output-base", Category: "declarations",
+		Snippet: `integer -i 16 b=255; echo "1[$b]"; typeset -i2 c=5; echo "2[$c]"`,
+		Why:     "`-i` takes an output base in both shells that have `integer` and the name prints in it afterwards — `16#ff` in ksh93 against `16#FF` in zsh, differing in nothing but the case of the digits, and `2#101` in both for the attached spelling. bash has no base at all: `-i2` is an invalid option there and a bare `16` is not a valid identifier, which is the row that makes it a dialect's answer. This engine records that a name is an integer and has nowhere to keep a base, so it names the base as missing rather than reading it and dropping it — dropping it left `255` standing at status 0 and turned the `16` into a variable of its own",
+	},
+	{
+		ID: "declare/integer-refuses-a-letter-its-own-declaration-takes", Category: "declarations",
+		Snippet: `integer -A m; echo "st=$?"`,
+		Why:     "the second name's letter set is not the declaration's, and the two shells with the word narrow it differently: `-A` is a bad option to zsh's `integer` where its own `typeset -A` makes an association, and ksh93 hands `integer` the whole typeset grammar and takes it. So the letters are a field of their own — a shell that reused the declaration's would accept `integer -A m`, which is an associative array in neither shell",
+	},
+	{
+		ID: "declare/integer-the-lines-a-hook-installer-opens-with", Category: "declarations",
+		Script:  true,
+		Snippet: "f() {\n  integer del list help\n  echo \"[${del-UNSET}][${list-UNSET}][${help-UNSET}]\"\n}\nf\n",
+		Why:     "the line that put the word on the release bar: zsh's own `add-zsh-hook` function file declares three integers this way before it does anything else, so a shell without `integer` cannot install a precmd hook — which is the whole of what a zsh startup file does with the function. It also reads the valueless-declaration answer through the new word: zsh gives the fresh cell 0 and ksh93 leaves it unset, which is `DeclaredNameWithoutValueIsEmpty` seen from a third spelling rather than a new question",
+	},
+	{
 		ID: "declare/local-in-a-posix-function", Category: "declarations",
 		Script:  true,
 		Snippet: "x=outer\nf() { typeset x=inner; }\nf\necho \"[$x]\"\n",

@@ -13,6 +13,7 @@ ksh93 (`/bin/ksh`), zsh 5.9.2. macOS arm64, 2026-08-29.
 | `${x#pat}` parameter ops | yes | yes | yes | yes | yes |
 | `local` | yes | yes | yes | **no** | yes |
 | `typeset` | **no** | yes | yes | yes | yes |
+| `integer` | **no** | **no** | **no** | yes | yes |
 | `$'...'` | **no** | yes | yes | yes | yes |
 | `$"..."` | **no** | yes | yes | yes | **no** |
 | `+=` append | **no** | yes | yes | yes | yes |

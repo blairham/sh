@@ -44,6 +44,18 @@ type declareFlags struct {
 	funcNames bool
 	remove    bool
 	print     bool
+	// integerForced records that the *name* the command was called by is
+	// what asked for the integer attribute, so a plus form on the same line
+	// cannot take it off again. It is `integer` in ksh93, where the word
+	// carries the type itself — see Semantics.IntegerNameForcesTheAttribute,
+	// which is where the other reading lives.
+	integerForced bool
+	// integerOff records that an `i` was written in a *plus* word, as
+	// against a plus word that carried some other letter. Only the explicit
+	// spelling may cancel a forced attribute, so the two have to be told
+	// apart: `integer +x n` is still an integer in both shells that have the
+	// word, and `integer +i n` is one in only one of them.
+	integerOff bool
 	// inert records that a letter out of Semantics.DeclareOptionsWithoutEffect
 	// was read. Nothing consults it as an attribute; it exists so that a
 	// declaration carrying only such a letter is not mistaken for the bare
@@ -68,6 +80,10 @@ const declareOptionLetters = "aAiprx"
 // unknown, in the dialect's words.
 func (r *Runner) parseDeclareFlags(name string, args []string, known string) (rest []string, f declareFlags, code int) {
 	i := 0
+	// pendingBase is set by an option word that ends in the integer letter,
+	// because the base may arrive as the next word — `typeset -i 16 n=255`
+	// — where it is indistinguishable from a name until this says otherwise.
+	pendingBase := false
 	for ; i < len(args); i++ {
 		a := args[i]
 		if a == "--" {
@@ -75,8 +91,24 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			break
 		}
 		if len(a) < 2 || (a[0] != '-' && a[0] != '+') {
+			if pendingBase && isAllDigits(a) {
+				if code := r.refuseIntegerBase(name); code != 0 {
+					return nil, f, code
+				}
+			}
 			break
 		}
+		if hasAttachedIntegerBase(a, known) {
+			// `-i16`, where the base rides on the letter. Refused here
+			// rather than in the letter loop, which would otherwise reach
+			// the `1` and call it an unknown option — a true statement
+			// about a letter the script never wrote.
+			if code := r.refuseIntegerBase(name); code != 0 {
+				return nil, f, code
+			}
+		}
+		pendingBase = a[0] == '-' && strings.HasSuffix(a, "i") &&
+			strings.ContainsRune(known, 'i')
 		// `+i` removes the attribute where `-i` adds it, which is the one
 		// place a shell spells an option with a plus.
 		f.remove = a[0] == '+'
@@ -95,6 +127,11 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			switch c {
 			case 'i':
 				f.integer = true
+				if f.remove {
+					// The explicit `+i`, which is the only spelling allowed
+					// to cancel a forced attribute. See declareFlags.
+					f.integerOff = true
+				}
 			case 'r':
 				f.readonly = true
 			case 'x':
@@ -178,7 +215,15 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		}
 		return code
 	}
+	return r.declareNames(name, args, f)
+}
 
+// declareNames is the declaration itself, once the letters have been read.
+//
+// Its own function because `integer` is the same declaration under a second
+// name with the integer attribute already decided, and a second copy of this
+// is the thing that would drift. See integerbuiltin.go.
+func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	if f.function || f.funcNames {
 		// The function table rather than the variables: `-f` writes the
 		// functions themselves and `-F` only names them. `-p` alongside
@@ -311,7 +356,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		if r.integer == nil {
 			r.integer = map[string]bool{}
 		}
-		if f.remove {
+		if f.remove && !f.integerForced {
 			delete(r.integer, name)
 		} else {
 			r.integer[name] = true

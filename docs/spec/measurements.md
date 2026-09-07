@@ -8503,6 +8503,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | --- | --- | --- | --- | --- | --- | --- |
 | `declare/typeset-assigns` | `[]` **2>** `<shell>: 1: typeset: not found` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
 | `declare/declare-is-the-second-name` | `[]` **2>** `<shell>: 1: declare: not found` | `[1]` | `[1]` | `[1]` | `[]` **2>** `<shell>: declare: not found` | `[1]` |
+| `declare/integer-is-the-third-name` | `[]~[5+2]` **2>** `<shell>: 1: integer: not found` | `[]~[5+2]` **2>** `<shell>: line 1: integer: command not found` | `[]~[5+2]` **2>** `<shell>: line 1: integer: command not found` | `[]~[5+2]` **2>** `<shell>: integer: command not found` | `[3]~[7]` | `[3]~[7]` |
+| `declare/integer-and-a-plus-form` | `i[3+4]~x[0]` **2>** `<script>: 1: integer: not found~<script>: 2: integer: not found~<script>: 5: integer: not found~<script>: 6: integer: not found` | `i[3+4]~x[0]` **2>** `<script>: line 1: integer: command not found~<script>: line 2: integer: command not found~<script>: line 5: integer: command not found~<script>: line 6: integer: command not found` | `i[3+4]~x[0]` **2>** `<script>: line 1: integer: command not found~<script>: line 2: integer: command not found~<script>: line 5: integer: command not found~<script>: line 6: integer: command not found` | `i[3+4]~x[0]` **2>** `<script>: line 1: integer: command not found~<script>: line 2: integer: command not found~<script>: line 5: integer: command not found~<script>: line 6: integer: command not found` | `i[7]~x[1]` | `i[3+4]~x[0]` |
+| `declare/integer-with-an-output-base` | `1[]~2[]` **2>** `<shell>: 1: integer: not found~<shell>: 1: typeset: not found` | `1[]~2[]` **2>** `<shell>: line 1: integer: command not found~<shell>: line 1: typeset: -2: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `1[]~2[]` **2>** `<shell>: line 1: integer: command not found~<shell>: line 1: typeset: -2: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `1[]~2[]` **2>** `<shell>: integer: command not found~<shell>: line 0: typeset: -2: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1[16#ff]~2[2#101]` | `1[16#FF]~2[2#101]` |
+| `declare/integer-refuses-a-letter-its-own-declaration-takes` | `st=127` **2>** `<shell>: 1: integer: not found` | `st=127` **2>** `<shell>: line 1: integer: command not found` | `st=127` **2>** `<shell>: line 1: integer: command not found` | `st=127` **2>** `<shell>: integer: command not found` | `st=0` | `st=1` **2>** `<shell>:integer:1: bad option: -A` |
+| `declare/integer-the-lines-a-hook-installer-opens-with` | `[UNSET][UNSET][UNSET]` **2>** `<script>: 2: integer: not found` | `[UNSET][UNSET][UNSET]` **2>** `<script>: line 2: integer: command not found` | `[UNSET][UNSET][UNSET]` **2>** `<script>: line 2: integer: command not found` | `[UNSET][UNSET][UNSET]` **2>** `<script>: line 2: integer: command not found` | `[UNSET][UNSET][UNSET]` | `[0][0][0]` |
 | `declare/local-in-a-posix-function` | `[outer]` **2>** `<script>: 2: typeset: not found` | `[outer]` | `[outer]` | `[outer]` | `[inner]` | `[outer]` |
 | `declare/local-in-a-keyword-function` | **2>** `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | `[outer]` | `[outer]` | `[outer]` | `[outer]` | `[outer]` |
 | `declare/valueless-local` | `[UNSET]` | `[UNSET]` | `[UNSET]` | `[]` | `[UNSET]` **2>** `<script>: line 1: local: not found` | `[]` |
@@ -8596,6 +8601,36 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/declare-is-the-second-name` — bash and zsh spell it `declare` as well, ksh93 only `typeset`, which makes the name a dialect's answer rather than an axis
   ```sh
   declare x=1; echo "[$x]"
+  ```
+- `declare/integer-is-the-third-name` — the other pairing of the family: `integer` is the declaration with the integer attribute already decided, and it is ksh93's and zsh's where `declare` is bash's and zsh's — so which names exist is a dialect's answer three times over rather than an axis. The second line is what the word is *for*: the attribute arrived without the letter, so a later assignment is an expression. bash and dash report a command they cannot find, which is what they really do with the word (#1155)
+  ```sh
+  integer n=3; echo "[$n]"; n=5+2; echo "[$n]"
+  ```
+- `declare/integer-and-a-plus-form` — whether a plus word on `integer` removes anything at all, and the two shells that have the word answer opposite ways: zsh prepends the letter to an ordinary declaration, so `+i` cancels it and `+x` unexports, where ksh93 has a declaration command whose type the word itself fixes and a plus form reaches neither. **One question about the word and not one per letter** — both rows move together, which is what makes it a single field. ksh93's own `typeset +x` does unexport, so this is not the letter's answer being asked twice
+  ```sh
+  integer n=5
+  integer +i n
+  n=3+4
+  echo "i[$n]"
+  integer -x e=1
+  integer +x e
+  echo "x[$(env | grep -c '^e=1$')]"
+  ```
+- `declare/integer-with-an-output-base` — `-i` takes an output base in both shells that have `integer` and the name prints in it afterwards — `16#ff` in ksh93 against `16#FF` in zsh, differing in nothing but the case of the digits, and `2#101` in both for the attached spelling. bash has no base at all: `-i2` is an invalid option there and a bare `16` is not a valid identifier, which is the row that makes it a dialect's answer. This engine records that a name is an integer and has nowhere to keep a base, so it names the base as missing rather than reading it and dropping it — dropping it left `255` standing at status 0 and turned the `16` into a variable of its own
+  ```sh
+  integer -i 16 b=255; echo "1[$b]"; typeset -i2 c=5; echo "2[$c]"
+  ```
+- `declare/integer-refuses-a-letter-its-own-declaration-takes` — the second name's letter set is not the declaration's, and the two shells with the word narrow it differently: `-A` is a bad option to zsh's `integer` where its own `typeset -A` makes an association, and ksh93 hands `integer` the whole typeset grammar and takes it. So the letters are a field of their own — a shell that reused the declaration's would accept `integer -A m`, which is an associative array in neither shell
+  ```sh
+  integer -A m; echo "st=$?"
+  ```
+- `declare/integer-the-lines-a-hook-installer-opens-with` — the line that put the word on the release bar: zsh's own `add-zsh-hook` function file declares three integers this way before it does anything else, so a shell without `integer` cannot install a precmd hook — which is the whole of what a zsh startup file does with the function. It also reads the valueless-declaration answer through the new word: zsh gives the fresh cell 0 and ksh93 leaves it unset, which is `DeclaredNameWithoutValueIsEmpty` seen from a third spelling rather than a new question
+  ```sh
+  f() {
+    integer del list help
+    echo "[${del-UNSET}][${list-UNSET}][${help-UNSET}]"
+  }
+  f
   ```
 - `declare/local-in-a-posix-function` — ksh93 gives a local scope only to a function defined with the `function` word, so here its assignment reaches the caller and bash's and zsh's do not
   ```sh

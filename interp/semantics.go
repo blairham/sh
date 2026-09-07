@@ -1535,6 +1535,67 @@ type Semantics struct {
 	// refusal has happened, so a shell with no `typeset` never meets it.
 	TypesetBadOptionFatal Answer
 
+	// IntegerOptions is the set of letters the `integer` builtin takes,
+	// spelled the way DeclareOptions is. It is a separate field rather than
+	// DeclareOptions over again because the two shells that have the word
+	// give it a *narrower* set than their own `typeset`, and they narrow it
+	// differently: measured 2026-09-06, zsh's `integer` refuses `-a`, `-A`,
+	// `-f`, `-F`, `-T` and `-U` as bad options where its `typeset` takes
+	// every one of them, and ksh93's refuses `-E`, `-H`, `-L`, `-R`, `-T`
+	// and `-Z` — the float and justification letters — where its `typeset`
+	// spells them all. So a shell whose `integer` simply reused the
+	// declaration's letters would accept `integer -A m`, which is an
+	// associative array in neither shell.
+	//
+	// Empty means the builtin is not registered at all, which is the answer
+	// for bash and dash: the word is a command that was not found there,
+	// which is what those two really do with it.
+	IntegerOptions string
+
+	// IntegerAttributeTakesABase is `-i` reading an output base — `typeset
+	// -i 16 n=255` and its attached spelling `-i16` — so that the name
+	// prints in that base afterwards rather than in decimal.
+	//
+	// ksh93 and zsh answer yes and store `16#ff` and `16#FF`; bash answers
+	// no, where `-i16` is an invalid option and a bare `16` is not a valid
+	// identifier. This engine models no output base, so where the answer is
+	// yes the base **refuses by name** rather than being read and dropped —
+	// a dropped base is the silent kind of wrong, and it was: before this
+	// field, `typeset -i 16 n=255` in the ksh and zsh dialects reported 0
+	// and left `255` standing where both shells print `16#ff`, and the `16`
+	// became a variable of its own.
+	//
+	// Asked only when a base is actually written, so the ordinary `-i` never
+	// reaches it and a dialect that has no `typeset` never meets the
+	// question at all.
+	IntegerAttributeTakesABase Answer
+
+	// IntegerPlusFormTakesAttributesOff decides whether a plus word on
+	// `integer` removes anything at all.
+	//
+	// The two shells that have the word disagree about what the word *is*,
+	// and the disagreement is not confined to `+i`. Measured 2026-09-06:
+	//
+	//	integer n=5; integer +i n; n=3+4    zsh 3+4    ksh93 7
+	//	integer -x e=1; integer +x e        zsh gone   ksh93 still exported
+	//
+	// zsh prepends the letter to an ordinary declaration, so every plus form
+	// means there what it means on `typeset`. ksh93 has a declaration
+	// command of its own whose type is fixed, and a plus form on it removes
+	// nothing — `typeset -p n` says `typeset -l -i n=5` there against zsh's
+	// plain `typeset n=5`, which is the same finding read from the value
+	// side. Its own `typeset +x` does unexport, so this is about the second
+	// name and not about the letter.
+	//
+	// Yes is zsh's answer. No is ksh93's, and it is why the field is not
+	// spelled per letter: one reading of the word covers `+i` and `+x`
+	// alike, and a field per letter would have been two questions whose
+	// answers can only ever agree.
+	//
+	// Asked only for a plus word on `integer`, which is the only place the
+	// two readings differ — every other spelling is parsed identically.
+	IntegerPlusFormTakesAttributesOff Answer
+
 	// JobSpecsByName resolves `%name` — the job whose command begins with
 	// the text — and `%?text`, the one whose command contains it. POSIX
 	// gives both spellings; dash answers "no such job" to every spec that

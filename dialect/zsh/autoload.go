@@ -110,6 +110,21 @@ func autoloadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		return autoloadListing(r)
 	}
 	for _, name := range rest {
+		if autoloadDefined(r, name) {
+			// Already a function, so there is nothing to mark: measured,
+			// `myfn() { echo body; }; autoload -Uz myfn; myfn` runs the body
+			// and is 0, with a file for `myfn` on `$fpath` or without one,
+			// and the name does not appear in the bare listing afterwards.
+			//
+			// It matters more than the corner suggests. A real startup file
+			// declares a name it may already have — a plugin manager's
+			// `builtin autoload -Uz is-at-least` runs again on every reload —
+			// and a declaration that replaced the definition with a stub
+			// turned a working function into `function definition file not
+			// found` at the next call. The stub is the record, so writing one
+			// over a real body is not a note about the name, it is losing it.
+			continue
+		}
 		if !r.DefineFunction(name, autoloadStub(name)) {
 			// The stub is this file's own text, so a name it cannot be
 			// written around is a name that is not a name.
@@ -119,6 +134,21 @@ func autoloadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		autoloadRecord(r, name)
 	}
 	return 0
+}
+
+// autoloadDefined reports whether a name is already a function this builtin
+// must leave alone — one with a body of its own rather than one of the stubs
+// this builtin wrote.
+//
+// The exception is the whole of why this is not `FunctionText(name)`: the
+// generated stub resolves itself with `+X NAME`, and the name it names is a
+// function at that moment — itself. A guard that did not know the difference
+// would refuse every autoload the moment it was called.
+func autoloadDefined(r *interp.Runner, name string) bool {
+	if _, ok := r.FunctionText(name); !ok {
+		return false
+	}
+	return !autoloadPending(r, name)
 }
 
 // autoloadStub is the body a name is given until it is called.
@@ -185,6 +215,20 @@ func autoloadResolveNow(r *interp.Runner, opts autoloadOpts, names []string) int
 	// two signs are two commands rather than one with a flag.
 	status := 0
 	for _, name := range names {
+		if autoloadDefined(r, name) {
+			// A function that is already there is not resolved over, and the
+			// refusal is silent: measured, `myfn() { echo body; }; autoload
+			// -Uz +X myfn` is status 1 with nothing on either stream, and
+			// `myfn` still runs its own body afterwards. A status rather than
+			// silence because `+X` was asked to do something and did not.
+			//
+			// Only the plus sign asks this. `-X` is the *opposite* case by
+			// construction — it replaces the function it is running inside,
+			// which is always a function with a body — so a guard shared
+			// between the two signs would refuse the only thing `-X` does.
+			status = 1
+			continue
+		}
 		if code := autoloadResolve(r, name); code != 0 {
 			status = code
 		}

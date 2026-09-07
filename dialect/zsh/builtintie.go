@@ -37,12 +37,21 @@ import "github.com/blairham/sh/interp"
 //     ZSH_EVAL_CONTEXT` writes nothing there — and a produced parameter is a
 //     different mechanism from a tie. It stays absent rather than being tied
 //     to a stored value that would then be wrong.
+//
 //   - **Any default value.** zsh fills `FPATH` with its own function
 //     directories and `MODULE_PATH` with its module directory when the
 //     environment names neither, and those are that installation's files.
 //     Inventing them here would point `autoload` at another shell's
 //     function library. So a pair the environment says nothing about starts
 //     empty, which is exactly what the same shell does for `CDPATH`.
+//
+//     `FPATH` has a default now and it is still not written here, which is
+//     the same rule seen from the other side: this dialect names the
+//     parameter — Semantics.FunctionSearchVariable — and the front end fills
+//     it with *this* installation's directories, read off where the running
+//     binary was installed. A path in this file would be the machine the
+//     line was typed on. The tie is what carries it into `fpath`, which is
+//     why the seed happens after this runs (#1250).
 func tieTheBuiltInPairs(r *interp.Runner) {
 	for _, pair := range [...][2]string{
 		{"PATH", "path"},

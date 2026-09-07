@@ -234,8 +234,7 @@ is `a b`.
 
 An **escaped** IFS whitespace character at the end is where the panel
 parts company, five to one — bash, bash 3.2, bash as `sh`, ksh93 and zsh
-trim it, dash keeps it — and that is filed separately rather than
-answered here.
+trim it, dash keeps it — and that is #1360 rather than an answer here.
 
 ### It is a remainder only past the count
 

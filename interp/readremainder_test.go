@@ -103,7 +103,7 @@ func TestTheLastNameOnAReadTakesTheRemainderOfTheLine(t *testing.T) {
 // is the escaped closing space. The trim honors the escape mask here, on the
 // same reasoning the splitter honors it: a backslashed space is data. That
 // matches dash and not the other five, which trim it anyway; the divergence
-// predates the remainder and is filed on its own rather than answered here,
+// predates the remainder and is #1360 rather than an answer here,
 // because five against one is a question for the semantics vector and not a
 // majority to be counted.
 func TestAReadRemainderLosesOnlyItsClosingIFSWhitespace(t *testing.T) {

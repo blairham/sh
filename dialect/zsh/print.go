@@ -449,10 +449,36 @@ func printFormatted(r *interp.Runner, ctx context.Context, opts printOptions, re
 	return printf(r, ctx, append([]string{opts.format}, rest...))
 }
 
+// expandFlagArgumentEscapes is the same set read for an expansion flag's
+// argument — the `(p)` flag's whole job — and it differs from `print`'s in
+// exactly one place.
+//
+// `\c` ends `print`'s output where it stands, and in a flag argument it is an
+// escape this shell does not know. Measured 2026-09-07 on zsh 5.9.2 with
+// `a=(x y)`: `${(pj:A\cB:)a}` is `xAcBy`, so the backslash is dropped and the
+// `c` kept, and `${(pj:\\c:)a}` is `x\cy`, where the doubled backslash is a
+// backslash and the `c` after it is not an escape at all.
+//
+// Everything else is the same measurement, so this is the one decoder told
+// which of the two it is rather than a second copy of it: `\101` is `A` in
+// both, `\q` is `q` in both, and a trailing backslash is a backslash in both.
+func expandFlagArgumentEscapes(s string) string {
+	out, _ := expandEscapes(s, false)
+	return out
+}
+
 // expandPrintEscapes is the measured escape set, applied to one operand. The
 // second result reports a `\c`, which ends the whole command's output where it
 // stands.
 func expandPrintEscapes(s string) (string, bool) {
+	return expandEscapes(s, true)
+}
+
+// expandEscapes is that set with the one place it is read two ways made a
+// parameter: cTruncates says whether `\c` ends the output, which it does for
+// an operand of `print` and does not for the argument of an expansion flag.
+// See expandFlagArgumentEscapes for the measurement.
+func expandEscapes(s string, cTruncates bool) (string, bool) {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] != '\\' {
@@ -471,7 +497,12 @@ func expandPrintEscapes(s string) (string, bool) {
 		case 'b':
 			b.WriteByte('\b')
 		case 'c':
-			return b.String(), true
+			if cTruncates {
+				return b.String(), true
+			}
+			// Not an escape here, so the backslash goes and the letter
+			// stays — the same rule the default branch below follows.
+			b.WriteByte('c')
 		case 'e', 'E':
 			b.WriteByte(0x1b)
 		case 'f':

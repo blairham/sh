@@ -1498,6 +1498,13 @@ func Apply(r *interp.Runner) {
 	// spelling: different letters, a different escape set and different
 	// wordings, all measured side by side. See print.go.
 	registerPrint(r)
+	// And the same escape set, reached from the other end: the `(p)`
+	// expansion flag reads the argument of a `j` or `s` behind it the way
+	// `print` reads an operand, so `${(pj:\n:)a}` joins on a real newline.
+	// One function for both, because the set is one measurement — see
+	// print.go, and interp.Runner.SetFlagArgumentEscapes for why the
+	// substrate asks rather than answers.
+	r.SetFlagArgumentEscapes(expandFlagArgumentEscapes)
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
 	r.Unregister("complete")

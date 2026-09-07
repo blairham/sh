@@ -931,6 +931,19 @@ type Runner struct {
 	// is what a runner nobody told gets. Installed through SetPromptStyle;
 	// see interp/prompt.go.
 	promptStyle PromptStyle
+	// flagArgEscapes decodes the argument of an expansion flag the way the
+	// `(p)` flag in front of it asks for — `${(pj:\n:)a}` joining on a real
+	// newline rather than on a backslash and an `n`.
+	//
+	// A function the dialect supplies rather than a table here, because the
+	// escape set is measured per shell and this package holds nobody's: the
+	// same shell's `echo` and `print` disagree on `\c` and on whether octal
+	// needs a leading zero, so "the escapes" is not one answer. Nil in a
+	// runner nobody told, where `(p)` is refused by name rather than read as
+	// a no-op — a `(p)` that quietly did nothing would join on the two
+	// characters and answer at status 0. Installed through
+	// SetFlagArgumentEscapes; see interp/expandflags.go.
+	flagArgEscapes func(string) string
 	// optionNamespace is the wider set of names `[[ -o name ]]` reads, for a
 	// dialect that has one. Nil in a shell whose option names are its
 	// `set -o` names and nothing more, which is where `[[ -o ]]` falls back

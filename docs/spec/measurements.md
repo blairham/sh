@@ -7005,6 +7005,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/expansion-flags-keys-and-values` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(k)m}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(k)m}: bad substitution` *(status 127)* | **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: ${(k)m}: bad substitution` *(status 1)* | **2>** `<shell>: cannot append index array to associative array m` *(status 1)* | `<k1><k1><v1>` |
 | `param/the-array-flag-without-an-assignment-changes-nothing` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(@Akons:\|:u)v}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@Akons:\|:u)v}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@Akons:\|:u)v}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `v}' unexpected` *(status 3)* | `[a][b][a][b][3][3][a b][a b]` |
 | `param/the-array-flag-on-an-assignment` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(A)u=x y}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(A)u=x y}: bad substitution` *(status 127)* | **2>** `<shell>: ${(A)u=x y}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `u=x' unexpected` *(status 3)* | `[x y]<x y>` |
+| `param/the-print-flag-reads-a-separators-escapes` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(pj:\t:)a}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(pj:\t:)a}: bad substitution` *(status 127)* | **2>** `<shell>: ${(pj:\t:)a}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a}' unexpected` *(status 3)* | `[x	y][x\ty]` |
+| `param/the-print-flag-must-precede-what-it-reads` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(pj:\t:)a}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(pj:\t:)a}: bad substitution` *(status 127)* | **2>** `<shell>: ${(pj:\t:)a}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a}' unexpected` *(status 3)* | `[x	y][x\ty]` |
+| `param/the-print-flag-substitutes-a-sole-parameter` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(pj:$s:)a}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(pj:$s:)a}: bad substitution` *(status 127)* | **2>** `<shell>: ${(pj:$s:)a}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a}' unexpected` *(status 3)* | `[x-y][xA$sy][x$sy]` |
 | `param/expansion-flags-run-after-the-operator` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(U)x#h}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(U)x#h}: bad substitution` *(status 127)* | **2>** `<shell>: ${(U)x#h}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x#h}' unexpected` *(status 3)* | `[ELLO][DEF]<val>` |
 | `param/array-element-inherits-the-base` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[q][3]` | `[q][3]` | `[q][3]` | `[q][3]` | `[p][3]` |
 | `param/an-operator-reaches-an-array-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[ello][heLlo][hell][ello]` | `[ello][heLlo][hell][ello]` | `[ello][heLlo][hell][ello]` | `[ello][heLlo][hell][ello]` | `[][][][]` |
@@ -7513,6 +7516,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/the-array-flag-on-an-assignment` — the other half of `(A)`, and the half it exists for: with an assignment operator it makes the assigned name an *array*, so the one word `x y` is substituted and the name is left holding one element rather than a scalar. Recorded as the measurement a refusal would need to become an answer — this implementation refuses the assignment by name and carries the value-side half above
   ```sh
   unset u; printf "[%s]" "${(A)u=x y}"; printf "<%s>" "${(@)u}"; echo
+  ```
+- `param/the-print-flag-reads-a-separators-escapes` — `(p)` is a modifier and not a transformation: it makes the *argument* of a flag behind it take `print`-style escapes, so the pair here is one join separator read two ways — a real tab and the two characters. Written as a pair because a recorded value would pass for an implementation that ignored the letter, which is exactly the shape a `(p)` read as a no-op has: a plausible answer at status 0
+  ```sh
+  a=(x y); printf "[%s]" "${(pj:\t:)a}" "${(j:\t:)a}"; echo
+  ```
+- `param/the-print-flag-must-precede-what-it-reads` — the order is the rule and not a convention — a `p` written *behind* the flag it would modify modifies nothing, so the second half of this pair is the unescaped two characters. The row a reading that merely looked for the letter anywhere in the group would fail
+  ```sh
+  a=(x y); printf "[%s]" "${(pj:\t:)a}" "${(j:\t:p)a}"; echo
+  ```
+- `param/the-print-flag-substitutes-a-sole-parameter` — the flag's other half, and how narrow it is: an argument that is *exactly* `$name` is substituted, one with a character in front of it is not, and without the flag neither is. Three readings of the same two characters in one row, because the middle one is what a reading that expanded the argument would get wrong while passing the first
+  ```sh
+  s=-; a=(x y); printf "[%s]" "${(pj:$s:)a}" "${(pj:A$s:)a}" "${(j:$s:)a}"; echo
   ```
 - `param/expansion-flags-run-after-the-operator` — the operator runs first and the flags transform what it produced — ${(U)x#h} is ELLO, not a trim of HELLO — with (P) the exception, resolving the name before the default can fire
   ```sh

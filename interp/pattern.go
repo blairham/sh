@@ -247,6 +247,13 @@ type patternOpts struct {
 	// for. It reaches only the literal characters of a pattern, which is
 	// what keeps it apart from fold above.
 	litFold caseFolding
+	// total is the length of the whole subject the pattern is being matched
+	// against, which is not always the length of the string handed to the
+	// matcher: `${x#pat}` tries the prefixes of x and each trial is a piece.
+	// It is what `(#e)` compares the position against, and it is set by
+	// matchPatternAt rather than by a caller, so no surface can leave it at
+	// a zero that would read as "the subject is empty".
+	total int
 	// escapes is the set of characters a backslash escapes. Empty means
 	// every character, which is five of the six shells' answer; a set means
 	// a backslash before anything outside it is a literal backslash and the
@@ -319,21 +326,49 @@ func swapCase(c byte) byte {
 }
 
 func matchPattern(pattern, s string, o patternOpts) bool {
-	return matchHere(pattern, s, o)
+	return matchPatternAt(pattern, s, 0, len(s), o)
 }
 
-func matchHere(p, s string, o patternOpts) bool {
+// matchPatternAt is matchPattern for a *piece* of a larger subject: base is
+// where the piece begins in the whole subject, and total is the whole
+// subject's length.
+//
+// The two are what the position-aware flags need and what nothing else in the
+// matcher carries, because `(#s)` and `(#e)` ask about the *subject* and not
+// about the piece a surface happened to hand over. Measured on zsh 5.9.2:
+// `x=abcd; ${x#ab(#e)}` leaves `abcd` alone where `${x#abcd(#e)}` empties it,
+// and `${x%(#s)cd}` leaves it alone where `${x%(#s)abcd}` empties it — so a
+// trim's prefix trial is at the start of the subject and never at its end,
+// and a suffix trial the other way round.
+//
+// Surfaces that match a whole string pass base 0 and the string's length,
+// which matchPattern does for them. Pathname expansion is one of those and
+// that is measured rather than assumed: `**/(#s)a*` matches `cx/ax`, so the
+// anchors bind to the *component* the walk is matching and not to the path.
+func matchPatternAt(pattern, s string, base, total int, o patternOpts) bool {
+	o.total = total
+	return matchHere(pattern, s, base, o)
+}
+
+// matchHere matches p against the whole of s, where s begins at offset at of
+// the subject the caller named.
+//
+// at is threaded rather than derived because s is re-sliced on every step and
+// a slice does not remember where it came from. It is the whole of what the
+// position-aware flag family needs: `(#s)` is `at == 0` and `(#e)` is
+// `at == o.total`.
+func matchHere(p, s string, at int, o patternOpts) bool {
 	for len(p) > 0 {
 		if o.extended {
 			// The exclusion binds loosest, so it is read before anything
 			// else in the branch: every side is matched against the whole
 			// of what is left of the subject.
 			if left, rights, ok := splitExclusion(p, o); ok {
-				if !matchHere(left, s, o) {
+				if !matchHere(left, s, at, o) {
 					return false
 				}
 				for _, x := range rights {
-					if matchHere(x, s, o) {
+					if matchHere(x, s, at, o) {
 						return false
 					}
 				}
@@ -343,11 +378,21 @@ func matchHere(p, s string, o patternOpts) bool {
 			// `[[ ab == a^x ]]` matches, so it starts where it stands
 			// rather than only at the front of a pattern.
 			if p[0] == '^' {
-				return !matchHere(p[1:], s, o)
+				return !matchHere(p[1:], s, at, o)
 			}
 			// A flag group has to be read before splitGroup below, which
 			// would otherwise take `(#i)` for an alternation of one.
 			if body, rest, ok := splitPatternFlags(p); ok {
+				if a := anchorPatternFlag(body); a != anchorNone {
+					// A zero-width assertion about where the match
+					// stands, so it consumes nothing and decides the
+					// branch outright.
+					if !a.holds(at, o) {
+						return false
+					}
+					p = rest
+					continue
+				}
 				next, unknown := applyPatternFlags(body, o)
 				if unknown != 0 {
 					// Refused by name before matching began; there is
@@ -361,15 +406,15 @@ func matchHere(p, s string, o patternOpts) bool {
 			// read here rather than by the branches below.
 			if item, rest, ok := splitClosableItem(p, o); ok {
 				if lo, hi, after, isClosure := closureBounds(rest, o); isClosure {
-					return matchRepeat(item, lo, hi, after, s, o)
+					return matchRepeat(item, lo, hi, after, s, at, o)
 				}
 			}
 		}
 		if body, quant, rest, ok := splitGroup(p, o); ok {
-			return matchGroup(body, quant, rest, s, o)
+			return matchGroup(body, quant, rest, s, at, o)
 		}
 		if lo, hi, rest, ok := splitNumericRange(p, o); ok {
-			return matchNumericRange(lo, hi, rest, s, o)
+			return matchNumericRange(lo, hi, rest, s, at, o)
 		}
 		switch p[0] {
 		case '*':
@@ -387,7 +432,7 @@ func matchHere(p, s string, o patternOpts) bool {
 			// pattern a subject beginning with a continuation byte, which a
 			// following `?` would then take for a character of its own.
 			for i := 0; ; i += o.unitWidth(s[i:]) {
-				if matchHere(p, s[i:], o) {
+				if matchHere(p, s[i:], at+i, o) {
 					return true
 				}
 				if i == len(s) {
@@ -400,7 +445,7 @@ func matchHere(p, s string, o patternOpts) bool {
 				return false
 			}
 			w := o.unitWidth(s)
-			p, s = p[1:], s[w:]
+			p, s, at = p[1:], s[w:], at+w
 
 		case '[':
 			if s == "" {
@@ -411,7 +456,7 @@ func matchHere(p, s string, o patternOpts) bool {
 			if !ok {
 				return false
 			}
-			p, s = rest, s[w:]
+			p, s, at = rest, s[w:], at+w
 
 		case '\\':
 			// An escaped metacharacter is an ordinary character.
@@ -427,19 +472,19 @@ func matchHere(p, s string, o patternOpts) bool {
 				if s == "" || s[0] != '\\' {
 					return false
 				}
-				p, s = p[1:], s[1:]
+				p, s, at = p[1:], s[1:], at+1
 				continue
 			}
 			if s == "" || !o.eqPatternByte(p[1], s[0]) {
 				return false
 			}
-			p, s = p[2:], s[1:]
+			p, s, at = p[2:], s[1:], at+1
 
 		default:
 			if s == "" || !o.eqPatternByte(p[0], s[0]) {
 				return false
 			}
-			p, s = p[1:], s[1:]
+			p, s, at = p[1:], s[1:], at+1
 		}
 	}
 	return s == ""
@@ -513,7 +558,7 @@ func readBound(p string, i int) (bound int64, next int, ok bool) {
 // every upper bound and below no lower one, which is the answer real zsh
 // gives: `[[ 99999999999999999999 = <1-> ]]` matches there and
 // `[[ 99999999999999999999 = <1-5> ]]` does not.
-func matchNumericRange(lo, hi int64, rest, s string, o patternOpts) bool {
+func matchNumericRange(lo, hi int64, rest, s string, at int, o patternOpts) bool {
 	for k := 1; k <= len(s) && isDigit(s[k-1]); k++ {
 		v, err := strconv.ParseInt(s[:k], 10, 64)
 		if err != nil {
@@ -526,7 +571,7 @@ func matchNumericRange(lo, hi int64, rest, s string, o patternOpts) bool {
 			// Every longer run is larger still, so nothing is left to try.
 			break
 		}
-		if matchHere(rest, s[k:], o) {
+		if matchHere(rest, s[k:], at+k, o) {
 			return true
 		}
 	}
@@ -614,14 +659,14 @@ func alternatives(body string) []string {
 // Every arm is tried against every split of the subject, because a group that
 // matches more than one length can only be resolved by what comes after it:
 // `+(a)b` against `aab` needs the group to stop before the b.
-func matchGroup(body string, quant byte, rest, s string, o patternOpts) bool {
+func matchGroup(body string, quant byte, rest, s string, at int, o patternOpts) bool {
 	arms := alternatives(body)
 	// `!(…)` is the odd one: it matches any text the arms do *not*, so it is
 	// answered by asking the ordinary question and inverting it rather than
 	// by trying the arms one at a time.
 	if quant == '!' {
 		for i := 0; i <= len(s); i++ {
-			if !matchesAnyArm(arms, s[:i], o) && matchHere(rest, s[i:], o) {
+			if !matchesAnyArm(arms, s[:i], at, o) && matchHere(rest, s[i:], at+i, o) {
 				return true
 			}
 		}
@@ -629,7 +674,7 @@ func matchGroup(body string, quant byte, rest, s string, o patternOpts) bool {
 	}
 	if quant == '?' || quant == '*' {
 		// Zero repetitions is allowed, so the rest may start here.
-		if matchHere(rest, s, o) {
+		if matchHere(rest, s, at, o) {
 			return true
 		}
 	}
@@ -646,27 +691,27 @@ func matchGroup(body string, quant byte, rest, s string, o patternOpts) bool {
 	// repetitions whatever the arms are, and this allows one repetition
 	// that happens to consume nothing. Recursing here would not terminate,
 	// which is the other reason it is a check and not an iteration.
-	if matchesAnyArm(arms, "", o) && matchHere(rest, s, o) {
+	if matchesAnyArm(arms, "", at, o) && matchHere(rest, s, at, o) {
 		return true
 	}
 	repeat := quant == '*' || quant == '+'
 	for i := 1; i <= len(s); i++ {
-		if !matchesAnyArm(arms, s[:i], o) {
+		if !matchesAnyArm(arms, s[:i], at, o) {
 			continue
 		}
-		if matchHere(rest, s[i:], o) {
+		if matchHere(rest, s[i:], at+i, o) {
 			return true
 		}
-		if repeat && matchGroup(body, quant, rest, s[i:], o) {
+		if repeat && matchGroup(body, quant, rest, s[i:], at+i, o) {
 			return true
 		}
 	}
 	return false
 }
 
-func matchesAnyArm(arms []string, s string, o patternOpts) bool {
+func matchesAnyArm(arms []string, s string, at int, o patternOpts) bool {
 	for _, a := range arms {
-		if matchHere(a, s, o) {
+		if matchHere(a, s, at, o) {
 			return true
 		}
 	}

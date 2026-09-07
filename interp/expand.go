@@ -2068,12 +2068,17 @@ func trimEdge(value, pattern string, op syntax.ParamOp, o patternOpts) (int, boo
 	}
 	for _, i := range idx {
 		if prefix {
-			if matchPattern(pattern, value[:i], o) {
+			// The piece is a prefix of value, so the matcher is told where
+			// it sits: a trial is at the start of the subject and reaches
+			// its end only when it is the whole of it. Measured on zsh
+			// 5.9.2, `x=abcd; ${x#ab(#e)}` leaves `abcd` alone where
+			// `${x#abcd(#e)}` empties it.
+			if matchPatternAt(pattern, value[:i], 0, len(value), o) {
 				return i, true
 			}
 			continue
 		}
-		if matchPattern(pattern, value[i:], o) {
+		if matchPatternAt(pattern, value[i:], i, len(value), o) {
 			return i, true
 		}
 	}
@@ -2093,14 +2098,14 @@ func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) st
 	switch e.Anchor {
 	case '#':
 		for k := len(stops) - 1; k >= 0; k-- {
-			if matchPattern(pattern, value[:stops[k]], o) {
+			if matchPatternAt(pattern, value[:stops[k]], 0, len(value), o) {
 				return with + value[stops[k]:]
 			}
 		}
 		return value
 	case '%':
 		for _, i := range stops {
-			if matchPattern(pattern, value[i:], o) {
+			if matchPatternAt(pattern, value[i:], i, len(value), o) {
 				return value[:i] + with
 			}
 		}
@@ -2114,12 +2119,16 @@ func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) st
 		// everywhere else rather than matching empty and looping.
 		end := -1
 		for m := len(stops) - 1; m >= k; m-- {
-			if matchPattern(pattern, value[i:stops[m]], o) {
+			// Every span tried is a piece of value and is matched as one,
+			// so a `(#s)` matches only the span starting at 0 and a `(#e)`
+			// only the one ending at the last unit. Measured:
+			// `x=XbXcX; ${x//(#s)X/-}` is `-bXcX`, not `-b-c-`.
+			if matchPatternAt(pattern, value[i:stops[m]], i, len(value), o) {
 				end = stops[m]
 				break
 			}
 		}
-		if end < 0 || end == i && pattern != "" && !matchPattern(pattern, "", o) {
+		if end < 0 || end == i && pattern != "" && !matchPatternAt(pattern, "", i, len(value), o) {
 			if i < len(value) {
 				b.WriteString(value[i:stops[k+1]])
 			}

@@ -250,6 +250,24 @@ func (r *Runner) fieldQualifiers(field string) (pattern string, q globQualifiers
 	if !found {
 		return field, globQualifiers{}, false, true
 	}
+	if strings.HasPrefix(list, "#") && !strings.HasPrefix(list, "#q") &&
+		r.MatchOption(ExtendedPatternOperators) {
+		// A trailing `(#…)` that is not the `(#q…)` spelling is a pattern
+		// flag group standing at the end of the last component, and not a
+		// qualifier list at all — so the field goes to the matcher whole.
+		//
+		// Measured on zsh 5.9.2 in a directory holding `ax` and `cx`:
+		// `*x(#i)` lists both with `extendedglob` on and is `unknown file
+		// attribute: #` with it off, and `*(#c1,9)` is `bad pattern` rather
+		// than a qualifier complaint — which is the matcher's answer and
+		// arrives by handing the field over rather than by a check here.
+		//
+		// It is what makes `(#e)` reachable in pathname expansion at all:
+		// the end of a component is exactly where the end anchor is
+		// written, so reading it as a qualifier list left `*x(#e)` naming a
+		// file attribute that was never in the pattern.
+		return field, globQualifiers{}, false, true
+	}
 	if after, cut := strings.CutPrefix(list, "#q"); cut {
 		// `(#q…)` is the same list wearing the extended flag group's
 		// spelling, and it is the only spelling that works where the bare

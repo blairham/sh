@@ -863,6 +863,74 @@ two to four, `a(#c2,)` is two or more, `a(#c,3)` is at most three, and
 `a(#c,)` is `a#`. It needs an item in front of it — `[[ aaa == (#c3) ]]`
 is `bad pattern`.
 
+### Where a match is standing
+
+`(#s)` and `(#e)` are not options at all. Each is a **zero-width
+assertion**: it consumes nothing and asks only where in the subject the
+match currently stands — `(#s)` that it is at the start, `(#e)` that it
+is at the end. Measured on zsh 5.9.2, 2026-09-07, with `extendedglob` on.
+
+An anchor anywhere else is a match that cannot happen, and **not** a
+pattern that cannot be read:
+
+    [[ ab == (#s)ab ]]        matches
+    [[ ab == ab(#e) ]]        matches
+    [[ '' == (#s)(#e) ]]      matches
+    [[ ab == a(#s)b ]]        does not — status 1, not the 2 of a bad pattern
+    [[ ab == a(#e)b ]]        does not
+    [[ ab == (#s)(#e)ab ]]    does not
+
+That distinction is load-bearing, because it is what lets another branch
+carry the match:
+
+    [[ ab == (a|(#s))b ]]     matches — by way of the `a` arm
+    [[ ab == ((#s)a|b)b ]]    matches
+    [[ ab == (a(#e)|a)b ]]    matches
+    [[ ab == *(#s)ab ]]       matches — a `*` that consumed nothing is at 0
+    [[ ab == ab(#e)* ]]       matches
+
+**Neither may share its flag group.** The body is the letter alone or the
+pattern is rejected — `(#is)`, `(#si)`, `(#se)` and `(#ss)` are every one
+of them `bad pattern`, where the same letters written as two groups
+(`(#i)(#s)`) are fine. A flag group is also not a closable item:
+`[[ ab == (#s)# ]]` is `bad pattern`.
+
+**An anchor names the subject, never the piece a surface handed over.**
+This is the whole of what the mechanism costs and the reason the matcher
+has to carry its position rather than deriving one from the string in
+hand: a trim tries the prefixes of its value one at a time, and each of
+those trials is at the start of the subject but reaches its end only when
+it is the whole of it.
+
+| surface | measured |
+| --- | --- |
+| `[[ ]]` | `[[ ab == (#s)ab(#e) ]]` matches |
+| `case` | `case ab in ((#s)ab)` matches; `(a(#e)b)` does not |
+| `${x#pat}` | `x=abcd; ${x#(#s)ab}` is `cd`; `${x#ab(#e)}` is `abcd`; `${x#abcd(#e)}` is empty |
+| `${x%pat}` | `${x%cd(#e)}` is `ab`; `${x%(#s)cd}` is `abcd`; `${x%(#s)abcd}` is empty |
+| `${x//pat/rep}` | `x=XbXcX; ${x//(#s)X/-}` is `-bXcX`; `${x//X(#e)/-}` is `XbXc-`; `${x//X(#s)/-}` is unchanged |
+| `${x:#pat}`, `(M)`, `(R)` | whole element: `a=(ab cb); ${a:#(#s)a*}` is `cb` |
+| pathname expansion | **per component**: `**/(#s)a*` lists `ax` and `cx/ax`, `*/(#s)a*` lists `cx/ax`, `*x(#e)` lists the names ending in `x` |
+
+An empty match is a position like any other, so `${x//(#s)/-}` on `abc`
+is `-abc` and `${x//(#e)/-}` is `abc-`.
+
+### A `(#…)` at the end of a component is a flag group, not a qualifier
+
+The two spellings collide at exactly one place — the end of the last
+component, which is where a qualifier list is written and where an end
+anchor is written. With `extendedglob` on, a trailing group whose body
+starts with `#` and is not the `(#q…)` spelling is read as a **flag
+group**:
+
+    *x(#i)      lists ax and cx        — a flag group
+    *x(#e)      lists ax and cx        — a flag group
+    *(#q/)      lists the directories  — a qualifier list
+    *(#c1,9)    bad pattern            — the matcher's complaint, not an attribute's
+
+With the option off, the same `*x(#i)` is `unknown file attribute: #`,
+which is what says the reading is the option's.
+
 ### The status a rejected pattern exits with is the surface's
 
 All four abandon the script rather than failing the match, and the status
@@ -893,10 +961,15 @@ the `(#q…)` spelling of a qualifier list are implemented, in every surface
 that matches a pattern: `[[ ]]`, `case`, `${x#pat}` / `${x%pat}` /
 `${x/pat/rep}`, `${x:#pat}` and the `(M)` filter, and pathname expansion.
 
+The two anchors `(#s)` and `(#e)` are implemented on every one of those
+surfaces too: the matcher carries the offset of the piece it is matching
+within the subject the caller named, which is what an assertion about a
+position needs and what nothing else in a pattern does.
+
 The rest is **refused by name** — `(#b)` and `(#B)` backreferences, `(#m)`
-and `(#M)`, the `(#s)` and `(#e)` anchors, `(#a1)` approximate matching,
-and `(#u)` / `(#U)`. Each needs the position of the match within the
-subject, which this matcher does not carry, so a pattern using one says
+and `(#M)`, `(#a1)` approximate matching, and `(#u)` / `(#U)`. Carrying a
+position is not enough for those: each has to *report* one, into `$match`,
+`$mbegin`, `$mend` or their scalar kin. So a pattern using one says
 
     <pattern>: the (#b) pattern flag is not implemented
 

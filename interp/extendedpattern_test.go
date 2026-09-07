@@ -241,6 +241,115 @@ func TestTheOperatorsReachEverySurface(t *testing.T) {
 	}
 }
 
+// The two position-aware flags that are assertions rather than options.
+//
+// `(#s)` asks that the match be standing at the start of the subject and
+// `(#e)` at its end, so the matcher has to carry where it is — which is the
+// mechanism the whole family is waiting on, and which nothing else in a
+// pattern needs.
+//
+// docs/spec/grammar/patterns.md, "Where a match is standing".
+func TestTheAnchorsAskWhereTheMatchIsStanding(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		// The trivial reading, which is also a control: an anchor at the
+		// edge it names holds.
+		{`[[ ab == (#s)ab ]] && echo hit || echo miss`, "hit"},
+		{`[[ ab == ab(#e) ]] && echo hit || echo miss`, "hit"},
+		{`[[ ab == (#s)ab(#e) ]] && echo hit || echo miss`, "hit"},
+		{`[[ '' == (#s)(#e) ]] && echo hit || echo miss`, "hit"},
+		// Anywhere else it simply does not hold. It is a match that cannot
+		// happen and not a pattern that cannot be read, which is what keeps
+		// the status 1 rather than the 2 a rejected pattern earns.
+		{`[[ ab == a(#s)b ]] && echo hit || echo miss`, "miss"},
+		{`[[ ab == a(#e)b ]] && echo hit || echo miss`, "miss"},
+		{`[[ ab == (#s)(#e)ab ]] && echo hit || echo miss`, "miss"},
+		// Which is what lets the other arm of an alternation carry the
+		// match. Both of these are the assertion failing and something else
+		// succeeding, and an implementation that made a misplaced anchor an
+		// error would fail them.
+		{`[[ ab == (a|(#s))b ]] && echo hit || echo miss`, "hit"},
+		{`[[ ab == ((#s)a|b)b ]] && echo hit || echo miss`, "hit"},
+		{`[[ ab == (a(#e)|a)b ]] && echo hit || echo miss`, "hit"},
+		{`[[ ab == ((#s)|x)ab ]] && echo hit || echo miss`, "hit"},
+		// A `*` that has consumed nothing is still at the start, and one
+		// that has consumed everything is at the end.
+		{`[[ ab == *(#s)ab ]] && echo hit || echo miss`, "hit"},
+		{`[[ ab == ab(#e)* ]] && echo hit || echo miss`, "hit"},
+		{`[[ aab == a*(#s)ab ]] && echo hit || echo miss`, "miss"},
+		// Through a closure, which re-enters the matcher at a position of
+		// its own.
+		{`[[ aaa == a#(#e) ]] && echo hit || echo miss`, "hit"},
+		{`[[ aaab == a#(#e) ]] && echo hit || echo miss`, "miss"},
+	} {
+		out, _ := runExtendedOperators(t, tc.src, true, nil)
+		if got := strings.TrimSpace(out); got != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}
+
+// Neither anchor may share its flag group, which is the shell's own rule and
+// not a convenience: the mixed spellings are rejected patterns rather than
+// unimplemented ones, so they take the surface's bad-pattern status and not
+// the refusal's.
+func TestAnAnchorStandsAloneInItsGroup(t *testing.T) {
+	for _, src := range []string{
+		`[[ AB == (#is)ab ]]`,
+		`[[ AB == (#si)ab ]]`,
+		`[[ ab == (#se)ab ]]`,
+		`[[ ab == (#ss)ab ]]`,
+	} {
+		out, st := runExtendedOperators(t, src, true, nil)
+		if !strings.Contains(out, "bad pattern") {
+			t.Errorf("%s = %q, want the pattern rejected", src, out)
+		}
+		if strings.Contains(out, "not implemented") {
+			t.Errorf("%s called a rejected pattern unimplemented: %q", src, out)
+		}
+		if st == 0 {
+			t.Errorf("%s exited 0, want the script abandoned", src)
+		}
+	}
+	// Written as two groups the same letters are fine, which is what says
+	// the rule is about the group and not about the letters.
+	out, _ := runExtendedOperators(t, `[[ AB == (#i)(#s)ab ]] && echo hit || echo miss`, true, nil)
+	if got := strings.TrimSpace(out); got != "hit" {
+		t.Errorf("`(#i)(#s)ab` = %q, want hit", got)
+	}
+}
+
+// An anchor asks about the *subject*, not about the piece a surface handed the
+// matcher — which is the whole reason the position is threaded rather than
+// derived from the string in hand. A trim tries the prefixes of its value one
+// at a time, and each of those is at the start of the subject and reaches its
+// end only when it is the whole of it.
+func TestAnAnchorNamesTheSubjectAndNotThePiece(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`v=abcd; echo "[${v#(#s)ab}]"`, "[cd]"},
+		{`v=abcd; echo "[${v#ab(#e)}]"`, "[abcd]"},
+		{`v=abcd; echo "[${v#abcd(#e)}]"`, "[]"},
+		{`v=abcd; echo "[${v%cd(#e)}]"`, "[ab]"},
+		{`v=abcd; echo "[${v%(#s)cd}]"`, "[abcd]"},
+		{`v=abcd; echo "[${v%(#s)abcd}]"`, "[]"},
+		{`v=abcd; echo "[${v##*(#e)}]"`, "[]"},
+		// A replacement scans every span of the value, so the anchors are
+		// what keep it to one end. Without a position these would replace
+		// every X rather than the one that is there.
+		{`v=XbXcX; echo "[${v//(#s)X/-}]"`, "[-bXcX]"},
+		{`v=XbXcX; echo "[${v//X(#e)/-}]"`, "[XbXc-]"},
+		{`v=XbXcX; echo "[${v//X(#s)/-}]"`, "[XbXcX]"},
+		{`v=aXbXc; echo "[${v//(#s)X/-}]"`, "[aXbXc]"},
+		// An empty match is a position, and only one position is the start.
+		{`v=abc; echo "[${v//(#s)/-}]"`, "[-abc]"},
+		{`v=abc; echo "[${v//(#e)/-}]"`, "[abc-]"},
+	} {
+		out, _ := runExtendedOperators(t, tc.src, true, nil)
+		if got := strings.TrimSpace(out); got != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}
+
 // The load-bearing half. A flag this matcher does not implement says so by
 // name and stops, because `(#b)` also fills `$match` and a dropped one would
 // leave a script reading an empty value rather than seeing a refusal.
@@ -250,8 +359,6 @@ func TestAnUnimplementedFlagIsRefusedByName(t *testing.T) {
 		{`[[ abc == (#B)(a)* ]]`, "(#B)"},
 		{`[[ abc == (#m)a* ]]`, "(#m)"},
 		{`[[ abc == (#M)a* ]]`, "(#M)"},
-		{`[[ abc == (#s)abc ]]`, "(#s)"},
-		{`[[ abc == abc(#e) ]]`, "(#e)"},
 		{`[[ abd == (#a1)abc ]]`, "(#a)"},
 		{`[[ abc == (#u)abc ]]`, "(#u)"},
 		{`[[ abc == (#U)abc ]]`, "(#U)"},
@@ -259,7 +366,7 @@ func TestAnUnimplementedFlagIsRefusedByName(t *testing.T) {
 		{`[[ abc == ((#b)(a)*|zz) ]]`, "(#b)"},
 		// And through every other surface, not only a condition.
 		{`case abc in (#b)(a)*) echo hit;; esac`, "(#b)"},
-		{`v=abc; echo "${v#(#s)a}"`, "(#s)"},
+		{`v=abc; echo "${v#(#m)a}"`, "(#m)"},
 		{`echo (#m)a*`, "(#m)"},
 	} {
 		out, _ := runExtendedOperators(t, tc.src, true, nil)

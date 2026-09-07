@@ -344,7 +344,7 @@ scan:
 	}
 
 	switch {
-	case strings.HasPrefix(s, "#") && len(s) > 1:
+	case strings.HasPrefix(s, "#") && len(s) > 1 && !hashIsTheParameter(s[1:]):
 		e.Length = true
 		s = s[1:]
 	case strings.HasPrefix(s, "!") && len(s) > 1 && !strings.ContainsAny(s[1:2], ":-+=?"):
@@ -617,6 +617,67 @@ func matchingFlagDelimiter(open byte) byte {
 // name "is it set" suggests — `${+@}`, `${+*}`, `${+#}`, `${+?}`, `${+$}`,
 // `${+!}` and `${+-}` are bad substitutions in the shell that has the
 // construct, and so is `${+}` with nothing after it at all.
+// hashIsTheParameter reports whether the `#` at the front of an expansion is
+// the parameter `$#` rather than the length prefix — so `${#=w}` is `$#` with
+// a default assignment on it and not the length of anything.
+//
+// The same shape the `!` above uses: a prefix that could begin a name is the
+// prefix, and one that cannot is the parameter itself. What decides it is the
+// *operator*, and the set is measured rather than reasoned, because the two
+// readings are not separated by anything as tidy as "an operator follows".
+// Measured 2026-09-07 on zsh 5.9.2 with `set -- p q`, so `$#` is 2 and `$-`
+// is five characters:
+//
+//	${#=w}    2       the parameter, with `=w` never firing since `$#` is set
+//	${#:=w}   2       and the same
+//	${#+w}    w       the parameter, and its alternate does fire
+//	${#:+w}   w
+//	${#:?w}   2
+//	${#-w}    bad substitution  — the *length* of `$-`, then a stray `w`
+//	${#?w}    bad substitution  — the length of `$?`, then a stray `w`
+//	${#:-w}   1       the length of the nameless `${:-w}`, which is `w`
+//
+// So `-` and `?` are names and stay lengths, and `:-` is a third reading
+// again — the nameless expansion this grammar does not have. The operators
+// that read `#` as the parameter and are not in this set are filed rather
+// than carried: `${##2}`, `${#%2}`, `${#/2/X}` and `${#:0:1}` are all `$#`
+// there, and `${##}` is the *length* of `$#`, which is the same two
+// characters resolved the other way — a backtracking parse rather than a
+// lookahead, and not a set this can express.
+func hashIsTheParameter(s string) bool {
+	switch {
+	case s == "":
+		return false
+	case s[0] == '=' || s[0] == '+':
+		// Neither can begin a name, so there is no length reading to
+		// compete: `${#=w}` and `${#+w}` are `$#` in all six shells.
+		return true
+	case s[0] == ':':
+		// Every `:` operator but `:-`. That one is the exception rather than
+		// a rule about the colon, and it is measured: `${#:-w}` is `$#` in
+		// five shells and 1 in zsh, where it is the length of the nameless
+		// `${:-w}`. Reading it as the parameter here would answer five
+		// shells and give the sixth a plausible number instead of the loud
+		// refusal it has now, which is the wrong trade — see the follow-up
+		// the spec entry names.
+		return len(s) > 1 && s[1] != '-'
+	case s[0] == '%' || s[0] == '/':
+		// With an operand. `${#%2}` and `${#/2/X}` are `$#` trimmed and
+		// replaced in every shell that has the operator, while a bare
+		// `${#%}` is a bad substitution in five of the six.
+		return len(s) > 1
+	case s[0] == '#':
+		// The same, and the reason the operand is required: `${##2}` is `$#`
+		// with a `2` stripped off its front, and `${##}` is the *length* of
+		// `$#` — the same two characters resolved the other way, unanimously.
+		return len(s) > 1
+	}
+	// Anything else begins a name, including the special ones: `${#-}` and
+	// `${#?}` are lengths, so `${#-w}` and `${#?w}` are a length with a
+	// stray word after it.
+	return false
+}
+
 func setTestNameStarts(s string) bool {
 	return s != "" && (isNameStart(s[0]) || (s[0] >= '0' && s[0] <= '9'))
 }

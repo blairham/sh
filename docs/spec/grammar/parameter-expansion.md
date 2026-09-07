@@ -169,6 +169,56 @@ yes. This is one of the two axes `CoreSemantics()` answers, and it says
 yes: the core panel is bash, ksh93 and zsh, and dash is the shell the
 core was drawn to exclude.
 
+### A `#` is the prefix, or it is the parameter `$#`
+
+The same character does both jobs, and what decides it is what stands
+behind it. `${#v}` is a length and `${#=w}` is the parameter `$#` with a
+default assignment on it — never firing, since `$#` is always set — so
+the word is not substituted at all.
+
+The two readings are not separated by anything as tidy as "an operator
+follows", because `-`, `?`, `@`, `*`, `$` and a digit are all *names*.
+What can never begin a name leaves the `#` as the parameter. Measured
+2026-09-07 with `set -- p q`, so `$#` is 2:
+
+| probe | all six | reading |
+| --- | --- | --- |
+| `${#=w}` | `2` | the parameter, `=w` never fires |
+| `${#:=w}` | `2` | the same |
+| `${#+w}` | `w` | the parameter, and its alternate does fire |
+| `${#:+w}` | `w` | |
+| `${#:?w}` | `2` | |
+| `${##2}` | `` | the parameter, with `2` trimmed off its front |
+| `${#%2}` | `` | and off its back |
+| `${#/2/X}` | `X` | dash has no operator and refuses |
+| `${#:0:1}` | `2` | dash has none and refuses |
+| `${##}` | `1` | the **length** of `$#` |
+| `${#?}` | `1` | the length of `$?` |
+| `${#-}` | varies | the length of `$-`, which differs by shell |
+
+`${##}` against `${##2}` is the pair worth holding on to: the same two
+characters, resolved one way with an operand behind them and the other
+way without, and unanimously. So the trim reading requires an operand,
+and a bare `${#%}` is a bad substitution in five of the six for the same
+reason — no operand for the trim and no name for the length.
+
+Three shapes are open, and each is a **parse** divergence rather than a
+value one:
+
+| probe | five shells | zsh 5.9.2 |
+| --- | --- | --- |
+| `${#-w}` | `2` | `bad substitution` |
+| `${#?w}` | `2` | `bad substitution` |
+| `${#:-w}` | `2` | `1` |
+
+zsh reads the first two as a length over `$-` and `$?` with a stray word
+after them, and the third as the length of the nameless `${:-w}` — an
+expansion with no name at all, which this grammar does not have. This
+implementation refuses all three, which is zsh's answer for two of them
+and nobody's for the third. Taking the five-shell side would replace one
+shell's loud refusal with a plausible number, so it waits on a grammar
+flag rather than being guessed.
+
 ## Extensions
 
 None of these are POSIX, and they do not all arrive together.
@@ -1404,7 +1454,7 @@ it. Measured:
 | `${=#v}` | the *length*, so the run precedes `#` as well |
 | `${=~v}`, `${~=v}` | the same expansion: both flags, in either order |
 | `${=}` | the empty string, no error — as `${~}` is |
-| `${#=v}` | **not this flag**: `${#=word}` is `$#` with a default assigned to it, so `set -- p q` makes it `2`. A gap here either way |
+| `${#=v}` | **not this flag**: `${#=word}` is `$#` with a default assigned to it, so `set -- p q` makes it `2` — unanimous across the panel, and answered; see "A `#` is the prefix, or it is the parameter `$#`" |
 
 ### It is one string that is split, not each element
 

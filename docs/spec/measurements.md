@@ -6152,7 +6152,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   x=/tmp/Dir/File.Txt; echo "[${x:ha}]"; echo after
   ```
-- `param/a-substring-modifier-that-needs-the-working-directory` — `:a` makes a path absolute lexically — `..` and `.` cancelled by name, no link followed — where the other three read `a` as an offset of 1 and take the substring. An absolute value on purpose, so the answer needs no working directory and no machine agrees or disagrees by accident
+- `param/a-substring-modifier-that-needs-the-working-directory` — `:a` makes a path absolute lexically — `..` and `.` canceled by name, no link followed — where the other three read `a` as an offset of 1 and take the substring. An absolute value on purpose, so the answer needs no working directory and no machine agrees or disagrees by accident
   ```sh
   x=/x/y/../z; a=1; echo "[${x:a}]"
   ```

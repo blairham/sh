@@ -168,7 +168,7 @@ func TestARefusedModifierIsNamedOnlyWhenTheLetterIsTheProblem(t *testing.T) {
 // name holding a slash is never searched for.
 func TestTheModifiersThatNeedMoreThanTheStringArePerformed(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
-		// `:a` is lexical — `..` and `.` cancelled by name, no link followed.
+		// `:a` is lexical — `..` and `.` canceled by name, no link followed.
 		{"absolute", `x=/x/y/../z/.; echo "[${x:a}]"`, "[/x/z]\n"},
 		{"absolute keeps empty empty", `x=; echo "[${x:a}]"`, "[]\n"},
 		// `:A` and `:P` resolve what exists and leave the rest alone, so a

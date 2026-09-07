@@ -141,26 +141,98 @@ func TestAModifierResolvesAgainstTheDiskItIsGiven(t *testing.T) {
 	if err := os.Symlink(filepath.Join(dir, "real"), filepath.Join(dir, "link")); err != nil {
 		t.Skipf("no symlinks here: %v", err)
 	}
+	if err := os.Symlink(filepath.Join(dir, "nowhere"), filepath.Join(dir, "dangling")); err != nil {
+		t.Skipf("no symlinks here: %v", err)
+	}
+	// The *physical* directory, which is what that shell puts a relative
+	// value on — and on this platform it is not the one the framework handed
+	// over, since a temporary directory sits under a link. Asserting the
+	// whole path rather than its ends is the point: "absolute and ending in
+	// rel/f" is equally true of the logical answer, so it would grade
+	// nothing.
+	physical, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatalf("resolving the directory: %v", err)
+	}
 	out, st := runZsh(t, dir, `x=rel/f; echo "[${x:a}]"
 y=`+filepath.Join(dir, "link", "sub")+`; echo "[${y:A}]"
-z=`+filepath.Join(dir, "link", "sub")+`; echo "[${z:a}]"`)
+z=`+filepath.Join(dir, "link", "sub")+`; echo "[${z:a}]"
+w=`+filepath.Join(dir, "dangling")+`; echo "[${w:A}]"`)
 	if st != 0 {
 		t.Fatalf("status %d, out %q", st, out)
 	}
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
-	if len(lines) != 3 {
-		t.Fatalf("got %q, want three lines", out)
+	if len(lines) != 4 {
+		t.Fatalf("got %q, want four lines", out)
 	}
-	// `:a` is lexical, so it neither needs nor consults the link.
-	if !strings.HasPrefix(lines[0], "[/") || !strings.HasSuffix(lines[0], "/rel/f]") {
-		t.Errorf(":a on a relative path = %s, want an absolute path ending in /rel/f", lines[0])
+	if want := "[" + filepath.Join(physical, "rel", "f") + "]"; lines[0] != want {
+		t.Errorf(":a on a relative path = %s, want %s", lines[0], want)
 	}
-	// `:A` follows it; `:a` does not, and the pair is the whole difference.
-	if strings.Contains(lines[1], "/link/") {
-		t.Errorf(":A = %s, want the link resolved", lines[1])
+	// `:A` follows the link; `:a` does not, and the pair is the whole
+	// difference between them.
+	if want := "[" + filepath.Join(physical, "real", "sub") + "]"; lines[1] != want {
+		t.Errorf(":A = %s, want %s", lines[1], want)
 	}
 	if !strings.HasSuffix(lines[2], "/link/sub]") {
 		t.Errorf(":a = %s, want the link left alone", lines[2])
+	}
+	// A link whose target is not there is its own answer, not the name it
+	// points at. The walk has to stop *at* it, which is the one thing the
+	// resolver cannot do by following links until one fails.
+	if want := "[" + filepath.Join(physical, "dangling") + "]"; lines[3] != want {
+		t.Errorf(":A on a dangling link = %s, want %s", lines[3], want)
+	}
+}
+
+// `:A` cancels `..` by name and `:P` applies it to what has already been
+// resolved. That is the primary difference between them, and a link to a
+// *sub*directory is the only shape that shows it: `link2/..` is the link's
+// parent by name and the parent of what it points at on the disk.
+func TestResolvedAndRealPathPartOverDotDot(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "real", "sub"), 0o700); err != nil {
+		t.Fatalf("making the tree: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(dir, "real", "sub"), filepath.Join(dir, "link2")); err != nil {
+		t.Skipf("no symlinks here: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(dir, "real"), filepath.Join(dir, "link")); err != nil {
+		t.Skipf("no symlinks here: %v", err)
+	}
+	physical, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatalf("resolving the directory: %v", err)
+	}
+	want := "[" + physical + "]" +
+		"[" + filepath.Join(physical, "real") + "]" +
+		// And a path only *partly* on the disk: the prefix that exists is
+		// resolved and the rest is appended as written, rather than the whole
+		// thing being handed back untouched.
+		"[" + filepath.Join(physical, "real", "no", "such") + "]\n"
+	// Written rather than joined: filepath.Join *cleans*, so it would cancel
+	// the `..` here and hand the shell a path with nothing left to disagree
+	// about — which is the very thing being measured.
+	out, st := runZsh(t, dir, `x=`+dir+`/link2/..
+y=`+dir+`/link/no/such
+echo "[${x:A}][${x:P}][${y:A}]"`)
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+}
+
+// An empty PATH finds nothing, where this shell's command *lookup* runs a
+// `mycmd` sitting in the current directory. Measured both ways in the same
+// shell, which is what makes it a rule about `:c` rather than about PATH.
+func TestACommandModifierWithAnEmptyPathFindsNothing(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mycmd"), []byte("#!/bin/sh\necho ran\n"), 0o700); err != nil {
+		t.Fatalf("writing the command: %v", err)
+	}
+	out, st := runZsh(t, dir, `x=mycmd
+PATH=
+echo "[${x:c}]"`)
+	if out != "[mycmd]\n" || st != 0 {
+		t.Errorf("`:c` with an empty PATH = %q (status %d), want the name unchanged", out, st)
 	}
 }
 

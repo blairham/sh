@@ -3304,7 +3304,7 @@ echo "st=$?"`,
 	{
 		ID: "param/a-substring-modifier-that-needs-the-working-directory", Category: "parameter expansion",
 		Snippet: `x=/x/y/../z; a=1; echo "[${x:a}]"`,
-		Why:     "`:a` makes a path absolute lexically — `..` and `.` cancelled by name, no link followed — where the other three read `a` as an offset of 1 and take the substring. An absolute value on purpose, so the answer needs no working directory and no machine agrees or disagrees by accident",
+		Why:     "`:a` makes a path absolute lexically — `..` and `.` canceled by name, no link followed — where the other three read `a` as an offset of 1 and take the substring. An absolute value on purpose, so the answer needs no working directory and no machine agrees or disagrees by accident",
 	},
 	{
 		ID: "param/a-substring-modifier-that-needs-the-command-search", Category: "parameter expansion",

@@ -499,7 +499,7 @@ func (r *Runner) absoluteAgainstCwd(value string) string {
 }
 
 // modifierAbsolute is `:a` — an absolute path, made lexically. `..` and `.`
-// are cancelled by name and no symlink is followed, which is the whole
+// are canceled by name and no symlink is followed, which is the whole
 // difference from `:A`.
 //
 // An empty value stays empty rather than becoming the working directory.
@@ -512,7 +512,7 @@ func (r *Runner) modifierAbsolute(value string) string {
 }
 
 // modifierRealPath is `:P` — the real path, with `..` applied to what has
-// already been resolved rather than cancelled by name.
+// already been resolved rather than canceled by name.
 //
 // Two things separate it from `:A`, both measured. An empty value is the
 // working directory here and stays empty there. And a trailing slash survives
@@ -555,10 +555,13 @@ func (r *Runner) modifierCommandPath(value string) string {
 		return value
 	}
 	path, _ := r.getVar("PATH")
-	if path == "" {
-		return value
-	}
 	for _, dir := range strings.Split(path, ":") {
+		// An empty element is skipped rather than read as the current
+		// directory, which is the rule this modifier does not share with the
+		// command lookup — and it is also what makes an empty PATH find
+		// nothing, since splitting one gives exactly one empty element. An
+		// `if path == ""` in front of this loop said the same thing twice:
+		// measured as an equivalent mutant, removing it changed no answer.
 		if dir == "" {
 			continue
 		}

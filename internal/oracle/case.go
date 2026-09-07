@@ -4996,6 +4996,26 @@ echo "st=$?"`,
 		Why:     "zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection: one spelling, two meanings, and no diagnostic to tell them apart",
 	},
 	{
+		ID: "redir/a-duplication-joins-the-fan-out", Category: "redirection",
+		Snippet: `echo x >&1 >b; printf "[b=%s]" "$(cat b)"`,
+		Why:     "a `>&` duplication is a target like any other and belongs in the fan-out, which is the half that was missing (#1261): zsh reaches the terminal *and* the file, and the five that write once reach the file alone. Silent in the direction that loses output — a progress line meant for the terminal and a log goes only to the log, at status 0, with nothing to detect it",
+	},
+	{
+		ID: "redir/a-duplication-copies-the-fan-out-so-far", Category: "redirection",
+		Snippet: `echo x >b >&1; printf "[n=%s]" "$(grep -c . b)"`,
+		Why:     "the discriminating half, and the reason `ignored` is not the story: written the other way round, zsh puts the line in the file *twice*, because by the time `>&1` is read standard output already is the fan-out, so duplicating it adds the file a second time. A shell that merely dropped the duplication would answer 1 here as the other five do, and so would one that added the stream it started with rather than the stream as it stands",
+	},
+	{
+		ID: "redir/a-table-descriptor-joins-the-fan-out", Category: "redirection",
+		Snippet: `echo x 3>c >b >&3; printf "[b=%s][c=%s]" "$(cat b)" "$(cat c)"`,
+		Why:     "the same rule where the duplication names a descriptor from the table rather than a named stream, so what is contributed is a file the command itself opened: zsh fills both and the other five only the last. Written without `exec` deliberately — an `exec`-parked descriptor drags in whether it reaches a command at all, which is a different axis",
+	},
+	{
+		ID: "redir/a-close-empties-the-fan-out", Category: "redirection",
+		Snippet: `echo x >b >&- >c; printf "[b=%s][c=%s]" "$(cat b)" "$(cat c)"`,
+		Why:     "unanimous, and the boundary of the rule above: `>&-` does not add a target, it discards the ones named before it, so the first file is created and left empty in all six. A fan-out that only ever grew wrote to `b` as well — right about the operator and wrong about the close",
+	},
+	{
 		ID: "token/clobber-override", Category: "tokenization",
 		Snippet: `set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"`,
 		Why:     ">| overrides noclobber with the same meaning everywhere, unlike &>",

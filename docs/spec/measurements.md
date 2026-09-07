@@ -7451,6 +7451,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
 | `redir/file-then-merge` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` |
 | `redir/multios-is-zsh-only` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[x][x]` |
+| `redir/a-duplication-joins-the-fan-out` | `[b=x]` | `[b=x]` | `[b=x]` | `[b=x]` | `[b=x]` | `x~[b=x]` |
+| `redir/a-duplication-copies-the-fan-out-so-far` | `[n=1]` | `[n=1]` | `[n=1]` | `[n=1]` | `[n=1]` | `[n=2]` |
+| `redir/a-table-descriptor-joins-the-fan-out` | `[b=][c=x]` | `[b=][c=x]` | `[b=][c=x]` | `[b=][c=x]` | `[b=][c=x]` | `[b=x][c=x]` |
+| `redir/a-close-empties-the-fan-out` | `[b=][c=x]` | `[b=][c=x]` | `[b=][c=x]` | `[b=][c=x]` | `[b=][c=x]` | `[b=][c=x]` |
 | `redir/clobber-override-bang` | `[f=one][bang=two f]` | `[f=one][bang=two f]` | `[f=one][bang=two f]` | `[f=one][bang=two f]` | `[f=one][bang=two f]` | `[f=two][bang=]` |
 | `redir/clobber-override-bang-behind-a-descriptor` | `[st=0][f=one][bang=two f]` | `[st=0][f=one][bang=two f]` | `[st=0][f=one][bang=two f]` | `[st=0][f=one][bang=two f]` | `[st=0][f=one][bang=two f]` | `[st=0][f=two][bang=]` |
 | `redir/append-override-bang` | `[st=0][f=][bang=two f]` | `[st=0][f=][bang=two f]` | `[st=0][f=][bang=two f]` | `[st=0][f=][bang=two f]` | `[st=0][f=][bang=two f]` | `[st=0][f=two][bang=]` |
@@ -7818,6 +7822,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/multios-is-zsh-only` — zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection: one spelling, two meanings, and no diagnostic to tell them apart
   ```sh
   echo x >a >b; printf "[%s][%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"
+  ```
+- `redir/a-duplication-joins-the-fan-out` — a `>&` duplication is a target like any other and belongs in the fan-out, which is the half that was missing (#1261): zsh reaches the terminal *and* the file, and the five that write once reach the file alone. Silent in the direction that loses output — a progress line meant for the terminal and a log goes only to the log, at status 0, with nothing to detect it
+  ```sh
+  echo x >&1 >b; printf "[b=%s]" "$(cat b)"
+  ```
+- `redir/a-duplication-copies-the-fan-out-so-far` — the discriminating half, and the reason `ignored` is not the story: written the other way round, zsh puts the line in the file *twice*, because by the time `>&1` is read standard output already is the fan-out, so duplicating it adds the file a second time. A shell that merely dropped the duplication would answer 1 here as the other five do, and so would one that added the stream it started with rather than the stream as it stands
+  ```sh
+  echo x >b >&1; printf "[n=%s]" "$(grep -c . b)"
+  ```
+- `redir/a-table-descriptor-joins-the-fan-out` — the same rule where the duplication names a descriptor from the table rather than a named stream, so what is contributed is a file the command itself opened: zsh fills both and the other five only the last. Written without `exec` deliberately — an `exec`-parked descriptor drags in whether it reaches a command at all, which is a different axis
+  ```sh
+  echo x 3>c >b >&3; printf "[b=%s][c=%s]" "$(cat b)" "$(cat c)"
+  ```
+- `redir/a-close-empties-the-fan-out` — unanimous, and the boundary of the rule above: `>&-` does not add a target, it discards the ones named before it, so the first file is created and left empty in all six. A fan-out that only ever grew wrote to `b` as well — right about the operator and wrong about the close
+  ```sh
+  echo x >b >&- >c; printf "[b=%s][c=%s]" "$(cat b)" "$(cat c)"
   ```
 - `redir/clobber-override-bang` — the discriminating pair for the `!` spelling of the clobber override, with both files read back because the exit status cannot tell them apart: zsh truncates the file that was named, and the other five write a file whose name is the single character `!` holding `two f` and report 0 — the same text, two meanings, no diagnostic (#1247)
   ```sh

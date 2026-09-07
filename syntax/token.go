@@ -46,6 +46,7 @@ const (
 	TokDSemi      // ;;
 	TokSemiAmp    // ;&   fall through to the next case body
 	TokDSemiAmp   // ;;&  keep testing later case patterns
+	TokSemiPipe   // ;|   the same, spelled zsh's way
 	TokLeftParen  // (
 	TokRightParen // )
 
@@ -71,6 +72,7 @@ var text = map[Kind]string{
 	TokAmp: "&", TokAmpBang: "&!", TokAmpPipe: "&|",
 	TokAndAnd: "&&", TokPipe: "|", TokOrOr: "||", TokPipeAmp: "|&",
 	TokSemi: ";", TokDSemi: ";;", TokSemiAmp: ";&", TokDSemiAmp: ";;&",
+	TokSemiPipe:  ";|",
 	TokLeftParen: "(", TokRightParen: ")",
 	TokLess: "<", TokGreat: ">", TokDGreat: ">>", TokLessAmp: "<&", TokGreatAmp: ">&",
 	TokLessGreat: "<>", TokClobber: ">|", TokDLess: "<<", TokDLessDash: "<<-",

@@ -465,7 +465,7 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 					if at == len(c.Items) {
 						return nil
 					}
-				case syntax.TokDSemiAmp:
+				case syntax.TokDSemiAmp, syntax.TokSemiPipe:
 					at++
 					for at < len(c.Items) && !r.caseItemMatches(c.Items[at], subject) {
 						at++

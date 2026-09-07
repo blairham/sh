@@ -236,6 +236,22 @@ func TestDialectGatesOtherConstructs(t *testing.T) {
 		{"case fallthrough absent", `a;&b`, POSIX(), `word(a) ; & word(b)`},
 		{"case continue where the flag is on", `a;;&b`, withCaseContinue(), `word(a) ;;& word(b)`},
 		{"case continue absent from core", `a;;&b`, Core(), `word(a) ;; & word(b)`},
+		// `;|` is the other spelling of the same terminator, and the two
+		// flags are independent because the shells that have them are
+		// disjoint. With it on the two bytes are one operator *anywhere*,
+		// which is what zsh does — measured, `echo a ;| echo b` is
+		// ``parse error near `;|'`` there and ``near `|'`` in the other
+		// four.
+		{"case continue pipe where the flag is on", `a;|b`, withCaseContinuePipe(), `word(a) ;| word(b)`},
+		{"case continue pipe absent from core", `a;|b`, Core(), `word(a) ; | word(b)`},
+		// Longest match still wins over the new two-byte operator, so `;;|`
+		// is `;;` and then a `|` rather than a `;` and then a `;|`.
+		{"double-semi wins over semi-pipe", `a;;|b`, withCaseContinuePipe(), `word(a) ;; | word(b)`},
+		// And the flags do not imply one another: the bash spelling stays
+		// two operators where only zsh's is on, and zsh's stays two where
+		// only bash's is.
+		{"semi-pipe does not bring double-semi-amp", `a;;&b`, withCaseContinuePipe(), `word(a) ;; & word(b)`},
+		{"double-semi-amp does not bring semi-pipe", `a;|b`, withCaseContinue(), `word(a) ; | word(b)`},
 		{"dollar-single in core", `$'a\nb'`, Core(), `word($'a\nb')`},
 		// The `$` of a translatable string contributes nothing: the spans
 		// are exactly what a bare `"` produces, expansions included.
@@ -470,6 +486,14 @@ func TestDoubleBracketIsLeftToTheParser(t *testing.T) {
 func withCaseContinue() Dialect {
 	d := Core()
 	d.CaseContinue = true
+	return d
+}
+
+// withCaseContinuePipe is Core plus zsh's spelling of the same terminator,
+// named as a flag for the reason above.
+func withCaseContinuePipe() Dialect {
+	d := Core()
+	d.CaseContinuePipe = true
 	return d
 }
 

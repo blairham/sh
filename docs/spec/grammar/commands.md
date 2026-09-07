@@ -1372,10 +1372,66 @@ same size**:
 | `;;` | stop | yes | yes | yes | yes | yes |
 | `;&` | fall through to the next body | **no** | yes | **no** | yes | yes |
 | `;;&` | keep testing later patterns | **no** | yes | **no** | **no** | **no** |
+| `;\|` | the same, spelled zsh's way | **no** | **no** | **no** | **no** | yes |
 
 `;&` is core; `;;&` is bash-only and belongs to the bash dialect. Lumping
 them together as "case extensions" would put a bash-only construct in the
 core language.
+
+### The two spellings of "keep testing" are mutually exclusive
+
+`;|` and `;;&` are **one terminator under two operators**, and no shell has
+both. Measured 2026-09-07 over a script file, three arms and the subject
+`b`: both print `B` then `star`, the arm running and the later patterns
+still being tested. zsh takes `;|` and refuses `;;&` with ``parse error
+near `&'``; bash 4-and-later takes `;;&` and refuses `;|`; dash, bash 3.2
+and ksh93 have neither.
+
+So this is a second grammar flag, `CaseContinuePipe` (zsh only), beside
+`CaseContinue` rather than a second *value* of it — the same reason
+`PipeBothStreams` records about `|&`. A single flag would have to be given
+a value for zsh, and zsh's answer is not "the other spelling": it is
+"that one is an error".
+
+The filing's own three-arm program could not tell this terminator from
+`;&`, because with a matching subject and a following `*` arm the two give
+the same output. The discriminator is a middle arm whose pattern does
+**not** match:
+
+    case b in
+      b) echo 1 <T>
+      z) echo 2 ;;
+      *) echo star ;;
+    esac
+
+`;&` prints `1` then `2` — it runs the next body without testing it. `;|`
+and `;;&` print `1` then `star`. A five-arm program mixing `;|` with `;&`
+prints `1 3 4` in zsh and, with `;;&` substituted, `1 3 4` in bash 5.3 —
+letter for letter, which is what makes them one construct.
+
+**The operator is not confined to a `case` arm**, because zsh's is not, and
+the diagnostic is the evidence:
+
+    echo a ;| echo b
+
+    zsh    parse error near `;|'
+    bash   syntax error near unexpected token `|'
+    dash   Syntax error: "|" unexpected
+    ksh93  syntax error at line 1: `|' unexpected
+
+zsh names both bytes because it lexed one token; the other three name the
+bare `|` because they lexed a `;` and then a `|`. Where the flag is off the
+operator table falls back the same way, so the refusal lands on the `|`
+where theirs does and the wording follows from the lexing rather than being
+written twice. The two bytes must also touch, like `|&`: `; |` with a blank
+is ``parse error near `|'`` even in zsh.
+
+Longest match still decides, so `;;|` is `;;` and then a `|` rather than a
+`;` and then a `;|` — a `|` with no command after it, which is what zsh
+reports.
+
+Corpus: `cmd/case-continue-matching-zsh-spelling`,
+`cmd/case-continue-matching-zsh-spelling-outside-a-case`.
 
 `;&` is also a **bash 4** feature: bash 3.2 rejects it, so it is
 unavailable through macOS's `/bin/sh`. That column only appeared when the
@@ -1407,6 +1463,13 @@ half was measured a size too small. Every line below runs in dash:
 
     case a in (a|;) …      the arm still matches `a`
     case a in (;|a) …      and still matches `a`
+
+(The second line is dash's reading, and it is dash's alone for two
+reasons now: only dash takes an operator where a pattern belongs, and in
+zsh those two bytes are the `;|` terminator, so the line is ``parse error
+near `;|'`` there rather than a pattern at all. The flags are disjoint —
+`CasePatternAcceptsOperator` is dash's and `CaseContinuePipe` is zsh's —
+so neither reading can reach the other's dialect.)
     case a in (a|;|b) …    matches `a` and `b`
     case a in (a|;|;|b) …  one operator per position, repeatable
     case a in ()) …        the slot takes the `)`; the arm has no patterns
@@ -1651,7 +1714,7 @@ and-or lists separated by `;`, `&` or newline; `sep` is any one of those.
     select      :  'select' name [ [ 'in' word* ] sep ] 'do' list sep 'done'
     case        :  'case' word 'in' { case-item } 'esac'
     case-item   :  [ '(' ] pattern { '|' pattern } ')' [ list ] terminator
-    terminator  :  ';;' | ';&' | ';;&'
+    terminator  :  ';;' | ';&' | ';;&' | ';|'
     coproc      :  'coproc' ( command | name compound )
 
 `for-arith` and `coproc` are not in XCU; each has its own section below,

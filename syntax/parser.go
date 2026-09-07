@@ -267,7 +267,7 @@ func (p *Parser) atStopWord() bool {
 // naming the `&`.
 func (p *Parser) atListEnd() bool {
 	switch p.tok.Kind {
-	case TokRightParen, TokDSemi, TokSemiAmp, TokDSemiAmp:
+	case TokRightParen, TokDSemi, TokSemiAmp, TokDSemiAmp, TokSemiPipe:
 		return true
 	}
 	return p.atStopWord()
@@ -2828,7 +2828,7 @@ func (p *Parser) parseCase() Command {
 		it.Body = p.parseList()
 
 		switch p.tok.Kind {
-		case TokDSemi, TokSemiAmp, TokDSemiAmp:
+		case TokDSemi, TokSemiAmp, TokDSemiAmp, TokSemiPipe:
 			it.Term, it.TermPos = p.tok.Kind, p.tok.Pos
 			// The terminator's own `p.next()` reads the *next arm's* first
 			// token, so the flag goes back on in front of it.

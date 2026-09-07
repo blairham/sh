@@ -452,6 +452,27 @@ type Dialect struct {
 	// only: ksh93 and zsh both reject it, so it is not core.
 	CaseContinue bool
 
+	// CaseContinuePipe enables `;|`, which is zsh's spelling of `;;&` — the
+	// same terminator, measured to the same output: an arm runs and the
+	// *later patterns keep being tested*, which a five-arm program with a
+	// `;&` in it confirms letter for letter against bash's `;;&`.
+	//
+	// A second flag beside CaseContinue rather than a second value of it,
+	// for the reason PipeBothStreams already records about `|&`: the two
+	// spellings are mutually exclusive, so no single flag could be given a
+	// value. zsh takes `;|` and refuses `;;&` with ``parse error near `&'``;
+	// bash 4-and-later takes `;;&` and refuses `;|`; dash, bash 3.2 and
+	// ksh93 have neither.
+	//
+	// The token is not confined to a `case` arm, because zsh's is not:
+	// measured, `echo a ;| echo b` is ``parse error near `;|'`` there and
+	// ``near `|'`` in the other four, so the two bytes are one operator
+	// wherever they stand. Where the flag is off the operator table falls
+	// back to `;` and then `|`, which is what those four lex — so the
+	// refusal lands on the `|` where theirs does, and the diagnostic follows
+	// from the lexing rather than being written twice.
+	CaseContinuePipe bool
+
 	// DollarSingleQuote enables `$'...'`, where backslash escapes are
 	// interpreted. Absent from dash.
 	DollarSingleQuote bool

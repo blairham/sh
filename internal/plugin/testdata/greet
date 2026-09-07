@@ -34,9 +34,19 @@ write() {
 }
 
 # ask METHOD PARAMS — one host method, then read its answer off the next line.
+#
+# It FAILS when that read fails, and every caller below stops serving when it
+# does. This is the second thing in this fixture worth copying into a real
+# plugin. A failed read is end of input, end of input means the host is gone —
+# `Host.Close` closes a plugin's input first precisely so a well-behaved one
+# sees it — and the answer to a host method is never coming after that. A read
+# whose failure goes unchecked hands back an empty line as though it were an
+# answer, and a loop that cannot tell that from a real answer goes round again
+# on it, for as long as the machine is up: seven orphaned copies of this file
+# were found at 11% of a core each, three hours old, which is #1093.
 ask() {
 	send "{\"jsonrpc\":\"2.0\",\"id\":9000,\"method\":\"$1\",\"params\":$2}"
-	IFS= read -r reply
+	IFS= read -r reply || return 1
 	printf '%s' "$reply"
 }
 
@@ -62,13 +72,13 @@ while IFS= read -r line; do
 			status=3
 			;;
 		getset)
-			reply=$(ask shell/getVar "{\"call\":\"$call\",\"name\":\"$arg\"}")
+			reply=$(ask shell/getVar "{\"call\":\"$call\",\"name\":\"$arg\"}") || break
 			value=$(str_of value "$reply")
 			set=$(printf '%s' "$reply" | sed -n 's/.*"set":\([a-z]*\).*/\1/p')
-			ask shell/setVar "{\"call\":\"$call\",\"name\":\"SEEN\",\"value\":\"$value/$set\"}" >/dev/null
+			ask shell/setVar "{\"call\":\"$call\",\"name\":\"SEEN\",\"value\":\"$value/$set\"}" >/dev/null || break
 			;;
 		where)
-			reply=$(ask shell/dir "{\"call\":\"$call\"}")
+			reply=$(ask shell/dir "{\"call\":\"$call\"}") || break
 			write "$call" out "$(str_of dir "$reply")
 "
 			;;
@@ -76,8 +86,13 @@ while IFS= read -r line; do
 			# The chunks come back already base64 and go straight out again as
 			# base64, so this fixture never has to decode anything: the host
 			# encoded it and the host will decode it.
+			#
+			# There are two reasons to leave this loop and they are not the same
+			# reason: `ask` failing is the host having gone away, and `eof` is the
+			# input having run out. Reading the first as "not eof yet" is what
+			# spun — an unanswered request is not an answer of no.
 			while :; do
-				reply=$(ask shell/read "{\"call\":\"$call\",\"max\":64}")
+				reply=$(ask shell/read "{\"call\":\"$call\",\"max\":64}") || break
 				data=$(str_of data "$reply")
 				eof=$(printf '%s' "$reply" | sed -n 's/.*"eof":\([a-z]*\).*/\1/p')
 				if [ -n "$data" ]; then
@@ -87,7 +102,7 @@ while IFS= read -r line; do
 			done
 			;;
 		moan)
-			ask shell/diagnose "{\"call\":\"$call\",\"text\":\"$arg is not a thing\"}" >/dev/null
+			ask shell/diagnose "{\"call\":\"$call\",\"text\":\"$arg is not a thing\"}" >/dev/null || break
 			status=1
 			;;
 		bigstatus)

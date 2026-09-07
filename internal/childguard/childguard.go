@@ -1,8 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-// Package childguard fails a test binary that leaves a process behind holding
-// one of the shell's own pipes.
+// Package childguard fails a test binary that leaves a process behind whose
+// command line names a marker the caller chooses.
+//
+// The marker is what makes this a guard rather than a census, and there are
+// two in this tree: the directory the interpreter's process-substitution
+// pipes live in, and the directory internal/plugin's fixtures live in. Both
+// are *paths*, which is not a coincidence — a path is the one thing a stray
+// carries in its command line that says whose it was.
 //
 // A process substitution is a named pipe and a command started beside the one
 // that was given its path. If the shell stops without closing its end, or
@@ -21,21 +27,35 @@
 //
 // # What it guards, and what it does not
 //
-// A surviving *descendant of this test binary* whose command line names one of
-// the shell's pipes. Both halves are load-bearing:
+// A surviving *descendant of this test binary* whose command line names the
+// marker. Both halves are load-bearing:
 //
 //   - A descendant, because a leak is this run's doing. Several agents run
 //     these suites at once on one machine, and reporting somebody else's stray
 //     would make the guard cry wolf where a real one is hardest to see.
-//   - Holding a pipe, because it is not a census of every child. Some tests
-//     mean to leave a process running — a job started with `&` and not waited
-//     for is the subject of several — and a guard that fired on those would be
-//     turned off within the day. The marker is what separates a leak from a
-//     background job that was the point.
+//   - Naming the marker, because it is not a census of every child. Some
+//     tests mean to leave a process running — a job started with `&` and not
+//     waited for is the subject of several — and a guard that fired on those
+//     would be turned off within the day. The marker is what separates a leak
+//     from a background job that was the point.
 //
 // So this does not catch every kind of stray child. It catches the class the
 // leak belonged to, at every site rather than three, which is what makes it a
 // guard rather than a patch.
+//
+// # And it cannot catch a run that was killed
+//
+// The census is taken after the run returns. A test binary that is killed
+// rather than finished — a `go test` timeout, a SIGKILL — never reaches it,
+// so nothing is reported however many strays there are; and a killed run is
+// the one that leaves the most, because no deferred shutdown runs either.
+//
+// That is not a gap to be closed here. It is the reason a child of these
+// tests has to be able to end *itself*: #1093 was seven orphaned plugin
+// fixtures spinning at 11% of a core each, from a run that was killed, and
+// what fixed it was the fixture noticing its own end of input rather than
+// anything this package could have said afterwards. A guard reports the
+// ordinary leak. Self-defence is what covers the other kind.
 package childguard
 
 import (
@@ -59,6 +79,11 @@ import (
 // helper's — and its tests pin the two together, so a prefix that changed in
 // one place fails the build rather than leaving the guard quietly finding
 // nothing.
+//
+// It is not the only marker, and a marker belongs to whoever writes the path.
+// internal/plugin's fixtures are named by their own directory and that
+// constant lives there, pinned to a real fixture path by a test of its own
+// for the same reason this one is pinned to the interpreter's prefix.
 const PipeMarker = "sh-procsub"
 
 // Grace is how long a straggler is given to finish before it is called a leak.
@@ -78,8 +103,8 @@ type Process struct {
 	Command string
 }
 
-// Wrap returns a run that fails if the tests leave a process holding a path
-// whose name contains marker.
+// Wrap returns a run that fails if the tests leave a process whose command
+// line contains marker.
 //
 // A package guards itself with
 //
@@ -115,13 +140,14 @@ func (g guarded) Run() int {
 	if len(left) == 0 {
 		return code
 	}
-	fmt.Fprintf(os.Stderr, "\nchildguard: the tests left %d process(es) holding a pipe:\n", len(left))
+	fmt.Fprintf(os.Stderr, "\nchildguard: the tests left %d process(es) whose command line names %q:\n", len(left), g.marker)
 	for _, p := range left {
 		fmt.Fprintf(os.Stderr, "\t%d (parent %d)\t%s\n", p.PID, p.PPID, p.Command)
 	}
-	fmt.Fprint(os.Stderr, "Each of these is a command the shell started and did not "+
-		"wait for, or whose end of the pipe was never closed. They reparent to init "+
-		"when this binary exits and stay until something kills them.\n")
+	fmt.Fprint(os.Stderr, "Each of these is a process this run started and did not "+
+		"wait for, or that was never told there was nothing left for it to do. "+
+		"They reparent to init when this binary exits and stay until something "+
+		"kills them.\n")
 	if code == 0 {
 		return 1
 	}

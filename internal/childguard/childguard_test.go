@@ -4,9 +4,11 @@
 package childguard
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -152,4 +154,57 @@ func TestACensusNamesThisProcess(t *testing.T) {
 		}
 	}
 	t.Errorf("the census of %d processes did not name this one (%d)", len(all), os.Getpid())
+}
+
+// TestTheReportNamesTheMarkerItLookedFor. The marker is a parameter and there
+// are two of them in this tree — the interpreter's pipe directory and
+// internal/plugin's fixture directory — so a report that described only pipes
+// would be telling whoever reads it to go and look for the wrong thing. What
+// makes the list actionable is the string that selected it.
+func TestTheReportNamesTheMarkerItLookedFor(t *testing.T) {
+	marker := "childguard-leak"
+	dir := t.TempDir()
+	held := startAStrayHoldingAPipe(t, dir, marker)
+	defer func() {
+		_ = held.Process.Kill()
+		_, _ = held.Process.Wait()
+	}()
+
+	said := captureStderr(t, func() {
+		_ = (guarded{m: runner{code: 0}, marker: marker, grace: 50 * time.Millisecond}).Run()
+	})
+	if !strings.Contains(said, marker) {
+		t.Errorf("the report does not name the marker it looked for.\ngot:\n%s", said)
+	}
+	if !strings.Contains(said, strconv.Itoa(held.Process.Pid)) {
+		t.Errorf("the report does not name the process it found (pid %d).\ngot:\n%s", held.Process.Pid, said)
+	}
+}
+
+// captureStderr runs f with os.Stderr replaced by a pipe and answers what was
+// written to it. The guard reports to os.Stderr directly, because a test
+// binary's report has nowhere else to go — so reading it back means standing
+// in for the file rather than for a writer the code was handed.
+func captureStderr(t *testing.T, f func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("making a pipe: %v", err)
+	}
+	saved := os.Stderr
+	os.Stderr = w
+	// Read on a goroutine: the report is small, but a pipe holds only so
+	// much, and a writer blocked on a full one nothing is draining would hang
+	// the test rather than fail it.
+	got := make(chan string, 1)
+	go func() {
+		b, _ := io.ReadAll(r)
+		got <- string(b)
+	}()
+	f()
+	os.Stderr = saved
+	_ = w.Close()
+	out := <-got
+	_ = r.Close()
+	return out
 }

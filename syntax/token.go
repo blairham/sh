@@ -278,6 +278,13 @@ type Span struct {
 	// span inside one carries its own quoting and is written back with it,
 	// which is what says the protection was the script's rather than the
 	// printer's.
+	//
+	// Setting it on the quoted spans as well is an equivalent mutant, and
+	// is recorded here so the next reader does not go looking for the row
+	// that would kill it: the printer is the only thing that reads this
+	// field, and it reads it in the arm it takes for unquoted text alone —
+	// a quoted span is written from its quoting before the question is
+	// asked.
 	PatternGroup bool
 
 	// Pos is where the span starts, including its opening delimiter.

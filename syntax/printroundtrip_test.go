@@ -38,7 +38,7 @@ import (
 // written with the `function` keyword comes back in the `name()` form, and
 // the two are not the same declaration — [syntax.FuncDecl.Keyword] is in the
 // tree because one semantics axis reads it, so dropping it changes what
-// `typeset` in the body does. Filed as #1403.
+// `typeset` in the body does. Filed as #1406.
 //
 // A count and not a list of ids, so that it cannot rot in either direction:
 // a new construct joining this bucket fails the test, and so does fixing the
@@ -104,7 +104,7 @@ func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 			}
 			if keywordFunctions != keywordFunctionsInTheCorpus {
 				t.Errorf("%d corpus cases define a function with the `function` keyword, want %d: "+
-					"#1403 has been fixed, or a case has been added — either way this file has to say so",
+					"#1406 has been fixed, or a case has been added — either way this file has to say so",
 					keywordFunctions, keywordFunctionsInTheCorpus)
 			}
 		})
@@ -197,6 +197,40 @@ func TestAPatternGroupPrintsBackAsAPattern(t *testing.T) {
 			}
 			if again := syntax.Print(second); again != printed {
 				t.Errorf("%s printed as %q and then as %q", tc.src, printed, again)
+			}
+		})
+	}
+}
+
+// The note is what the printer reads, and not the byte.
+//
+// A tree does not have to have come from a parser — this is a public printer
+// — and an unquoted `(` in a word it did not read is a parenthesis with
+// nothing saying it opens a group. That one is still protected, which is the
+// half of the rule a fix that simply stopped escaping parentheses would get
+// wrong: it would print an unbalanced word for the literal case and lose the
+// distinction the flag exists to keep.
+func TestAnUnmarkedParenthesisIsStillProtected(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		span syntax.Span
+		want string
+	}{
+		{
+			"nothing says it is a group",
+			syntax.Span{Kind: syntax.Literal, Value: "(a|b)", Quoting: syntax.Unquoted},
+			`\(a\|b\)`,
+		},
+		{
+			"the group says so",
+			syntax.Span{Kind: syntax.Literal, Value: "(a|b)", Quoting: syntax.Unquoted, PatternGroup: true},
+			`(a|b)`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := syntax.PrintWord(&syntax.Word{Spans: []syntax.Span{tc.span}})
+			if got != tc.want {
+				t.Errorf("printed %q, want %q", got, tc.want)
 			}
 		})
 	}

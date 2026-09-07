@@ -874,6 +874,25 @@ type Runner struct {
 	// setOptionStatus is what the last refused `set -o` name reports, which
 	// is one of the four dialects' answers rather than a constant.
 	setOptionStatus int
+	// setRefusalOwed records that `set` has reported at least one bad option
+	// and still owes the fatality that follows them, and setUsageOwed that
+	// one of those refusals wanted a usage block under it.
+	//
+	// They exist because one dialect reports **every** bad option word before
+	// either — see Semantics.SetReportsEveryBadOption — so the report and
+	// what comes after it are no longer one step.
+	//
+	// Two flags and not one, because the usage block is not owed by every
+	// refusal: a bad *letter* draws one where the dialect prints one at all,
+	// and a bad `-o` name draws one only where SetInvalidOptionNameUsage
+	// says so. Printing it because *something* was refused would give a
+	// dialect that prints none under a name one anyway, which is a wrong
+	// answer that the one shell answering this axis happens to hide.
+	//
+	// Nothing else may read either: both are set and consumed inside one
+	// call of the builtin.
+	setRefusalOwed bool
+	setUsageOwed   bool
 	// atInvocation marks a `set` option applied by the front end from the
 	// words the shell was started with, rather than by the builtin from a
 	// line of script. The panel words the two refusals differently — nobody

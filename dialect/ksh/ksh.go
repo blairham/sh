@@ -293,6 +293,14 @@ func Semantics() interp.Semantics {
 	// the attribute back.
 	s.DeclarationAssignmentClearsTheExportAttribute = interp.Yes
 	s.FatalErrorStatusIsOne = interp.Yes
+	// The one shell in the panel that reports *every* option word `set`
+	// cannot use before it gives up, with a single usage block after them
+	// all. The other four stop at the first, which three of them do because
+	// the refusal is fatal there and the loop never reaches the second — so
+	// this is a rule of its own here rather than a consequence of the
+	// fatality, since this shell's refusal is fatal too and it still prints
+	// both lines first (#1170).
+	s.SetReportsEveryBadOption = interp.Yes
 	s.ArithInvalidOctalDigitIsError = interp.No
 	s.IndirectionYieldsName = interp.Yes
 	s.BraceExpansion = interp.Yes

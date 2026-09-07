@@ -1859,6 +1859,28 @@ type Diagnostics struct {
 	// NotFound is a command name that resolved to nothing. One verb: the
 	// name.
 	NotFound string
+	// SetArrayNeedsAName is what `set -A` with nothing after it says, where
+	// the dialect refuses it. One verb: the letter as written, `-A` or `+A`.
+	//
+	// Empty means the dialect answers a missing name with a *listing* of the
+	// arrays it has — zsh, measured — which this engine does not build, so
+	// the listing is named as missing instead. The two are not one refusal
+	// with two wordings: one shell is telling the script it left an operand
+	// out and the other is being asked a question it would have answered.
+	SetArrayNeedsAName string
+
+	// BadNameRefusalHidesTheBuiltin names the builtins whose bad-name
+	// refusal does *not* carry the builtin in its location, in a dialect
+	// that otherwise puts it there.
+	//
+	// zsh is the dialect and `set` is the builtin: `set -A 1v q` is
+	// `<script>:1: not an identifier: 1v` where `unset 1x` and `typeset 1w`
+	// from the same shell are `<script>:unset:1:` and `<script>:typeset:1:`.
+	// The same shape SubscriptRefusalNamesBuiltin has, and a set for the
+	// same reason — the sentence and the location are decided separately and
+	// this builtin is where they part.
+	BadNameRefusalHidesTheBuiltin map[string]bool
+
 	// ReadonlyVariableInDeclaration replaces it when the assignment was made
 	// through a declaration utility. Two verbs: the name and the builtin.
 	//

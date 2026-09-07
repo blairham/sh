@@ -1656,6 +1656,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `export/an-imported-name-reassigned-is-listed` | `1` | `1` | `1` | `1` | `1` | `1` |
 | `export/an-exported-name-reaches-a-real-child` | `E=2~X=1` | `E=2~X=1` | `E=2~X=1` | `E=2~X=1` | `E=2~X=1` | `E=2~X=1` |
 | `export/a-prefix-over-an-imported-name` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` |
+| `setarray/the-array-assignment-through-a-held-name` | **2>** `<shell>: 1: set: Illegal option -A` *(status 2)* | `st=2 n=0 [] first=[]` **2>** `<shell>: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | **2>** `<shell>: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `st=2 n=0 [] first=[]` **2>** `<shell>: line 0: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | `st=0 n=3 [m n o] first=[m]` | `st=0 n=3 [m n o] first=[]` |
+| `setarray/the-plus-form-replaces-from-the-front` | **2>** `<script>: 1: set: Illegal option -A` *(status 2)* | `1 n=0 []~2 n=0 []` **2>** `<script>: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~<script>: line 2: set: +A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~<script>: line 4: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~<script>: line 5: set: +A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | **2>** `<script>: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `1 n=0 []~2 n=0 []` **2>** `<script>: line 1: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~<script>: line 2: set: +A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~<script>: line 4: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~<script>: line 5: set: +A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | `1 n=5 [Q R 3 4 5]~2 n=3 [1 2 3]` | `1 n=5 [Q R 3 4 5]~2 n=3 [1 2 3]` |
+| `setarray/no-values-and-whether-the-name-survives` | **2>** `<script>: 1: set: Illegal option -A` *(status 2)* | `n=0 set=[]` **2>** `<script>: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~<script>: line 2: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~<script>: line 4: typeset: a: not found` *(status 1)* | **2>** `<script>: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `n=0 set=[]` **2>** `<script>: line 1: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~<script>: line 2: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~<script>: line 4: typeset: a: not found` *(status 1)* | `n=0 set=[]` | `n=0 set=[x]~typeset -a a=(  )` |
+| `setarray/whether-the-options-carry-on-past-the-name` | **2>** `<script>: 1: set: Illegal option -A` *(status 2)* | `1 n=0 []~2 st=2 n=0 []` **2>** `<script>: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~<script>: line 3: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | **2>** `<script>: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `1 n=0 []~2 st=2 n=0 []` **2>** `<script>: line 1: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~<script>: line 3: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | `1 n=2 [1 2]` **2>** `<script>[3]: set: -q: unknown option~<script>[3]: set: -z: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `1 n=3 [-- 1 2]~2 st=0 n=2 [-q -z]` |
+| `setarray/a-name-that-is-not-a-name` | **2>** `<shell>: 1: set: Illegal option -A` *(status 2)* | `st=2 after` **2>** `<shell>: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | **2>** `<shell>: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `st=2 after` **2>** `<shell>: line 0: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | **2>** `<shell>: set: 1bad: invalid variable name` *(status 1)* | **2>** `<shell>:1: not an identifier: 1bad` |
+| `setarray/over-a-frozen-name` | **2>** `<script>: 1: typeset: not found~<script>: 2: set: Illegal option -A` *(status 2)* | `after` **2>** `<script>: line 2: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | **2>** `<script>: line 2: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `after` **2>** `<script>: line 2: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | **2>** `<script>[2]: set: ro: is read only` *(status 1)* | **2>** `<script>:2: read-only variable: ro` *(status 1)* |
+| `setarray/the-line-a-hook-installer-assigns-with` | **2>** `<script>: 2: typeset: not found~<script>: 4: Bad substitution` *(status 2)* | `n=0 []` **2>** `<script>: line 4: ${(P)hook}: bad substitution` | **2>** `<script>: line 4: ${(P)hook}: bad substitution` *(status 1)* | `n=0 []` **2>** `<script>: line 2: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<script>: line 4: ${(P)hook}: bad substitution` | **2>** `<script>[2]: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `n=1 [my_hook]` |
 | `export/p-names-what-is-exported` | `1` | `1` | `1` | `1` | `1` | `1` |
 | `export/no-operands-lists-what-is-exported` | `export MYNAME='1'` | `declare -x MYNAME="1"` | `export MYNAME="1"` | `declare -x MYNAME="1"` | `MYNAME=1` | `MYNAME=1` |
 | `readonly/no-operands-lists-what-is-readonly` | `readonly RONAME='2'` | `declare -r RONAME="2"` | `readonly RONAME="2"` | `declare -r RONAME="2"` | `RONAME=2` | `RONAME=2` |
@@ -2286,6 +2293,51 @@ grades it and nothing drift-checks it either, for the same reason.
 - `export/a-prefix-over-an-imported-name` — a prefix over a name the shell inherited: the command sees the prefix and the next command sees what came in, unanimously. `cmd/assignment-prefix-is-transient` asks this of a shell variable and reads it back in the shell; this one asks it of an inherited name and reads it back through a real environment, which is where a superseding entry would be one of two rather than instead of the other
   ```sh
   TERM=prefixed env | grep '^TERM='; env | grep '^TERM='
+  ```
+- `setarray/the-array-assignment-through-a-held-name` — `set -A name value …` is the thing `name=(…)` cannot do — the name is a literal there, so a script holding it in a variable has no other spelling. ksh93 and zsh have the letter; bash calls it an invalid option and prints a usage block, dash calls it illegal and stops. So which shells have it is a dialect's answer rather than an axis. The `first=` field reads the base back and the two shells that have the letter disagree about it, which is `ArrayBaseIsZero` seen through a new builtin rather than a new question: it goes through the same whole-array store `name=(…)` reaches, so the base is answered once (#1156)
+  ```sh
+  h=hh; set -A $h m n o; echo "st=$? n=${#hh[@]} [${hh[@]}] first=[${hh[0]}]"
+  ```
+- `setarray/the-plus-form-replaces-from-the-front` — the plus form replaces from the *front* and leaves the rest of the array standing, which is a different operation from the minus form rather than the same one — and it is the half a single implementation gets wrong, since `set -A` replaces the whole array. Both shells with the letter agree on both lines, including that a plus form with nothing to put at the front leaves the array exactly as it was — which is *not* the minus form's answer to the same emptiness, and is why the two emptinesses are not one question
+  ```sh
+  set -A b 1 2 3 4 5
+  set +A b Q R
+  echo "1 n=${#b[@]} [${b[@]}]"
+  set -A c 1 2 3
+  set +A c
+  echo "2 n=${#c[@]} [${c[@]}]"
+  ```
+- `setarray/no-values-and-whether-the-name-survives` — `set -A name` with no values at all: ksh93 **unsets** the name and zsh leaves an array with no elements. Both count 0, so the difference reaches a script only through `${a+x}` and a listing — which is exactly what makes it a field and not a rule, because a script asking whether the name is set gets opposite answers. The `typeset -p` line is the same finding from the other side: nothing at all against `typeset -a a=(  )`
+  ```sh
+  set -A a 1 2 3
+  set -A a
+  echo "n=${#a[@]} set=[${a+x}]"
+  typeset -p a
+  ```
+- `setarray/whether-the-options-carry-on-past-the-name` — whether the words behind `set -A name` are more options or the array's values, and the two shells that have the letter answer opposite ways. ksh93 keeps parsing, so a `--` still ends the options and the values are exactly the words that would have become the positional parameters; zsh stops at the name and every word behind it is a value, `--` and dash words included. **One question and not two** — whether `--` is an operand *is* whether options are still being read, so both lines move together. The second line uses letters neither shell implements, so the shell that carries on refuses one and the shell that does not stores both
+  ```sh
+  set -A dd -- 1 2
+  echo "1 n=${#dd[@]} [${dd[@]}]"
+  set -A ff -q -z
+  echo "2 st=$? n=${#ff[@]} [${ff[@]}]"
+  ```
+- `setarray/a-name-that-is-not-a-name` — the name operand goes through the same check every other builtin's operands go through, fatality included: both shells that have the letter end the script there, and word it their own way — `set: 1bad: invalid variable name` against `not an identifier: 1bad`. The location is the finding: zsh does *not* name the builtin here where `unset 1x` and `typeset 1w` from the same shell are `<script>:unset:1:` and `<script>:typeset:1:`, so the sentence and the location are decided separately
+  ```sh
+  set -A 1bad v; echo "st=$? after"
+  ```
+- `setarray/over-a-frozen-name` — the readonly refusal reaches this store too, and it has to stand in *front* of it: the whole-array store keeps the scalar view in step and that call is guarded, so a check made afterwards prints its complaint with the array already written. ksh93 names the builtin and keeps its bracketed builtin location — `<script>[2]: set: ro: is read only` — where a plain `ro=(x y)` in the same shell is `<script>: line 2: ro: is read only`, so one table decides the sentence and the location together
+  ```sh
+  typeset -r ro=1
+  set -A ro q
+  echo after
+  ```
+- `setarray/the-line-a-hook-installer-assigns-with` — the line that put the letter on the release bar: zsh's own `add-zsh-hook` installs a hook exactly this way, and it is the whole reason a name held in a variable has to be assignable. The `${(P)hook}` is zsh's own indirection and reaches only that shell, so this row records what each of the others makes of the line rather than claiming they all run it
+  ```sh
+  hook=precmd_functions
+  typeset -ga $hook
+  fn=my_hook
+  set -A $hook ${(P)hook} $fn
+  echo "n=${#precmd_functions[@]} [${precmd_functions[@]}]"
   ```
 - `export/p-names-what-is-exported` — the listing must name the exported variable in one of the two spellings the shells use — the grep finds either, and found neither before
   ```sh

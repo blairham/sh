@@ -135,6 +135,10 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 	// accepted; the rest are refused rather than silently ignored, which
 	// would let a script believe it had asked for something.
 	i := 0
+	// Set by the array letter, which turns the operands from positional
+	// parameters into an array's elements. See setarray.go.
+	arrayName := ""
+	arrayFront, haveArray := false, false
 	for ; i < len(args); i++ {
 		a := args[i]
 		if a == "--" {
@@ -171,11 +175,47 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 			}
 			continue
 		}
+		// The array letter, which takes the *next word* as a name — the
+		// same shape `-o` has, and the only other one in this builtin. The
+		// letters in front of it still apply: `set -eA nn 1 2` is errexit as
+		// well as an assignment, measured in both shells that have it.
+		if letters, ok := strings.CutSuffix(a[1:], "A"); ok && r.setArrayLetter() {
+			if !r.setLetters(letters, on) {
+				return r.setOptionFailure()
+			}
+			if i+1 >= len(args) {
+				return r.setArrayWithoutAName(on)
+			}
+			i++
+			arrayName, arrayFront, haveArray = args[i], !on, true
+			cont := r.ask(r.sem().SetArrayOptionsContinuePastTheName,
+				"the words after `set -A name` read as options rather than as values")
+			if r.unspecified {
+				return r.status
+			}
+			if cont {
+				// Options carry on past the name, so the values are whatever
+				// the option parse does not claim — which is exactly the
+				// words that would have become the positional parameters,
+				// and a `--` among them still ends the options.
+				continue
+			}
+			// Or the name ends the options and every word behind it is a
+			// value, `--` and dash words included.
+			i++
+			break
+		}
 		if !r.setLetters(a[1:], on) {
 			// 2 unless the refusal recorded a status of its own, which a
 			// denied `set -m` does in one dialect.
 			return r.setOptionFailure()
 		}
+	}
+	if haveArray {
+		// The positional parameters are left alone: measured, `set -- one two
+		// three; set -A a x y` keeps all three of them in both shells. So
+		// this returns rather than falling into the replacement below.
+		return r.setArrayOperands(arrayName, arrayFront, args[i:])
 	}
 	// `set -C` alone sets an option and leaves the parameters alone; only an
 	// explicit `--`, or operands after the options, replaces them.

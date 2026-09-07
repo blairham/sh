@@ -70,7 +70,10 @@ func TestZshRefusesAnInvocationOptionWithNoLocationAtAll(t *testing.T) {
 // only b, c, j, q and z of the fifty-two and has the other forty-seven — so
 // nearly every letter this shell does not implement is one zsh really has.
 func TestZshKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
-	const missing = "dgiklprstwyABDEFGHIJKLMNOPQRSTUVWXYZ"
+	// `-A` is not in the list: it assigns an array and is implemented — see
+	// Semantics.SetArrayLetter. A letter both claimed and refused is dead
+	// data that says the opposite of what the shell does.
+	const missing = "dgiklprstwyBDEFGHIJKLMNOPQRSTUVWXYZ"
 	if got := zsh.Diagnostics().UnimplementedOptionLetters["set"]; got != missing {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, missing)
 	}

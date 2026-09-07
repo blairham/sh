@@ -1133,7 +1133,17 @@ func (l *Lexer) heredocSpans() []Span {
 func (l *Lexer) scanDouble() []Span {
 	open := l.pos()
 	l.advance() // "
+	return l.scanDoubleBody(open, true)
+}
 
+// scanDoubleBody reads double-quoted content from the cursor.
+//
+// `closing` says a `"` ends it, which is the ordinary run scanDouble opens.
+// Without one the content runs to the end of the input and a `"` in it is an
+// ordinary character — which is what the operand of a `${ }` written inside
+// double quotes is. The quote that put it in this context is outside the text,
+// so there is none to find and running out is not a failure.
+func (l *Lexer) scanDoubleBody(open Pos, closing bool) []Span {
 	var out []Span
 	var b strings.Builder
 	litPos := l.pos()
@@ -1146,6 +1156,10 @@ func (l *Lexer) scanDouble() []Span {
 
 	for {
 		if l.eof() {
+			if !closing {
+				flush()
+				return out
+			}
 			l.ranOut("\"")
 			if !l.dialect.CloseQuotesAtEOF {
 				l.failUnmatched(open, "\"", "\"", "unterminated double quote")
@@ -1155,6 +1169,15 @@ func (l *Lexer) scanDouble() []Span {
 		}
 		c := l.peek()
 		switch {
+		// A `"` written inside an operand opens a run of its own rather than
+		// standing for a character, which is the half of this that is *not*
+		// like a single quote: `"${u:-"a b"}"` is `a b` in every shell in the
+		// panel, quotes removed, where `"${u:-'a b'}"` keeps them. So the two
+		// quote characters part company here and each keeps its own rule.
+		case c == '"' && !closing:
+			flush()
+			out = append(out, l.scanDouble()...)
+			litPos = l.pos()
 		case c == '"':
 			l.advance()
 			flush()

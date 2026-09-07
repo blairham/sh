@@ -71,6 +71,14 @@ func TestASubshellsFunctionExportDoesNotEscape(t *testing.T) {
 	}{
 		{"exported in a subshell", "g(){ :; }\n(export -f g)\n" + env, 0},
 		{"exported at the top level", "g(){ :; }\nexport -f g\n" + env, 1},
+		// The row that does the work, and it needs the parent to have
+		// exported one first: the table is allocated on first use, so with
+		// nothing exported anywhere the subshell built the map the parent's
+		// field never pointed at and the leak did not appear at all. Exactly
+		// the mask the alias table hid behind, and the reason removing
+		// `c.exportedFuncs` from clone survived the first two rows.
+		{"exported in a subshell beside one already exported",
+			"h(){ :; }\nexport -f h\ng(){ :; }\n(export -f g)\n" + env, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runBash(t, t.TempDir(), tc.src)

@@ -327,6 +327,12 @@ func Semantics() interp.Semantics {
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	s.ReadonlyReassignmentFatal = interp.No
 	s.ReadonlyReassignmentFatalFromCommandString = interp.Yes
+	// A failed expansion gives up the line here and the shell carries on at
+	// the next one, which is this shell alone among the four. Measured over
+	// both routes and both separators — see the axis for the 2x2 — on a bad
+	// substitution, a division by zero, a bad subscript and an arithmetic
+	// expression the parser refused.
+	s.FailedExpansionAbandonsTheLine = interp.Yes
 	s.ReadonlyReassignmentByDeclarationFatal = interp.No
 	s.BuiltinSyntaxErrorFatal = interp.No
 	// An error inside a file `.` read ends the shell here, not just the file:

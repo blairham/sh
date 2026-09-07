@@ -54,6 +54,41 @@ type capturePlan struct {
 	whole bool
 }
 
+// reports says the pattern fills a parameter when it matches, which is what
+// decides whether a replacement has to be expanded again for each match.
+func (p capturePlan) reports() bool { return p.count > 0 || p.whole }
+
+// matchWhere is everything the position-aware flags need that is *not* about
+// how a pattern reads: how long the whole subject is, which groups it
+// numbers, and where a match reports itself.
+//
+// It is held behind a pointer, and that is a measurement rather than a style.
+// [patternOpts] is threaded **by value** through a recursive matcher, so
+// every byte of it is copied on every step and again into each of the
+// helpers that take one. Inlining these three fields grew the struct from 72
+// bytes to 104 and cost four times the run time of `${v//abc/xyz}` over a
+// value using none of them — 0.12s to 0.49s for twenty passes over 1200
+// characters, measured with the shell binary and confirmed in a profile,
+// where the tell was `splitGroup` tripling in cost without its body
+// changing: its whole cost is the argument copy.
+//
+// The pointer is made where the pattern is resolved and reused for every
+// trial against the same subject, so a trim that tries a thousand prefixes
+// allocates once rather than a thousand times.
+type matchWhere struct {
+	// total is the length of the whole subject, which is not always the
+	// length of the string handed to the matcher: `${x#pat}` tries the
+	// prefixes of x and each trial is a piece. It is what `(#e)` compares a
+	// position against.
+	total int
+	// plan is the group numbering this pattern's `(#b)` implies, worked out
+	// once rather than on every trial.
+	plan capturePlan
+	// caps is where the groups of the trial now running report themselves,
+	// and is replaced for each trial.
+	caps *captures
+}
+
 // captures is where a match reports itself, and is shared by pointer because
 // the matcher threads its options by value.
 //

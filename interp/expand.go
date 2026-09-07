@@ -2018,21 +2018,36 @@ func (r *Runner) matchedWith(value, pattern string, op syntax.ParamOp) string {
 	return out
 }
 
-// replaceWith substitutes a matching span, with the replacement text
-// **recomputed for every match**.
+// replaceWith substitutes a matching span, expanding the replacement text
+// once per match where — and only where — the pattern reports something.
 //
-// That is measured and not a nicety: `x=abcd; ${x//(#b)(b)(c)/[$match[1]]}`
-// answers `a[b]d`, and `${x//(#m)[bc]/<$MATCH:$MBEGIN>}` answers
-// `a<b:2><c:3>d`, so each replacement reads the parameters that *its own*
-// match wrote. A `with` joined once before the scan cannot say either.
+// Both halves are measured, and the difference is visible rather than a
+// saving. A pattern that reports fills `$match` or `$MATCH` before each
+// replacement, so each one has to be expanded again to read them:
+// `x=abcd; ${x//(#b)(b)(c)/[$match[1]]}` is `a[b]d` and
+// `${x//(#m)[bc]/<$MATCH:$MBEGIN>}` is `a<b:2><c:3>d`. A pattern that
+// reports nothing leaves the replacement the same text every time, and the
+// shell expands it **once**: `x=aaa; ${x//a/$RANDOM}` repeats one number
+// three times and `i=0; ${x//a/$((++i))}` is `111`, where the same two with
+// a `(#b)` in front are three different numbers and `123`.
+//
+// So this is not an optimization with a behavior consequence, it is the
+// behavior. Expanding unconditionally per match made `${x//a/$((++i))}`
+// count, and cost four times the run time of a substitution over a long
+// value for the trouble.
 func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string {
 	o := r.patternOpts(pattern, value)
+	// One spelling of "read the replacement", used by both branches. It is
+	// `replacementOf` and not `joinWord` because a replacement is **text**
+	// and not a pattern (#1337), and having the two branches read it two
+	// ways is exactly how that fix would come undone in the branch nobody
+	// looks at.
+	if o.where == nil || !o.where.plan.reports() {
+		with := r.replacementOf(e.Arg2)
+		return replace(value, pattern, e, o, func(matchReport) string { return with })
+	}
 	return replace(value, pattern, e, o, func(m matchReport) string {
 		r.publishMatch(m)
-		// The replacement is *text* and not a pattern — the same reading
-		// every other call site takes (#1337) — and it is read here rather
-		// than by the caller because it has to be read again for each
-		// match.
 		return r.replacementOf(e.Arg2)
 	})
 }

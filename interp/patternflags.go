@@ -105,7 +105,7 @@ func (a patternAnchor) holds(at int, o patternOpts) bool {
 	case anchorStart:
 		return at == 0
 	case anchorEnd:
-		return at == o.total
+		return at == o.where.total
 	}
 	return true
 }
@@ -380,25 +380,25 @@ func matchRepeat(item string, ip, lo, hi int, after string, ap int, s string, at
 }
 
 func repeatFrom(item string, ip, k, lo, hi int, after string, ap int, s string, at int, o patternOpts) bool {
-	mark := o.caps.mark()
+	mark := o.where.caps.mark()
 	if k >= lo && matchHere(after, s, ap, at, o) {
 		return true
 	}
-	o.caps.rollback(mark)
+	o.where.caps.rollback(mark)
 	if hi != unboundedRepeat && k >= hi {
 		return false
 	}
 	for i := 0; i < len(s); {
 		i += o.unitWidth(s[i:])
-		mark := o.caps.mark()
+		mark := o.where.caps.mark()
 		if !matchHere(item, s[:i], ip, at, o) {
-			o.caps.rollback(mark)
+			o.where.caps.rollback(mark)
 			continue
 		}
 		if repeatFrom(item, ip, k+1, lo, hi, after, ap, s[i:], at+i, o) {
 			return true
 		}
-		o.caps.rollback(mark)
+		o.where.caps.rollback(mark)
 	}
 	return false
 }
@@ -595,7 +595,7 @@ func (r *Runner) extendedPatternOpts(o patternOpts, pattern string, badStatus in
 	f, found := scanExtendedPattern(pattern, o)
 	switch {
 	case !found:
-		o.plan = planCapturesFor(pattern, o)
+		o.where = &matchWhere{plan: planCapturesFor(pattern, o)}
 		return o
 	case f.bad:
 		r.fatalPattern(pattern, badStatus)

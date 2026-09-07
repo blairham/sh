@@ -247,22 +247,10 @@ type patternOpts struct {
 	// for. It reaches only the literal characters of a pattern, which is
 	// what keeps it apart from fold above.
 	litFold caseFolding
-	// plan is the group numbering this pattern's `(#b)` implies, worked out
-	// once where the pattern is resolved rather than on every trial — a trim
-	// matches the same pattern against every prefix of its value.
-	plan capturePlan
-	// caps is where a `(#b)` reports the groups it matched, and is a pointer
-	// because the rest of these options are threaded by value — a capture has
-	// to survive the return the way `bad` does. It is nil for every pattern
-	// with no group to report, which is nearly all of them.
-	caps *captures
-	// total is the length of the whole subject the pattern is being matched
-	// against, which is not always the length of the string handed to the
-	// matcher: `${x#pat}` tries the prefixes of x and each trial is a piece.
-	// It is what `(#e)` compares the position against, and it is set by
-	// matchPatternAt rather than by a caller, so no surface can leave it at
-	// a zero that would read as "the subject is empty".
-	total int
+	// where is the subject's length, the group numbering and the place a
+	// match reports itself — everything the position-aware flags need, held
+	// behind one pointer. See matchWhere for why it is not three fields.
+	where *matchWhere
 	// escapes is the set of characters a backslash escapes. Empty means
 	// every character, which is five of the six shells' answer; a set means
 	// a backslash before anything outside it is a literal backslash and the
@@ -375,13 +363,20 @@ func matchPattern(pattern, s string, o patternOpts) bool {
 // all of them, and for one that did not match — measured, a failed `(#b)`
 // leaves `$match` exactly as it was.
 func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bool, matchReport) {
-	o.total = len(subject)
-	c := newCaptures(o.plan)
-	o.caps = c
+	w := o.where
+	if w == nil {
+		// A caller that built its options by hand rather than through
+		// Runner.patternOpts. It asks for no flag, so the plan is empty and
+		// this allocates once for the whole match rather than per trial.
+		w = &matchWhere{}
+		o.where = w
+	}
+	w.total, w.caps = len(subject), newCaptures(w.plan)
 	if !matchHere(pattern, piece, 0, base, o) {
 		return false, matchReport{}
 	}
-	return true, c.report(subject, capSpan{begin: base, end: base + len(piece), set: true}, o.plan.whole)
+	span := capSpan{begin: base, end: base + len(piece), set: true}
+	return true, w.caps.report(subject, span, w.plan.whole)
 }
 
 // matchHere matches p against the whole of s, where p begins at offset pp of
@@ -474,11 +469,11 @@ func matchHere(p, s string, pp, at int, o patternOpts) bool {
 			// pattern a subject beginning with a continuation byte, which a
 			// following `?` would then take for a character of its own.
 			for i := 0; ; i += o.unitWidth(s[i:]) {
-				mark := o.caps.mark()
+				mark := o.where.caps.mark()
 				if matchHere(p, s[i:], pp, at+i, o) {
 					return true
 				}
-				o.caps.rollback(mark)
+				o.where.caps.rollback(mark)
 				if i == len(s) {
 					return false
 				}
@@ -615,11 +610,11 @@ func matchNumericRange(lo, hi int64, rest string, pp int, s string, at int, o pa
 			// Every longer run is larger still, so nothing is left to try.
 			break
 		}
-		mark := o.caps.mark()
+		mark := o.where.caps.mark()
 		if matchHere(rest, s[k:], pp, at+k, o) {
 			return true
 		}
-		o.caps.rollback(mark)
+		o.where.caps.rollback(mark)
 	}
 	return false
 }
@@ -724,35 +719,22 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 	// by trying the arms one at a time.
 	if quant == '!' {
 		for i := 0; i <= len(s); i++ {
-			mark := o.caps.mark()
+			mark := o.where.caps.mark()
 			if !matchesAnyArm(arms, armAt, s[:i], at, o) && matchHere(rest, s[i:], rp, at+i, o) {
 				return true
 			}
-			o.caps.rollback(mark)
+			o.where.caps.rollback(mark)
 		}
 		return false
 	}
 	if quant == '?' || quant == '*' {
 		// Zero repetitions is allowed, so the rest may start here.
-		mark := o.caps.mark()
+		mark := o.where.caps.mark()
 		if matchHere(rest, s, rp, at, o) {
 			return true
 		}
-		o.caps.rollback(mark)
+		o.where.caps.rollback(mark)
 	}
-	// One repetition of an arm that matches no text is also no text, so a
-	// group with such an arm may stand for nothing however it is quantified
-	// — including not at all. `@(|a)b` matches `b` in every shell that has
-	// the construct, and so does the unquantified `(|a)b` in the one shell
-	// that has *that*; the split loop below starts at one character and
-	// could never reach it.
-	//
-	// Asked as "can an arm match nothing" rather than "is an arm empty",
-	// because `@(*)b` matches `b` too and the arm there is `*`. It is not
-	// folded into the `?`/`*` branch above: those two allow zero
-	// repetitions whatever the arms are, and this allows one repetition
-	// that happens to consume nothing. Recursing here would not terminate,
-	// which is the other reason it is a check and not an iteration.
 	repeat := quant == '*' || quant == '+'
 	// Arm-major, and the longest split of each arm first. Which combination
 	// wins decides nothing about *whether* the pattern matches and
@@ -761,31 +743,48 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 	// `[[ abc == (#b)(ab|a)* ]]` reports `ab`, so a written arm beats a
 	// longer one; and `[[ aabab == (#b)(a*)b ]]` reports `aaba`, so within
 	// one arm the group takes as much as it can and still leave the rest a
-	// match. An empty arm is reached at i == 0 rather than by a case of its
-	// own, which is also what keeps `(|a)b` matching `b`.
+	// match.
+	//
+	// The split runs down to **zero**, which is what lets one repetition of
+	// an arm that matches no text stand for the whole group: `@(|a)b`
+	// matches `b` in every shell that has the construct, and so does the
+	// unquantified `(|a)b` in the one shell that has *that*. It was a case
+	// of its own — "can an arm match nothing" asked before the loop — while
+	// the loop started at one character, and folding it in is only safe
+	// because the loop counts down: an empty match reached at i == 0 is the
+	// last thing tried rather than the first.
+	//
+	// Every attempt is bracketed by a mark, so a group that matched down a
+	// branch the subject later left does not keep its span. That is the
+	// invariant the whole file relies on: anything here that can *write* a
+	// capture also unwinds it when its own attempt fails, which is what
+	// lets a failed matchHere be treated as having written nothing.
 	for k, a := range arms {
 		for i := len(s); i >= 0; i-- {
-			mark := o.caps.mark()
+			mark := o.where.caps.mark()
 			if !matchHere(a, s[:i], armAt[k], at, o) {
-				o.caps.rollback(mark)
+				o.where.caps.rollback(mark)
 				continue
 			}
 			if matchHere(rest, s[i:], rp, at+i, o) {
-				o.caps.record(gp, at, at+i)
+				o.where.caps.record(gp, at, at+i)
 				return true
 			}
 			// A repetition has to consume something, or the recursion
 			// would not terminate.
 			if repeat && i > 0 && matchGroup(body, gp, quant, rest, rp, s[i:], at+i, o) {
-				o.caps.record(gp, at, at+i)
+				o.where.caps.record(gp, at, at+i)
 				return true
 			}
-			o.caps.rollback(mark)
+			o.where.caps.rollback(mark)
 		}
 	}
 	return false
 }
 
+// matchesAnyArm reports whether any arm matches the whole of s. Only the
+// negated quantifier needs it — every other branch has to know *which* arm
+// and at what split, because that is what a capture reports.
 func matchesAnyArm(arms []string, armAt []int, s string, at int, o patternOpts) bool {
 	for k, a := range arms {
 		if matchHere(a, s, armAt[k], at, o) {

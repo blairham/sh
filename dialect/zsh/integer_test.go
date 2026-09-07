@@ -4,6 +4,8 @@
 package zsh_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -121,20 +123,35 @@ integer`)
 	}
 }
 
-// `integer` is a builtin here and its operands are a declaration's, so
-// `integer n=5+2` is one word rather than a command with arguments.
+// `integer` is a builtin here and its operands are a declaration's, so the
+// value after `=` is not globbed.
+//
+// A field-splitting probe would not have shown this: this shell does not
+// split an unquoted parameter at all, so `IFS=:; v=1:2; integer n=$v` keeps
+// the whole value either way and a test written that way passes with the
+// declaring word taken back out. The glob is what separates them — with the
+// word declaring, `n=*` is the character, and without it the `*` matches the
+// file next to it and the arithmetic reads a number.
 func TestIntegerIsADeclaringBuiltinHere(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `whence -w integer
-IFS=:; v='1:2'; integer n=$v; echo "n=[$n]"`)
-	if !strings.Contains(out, "integer: builtin") {
-		t.Errorf("whence -w integer = %q, want it named a builtin", out)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "7"), nil, 0o600); err != nil {
+		t.Fatal(err)
 	}
-	// The unquoted operand is not field-split, so `1:2` reaches the
-	// assignment entire and the arithmetic complains about *it*. A word that
-	// split would have assigned 1 and left 2 as a second operand.
-	if !strings.Contains(out, "operator expected at `:2'") || st == 0 {
-		t.Errorf("integer n=$v with IFS=: = %q (status %d), want the whole value in "+
-			"one operand", out, st)
+	out, st := runZsh(t, dir, `whence -w integer`)
+	if !strings.Contains(out, "integer: builtin") || st != 0 {
+		t.Errorf("whence -w integer = %q (status %d), want it named a builtin", out, st)
+	}
+	out, st = runZsh(t, dir, `integer n=*; echo "n=[$n]"`)
+	if !strings.Contains(out, "bad math expression: operand expected at `*'") || st != 1 {
+		t.Errorf("integer n=* = %q (status %d), want the `*` to reach the arithmetic "+
+			"entire", out, st)
+	}
+	// The other half, and the one that fails when the word stops declaring:
+	// the whole of `n=*` is globbed there and the file named 7 is what it
+	// matches, so the complaint is about a pattern and not about arithmetic.
+	if strings.Contains(out, "no matches found") || strings.Contains(out, "n=[7]") {
+		t.Errorf("integer n=* = %q; the operand was globbed, so the word is not "+
+			"declaring", out)
 	}
 }
 

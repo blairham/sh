@@ -77,25 +77,21 @@ func biInteger(r *Runner, _ context.Context, args []string) int {
 	// letters were written: `integer +x n` is still an integer declaration in
 	// both shells, because the plus belongs to the export letter.
 	f.integer = true
-	f.integerForced = true
 	if f.remove {
 		// A plus word is the one place the two readings part company, and it
 		// is the *word* rather than the `i` in it: in the shell where the
 		// name carries the type, `integer +x n` leaves the export alone as
-		// well. So the whole removal is put down rather than the integer
-		// half of it.
+		// well. So the whole removal stands or falls together rather than the
+		// integer half of it being singled out.
 		off := r.ask(r.sem().IntegerPlusFormTakesAttributesOff,
 			"a plus word on `integer` taking an attribute off the name")
 		if r.unspecified {
 			return r.status
 		}
-		if !off {
-			f.remove = false
-		} else {
-			// Where a plus form does remove, it removes the integer
-			// attribute too when that is what was written — and only then.
-			f.integerForced = !f.integerOff
-		}
+		f.remove = off
+		// And where a plus form does remove, it reaches the attribute the
+		// *name* asked for only when `i` is the letter that was written.
+		f.integerForced = off && !f.integerOff
 	}
 	return r.declareNames(name, args, f)
 }

@@ -433,29 +433,29 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 		// silently, status 0.
 		r.beginHeading()
 		subject := strings.Join(r.expandWordNoSplit(c.Word), "")
-		if r.failedHeading() {
+		if r.failedHeading() || r.ctl != controlNone {
 			// Before any arm is tested, because a subject that failed is
 			// empty and empty *matches*: the `""` arm fired and the shell
 			// chose a branch from a value it could not compute (#1215).
+			//
+			// And before `r.status = 0`, which is what the second half of
+			// the condition is for: a subject that raised a fatal error of
+			// its own reports through r.ctl rather than through the flags
+			// failedHeading reads, so `set -u; case ${NOPEV} in …` fell
+			// through to the zeroing below and reported **success** for a
+			// script that had stopped — where bash, ksh93 and zsh report 1
+			// and dash 2. The same `${NOPEV}` in a simple command or an
+			// assignment already reported it correctly, so this was the
+			// `case` losing a status rather than the shell mis-numbering
+			// one (#1063).
 			return nil
 		}
 		// A case matching nothing exits 0.
 		r.status = 0
-		r.unspecified = false
 
 		for i, item := range c.Items {
-			matched := r.caseItemMatches(item, subject)
-			if r.ctl != controlNone {
-				// A pattern the dialect rejects outright. Testing the later
-				// items would report it again, once per item.
-				return nil
-			}
-			if r.unspecified {
-				// A pattern asked an axis no dialect answered. Falling
-				// through to the next item would run a body chosen by a
-				// guess, and reporting the refusal while running anyway is
-				// the failure this whole structure exists to avoid.
-				r.status = 2
+			matched, ok := r.caseItemMatched(item, subject)
+			if !ok {
 				return nil
 			}
 			if !matched {
@@ -483,7 +483,14 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 					}
 				case syntax.TokDSemiAmp, syntax.TokSemiPipe:
 					at++
-					for at < len(c.Items) && !r.caseItemMatches(c.Items[at], subject) {
+					for at < len(c.Items) {
+						matched, ok := r.caseItemMatched(c.Items[at], subject)
+						if !ok {
+							return nil
+						}
+						if matched {
+							break
+						}
 						at++
 					}
 					if at == len(c.Items) {
@@ -499,6 +506,48 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 		}
 		return nil
 	})
+}
+
+// caseItemMatched tests one item's patterns against the subject and reports
+// separately whether they could be read at all.
+//
+// A pattern is a heading: it is expanded before the construct decides what to
+// run, and a `case` that cannot read one has no more business choosing an arm
+// than one that cannot read its subject. So it is cleared and judged with the
+// same pair — beginHeading and failedHeading — and the clearing is per item
+// for the reason a simple command clears per command: the item before this one
+// may have left a flag set, and a pattern is only answerable for its own
+// failure.
+//
+// Measured 2026-09-07, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
+// ZDOTDIR and HISTFILE, over a script file: `case abc in $((1/0))) printf
+// hit;; *) printf miss;; esac` runs **no arm** in bash 5.3.15, dash, ksh93u+
+// or zsh 5.9.2, and ran `*)` here at status 0 — the diagnostic printed and
+// then a branch fired that no shell would have fired. Unanimous over the
+// three routes a pattern can fail by: a bad substitution, an unset name under
+// `set -u`, and a division by zero.
+//
+// Which of them the *script* survives is the fatal-error axis, and it is
+// answered where it always was: `case` is a site on it and not a question of
+// its own.
+func (r *Runner) caseItemMatched(item *syntax.CaseItem, subject string) (matched, ok bool) {
+	// Defensive rather than load-bearing, and that is measured: a mutant
+	// that drops this clearing survives, because every route that could
+	// leave one of the flags set from an earlier item or from a body it ran
+	// also sets control flow, which the check below catches first. It stays
+	// because the rule this function states — a pattern answers for its own
+	// failure — is the one a reader will assume, and because a site that
+	// stops setting control flow would otherwise turn a stale flag into a
+	// refused pattern.
+	r.beginHeading()
+	matched = r.caseItemMatches(item, subject)
+	if r.ctl != controlNone {
+		// A pattern the dialect rejects outright, or one whose failure was
+		// fatal on its own. Testing the later items would report it again,
+		// once per item.
+		return matched, false
+	}
+	return matched, !r.failedHeading()
 }
 
 func (r *Runner) caseItemMatches(item *syntax.CaseItem, subject string) bool {

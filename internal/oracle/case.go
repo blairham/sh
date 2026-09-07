@@ -6945,6 +6945,28 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "unanimous",
 	},
 	{
+		ID: "case/a-failed-pattern-runs-no-arm", Category: "compound shapes",
+		Snippet: `p="a*"; case abc in ${p@@@x}) printf hit;; *) printf miss;; esac; echo " after"`,
+		Why:     "a pattern no shell can read is not a pattern that failed to match: the later arms are not tried either, and all four agree — none of them prints hit or miss. They part only over whether the script goes on, which is the fatal-error axis. Ours ran `*)` at status 0, so the diagnostic was printed and then a branch fired that no shell would have fired",
+	},
+	{
+		ID: "case/an-unset-pattern-under-u-runs-no-arm", Category: "compound shapes",
+		Snippet: `set -u; case abc in ${NOPEV}) printf hit;; *) printf miss;; esac; echo " after"`,
+		Why:     "the same failure by a different route inside the expander — this one raises a fatal error of its own where the bad substitution above only reports — which is why the two are separate rows rather than one",
+	},
+	{
+		ID: "case/a-failed-arithmetic-pattern-runs-no-arm", Category: "compound shapes",
+		Snippet: `case abc in $((1/0))) printf hit;; *) printf miss;; esac; echo " after"`,
+		Why:     "the third route to the same place. No column runs an arm, and every column stops — which is a `-c` reading and not the whole story: the same snippet read from a *file* has bash print ` after` at status 0 while the other three still stop, so the continuation question belongs to FailedExpansionAbandonsTheLine and this row pins only the arm",
+	},
+	{
+		ID: "case/an-unset-subject-under-u-keeps-its-status", Category: "compound shapes",
+		Script:  true,
+		Snippet: "set -u\ncase ${NOPEV} in *) printf miss;; esac\n",
+		Why: "the subject's failure was fatal on its own, and `case` zeroed the status it had set on the way to reporting that nothing matched — 0 here against 1 in bash, ksh93 and zsh and 2 in dash. " +
+			"Read from a file rather than from `-c` on purpose: bash numbers the same failure 127 over `-c` and 1 over a script, and the number this row is about is the one a script gets",
+	},
+	{
 		ID: "case/an-operator-where-a-pattern-belongs", SyntaxError: true, Category: "compound shapes",
 		Snippet: `case a in & ) echo hit;; *) echo miss;; esac`,
 		Why:     "dash parses this and prints miss: one operator is accepted where the pattern list would start, and the arm it opens matches nothing at all — not `&`, not the empty string. The other three refuse at the `&`. Measured rather than inferred from the diagnostic, because a shell that only worded the error differently would still not reach the esac",

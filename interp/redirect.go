@@ -249,7 +249,13 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			}
 			if err := r.dupFd(fd, name, opened); err != nil {
 				r.diagf("%v\n", err)
-				r.status = 1
+				// A duplication that fails is a redirection that failed, and
+				// carries the same number as one whose file would not open.
+				// It said 1 here whatever the dialect answered, so the one
+				// dialect that reports 2 reported 2 for `>nodir/f` and 1 for
+				// `>&3` — the same event, two numbers, and only the first of
+				// them measured.
+				r.status = r.diag().redirectFailureStatus()
 				r.redirErr = true
 				return closers, nil
 			}
@@ -834,6 +840,25 @@ func (r *Runner) dupFd(fd int, target string, opened map[int]io.Writer) error {
 			return r.errBadFd(m)
 		}
 		src = v
+	}
+	// A descriptor the script closed is not a descriptor. `N>&M` reads M
+	// before it writes fd, and a closed M fails the *redirection* — the
+	// command never runs, so there is nothing for a write to fail at.
+	//
+	// The two are easy to conflate because both end in EBADF, and the
+	// conflation is what #1345 was: closedFd both reads and writes, so the
+	// duplication above copied it happily and the command then failed on the
+	// write it did attempt. That answers a script correctly only by accident,
+	// and stops being an accident the moment the command writes nothing:
+	// `exec 2>&-; true >&2` is a failure in all six of the panel and was a
+	// silent success here, in every dialect.
+	//
+	// A number above two is already refused this way, by being absent from
+	// the table — see the default arm. Only the three named streams could be
+	// *present and closed*, which is the whole of why the check is here and
+	// not there.
+	if _, closed := src.(closedFd); closed {
+		return r.errBadFd(m)
 	}
 	switch fd {
 	case 0:

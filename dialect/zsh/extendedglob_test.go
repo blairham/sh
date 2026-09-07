@@ -81,6 +81,12 @@ func TestTheOperatorsReachEverySurfaceInThisShell(t *testing.T) {
 		{"a (r) subscript", `a=(ABC def); echo "${a[(r)(#i)abc]}"`, "ABC"},
 		{"pathname expansion", `echo (#i)ab*`, "ABC abd"},
 		{"a qualifier list, (#q…)", `echo *(#q.)`, "ABC aaa abd"},
+		// A `(#…)` at the end of the last component is a flag group and not
+		// a qualifier list, which is the one place the two spellings could
+		// be confused — and were: reading it as a list answered `unknown
+		// file attribute: #` for a pattern with no attribute in it, and it
+		// is where an end anchor is naturally written.
+		{"a flag group at the end", `echo *(#i)ABD`, "abd"},
 	} {
 		out, st := runZsh(t, dir, "setopt extendedglob\n"+tc.src)
 		if strings.TrimSpace(out) != tc.want || st != 0 {
@@ -96,6 +102,64 @@ func TestTheOperatorsReachEverySurfaceInThisShell(t *testing.T) {
 	}
 }
 
+// The two anchors, in this shell and on every surface it has one.
+//
+// They are the flags that made the position necessary, and the surfaces
+// differ in what they hand the matcher: a condition and a `case` give it the
+// whole subject, a trim gives it a prefix or a suffix of one, a replacement
+// gives it a span from the middle, and pathname expansion gives it one path
+// component at a time. An anchor answered against the *piece* rather than the
+// subject would be right on the first two and wrong on the rest.
+//
+// Measured on zsh 5.9.2, 2026-09-07 — see docs/spec/grammar/patterns.md.
+func TestTheAnchorsOnEverySurface(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"ax", "bx", "ay"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "cx", "ax"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, src, want string }{
+		{"condition", `[[ ab == (#s)ab(#e) ]] && echo hit || echo miss`, "hit"},
+		{"condition, midway", `[[ ab == a(#s)b ]] && echo hit || echo miss`, "miss"},
+		{"case", `case ab in ((#s)ab) echo hit;; *) echo miss;; esac`, "hit"},
+		{"case, midway", `case ab in (a(#e)b) echo hit;; *) echo miss;; esac`, "miss"},
+		{"trim prefix", `v=abcd; echo "[${v#(#s)ab}]"`, "[cd]"},
+		{"trim prefix, end anchor", `v=abcd; echo "[${v#ab(#e)}]"`, "[abcd]"},
+		{"trim suffix", `v=abcd; echo "[${v%cd(#e)}]"`, "[ab]"},
+		{"trim suffix, start anchor", `v=abcd; echo "[${v%(#s)cd}]"`, "[abcd]"},
+		{"replace", `v=XbXcX; echo "[${v//(#s)X/-}]"`, "[-bXcX]"},
+		{"replace, end anchor", `v=XbXcX; echo "[${v//X(#e)/-}]"`, "[XbXc-]"},
+		{"element exclusion", `a=(ab cb); print -l -- ${a:#(#s)a*}`, "cb"},
+		{"the (M) filter", `a=(ab cb); print -l -- ${(M)a:#(#s)a*}`, "ab"},
+		{"a (r) subscript", `a=(ab cb); echo "${a[(r)(#s)a*]}"`, "ab"},
+		// Per component, which is the answer pathname expansion gives and
+		// the one a walk that anchored to the whole path would not: `ax`
+		// lies inside `cx`, and its component starts with an `a` even
+		// though the path does not.
+		{"pathname expansion", `print -l -- (#s)a*`, "ax\nay"},
+		{"pathname expansion, component", `print -l -- */(#s)a*`, "cx/ax"},
+		{"pathname expansion, end anchor", `print -l -- *x(#e)`, "ax\nbx\ncx"},
+		// A numeric range consumes a run the matcher has to measure before
+		// it can go on, so the position has to survive it.
+		{"a numeric range", `[[ 12ab == (#s)<1-99>ab(#e) ]] && echo hit || echo miss`, "hit"},
+	} {
+		out, st := runZsh(t, dir, "setopt extendedglob\n"+tc.src)
+		if strings.TrimSpace(out) != tc.want || st != 0 {
+			t.Errorf("%s: %s = %q (status %d), want %q", tc.name, tc.src, out, st, tc.want)
+		}
+	}
+	// With the option off the same characters are a group holding one
+	// alternative, which is the pair that says the flags are the option's.
+	out, st := runZsh(t, dir, `[[ '#sab' == (#s)ab ]] && echo hit || echo miss`)
+	if strings.TrimSpace(out) != "hit" || st != 0 {
+		t.Errorf("`(#s)` with the option off = %q (status %d), want hit", out, st)
+	}
+}
+
 // The refusals, which are the half this change is really about: a `(#b)` also
 // fills `$match`, so one that was quietly dropped left a script reading
 // `$match[1]` with an empty value rather than seeing that the feature is not
@@ -105,8 +169,6 @@ func TestTheUnimplementedFlagsAreRefusedByName(t *testing.T) {
 		{`[[ abc == (#b)(a)* ]]; echo "m=[$match[1]]"`, "(#b)"},
 		{`[[ abc == (#B)(a)* ]]`, "(#B)"},
 		{`[[ abc == (#m)a* ]]`, "(#m)"},
-		{`[[ abc == (#s)abc ]]`, "(#s)"},
-		{`[[ abc == abc(#e) ]]`, "(#e)"},
 		{`[[ abd == (#a1)abc ]]`, "(#a)"},
 		// Against the filesystem too, where a refusal that reported and
 		// carried on would go on to say the pattern matched nothing — a

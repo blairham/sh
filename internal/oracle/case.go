@@ -8731,6 +8731,37 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "and the third surface, which is the one with no `[[` in it: the flag and the closure both reach pathname expansion, so the shell with them lists `ABC abd` and then `aaa` where the rest print the two words back or refuse the parenthesis. A script file rather than `-c` because a leading `(` in an argument is read differently by route (#1053)",
 	},
 	{
+		ID: "pat/the-start-and-end-anchors", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ ab == (#s)ab(#e) ]] && echo both-hit || echo both-miss; [[ ab == a(#s)b ]]; echo "mid-st=$?"; echo after`,
+		Why:     "the two flags that are assertions about a *position* rather than options over the rest of the branch. The status is what the row is really about: in the shell that has them it is both-hit, mid-st=1 and after, because an anchor standing anywhere but the edge it names is a match that cannot happen and **not** a pattern that cannot be read — a rejected pattern is mid-st=2 in this surface and takes the script with it, so `after` would not print. The other five read `(#s)` as a group holding one alternative, so the first pattern is ordinary text and misses",
+	},
+	{
+		ID: "pat/an-anchor-lets-another-branch-carry-the-match", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ ab == (a|(#s))b ]] && echo alt-hit || echo alt-miss; [[ ab == *(#s)ab ]] && echo star-hit || echo star-miss; [[ ab == ab(#e)* ]] && echo end-hit || echo end-miss`,
+		Why:     "the consequence of the row above, and the one an implementation that made a misplaced anchor an *error* would fail: all three are the assertion holding or failing while something else decides the match. A `*` that has consumed nothing is still at the start and one that has consumed everything is at the end, so the shell with the flags is hit three times where the rest miss three times",
+	},
+	{
+		ID: "pat/an-anchor-may-not-share-its-flag-group", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ AB == (#i)(#s)ab ]] && echo split-hit || echo split-miss; [[ AB == (#is)ab ]]; echo "st=$?"; echo after`,
+		Why:     "the same two letters, written two ways. Separate groups are fine and fold the literal; one group holding both is `bad pattern`, which stops the script — so the shell with the flags prints split-hit and nothing after it. A matcher that scanned a group for letters rather than comparing the whole body would print split-hit, st=1 and after",
+	},
+	{
+		ID: "pat/an-anchor-names-the-subject-not-the-piece", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; v=abcd; echo "[${v#(#s)ab}]"; echo "[${v#ab(#e)}]"; echo "[${v#abcd(#e)}]"; echo "[${v%(#s)cd}]"`,
+		Why:     "the surface that proves the anchors need a position and not merely an edge: a trim tries the prefixes of its value one at a time, so every trial is at the start of the subject and reaches its end only when it is the whole of it. The shell with the flags prints `[cd]`, `[abcd]`, `[]` and `[abcd]`; a matcher answering the anchor against the *piece* in hand rather than the subject would trim `ab(#e)` and print `[cd]` for the second",
+	},
+	{
+		ID: "pat/an-anchor-in-a-replacement", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; v=XbXcX; echo "[${v//(#s)X/-}]"; echo "[${v//X(#e)/-}]"; echo "[${v//X(#s)/-}]"; w=abc; echo "[${w//(#e)/-}]"`,
+		Why:     "a replacement scans every span of its value, so the anchors are the only thing that can hold one to an end — and an empty match is a position like any other. The shell with the flags prints `[-bXcX]`, `[XbXc-]`, `[XbXcX]` and `[abc-]`; a matcher without a position would replace all three X in the first two rows",
+	},
+	{
+		ID: "pat/an-anchor-binds-to-one-path-component", Category: "pattern matching", SyntaxError: true,
+		Snippet: "setopt extendedglob 2>/dev/null\nmkdir -p cx\ntouch ax bx cx/ax\nprint -rl -- */(#s)a* 2>&1\nprint -rl -- *x(#e) 2>&1\n",
+		Script:  true,
+		Why:     "pathname expansion walks a pattern one component at a time, and the anchors bind to the component and not to the path: `*/(#s)a*` lists `cx/ax`, whose *component* starts with an `a` even though the path does not, and `*x(#e)` lists the names ending in `x`. The second is also where the two spellings of a trailing group collide — read as a qualifier list it is `unknown file attribute: #` for a pattern with no attribute in it. A script file because a leading `(` in an argument is read differently by route (#1053)",
+	},
+	{
 		ID: "pat/a-closure-at-the-front-of-a-pattern", Category: "pattern matching",
 		Snippet: `setopt extendedglob 2>/dev/null; p="#foo"; [[ "#foo" == $p ]] && echo dead-hit || echo dead-miss; [[ "#foo" == ${~p} ]] && echo live-hit || echo live-miss; echo after`,
 		Why:     "both halves of the same value in one row. Through `$p` the four characters are ordinary text and the row is dead-hit; through the flag that makes an expansion's result a pattern they are a closure with nothing to repeat, which is a bad pattern that stops the script — so `live-` and `after` never print. A shell reading the `#` as a character in both would print dead-hit, live-hit and after",

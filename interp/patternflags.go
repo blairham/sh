@@ -52,6 +52,64 @@ const (
 	caseLowerEither
 )
 
+// patternAnchor is a zero-width assertion a flag group carries instead of an
+// option: it consumes no subject and asks only where the match is standing.
+//
+// It is a separate result from [applyPatternFlags]'s options because the two
+// answers have different lifetimes. An option holds for the rest of the
+// branch; an assertion is decided once, where the group stands, and settles
+// that branch either way.
+type patternAnchor int
+
+const (
+	// anchorNone is a flag group that is not one of the two anchors.
+	anchorNone patternAnchor = iota
+	// anchorStart is `(#s)`: the position is the start of the subject.
+	anchorStart
+	// anchorEnd is `(#e)`: the position is the end of the subject.
+	anchorEnd
+)
+
+// anchorPatternFlagLetters are the two flags that are assertions rather than
+// options.
+const anchorPatternFlagLetters = "se"
+
+// anchorPatternFlag reads a flag group that is one of the two anchors.
+//
+// Each stands **alone** in its group, which is measured rather than a
+// simplification: on zsh 5.9.2 with `extendedglob` on, `(#is)`, `(#si)`,
+// `(#se)` and `(#ss)` are every one of them `bad pattern`, where the same
+// letters written as two groups — `(#i)(#s)` — are not. That is why this
+// compares the whole body instead of scanning it for a letter, and why
+// classifyPatternFlags calls a mixed group bad rather than unimplemented.
+func anchorPatternFlag(body string) patternAnchor {
+	switch body {
+	case "s":
+		return anchorStart
+	case "e":
+		return anchorEnd
+	}
+	return anchorNone
+}
+
+// holds reports whether the assertion is true at offset at of the subject.
+//
+// Neither is ever an error where it stands, and that too is measured:
+// `[[ ab == a(#s)b ]]` and `[[ ab == a(#e)b ]]` both simply fail to match,
+// with status 1 rather than the 2 a bad pattern earns. An anchor in the
+// middle of a branch is a match that cannot happen, not a pattern that
+// cannot be read — which is what makes `(a|(#s))b` and `*(#s)ab` match `ab`
+// by way of the branch that does not need it.
+func (a patternAnchor) holds(at int, o patternOpts) bool {
+	switch a {
+	case anchorStart:
+		return at == 0
+	case anchorEnd:
+		return at == o.total
+	}
+	return true
+}
+
 // eqPatternByte compares one byte of a pattern with one byte of the subject,
 // honoring both the option and the flag.
 //
@@ -312,12 +370,12 @@ func readCount(s string, empty int) (int, bool) {
 // needs the closure to stop one character early. A repetition always consumes
 // at least one unit, which is what makes the recursion terminate for an item
 // that can match nothing.
-func matchRepeat(item string, lo, hi int, after, s string, o patternOpts) bool {
-	return repeatFrom(item, 0, lo, hi, after, s, o)
+func matchRepeat(item string, lo, hi int, after, s string, at int, o patternOpts) bool {
+	return repeatFrom(item, 0, lo, hi, after, s, at, o)
 }
 
-func repeatFrom(item string, k, lo, hi int, after, s string, o patternOpts) bool {
-	if k >= lo && matchHere(after, s, o) {
+func repeatFrom(item string, k, lo, hi int, after, s string, at int, o patternOpts) bool {
+	if k >= lo && matchHere(after, s, at, o) {
 		return true
 	}
 	if hi != unboundedRepeat && k >= hi {
@@ -325,10 +383,10 @@ func repeatFrom(item string, k, lo, hi int, after, s string, o patternOpts) bool
 	}
 	for i := 0; i < len(s); {
 		i += o.unitWidth(s[i:])
-		if !matchHere(item, s[:i], o) {
+		if !matchHere(item, s[:i], at, o) {
 			continue
 		}
-		if repeatFrom(item, k+1, lo, hi, after, s[i:], o) {
+		if repeatFrom(item, k+1, lo, hi, after, s[i:], at+i, o) {
 			return true
 		}
 	}
@@ -350,12 +408,18 @@ type patternFault struct {
 	bad bool
 }
 
-// implementedPatternFlags are the flag letters the matcher answers.
+// implementedPatternFlags are the flag letters that change how a literal
+// compares, and which this matcher answers wherever they stand in a group.
 //
-// The rest of the family needs the position of the match within the subject,
-// which this matcher does not carry, so each is refused by name — a flag that
-// quietly did nothing would be exactly the failure this refusal exists to
-// prevent.
+// The two anchors are answered too and are deliberately not here: `(#s)` and
+// `(#e)` are assertions rather than options, they may not share a group, and
+// anchorPatternFlag is what reads them.
+//
+// The rest of the family — `(#b)`, `(#B)`, `(#m)`, `(#M)`, `(#a1)` — needs
+// more than the position: it has to *report* one, into `$match`, `$mbegin`,
+// `$mend` and their scalar kin. Each is still refused by name, because a flag
+// that quietly did nothing would leave those reading as "the group matched
+// nothing" rather than as "this shell does not do backreferences".
 const implementedPatternFlags = "iIl"
 
 // knownPatternFlags are the letters the shell itself has, so that a refusal
@@ -375,6 +439,9 @@ const numberedPatternFlags = "ac"
 //
 // found is false for a group this matcher answers in full.
 func classifyPatternFlags(body string) (patternFault, bool) {
+	if anchorPatternFlag(body) != anchorNone {
+		return patternFault{}, false
+	}
 	for i := 0; i < len(body); i++ {
 		c := body[i]
 		if strings.IndexByte(implementedPatternFlags, c) >= 0 {
@@ -385,6 +452,12 @@ func classifyPatternFlags(body string) (patternFault, bool) {
 			digits++
 		}
 		switch {
+		case strings.IndexByte(anchorPatternFlagLetters, c) >= 0:
+			// An anchor sharing its group with anything at all, since the
+			// check above took the two groups that are one alone. The shell
+			// rejects the pattern rather than reading the letters — see
+			// anchorPatternFlag.
+			return patternFault{bad: true}, true
 		case strings.IndexByte(numberedPatternFlags, c) >= 0 && digits > 0:
 			return patternFault{flag: c}, true
 		case strings.IndexByte(knownPatternFlags, c) >= 0:

@@ -293,6 +293,7 @@ func Semantics() interp.Semantics {
 	s.UnderscoreStartsAtTheInvocation = interp.Yes
 	// hash counts builtins and functions and announces its empty table.
 	s.FatalErrorStatusIsOne = interp.Yes
+	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
 	// bash has no floats, so `2**-1` has no integer answer and stops the
 	// expression; the two shells with floats answer 0.5 instead.

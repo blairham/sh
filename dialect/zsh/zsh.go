@@ -518,6 +518,7 @@ func Semantics() interp.Semantics {
 	// from an argument rather than from a file. Measured on every
 	// neighboring refusal too, and they all leave 1 — see the axis.
 	s.SetArrayBadNameLeavesZeroFromCommandString = interp.Yes
+	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
 	s.BraceExpansion = interp.Yes
 	// Pads like bash — `{01..3}` is `01 02 03` — but a negative step

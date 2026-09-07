@@ -62,6 +62,10 @@ func testSemantics() Semantics {
 	s.DeclarePrintReportsAMissingName = Yes
 	s.TypesetLocalNeedsKeywordFunction = No
 	s.ReadonlyReassignmentFatal = No
+	// A here-document body fed to a program is expanded in that program's
+	// process, so what it writes does not come back. bash's answer, and
+	// ksh93's and zsh's; dash alone says otherwise.
+	s.HeredocExpandsInTheCommandsProcess = Yes
 	s.TrapQuoting = ListingQuoteAlwaysEscaped
 
 	// `read` — the option letters decide which of its axes are even

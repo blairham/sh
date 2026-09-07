@@ -8388,6 +8388,38 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the unit stretches past a newline while a construct is open, so the whole loop runs before the line after it fails — a line-at-a-time reader that stopped at the first newline could not run it at all",
 	},
 	{
+		ID: "heredoc/a-side-effect-in-a-body-fed-to-a-program", Category: "redirection",
+		Snippet: `unset u; cat >/dev/null <<END
+[${u:=zz}]
+END
+echo "u=${u-UNSET}"`,
+		Why: "the body is expanded in the process the redirection is for, so what it writes dies with that process: `u` is unset afterwards in bash, ksh93 and zsh, and holds `zz` in dash — the one shell that expands it here. `${u:=}` rather than `$(( n++ ))` so dash can be in the column at all",
+	},
+	{
+		ID: "heredoc/a-side-effect-in-a-body-fed-to-a-builtin", Category: "redirection",
+		Snippet: `unset u; read q <<END
+[${u:=zz}]
+END
+echo "u=${u-UNSET}"`,
+		Why: "the control, and the reason the rule is about the process rather than about here-documents: a builtin runs in this shell, there is no other process for the write to land in, and all four shells leave `zz` behind. The pair is what says the line is drawn at the fork",
+	},
+	{
+		ID: "heredoc/a-side-effect-is-visible-to-the-rest-of-the-body", Category: "redirection",
+		Snippet: `n=1; cat <<END
+[$(( n++ ))][$(( n++ ))]
+END
+echo "after=$n"`,
+		Why: "the write happens and is only then thrown away, which is what `[1][2]` says: refusing the write instead would give `[1][1]`, which is nobody's answer. dash has no `++` and refuses the expression, so it is out of this row and in the two above",
+	},
+	{
+		ID: "heredoc/a-failed-body-costs-the-command", Category: "redirection",
+		Snippet: `set -u; cat <<END
+[$NOPE_H]
+END
+echo "st=$? alive"`,
+		Why: "unanimous, dash included, in the two things that matter: the diagnostic is written, `cat` never runs, and the script carries on — the failure happened in a process that is not the shell, so the shell is not what is given up. Here the body's value reached `cat` anyway and then the whole script was abandoned. The *status* is a third question and splits four ways: 127 in bash over `-c`, 1 in ksh93 and zsh, 2 in dash — and 1 in bash when the same snippet is read from a file, which is why this row is the `-c` reading and nothing is inferred from it about the number",
+	},
+	{
 		ID: "heredoc/quotes-in-the-body-are-literal", Category: "redirection",
 		Script:  true,
 		Snippet: "cat <<EOF\ndon't say \"hi\"\nEOF\n",

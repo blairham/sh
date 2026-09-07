@@ -42663,6 +42663,50 @@
         "TimedOut": false
       }
     },
+    "heredoc/a-failed-body-costs-the-command": {
+      "bash": {
+        "Stdout": "st=127 alive",
+        "Stderr": "\u003cshell\u003e: line 1: NOPE_H: unbound variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127 alive",
+        "Stderr": "\u003cshell\u003e: line 1: NOPE_H: unbound variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127 alive",
+        "Stderr": "\u003cshell\u003e: NOPE_H: unbound variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 alive",
+        "Stderr": "\u003cshell\u003e: 1: NOPE_H: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 alive",
+        "Stderr": "\u003cshell\u003e: NOPE_H: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 alive",
+        "Stderr": "\u003cshell\u003e:1: NOPE_H: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "heredoc/a-nested-delimiter-names-the-programs-lines": {
       "bash": {
         "Stdout": "pad~pad~v=[z]",
@@ -42791,6 +42835,138 @@
         "Stdout": "",
         "Stderr": "\u003cscript\u003e:9: parse error near `v=$(cat \u003c\u003cA'",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/a-side-effect-in-a-body-fed-to-a-builtin": {
+      "bash": {
+        "Stdout": "u=zz",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "u=zz",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "u=zz",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "u=zz",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "u=zz",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "u=zz",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/a-side-effect-in-a-body-fed-to-a-program": {
+      "bash": {
+        "Stdout": "u=UNSET",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "u=UNSET",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "u=UNSET",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "u=zz",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "u=UNSET",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "u=UNSET",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/a-side-effect-is-visible-to-the-rest-of-the-body": {
+      "bash": {
+        "Stdout": "[1][2]~after=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1][2]~after=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[1][2]~after=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after=1",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" n++ \"",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1][2]~after=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1][2]~after=1",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }

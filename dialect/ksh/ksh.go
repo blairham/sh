@@ -348,6 +348,7 @@ func Semantics() interp.Semantics {
 	// fatality, since this shell's refusal is fatal too and it still prints
 	// both lines first (#1170).
 	s.SetReportsEveryBadOption = interp.Yes
+	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.ArithInvalidOctalDigitIsError = interp.No
 	s.IndirectionYieldsName = interp.Yes
 	s.BraceExpansion = interp.Yes

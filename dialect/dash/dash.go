@@ -44,6 +44,14 @@ func Semantics() interp.Semantics {
 	// disappears under: `IFS=:; set -- x "" y` is two fields here and three
 	// in bash.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// The one shell in the panel that expands a here-document body in the
+	// shell rather than in the process the redirection is for, so what the
+	// body writes is still there afterwards: `unset u; cat <<END` with a
+	// body of `${u:=zz}` leaves `u=zz` here and leaves it unset in bash,
+	// ksh93 and zsh. Its own failure half still costs only the command —
+	// `set -u` on an unset name in such a body reports 2 and the script
+	// carries on — which is unanimous and so is not asked.
+	s.HeredocExpandsInTheCommandsProcess = interp.No
 	// POSIX makes an unquoted `$@` behave as `$*` where nothing is split,
 	// and this shell complies: `IFS=-; set -- x y z; v=${@}` is `x-y-z`
 	// here and in zsh, against `x y z` in bash and ksh93. It has no arrays,

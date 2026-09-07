@@ -7212,6 +7212,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/file-then-merge` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` |
 | `redir/multios-is-zsh-only` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[x][x]` |
 | `redirect/an-empty-target-is-not-the-working-directory` | `r=2~w=2` **2>** `<shell>: 1: cannot open : No such file~<shell>: 1: cannot create : Directory nonexistent` | `r=1~w=1` **2>** `<shell>: line 1: : No such file or directory~<shell>: line 1: : No such file or directory` | `r=1~w=1` **2>** `<shell>: line 1: : No such file or directory~<shell>: line 1: : No such file or directory` | `r=1~w=1` **2>** `<shell>: : No such file or directory~<shell>: : No such file or directory` | `r=1~w=1` **2>** `<shell>: : cannot open~<shell>: : cannot open` | `r=1~w=1` **2>** `<shell>:1: no such file or directory: ~<shell>:1: no such file or directory: ` |
+| `heredoc/a-side-effect-in-a-body-fed-to-a-program` | `u=zz` | `u=UNSET` | `u=UNSET` | `u=UNSET` | `u=UNSET` | `u=UNSET` |
+| `heredoc/a-side-effect-in-a-body-fed-to-a-builtin` | `u=zz` | `u=zz` | `u=zz` | `u=zz` | `u=zz` | `u=zz` |
+| `heredoc/a-side-effect-is-visible-to-the-rest-of-the-body` | `after=1` **2>** `<shell>: 1: arithmetic expression: expecting primary: " n++ "` | `[1][2]~after=1` | `[1][2]~after=1` | `[1][2]~after=1` | `[1][2]~after=1` | `[1][2]~after=1` |
+| `heredoc/a-failed-body-costs-the-command` | `st=2 alive` **2>** `<shell>: 1: NOPE_H: parameter not set` | `st=127 alive` **2>** `<shell>: line 1: NOPE_H: unbound variable` | `st=127 alive` **2>** `<shell>: line 1: NOPE_H: unbound variable` | `st=127 alive` **2>** `<shell>: NOPE_H: unbound variable` | `st=1 alive` **2>** `<shell>: NOPE_H: parameter not set` | `st=1 alive` **2>** `<shell>:1: NOPE_H: parameter not set` |
 | `heredoc/quotes-in-the-body-are-literal` | `don't say "hi"` | `don't say "hi"` | `don't say "hi"` | `don't say "hi"` | `don't say "hi"` | `don't say "hi"` |
 | `heredoc/a-backslash-escapes-three-things` | `$x \ \n \' \"` | `$x \ \n \' \"` | `$x \ \n \' \"` | `$x \ \n \' \"` | `$x \ \n \' \"` | `$x \ \n \' \"` |
 | `heredoc/an-unquoted-body-expands` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` |
@@ -7568,6 +7572,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redirect/an-empty-target-is-not-the-working-directory` — an empty target names no file, and the same rule the file tests need: joining it onto the working directory opens the *directory*, so the read succeeds and the complaint arrives from the command as `Is a directory` rather than from the shell. Every shell in the panel refuses to open the name — with four wordings and two statuses, so the case pins the wording too
   ```sh
   printf secret > in-there; cat < ""; echo "r=$?"; echo hi > ""; echo "w=$?"
+  ```
+- `heredoc/a-side-effect-in-a-body-fed-to-a-program` — the body is expanded in the process the redirection is for, so what it writes dies with that process: `u` is unset afterwards in bash, ksh93 and zsh, and holds `zz` in dash — the one shell that expands it here. `${u:=}` rather than `$(( n++ ))` so dash can be in the column at all
+  ```sh
+  unset u; cat >/dev/null <<END
+  [${u:=zz}]
+  END
+  echo "u=${u-UNSET}"
+  ```
+- `heredoc/a-side-effect-in-a-body-fed-to-a-builtin` — the control, and the reason the rule is about the process rather than about here-documents: a builtin runs in this shell, there is no other process for the write to land in, and all four shells leave `zz` behind. The pair is what says the line is drawn at the fork
+  ```sh
+  unset u; read q <<END
+  [${u:=zz}]
+  END
+  echo "u=${u-UNSET}"
+  ```
+- `heredoc/a-side-effect-is-visible-to-the-rest-of-the-body` — the write happens and is only then thrown away, which is what `[1][2]` says: refusing the write instead would give `[1][1]`, which is nobody's answer. dash has no `++` and refuses the expression, so it is out of this row and in the two above
+  ```sh
+  n=1; cat <<END
+  [$(( n++ ))][$(( n++ ))]
+  END
+  echo "after=$n"
+  ```
+- `heredoc/a-failed-body-costs-the-command` — unanimous, dash included, in the two things that matter: the diagnostic is written, `cat` never runs, and the script carries on — the failure happened in a process that is not the shell, so the shell is not what is given up. Here the body's value reached `cat` anyway and then the whole script was abandoned. The *status* is a third question and splits four ways: 127 in bash over `-c`, 1 in ksh93 and zsh, 2 in dash — and 1 in bash when the same snippet is read from a file, which is why this row is the `-c` reading and nothing is inferred from it about the number
+  ```sh
+  set -u; cat <<END
+  [$NOPE_H]
+  END
+  echo "st=$? alive"
   ```
 - `heredoc/quotes-in-the-body-are-literal` — a here-document body is not a word: a quote in it is an ordinary character with nothing to quote, so running the word lexer over it removed them and turned don't into dont — silently, with status 0
   ```sh

@@ -851,6 +851,23 @@ func (l *Lexer) scanArgumentGroup() string {
 	depth := 0
 	for !l.eof() {
 		c := l.peek()
+		// A numeric range's `<` is pattern text and not the operator that
+		// ends the word, so it is taken whole before the four characters
+		// below get to see it — the same precedence `next` and `endsWord`
+		// already give it outside a group. Without this the group ended at
+		// the `<` and left its `)` to the parser, which is why every
+		// powerlevel10k config died on `(5.<1->*|<6->.*)` (#1217).
+		//
+		// `numericRangeAt` is the whole disambiguation and it is exact, so
+		// the plain operator keeps every byte that is not a range: measured
+		// on zsh 5.9.2, `(a<b)`, `(<a-b>)`, `(<1-2-3>)`, `(<-->)`, `(<>)`
+		// and `(<1)` are all still parse errors there.
+		if width, ok := l.numericRangeAt(0); ok {
+			for range width {
+				l.advance()
+			}
+			continue
+		}
 		// `depth > 0` cannot be false at one of those four bytes and is
 		// kept for what it says rather than for what it decides: this is
 		// entered on a `(`, so the only pass with depth zero is the first

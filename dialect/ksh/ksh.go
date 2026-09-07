@@ -276,6 +276,7 @@ func Semantics() interp.Semantics {
 	// and `d=MiXeD; typeset -u d` stores MIXED. bash waits for the next
 	// assignment.
 	s.AttributeRereadsTheValueItFinds = interp.Yes
+	s.InheritedValueSurvivesADeclaredType = interp.No
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
 	// \x does not.
 	s.EchoOptions = "ne"

@@ -346,7 +346,15 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// never a fresh one — which is exactly the reading that leaves a
 			// standing value alone and brings only an absent name into
 			// being.
-			r.declareEmpty(name, fresh)
+			// No guard on r.unspecified beside this call. The declaration is
+			// still refused as a whole — the *next* operand's
+			// localExportAttribute check sees the flag and returns 2 with
+			// nothing assigned — so a guard here decided nothing and was a
+			// line no mutant could kill. What matters is that the refusal
+			// reaches the operands after it, and
+			// TestAnUnansweredInheritedTypeAxisRefusesTheNamesAfterItToo
+			// pins that rather than the guard that appeared to do it.
+			r.declareEmpty(name, fresh, f.export || f.readonly)
 		}
 		if f.readonly && !f.remove {
 			r.markReadonly(name)
@@ -605,7 +613,7 @@ func (r *Runner) integerValue(text string) (string, bool) {
 // The name is now local, or attributed, or both — but whether it also *exists*
 // is a dialect's answer, so this is the one place that decides it and both
 // `local` and `typeset` come through here.
-func (r *Runner) declareEmpty(name string, fresh bool) {
+func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry bool) {
 	// A name that already holds a value is not one this declaration is
 	// bringing into being, and nothing about being declared empties it:
 	// `typeset -x v` on a `v=abc` leaves `abc` alone in all four shells that
@@ -618,8 +626,20 @@ func (r *Runner) declareEmpty(name string, fresh bool) {
 	// typeset -i v; echo "[${v-UNSET}]"; }` reads UNSET in bash and ksh93 and
 	// `0` in zsh, against `[5]` for the same line at the top.
 	if !fresh && r.declaredNameHolds(name) {
-		r.rereadStandingValue(name)
-		return
+		if r.declarationStartsAnInheritedNameOver(name, keepsTheEnvironmentEntry) {
+			// The name is being started over rather than added to, so it
+			// falls through to the branches below as though it had been
+			// holding nothing — which is what it is now holding.
+			if r.unspecified {
+				return
+			}
+		} else {
+			if r.unspecified {
+				return
+			}
+			r.rereadStandingValue(name)
+			return
+		}
 	}
 	if r.ask(r.sem().DeclaredNameWithoutValueIsEmpty, "a declaration without a value setting the name") {
 		r.setVar(name, "")
@@ -698,6 +718,100 @@ func (r *Runner) declarationAssignmentExport(name string, namesTheAttribute bool
 		r.exported = map[string]bool{}
 	}
 	r.exported[name] = false
+}
+
+// declarationStartsAnInheritedNameOver reports whether this declaration takes
+// the name back to the state a *fresh* one would be in, having done so.
+//
+// The third answer to the question rereadStandingValue asks, on the one input
+// where the two shells that re-read part company — see
+// Semantics.InheritedValueSurvivesADeclaredType for the shape and what each
+// part of it is guarding against. A shell that says no here discards a value
+// the script never assigned rather than reading it back through the attribute
+// that just arrived, so both the value and the export attribute go and the
+// name reads as one this shell has never held.
+//
+// Asked *before* attributeWouldChange rather than inside rereadStandingValue,
+// because the two questions have different inputs: the re-read is about a
+// value the attribute would alter, and this is about where the value lives.
+// An inherited `7` meeting `-i` and an inherited `UPPER` meeting `-u` are
+// discarded by the shell that discards, and neither is a value any fold would
+// touch — so asking behind that predicate would have answered the shape's
+// commonest spelling with silence.
+func (r *Runner) declarationStartsAnInheritedNameOver(name string, keepsTheEnvironmentEntry bool) bool {
+	if keepsTheEnvironmentEntry {
+		// `-x` or `-r` on this same command. Measured: `typeset -ix G` and
+		// `typeset -ir K` keep an inherited value and re-read it, where
+		// `typeset -x P; typeset -i P` — the same two attributes over two
+		// commands — discards it, and so does any other extra letter. It is
+		// the letters this command carries, not the ones the name has.
+		return false
+	}
+	if !r.declaresAType(name) {
+		// A declaration with nothing to say about a value leaves an
+		// inherited name entirely alone everywhere: a bare `typeset`, `-x`
+		// and `-r` all read the value back and still reach a child.
+		return false
+	}
+	if _, own := r.Vars[name]; own {
+		// The script has assigned it, so the value is this shell's rather
+		// than the one it was started with — and every shell re-reads or
+		// waits over that, including the one that discards. `D=$D; typeset
+		// -i D` is 0 in all three, which is what says the question is about
+		// where the value lives.
+		return false
+	}
+	if _, inherited := r.inheritedValue(name); !inherited {
+		// Not an inherited value at all, so there is nothing here to
+		// discard. declaredNameHolds counts an array and a keyed table as
+		// something the name is holding, and a keyed table keeps no scalar
+		// view for the check above to find — so `typeset -A m; m[k]=v;
+		// typeset -i m` arrives here with a table and no value anywhere, and
+		// without this it would be marked removed and written off the
+		// environment for a value it never had.
+		return false
+	}
+	if r.ask(r.sem().InheritedValueSurvivesADeclaredType,
+		"a value the shell was started with surviving a declared type") {
+		return false
+	}
+	if r.unspecified {
+		return false
+	}
+	// Both halves, because the shell that does this drops both: the value,
+	// and the export the name had by having arrived in the environment.
+	//
+	// Nothing is deleted from the scalar table, because by here there is
+	// nothing in it: the check above returned already for a name this shell
+	// holds a value of its own for. A `delete` beside these two read as
+	// though it were doing the work and was a line no mutant could kill.
+	//
+	// The export record is written off rather than deleted, for the reason
+	// unsetName has: deleting it puts the question back to the environment,
+	// and the environment is precisely what still names this one. The removal
+	// mark goes with it, so the inherited value is not read back by the
+	// fallback either — and a later assignment lifts the mark without putting
+	// the export back, which is what the shell that discards does.
+	if r.exported == nil {
+		r.exported = map[string]bool{}
+	}
+	r.exported[name] = false
+	if r.removed == nil {
+		r.removed = map[string]bool{}
+	}
+	r.removed[name] = true
+	return true
+}
+
+// declaresAType reports whether the name carries one of the attributes that
+// has something to say about a *value*: the integer letter and the two case
+// letters, which are the three that share one answer wherever they are asked.
+//
+// Read off the name rather than off the declaration's flags because that is
+// where applyAttributes has just put them, and because `integer n` — the
+// spelling that carries the type in the word — never sets a letter at all.
+func (r *Runner) declaresAType(name string) bool {
+	return r.integer[name] || r.lowered[name] || r.uppered[name]
 }
 
 // rereadStandingValue applies an attribute a declaration has just added to the

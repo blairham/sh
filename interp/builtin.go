@@ -2374,7 +2374,14 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		} else {
-			r.declareEmpty(name, fresh)
+			// No guard on r.unspecified here, deliberately. The one axis
+			// declareEmpty asks that this builtin could not already reach —
+			// InheritedValueSurvivesADeclaredType — needs a cell the
+			// declaration did *not* just make, and `local` inside a function
+			// always makes one. Adding a guard would change what the axes
+			// this builtin has always reached do, which is not this change's
+			// business, and nothing could exercise it either way.
+			r.declareEmpty(name, fresh, f.export || f.readonly)
 		}
 		if f.readonly && !f.remove {
 			r.markReadonly(name)

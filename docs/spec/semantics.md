@@ -7898,6 +7898,64 @@ Two divergences beside it, measured and not modeled: ksh93 folds an
 array's elements under `-u` where zsh leaves them alone, and zsh renders
 `0x10` under `-i` as `16#10` where ksh93 gives `16`.
 
+**`InheritedValueSurvivesADeclaredType`** — bash yes · dash unspecified · ksh93 no · zsh yes
+
+Keeps the value a name was born with when a declaration gives it a
+*type* — `-i`, `-u` or `-l` — that the same declaration does not also
+export or freeze.
+
+The **third** answer to the question above, on the one input where the
+two shells that agree about a scalar part company:
+
+    INHERITED=bar, then `typeset -i INHERITED`
+      bash    [bar]   the child is told INHERITED=bar
+      zsh     [0]     the child is told INHERITED=0
+      ksh93   unset   the child is told nothing at all
+
+Measured 2026-09-07, `env -i PATH=/usr/bin:/bin INHERITED=bar` with a
+scratch `HOME`, `ZDOTDIR` and `HISTFILE`, from a script file, reading the
+child's view through `env | grep`.
+
+bash and zsh are the field above answering no and yes, and both still
+hand the name down. **ksh93 does neither**: the value goes *and* the
+export goes, so the name reaches no child. Modeling that as the re-read
+gives the wrong answer twice over — a re-read produces 0 and keeps the
+export, and this produces neither.
+
+Nor is it "a declaration empties what it touches". `${INHERITED+SET}` is
+empty afterwards, so the name has no value rather than an empty one —
+which is exactly what that shell's `DeclaredNameWithoutValueIsEmpty` = no
+leaves a **fresh** name holding. The declaration is starting the name
+over, and everything after it follows: the attribute is intact
+(`INHERITED=3+4` reads 7), `typeset -p` says `typeset -i INHERITED` with
+no value, and a later assignment does not put the export back.
+
+Asked only where every part of the shape holds, and each part is what a
+narrower or wider reading gets wrong:
+
+- The value is the one the shell was **started with** and the script has
+  never assigned. `D=$D; typeset -i D` is 0 with the export kept in all
+  three, and so is `export FOO=bar; typeset -i FOO` — so the question is
+  about where the value lives, not about the export attribute.
+- A **type** letter arrived. A bare `typeset`, `typeset -x` and
+  `typeset -r` leave an inherited name entirely alone in every shell.
+- Whether the fold would change anything is **not** part of it, which is
+  where this parts company with the field above: an inherited `7` meeting
+  `-i` and an inherited `UPPER` meeting `-u` are discarded too. So it is
+  asked *ahead* of the canonical-spelling predicate rather than behind
+  it, where the shape's commonest spellings would have gone unanswered.
+- The **same command** must not also name `-x` or `-r`. `typeset -ix G`
+  and `typeset -ir K` keep the value and re-read it; splitting them in
+  two — `typeset -x P; typeset -i P` — discards it, and so does any other
+  extra letter, measured with ksh93's `-t`. It is the letters this command
+  carries and not the ones the name already has.
+
+Pinned by `declare/a-type-over-a-name-the-shell-was-started-with`,
+`declare/a-type-over-an-inherited-name-a-fold-would-not-touch`,
+`declare/an-inherited-name-started-over-is-a-fresh-one`,
+`declare/an-inherited-name-the-same-declaration-also-exports` and
+`declare/an-inherited-name-the-script-assigned-first`.
+
 **`DeclarationNameOperands`** — bash PlainNamesOnly · dash PlainNamesOnly · ksh93 PlainNamesOnly · zsh NamesAndSpecialParameters
 
 Says what may stand where `export` and `readonly` want a name, beyond a

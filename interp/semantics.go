@@ -1516,6 +1516,52 @@ type Semantics struct {
 	// `typeset -r r=1; typeset -i r` is 1 at status 0 in the shells that
 	// re-read.
 	AttributeRereadsTheValueItFinds Answer
+	// InheritedValueSurvivesADeclaredType keeps the value a name was born
+	// with when a declaration gives it a *type* — `-i`, `-u` or `-l` — that
+	// the same declaration does not also export or freeze.
+	//
+	// The third answer to the question above, on the one input where the two
+	// shells that agree about a scalar part company. bash and zsh both keep
+	// the value and go on to answer that question: bash leaves `bar` alone
+	// and zsh re-reads it to 0, and both still hand it to a child. ksh93u+
+	// **discards it** — the name comes back *unset* and *unexported*, so
+	// `INHERITED=bar sh -c 'typeset -i INHERITED; env'` tells the child
+	// nothing at all where the other two tell it something.
+	//
+	// It is not the re-read seen from another angle, and modeling it as one
+	// gives the wrong answer twice over: a re-read produces 0 and keeps the
+	// export, and the shell that discards produces neither. It is also not
+	// "a declaration empties what it touches" — `${name+SET}` is empty
+	// afterwards, so the name has no value rather than an empty one, which
+	// is exactly what that dialect's `DeclaredNameWithoutValueIsEmpty` = no
+	// leaves a *fresh* name holding. The declaration is starting the name
+	// over.
+	//
+	// Asked only where every part of the shape holds, because each part is
+	// what a narrower or wider reading gets wrong:
+	//
+	//   - The value is the one the shell was **started with** and the script
+	//     has never assigned. `D=$D; typeset -i D` re-reads to 0 and keeps
+	//     the export in all three, and so does `export FOO=bar; typeset -i
+	//     FOO` — so this is about where the value lives, not about the
+	//     export attribute.
+	//   - A **type** letter arrived. A declaration that says nothing about a
+	//     value — a bare `typeset`, `-x`, `-r` — leaves an inherited name
+	//     entirely alone in every shell.
+	//   - Whether the fold would change anything is **not** part of it, and
+	//     this is where the question parts company with the re-read above:
+	//     an inherited `7` meeting `-i`, and an inherited `UPPER` meeting
+	//     `-u`, are discarded too. So it is asked ahead of
+	//     attributeWouldChange rather than behind it.
+	//   - The **same command** must not also name `-x` or `-r`. `typeset -ix
+	//     G` and `typeset -ir K` keep the value and re-read it; splitting
+	//     them in two — `typeset -x P; typeset -i P` — discards it, and so
+	//     does any *other* extra letter, measured with `-t`. One command's
+	//     letters, not the name's standing attributes.
+	//
+	// bash yes (both builds), ksh93 no, zsh yes. dash has no declaration
+	// builtin with a type letter and never arrives.
+	InheritedValueSurvivesADeclaredType Answer
 
 	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
 	// hide any outer `u` — the local exists unset, so `${u-UNSET}` fires the

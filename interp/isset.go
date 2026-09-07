@@ -75,12 +75,13 @@ func (r *Runner) parameterIsSet(name string) (bool, error) {
 //
 // `@` is the exception that keeps the second column from being "the specials":
 // it is unset in all three, with positional parameters set and in the shell
-// that answers for every other one. So it is excluded here rather than by an
-// axis, because no column disagrees about it.
+// that answers for every other one. It is excluded by being absent from
+// isSpecialParamName and by nothing else — an `@` guard stood here as well
+// for a while, and the pair was mutually redundant in the way that hides a
+// bug rather than guards against one: with the guard present, *adding* `@` to
+// the specials set changed no answer and no test could see it. One place, so
+// one mutant.
 func (r *Runner) isSetNameKind(name string) bool {
-	if name == "" || name == "@" {
-		return false
-	}
 	if isPositionalName(name) {
 		return r.sem().ParameterIsSetSeesPositionals
 	}

@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/interp"
@@ -81,6 +82,50 @@ func TestTheTestBuiltinAndTheConditionAgreeAboutIsSet(t *testing.T) {
 		b, _ := runGrammar(t, builtin, isSetGrammar, isSetRunner(true, false))
 		if a != b {
 			t.Errorf("%s: `[[ -v x ]]` said %q and `[ -v x ]` said %q", src, a, b)
+		}
+	}
+}
+
+// Without the flag the builtin keeps the refusal by name it already gave,
+// rather than answering a question this shell does not have. That is the
+// honest half of #1255 and it was the behavior before the change; it is
+// asserted here because nothing else would notice the gate going away — the
+// operand would simply be read as a filename and the test would answer false,
+// quietly, which is the wrong kind of no.
+// Both routes into the builtin, because there are two and they are gated
+// separately: an expression of exactly two words reaches unaryTest straight
+// from testExpr with the operator table never consulted, and a longer one is
+// read by the parser, which asks isTestUnary first. A test of the short form
+// alone leaves the long form's gate unasserted — measured by mutation, where
+// removing it changed no answer.
+func TestWithoutTheFlagTheTestBuiltinRefusesIsSetByName(t *testing.T) {
+	for _, src := range []string{
+		`x=1; [ -v x ] && echo SET || echo UNSET`,
+	} {
+		got, st := run(t, src, nil)
+		if !strings.Contains(got, "-v: unary operator expected") {
+			t.Errorf("%s: got %q, want a refusal naming -v", src, got)
+		}
+		if st != 0 {
+			t.Errorf("%s: status %d, want 0 — the refusal is the `[`'s and the `||` arm ran", src, st)
+		}
+	}
+}
+
+// And the multi-term route, which is a different entrance: an expression of
+// exactly two words reaches unaryTest straight from testExpr, while a longer
+// one is read by the parser, which consults the operator table first. Both
+// have to know about `-v` or the two forms disagree in the same shell.
+func TestBothRoutesIntoTheTestBuiltinKnowIsSet(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`x=1; [ -v x ] && echo SET || echo UNSET`, "SET\n"},
+		{`x=1; [ -v x -a -n x ] && echo SET || echo UNSET`, "SET\n"},
+		{`x=1; [ -n x -a -v x ] && echo SET || echo UNSET`, "SET\n"},
+		{`[ -v nope -o -v nope ] && echo SET || echo UNSET`, "UNSET\n"},
+	} {
+		got, st := runGrammar(t, tc.src, isSetGrammar, isSetRunner(true, false))
+		if got != tc.want || st != 0 {
+			t.Errorf("%s: got %q/%d, want %q/0", tc.src, got, st, tc.want)
 		}
 	}
 }

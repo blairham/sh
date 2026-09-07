@@ -356,6 +356,29 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 		return operand != "", nil
 	case "-z":
 		return operand == "", nil
+	case "-v":
+		// The same question `[[ -v ]]` asks and the same answer: the two
+		// constructs agree in every shell that has the operator, so they
+		// share the function rather than each having one.
+		//
+		// Gated here *and* at isTestUnary, and the pair is not redundant:
+		// there are two ways in. An expression of exactly two words comes
+		// straight here from testExpr without the operator table being
+		// consulted at all, and a longer one is read by the parser, which
+		// asks isTestUnary first. Taking either gate away leaves `-v`
+		// answered on one route and refused on the other, which is why both
+		// routes are asserted.
+		//
+		// Removing isTestUnary's gate alone survives the suite, and that
+		// survivor is explained rather than closed: the only answer it
+		// moves is the *wording* of a refusal on the multi-term route, and
+		// that wording is already wrong there for every operator this shell
+		// lacks — `[ -Q x -a -n x ]` says `too many arguments` where the
+		// panel names the `-Q`. Asserting it would pin the defect. #1290.
+		if !r.dialect().ParameterIsSetTest {
+			break
+		}
+		return r.parameterIsSet(operand)
 	case "-t":
 		// A terminal test on a descriptor this shell may not even own. Never
 		// true here: the streams are io.Writers, which is the honest answer
@@ -366,12 +389,6 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 			return false, &testError{kind: errIntegerExpected, operand: operand, decided: true}
 		}
 		return false, nil
-	}
-	if op == "-v" && r.dialect().ParameterIsSetTest {
-		// The same question `[[ -v ]]` asks and the same answer: the two
-		// constructs agree in every shell that has the operator, so they
-		// share the function rather than each having one.
-		return r.parameterIsSet(operand)
 	}
 	if !isTestUnary(op) {
 		return false, &testError{kind: errUnaryExpected, operand: op}

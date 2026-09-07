@@ -87,3 +87,32 @@ func (r *Runner) GiveUpTheFile() bool {
 	r.takeFileError()
 	return true
 }
+
+// GiveUpTheLine is the same boundary at an interactive prompt: the unit is the
+// line a person typed, and an error in it costs that line rather than the
+// session.
+//
+// The third site of one mechanism — `.` and `eval` are the first, a startup
+// file the second — and it is a method of its own rather than a flag on
+// GiveUpTheFile because **the axis is answered differently here**, which is
+// the only thing that separates the two.
+//
+// `${x?word}` is that axis. A dialect that documents the operand as exiting
+// the shell does exit for it in a *script*: measured, `echo X${NOPE?gone}`
+// followed by `echo after` prints only the diagnostic in zsh and in dash, and
+// prints `after` in bash and ksh93. At a **prompt** all four print the
+// diagnostic and draw the next prompt — measured through a pseudo-terminal,
+// one keystroke at a time, with a marker the typed line cannot contain — so
+// here there is nothing to ask: every error costs the line.
+//
+// What it still does not catch is a request to *stop*, which is the half that
+// keeps this from turning a shell into one nobody can leave. Measured at a
+// prompt in all four: `exit`, `exit 7`, `eval 'exit 7'` and errexit firing
+// (`set -e` then `false`) each end the session.
+func (r *Runner) GiveUpTheLine() bool {
+	if !r.pendingFileError() {
+		return false
+	}
+	r.takeFileError()
+	return true
+}

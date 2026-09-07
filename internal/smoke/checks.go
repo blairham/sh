@@ -69,6 +69,11 @@ var (
 	// it was asked for rather than the last thing typed — which up-arrow
 	// would also have found.
 	chaffProbe = probe{"echo chaff-$((6 * 7))", "chaff-42"}
+	// The line typed *after* a fatal expansion, so its mark can only appear
+	// if the session outlived the error. Measured through a pseudo-terminal
+	// in bash 5.3, zsh 5.9.2, ksh93u+ and dash: all four print the
+	// diagnostic and draw the next prompt (#1124).
+	survivedProbe = probe{"echo survived-$((6 * 7))", "survived-42"}
 	// The foreground job the suspend rows use; see tickerText.
 	tickProbe = probe{"./" + tickerName, "tick-42"}
 	// Typed in three pieces with a Tab in the middle, so the line here is
@@ -198,6 +203,23 @@ func checks() []check {
 					return Fail, err.Error()
 				}
 				return Pass, "two stages ran and the second saw the first's output"
+			},
+		},
+		{
+			name:   "a fatal error costs the line and not the session",
+			proves: "a mistyped variable name does not close the terminal",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				// `${x?word}` rather than `set -u`, because an option set
+				// here would stick: every later row would be running under
+				// a rule this one turned on, and the first of them to read
+				// an unset name would fail for this row's reason.
+				if err := s.typeLine(`echo X${SMOKE_NOPE?gone}`); err != nil {
+					return Fail, err.Error()
+				}
+				if err := s.runProbe(survivedProbe); err != nil {
+					return Fail, "the session did not survive a fatal expansion: " + err.Error()
+				}
+				return Pass, "the prompt came back and the next line ran"
 			},
 		},
 		{

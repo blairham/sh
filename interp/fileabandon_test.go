@@ -341,6 +341,130 @@ func TestGiveUpTheFileHonoursTheErrorOperatorAxis(t *testing.T) {
 	}
 }
 
+// runAndGiveUpTheLine runs text the way a repl runs one accepted line — one
+// chunk on a session that stays open — and then offers the *line* up, which is
+// what repl.runEach does around every one of them.
+func runAndGiveUpTheLine(t *testing.T, dir, text string, sem Semantics, dg Diagnostics) (string, *Runner) {
+	t.Helper()
+	f, err := syntax.Parse(text, syntax.Core())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	var buf bytes.Buffer
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf,
+		Semantics: &sem, Diagnostics: &dg,
+		Dir: dir, Name: "testsh",
+	})
+	r.Vars = map[string]string{"PATH": dir}
+	if err := r.RunPart(context.Background(), f); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	r.GiveUpTheLine()
+	return buf.String(), r
+}
+
+// TestGiveUpTheLineEndsALineAndNotTheSession is the third site of this
+// boundary: a prompt. What a person typed is one unit of input, and an error
+// in it costs the unit rather than the session — measured through a
+// pseudo-terminal in bash 5.3, zsh 5.9.2, ksh93u+ and dash, all four of which
+// print the diagnostic and draw the next prompt (#1124).
+func TestGiveUpTheLineEndsALineAndNotTheSession(t *testing.T) {
+	dir := t.TempDir()
+	out, r := runAndGiveUpTheLine(t, dir, "set -u\necho X${NOPE}\necho LINE-AFTER\n",
+		abandonSemantics(No, No), abandonDiagnostics())
+	const want = "testsh: line 2: NOPE: parameter not set\n"
+	if out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+	if r.Exited() {
+		t.Error("Exited() = true after an error was given up; the session should be open")
+	}
+}
+
+// TestGiveUpTheLineLeavesAnExitAlone: `exit` at a prompt ends the session in
+// every shell, and so does errexit firing. This is the half that keeps the
+// catch from making a shell nobody can leave.
+func TestGiveUpTheLineLeavesAnExitAlone(t *testing.T) {
+	dir := t.TempDir()
+	out, r := runAndGiveUpTheLine(t, dir, "echo LINE-BEFORE\nexit 3\n",
+		abandonSemantics(No, No), abandonDiagnostics())
+	if out != "LINE-BEFORE\n" {
+		t.Errorf("got %q, want the line to stop at the exit", out)
+	}
+	if !r.Exited() {
+		t.Error("Exited() = false after `exit 3`; the session should be over")
+	}
+	if r.ExitStatus() != 3 {
+		t.Errorf("status = %d, want 3", r.ExitStatus())
+	}
+}
+
+// TestGiveUpTheLineDoesNotAskTheErrorOperatorAxis is the **only** thing that
+// separates this site from the file one, and so the only test that can tell
+// the two calls apart: `${x?word}` is a request to stop at a file boundary in
+// the dialect that documents it that way, and is an error at a prompt in every
+// shell measured.
+//
+// Both answers to the axis are run against the same text, so what is asserted
+// is that the answer makes no difference here — where the pair in
+// TestGiveUpTheFileHonoursTheErrorOperatorAxis asserts that it makes all of
+// it.
+func TestGiveUpTheLineDoesNotAskTheErrorOperatorAxis(t *testing.T) {
+	const line = "echo LINE-BEFORE\necho X${NOPE?msg}\n"
+	dir := t.TempDir()
+	for _, paramErrorExits := range []Answer{No, Yes, Unspecified} {
+		out, r := runAndGiveUpTheLine(t, dir, line,
+			abandonSemantics(No, paramErrorExits), abandonDiagnostics())
+		const want = "LINE-BEFORE\n" +
+			"testsh: line 2: NOPE: msg\n"
+		if out != want {
+			t.Errorf("axis %v: got %q, want %q", paramErrorExits, out, want)
+		}
+		if r.Exited() {
+			t.Errorf("axis %v: Exited() = true; a prompt keeps the session for this operand", paramErrorExits)
+		}
+	}
+}
+
+// TestACaughtLineDoesNotMakeALaterExitSurvivable is the same guard the file
+// boundary has: after a line has been given up over an error, `exit 7` on the
+// next one must still end the session. A catch that cleared the control flow
+// and left the kind behind would read that exit as one more error.
+func TestACaughtLineDoesNotMakeALaterExitSurvivable(t *testing.T) {
+	dir := t.TempDir()
+	sem, dg := abandonSemantics(No, No), abandonDiagnostics()
+	f, err := syntax.Parse("set -u\necho X${NOPE}\n", syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := syntax.Parse("exit 7\n", syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
+		Dir: dir, Name: "testsh",
+	})
+	r.Vars = map[string]string{"PATH": dir}
+	if err := r.RunPart(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if !r.GiveUpTheLine() {
+		t.Fatal("the first line was not given up over its error")
+	}
+	if err := r.RunPart(context.Background(), second); err != nil {
+		t.Fatal(err)
+	}
+	if r.GiveUpTheLine() {
+		t.Error("`exit 7` was caught as an error on the line after a caught one")
+	}
+	if !r.Exited() || r.ExitStatus() != 7 {
+		t.Errorf("Exited() = %v at %d, want the session over at 7", r.Exited(), r.ExitStatus())
+	}
+}
+
 // TestTheSameBoundaryIsAtEvalAndCarriesADifferentStatus: `eval` and `.` are one
 // axis and two statuses, which is the arrangement a parse failure in borrowed
 // text already has. The override is the file's; evaluated text keeps the status

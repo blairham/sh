@@ -204,26 +204,56 @@ func TestTheProfileRunsBeforePosixMode(t *testing.T) {
 	}
 }
 
+// modeProbe asks the shell what mode it is in, in the words a person would
+// use.
+const modeProbe = "set -o\n"
+
 // TestThePromptReadsTheNameFromItsOwnArgv.
 //
 // The prompt route never reaches the place the script routes read argv[0], so
 // a fact read in one of them and not the other is a shell that answers two
 // ways depending on whether it was given work — which is exactly what
 // happened to `-i` (#472) and to the login profile (#482).
+//
+// **The mode itself is the observable and the failed redirection is not**,
+// which is a correction rather than a preference. POSIX mode moves three
+// answers here: whether a redirection failure on a special builtin is fatal,
+// whether `unset` of a readonly name is, and whether aliases expand. The
+// first two are *abandonments*, and at an interactive prompt an abandonment
+// is caught — measured through a pseudo-terminal, `exec 3>/nope/x` draws the
+// next prompt in bash 5.3, in bash invoked as `sh`, in dash, in ksh93 and in
+// zsh, and so does `: 3>/nope/x` (#1124). So the redirection probe stopped
+// being able to see the mode at a prompt the moment a prompt became a
+// boundary, and it was never the thing under test: what is under test is
+// whether the route read argv[0], which `set -o` answers directly and in the
+// words a person would use.
 func TestThePromptReadsTheNameFromItsOwnArgv(t *testing.T) {
 	for _, tc := range []struct {
-		name, argv0 string
-		want        bool
+		name, argv0, want string
 	}{
-		{"called sh", "sh", false},
-		{"called something else", "testsh", true},
+		{"called sh", "sh", "posix          on"},
+		{"called something else", "testsh", "posix          off"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, _, _ := runPipedShell(t, namedShell(), redirProbe, tc.argv0, "-i")
-			if got := strings.Contains(out, "after"); got != tc.want {
-				t.Errorf("carried on = %v, want %v (out %q)", got, tc.want, out)
+			out, _, _ := runPipedShell(t, namedShell(), modeProbe, tc.argv0, "-i")
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("out = %q, want %q in it", out, tc.want)
 			}
 		})
+	}
+}
+
+// TestAFailedRedirectionAtAPromptIsNotTheModesObservable is the other half of
+// that correction, kept as a test of its own so the fact is pinned rather
+// than only explained: in POSIX mode *and* out of it, the prompt survives the
+// failure it would abandon a script for. Both names are run, because the
+// finding is that the two answers are the same here.
+func TestAFailedRedirectionAtAPromptIsNotTheModesObservable(t *testing.T) {
+	for _, argv0 := range []string{"sh", "testsh"} {
+		out, _, _ := runPipedShell(t, namedShell(), redirProbe, argv0, "-i")
+		if !strings.Contains(out, "after") {
+			t.Errorf("argv0 %q: out = %q, want the prompt to have survived", argv0, out)
+		}
 	}
 }
 

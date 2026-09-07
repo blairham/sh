@@ -552,8 +552,9 @@ two machines.
 `make smoke` starts each dialect binary on a real pseudo-terminal with a
 scratch `HOME` and drives a session a person would have: an rc file with an
 alias, a function and a `PS1` in it, a prompt, Tab, up-arrow, `C-r`, a
-pipeline, a background job, `^Z` and `fg`, and `exit`. It answers **one row
-per feature** and never one boolean, because a shell whose rc file is never
+pipeline, a mistyped variable name, a background job, `^Z` and `fg`, and
+`exit`. It answers **one row per feature** and never one boolean, because a
+shell whose rc file is never
 read fails four rows for one reason and a suite that stops at the first of
 them reports a shell about which nothing else is known. `internal/smoke`
 holds it and `cmd/smoke` prints the table.
@@ -569,7 +570,13 @@ Two rules make it worth reading. **A mark is never text that is typed**: the
 terminal echoes keystrokes, so a wait on a mark the line contains passes for
 a shell that draws the line back and runs nothing — every line is written as
 an expression, `echo alias-$((6 * 7))-ok` in and `alias-42-ok` out, and a
-test holds the invariant. And **the assertions are written against what bash
+test holds the invariant. A third pitfall belongs beside it, learned on
+#1124: **counting prompts is not a readiness signal for a shell with a line
+editor**, which redraws its prompt on every keystroke, so a wait on "one more
+prompt than last time" returns before anything has run. `session.atPrompt`
+is safe because it waits on the *transition* and clears its flag on every
+keystroke; a hand-rolled counter is not, and reported a shell as surviving a
+failure it had merely not reached. And **the assertions are written against what bash
 and zsh do rather than against what this tree does today**: rows known to be
 missing carry the issue that owns them, so a known gap is quiet, an unowned
 one is an exit status, and a gap that closes announces itself. Weakening one

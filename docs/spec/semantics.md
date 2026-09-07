@@ -416,6 +416,76 @@ their configuration and cannot tell. It also makes a startup diagnostic
 count lie: a new failure early in a sourced file suppresses everything
 after it, so the number of complaints *falls* while the shell gets worse.
 
+### The third site: a prompt, and there the panel is unanimous *and* the axis is not asked
+
+**A prompt is a boundary in the same sense a file is.** What a person typed
+is one unit of input, and an error in it ends that unit and asks for the
+next line:
+
+    set -u
+    echo X${NOPE}
+    echo STILL-HERE
+
+bash 5.3, zsh 5.9.2, ksh93u+ **and dash** all print the diagnostic and draw
+the next prompt, with `STILL-HERE` printed. Not only `set -u`: the same is
+true of `${x?word}` and `${x:?word}`, a division by zero, a substitution
+that will not read, a readonly reassignment where the dialect calls one
+fatal, an error inside a function or a loop typed at the prompt, and a
+failed redirection on a special builtin — `exec 3>/nope/x` and
+`: 3>/nope/x` alike, in POSIX mode as well as out of it. This shell ended
+the session for every one of them, in all four dialects, so one mistyped
+variable name under `set -u` closed the terminal (#1124).
+
+`Runner.GiveUpTheLine` is the call, and it is a method of its own rather
+than a flag because **the `${x?word}` axis is answered differently here**.
+That operand is a request to stop at a file boundary in the two dialects
+that document it that way, and it is an *error* at a prompt in all four:
+
+| | in a script | at a prompt |
+| --- | --- | --- |
+| `echo X${NOPE?gone}` in bash, ksh93 | reports, carries on | draws the next prompt |
+| `echo X${NOPE?gone}` in zsh, dash | **ends the shell** | draws the next prompt |
+
+So one axis, three sites, and each site answers it for itself: `.` and
+`eval` ask it, a startup file asks it, and a prompt does not.
+
+**The status is not a field here**, which is the other way this site differs
+from the `.` one. `.` overrides with `Diagnostics.SourcedFatalStatus`
+because a caught error there reports 126 in one shell; at a prompt every
+shell reports the status the error itself left — `$?` is 1 in bash, zsh and
+ksh93 and 2 in dash, for the unset parameter and for the division by zero
+alike — so there is nothing to override.
+
+**`exit` is still not an error**, and this is the half that keeps the catch
+from making a shell nobody can leave. Measured at a prompt in all four:
+`exit`, `exit 7`, `eval 'exit 7'` and errexit firing (`set -e` then
+`false`) each end the session.
+
+**One divergence recorded rather than reproduced, and it is dash's alone.**
+The boundary here is "the shell is prompting", and dash's is narrower than
+that: with `-i` reading from a **pipe** rather than a terminal, dash prints
+the diagnostic and draws a further prompt and yet does *not* run the line
+after it — the same `set -u; echo X${NOPE}` and the same
+`echo $((1/0))` that it survives with a terminal. bash 5.3, bash 3.2, bash
+invoked as `sh`, ksh93 and zsh all survive both routes, and a plain
+`false` is survived by dash on both, so it is the abandonment that changes
+and not the prompting. This shell has one rule for both routes and so is
+dash's answer on a terminal and not its answer through a pipe; the case
+that separates them is one nobody types on purpose (#1165).
+
+**How it was measured, and why that is worth writing down.** Through a
+pseudo-terminal, one keystroke at a time, waiting for the terminal to go
+quiet between lines and reading a **marker the typed line cannot contain**
+— `echo "MARK:$((6*7))"` in, `MARK:42` out. Two earlier attempts on this
+same construct failed and both failures were the harness: bursting a whole
+script into a pty measures the line discipline rather than the shell, and
+waiting on text that appears in the line being typed is answered by the
+terminal's own echo, so the check passes for a shell that ran nothing. A
+count of prompt anchors is no good either once the shell under test has a
+line editor: it redraws the prompt on every keystroke, so the count runs
+ahead of the work. Covered by a row in `internal/smoke`, which drives a
+real terminal, and by unit tests over the repl's own loop.
+
 ## A divergence that is not the shells' but ours
 
 Every other row in this file is a disagreement between real shells. This one

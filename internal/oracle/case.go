@@ -5543,6 +5543,36 @@ echo "st=$?"`,
 		Why:     "the discriminating half of `a-numeric-range-may-start-a-pattern-group`: `<` digits `-` digits `>` is the entire disambiguation, so a `<` that is not one still ends the word exactly as `a-pattern-operands-group-ends-at-an-operator` records. Measured on zsh 5.9.2 — `(<a-b>)`, `(<1-2-3>)`, `(<-->)` and `(<1)` are all still parse errors there, so admitting the range must not admit them. Written with `<a-b>` because it is the shape a reader is most likely to assume works",
 	},
 	{
+		ID: "cond/a-groups-operator-may-be-quoted", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `k='<x'; [[ $k == (\<)* ]] && echo esc || echo no; [[ $k == ("<")* ]] && echo dq || echo no; [[ $k == ('<')* ]] && echo sq || echo no; k2='a;b'; [[ $k2 == (a\;b) ]] && echo semi || echo no`,
+		Why:     "the other half of `a-pattern-operands-group-ends-at-an-operator`, and the one that says the four characters are *operators* rather than characters the group may not hold: a backslash or either quote takes the operator away and the group carries the byte, which is what quoting does everywhere else in a word. Both spellings failed here, which is the informative part — whatever consumed the `<` ran before quote removal had any say, because the group was copied out of the source as raw bytes (#1248)",
+	},
+	{
+		ID: "cond/a-mid-word-groups-operator-ends-the-word", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `k='ab<c'; [[ $k == a(b<c) ]] && echo hit || echo miss; echo after`,
+		Why:     "`a-pattern-operands-group-ends-at-an-operator` with the group in the *middle* of the word rather than opening it, which is the row that says the rule is about neither the route nor the position. #1175 made it a route question and then a `does the group start the word` one; both were the shape of where the group happened to be measured, and reading the `<` into a mid-word group matched `ab<c` against `a(b<c)` where the shell will not read the line at all (#1248)",
+	},
+	{
+		ID: "cond/a-mid-word-groups-operator-may-be-quoted", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `k='ab<c'; [[ $k == a(b\<c) ]] && echo esc || echo no; k2=ab; [[ $k2 == a(b|c) ]] && echo alt || echo no; k3=a5; [[ $k3 == a(<0-9>) ]] && echo range || echo no`,
+		Why:     "and the three things a mid-word group still carries once the operator is taken away from it: an escaped `<`, the alternation the `|` is there for, and a numeric range whose own `<` was never an operator. The pair with the row above is what makes `ends the word` a statement about unquoted operators rather than about the characters",
+	},
+	{
+		ID: "cond/a-groups-quoted-text-is-literal", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `[[ b == ("b") ]] && echo dq || echo no; [[ b == (\b) ]] && echo esc || echo no; [[ 'a*b' == (a"*"b) ]] && echo star || echo no; [[ axb == (a"*"b) ]] && echo wild || echo no; [[ 'a|b' == (a\|b) ]] && echo bar || echo no`,
+		Why:     "the quieter half of the row above, and the one no parse test can see: a group read as raw text parses perfectly and then hands the matcher the quotes, so `(\"b\")` asks whether `b` is three characters and answers no at status 1 with nothing said. The `*` pair is the discriminator — a quoted star matches a star and not `x` — and the `|` is there because an escaped bar is not an arm boundary, which is a fact about the matcher rather than the scanner",
+	},
+	{
+		ID: "pat/quoted-text-in-an-extended-pattern-group", Category: "pattern matching",
+		Snippet: `shopt -s extglob; [[ b == @("b") ]] && echo dq || echo no; [[ 'a;b' == @("a;b") ]] && echo semi || echo no; [[ 'a*b' == @(a"*"b) ]] && echo star || echo no; [[ axb == @(a"*"b) ]] && echo wild || echo no`,
+		Why:     "the same question as `a-quoted-operator-in-a-group-reaches-every-route`, asked of the group behind a quantifier rather than the bare one — and the answer diverged here without any parse failure to notice it, because a group read as raw text hands the matcher the quotes and `@(\"b\")` then asks whether `b` is three characters. The last two arms are the discriminator: a quoted star matches a star and not `x`, so `did it match` cannot stand in for `was it literal`. bash 3.2 is the other half of the row and refuses the line outright — the option is not in force while the same line is being parsed there (#1248)",
+	},
+	{
+		ID: "pat/a-quoted-operator-in-a-group-reaches-every-route", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case '<x' in (\<)*) echo case;; *) echo no;; esac; case b in (a|"b")) echo alt;; *) echo no;; esac; v='<x'; echo ${v/(\<)/L}`,
+		Why:     "one scanner, three routes — a `case` arm, an argument and a substitution's pattern — asserted rather than assumed, because #1217 was filed after a fix that reached only the route it was measured on. The `case` arm is the sharp one: its leading `(` is the arm's own paren in every shell, so what is being read as a group there is the *second* one",
+	},
+	{
 		ID: "cond/a-regex-operands-group-keeps-its-operators", Category: "[[ ]] and (( ))",
 		Snippet: `k='a<b'; [[ $k =~ (a<b) ]]; echo "lt=$?"; k2='a;b'; [[ $k2 =~ (a;b) ]]; echo "semi=$?"; [[ ab =~ (a<b) ]]; echo "no=$?"`,
 		Why:     "and the operand that does *not* end there, which is the pair that makes the rule a rule about two constructs rather than about parentheses. A regular expression owns its `<` and its `;`: all four shells with `=~` match `a<b` and `a;b` against those groups and fail `ab` against the first, so the characters are regex text and not a redirection or a terminator. zsh is the dissenter and refuses the `<` while parsing, which is where its wording layer answers; dash has no `[[ ]]`. Written beside the pattern operand's row deliberately — the two differ in nothing a reader can see, and the shells still separate them (#1175)",

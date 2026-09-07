@@ -354,7 +354,7 @@ func condGlobQuals() Dialect {
 }
 
 // A *pattern operand's* leading group ends at an operator too, which is the
-// second route into scanArgumentGroup and was answered wrong until #1175.
+// second route into scanGroupSpans and was answered wrong until #1175.
 //
 // This is the route the `inArgument` guard used to divert: `[[ $k == (a<b) ]]`
 // took the group whole and matched, where zsh refuses the `<` while parsing.
@@ -402,7 +402,7 @@ func TestAPatternOperandsLeadingGroupEndsAtAnOperator(t *testing.T) {
 }
 
 // A *regular expression's* operand is the other answer, and it does not reach
-// scanArgumentGroup at all — scanWord takes a regex group whole at a case of
+// scanGroupSpans at all — scanWord takes a regex group whole at a case of
 // its own, ahead of the one this file is about.
 //
 // The four shells with `=~` agree, measured 2026-09-07 over a script file

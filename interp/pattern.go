@@ -17,7 +17,7 @@ import (
 // so the set escaping has any effect on. Escaping is what carries "this text
 // was quoted, match it literally" into the matcher; a string holding none of
 // these escapes to itself.
-const patternMeta = `*?[\()<`
+const patternMeta = `*?[\()<|`
 
 // extendedPatternMeta is the three characters that become metacharacters only
 // once [ExtendedPatternOperators] is on: the closure, the exclusion and the

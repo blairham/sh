@@ -522,11 +522,11 @@ exception, a pattern group being allowed to hold an alternation. That is
 also what `coproc MY ( cat </dev/null )` runs into, which is why the
 complaint names the `)` and not the `(`.
 
-**And it is a rule about a group starting a word, not about this
-construct.** A *pattern operand's* leading group ends at the same four
-characters, which needs only bare groups and no qualifiers at all —
-measured on zsh 5.9.2, 2026-09-07, each probe in a script file of its
-own so the first refusal does not hide the rest:
+**And it is a rule about any group in a word, not about this construct
+and not about where the group sits.** A *pattern operand's* group ends at
+the same four characters, which needs only bare groups and no qualifiers
+at all — measured on zsh 5.9.2, 2026-09-07, each probe in a script file
+of its own so the first refusal does not hide the rest:
 
 | written | zsh 5.9.2 |
 | --- | --- |
@@ -535,6 +535,39 @@ own so the first refusal does not hide the rest:
 | `[[ $k == (a;b) ]]` | ``parse error near `;'`` |
 | `[[ $k == (a&b) ]]` | ``parse error near `&'`` |
 | `[[ $k == (a\|b) ]]` | matches — the `\|` is the group's |
+| `[[ $k == a(b<c) ]]` | ``parse error near `<'`` |
+| `[[ $k == a(b;c) ]]` | ``parse error near `;'`` |
+| `[[ $k == a(b\|c) ]]` | matches |
+| `[[ $k == a(<0-9>) ]]` | matches — the range's `<` never was one |
+
+The last four rows are the correction. This was written as a rule about
+a *route* into the scanner and then as a rule about a group **starting**
+a word; each was the shape of where the group happened to be measured,
+and neither survives asking the middle of a word. Measured:
+`cond/a-mid-word-groups-operator-ends-the-word`,
+`cond/a-mid-word-groups-operator-may-be-quoted`.
+
+**The four end the word only where they are unquoted.** A backslash or
+either quote takes the operator away and the group carries the byte,
+which is what quoting does everywhere else in a word:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `[[ '<x' == (\<)* ]]` | matches |
+| `[[ '<x' == ("<")* ]]` | matches |
+| `[[ '<x' == ('<')* ]]` | matches |
+| `[[ 'a;b' == (a\;b) ]]` | matches |
+| `[[ 'a)b' == (a\)b) ]]` | matches — the group's own delimiter too |
+
+And the quoting reaches the *matcher*, not only the scan: quoted text
+inside a group is literal there as it is anywhere else, so
+`[[ b == ("b") ]]` matches and `[[ axb == (a"*"b) ]]` does not. That
+half is not one shell's — bash's quantified group is the same body, and
+`[[ b == @("b") ]]` matches in bash 5.3.15. Measured:
+`cond/a-groups-operator-may-be-quoted`,
+`cond/a-groups-quoted-text-is-literal`,
+`pat/quoted-text-in-an-extended-pattern-group`,
+`pat/a-quoted-operator-in-a-group-reaches-every-route`.
 
 A **regular expression's** operand is the other answer and owns its
 operators: `[[ 'a<b' =~ (a<b) ]]` and `[[ 'a;b' =~ (a;b) ]]` both match

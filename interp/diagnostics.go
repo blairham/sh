@@ -1044,6 +1044,30 @@ type Diagnostics struct {
 	// not been measured to word the two apart.
 	BadArrayLiteralSubscript string
 
+	// ArrayLiteralThroughASubscript is what the refusing shell says about
+	// `a[i]=(p q)`. Two verbs: the name, and the subscript *as written* —
+	// `a[$i]`, not the 1 it evaluated to, which is measured rather than
+	// assumed: bash quotes the text back in both builds. One sentence covers
+	// every target, an array, a scalar, a declared table and an unset name
+	// alike, because what it objects to is the list and not the name.
+	//
+	// Only a dialect answering SubscriptedArrayLiteralRefused has anything to
+	// put here.
+	ArrayLiteralThroughASubscript string
+
+	// ArrayValueToNonArray is what the splicing shell says when the name a
+	// subscripted literal writes through holds a plain string. One verb: the
+	// name, without the subscript. An *unset* name is not this — it becomes
+	// an array — so what it reports is a name already holding something that
+	// is not one.
+	ArrayValueToNonArray string
+
+	// SliceOfAnAssociativeArray is the same refusal for a declared table,
+	// which the splicing shell words differently: a subscript over a table
+	// names a key rather than a position, so there is no span for the words
+	// to replace. One verb: the name.
+	SliceOfAnAssociativeArray string
+
 	// UnsetBadSubscript wraps the sentence about an `unset` operand whose
 	// subscript would not evaluate. One verb: that sentence, already worded by
 	// ArithError. Empty leaves it to stand alone, which is what bash and zsh

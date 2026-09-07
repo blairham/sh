@@ -173,6 +173,35 @@ func (r *Runner) elemPos(a Array, idx int) (int, bool) {
 	return pos, pos >= 0
 }
 
+// markIndexed gives a name the indexed-array attribute, which is what
+// `declare -a` and `typeset -a` do. Declaring twice keeps the elements.
+//
+// The attribute *is* the store, exactly as it is for a table — see markAssoc —
+// so an empty array is what a name declared without a value holds. Almost
+// nothing needed that before, because an element assignment brings an array
+// into being on its own; what needs it is the one question a store with
+// nothing in it cannot otherwise answer, which is whether the name is an array
+// holding nothing or a scalar holding nothing.
+//
+// A declared table is left alone rather than replaced. Two letters naming two
+// kinds of array on one line is a shape nothing here has measured, and taking
+// the table away on the strength of a guess would lose its elements.
+func (r *Runner) markIndexed(name string) {
+	if _, produced := r.DynamicArrays[name]; produced {
+		return
+	}
+	if r.assocDeclared(name) {
+		return
+	}
+	if _, ok := r.Arrays[name]; ok {
+		return
+	}
+	if r.Arrays == nil {
+		r.Arrays = map[string]Array{}
+	}
+	r.Arrays[name] = Array{}
+}
+
 // setArrayElem assigns one element. Any subscript at or above the base is
 // legal, whether or not anything below it has been assigned, and a negative
 // one counts back from the end.

@@ -778,6 +778,16 @@ func Semantics() interp.Semantics {
 	// is one such span and comes back empty; an array with nothing in it has
 	// no span and gains no element.
 	s.UnsetArraySpan = interp.UnsetArraySpanLeavesOneEmptyElement
+	// `a[2]=(p q)` puts the words *where the subscript points* and the array
+	// grows by one: `a=(x y); a[1]=(p q)` reads back `p q y`. Measured
+	// 2026-09-07 against zsh 5.9.2, over the shapes that could have told a
+	// different rule — an empty literal removes the element, `+=` appends at
+	// the element rather than at the end, a subscript past the last element
+	// pads with empties on the way, and `a[2]=([3]=p)` splices the three
+	// positions that same literal would have filled on its own. bash refuses
+	// the line and ksh93 builds a nested value, so this is an axis and not a
+	// default (#1330).
+	s.SubscriptedArrayLiteral = interp.SubscriptedArrayLiteralSplices
 	// The complaint is the builtin's rather than the script's: `unset` reports
 	// 1 and the next command still runs.
 	s.BadSubscriptToUnsetFatal = interp.No
@@ -1015,6 +1025,11 @@ func Diagnostics() interp.Diagnostics {
 		// The array alone, and a sentence about the assignment rather than
 		// about the subscript.
 		BadArraySubscript: "%[1]s: assignment to invalid subscript range",
+		// The two ways a subscripted array literal has no span to land in.
+		// Worded apart from each other here, and both without the subscript:
+		// what is reported is the name's kind rather than the number.
+		ArrayValueToNonArray:      "%[1]s: attempt to assign array value to non-array",
+		SliceOfAnAssociativeArray: "%[1]s: attempt to set slice of associative array",
 		// The identical sentence from `unset`, and the builtin is *not* in
 		// the location for it — the store is speaking rather than `unset` —
 		// which is why the two routes need two fields even where one shell

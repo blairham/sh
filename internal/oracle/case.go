@@ -4643,6 +4643,26 @@ echo "st=$?"`,
 		Why:     "`[*]` joins, so a quoted one is a single field whether or not there is anything to join — one, unanimously, where `[@]` splits the panel. The two spellings differing on an empty array is the sharpest statement that the star is not the at",
 	},
 	{
+		ID: "array/an-array-literal-through-a-subscript", Category: "expansion",
+		Snippet: `a=(x y); a[1]=(p q); echo "[${a[@]}] n=${#a[@]}"`,
+		Why:     "an array literal standing where one element's value goes, and the panel gives three answers to it: one shell splices the words in and the array grows, one refuses the line and ends the script, and the third builds a nested value. There is no common reading to fall back on, which is what makes it a semantics axis rather than a default — and the length is in the snippet because a wrong reading that replaced the whole array left an array, at status 0, with plausible contents. The subscript is a numeral rather than `$i` on purpose: the refusing shell quotes a subscript back *as written* and this tree evaluates one holding an expansion, which is a gap of its own and would have graded three rows on it instead of on the construct",
+	},
+	{
+		ID: "array/an-empty-array-literal-through-a-subscript", Category: "expansion",
+		Snippet: `a=(x y z); a[1]=(); echo "n=${#a[@]}"`,
+		Why:     "the row a real plugin writes: `(( index <= $#fpath )) && fpath[$index]=()` drops one entry from `fpath`. In the shell that splices, an empty literal is a span of zero words replacing a span of one, so the element is removed and the count falls by exactly one; a reading that took the literal for the whole array emptied it instead and said nothing",
+	},
+	{
+		ID: "array/appending-an-array-literal-through-a-subscript", Category: "expansion",
+		Snippet: `a=(x y); a[1]+=(p); echo "[${a[@]}]"`,
+		Why:     "the operator asks the same question the subscript already answers for a scalar — `a[0]+=Q` joins the element where `a+=(Q)` adds one after the last — so in the splicing shell this appends *at* the element and the new word lands in the middle. Recorded beside the plain form because the two differ only in where the words go, which is exactly the distinction a fix reading the subscript late would lose",
+	},
+	{
+		ID: "array/an-array-literal-through-a-subscript-on-a-scalar", Category: "expansion",
+		Snippet: `s=abc; s[1]=(p q); echo "after st=$?"`,
+		Why:     "the same construct where the name is not an array, which splits the panel a second time and along a different line: the refusing shell says the same sentence it says for an array, and the splicing shell — which had no complaint at all a moment ago — refuses this one, because a string has no span to replace. Whether the rest of the line runs is the other half of the row",
+	},
+	{
 		ID: "assoc/unsetting-at-is-a-key-and-not-every-element", Category: "expansion",
 		Snippet: `typeset -A m; m[k]=v; m[j]=w; unset "m[@]"; echo "n=${#m[@]}"`,
 		Why:     "the whole-array reading belongs to the indexed array alone. With the attribute on, `@` is a key like any other and nothing was stored under it, so all three that have the attribute leave both elements where they are — including the two that clear an indexed array through the same spelling. It is the boundary a fix is likeliest to cross by accident, because the two kinds share a builtin and an operand shape",

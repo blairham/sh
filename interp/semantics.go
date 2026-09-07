@@ -4210,6 +4210,11 @@ type Semantics struct {
 	// as one empty element. Measured across spans of one, two and all — see
 	// docs/spec/measurements.md.
 	UnsetArraySpan UnsetArraySpanPolicy
+
+	// SubscriptedArrayLiteral is what `a[i]=(p q)` does — an array literal
+	// standing where one element's value goes. The panel disagrees about it
+	// completely; see SubscriptedArrayLiteralPolicy.
+	SubscriptedArrayLiteral SubscriptedArrayLiteralPolicy
 }
 
 // StartupFileOptions are the invocation options that change which startup
@@ -5478,6 +5483,63 @@ func (r *Runner) unsetArraySpan() UnsetArraySpanPolicy {
 // no answer at all means removal too.
 func (r *Runner) unsetBlanksInPlace() bool {
 	return r.sem().UnsetArraySpan == UnsetArraySpanLeavesOneEmptyElement
+}
+
+// SubscriptedArrayLiteralPolicy is what an array literal means when a
+// subscript names one element to put it in: `a[2]=(p q)`.
+//
+// Three shells with arrays, three answers, and none of them is a weakening of
+// another — which is what makes this a semantics axis rather than a grammar
+// flag. The syntax is identical in all three and only the meaning parts.
+type SubscriptedArrayLiteralPolicy int
+
+const (
+	// SubscriptedArrayLiteralUnspecified is no answer, and it is refused by
+	// name rather than guessed at. There is nothing to fall back on: the two
+	// answers that exist leave arrays of different lengths, and the third
+	// shell in the panel builds a nested value this interpreter has no
+	// representation for at all.
+	SubscriptedArrayLiteralUnspecified SubscriptedArrayLiteralPolicy = iota
+	// SubscriptedArrayLiteralRefused reports the line and ends the script:
+	// bash, in both builds measured, where `a[1]=(p q)` is `a[1]: cannot
+	// assign list to array member` at status 1 and the rest of the command
+	// string does not run. The refusal does not depend on what the name
+	// holds — an array, a scalar, a declared table and an unset name are all
+	// refused with the same sentence and the subscript quoted as written.
+	SubscriptedArrayLiteralRefused
+	// SubscriptedArrayLiteralSplices replaces the element with the words:
+	// zsh, where the array's *length* changes by the literal's count less
+	// one. `i=1; a=(x y); a[$i]=(p q)` reads back `p q y`, `a[$i]=()` removes
+	// the element, and `a[$i]+=(p)` appends at the element rather than at the
+	// end. A subscript past the last element pads with empties on the way, a
+	// scalar name is refused as a non-array and a declared table is refused
+	// as a slice.
+	SubscriptedArrayLiteralSplices
+)
+
+func (p SubscriptedArrayLiteralPolicy) String() string {
+	switch p {
+	case SubscriptedArrayLiteralRefused:
+		return "refused"
+	case SubscriptedArrayLiteralSplices:
+		return "splices the element"
+	}
+	return "unspecified"
+}
+
+// subscriptedArrayLiteral resolves the axis, refusing an unanswered dialect by
+// name rather than picking one of the two answers: they disagree about the
+// array's length, its contents and the exit status, so there is no reading
+// that is nearly right.
+func (r *Runner) subscriptedArrayLiteral() SubscriptedArrayLiteralPolicy {
+	p := r.sem().SubscriptedArrayLiteral
+	if p == SubscriptedArrayLiteralUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("`a[i]=(p q)`, an array literal through a subscript")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
 }
 
 // ask reads one axis.

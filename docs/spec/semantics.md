@@ -9647,3 +9647,84 @@ taking them from the program around it — so `Runner.TakeInterrupt` is a hook
 the front end fills in, asked at the top of every command. That is the only
 place a loop of builtins can be stopped: nothing in `while :; do echo tick;
 done` blocks, waits, or returns anywhere else.
+
+## An array literal through a subscript: three answers and no middle
+
+`a[i]=(p q)` is an array literal standing where one element's value goes,
+and it is the sharpest example so far of rule 4 read the other way: the
+panel does not merely disagree about a detail, it disagrees about what
+the construct *is*.
+
+Measured 2026-09-07, zsh 5.9.2, bash 5.3.15, bash 3.2.57, ksh93u+, dash:
+
+    i=1; a=(x y); a[$i]=(p q); print -rl -- "${a[@]}"
+
+    zsh       p q y      the element is replaced by the two words
+    bash 5.3  a[$i]: cannot assign list to array member   (status 1, line abandoned)
+    bash 3.2  the same sentence, the same status
+    ksh93     x p        a nested value, which this interpreter cannot hold
+    dash      a syntax error before any of it
+
+There is nothing to fall back on. The two readings that can be built here
+leave arrays of *different lengths*, so a core that guessed would be wrong
+in a way no script could see: status 0, an array on the other side, and
+plausible contents. That is what it was doing — the subscript was dropped
+and the literal became the whole array — and `SubscriptedArrayLiteral` is
+the axis that replaces the guess, with an unanswered dialect refused by
+name.
+
+### The rows that fix the reading
+
+Splicing agrees with "replace the whole array" on a one-element array, and
+with "insert after the element" on everything except an empty literal, so
+the probe set has to include both:
+
+    a=(x y z); a[2]=(p q)      x p q z    in the middle, not at the end
+    a=(x y z); a[2]=()         x z        an empty literal *removes*
+    a=(x y);   a[1]+=(p)       x p y      `+=` appends at the element
+    a=(x y);   a[5]=(p q)      x y ‸ ‸ p q   padded on the way, six elements
+    a=(x y z); a[-1]=(p q)     x y p q    counts back, asks nothing of the base
+    a=(x y z); a[2]=([3]=p)    x ‸ ‸ p z  the literal places its own elements
+
+(‸ is an empty element.) The last is the one that says what the *value* is:
+the words are exactly the array that same literal would have built on its
+own, placement and all, which is why the two spellings share one function
+rather than each expanding the elements their own way.
+
+`+=` is the same distinction the scalar element assignment already draws —
+`a[0]+=Q` joins the element where `a+=(Q)` adds one after the last — so the
+subscript is what says which of the two operations the operator means, on
+both routes.
+
+### The refusals belong to the axis too
+
+The splicing shell has two complaints of its own, and they are not the
+refusing shell's one sentence wearing a different coat:
+
+    s=abc;          s[2]=(p q)   s: attempt to assign array value to non-array
+    typeset -A h;   h[k]=(p q)   h: attempt to set slice of associative array
+
+Neither names the subscript, because what is wrong is the name's kind. A
+table has keys rather than positions, so there is no span for the words to
+replace; a string is not an array at all. An **unset** name is neither — it
+becomes an array, with empty elements in front of the subscript.
+
+The refusing shell says its one sentence to all of them, quotes the
+subscript back as written, and does not evaluate it: `a[1/0]=(p q)` is
+`cannot assign list to array member` there and `division by zero` in the
+shell that splices.
+
+### The letter that had to start meaning something
+
+`typeset -a a; a[2]=(p q)` splices and `typeset a; a[2]=(p q)` is refused,
+which is one question — is this name an array holding nothing, or a scalar
+holding nothing — that no store with nothing in it can answer. `-a` was
+accepted and recorded nowhere, because an element assignment brings an
+array into being on its own and nothing had ever needed the attribute.
+
+So the attribute *is* an empty store, exactly as `-A` already was. One
+thing had to move with it: `typeset -ia b; b=(5+5 6+6)` keeps the integer
+letter and folds to `10 12`, so an array with nothing in it is not a
+compound value the name can be started over from — measured in bash 5.3.15,
+where `typeset -ia b=(); b=(5+5 6+6)` gives the same `10 12` as the
+valueless declaration.

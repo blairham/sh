@@ -39,6 +39,7 @@ type declareFlags struct {
 	readonly  bool
 	export    bool
 	assoc     bool
+	array     bool
 	lower     bool
 	upper     bool
 	global    bool
@@ -213,15 +214,16 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// both shells that spell the option at all.
 				f.print = true
 			case 'a':
-				// Accepted and recorded nowhere. An array here is dynamic,
-				// so `typeset -a arr` followed by `arr[0]=x` works without
-				// the attribute existing — which is what the flag is used
-				// for. The compound form `typeset -a arr=(x y)` is a
-				// different thing and is not built: the parser reads the
-				// parenthesis as an ordinary word, and making it an array
-				// literal in argument position is grammar rather than a
-				// flag. Refusing the flag outright would break the common
-				// use to be honest about the rare one.
+				// The indexed-array attribute, which is what `-A` is for
+				// tables. An array is otherwise dynamic here — `typeset -a
+				// arr` followed by `arr[0]=x` worked before the letter was
+				// recorded at all — so what the attribute adds is the one
+				// thing that cannot be inferred from a store with nothing in
+				// it: that the name is an *array* holding nothing rather
+				// than a scalar holding nothing. `a[i]=(p q)` is the
+				// construct that has to tell those apart, since it splices
+				// into the first and is refused on the second (#1330).
+				f.array = true
 			}
 		}
 	}
@@ -399,6 +401,14 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				return r.status
 			}
 			r.shadowedExport(name, wasExported)
+		}
+		if f.array && !f.remove {
+			// Before the table's, and exclusive with it: `-a` and `-A` name
+			// two kinds of array and a name is one kind at a time, so a line
+			// carrying both letters is the table — which is the order the
+			// stores themselves enforce, since markIndexed leaves a declared
+			// table alone.
+			r.markIndexed(name)
 		}
 		if f.assoc && !f.remove {
 			// After the shadow, so that `typeset -A` inside a function
@@ -1002,8 +1012,15 @@ func (r *Runner) compoundNameHolds(name string) bool {
 	if _, ok := r.assocFor(name); ok {
 		return true
 	}
-	_, ok := r.Arrays[name]
-	return ok
+	a, ok := r.Arrays[name]
+	// An array with nothing in it is not a value to start over from, and that
+	// is measured rather than an artifact of how the store is kept: `typeset
+	// -ia b=(); b=(5+5 6+6)` folds to `10 12` and keeps the letter in bash
+	// 5.3.15, exactly as `typeset -ia b` with no literal at all does. It
+	// matters because the array attribute *is* an empty store — see
+	// markIndexed — so `typeset -ia b` would otherwise be a name already
+	// holding a compound value and lose the letter to its first literal.
+	return ok && len(a) > 0
 }
 
 // compoundMeetingAnAttribute is what an attribute a declaration has just

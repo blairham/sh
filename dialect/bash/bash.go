@@ -819,9 +819,14 @@ func Diagnostics() interp.Diagnostics {
 		UnterminatedNoConstruct: "syntax error: unexpected end of file",
 		// One sentence for every unmatched delimiter, always naming the
 		// closer — only the line it lands on differs by construct.
-		UnmatchedQuote:            "unexpected EOF while looking for matching `%[2]s'",
-		UnmatchedCmdSubst:         "unexpected EOF while looking for matching `%[2]s'",
-		UnmatchedBraceSubst:       "unexpected EOF while looking for matching `%[2]s'",
+		UnmatchedQuote:      "unexpected EOF while looking for matching `%[2]s'",
+		UnmatchedCmdSubst:   "unexpected EOF while looking for matching `%[2]s'",
+		UnmatchedBraceSubst: "unexpected EOF while looking for matching `%[2]s'",
+		// The same sentence as the other three openers, with the closer it
+		// echoes coming from the construct: `)` for `$((1+2` and `]` for
+		// `$[1+2`, which is measured and is why the closer is a verb rather
+		// than being written into each wording.
+		UnmatchedArithSubst:       "unexpected EOF while looking for matching `%[2]s'",
 		UnmatchedReportedAtOpener: true,
 		CmdSubstUnmatchedAtEnd:    true,
 		SyntaxErrorStatus:         2,

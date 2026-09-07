@@ -1736,12 +1736,25 @@ type Diagnostics struct {
 	// comes back as `v=$(echo hör…` — eighteen characters in twenty bytes
 	// — and pushing a multibyte character across the boundary splits it:
 	// measured, a word whose twentieth byte begins `é`, `€` or an emoji
-	// answers with that character's lead byte alone, `Ã`, `â`,
-	// `ð`, and the diagnostic is not valid UTF-8. So this is a byte
+	// answers with that character's lead byte alone — 0xC3, 0xE2 or 0xF0 — and the diagnostic is not
+	// valid UTF-8. So this is a byte
 	// slice and deliberately not a rune-aware one — rounding down to a
 	// character boundary would be a nicer diagnostic than the shell's and
 	// would not match it.
 	UnmatchedNearMaxBytes int
+	// UnmatchedArithSubst is `$((` or `$[` the input ran out inside. Same
+	// verbs, and both spellings take it: everything about them but the
+	// delimiters is one construct, and %[2]s carries which closer never
+	// came — `)` for the first and `]` for the second, which is what the
+	// dialect that echoes the closer prints for each.
+	//
+	// Empty falls back to the substrate's own sentence, deliberately not to
+	// UnmatchedQuote. An opener with no wording of its own gets the quote's
+	// sentence today, and for this one that would be a shell being made to
+	// say something about a quote where no quote was written. Every preset
+	// in the panel states an answer here, so the fallback is what the core
+	// and a new dialect get rather than what any measured shell relies on.
+	UnmatchedArithSubst string
 	// UnmatchedReportedAtOpener puts an unmatched quote's diagnostic on
 	// the line the opener is on rather than the line the input ran out on.
 	UnmatchedReportedAtOpener bool
@@ -2737,6 +2750,16 @@ func (d Diagnostics) ParseFailure(err error) string {
 			}
 		case "${":
 			form = d.UnmatchedBraceSubst
+		case "$((", "$[":
+			// Assigned whatever the dialect says, empty included, because
+			// empty here must *not* leave form as UnmatchedQuote — a shell
+			// would then say something about a quote where the script wrote
+			// none. What an empty format falls back to is Wording's job and
+			// it is se.Msg, the substrate's own sentence, which is what this
+			// opener wants. Restating that fallback here was dead code:
+			// removing it was behaviorally identical under mutation, which
+			// is how it was found.
+			form = d.UnmatchedArithSubst
 		}
 		return Wording(form, se.Msg,
 			se.Token, se.Expected, d.nearText(se.LastToken), se.Pos.Line, se.EofLine)

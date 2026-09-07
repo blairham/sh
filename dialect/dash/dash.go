@@ -470,8 +470,14 @@ func Diagnostics() interp.Diagnostics {
 		UnmatchedBackquote:      "Syntax error: EOF in backquote substitution",
 		UnmatchedCmdSubst:       "Syntax error: end of file unexpected (expecting \")\")",
 		UnmatchedBraceSubst:     "Syntax error: Missing '}'",
-		SyntaxError:             "Syntax error: %s",
-		BadSubstitution:         "Bad substitution",
+		// This shell names the two characters that never came rather than
+		// the one the other dialect echoes, so the closer is written in
+		// rather than taken from the construct. It has no `$[` at all —
+		// `echo $[1+2` runs and prints the text — so there is one spelling
+		// to word here and not two.
+		UnmatchedArithSubst: "Syntax error: Missing '))'",
+		SyntaxError:         "Syntax error: %s",
+		BadSubstitution:     "Bad substitution",
 		// The builtin in front, which its plain form does not have.
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
 		ReadonlyRefusalNamesBuiltin:   map[string]bool{"export": true, "readonly": true},

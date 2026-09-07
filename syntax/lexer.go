@@ -1464,17 +1464,22 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 // `ParseFailureLine` answered 0 because there was no *syntax.Error to read a
 // line from (#1023).
 //
-// The arithmetic one keeps the plain failure for now, and that is a scoped
-// gap rather than the same bug left half-fixed: routing it through
-// failUnmatched moves its *line* as well as its sentence — the shell that
-// reports `$(` at the line after the input's last reports `$((` at the
-// opener's — so it wants its own measured row per dialect. #1086.
+// The one that holds an *expression* goes through it too, since #1086, and
+// its line is why that took a second measurement rather than following on
+// from the first. A dialect that reports an unmatched `$(` at the line after
+// the input's last reports `$((` at the **opener's**: `echo $((1+2` with a
+// trailing newline answers `line 1` where `v=$(echo hi` answers `line 2`.
+//
+// What settles it is that the line convention is already keyed on the opener
+// rather than on the kind. ParseFailureLine reads CmdSubstUnmatchedAtEnd for
+// `$(`, `<(` and `>(` and UnmatchedReportedAtOpener for everything else, and
+// `$((` wants the second — which is the same answer a quote gets, in the one
+// dialect that parts them, and is what that dialect prints. So the routing
+// needed no new switch at all, and adding `$((` to the first set is the
+// mistake that would have moved the line: measured per dialect afterwards,
+// all four agree with the panel unchanged.
 func (l *Lexer) failedToClose(open Pos, kind SpanKind) {
-	if !holdsCommands(kind) {
-		l.fail(open, "unterminated %s", kind)
-		return
-	}
-	l.failUnmatched(open, openingOf(kind), ")", "unterminated "+kind.String())
+	l.failUnmatched(open, openingOf(kind), closingOf(kind), "unterminated "+kind.String())
 }
 
 // scanBracket reads `$[ … ]`, the older spelling of `$(( … ))`.
@@ -1499,7 +1504,12 @@ func (l *Lexer) scanBracket(q Quoting) Span {
 	for depth > 0 {
 		if l.eof() {
 			l.ranOut("$[")
-			l.fail(open, "unterminated arithmetic substitution")
+			// The older spelling names its own delimiters rather than
+			// borrowing ArithSubst's: the dialect that echoes the closer
+			// back says `]` here and `)` for `$((`, measured, and the kind
+			// is the same for both spellings because everything downstream
+			// of the delimiters is.
+			l.failUnmatched(open, "$[", "]", "unterminated "+ArithSubst.String())
 			break
 		}
 		switch l.peek() {
@@ -2243,6 +2253,24 @@ func openingOf(kind SpanKind) string {
 		return "<("
 	case ProcSubstOut:
 		return ">("
+	}
+	return kind.String()
+}
+
+// closingOf is the delimiter that never came, for the dialect whose sentence
+// names it rather than the opener.
+//
+// One parenthesis for every kind that reaches here, the arithmetic one
+// included, and that is measured rather than a simplification: the dialect
+// that words this as "looking for matching `)'" says `)` for `$((1+2` and not
+// `))`, so echoing the two characters the construct was opened with would be
+// wrong. The bracketed spelling is the exception and does not come through
+// here — scanBracket names its own `]`, which is what that dialect prints
+// for it.
+func closingOf(kind SpanKind) string {
+	switch kind {
+	case ArithSubst, CommandSubst, ProcSubstIn, ProcSubstOut:
+		return ")"
 	}
 	return kind.String()
 }

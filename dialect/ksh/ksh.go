@@ -654,6 +654,18 @@ func Semantics() interp.Semantics {
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#ff` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
+	// Lower case first and on into upper, then two more: measured, base 64
+	// spells 61 `Z`, 62 `@` and 63 `_`, so the alphabet is sixty-four long
+	// and `typeset -i64 a=100` is `64#1A`.
+	s.IntegerBaseDigits = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@_"
+	s.IntegerBaseComesFromTheValueAssigned = interp.No
+	s.IntegerBaseNegativeIsTwosComplement = interp.Yes
+	// The letter always names a base here and ten is what it names when
+	// nothing is written: measured, `typeset -i10 d=255` lists back as
+	// `typeset -i d=255` with no base word, and a later bare `typeset -i a`
+	// — or `integer a`, the same declaration under another word — takes the
+	// base off a name that had one and leaves `255` standing.
+	s.IntegerBaseTenIsNoBase = interp.Yes
 	// The name carries the type in this shell, so a plus word on `integer`
 	// removes nothing: `integer n=5; integer +i n; n=3+4` is 7 here, and
 	// `integer -x e=1; integer +x e` leaves e exported — where this shell's

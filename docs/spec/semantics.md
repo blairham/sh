@@ -4920,15 +4920,139 @@ unexport, so this is not the letter's answer being asked twice. Corpus:
     typeset -i 16 b=255      bash `16': not a valid identifier, st=1
     typeset -i2 c=5          bash -2: invalid option, st=2
 
-This engine records that a name is an integer and has nowhere to keep a
-*base*, which is a property of how the value reads back out, so where
-the answer is yes the base **refuses by name** rather than being read
-and dropped. Dropping it was the previous answer and was the silent kind
-of wrong: `typeset -i 16 b=255` reported 0 with `255` standing, and the
-`16` became a variable of its own. Asked only where a base is actually
-written, so an ordinary `-i` never meets it and a dialect whose `-i`
-takes none — bash — is left alone. Corpus:
-`declare/integer-with-an-output-base`.
+Asked only where a base is actually written, so an ordinary `-i` never
+meets it and a dialect whose `-i` takes none — bash — is left alone;
+there the word after the letter is an operand and `-i16` is somebody
+else's bad option.
+
+**The rendered text is what is stored**, not a way of printing what is,
+and this is the row the whole feature has to be built around:
+
+    typeset -i16 h=255
+    ${#h}         5              five characters, not three
+    g=$h          g is 16#ff     a plain copy copies the text
+    $(( h + 1 ))  256            arithmetic parses it back
+    export h; env h=16#ff        the child is told the text
+
+A shell that merely printed the name differently would answer the length
+3, the copy `255` and the child `h=255`. ksh93 and zsh agree on all four,
+differing only in the case of the digits.
+
+**The base belongs to the name** and not to the assignment that met it:
+`typeset -i8 c; c=64` is `8#100`, a second declaration re-renders what
+the name is already holding — `typeset -i i=5; typeset -i16 i` is `16#5`
+and `typeset -i16 h=255; typeset -i8 h` is `8#377` — and that is a change
+of spelling rather than a re-read, so it meets no dialect and no readonly
+refusal. `+i` takes the base off with the attribute and leaves the
+characters that are there alone, so only the *next* assignment is plain.
+
+**Base ten marks nothing**, and it is why the range check and the
+rendering cannot be one question: `typeset -i10 e=255` is `255` in both,
+so ten is a base a shell takes and writes nothing with. Joining the two
+made the shell that refuses a bad base refuse base ten as well. What the
+two shells do *record* when ten is written is a separate answer, below.
+
+**`Semantics.IntegerBaseDigits`** — bash empty · dash empty · ksh93 sixty-four long, lower case first · zsh thirty-six long, upper case
+
+The alphabet a dialect counts in, and its length is the largest base it
+can spell. Two facts in one string because they are one fact about the
+shell:
+
+    typeset -i36 b=100    ksh93 36#2s    zsh 36#2S
+    typeset -i64 b=100    ksh93 64#1A    zsh refuses
+    typeset -i64 b=63     ksh93 64#_     — 61 is Z, 62 is @, 63 is _
+    typeset -i1  b=5      ksh93 5        zsh refuses
+
+**`Diagnostics.IntegerBadBase`** is what a dialect says about a base
+outside that range, and its absence is the other answer: ksh93 takes any
+base in silence and renders plain what it cannot spell, and zsh writes
+`invalid base (must be 2 to 36 inclusive): 64`, leaves the name holding
+nothing, and carries on. So the refusal is the presence of a wording
+rather than a second field.
+
+**`Semantics.IntegerBaseComesFromTheValueAssigned`** — bash no · dash no · ksh93 no · zsh yes
+
+The half of the base that is not the letter, and zsh alone. The base is
+learned from the *radix prefix* of the value assigned, and it sticks to
+the name:
+
+    typeset -i a; a=0x10           ksh93 16    zsh 16#10
+    typeset -i b; b=0x10; b=5      ksh93 5     zsh 16#5
+    typeset -i c; c=8#7;  c=99     ksh93 99    zsh 8#143
+    a=0x10; typeset -i a           ksh93 16    zsh 16#10
+
+Two things teach it nothing in any column: a leading zero, which is not a
+radix, and a value that arrived already evaluated — `$((0x10))` hands the
+assignment four decimal characters and there is no prefix left to read. A
+*sign* in front of one does not hide it: `b=-0x10` is `-16#10`.
+
+The leading-zero row splits the panel for a reason of its own, which is
+#1270 and not this: `016` is 14 in the three bash columns, which read it
+as octal, and 16 in both shells that have a base.
+
+What is learned is a base the shell **takes**, not only one it writes a
+value in, and ten is the row that says so: `b=10#5` lists back as
+`typeset -i10 b=5` while `$b` is a plain `5`, so a reading that kept only
+the bases something is written in would answer that listing wrong and
+every other row right. Corpus:
+`declare/a-learned-output-base-says-itself-back`.
+
+**`Semantics.IntegerBaseNegativeIsTwosComplement`** — bash no · dash no · ksh93 yes · zsh no
+
+    typeset -i16 h=-255    ksh93 16#ffffffffffffff01    zsh -16#FF
+    typeset -i2  c=-5      ksh93 sixty-four binary digits   zsh -2#101
+
+Nothing about the value differs, only how it is written, and a reading
+that took either for the rule gets the other's row wrong by a whole word.
+
+**`Semantics.IntegerBaseTenIsNoBase`** — bash no · dash no · ksh93 yes · zsh no
+
+Whether "no base" is a state or just base ten, which is the question
+#1130 left open, and the two shells answer it differently:
+
+    typeset -i10 d=255; typeset -p d    ksh93 typeset -i d=255
+                                        zsh   typeset -i10 d=255
+    typeset -i16 a=255; typeset -i a    ksh93 255      zsh 16#FF
+    typeset -i16 b=255; integer b       ksh93 255      zsh 16#FF
+    typeset -i16 c=255; typeset -x c    ksh93 16#ff    zsh 16#FF
+
+Those are one answer and not two. ksh93's letter always names a base and
+ten is what it names when nothing is written, so a bare `-i` is `-i10`,
+ten records nothing, and a name that had a base loses it — `integer`
+being the same declaration under another word, it does this too. In zsh
+ten is a state: it is recorded, the listing says `-i10` back, and a later
+bare `-i` leaves the base where it was.
+
+The value reads the same either way, ten being the base nothing is
+written in, so this is not `IntegerBaseDigits` asked twice: what it
+changes is the listing and what a second declaration does to a base
+already there. The last row is the control both readings have to pass —
+another letter is not this question, and `typeset -x` over a based name
+leaves the base alone in both.
+
+Degenerate bases in ksh93 are measured and not modeled, and #1308 has
+them: `-i0` leaves a standing base alone where `-i1` takes it off, both
+list without a base word, and a base above the alphabet is kept and
+renders in ten with the mark on — `typeset -i65 d=100` is `10#100`.
+zsh reaches none of them, refusing everything outside 2 to 36.
+
+**The two listings write the base two ways**, and one of them writes the
+number rather than the text the name is holding:
+
+    typeset -i16 a=255; typeset -p a
+      ksh93   typeset -i 16 a=16#ff     a word of its own, value as stored
+      zsh     typeset -i16 a=255        attached, value decoded to decimal
+
+The unquoted `16#ff` is ksh93 reading the text as the number it is; every
+other `#` is quoted there, and that wider rule is #1271. Corpus:
+`declare/an-integer-attribute-carries-an-output-base`,
+`declare/an-output-base-is-the-value-and-not-a-rendering`,
+`declare/zsh-learns-an-output-base-from-the-value`,
+`declare/an-output-base-belongs-to-the-name`,
+`declare/an-output-base-outside-what-the-shell-spells`,
+`declare/a-negative-value-in-an-output-base` and
+`declare/an-output-base-says-itself-back`,
+`declare/a-bare-integer-letter-and-what-base-ten-is`, with `declare/integer-with-an-output-base` reaching it through the second name.
 
 **`integer` with no names is a filtered listing** — the integer
 variables in ksh93 and every integer parameter, its own specials

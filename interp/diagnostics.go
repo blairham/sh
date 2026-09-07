@@ -1994,6 +1994,17 @@ type Diagnostics struct {
 	// already names the builtin. Reached only where
 	// DeclarePrintReportsAMissingName said yes.
 	DeclareNoSuchVariable string
+	// IntegerBadBase is an output base the dialect will not spell — `typeset
+	// -i64 a=100` and `typeset -i1 f=5`.
+	//
+	// One shell complains and leaves the name with nothing: `zsh:typeset:1:
+	// invalid base (must be 2 to 36 inclusive): 64`, status 1, and the
+	// script carries on. The other takes any base in silence and renders
+	// plain what it cannot spell, which is what an empty entry means — see
+	// Semantics.IntegerBaseDigits for what a dialect can spell.
+	//
+	// Two arguments: the builtin and the base as written.
+	IntegerBadBase string
 
 	// ReadonlyVariable is an assignment to a readonly name. One verb: the
 	// name.

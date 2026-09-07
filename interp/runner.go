@@ -1203,6 +1203,12 @@ type Runner struct {
 	// `n=5+2` stores 7 rather than the four characters. It is a property of
 	// the name and not of the assignment, which is why it is recorded here.
 	integer map[string]bool
+	// integerBase is the base an integer name renders in — `typeset -i16 h`
+	// makes 255 read back as `16#ff`. A property of the name like the
+	// attribute itself, and consulted by every store afterwards rather than
+	// by the declaration that named it. Absent, or 10, or a base the dialect
+	// has no digits for, all mean plain decimal.
+	integerBase map[string]int
 	// lowered and uppered are the case attributes — `declare -l` and `-u` —
 	// which fold what is assigned to the name, the same shape integer has:
 	// a property of the name that changes what a later assignment means.
@@ -3243,11 +3249,26 @@ func (r *Runner) attributeFolded(name, value string) (string, bool) {
 	if r.integer[name] {
 		// The name was declared integer, so what is assigned to it is an
 		// expression rather than text.
+		//
+		// The base the text was written in is learned before it is
+		// evaluated, in the dialect that learns one: `0x10` teaches the name
+		// 16 and a later plain `5` then reads back as `16#5`, so it is the
+		// name's base and not the assignment's. See
+		// Semantics.IntegerBaseComesFromTheValueAssigned.
+		r.learnIntegerBase(name, value)
+		if r.unspecified {
+			return "", false
+		}
 		v, ok := r.integerValue(value)
 		if !ok {
 			return "", false
 		}
-		value = v
+		// Written back out in the name's base, which is what is stored:
+		// every read sees these characters and arithmetic parses them back.
+		value = r.integerRenderedText(name, v)
+		if r.unspecified {
+			return "", false
+		}
 	}
 	// The case attributes, folded at assignment the way the integer
 	// attribute evaluates there: `declare -l v; v=ABC` stores `abc` in both

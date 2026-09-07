@@ -7401,7 +7401,7 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 	{
 		ID: "declare/integer-with-an-output-base", Category: "declarations",
 		Snippet: `integer -i 16 b=255; echo "1[$b]"; typeset -i2 c=5; echo "2[$c]"`,
-		Why:     "`-i` takes an output base in both shells that have `integer` and the name prints in it afterwards — `16#ff` in ksh93 against `16#FF` in zsh, differing in nothing but the case of the digits, and `2#101` in both for the attached spelling. bash has no base at all: `-i2` is an invalid option there and a bare `16` is not a valid identifier, which is the row that makes it a dialect's answer. This engine records that a name is an integer and has nowhere to keep a base, so it names the base as missing rather than reading it and dropping it — dropping it left `255` standing at status 0 and turned the `16` into a variable of its own",
+		Why:     "`-i` takes an output base in both shells that have `integer` and the name prints in it afterwards — `16#ff` in ksh93 against `16#FF` in zsh, differing in nothing but the case of the digits, and `2#101` in both for the attached spelling. bash has no base at all: `-i2` is an invalid option there and a bare `16` is not a valid identifier, which is the row that makes it a dialect's answer. The base is reached through the second *name* here, which is what this row adds to the seven around it: `integer` is the same declaration under a third word and gets the base with it",
 	},
 	{
 		ID: "declare/integer-refuses-a-letter-its-own-declaration-takes", Category: "declarations",
@@ -7618,6 +7618,51 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		ID: "declare/an-integer-attribute-over-a-number-written-oddly", Category: "declarations",
 		Snippet: "a=08; typeset -i a; echo \"1[$a]\"\nb=\" 7 \"; typeset -i b; echo \"2[$b]\"\nc=+7; typeset -i c; echo \"3[$c]\"\ng=5+2; typeset -i g; echo \"4[$g]\"\nh=; typeset -i h; echo \"5[$h]\"",
 		Why:     "the same question over text that *is* a number written some other way, which is where a narrower reading of it goes wrong. The shells that re-read canonicalize all five — `08` is 8 and not an octal error, a padded `7` loses its spaces, `+7` its sign, `5+2` is 7 and an empty value is 0 — and the shells that do not leave every one of them as written. `08` is the row that decides how the *question* may be asked: a predicate that folded first to find out whether the readings differ would report a bad octal digit and fail, where the shells that keep the text say nothing at all, so the answer of the question would depend on the answer being asked for",
+	},
+	{
+		ID: "declare/an-integer-attribute-carries-an-output-base", Category: "declarations",
+		Snippet: "typeset -i8 c; c=64;  echo \"1[$c]\"\ntypeset -i16 h=255;   echo \"2[$h]\"\ntypeset -i2 g=5;      echo \"3[$g]\"\ntypeset -i10 e=255;   echo \"4[$e]\"",
+		Why:     "`typeset -i<n>` names an output *base* and the name prints in it: `8#100`, `16#ff` in ksh93 against `16#FF` in zsh, `2#101`. bash has no such option at all: every line is an invalid-option usage, and only the first stores anything — its `c=64` is a separate assignment that runs after the refused declaration, where the other three carried their values on the declaration itself and lost them. So this is an additive builtin option for two shells rather than a core one. Base ten is the row that says what \"no base\" is: `255` in both, so ten is a base a shell takes and marks nothing with, which is why the range check and the rendering cannot be one question (#1130)",
+	},
+	{
+		ID: "declare/an-output-base-is-the-value-and-not-a-rendering", Category: "declarations",
+		Snippet: "typeset -i16 h=255\necho \"len=${#h}\"\ng=$h; echo \"copy=[$g]\"\necho \"arith=$(( h + 1 ))\"\nexport h; env | grep '^h='",
+		Why:     "the row that decides how the feature has to be built: what the shell holds *is* the based text. Five characters long, copied as five characters by a plain assignment, handed to a child as `h=16#ff`, and parsed back by arithmetic to give 256. A shell that merely printed the name differently would answer the length 3, the copy `255` and the child `h=255` — so the base changes the value and is not a way of reading it back. All four answers agree in ksh93 and zsh, differing only in the case of the digits",
+	},
+	{
+		ID: "declare/zsh-learns-an-output-base-from-the-value", Category: "declarations",
+		Snippet: "typeset -i a; a=0x10; echo \"1[$a]\"\ntypeset -i b; b=0x10; b=5; echo \"2[$b]\"\ntypeset -i c; c=8#7; c=99; echo \"3[$c]\"\ntypeset -i d; d=016; echo \"4[$d]\"\ntypeset -i e; e=$((0x10)); echo \"5[$e]\"",
+		Why:     "the half of the base that is not the letter, and zsh alone: the base is learned from the *radix prefix* of the value assigned, and it sticks to the name — a later plain `5` under a name that learned 16 reads `16#5`, and a name that learned 8 renders 99 as `8#143`. ksh93 learns none and prints 16, 5 and 99. Two things do not teach it in any column: a leading zero, which is not a radix, and a value that arrived already evaluated — `$((0x10))` hands the assignment four decimal characters and there is no prefix left to read. The leading-zero row splits the panel for a reason of its own and not this one: `016` is 14 in the three bash columns, which read it as octal, and 16 in both shells that have a base, which do not — recorded here and answered in #1270",
+	},
+	{
+		ID: "declare/an-output-base-belongs-to-the-name", Category: "declarations",
+		Snippet: "typeset -i i=5; typeset -i16 i; echo \"1[$i]\"\ntypeset -i16 h=255; typeset -i8 h; echo \"2[$h]\"\ntypeset -i16 j=255; typeset +i j; echo \"3[$j]\"; j=3; echo \"4[$j]\"",
+		Why:     "the base is a property of the name and not of the assignment that met it: a declaration that names one re-renders what the name is already holding — `16#5` from a plain 5, and `8#377` from a `16#ff` — which is a change of spelling rather than a re-read, so it meets no dialect. `+i` takes the base off with the attribute and leaves the characters that are there alone, so `3[$j]` is still `16#ff` and only the *next* assignment is plain. Both shells with the feature agree on all four",
+	},
+	{
+		ID: "declare/an-output-base-outside-what-the-shell-spells", Category: "declarations",
+		Snippet: "typeset -i64 a=100; echo \"1[$a] st=$?\"\ntypeset -i1 b=5;    echo \"2[$b] st=$?\"\ntypeset -i36 c=100; echo \"3[$c]\"",
+		Why:     "how far each shell's alphabet reaches, and what it does past the end. ksh93 counts in lower case and carries on into upper and two more — 61 is `Z`, 62 `@`, 63 `_` — so base 64 is one it spells and `64#1A` is 100; a base it cannot use, like 1, it takes in silence and prints plain. zsh counts in upper case, stops at 36, and **refuses** the rest by name: `invalid base (must be 2 to 36 inclusive)`, with the name left holding nothing and the script carrying on. So one string carries both the case and the range, and whether there is a complaint for the rest is the second answer",
+	},
+	{
+		ID: "declare/a-negative-value-in-an-output-base", Category: "declarations",
+		Snippet: "typeset -i16 h=-255; echo \"1[$h]\"\ntypeset -i2 c=-5;    echo \"2[$c]\"",
+		Why:     "the sign, and the two shells part company: ksh93 prints the sixty-four-bit two's complement — `16#ffffffffffffff01`, and sixty-four binary digits for the second — where zsh puts the sign in front of the magnitude, `-16#FF` and `-2#101`. Nothing about the value differs, only how it is written, and a reading that took either for the rule gets the other's row wrong by a whole word",
+	},
+	{
+		ID: "declare/an-output-base-says-itself-back", Category: "declarations",
+		Snippet: "typeset -i16 a=255; typeset -p a\ntypeset -i8 d; d=64; typeset -p d",
+		Why:     "the two arrangements, and the one place a shell writes the number rather than the text it is holding: ksh93 writes the base as a word of its own and the value as stored — `typeset -i 16 a=16#ff`, unquoted despite the `#` — where zsh attaches the base to the letter and **decodes** the value to decimal, `typeset -i16 a=255`. So the same name lists two ways from two shells that agree exactly on what it holds",
+	},
+	{
+		ID: "declare/a-bare-integer-letter-and-what-base-ten-is", Category: "declarations",
+		Snippet: "typeset -i16 a=255; typeset -i a; echo \"1[$a]\"\ntypeset -i16 b=255; integer b;    echo \"2[$b]\"\ntypeset -i16 c=255; typeset -x c; echo \"3[$c]\"\ntypeset -i10 d=255; typeset -p d",
+		Why:     "what \"no base\" is, which is the question #1130 left open, and the two shells answer it differently. In ksh93 the letter always names a base and ten is what it names when nothing is written: a bare `typeset -i` — or `integer`, the same declaration under another word — takes the base off a name that had one and leaves `255` standing, and `typeset -i10 d=255` lists back as `typeset -i d=255` with no base word at all. In zsh ten is a base like any other: it is recorded, the listing says `-i10` back, and a bare `-i` leaves `16#FF` where it was. The third line is the control both readings have to pass — another letter over a based name is not this question, and `typeset -x` leaves the base alone in both",
+	},
+	{
+		ID: "declare/a-learned-output-base-says-itself-back", Category: "declarations",
+		Snippet: "typeset -i c; c=0x10; typeset -p c\ntypeset -i b; b=10#5; typeset -p b; echo \"b=[$b]\"\ntypeset -i d; d=8#7;  typeset -p d",
+		Why:     "a base learned from the value is recorded exactly like one named on the letter, and the listing says it back: `typeset -i16 c=16` and `typeset -i8 d=7` in zsh against a bare `typeset -i` in ksh93, which learns none. The middle line is the one worth the row — `10#5` teaches zsh *ten*, which it records and lists as `-i10` — so what the learning path keeps is a base the shell **takes** rather than only one it writes a value in: `$b` is a plain `5` either way, and only the listing tells them apart. A reading that filtered the learned base by whether anything is written in it would answer that line `typeset -i b=5` and every other line right, which is why it is here (#1130)",
 	},
 	{
 		ID: "declare/an-attribute-that-would-change-nothing-needs-no-dialect", Category: "declarations",

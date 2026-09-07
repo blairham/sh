@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"strconv"
 	"strings"
 )
 
@@ -96,32 +97,137 @@ func biInteger(r *Runner, _ context.Context, args []string) int {
 	return r.declareNames(name, args, f)
 }
 
-// refuseIntegerBase is what `-i` with an output base says where the dialect
-// gives the letter one.
+// takesIntegerBase is whether `-i` reads an output base in this dialect —
+// `typeset -i 16 n=255` and its attached spelling `-i16` — so that the word
+// after the letter is a base and not a name.
 //
-// This engine records that a name is an integer and evaluates what is
-// assigned to it; it has nowhere to keep a *base*, which is a property of how
-// the value reads back out. So the base is named as missing instead of being
-// read and dropped. Dropping it was the previous answer and was the silent
-// kind of wrong: `typeset -i 16 n=255` reported 0 and left `255` standing
-// where ksh93 prints `16#ff` and zsh prints `16#FF`, and the `16` went on to
-// become a variable of its own.
-//
-// Where the dialect's `-i` takes no base — bash, whose `-i16` is an invalid
-// option and whose bare `16` is not a valid identifier — nothing is refused
+// Where the dialect's `-i` takes none — bash, whose `-i16` is an invalid
+// option and whose bare `16` is not a valid identifier — nothing is consumed
 // and the word is left to mean what it meant.
-func (r *Runner) refuseIntegerBase(builtin string) int {
+func (r *Runner) takesIntegerBase() bool {
 	takes := r.ask(r.sem().IntegerAttributeTakesABase, "`-i` reading an output base")
 	if r.unspecified {
 		// An unanswered axis refuses rather than picking a shell, and the
 		// status it set is the one that stands.
-		return r.status
+		return false
 	}
-	if !takes {
-		return 0
+	return takes
+}
+
+// integerBaseAccepted reports whether the dialect will take this base,
+// having complained if it will not.
+//
+// One shell complains and leaves the name with nothing — `invalid base (must
+// be 2 to 36 inclusive): 64`, status 1, and the script carries on — and the
+// other takes any base in silence and renders plain what it cannot spell. So
+// the refusal is the presence of a wording rather than a second field: with
+// none, an unspellable base is simply a base nothing is rendered in, which is
+// also what base 10 is.
+func (r *Runner) integerBaseAccepted(builtin string, base int, written string) bool {
+	if r.validIntegerBase(base) {
+		return true
 	}
-	r.diagf("%s: an output base is not implemented yet\n", r.builtinComplaintName(builtin))
-	return 2
+	wording := r.diag().IntegerBadBase
+	if wording == "" {
+		// Taken and rendered plain: measured, ksh93 prints `5` for both
+		// `typeset -i1 f=5` and `typeset -i0 f=5` and says nothing.
+		return true
+	}
+	r.diagf("%s\n", Wording(wording, "%[1]s: invalid base: %[2]s",
+		r.builtinComplaintName(builtin), written))
+	r.status = 1
+	return false
+}
+
+// integerBaseTenIsNone reports whether ten is the absence of an output base
+// in this dialect rather than a base of its own.
+//
+// Asked only where the answer changes something: where ten is written down,
+// and where the integer letter arrives bare over a name that already has a
+// base. Every other declaration reads the same either way, and the common
+// path — `typeset -i n` on a name with no base — must not meet a question it
+// does not need.
+func (r *Runner) integerBaseTenIsNone() bool {
+	return r.ask(r.sem().IntegerBaseTenIsNoBase,
+		"base ten as the absence of an output base")
+}
+
+// spellsIntegerBase reports whether the dialect has digits for this base.
+// Base 10 is spelled by every one of them and is the base nothing is written
+// in, so it is not one of these.
+func (r *Runner) spellsIntegerBase(base int) bool {
+	// Base 10 is valid everywhere and marks nothing: measured, `typeset -i10
+	// e=255` is `255` and `typeset -i10 e; e=0x1f` is `31` in both shells
+	// that have the feature. So the two questions are not one — a base the
+	// dialect *takes* and a base it writes a value in — and joining them
+	// made the one shell that refuses a bad base refuse base ten as well.
+	return base != 10 && r.validIntegerBase(base)
+}
+
+// validIntegerBase reports whether the dialect takes this base at all, which
+// is the range its alphabet covers.
+func (r *Runner) validIntegerBase(base int) bool {
+	return base >= 2 && base <= len(r.sem().IntegerBaseDigits)
+}
+
+// integerRendered is a number written in a name's output base — `16#ff` for
+// 255 under `-i16` — or in plain decimal where the name has no base, which is
+// every name in a dialect without the feature and every name under base 10.
+//
+// The rendered text is what is *stored*, not a way of printing what is: every
+// read sees these characters, `${#h}` counts them, a child is told them, and
+// arithmetic parses them back. Measured in both shells that have the feature.
+func (r *Runner) integerRendered(name string, v int) string {
+	base := r.integerBase[name]
+	if !r.spellsIntegerBase(base) {
+		return itoa(v)
+	}
+	digits := r.sem().IntegerBaseDigits
+	sign := ""
+	u := uint64(v)
+	if v < 0 {
+		if !r.ask(r.sem().IntegerBaseNegativeIsTwosComplement,
+			"a negative integer rendered in its output base as a bit pattern") {
+			if r.unspecified {
+				return itoa(v)
+			}
+			// The sign in front of the magnitude, outside the base mark.
+			sign = "-"
+			u = uint64(-v)
+		}
+	}
+	var out []byte
+	for {
+		out = append([]byte{digits[u%uint64(base)]}, out...)
+		u /= uint64(base)
+		if u == 0 {
+			break
+		}
+	}
+	return sign + itoa(base) + "#" + string(out)
+}
+
+// integerBaseOfLiteral is the base the text of an assignment names, for the
+// dialect that learns one from it — 16 from `0x10`, 8 from `8#7`, and none
+// from a leading zero or from a value that arrived already evaluated.
+//
+// 0 when the text names none, which is every text in the dialect that does
+// not learn.
+func integerBaseOfLiteral(text string) int {
+	text = strings.TrimSpace(text)
+	text = strings.TrimPrefix(text, "-")
+	text = strings.TrimPrefix(text, "+")
+	if len(text) > 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X') {
+		return 16
+	}
+	if at := strings.IndexByte(text, '#'); at > 0 && isAllDigits(text[:at]) {
+		n, err := strconv.Atoi(text[:at])
+		if err != nil {
+			return 0
+		}
+		return n
+	}
+	return 0
 }
 
 // hasAttachedIntegerBase is `-i16`: the integer letter with a base riding on
@@ -150,4 +256,115 @@ func isAllDigits(s string) bool {
 		}
 	}
 	return true
+}
+
+// readIntegerBase takes the base an option word named, refusing it where the
+// dialect will not spell it and says so. The result is whether the
+// declaration goes on.
+func (r *Runner) readIntegerBase(builtin string, f *declareFlags, written string) bool {
+	n, err := strconv.Atoi(written)
+	if err != nil {
+		// Not a number at all, so not a base — the caller only offers digits,
+		// so this is belt and braces rather than the check that does the work.
+		return true
+	}
+	if !r.integerBaseAccepted(builtin, n, written) {
+		return false
+	}
+	// The letter itself is not set here. Both spellings that reach this have
+	// already written it — the detached one in the word before, the attached
+	// one in what is left of this word after the base comes off — and
+	// setting it again covered for the truncation being wrong.
+	f.base, f.baseNamed = n, true
+	return true
+}
+
+// integerRenderedText is integerRendered over the decimal text integerValue
+// produced, which is the shape attributeFolded has to hand.
+func (r *Runner) integerRenderedText(name, decimal string) string {
+	if r.integerBase[name] == 0 {
+		// The common case by far: no base was named and none was learned, so
+		// there is nothing to render and nothing to parse back.
+		return decimal
+	}
+	v, err := strconv.Atoi(decimal)
+	if err != nil {
+		return decimal
+	}
+	return r.integerRendered(name, v)
+}
+
+// learnIntegerBase takes a name's output base from the radix prefix of the
+// text being assigned to it, where the dialect learns one and the name has
+// none already.
+//
+// Asked only when the text actually names a base, so a plain `n=5` under an
+// integer name never reaches the dialect — which matters, because that is
+// nearly every assignment there is.
+func (r *Runner) learnIntegerBase(name, text string) {
+	if r.integerBase[name] != 0 {
+		// The name has one, from the letter or from an earlier assignment,
+		// and it sticks: measured, a name that learned 16 renders a later
+		// plain `5` as `16#5`.
+		return
+	}
+	base := integerBaseOfLiteral(text)
+	if base == 0 {
+		return
+	}
+	if !r.ask(r.sem().IntegerBaseComesFromTheValueAssigned,
+		"an integer name taking its output base from the value assigned to it") {
+		return
+	}
+	if !r.validIntegerBase(base) {
+		// A radix outside what the dialect takes is not a base it can
+		// remember; the value still evaluates, which is what the arithmetic
+		// reader does with it either way.
+		return
+	}
+	if base == 10 && r.integerBaseTenIsNone() {
+		// Ten learned is ten written down, and where ten is the letter's
+		// default it records nothing either way. The dialect that learns
+		// answers no, and records it: measured, `typeset -i b; b=10#5` lists
+		// back as `typeset -i10 b=5` in zsh — so what the learning path
+		// keeps is a base the dialect *takes* and not only one it writes a
+		// value in, which is why this is validIntegerBase and not
+		// spellsIntegerBase.
+		return
+	}
+	if r.integerBase == nil {
+		r.integerBase = map[string]int{}
+	}
+	r.integerBase[name] = base
+}
+
+// rerenderInTheNewBase writes a value the name is already holding back out in
+// the base a declaration has just given it.
+//
+// Not a re-read and not an assignment: the number does not change, only the
+// characters it is written in, so it meets no dialect and no readonly
+// refusal. `typeset -r16 …` is not a spelling any shell has, and a base named
+// over a frozen name re-renders in both that do — measured.
+func (r *Runner) rerenderInTheNewBase(name string) {
+	held, ok := r.Vars[name]
+	if !ok {
+		return
+	}
+	v, err := strconv.Atoi(strings.TrimPrefix(held, "-"))
+	if err != nil {
+		// Already written in some base, so read it back through the
+		// arithmetic that understands `16#ff` and write it out in the new
+		// one. Silent on failure: the value stands as it is rather than
+		// being half converted.
+		text, ok := r.integerValue(held)
+		if !ok {
+			return
+		}
+		if v, err = strconv.Atoi(text); err != nil {
+			return
+		}
+	} else if strings.HasPrefix(held, "-") {
+		v = -v
+	}
+	r.Vars[name] = r.integerRendered(name, v)
 }

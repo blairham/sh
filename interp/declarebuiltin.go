@@ -30,7 +30,12 @@ import (
 
 // declareFlags is what a declaration asks for.
 type declareFlags struct {
-	integer   bool
+	integer bool
+	// base is the output base `-i16` or `-i 16` named, and baseNamed says
+	// one was written at all — 0 is a base a shell will take and render
+	// plain, so the two cannot be one field.
+	base      int
+	baseNamed bool
 	readonly  bool
 	export    bool
 	assoc     bool
@@ -106,21 +111,34 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			break
 		}
 		if len(a) < 2 || (a[0] != '-' && a[0] != '+') {
-			if pendingBase && isAllDigits(a) {
-				if code := r.refuseIntegerBase(name); code != 0 {
-					return nil, f, code
+			if pendingBase && isAllDigits(a) && r.takesIntegerBase() {
+				// The detached spelling: the word after the letter is the
+				// base and not the first name. Consumed here, which is also
+				// what keeps it away from the operand name check — a `9`
+				// that is a base was never an operand.
+				if !r.readIntegerBase(name, &f, a) {
+					return nil, f, r.status
 				}
+				continue
+			}
+			if r.unspecified {
+				return nil, f, r.status
 			}
 			break
 		}
-		if hasAttachedIntegerBase(a, known) {
-			// `-i16`, where the base rides on the letter. Refused here
-			// rather than in the letter loop, which would otherwise reach
-			// the `1` and call it an unknown option — a true statement
-			// about a letter the script never wrote.
-			if code := r.refuseIntegerBase(name); code != 0 {
-				return nil, f, code
+		if hasAttachedIntegerBase(a, known) && r.takesIntegerBase() {
+			// `-i16`, where the base rides on the letter. Read here rather
+			// than in the letter loop, which would otherwise reach the `1`
+			// and call it an unknown option — a true statement about a
+			// letter the script never wrote.
+			at := strings.IndexByte(a[1:], 'i')
+			if !r.readIntegerBase(name, &f, a[at+2:]) {
+				return nil, f, r.status
 			}
+			a = a[:at+2]
+		}
+		if r.unspecified {
+			return nil, f, r.status
 		}
 		pendingBase = a[0] == '-' && strings.HasSuffix(a, "i") &&
 			strings.ContainsRune(known, 'i')
@@ -443,8 +461,47 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		}
 		if f.remove && !f.integerForced {
 			delete(r.integer, name)
+			// The base goes with the attribute — measured, `typeset +i j`
+			// leaves the text the name is holding alone and a *later* `j=3`
+			// is plain, so what the plus form takes off is the rendering of
+			// what comes next and not what is already there.
+			delete(r.integerBase, name)
 		} else {
 			r.integer[name] = true
+			switch {
+			case f.baseNamed && f.base == 10 && r.integerBaseTenIsNone():
+				// Ten written down where ten is the letter's default
+				// records nothing at all, so a name that had a base loses
+				// it: measured, `typeset -i16 h=255; typeset -i10 h` reads
+				// `255` in ksh93 and lists back without a base word.
+				delete(r.integerBase, name)
+				r.rerenderInTheNewBase(name)
+			case f.baseNamed:
+				if r.integerBase == nil {
+					r.integerBase = map[string]int{}
+				}
+				r.integerBase[name] = f.base
+				// The base applies to what the name already holds, not only
+				// to what is written next: measured, `typeset -i i=5;
+				// typeset -i16 i` reads back `16#5`, and `typeset -i16
+				// h=255; typeset -i8 h` re-renders to `8#377`. A declaration
+				// that also assigns stores its value after this runs, so the
+				// one line covers both spellings — the same shape `-U` has
+				// just below.
+				r.rerenderInTheNewBase(name)
+			case r.integerBase[name] != 0 && r.integerBaseTenIsNone():
+				// The letter with no base is the letter naming ten, where
+				// ten is what it names by default — so it takes the base off
+				// a name that had one and re-renders what is standing there:
+				// measured, `typeset -i16 a=255; typeset -i a` is `255` in
+				// ksh93 and `16#FF` in zsh, and `integer a` is the same
+				// declaration under another word. Another letter is not this
+				// question: `typeset -x` over a based name leaves the base
+				// alone in both, which is why nothing is asked unless the
+				// integer letter itself was written.
+				delete(r.integerBase, name)
+				r.rerenderInTheNewBase(name)
+			}
 		}
 	}
 	if f.export {

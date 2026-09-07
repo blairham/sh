@@ -91,11 +91,10 @@ func TestIntegerTakesFewerLettersThanTypesetHere(t *testing.T) {
 	}
 }
 
-// An output base is refused by name rather than read and dropped. Measured:
-// `integer -i 16 b=255` is `16#FF` here — uppercase, where ksh93 writes
-// `16#ff` — and this engine has nowhere to keep a base, so before this it
-// reported 0 and left `255` standing.
-func TestAnOutputBaseIsNamedAsMissingHere(t *testing.T) {
+// An output base is read and the name renders in it, in all three spellings.
+// `16#FF` here — upper case, where ksh93 writes `16#ff` — and the value the
+// shell holds *is* those five characters.
+func TestAnOutputBaseIsRead(t *testing.T) {
 	if got := zsh.Semantics().IntegerAttributeTakesABase; got != interp.Yes {
 		t.Errorf("IntegerAttributeTakesABase = %v, want Yes", got)
 	}
@@ -104,10 +103,72 @@ func TestAnOutputBaseIsNamedAsMissingHere(t *testing.T) {
 		`typeset -i 16 b=255`,
 		`typeset -i16 b=255`,
 	} {
-		out, _ := runZsh(t, t.TempDir(), src)
-		if !strings.Contains(out, "an output base is not implemented yet") {
-			t.Errorf("%s = %q, want the base named as missing", src, out)
+		out, _ := runZsh(t, t.TempDir(), src+"\necho \"[$b]\"")
+		if out != "[16#FF]\n" {
+			t.Errorf("%s = %q, want %q", src, out, "[16#FF]\n")
 		}
+	}
+}
+
+// This shell counts in upper case and stops at 36, so a base outside two to
+// thirty-six is refused by name and the declaration is not made.
+func TestAnOutOfRangeOutputBaseIsRefused(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`typeset -i64 a=100`, "invalid base (must be 2 to 36 inclusive): 64"},
+		{`typeset -i1 a=5`, "invalid base (must be 2 to 36 inclusive): 1"},
+		{`typeset -i0 a=5`, "invalid base (must be 2 to 36 inclusive): 0"},
+	} {
+		out, _ := runZsh(t, t.TempDir(), tc.src+"\necho \"[$a]\"")
+		if !strings.Contains(out, tc.want) {
+			t.Errorf("%s = %q, want it to name %q", tc.src, out, tc.want)
+		}
+		if !strings.Contains(out, "[]") {
+			t.Errorf("%s = %q, want the name left with nothing", tc.src, out)
+		}
+	}
+}
+
+// The half of the feature that is not the letter: this shell learns a name's
+// output base from the radix prefix of the value assigned to it, and it
+// sticks — a later plain `5` under a name that learned 16 is `16#5`.
+func TestAnOutputBaseIsLearnedFromTheValue(t *testing.T) {
+	if got := zsh.Semantics().IntegerBaseComesFromTheValueAssigned; got != interp.Yes {
+		t.Errorf("IntegerBaseComesFromTheValueAssigned = %v, want Yes", got)
+	}
+	for _, tc := range []struct{ src, want string }{
+		{"typeset -i b\nb=0x10", "[16#10]\n"},
+		{"typeset -i b\nb=0x10\nb=5", "[16#5]\n"},
+		{"typeset -i b\nb=8#7\nb=99", "[8#143]\n"},
+		{"b=0x10\ntypeset -i b\nb=7", "[16#7]\n"},
+		// A leading zero is not a radix, and neither is a value that arrived
+		// already evaluated — the expansion handed the assignment decimal.
+		{"typeset -i b\nb=016", "[16]\n"},
+		{"typeset -i b\nb=$((0x10))", "[16]\n"},
+	} {
+		out, _ := runZsh(t, t.TempDir(), tc.src+"\necho \"[$b]\"")
+		if out != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+		}
+	}
+}
+
+// A negative value puts the sign in front of the magnitude here, where ksh93
+// prints the sixty-four-bit two's complement.
+func TestANegativeValueInAnOutputBaseKeepsItsSign(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), "typeset -i16 h=-255\necho \"[$h]\"")
+	if out != "[-16#FF]\n" {
+		t.Errorf("got %q, want %q", out, "[-16#FF]\n")
+	}
+}
+
+// How the base says itself back: attached to the letter, and the value
+// decoded to decimal — the one place this shell writes the number rather than
+// the text it is holding.
+func TestTheOutputBaseSaysItselfBack(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), "typeset -i16 a=255\ntypeset -p a\nb=0x10\ntypeset -i b\ntypeset -p b")
+	want := "typeset -i16 a=255\ntypeset -i16 b=16\n"
+	if out != want {
+		t.Errorf("got %q, want %q", out, want)
 	}
 }
 
@@ -166,5 +227,52 @@ f`)
 	want := "del=[0] list=[0] help=[0]\n"
 	if out != want || st != 0 {
 		t.Errorf("`integer del list help` = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// Ten is a base of its own here and not the letter's default, which is the
+// row that parts company with ksh93 twice over: it is recorded and the
+// listing says `-i10` back, and a later bare `typeset -i` leaves the base a
+// name already has where it was.
+func TestBaseTenIsABaseOfItsOwn(t *testing.T) {
+	if got := zsh.Semantics().IntegerBaseTenIsNoBase; got != interp.No {
+		t.Errorf("IntegerBaseTenIsNoBase = %v, want No", got)
+	}
+	for _, tc := range []struct{ src, want string }{
+		{"typeset -i16 a=255\ntypeset -i a\necho \"[$a]\"", "[16#FF]\n"},
+		{"typeset -i16 b=255\ninteger b\necho \"[$b]\"", "[16#FF]\n"},
+		{"typeset -i16 c=255\ntypeset -x c\necho \"[$c]\"", "[16#FF]\n"},
+		{"typeset -i10 d=255\ntypeset -p d", "typeset -i10 d=255\n"},
+		// A base of ten still writes nothing into the value: it is the base
+		// nothing is written in, which is the half both shells share.
+		{"typeset -i10 e=255\necho \"[$e]\"", "[255]\n"},
+	} {
+		out, st := runZsh(t, t.TempDir(), tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// A base learned from the value is recorded like one named on the letter, and
+// the listing says it back — ten included, which is the row that says the
+// learning path keeps a base this shell *takes* rather than only one it
+// writes a value in. Measured: `b=10#5` lists as `typeset -i10 b=5` while
+// `$b` is a plain `5`.
+func TestALearnedOutputBaseSaysItselfBack(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"typeset -i c; c=0x10; typeset -p c", "typeset -i16 c=16\n"},
+		{"typeset -i b; b=10#5; typeset -p b; echo \"[$b]\"", "typeset -i10 b=5\n[5]\n"},
+		{"typeset -i d; d=8#7;  typeset -p d", "typeset -i8 d=7\n"},
+		// A sign in front of the radix does not hide it.
+		{"typeset -i e; e=-0x10; echo \"[$e]\"", "[-16#10]\n"},
+		// And a negative under a base keeps its sign into the listing, where
+		// this shell writes the number rather than the text it holds.
+		{"typeset -i16 f=-255; typeset -p f", "typeset -i16 f=-255\n"},
+	} {
+		out, st := runZsh(t, t.TempDir(), tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+		}
 	}
 }

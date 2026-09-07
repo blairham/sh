@@ -189,6 +189,76 @@ one empty field — see `docs/spec/grammar/parameter-expansion.md`. Where
 that rule is in force the field behind the last separator is already
 there and this question is not asked.
 
+## `read`'s last name takes the remainder of the line
+
+`read` feeds the splitter above, and it uses what comes out two ways. An
+array target — `read -a`, `read -A` — takes the fields **as fields**. A
+list of names does not: each name but the last takes its field, and the
+**last name takes the remainder of the line**, which is the input text
+from where its own field began, separators and all.
+
+    IFS=:; printf 'a:b:c\n' | { read -r x y; }    → x=a  y=b:c
+
+The remainder is text, so it is not the remaining fields put back
+together. Joining them on a space is the answer that looks right — the
+right number of words, the right words, status 0, nothing said — and it
+is wrong in all six shells:
+
+    printf 'root:x:0:0:Root User:/root:/bin/sh\n' |
+        { IFS=: read -r user rest; }
+
+    all six   rest=x:0:0:Root User:/root:/bin/sh
+    a rejoin  rest=x 0 0 Root User /root /bin/sh
+
+`while IFS=: read -r user rest; do …; done < /etc/passwd` is the shape
+that reaches it, and anything that splits `$rest` on `:` again finds one
+field where there were six. Measured 2026-09-07 across the panel; the
+rows are `ifs/read-remainder-*` in `docs/spec/measurements.md`.
+
+### What comes off the end
+
+The closing run of IFS **whitespace**, and nothing else. Three
+measurements bound it, and each is one a plausible trim gets wrong:
+
+| probe | remainder |
+| --- | --- |
+| `IFS=': '; 'a:b:c  '` | `b:c` — the spaces are IFS whitespace |
+| `IFS=':'; 'a:b:c  '` | `b:c  ` — the same spaces are ordinary text |
+| `IFS=':'; 'a:b:c::'` | `b:c::` — a closing *separator* run is kept |
+
+So the trim is IFS's question rather than `unicode.IsSpace`'s, and it is
+the whitespace half of IFS rather than all of it. Leading IFS whitespace
+never reaches the remainder at all: it is discarded by the splitter
+before the first field starts, which is why `read -r line` on `'  a b  '`
+is `a b`.
+
+An **escaped** IFS whitespace character at the end is where the panel
+parts company, five to one — bash, bash 3.2, bash as `sh`, ksh93 and zsh
+trim it, dash keeps it — and that is #1360 rather than an answer here.
+
+### It is a remainder only past the count
+
+With one field per name the last name takes its own **field**, not the
+remainder, and the two differ exactly when the line ends in a separator:
+
+    IFS=:; printf 'a:b:\n' | { read -r x y; }
+    five shells  y=b        zsh  y=b:
+
+That is `Semantics.TrailingSeparatorEndsAField` again and not a second
+rule. In zsh the trailing separator opens a third field, three fields
+against two names is a remainder, and the remainder keeps the colon; in
+the other five the separator is absorbed, two fields meet two names, and
+`y` is the field `b`. The same fact reaches a single name — `'a:'` read
+into one name is `a` in five and `a:` in zsh — and a line of nothing but
+separators, where `'::'` into two names leaves the second empty in five
+and `:` in zsh.
+
+`read`'s names therefore ask the tail question **at that count and
+nowhere else**. Past it the extra empty field changes no value, because
+the remainder is the same text under either answer; short of it the name
+the extra field would fill is the empty string it was going to be given
+anyway. An array target has no such boundary and asks at every count.
+
 ## Empty and unset values produce no fields
 
     x=''; set -- $x     → 0 fields

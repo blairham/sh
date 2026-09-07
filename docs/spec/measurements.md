@@ -94,6 +94,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `ifs/mixed-trailing-run-split-on` | `1[a] 1[a]` **2>** `<shell>: 1: setopt: not found` | `1[a] 1[a]` **2>** `<shell>: line 1: setopt: command not found` | `1[a] 1[a]` **2>** `<shell>: line 1: setopt: command not found` | `1[a] 1[a]` **2>** `<shell>: setopt: command not found` | `1[a] 1[a]` **2>** `<shell>: setopt: not found` | `2[a][] 1[a]` |
 | `ifs/nonws-trailing-cmdsub` | `1[a]` | `1[a]` | `1[a]` | `1[a]` | `1[a]` | `2[a][]` |
 | `ifs/nonws-trailing-read-remainder` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b:]` |
+| `ifs/read-remainder-keeps-its-separators` | `[a][b:c]` | `[a][b:c]` | `[a][b:c]` | `[a][b:c]` | `[a][b:c]` | `[a][b:c]` |
+| `ifs/read-remainder-passwd-idiom` | `[root][x:0:0:Root User:/root:/bin/sh]` | `[root][x:0:0:Root User:/root:/bin/sh]` | `[root][x:0:0:Root User:/root:/bin/sh]` | `[root][x:0:0:Root User:/root:/bin/sh]` | `[root][x:0:0:Root User:/root:/bin/sh]` | `[root][x:0:0:Root User:/root:/bin/sh]` |
+| `ifs/read-remainder-closing-ws-comes-off` | `[b:c][b:c  ]` | `[b:c][b:c  ]` | `[b:c][b:c  ]` | `[b:c][b:c  ]` | `[b:c][b:c  ]` | `[b:c][b:c  ]` |
+| `ifs/read-remainder-closing-separator-run-stays` | `[b:c::]` | `[b:c::]` | `[b:c::]` | `[b:c::]` | `[b:c::]` | `[b:c::]` |
+| `ifs/read-one-name-is-the-whole-line` | `[:a:b:]` | `[:a:b:]` | `[:a:b:]` | `[:a:b:]` | `[:a:b:]` | `[:a:b:]` |
+| `ifs/nonws-trailing-read-one-name` | `[a]` | `[a]` | `[a]` | `[a]` | `[a]` | `[a:]` |
+| `ifs/nonws-only-read-remainder` | `[][]` | `[][]` | `[][]` | `[][]` | `[][]` | `[][:]` |
 | `ifs/nonws-only-delimiters` | `n=2` | `n=2` | `n=2` | `n=2` | `n=2` | `n=1` |
 | `ifs/mixed-ws-around-nonws` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a : b]` |
 | `ifs/mixed-adjacent-nonws` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a::b]` |
@@ -155,6 +162,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `ifs/nonws-trailing-read-remainder` — `read` feeds the same splitter, and the last name takes the remainder of the line — which is text rather than a field, so it keeps the separators the input had. Five shells give `b` and the sixth `b:`, which is the trailing separator surviving in the one shell where it delimits. Two facts in one row: an implementation that rejoins the remainder from its fields answers `b c` for `a:b:c` in every shell, which no shell in the panel does
   ```sh
   IFS=:; printf 'a:b:\n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; }
+  ```
+- `ifs/read-remainder-keeps-its-separators` — the remainder is the text of the line and not the remaining fields put back together: all six keep the colon between `b` and `c`. Rebuilding it from the fields joins them on a hard space, which is a value of the right length and the right words at status 0 with nothing said — the row is here because that answer is `[a][b c]` and looks entirely reasonable
+  ```sh
+  IFS=:; printf 'a:b:c\n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; }
+  ```
+- `ifs/read-remainder-passwd-idiom` — the shape scripts actually write, `while IFS=: read -r user rest`, at its full width. It is the row that says the previous one is not a curiosity: six colons go missing at once and anything that splits `$rest` again finds one field. The embedded space in `Root User` is deliberate — it is what a rejoin's output looks like everywhere else on the line
+  ```sh
+  printf 'root:x:0:0:Root User:/root:/bin/sh\n' | { IFS=: read -r user rest; printf "[%s][%s]" "$user" "$rest"; }
+  ```
+- `ifs/read-remainder-closing-ws-comes-off` — the trim at the end of the remainder is IFS whitespace and nothing else, asked twice of one input: with a space in IFS the two at the end come off, and without one they are ordinary characters and stay. A trim that used unicode.IsSpace answers the first half and fails the second; one that trimmed trailing IFS *characters* would take the colon off `a:b:c::`
+  ```sh
+  printf 'a:b:c  \n' | { IFS=': ' read -r x y; printf "[%s]" "$y"; }; printf 'a:b:c  \n' | { IFS=: read -r x y; printf "[%s]" "$y"; }
+  ```
+- `ifs/read-remainder-closing-separator-run-stays` — the other side of the trim: a closing run of non-whitespace separators is part of the remainder in all six, so the value ends in the two colons the input ended in. Paired with the row above it pins the trim to the whitespace half
+  ```sh
+  IFS=:; printf 'a:b:c::\n' | { read -r x y; printf "[%s]" "$y"; }
+  ```
+- `ifs/read-one-name-is-the-whole-line` — one name is the remainder from the first field, which is the whole line — leading separator, trailing separator and all, in all six. It is the case that separates the remainder from the *last field*: the last field here is `b`
+  ```sh
+  IFS=:; printf ':a:b:\n' | { read -r line; printf "[%s]" "$line"; }
+  ```
+- `ifs/nonws-trailing-read-one-name` — the tail axis reaching a single name: five shells give `a` and zsh `a:`, because in zsh the trailing separator opens a second field and one name against two fields is a remainder rather than a field. The row a fix that made the remainder unconditional would fail in the five, and one that never reached it would fail in the sixth
+  ```sh
+  IFS=:; printf 'a:\n' | { read -r l; printf "[%s]" "$l"; }
+  ```
+- `ifs/nonws-only-read-remainder` — a line of nothing but separators, which is where the two readings are furthest apart with the least in the input: two empty fields in five shells and three in zsh, so the second name is empty there and `:` in the sixth
+  ```sh
+  IFS=:; printf '::\n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; }
   ```
 - `ifs/nonws-only-delimiters` — pins the asymmetry as a count rather than as a rendering
   ```sh

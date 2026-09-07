@@ -2376,13 +2376,29 @@ func splitFieldsLiteral(s string, literal []bool, ifs string, ifsSet bool) []str
 // parameter here rather than a splitter of its own, because everything else
 // about the two is the same rule and a copy of it would drift.
 func splitFieldsEdges(s string, literal []bool, ifs string, ifsSet, keepEdges bool) []string {
+	fields, _ := splitFieldsAt(s, literal, ifs, ifsSet, keepEdges)
+	return fields
+}
+
+// splitFieldsAt is splitFieldsEdges with each field's offset in s reported
+// beside it: at[i] is where fields[i] began.
+//
+// `read` is what the offsets are for. The last name on its list takes the
+// remainder of the *line* from where its own field started — separators and
+// all — and a list of fields cannot say where that was. Rebuilding it by
+// joining the fields back together is what silently replaced every separator
+// in `IFS=: read -r user rest` with a space (#1208), and the offset is the
+// only thing that makes the difference recoverable. It is reported from the
+// one splitter rather than recomputed beside it, because a second walk of the
+// same rule is a second place for it to drift.
+func splitFieldsAt(s string, literal []bool, ifs string, ifsSet, keepEdges bool) ([]string, []int) {
 	if ifsSet && ifs == "" {
 		// Set and empty disables the stage entirely, which is a different
 		// state from unset rather than a degree of it.
 		if s == "" {
 			return emptyFields(keepEdges)
 		}
-		return []string{s}
+		return []string{s}, []int{0}
 	}
 	if s == "" {
 		return emptyFields(keepEdges)
@@ -2398,6 +2414,7 @@ func splitFieldsEdges(s string, literal []bool, ifs string, ifsSet, keepEdges bo
 	}
 
 	var out []string
+	var at []int
 	i := 0
 	for !keepEdges && i < len(s) && isWS(i) { // leading IFS whitespace is discarded
 		i++
@@ -2408,6 +2425,7 @@ func splitFieldsEdges(s string, literal []bool, ifs string, ifsSet, keepEdges bo
 			i++
 		}
 		out = append(out, s[start:i])
+		at = append(at, start)
 		if i >= len(s) {
 			break
 		}
@@ -2432,18 +2450,19 @@ func splitFieldsEdges(s string, literal []bool, ifs string, ifsSet, keepEdges bo
 		// delimiter is written out here.
 		if keepEdges && i >= len(s) {
 			out = append(out, "")
+			at = append(at, i)
 		}
 	}
-	return out
+	return out, at
 }
 
 // emptyFields is what splitting nothing comes to: no field at all, or the one
-// empty field the edge-keeping rule leaves behind.
-func emptyFields(keepEdges bool) []string {
+// empty field the edge-keeping rule leaves behind, with its offset.
+func emptyFields(keepEdges bool) ([]string, []int) {
 	if keepEdges {
-		return []string{""}
+		return []string{""}, []int{0}
 	}
-	return nil
+	return nil, nil
 }
 
 // itoa writes an integer.

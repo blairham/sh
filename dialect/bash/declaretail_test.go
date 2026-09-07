@@ -6,6 +6,9 @@ package bash_test
 import (
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/interp"
 )
 
 // The declaration long tail, measured against bash 5.3 (2026-09-04):
@@ -164,5 +167,39 @@ func TestGlobalAssociativeDeclaration(t *testing.T) {
 				t.Errorf("got %q (status %d), want %q", out, st, c.want)
 			}
 		})
+	}
+}
+
+// `-i` takes no output base in this shell, which is what separates it from
+// the two that have `integer` — and there is no `integer` here at all.
+// Measured 2026-09-06 on bash 5.3.15, `env -i PATH=/usr/bin:/bin` with a
+// scratch HOME, over a script file:
+//
+//	typeset -i2 c=5        -2: invalid option, st=2
+//	typeset -i 16 b=255    `16': not a valid identifier, st=1
+//	integer n=3            integer: command not found, st=127
+//
+// The axis is asked only where a base is written, so the answer matters
+// exactly here: with it left unanswered, `typeset -i2` reported that the
+// shells disagree and no dialect had been chosen — when one had.
+func TestTheIntegerLetterTakesNoBaseHere(t *testing.T) {
+	if got := bash.Semantics().IntegerAttributeTakesABase; got != interp.No {
+		t.Errorf("IntegerAttributeTakesABase = %v, want No", got)
+	}
+	if got := bash.Semantics().IntegerOptions; got != "" {
+		t.Errorf("IntegerOptions = %q, want empty — there is no `integer` here", got)
+	}
+	out, st := runBash(t, t.TempDir(), `typeset -i2 c=5`)
+	if !strings.Contains(out, "typeset: -2: invalid option") || st != 2 {
+		t.Errorf("typeset -i2 = %q (status %d), want the letter refused as invalid "+
+			"and nothing said about a base", out, st)
+	}
+	if strings.Contains(out, "output base") || strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("typeset -i2 = %q, want no word about a base in a shell whose `-i` "+
+			"takes none", out)
+	}
+	out, st = runBash(t, t.TempDir(), `integer n=3; echo "st=$?"`)
+	if !strings.Contains(out, "integer: command not found") || !strings.Contains(out, "st=127") {
+		t.Errorf("integer n=3 = %q (status %d), want a command that is not found", out, st)
 	}
 }

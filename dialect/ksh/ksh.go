@@ -562,6 +562,23 @@ func Semantics() interp.Semantics {
 	// typeset is one of this shell's own special builtins, so any of its
 	// failures ends the script — a bad option included.
 	s.TypesetBadOptionFatal = interp.Yes
+	// `integer` is the same declaration under a second name, and this shell
+	// hands it typeset's whole letter grammar — measured 2026-09-06, every
+	// letter typeset takes is either accepted by `integer` or refused by it
+	// for conflicting with the type, and none is refused as unknown. So the
+	// set is typeset's and so is Diagnostics.UnimplementedOptionLetters for
+	// it, which is why `integer -f` here says the letter is missing rather
+	// than claiming this shell has never heard of it.
+	s.IntegerOptions = "aAilprux"
+	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
+	// `16#ff` — and this engine has no base to keep, so it refuses by name.
+	s.IntegerAttributeTakesABase = interp.Yes
+	// The name carries the type in this shell, so a plus word on `integer`
+	// removes nothing: `integer n=5; integer +i n; n=3+4` is 7 here, and
+	// `integer -x e=1; integer +x e` leaves e exported — where this shell's
+	// own `typeset +x` does unexport. `typeset -p n` says the same from the
+	// value side, `typeset -l -i n=5` against zsh's plain `typeset n=5`.
+	s.IntegerPlusFormTakesAttributesOff = interp.No
 	// A bare `set` lists the variables alone, values bare until one needs
 	// quoting and `$'...'` from there.
 	s.SetListing = interp.SetListingAssignments
@@ -850,6 +867,10 @@ func Diagnostics() interp.Diagnostics {
 			// function listings (-f and the floats' -F), namerefs, padding
 			// and alignment, mappings and the rest of its usage line.
 			"typeset": "-bfFhmnstCEHLMRSTXZ",
+			// `integer` reads typeset's letters, so it is missing exactly
+			// the ones typeset is missing — including the `--version` this
+			// shell answers on both names.
+			"integer": "-bfFhmnstCEHLMRSTXZ",
 		},
 		// ksh93's one sentence for a dead -u descriptor, the number not
 		// named; the non-number wordings per letter are not modeled yet, so
@@ -862,7 +883,11 @@ func Diagnostics() interp.Diagnostics {
 		// ksh93's `type` is `whence -v`, and a refused option says so —
 		// measured with `type -t echo`, whose complaint and usage line both
 		// name `whence`.
-		BuiltinComplaintName: map[string]string{"type": "whence"},
+		// ksh93's `type` is `whence -v`, and its `integer` is `typeset` — the
+		// second name is a spelling and the builtin says so, both in the
+		// complaint and in the usage line under it. Measured with
+		// `integer -Q w=1`, whose two lines name typeset throughout.
+		BuiltinComplaintName: map[string]string{"type": "whence", "integer": "typeset"},
 		// Two wordings, split between `export` and the other two, and the
 		// operand quoted back as given.
 		BuiltinBadName: map[string]string{
@@ -883,6 +908,13 @@ func Diagnostics() interp.Diagnostics {
 			"type": "Usage: whence [-afpqv] name  ...",
 			// Three lines, exactly as the engine wraps them.
 			"typeset": "Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]\n" +
+				"               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]\n" +
+				"               [name[=value]...]\n" +
+				"   Or: typeset [ options ] -f [name...]",
+			// The same three lines under `integer`, which is what this shell
+			// prints: the usage belongs to the builtin and not to the word
+			// that reached it.
+			"integer": "Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]\n" +
 				"               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]\n" +
 				"               [name[=value]...]\n" +
 				"   Or: typeset [ options ] -f [name...]",
@@ -1025,6 +1057,15 @@ func Apply(r *interp.Runner) {
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
 	}
+	// `integer` is `typeset` with the type already decided, and it is one of
+	// the two shells that has the word: zsh's own `add-zsh-hook` opens with
+	// `integer del list help`, which is why a shell claiming to be either of
+	// them needs it. Registered rather than built here, so that both
+	// dialects get the *same* declaration — see interp/integerbuiltin.go.
+	r.Register("integer", interp.IntegerBuiltin())
+	// And the assignment rule follows the name the way it follows `declare`:
+	// `integer n=5+2` is a declaration's operand and not a word to split.
+	r.SetDeclaring("integer")
 	// ksh93's own spellings of "what would this run" and "write this out",
 	// both pervasive in real ksh scripts. See whence.go and print.go.
 	registerWhence(r)

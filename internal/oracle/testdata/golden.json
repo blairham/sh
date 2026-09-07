@@ -23831,6 +23831,50 @@
         "TimedOut": false
       }
     },
+    "declare/integer-and-a-plus-form": {
+      "bash": {
+        "Stdout": "i[3+4]~x[0]",
+        "Stderr": "\u003cscript\u003e: line 1: integer: command not found~\u003cscript\u003e: line 2: integer: command not found~\u003cscript\u003e: line 5: integer: command not found~\u003cscript\u003e: line 6: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "i[3+4]~x[0]",
+        "Stderr": "\u003cscript\u003e: line 1: integer: command not found~\u003cscript\u003e: line 2: integer: command not found~\u003cscript\u003e: line 5: integer: command not found~\u003cscript\u003e: line 6: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "i[3+4]~x[0]",
+        "Stderr": "\u003cscript\u003e: line 1: integer: command not found~\u003cscript\u003e: line 2: integer: command not found~\u003cscript\u003e: line 5: integer: command not found~\u003cscript\u003e: line 6: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "i[3+4]~x[0]",
+        "Stderr": "\u003cscript\u003e: 1: integer: not found~\u003cscript\u003e: 2: integer: not found~\u003cscript\u003e: 5: integer: not found~\u003cscript\u003e: 6: integer: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "i[7]~x[1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "i[3+4]~x[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/integer-attribute-added-to-a-name-with-a-value": {
       "bash": {
         "Stdout": "[5+2] st=0",
@@ -24045,6 +24089,182 @@
       },
       "zsh": {
         "Stdout": "[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/integer-is-the-third-name": {
+      "bash": {
+        "Stdout": "[]~[5+2]",
+        "Stderr": "\u003cshell\u003e: line 1: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[]~[5+2]",
+        "Stderr": "\u003cshell\u003e: line 1: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[]~[5+2]",
+        "Stderr": "\u003cshell\u003e: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]~[5+2]",
+        "Stderr": "\u003cshell\u003e: 1: integer: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[3]~[7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[3]~[7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/integer-refuses-a-letter-its-own-declaration-takes": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: integer: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:integer:1: bad option: -A",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/integer-the-lines-a-hook-installer-opens-with": {
+      "bash": {
+        "Stdout": "[UNSET][UNSET][UNSET]",
+        "Stderr": "\u003cscript\u003e: line 2: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[UNSET][UNSET][UNSET]",
+        "Stderr": "\u003cscript\u003e: line 2: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[UNSET][UNSET][UNSET]",
+        "Stderr": "\u003cscript\u003e: line 2: integer: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[UNSET][UNSET][UNSET]",
+        "Stderr": "\u003cscript\u003e: 2: integer: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[UNSET][UNSET][UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0][0][0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/integer-with-an-output-base": {
+      "bash": {
+        "Stdout": "1[]~2[]",
+        "Stderr": "\u003cshell\u003e: line 1: integer: command not found~\u003cshell\u003e: line 1: typeset: -2: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1[]~2[]",
+        "Stderr": "\u003cshell\u003e: line 1: integer: command not found~\u003cshell\u003e: line 1: typeset: -2: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1[]~2[]",
+        "Stderr": "\u003cshell\u003e: integer: command not found~\u003cshell\u003e: line 0: typeset: -2: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "1[]~2[]",
+        "Stderr": "\u003cshell\u003e: 1: integer: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1[16#ff]~2[2#101]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1[16#FF]~2[2#101]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

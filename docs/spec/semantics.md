@@ -4440,6 +4440,77 @@ opening brace a line of its own, zsh keeps it on the header's
 failures ends the script — a bad option included, usage lines and all:
 `Semantics.TypesetBadOptionFatal`.
 
+**`integer` is the declaration under a third name**, and which names a
+shell has is a dialect's answer rather than an axis for the third time:
+dash has none of them, ksh93 has `typeset` and `integer`, bash has
+`typeset` and `declare`, and zsh has all three. Measured 2026-09-06,
+`env -i PATH=/usr/bin:/bin` with a scratch `HOME`, `ZDOTDIR` and
+`HISTFILE`, over a script file.
+
+    integer n=3            ksh93, zsh  st=0 n=3
+                           bash, dash  command not found
+    integer -r r=5         ksh93, zsh  st=0 r=5
+
+It matters because zsh's own `add-zsh-hook` declares with it — line 26
+of that function file is `integer del list help` — so a shell without
+the word cannot install a precmd hook, which is the whole of what a zsh
+startup file does with the function (#1155).
+
+The attribute, the arithmetic a later assignment means, the function
+shadow, the readonly refusal and every letter's meaning are the
+declaration's, not a second implementation's: `interp/integerbuiltin.go`
+registers `Runner.declareNames` under the second name. Three things the
+name decides for itself, and each is a table of values:
+
+**Its letters are narrower than the declaration's, and narrowed
+differently.** zsh's `integer` refuses `-a`, `-A`, `-f`, `-F`, `-T` and
+`-U` as bad options where its own `typeset` takes all six; ksh93 hands
+`integer` the whole typeset grammar and takes every one of them.
+`Semantics.IntegerOptions`, empty where the shell has no such word — so
+a shell that reused `DeclareOptions` would accept `integer -A m`, which
+is an associative array in neither shell.
+
+**A plus word on `integer` removes nothing in ksh93 and everything in
+zsh** — `Semantics.IntegerPlusFormTakesAttributesOff`:
+
+    integer n=5; integer +i n; n=3+4      zsh [3+4]   ksh93 [7]
+    integer -x e=1; integer +x e          zsh gone    ksh93 exported
+    integer n=5; typeset -p n             zsh typeset n=5
+                                          ksh93 typeset -l -i n=5
+
+zsh prepends the letter to an ordinary declaration, so every plus form
+means there what it means on `typeset`; ksh93 has a declaration command
+whose type the word itself fixes, and a plus form reaches neither the
+type nor the export. **One question about the word rather than one per
+letter**: both rows move together, and ksh93's own `typeset +x` *does*
+unexport, so this is not the letter's answer being asked twice. Corpus:
+`declare/integer-and-a-plus-form`.
+
+**`-i` takes an output base in the two shells that have `integer`** —
+`Semantics.IntegerAttributeTakesABase`:
+
+    integer -i 16 b=255      ksh93 [16#ff]   zsh [16#FF]
+    typeset -i2 c=5          ksh93, zsh [2#101]
+    typeset -i 16 b=255      bash `16': not a valid identifier, st=1
+    typeset -i2 c=5          bash -2: invalid option, st=2
+
+This engine records that a name is an integer and has nowhere to keep a
+*base*, which is a property of how the value reads back out, so where
+the answer is yes the base **refuses by name** rather than being read
+and dropped. Dropping it was the previous answer and was the silent kind
+of wrong: `typeset -i 16 b=255` reported 0 with `255` standing, and the
+`16` became a variable of its own. Asked only where a base is actually
+written, so an ordinary `-i` never meets it and a dialect whose `-i`
+takes none — bash — is left alone. Corpus:
+`declare/integer-with-an-output-base`.
+
+**`integer` with no names is a filtered listing** — the integer
+variables in ksh93 and every integer parameter, its own specials
+included, in zsh — which is the listing `typeset -i` with no names is
+and is not built either. It refuses by name rather than falling through
+to the bare declaration listing, which would answer with the whole
+variable table: a wrong answer rather than a missing one.
+
 **A bare `local` writes three different things**
 (`Semantics.BareLocalListing`): bash lists the running function's own
 locals — the innermost scope only — as clustered declarations

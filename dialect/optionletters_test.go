@@ -61,6 +61,11 @@ func TestNoLetterIsBothImplementedAndNot(t *testing.T) {
 				{"typeset", d.sem.DeclareOptions},
 				{"declare", d.sem.DeclareOptions},
 				{"local", d.sem.LocalOptions},
+				// `integer` is the declaration under a third spelling, with
+				// its own letter set: it is *narrower* than typeset's in both
+				// shells that have the word, so it has its own optstring and
+				// its own row here rather than riding on DeclareOptions.
+				{"integer", d.sem.IntegerOptions},
 			} {
 				claimed := strings.ReplaceAll(b.opts, ":", "")
 				missing := d.diag.UnimplementedOptionLetters[b.builtin]

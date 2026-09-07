@@ -592,6 +592,13 @@ func Semantics() interp.Semantics {
 	s.LocalOptions = "aAgilprux"
 	// A bad `declare` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
+	// `-i` takes no output base here, which is what separates this shell
+	// from the two that have `integer`: measured 2026-09-06, `typeset -i2
+	// c=5` is `-2: invalid option` and `typeset -i 16 b=255` calls the `16`
+	// a name that is not a valid identifier. So nothing about a base is
+	// refused and both words go on meaning what they meant — and there is no
+	// `integer` here at all, which is why IntegerOptions stays empty.
+	s.IntegerAttributeTakesABase = interp.No
 	// `declare -g x=new` writes the global cell even with a `local x`
 	// standing in front of the name.
 	s.DeclareGlobalReachesPastALocal = interp.Yes

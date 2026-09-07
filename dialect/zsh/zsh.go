@@ -724,6 +724,23 @@ func Semantics() interp.Semantics {
 	s.LocalOptions = "aAHilpruUTx"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
+	// `integer` here is `typeset` with the letter prepended rather than a
+	// declaration of its own, and its letter set is *narrower* than
+	// typeset's: measured 2026-09-06, `integer -a`, `-A`, `-f`, `-F`, `-T`
+	// and `-U` are bad options where this shell's typeset takes all six. So
+	// the set is its own field and not DeclareOptions over again — a shell
+	// that reused them would accept `integer -A m`, which is an associative
+	// array in no shell that has the word.
+	s.IntegerOptions = "gHilprux"
+	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
+	// `16#FF` — and this engine has no base to keep, so it refuses by name.
+	s.IntegerAttributeTakesABase = interp.Yes
+	// The letter is ordinary in this shell, so a plus word on `integer`
+	// means what it means on `typeset`: `integer n=5; integer +i n; n=3+4`
+	// is `3+4` here and `integer +x e` unexports, and `typeset -p n` says a
+	// plain `typeset n=5`. ksh93, where the name carries the type, answers
+	// every one of those the other way.
+	s.IntegerPlusFormTakesAttributesOff = interp.Yes
 	// `typeset -g x=new` with a `local x` in front assigns the *local* —
 	// the letter only widens where a new declaration would land, it does
 	// not reach past what already stands. Measured: `in=new out=out`
@@ -919,6 +936,12 @@ func Diagnostics() interp.Diagnostics {
 			"jobs":    "dzZ",
 			"declare": "bcEhkLmnRtZ",
 			"local":   "bcEFhkLmnRtZ",
+			// `integer`'s own short list, and it is not typeset's: the
+			// letters typeset is missing that `integer` refuses outright —
+			// b, c, E and m — are bad options under this name and belong in
+			// neither field, while `-h`, `-t`, `-L`, `-R` and `-Z` are
+			// letters this shell's `integer` really takes.
+			"integer": "LRZht",
 		},
 		// The builtin's name is stripped to the location prefix as ever:
 		// `zsh:read:1: -p: no coprocess`, measured with no coprocess to
@@ -1247,6 +1270,15 @@ func Apply(r *interp.Runner) {
 	// `declare` is `typeset` under a second name rather than a second
 	// implementation. ksh93 has only the older name and dash has neither, so
 	// which names exist is a dialect's answer and not an axis.
+	// `integer` is `typeset` with the type already decided, and it is one of
+	// the two shells that has the word — this shell's own `add-zsh-hook`
+	// opens with `integer del list help`, so a startup file that installs a
+	// hook cannot run without it. Registered rather than built here, so both
+	// dialects get the *same* declaration — see interp/integerbuiltin.go.
+	r.Register("integer", interp.IntegerBuiltin())
+	// And the assignment rule follows the name the way it follows `declare`:
+	// `integer n=5+2` is a declaration's operand and not a word to split.
+	r.SetDeclaring("integer")
 	if typeset, ok := r.Builtin("typeset"); ok {
 		r.Register("declare", typeset)
 		// And the assignment rule follows the name: `declare x=*` stores the

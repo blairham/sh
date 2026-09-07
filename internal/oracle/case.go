@@ -8984,6 +8984,37 @@ echo "st=$?"`,
 		Why:     "the same separator after a bar, and this is where the two lenient columns part: zsh prints a numbered `one`, so `cat -n` really is the pipeline's right-hand side with the `;` skipped, and ksh93 refuses the `;` outright. It is the discriminating probe of the pair — a rule stated for control operators generally would have to accept it in ksh93 too. zsh skips any number of them, `echo one | ; ; cat -n` included, and still refuses `echo one | ;` with nothing after",
 	},
 	{
+		ID: "commands/a-list-beginning-with-a-separator", Category: "commands", SyntaxError: true,
+		Snippet: `; echo two`,
+		Why:     "the same separator rule at the *start* of a list, where there is no operator in front of it at all. ksh93 and zsh print `two` and the other four refuse the line, which is what says this is one rule about a `;` written where a command belongs rather than a rule about `&&` — the position varies and the answer does not (#1142)",
+	},
+	{
+		ID: "commands/a-separator-at-the-head-of-a-compound-body", Category: "commands", SyntaxError: true,
+		Snippet: `{ ; echo two; }`,
+		Why:     "the same rule at the *first* thing in a body rather than between two statements, which is its own position in the grammar: ksh93 and zsh print `two` and the other four refuse it. Measured the same way for `( ; … )`, `if …; then ; … fi`, `while …; do ; … done` and a `case` arm, all five alike. It is here because a mutant that removed the skip at the head of a list survived every other case — every one of them wrote the `;` after something",
+	},
+	{
+		ID: "commands/two-separators-with-nothing-between-them", Category: "commands", SyntaxError: true,
+		Snippet: `false ; ; echo "st=$?"`,
+		Why:     "the same rule between two statements, and the row that says **nothing runs** for the skipped separator: `st=1` in both lenient columns, so it does not even set a status. A reading that put an empty successful command here would answer `st=0` and be wrong about every `$?` written after one",
+	},
+	{
+		ID: "commands/a-separator-after-a-background-terminator", Category: "commands", SyntaxError: true,
+		Snippet: `true & ; echo two`,
+		Why:     "the same rule after a `&` rather than a `;`, which is worth its own row because `&` terminates the statement and could have been read as the thing being tolerated. It is not: what is stepped over is the `;` after it, exactly as in the row above",
+	},
+	{
+		ID: "commands/a-newline-after-a-skipped-separator", Category: "commands", SyntaxError: true,
+		Snippet: `true || ;
+echo two`,
+		Why: "the third place the two lenient columns part, and the sharpest: ksh93 prints `two` and zsh prints nothing over the same two lines. zsh steps over the newline as well, so `echo two` is the `||`'s right-hand side and the successful `true` short-circuits past it; ksh93 stops at the newline, the and-or ends with nothing on its right, and the `echo` is the next statement. `true` rather than `false` because a failing left-hand side runs the right-hand side and prints either way, which is exactly the reading this has to tell apart",
+	},
+	{
+		ID: "commands/a-second-separator-where-a-command-belongs", Category: "commands", SyntaxError: true,
+		Snippet: `false || ; ; echo two`,
+		Why:     "how many may be stepped over, which is one of the two places the lenient columns part: zsh takes as many as are written and prints `two`, ksh93 takes one and calls the second `` `;' unexpected ``. So a single flag could not be given a value for both, and the count is part of the dialect's answer",
+	},
+	{
 		ID: "commands/an-and-or-operator-at-the-end-of-input", Category: "commands",
 		SyntaxError: true, Unfinished: true,
 		Snippet: `echo one &&`,

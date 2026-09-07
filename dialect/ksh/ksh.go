@@ -104,6 +104,10 @@ func Dialect() syntax.Dialect {
 	d.ExtendedPattern = true
 	// And inside `[[ ]]`, which is the only place bash reads them.
 	d.ExtendedPatternInCondition = true
+	// `[[ -v name ]]`. Measured on ksh93u+, which has the operator and reads
+	// fewer kinds of name through it than the other two; see
+	// interp.Semantics.ParameterIsSetSeesPositionals.
+	d.ParameterIsSetTest = true
 	// A bare `|` in a `=~` operand belongs to the regular expression.
 	d.RegexTakesAlternation = true
 	// `cmd |&` is this shell's coprocess: an operator that terminates a

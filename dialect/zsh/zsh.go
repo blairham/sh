@@ -146,6 +146,10 @@ func Dialect() syntax.Dialect {
 	// 3.2, bash-as-sh and ksh93, and dash — which has no `[[ ]]` — tries to
 	// open a file called `-`.
 	d.NumericRangePattern = true
+	// `[[ -v name ]]`, which asks whether a parameter is set. Measured on zsh
+	// 5.9.2, which reads more kinds of name through it than the other two that
+	// have it; see interp.Semantics.ParameterIsSetSeesSpecials.
+	d.ParameterIsSetTest = true
 	// A `(` where an argument may stand belongs to the word: `echo MY ( x )`
 	// is two words there and a syntax error in the other four. Measured
 	// 2026-09-06 on zsh 5.9.2 — `unknown file attribute:` names the space
@@ -918,6 +922,14 @@ func Semantics() interp.Semantics {
 	// `{name}>f`.
 	s.FdNumberBoundedByOpenFileLimit = interp.No
 
+	// `[[ -v ]]` reads more kinds of name here than either of the other two
+	// shells that have the operator: a positional, as bash does, and every
+	// parameter spelled as one punctuation character — `?`, `#`, `$`, `!`,
+	// `*` and `-` — which is this shell's alone. `@` is unset here as it is
+	// everywhere, so it is excluded outright rather than by an axis.
+	// Measured on zsh 5.9.2.
+	s.ParameterIsSetSeesPositionals = true
+	s.ParameterIsSetSeesSpecials = true
 	return s
 }
 

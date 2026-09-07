@@ -311,7 +311,7 @@ func (p *testParser) primary() (bool, error) {
 			return ok, err
 		}
 	}
-	if isTestUnary(p.args[p.pos]) {
+	if p.r.isTestUnary(p.args[p.pos]) {
 		if p.pos+1 >= len(p.args) {
 			return false, &testError{kind: errOperandExpected}
 		}
@@ -326,6 +326,20 @@ func (p *testParser) primary() (bool, error) {
 
 // isTestUnary reports whether a word is one of the unary operators, which is
 // what decides between "an operator and its operand" and "a bare string".
+//
+// All but one are unanimous. `-v` is the exception and is asked of the
+// dialect, so a shell without it keeps the refusal by name it already gave —
+// `[: -v: unary operator expected` — rather than answering a question it does
+// not have. That is the same head count that keeps `-v` out of the core
+// grammar: dash has neither the operator nor `[[ ]]`, and bash 3.2 answers
+// `[: -v: unary operator expected` too.
+func (r *Runner) isTestUnary(s string) bool {
+	if s == "-v" {
+		return r.dialect().ParameterIsSetTest
+	}
+	return isTestUnary(s)
+}
+
 func isTestUnary(s string) bool {
 	switch s {
 	case "-n", "-z", "-e", "-f", "-d", "-s", "-r", "-w", "-x", "-L", "-h",
@@ -342,6 +356,29 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 		return operand != "", nil
 	case "-z":
 		return operand == "", nil
+	case "-v":
+		// The same question `[[ -v ]]` asks and the same answer: the two
+		// constructs agree in every shell that has the operator, so they
+		// share the function rather than each having one.
+		//
+		// Gated here *and* at isTestUnary, and the pair is not redundant:
+		// there are two ways in. An expression of exactly two words comes
+		// straight here from testExpr without the operator table being
+		// consulted at all, and a longer one is read by the parser, which
+		// asks isTestUnary first. Taking either gate away leaves `-v`
+		// answered on one route and refused on the other, which is why both
+		// routes are asserted.
+		//
+		// Removing isTestUnary's gate alone survives the suite, and that
+		// survivor is explained rather than closed: the only answer it
+		// moves is the *wording* of a refusal on the multi-term route, and
+		// that wording is already wrong there for every operator this shell
+		// lacks — `[ -Q x -a -n x ]` says `too many arguments` where the
+		// panel names the `-Q`. Asserting it would pin the defect. #1290.
+		if !r.dialect().ParameterIsSetTest {
+			break
+		}
+		return r.parameterIsSet(operand)
 	case "-t":
 		// A terminal test on a descriptor this shell may not even own. Never
 		// true here: the streams are io.Writers, which is the honest answer

@@ -2522,6 +2522,35 @@ type Semantics struct {
 	// rather than given a value here.
 	PatternEscapeReaches string
 
+	// ParameterIsSetSeesPositionals lets `-v 1` ask about a positional
+	// parameter, and `-v 0` about the shell's name.
+	//
+	// Measured 2026-09-07 on the three shells that have the operator, under
+	// `-c`: `set -- p q; [[ -v 1 ]]` is set in bash 5.3.15 and zsh 5.9.2 and
+	// **unset** in ksh93u+, and `[[ -v 0 ]]` splits the same way. It is the
+	// operator declining to treat a digit as a name rather than a lookup
+	// coming back empty — `${1+s}` is `s` in all three — which is why the
+	// answer is here rather than in the parameter table.
+	//
+	// A positional past `$#` is unset everywhere and needs no axis: with two
+	// parameters set, `[[ -v 3 ]]` is unset in all three.
+	ParameterIsSetSeesPositionals bool
+
+	// ParameterIsSetSeesSpecials lets `-v ?` and its fellows — `#`, `$`,
+	// `!`, `*` and `-` — ask about a parameter spelled as one punctuation
+	// character.
+	//
+	// zsh 5.9.2 alone answers set for every one of them; bash 5.3.15 and
+	// ksh93u+ answer unset for every one. Again the parameters are there in
+	// all three and it is the operator that does not look: `[[ -n ${?+s} ]]`
+	// and `[[ -n ${#+s} ]]` are set in bash and ksh93 as well.
+	//
+	// `@` is not one of them and is unset in all three — with positional
+	// parameters set, and in the shell that answers for every other
+	// character — so it is excluded outright rather than by this axis. See
+	// isSetNameKind.
+	ParameterIsSetSeesSpecials bool
+
 	// ScalarSubscriptIsACharacter reads `${s[2]}` on a plain string as its
 	// second character, rather than as an element of the one-element array a
 	// scalar reads as.

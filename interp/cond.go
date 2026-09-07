@@ -128,6 +128,12 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 				"%[2]s: %[1]s: integer expected", s, "[[")}
 		}
 		return false, nil
+	case "-v":
+		// Whether a parameter is set, which is a question about the
+		// parameter and not about its value: a name holding the empty
+		// string is set. Shared with `test -v` — see parameterIsSet, where
+		// the whole of the answer and its two axes are.
+		return r.parameterIsSet(s)
 	case "-o":
 		// The shell's own option state, read through the dialect's namespace
 		// — which for one of the panel is far wider than its `set -o` names.

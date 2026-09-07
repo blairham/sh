@@ -971,6 +971,23 @@ type Dialect struct {
 	// with neither leaves both false.
 	ExtendedPatternInCondition bool
 
+	// ParameterIsSetTest enables `[[ -v name ]]`, which asks whether a
+	// parameter is set rather than anything about its value.
+	//
+	// A grammar flag rather than core, and bash 3.2 is why: it is the one
+	// shell in the panel with `[[ ]]` that does not have the operator, and it
+	// does not merely answer differently — it cannot read the line at all,
+	// `conditional binary operator expected` followed by `syntax error near
+	// `x''. dash has no `[[ ]]` to put it in. So the head count that made `-o`
+	// core fails here by exactly one column.
+	//
+	// The operand is an ordinary word, read the same way `-o`'s is: `[[ -v
+	// 'x' ]]` and `n=x; [[ -v $n ]]` both ask about `x`, and a subscript
+	// belongs to it — `[[ -v 'a[2]' ]]`. What the name then *means* is the
+	// interpreter's, and the three shells that have the operator disagree
+	// about two classes of name; see interp.Semantics.
+	ParameterIsSetTest bool
+
 	// PatternAlternation enables a bare `(a|b)` inside a pattern word, which
 	// zsh has and the others do not: `a(b|c)` matches `ab` there. It is why
 	// `@(abc|xyz)` is a literal `@` followed by a group in zsh rather than an

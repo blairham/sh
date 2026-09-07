@@ -98,6 +98,15 @@ func (c *TestClause) commandNode() {}
 // operand is an ordinary word everywhere — `[[ -o 'aliases' ]]` reads the
 // same name as `[[ -o aliases ]]`, and `v=errexit; [[ -o $v ]]` reads it out
 // of the variable — and a missing one is a syntax error in all three.
+// condUnaryOp reports whether a word is a one-operand test in this dialect.
+// All but one are core; `-v` is the exception and says why in dialect.go.
+func (p *Parser) condUnaryOp(s string) bool {
+	if s == "-v" {
+		return p.dialect.ParameterIsSetTest
+	}
+	return condUnaryOps[s]
+}
+
 var condUnaryOps = map[string]bool{
 	"-n": true, "-z": true,
 	"-e": true, "-f": true, "-d": true, "-s": true,
@@ -302,7 +311,7 @@ func (p *Parser) condPrimary() CondExpr {
 		p.next()
 		return &CondGroup{X: x, Start: start, Stop: stop}
 
-	case p.tok.Kind == TokWord && !p.tok.IsQuoted() && condUnaryOps[p.tok.Literal()]:
+	case p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.condUnaryOp(p.tok.Literal()):
 		op, start := p.tok.Literal(), p.tok.Pos
 		p.next()
 		x := p.condWord()

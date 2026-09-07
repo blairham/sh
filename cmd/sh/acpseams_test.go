@@ -49,6 +49,11 @@ type acpClient struct {
 	asked  []acp.RequestPermissionRequest
 	stdout strings.Builder
 	stderr strings.Builder
+	// calls is the title of every tool call update, which is what the
+	// session's *event sink* produces. What a command wrote arrives on a
+	// different route — the runner's writers — so a client can be shown
+	// output by a session that reports no actions at all.
+	calls []string
 }
 
 func (c *acpClient) Handle(_ context.Context, method string, params json.RawMessage) (any, error) {
@@ -79,6 +84,11 @@ func (c *acpClient) Notify(_ context.Context, method string, params json.RawMess
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if raw.Update["sessionUpdate"] == acp.UpdateToolCall {
+		title, _ := raw.Update["title"].(string)
+		c.calls = append(c.calls, title)
+		return
+	}
 	if raw.Update["sessionUpdate"] != acp.UpdateAgentMessageChunk {
 		return
 	}
@@ -109,6 +119,13 @@ func (c *acpClient) errs() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.stderr.String()
+}
+
+// reported is every action the session told the client about.
+func (c *acpClient) reported() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.calls...)
 }
 
 // served runs `sh -acp …` through run(), with this test on the other end of
@@ -328,5 +345,14 @@ func TestAnAuditedACPSessionStillWritesTheRecord(t *testing.T) {
 	}
 	if !slices.Contains(execs, "command-start /bin/echo") {
 		t.Errorf("the exec records are %q, want the command a session ran written down", execs)
+	}
+	// And the client is still told, which is the other half of composing
+	// rather than replacing: a fix that fed the file by taking the connection
+	// out of the stream would pass everything above. The chunks a command
+	// writes arrive by another route entirely, so this asks for the thing the
+	// *sink* produces.
+	if !slices.ContainsFunc(c.reported(), func(s string) bool { return strings.Contains(s, "/bin/echo") }) {
+		t.Errorf("the client was told about %q, want the exec reported to it as well as to the file",
+			c.reported())
 	}
 }

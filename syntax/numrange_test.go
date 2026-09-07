@@ -279,7 +279,7 @@ func TestANumericRangeIsReachedFromInsideALeadingGroup(t *testing.T) {
 }
 
 // TestTheSameScannerIsReachedFromACaseArmAndAnArgument — the other two
-// routes into scanArgumentGroup. They are asserted separately because they
+// routes into scanGroupSpans. They are asserted separately because they
 // need a *different* flag from the condition: a `case` arm and an argument
 // reach the scanner through the leading-paren rule rather than through
 // `inPattern`, so a fix that only satisfied the condition would leave these

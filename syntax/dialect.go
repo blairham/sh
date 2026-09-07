@@ -1113,7 +1113,7 @@ type Dialect struct {
 	// characters — `[[ $k == (a<b) ]]` is `parse error near `<'` there and
 	// needs only [Dialect.PatternAlternation] — where a *regular
 	// expression's* operand keeps them, in all four shells that have `=~`.
-	// See Lexer.scanArgumentGroup, which holds both measurements (#1175).
+	// See Lexer.scanGroupSpans, which holds both measurements (#1175).
 	//
 	// The matcher's half is read from here too, the way
 	// [Dialect.PatternAlternation] and [Dialect.NumericRangePattern] are:

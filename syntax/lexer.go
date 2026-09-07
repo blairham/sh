@@ -936,48 +936,95 @@ func (l *Lexer) scanPatternGroup() string {
 	return l.src[start:l.off]
 }
 
-// scanArgumentGroup reads a `( … )` that stands for a whole word, stopping
-// where an operator ends the word rather than at the closing parenthesis.
+// scanGroupSpans reads a `( … )` that belongs to a word and returns it as
+// *spans* rather than as text.
 //
-// It is scanPatternGroup with one clause added, and the clause is measured:
-// `;`, `<`, `>` and `&` end the word where they appear, so `echo ( a <b )`
-// leaves the `)` to the parser and is `parse error near `)”. A `|` does not,
-// because a pattern group may hold an alternation — `echo ( a|b )` is one
-// word, which the shell then reports as matching nothing.
+// Text was the bug. A group used to be copied out of the source and appended
+// to the word's unquoted literal run, which loses the two things quoting is
+// for, in both directions:
 //
-// **It is the scanner for every group that starts a word**, which is three
-// routes rather than a generalization of one. A *pattern* operand's leading
-// group ends at the same four characters — measured on zsh 5.9.2, 2026-09-07,
-// from a script file under `env -i`, each probe in a file of its own so the
-// first refusal does not hide the rest:
+//   - The scan ran over raw bytes, so a `\<` or a `"<"` inside a group ended
+//     the word at its `<` and left the `)` to the parser — `[[ "<x" == (\<)* ]]`
+//     was `parse error near `<”. The same for `\>`, `\;`, `\&`, `\)` and `\(`,
+//     and for each of them written inside quotes (#1248).
+//   - What did scan through arrived at the matcher with its quotes still in
+//     it, so `[[ b == ("b") ]]` asked whether `b` is the three characters
+//     `"b"` and answered no. That half is the silent one.
 //
-//	[[ $k == (a<b) ]]    parse error near `<'
-//	[[ $k == (a>b) ]]    parse error near `>'
-//	[[ $k == (a;b) ]]    parse error near `;'
-//	[[ $k == (a&b) ]]    parse error near `&'
-//	[[ $k == (a|b) ]]    matches — the `|` is the group's
+// Spans fix both at once, because a span carries its quoting and the pattern
+// builder already knows what to do with it: a quoted span's metacharacters
+// are escaped and an unquoted one's are live, which is exactly the rule the
+// rest of a word gets. Nothing here decides what a character *means* — `(`,
+// `|` and `)` stay in the literal text for the matcher to read, and a
+// numeric range is stepped over whole for the same reason it is elsewhere.
 //
-// A *regular expression's* operand is the other answer, and it never comes
-// through here: scanWord takes a regex group whole at its own case above, and
-// the four shells with `=~` agree it should — `[[ 'a<b' =~ (a<b) ]]` and
+// **It is the scanner for every group that belongs to a word**, and `;`, `<`,
+// `>` and `&` end the word where they stand in one rather than being taken
+// into it: `echo ( a <b )` leaves the `)` to the parser. A `|` does not,
+// because a group may hold an alternation — `echo ( a|b )` is one word,
+// which the shell then reports as matching nothing. Measured on zsh 5.9.2,
+// 2026-09-07, from a script file under `env -i`, each probe in a file of its
+// own so the first refusal does not hide the rest:
+//
+//	[[ $k == (a<b) ]]     parse error near `<'
+//	[[ $k == (a>b) ]]     parse error near `>'
+//	[[ $k == (a;b) ]]     parse error near `;'
+//	[[ $k == (a&b) ]]     parse error near `&'
+//	[[ $k == (a|b) ]]     matches — the `|` is the group's
+//	[[ $k == a(b<c) ]]    parse error near `<'
+//	[[ $k == a(b;c) ]]    parse error near `;'
+//	[[ $k == a(b|c) ]]    matches
+//
+// **Position does not decide it either.** #1175 moved this from a route
+// question to a "does the group start the word" one, and the last three rows
+// say it is neither: a group in the middle of a word ends it at the same four
+// characters, and reading them into it matched `ab<c` against `a(b<c)` where
+// the shell will not read the line at all. Route and position were each the
+// shape of where the group happened to be measured.
+//
+// They end the word only where they are *unquoted*, which is the fix: the
+// four are operators for the same reason a `<` outside a group is one, and
+// quoting is what says a character is not an operator anywhere else in a
+// word.
+//
+// A *regular expression's* operand is the other answer and never comes
+// through here: scanWord takes a regex group whole at its own case, and the
+// four shells with `=~` agree it should — `[[ 'a<b' =~ (a<b) ]]` and
 // `[[ 'a;b' =~ (a;b) ]]` both match in bash 5.3, bash 3.2, bash-as-`sh` and
 // ksh93, where zsh refuses the `<` while parsing. So a regex operand owns its
 // operators and a pattern operand does not, which is a difference between two
 // constructs rather than the accident it looked like (#1175).
 //
-// Unterminated input is scanPatternGroup's business rather than an operator's,
-// so it delegates the whole scan when nothing stops it.
-func (l *Lexer) scanArgumentGroup() string {
-	start := l.off
+// Expansions inside a group are *not* read here and stay literal text, which
+// is what they were before and is measured as wrong: zsh 5.9.2 expands
+// `v='\<'; [[ '<x' == (${~v})* ]]` to a match. That is a gap of its own and
+// filed as one — this scanner is about quoting.
+func (l *Lexer) scanGroupSpans() []Span {
+	var spans []Span
+	var lit strings.Builder
+	litPos := l.pos()
+	flush := func() {
+		if lit.Len() > 0 {
+			spans = append(spans, Span{Kind: Literal, Value: lit.String(), Quoting: Unquoted, Pos: litPos})
+			lit.Reset()
+		}
+	}
+	keep := func(c byte) {
+		if lit.Len() == 0 {
+			litPos = l.pos()
+		}
+		lit.WriteByte(c)
+		l.advance()
+	}
 	depth := 0
 	for !l.eof() {
 		c := l.peek()
-		// A numeric range's `<` is pattern text and not the operator that
-		// ends the word, so it is taken whole before the four characters
-		// below get to see it — the same precedence `next` and `endsWord`
-		// already give it outside a group. Without this the group ended at
-		// the `<` and left its `)` to the parser, which is why every
-		// powerlevel10k config died on `(5.<1->*|<6->.*)` (#1217).
+		// A numeric range's `<` is pattern text rather than the operator
+		// that ends the word, so it is taken whole before the four
+		// characters below get to see it — the precedence `next` and
+		// `endsWord` already give it outside a group. Without this the
+		// group ended at the `<` and left its `)` to the parser, which is
+		// why every powerlevel10k config died on `(5.<1->*|<6->.*)` (#1217).
 		//
 		// `numericRangeAt` is the whole disambiguation and it is exact, so
 		// the plain operator keeps every byte that is not a range: measured
@@ -991,33 +1038,93 @@ func (l *Lexer) scanArgumentGroup() string {
 		// than a gap.
 		if width, ok := l.numericRangeAt(0); ok {
 			for range width {
-				l.advance()
+				keep(l.peek())
 			}
 			continue
 		}
+		// Unquoted only. That is the whole of #1248: a `<` that a backslash
+		// or a quote has protected is pattern text, and the cases below take
+		// it before this one is reached.
+		//
 		// `depth > 0` cannot be false at one of those four bytes and is
 		// kept for what it says rather than for what it decides: this is
 		// entered on a `(`, so the only pass with depth zero is the first
-		// one and its byte is that `(`. Mutating it to `depth >= 0` survives
-		// the suite, and that is an equivalent mutant rather than a gap —
-		// recorded here so the next reader does not go looking for the row
-		// that would kill it.
+		// one and its byte is that `(`. Mutating it to `depth >= 0`
+		// survives the suite, and that is an equivalent mutant rather than
+		// a gap — recorded here so the next reader does not go looking for
+		// the row that would kill it.
 		if depth > 0 && strings.IndexByte(";<>&", c) >= 0 {
-			return l.src[start:l.off]
+			flush()
+			return spans
 		}
-		l.advance()
-		switch c {
-		case '(':
-			depth++
-		case ')':
-			depth--
-			if depth == 0 {
-				return l.src[start:l.off]
+		switch {
+		case c == '\\' && l.peekAt(1) == '\n':
+			// A line continuation is removed before tokens are formed, here
+			// as everywhere else, so it can split a group anywhere.
+			l.advance()
+			l.advance()
+
+		case c == '\\':
+			escPos := l.pos()
+			l.advance()
+			if l.eof() {
+				l.ranOut("pattern")
+				l.fail(escPos, "input ends after a backslash")
+				flush()
+				return spans
+			}
+			// Its own span, for the reason the same case in scanWord gives:
+			// the protection has to outlive the lexer, because a later stage
+			// decides whether the character is a metacharacter.
+			flush()
+			spans = append(spans, Span{
+				Kind:    Literal,
+				Value:   string(l.advance()),
+				Quoting: BackslashQuoted,
+				Pos:     escPos,
+			})
+
+		case c == '\'':
+			flush()
+			if s, ok := l.scanSingle(); ok {
+				spans = append(spans, s)
+			}
+
+		case c == '"':
+			flush()
+			spans = append(spans, l.scanDouble()...)
+
+		case c == '$' && l.peekAt(1) == '\'' && l.dialect.DollarSingleQuote:
+			flush()
+			if s, ok := l.scanDollarSingle(); ok {
+				spans = append(spans, s)
+			}
+
+		default:
+			keep(c)
+			switch c {
+			case '(':
+				depth++
+			case ')':
+				depth--
+				if depth == 0 {
+					flush()
+					return spans
+				}
 			}
 		}
+		if l.err != nil {
+			break
+		}
 	}
-	l.off = start
-	return l.scanPatternGroup()
+	// Unterminated: the caller reports the word as unfinished, the same as an
+	// unclosed quote.
+	flush()
+	if l.err == nil {
+		l.ranOut("pattern")
+		l.fail(l.pos(), "unterminated pattern group")
+	}
+	return spans
 }
 
 // scanWord reads a word as a sequence of spans, one per run of uniform
@@ -1115,28 +1222,18 @@ func (l *Lexer) scanWord(start Pos) Token {
 			if lit.Len() == 0 {
 				litPos = l.pos()
 			}
-			// **Position, not route.** A group that starts a word ends the
-			// word at a shell operator whichever of the three ways it got
-			// here, which is measured rather than assumed — see
-			// scanArgumentGroup, where the pattern operand's four probes
-			// are.
-			//
-			// An `l.inArgument` guard used to stand in this condition, so
-			// only the argument route reached scanArgumentGroup and the
-			// pattern route swallowed operators. Removing it survived the
-			// whole suite, which is what #1175 was filed about; the shells
-			// do distinguish the two, and the row that says so is the
-			// second one in scanArgumentGroup's list. What #1161 measured
-			// still holds — a `case` arm cannot tell the two scanners
-			// apart, `case x in (#i;a)b)` and `case x in (#i<a)b)` being
-			// refused under both readings — so that route is unaffected
-			// either way and is no reason to keep a guard the pattern route
-			// answers wrong.
-			if lit.Len() == 0 {
-				lit.WriteString(l.scanArgumentGroup())
-				continue
-			}
-			lit.WriteString(l.scanPatternGroup())
+			// **Neither route nor position.** A group ends the word at a
+			// shell operator wherever it stands, which is measured rather
+			// than assumed — see scanGroupSpans, where the eight probes
+			// are. An `l.inArgument` guard used to stand in this condition
+			// so only the argument route stopped at one (#1175), and a
+			// `lit.Len() == 0` test replaced it so only a group *opening*
+			// the word did; both were the shape of the measurement rather
+			// than of the shell. What #1161 measured still holds — a `case`
+			// arm cannot tell the readings apart, `case x in (#i;a)b)` and
+			// `case x in (#i<a)b)` being refused under all of them.
+			flush()
+			spans = append(spans, l.scanGroupSpans()...)
 
 		case c == '\'':
 			flush()

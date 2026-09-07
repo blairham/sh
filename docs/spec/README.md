@@ -29,6 +29,7 @@ A spec entry with no citation is a guess and does not belong here.
     invocation.md     what the front end decides before anything runs
     history.md        what an interactive shell writes down, and what it does not
     prompt.md         the prompt languages, and what the editor counts
+    hooks.md          what a session runs between one command and the next
     editing.md        what the keys do while a line is being typed
     completion.md     what Tab does to the word under the cursor
     grammar/          per-construct specs

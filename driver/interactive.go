@@ -245,6 +245,9 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		Style:   sh.PromptStyle,
 		Editor:  sh.EditorStyle,
 		History: sh.HistoryStyle,
+		// And what it runs between commands, which is one dialect's `precmd`
+		// and `preexec` and nothing at all for the other three.
+		Hooks: sh.HookStyle,
 		// What this binary adds to every prompt, which is nothing for a
 		// dialect binary and the sandbox marker for cmd/sh under a policy.
 		PromptProviders: sh.PromptProviders,

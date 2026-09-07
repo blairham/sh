@@ -4005,6 +4005,70 @@ What was built, all through the extension seam — registered builtins in each
   harmless. A name with a directory in it is read from where it says and
   `$fpath` plays no part.
 
+  **A name that is already a function is left alone.** Measured 2026-09-07:
+  with a file for `cfn` on `$fpath` and `cfn` already defined,
+  `autoload -Uz cfn` is 0, the body survives, and the name is absent from
+  the bare listing afterwards — so the declaration is a no-op rather than a
+  re-marking. `+X` over such a name refuses instead of resolving: status 1,
+  and nothing on either stream. Only the plus sign asks this. `-X` is the
+  opposite case by construction — the function it replaces is the one it is
+  running inside, which always has a body — so the two signs cannot share
+  the guard, and a guard that was shared refused every autoload the moment
+  the generated stub called it.
+
+  It matters more than the corner suggests, and it is the second reason a
+  stock function fails to autoload. A real startup file declares a name it
+  may already have — a plugin manager writes `builtin autoload -Uz
+  is-at-least` and runs the line again on every reload — and a shell that
+  wrote its stub over the definition turned a working function into
+  `function definition file not found` at the *next* call. The stub is the
+  record, so writing one over a real body is not a note about the name, it
+  is losing it. Corpus: `autoload/an-existing-function-is-left-alone`,
+  `autoload/resolve-now-refuses-an-existing-function`.
+
+  **`$fpath` is not empty at startup, and what is on it is the front
+  end's.** Measured 2026-09-07 against zsh 5.9.2 under `env -i` with a
+  scratch HOME and `-f`, so no startup file is speaking: that shell arrives
+  with three directories on it, all three of them belonging to *that
+  installation* — its own function library plus the two site directories
+  third-party packages install into. An `FPATH` in the environment replaces
+  the lot rather than adding to it, and does so even when it is the empty
+  string, so the default is a fallback for a name the environment does not
+  mention rather than for one it leaves blank.
+
+  Which directories is a fact about where a shell was installed, and no
+  dialect may hold one: the same machine's other zsh — Apple's 5.9 at
+  `/bin/zsh` — answers a different prefix *and* a different layout, with a
+  version segment under `share/zsh` where the Homebrew build has none. Two
+  builds of one shell on one machine, so there is no expression that
+  derives one installation's directories from another's, and a table of
+  paths would be the recording machine's rather than any machine's.
+
+  So the dialect names the parameter — `Semantics.FunctionSearchVariable`,
+  `FPATH` here and empty in the other three — and the **front end** fills
+  it with this installation's own directories, read off where the running
+  binary sits: `<prefix>/share/sh/site-functions` then
+  `<prefix>/share/sh/functions`, site first, which is the order the shell
+  being imitated has and the useful one. `<prefix>` comes from the binary's
+  own resolved path, recognizing the `libexec/sh` layout `make install` and
+  the Homebrew formula both use and falling back to the parent of whatever
+  directory the binary is in. Nothing is stat-ed: an entry that is not there
+  is carried anyway, which is what the shell being imitated does with
+  `/usr/local/share/zsh/site-functions` on a machine that has no such
+  directory. Corpus: `tie/FPATH-arrives-with-a-value`,
+  `tie/an-FPATH-in-the-environment-replaces-the-default`,
+  `tie/an-empty-FPATH-in-the-environment-suppresses-the-default`.
+
+  What this deliberately does **not** do is point the search at another
+  shell's installed function library. It is reachable — a person puts one on
+  `FPATH` — and it is the only thing that makes a stock `add-zsh-hook` or
+  `is-at-least` load today, because this installation ships no functions of
+  its own yet. It is not the default: the directories cannot be found
+  portably, and which library a shell reads is a decision about what that
+  shell *is* rather than a default to arrive at by derivation. A name that
+  cannot be found still refuses by name, which says more than a silent
+  empty does (#1250).
+
   **`+X` and `-X` are two commands rather than one letter with a sign.**
   `+X name…` resolves the names given and does not run them; `+X` with
   nothing is silence and 0. `-X` takes *no* name — it means "the function

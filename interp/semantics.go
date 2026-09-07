@@ -3200,6 +3200,29 @@ type Semantics struct {
 	// shell a person cannot repair from.
 	StartupFileOptions StartupFileOptions
 
+	// FunctionSearchVariable names the scalar this shell searches for
+	// *function definition files* — the parameter an `autoload`d name is
+	// looked up on. Empty means the shell has no such search, which is three
+	// of the four; zsh names `FPATH`.
+	//
+	// It is here rather than in the builtin that reads it because the value is
+	// not the builtin's to invent. Measured 2026-09-07 against zsh 5.9.2 under
+	// `env -i` with a scratch HOME and `-f`, so no startup file is speaking:
+	// the shell arrives with three directories on it, all three of them that
+	// *installation's* — its own function library, plus the two site
+	// directories third-party packages install into. An `FPATH` in the
+	// environment **replaces** the lot rather than adding to it, and does so
+	// even when it is the empty string, so the default is a fallback for a
+	// name the environment does not mention rather than for one it leaves
+	// blank.
+	//
+	// Which directories is a fact about where a shell was installed, and no
+	// dialect can hold one: a value written here would be the recording
+	// machine's. So this names the parameter and the front end supplies the
+	// value — the same split `StartupDirectoryVariable` above already makes,
+	// and the same one `$PATH` has. See driver.
+	FunctionSearchVariable string
+
 	// ArrayLengthWithoutSubscriptIsCount makes `${#a}` of an array the
 	// number of elements, which is zsh's reading; bash and ksh93 measure
 	// the element the bare name yields. Asked only where the two answers

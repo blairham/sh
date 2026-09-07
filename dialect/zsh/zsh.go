@@ -334,6 +334,14 @@ func Semantics() interp.Semantics {
 		Login:       "-l --login",
 		SuppressAll: "-f --no-rcs",
 	}
+	// The parameter an `autoload`d name is looked up on, and the panel's only
+	// one: `autoload -Uz is-at-least` finds its file on `$FPATH` and nothing
+	// else does. Measured under `-f`, so it is the shell's own value and not a
+	// startup file's — which is also what says the value survives the escape
+	// hatch above. Named here and filled in by the front end, because which
+	// directories is a fact about where a shell was installed; see
+	// interp.Semantics.FunctionSearchVariable.
+	s.FunctionSearchVariable = "FPATH"
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.LoginShowsLInDollarDash = interp.Yes
 	s.CommandStringShowsSInDollarDash = interp.No

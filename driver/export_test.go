@@ -61,3 +61,16 @@ func ReplaceProcessForTest(path string, argv, env []string, files []*os.File) er
 // AtPlacementForTest fills in the seam that stands on both sides of the
 // descriptor placement.
 func AtPlacementForTest(f func(where string)) { atPlacement = f }
+
+// InstallPrefixForTest and FunctionSearchDirsForTest are the two halves of
+// where a shell looks for function definition files, reachable from the
+// package's external tests.
+//
+// Exposed because the derivation is a fact about *layouts* and the only way to
+// see it through a running shell is to install a binary into each of them —
+// which puts a build step in the middle of what is a string transformation,
+// and could only ever exercise the layout this checkout happens to be in.
+func InstallPrefixForTest(exe string) string { return installPrefix(exe) }
+
+// FunctionSearchDirsForTest is functionSearchDirs.
+func FunctionSearchDirsForTest(prefix string) []string { return functionSearchDirs(prefix) }

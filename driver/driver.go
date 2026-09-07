@@ -1132,6 +1132,11 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// substrate's builtins, which is neither grammar nor semantics.
 		sh.Register(r)
 	}
+	// And the one parameter a shell arrives with a value in that no dialect
+	// can hold, because the value is where this binary was installed rather
+	// than anything about the language. After Register, which is what ties
+	// the scalar to its array. See functiondirs.go.
+	sh.seedFunctionSearch(r)
 	return r
 }
 

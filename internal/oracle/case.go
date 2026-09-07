@@ -7785,6 +7785,21 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the tie `autoload` depends on: a function is looked for in `$fpath`, and `$fpath` is whatever `FPATH` says. Worth its own row rather than folding into the membership one, because this is the pair whose absence made every autoload a `function definition file not found` for a reason that had nothing to do with autoloading",
 	},
 	{
+		ID: "tie/FPATH-arrives-with-a-value", Category: "declarations",
+		Snippet: `echo "named=${FPATH+yes} filled=$(( ${#fpath[@]} > 0 ))"`,
+		Why:     "what the pair holds before a script has said anything, which no row asked until #1250. One shell arrives with its own installed function directories on it and the rest name `FPATH` at all; a shell whose `$fpath` starts empty can autoload nothing, which is a whole feature missing for a reason that looks like a missing file. Asked as two booleans rather than as the value, because the value is where a shell was installed and a row that printed it would be a record of the machine that recorded it",
+	},
+	{
+		ID: "tie/an-FPATH-in-the-environment-replaces-the-default", Category: "declarations", Env: []string{"FPATH=/x/y"},
+		Snippet: `echo "n=${#fpath[@]} [${fpath[*]}]"`,
+		Why:     "and it replaces rather than adds: one element, not the three the shell would have had plus this one. The half of a default that decides how it is implemented — an environment that merely won the *front* of the list would leave a shell reading another installation's functions behind whatever it was told to read",
+	},
+	{
+		ID: "tie/an-empty-FPATH-in-the-environment-suppresses-the-default", Category: "declarations", Env: []string{"FPATH="},
+		Snippet: `echo "n=${#fpath[@]} named=${FPATH+yes}"`,
+		Why:     "present and empty is still the environment speaking: one empty element rather than the default's directories. So the question a default asks is whether the environment *mentions* the name, and a shell that tested the value instead would put its own directories back the moment a caller cleared the variable on purpose",
+	},
+	{
 		ID: "declare/tie-mirrors-a-scalar-and-an-array", Category: "declarations",
 		Snippet: `typeset -T TS ts; TS=a:b:c; echo "n=${#ts[@]} [${ts[*]}] st=$?"`,
 		Why:     "the letter one shell in the panel has with this meaning: zsh ties a scalar to an array so each reflects the other, splitting the scalar on `:`. bash refuses `-T` with its usage line and 2. **ksh93 is the interesting column**: `typeset -T tname` declares a *type* there, so it takes this line without a word and answers `n=0 []` — the same letter, silently doing something else, which is why it must be refused by name in that dialect rather than shared as one attribute with two readings",
@@ -10268,6 +10283,16 @@ echo "read=[$l]"`,
 		ID: "autoload/a-missing-file-fails-at-the-call", Category: "builtins",
 		Snippet: `fpath=(); autoload -Uz zznone; echo "decl=$?"; zznone; echo "call=$?"`,
 		Why:     "and where it fails: the declaration is 0 with an empty `fpath` and the *call* is `zznone: function definition file not found` at 1. Two statuses in one row, because a shell that resolved at the declaration would report the failure in the wrong place and a script's `autoload || return` would fire when nothing was wrong yet",
+	},
+	{
+		ID: "autoload/an-existing-function-is-left-alone", Category: "builtins",
+		Snippet: `mkdir -p fp; printf "%s\n" 'echo "from the file"' > fp/cfn; fpath=(fp); cfn() { echo "the body it had"; }; autoload -Uz cfn; echo "decl=$?"; cfn; echo "call=$?"; autoload; echo "listing ends"`,
+		Why:     "a name that is already a function is not marked: the declaration is 0, the body survives, and the name is absent from the bare listing afterwards — with a file for it on `$fpath`, so this is not the file simply being missing. A real startup file declares a name it may already have, and a shell that wrote its stub over the definition turned a working function into `function definition file not found` at the *next* call. Three observables in one row because they are three ways to be wrong, and a shell that kept the record while keeping the body would pass the first two",
+	},
+	{
+		ID: "autoload/resolve-now-refuses-an-existing-function", Category: "builtins",
+		Snippet: `mkdir -p fp; printf "%s\n" 'echo "from the file"' > fp/cfn; fpath=(fp); cfn() { echo "the body it had"; }; autoload -Uz +X cfn; echo "resolve=$?"; cfn`,
+		Why:     "the same rule through the letter that exists to resolve now: `+X` over a definition is 1 and silent, and the body is still the one it had. Silent and not a diagnostic, which is the part only a measurement gives — and a status rather than 0, because `+X` was asked to do something and did not. `-X` is deliberately not asked here: it replaces the function it is running *inside*, which always has a body, so the two signs cannot share a guard",
 	},
 	{
 		ID: "autoload/the-two-signs-of-x", Category: "builtins",

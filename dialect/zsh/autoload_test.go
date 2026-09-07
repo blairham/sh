@@ -267,3 +267,55 @@ is-at-least 5.1 && print -r -- NEW || print -r -- OLD`)
 		t.Errorf("the plugin manager's two lines = %q (status %d), want %q", out, st, "NEW\n")
 	}
 }
+
+// A name that is already a function is left alone — measured 2026-09-07
+// against zsh 5.9.2 under `env -i` and `-f`.
+//
+// It is the second reason a stock function fails to autoload, and it was found
+// while measuring the first (#1250). A real startup file declares a name it
+// may already have: a plugin manager writes `builtin autoload -Uz is-at-least`
+// and runs it again on every reload, and this shell answered the second
+// declaration by replacing the working function with a stub — so the *next*
+// call said `function definition file not found` about a function that was
+// right there. The stub is the record, so writing one over a real body is not
+// a note about the name, it is losing it.
+//
+// Three observables in one script, because they are three ways to be wrong:
+// the body survives, the declaration is still 0, and the name is gone from the
+// bare listing — a shell that kept the record while keeping the body would
+// pass the first two and list a function it had not marked.
+func TestAutoloadLeavesAFunctionThatIsAlreadyDefined(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"myfunc": `print -r -- "from the file"`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+myfunc() { print -r -- "the body it already had" }
+autoload -Uz myfunc
+print -r -- "decl st=$?"
+myfunc
+print -r -- "call st=$?"
+autoload
+print -r -- "listing ends"`)
+	want := "decl st=0\nthe body it already had\ncall st=0\nlisting ends\n"
+	if out != want || st != 0 {
+		t.Errorf("a redundant declaration = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And `+X` on such a name refuses rather than resolving over it: status 1,
+// nothing on either stream, and the body still the one it had.
+//
+// Silent because that is what was measured, and a status because `+X` was
+// asked to do something and did not. Only the plus sign asks this — `-X` is
+// the opposite case by construction, since the function it replaces is the one
+// it is running inside and that always has a body.
+func TestResolveNowRefusesAFunctionThatIsAlreadyDefined(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"myfunc": `print -r -- "from the file"`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+myfunc() { print -r -- "the body it already had" }
+autoload -Uz +X myfunc 2>&1
+print -r -- "resolve st=$?"
+myfunc`)
+	want := "resolve st=1\nthe body it already had\n"
+	if out != want || st != 0 {
+		t.Errorf("+X over a definition = %q (status %d), want %q", out, st, want)
+	}
+}

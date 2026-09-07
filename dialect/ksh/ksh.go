@@ -582,6 +582,10 @@ func Semantics() interp.Semantics {
 	// `set -A name value …` assigns an array through a name a variable
 	// holds, which is this shell's spelling and zsh's alike.
 	s.SetArrayLetter = interp.Yes
+	// And the refusal of a name that is not one leaves 1 by both routes
+	// here, which is the answer that makes the other shell's 0 a quirk of
+	// that shell rather than a rule about the letter.
+	s.SetArrayBadNameLeavesZeroFromCommandString = interp.No
 	// And the option parse carries on past the name here: `set -A ff -x -y`
 	// takes `-x` as xtrace and refuses `-y`, and `set -A dd -- 1 2` stores
 	// two elements because the `--` still ends the options. So the values are

@@ -122,6 +122,10 @@ func TestSemantics(t *testing.T) {
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
 		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},
+		// The other shell with the array letter, and it leaves 1 on both
+		// routes — which is what makes the zero that shell's quirk rather
+		// than the letter's rule (#1172).
+		{"SetArrayBadNameLeavesZeroFromCommandString", s.SetArrayBadNameLeavesZeroFromCommandString, interp.No},
 		{"ReadonlyReassignmentByDeclarationFatal", s.ReadonlyReassignmentByDeclarationFatal, interp.Yes},
 		{"UnsetFunctionChecksTheName", s.UnsetFunctionChecksTheName, interp.Yes},
 		{"UnsetFunctionReportsMissing", s.UnsetFunctionReportsMissing, interp.No},

@@ -43,6 +43,17 @@ func (r *Runner) setArrayOperands(name string, front bool, values []string) int 
 		if status == 0 {
 			status = 2
 		}
+		if r.ctl == controlExit && r.Route == RouteCommandString &&
+			r.ask(r.sem().SetArrayBadNameLeavesZeroFromCommandString,
+				"a `set -A` bad name leaving 0 behind when the program came from an argument") {
+			// The refusal still ends the shell — the words after it do not
+			// run on either route — and the number it leaves behind is 0
+			// rather than the 1 a script file gets. Both fields, because
+			// controlExit is what Run reports and `status` is what the
+			// builtin returns, and a caller reading either has to see the
+			// same answer.
+			r.status, status = 0, 0
+		}
 		return status
 	}
 	if r.assocDeclared(name) {

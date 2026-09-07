@@ -1282,6 +1282,33 @@ type Semantics struct {
 	// argument and never stops for this one.
 	ReadonlyReassignmentByDeclarationFatal Answer
 
+	// SetArrayBadNameLeavesZeroFromCommandString makes `set -A` refuse a
+	// name that is not one and leave the shell exiting **0**, where the same
+	// refusal from a script file leaves 1.
+	//
+	// True in zsh, false in ksh93, and unreachable in the two shells without
+	// the letter — SetArrayLetter is read rather than asked, so a dialect
+	// whose `set` has no `-A` never arrives here.
+	//
+	// Measured 2026-09-06 and again 2026-09-07 with `>/dev/null 2>&1`, so
+	// the number is the shell's own. The stderr is byte-identical on both
+	// routes — `<shell>:1: not an identifier: 1bad` — and `after` runs on
+	// neither, so the refusal is fatal either way and only the status moves.
+	//
+	// It is this refusal and no other, which is what makes it a field of its
+	// own rather than a route rule about bad names or about `set`. Every
+	// neighbor was measured from `-c` in zsh and every one of them leaves 1:
+	//
+	//	set -A 1bad v      0      set -q             1
+	//	set +A 1bad v      0      set -o nosuch      1
+	//	set -A 1bad        0      unset 1x           1
+	//	set -A a-b v       0      export 1bad        1
+	//	set -eA 1bad v     0      typeset 1bad       1
+	//
+	// And it is a flat 0 rather than the previous command's status:
+	// `-c 'false; set -A 1bad v'` exits 0 too.
+	SetArrayBadNameLeavesZeroFromCommandString Answer
+
 	// ReadonlyReassignmentFatalFromCommandString is the same question for a
 	// shell whose program came from an argument rather than from a file.
 	//

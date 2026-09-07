@@ -66694,6 +66694,50 @@
         "TimedOut": false
       }
     },
+    "setarray/a-name-that-is-not-a-name-in-a-script": {
+      "bash": {
+        "Stdout": "st=2 after",
+        "Stderr": "\u003cscript\u003e: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 after",
+        "Stderr": "\u003cscript\u003e: line 1: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -A",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[1]: set: 1bad: invalid variable name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:1: not an identifier: 1bad",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "setarray/no-values-and-whether-the-name-survives": {
       "bash": {
         "Stdout": "n=0 set=[]",

@@ -377,6 +377,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `subst/a-substitution-inside-an-arm` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` |
 | `glob/matches-are-in-order` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` |
 | `length/of-a-one-element-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `one=5~two=5~none=0` | `one=5~two=5~none=0` | `one=5~two=5~none=0` | `one=5~two=5~none=3` | `one=1~two=2~none=0` |
+| `length/of-an-array-holding-one-empty-string` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a x=([0]="")~one=0~two=0` | `declare -a x=([0]="")~one=0~two=0` | `declare -a x='([0]="")'~one=0~two=0` | `typeset -a x=('')~one=0~two=0` | `typeset -a x=( '' )~one=1~two=2` |
 
 - `expand/results-not-rescanned-quote` — a quote in expanded text is a literal quote
   ```sh
@@ -1204,6 +1205,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `length/of-a-one-element-array` — the shells split on what `${#a}` of an array means — one counts the elements and the others measure the scalar a bare name yields — and the split is visible at *one* element as much as at two: 1 against 5 for `a=(hello)`. A reading that skipped the question at one element on the grounds that such an array is its own element is true of the value and false of its length, and answers a plausible number at status 0
   ```sh
   a=(hello); echo "one=${#a}"; a=(hello there); echo "two=${#a}"; a=(); echo "none=${#a}"
+  ```
+- `length/of-an-array-holding-one-empty-string` — the other half of the same question, and the half where both readings produce the same digit for opposite reasons: `x=("")` is one element whose length is nought, so the shell that counts says 1 and the shells that measure the scalar say 0. Worth its own row because an implementation that decides *whether* a name is an array by looking at the scalar a one-element array is mirrored into cannot tell this array from an empty one — it answered 0 in the counting dialect too, which is the shell's own answer for `x=()` and no complaint anywhere (#1097). `typeset -p` is on the line to show the storage was right the whole time
+  ```sh
+  x=(""); typeset -p x; echo "one=${#x}"; x=("" ""); echo "two=${#x}"
   ```
 
 ## semantics axes
@@ -6073,6 +6078,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/prompt-percent-names-the-user` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(%):-%n}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(%):-%n}: bad substitution` *(status 127)* | **2>** `<shell>: ${(%):-%n}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `:-%n}' unexpected` *(status 3)* | `matches-the-login-name` |
 | `param/prompt-percent-user-is-not-a-variable` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(%):-%n}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(%):-%n}: bad substitution` *(status 127)* | **2>** `<shell>: ${(%):-%n}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `:-%n}' unexpected` *(status 3)* | `ignores-it` |
 | `param/prompt-percent-refuses-an-escape-by-name` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${(%):-%zz}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${(%):-%zz}]: bad substitution` *(status 127)* | **2>** `<shell>: [${(%):-%zz}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `:-%zz}]' unexpected` *(status 3)* | `[z]~st=0` |
+| `param/a-split-flag-keeps-the-field-at-each-edge` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(s.:.)x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(s.:.)x}: bad substitution` *(status 127)* | **2>** `<shell>: ${(s.:.)x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `colon=2~interior=2~both=3` |
+| `param/a-split-flag-on-an-empty-value` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(s::)x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(s::)x}: bad substitution` *(status 127)* | **2>** `<shell>: ${(s::)x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `chars=1~lines=1~unquoted=0` |
 | `param/expansion-flags-quote-four-ways` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(q)x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(q)x}: bad substitution` *(status 127)* | **2>** `<shell>: ${(q)x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `[a\ b\'c]['a b'\''c']["a b'c"][$'a b\'c']` |
 | `param/expansion-flags-split-at-newlines` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(f)x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(f)x}: bad substitution` *(status 127)* | **2>** `<shell>: ${(f)x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `[a][b]` |
 | `param/expansion-flags-at-keeps-array-fields` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a}' unexpected` *(status 3)* | `<x><y z><>{x y z }` |
@@ -6490,6 +6497,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/prompt-percent-refuses-an-escape-by-name` — an escape outside the prompt language: zsh expands `%z` to nothing at all and carries on at 0, so the shell that has the construct is *quieter* here than this one, which refuses it by name. The refusal is the deliberate difference — a wrong answer wearing a success is worse than a complaint — and this row is where it is written down rather than left to be discovered
   ```sh
   echo "[${(%):-%zz}]"; echo "st=$?"
+  ```
+- `param/a-split-flag-keeps-the-field-at-each-edge` — which empty field a quoted `(s)` keeps, put where one snippet separates the two answers: the field at each *edge* survives and the interior ones do not, so `":"` is two fields and `"a::b"` is two as well — the second of `a::b` being `b` and not the empty one between them. An implementation that drops every empty field passes the middle test and answers 0 for the other two, which is a count rather than a complaint. zsh alone has the flag; the other four read the parenthesis as text or as a bad substitution
+  ```sh
+  x=":"; set -- "${(s.:.)x}"; echo "colon=$#"; x="a::b"; set -- "${(s.:.)x}"; echo "interior=$#"; x=":a:"; set -- "${(s.:.)x}"; echo "both=$#"
+  ```
+- `param/a-split-flag-on-an-empty-value` — an empty value split is one empty field in quotes and no field at all without them, and the two separators have to agree: splitting into characters answers the same 1 as splitting at newlines, where a character loop over an empty string naturally produces nothing. The quoted-versus-unquoted pair is on the same line because 1 and 0 are both defensible on their own and only the pair says which is which
+  ```sh
+  x=""; set -- "${(s::)x}"; echo "chars=$#"; set -- "${(f)x}"; echo "lines=$#"; set -- ${(s::)x}; echo "unquoted=$#"
   ```
 - `param/expansion-flags-quote-four-ways` — the q family is one flag repeated, and each repetition is a different quoting: backslashes, single quotes, double quotes, then $'…'. Repetition is what selects it, which is exactly what bash's @ family refuses
   ```sh

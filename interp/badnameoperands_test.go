@@ -138,3 +138,20 @@ func TestASurvivableBadNameDeclaresEverythingWithoutAskingTheAxis(t *testing.T) 
 		t.Errorf("survivable refusal = %q (status %d), want %q at 0", out, status, want)
 	}
 }
+
+// And it is reported once, like any other bad operand: a second refused
+// subscript behind the first is judged in silence.
+//
+// Only a dialect that keeps the operands *behind* the refusal and also
+// refuses a subscripted operand can reach this, and no preset is both — the
+// two shells that keep them are the two that take a subscript. So the two
+// answers are set by hand here rather than measured in a dialect test; a
+// library building its own vector can put them together, and the silence is
+// what every column that stops was measured to write.
+func TestASecondRefusedSubscriptIsJudgedInSilence(t *testing.T) {
+	out, status := runBadName(t, `export ok1=1 "a[1]=v" "b[2]=w" ok2=2`, Yes)
+	want := "sh: export: `a[1]': not a valid identifier\n"
+	if out != want || status == 0 {
+		t.Errorf("two refused subscripts = %q (status %d), want %q and a failure", out, status, want)
+	}
+}

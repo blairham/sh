@@ -151,6 +151,10 @@ func TestSemantics(t *testing.T) {
 		// A failed expansion ends the shell here, which is the standard's
 		// answer and this preset's by inheritance (#1171).
 		{"FailedExpansionAbandonsTheLine", s.FailedExpansionAbandonsTheLine, interp.No},
+		// One line for a bad option word here, and the reason is the
+		// fatality rather than a rule: the loop never reaches the second
+		// word. Pinned so that staying on this answer is a decision (#1170).
+		{"SetReportsEveryBadOption", s.SetReportsEveryBadOption, interp.No},
 		{"ReadonlyReassignmentByDeclarationFatal", s.ReadonlyReassignmentByDeclarationFatal, interp.Yes},
 		{"UnsetFunctionChecksTheName", s.UnsetFunctionChecksTheName, interp.No},
 		{"UnsetFunctionReportsMissing", s.UnsetFunctionReportsMissing, interp.No},

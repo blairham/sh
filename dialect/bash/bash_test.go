@@ -129,6 +129,10 @@ func TestSemantics(t *testing.T) {
 		// gives up the line and runs the next one, where the other three end
 		// the shell. Measured over both routes and both separators (#1171).
 		{"FailedExpansionAbandonsTheLine", s.FailedExpansionAbandonsTheLine, interp.Yes},
+		// One line for a bad option word here, and the reason is the
+		// fatality rather than a rule: the loop never reaches the second
+		// word. Pinned so that staying on this answer is a decision (#1170).
+		{"SetReportsEveryBadOption", s.SetReportsEveryBadOption, interp.No},
 		{"ReadonlyReassignmentByDeclarationFatal", s.ReadonlyReassignmentByDeclarationFatal, interp.No},
 		{"UnsetFunctionChecksTheName", s.UnsetFunctionChecksTheName, interp.No},
 		{"UnsetFunctionReportsMissing", s.UnsetFunctionReportsMissing, interp.No},

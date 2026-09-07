@@ -20,23 +20,79 @@ import (
 // **four** wordings — the three bash columns share theirs — at three statuses,
 // which is why the detection was left out of #1057 and filed on its own.
 //
-// The whole rendered report is asserted rather than a substring of it: the
-// location, the sentence and whether the offending line is echoed back are
-// three separate answers, and a `Contains` check passes with any two of them
-// wrong.
-func TestALoopNamedByAnExpansionIsRefusedInThisShellsWords(t *testing.T) {
-	const src = "n=x\nfor $n in a b; do :; done\n"
-	const want = "s.sh: line 2: $n: invalid variable name\n"
-	_, err := syntax.Parse(src, ksh.Dialect())
-	if err == nil {
-		t.Fatal("parsed; every shell in the panel refuses this")
+// The stage is the second question and is #1110's: this shell **parses** it
+// and complains when the loop is reached, so `ksh -n` accepts the script — and
+// then ends it, where bash carries on. Measured 2026-09-06 and re-measured
+// 2026-09-07, `env -i PATH=/usr/bin:/bin` with a scratch HOME, over a script
+// file and through `-c` alike:
+//
+//	ksh -n s.sh              accepts, silent, status 0
+//	ksh s.sh                 the complaint, and stops
+//	the script's own status   1
+//
+// The whole rendered line is asserted rather than a substring of it: the
+// location, the sentence and whether the script carried on are three separate
+// answers, and a `Contains` check passes with any two of them wrong.
+//
+// This replaces the assertion that the *parse* fails. That assertion was
+// right about the wording and the status and wrong about the stage, so what
+// it was pinning is kept and moved rather than dropped.
+func TestALoopNamedByAnExpansionIsRefusedWhenTheLoopRuns(t *testing.T) {
+	const src = "n=x\nfor $n in a b; do :; done\necho after"
+	if _, err := syntax.Parse(src+"\n", ksh.Dialect()); err != nil {
+		t.Fatalf("refused while parsing: %v — this shell accepts it and `ksh -n` is silent", err)
 	}
-	d := ksh.Diagnostics().ForScript()
-	if got := d.ParseDiagnostic("s.sh", "", err, src); got != want {
-		t.Errorf("\n got %q\nwant %q", got, want)
+	out, st := runKsh(t, t.TempDir(), src)
+	const want = "ksh: line 2: $n: invalid variable name\n"
+	if out != want || st != 1 {
+		t.Errorf("\n got %q (status %d)\nwant %q at 1", out, st, want)
 	}
-	if got, want := d.StatusForParseError(err), 1; got != want {
-		t.Errorf("status = %d, want %d", got, want)
+}
+
+// `for 1x` behaves identically, which is what says the *expansion* is not
+// what moved the stage: the whole check moved.
+func TestALoopNamedByANonNameIsRefusedWhenTheLoopRuns(t *testing.T) {
+	out, st := runKsh(t, t.TempDir(), "for 1x in a b; do :; done\necho after")
+	const want = "ksh: 1x: invalid variable name\n"
+	if out != want || st != 1 {
+		t.Errorf("\n got %q (status %d)\nwant %q at 1", out, st, want)
+	}
+}
+
+// `select` answers exactly as `for` does here, and this is the row #1110 had
+// the other way round.
+//
+// It recorded ksh93 as fatal for `for` and not for `select`. Re-measured
+// 2026-09-07 on 93u+ 2012-08-01 with stdin closed, both spellings end the
+// script at 1 with the line after the loop unreached — so the loop keyword is
+// not an axis and the fatality half has two answers rather than three.
+func TestTheMenuLoopAnswersAsTheForLoopDoes(t *testing.T) {
+	out, st := runKsh(t, t.TempDir(), "n=x\nselect $n in a b; do :; done\necho after")
+	const want = "ksh: line 2: $n: invalid variable name\n"
+	if out != want || st != 1 {
+		t.Errorf("\n got %q (status %d)\nwant %q at 1", out, st, want)
+	}
+}
+
+// A redirection on the clause makes the refusal **not** fatal, which is this
+// shell's alone and is measured rather than tolerated.
+//
+// `for 1x in a b; do :; done > mf; echo after` reports the same sentence,
+// prints `after` and exits 0, where the same loop without a redirection ends
+// the script at 1. Any redirection does it — `2>&1` behaves as `> mf` does —
+// and the `select` spelling behaves the same way. bash-as-`sh` stops at 2 with
+// a redirection and without one, so it is not a rule about clauses in general.
+func TestARedirectionMakesTheRefusalNotFatal(t *testing.T) {
+	for _, src := range []string{
+		"for 1x in a b; do :; done > mf\necho \"after st=$?\"",
+		"for 1x in a b; do :; done 2>&1\necho \"after st=$?\"",
+		"select 1x in a b; do :; done > mf\necho \"after st=$?\"",
+	} {
+		out, st := runKsh(t, t.TempDir(), src)
+		want := "ksh: 1x: invalid variable name\nafter st=1\n"
+		if out != want || st != 0 {
+			t.Errorf("%q:\n got %q (status %d)\nwant %q at 0", src, out, st, want)
+		}
 	}
 }
 
@@ -50,13 +106,9 @@ func TestTheNameIsNamedAsWritten(t *testing.T) {
 		{`"$n"`, "\"$n\": invalid variable name"},
 		{"$(echo n)", "$(echo n): invalid variable name"},
 	} {
-		src := "for " + tc.name + " in a b; do :; done\n"
-		_, err := syntax.Parse(src, ksh.Dialect())
-		if err == nil {
-			t.Fatalf("%q parsed; this shell refuses it", src)
-		}
-		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
-			t.Errorf("%q:\n got %q\nwant %q", src, got, tc.want)
+		out, _ := runKsh(t, t.TempDir(), "for "+tc.name+" in a b; do :; done")
+		if want := "ksh: " + tc.want + "\n"; out != want {
+			t.Errorf("for %s:\n got %q\nwant %q", tc.name, out, want)
 		}
 	}
 }
@@ -90,11 +142,13 @@ func TestAQuotedLoopNameIsTakenHere(t *testing.T) {
 		}
 	}
 	// And the quoting is the whole of what it widens: a word that is not a
-	// name in any reading is still refused.
+	// name in any reading is still refused — when the loop runs, which is
+	// the stage this shell checks at, and with the word named as written.
 	for _, name := range []string{"1x", `"1x"`, `"a b"`, `""`, `"$n"`} {
-		src := "for " + name + " in a b; do :; done\n"
-		if _, err := syntax.Parse(src, ksh.Dialect()); err == nil {
-			t.Errorf("%q parsed; this shell refuses it", src)
+		out, st := runKsh(t, t.TempDir(), "for "+name+" in a b; do :; done\necho after")
+		want := "ksh: " + name + ": invalid variable name\n"
+		if out != want || st != 1 {
+			t.Errorf("for %s:\n got %q (status %d)\nwant %q at 1", name, out, st, want)
 		}
 	}
 }

@@ -720,7 +720,15 @@ func printNode(w io.Writer, n syntax.Node, depth int) {
 			}
 			items = "in " + strings.Join(ws, " ")
 		}
-		printf(w, "%s%-8s for %s %s\n", pad, x.Pos(), strings.Join(x.Names, " "), items)
+		names := strings.Join(x.Names, " ")
+		if x.RefusedName != "" {
+			// A word carried here because it is not a name — the dialect
+			// that checks it when the loop runs. Marked rather than printed
+			// bare, so a dump does not read as though the loop had a
+			// variable to bind.
+			names = x.RefusedName + " (not a name)"
+		}
+		printf(w, "%s%-8s for %s %s\n", pad, x.Pos(), names, items)
 		printBranch(w, "do", x.Body, depth+1)
 		printRedirs(w, x.Redirs, pad, depth)
 	case *syntax.CaseClause:

@@ -80,6 +80,11 @@ func Dialect() syntax.Dialect {
 	// a bar and an ampersand and refuses the line, which is why this is not
 	// core and why the three bash columns of a measurement do not agree.
 	d.PipeBothStreams = true
+	// A `for` or `select` whose variable is not a name parses here, and the
+	// complaint comes when the loop is reached — so `bash -n` accepts a
+	// script this used to refuse, which is what a CI syntax check runs.
+	// interp.Semantics.ForNameWhenTheLoopRuns is what happens then (#1110).
+	d.ForNameCheckedWhenTheLoopRuns = true
 	// `coproc cat` with the near ends in COPROC. zsh's coprocess speaks
 	// `print -p` rather than an array and is a different feature.
 	d.Coproc = true
@@ -294,6 +299,13 @@ func Semantics() interp.Semantics {
 	// hash counts builtins and functions and announces its empty table.
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
+	// A loop variable that is not a name is checked when the loop runs here,
+	// and the loop fails while the script carries on: `for $n in a b` prints
+	// the complaint, the loop reports 1, and `echo "st=$?"` after it runs
+	// and the script exits 0. POSIX mode moves it — see SetPosixMode — which
+	// is the whole of the bash-as-`sh` column and is a mode rather than a
+	// build: bash 3.2 and 5.3 agree under their own names.
+	s.ForNameWhenTheLoopRuns = interp.ForNameFailsTheLoop
 	s.ArithNameValueRecurses = interp.Yes
 	// bash has no floats, so `2**-1` has no integer answer and stops the
 	// expression; the two shells with floats answer 0.5 instead.

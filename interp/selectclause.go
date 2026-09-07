@@ -30,6 +30,15 @@ import (
 // selectClause runs `select name [in words] do … done`.
 func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
+		if c.RefusedName != "" {
+			// The same answer the `for` spelling gets, inside the
+			// redirections for the same measured reason — and it is the same
+			// answer in both shells that reach it: re-measured, ksh93 ends
+			// the script for `select $n` exactly as it does for `for $n`,
+			// which #1110 had recorded the other way.
+			r.refuseForName(c.RefusedName, len(c.Redirs) > 0)
+			return nil
+		}
 		var items []string
 		r.beginHeading()
 		if c.HasItems {

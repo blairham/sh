@@ -941,6 +941,10 @@ Two questions, and the panel splits on only one of them.
 | ksh93u+ | `$n: invalid variable name` | 1 |
 | zsh 5.9.2 | ``parse error near `$n' `` | 1 |
 
+The status column is already the *stage* showing through, and the section
+below is where it is answered: two of these six find the name while
+parsing and four of them when the loop runs.
+
 Measured 2026-09-06, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`,
 over a script file and through `-c` alike. Six columns, **four** wordings
 — the three bash columns share one — and three statuses. `${n}`, `"$n"`,
@@ -989,16 +993,79 @@ the whole of it.
 
 Corpus: `core/a-for-name-that-is-a-quoted-word`.
 
-### The stage is a third question, and not answered yet
+### The stage is a third question
 
 bash and ksh93 **parse** all of the above and complain when the loop is
-reached, so `bash -n` accepts a script we refuse, and bash's complaint is
-not fatal — the loop fails with status 1 and the script carries on. We
-find it while parsing in every dialect and stop. `Diagnostics.ForNameStatus`
-and `runtimeRefusal` are what make the wording and the refusal's own
-status right today; they cannot say the parse succeeded. Filed as #1110,
-which is also where ksh93's own split lives: it is fatal for `for` and not
-for `select`.
+reached. Measured 2026-09-06 and re-measured 2026-09-07, `env -i
+PATH=/usr/bin:/bin` with a scratch `HOME`, over a script file holding
+`n=x`, `for $n in a b; do echo body; done` and
+`echo "reached-after st=$?"`:
+
+| shell | `-n` over that file | a run | script status |
+| --- | --- | --- | --- |
+| bash 5.3.15 | accepts, silent, 0 | the complaint, then `reached-after st=1` | **0** |
+| bash-as-`sh` | accepts, silent, 0 | the complaint, and stops | 2 |
+| bash 3.2.57 | accepts, silent, 0 | the complaint, then `reached-after st=1` | **0** |
+| dash | refuses, 2 | — | 2 |
+| ksh93u+ | accepts, silent, 0 | the complaint, and stops | 1 |
+| zsh 5.9.2 | refuses, 1 | — | 1 |
+
+A syntax check is what a CI job runs, so refusing the parse reported a
+working script as broken — which is why the `-n` column is the one that
+matters most and has a corpus row of its own.
+
+Grammar flag: `ForNameCheckedWhenTheLoopRuns`, on for `bash` and `ksh`.
+The refused word is carried on `ForClause.RefusedName` and
+`SelectClause.RefusedName` — set *instead* of the name and not beside it,
+so a clause with no name to bind is not a clause the interpreter can try
+to run. The wording is the same `Diagnostics.ForName` the parse-time
+refusal uses, because it is the same sentence in every column: the
+**stage** is the whole of the difference, which is why there is one field
+and not two that could drift.
+
+**A word only.** `for ; in a b` stays an ordinary unexpected-token
+failure under the flag — bash at 2 with the line echoed, ksh93 at 3 —
+because what those two want in that position is a word and the *name* is
+what they check later. So whether a word may stand there is the grammar's
+question and whether the word is a name is the loop's.
+
+What happens when the loop is reached is
+`interp.Semantics.ForNameWhenTheLoopRuns`, three answers among the four
+columns that get there:
+
+| value | shells | effect |
+| --- | --- | --- |
+| `ForNameFailsTheLoop` | bash 5.3, bash 3.2 | the loop reports 1, the script goes on |
+| `ForNameEndsTheScript` | ksh93 | stops at `ForNameStatus`, which is 1 |
+| `ForNameEndsTheScriptAsASyntaxError` | bash in POSIX mode | stops at the syntax-error status, 2 |
+
+**The bash-as-`sh` row is a mode and not a build.** bash 3.2 and 5.3
+agree under their own names, and `set -o posix; for 1x in a b` in bash
+5.3 stops at 2 exactly as the same binary invoked as `sh` does — so it is
+a value `SetPosixMode` swaps, with the dialect's own answer saved and put
+back by `set +o posix` rather than the standard's opposite asserted.
+
+**`select` answers the same as `for` in both shells.** #1110 recorded
+ksh93 as fatal for `for` and not for `select`; re-measured on 93u+
+2012-08-01 with stdin closed, `select $n in a b` and `select 1x in a b`
+both end the script at 1 with the line after the loop unreached. So the
+loop keyword is not an axis and the fatality half has two answers rather
+than three.
+
+**A redirection on the clause makes ksh93's refusal not fatal**, and that
+one is its alone. `for 1x in a b; do :; done > out; echo after` reports
+the same sentence, prints `after` and exits 0 there, where the same loop
+without a redirection ends the script at 1; any redirection does it, and
+`select` behaves the same way. bash-as-`sh` stops at 2 either way. All
+four columns that reach the loop **create** the file, which is what says
+the redirection is made before the variable is looked at — the first
+guess here was that a loop which never runs would not open its own
+redirection, and it was wrong.
+
+Corpus: `core/a-refused-loop-name-still-parses-in-four-columns`,
+`core/a-refused-loop-name-costs-the-loop-or-the-script`,
+`core/a-redirection-on-a-refused-loop-is-not-fatal-in-one-shell`,
+`core/a-refused-select-name-answers-as-the-loop-does`.
 
 ## A `for` with more than one name
 

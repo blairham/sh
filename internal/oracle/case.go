@@ -1669,9 +1669,30 @@ echo "reached-after st=$?"`,
 		Why:     "where a short loop's redirection lands, and the loop variable in the target is what makes the answer visible: two files named for the two items mean the redirection ran once per iteration and is the *body* — a command that only redirects. A redirection on the loop is expanded once before it starts and would leave a single `f`, which is what `for i (a b) { echo hi } > f$i` does. The distinction is unreachable from the tree alone, so it is pinned here",
 	},
 	{
+		ID: "core/a-for-with-nothing-after-it", Category: "command language", SyntaxError: true,
+		Snippet: `for`,
+		Why:     "a `for` with no word after it at all, which is where a missing name and a bad one part company: the panel answers this four ways and none of them is what it answers `for 1x` — dash gives its one bad-loop-variable sentence, bash names the `newline` it terminates its input with, and ksh93 and zsh give the unfinished-construct wording they give a bare `while`, `for' unmatched` and `parse error near `for'`. Three statuses, 2, 3 and 1. Reading the end of the input as though it were the loop variable named `end of input` as a word a script had written and carried the loop's status rather than the parse error's (#1319)",
+	},
+	{
+		ID: "core/a-for-with-nothing-after-it-from-a-script", Category: "command language", SyntaxError: true,
+		Script:  true,
+		Snippet: `for`,
+		Why:     "the same header read from a file rather than through `-c`, which is the row that says the route is not the variable: every column answers it exactly as it answers the `-c` one, wording and status alike. Worth recording because the misclassification it pins reached every route — `StatusForParseError` sends the loop's error to `ForNameStatus`, so `-c`, a script, standard input and a prompt all carried the same wrong number",
+	},
+	{
+		ID: "core/a-separator-where-a-loop-variable-belongs", Category: "command language", SyntaxError: true,
+		Snippet: `for ; in a b`,
+		Why:     "a token that is present and could never be a name, which separates the two questions the bare `for` runs together: there is no end of input here, so a shell answering it as an unfinished construct would be wrong. Three of the four name the `;` exactly as they name it anywhere else and dash gives the same bad-loop-variable sentence it gives `for` itself, which is what says the classification is the dialect's and not the token's",
+	},
+	{
+		ID: "core/a-select-with-nothing-after-it", Category: "command language", SyntaxError: true,
+		Snippet: `select`,
+		Why:     "the menu loop reaches the same header code, and the panel answers it identically but for the word it quotes — `select' unmatched` where `for` gets `for' unmatched`. It is the row that says the fix belongs to the header rather than to the `for` keyword, and the one column without the construct at all is the contrast: dash runs `select` as a command and reports it missing",
+	},
+	{
 		ID: "core/for-wants-a-name", Category: "command language", SyntaxError: true,
 		Snippet: `for 1x in a; do echo; done`,
-		Why:     "four wordings for one refusal, and only one of them blames the word rather than saying something about names",
+		Why:     "four wordings for one refusal, and only one of them blames the word rather than saying something about names. The control for the rows above: a word that is *there* and is not a name is the loop's complaint in every column, which is the boundary a bare `for` sits on the other side of",
 	},
 
 	// --- getopts: the builtin a borrowed program could not have been ------

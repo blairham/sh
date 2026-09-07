@@ -33,6 +33,10 @@ func Dialect() syntax.Dialect {
 	// that matches nothing — measured by running it, not inferred from the
 	// error it causes elsewhere.
 	d.CasePatternAcceptsOperator = true
+	// The loop-variable position is read as a name whatever stands there, so
+	// `for` with nothing after it is `Bad for loop variable` here and an
+	// unexpected token in the other three.
+	d.ForNonWordIsANameError = true
 	return d
 }
 

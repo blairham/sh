@@ -202,6 +202,61 @@ type Dialect struct {
 	// one.
 	ForNameCheckedWhenTheLoopRuns bool
 
+	// ForNonWordIsANameError judges whatever stands in the loop-variable
+	// position as a *name*, even when it is a token that could never be a
+	// word at all — the end of the input, a newline, a `;`.
+	//
+	// dash alone does that, and it is the whole of the difference: it answers
+	// `for`, `for` with a newline after it, `for ;` and `for ; in a b` with
+	// the one sentence it gives every bad loop variable. The other three ask
+	// the grammar first, so a token that is not a word is refused as a token
+	// and never reaches the name check:
+	//
+	//	              dash                    bash            ksh93            zsh
+	//	`for`         Bad for loop variable   `newline'       `for' unmatched  near `for'
+	//	`for` NL do   Bad for loop variable   `newline'       `newline'        near `\n'
+	//	`for ;`       Bad for loop variable   `;'             `;'              near `;'
+	//	`for 1x in a` Bad for loop variable   not a valid identifier — the name check
+	//
+	// Measured 2026-09-07, `env -i PATH=/usr/bin:/bin` with a scratch HOME,
+	// through `-c`, from a script file and on standard input; the panel gives
+	// the same answer on all three routes, so this is not a route question
+	// (#1319). The last row is the control: a word that is present and is not
+	// a name is the [ErrForName] case in every column including this one, and
+	// stays there.
+	//
+	// The status follows the classification rather than being set beside it:
+	// a grammar failure carries the dialect's parse-error status — bash 2,
+	// ksh93 3, zsh 1 — where ErrForName carries ForNameStatus, so calling a
+	// bare `for` a bad name answered 1 in three dialects that answer 2, 3 and
+	// 1 for every other refused line.
+	ForNonWordIsANameError bool
+
+	// ForNameEndOfInputIsANewline makes the input running out where a loop's
+	// variable belonged read as a newline standing there, rather than as a
+	// construct left unfinished.
+	//
+	// It is the other half of the three-way split [ForNonWordIsANameError]
+	// begins, and the two together carry the three answers the panel gives a
+	// bare `for`: dash calls it a bad loop variable, bash calls it an
+	// unexpected `newline`, and ksh93 and zsh give the same unterminated
+	// wording they give a bare `while` — ``for' unmatched`` and ``parse error
+	// near `for'``.
+	//
+	// bash's answer is a fact about where its input ends. It terminates what
+	// it reads with a newline, so a position that *accepts* newlines swallows
+	// that one and reports the end of the file — a bare `while` is `unexpected
+	// end of file from `while' command on line 1` there, the same shape as
+	// every other unfinished construct. The loop-variable position accepts no
+	// newline, so the newline is what is left over and the newline is what it
+	// names. The same fact is why it puts the end of input on the line *after*
+	// the text; see Error.EndLine, which is the half of it already recorded.
+	//
+	// Consulted only where a newline could not have stood, which is why it is
+	// one loop's flag rather than a claim about every failure: everywhere else
+	// the newline is taken and the question never arises.
+	ForNameEndOfInputIsANewline bool
+
 	// ForBraceBody lets a `for` or `select` loop take a brace group where
 	// `do … done` stands: `for ((;;)) { echo hi; break; }`, and equally
 	// `for i in a b; { echo "$i"; }`. Absent from dash, which is the only

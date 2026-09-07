@@ -322,6 +322,7 @@ func Semantics() interp.Semantics {
 	// `d=MiXeD; typeset -u d` still reads `MiXeD`. ksh93 and zsh re-read on
 	// the spot and store 0 and MIXED.
 	s.AttributeRereadsTheValueItFinds = interp.No
+	s.InheritedValueSurvivesADeclaredType = interp.Yes
 	// `local u` hides the caller's `u` — the local exists unset.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No

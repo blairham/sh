@@ -1635,7 +1635,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `jobs/a-running-background-job` | `[1] + Running                    ` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                 sleep 0.4 &` | `[1] +  Running                 <command unknown>` | `[1]  + running    sleep 0.4` |
 | `jobs/a-finished-background-job` | `[1] Done                       ~---` | `[1] Done                       sleep 0.05~---` | `[1] Done                       sleep 0.05~---` | `---` | `[1] Running                 <command unknown>~---` | `---` |
 | `jobs/a-background-job-that-failed` | `[1] Done(1)                    ` | `[1] Exit 1                     false` | `[1] Done(1)                    false` | *(no output, status 0)* | `[1] Running                 <command unknown>` | *(no output, status 0)* |
-| `jobs/a-job-that-is-neither-current-nor-previous` | `[2][+] Done                       ~[1][+] Done(1)                    ` | `[1][+] Running                    false &` | `[1][ ] Done(1)                    false` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
+| `jobs/a-job-that-is-neither-current-nor-previous` | `[2][+] Done                       ~[1][+] Done(1)                    ` | `[1][ ] Exit 1                     false` | `[1][ ] Done(1)                    false` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `jobs/two-jobs-and-which-end-it-starts-from` | `[2] + Running                    ~[1] - Running                    ` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                 sleep 0.4 &~[2]+  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[1]  - running    sleep 0.4~[2]  + running    sleep 0.4` |
 | `jobs/dash-p-is-the-process-ids-alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `a listing with the id in it` |
 | `jobs/dash-l-puts-the-process-id-in-the-listing` | `[1] + PID Running ` | `[1]+ PID Running sleep 0.4 &` | `[1]+ PID Running sleep 0.4 &` | `[1]+ PID Running sleep 0.4 &` | `[1] + PID	 Running <command unknown>` | `[1] + PID running sleep 0.4` |
@@ -8982,6 +8982,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/an-attribute-that-would-change-nothing-needs-no-dialect` | `1[7]~2[abc]~3[MiXeD]` **2>** `<shell>: 1: typeset: not found~<shell>: 2: typeset: not found~<shell>: 3: typeset: not found` | `1[7]~2[abc]~3[MiXeD]` | `1[7]~2[abc]~3[MiXeD]` | `1[7]~2[abc]~3[MiXeD]` | `1[7]~2[abc]~3[MiXeD]` | `1[7]~2[abc]~3[MiXeD]` |
 | `declare/an-attribute-over-a-cell-a-function-just-shadowed` | **2>** `<shell>: 2: Syntax error: "}" unexpected` *(status 2)* | `in[UNSET]~out[5]` | `in[UNSET]~out[5]` | `in[UNSET]~out[5]` | `in[UNSET]~out[5]` | `in[0]~out[5]` |
 | `declare/an-attribute-added-to-an-exported-name-reaches-the-child` | `FOO=bar` **2>** `<shell>: 1: typeset: not found` | `FOO=bar` | `FOO=bar` | `FOO=bar` | `FOO=0` | `FOO=0` |
+| `declare/a-type-over-a-name-the-shell-was-started-with` | `before=[bar]~after=[SET][bar]~INHERITED=bar` **2>** `<shell>: 2: typeset: not found` | `before=[bar]~after=[SET][bar]~INHERITED=bar` | `before=[bar]~after=[SET][bar]~INHERITED=bar` | `before=[bar]~after=[SET][bar]~INHERITED=bar` | `before=[bar]~after=[][]~(gone)` | `before=[bar]~after=[SET][0]~INHERITED=0` |
+| `declare/a-type-over-an-inherited-name-a-fold-would-not-touch` | `u[SET][UPPER]~i[SET][7]~l[SET][lower]~3` **2>** `<shell>: 1: typeset: not found~<shell>: 2: typeset: not found~<shell>: 3: typeset: not found` | `u[SET][UPPER]~i[SET][7]~l[SET][lower]~3` | `u[SET][UPPER]~i[SET][7]~l[SET][lower]~3` | `u[SET][UPPER]~i[SET][7]~l[SET][lower]~3` **2>** `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 2: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `u[][]~i[][]~l[][]~0` | `u[SET][UPPER]~i[SET][7]~l[SET][lower]~3` |
+| `declare/an-inherited-name-started-over-is-a-fresh-one` | `st=127~[mix]~E=mix` **2>** `<shell>: 1: typeset: not found~<shell>: 2: typeset: not found` | `declare -xu E="jj"~st=0~[MIX]~E=MIX` | `declare -xu E="jj"~st=0~[MIX]~E=MIX` | `declare -x E="jj"~st=0~[mix]~E=mix` **2>** `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -u E~st=0~[MIX]~(no child)` | `export -u E=jj~st=0~[MIX]~E=MIX` |
+| `declare/an-inherited-name-the-same-declaration-also-exports` | `ix[3+4] env=1~ir[6+6] env=1~two[SET][4+4] env=1` **2>** `<shell>: 1: typeset: not found~<shell>: 2: typeset: not found~<shell>: 3: typeset: not found~<shell>: 3: typeset: not found` | `ix[3+4] env=1~ir[6+6] env=1~two[SET][4+4] env=1` | `ix[3+4] env=1~ir[6+6] env=1~two[SET][4+4] env=1` | `ix[3+4] env=1~ir[6+6] env=1~two[SET][4+4] env=1` | `ix[7] env=1~ir[12] env=1~two[][] env=0` | `ix[7] env=1~ir[12] env=1~two[SET][8] env=1` |
+| `declare/an-inherited-name-the-script-assigned-first` | `[SET][bar] env=1` **2>** `<shell>: 2: typeset: not found` | `[SET][bar] env=1` | `[SET][bar] env=1` | `[SET][bar] env=1` | `[SET][0] env=1` | `[SET][0] env=1` |
 | `declare/a-local-that-shadows-a-readonly` | `in=[2]~running~st=0 out=[]~after` **2>** `<script>: 1: typeset: not found` | `in=[1]~running~st=0 out=[1]~after` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~running~st=0 out=[1]~after` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~running~st=0 out=[1]~after` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~running~st=0 out=[1]~after` **2>** `<script>: line 2: local: not found` | `in=[2]~running~st=0 out=[1]~after` |
 | `declare/a-valueless-local-that-shadows-a-readonly` | `in=[UNSET]~st=0 out=[]` **2>** `<script>: 1: typeset: not found` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: not found` | `in=[]~st=0 out=[1]` |
 | `declare/a-refused-shadow-keeps-the-other-operands` | `in y=[1] x=[5] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: 1: typeset: not found` | `in y=[1] x=[1] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: x: readonly variable` | `in y=[1] x=[1] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: x: readonly variable` | `in y=[1] x=[1] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: x: readonly variable` | `in y=[outer] x=[1] z=[outer]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: not found` | `in y=[1] x=[5] z=[2]~out y=[outer] z=[outer]` |
@@ -9238,6 +9243,41 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/an-attribute-added-to-an-exported-name-reaches-the-child` — the same divergence seen from the only place it cannot be argued about: what the *child* is told. `FOO=0` in ksh93 and zsh and `FOO=bar` in the three bash columns, so the re-read is a change to the value and not a way of reading it back — a shell that merely rendered the name differently to its own expansions would answer this row `bar` everywhere
   ```sh
   export FOO=bar; typeset -i FOO; env | grep '^FOO='
+  ```
+- `declare/a-type-over-a-name-the-shell-was-started-with` — the third answer to the re-read, on the one input where the two shells that agree about a scalar part company. bash leaves `bar` and hands it down; zsh reads it back to 0 and hands *that* down; **ksh93 does neither** — the name comes back with no value at all and the export goes with it, so the child is told nothing. Modeling ksh93 as the re-read is wrong in two places at once and silently: a script that declares an inherited name and then runs a child hands it `0` where this shell hands it nothing. The `${INHERITED+SET}` is what tells the two failures apart — an empty value would still be SET, and it is not (#1121)
+  ```sh
+  echo "before=[$INHERITED]"
+  typeset -i INHERITED
+  echo "after=[${INHERITED+SET}][$INHERITED]"
+  env | grep '^INHERITED=' || echo '(gone)'
+  ```
+- `declare/a-type-over-an-inherited-name-a-fold-would-not-touch` — the row that says the question is not the re-read narrowed, and the reason it has to be asked *ahead* of the canonical-spelling predicate rather than behind it: none of these three values is one any fold would alter — `UPPER` is already upper, `7` is already the canonical spelling of itself, `lower` is already lower — and ksh93 discards all three anyway, taking the count of environment entries from 3 to 0. Asked behind that predicate, the shape's commonest spellings would have gone unanswered. All three letters on one row because they share this answer the way they share the re-read one
+  ```sh
+  typeset -u A; echo "u[${A+SET}][$A]"
+  typeset -i B; echo "i[${B+SET}][$B]"
+  typeset -l C; echo "l[${C+SET}][$C]"
+  env | grep -c '^[ABC]=' || true
+  ```
+- `declare/an-inherited-name-started-over-is-a-fresh-one` — what the shell that discards leaves behind, which is not an emptied name but a **fresh** one. The attribute is intact — `mix` folds to `MIX` — the listing says the name with its attribute and no value, and the export does not come back by being assigned to. That is exactly the state that shell's own `DeclaredNameWithoutValueIsEmpty` = no leaves a name it has never held, which is what makes this one answer rather than a special case: the declaration starts the name over. bash and zsh keep the name in the child's environment throughout
+  ```sh
+  typeset -u E
+  typeset -p E
+  echo "st=$?"
+  E=mix
+  echo "[$E]"
+  env | grep '^E=' || echo '(no child)'
+  ```
+- `declare/an-inherited-name-the-same-declaration-also-exports` — the bound, and it is a fact about **one command's letters** rather than about the name's standing attributes. `-x` or `-r` beside the type letter keeps the inherited value and re-reads it — 7 and 12, still exported — where the same two attributes split across two commands discard it. So a reading that consulted whether the name is exported when the type arrives gets the third column wrong: `P` is exported by the line before, and is discarded all the same
+  ```sh
+  typeset -ix G; echo "ix[$G] env=$(env | grep -c '^G=')"
+  typeset -ir K; echo "ir[$K] env=$(env | grep -c '^K=')"
+  typeset -x P; typeset -i P; echo "two[${P+SET}][$P] env=$(env | grep -c '^P=')"
+  ```
+- `declare/an-inherited-name-the-script-assigned-first` — the control that says the question is about where the value *lives* and not about the export attribute: the script assigns the name its own value first — the same value it already had — and every column then answers the plain re-read question. `0` in ksh93 and zsh and `bar` in the three bash columns, exported in all six. A shell that keyed the discard off the export bit would answer this row the same as the one above it, and no shell does
+  ```sh
+  D=$D
+  typeset -i D
+  echo "[${D+SET}][$D] env=$(env | grep -c '^D=')"
   ```
 - `declare/a-local-that-shadows-a-readonly` — whether a declaration inside a function may make a local of a name the shell has frozen, and the two shells that can be asked answer opposite ways. zsh takes the shadow — `in=[2]`, the function runs on, and the outer 1 is back afterwards — where bash reports `local: x: readonly variable`, leaves the *outer* value in view and **still runs the rest of the function**. Three things ride on the refusal and each was wrong here: it names the builtin the script wrote, the builtin reports 1 rather than abandoning anything, and the outer value is what the body sees. ksh93 has no `local` and dash no `typeset -r`, so those two columns record the absence rather than an answer (#1159)
   ```sh

@@ -398,6 +398,7 @@ func Semantics() interp.Semantics {
 	// one above, which this shell happens to answer the same way — bash
 	// answers both no and ksh93 answers them differently from each other.
 	s.AttributeRereadsTheValueItFinds = interp.Yes
+	s.InheritedValueSurvivesADeclaredType = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	// A local does not inherit the export attribute of the name it shadows.
 	// Measured with a real child: `export FOO=bar; f() { local FOO=baz; env;

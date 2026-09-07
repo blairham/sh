@@ -24271,6 +24271,94 @@
         "TimedOut": false
       }
     },
+    "declare/a-type-over-a-name-the-shell-was-started-with": {
+      "bash": {
+        "Stdout": "before=[bar]~after=[SET][bar]~INHERITED=bar",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "before=[bar]~after=[SET][bar]~INHERITED=bar",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "before=[bar]~after=[SET][bar]~INHERITED=bar",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "before=[bar]~after=[SET][bar]~INHERITED=bar",
+        "Stderr": "\u003cshell\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "before=[bar]~after=[][]~(gone)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "before=[bar]~after=[SET][0]~INHERITED=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-type-over-an-inherited-name-a-fold-would-not-touch": {
+      "bash": {
+        "Stdout": "u[SET][UPPER]~i[SET][7]~l[SET][lower]~3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "u[SET][UPPER]~i[SET][7]~l[SET][lower]~3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "u[SET][UPPER]~i[SET][7]~l[SET][lower]~3",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 2: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "u[SET][UPPER]~i[SET][7]~l[SET][lower]~3",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "u[][]~i[][]~l[][]~0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "u[SET][UPPER]~i[SET][7]~l[SET][lower]~3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-typeset-declared-twice-in-one-function": {
       "bash": {
         "Stdout": "read=[x]",
@@ -24573,6 +24661,138 @@
       },
       "zsh": {
         "Stdout": "1[7]~2[abc]~3[MiXeD]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-inherited-name-started-over-is-a-fresh-one": {
+      "bash": {
+        "Stdout": "declare -xu E=\"jj\"~st=0~[MIX]~E=MIX",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -xu E=\"jj\"~st=0~[MIX]~E=MIX",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -x E=\"jj\"~st=0~[mix]~E=mix",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~[mix]~E=mix",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -u E~st=0~[MIX]~(no child)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "export -u E=jj~st=0~[MIX]~E=MIX",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-inherited-name-the-same-declaration-also-exports": {
+      "bash": {
+        "Stdout": "ix[3+4] env=1~ir[6+6] env=1~two[SET][4+4] env=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ix[3+4] env=1~ir[6+6] env=1~two[SET][4+4] env=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ix[3+4] env=1~ir[6+6] env=1~two[SET][4+4] env=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "ix[3+4] env=1~ir[6+6] env=1~two[SET][4+4] env=1",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: typeset: not found~\u003cshell\u003e: 3: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "ix[7] env=1~ir[12] env=1~two[][] env=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ix[7] env=1~ir[12] env=1~two[SET][8] env=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-inherited-name-the-script-assigned-first": {
+      "bash": {
+        "Stdout": "[SET][bar] env=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[SET][bar] env=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[SET][bar] env=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[SET][bar] env=1",
+        "Stderr": "\u003cshell\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[SET][0] env=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[SET][0] env=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -43149,7 +43369,7 @@
     },
     "jobs/a-job-that-is-neither-current-nor-previous": {
       "bash": {
-        "Stdout": "[1][+] Running                    false \u0026",
+        "Stdout": "[1][ ] Exit 1                     false",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

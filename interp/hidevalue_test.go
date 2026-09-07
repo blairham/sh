@@ -254,6 +254,11 @@ func TestTheRereadReachesAnInheritedValue(t *testing.T) {
 			withHiding(s)
 			s.DeclaredNameWithoutValueIsEmpty = Yes
 			s.AttributeRereadsTheValueItFinds = tc.answer
+			// Both shells this models keep the inherited value and then
+			// answer the question above about it; the third answer — the
+			// value discarded outright — is
+			// InheritedValueSurvivesADeclaredType's own test.
+			s.InheritedValueSurvivesADeclaredType = Yes
 		}
 		out, errs, st := declRunEnv(t, `typeset -i INHERITED
 echo "[$INHERITED]"`, set, Diagnostics{}, []string{"INHERITED=bar"})

@@ -772,12 +772,24 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 						// a dialect's.
 						return []string{""}, true
 					}
-					if r.ask(r.sem().EmptyArrayAtIsOneEmptyField,
-						`a quoted "${a[@]}" of an empty array`) {
-						// One dialect hands the quotes a field to keep: an
-						// empty array is one empty argument there, which is
-						// the reason careful scripts write
-						// "${a[@]+"${a[@]}"}".
+					if r.subscriptNameIsAbsent(e) &&
+						r.ask(r.sem().UnsetNameAtIsOneEmptyField,
+							`a quoted "${a[@]}" on a name that holds nothing`) {
+						// One dialect reads a name that is not a declared
+						// array as a scalar, so a quoted whole-array
+						// subscript on one nothing ever gave a value to is
+						// the empty field `"$a"` would give.
+						//
+						// Guarded by the name being absent, which is the
+						// only half that splits the panel. An array that
+						// *exists* and has no elements is no field in every
+						// column measured, so it falls through to the empty
+						// slice below and asks nobody. The axis was asked
+						// without that guard, which gave a declared empty
+						// array the unset answer — and, in the dialect that
+						// said yes, gave a spurious empty argument to every
+						// `f "${a[@]}"` and `set -- "${a[@]}"` written
+						// before anything filled the array, at status 0.
 						return []string{""}, true
 					}
 				}

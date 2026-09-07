@@ -474,6 +474,24 @@ func Semantics() interp.Semantics {
 	// specials to reach.
 	s.ReadonlyAttributeCanBeRemoved = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
+	// The same reading of an undeclared name reached through a subscript:
+	// a name that is not an array here reads as a scalar, so a quoted
+	// `"${a[@]}"` on one nothing declared is the one empty field `"$a"`
+	// gives. This shell alone. Measured 2026-09-07 against 5.9.2, with a
+	// function so the positional-parameter builtin is not a confound:
+	//
+	//	f() { printf '%s\n' "$#"; }
+	//
+	//	unset a;        f "${a[@]}"   1     no array, so a scalar reading
+	//	a=();           f "${a[@]}"   0     a set, empty array
+	//	typeset -a a;   f "${a[@]}"   0     the same, declared
+	//	a=x;            f "${a[@]}"   1     control
+	//
+	// The middle two are what makes it existence rather than emptiness, and
+	// they are the direction bash and ksh93 answer both halves in. Note the
+	// asymmetry runs the other way from the one an empty-array axis would
+	// predict: the *declared* empty array is the one with no field here.
+	s.UnsetNameAtIsOneEmptyField = interp.Yes
 	// And an attribute added to a name that already holds a value re-reads
 	// it at once, as ksh93 does: `FOO=bar; typeset -i FOO` stores 0 and
 	// `d=MiXeD; typeset -u d` stores MIXED. A separate question from the

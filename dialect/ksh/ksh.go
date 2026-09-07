@@ -270,9 +270,19 @@ func Semantics() interp.Semantics {
 	// max+1 stays at the maximum, and a value that names another variable
 	// is chased until it is a number.
 	s.ArithOverflowSaturates = interp.Yes
-	// An empty "${a[@]}" is one empty argument, and a negative substring
-	// length is nothing at all.
-	s.EmptyArrayAtIsOneEmptyField = interp.Yes
+	// A negative substring length is nothing at all here.
+	//
+	// A quoted `"${a[@]}"` is not next to it any more. This shell was the
+	// one column recorded as handing the quotes one empty field there, on
+	// the strength of `a=(); set -- "${a[@]}"` counting `n=1` — but `a=()`
+	// is no array literal here at all. It builds a *compound* variable, and
+	// the field that row counted held the text `(`, newline, `)` rather than
+	// nothing. Asked with `set -A a`, which is this shell's way to declare
+	// an array, there is no field; and `set -A a` on an array that already
+	// has elements leaves the name unset, so there is no declared-and-empty
+	// state to answer for either. Measured 2026-09-07 against 93u+
+	// 2012-08-01. The yes here gave every `f "${a[@]}"` on a name nothing
+	// had filled yet one spurious empty argument.
 	s.SubstringNegativeLengthIsEmpty = interp.Yes
 	// [ a -eq 1 ] is a plain false here, no sentence, status 1.
 	s.TestIntegerRefusalIsSilent = interp.Yes

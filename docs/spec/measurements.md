@@ -456,8 +456,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/a-quoted-gap-keeps-its-place` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[][x][y]` |
 | `array/an-unquoted-gap-is-no-field` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2` | `n=2` | `n=2` | `n=2` | `n=2` |
 | `array/a-subscript-on-a-name-that-is-no-array` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
-| `array/a-quoted-empty-array-is-not-the-same-question` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1` | `n=0` |
-| `array/a-quoted-empty-array-with-a-star` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
+| `array/a-quoted-at-on-a-name-that-holds-nothing` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=0` | `n=1` |
+| `array/a-declared-empty-array-quoted-at` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: Bad substitution` *(status 2)* | `n=0 ` | `n=0 ` | `n=0 ` | `n=0 ` | `n=0 SET` |
+| `array/an-array-that-was-unset-holds-nothing-again` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=0` | `n=1` |
+| `array/a-quoted-empty-array-with-a-star` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
 | `array/an-array-literal-through-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[1]: cannot assign list to array member` *(status 1)* | **2>** `<shell>: line 1: a[1]: cannot assign list to array member` *(status 127)* | **2>** `<shell>: a[1]: cannot assign list to array member` *(status 1)* | `[x p] n=2` | `[p q y] n=3` |
 | `array/an-empty-array-literal-through-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[1]: cannot assign list to array member` *(status 1)* | **2>** `<shell>: line 1: a[1]: cannot assign list to array member` *(status 127)* | **2>** `<shell>: a[1]: cannot assign list to array member` *(status 1)* | `n=3` | `n=2` |
 | `array/appending-an-array-literal-through-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[1]: cannot assign list to array member` *(status 1)* | **2>** `<shell>: line 1: a[1]: cannot assign list to array member` *(status 127)* | **2>** `<shell>: a[1]: cannot assign list to array member` *(status 1)* | `[x p]` | `[x p y]` |
@@ -1331,13 +1333,21 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   set -- "${b[3]}"; echo "n=$#"
   ```
-- `array/a-quoted-empty-array-is-not-the-same-question` — how many fields an empty *list* makes is a dialect's answer — two shells say none and ksh93 says one, which is why careful scripts write `"${a[@]+"${a[@]}"}"`. It is recorded next to the gap cases because the two were being answered by one test: asking this axis about a single subscript is what made a gap disappear, and only this spelling is entitled to ask it
+- `array/a-quoted-at-on-a-name-that-holds-nothing` — how many fields a quoted whole-array subscript makes on a name nothing ever gave a value to, which is the dialect's answer and the ordinary state of a name before anything fills it: zsh reads an undeclared name through a subscript as a scalar and hands the quotes one empty field, bash and ksh93 hand none. A spurious empty argument is silent at status 0, which is what makes `set -- "${arr[@]}"` and `f "${arr[@]}"` worth pinning here. Recorded next to the gap cases because the two were once answered by one test: asking this axis about a single subscript is what made a gap disappear, and only this spelling is entitled to ask it
   ```sh
-  a=(); set -- "${a[@]}"; echo "n=$#"
+  set -- "${a[@]}"; echo "n=$#"
   ```
-- `array/a-quoted-empty-array-with-a-star` — `[*]` joins, so a quoted one is a single field whether or not there is anything to join — one, unanimously, where `[@]` splits the panel. The two spellings differing on an empty array is the sharpest statement that the star is not the at
+- `array/a-declared-empty-array-quoted-at` — the other half of the same question, and the half that is *not* a dialect's: an array that exists and has no elements is no field in every column that has arrays at all. `typeset -a` because it is the one spelling all three of them take — `a=()` is not an array literal in ksh93 and `set -A` is not one in bash. `${a+SET}` is in the snippet because the three disagree about whether the declaration even leaves the name set, and a count alone would have read that disagreement as agreement
   ```sh
-  a=(); set -- "${a[*]}"; echo "n=$#"
+  typeset -a a; set -- "${a[@]}"; echo "n=$# ${a+SET}"
+  ```
+- `array/an-array-that-was-unset-holds-nothing-again` — an array that existed and was taken away answers as a name that never existed rather than as an empty one — so the axis is about existence and not about a store that happens to be empty. It is the shape a script reaches by `unset` between two loops, and the reason a fix keyed on the array being present rather than on the name holding anything would pass the first row and fail here
+  ```sh
+  a=(x y); unset a; set -- "${a[@]}"; echo "n=$#"
+  ```
+- `array/a-quoted-empty-array-with-a-star` — `[*]` joins, so a quoted one is a single field whether or not there is anything to join — one, unanimously, where `[@]` on the same name splits the panel. The two spellings differing on a name that holds nothing is the sharpest statement that the star is not the at, and it is the control for the row above: a fix that gave the at no field must not take the star's field away
+  ```sh
+  set -- "${a[*]}"; echo "n=$#"
   ```
 - `array/an-array-literal-through-a-subscript` — an array literal standing where one element's value goes, and the panel gives three answers to it: one shell splices the words in and the array grows, one refuses the line and ends the script, and the third builds a nested value. There is no common reading to fall back on, which is what makes it a semantics axis rather than a default — and the length is in the snippet because a wrong reading that replaced the whole array left an array, at status 0, with plausible contents. The subscript is a numeral rather than `$i` on purpose: the refusing shell quotes a subscript back *as written* and this tree evaluates one holding an expansion, which is a gap of its own and would have graded three rows on it instead of on the construct
   ```sh
@@ -6961,7 +6971,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/bad-substitution-stops-at-the-first` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${x@QQ}: bad substitution` *(status 127)* | **2>** `<shell>: line 1: ${x@QQ}: bad substitution` *(status 127)* | **2>** `<shell>: ${x@QQ}: bad substitution` *(status 1)* | **2>** `<shell>: "${x@QQ}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/an-unset-name-stops-at-the-first-too` | **2>** `<shell>: 1: a: parameter not set` *(status 2)* | **2>** `<shell>: line 1: a: unbound variable` *(status 127)* | **2>** `<shell>: line 1: a: unbound variable` *(status 127)* | **2>** `<shell>: a: unbound variable` *(status 127)* | **2>** `<shell>: a: parameter not set` *(status 1)* | **2>** `<shell>:1: a: parameter not set` *(status 1)* |
 | `param/an-array-length-without-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `3 5` | `3 5` | `3 5` | `3 5` | `3 3` |
-| `param/an-empty-array-quoted-at` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1` | `n=0` |
+| `param/an-empty-array-literal-shows-what-its-field-holds` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1[(~)]` | `n=0` |
 | `param/a-negative-substring-length` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[bcd]` | `[bcd]` | **2>** `<shell>: -2: substring expression < 0` *(status 1)* | `[]` | `[bcd]` |
 | `param/substring` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` |
 | `param/a-length-in-a-single-byte-locale` | `[6][9]` | `[6][9]` | `[6][9]` | `[6][9]` | `[6][9]` | `[6][9]` |
@@ -7336,9 +7346,9 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   a=(hello by z); echo "${#a[@]} ${#a}"
   ```
-- `param/an-empty-array-quoted-at` — ksh93 hands the quotes one empty field where bash and zsh hand none — the reason careful scripts write "${a[@]+"${a[@]}"}"
+- `param/an-empty-array-literal-shows-what-its-field-holds` — the contents and not only the count, and the row's whole point is that the two are different evidence. Its ancestor here counted fields only, recorded ksh93 at one against bash's and zsh's none, and a semantics axis was built on the difference. **`a=()` is not an array literal in ksh93.** It builds a *compound* variable — `typeset -p a` answers `typeset -C a=()` — whose value is the three bytes `(`, newline, `)`, so the field this row now shows holds those bytes rather than nothing, and the agreement the count reported was a coincidence between two unrelated behaviors. This tree has no compound variables and reads the literal as the empty array bash and zsh read it as, so it answers `n=0` here; the divergence is a missing construct rather than a field-counting rule, and recording it with the content visible is what keeps it from being mistaken for one again
   ```sh
-  a=(); set -- "${a[@]}"; echo "n=$#"
+  a=(); set -- "${a[@]}"; printf 'n=%s' "$#"; for x in "$@"; do printf '[%s]' "$x"; done; echo
   ```
 - `param/a-negative-substring-length` — bash and zsh count a negative length from the end; ksh93 answers with nothing at all
   ```sh

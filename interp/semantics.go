@@ -3460,10 +3460,44 @@ type Semantics struct {
 	// then, a slice or one of the element-selecting three.
 	ArrayNameWithoutSubscriptIsTheList Answer
 
-	// EmptyArrayAtIsOneEmptyField hands a quoted "${a[@]}" of an empty
-	// array one empty field: ksh93 alone, and the reason careful scripts
-	// write "${a[@]+"${a[@]}"}".
-	EmptyArrayAtIsOneEmptyField Answer
+	// UnsetNameAtIsOneEmptyField hands a quoted `"${a[@]}"` written on a name
+	// that holds nothing at all one empty field. zsh alone, where a name
+	// that is not a declared array reads as a scalar and an unset scalar
+	// under quotes is one empty field — the same field `"$a"` gives.
+	//
+	// It is a question about **existence** and not about emptiness. An array
+	// that exists and has no elements is no field in every column measured,
+	// so that half is core and asks nothing:
+	//
+	//	f() { printf '%s\n' "$#"; }
+	//
+	//	                       unset a   declared, no elements   one element
+	//	dash                   n/a       n/a                     n/a
+	//	bash 5.3, as sh, 3.2   0         0                       1
+	//	ksh93u+                0         0                       1
+	//	zsh 5.9.2              1         0                       1
+	//
+	// Measured 2026-09-07 from files, with a *function* rather than `set --`
+	// so the positional-parameter builtin is not a confound, and with each
+	// shell's own way of declaring an empty array — `a=()` for bash and zsh,
+	// `set -A a` for ksh93, which has no such literal.
+	//
+	// That last clause is the whole reason this axis is spelled this way. It
+	// was `EmptyArrayAtIsOneEmptyField`, ksh93 yes, on the strength of
+	// `a=(); set -- "${a[@]}"; echo "n=$#"` answering `n=1` there. ksh93 does
+	// not read `a=()` as an array literal: it makes a *compound variable*
+	// whose value is the two-line text `(\n)`, which `typeset -p a` reports
+	// as `typeset -C a=()`, so the one field that row counted held those
+	// three bytes rather than nothing. A count-only snippet cannot tell one
+	// empty field from one field holding `(`, newline, `)`, and the corpus
+	// row recorded the agreement of a coincidence. Asked with `set -A a`,
+	// ksh93 gives no field — and `set -A a` on an existing array leaves the
+	// name *unset*, so ksh93 has no declared-and-empty state to ask about.
+	//
+	// zsh is the column that really splits the two, and in the opposite
+	// direction from the one that story predicted: `a=()` there is a set,
+	// empty array and no field, while a name nothing declared is one field.
+	UnsetNameAtIsOneEmptyField Answer
 
 	// SubstringNegativeLengthIsEmpty answers `${x:1:-2}` with nothing at
 	// all: ksh93; bash and zsh count the negative length from the end.
@@ -4818,7 +4852,7 @@ func PosixSemantics() Semantics {
 		ExecOpenedFdReachesACommand:        Yes,
 		ReadRequiresAVariableName:          No,
 		ArrayLengthWithoutSubscriptIsCount: No,
-		EmptyArrayAtIsOneEmptyField:        No,
+		UnsetNameAtIsOneEmptyField:         No,
 		SubstringNegativeLengthIsEmpty:     No,
 		// The standard has no modifiers and no history syntax, so a range is
 		// the arithmetic it looks like — which is also what three of the four

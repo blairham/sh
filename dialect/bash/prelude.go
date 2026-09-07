@@ -27,6 +27,14 @@ func Prelude() string { return identity() + functions }
 // not modeled — `dirs` reads $PWD at print time instead, so a plain `cd`
 // never leaves the listing stale.
 //
+// Every read of the stack is written `${DIRSTACK[@]+"${DIRSTACK[@]}"}` and
+// not `"${DIRSTACK[@]}"`. This shell answers no to
+// Semantics.UnsetNameAtIsOneEmptyField, so the plain spelling is safe here —
+// but it is not in the zsh prelude, whose shell reads an undeclared name
+// through a subscript as a scalar and stored an empty entry on the first
+// push. The guard holds under both answers, and keeping the two texts
+// identical is what makes them one dialect apart rather than two programs.
+//
 // Measured (2026-09-04, extended 2026-09-05): `pushd dir` prints the stack
 // after pushing, a bare `pushd` exchanges the top entry with the current
 // directory, `popd` prints what remains, and `dirs` writes everything on one
@@ -84,7 +92,7 @@ dirs() {
 		DIRSTACK=()
 		return 0
 	fi
-	set -- "$PWD" "${DIRSTACK[@]}"
+	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
 	if [ -n "$__n" ]; then
 		case $__n in
 		+*) __i=${__n#+} ;;
@@ -123,7 +131,7 @@ dirs() {
 }
 __dirs_rotate() {
 	local __spec=$1 __i __new
-	set -- "$PWD" "${DIRSTACK[@]}"
+	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
 	case $__spec in
 	+*) __i=${__spec#+} ;;
 	*)  __i=$(( $# - 1 - ${__spec#-} )) ;;
@@ -172,7 +180,7 @@ pushd() {
 		DIRSTACK[0]=$__old
 	else
 		cd "$1" || return 1
-		DIRSTACK=("$__old" "${DIRSTACK[@]}")
+		DIRSTACK=("$__old" ${DIRSTACK[@]+"${DIRSTACK[@]}"})
 	fi
 	dirs
 }
@@ -203,7 +211,7 @@ popd() {
 		diagnose "directory stack empty"
 		return 1
 	fi
-	set -- "$PWD" "${DIRSTACK[@]}"
+	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
 	__i=0
 	if [ -n "$__spec" ]; then
 		case $__spec in

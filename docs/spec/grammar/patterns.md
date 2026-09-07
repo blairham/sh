@@ -451,6 +451,7 @@ is the fourth place the same two answers apply:
     for x in (#i)a; do :; done              accepted
     for x in a (#i)b; do :; done            accepted
     select x in (#i)a; do :; done           accepted
+    for x (a (#i)b); do :; done             accepted
     for x ((#i)a); do :; done               *refused* — see below
     case x in (#i)a) :;; esac               accepted
     case x in ((#i)a) :;; esac              accepted
@@ -493,6 +494,14 @@ followed by more pattern text and the arm's `)` is the second one, and
 Both are accepted by that shell. Neither is a regression — both were
 refused before as well — and neither is derivable from the rule above,
 which is why they are named here instead of being answered wrong.
+
+**And the parenthesised list's own opening paren**, which is a lexing
+question rather than a word-position one: `for x ((#i)a)` reaches the
+lexer as `((`, is taken for an arithmetic command, and never gets as far
+as being a list at all. A *later* element there does read the flag —
+`for x (a (#i)b)` — because its paren stands after a word. The suspension
+a `case` arm gets would fix it, and it wants a position of its own to be
+told about; nothing measured needs it, so it is named here instead.
 
 **`;` as an element separator inside an array literal** is the other
 thing still outstanding from this family, which that shell and ksh93

@@ -717,6 +717,10 @@ func (l *Lexer) endsWord(c byte) bool {
 // the last differ from the third in nothing else. Two shapes that reading
 // leaves refused are written down in the spec rather than guessed at —
 // `case x in (a)b)` and `case x in (#i*)`, which that shell also takes.
+//
+// Read only where the *operator table* would otherwise take the paren. Once
+// the token is known to be a word, `inArgument` alone decides how a leading
+// group is scanned; see the note at that call.
 func (l *Lexer) leadingParenBelongsToTheWord() bool {
 	if l.inArgument {
 		return true
@@ -892,7 +896,15 @@ func (l *Lexer) scanWord(start Pos) Token {
 			if lit.Len() == 0 {
 				litPos = l.pos()
 			}
-			if lit.Len() == 0 && l.leadingParenBelongsToTheWord() {
+			// `inArgument` and not leadingParenBelongsToTheWord: the
+			// difference between the two group scanners is only whether the
+			// group ends the word at a shell operator, and at a `case` arm
+			// that is unobservable — `case x in (#i;a)b)` and
+			// `case x in (#i<a)b)` are refused by that shell either way, and
+			// by this one under both readings. A mutant swapping them
+			// survived every row, which is the evidence that the wider
+			// condition decided nothing here (#1161).
+			if lit.Len() == 0 && l.inArgument {
 				// The group that stands for the whole word ends the word at
 				// a shell operator rather than swallowing it, which is
 				// measured: `echo ( a <b )` is a parse error at the `)`

@@ -156,4 +156,21 @@ func TestTheParenthesisedItemListReadsTheSameWords(t *testing.T) {
 	} {
 		mustParse(t, src, on, "a reserved word is an ordinary item there too")
 	}
+	// And a group beginning a *later* element of it, which is the position
+	// the flag reaches there. The first element cannot be reached the same
+	// way — `for x ((#i)a)` is lexed as an arithmetic command before the
+	// list's own paren is ever seen, which is a different question and is
+	// recorded in the spec as still refused.
+	off := Core()
+	off.ShortForm = true
+	for _, src := range []string{
+		`for x (a (#i)b); do :; done`,
+		`select x (a (#i)b); do :; done`,
+	} {
+		mustParse(t, src, on, "a group beginning a later parenthesised item")
+		mustFail(t, src, off, "and it does not, without the flag")
+	}
+	mustFail(t, `for x ((#i)a); do :; done`, on,
+		"the list's own opening paren is lexed as an arithmetic command, which "+
+			"this change does not reach")
 }

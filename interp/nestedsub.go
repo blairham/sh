@@ -114,6 +114,11 @@ func (r *Runner) nestedSubscriptResult(e *syntax.ParamExpr, elems []string) ([]s
 // letter the subscript takes over — which is also why the base is expanded
 // here and nowhere else: `${(P)$(cmd)}` runs its command once.
 //
+// A count and a set test are names too, which is the sharp end of "the whole
+// pipeline": measured with `set -- abc def` and `hh=zz`, `${${(P)#hh}[1]}` is
+// `d` — `${#hh}` is 2, and `${2[1]}` is the first character of the second
+// parameter. A guard excluding them looked obviously right and was wrong.
+//
 // Quoted as well as unquoted, measured: `${"${(P)h}"[2]}` on `arr=(a b c)` is
 // `b`, the same element the bare spelling answers with, where quoting an
 // inner that is a *value* joins its fields first.
@@ -123,11 +128,6 @@ func (r *Runner) nestedParamReference(span syntax.Span) (string, bool) {
 	}
 	e := span.Param
 	if e.Bad || !e.HasFlags || !strings.ContainsRune(e.Flags, 'P') {
-		return "", false
-	}
-	if e.Length || e.SetTest {
-		// A count and a set test are numbers rather than names, so neither
-		// is a reference to anything.
 		return "", false
 	}
 	ref := *e

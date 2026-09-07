@@ -51,6 +51,14 @@ func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
 			r.status = 2
 			return nil
 		}
+		if r.ctl == controlExit {
+			// The condition rejected its pattern outright and the shell is
+			// being abandoned, so the status belongs to the refusal rather
+			// than to a comparison that never finished. Measured, real zsh
+			// exits 2 from `[[ x == (#Z)a ]]` and the answer would read as
+			// the ordinary `1` for "did not match" without this.
+			return nil
+		}
 		r.status = boolInt(!ok)
 		return nil
 	})

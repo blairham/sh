@@ -250,6 +250,19 @@ func (r *Runner) fieldQualifiers(field string) (pattern string, q globQualifiers
 	if !found {
 		return field, globQualifiers{}, false, true
 	}
+	if after, cut := strings.CutPrefix(list, "#q"); cut {
+		// `(#q…)` is the same list wearing the extended flag group's
+		// spelling, and it is the only spelling that works where the bare
+		// one has been turned off. Measured: `*(#q.)` lists regular files
+		// with `extendedglob` on and is `unknown file attribute: #` with it
+		// off, which is the answer this shell already gave — so the prefix
+		// is read only while the option is on.
+		if !r.MatchOption(ExtendedPatternOperators) {
+			r.fatal("unknown file attribute: %c\n", '#')
+			return "", globQualifiers{}, true, false
+		}
+		list = after
+	}
 	q, bad, valid := parseGlobQualifiers(list)
 	if !valid {
 		// Named, because the message is the whole of what a reader has to go

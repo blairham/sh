@@ -86,8 +86,8 @@ func TestAGroupIsAMetacharacterOnlyWhereItCloses(t *testing.T) {
 		{`a*b`, false, true},
 		{`a?b`, true, true},
 	} {
-		if got := hasUnescapedMeta(tc.field, false, tc.patternGroup, false); got != tc.wantIsMeta {
-			t.Errorf("hasUnescapedMeta(%q, false, %v, false) = %v, want %v",
+		if got := hasUnescapedMeta(tc.field, false, tc.patternGroup, false, false); got != tc.wantIsMeta {
+			t.Errorf("hasUnescapedMeta(%q, false, %v, false, false) = %v, want %v",
 				tc.field, tc.patternGroup, got, tc.wantIsMeta)
 		}
 	}
@@ -129,8 +129,8 @@ func TestAGroupIsAMetacharacterOnlyWhereItCloses(t *testing.T) {
 		// literal here as well.
 		{`\@(a|b)`, true, false},
 	} {
-		if got := hasUnescapedMeta(tc.field, false, false, tc.extendedPattern); got != tc.wantIsMeta {
-			t.Errorf("hasUnescapedMeta(%q, false, false, %v) = %v, want %v",
+		if got := hasUnescapedMeta(tc.field, false, false, tc.extendedPattern, false); got != tc.wantIsMeta {
+			t.Errorf("hasUnescapedMeta(%q, false, false, %v, false) = %v, want %v",
 				tc.field, tc.extendedPattern, got, tc.wantIsMeta)
 		}
 	}

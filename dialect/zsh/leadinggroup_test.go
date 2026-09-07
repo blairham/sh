@@ -22,19 +22,18 @@ import (
 // `~/.zi/bin/lib/zsh/install.zsh:1580` is written as.
 func TestACaseArmsPatternMayBeginWithAGroup(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
-		// The flag itself is read and not implemented — it is the `(#q…)`
-		// family of #1053 — so the case-insensitive rows answer `miss` here
-		// where that shell answers `hit`. That is the honest half and it is
-		// what this issue was about: the arm *parses*, and the flag's
-		// meaning is a separate open item rather than something this change
-		// pretends to have. A row asserting `hit` would have been asserting
-		// a feature nothing here builds — and the flag is not a no-op
-		// either: `(#i)` reaches the matcher as five literal characters, so
-		// even `f.zip` misses `((#i)*.zip)`. What each row *does* show is
-		// that the arm was read and dispatched, since the `*)` arm ran.
-		{`setopt extendedglob; case F.ZIP in ((#i)*.zip) echo hit;; *) echo miss;; esac`, "miss"},
-		{`setopt extendedglob; case A in (#i)a) echo hit;; *) echo miss;; esac`, "miss"},
-		{`setopt extendedglob; case A in ((#i)a) echo hit;; *) echo miss;; esac`, "miss"},
+		// The flag is honored as well as read, which is #1244: these rows
+		// answered `miss` while `(#i)` reached the matcher as five literal
+		// characters, so even `f.zip` missed `((#i)*.zip)`. They answer
+		// `hit` now, which is what real zsh answers, and they still show
+		// what this issue was about — the arm is read and dispatched.
+		{`setopt extendedglob; case F.ZIP in ((#i)*.zip) echo hit;; *) echo miss;; esac`, "hit"},
+		{`setopt extendedglob; case A in (#i)a) echo hit;; *) echo miss;; esac`, "hit"},
+		{`setopt extendedglob; case A in ((#i)a) echo hit;; *) echo miss;; esac`, "hit"},
+		// And with the option off the same arm is a group holding one
+		// alternative, so the pattern is the four characters `#ia`.
+		{`case A in ((#i)a) echo hit;; *) echo miss;; esac`, "miss"},
+		{`case '#ia' in ((#i)a) echo hit;; *) echo miss;; esac`, "hit"},
 		// No `#` anywhere: the arm's paren in front of an alternation group,
 		// and that group *is* implemented, so this row matches.
 		{`case b in ((a|b)) echo hit;; *) echo miss;; esac`, "hit"},

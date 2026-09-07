@@ -5307,6 +5307,14 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		chars:   r.patternCountsCharacters(pattern, s),
 		escapes: r.sem().PatternEscapeReaches,
 	}
+	// The status a rejected pattern exits with is the surface's, and the two
+	// this function serves do not agree: measured, `[[ x == (#Z)a ]]` exits 2
+	// and the same pattern in a `case` exits 0.
+	badStatus := 0
+	if condition {
+		badStatus = 2
+	}
+	o = r.extendedPatternOpts(o, pattern, badStatus)
 	var bad bool
 	if hasUnterminatedBracket(pattern) {
 		o.bracket, o.bad = r.bracketPolicy(), &bad

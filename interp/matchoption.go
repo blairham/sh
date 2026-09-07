@@ -44,6 +44,26 @@ const (
 	// it an ordinary pattern, where adjacent stars collapse to one.
 	StarStarCrossesDirectories
 
+	// ExtendedPatternOperators reads the pattern operators one shell keeps
+	// behind an option of its own: the parenthesized flag groups `(#…)`, the
+	// closures `#` and `##`, the negation `^pat` and the exclusion
+	// `pat1~pat2`.
+	//
+	// It is an option rather than a dialect flag because the shell that has
+	// them switches it while it runs, and because the same characters are
+	// *ordinary text* with it off — measured, and the measurement is the
+	// reason this is not simply always on: `[[ 'a#' == a# ]]` matches with
+	// the option off and does not with it on, and `(#i)abc` off is a group
+	// holding one alternative that matches the four characters `#iab` and a
+	// `c`. Turning the reading on unconditionally would break every pattern
+	// in the other direction, silently.
+	//
+	// Unlike QuantifiedGroupsEverywhere this reaches no grammar: the
+	// constructs are read out of the pattern *text* by the matcher, so a
+	// pattern held in a variable is read the same way as one written down,
+	// which is what that shell does.
+	ExtendedPatternOperators
+
 	// QuantifiedGroupsEverywhere reads `@(a|b)` and the other quantified
 	// groups in every pattern, not only where the dialect's grammar already
 	// has them. This one reaches the parser: whether `(` belongs to a group

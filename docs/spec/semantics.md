@@ -2758,10 +2758,10 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 11 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e` |
-| axis- or matcher-backed | 6 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`) |
+| axis- or matcher-backed | 7 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`) |
 | fixed | 18 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted |
 | store-backed, read by the front end | 1 | `histignorespace`: kept where a recorded name is kept, and read by the line editor before it records a line |
-| **recorded** | 149 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 148 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -2770,9 +2770,12 @@ interactive session reads it through this namespace every time it accepts
 a line. `histignoredups` was already substrate-backed — zsh's `set -h`
 abbreviates it — and was a switch whose state nothing consulted; it is now
 consulted too. Both decide what a session writes to its history file, so
-neither is recorded any more. Nothing else about the split moved: 149 of
-185 is still most of the table, and the count above is the one produced by
-counting the constructors in `dialect/zsh/setopt.go`.
+neither is recorded any more. `extendedglob` left the same way when the
+pattern operators it gates were built (#1244), which is the third name to
+move and the reason the matcher-backed row now reads 7. Nothing else about
+the split moved: 148 of 185 is still most of the table, and the count above
+is the one produced by counting the constructors in
+`dialect/zsh/setopt.go`.
 
 The recorded kind is the change of position, and it is deliberate. A real
 `~/.zshrc` opens with a dozen `setopt` lines about completion, correction,
@@ -2839,7 +2842,7 @@ call back into the table it was called from.
 
 Two consequences worth stating, because both are divergences rather than
 wins. Recording is unchanged: a listing 185 rows long still says nothing
-about whether a name is acted on, and 149 of them are remembered and not
+about whether a name is acted on, and 148 of them are remembered and not
 acted on exactly as before — the table is longer in the listing because zsh
 lists that many, not because more of it is implemented. And a `set -o` name
 this shell has and will not move now answers `can't change option` at 1,
@@ -4182,7 +4185,7 @@ than missing:
   the chain rather than the last; `-x` sets the tab width of a printed body.
   Each is refused as not implemented rather than as unknown, the same
   distinction `compgen` draws between an action a shell lacks and a typo.
-- zsh `setopt` names of the **recorded** kind: 149 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 148 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150; neither was the count
   the table produces. It is now counted from the constructors.)

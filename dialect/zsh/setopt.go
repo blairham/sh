@@ -45,9 +45,9 @@ import (
 //     `set -o errexit` are the same switch read and written through one seam;
 //   - backed by a semantics axis or a match option — `shwordsplit`, `nomatch`,
 //     `ksharrays` are zsh's own names for three axes the vector already
-//     carries, and `nullglob`, `globdots` and `caseglob` are zsh's names for
-//     three the pattern matcher carries. Flipping the first three is what
-//     `emulate` does too (see emulate.go);
+//     carries, and `nullglob`, `globdots`, `caseglob` and `extendedglob` are
+//     zsh's names for four the pattern matcher carries. Flipping the first
+//     three is what `emulate` does too (see emulate.go);
 //   - fixed: a name zsh has whose state this shell cannot change. Asking for
 //     the state it is already in succeeds, the same bargain setoptions.go
 //     strikes for `set +o posix`; asking it to move is refused out loud with
@@ -64,15 +64,21 @@ import (
 //     a line. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 149 of the 185
+//     typing a directory name still does not change directory. 148 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
-// Two names moved out of "recorded" when the front end learned to read them:
+// Three names have moved out of "recorded". Two went when the front end
+// learned to read them:
 // `histignorespace` above, and `histignoredups`, which was already a `set -o`
 // backed switch whose state nothing consulted. Both now decide what a session
 // writes to its history file, so both are implemented rather than remembered.
-// Nothing else about the split moved, and 149 is still most of the table.
+// The third is `extendedglob`, which now moves the pattern matcher's
+// [interp.ExtendedPatternOperators] — the closures, the exclusion, the
+// negation and the `(#…)` flag groups all read a pattern differently while
+// it is on, and reading it the same way either way was #1244.
+//
+// Nothing else about the split moved, and 148 is still most of the table.
 //
 // Recording is worth doing and is not the same as implementing. A real rc
 // file opens with a dozen `setopt` lines about completion, correction and
@@ -209,7 +215,7 @@ var zshOptions = []zshOption{
 	recorded("errreturn", false),
 	recorded("evallineno", true),
 	setOptBacked("exec", true, "noexec", true),
-	recorded("extendedglob", false),
+	matchBacked("extendedglob", false, interp.ExtendedPatternOperators, false),
 	recorded("extendedhistory", false),
 	recorded("flowcontrol", true),
 	recorded("forcefloat", false),

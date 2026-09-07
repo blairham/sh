@@ -30,7 +30,7 @@ import (
 func globEscape(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
-		if strings.IndexByte(`*?[\<()`, s[i]) >= 0 {
+		if strings.IndexByte(`*?[\<()`+extendedPatternMeta, s[i]) >= 0 {
 			b.WriteByte('\\')
 		}
 		b.WriteByte(s[i])
@@ -72,11 +72,18 @@ func globUnescape(s string) string {
 // quantifier being a metacharacter in its own right — which is why the gap
 // showed up as three of the five quantifiers rather than as the construct
 // (#1042).
-func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern bool) bool {
+func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, extendedOperators bool) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\\' {
 			i++
 			continue
+		}
+		if extendedOperators && strings.IndexByte(extendedPatternMeta, s[i]) >= 0 {
+			// The closure, the exclusion and the negation. They are only
+			// metacharacters while the option is on, which is why the answer
+			// is threaded in rather than read off the byte: `echo a#` reaches
+			// the filesystem there and prints two characters everywhere else.
+			return true
 		}
 		if extendedPattern && quantifiesAGroup(s, i) {
 			// The quantifier and its group are one construct, so the `(` is
@@ -249,13 +256,37 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		return nil, false
 	}
 	if !hasQuals && !hasUnescapedMeta(field, r.dialect().NumericRangePattern,
-		r.dialect().PatternAlternation, r.dialect().ExtendedPattern) {
+		r.dialect().PatternAlternation, r.dialect().ExtendedPattern,
+		r.MatchOption(ExtendedPatternOperators)) {
+		return nil, false
+	}
+	if r.MatchOption(ExtendedPatternOperators) &&
+		hasTopLevelExclusion(field, patternOpts{extended: true}) &&
+		strings.Contains(field, "/") {
+		// The exclusion is looser than `/` — measured, `**/x~*bar*` takes
+		// `bar/x` out by matching the whole path — and this walk reads a
+		// pattern one component at a time, so an exclusion that crosses a
+		// component is not something it can answer. Refused by name rather
+		// than answered per component, which would quietly compare the right
+		// side against a file's name alone.
+		r.diagf("%s: a `~` exclusion spanning a path component is not implemented\n",
+			globUnescape(whole))
+		r.status = 1
+		r.ctl = controlExit
 		return nil, false
 	}
 	// A list makes the field a pattern whatever is in front of it: `f1(.)`
 	// is `f1` where the name alone is no pattern at all, so the qualifiers
 	// are what sent it to the filesystem.
 	defer func() {
+		if r.ctl == controlExit {
+			// The pattern was rejected while it was being read, and the
+			// script is already being abandoned. Reporting a miss on top of
+			// that says the pattern matched nothing, which is a different
+			// and weaker claim than the one already made.
+			r.globMissed = false
+			return
+		}
 		if r.globMissed && r.ask(r.sem().GlobNoMatchIsError, "an unmatched pattern being an error") &&
 			!r.MatchOption(UnmatchedPatternIsEmpty) {
 			// An error, which in zsh means the command does not run and the

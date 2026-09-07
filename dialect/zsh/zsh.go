@@ -512,6 +512,15 @@ func Semantics() interp.Semantics {
 	// field everywhere, and whitespace is absorbed at both ends here too —
 	// this is the non-whitespace tail alone.
 	s.TrailingSeparatorEndsAField = interp.Yes
+	// And `read` into an array asks the same question about a closing run of
+	// IFS *whitespace* and answers it the same way, where the expansion above
+	// absorbs it: measured 2026-09-07, `read -A r <<< " a "` is two elements
+	// here and `x=" a "; set -- ${=x}` is one field. Same shell, same IFS,
+	// two answers — which is why they are two fields.
+	s.ReadTrailingWhitespaceEndsAField = interp.Yes
+	// A line that splits into nothing fills one empty element rather than
+	// none, which is ksh93's answer too and not bash's.
+	s.ReadNoFieldsIsOneEmptyElement = interp.Yes
 	s.GlobExpansionResults = interp.No
 	s.GlobNoMatchIsError = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No

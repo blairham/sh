@@ -310,6 +310,11 @@ func Semantics() interp.Semantics {
 	// declaration here either.
 	// A fatal refusal takes the operands after it with it: measured
 	// 2026-09-07, `export ok1=1 ":" ok2=2` leaves ok1 set and ok2 unset.
+	// No arrays and no `read -a`, so neither edge question can be reached.
+	// Answered anyway rather than left to refuse: the preset's reading is
+	// the ordinary field split, which is this shell's everywhere else.
+	s.ReadTrailingWhitespaceEndsAField = interp.No
+	s.ReadNoFieldsIsOneEmptyElement = interp.No
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.TypesetTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.No

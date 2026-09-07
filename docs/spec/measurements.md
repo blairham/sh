@@ -453,6 +453,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/a-subscript-on-a-name-that-is-no-array` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
 | `array/a-quoted-empty-array-is-not-the-same-question` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1` | `n=0` |
 | `array/a-quoted-empty-array-with-a-star` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
+| `array/an-array-literal-through-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[1]: cannot assign list to array member` *(status 1)* | **2>** `<shell>: line 1: a[1]: cannot assign list to array member` *(status 127)* | **2>** `<shell>: a[1]: cannot assign list to array member` *(status 1)* | `[x p] n=2` | `[p q y] n=3` |
+| `array/an-empty-array-literal-through-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[1]: cannot assign list to array member` *(status 1)* | **2>** `<shell>: line 1: a[1]: cannot assign list to array member` *(status 127)* | **2>** `<shell>: a[1]: cannot assign list to array member` *(status 1)* | `n=3` | `n=2` |
+| `array/appending-an-array-literal-through-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[1]: cannot assign list to array member` *(status 1)* | **2>** `<shell>: line 1: a[1]: cannot assign list to array member` *(status 127)* | **2>** `<shell>: a[1]: cannot assign list to array member` *(status 1)* | `[x p]` | `[x p y]` |
+| `array/an-array-literal-through-a-subscript-on-a-scalar` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: line 1: s[1]: cannot assign list to array member` *(status 1)* | **2>** `<shell>: line 1: s[1]: cannot assign list to array member` *(status 127)* | **2>** `<shell>: s[1]: cannot assign list to array member` *(status 1)* | `after st=0` | **2>** `<shell>:1: s: attempt to assign array value to non-array` *(status 1)* |
 | `assoc/unsetting-at-is-a-key-and-not-every-element` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: m[j]=w: not found~<shell>: 1: unset: m[@]: bad variable name` *(status 2)* | `n=2` | `n=2` | `n=0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `n=2` | `n=2` |
 | `assoc/a-missing-key-quoted-is-one-field` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `n=1` | `n=1` | `n=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `n=1` | `n=1` |
 | `assoc/a-string-subscript` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `v k` | `v k` | `v 0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `v k` | **2>** `<shell>:1: bad substitution` *(status 1)* |
@@ -1308,6 +1312,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/a-quoted-empty-array-with-a-star` — `[*]` joins, so a quoted one is a single field whether or not there is anything to join — one, unanimously, where `[@]` splits the panel. The two spellings differing on an empty array is the sharpest statement that the star is not the at
   ```sh
   a=(); set -- "${a[*]}"; echo "n=$#"
+  ```
+- `array/an-array-literal-through-a-subscript` — an array literal standing where one element's value goes, and the panel gives three answers to it: one shell splices the words in and the array grows, one refuses the line and ends the script, and the third builds a nested value. There is no common reading to fall back on, which is what makes it a semantics axis rather than a default — and the length is in the snippet because a wrong reading that replaced the whole array left an array, at status 0, with plausible contents. The subscript is a numeral rather than `$i` on purpose: the refusing shell quotes a subscript back *as written* and this tree evaluates one holding an expansion, which is a gap of its own and would have graded three rows on it instead of on the construct
+  ```sh
+  a=(x y); a[1]=(p q); echo "[${a[@]}] n=${#a[@]}"
+  ```
+- `array/an-empty-array-literal-through-a-subscript` — the row a real plugin writes: `(( index <= $#fpath )) && fpath[$index]=()` drops one entry from `fpath`. In the shell that splices, an empty literal is a span of zero words replacing a span of one, so the element is removed and the count falls by exactly one; a reading that took the literal for the whole array emptied it instead and said nothing
+  ```sh
+  a=(x y z); a[1]=(); echo "n=${#a[@]}"
+  ```
+- `array/appending-an-array-literal-through-a-subscript` — the operator asks the same question the subscript already answers for a scalar — `a[0]+=Q` joins the element where `a+=(Q)` adds one after the last — so in the splicing shell this appends *at* the element and the new word lands in the middle. Recorded beside the plain form because the two differ only in where the words go, which is exactly the distinction a fix reading the subscript late would lose
+  ```sh
+  a=(x y); a[1]+=(p); echo "[${a[@]}]"
+  ```
+- `array/an-array-literal-through-a-subscript-on-a-scalar` — the same construct where the name is not an array, which splits the panel a second time and along a different line: the refusing shell says the same sentence it says for an array, and the splicing shell — which had no complaint at all a moment ago — refuses this one, because a string has no span to replace. Whether the rest of the line runs is the other half of the row
+  ```sh
+  s=abc; s[1]=(p q); echo "after st=$?"
   ```
 - `assoc/unsetting-at-is-a-key-and-not-every-element` — the whole-array reading belongs to the indexed array alone. With the attribute on, `@` is a key like any other and nothing was stored under it, so all three that have the attribute leave both elements where they are — including the two that clear an indexed array through the same spelling. It is the boundary a fix is likeliest to cross by accident, because the two kinds share a builtin and an operand shape
   ```sh

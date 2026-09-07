@@ -54,7 +54,13 @@ func TestAFunctionNameMayHoldAnExpansion(t *testing.T) {
 		// it, so `a[$i]=()` is an assignment and defines nothing. This
 		// parsed before the flag and stopped parsing with it, which is how
 		// it was found — a real plugin, not a hypothetical.
-		{`i=1; a=(x y z); a[$i]=(); print -r -- "n=$#a"`, "n=0"},
+		//
+		// Two elements and not none: the literal goes where the subscript
+		// points, so an empty one *removes* the element it names rather than
+		// emptying the array. The count was written here as `n=0` when the
+		// row was about the parse alone, which recorded the semantics that
+		// were wrong underneath it (#1330).
+		{`i=1; a=(x y z); a[$i]=(); print -r -- "n=$#a"`, "n=2"},
 		// A command word holding an expansion and *no* parentheses is a
 		// command, which is the far commoner thing to write and the control
 		// this needed: the parentheses are the whole announcement, and

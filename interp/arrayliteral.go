@@ -77,6 +77,23 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 			next = old.pastTheEnd()
 		}
 	}
+	if a, ok := r.literalInto(name, a, next, parsed); ok {
+		r.storeArray(name, a)
+	}
+}
+
+// literalInto places a literal's elements into an array, starting at next.
+//
+// Taken out of assignArrayLiteral because a second construct builds the same
+// value: `a[i]=(p q)` is that literal, spliced in where the subscript points,
+// and it has to expand and place exactly as the whole-array spelling does —
+// `a[2]=([3]=p)` fills three positions in the shell that has it, the same
+// three `a=([3]=p)` fills. Folded rather than written twice, so a rule about
+// what a literal *is* cannot come to differ between the two spellings.
+//
+// The second result is false where the placement was refused, in which case
+// the script has already been ended and nothing should be stored.
+func (r *Runner) literalInto(name string, a Array, next int, parsed []literalElem) (Array, bool) {
 	for _, e := range parsed {
 		if !e.subscripted {
 			for _, f := range e.fields {
@@ -93,7 +110,7 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 			// arithmetic failure and end the script. The third reads the
 			// text as a key and never reaches this.
 			r.fatal("%s\n", r.subscriptFailure(e.sub, err))
-			return
+			return nil, false
 		}
 		pos, ok := r.elemPos(a, idx)
 		if !ok {
@@ -106,7 +123,7 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 			}
 			r.fatal("%s\n", Wording(wording,
 				"%[1]s[%[2]s]: bad array subscript", name, e.sub, e.value))
-			return
+			return nil, false
 		}
 		a[pos] = e.value
 		// A bare element after a subscripted one continues from there rather
@@ -116,7 +133,7 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 		// same positions whichever number the first element answers to.
 		next = pos + 1
 	}
-	r.storeArray(name, a)
+	return a, true
 }
 
 // literalSubscriptIsAKey asks whether a subscript inside a literal is the text

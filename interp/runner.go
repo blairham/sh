@@ -3643,6 +3643,14 @@ func (r *Runner) assign(a *syntax.Assign) {
 		return
 	}
 	switch {
+	case a.IsArray && a.Index != nil:
+		// An array literal *and* a subscript, which is a third thing rather
+		// than either of the two below: the words go where the subscript
+		// points instead of becoming the whole array. Ahead of both array
+		// branches because they answer to `a.IsArray` alone and would take
+		// this line, dropping the subscript — which is what made
+		// `fpath[$i]=()` empty `fpath` (#1330).
+		r.assignElemLiteral(a)
 	case a.IsArray && r.assocDeclared(a.Name):
 		// The attribute was declared, so the literal's elements are keyed
 		// rather than counted.

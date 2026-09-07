@@ -404,6 +404,23 @@ func TestTheNestedSubscriptShapesNotBuiltSayWhichTheyAre(t *testing.T) {
 	}
 }
 
+// An expansion the grammar could not read is not a reference to anything.
+//
+// `@Q` is not in this grammar, so the node is marked unreadable and the run
+// reports it — where taking it as a reference would resolve the name its base
+// happened to hold and answer with an element of *that*, at status 0. It is
+// the same guard `expandAtList` keeps for the same reason, one construct
+// over: a `Bad` node is not a shape.
+func TestAnUnreadableInnerIsNotAReference(t *testing.T) {
+	out, st := runNestedSubscript(t, `a=(x y); h=a; printf "[%s]" "${${(P)h@Q}[1]}"`)
+	if !strings.Contains(out, "bad substitution") {
+		t.Errorf("got %q, want the unreadable inner reported", out)
+	}
+	if st == 0 {
+		t.Errorf("status 0, want the unreadable inner refused")
+	}
+}
+
 // A refusal from inside the reference route names what the *script* wrote
 // rather than the name the reference resolved to.
 //

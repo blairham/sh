@@ -50,10 +50,18 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		return nil, nil
 	}
 	var closers []io.Closer
-	// What this command has already opened for each stream, so a second
+	// What this command has already aimed each stream at, so a second
 	// redirection of the same one can be combined with the first where the
-	// dialect combines them. Per command rather than per runner: the stream
-	// it started with is not one of its targets.
+	// dialect combines them.
+	//
+	// Per command rather than per runner, and the stream the command started
+	// with is not in here *until the command names it*. `>&1` names it, which
+	// is why this is written by the duplication path as well as by the
+	// opening one: under the dialect that writes to every target, `echo x >&1
+	// >b` reaches the terminal and the file both, and `echo x >b >&1` writes
+	// the file twice, because by then the thing being duplicated is already
+	// the fan-out (#1261). Reading the earlier note as "the shell's own
+	// stream is never a target" is what left the duplication out.
 	opened := map[int]io.Writer{}
 	// Saved streams are restored when the command finishes, which is why the
 	// caller closes what comes back rather than this doing it.
@@ -239,7 +247,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			if fd > 2 && !persists {
 				saveFds()
 			}
-			if err := r.dupFd(fd, name); err != nil {
+			if err := r.dupFd(fd, name, opened); err != nil {
 				r.diagf("%v\n", err)
 				r.status = 1
 				r.redirErr = true
@@ -485,7 +493,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 // them, and returns the newest otherwise.
 func (r *Runner) eachTarget(fd int, f io.Writer, opened map[int]io.Writer) io.Writer {
 	if prev, ok := opened[fd]; ok &&
-		r.ask(r.sem().RedirectsWriteToEveryTarget, "a command redirecting one stream to several files") {
+		r.ask(r.sem().RedirectsWriteToEveryTarget, "a command redirecting one stream to several targets") {
 		// Marked as what it is rather than left to be recognized by type. A
 		// stream over several files is the one shape that cannot be handed to
 		// a process replacement as a descriptor number, and the shell that
@@ -769,8 +777,31 @@ func (r *Runner) errBadFd(fd int) error {
 // descriptor table, which is what makes `exec 6>&1; echo hi >&6` work. A
 // caller redirecting into the table must call the applyRedirs save first,
 // so the write can be taken back when the command ends.
-func (r *Runner) dupFd(fd int, target string) error {
+//
+// opened is the command's target set, and a *write* duplication of a named
+// stream joins it exactly as an opened file does. The dialect that writes to
+// every target of a repeated redirection was dropping `>&` from the fan-out,
+// because this path rebound the stream and the fan-out never learned of it:
+// `echo x >&1 >b` wrote the file and nothing else where zsh writes both
+// (#1261). What the duplication contributes is the descriptor *as it stands
+// now*, which is why `echo x >b >&1` fills the file twice there — by then
+// standard output already is the fan-out, so duplicating it adds the file a
+// second time. Measured; and the order dependence is the loop's, not a rule
+// of its own.
+//
+// A close empties the set rather than adding to it, which is the same
+// measurement read from its other end: `echo x >b >&- >c` leaves `b` empty
+// and puts the line in `c` alone, so the targets named before the close are
+// not merely bypassed, they are gone.
+//
+// The reading side stays out of it. Input has a fan-out of its own in that
+// dialect — `cat <a <b` reads both files in order — and this shell has none,
+// for either operator, so joining `<&` to a set nothing else fills would
+// model half of a feature.
+func (r *Runner) dupFd(fd int, target string, opened map[int]io.Writer) error {
 	if target == "-" {
+		// Whatever this command had aimed at the number, it no longer has.
+		delete(opened, fd)
 		switch fd {
 		case 0:
 			r.Stdin = closedFd{}
@@ -816,6 +847,9 @@ func (r *Runner) dupFd(fd int, target string) error {
 		if !ok {
 			return r.errBadFd(m)
 		}
+		// A target like any other, so a second one joins the first where the
+		// dialect joins them and replaces it everywhere else.
+		w = r.eachTarget(fd, w, opened)
 		if fd == 2 {
 			r.Stderr = w
 		} else {

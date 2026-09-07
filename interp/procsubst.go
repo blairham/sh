@@ -160,9 +160,16 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 			// it is the end-of-file the command that named the path is
 			// reading until. Nil when nobody ever opened the other end, so
 			// there was nothing to close.
-			if end != nil {
-				_ = end.Close()
+			if end == nil {
+				return
 			}
+			_ = end.Close()
+			// And again, until there is no reader left to tell. The close
+			// above is not reliably heard by a reader whose own open had not
+			// finished when it happened, which is #1079 and is measured in
+			// nudgeFifoEOF. Ends on its first round in the ordinary case,
+			// and cannot outlive the pipe.
+			nudgeFifoEOF(path)
 		})
 	}
 

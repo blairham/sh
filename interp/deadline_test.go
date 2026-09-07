@@ -24,12 +24,16 @@ import (
 // that reaches it is not slow, it is stopped. Raising this to make something
 // green would be reading the tool backwards.
 //
-// The body keeps running after the failure, and that is the trade rather than
-// an oversight. Nothing here can stop it: [interp.Runner.Run] takes a context
-// and no loop in the interpreter consults it, so a runaway script cannot be
-// cancelled by its caller. A goroutine left spinning until the package ends is
-// still far less than a package that ends by timing out; where the body is
-// waiting on something rather than spinning, the case releases it in a
+// The body keeps running after the failure, and that is the trade for a case
+// written this way rather than a limitation of the package any more:
+// [interp.Runner.Run] consults its context at every command since #1075, so a
+// case that hands the runner a cancelable context and cancels it on the bound
+// gets a round that *stops* as well as one that is named —
+// procsubeof_test.go is written that way and could not have been before. This
+// form stays for the cases whose body is not a Runner at all, and for those
+// the trade is unchanged: a goroutine left spinning until the package ends is
+// still far less than a package that ends by timing out, and where the body
+// is waiting on something rather than spinning the case releases it in a
 // t.Cleanup — see blockingFifo.
 func deadline(t *testing.T, what string, body func()) {
 	t.Helper()

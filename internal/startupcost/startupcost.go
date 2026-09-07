@@ -131,7 +131,7 @@ done
 `
 
 // richPatternSubject is the string the pattern work is substituted across: a
-// coloured message of the kind a prompt theme builds, mostly not matching the
+// colored message of the kind a prompt theme builds, mostly not matching the
 // pattern aimed at it. Its length matters — the cost this was written to
 // catch grew as the fourth power of it — so it is the length the real one
 // was, 82 bytes.

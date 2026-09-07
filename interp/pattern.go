@@ -448,7 +448,11 @@ func matchHere(p, s string, pp, at int, o patternOpts) bool {
 // ordinary pattern reaches it and low enough that a pathological one pays
 // the linear prefix once rather than the polynomial. Anything in the
 // hundreds satisfies both: the #1383 pattern asks eleven million questions.
-const memoThreshold = 512
+//
+// A var rather than a const so that a test can drive a pattern down both
+// paths and compare, which is the only way to say "the memo changes no
+// answer" rather than to hope it. Nothing outside a test writes it.
+var memoThreshold = 512
 
 // matchBranch is matchHere without the memo — the matching itself. Every
 // recursion goes back through matchHere so that it is memoized too.

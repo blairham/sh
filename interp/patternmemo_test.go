@@ -1,0 +1,147 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package interp
+
+import "testing"
+
+// memoCases are patterns that ask enough questions to reach memoThreshold,
+// paired with subjects on both sides of the answer.
+//
+// They have to be expensive or they prove nothing: the memo does not engage
+// until a trial has asked memoThreshold questions, so a cheap pattern takes
+// the same path with the memo present as without it and a test built on one
+// would pass against any mistake in it at all. The `##` closure under
+// alternation is what makes them expensive, which is the shape #1383 was.
+//
+// The subjects in each group are the *same length* on purpose. That is what
+// makes a key collision possible: a key is (pattern offset, pattern length,
+// subject offset, subject length, folding), so two different subjects of one
+// length occupy exactly the same keys and a memo carried from one to the
+// other is read as an answer about the other.
+var memoCases = []struct {
+	pattern  string
+	subjects []string
+}{
+	{"(a|aa|aaa)##[a-z]", []string{
+		"aaaaaaaaaaaaaaaaaaaax", // matches
+		"aaaaaaaaaaaaaaaaaaaaZ", // does not: Z is outside the bracket
+		"aaaaaaaaaaaaaaaaaaaa1", // does not
+		"aaaaaaaaaaaaaaaaaaaab", // matches
+	}},
+	{"(x|xx)##(y|yy)##z", []string{
+		"xxxxxxxxxxyyyyyyyyyz", // matches
+		"xxxxxxxxxxyyyyyyyyy_", // does not
+		"xxxxxxxxxx_yyyyyyyyz", // does not
+	}},
+	{`(#b)(([\\]|(%F))([\{]([^\}]##)[\}])|([\{]([^\}]##)[\}])([^\%\{\\]#))`, []string{
+		"{error}Error{ehi}:{rst} Unknown{a}",
+		"{error}Error{ehi}:{rst} Unknown{b}",
+		"nothing here matches this pattern at.",
+	}},
+}
+
+// memoTestOpts is the options a dialect with alternation and closures builds.
+func memoTestOpts(pattern string) patternOpts {
+	o := patternOpts{
+		caret:        true,
+		bracket:      BracketLiteral,
+		group:        true,
+		numericRange: true,
+		extended:     true,
+		escapes:      `-=!*?[]()|^~#<>\`,
+	}
+	o.where = &matchWhere{plan: planCapturesFor(pattern, o)}
+	return o
+}
+
+// TestTheMemoChangesNoAnswer runs every case with the memo engaged and with it
+// out of reach, and requires the two to agree on the match *and* on what a
+// `(#b)` reported.
+//
+// The captures are half the assertion and not decoration. Which arm and which
+// split won is what `$match` is made of, and a memo that remembered a
+// *successful* trial would skip re-running it and so skip writing them — a
+// match that still answers "yes" while reporting nothing, which is the
+// plausible-wrong-answer shape this repository exists to avoid. Only dead
+// ends are remembered, and this is what says so.
+func TestTheMemoChangesNoAnswer(t *testing.T) {
+	was := memoThreshold
+	t.Cleanup(func() { memoThreshold = was })
+	for _, c := range memoCases {
+		engaged := false
+		for _, subject := range c.subjects {
+			// Out of reach: no trial here asks a billion questions.
+			memoThreshold = 1 << 30
+			o := memoTestOpts(c.pattern)
+			wantOK, wantReport := matchPatternIn(c.pattern, subject, subject, 0, o)
+			plain := o.where.asked
+
+			memoThreshold = 512
+			o = memoTestOpts(c.pattern)
+			gotOK, gotReport := matchPatternIn(c.pattern, subject, subject, 0, o)
+			memoized := o.where.asked
+
+			if gotOK != wantOK {
+				t.Errorf("%s vs %q: memoized says %v, unmemoized says %v", c.pattern, subject, gotOK, wantOK)
+			}
+			if gotReport.subject != wantReport.subject || gotReport.whole != wantReport.whole ||
+				len(gotReport.groups) != len(wantReport.groups) {
+				t.Errorf("%s vs %q: memoized reported %+v, unmemoized %+v", c.pattern, subject, gotReport, wantReport)
+			}
+			for i := range gotReport.groups {
+				if gotReport.groups[i] != wantReport.groups[i] {
+					t.Errorf("%s vs %q: group %d memoized %+v, unmemoized %+v",
+						c.pattern, subject, i, gotReport.groups[i], wantReport.groups[i])
+				}
+			}
+			// Whether this subject engaged the memo at all. Only a
+			// *failing* trial can: a match that succeeds returns as soon as
+			// it has found one, so it never revisits a dead end and there
+			// is nothing for the memo to skip — which is itself the design,
+			// since a success is deliberately not remembered.
+			if !gotOK && plain > 512 && memoized < plain {
+				engaged = true
+			}
+		}
+		// Every pattern here has to have at least one subject the memo
+		// actually worked on, or the agreement above is two runs of the same
+		// code down the same path, and the case would pass against any
+		// mistake in the memo whatsoever.
+		if !engaged {
+			t.Errorf("%s: no subject reached the memo, so this case proves nothing about it", c.pattern)
+		}
+	}
+}
+
+// TestOneOptionsValueAnswersManySubjects is the invariant three callers rely
+// on and none of them states.
+//
+// Pathname expansion builds its options once and matches every name in the
+// directory with them (interp/glob.go), `unalias -m` and the element filters
+// do the same over their own lists, and `${x#p}` reuses one value for every
+// prefix of one subject — the whole reason matchWhere is a pointer. So a
+// matchWhere carries state across subjects by design, and anything remembered
+// in it has to be dropped when the subject changes or it becomes an answer
+// about the wrong string.
+//
+// Measured: with the reset removed, `(a|aa|aaa)##[a-z]` over two names of
+// equal length reported *no matches* in a directory where real zsh and this
+// shell both list one. Nothing else in interp's tests, or any dialect's,
+// noticed — which is why this is a test rather than a comment.
+func TestOneOptionsValueAnswersManySubjects(t *testing.T) {
+	for _, c := range memoCases {
+		shared := memoTestOpts(c.pattern)
+		for _, subject := range c.subjects {
+			// The answer this subject gets from a value nothing else has
+			// touched is the answer it has to get from the shared one.
+			fresh := memoTestOpts(c.pattern)
+			want, _ := matchPatternIn(c.pattern, subject, subject, 0, fresh)
+			got, _ := matchPatternIn(c.pattern, subject, subject, 0, shared)
+			if got != want {
+				t.Errorf("%s vs %q: %v from a reused options value, %v from a fresh one",
+					c.pattern, subject, got, want)
+			}
+		}
+	}
+}

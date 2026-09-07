@@ -415,6 +415,14 @@ func Semantics() interp.Semantics {
 	// give `x y z`. With IFS set and empty it is `xy`, which is what says
 	// the separator is read from IFS rather than defaulted to a space.
 	s.UnsplitAtListJoinsOnIFS = interp.Yes
+	// The separator that closes a value delimits here rather than being
+	// absorbed, so every such split has one more field than it does in the
+	// rest of the panel: `IFS=:; v='a:'` under `shwordsplit` is `[a][]` where
+	// the other five give `[a]`, and `read -A` on the same line fills three
+	// elements from `a:b:` where they fill two. A leading separator opens a
+	// field everywhere, and whitespace is absorbed at both ends here too —
+	// this is the non-whitespace tail alone.
+	s.TrailingSeparatorEndsAField = interp.Yes
 	s.GlobExpansionResults = interp.No
 	s.GlobNoMatchIsError = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No

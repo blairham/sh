@@ -146,6 +146,7 @@ func TestSemantics(t *testing.T) {
 		// character of IFS, so `IFS=-; a=(x y z); v=${a[@]}` is `x-y-z`
 		// where bash and ksh93 give `x y z`.
 		{"UnsplitAtListJoinsOnIFS", s.UnsplitAtListJoinsOnIFS, interp.Yes},
+		{"TrailingSeparatorEndsAField", s.TrailingSeparatorEndsAField, interp.Yes},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.No},
 		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.No},
 		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.Yes},

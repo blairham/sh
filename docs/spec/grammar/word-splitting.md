@@ -128,7 +128,7 @@ not split parameter expansions at all — see below):
 | `IFS=:; x='a:b:c'; set -- $x` | `[a][b][c]` |
 | `IFS=:; x='a::b'; set -- $x` | `[a][][b]` |
 | `IFS=:; x=':a'; set -- $x` | `[][a]` |
-| `IFS=:; x='a:'; set -- $x` | `[a]` |
+| `IFS=:; x='a:'; set -- $x` | `[a]` — but see the axis below |
 | `IFS=:; x='::'; set -- $x` | 2 fields |
 | `IFS=' :'; x='a : b'; set -- $x` | `[a][b]` |
 | `IFS=' :'; x='a::b'; set -- $x` | `[a][][b]` |
@@ -141,12 +141,53 @@ give different answers:
     IFS=:; x=':a'   → [][a]     leading delimiter makes an empty field
     IFS=:; x='a:'   → [a]       trailing delimiter does not
 
-A trailing delimiter is absorbed; a leading one is not. This is not an
-implementation quirk — all three splitting shells do it, and POSIX
-specifies it — but it is the single most common source of off-by-one
-field counts, and any implementation that treats splitting as a
-symmetric "split on delimiter" produces `[a][]` for the second row and is
-wrong.
+A trailing delimiter is absorbed; a leading one is not. It is the single
+most common source of off-by-one field counts, and any implementation
+that treats splitting as a symmetric "split on delimiter" produces
+`[a][]` for the second row.
+
+POSIX.1-2024 2.6.5 specifies the absorbing reading — "once the input is
+empty, the candidate shall become an output field if and only if it is
+not empty" — and dash, bash, bash 3.2, bash as `sh` and ksh93 all
+implement it. **zsh does not**, and that is
+`Semantics.TrailingSeparatorEndsAField`: the trailing separator delimits
+there, so every such split has one more field. It cannot be seen through
+a parameter expansion in zsh as it comes, because that is not split at
+all; asking it needs `setopt shwordsplit`, the `${=spec}` flag, an
+unquoted command substitution — which every shell splits — or `read`.
+
+Measured 2026-09-07 with `IFS=:`, printing the count with the fields:
+
+| value | five shells | zsh |
+| --- | --- | --- |
+| `a:` | `1 [a]` | `2 [a][]` |
+| `a::` | `2 [a][]` | `3 [a][][]` |
+| `a:b:` | `2 [a][b]` | `3 [a][b][]` |
+| `:a:` | `2 [][a]` | `3 [][a][]` |
+| `:` | `1 []` | `2 [][]` |
+| `` | 0 fields | 0 fields |
+
+Three things bound it, and each is a row a wrong fix gets wrong. A
+**leading** separator delimits in all six, so the asymmetry is at the
+tail alone. **Whitespace** is absorbed at both ends in zsh as well —
+`' a '` is one field everywhere — so this is the non-whitespace half of
+the rule and nothing else. And it is the closing **run** that decides
+rather than the last byte: with `IFS=' :'`, `'a: '` is two fields in zsh
+and `'a  '` is one, so the trailing space does not hide the colon in
+front of it.
+
+An **escaped** separator is data and is not part of the run at all, which
+is why the mask `read` carries reaches this question: `IFS=:; read -A a`
+on `a\:` fills one element `a:` in zsh where `a:` fills two.
+
+The empty value is the row that says the answer adds a field rather than
+keeping an edge: an unquoted empty expansion is no field at all in all
+six, zsh included, so nothing is opened where there was no separator.
+That is also what separates this from the edge-keeping rule a **quoted**
+`${=spec}` follows, which keeps both edges unconditionally and makes `''`
+one empty field — see `docs/spec/grammar/parameter-expansion.md`. Where
+that rule is in force the field behind the last separator is already
+there and this question is not asked.
 
 ## Empty and unset values produce no fields
 

@@ -28,6 +28,9 @@ func starRun(t *testing.T, src string, split, join Answer) (string, int) {
 		s.UnquotedListJoinsOnIFS = join
 		s.ArrayBaseIsZero = No
 		s.SubscriptCommaIsARange = Yes
+		// The tail of the splitting rule as five of the six shells give it —
+		// see the note in joinRun.
+		s.TrailingSeparatorEndsAField = No
 	})
 }
 

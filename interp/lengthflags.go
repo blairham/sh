@@ -188,7 +188,7 @@ func separatedFieldCount(w, ifs string, ifsSet bool) int {
 // separator opens a field however much whitespace follows it.
 func ifsWordCount(w, ifs string, ifsSet bool) int {
 	n := len(splitFields(w, ifs, ifsSet))
-	if trailingRunSeparates(w, ifs, ifsSet) {
+	if trailingRunSeparates(w, nil, ifs, ifsSet) {
 		n++
 	}
 	return n
@@ -196,12 +196,21 @@ func ifsWordCount(w, ifs string, ifsSet bool) int {
 
 // trailingRunSeparates reports whether the value's closing run of separators
 // holds a non-whitespace one.
-func trailingRunSeparates(w, ifs string, ifsSet bool) bool {
+//
+// It is also the guard on TrailingSeparatorEndsAField, which is why it takes
+// the literal mask `read` carries: an escaped separator is data, so it ends
+// the run rather than belonging to it, and `read -A` on `a\:` is one field in
+// the shell where `a:` is two. A nil mask exempts nothing, which is every
+// caller but that one.
+func trailingRunSeparates(w string, literal []bool, ifs string, ifsSet bool) bool {
 	if ifsSet && ifs == "" {
 		return false
 	}
 	found := false
 	for i := len(w) - 1; i >= 0; i-- {
+		if literal != nil && literal[i] {
+			break
+		}
 		c := w[i]
 		if strings.IndexByte(ifs, c) < 0 {
 			break

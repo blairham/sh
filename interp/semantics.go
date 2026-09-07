@@ -119,6 +119,44 @@ type Semantics struct {
 	// than two elements, which uses no separator at all.
 	UnsplitAtListJoinsOnIFS Answer
 
+	// TrailingSeparatorEndsAField makes the non-whitespace IFS separator that
+	// closes a value open one last empty field, rather than being absorbed.
+	//
+	// False in bash, bash 3.2, bash as `sh`, dash and ksh93, and true in zsh
+	// — the one axis in this neighborhood where the panel splits five to one.
+	// Measured 2026-09-07 with `IFS=:` and an unquoted `$v` (zsh under
+	// `setopt shwordsplit`, the only way to ask it there):
+	//
+	//	v='a:'    five shells [a]        · zsh [a][]
+	//	v='a::'   five shells [a][]      · zsh [a][][]
+	//	v='a:b:'  five shells [a][b]     · zsh [a][b][]
+	//	v=':a:'   five shells [][a]      · zsh [][a][]
+	//	v=':'     five shells []         · zsh [][]
+	//
+	// A *leading* separator opens a field in all six, so the asymmetry is at
+	// the tail alone and this axis is the whole of it. POSIX.1-2024 2.6.5
+	// answers it too — "once the input is empty, the candidate shall become
+	// an output field if and only if it is not empty" — which is the
+	// absorbing reading, so PosixSemantics says No and zsh is the departure.
+	//
+	// Asked only at the disagreement, and the guard is what keeps it off
+	// every ordinary script: it is the closing *run* of separators that
+	// decides, and only a non-whitespace one in that run makes the two
+	// readings differ. `' a '` under the default IFS is one field in all six,
+	// because whitespace is absorbed at both ends in zsh as well; `'a: '`
+	// with `IFS=' :'` is the case that shows it is the run rather than the
+	// last byte, since the trailing space does not hide the colon in front of
+	// it. An escaped separator is data and not part of the run at all, which
+	// is why the mask `read` carries has to reach this question: `read -A` on
+	// `a\:` is one field `a:` in zsh where `a:` is two.
+	//
+	// It is not [Semantics] alone that answers a split — an unquoted
+	// `${=spec}` keeps the fields at *both* edges unconditionally, which is a
+	// different rule and reaches the splitter as its own parameter. Where
+	// that rule is in force this question is never asked, because the field
+	// behind the last separator is already there.
+	TrailingSeparatorEndsAField Answer
+
 	// GlobExpansionResults matches the *result* of an expansion against the
 	// filesystem. False in zsh, where only a pattern written literally in the
 	// source is expanded. The same rule decides whether `[[ abc == $p ]]`
@@ -3789,7 +3827,13 @@ func PosixSemantics() Semantics {
 		// behave as `$*` does, which is the join on IFS; dash, the shell in
 		// the panel that targets this text, complies. bash and ksh93 are the
 		// departure.
-		UnsplitAtListJoinsOnIFS:                  Yes,
+		UnsplitAtListJoinsOnIFS: Yes,
+		// 2.6.5 spells the tail out — "once the input is empty, the
+		// candidate shall become an output field if and only if it is not
+		// empty" — so a trailing separator is absorbed and opens nothing.
+		// dash, the shell in the panel that targets this text, complies, and
+		// so do bash and ksh93; zsh is the departure.
+		TrailingSeparatorEndsAField:              No,
 		GlobExpansionResults:                     Yes,
 		GlobNoMatchIsError:                       No,
 		AssignmentPrefixPersistsOnSpecialBuiltin: Yes,

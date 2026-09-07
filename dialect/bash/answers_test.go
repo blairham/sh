@@ -96,6 +96,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		// space here — `IFS=-; a=(x y z); v=${a[@]}` is `x y z`, against
 		// `x-y-z` in zsh. The `*` spelling is core and does not ask this.
 		{"UnsplitAtListJoinsOnIFS", s.UnsplitAtListJoinsOnIFS, interp.No},
+		{"TrailingSeparatorEndsAField", s.TrailingSeparatorEndsAField, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.No},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.No},

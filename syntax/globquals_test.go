@@ -170,3 +170,176 @@ func containsText(s, sub string) bool {
 	}
 	return false
 }
+
+// arrayGlobQuals is globQuals with the array literal, which is the grammar
+// the assignment cases below need and which Core() has not got.
+func arrayGlobQuals() Dialect {
+	d := globQuals()
+	d.ArrayLiteral = true
+	return d
+}
+
+// An element of an array literal stands where an argument does, so a `(` that
+// begins one belongs to the element.
+//
+// The assignment used to find its closing `)` by counting, and a glob flag
+// opens one that is part of a *word*: `files=( (#i)a )` was `expected ) to
+// close an array assignment` where zsh accepts it, and so was every shape
+// whose group stands at the *front* of an element. The three that stand after
+// a pattern — `*(-.DN)`, `*~(*/*)` and `*.(zip|tgz)` — were already right,
+// because mid-word the lexer folds a group without being told. Measured on
+// zsh 5.9.2, `-n` over a script file under `env -i` (#1149).
+func TestAParenWhereAnArrayElementBeginsBelongsToTheElement(t *testing.T) {
+	on := arrayGlobQuals()
+	off := Core()
+	off.ArrayLiteral = true
+	for _, src := range []string{
+		`files=( (#i)a )`,
+		`files=( x (#i)a )`,
+		`files=( (#b)a )`,
+		`files=( (#s)a )`,
+		`files=( (#q-.) )`,
+		`files=( (#i)a (#b)b )`,
+		`a=( (a|b) )`,
+		`a=( (echo x) )`,
+		// The line `~/.zi/bin/lib/zsh/install.zsh` stopped on, whole: four
+		// parenthesised shapes in one word, of which only the leading one
+		// was the problem.
+		`files=( (#i)**/*.(zip|rar|7z|tgz|tbz|tbz2|tar.gz|tar.bz2|tar.7z|txz|tar.xz|gz|xz|tar|dmg|exe)~(*/*|.(_backup|git))/*(-.DN) )`,
+		// Across a newline, which is where the elements of a real array go.
+		"files=( (#i)a\n(#b)b )",
+		// And a declaration's operand, which reaches the same parser by
+		// another route.
+		`local files=( (#i)a )`,
+		`typeset -a files=( (#i)a )`,
+	} {
+		mustParse(t, src, on, "a group where an array element begins")
+		mustFail(t, src, off, "the same without the flag")
+	}
+	// The shapes that were already right, kept so a fix that reached them
+	// through a different path would be noticed.
+	for _, src := range []string{
+		`files=( a(#i) )`,
+		`files=( *(-.DN) )`,
+		`files=( *~(*/*|.(_backup|git))/* )`,
+		`files=( "(#i)a" )`,
+		`files=( $(echo x) )`,
+		`files=( )`,
+		`files=()`,
+		`files=( a b )`,
+	} {
+		mustParse(t, src, on, "an array literal that already parsed")
+	}
+}
+
+// The elements it makes, which is the half a parse test cannot see: a group
+// swallowed into the previous element, or into the assignment, still parses.
+func TestAnArrayElementsGroupIsItsOwnElement(t *testing.T) {
+	for _, tc := range []struct {
+		src  string
+		want []string
+	}{
+		{`files=( (#i)a )`, []string{"(#i)a"}},
+		{`files=( x (#i)a )`, []string{"x", "(#i)a"}},
+		{`files=( (#i)a (#b)b )`, []string{"(#i)a", "(#b)b"}},
+		{`files=( (#i)a* )`, []string{"(#i)a*"}},
+		{`files=( a(#i) )`, []string{"a(#i)"}},
+		{`files=( (a|b) )`, []string{"(a|b)"}},
+		{`files=( )`, nil},
+	} {
+		f, err := Parse(tc.src, arrayGlobQuals())
+		if err != nil {
+			t.Errorf("%s: %v", tc.src, err)
+			continue
+		}
+		cmd, ok := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+		if !ok || len(cmd.Assigns) != 1 {
+			t.Errorf("%s: not one assignment", tc.src)
+			continue
+		}
+		a := cmd.Assigns[0]
+		if !a.IsArray {
+			t.Errorf("%s: not an array assignment", tc.src)
+			continue
+		}
+		got := make([]string, 0, len(a.Elems))
+		for _, w := range a.Elems {
+			got = append(got, w.Literal())
+		}
+		if len(got) != len(tc.want) {
+			t.Errorf("%s: %d elements %q, want %d %q", tc.src, len(got), got, len(tc.want), tc.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("%s: element %d = %q, want %q", tc.src, i, got[i], tc.want[i])
+			}
+		}
+	}
+}
+
+// Argument position is *restored* rather than turned off, and the difference
+// is observable inside the same command.
+//
+// An assignment is read where a command may begin as well as after a word, so
+// what the token after the array stands in is whatever it stood in before —
+// and measured on zsh 5.9.2 the two answers differ: `a=( x ) (b)` written
+// first is `parse error near '('`, where `local a=( x ) (b)` parses, the
+// `local` having already made it argument position. Leaving the flag on after
+// the array made the first of those parse.
+//
+// parseSimple's own defer clears the flag when the *command* ends, which is
+// why `a=( x ); ( echo b )` cannot see this and the pair below can.
+func TestTheArraysArgumentPositionIsRestoredAndNotCleared(t *testing.T) {
+	d := arrayGlobQuals()
+	d.DeclarationUtilities = map[string]bool{"local": true}
+	for _, src := range []string{
+		`a=( x ) (b)`,
+		`a=( (#i)x ) (b)`,
+		`a=( x ) ( echo b )`,
+	} {
+		mustFail(t, src, d, "a paren after an array at command position")
+	}
+	for _, src := range []string{
+		`local a=( x ) (b)`,
+		`local a=( (#i)x ) (b)`,
+	} {
+		mustParse(t, src, d, "a paren after an array in argument position")
+	}
+}
+
+// Argument position ends with the command, which a parse test alone cannot
+// see: `a=( x ); ( echo b )` parses either way, and only what the second
+// statement turned out to be says which.
+func TestTheArraysArgumentPositionEndsWithIt(t *testing.T) {
+	for _, src := range []string{
+		`a=( x ); ( echo b )`,
+		`a=( (#i)x ); ( echo b )`,
+		"a=( (#i)x )\n( echo b )",
+	} {
+		f, err := Parse(src, arrayGlobQuals())
+		if err != nil {
+			t.Errorf("%s: %v", src, err)
+			continue
+		}
+		last := f.Stmts[len(f.Stmts)-1]
+		pipe, ok := last.Expr.(*Pipeline)
+		if !ok {
+			t.Errorf("%s: last statement is not a pipeline", src)
+			continue
+		}
+		if _, ok := pipe.Cmds[len(pipe.Cmds)-1].(*Subshell); !ok {
+			t.Errorf("%s: the trailing `( … )` is %T, want a subshell", src, pipe.Cmds[len(pipe.Cmds)-1])
+		}
+	}
+}
+
+// The group ends where it closes rather than swallowing the assignment's own
+// `)`: zsh answers `files=( (#i)a) )` with a parse error at the stray `)`,
+// which is only reachable if the group took one parenthesis and the array
+// took the next.
+func TestTheElementsGroupDoesNotSwallowTheAssignmentsParen(t *testing.T) {
+	if _, err := Parse(`files=( (#i)a) )`, arrayGlobQuals()); err == nil {
+		t.Error("parsed, want the stray `)` refused")
+	}
+}

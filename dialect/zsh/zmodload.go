@@ -139,7 +139,9 @@ var zmodloadFeatures = map[string][]string{
 		"b:zsystem", "f:systell", "p:errnos", "p:sysparams",
 	},
 	// The largest of them, and the one a plugin manager leans on hardest:
-	// 34 parameters and not one builtin.
+	// 33 parameters and not one builtin. Measured 2026-09-07 as
+	// `zmodload -lF zsh/parameter` against zsh 5.9.2, and held name for name
+	// by TestTheThreeRostersAccountForTheModuleExactlyOnce.
 	"zsh/parameter": {
 		"p:aliases", "p:builtins", "p:commands", "p:dirstack",
 		"p:dis_aliases", "p:dis_builtins", "p:dis_functions",

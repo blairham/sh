@@ -88,7 +88,23 @@ var (
 	// A line to run after a half-typed key has been given up on. Its only job
 	// is to prove the shell is still reading.
 	escapeProbe = probe{"echo escaped-$((6 * 7))-ok", "escaped-42-ok"}
+	// The body of the loop typed over several lines. It is the only line of
+	// the construct that produces anything, so it is the only one that can
+	// carry a mark — `for i in 1 2`, `do` and `done` print nothing, and a
+	// wait on any of them would be answered by the echo of the keystrokes.
+	multiLineProbe = probe{"echo loop-$((6 * 7))-ok", "loop-42-ok"}
 )
+
+// multiLineLoop is the loop as a person types it: four lines, three of which
+// leave the construct unfinished.
+//
+// A loop rather than a quoted string or a here-document, because the three
+// spellings fail apart: a quote leaves the *lexer* unfinished, and this leaves
+// the *grammar* unfinished with every word complete, which is the case a
+// dialect's own reading of `for` decides (#1298).
+func multiLineLoop() []string {
+	return []string{"for i in 1 2", "do", multiLineProbe.line, "done"}
+}
 
 const (
 	completionOpens  = "[ -f "
@@ -109,7 +125,7 @@ func probes() []probe {
 	return []probe{
 		rcProbe, aliasProbe, functionProbe, pipelineProbe,
 		recallProbe, searchProbe, chaffProbe, tickProbe, completionProbe,
-		undoProbe, escapeProbe,
+		undoProbe, escapeProbe, multiLineProbe,
 	}
 }
 
@@ -203,6 +219,44 @@ func checks() []check {
 					return Fail, err.Error()
 				}
 				return Pass, "two stages ran and the second saw the first's output"
+			},
+		},
+		{
+			name:   "a loop typed over several lines",
+			proves: "a construct spread over several lines is continued at the prompt, not run a line at a time",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				if err := s.atPrompt(); err != nil {
+					return Fail, err.Error()
+				}
+				lines := multiLineLoop()
+				for i, line := range lines {
+					if err := s.send(line + "\r"); err != nil {
+						return Fail, err.Error()
+					}
+					if i == len(lines)-1 {
+						// The last line closes the construct, so what comes
+						// next is the loop running rather than another
+						// question.
+						break
+					}
+					// A wait per line rather than one at the end, because
+					// *where* the shell stopped continuing is the finding: a
+					// header read as a whole command and a body read as one
+					// look identical from the far side of the construct.
+					// Safe to wait on a redrawn continuation prompt, which
+					// this may be: nothing has left raw mode, so no keystroke
+					// can have been dropped, and the assertion the row rests
+					// on is the mark below.
+					if err := s.screen.Await(continuationPrompt, budget); err != nil {
+						return Fail, "the shell did not ask for more after " + quote(line) +
+							", so it took an unfinished construct as a whole command: " + err.Error()
+					}
+				}
+				if err := s.screen.Await(multiLineProbe.mark, budget); err != nil {
+					return Fail, "the loop did not run: " + err.Error()
+				}
+				return Pass, "the construct was continued over " + strconv.Itoa(len(lines)) +
+					" lines and the body ran"
 			},
 		},
 		{

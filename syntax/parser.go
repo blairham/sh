@@ -2244,7 +2244,25 @@ func (p *Parser) shortFormBody() (body []*Stmt, stop Pos) {
 	if p.braceBodyFollows() {
 		return p.braceLoopBody()
 	}
-	if p.at(TokEOF) || p.atStopWord() || p.at(TokRightParen) {
+	if p.at(TokEOF) {
+		// Nothing at all because the input ended, which is two different
+		// facts wearing one shape. To a program that is all there is, the
+		// loop is finished and its body is empty: `for i in 1 2` and a
+		// newline is a whole command to `-c`, and it runs nothing. At a
+		// prompt the identical text is a promise — the shell asks for
+		// another line and takes it as the body — so the difference cannot
+		// be in the parse. What the parser can say is that the input ran out
+		// while it was still inside the construct, which is what Incomplete
+		// means: a reader that can fetch another line does, and one that
+		// cannot keeps the empty body it already has (#1298).
+		p.ranOut()
+		return nil, p.tok.Pos
+	}
+	if p.atStopWord() || p.at(TokRightParen) {
+		// A stop word or a `)` is somebody else's, and it is *here*, so the
+		// input did not run out: the body is empty and the construct is
+		// finished. `while cond; { … }` is this, with the group taken as the
+		// condition and `}` left standing where a body could have been.
 		return nil, p.tok.Pos
 	}
 	st := p.parseStmt()

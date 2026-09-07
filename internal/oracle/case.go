@@ -1623,6 +1623,12 @@ echo "reached-after st=$?"`,
 		Why:     "the body left out of a `for`, which is legal exactly where the header closed itself. Reaching it needs something the body cannot be, because anything that could be one *is* one — hence the `fi`, a word no command may start with. The second loop is the contrast in the same line: the same header with a command after it runs that command per item, so `no-body` prints once and `body` twice. `for i in a b` with nothing after it is a syntax error in the same shell, so this is a property of the header rather than of the loop",
 	},
 	{
+		ID: "core/a-for-header-with-nothing-after-it-ends-the-file", Category: "command language", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo before\nfor i in 1 2",
+		Why:     "the short-form body left out because the *input ran out*, which is a different reading of the same absence from `for i (a b); fi` — that header closed itself and this one did not. One shell takes the loop and runs it over nothing; the other four call the end of the file a syntax error, and each blames something different. Run from a file rather than through -c because the two cannot be told apart otherwise: the shell asks for another line at a prompt and takes this one only when there is no more, so what is pinned here is what a *reader with nothing left* does. `echo before` is what says the file got that far (#1298)",
+	},
+	{
 		ID: "core/a-short-loop-redirection-is-the-bodys", Category: "command language", SyntaxError: true,
 		Snippet: `for i (a b) > f$i; ls`,
 		Why:     "where a short loop's redirection lands, and the loop variable in the target is what makes the answer visible: two files named for the two items mean the redirection ran once per iteration and is the *body* — a command that only redirects. A redirection on the loop is expanded once before it starts and would leave a single `f`, which is what `for i (a b) { echo hi } > f$i` does. The distinction is unreachable from the tree alone, so it is pinned here",

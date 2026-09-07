@@ -1061,6 +1061,15 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// process is exactly the caller who most wants it.
 		GuardConcurrent: sh.guardConcurrent(),
 	}
+	// The prompt-escape table, so the interpreter answers `${(%)…}` and
+	// `print -P` from the *same* table the prompt drawer is handed below.
+	//
+	// One value, one type: repl.PromptStyle is an alias for
+	// interp.PromptStyle rather than a copy of it, and this front end is the
+	// one place that hands it to both readers. A dialect's Apply installs it
+	// too, for an embedder that never builds a Shell; the two agree because
+	// they are the same function's result.
+	r.SetPromptStyle(sh.PromptStyle)
 	r.Dir = sh.Dir
 	if r.Dir == "" {
 		if wd, err := os.Getwd(); err == nil {

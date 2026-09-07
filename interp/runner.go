@@ -918,6 +918,18 @@ type Runner struct {
 	// nobody told, where the escape is refused rather than guessed at.
 	// Installed through SetPromptUser; see extend.go.
 	promptUser string
+	// promptHost is the machine's name the `%m` and `%M` prompt escapes
+	// report, carried in the same way and for the same reason: a Runner
+	// embedded in another program does not go asking the operating system
+	// what host it is on. Empty in a runner nobody told, where both escapes
+	// are refused rather than guessed at. Installed through SetPromptHost.
+	promptHost string
+	// promptStyle is the prompt-escape table this shell's dialect supplies —
+	// the same table the prompt drawer reads, which is the whole of #1090.
+	// The zero value has no escape character and so no escape language, which
+	// is what a runner nobody told gets. Installed through SetPromptStyle;
+	// see interp/prompt.go.
+	promptStyle PromptStyle
 	// optionNamespace is the wider set of names `[[ -o name ]]` reads, for a
 	// dialect that has one. Nil in a shell whose option names are its
 	// `set -o` names and nothing more, which is where `[[ -o ]]` falls back

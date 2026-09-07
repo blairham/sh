@@ -19,6 +19,21 @@ import (
 // docs/spec/grammar/parameter-expansion.md; the tests name the grammar flag
 // and never a shell.
 
+// promptEscapeTable is the smallest table the `%` flag tests need: the
+// doubled escape, the user, and the two codes that name the file being read.
+func promptEscapeTable() PromptStyle {
+	return PromptStyle{
+		Escape: '%',
+		Codes: map[rune]PromptField{
+			'%': FieldEscape,
+			'n': FieldUser,
+			'x': FieldSourceFile,
+			'N': FieldUnitName,
+		},
+		TrailingEscapeIsDropped: true,
+	}
+}
+
 func flagsRun(t *testing.T, src string) (string, string, int) {
 	t.Helper()
 	d := syntax.Core()
@@ -40,6 +55,13 @@ func flagsRun(t *testing.T, src string) (string, string, int) {
 	// The dialect travels with the runner so nested input — a sourced file,
 	// an eval — parses the same grammar.
 	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &errs, Dialect: &d, Semantics: &sem, Name: "testsh"})
+	// The `%` flag reads the prompt-escape table a dialect supplies, so a
+	// test of it has to supply one. Named as a table rather than as a shell:
+	// these four rows are the escapes a script uses to find its own path
+	// plus the doubled escape, which is what this package carried
+	// hard-coded before there was one table (#1090). Everything not in it
+	// is refused by name, which several cases below are about.
+	r.SetPromptStyle(promptEscapeTable())
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

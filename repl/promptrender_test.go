@@ -375,3 +375,64 @@ func TestTheBangIsReadAfterExpansionAndTheTableBeforeIt(t *testing.T) {
 		t.Errorf("drew %q, want <someone>", got)
 	}
 }
+
+// An escape with nothing after it, where the dialect says it is dropped.
+//
+// A row of the table rather than a rule above it, because the panel splits:
+// measured through a pty, zsh drew `PS1='x%'` as `x` — and `print -P 'x%'` and
+// `${(%):-x%}` as `x` too, which is what makes it the *dialect's* answer
+// rather than a difference between the two readers — where bash and ksh93 draw
+// the character. The pair of tests is the assertion; either alone passes with
+// the flag ignored in one direction.
+func TestATrailingEscapeTheDialectDrops(t *testing.T) {
+	for _, unk := range []UnknownCode{KeepBoth, DropEscape, DropBoth} {
+		s := Shell{Style: PromptStyle{Escape: '%', Unknown: unk, TrailingEscapeIsDropped: true}}
+		if got := s.render(`x%`); got != `x` {
+			t.Errorf("Unknown %v drew %q, want the escape dropped", unk, got)
+		}
+		if got := s.render(`%`); got != `` {
+			t.Errorf("Unknown %v drew %q for a lone escape, want nothing", unk, got)
+		}
+	}
+}
+
+// The braces after a code the dialect lists in Formats hold a `strftime`
+// format, and replace the shape the code would otherwise draw.
+//
+// Measured through a pty against zsh 5.9.2: `%D` drew `26-09-07`, `%D{%H:%M}`
+// drew `04:25` and `%D{}` drew nothing at all. The last one is why the walker
+// reports whether there were braces rather than only what was in them — an
+// empty format is a format, and the absence of one is the plain date.
+func TestACodeWhoseBracesAreATimeFormat(t *testing.T) {
+	at := time.Date(2026, 9, 7, 4, 25, 13, 0, time.UTC)
+	s := Shell{
+		Clock: func() time.Time { return at },
+		Style: PromptStyle{
+			Escape:  '%',
+			Codes:   map[rune]PromptField{'D': FieldDateYearMonthDay},
+			Formats: map[rune]bool{'D': true},
+		},
+	}
+	for _, tc := range []struct{ in, want string }{
+		{`%D`, "26-09-07"},
+		{`%D{%H:%M}`, "04:25"},
+		{`%D{}`, ""},
+		{`%D{%Y-%m-%dT%H:%M:%S}`, "2026-09-07T04:25:13"},
+		// The letters after an unbraced code are text, exactly as they are
+		// after an unbraced color code.
+		{`%Dx`, "26-09-07x"},
+	} {
+		if got := s.render(tc.in); got != tc.want {
+			t.Errorf("%s drew %q, want %q", tc.in, got, tc.want)
+		}
+	}
+	// And a code *not* in Formats keeps its braces as the text they are,
+	// which is what says the set is read and not the presence of braces.
+	plain := Shell{
+		Clock: func() time.Time { return at },
+		Style: PromptStyle{Escape: '%', Codes: map[rune]PromptField{'D': FieldDateYearMonthDay}},
+	}
+	if got := plain.render(`%D{%H}`); got != "26-09-07{%H}" {
+		t.Errorf("a code outside Formats drew %q, want the braces as text", got)
+	}
+}

@@ -3,7 +3,7 @@
 
 package dash
 
-import "github.com/blairham/sh/repl"
+import "github.com/blairham/sh/interp"
 
 // PromptStyle is what dash does to a prompt parameter's value before drawing
 // it.
@@ -16,8 +16,8 @@ import "github.com/blairham/sh/repl"
 //
 // Measured through a pty rather than taken from documentation: the panel
 // disagrees about this, and the disagreement is why the field exists.
-func PromptStyle() repl.PromptStyle {
-	return repl.PromptStyle{
+func PromptStyle() interp.PromptStyle {
+	return interp.PromptStyle{
 		Expand: true,
 		// Measured with nothing assigned: real dash prompts `$ ` and continues
 		// with `> `, which is what the substrate does anyway. Stated rather than

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -47,106 +48,58 @@ func (s Shell) history(text string) string {
 			i++
 			continue
 		}
-		b.WriteString(s.field(FieldHistoryNumber))
+		b.WriteString(s.field(FieldHistoryNumber, "", false))
 	}
 	return b.String()
 }
 
 // table draws each code in the prompt's text.
+//
+// The walker is [interp.ExpandPromptStyle] and the table is the dialect's,
+// which is the same table the interpreter's `${(%)…}` and `print -P` read —
+// see repl/promptstyle.go for why that is one type and not two. This is the
+// *resolver* half, and the drawer's resolver answers everything: a session
+// knows its own history number, its terminal's name and what the parser is
+// still inside, so nothing here is ever refused and the walker's refusal
+// path is unreachable from this side. The escapes it would refuse for a
+// script are the ones this Shell answers.
+//
+// A code the table lists as Unsupported is the one exception, and it is the
+// one place the two readers deliberately differ: an expansion refuses it by
+// name, and a prompt has to draw something and falls through to whatever
+// Unknown says — the same answer it had when the code was in no table at all.
+//
+// Before expansion rather than after, which is measurable and not a detail:
+// with `x='\u'` set, bash draws `$x` as the two characters and not as the user
+// name, so a code that arrives *through* expansion is text and not a code. The
+// order also explains a thing that looks like a prompt feature and is not —
+// `\$` drawing a bare dollar in dash, which has no table at all, is what a
+// backslash does to a dollar during the expansion that follows.
 func (s Shell) table(text string) string {
-	if s.Style.Escape == 0 || text == "" {
-		return text
-	}
-	var b strings.Builder
-	runes := []rune(text)
-	for i := 0; i < len(runes); i++ {
-		if runes[i] != s.Style.Escape {
-			b.WriteRune(runes[i])
-			continue
-		}
-		if i+1 >= len(runes) {
-			// An escape with nothing after it is the character itself. There
-			// is no code to look up, so none of the three answers below
-			// applies.
-			b.WriteRune(runes[i])
-			break
-		}
-		code := runes[i+1]
-		i++
-		if field, ok := s.Style.Codes[code]; ok {
-			b.WriteString(s.field(field))
-			continue
-		}
-		if seq, ok := s.Style.Sequences[code]; ok {
-			b.WriteString(seq)
-			continue
-		}
-		if layer, ok := s.Style.Colors[code]; ok {
-			arg, next := colorArgument(runes, i+1)
-			i = next
-			b.WriteString(colorSequence(layer, arg))
-			continue
-		}
-		if v, ok := octalByte(s.Style.Octal, runes, i); ok {
-			b.WriteByte(v)
-			i += 2
-			continue
-		}
+	out, _, _ := interp.ExpandPromptStyle(s.Style, text, s.promptField)
+	return out
+}
+
+// promptField is the drawer's resolver: every code, always answered.
+//
+// FieldNone is a code in no part of the table. A prompt has to draw
+// something, so it draws what this dialect's Unknown says: bash keeps both
+// characters, ksh93 drops the escape and zsh drops the pair. A script's
+// expansion refuses the same code by name instead, which is the split the
+// walker's note explains — the policy is read here because this is the reader
+// that has to obey it.
+func (s Shell) promptField(f PromptField, arg string, braced bool) (string, bool) {
+	if f == FieldNone {
 		switch s.Style.Unknown {
 		case DropEscape:
-			b.WriteRune(code)
+			return arg, true
 		case DropBoth:
+			return "", true
 		default: // KeepBoth
-			b.WriteRune(s.Style.Escape)
-			b.WriteRune(code)
+			return string(s.Style.Escape) + arg, true
 		}
 	}
-	return b.String()
-}
-
-// colorArgument reads the braces after a color code, and says where the code
-// ended.
-//
-// No braces is the empty argument and the code ends where it was, which is
-// measured: zsh drew `%Fred` as the color for an empty argument and then the
-// three letters, so the letters after an unbraced code are text.
-//
-// An opening brace with no closing one is the rest of the prompt, for the
-// reason an unterminated anything is: there is no later text for it to be
-// text of.
-func colorArgument(runes []rune, i int) (string, int) {
-	if i >= len(runes) || runes[i] != '{' {
-		return "", i - 1
-	}
-	for j := i + 1; j < len(runes); j++ {
-		if runes[j] == '}' {
-			return string(runes[i+1 : j]), j
-		}
-	}
-	return string(runes[i+1:]), len(runes) - 1
-}
-
-// octalByte reads three octal digits as the byte they name.
-//
-// Three exactly. Measured against bash: `\007` drew the bell and `\101` drew
-// `A`, while `\0`, `\1`, `\10`, `\00` and `\8` were each drawn as the two
-// characters written — so a shorter run is not a shorter number, it is not a
-// number at all and falls through to whatever the dialect does with a code it
-// does not know.
-//
-// The low byte of the value, so `\400` is a NUL, which is what bash drew.
-func octalByte(enabled bool, runes []rune, i int) (byte, bool) {
-	if !enabled || i+2 >= len(runes) {
-		return 0, false
-	}
-	v := 0
-	for _, r := range runes[i : i+3] {
-		if r < '0' || r > '7' {
-			return 0, false
-		}
-		v = v*8 + int(r-'0')
-	}
-	return byte(v), true
+	return s.field(f, arg, braced), true
 }
 
 // field is what one code draws.
@@ -156,7 +109,7 @@ func octalByte(enabled bool, runes []rune, i int) (byte, bool) {
 // has assigned PWD or HOME means it, and asking the operating system instead
 // would draw a prompt describing a different shell than the one being typed
 // into.
-func (s Shell) field(f PromptField) string {
+func (s Shell) field(f PromptField, arg string, braced bool) string {
 	switch f {
 	case FieldUser:
 		return s.userName()
@@ -214,11 +167,37 @@ func (s Shell) field(f PromptField) string {
 		return markStart
 	case FieldNonPrintingEnd:
 		return markEnd
+	case FieldSourceFile, FieldUnitName:
+		// The file being read, which only the interpreter knows — it is
+		// reading nothing at a prompt, so both come to what the shell calls
+		// itself. Asked of the Runner rather than answered here, so that
+		// `${(%):-%x}` typed at the prompt and `%x` written *in* the prompt
+		// are the same answer.
+		if s.Runner == nil {
+			return ""
+		}
+		v, _ := s.Runner.PromptField(f, arg, braced)
+		return v
 	case FieldExitStatus:
 		if s.Runner == nil {
 			return "0"
 		}
 		return itoa(s.Runner.ExitStatus())
+	}
+	if braced && isClockField(f) {
+		// The braces after a Formats code hold a `strftime` format and
+		// replace the shape the code would otherwise draw: measured, `%D` is
+		// `26-09-07` and `%D{%H:%M}` is the clock through that format.
+		//
+		// interp.Strftime rather than a formatter of this package's own,
+		// because a second implementation of one format language is the thing
+		// that would drift — it is the same one `printf '%(fmt)T'` writes
+		// through. The *clock* is still this reader's, which is the resolver
+		// split doing what it is for: a prompt is tested with an injected
+		// Clock and a script's expansion with the Runner's.
+		return interp.Strftime(arg, s.now())
+	}
+	switch f {
 	case FieldTime24:
 		return s.now().Format("15:04:05")
 	case FieldTime12:
@@ -250,6 +229,12 @@ func (s Shell) field(f PromptField) string {
 		return s.now().Format("06-01-02")
 	}
 	return ""
+}
+
+// isClockField reports whether a code is drawn from the clock, and so whether
+// a `strftime` argument in braces has anything to replace.
+func isClockField(f PromptField) bool {
+	return f >= FieldTime24 && f <= FieldDateYearMonthDay
 }
 
 // userName is who the shell is running as.

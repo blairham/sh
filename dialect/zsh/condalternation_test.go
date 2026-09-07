@@ -186,6 +186,11 @@ func TestOnlyTheRangeShapeSurvivesALeadingGroup(t *testing.T) {
 		`k=x; [[ $k == (<-->) ]] && echo hit || echo miss`,
 		`k=x; [[ $k == (<>) ]] && echo hit || echo miss`,
 		`k=x; [[ $k == (<1) ]] && echo hit || echo miss`,
+		// Each half of the shape, separately: `<1-2` is missing its `>`
+		// and `<12>` its `-`, and dropping either test from the scanner
+		// survived the suite until these two rows.
+		`k=x; [[ $k == (<1-2) ]] && echo hit || echo miss`,
+		`k=x; [[ $k == (<12>) ]] && echo hit || echo miss`,
 	} {
 		if !parseFails(t, src) {
 			t.Errorf("%s: parsed, where the `<` is not a range and ends the word", src)

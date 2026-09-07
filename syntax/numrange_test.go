@@ -84,6 +84,15 @@ func TestOnlyTheMeasuredShapeIsARange(t *testing.T) {
 		`echo <-->`,
 		`echo <->>`,
 		`echo <`,
+		// The `-` is required and it is a `-` rather than "some
+		// separator": dropping its test from numericRangeAt admits any
+		// single character in its place, and that survived the whole suite
+		// until these rows. Measured on zsh 5.9.2, each in a script file of
+		// its own under `env -i`: all four are parse errors there.
+		`echo <12>`,
+		`echo <a>`,
+		`echo <1x2>`,
+		`echo <1.2>`,
 	} {
 		if _, err := Parse(src, on); err == nil {
 			t.Errorf("%s: read as a range, where only `<` digits `-` digits `>` is one", src)
@@ -123,6 +132,17 @@ func TestDigitsInFrontOfANumericRangeAreNotADescriptor(t *testing.T) {
 	cmd := onlySimpleCommand(t, parsed(t, `echo 2<f`, on), `echo 2<f`)
 	if len(cmd.Args) != 1 || len(cmd.Redirs) != 1 {
 		t.Errorf("`echo 2<f`: %d words and %d redirections, want 1 and 1", len(cmd.Args), len(cmd.Redirs))
+	}
+	// And a range missing only its closing `>` is a redirection from a file
+	// whose name happens to hold a dash. "Did it parse" cannot say so —
+	// both readings parse — so it is asserted as the shape, which is what
+	// makes it the row that catches a scanner reading a width past the end
+	// of the input. Measured on zsh 5.9.2: `cat <1-2` prints the contents of
+	// a file called `1-2`.
+	open := onlySimpleCommand(t, parsed(t, `echo <1-2`, on), `echo <1-2`)
+	if len(open.Args) != 1 || len(open.Redirs) != 1 {
+		t.Errorf("`echo <1-2`: %d words and %d redirections, want 1 and 1",
+			len(open.Args), len(open.Redirs))
 	}
 }
 
@@ -309,6 +329,12 @@ func TestOnlyARangeSurvivesALeadingGroupsOperators(t *testing.T) {
 		`[[ $k == (<-->) ]] && echo hit`,
 		`[[ $k == (<>) ]] && echo hit`,
 		`[[ $k == (<1) ]] && echo hit`,
+		// The two that say each half of the shape is load-bearing, and the
+		// two the mutation run needed: `(<1-2)` is what a dropped
+		// closing-`>` test would admit and `(<12>)` what a dropped `-`
+		// test would. Both are parse errors in zsh 5.9.2 as well.
+		`[[ $k == (<1-2) ]] && echo hit`,
+		`[[ $k == (<12>) ]] && echo hit`,
 	} {
 		if _, err := Parse(src, on); err == nil {
 			t.Errorf("%s: parsed, where the `<` is not a range and ends the word", src)

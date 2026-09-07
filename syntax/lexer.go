@@ -862,6 +862,12 @@ func (l *Lexer) scanArgumentGroup() string {
 		// the plain operator keeps every byte that is not a range: measured
 		// on zsh 5.9.2, `(a<b)`, `(<a-b>)`, `(<1-2-3>)`, `(<-->)`, `(<>)`
 		// and `(<1)` are all still parse errors there.
+		//
+		// Adding `&& depth > 0` here survives the suite, for the same
+		// reason `depth >= 0` does below and recorded for the same reason:
+		// the only pass with depth zero is the first one and its byte is
+		// the `(`, which is not a `<`. It is an equivalent mutant rather
+		// than a gap.
 		if width, ok := l.numericRangeAt(0); ok {
 			for range width {
 				l.advance()

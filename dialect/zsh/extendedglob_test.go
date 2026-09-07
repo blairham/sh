@@ -160,20 +160,67 @@ func TestTheAnchorsOnEverySurface(t *testing.T) {
 	}
 }
 
+// The reporting flags in this shell, where `$match[1]` is the shell's own
+// spelling and its arrays count from one.
+//
+// Measured on zsh 5.9.2, 2026-09-07 — see docs/spec/grammar/patterns.md.
+func TestTheReportingFlagsInThisShell(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "ax"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, src, want string }{
+		{"a condition", `[[ abc == (#b)(a)(b)c ]]; print -r -- "$match[1]$match[2] $mbegin[1]$mbegin[2] $mend[1]$mend[2]"`, "ab 12 12"},
+		{"a case arm", `case abc in ((#b)(a)(b)c) print -r -- "$match[1]$match[2]";; esac`, "ab"},
+		{"a trim prefix", `v=abcd; print -r -- "${v#(#b)(a)(b)} $match[1]$match[2] $mbegin[2]"`, "cd ab 2"},
+		{"a trim suffix", `v=abcd; print -r -- "${v%(#b)(c)(d)} $mbegin[1]$mbegin[2]"`, "ab 34"},
+		{"an element filter", `a=(abc xbc); print -r -- ${a:#(#b)(a)*} "$match[1]"`, "xbc a"},
+		{"an (r) subscript", `a=(ab cb); print -r -- "${a[(r)(#b)(a)*]} $match[1]"`, "ab a"},
+		{"the whole match", `[[ abc == (#m)a* ]]; print -r -- "$MATCH $MBEGIN $MEND"`, "abc 1 3"},
+		{"both at once", `[[ abc == (#m)(#b)(a)b* ]]; print -r -- "$MATCH $match[1]"`, "abc a"},
+		{"a replacement, per match", `v=abcd; print -r -- "${v//(#b)(b)(c)/<$match[1]-$match[2]>}"`, "a<b-c>d"},
+		{"a replacement, the whole match", `v=abcd; print -r -- "${v//(#m)[bc]/<$MATCH:$MBEGIN>}"`, "a<b:2><c:3>d"},
+		// A group that never participated, which is the row that says why a
+		// quietly dropped flag was never acceptable: empty is a real answer.
+		{"a group that did not run", `[[ ac == (#b)(a)((b))#c ]]; print -r -- "[$match[2]] $mbegin[2] $mend[2]"`, "[] -1 -1"},
+		// The arrays are the shell's own, so `local` contains them.
+		{"local containment", `f() { local match mbegin mend; [[ abc == (#b)(a)* ]]; print -r -- in=$match[1]; }; f; print -r -- "out=[$match[1]]"`, "in=a\nout=[]"},
+		// Nothing is written where the pattern asked for nothing.
+		{"no group, no write", `match=(zz); [[ abc == (#b)abc ]]; print -r -- "$match[1]"`, "zz"},
+		{"no match, no write", `MATCH=zz; [[ abc == (#m)xyz ]]; print -r -- "$MATCH"`, "zz"},
+		// Pathname expansion is the surface that reports *nothing*, measured
+		// rather than assumed.
+		{"the walk reports nothing", `match=(zz); print -rl -- (#b)(a)* >/dev/null; print -r -- "$match[1]"`, "zz"},
+	} {
+		out, st := runZsh(t, dir, "setopt extendedglob\n"+tc.src)
+		if strings.TrimSpace(out) != tc.want || st != 0 {
+			t.Errorf("%s: %s = %q (status %d), want %q", tc.name, tc.src, out, st, tc.want)
+		}
+	}
+	// The reported positions move with the array base, which is this shell's
+	// own option and not a constant: measured, `(#m)` on `abc` reports
+	// `1 3` and `0 2` under `ksharrays`.
+	const kshArrays = "setopt extendedglob ksharrays\n" +
+		"[[ abc == (#m)a* ]]; print -r -- \"$MBEGIN $MEND\""
+	out, st := runZsh(t, dir, kshArrays)
+	if strings.TrimSpace(out) != "0 2" || st != 0 {
+		t.Errorf("`(#m)` under ksharrays = %q (status %d), want 0 2", out, st)
+	}
+}
+
 // The refusals, which are the half this change is really about: a `(#b)` also
 // fills `$match`, so one that was quietly dropped left a script reading
 // `$match[1]` with an empty value rather than seeing that the feature is not
 // here.
 func TestTheUnimplementedFlagsAreRefusedByName(t *testing.T) {
 	for _, tc := range []struct{ src, name string }{
-		{`[[ abc == (#b)(a)* ]]; echo "m=[$match[1]]"`, "(#b)"},
-		{`[[ abc == (#B)(a)* ]]`, "(#B)"},
-		{`[[ abc == (#m)a* ]]`, "(#m)"},
-		{`[[ abd == (#a1)abc ]]`, "(#a)"},
+		{`[[ abd == (#a1)abc ]]; echo "m=[$match[1]]"`, "(#a)"},
+		{`[[ abc == (#u)abc ]]`, "(#u)"},
+		{`[[ abc == (#U)abc ]]`, "(#U)"},
 		// Against the filesystem too, where a refusal that reported and
 		// carried on would go on to say the pattern matched nothing — a
 		// weaker and different claim from the one already made.
-		{`echo (#m)a*`, "(#m)"},
+		{`echo (#u)a*`, "(#u)"},
 	} {
 		out, st := runZsh(t, t.TempDir(), "setopt extendedglob\n"+tc.src)
 		want := "the " + tc.name + " pattern flag is not implemented"

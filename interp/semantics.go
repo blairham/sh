@@ -5401,7 +5401,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 	if hasUnterminatedBracket(pattern) {
 		o.bracket, o.bad = r.bracketPolicy(), &bad
 	}
-	matched := matchPattern(pattern, s, o)
+	matched, report := matchPatternIn(pattern, s, s, 0, o)
 	if bad {
 		// zsh abandons the script rather than failing the match.
 		// Measured: zsh abandons the script here with status 0, and with 1
@@ -5409,6 +5409,14 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		// zsh's, and neither is guessable from the other.
 		r.fatalPattern(pattern, 0)
 		return false
+	}
+	// The surfaces this function serves are the ones that report a match
+	// into `$match` and `$MATCH` — a condition, a `case`, the element
+	// filters and an `(r)` subscript. Pathname expansion is deliberately
+	// not among them: measured, `print -rl -- (#b)(a)*` leaves `$match`
+	// untouched, so the walk goes through matchPattern instead.
+	if matched {
+		r.publishMatch(report)
 	}
 	return matched
 }

@@ -1493,7 +1493,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		return r.trimWith(value, r.patternOf(e.Arg), e.Op)
 
 	case syntax.ParamReplace:
-		return r.replaceWith(value, r.patternOf(e.Arg), r.replacementOf(e.Arg2), e)
+		return r.replaceWith(value, r.patternOf(e.Arg), e)
 
 	case syntax.ParamSubstring:
 		return r.substringRange(value, e)
@@ -1782,8 +1782,8 @@ func (r *Runner) elementOpApplier(e *syntax.ParamExpr) func(string) string {
 		pattern := r.patternOf(e.Arg)
 		return func(v string) string { return r.trimWith(v, pattern, e.Op) }
 	case syntax.ParamReplace:
-		pattern, with := r.patternOf(e.Arg), r.replacementOf(e.Arg2)
-		return func(v string) string { return r.replaceWith(v, pattern, with, e) }
+		pattern := r.patternOf(e.Arg)
+		return func(v string) string { return r.replaceWith(v, pattern, e) }
 	default:
 		pattern := r.patternOf(e.Arg)
 		return func(v string) string { return r.changeCaseWith(v, pattern, e) }
@@ -2006,27 +2006,46 @@ func toggleCase(c rune) rune {
 }
 
 func (r *Runner) trimWith(value, pattern string, op syntax.ParamOp) string {
-	return trim(value, pattern, op, r.patternOpts(pattern, value))
+	out, m := trim(value, pattern, op, r.patternOpts(pattern, value))
+	r.publishMatch(m)
+	return out
 }
 
 // matchedWith is trimWith with the flag that keeps what the pattern took.
 func (r *Runner) matchedWith(value, pattern string, op syntax.ParamOp) string {
-	return matched(value, pattern, op, r.patternOpts(pattern))
+	out, m := matched(value, pattern, op, r.patternOpts(pattern))
+	r.publishMatch(m)
+	return out
 }
 
-func (r *Runner) replaceWith(value, pattern, with string, e *syntax.ParamExpr) string {
-	return replace(value, pattern, with, e, r.patternOpts(pattern, value))
+// replaceWith substitutes a matching span, with the replacement text
+// **recomputed for every match**.
+//
+// That is measured and not a nicety: `x=abcd; ${x//(#b)(b)(c)/[$match[1]]}`
+// answers `a[b]d`, and `${x//(#m)[bc]/<$MATCH:$MBEGIN>}` answers
+// `a<b:2><c:3>d`, so each replacement reads the parameters that *its own*
+// match wrote. A `with` joined once before the scan cannot say either.
+func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string {
+	o := r.patternOpts(pattern, value)
+	return replace(value, pattern, e, o, func(m matchReport) string {
+		r.publishMatch(m)
+		// The replacement is *text* and not a pattern — the same reading
+		// every other call site takes (#1337) — and it is read here rather
+		// than by the caller because it has to be read again for each
+		// match.
+		return r.replacementOf(e.Arg2)
+	})
 }
 
-func trim(value, pattern string, op syntax.ParamOp, o patternOpts) string {
-	i, ok := trimEdge(value, pattern, op, o)
+func trim(value, pattern string, op syntax.ParamOp, o patternOpts) (string, matchReport) {
+	i, m, ok := trimEdge(value, pattern, op, o)
 	if !ok {
-		return value
+		return value, matchReport{}
 	}
 	if trimsPrefix(op) {
-		return value[i:]
+		return value[i:], m
 	}
-	return value[:i]
+	return value[:i], m
 }
 
 // matched is trim's other half: the part the pattern took rather than the part
@@ -2036,15 +2055,15 @@ func trim(value, pattern string, op syntax.ParamOp, o patternOpts) string {
 // other side of the same split — which is why it shares trimEdge rather than
 // scanning again. Measured: `${(M)v#h*l}` on `hello` is `hel` where
 // `${v#h*l}` is `lo`, and `${(M)v#zzz}` is empty where `${v#zzz}` is `hello`.
-func matched(value, pattern string, op syntax.ParamOp, o patternOpts) string {
-	i, ok := trimEdge(value, pattern, op, o)
+func matched(value, pattern string, op syntax.ParamOp, o patternOpts) (string, matchReport) {
+	i, m, ok := trimEdge(value, pattern, op, o)
 	if !ok {
-		return ""
+		return "", matchReport{}
 	}
 	if trimsPrefix(op) {
-		return value[:i]
+		return value[:i], m
 	}
-	return value[i:]
+	return value[i:], m
 }
 
 func trimsPrefix(op syntax.ParamOp) bool {
@@ -2053,7 +2072,7 @@ func trimsPrefix(op syntax.ParamOp) bool {
 
 // trimEdge is where a trim's pattern stops: the split point, and whether the
 // pattern matched at all.
-func trimEdge(value, pattern string, op syntax.ParamOp, o patternOpts) (int, bool) {
+func trimEdge(value, pattern string, op syntax.ParamOp, o patternOpts) (int, matchReport, bool) {
 	prefix := trimsPrefix(op)
 	longest := op == syntax.ParamTrimPrefixLong || op == syntax.ParamTrimSuffixLong
 
@@ -2073,22 +2092,22 @@ func trimEdge(value, pattern string, op syntax.ParamOp, o patternOpts) (int, boo
 			// its end only when it is the whole of it. Measured on zsh
 			// 5.9.2, `x=abcd; ${x#ab(#e)}` leaves `abcd` alone where
 			// `${x#abcd(#e)}` empties it.
-			if matchPatternAt(pattern, value[:i], 0, len(value), o) {
-				return i, true
+			if ok, m := matchPatternIn(pattern, value[:i], value, 0, o); ok {
+				return i, m, true
 			}
 			continue
 		}
-		if matchPatternAt(pattern, value[i:], i, len(value), o) {
-			return i, true
+		if ok, m := matchPatternIn(pattern, value[i:], value, i, o); ok {
+			return i, m, true
 		}
 	}
-	return 0, false
+	return 0, matchReport{}, false
 }
 
 // replace substitutes a matching span, once or everywhere.
 //
 // The anchored forms match only at one end, which is what `/#` and `/%` mean.
-func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) string {
+func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, with func(matchReport) string) string {
 	// Every position a match may start or end at, in order, and there is one
 	// more of them than there are units. They are unit boundaries rather than
 	// byte offsets, so a pattern is never handed half of a character —
@@ -2098,15 +2117,15 @@ func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) st
 	switch e.Anchor {
 	case '#':
 		for k := len(stops) - 1; k >= 0; k-- {
-			if matchPatternAt(pattern, value[:stops[k]], 0, len(value), o) {
-				return with + value[stops[k]:]
+			if ok, m := matchPatternIn(pattern, value[:stops[k]], value, 0, o); ok {
+				return with(m) + value[stops[k]:]
 			}
 		}
 		return value
 	case '%':
 		for _, i := range stops {
-			if matchPatternAt(pattern, value[i:], i, len(value), o) {
-				return value[:i] + with
+			if ok, m := matchPatternIn(pattern, value[i:], value, i, o); ok {
+				return value[:i] + with(m)
 			}
 		}
 		return value
@@ -2118,24 +2137,26 @@ func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) st
 		// The longest match at this position, so `*` behaves as it does
 		// everywhere else rather than matching empty and looping.
 		end := -1
+		var rep matchReport
 		for m := len(stops) - 1; m >= k; m-- {
 			// Every span tried is a piece of value and is matched as one,
 			// so a `(#s)` matches only the span starting at 0 and a `(#e)`
 			// only the one ending at the last unit. Measured:
 			// `x=XbXcX; ${x//(#s)X/-}` is `-bXcX`, not `-b-c-`.
-			if matchPatternAt(pattern, value[i:stops[m]], i, len(value), o) {
-				end = stops[m]
+			ok, got := matchPatternIn(pattern, value[i:stops[m]], value, i, o)
+			if ok {
+				end, rep = stops[m], got
 				break
 			}
 		}
-		if end < 0 || end == i && pattern != "" && !matchPatternAt(pattern, "", i, len(value), o) {
+		if end < 0 || end == i && pattern != "" && !matchPattern(pattern, "", o) {
 			if i < len(value) {
 				b.WriteString(value[i:stops[k+1]])
 			}
 			k++
 			continue
 		}
-		b.WriteString(with)
+		b.WriteString(with(rep))
 		if !e.All {
 			b.WriteString(value[end:])
 			return b.String()

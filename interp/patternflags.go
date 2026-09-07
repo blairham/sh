@@ -161,6 +161,11 @@ func applyPatternFlags(body string, o patternOpts) (patternOpts, byte) {
 			o.litFold = caseExact
 		case 'l':
 			o.litFold = caseLowerEither
+		case 'b', 'B', 'm', 'M':
+			// The reporting flags. They change nothing about *how* a
+			// pattern matches, only about what a successful match writes
+			// down, so the matcher steps over them and planCaptures is
+			// where they are read.
 		default:
 			return o, body[i]
 		}
@@ -370,25 +375,30 @@ func readCount(s string, empty int) (int, bool) {
 // needs the closure to stop one character early. A repetition always consumes
 // at least one unit, which is what makes the recursion terminate for an item
 // that can match nothing.
-func matchRepeat(item string, lo, hi int, after, s string, at int, o patternOpts) bool {
-	return repeatFrom(item, 0, lo, hi, after, s, at, o)
+func matchRepeat(item string, ip, lo, hi int, after string, ap int, s string, at int, o patternOpts) bool {
+	return repeatFrom(item, ip, 0, lo, hi, after, ap, s, at, o)
 }
 
-func repeatFrom(item string, k, lo, hi int, after, s string, at int, o patternOpts) bool {
-	if k >= lo && matchHere(after, s, at, o) {
+func repeatFrom(item string, ip, k, lo, hi int, after string, ap int, s string, at int, o patternOpts) bool {
+	mark := o.caps.mark()
+	if k >= lo && matchHere(after, s, ap, at, o) {
 		return true
 	}
+	o.caps.rollback(mark)
 	if hi != unboundedRepeat && k >= hi {
 		return false
 	}
 	for i := 0; i < len(s); {
 		i += o.unitWidth(s[i:])
-		if !matchHere(item, s[:i], at, o) {
+		mark := o.caps.mark()
+		if !matchHere(item, s[:i], ip, at, o) {
+			o.caps.rollback(mark)
 			continue
 		}
-		if repeatFrom(item, k+1, lo, hi, after, s[i:], at+i, o) {
+		if repeatFrom(item, ip, k+1, lo, hi, after, ap, s[i:], at+i, o) {
 			return true
 		}
+		o.caps.rollback(mark)
 	}
 	return false
 }
@@ -420,7 +430,7 @@ type patternFault struct {
 // `$mend` and their scalar kin. Each is still refused by name, because a flag
 // that quietly did nothing would leave those reading as "the group matched
 // nothing" rather than as "this shell does not do backreferences".
-const implementedPatternFlags = "iIl"
+const implementedPatternFlags = "iIlbBmM"
 
 // knownPatternFlags are the letters the shell itself has, so that a refusal
 // can tell "this shell does not do that yet" apart from "no shell does".
@@ -554,6 +564,15 @@ func countClosure(body string) (lo, hi int, ok bool) {
 	return readCountSpec(body[1:])
 }
 
+// planCapturesFor is planCaptures where the pattern could have a flag group
+// at all, and the empty plan where it plainly could not.
+func planCapturesFor(pattern string, o patternOpts) capturePlan {
+	if !hasPatternFlagGroup(pattern) {
+		return capturePlan{}
+	}
+	return planCaptures(pattern, o)
+}
+
 // extendedPatternOpts fills in the extended-operator answers for one pattern,
 // and refuses one holding a construct this matcher does not implement.
 //
@@ -576,6 +595,7 @@ func (r *Runner) extendedPatternOpts(o patternOpts, pattern string, badStatus in
 	f, found := scanExtendedPattern(pattern, o)
 	switch {
 	case !found:
+		o.plan = planCapturesFor(pattern, o)
 		return o
 	case f.bad:
 		r.fatalPattern(pattern, badStatus)

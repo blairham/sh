@@ -19387,94 +19387,6 @@
         "TimedOut": false
       }
     },
-    "cond/a-groups-operator-may-be-quoted": {
-      "bash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(\\'~\u003cshell\u003e: -c: line 1: `k='\u003cx'; [[ $k == (\\\u003c)* ]] \u0026\u0026 echo esc || echo no; [[ $k == (\"\u003c\")* ]] \u0026\u0026 echo dq || echo no; [[ $k == ('\u003c')* ]] \u0026\u0026 echo sq || echo no; k2='a;b'; [[ $k2 == (a\\;b) ]] \u0026\u0026 echo semi || echo no'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(\\'~\u003cshell\u003e: -c: line 1: `k='\u003cx'; [[ $k == (\\\u003c)* ]] \u0026\u0026 echo esc || echo no; [[ $k == (\"\u003c\")* ]] \u0026\u0026 echo dq || echo no; [[ $k == ('\u003c')* ]] \u0026\u0026 echo sq || echo no; k2='a;b'; [[ $k2 == (a\\;b) ]] \u0026\u0026 echo semi || echo no'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 0: syntax error near `(\\'~\u003cshell\u003e: -c: line 0: `k='\u003cx'; [[ $k == (\\\u003c)* ]] \u0026\u0026 echo esc || echo no; [[ $k == (\"\u003c\")* ]] \u0026\u0026 echo dq || echo no; [[ $k == ('\u003c')* ]] \u0026\u0026 echo sq || echo no; k2='a;b'; [[ $k2 == (a\\;b) ]] \u0026\u0026 echo semi || echo no'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
-        "Status": 3,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "esc~dq~sq~semi",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "cond/a-groups-quoted-text-is-literal": {
-      "bash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(\"'~\u003cshell\u003e: -c: line 1: `[[ b == (\"b\") ]] \u0026\u0026 echo dq || echo no; [[ b == (\\b) ]] \u0026\u0026 echo esc || echo no; [[ 'a*b' == (a\"*\"b) ]] \u0026\u0026 echo star || echo no; [[ axb == (a\"*\"b) ]] \u0026\u0026 echo wild || echo no; [[ 'a|b' == (a\\|b) ]] \u0026\u0026 echo bar || echo no'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(\"'~\u003cshell\u003e: -c: line 1: `[[ b == (\"b\") ]] \u0026\u0026 echo dq || echo no; [[ b == (\\b) ]] \u0026\u0026 echo esc || echo no; [[ 'a*b' == (a\"*\"b) ]] \u0026\u0026 echo star || echo no; [[ axb == (a\"*\"b) ]] \u0026\u0026 echo wild || echo no; [[ 'a|b' == (a\\|b) ]] \u0026\u0026 echo bar || echo no'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 0: syntax error near `(\"'~\u003cshell\u003e: -c: line 0: `[[ b == (\"b\") ]] \u0026\u0026 echo dq || echo no; [[ b == (\\b) ]] \u0026\u0026 echo esc || echo no; [[ 'a*b' == (a\"*\"b) ]] \u0026\u0026 echo star || echo no; [[ axb == (a\"*\"b) ]] \u0026\u0026 echo wild || echo no; [[ 'a|b' == (a\\|b) ]] \u0026\u0026 echo bar || echo no'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
-        "Status": 3,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "dq~esc~star~no~bar",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
     "cond/a-leading-groups-numeric-range-has-four-shapes": {
       "bash": {
         "Stdout": "",
@@ -19559,94 +19471,6 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: parse error near `\u003c'",
         "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "cond/a-mid-word-groups-operator-ends-the-word": {
-      "bash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error in conditional expression: unexpected token `('~\u003cshell\u003e: -c: line 1: syntax error near `a(b'~\u003cshell\u003e: -c: line 1: `k='ab\u003cc'; [[ $k == a(b\u003cc) ]] \u0026\u0026 echo hit || echo miss; echo after'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error in conditional expression: unexpected token `('~\u003cshell\u003e: -c: line 1: syntax error near `a(b'~\u003cshell\u003e: -c: line 1: `k='ab\u003cc'; [[ $k == a(b\u003cc) ]] \u0026\u0026 echo hit || echo miss; echo after'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error in conditional expression: unexpected token `('~\u003cshell\u003e: -c: line 0: syntax error near `a(b'~\u003cshell\u003e: -c: line 0: `k='ab\u003cc'; [[ $k == a(b\u003cc) ]] \u0026\u0026 echo hit || echo miss; echo after'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
-        "Status": 3,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e:1: parse error near `\u003c'",
-        "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "cond/a-mid-word-groups-operator-may-be-quoted": {
-      "bash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error in conditional expression: unexpected token `('~\u003cshell\u003e: -c: line 1: syntax error near `a(b'~\u003cshell\u003e: -c: line 1: `k='ab\u003cc'; [[ $k == a(b\\\u003cc) ]] \u0026\u0026 echo esc || echo no; k2=ab; [[ $k2 == a(b|c) ]] \u0026\u0026 echo alt || echo no; k3=a5; [[ $k3 == a(\u003c0-9\u003e) ]] \u0026\u0026 echo range || echo no'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error in conditional expression: unexpected token `('~\u003cshell\u003e: -c: line 1: syntax error near `a(b'~\u003cshell\u003e: -c: line 1: `k='ab\u003cc'; [[ $k == a(b\\\u003cc) ]] \u0026\u0026 echo esc || echo no; k2=ab; [[ $k2 == a(b|c) ]] \u0026\u0026 echo alt || echo no; k3=a5; [[ $k3 == a(\u003c0-9\u003e) ]] \u0026\u0026 echo range || echo no'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error in conditional expression: unexpected token `('~\u003cshell\u003e: -c: line 0: syntax error near `a(b'~\u003cshell\u003e: -c: line 0: `k='ab\u003cc'; [[ $k == a(b\\\u003cc) ]] \u0026\u0026 echo esc || echo no; k2=ab; [[ $k2 == a(b|c) ]] \u0026\u0026 echo alt || echo no; k3=a5; [[ $k3 == a(\u003c0-9\u003e) ]] \u0026\u0026 echo range || echo no'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
-        "Status": 3,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "esc~alt~range",
-        "Stderr": "",
-        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -27791,50 +27615,6 @@
         "TimedOut": false
       }
     },
-    "declare/a-bare-integer-letter-and-what-base-ten-is": {
-      "bash": {
-        "Stdout": "1[]~2[]~3[]",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: integer: command not found~\u003cshell\u003e: line 3: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 4: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 4: typeset: d: not found",
-        "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "1[]~2[]~3[]",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: integer: command not found~\u003cshell\u003e: line 3: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 4: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 4: typeset: d: not found",
-        "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "1[]~2[]~3[]",
-        "Stderr": "\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 1: integer: command not found~\u003cshell\u003e: line 2: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 3: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 3: typeset: d: not found",
-        "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "1[]~2[]~3[]",
-        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 2: integer: not found~\u003cshell\u003e: 3: typeset: not found~\u003cshell\u003e: 3: typeset: not found~\u003cshell\u003e: 4: typeset: not found~\u003cshell\u003e: 4: typeset: not found",
-        "Status": 127,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "1[255]~2[255]~3[16#ff]~typeset -i d=255",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "1[16#FF]~2[16#FF]~3[16#FF]~typeset -i10 d=255",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
     "declare/a-declaration-without-a-value-exports-nothing": {
       "bash": {
         "Stdout": "(none)~BAR=",
@@ -28095,50 +27875,6 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: m: assignment to invalid subscript range",
         "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "declare/a-learned-output-base-says-itself-back": {
-      "bash": {
-        "Stdout": "declare -i c=\"16\"~declare -i b=\"5\"~b=[5]~declare -i d=\"7\"",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "declare -i c=\"16\"~declare -i b=\"5\"~b=[5]~declare -i d=\"7\"",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "declare -i c=\"16\"~declare -i b=\"5\"~b=[5]~declare -i d=\"7\"",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "b=[10#5]",
-        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: typeset: not found~\u003cshell\u003e: 3: typeset: not found",
-        "Status": 127,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "typeset -i c=16~typeset -i b=5~b=[5]~typeset -i d=7",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "typeset -i16 c=16~typeset -i10 b=5~b=[5]~typeset -i8 d=7",
-        "Stderr": "",
-        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -28445,50 +28181,6 @@
       },
       "zsh": {
         "Stdout": "typeset q=7~st=0~typeset PATHX=zz~st=0",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "declare/a-negative-value-in-an-output-base": {
-      "bash": {
-        "Stdout": "1[]~2[]",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: typeset: -2: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "1[]~2[]",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: typeset: -2: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "1[]~2[]",
-        "Stderr": "\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 1: typeset: -2: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "1[]~2[]",
-        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "1[16#ffffffffffffff01]~2[2#1111111111111111111111111111111111111111111111111111111111111011]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "1[-16#FF]~2[-2#101]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -29463,50 +29155,6 @@
         "TimedOut": false
       }
     },
-    "declare/an-integer-attribute-carries-an-output-base": {
-      "bash": {
-        "Stdout": "1[64]~2[]~3[]~4[]",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -8: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 3: typeset: -2: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 4: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "1[64]~2[]~3[]~4[]",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -8: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 3: typeset: -2: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 4: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "1[64]~2[]~3[]~4[]",
-        "Stderr": "\u003cshell\u003e: line 0: typeset: -8: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 2: typeset: -2: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 3: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "1[64]~2[]~3[]~4[]",
-        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: typeset: not found~\u003cshell\u003e: 4: typeset: not found",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "1[8#100]~2[16#ff]~3[2#101]~4[255]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "1[8#100]~2[16#FF]~3[2#101]~4[255]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
     "declare/an-integer-attribute-over-a-number-written-oddly": {
       "bash": {
         "Stdout": "1[08]~2[ 7 ]~3[+7]~4[5+2]~5[]",
@@ -29810,182 +29458,6 @@
       "zsh": {
         "Stdout": "st=1",
         "Stderr": "\u003cshell\u003e:typeset:1: bad option: +q",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "declare/an-output-base-belongs-to-the-name": {
-      "bash": {
-        "Stdout": "1[5]~2[]~3[]~4[3]",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: typeset: -8: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 3: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "1[5]~2[]~3[]~4[3]",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: typeset: -8: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 3: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "1[5]~2[]~3[]~4[3]",
-        "Stderr": "\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 1: typeset: -8: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 2: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "1[]~2[]~3[]~4[3]",
-        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: typeset: not found~\u003cshell\u003e: 3: typeset: not found",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "1[16#5]~2[8#377]~3[16#ff]~4[3]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "1[16#5]~2[8#377]~3[16#FF]~4[3]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "declare/an-output-base-is-the-value-and-not-a-rendering": {
-      "bash": {
-        "Stdout": "len=0~copy=[]~arith=1",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-        "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "len=0~copy=[]~arith=1",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-        "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "len=0~copy=[]~arith=1",
-        "Stderr": "\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
-        "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "len=0~copy=[]~arith=1",
-        "Stderr": "\u003cshell\u003e: 1: typeset: not found",
-        "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "len=5~copy=[16#ff]~arith=256~h=16#ff",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "len=5~copy=[16#FF]~arith=256~h=16#FF",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "declare/an-output-base-outside-what-the-shell-spells": {
-      "bash": {
-        "Stdout": "1[] st=2~2[] st=2~3[]",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -6: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 3: typeset: -3: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "1[] st=2~2[] st=2~3[]",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -6: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 2: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 3: typeset: -3: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "1[] st=2~2[] st=2~3[]",
-        "Stderr": "\u003cshell\u003e: line 0: typeset: -6: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 2: typeset: -3: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "1[] st=127~2[] st=127~3[]",
-        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: typeset: not found",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "1[64#1A] st=0~2[5] st=0~3[36#2s]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "1[] st=1~2[] st=1~3[36#2S]",
-        "Stderr": "\u003cshell\u003e:typeset:1: invalid base (must be 2 to 36 inclusive): 64~\u003cshell\u003e:typeset:2: invalid base (must be 2 to 36 inclusive): 1",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "declare/an-output-base-says-itself-back": {
-      "bash": {
-        "Stdout": "declare -- d=\"64\"",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: a: not found~\u003cshell\u003e: line 2: typeset: -8: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "declare -- d=\"64\"",
-        "Stderr": "\u003cshell\u003e: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: a: not found~\u003cshell\u003e: line 2: typeset: -8: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "declare -- d=\"64\"",
-        "Stderr": "\u003cshell\u003e: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: a: not found~\u003cshell\u003e: line 1: typeset: -8: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 2: typeset: not found",
-        "Status": 127,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "typeset -i 16 a=16#ff~typeset -i 8 d=8#100",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "typeset -i16 a=255~typeset -i8 d=64",
-        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -33241,50 +32713,6 @@
       },
       "zsh": {
         "Stdout": "[]~after=[out]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "declare/zsh-learns-an-output-base-from-the-value": {
-      "bash": {
-        "Stdout": "1[16]~2[5]~3[99]~4[14]~5[16]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "1[16]~2[5]~3[99]~4[14]~5[16]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "1[16]~2[5]~3[99]~4[14]~5[16]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "1[0x10]~2[5]~3[99]~4[016]~5[16]",
-        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 2: typeset: not found~\u003cshell\u003e: 3: typeset: not found~\u003cshell\u003e: 4: typeset: not found~\u003cshell\u003e: 5: typeset: not found",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "1[16]~2[5]~3[99]~4[16]~5[16]",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "1[16#10]~2[16#5]~3[8#143]~4[16]~5[16]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -62822,6 +62250,50 @@
         "TimedOut": false
       }
     },
+    "pat/a-group-that-did-not-participate": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(#'~\u003cshell\u003e: -c: line 1: `setopt extendedglob 2\u003e/dev/null; [[ ac == (#b)(a)((b))#c ]]; print -r -- \"[$match[2]][$mbegin[2]][$mend[2]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(#'~\u003cshell\u003e: -c: line 1: `setopt extendedglob 2\u003e/dev/null; [[ ac == (#b)(a)((b))#c ]]; print -r -- \"[$match[2]][$mbegin[2]][$mend[2]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 0: syntax error near `(#'~\u003cshell\u003e: -c: line 0: `setopt extendedglob 2\u003e/dev/null; [[ ac == (#b)(a)((b))#c ]]; print -r -- \"[$match[2]][$mbegin[2]][$mend[2]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[][-1][-1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/a-literal-at-before-a-bare-group": {
       "bash": {
         "Stdout": "",
@@ -63702,44 +63174,44 @@
         "TimedOut": false
       }
     },
-    "pat/a-quoted-operator-in-a-group-reaches-every-route": {
+    "pat/a-replacement-is-expanded-per-match": {
       "bash": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 1: `case '\u003cx' in (\\\u003c)*) echo case;; *) echo no;; esac; case b in (a|\"b\")) echo alt;; *) echo no;; esac; v='\u003cx'; echo ${v/(\\\u003c)/L}'",
-        "Status": 2,
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 1: `case '\u003cx' in (\\\u003c)*) echo case;; *) echo no;; esac; case b in (a|\"b\")) echo alt;; *) echo no;; esac; v='\u003cx'; echo ${v/(\\\u003c)/L}'",
-        "Status": 2,
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 0: `case '\u003cx' in (\\\u003c)*) echo case;; *) echo no;; esac; case b in (a|\"b\")) echo alt;; *) echo no;; esac; v='\u003cx'; echo ${v/(\\\u003c)/L}'",
-        "Status": 2,
+        "Stderr": "\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found",
+        "Status": 127,
         "Signal": 0,
         "TimedOut": false
       },
       "dash": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: 1: Syntax error: \")\" unexpected (expecting \";;\")",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
         "Status": 2,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: syntax error at line 1: `)' unexpected",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
         "Status": 3,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "case~alt~Lx",
+        "Stdout": "a\u003cb-c\u003ed~a\u003cb:2\u003e\u003cc:3\u003ed",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -64890,6 +64362,94 @@
         "TimedOut": false
       }
     },
+    "pat/backreference-numbering-is-the-pattern-not-the-path": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(#'~\u003cshell\u003e: -c: line 1: `setopt extendedglob 2\u003e/dev/null; [[ abc == (#b)((x)|a(b)c) ]]; print -r -- \"[$match[1]|$match[2]|$match[3]][$mbegin[2]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(#'~\u003cshell\u003e: -c: line 1: `setopt extendedglob 2\u003e/dev/null; [[ abc == (#b)((x)|a(b)c) ]]; print -r -- \"[$match[1]|$match[2]|$match[3]][$mbegin[2]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 0: syntax error near `(#'~\u003cshell\u003e: -c: line 0: `setopt extendedglob 2\u003e/dev/null; [[ abc == (#b)((x)|a(b)c) ]]; print -r -- \"[$match[1]|$match[2]|$match[3]][$mbegin[2]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[abc||b][-1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/backreferences-fill-three-arrays": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(#'~\u003cshell\u003e: -c: line 1: `setopt extendedglob 2\u003e/dev/null; [[ abc == (#b)(a)(b*) ]]; print -r -- \"[$match[1]|$match[2]][$mbegin[1]|$mbegin[2]][$mend[1]|$mend[2]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(#'~\u003cshell\u003e: -c: line 1: `setopt extendedglob 2\u003e/dev/null; [[ abc == (#b)(a)(b*) ]]; print -r -- \"[$match[1]|$match[2]][$mbegin[1]|$mbegin[2]][$mend[1]|$mend[2]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 0: syntax error near `(#'~\u003cshell\u003e: -c: line 0: `setopt extendedglob 2\u003e/dev/null; [[ abc == (#b)(a)(b*) ]]; print -r -- \"[$match[1]|$match[2]][$mbegin[1]|$mbegin[2]][$mend[1]|$mend[2]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[a|bc][1|2][1|3]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/bracket-bang-negates-everywhere": {
       "bash": {
         "Stdout": "negated",
@@ -65418,6 +64978,50 @@
         "TimedOut": false
       }
     },
+    "pat/nothing-is-written-without-a-match": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(#'~\u003cshell\u003e: -c: line 1: `setopt extendedglob 2\u003e/dev/null; match=(zz); [[ abc == (#b)abc ]]; print -r -- \"[$match[1]]\"; [[ abc == (#b)(x)zz ]]; print -r -- \"[$match[1]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(#'~\u003cshell\u003e: -c: line 1: `setopt extendedglob 2\u003e/dev/null; match=(zz); [[ abc == (#b)abc ]]; print -r -- \"[$match[1]]\"; [[ abc == (#b)(x)zz ]]; print -r -- \"[$match[1]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 0: syntax error near `(#'~\u003cshell\u003e: -c: line 0: `setopt extendedglob 2\u003e/dev/null; match=(zz); [[ abc == (#b)abc ]]; print -r -- \"[$match[1]]\"; [[ abc == (#b)(x)zz ]]; print -r -- \"[$match[1]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[zz]~[zz]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/only-a-leading-period-is-special": {
       "bash": {
         "Stdout": "[a.b]",
@@ -65457,50 +65061,6 @@
       "zsh": {
         "Stdout": "[a.b]",
         "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "pat/quoted-text-in-an-extended-pattern-group": {
-      "bash": {
-        "Stdout": "dq~semi~star~no",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "dq~semi~star~no",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error in conditional expression: unexpected token `('~\u003cshell\u003e: -c: line 0: syntax error near `@(\"'~\u003cshell\u003e: -c: line 0: `shopt -s extglob; [[ b == @(\"b\") ]] \u0026\u0026 echo dq || echo no; [[ 'a;b' == @(\"a;b\") ]] \u0026\u0026 echo semi || echo no; [[ 'a*b' == @(a\"*\"b) ]] \u0026\u0026 echo star || echo no; [[ axb == @(a\"*\"b) ]] \u0026\u0026 echo wild || echo no'",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "",
-        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
-        "Status": 2,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "dq~semi~star~no",
-        "Stderr": "\u003cshell\u003e: shopt: not found",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "no~no~no~no",
-        "Stderr": "\u003cshell\u003e:1: command not found: shopt",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -65946,6 +65506,94 @@
         "TimedOut": false
       }
     },
+    "pat/the-walk-reports-no-match": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: syntax error near unexpected token `('~\u003cscript\u003e: line 4: `print -rl -- (#b)(a)* 2\u003e\u00261'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: syntax error near unexpected token `('~\u003cscript\u003e: line 4: `print -rl -- (#b)(a)* 2\u003e\u00261'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: syntax error near unexpected token `('~\u003cscript\u003e: line 4: `print -rl -- (#b)(a)* 2\u003e\u00261'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 3: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 3: syntax error at line 4: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ax~[zz]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/the-whole-match-flag": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(#'~\u003cshell\u003e: -c: line 1: `setopt extendedglob 2\u003e/dev/null; [[ abc == (#m)a* ]]; print -r -- \"[$MATCH][$MBEGIN][$MEND]\"; MATCH=zz; [[ abc == (#m)(#M)a* ]]; print -r -- \"[$MATCH]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(#'~\u003cshell\u003e: -c: line 1: `setopt extendedglob 2\u003e/dev/null; [[ abc == (#m)a* ]]; print -r -- \"[$MATCH][$MBEGIN][$MEND]\"; MATCH=zz; [[ abc == (#m)(#M)a* ]]; print -r -- \"[$MATCH]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 0: syntax error near `(#'~\u003cshell\u003e: -c: line 0: `setopt extendedglob 2\u003e/dev/null; [[ abc == (#m)a* ]]; print -r -- \"[$MATCH][$MBEGIN][$MEND]\"; MATCH=zz; [[ abc == (#m)(#M)a* ]]; print -r -- \"[$MATCH]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[abc][1][3]~[zz]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/unterminated-bracket": {
       "bash": {
         "Stdout": "hit",
@@ -66030,6 +65678,50 @@
         "Stdout": "[",
         "Stderr": "\u003cshell\u003e:1: bad pattern: [a",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/which-split-a-backreference-reports": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(#'~\u003cshell\u003e: -c: line 1: `setopt extendedglob 2\u003e/dev/null; [[ abc == (#b)(a|ab)* ]]; print -r -- \"[$match[1]]\"; [[ abc == (#b)(ab|a)* ]]; print -r -- \"[$match[1]]\"; [[ aabab == (#b)(a*)b ]]; print -r -- \"[$match[1]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(#'~\u003cshell\u003e: -c: line 1: `setopt extendedglob 2\u003e/dev/null; [[ abc == (#b)(a|ab)* ]]; print -r -- \"[$match[1]]\"; [[ abc == (#b)(ab|a)* ]]; print -r -- \"[$match[1]]\"; [[ aabab == (#b)(a*)b ]]; print -r -- \"[$match[1]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 0: syntax error near `(#'~\u003cshell\u003e: -c: line 0: `setopt extendedglob 2\u003e/dev/null; [[ abc == (#b)(a|ab)* ]]; print -r -- \"[$match[1]]\"; [[ abc == (#b)(ab|a)* ]]; print -r -- \"[$match[1]]\"; [[ aabab == (#b)(a*)b ]]; print -r -- \"[$match[1]]\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[a]~[ab]~[aaba]",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -73294,50 +72986,6 @@
         "TimedOut": false
       }
     },
-    "redir/a-closed-stdin-is-closed-for-a-command": {
-      "bash": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
     "redir/a-closed-stdin-is-closed-for-a-replacement": {
       "bash": {
         "Stdout": "",
@@ -73378,50 +73026,6 @@
         "Stdout": "",
         "Stderr": "",
         "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "redir/a-closed-stdout-is-closed-for-a-command": {
-      "bash": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -74080,50 +73684,6 @@
       },
       "zsh": {
         "Stdout": "",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "redir/a-per-command-close-reaches-the-command": {
-      "bash": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "st=1~diagnosed",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "st=1~diagnosed",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -74874,50 +74434,6 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: file number expected",
         "Status": 1,
-        "Signal": 0,
-        "TimedOut": false
-      }
-    },
-    "redir/an-empty-stdin-is-not-a-closed-one": {
-      "bash": {
-        "Stdout": "st=0~silent",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash-as-sh": {
-        "Stdout": "st=0~silent",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "bash32": {
-        "Stdout": "st=0~silent",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "dash": {
-        "Stdout": "st=0~silent",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "ksh93": {
-        "Stdout": "st=0~silent",
-        "Stderr": "",
-        "Status": 0,
-        "Signal": 0,
-        "TimedOut": false
-      },
-      "zsh": {
-        "Stdout": "st=0~silent",
-        "Stderr": "",
-        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }

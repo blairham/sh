@@ -489,12 +489,9 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 			words[i] = take(w, pattern, e.Op)
 		}
 	case syntax.ParamReplace:
-		// The same reading of the replacement the two paths in expand.go
-		// take. Three call sites and one rule: a second spelling here is
-		// exactly how the fix would have missed the flagged expansions.
-		pattern, with := r.patternOf(e.Arg), r.replacementOf(e.Arg2)
+		pattern := r.patternOf(e.Arg)
 		for i, w := range words {
-			words[i] = r.replaceWith(w, pattern, with, e)
+			words[i] = r.replaceWith(w, pattern, e)
 		}
 	case syntax.ParamSubstring:
 		if isList {

@@ -350,24 +350,153 @@ func TestAnAnchorNamesTheSubjectAndNotThePiece(t *testing.T) {
 	}
 }
 
+// The flags that *report* a position rather than only asking about one, and
+// the parameters they report it into.
+//
+// docs/spec/grammar/patterns.md, "Reporting where a match landed".
+func TestTheReportingFlagsFillTheirParameters(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		// The shape and the convention: the arrays run in group order, and
+		// the bounds are one-based with the end being the index of the
+		// *last* character.
+		{`[[ abc == (#b)(a)(b)c ]]; echo "[${match[1]}${match[2]}][${mbegin[1]}${mbegin[2]}][${mend[1]}${mend[2]}]"`, "[ab][12][12]"},
+		{`[[ abc == (#b)a(b*) ]]; echo "[${match[1]}][${mbegin[1]}][${mend[1]}]"`, "[bc][2][3]"},
+		// An empty group has an end one below its begin, which is what the
+		// inclusive convention says and what a script can rely on.
+		{`[[ ac == (#b)(a)(b|)c ]]; echo "[${match[2]}][${mbegin[2]}][${mend[2]}]"`, "[][2][1]"},
+		// Numbering is by opening parenthesis, outermost first.
+		{`[[ abc == (#b)((a)(b))c ]]; echo "[${match[1]}|${match[2]}|${match[3]}]"`, "[ab|a|b]"},
+		// A group that never participated is empty with -1 for both bounds
+		// — the row that says why a dropped flag was never acceptable, since
+		// empty is a real answer here.
+		{`[[ ac == (#b)(a)((b))#c ]]; echo "[${match[2]}][${mbegin[2]}][${mend[2]}]"`, "[][-1][-1]"},
+		// Even down an arm the subject never took: the number is a fact
+		// about the pattern text and not about the path.
+		{`[[ abc == (#b)((x)|a(b)c) ]]; echo "[${match[1]}|${match[2]}|${match[3]}][${mbegin[2]}]"`, "[abc||b][-1]"},
+		// A group under a closure reports its last repetition.
+		{`[[ abab == (#b)(ab)# ]]; echo "[${match[1]}][${mbegin[1]}]"`, "[ab][3]"},
+		// The scope of the two switches is the group they stand in.
+		{`[[ abc == (#b)(a)(#B)(b)c ]]; echo "[${match[1]}][${match[2]}]"`, "[a][]"},
+		{`[[ abc == (#b)(a)((#B)(b))(c) ]]; echo "[${match[2]}][${match[3]}]"`, "[b][c]"},
+		// `(#m)` is its own parameter set and composes with `(#b)`.
+		{`[[ abc == (#m)a* ]]; echo "[$MATCH][$MBEGIN][$MEND]"`, "[abc][1][3]"},
+		{`[[ abc == (#m)(#b)(a)b* ]]; echo "[$MATCH][${match[1]}]"`, "[abc][a]"},
+		{`[[ abc == (#m)(#M)a* ]]; echo "[$MATCH]"`, "[]"},
+		{`[[ abc == (#bB)(a)bc ]]; echo "[${match[1]}]"`, "[]"},
+	} {
+		out, _ := runReportingFlags(t, tc.src)
+		if got := strings.TrimSpace(out); got != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}
+
+// runReportingFlags is runExtendedOperators with the one further axis these
+// rows depend on answered: `$match` is an array, and which number its first
+// element answers to is a dialect's choice rather than this file's. The flags
+// report **one-based** positions, so a test reading `${match[1]}` has to say
+// which base it is reading in or it would be asserting the axis by accident.
+func runReportingFlags(t *testing.T, src string) (string, int) {
+	t.Helper()
+	return runExtendedOperators(t, src, true, func(r *Runner) {
+		r.Semantics.ArrayBaseIsZero = No
+	})
+}
+
+// Nothing is written where the pattern asked for nothing, or where it asked
+// and did not match.
+//
+// This is the other half of the module rule the refusal was protecting: a
+// publish that always ran would *empty* the parameters a script had filled
+// itself, which is a wrong answer in the opposite direction.
+func TestAMatchThatAsksForNothingWritesNothing(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`match=(zz); [[ abc == (#b)abc ]]; echo "[${match[1]}]"`, "[zz]"},
+		{`match=(zz); [[ abc == (#b)(x)zz ]]; echo "[${match[1]}]"`, "[zz]"},
+		{`match=(zz); [[ abc == (a)bc ]]; echo "[${match[1]}]"`, "[zz]"},
+		{`MATCH=zz; [[ abc == (#m)xyz ]]; echo "[$MATCH]"`, "[zz]"},
+		{`MATCH=zz; [[ abc == a* ]]; echo "[$MATCH]"`, "[zz]"},
+		{`match=(zz); v=abc; echo "[${v//(#b)(q)/X}][${match[1]}]"`, "[abc][zz]"},
+	} {
+		out, _ := runReportingFlags(t, tc.src)
+		if got := strings.TrimSpace(out); got != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}
+
+// Which combination of arm and length wins decides nothing about *whether* a
+// pattern matches and everything about what it reports, so it has its own
+// rows: a written arm beats a longer one, and within an arm the group takes
+// as much as it can and still leave the rest a match.
+func TestWhichSplitAGroupReports(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`[[ abc == (#b)(a|ab)* ]]; echo "[${match[1]}]"`, "[a]"},
+		{`[[ abc == (#b)(ab|a)* ]]; echo "[${match[1]}]"`, "[ab]"},
+		{`[[ ab == (#b)(|a)(b|ab) ]]; echo "[${match[1]}|${match[2]}]"`, "[|ab]"},
+		{`[[ ab == (#b)(a|)(b|ab) ]]; echo "[${match[1]}|${match[2]}]"`, "[a|b]"},
+		{`[[ aabab == (#b)(a*)b ]]; echo "[${match[1]}]"`, "[aaba]"},
+		{`[[ abcabc == (#b)(*)(abc) ]]; echo "[${match[1]}|${match[2]}]"`, "[abc|abc]"},
+		{`[[ aaa == (#b)(a#)(a#)(a#) ]]; echo "[${match[1]}|${match[2]}|${match[3]}]"`, "[aaa||]"},
+	} {
+		out, _ := runReportingFlags(t, tc.src)
+		if got := strings.TrimSpace(out); got != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}
+
+// A replacement reads the parameters *its own* match wrote, which means the
+// replacement text is expanded once per match rather than once per
+// expansion. A `with` joined before the scan cannot say either of these.
+func TestAReplacementIsExpandedPerMatch(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`v=abcd; echo "[${v//(#b)(b)(c)/<${match[1]}-${match[2]}>}]"`, "[a<b-c>d]"},
+		{`v=abcb; echo "[${v//(#b)(b)/<${match[1]}${mbegin[1]}>}]"`, "[a<b2>c<b4>]"},
+		{`v=abcd; echo "[${v//(#m)[bc]/<$MATCH:$MBEGIN:$MEND>}]"`, "[a<b:2:2><c:3:3>d]"},
+		{`v=abcd; echo "[${v/(#b)(b*)/<${match[1]}>}]"`, "[a<bcd>]"},
+		{`v=abc; echo "[${v/#(#b)(a)/<${match[1]}>}]"`, "[<a>bc]"},
+		{`v=abc; echo "[${v/%(#b)(c)/<${match[1]}>}]"`, "[ab<c>]"},
+		// And the parameters are left holding the *last* match.
+		{`v=abcb; echo "[${v//(#b)(b)/Q}][${mbegin[1]}]"`, "[aQcQ][4]"},
+	} {
+		out, _ := runReportingFlags(t, tc.src)
+		if got := strings.TrimSpace(out); got != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}
+
+// The positions a script reads are **characters**, which is a different
+// number from the byte offset the matcher works in the moment a subject
+// holds anything above ASCII.
+func TestReportedPositionsAreCharacters(t *testing.T) {
+	src := `v=aébc; echo "[${v//(#m)?/<$MATCH:$MBEGIN:$MEND>}]"`
+	out, _ := runExtendedOperators(t, src, true, func(r *Runner) {
+		r.Semantics.ArrayBaseIsZero = No
+		r.Semantics.MultibyteEncodingIsHonored = Yes
+		r.Env = append(r.Env, "LC_ALL=en_US.UTF-8")
+	})
+	want := "[<a:1:1><é:2:2><b:3:3><c:4:4>]"
+	if got := strings.TrimSpace(out); got != want {
+		t.Errorf("%s = %q, want %q", src, got, want)
+	}
+}
+
 // The load-bearing half. A flag this matcher does not implement says so by
 // name and stops, because `(#b)` also fills `$match` and a dropped one would
 // leave a script reading an empty value rather than seeing a refusal.
 func TestAnUnimplementedFlagIsRefusedByName(t *testing.T) {
 	for _, tc := range []struct{ src, name string }{
-		{`[[ abc == (#b)(a)* ]]`, "(#b)"},
-		{`[[ abc == (#B)(a)* ]]`, "(#B)"},
-		{`[[ abc == (#m)a* ]]`, "(#m)"},
-		{`[[ abc == (#M)a* ]]`, "(#M)"},
 		{`[[ abd == (#a1)abc ]]`, "(#a)"},
 		{`[[ abc == (#u)abc ]]`, "(#u)"},
 		{`[[ abc == (#U)abc ]]`, "(#U)"},
 		// A flag reached through an arm of an alternation is reached.
-		{`[[ abc == ((#b)(a)*|zz) ]]`, "(#b)"},
+		{`[[ abc == ((#u)abc|zz) ]]`, "(#u)"},
 		// And through every other surface, not only a condition.
-		{`case abc in (#b)(a)*) echo hit;; esac`, "(#b)"},
-		{`v=abc; echo "${v#(#m)a}"`, "(#m)"},
-		{`echo (#m)a*`, "(#m)"},
+		{`case abc in (#u)abc) echo hit;; esac`, "(#u)"},
+		{`v=abc; echo "${v#(#u)a}"`, "(#u)"},
+		{`echo (#u)a*`, "(#u)"},
 	} {
 		out, _ := runExtendedOperators(t, tc.src, true, nil)
 		want := "the " + tc.name + " pattern flag is not implemented"
@@ -377,18 +506,18 @@ func TestAnUnimplementedFlagIsRefusedByName(t *testing.T) {
 	}
 	// It stops the script rather than reporting and carrying on, which is
 	// the difference between a refusal and a complaint.
-	out, st := runExtendedOperators(t, `[[ abc == (#b)(a)* ]]; echo AFTER`, true, nil)
+	out, st := runExtendedOperators(t, `[[ abc == (#u)abc ]]; echo AFTER`, true, nil)
 	if strings.Contains(out, "AFTER") || st == 0 {
 		t.Errorf("a refused flag = %q status %d, want the script abandoned", out, st)
 	}
 	// And no arm runs, which is the half a status cannot show: a refusal
 	// that let the match answer for itself would run one of these bodies.
-	out, _ = runExtendedOperators(t, `case abc in (#b)(a)*) echo hit;; *) echo miss;; esac`, true, nil)
+	out, _ = runExtendedOperators(t, `case abc in (#u)abc) echo hit;; *) echo miss;; esac`, true, nil)
 	if strings.Contains(out, "hit") || strings.Contains(out, "miss") {
 		t.Errorf("a refused `case` pattern ran an arm: %q", out)
 	}
 	// With the option off the same text is a group and nothing is refused.
-	out, _ = runExtendedOperators(t, `[[ '#babc' == (#b)abc ]] && echo hit; echo AFTER`, false, nil)
+	out, _ = runExtendedOperators(t, `[[ '#uabc' == (#u)abc ]] && echo hit; echo AFTER`, false, nil)
 	if !strings.Contains(out, "hit") || !strings.Contains(out, "AFTER") {
 		t.Errorf("with the option off = %q, want hit and AFTER", out)
 	}

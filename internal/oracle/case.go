@@ -8967,6 +8967,48 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "pathname expansion walks a pattern one component at a time, and the anchors bind to the component and not to the path: `*/(#s)a*` lists `cx/ax`, whose *component* starts with an `a` even though the path does not, and `*x(#e)` lists the names ending in `x`. The second is also where the two spellings of a trailing group collide — read as a qualifier list it is `unknown file attribute: #` for a pattern with no attribute in it. A script file because a leading `(` in an argument is read differently by route (#1053)",
 	},
 	{
+		ID: "pat/backreferences-fill-three-arrays", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ abc == (#b)(a)(b*) ]]; print -r -- "[$match[1]|$match[2]][$mbegin[1]|$mbegin[2]][$mend[1]|$mend[2]]"`,
+		Why:     "the flag that made the refusal necessary, now answered. One shell fills three arrays and prints `[a|bc][1|2][1|3]`, so the bounds are one-based and the end is the index of the *last* character; the rest read `(#b)` as a group holding one alternative, find no match and print six empty fields. That second shape is exactly what a quietly dropped flag looked like from a script, which is why it refused by name until it could fill them (#1244, #1304)",
+	},
+	{
+		ID: "pat/a-group-that-did-not-participate", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ ac == (#b)(a)((b))#c ]]; print -r -- "[$match[2]][$mbegin[2]][$mend[2]]"`,
+		Why:     "the row that says why empty was never an acceptable answer for a missing flag: a group the match never reached is the **empty string** with -1 for both bounds, so the text alone cannot tell \"this group matched nothing\" from \"this shell does not do backreferences\". The shell with the flag prints `[][-1][-1]`; a shell without it prints three empty fields and looks the same on the first of the three",
+	},
+	{
+		ID: "pat/backreference-numbering-is-the-pattern-not-the-path", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ abc == (#b)((x)|a(b)c) ]]; print -r -- "[$match[1]|$match[2]|$match[3]][$mbegin[2]]"`,
+		Why:     "groups are numbered by opening parenthesis, outermost first, and the numbering counts an arm the subject never takes: the shell with the flag prints `[abc||b][-1]`, so `(x)` is group 2 and reports -1 rather than being skipped. An implementation numbering as it matched would report `b` as group 2 and shift everything after it",
+	},
+	{
+		ID: "pat/which-split-a-backreference-reports", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ abc == (#b)(a|ab)* ]]; print -r -- "[$match[1]]"; [[ abc == (#b)(ab|a)* ]]; print -r -- "[$match[1]]"; [[ aabab == (#b)(a*)b ]]; print -r -- "[$match[1]]"`,
+		Why:     "which combination of arm and length wins decides nothing about *whether* the pattern matches and everything about what it reports, so it needs a row of its own. The shell with the flag prints `[a]`, `[ab]` and `[aaba]`: a written arm beats a longer one, and within one arm the group takes as much as it can and still leave the rest a match. A matcher trying the shortest split first would answer `[a]`, `[ab]` and `[a]`",
+	},
+	{
+		ID: "pat/the-whole-match-flag", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ abc == (#m)a* ]]; print -r -- "[$MATCH][$MBEGIN][$MEND]"; MATCH=zz; [[ abc == (#m)(#M)a* ]]; print -r -- "[$MATCH]"`,
+		Why:     "the scalar half of the family, and its own switch: `(#m)` fills MATCH, MBEGIN and MEND with the whole match and `(#M)` turns it back off, so the shell with the flags prints `[abc][1][3]` and then `[zz]` — the value the script put there, untouched. The `MATCH=zz` is what makes the second half discriminating: without it the first match's value is still standing and a shell that ignored `(#M)` would print `[abc]` twice and look right once",
+	},
+	{
+		ID: "pat/nothing-is-written-without-a-match", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; match=(zz); [[ abc == (#b)abc ]]; print -r -- "[$match[1]]"; [[ abc == (#b)(x)zz ]]; print -r -- "[$match[1]]"`,
+		Why:     "the other direction of the same rule: a `(#b)` with no group and a `(#b)` that does not match both leave the array exactly as the script left it, so the shell with the flag prints `[zz]` twice. An implementation that published on every match would *empty* an array its own script filled, which is a wrong answer in the opposite direction from the one the refusal was guarding",
+	},
+	{
+		ID: "pat/a-replacement-is-expanded-per-match", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; x=abcd; print -r -- "${x//(#b)(b)(c)/<$match[1]-$match[2]>}"; print -r -- "${x//(#m)[bc]/<$MATCH:$MBEGIN>}"`,
+		Why:     "the sharpest consequence of a flag that reports: the replacement text is expanded **once per match** and reads what that match wrote, so the shell with the flags prints `a<b-c>d` and `a<b:2><c:3>d`. A replacement joined once before the scan cannot say either, and would print the same `<->` twice",
+	},
+	{
+		ID: "pat/the-walk-reports-no-match", Category: "pattern matching", SyntaxError: true,
+		Snippet: "setopt extendedglob 2>/dev/null\ntouch ax\nmatch=(zz)\n" +
+			"print -rl -- (#b)(a)* 2>&1\nprint -r -- \"[$match[1]]\"\n",
+		Script: true,
+		Why:    "the one surface that matches a pattern and reports nothing. The shell with the flag lists `ax` and then prints `[zz]`, so pathname expansion leaves the arrays alone where a condition, a `case`, a trim, a replacement and an element filter all fill them — measured rather than assumed, because publishing there would have been the obvious thing to do",
+	},
+	{
 		ID: "pat/a-closure-at-the-front-of-a-pattern", Category: "pattern matching",
 		Snippet: `setopt extendedglob 2>/dev/null; p="#foo"; [[ "#foo" == $p ]] && echo dead-hit || echo dead-miss; [[ "#foo" == ${~p} ]] && echo live-hit || echo live-miss; echo after`,
 		Why:     "both halves of the same value in one row. Through `$p` the four characters are ordinary text and the row is dead-hit; through the flag that makes an expansion's result a pattern they are a closure with nothing to repeat, which is a bad pattern that stops the script — so `live-` and `after` never print. A shell reading the `#` as a character in both would print dead-hit, live-hit and after",

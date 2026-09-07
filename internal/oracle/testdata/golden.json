@@ -68102,6 +68102,138 @@
         "TimedOut": false
       }
     },
+    "setoption/a-bad-name-between-two-bad-letters": {
+      "bash": {
+        "Stdout": "after st=2",
+        "Stderr": "\u003cscript\u003e: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after st=2",
+        "Stderr": "\u003cscript\u003e: line 1: set: -q: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -q",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[1]: set: -q: unknown option~\u003cscript\u003e[1]: set: nosuchoption: bad option(s)~\u003cscript\u003e[1]: set: -z: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:set:1: bad option: -q",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setoption/every-bad-option-word-is-reported": {
+      "bash": {
+        "Stdout": "after st=2",
+        "Stderr": "\u003cscript\u003e: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after st=2",
+        "Stderr": "\u003cscript\u003e: line 1: set: -q: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -q",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[1]: set: -q: unknown option~\u003cscript\u003e[1]: set: -z: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:set:1: bad option: -q",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setoption/two-bad-letters-in-one-bundle": {
+      "bash": {
+        "Stdout": "after st=2",
+        "Stderr": "\u003cscript\u003e: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after st=2",
+        "Stderr": "\u003cscript\u003e: line 1: set: -q: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -q",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[1]: set: -q: unknown option~\u003cscript\u003e[1]: set: -z: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:set:1: bad option: -q",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "shape/an-operator-where-a-later-case-pattern-belongs": {
       "bash": {
         "Stdout": "",

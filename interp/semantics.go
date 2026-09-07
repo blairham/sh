@@ -1269,6 +1269,46 @@ type Semantics struct {
 	// the session.
 	JobsListFinishedJobs Answer
 
+	// SetReportsEveryBadOption makes `set` report every option word it
+	// cannot use before it gives up, rather than stopping at the first.
+	//
+	// True in ksh93 alone, which is why it went unnoticed: three of the five
+	// columns print one line because the refusal is *fatal* there and the
+	// loop never reaches the second word, and the fourth prints one because
+	// it stops too. ksh93's refusal is fatal as well and it still prints
+	// every line first.
+	//
+	// Measured 2026-09-06 and again 2026-09-07, over a script file and over
+	// `-c`, which answer alike:
+	//
+	//	set -q -z        two lines, then one usage block, status 2
+	//	set -q -z -y     three lines, then one usage block
+	//	set -qz          two lines — a bundle is one word and several letters
+	//	set -q -o nosuch -z   three lines, in the order written
+	//
+	// So the unit is the **letter**, not the word: a bundle is not one
+	// refusal, which was the open question. Long names count too and
+	// interleave with letters in argument order.
+	//
+	// The usage block is printed **once**, after all of them, and not one
+	// per word — which is what makes this more than "keep looping", since
+	// the block is written by the same helper that writes each sentence.
+	// The fatality is applied after them as well, so it ends the script
+	// *after* the reports rather than instead of them.
+	//
+	// This is the rule Runner.builtinNames already follows for bad
+	// *operands*, where bash is the shell that reports each one. Two
+	// different shells answer yes to the two questions, which is what keeps
+	// them separate fields: bash reports every bad name to `export` and
+	// stops at the first bad option to `set`, and ksh93 does the reverse.
+	//
+	// Asked for the builtin only. The front end's own option parse is a
+	// different surface with its own measured quirks — ksh93 answers
+	// `ksh -q -z` with a spurious `- : unknown option` between the two, and
+	// folds the whole of the rest of argv into a `-o` complaint — so it
+	// keeps stopping at the first until those are settled.
+	SetReportsEveryBadOption Answer
+
 	// ShiftPastEndFatal ends a non-interactive shell when `shift` runs off
 	// the end. True in dash and ksh93.
 	ShiftPastEndFatal Answer
@@ -3795,13 +3835,17 @@ func PosixSemantics() Semantics {
 		// and `-c` is one of them; `-s` is not, when it was not written.
 		// The preset takes the text rather than a vote, which is the rule
 		// everywhere here, and the panel splits two against two anyway.
-		CommandStringShowsCInDollarDash:            Yes,
-		CommandStringShowsSInDollarDash:            No,
-		ArithInvalidOctalDigitIsError:              Yes,
-		RegexQuotingMakesLiteral:                   No,
-		ProcessSubstitutionInCondition:             No,
-		LastPipelineElementInCurrentShell:          No,
-		ShiftPastEndFatal:                          Yes,
+		CommandStringShowsCInDollarDash:   Yes,
+		CommandStringShowsSInDollarDash:   No,
+		ArithInvalidOctalDigitIsError:     Yes,
+		RegexQuotingMakesLiteral:          No,
+		ProcessSubstitutionInCondition:    No,
+		LastPipelineElementInCurrentShell: No,
+		ShiftPastEndFatal:                 Yes,
+		// The standard describes one refusal and says nothing about a
+		// second, so the preset stops at the first the way three of the
+		// panel do.
+		SetReportsEveryBadOption:                   No,
 		ReadonlyReassignmentFatal:                  Yes,
 		ReadonlyReassignmentFatalFromCommandString: Yes,
 		ReadonlyReassignmentByDeclarationFatal:     Yes,

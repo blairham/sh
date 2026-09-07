@@ -126,7 +126,24 @@ func biFalse(*Runner, context.Context, []string) int { return 1 }
 // `set --` with nothing after it clears them, which is different from `set`
 // with no arguments at all — that lists variables, in the dialect's shape.
 // See setlisting.go.
-func biSet(r *Runner, _ context.Context, args []string) int {
+func biSet(r *Runner, ctx context.Context, args []string) int {
+	status := r.setOptionsAndOperands(ctx, args)
+	if r.setRefusalOwed {
+		// The dialect that reports every bad option word has now read them
+		// all, and what it still owes is the usage block and the fatality.
+		//
+		// Here rather than at the end of the loop, because the loop is not
+		// the only way out: `set -A` with no name reports and returns from
+		// where it stands, and paying the debt only on the loop's own exit
+		// left that refusal with no usage block and no fatality at all. One
+		// door out of the builtin is one place to settle, and a later early
+		// return cannot silently swallow either.
+		return r.finishSetRefusals()
+	}
+	return status
+}
+
+func (r *Runner) setOptionsAndOperands(_ context.Context, args []string) int {
 	if len(args) == 0 {
 		return r.setListing()
 	}
@@ -213,6 +230,13 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 			return r.setOptionFailure()
 		}
 	}
+	if r.setRefusalOwed {
+		// Before the array assignment and before the positional parameters,
+		// because neither happens: `set -q -z` sets nothing in the shell
+		// that reports both, exactly as in the four that stop at the first
+		// word. What is owed is paid by the caller.
+		return r.status
+	}
 	if haveArray {
 		// The positional parameters are left alone: measured, `set -- one two
 		// three; set -A a x y` keeps all three of them in both shells. So
@@ -281,7 +305,10 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				if r.unspecified {
 					return false
 				}
-				return r.badSetOptionLetter(opt, on)
+				if !r.badSetOptionLetter(opt, on) {
+					return false
+				}
+				continue
 			}
 			if r.ask(r.sem().SetHLetterTracksCommands, "which option `set -h` abbreviates") {
 				// The same state the hashall and trackall table entries
@@ -300,7 +327,10 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				if r.unspecified {
 					return false
 				}
-				return r.badSetOptionLetter(opt, on)
+				if !r.badSetOptionLetter(opt, on) {
+					return false
+				}
+				continue
 			}
 			if opt == 'E' {
 				r.errtrace = on
@@ -316,7 +346,15 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				r.noglob = on
 			}
 		default:
-			return r.badSetOptionLetter(opt, on)
+			// A letter this shell has not got. What comes back is whether to
+			// carry on rather than whether it worked: one dialect reports it
+			// and reads the letters behind it, and the debt it leaves — the
+			// usage block and the fatality — is on the runner for
+			// finishSetRefusals to pay. The other four stop here, which is
+			// what a false says.
+			if !r.badSetOptionLetter(opt, on) {
+				return false
+			}
 		}
 	}
 	return true
@@ -414,6 +452,15 @@ func (r *Runner) saySetRefusal(msg string, usage, isName bool) {
 	if !r.atInvocation {
 		r.diagf("%s\n", msg)
 		if usage {
+			if r.reportsEveryBadSetOption() {
+				// One block after all of them rather than one per word,
+				// which is measured: `set -q -z` in the dialect that reports
+				// both prints two sentences and a single usage line. Owed
+				// here — where it is known that *this* refusal wanted one —
+				// and paid in finishSetRefusals.
+				r.setUsageOwed = true
+				return
+			}
 			r.sayBuiltinUsage(d.BuiltinUsage["set"])
 		}
 		return
@@ -445,14 +492,60 @@ func (r *Runner) sayBuiltinUsage(usage string) {
 // setRefusalStatus records what a refused `set` option reports and ends the
 // script where the dialect says such a refusal is fatal. One place for both
 // spellings, because the panel answers them identically (#483).
+//
+// It returns whether the option loop should carry on. Only one dialect says
+// yes, and there the fatality is owed rather than applied: it has to end the
+// script *after* every bad word has been reported rather than instead of the
+// ones behind the first. See Semantics.SetReportsEveryBadOption, and
+// finishSetRefusals, which pays both debts.
 func (r *Runner) setRefusalStatus(why string) bool {
 	status := orDefault(r.diag().SetInvalidOptionStatus, 2)
 	r.setOptionStatus = status
+	if r.reportsEveryBadSetOption() {
+		r.setRefusalOwed = true
+		return true
+	}
 	if r.ask(r.sem().BadSetOptionNameFatal, why) {
 		r.status = status
 		r.fatalQuiet()
 	}
 	return false
+}
+
+// reportsEveryBadSetOption is the axis, read only where `set` itself is
+// speaking.
+//
+// Read rather than asked, and not because the answer is cheap: an unanswered
+// axis here would put a complaint about a missing dialect in front of a
+// refusal that is already correct for whoever stops at the first word, which
+// is what every preset but one does and what the standard describes. The
+// invocation and environment routes are excluded for the reason the axis
+// gives — the front end's parse has quirks of its own that are not this.
+func (r *Runner) reportsEveryBadSetOption() bool {
+	return !r.atInvocation && !r.fromEnvironment &&
+		r.sem().SetReportsEveryBadOption == Yes
+}
+
+// finishSetRefusals pays what the reports above left owing: one usage block
+// after all of them, and then the fatality.
+//
+// Called once, at the end of the option loop, and only in the dialect that
+// carried on past a bad word — everywhere else setRefusalStatus has already
+// done both and nothing is owed.
+func (r *Runner) finishSetRefusals() int {
+	usage := r.setUsageOwed
+	r.setRefusalOwed, r.setUsageOwed = false, false
+	if usage {
+		r.sayBuiltinUsage(r.diag().BuiltinUsage["set"])
+	}
+	status := orDefault(r.diag().SetInvalidOptionStatus, 2)
+	if r.ask(r.sem().BadSetOptionNameFatal,
+		"a refused `set` option ending the script after every bad word is reported") {
+		r.status = status
+		r.fatalQuiet()
+	}
+	r.setOptionStatus = 0
+	return status
 }
 
 func (r *Runner) setOption(name string, on bool) bool {

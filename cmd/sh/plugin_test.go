@@ -548,7 +548,7 @@ func TestAPluginsRelayDoesNotWriteTheShellsStreamAtTheSameTimeAsTheShell(t *test
 	code := run([]string{
 		"sh", "-dialect", "posix", "-plugin", path, "-c",
 		"i=0; while [ $i -lt 6 ]; do /bin/sh -c 'j=0; while [ $j -lt 40 ]; do echo noise >&2; j=$((j+1)); done'; i=$((i+1)); done",
-	}, &out, errs)
+	}, nil, &out, errs)
 	text, overlapped := errs.report()
 	if code != 0 {
 		t.Fatalf("status = %d, err = %q", code, text)
@@ -582,7 +582,7 @@ func TestOneWriterHandedToBothStreamsIsGuardedByOneLock(t *testing.T) {
 	code := run([]string{
 		"sh", "-dialect", "posix", "-plugin", path, "-c",
 		"i=0; while [ $i -lt 6 ]; do /bin/sh -c 'j=0; while [ $j -lt 40 ]; do echo noise; j=$((j+1)); done'; i=$((i+1)); done",
-	}, both, both)
+	}, nil, both, both)
 	text, overlapped := both.report()
 	if code != 0 {
 		t.Fatalf("status = %d, output = %q", code, text)

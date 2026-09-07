@@ -43,7 +43,7 @@ func sandboxed(t *testing.T, dialect string, args ...string) outcome {
 	}
 	argv = append(argv, args...)
 	var out, errs bytes.Buffer
-	code := run(argv, &out, &errs)
+	code := run(argv, nil, &out, &errs)
 	return outcome{out: out.String(), errs: errs.String(), code: code}
 }
 

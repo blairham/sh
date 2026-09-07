@@ -132,7 +132,7 @@ import (
 const exitFailure = 2
 
 func main() {
-	os.Exit(run(os.Args, os.Stdout, os.Stderr))
+	os.Exit(run(os.Args, os.Stdin, os.Stdout, os.Stderr))
 }
 
 // run is the whole of main, with the process's streams passed in rather than
@@ -144,7 +144,21 @@ func main() {
 // this file has already had once — a shell that was never handed its gate
 // looks precisely like a shell that works, and so does a main() that reads a
 // policy and drops the error on the floor.
-func run(argv []string, stdout, stderr io.Writer) int {
+//
+// stdin is here for the one route that reads a stream of its own rather than
+// leaving it to the front end: `-acp` is a protocol server, and its input is
+// the client's messages. Every other route leaves standard input to driver,
+// which fills a nil one in with the process's — a shell's input is a
+// descriptor its children inherit, and an io.Reader that is not an *os.File
+// would put a copying pipe between every command and the terminal. So a
+// caller with no protocol to serve may pass nil, and the tests on the other
+// routes do: nothing but `-acp` reads this stream.
+//
+// It was reached for inside serveACP until #1335, and that is not a detail:
+// a route that reads the process's own streams cannot be driven by a test at
+// all, which is why `-acp -policy p` went unmeasured until somebody ran it by
+// hand.
+func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	own, rest, err := readOwnFlags(argv[1:])
 	// Before the error, and before any dialect is resolved: a usage message is
 	// not shell behavior, so it must not be reachable only through a shell that
@@ -236,7 +250,7 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		// The seams are already installed, which is the point of reaching it
 		// here rather than earlier: a policy handed to `-acp` governs every
 		// session the client opens, exactly as it governs a script.
-		code := serveACP(sh, rest)
+		code := serveACP(sh, rest, stdin, stdout)
 		done()
 		return code
 	}

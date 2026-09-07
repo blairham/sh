@@ -64,10 +64,10 @@ first-prompt work worth naming underneath it, so the only way to make a
 prompt appear faster is to not start a process — which is a different
 feature, not an optimization of this one.
 
-## Two things the harness had to learn
+## Three things the harness had to learn
 
-Both were measurement bugs that produced confident wrong answers, which
-is the failure mode worth writing down.
+All three were measurement bugs that produced confident wrong answers,
+which is the failure mode worth writing down.
 
 **A benchmark times the whole call, and the whole call is not the
 start.** Ending a shell means killing a session leader that owns a
@@ -105,3 +105,56 @@ where the table above was measured, does not.
 The second one is also why the harness kills a shell that has not drawn a
 prompt instead of waiting: a deadline on the pseudo-terminal descriptor
 never fired, because it is not a descriptor the Go runtime polls.
+
+**The rc a harness writes is not the rc a person has.** Everything above
+was measured on fifteen lines of aliases, and on that file the table is
+true: we are about half of bash and level with zsh. On the maintainer's
+actual configuration — a plugin manager, 31 plugins, 136 sourced `.zsh`
+files — the same binary took **7.82s against real zsh's 0.14s**, which is
+56x, and "unusably slow on start up, that is not a daily driver" (#1383).
+
+Both numbers were honest. Only one of them was about a shell anybody
+uses, and the instrument could see only the flattering one, which is how
+a 56x gap survived a hundred merged changes in a single day. The
+paragraph above saying there is "no first-prompt work worth naming"
+underneath process start is exactly the conclusion a synthetic rc
+licenses and a real one refutes.
+
+What the synthetic rc had none of, and what a real one is mostly made of:
+
+1. **Many files, sourced.** A plugin manager's cost is `source` called
+   several dozen times, each file defining functions the next one wraps.
+2. **Pattern work.** This is where the 7.8s was. A profile put **96% of
+   the whole startup in `interp.matchHere`** — 85 calls to one
+   prompt-theme substitution, whose pattern nests alternation two deep
+   over `##` closures and mostly fails to match. A failing match is the
+   expensive one, because a matcher that found nothing has explored
+   everything: 11.2 million recursive calls for an 82-byte subject, when
+   only about 5,600 distinct questions exist to ask. It grew as the
+   **fourth power** of the subject's length.
+
+So `internal/startupcost` now measures a second rc as well — forty
+sourced files and one pattern-heavy substitution, the *shape* of a real
+configuration rather than a copy of one, since a test cannot depend on a
+plugin manager it would have to fetch. It is not subtle about the
+difference. Run against the commit before the fix, the synthetic case
+still reported `ours-zsh` at 5.9ms against zsh's 8.1ms — ahead — while on
+the rich case `ours-bash` took 1448ms against bash's 41ms and `ours-zsh`
+**never reached a prompt at all**.
+
+**And an instrument must check its own output.** The gate that makes the
+rich case honest is that the sentinel is drawn *only* if the substitution
+produced the answer the whole panel gives. Without it the case would
+measure a refusal: this is the third time that has happened here — an
+agent's benchmark on this repository showed no regression whatsoever
+because `syntax.Core()` rejected the construct under test and the output
+went to `io.Discard`, so the clock faithfully timed a shell doing
+nothing. A shell that will not do the work now fails to start rather than
+posting a very good number, and a test deliberately moves the expected
+answer out of reach to prove the gate is wired the right way round.
+
+The first draft of the rich case fell into it immediately, and in the
+dullest possible way: the pattern work sat in the rc without `setopt
+extendedglob`, so every metacharacter in it was an ordinary character,
+the substitution replaced nothing, and the case ran in 10ms while looking
+entirely plausible.

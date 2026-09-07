@@ -261,13 +261,13 @@ type patternOpts struct {
 
 // escapeReaches reports whether a backslash escapes c rather than standing
 // for itself.
-func (o patternOpts) escapeReaches(c byte) bool {
+func (o *patternOpts) escapeReaches(c byte) bool {
 	return o.escapes == "" || strings.IndexByte(o.escapes, c) >= 0
 }
 
 // unitWidth is how many bytes of a non-empty subject one `?` consumes, one
 // bracket matches, and one step of a `*` passes over.
-func (o patternOpts) unitWidth(s string) int {
+func (o *patternOpts) unitWidth(s string) int {
 	if !o.chars {
 		return 1
 	}
@@ -372,6 +372,9 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 		o.where = w
 	}
 	w.total, w.caps = len(subject), newCaptures(w.plan)
+	// A trial's answers are about *this* subject, so they are dropped with
+	// the captures rather than carried into the next one.
+	w.asked, w.dead = 0, nil
 	if !matchHere(pattern, piece, 0, base, o) {
 		return false, matchReport{}
 	}
@@ -391,13 +394,71 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 // pattern text and not about the path the matcher took to reach it, which is
 // measured: `(#b)((x)|a(b)c)` numbers `(x)` as 2 even in the run where the
 // arm holding it is never taken.
+//
+// It also remembers which questions came back **false**, which is what keeps
+// a pattern with alternation over closures in it from taking eight seconds.
+// Nothing is remembered about a match that succeeded: which arm and which
+// split won decides what a `(#b)` reports, so a successful trial has to be
+// re-run to write its captures, and the order the search tries things in is
+// left exactly as it was. Only the dead ends are skipped, and a dead end
+// wrote nothing by the invariant matchGroup states — every attempt that can
+// write a capture unwinds it when it fails.
+//
+// That the key is *exact* is a fact about this matcher rather than a hope
+// about it; matchKey says which fact, and how it was established. The one
+// side effect a failing trial can have is `*o.bad`, which only ever goes
+// true, so a question already asked has already set it.
+//
+// #1383: 11.2 million calls for an 82-byte subject against a 68-byte pattern,
+// where about 5,600 distinct questions exist — a 2,000-fold redundancy, and a
+// cost growing as the fourth power of the subject. Memoized, the same match
+// is 61x faster and grows as roughly n^1.5. The startup it was found in went
+// from 8.05s to 0.145s against real zsh's 0.143s on the same configuration.
 func matchHere(p, s string, pp, at int, o patternOpts) bool {
+	w := o.where
+	w.asked++
+	if w.asked <= memoThreshold {
+		return matchBranch(p, s, pp, at, o)
+	}
+	k := matchKey{pp: pp, plen: len(p), at: at, slen: len(s), fold: o.litFold}
+	if _, dead := w.dead[k]; dead {
+		return false
+	}
+	if matchBranch(p, s, pp, at, o) {
+		return true
+	}
+	if w.dead == nil {
+		w.dead = make(map[matchKey]struct{})
+	}
+	w.dead[k] = struct{}{}
+	return false
+}
+
+// memoThreshold is how many questions a trial may ask before it starts
+// writing the answers down.
+//
+// A threshold rather than always, because the memo is not free — a key to
+// build and a map to probe on every question, and a map to allocate on the
+// first one — and it earns nothing on the patterns a shell actually spends
+// its life on. `*.go` against a filename is a handful of questions, none of
+// them repeated, so a memo there is a pure loss; it is the same argument
+// patternOpts' pointer was made for, from the other side.
+//
+// The number is loose on purpose. It only has to be high enough that no
+// ordinary pattern reaches it and low enough that a pathological one pays
+// the linear prefix once rather than the polynomial. Anything in the
+// hundreds satisfies both: the #1383 pattern asks eleven million questions.
+const memoThreshold = 512
+
+// matchBranch is matchHere without the memo — the matching itself. Every
+// recursion goes back through matchHere so that it is memoized too.
+func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 	for len(p) > 0 {
 		if o.extended {
 			// The exclusion binds loosest, so it is read before anything
 			// else in the branch: every side is matched against the whole
 			// of what is left of the subject.
-			if left, rights, ok := splitExclusion(p, o); ok {
+			if left, rights, ok := splitExclusion(p, &o); ok {
 				if !matchHere(left, s, pp, at, o) {
 					return false
 				}
@@ -441,16 +502,16 @@ func matchHere(p, s string, pp, at int, o patternOpts) bool {
 			}
 			// A closure repeats the one item in front of it, so the item is
 			// read here rather than by the branches below.
-			if item, rest, ok := splitClosableItem(p, o); ok {
-				if lo, hi, after, isClosure := closureBounds(rest, o); isClosure {
+			if item, rest, ok := splitClosableItem(p, &o); ok {
+				if lo, hi, after, isClosure := closureBounds(rest, &o); isClosure {
 					return matchRepeat(item, pp, lo, hi, after, pp+len(p)-len(after), s, at, o)
 				}
 			}
 		}
-		if body, quant, rest, ok := splitGroup(p, o); ok {
+		if body, quant, rest, ok := splitGroup(p, &o); ok {
 			return matchGroup(body, pp, quant, rest, pp+len(p)-len(rest), s, at, o)
 		}
-		if lo, hi, rest, ok := splitNumericRange(p, o); ok {
+		if lo, hi, rest, ok := splitNumericRange(p, &o); ok {
 			return matchNumericRange(lo, hi, rest, pp+len(p)-len(rest), s, at, o)
 		}
 		switch p[0] {
@@ -491,7 +552,7 @@ func matchHere(p, s string, pp, at int, o patternOpts) bool {
 				return false
 			}
 			w := o.unitWidth(s)
-			rest, ok := matchBracket(p, s[:w], o)
+			rest, ok := matchBracket(p, s[:w], &o)
 			if !ok {
 				return false
 			}
@@ -545,7 +606,7 @@ const unbounded = -1
 // literal. Real zsh reports `number truncated after 19 digits` and fails the
 // match; refusing to read it as a range fails the same match without
 // inventing a diagnostic, which is the honest half of the answer.
-func splitNumericRange(p string, o patternOpts) (lo, hi int64, rest string, ok bool) {
+func splitNumericRange(p string, o *patternOpts) (lo, hi int64, rest string, ok bool) {
 	if !o.numericRange || p == "" || p[0] != '<' {
 		return 0, 0, "", false
 	}
@@ -623,7 +684,7 @@ func matchNumericRange(lo, hi int64, rest string, pp int, s string, at int, o pa
 //
 // quant is the character in front of it, or 0 for a bare group, which the
 // dialect with bare groups treats as "exactly one" — the same as `@`.
-func splitGroup(p string, o patternOpts) (body string, quant byte, rest string, ok bool) {
+func splitGroup(p string, o *patternOpts) (body string, quant byte, rest string, ok bool) {
 	i := 0
 	if o.quantified && len(p) > 1 && p[1] == '(' {
 		switch p[0] {
@@ -796,7 +857,7 @@ func matchesAnyArm(arms []string, armAt []int, s string, at int, o patternOpts) 
 
 // matchBracket consumes a bracket expression from p and reports whether c is
 // in it, returning what is left of the pattern.
-func matchBracket(p string, c string, o patternOpts) (rest string, ok bool) {
+func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 	i := 1
 	negate := false
 	// `!` is the portable negation, everywhere. `^` is an extension dash

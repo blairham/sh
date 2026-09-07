@@ -87,6 +87,41 @@ type matchWhere struct {
 	// caps is where the groups of the trial now running report themselves,
 	// and is replaced for each trial.
 	caps *captures
+	// asked counts the questions this trial has put to matchHere, and dead
+	// is the ones that came back false. Both are reset per trial along with
+	// caps. See memoThreshold for why the count exists at all.
+	asked int
+	dead  map[matchKey]struct{}
+}
+
+// matchKey names one question put to matchHere, exactly.
+//
+// A question is "does the pattern from pp, for plen bytes, match the subject
+// from at, for slen bytes, folding literals this way" — and those five
+// numbers are the whole of it, which is a fact about the matcher that had to
+// be established rather than assumed:
+//
+//   - Every non-empty string matchHere is handed is a *substring* of the
+//     pattern or of the subject, never a fresh one, so a (offset, length)
+//     pair names it. Measured: instrumented against the whole of interp's
+//     and every dialect's tests, and against the configuration in #1383,
+//     not one string of either kind fell outside its root.
+//   - pp and at are those offsets and not approximations of them. Same
+//     instrumentation, comparing each against the offset recovered from the
+//     string's own data pointer: zero disagreements in 172,647 pattern and
+//     189,208 subject checks on the #1383 pattern alone. They are exact
+//     because the backreference numbering already depends on it — a `(#b)`
+//     group's number is where its `(` stands in the pattern text.
+//   - litFold is the only field of patternOpts a recursion can change.
+//     applyPatternFlags writes that and nothing else; `b`, `B`, `m` and `M`
+//     are read by planCaptures rather than by the matcher, and every other
+//     field is the dialect's answer, fixed before the match began.
+//
+// The subject and pattern themselves are not in the key because a trial is
+// against one of each, and the memo is reset when the trial is.
+type matchKey struct {
+	pp, plen, at, slen int
+	fold               caseFolding
 }
 
 // captures is where a match reports itself, and is shared by pointer because
@@ -181,7 +216,7 @@ func planCaptures(pattern string, o patternOpts) capturePlan {
 // which is what the *top level* of a pattern is asked for and what a nested
 // group's answer is deliberately thrown away.
 func planWalk(p string, base int, capturing, whole bool, o patternOpts, pl *capturePlan) bool {
-	if left, rights, ok := splitExclusion(p, o); ok {
+	if left, rights, ok := splitExclusion(p, &o); ok {
 		planWalk(left, base, capturing, whole, o, pl)
 		at := base + len(left)
 		for _, x := range rights {
@@ -207,11 +242,11 @@ func planWalk(p string, base int, capturing, whole bool, o patternOpts, pl *capt
 			p, base = p[1:], base+1
 			continue
 		}
-		item, rest, ok := splitClosableItem(p, o)
+		item, rest, ok := splitClosableItem(p, &o)
 		if !ok {
 			break
 		}
-		if body, quant, after, isGroup := splitGroup(item, o); isGroup && after == "" {
+		if body, quant, after, isGroup := splitGroup(item, &o); isGroup && after == "" {
 			bp := base + 1
 			if quant != 0 {
 				bp = base + 2

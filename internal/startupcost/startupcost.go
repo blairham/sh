@@ -34,6 +34,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -83,6 +84,112 @@ up() { cd ..; }
 title() { printf '%s' "$1"; }
 `
 
+// The rich rc: a plugin manager's shape rather than an alias list.
+//
+// #1383 is why this exists. The synthetic rc above is small and dull on
+// purpose, and on it this project genuinely beat every reference shell —
+// `ours-zsh 3.8ms` against `zsh 6.2ms`. On the maintainer's actual
+// configuration, 31 plugins and 136 sourced files, the same binary took
+// **7.82s against real zsh's 0.14s**. Both numbers were true. Only one of
+// them was about a shell anybody uses, and the instrument could not see it,
+// which is how a 56x regression survived a hundred merged changes in a day.
+//
+// So the difference between the two rc files is the measurement, and it is
+// made of the two things the synthetic one has none of:
+//
+//  1. **Many files, sourced.** A plugin manager's cost is not its own code,
+//     it is `source` called several dozen times, each file defining
+//     functions the next one wraps.
+//  2. **Pattern work.** This is where the 7.8s was — 96% of the startup in
+//     `interp.matchHere`, 85 calls to one prompt-theme substitution — and it
+//     is the part a portable rc cannot express, hence Subject.PatternWork.
+//
+// It is not the real configuration, and it is not meant to pass for it: a
+// test cannot depend on a plugin manager it would have to fetch, or on one
+// person's dotfiles. It is that configuration's *shape*, which is what a
+// regression of this kind shows up in.
+const richPluginCount = 40
+
+// richPluginBody is one sourced file, and there are richPluginCount of them.
+// Each wraps the last one's function, so the file is doing what a plugin does
+// rather than merely existing.
+const richPluginBody = `shrc_step_%[1]d() { printf '%%s' '%[1]d'; }
+alias shrc_a_%[1]d='ls -l'
+alias shrc_b_%[1]d='git status'
+shrc_hook_%[1]d() { shrc_step_%[1]d; }
+shrc_depth=%[1]d
+`
+
+// richRCHead sources them all. A loop rather than a generated list of
+// `source` lines, because what is being measured is the sourcing.
+const richRCHead = `shrc_dir=%[1]s
+shrc_i=0
+while [ $shrc_i -lt %[2]d ]; do
+	. "$shrc_dir/plugin$shrc_i.sh"
+	shrc_i=$((shrc_i + 1))
+done
+`
+
+// richPatternSubject is the string the pattern work is substituted across: a
+// coloured message of the kind a prompt theme builds, mostly not matching the
+// pattern aimed at it. Its length matters — the cost this was written to
+// catch grew as the fourth power of it — so it is the length the real one
+// was, 82 bytes.
+const richPatternSubject = "{error}Error{ehi}:{rst} Unknown subcommand{ehi}:{rst} {apo}`{cmd}lucid{apo}`{rst} "
+
+// richPatternAnswer is what every shell in the panel answers for that
+// substitution: the length of the result, measured on zsh 5.9.2 and bash
+// 5.3.15 and matched by both of ours.
+const richPatternAnswer = "9"
+
+// zshPatternWork and bashPatternWork are the same work in each language.
+//
+// The pattern is the one from the configuration in #1383, reduced to what
+// makes it expensive: alternation nested two deep, each arm holding a closure
+// over a negated bracket, substituted across a subject it mostly fails on. A
+// failing match is the expensive case, because a matcher that cannot find one
+// has explored everything.
+const (
+	zshPatternWork = `setopt extendedglob
+shrc_m='` + richPatternSubject + `'
+shrc_i=0
+while [ $shrc_i -lt 5 ]; do
+	shrc_o="${shrc_m//(#b)(([\\]|(%F))([\{]([^\}]##)[\}])|([\{]([^\}]##)[\}])([^\%\{\\]#))/X}"
+	shrc_i=$((shrc_i + 1))
+done
+`
+	bashPatternWork = `shopt -s extglob
+shrc_m='` + richPatternSubject + `'
+shrc_i=0
+while [ $shrc_i -lt 5 ]; do
+	shrc_o="${shrc_m//@(@(\\|%F)@(\{+([^\}])\})|@(\{+([^\}])\})+([^%\{\\]))/X}"
+	shrc_i=$((shrc_i + 1))
+done
+`
+)
+
+// richRCTail draws the sentinel, and draws it **only if the pattern work
+// produced the answer every shell in the panel gives**.
+//
+// That condition is the whole point, and it is there because of a trap this
+// repository has now been caught by twice. A benchmark whose shell *refused*
+// the construct it was timing showed no regression at all — the parse failed,
+// the output went nowhere, and the clock faithfully measured a shell doing
+// nothing. Gating the mark on the answer makes that failure end the
+// measurement instead of flattering it: a shell that would not do the work
+// never draws the prompt the harness is waiting for, and RunPrompt reports
+// that it never started rather than reporting a fast time.
+//
+// So this instrument cannot report a number for work it did not do.
+const richRCTail = `if [ "${#shrc_o}" = "` + richPatternAnswer + `" ]; then
+	PS1=` + promptMark + `
+	PROMPT=` + promptMark + `
+else
+	PS1='SHRCPATTERNWRONG '
+	PROMPT='SHRCPATTERNWRONG '
+fi
+`
+
 // Subject is one thing being measured: a shell, and how to ask it for each of
 // the two numbers.
 type Subject struct {
@@ -116,7 +223,23 @@ type Subject struct {
 	// pointed straight at it.
 	RCName string
 
-	// PromptTimeout is how long this subject is given to draw its prompt
+	// PatternWork is the pattern-heavy stanza the *rich* rc runs, written in
+	// this shell's own language, and is what makes that half of the
+	// measurement able to bite.
+	//
+	// Data rather than a branch, for the reason RCEnv is: the two dialects
+	// spell the same construct differently — `(a|b)` and `x##` in one,
+	// `@(a|b)` and `+(x)` in the other, behind `extendedglob` and `extglob`
+	// respectively — so a single portable string would either exercise
+	// neither shell's extended patterns or refuse to parse in one of them.
+	// What is held constant is the *work*: nested alternation over a closure,
+	// substituted across a string that mostly does not match, which is the
+	// shape a prompt theme is made of.
+	//
+	// Empty means this subject has no rich rc to measure.
+	PatternWork string
+
+	// PromptTimeout is how long this subject is given to draw its prompt to draw its prompt
 	// before the measurement is abandoned. Zero means readTimeout, which is
 	// what every real subject uses; it is a field only so that the test for
 	// "a shell that never prompts fails rather than hangs" need not take ten
@@ -149,13 +272,14 @@ const (
 // costs whatever filling in a struct costs, and having both in the table is
 // what makes that visible rather than assumed.
 func Ours(dir string) []Subject {
-	ours := func(name, bin, rc string) Subject {
+	ours := func(name, bin, rc, work string) Subject {
 		return Subject{
 			Name:         name,
 			Path:         filepath.Join(dir, bin),
 			CommandArgs:  []string{"-c"},
 			PromptArgs:   []string{"-i"},
 			RCPromptArgs: []string{"-i"},
+			PatternWork:  work,
 			// A home directory of its own with the file in it, which is how
 			// a person's shell finds theirs and how the reference shells are
 			// pointed at one here. The name is the dialect's — see
@@ -166,8 +290,8 @@ func Ours(dir string) []Subject {
 		}
 	}
 	return []Subject{
-		ours("ours-bash", "our-bash", ".bashrc"),
-		ours("ours-zsh", "our-zsh", ".zshrc"),
+		ours("ours-bash", "our-bash", ".bashrc", bashPatternWork),
+		ours("ours-zsh", "our-zsh", ".zshrc", zshPatternWork),
 	}
 }
 
@@ -189,6 +313,7 @@ func References() []Subject {
 			PromptArgs:   []string{"--norc", "-i"},
 			RCPromptArgs: []string{"--rcfile", rcPlaceholder, "-i"},
 			RCName:       "bashrc",
+			PatternWork:  bashPatternWork,
 		},
 		{
 			Name:        "zsh",
@@ -206,6 +331,7 @@ func References() []Subject {
 			RCPromptArgs: []string{"-d", "-i"},
 			RCEnv:        []string{"ZDOTDIR=" + dirPlaceholder},
 			RCName:       ".zshrc",
+			PatternWork:  zshPatternWork,
 		},
 	}
 }
@@ -228,6 +354,42 @@ func WriteRC(s Subject, dir string) (string, error) {
 	}
 	path := filepath.Join(dir, name)
 	return path, os.WriteFile(path, []byte(rcBody), 0o600)
+}
+
+// WriteRichRC puts the plugin-manager-shaped rc and the files it sources into
+// dir, and returns the path to the rc. The directory is the caller's to make
+// and to remove.
+//
+// It is the same route WriteRC uses — the subject's own RCName in the
+// subject's own directory — so the two halves differ in what the file
+// *contains* and in nothing else. A subject with no PatternWork has no rich
+// rc, and asking for one is an error rather than a silently portable file:
+// the pattern work is the half that catches #1383, and a rich rc without it
+// would be forty aliases and a measurement nobody needs.
+func WriteRichRC(s Subject, dir string) (string, error) {
+	if s.PatternWork == "" {
+		return "", errors.New("startupcost: " + s.Name + " has no PatternWork, so no rich rc")
+	}
+	for i := range richPluginCount {
+		body := fmt.Sprintf(richPluginBody, i)
+		name := filepath.Join(dir, "plugin"+strconv.Itoa(i)+".sh")
+		if err := os.WriteFile(name, []byte(body), 0o600); err != nil {
+			return "", err
+		}
+	}
+	name := s.RCName
+	if name == "" {
+		name = "rc"
+	}
+	path := filepath.Join(dir, name)
+	body := fmt.Sprintf(richRCHead, dir, richPluginCount) + s.PatternWork + richRCTail
+	return path, os.WriteFile(path, []byte(body), 0o600)
+}
+
+// RichRCBody is what WriteRichRC would write for this subject, for a test
+// that needs to look at it rather than run it.
+func RichRCBody(s Subject, dir string) string {
+	return fmt.Sprintf(richRCHead, dir, richPluginCount) + s.PatternWork + richRCTail
 }
 
 // RunCommand starts the shell with a command string and waits for it to

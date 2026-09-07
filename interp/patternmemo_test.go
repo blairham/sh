@@ -114,6 +114,96 @@ func TestTheMemoChangesNoAnswer(t *testing.T) {
 	}
 }
 
+// memoPatterns and memoSubjects are crossed with each other, and they are
+// deliberately small and varied rather than realistic: what is being tested
+// is that the memo is invisible, and the way to test that is to ask it a lot
+// of different questions rather than a few deep ones.
+var memoPatterns = []string{
+	"", "*", "?", "a", "abc", "a*", "*a", "a*b", "**", "*?*",
+	"[abc]", "[^abc]", "[a-z]*", "[]a]", "[a", "a[b-]",
+	"(a|b)", "(a|b)c", "(ab|a)*", "(|a)b", "a(b|c)d", "((a|b)|c)",
+	"a#", "a##", "(a|b)#", "(a|b)##", "a#b", "(ab)#c", "((a)#b)#",
+	"a~b", "*~b*", "a*~*b", "^a", "a^b", "^*",
+	"(#i)abc", "(#i)a*", "a(#i)bc", "(#I)ABC", "(#l)abc",
+	"(#b)(a)(b)", "(#b)(a*)b", "(#b)((x)|a(b)c)", "(#b)(a|ab)*",
+	"(#s)a*", "a*(#e)", "(#s)abc(#e)",
+	"<1-9>", "a<1-9>b", "<->",
+	`a\*b`, `\[a`, `a\b`,
+	"a*b*c*d", "*a*a*a*", "(a|aa)#b", "(a|aa|aaa)##[a-z]",
+}
+
+var memoSubjects = []string{
+	"", "a", "b", "ab", "abc", "abcd", "ABC", "aab", "aaa", "aaaa",
+	"a*b", "[a", `a`, "a5b", "5", "9", "x", "abcabc", "aabab",
+	"aaaaaaaaaaaaaaaaaaaax", "aaaaaaaaaaaaaaaaaaaaZ",
+	"{a}b", "%Fx", "a~b", "^a",
+}
+
+// TestTheMemoIsInvisibleAtEveryThreshold crosses every pattern above with
+// every subject and requires the answer and the capture report to be the same
+// with the memo recording every single question as with it recording none.
+//
+// The threshold is what makes this the strong version of the test below it.
+// In use the memo does not engage until a trial has asked 512 questions, so
+// an ordinary pattern never reaches it and a differential test built on
+// ordinary patterns compares two runs of identical code — which is exactly
+// how a first attempt at this file passed while `drop plen from the key`,
+// `drop slen from the key`, `drop the folding from the key` and
+// `remember successes too` all survived. Driving the threshold to zero makes
+// every one of these 1,500 pairs exercise the memo, and all four die here.
+//
+// Soundness at zero is also the claim the threshold rests on: it is a
+// performance tuning and nothing else, so if the memo were only correct
+// because it usually does not run, this is the test that would say so.
+func TestTheMemoIsInvisibleAtEveryThreshold(t *testing.T) {
+	was := memoThreshold
+	t.Cleanup(func() { memoThreshold = was })
+	pairs, engaged := 0, 0
+	for _, pattern := range memoPatterns {
+		for _, subject := range memoSubjects {
+			memoThreshold = 1 << 30
+			off := memoTestOpts(pattern)
+			wantOK, wantReport := matchPatternIn(pattern, subject, subject, 0, off)
+
+			memoThreshold = 0
+			on := memoTestOpts(pattern)
+			gotOK, gotReport := matchPatternIn(pattern, subject, subject, 0, on)
+
+			pairs++
+			if len(on.where.dead) > 0 {
+				engaged++
+			}
+			if gotOK != wantOK {
+				t.Errorf("%q vs %q: %v with the memo, %v without", pattern, subject, gotOK, wantOK)
+				continue
+			}
+			if !sameReport(gotReport, wantReport) {
+				t.Errorf("%q vs %q: reported %+v with the memo, %+v without", pattern, subject, gotReport, wantReport)
+			}
+		}
+	}
+	// A cross product that never wrote a memo entry would agree with itself
+	// for the dullest of reasons.
+	if engaged*4 < pairs {
+		t.Errorf("only %d of %d pairs recorded anything, so most of this proves nothing", engaged, pairs)
+	}
+	t.Logf("%d pairs compared, %d of them recorded a dead end", pairs, engaged)
+}
+
+// sameReport compares two match reports field by field, because a `(#b)` is
+// the half of a match a wrong memo would corrupt while still answering yes.
+func sameReport(a, b matchReport) bool {
+	if a.subject != b.subject || a.whole != b.whole || a.wantsAll != b.wantsAll || len(a.groups) != len(b.groups) {
+		return false
+	}
+	for i := range a.groups {
+		if a.groups[i] != b.groups[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // TestOneOptionsValueAnswersManySubjects is the invariant three callers rely
 // on and none of them states.
 //

@@ -303,6 +303,23 @@ func replaceOnce(s, old, new string) string {
 	return s[:i] + new + s[i+len(old):]
 }
 
+// TestWriteRichRCRefusesASubjectWithNoPatternWork keeps the rich case from
+// quietly decaying into the plain one.
+//
+// The pattern work is the entire reason the rich rc exists — the sourcing of
+// forty files is the cheap half, and #1383 was in the other one. A subject
+// that lost its PatternWork would still get a perfectly good rc, still reach
+// a prompt, and still be timed, under a benchmark name promising it had been
+// measured on something realistic. Refusing is the only answer that cannot be
+// misread.
+func TestWriteRichRCRefusesASubjectWithNoPatternWork(t *testing.T) {
+	t.Parallel()
+	bare := startupcost.Subject{Name: "no-pattern-work", RCName: ".bare"}
+	if _, err := startupcost.WriteRichRC(bare, t.TempDir()); err == nil {
+		t.Fatal("wrote a rich rc for a subject with no pattern work, so the rich case can silently become the plain one")
+	}
+}
+
 // TestEverySubjectStartsBothWays is the guard the benchmarks need and cannot
 // be: a benchmark that measures a shell which never drew a prompt would report
 // a number for a timeout, and a benchmark nobody runs reports nothing at all.

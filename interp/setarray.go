@@ -38,7 +38,13 @@ func (r *Runner) setArrayOperands(name string, front bool, values []string) int 
 		r.diagf("set: -A with a subscripted name is not implemented yet\n")
 		return 2
 	}
-	rest, status := r.builtinNames("set", []string{name}, true)
+	rest, status, ended := r.builtinNames("set", []string{name}, true)
+	if ended {
+		// One operand and nothing behind it, so there is nothing to declare
+		// before the give-up: raised straight away, and everything below
+		// reads the control flag as it always did.
+		r.endAfterABadName(status)
+	}
 	if r.ctl == controlExit || len(rest) == 0 {
 		if status == 0 {
 			status = 2

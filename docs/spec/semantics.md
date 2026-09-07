@@ -8575,6 +8575,48 @@ declaration's operand went through pathname expansion first, so
 `TypesetTakesASubscript`, which is what bash needs — it takes
 `local a[1]=v` and refuses `export a[1]=v`.
 
+**`BadNameDeclaresTheOperandsAfterIt`** — bash no · dash no · ksh93 yes · zsh yes
+
+Keeps declaring past an operand the builtin refused, where the refusal is
+fatal. Asked only on the fatal path — bash reports each bad operand and
+carries on, so its whole list is declared by the loop rather than by
+this, and the answer recorded for it is the one bash-as-`sh` gives, which
+is the same binary with the fatality turned on.
+
+Measured 2026-09-07 from a script file, reading the names back from an
+**EXIT trap**: a reader written on the next line never runs in the four
+columns that stop, so "nothing was declared" and "the script ended" look
+identical without one. The position of the bad name is the variable, and
+only the middle position can tell the two answers apart.
+
+| `export … ok1=1 … ok2=2 …`, bad name at | bash 5.3 | bash-as-`sh` | dash | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- | --- | --- |
+| first | `[1][2]`, not fatal | `[U][U]` | `[U][U]` | `[1][2]` | `[1][2]` |
+| middle | `[1][2]`, not fatal | `[1][U]` | `[1][U]` | `[1][2]` | `[1][2]` |
+| last | `[1][2]`, not fatal | `[1][2]` | `[1][2]` | `[1][2]` | `[1][2]` |
+
+The same holds for `typeset`, `readonly` and `unset` — a fatal
+`unset ok1 ":" ok2` removes both names before it stops — and for `local`
+where the shell has one. `set -A` takes a single name and so has nothing
+to keep.
+
+The operands behind the refusal are collected **in silence**: every
+column that stops writes exactly one diagnostic however many bad names
+follow, so judging them again would add a line no shell writes. bash,
+which does not stop, writes one per bad operand.
+
+This was `nil`: a fatal refusal handed the caller no operands at all, so
+a declaration with one bad name among good ones declared none of them and
+a sourced file left the caller without the names it had set (#1211).
+
+Pinned by `declare/a-bad-name-among-good-ones`,
+`export/a-bad-name-in-front-of-good-ones`,
+`export/a-bad-name-among-good-ones`,
+`export/a-bad-name-behind-good-ones`,
+`readonly/a-bad-name-among-good-ones`,
+`unset/a-bad-name-among-names-to-remove` and
+`declare/a-bad-name-with-more-bad-names-behind-it`.
+
 ### A declaration whose operand names an element
 
 `typeset a[1]=v` writes the element in every column that takes the

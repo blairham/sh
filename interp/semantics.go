@@ -4121,6 +4121,21 @@ type Semantics struct {
 	// it.
 	UnsetTakesASubscript Answer
 
+	// BadNameDeclaresTheOperandsAfterIt keeps declaring past an operand the
+	// builtin refused, where the refusal is fatal.
+	//
+	// Measured 2026-09-07 with the bad name first, in the middle and last,
+	// over `export`, `readonly`, `typeset` and `unset`, reading the names
+	// back from an EXIT trap because the fatality otherwise hides the answer:
+	// ksh93 and zsh declare every well-formed operand wherever the bad one
+	// stood, and dash and bash-as-`sh` declare only the ones in front of it.
+	//
+	// Asked only on the fatal path. bash proper reports each bad operand and
+	// carries on, so its whole list is declared by the loop rather than by
+	// this — the answer recorded for it is the one bash-as-`sh` gives, which
+	// is the same shell with the fatality turned on.
+	BadNameDeclaresTheOperandsAfterIt Answer
+
 	// SubscriptedOperandTakesTheIntegerAttribute lets `typeset -i a[1]=0x10`
 	// give the array the integer attribute and write the element with it.
 	//
@@ -4617,6 +4632,10 @@ func PosixSemantics() Semantics {
 		// rather than an element, which is bash's and dash's answer.
 		DeclarationTakesASubscript: No,
 		UnsetTakesASubscript:       Yes,
+		// A fatal refusal takes the rest of the operand list with it, which
+		// is the standard's reading — the builtin stops where it failed —
+		// and dash's and bash-as-`sh`'s measured answer.
+		BadNameDeclaresTheOperandsAfterIt: No,
 		// `local` reads the declaration question rather than the export one,
 		// and the standard gives it to nobody, so the core answers it the
 		// same way it answers the neighboring one: a declaration names a

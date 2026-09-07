@@ -320,19 +320,15 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	// `typeset: 1x: invalid variable name`, where zsh's says `integer`. That
 	// is Diagnostics.BuiltinComplaintName doing the job it already does for
 	// an unknown option.
-	args, code := r.builtinNames(r.builtinComplaintName(name), args, false)
-	if r.ctl == controlExit {
-		// Belt and braces, and provably so: builtinNames answers with no
-		// operands at all once a refusal has ended the script, so the loop
-		// below is empty either way and a mutation of this line cannot be
-		// killed. It is kept for the shape biLocal already has rather than
-		// for an effect it has here.
-		//
-		// That "no operands at all" is itself a divergence, filed rather
-		// than fixed with this: every shell in the panel declares the
-		// operands that *were* names beside the one that was not and only
-		// then stops, which a sourced file can see — real zsh's `. f` over
-		// `typeset ":" ok=1` leaves `ok` at 1 and this leaves it empty.
+	// A fatal refusal comes back as `ended` rather than as a control flag,
+	// because the operands that *were* names are declared first and the
+	// script stops after them — real zsh's `. f` over `typeset ":" ok=1`
+	// leaves `ok` at 1, and this left it empty until the give-up was held
+	// back (#1211). The flag is raised below the loop.
+	args, code, ended := r.builtinNames(r.builtinComplaintName(name), args, false)
+	if r.unspecified {
+		// An unanswered axis inside the name check is not a refusal to carry
+		// past: nothing was decided, so nothing is declared.
 		return code
 	}
 	status := code
@@ -463,6 +459,11 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		if f.readonly && !f.readonlyOff {
 			r.markReadonly(name)
 		}
+	}
+	if ended {
+		// The operands that were names have been declared; now the script
+		// stops, which is what the refusal above asked for.
+		return r.endAfterABadName(status)
 	}
 	if r.assignFailed {
 		// See biExport.

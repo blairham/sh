@@ -1830,6 +1830,50 @@
         "TimedOut": false
       }
     },
+    "arith/a-key-is-not-an-index-in-an-expression": {
+      "bash": {
+        "Stdout": "[7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[99]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: m[k]=7: not found~\u003cshell\u003e: 1: m[0]=99: not found~\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" m[k] \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "arith/a-name-is-not-substituted": {
       "bash": {
         "Stdout": "8",
@@ -2440,6 +2484,50 @@
       },
       "zsh": {
         "Stdout": "3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-element-holding-a-name-is-chased": {
+      "bash": {
+        "Stdout": "[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[0]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -3628,6 +3716,94 @@
       },
       "zsh": {
         "Stdout": "[1][2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/increment-through-a-key": {
+      "bash": {
+        "Stdout": "[2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[2]",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: m[k]=1: not found~\u003cshell\u003e: 1: m[k]++: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/increment-through-a-subscript": {
+      "bash": {
+        "Stdout": "[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[4]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -21625,6 +21801,314 @@
       },
       "zsh": {
         "Stdout": "[2][a\")b]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "datetime/strftime-assigns-and-drops-the-newline": {
+      "bash": {
+        "Stdout": "|~v= st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: strftime: command not found~\u003cshell\u003e: line 1: strftime: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "|~v= st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: strftime: command not found~\u003cshell\u003e: line 1: strftime: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "|~v= st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: strftime: command not found~\u003cshell\u003e: strftime: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "|~v= st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: strftime: not found~\u003cshell\u003e: 1: strftime: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "|~v= st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: strftime: not found~\u003cshell\u003e: strftime: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "2026|~v=12:34 st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "datetime/strftime-reads-a-header-back": {
+      "bash": {
+        "Stdout": "v= st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: strftime: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "v= st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: strftime: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "v= st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: strftime: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "v= st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: strftime: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "v= st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: strftime: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "v=1788698096 st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "datetime/strftime-refuses-by-name": {
+      "bash": {
+        "Stdout": "st=127~st=127~st=127~after",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: strftime: command not found~\u003cshell\u003e: line 1: strftime: command not found~\u003cshell\u003e: line 1: strftime: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~st=127~st=127~after",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: strftime: command not found~\u003cshell\u003e: line 1: strftime: command not found~\u003cshell\u003e: line 1: strftime: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~st=127~st=127~after",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: strftime: command not found~\u003cshell\u003e: strftime: command not found~\u003cshell\u003e: strftime: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~st=127~st=127~after",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: strftime: not found~\u003cshell\u003e: 1: strftime: not found~\u003cshell\u003e: 1: strftime: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~st=127~st=127~after",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: strftime: not found~\u003cshell\u003e: strftime: not found~\u003cshell\u003e: strftime: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~st=1~st=1~after",
+        "Stderr": "\u003cshell\u003e:strftime:1: not enough arguments~\u003cshell\u003e:strftime:1: too many arguments~\u003cshell\u003e:strftime:1: abc: invalid argument",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "datetime/strftime-writes-an-epoch": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: strftime: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: strftime: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: strftime: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: strftime: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: strftime: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "2026-09-06 12:34:56~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "datetime/the-pair-is-seconds-and-nanoseconds": {
+      "bash": {
+        "Stdout": "n=0 0 1",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n=0 0 1",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "n=0 0 1",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "n=0 0 1",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "n=2 1 1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "datetime/the-real-time-and-how-many-places-it-carries": {
+      "bash": {
+        "Stdout": "places=6 set=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "places=6 set=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "places=0 set=",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "places=0 set=",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "places=0 set=",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "places=10 set=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "datetime/the-seconds-are-a-clock-read": {
+      "bash": {
+        "Stdout": "1 1",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1 1",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "0 1",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "0 1",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "0 1",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1 1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -78824,6 +79308,50 @@
       },
       "zsh": {
         "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zmodload/loading-the-clock-module": {
+      "bash": {
+        "Stdout": "st=127~e=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~e=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~e=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~e=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~e=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~e=0~zsh/datetime~zsh/main",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

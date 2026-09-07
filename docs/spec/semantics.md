@@ -2722,6 +2722,30 @@ the form a version check uses before it knows whether the shell set one:
 A subscript on an assignment's target belongs to the target, so `(( a[1] = 9 ))`
 writes an element rather than evaluating one and discarding it.
 
+**Every operator that assigns reaches a target of the same kind.** `=`, `+=`
+and the rest of the compound forms took a subscript and `++`/`--` did not, so
+`(( m[k]++ ))` was `++ needs a variable` in every dialect while
+`(( m[k] += 1 ))` on the same element was fine. A name that can be assigned to
+can be incremented — bash, ksh93 and zsh all say so, and they differ here only
+by where the first element is — so the two paths are one: a target is a name
+and the subscript it carries, read the same way whichever operator wrote it.
+An expression that names no storage is still refused, which is what keeps
+`(( 1++ ))` an error (#1154).
+
+**On a declared associative name the subscript is a key, not an expression.**
+The switch `${m[k]}` already throws has to be thrown inside an expression too,
+and it was not: with `m[k]=7`, `m[0]=99` and `k=0`, `$(( m[k] ))` was 99 where
+all three shells with the attribute answer 7 — a wrong element with no
+diagnostic at all, and an assignment through the same spelling stored under the
+number rather than the key. Whitespace belongs to the key here exactly as it
+does there: `m[ k ]` and `m[k]` are two keys, measured unanimous.
+
+**An element is read as an operand by the rule a name is read by.** A name
+holding a name was chased to a number and an element holding one was refused,
+so `y=5; a=(y); echo $(( a[0] ))` errored where bash and ksh93 answer 5. The
+storage an operand came out of is not what decides how it reads, and the same
+axis answers both — `ArithNameValueRecurses`.
+
 Whether a dialect has subscripts at all is the flag that already admits
 `${a[1]}` — one question asked in the two places that need it. Where it is
 off, `a[0]` inside an expression is a name followed by text that cannot be an
@@ -3646,6 +3670,15 @@ What was built, all through the extension seam — registered builtins in each
   kind, so those still hold their module shut: `zsh/complete` is refused over
   its four conditions and not over its two builtins.
 
+  **`zsh/datetime` is the one module in the table that needed none of that**:
+  all four of its features are implemented, so it loads because the shell has
+  it rather than because the rule forgave anything. What the rule bought was
+  the *question* — with a module able to load short of a feature, "which of
+  these four are worth having" is answerable one feature at a time instead of
+  all-or-nothing (#1154). It is also the first second module: until it landed,
+  only `zsh/main` could be loaded and nothing could tell the sorted listing
+  from an unsorted one.
+
   **Not a silent success**, which is the failure this builtin is most able to
   cause: a script told `zsh/zutil` loaded and then calling `zparseopts` fails
   several hundred lines later, in a function whose caller has gone, about a
@@ -3687,6 +3720,78 @@ What was built, all through the extension seam — registered builtins in each
   letters zsh's `zmodload` does not have at all are `bad option: -q` and 1,
   which is this builtin's wording and `bindkey`'s, not `zstyle`'s `invalid
   option`. Corpus: `zmodload/*`.
+- **zsh `zsh/datetime`** (dialect/zsh/datetime.go): the clock, as a script
+  reads it — `$EPOCHSECONDS`, `$EPOCHREALTIME`, `$epochtime` and the
+  `strftime` builtin. Measured 2026-09-06 against zsh 5.9.2 with a scratch
+  HOME and no startup files.
+
+  All four are implemented rather than refused, because none of them needs a
+  seam that does not exist. The three parameters are one clock read each
+  through `interp.Runner.Now`, which is the hook `printf '%(fmt)T'` already
+  reads — so an embedder that pins the clock pins these — and they are
+  **produced, not stored**, for the reason `$SECONDS` is: a clock read once is
+  wrong from the instant afterwards, and silently, because the caller still
+  gets a number. `strftime` is a formatter over the same format language
+  `printf '%(fmt)T'` writes and calls `interp.Strftime` rather than carrying a
+  second copy of it.
+
+  All three parameters are **readonly**, which zsh's own
+  `${(t)EPOCHSECONDS}` also says — `integer-readonly-hide-hideval-special` —
+  and it is load-bearing rather than decoration: a produced parameter a
+  script can assign to is shadowed by the assignment from then on, so it
+  would stop tracking the clock and never say so. They appear in `readonly`
+  and `readonly -p` as bare names, exactly as zsh's do; zsh writes a kind
+  letter with the readonly one — `-ir`, `-Fr`, `-ar` — and this shell writes
+  `-r` alone, because a produced parameter has no integer or float attribute
+  here to show.
+
+  They are **not** also marked hidden, though zsh's are. `MarkHidden` keeps a
+  produced *table* out of a listing, which is why the `builtins` association
+  needs it; a produced scalar or array is in none of the tables a listing
+  walks, so readonly is what puts it there — as a bare name with no value,
+  which is what zsh writes — and hiding it changes nothing observable.
+  Measured against a build with the call in: `readonly`, `readonly -p`,
+  `typeset` and `typeset -p` are byte-identical either way, and the one
+  listing that would tell them apart is `typeset -H`, which this shell has
+  not got.
+
+  `$EPOCHREALTIME` carries **ten decimal places**, which is `typeset -F`'s
+  default precision, and the last of them are the rounding a float64 of a
+  nanosecond epoch gives — the same digits a real zsh shows. The count is a
+  dialect answer and not a shape: bash has its own `$EPOCHREALTIME` from 5.0
+  and writes **six**, and bash 3.2, ksh93 and dash have no such parameter.
+  This shell's bash has neither, which is recorded rather than fixed here.
+
+  `strftime [-n] [-r] [-s scalar] format [seconds [nanoseconds]]`. The
+  letters cluster, so `-rs v` is `-r -s v`, and `-s`'s name is the rest of the
+  word or the next word whatever it looks like — `strftime -s -n …` is
+  `not an identifier: -n` rather than two options. `-n` drops the trailing
+  newline, `-s` writes nothing and assigns instead, no epoch operand at all is
+  the clock, and a third operand is nanoseconds. Five conversions go beyond
+  POSIX: `%N` the nanoseconds in nine digits, `%.` the fraction in three or
+  `%<n>.` in n of them **rounded**, and `%f`, `%K` and `%L` the unpadded
+  spellings of `%d`, `%H` and `%I`. A conversion nothing knows keeps its
+  letter and loses the `%`, which is the C library's answer rather than the
+  shell's.
+
+  `-r` reads a time back out of a string, which is the direction
+  `lib/zsh/install.zsh` uses on an HTTP `Last-Modified` header. **An unnamed
+  field is the start of 1900**, not today — measured, `-r "%H:%M" 1:2` is
+  -2208985080 — and that is the answer to keep, because the alternative
+  silently invents a year. Fewer digits than a field's width still match, a
+  run of whitespace in the format matches any run in the input, and input left
+  over is a **warning** at status 0 with the seconds still written, rather
+  than a refusal that would lose a header that read perfectly well.
+
+  Every complaint carries the builtin's own name in the location —
+  `<file>:strftime:2:` — and none of them is fatal: status 1 and the script
+  carries on. `not enough arguments`, `too many arguments` and
+  `bad option: -Q` are counted before any operand is looked at;
+  `not an identifier: 1bad`, `abc: invalid argument` and `format not matched`
+  are about the operands. A conversion `-r` has not got is **not** `format not
+  matched` — that would send a script looking at its data for a shortfall that
+  is this shell's — but `-r: %V is not implemented yet`. Corpus:
+  `datetime/*`, `zmodload/loading-the-clock-module`.
 - **zsh `autoload`** (dialect/zsh/autoload.go): a name defined from
   `$fpath` the first time it is called. Measured 2026-09-06 under `env -i`
   with a scratch HOME and no startup files.

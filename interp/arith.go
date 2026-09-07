@@ -191,6 +191,14 @@ func (r *Runner) evalNum(e syntax.ArithExpr) (arithNum, error) {
 // there is zero rather than an error, which is what every shell in the panel
 // does with a subscript past the end and with a name that was never an array.
 func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
+	// An associative name's subscript is a key and not an expression, which
+	// is the same reading `${m[k]}` takes and for the same reason: with
+	// `m[k]=7`, `m[0]=99` and `k=0`, all three shells with the attribute
+	// answer `$(( m[k] ))` with 7. Evaluating it instead read the wrong
+	// element and said nothing, which is the silent half of a wrong answer.
+	if a, ok := r.assocFor(x.Name); ok {
+		return r.arithElemValue(a[x.Sub])
+	}
 	idx, err := r.evalNum(x.Index)
 	if err != nil {
 		return intNum(0), err
@@ -205,10 +213,80 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	// answers the same way for `${a[-1]}`, so the two spellings cannot drift.
 	elems, _ := r.arrayElems(x.Name)
 	v, ok := r.elemAt(x.Name, elems, idx.asInt())
-	if !ok || strings.TrimSpace(v) == "" {
+	if !ok {
 		return intNum(0), nil
 	}
-	return r.parseArithNum(strings.TrimSpace(v))
+	return r.arithElemValue(v)
+}
+
+// arithElemValue reads an element as a number, whichever kind of array it
+// came out of, by the rule a plain name reads by: empty is zero — what every
+// shell in the panel gives a subscript past the end and a name that was never
+// an array — and a value that is no literal is re-read as a name where the
+// dialect does that.
+func (r *Runner) arithElemValue(v string) (arithNum, error) {
+	return r.arithNumOfStored(v, 0)
+}
+
+// arithPlace is what an expression reads from and writes back to: a name, and
+// the subscript it carries when it names an element.
+//
+// One type rather than two paths, because `++` and `=` disagreed about what a
+// target could be — the assignment reached an element and the increment
+// refused anything but a bare name, so `(( m[k]++ ))` was an error in every
+// dialect while `(( m[k] += 1 ))` was not. A name that can be assigned to can
+// be incremented; the operator is not what decides it.
+type arithPlace struct {
+	name string
+	// index is nil when the target is a plain name.
+	index syntax.ArithExpr
+	// sub is the subscript as written, which is the key on an associative
+	// name and the text a refusal quotes on an indexed one.
+	sub string
+}
+
+// arithPlaceOf is the target an operator can write through, and false for an
+// expression that names no storage — `(( 1++ ))`, `(( (a)++ ))`.
+func arithPlaceOf(e syntax.ArithExpr) (arithPlace, bool) {
+	switch x := e.(type) {
+	case *syntax.ArithVar:
+		return arithPlace{name: x.Name}, true
+	case *syntax.ArithIndex:
+		return arithPlace{name: x.Name, index: x.Index, sub: x.Sub}, true
+	}
+	return arithPlace{}, false
+}
+
+// readPlace is the value a target currently holds.
+func (r *Runner) readPlace(p arithPlace) (arithNum, error) {
+	if p.index == nil {
+		return r.arithValueOf(p.name, 0)
+	}
+	return r.arithElement(&syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub})
+}
+
+// writePlace stores a value back through a target, written the way the
+// dialect writes a number — so `i+=1.5` leaves 1.5 behind and not 1.
+func (r *Runner) writePlace(p arithPlace, v arithNum) error {
+	text := r.formatNum(v)
+	if p.index == nil {
+		r.setVar(p.name, text)
+		return nil
+	}
+	if r.assocDeclared(p.name) {
+		r.setAssocElem(p.name, p.sub, text)
+		return nil
+	}
+	idx, err := r.evalNum(p.index)
+	if err != nil {
+		return err
+	}
+	sub := p.sub
+	if sub == "" {
+		sub = r.formatNum(idx)
+	}
+	r.setArrayElem(p.name, idx.asInt(), sub, text)
+	return nil
 }
 
 // charCode answers the character-code operator, which is a *character* and
@@ -269,11 +347,11 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 	// ++ and -- read and write a variable, so they need its name rather than
 	// its value.
 	if x.Op == "++" || x.Op == "--" {
-		v, ok := x.X.(*syntax.ArithVar)
+		place, ok := arithPlaceOf(x.X)
 		if !ok {
 			return intNum(0), arithError{msg: x.Op + " needs a variable"}
 		}
-		old, err := r.arithValueOf(v.Name, 0)
+		old, err := r.readPlace(place)
 		if err != nil {
 			return intNum(0), err
 		}
@@ -282,7 +360,9 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 			step = -1
 		}
 		next := r.addNum(old, step)
-		r.setVar(v.Name, r.formatNum(next))
+		if err := r.writePlace(place, next); err != nil {
+			return intNum(0), err
+		}
 		if x.Postfix {
 			// The difference between the two spellings is what they evaluate
 			// to, not what they do.
@@ -324,12 +404,13 @@ func (r *Runner) addNum(n arithNum, step float64) arithNum {
 }
 
 func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
+	place := arithPlace{name: x.Name, index: x.Index, sub: x.Sub}
 	v, err := r.evalNum(x.Value)
 	if err != nil {
 		return intNum(0), err
 	}
 	if x.Op != "=" {
-		old, err := r.arithAssignTarget(x)
+		old, err := r.readPlace(place)
 		if err != nil {
 			return intNum(0), err
 		}
@@ -338,27 +419,11 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 			return intNum(0), err
 		}
 	}
-	// The side effect that outlives the expression, written the way the
-	// dialect writes a number — so `i+=1.5` leaves 1.5 behind and not 1.
-	if x.Index != nil {
-		idx, ierr := r.evalNum(x.Index)
-		if ierr != nil {
-			return intNum(0), ierr
-		}
-		r.setArrayElem(x.Name, idx.asInt(), r.formatNum(idx), r.formatNum(v))
-		return v, nil
+	// The side effect that outlives the expression.
+	if err := r.writePlace(place, v); err != nil {
+		return intNum(0), err
 	}
-	r.setVar(x.Name, r.formatNum(v))
 	return v, nil
-}
-
-// arithAssignTarget is the current value of what an assignment writes to,
-// which is an element when the target carries a subscript.
-func (r *Runner) arithAssignTarget(x *syntax.ArithAssign) (arithNum, error) {
-	if x.Index == nil {
-		return r.arithValueOf(x.Name, 0)
-	}
-	return r.arithElement(&syntax.ArithIndex{Name: x.Name, Index: x.Index})
 }
 
 func (r *Runner) evalBinary(x *syntax.ArithBinary) (arithNum, error) {
@@ -639,7 +704,22 @@ func (r *Runner) arithValueOf(name string, depth int) (arithNum, error) {
 		return intNum(0), arithError{msg: "expression nested too deeply: " + name}
 	}
 	value, ok := r.getVar(name)
-	if !ok || strings.TrimSpace(value) == "" {
+	if !ok {
+		return intNum(0), nil
+	}
+	return r.arithNumOfStored(value, depth)
+}
+
+// arithNumOfStored reads a value a variable was holding as a number.
+//
+// Split out of arithValueOf so that an *element* is read the same way a plain
+// name is. It was not: an element went straight to the literal parser, so
+// `a=(y); y=5; echo $(( a[0] ))` refused where all three shells with arrays
+// answer 5, and an element holding a word that is no name at all refused with
+// a different sentence from the identical scalar. One operand rule, asked
+// once — the storage it came out of is not what decides how it reads.
+func (r *Runner) arithNumOfStored(value string, depth int) (arithNum, error) {
+	if strings.TrimSpace(value) == "" {
 		return intNum(0), nil
 	}
 	if n, err := r.parseArithNum(strings.TrimSpace(value)); err == nil {

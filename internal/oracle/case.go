@@ -5877,6 +5877,26 @@ echo unreachable`,
 		Snippet: `x=abc; printf "[%s]" "$((x+1))"`,
 		Why:     "three answers: dash and ksh93 error differently, while bash and zsh re-evaluate the value as an expression and reach 0",
 	},
+	{
+		ID: "arith/increment-through-a-subscript", Category: "arithmetic",
+		Snippet: `a=(3 4 5); (( a[1]++ )); printf "[%s]" "${a[1]}"`,
+		Why:     "`++` took a bare name and nothing else, so this was `++ needs a variable` in every dialect while `(( a[1] += 1 ))` on the same element was fine. A name that can be assigned to can be incremented; the three shells with arrays all say so, and they differ here only by where the first element is",
+	},
+	{
+		ID: "arith/increment-through-a-key", Category: "arithmetic",
+		Snippet: `typeset -A m; m[k]=1; (( m[k]++ )); printf "[%s]" "${m[k]}"`,
+		Why:     "the spelling a real script reached — a counter kept in an association, incremented in place. The declared attribute makes the subscript a key on the way in *and* on the way out, so the operator has to know which kind of array it is writing to; dash and bash 3.2 have no `-A` and split the panel",
+	},
+	{
+		ID: "arith/a-key-is-not-an-index-in-an-expression", Category: "arithmetic",
+		Snippet: `typeset -A m; m[k]=7; m[0]=99; k=0; printf "[%s]" "$(( m[k] ))"`,
+		Why:     "the case that tells the two readings apart, and the reason it was worth a row of its own: evaluating the subscript answered 99 with no diagnostic at all, which is a wrong value a script cannot see. The three shells with the attribute all read the key",
+	},
+	{
+		ID: "arith/an-element-holding-a-name-is-chased", Category: "arithmetic",
+		Snippet: `y=5; a=(y); printf "[%s]" "$(( a[0] ))"`,
+		Why:     "the chase a bare name already got, asked of an element: the storage an operand came out of is not what decides how it reads. bash and ksh93 reach 5 here and zsh counts from 1 so its element 0 is nothing, which is the same split `${a[0]}` shows and not a second rule",
+	},
 	// --- conditions -----------------------------------------------------------
 	{
 		ID: "cond/no-field-splitting-inside", Category: "conditions",
@@ -9152,6 +9172,51 @@ wait`,
 		ID: "zmodload/the-feature-letter-needs-a-module", Category: "builtins",
 		Snippet: `zmodload -F; echo "st=$?"`,
 		Why:     "and `-F` with nothing to act on is `-F requires a module name` and 1, where the bare builtin with no letters at all is a listing and 0 — so the operand is required by the letter rather than by the builtin",
+	},
+	// `zsh/datetime` — the clock, and the one module in the table with every
+	// feature it names present rather than refused (#1154).
+	{
+		ID: "zmodload/loading-the-clock-module", Category: "builtins",
+		Snippet: `zmodload zsh/datetime; echo "st=$?"; zmodload -e zsh/datetime; echo "e=$?"; zmodload`,
+		Why:     "the line `zi.zsh` guards its whole scheduler on — `if { zmodload zsh/datetime } { … }` — and the listing after it, which is where a second loaded module first became observable: until this one there was exactly one loadable module, so nothing could tell the sorted listing from an unsorted one",
+	},
+	{
+		ID: "datetime/the-seconds-are-a-clock-read", Category: "builtins",
+		Snippet: `zmodload zsh/datetime; a=$EPOCHSECONDS; echo "$(( a > 1700000000 )) $(( EPOCHSECONDS >= a ))"`,
+		Why:     "a value, not a shape: the seconds are past a date already gone and never go backwards between two reads. Asked this way because the number itself is different every time the corpus runs, and a case that pinned one would have to be rewritten daily — where a shell answering `0` for an unset parameter fails both halves",
+	},
+	{
+		ID: "datetime/the-real-time-and-how-many-places-it-carries", Category: "builtins",
+		Snippet: `zmodload zsh/datetime 2>/dev/null; d=${EPOCHREALTIME#*.}; echo "places=${#d} set=${EPOCHREALTIME:+yes}"`,
+		Why:     "how many decimal places the fraction carries, which is a dialect answer and not a shape: zsh's is `typeset -F`'s ten and bash's own `$EPOCHREALTIME` — it has one, from 5.0 — is six. bash 3.2, ksh93 and dash have no such parameter and the count is of an empty string, which the `set=` half tells apart from a real zero. Counted rather than printed because the digits are a clock and a recorded value would be stale the second after",
+	},
+	{
+		ID: "datetime/the-pair-is-seconds-and-nanoseconds", Category: "builtins",
+		Snippet: `zmodload zsh/datetime; echo "n=${#epochtime[@]} $(( epochtime[1] > 1700000000 )) $(( epochtime[2] >= 0 ))"`,
+		Why:     "the third parameter is the same clock with the nanoseconds beside the seconds instead of inside them — two elements, and the first of them is the same number `$EPOCHSECONDS` is",
+	},
+	{
+		ID: "datetime/strftime-writes-an-epoch", Category: "builtins",
+		Snippet: `zmodload zsh/datetime; strftime "%Y-%m-%d %H:%M:%S" 1788698096; echo "st=$?"`,
+		Env:     []string{"TZ=UTC"},
+		Why:     "a fixed epoch through the format language `printf '%(fmt)T'` also writes, so the two spellings of one job cannot drift. The zone is pinned because the answer is a wall clock and the record would otherwise be about the machine that made it",
+	},
+	{
+		ID: "datetime/strftime-assigns-and-drops-the-newline", Category: "builtins",
+		Snippet: `zmodload zsh/datetime; strftime -n "%Y" 1788698096; echo "|"; strftime -s v "%H:%M" 1788698096; echo "v=$v st=$?"`,
+		Env:     []string{"TZ=UTC"},
+		Why:     "the two letters that change where the answer goes rather than what it is — `-n` writes no newline and `-s` writes no output at all. A shell that treated `-s` as a formatting flag would print the time *and* set the variable, which the `|` and the `v=` between them catch",
+	},
+	{
+		ID: "datetime/strftime-reads-a-header-back", Category: "builtins",
+		Snippet: `zmodload zsh/datetime; strftime -rs v "%d %b %Y %H:%M:%S GMT" "06 Sep 2026 12:34:56 GMT"; echo "v=$v st=$?"`,
+		Env:     []string{"TZ=UTC"},
+		Why:     "the direction and the exact format `lib/zsh/install.zsh` reads an HTTP `Last-Modified` header with, `-r` and `-s` in one word as it writes them. The month is a name rather than a number, which is the part a numeric-only reading would refuse",
+	},
+	{
+		ID: "datetime/strftime-refuses-by-name", Category: "builtins",
+		Snippet: `zmodload zsh/datetime; strftime; echo "st=$?"; strftime "%Y" 1 2 3; echo "st=$?"; strftime "%Y" abc; echo "st=$?"; echo after`,
+		Why:     "three usage refusals in a row, each at 1 and none of them fatal — the `after` is what says so. Two of the three are counted before any argument is looked at, so a shell checking the format first would word them differently",
 	},
 	{
 		ID: "zmodload/a-letter-the-builtin-does-not-have", Category: "builtins",

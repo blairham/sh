@@ -179,3 +179,14 @@ func space2(n int) string {
 	}
 	return s
 }
+
+// Strftime writes a time through a POSIX date format, which is what
+// `printf '%(fmt)T'` does with one.
+//
+// Exported because a dialect has a builtin that does the same job under its
+// own name — zsh's `strftime` — and two implementations of one format
+// language would drift: a conversion fixed in one would stay wrong in the
+// other, and no test on either side could see it. The extensions that
+// builtin has beyond POSIX stay with the builtin, because they are that
+// shell's and not this format language's.
+func Strftime(format string, t time.Time) string { return strftime(format, t) }

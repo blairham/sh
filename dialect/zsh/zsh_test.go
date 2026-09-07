@@ -53,6 +53,12 @@ func TestGrammar(t *testing.T) {
 	if !zsh.Dialect().AliasBodyCountsLines {
 		t.Error("AliasBodyCountsLines = false, want true")
 	}
+	// The try-always block is this shell's alone, and the value is pinned
+	// rather than only the behavior: nothing else names which answer this
+	// preset gives, and nine files in a real plugin tree turn on it (#1216).
+	if !zsh.Dialect().TryAlways {
+		t.Error("TryAlways = false, want true")
+	}
 	for _, tc := range []struct {
 		src  string
 		want bool

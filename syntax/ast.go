@@ -374,6 +374,32 @@ func (c *Group) Pos() Pos     { return c.Start }
 func (c *Group) End() Pos     { return c.Stop }
 func (c *Group) commandNode() {}
 
+// TryClause is `{ … } always { … }`, the try-always block.
+//
+// The two halves are lists rather than [Group] nodes, the way an [IfClause]'s
+// branches are: the braces are mandatory punctuation of this production, so a
+// nested group node would carry no fact the construct does not already state —
+// and a list is what lets `break` inside the try half reach the loop around
+// the whole construct rather than a group standing in the way.
+//
+// Redirs belongs to the construct and not to either half, which is measured:
+// `{ echo t; } always { echo a; } > /dev/null` sends *both* halves there, and
+// a redirection written after the try half instead ends it, so that spelling
+// is a parse error. See [Dialect.TryAlways] for the grammar.
+type TryClause struct {
+	// Try is the first half, run first and whatever happens.
+	Try []*Stmt
+	// Always is the second half, run however the first half ended.
+	Always []*Stmt
+	Start  Pos
+	Stop   Pos
+	redirs
+}
+
+func (c *TryClause) Pos() Pos     { return c.Start }
+func (c *TryClause) End() Pos     { return c.Stop }
+func (c *TryClause) commandNode() {}
+
 // IfClause is `if … then … [elif …] [else …] fi`.
 //
 // Cond is a list rather than a single command, and its *last* command decides:

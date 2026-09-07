@@ -21103,6 +21103,50 @@
         "TimedOut": false
       }
     },
+    "core/a-block-with-a-cleanup-half": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 1: `{ echo t; } always { echo a; }; echo \"?=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 1: `{ echo t; } always { echo a; }; echo \"?=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 0: `{ echo t; } always { echo a; }; echo \"?=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t~a~?=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-brace-body-is-not-a-while-body": {
       "bash": {
         "Stdout": "",
@@ -21273,6 +21317,270 @@
       },
       "zsh": {
         "Stdout": "[y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-cleanup-block-does-not-replace-the-status": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 1: `{ false; } always { true; }; echo \"one=$?\"; { true; } always { false; }; echo \"two=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 1: `{ false; } always { true; }; echo \"one=$?\"; { true; } always { false; }; echo \"two=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 0: `{ false; } always { true; }; echo \"one=$?\"; { true; } always { false; }; echo \"two=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one=1~two=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-cleanup-block-sees-the-status-it-cleans-up-after": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 1: `{ (exit 5); } always { echo \"inner=$?\"; }; echo \"outer=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 1: `{ (exit 5); } always { echo \"inner=$?\"; }; echo \"outer=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 0: `{ (exit 5); } always { echo \"inner=$?\"; }; echo \"outer=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "inner=5~outer=5",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-cleanup-block-that-continues-outranks-a-break": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2 3; do { echo t$i; break; } always { echo A$i; continue; }; echo body$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2 3; do { echo t$i; break; } always { echo A$i; continue; }; echo body$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2 3; do { echo t$i; break; } always { echo A$i; continue; }; echo body$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"done\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t1~A1~t2~A2~t3~A3~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-cleanup-blocks-own-return-keeps-the-first-halfs-status": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { (exit 5); } always { echo A; return 4; }; echo NOT-REACHED; }; f; echo \"?=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { (exit 5); } always { echo A; return 4; }; echo NOT-REACHED; }; f; echo \"?=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { (exit 5); } always { echo A; return 4; }; echo NOT-REACHED; }; f; echo \"?=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "A~?=5",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-cleanup-halfs-continue-count-decides-too": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; continue; } always { echo A$i$j; continue 2; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; continue; } always { echo A$i$j; continue 2; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; continue; } always { echo A$i$j; continue 2; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"done\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t1a~A1a~t2a~A2a~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-cleanup-halfs-continue-count-the-other-way": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; continue 2; } always { echo A$i$j; continue; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; continue 2; } always { echo A$i$j; continue; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; continue 2; } always { echo A$i$j; continue; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"done\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t1a~A1a~t1b~A1b~inner1~t2a~A2a~t2b~A2b~inner2~after",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -21451,6 +21759,50 @@
         "Stdout": "st=0",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-failed-expansion-in-a-try-half-still-runs-the-cleanup": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { for i in a $((1/0)) b; do echo $i; done; } always { echo \"A$((1+1))\"; }; echo NOT-REACHED; }; f'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { for i in a $((1/0)) b; do echo $i; done; } always { echo \"A$((1+1))\"; }; echo NOT-REACHED; }; f'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { for i in a $((1/0)) b; do echo $i; done; } always { echo \"A$((1+1))\"; }; echo NOT-REACHED; }; f'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "A2",
+        "Stderr": "f: division by zero",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -22247,6 +22599,94 @@
         "TimedOut": false
       }
     },
+    "core/a-redirection-on-a-try-always-block-reaches-both-halves": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 1: `{ echo t; } always { echo a; } \u003e /dev/null; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 1: `{ echo t; } always { echo a; } \u003e /dev/null; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 0: `{ echo t; } always { echo a; } \u003e /dev/null; echo done'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-return-runs-the-cleanup-block-and-still-returns": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { echo t; return 3; } always { echo \"A ?=$?\"; }; echo NOT-REACHED; }; f; echo \"?=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { echo t; return 3; } always { echo \"A ?=$?\"; }; echo NOT-REACHED; }; f; echo \"?=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { echo t; return 3; } always { echo \"A ?=$?\"; }; echo NOT-REACHED; }; f; echo \"?=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t~A ?=3~?=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-select-name-that-is-an-expansion": {
       "bash": {
         "Stdout": "",
@@ -22419,6 +22859,50 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: parse error near `echo'",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-separator-takes-the-cleanup-keyword-away": {
+      "bash": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e: line 1: always: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e: line 1: always: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e: always: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e: 1: always: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e: always: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t",
+        "Stderr": "\u003cshell\u003e:1: command not found: always",
+        "Status": 127,
         "Signal": 0,
         "TimedOut": false
       }
@@ -22819,6 +23303,50 @@
         "TimedOut": false
       }
     },
+    "core/a-try-always-block-ends-a-condition": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `if { true; } always { :; } { echo A; }; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `if { true; } always { :; } { echo A; }; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `if { true; } always { :; } { echo A; }; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"then\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "A~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-while-condition-that-ends-itself-takes-a-body": {
       "bash": {
         "Stdout": "",
@@ -22947,6 +23475,94 @@
         "Stdout": "",
         "Stderr": "\u003cscript\u003e:1: parse error near `}'",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/an-exit-at-the-top-level-skips-the-cleanup-block": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `{ echo t; exit 7; } always { echo A; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `{ echo t; exit 7; } always { echo A; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `{ echo t; exit 7; } always { echo A; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/an-exit-inside-a-function-runs-the-cleanup-block": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { echo t; exit 7; } always { echo A; }; }; f; echo NOT-REACHED'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { echo t; exit 7; } always { echo A; }; }; f; echo NOT-REACHED'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `f(){ { echo t; exit 7; } always { echo A; }; }; f; echo NOT-REACHED'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t~A",
+        "Stderr": "",
+        "Status": 7,
         "Signal": 0,
         "TimedOut": false
       }
@@ -23165,6 +23781,50 @@
       },
       "zsh": {
         "Stdout": "[one two]~[one-two]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/break-and-continue-reach-the-cleanup-block": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2 3; do { echo t$i; [[ $i == 2 ]] \u0026\u0026 break; } always { echo A$i; }; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2 3; do { echo t$i; [[ $i == 2 ]] \u0026\u0026 break; } always { echo A$i; }; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2 3; do { echo t$i; [[ $i == 2 ]] \u0026\u0026 break; } always { echo A$i; }; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"done\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t1~A1~t2~A2~after",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -23561,6 +24221,94 @@
       },
       "zsh": {
         "Stdout": "i=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/continue-ness-is-sticky-across-the-halves": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; continue; } always { echo A$i$j; break 2; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; continue; } always { echo A$i$j; break 2; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; continue; } always { echo A$i$j; break 2; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"done\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t1a~A1a~t2a~A2a~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/continue-ness-is-sticky-the-other-way": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; break 2; } always { echo A$i$j; continue; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; break 2; } always { echo A$i$j; continue; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; break 2; } always { echo A$i$j; continue; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"done\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t1a~A1a~t1b~A1b~inner1~t2a~A2a~t2b~A2b~inner2~after",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -24359,6 +25107,138 @@
         "TimedOut": false
       }
     },
+    "core/the-cleanup-half-belongs-to-a-brace-group-alone": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `if true; then echo t; fi always { echo a; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `if true; then echo t; fi always { echo a; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `if true; then echo t; fi always { echo a; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:1: parse error near `always'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/the-cleanup-half-must-be-a-brace-group": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `{ echo t; } always echo a'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `{ echo t; } always echo a'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `{ echo t; } always echo a'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:1: parse error near `echo'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/the-cleanup-keyword-is-positional-not-reserved": {
+      "bash": {
+        "Stdout": "fn~always~always",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "fn~always~always",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "fn~always~always",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "fn~always~always",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "fn~always~always",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "fn~always~always",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/the-missing-separator-is-named-inside-a-group": {
       "bash": {
         "Stdout": "",
@@ -24485,6 +25365,138 @@
       },
       "zsh": {
         "Stdout": "it=1~it=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/try-always-blocks-nest-in-both-halves": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 1: `{ { echo t; } always { echo a; }; } always { echo b; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 1: `{ { echo t; } always { echo a; }; } always { echo b; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `always'~\u003cshell\u003e: -c: line 0: `{ { echo t; } always { echo a; }; } always { echo b; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t~a~b",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/two-cleanup-counts-take-the-second-halfs": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; break; } always { echo A$i$j; break 2; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; break; } always { echo A$i$j; break 2; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; break; } always { echo A$i$j; break 2; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"done\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t1a~A1a~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/two-cleanup-counts-take-the-second-halfs-the-other-way": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; break 2; } always { echo A$i$j; break; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; break 2; } always { echo A$i$j; break; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `always'~\u003cscript\u003e: line 1: `for i in 1 2; do for j in a b; do { echo t$i$j; break 2; } always { echo A$i$j; break; }; echo body; done; echo inner$i; done; echo after'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: word unexpected (expecting \"done\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `always' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "t1a~A1a~inner1~t2a~A2a~inner2~after",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -1210,6 +1210,14 @@ type Runner struct {
 	// depth bounds function recursion, because a shell script can recurse
 	// and a stack overflow is not a diagnostic anyone can act on.
 	depth int
+	// funcFloor is the depth this shell body began at, so that "am I inside a
+	// function call" can be asked about *this* shell rather than about the
+	// process. clone raises it, because a subshell is a shell of its own: it
+	// inherits the caller's frames as state but is not running inside them.
+	//
+	// It exists for one measured question — see tryclause.go — and the
+	// measurement is what says a plain copy of depth would be wrong.
+	funcFloor int
 	// actionIDs numbers this session's actions — see actionid.go. A pointer
 	// so that clone shares it rather than copying it: two subshells with
 	// counters of their own would hand two different actions the same id, and
@@ -1224,6 +1232,8 @@ const maxDepth = 256
 func (r *Runner) clone() *Runner {
 	c := *r
 	c.inSubshell = true
+	// A subshell body is not running inside the frames the copy inherited.
+	c.funcFloor = c.depth
 	// A pending process substitution belongs to the command being built in
 	// the runner that made it, not to a subshell cloned while it was being
 	// built. Carrying them over meant the second `<(…)` of a command cloned
@@ -2074,6 +2084,8 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		return r.simple(ctx, x)
 	case *syntax.Group:
 		return r.group(ctx, x)
+	case *syntax.TryClause:
+		return r.tryClause(ctx, x)
 	case *syntax.Subshell:
 		return r.subshell(ctx, x)
 	case *syntax.IfClause:

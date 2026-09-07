@@ -490,6 +490,31 @@ type Dialect struct {
 	// Herestring enables `<<<`. Absent from dash.
 	Herestring bool
 
+	// ClobberOverrideMarker generalizes the clobber-override marker. Core
+	// takes `|` after `>` alone, which is `>|`; this makes the marker `|`
+	// *or* `!` and lets it follow any of the four write operators, so it
+	// enables all seven of `>!`, `>>|`, `>>!`, `&>|`, `&>!`, `&>>|` and
+	// `&>>!`. The last four need AmpersandRedirect as well, since a marker
+	// cannot attach to an operator the dialect does not read.
+	//
+	// Measured 2026-09-07 across the panel, and it moves as one thing: zsh
+	// 5.9.2 accepts all seven, and dash, bash 5.3, bash 5.3 as sh, bash 3.2
+	// and ksh93 accept none of them — they have `>|` and nothing else. That
+	// is why it is one flag rather than one per spelling; there is no column
+	// that takes some and refuses others.
+	//
+	// The two fallbacks are different and both are what the shells do, which
+	// is the reason to be careful here. A `|` marker falls back to a pipe
+	// with nothing on its left, so `echo hi >>| f` is a *refusal* in the
+	// five — a syntax error at the `|`, each in its own words. A `!` marker
+	// falls back to a word, and that one is silent: `echo hi >! f` in all
+	// five writes a file whose name is the single character `!`, holding
+	// `hi f`, and reports 0. This is the AmpersandRedirect hazard exactly —
+	// one spelling, two meanings, no diagnostic — so accepting the union
+	// here would quietly pick zsh's reading for text that legitimately has
+	// the other one.
+	ClobberOverrideMarker bool
+
 	// HeredocEndsAtClosingParen lets a here-document's body end at the
 	// closing parenthesis of the construct it sits inside, so that the
 	// delimiter is a delimiter even with the `)` written onto its line:

@@ -631,9 +631,11 @@ func (l *Lexer) fdVariableSubscript(open int) (int, bool) {
 // operators, longest first. Longest match wins, so the order is the algorithm
 // and not merely tidiness: `>>` must be found before `>`.
 var operators = []Kind{
-	TokDSemiAmp, TokTLess, TokAmpDGreat, TokDLessDash, // 3 bytes
+	TokAmpDGreatClobber, TokAmpDGreatBang, // 4 bytes
+	TokDSemiAmp, TokTLess, TokAmpDGreat, TokDLessDash,
+	TokDGreatClobber, TokDGreatBang, TokAmpGreatClobber, TokAmpGreatBang, // 3 bytes
 	TokAndAnd, TokOrOr, TokDSemi, TokSemiAmp, TokDGreat, TokLessAmp, TokGreatAmp,
-	TokLessGreat, TokClobber, TokDLess, TokAmpGreat,
+	TokLessGreat, TokClobber, TokClobberBang, TokDLess, TokAmpGreat,
 	TokAmpBang, TokAmpPipe, TokPipeAmp, TokSemiPipe, // 2 bytes
 	TokAmp, TokPipe, TokSemi, TokLeftParen, TokRightParen, TokLess, TokGreat, // 1 byte
 }
@@ -658,6 +660,14 @@ func (l *Lexer) enabled(k Kind) bool {
 		// they are is the parser's. Where neither is set the operator table
 		// falls back to `|` then `&`, which is what bash 3.2 and dash lex.
 		return l.dialect.PipeBothStreams || l.dialect.CoprocPipeOperator
+	case TokClobberBang, TokDGreatClobber, TokDGreatBang:
+		return l.dialect.ClobberOverrideMarker
+	case TokAmpGreatClobber, TokAmpGreatBang, TokAmpDGreatClobber, TokAmpDGreatBang:
+		// The marker on the both-streams operators needs those operators
+		// first: where `&>` is not read at all, `&>|` cannot be the marker on
+		// it, and the fallback that matters is `&` then `>|` rather than a
+		// four-byte operator nobody wrote.
+		return l.dialect.ClobberOverrideMarker && l.dialect.AmpersandRedirect
 	}
 	return true
 }

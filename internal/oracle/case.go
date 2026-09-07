@@ -4865,7 +4865,7 @@ echo "st=$?"`,
 	{
 		ID: "redir/noclobber-refuses-both-streams-to-one-file", Category: "redirection",
 		Snippet: `set -C; : > qq; true &>qq; echo "st=$?"`,
-		Why:     "`set -C` refuses this truncation exactly as it refuses a plain `>`, unanimously and each in its own words — and unlike `>` there is no override spelling to exempt, because `>|&` is a syntax error in all six. A command with no output on purpose: the two shells that have no `&>` read the line as a background `true` and a bare `>qq`, and anything the job printed would arrive against the clock",
+		Why:     "`set -C` refuses this truncation exactly as it refuses a plain `>`, unanimously and each in its own words. The override, where there is one, is spelled after the whole operator rather than inside it — `>|&` is a syntax error in all six, but `&>|` and `&>!` are not, and one column reads both, which is redir/both-streams-clobber-override-bang. A command with no output on purpose: the two shells that have no `&>` read the line as a background `true` and a bare `>qq`, and anything the job printed would arrive against the clock",
 	},
 	{
 		ID: "redir/merge-then-file", Category: "redirection",
@@ -4886,6 +4886,51 @@ echo "st=$?"`,
 		ID: "token/clobber-override", Category: "tokenization",
 		Snippet: `set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"`,
 		Why:     ">| overrides noclobber with the same meaning everywhere, unlike &>",
+	},
+	{
+		ID: "redir/clobber-override-bang", Category: "redirection",
+		Snippet: `set -C; echo one > f; echo two >! f; printf "[f=%s][bang=%s]" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"`,
+		Why:     "the discriminating pair for the `!` spelling of the clobber override, with both files read back because the exit status cannot tell them apart: zsh truncates the file that was named, and the other five write a file whose name is the single character `!` holding `two f` and report 0 — the same text, two meanings, no diagnostic (#1247)",
+	},
+	{
+		ID: "redir/clobber-override-bang-behind-a-descriptor", Category: "redirection",
+		Snippet: `set -C; echo one > f; echo two 1>! f; printf "[st=%s][f=%s][bang=%s]" "$?" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"`,
+		Why:     "the same override with an explicit descriptor in front of it, which is where a redirection's operator is easiest to lose: the number binds to the operator and the marker still belongs to it",
+	},
+	{
+		ID: "redir/append-override-bang", Category: "redirection",
+		Snippet: `set -C; echo two >>! f; printf "[st=%s][f=%s][bang=%s]" "$?" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"`,
+		Why:     "the shape a real plugin tree writes its log with. zsh creates the file it named; the other five create `!` and report 0, so a script that logs this way gets success and no log and nothing downstream can see it (#1247)",
+	},
+	{
+		ID: "redir/append-override-pipe", Category: "redirection",
+		Snippet: `set -C; echo two >>| f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"`,
+		Why:     "the same override spelled with the marker `>|` uses, and the other half of the fallback story: a `|` marker falls back to a pipe with nothing on its left, so this one is a syntax error in the five rather than a silent second meaning",
+	},
+	{
+		ID: "redir/append-override-bang-on-a-compound", Category: "redirection",
+		Snippet: `set -C; for i in 1 2; do echo $i; done >>! f; printf "[st=%s][f=%s][bang=%s]" "$?" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"`,
+		Why:     "the operator on a compound command rather than a simple one, which is the shape found in the wild — and where the fallback stops being silent: `done >>! f` leaves `f` as a word after the compound, which the five refuse outright",
+	},
+	{
+		ID: "redir/noclobber-blocks-an-append-that-creates", Category: "redirection",
+		Snippet: `set -C; echo hi >> f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"`,
+		Why:     "POSIX 2.7.2 puts noclobber on `>` alone, and five of the panel comply: appending to a name that is not there creates it. zsh puts the option on `>>` as well and refuses. This is the refusal `>>|` and `>>!` exist to override, so without it the override is unobservable",
+	},
+	{
+		ID: "redir/noclobber-allows-an-append-to-an-existing-file", Category: "redirection",
+		Snippet: `set -C; : > f; echo hi >> f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"`,
+		Why:     "the control for the row above: noclobber never stops an append to a file that is already there, unanimously — so the divergence is about creating and not about appending",
+	},
+	{
+		ID: "redir/both-streams-clobber-override-bang", Category: "redirection",
+		Snippet: `set -C; echo one > f; true &>! f; printf "[st=%s][f=%s][bang=%s]" "$?" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"`,
+		Why:     "the marker reaches `&>` too in the one dialect that has it, which corrects what the row on refusing both streams to one file implies: `>|&` is a syntax error in all six, but `&>|` and `&>!` are not. A command with no output on purpose, because the two shells with no `&>` read the line as a background job",
+	},
+	{
+		ID: "redir/both-streams-append-override-pipe", Category: "redirection",
+		Snippet: `set -C; echo two &>>| f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"`,
+		Why:     "the fourth operator the marker attaches to, and a refusal everywhere else — bash 3.2 names `>|` as the token it did not expect where bash 5.3 names `|`, which is the same grammar reached from two directions",
 	},
 	// --- the command language ---------------------------------------------
 	{

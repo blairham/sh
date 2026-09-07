@@ -159,21 +159,141 @@ func TestARefusedModifierIsNamedOnlyWhenTheLetterIsTheProblem(t *testing.T) {
 	}
 }
 
-// A modifier the dialect has and this implementation does not perform is
-// refused out loud rather than passed through. Passing it through would be
-// promising a value that was never computed, which is the same choice `set`
-// makes for an option letter it has and does not do.
-func TestAnUnperformedModifierIsRefusedRatherThanIgnored(t *testing.T) {
-	for _, mod := range []string{"a", "A", "P", "c", "q", "Q", "s"} {
-		out, st := runWithModifiers(t, `x=/tmp/a.b; echo "[${x:`+mod+`}]"`)
-		if !strings.Contains(out, "not implemented") {
-			t.Errorf("%s: got %q, want a refusal saying so", mod, out)
+// All thirteen letters are performed now, and the six that need something a
+// string does not carry are the reason applyModifier is a method.
+//
+// Names the axis and never a shell, which is the rule for a test here. The
+// values chosen are the ones no machine can disagree about: an absolute path
+// needs no working directory, a path under `/no/such` exists nowhere, and a
+// name holding a slash is never searched for.
+func TestTheModifiersThatNeedMoreThanTheStringArePerformed(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// `:a` is lexical — `..` and `.` canceled by name, no link followed.
+		{"absolute", `x=/x/y/../z/.; echo "[${x:a}]"`, "[/x/z]\n"},
+		{"absolute keeps empty empty", `x=; echo "[${x:a}]"`, "[]\n"},
+		// `:A` and `:P` resolve what exists and leave the rest alone, so a
+		// path that is nowhere comes back as itself.
+		{"resolved", `x=/no/such/path; echo "[${x:A}]"`, "[/no/such/path]\n"},
+		{"real path keeps a trailing slash it could not resolve", `x=/no/such/; echo "[${x:P}]"`, "[/no/such/]\n"},
+		{"resolved drops it", `x=/no/such/; echo "[${x:A}]"`, "[/no/such]\n"},
+		// `:c` leaves a name it cannot find, and never touches one with a
+		// slash in it.
+		{"command not found", `x=nosuchcommand12345; echo "[${x:c}]"`, "[nosuchcommand12345]\n"},
+		{"command with a slash", `x=./nosuch; echo "[${x:c}]"`, "[./nosuch]\n"},
+		// `:q` and `:Q` are this shell's own quoting, out and back.
+		{"quoted", `x="a b*c"; echo "[${x:q}]"`, "[a\\ b\\*c]\n"},
+		{"quoted empty stays empty", `x=; echo "[${x:q}]"`, "[]\n"},
+		{"unquoted", `x="'a b'"; echo "[${x:Q}]"`, "[a b]\n"},
+		{"round trip", `x="a b"; echo "[${x:q:Q}]"`, "[a b]\n"},
+		// `:s` replaces a literal substring, first occurrence or every one.
+		{"substituted", `x=aXbXc; echo "[${x:s/X/-/}]"`, "[a-bXc]\n"},
+		{"substituted globally", `x=aXbXc; echo "[${x:gs/X/-/}]"`, "[a-b-c]\n"},
+		{"the delimiter may be a colon", `x=aXbXc; echo "[${x:s:X:-:}]"`, "[a-bXc]\n"},
+		{"the matched text", `x=aXbXc; echo "[${x:s/X/[&]/}]"`, "[a[X]bXc]\n"},
+		// A pattern is not a pattern: these are literal strings.
+		{"a question mark is literal", `x=abc; echo "[${x:s/?/Z/}]"`, "[abc]\n"},
+		{"and is replaced where it is there", `x="a?c"; echo "[${x:s/?/Z/}]"`, "[aZc]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runWithModifiers(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s\ngot  %q (status %d)\nwant %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The substitution is remembered for the shell rather than for the parameter,
+// which is what an empty pattern and `:&` both reach for.
+func TestASubstitutionIsRememberedForTheShell(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"an empty pattern reuses it", `x=aXbXc; echo "[${x:s/X/-/}][${x:s//+/}]"`, "[a-bXc][a+bXc]\n"},
+		{"across parameters", `x=aXbXc; y=aXd; echo "[${x:s/X/-/}][${y:s//+/}]"`, "[a-bXc][a+d]\n"},
+		{"and `&` repeats the whole of it", `x=aXbXc; echo "[${x:s/X/-/}][${x:&}]"`, "[a-bXc][a-bXc]\n"},
+		{"`&` with none before it is silence", `x=aXbXc; echo "[${x:&}]"`, "[aXbXc]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runWithModifiers(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s\ngot  %q (status %d)\nwant %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+	// An empty pattern with nothing to reuse is refused by name, which is the
+	// one place the two spellings differ: `:&` says nothing and this says so.
+	out, st := runWithModifiers(t, `x=aXbXc; echo "[${x:s//+/}]"`)
+	if !strings.Contains(out, "no previous substitution") || st == 0 {
+		t.Errorf("got %q (status %d), want a refusal naming what is missing", out, st)
+	}
+}
+
+// A count after `h` or `t` counts *separators*, from the left and from the
+// right respectively — not repetitions of the modifier, which is what it
+// looks like and is a different answer at almost every count.
+func TestACountAfterHeadOrTailCountsSeparators(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		// `:h` three times over would be `/a/b`, which is `:h3`'s answer by
+		// coincidence and nothing else's.
+		{`x=/a/b/c/d/e; echo "[${x:h1}]"`, "[/]\n"},
+		{`x=/a/b/c/d/e; echo "[${x:h2}]"`, "[/a]\n"},
+		{`x=/a/b/c/d/e; echo "[${x:h3}]"`, "[/a/b]\n"},
+		{`x=/a/b/c/d/e; echo "[${x:h9}]"`, "[/a/b/c/d/e]\n"},
+		{`x=/a/b/c/d/e; echo "[${x:t2}]"`, "[d/e]\n"},
+		{`x=/a/b/c/d/e; echo "[${x:t5}]"`, "[a/b/c/d/e]\n"},
+		{`x=/a/b/c/d/e; echo "[${x:t9}]"`, "[/a/b/c/d/e]\n"},
+		// No count and `0` are the same answer, and neither is `1`.
+		{`x=/a/b/c/d/e; echo "[${x:h}][${x:h0}]"`, "[/a/b/c/d][/a/b/c/d]\n"},
+		// A trailing run of slashes separates nothing, so this path has two
+		// separators and not three.
+		{`x=/a/b//; echo "[${x:h2}][${x:h3}]"`, "[/a][/a/b//]\n"},
+	} {
+		if out, st := runWithModifiers(t, tc.src); out != tc.want || st != 0 {
+			t.Errorf("%s\ngot  %q (status %d)\nwant %q", tc.src, out, st, tc.want)
 		}
-		if strings.Contains(out, "/tmp/a.b") {
-			t.Errorf("%s: got %q, want no value passed through", mod, out)
+	}
+}
+
+// A length *and then* a modifier list, which the parser cannot split on its
+// own: a range is split once, so `5:t` arrived whole and reached the
+// evaluator as an expression.
+func TestAModifierMayFollowBothAnOffsetAndALength(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`x=/tmp/Dir/File.Txt.gz; echo "[${x:1:5:t}]"`, "[D]\n"},
+		{`x=abcdefgh; echo "[${x:1:5:u}]"`, "[BCDEF]\n"},
+		// Still a length and still a modifier where there is only one of them.
+		{`x=/tmp/Dir/File.Txt.gz; echo "[${x:2:t}]"`, "[File.Txt.gz]\n"},
+		{`x=/tmp/Dir/File.Txt.gz; echo "[${x:2:2}]"`, "[mp]\n"},
+	} {
+		if out, st := runWithModifiers(t, tc.src); out != tc.want || st != 0 {
+			t.Errorf("%s\ngot  %q (status %d)\nwant %q", tc.src, out, st, tc.want)
 		}
-		if st == 0 {
-			t.Errorf("%s: status = 0, want a failure", mod)
+	}
+	// And a digit that is neither is still refused, naming itself.
+	if out, _ := runWithModifiers(t, `x=abcdefgh; echo "[${x:1:2:3}]"`); !strings.Contains(out, "no such modifier <3>") {
+		t.Errorf("got %q, want the digit named", out)
+	}
+}
+
+// The refusal names **one byte**, not the whole segment. `${x:zz}` is a
+// complaint about `z`; the second `z` has not been looked at, and naming both
+// would say the pair is the modifier that is missing.
+func TestAnUnrecognizedModifierNamesOneByte(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`x=/tmp/a.b; echo "[${x:zz}]"`, "no such modifier <z>"},
+		{`x=/tmp/a.b; echo "[${x:iq}]"`, "no such modifier <i>"},
+		{`x=/tmp/a.b; echo "[${x:h:zz}]"`, "no such modifier <z>"},
+		// `g` is a prefix rather than a letter, so alone it names itself.
+		{`x=/tmp/a.b; echo "[${x:g}]"`, "no such modifier <g>"},
+	} {
+		out, st := runWithModifiers(t, tc.src)
+		if !strings.Contains(out, tc.want) || st == 0 {
+			t.Errorf("%s\ngot  %q (status %d)\nwant it to contain %q", tc.src, out, st, tc.want)
 		}
+	}
+	// A letter that *is* a modifier with junk after it is the other shape,
+	// and names nothing.
+	out, _ := runWithModifiers(t, `x=/tmp/a.b; echo "[${x:hzz}]"`)
+	if !strings.Contains(out, "no such modifier") || strings.Contains(out, "<") {
+		t.Errorf("got %q, want the complaint with nothing named", out)
 	}
 }

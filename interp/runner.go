@@ -1198,6 +1198,13 @@ type Runner struct {
 	// mirroring says a tie is already writing the other half, which is what
 	// keeps the two mirrors from calling each other forever.
 	mirroring bool
+	// lastSubst is the pattern and replacement `${x:s/l/r/}` last used, which
+	// an empty pattern and `${x:&}` both reach for. Shell-wide rather than
+	// per parameter — measured: a substitution made on one name is the one an
+	// empty pattern on another name reuses, on the same line. A scalar, so a
+	// subshell gets its own copy of it with the parent's contents the way
+	// every other scalar on this struct does.
+	lastSubst lastSubstitution
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
 	// depth bounds function recursion, because a shell script can recurse

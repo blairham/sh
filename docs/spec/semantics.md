@@ -5618,10 +5618,9 @@ differ by a substitution — one ends in a quoted name and the other ends.
 The letters this shell accepts, measured one at a time against zsh 5.9.2:
 `a c e h l q r s t u A P Q`. Every other letter is refused, named.
 
-#### Recorded rather than reproduced: seven of the thirteen
+#### All thirteen, and the fourteenth is not a letter
 
-Six are performed here, and they are the six that are a pure function of
-the string:
+Issue #699. Six are a pure function of the string:
 
     :h  everything before the last slash, trailing slashes off first,
         `.` where there is none — `/a/b//` → `/a`, `a/` → `.`, `/` → `/`
@@ -5631,17 +5630,86 @@ the string:
     :e  what `:r` takes off, without its dot
     :l  lowercase        :u  uppercase
 
-The other seven are recognized and **refused out loud** rather than
-guessed at, because each needs something a string does not carry: `:a`
-the working directory, `:A` and `:P` the disk, `:c` the command search,
-`:q` and `:Q` that shell's quoting table — `a b*c` quotes to `a\ b\*c` and
-a newline to `$'\n'` — and `:s` a pattern rather than a letter. Refusing
-is the choice `set` makes for an option letter it has and does not do:
-passing the value through would be promising one that was never computed.
+Seven need something a string does not carry, which is why performing
+them made `applyModifier` a method:
 
-Two shapes are also left: `${x:1:5:t}`, a modifier after both an offset
-and a length, and `${x:h2}`, where a digit after a modifier is swallowed
-where `${x:h:2}` is refused.
+    :a  an absolute path, made **lexically** — `..` and `.` canceled by
+        name and no link followed. Against the *physical* working
+        directory, which is neither `$PWD` nor the Runner's logical
+        directory after a `cd` through a link: measured, with `/tmp` a
+        link, `cd /tmp; ${x:a}` on `rel/f` is `/private/tmp/rel/f`, and
+        setting `PWD` to something invented does not change it. An empty
+        value stays empty.
+    :A  the same, then resolved on the disk.
+    :P  resolved on the disk, with `..` applied to what has already been
+        resolved rather than canceled by name. That is the whole
+        difference from `:A`, and `link2/..` shows it: `:A` gives the
+        link's parent by name, `:P` the parent of what it points at.
+        Two smaller ones — an empty value is the working directory here
+        and stays empty there, and a trailing slash survives on a path
+        that could not be fully resolved.
+    :c  the path the command search would find, and the value unchanged
+        where it would find nothing. Three narrower rules, all measured
+        and all the opposite of a guess: a name holding a slash is left
+        exactly as written, a **function is not a command** and a builtin
+        resolves to the external file of that name (`echo` → `/bin/echo`),
+        and an **empty PATH finds nothing** where the same shell's command
+        *lookup* runs a `mycmd` sitting in the current directory.
+    :q  quoted in this shell's own quoting. The same table `${(q)x}` uses
+        with one difference: `${x:q}` on an empty value is empty where the
+        flag is `''`.
+    :Q  the inverse, and identical to `${(Q)x}` on every input tried.
+    :s  `s<d>pattern<d>replacement<d>`, where the delimiter is whatever
+        byte follows the letter — `/ | # , :` all measured, and the
+        closing one optional.
+
+Both resolving modifiers stop where the disk stops and leave the rest
+alone: `/tmp/no/such` is `/private/tmp/no/such`, and a **dangling link is
+its own answer** rather than the name it points at.
+
+**`:s` is not a pattern**, which is what makes `${x/a/b}`'s machinery the
+wrong tool. Measured three ways with `x=abc`: `${x:s/?/Z/}`,
+`${x:s/[ab]/Z/}` and `${x:s/b*/Z/}` all answer `abc`, and each of `?`,
+`[b]` and `*` is replaced where the value really holds it.
+
+**And it leaves something behind.** The pattern and replacement are
+remembered for the whole shell rather than per parameter, so
+`${x:s/X/-/}` then `${y:s//+/}` reuses the `X` — and the reuse *writes
+back*, so a later `:&` repeats `X → +` and not the substitution two
+expansions earlier. `:&` is the fourteenth modifier and the one that is
+not a letter; with nothing remembered it is silence, where an empty
+pattern with nothing remembered is `no previous substitution`.
+
+**`g` is a prefix, not a letter.** `${x:g}` names `g` as no modifier,
+`${x:gh}` is the head, and it changes the answer only for `s` and `&`.
+
+**A digit after `h` or `t` counts separators, not repetitions** — from
+the left and from the right respectively, and only those two letters take
+one. On `/a/b/c/d/e`, `${x:h1}` is `/` where the head three times over is
+`/a/b`; `${x:h3}` is `/a/b`, which is the same answer by coincidence and
+the reason a repetition reading survived being written down. A separator
+is a run of slashes with something after it, so a trailing run separates
+nothing and `${x:h3}` on `/a/b//` is the whole value. No digit and `0`
+are the same answer, and neither is `1`.
+
+Both left-over shapes are read now. `${x:1:5:t}` is a modifier after both
+an offset and a length: a range is split once, so `5:t` arrived whole and
+reached the evaluator as an expression. And `${x:h2}` is the count above
+rather than a digit swallowed by the letter.
+
+**The refusal names one byte.** `${x:zz}` is a complaint about `z`; the
+second `z` has not been looked at, and naming both would say the pair is
+the modifier that is missing. A letter that *is* a modifier with junk
+after it is the other shape and names nothing. `${x:s}` is neither: a
+substitution with no body is a bad substitution, like any other
+malformed `${ }`.
+
+**Still recorded rather than reproduced.** A backslash escaping the
+delimiter inside a substitution — `${x:s/\//:/}` — does not reach the
+modifier here, because this shell's lexer removes the escape while
+reading `${ }` where that one keeps it. Quoted or unquoted alike, so it
+is not a double-quote rule. A different delimiter is the workaround and
+is what a script would ordinarily write (`${x:s|/|:|}` agrees).
 
 ### What "operand expected" means — two failures, not one
 

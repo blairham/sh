@@ -129,3 +129,93 @@ func splitPathComponents(path string) []string {
 		return c == '/' || c == filepath.Separator
 	})
 }
+
+// physicalPrefix resolves as much of path as exists and leaves the rest
+// alone, which is what a *modifier* wants where `cd -P` wants an error.
+//
+// `${x:A}` and `${x:P}` never fail: a path that is not there comes back with
+// its existing prefix resolved and the rest appended exactly as written, so
+// `/tmp/no/such` is `/private/tmp/no/such` where `/tmp` is a link and `no` is
+// not there. A dangling symlink is left as its own name for the same reason —
+// the walk stops at the component it cannot follow.
+//
+// Separate from physicalPath rather than a flag on it because the two want
+// opposite things from the same failure, and a bool parameter at the call
+// site would say which only to whoever looked the function up.
+func (r *Runner) physicalPrefix(path string) string {
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(r.workDir(), path)
+	}
+	if !filepath.IsAbs(path) {
+		return path
+	}
+	vol := filepath.VolumeName(path)
+	pending := splitPathComponents(path[len(vol):])
+	resolved := vol
+	hops := 0
+	for len(pending) > 0 {
+		comp := pending[0]
+		pending = pending[1:]
+		switch comp {
+		case ".":
+			continue
+		case "..":
+			// The parent of what is already resolved, which is the physical
+			// parent rather than the one the name suggests. This is the whole
+			// difference between `:P` and `:A`: the other one cancels `..`
+			// lexically before the walk begins.
+			if i := strings.LastIndexByte(resolved, filepath.Separator); i >= len(vol) {
+				resolved = resolved[:i]
+			} else {
+				resolved = vol
+			}
+			continue
+		}
+		candidate := resolved + string(filepath.Separator) + comp
+		info, err := r.lstat(candidate)
+		if err != nil {
+			// As far as it goes. What is left is appended as written,
+			// including this component, because none of it can be resolved
+			// once its parent cannot be.
+			return joinRemainder(candidate, pending)
+		}
+		if info.Mode()&fs.ModeSymlink == 0 {
+			resolved = candidate
+			continue
+		}
+		// A link whose target is not there is left as its own name, which is
+		// measured: `${x:A}` on a dangling link answers the link, not what it
+		// points at. stat follows the whole chain, so this is also the answer
+		// for a chain that ends in one.
+		if _, serr := r.stat(candidate); serr != nil {
+			return joinRemainder(candidate, pending)
+		}
+		hops++
+		if hops > maxSymlinkHops {
+			return joinRemainder(candidate, pending)
+		}
+		target, err := r.readLink(candidate)
+		if err != nil {
+			return joinRemainder(candidate, pending)
+		}
+		tvol := filepath.VolumeName(target)
+		if filepath.IsAbs(target) {
+			resolved = tvol
+			target = target[len(tvol):]
+		}
+		pending = append(splitPathComponents(target), pending...)
+	}
+	if resolved == vol {
+		return vol + string(filepath.Separator)
+	}
+	return resolved
+}
+
+// joinRemainder puts an unresolvable component and everything still pending
+// back on the end of what was resolved.
+func joinRemainder(resolved string, pending []string) string {
+	if len(pending) == 0 {
+		return resolved
+	}
+	return resolved + string(filepath.Separator) + strings.Join(pending, string(filepath.Separator))
+}

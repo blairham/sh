@@ -2803,16 +2803,24 @@ func (p *Parser) parseCase() Command {
 	for p.err == nil && !p.atWord("esac") && !p.at(TokEOF) {
 		p.lex.inCaseArm = false
 		it := &CaseItem{Start: p.tok.Pos}
-		// A pattern may carry a leading open paren. Where the paren opened a
-		// glob flag instead the lexer has already folded it into the word, so
-		// this sees no paren at all and the pattern arrives whole.
+		// A pattern may carry a leading open paren. Where the paren opened
+		// the *pattern* instead the lexer has already folded it into the
+		// word, so this sees no paren at all and the pattern arrives whole.
+		//
+		// Each pattern stands where an argument does either way, so a `(`
+		// beginning one belongs to it — `case x in ((a|b))` is the arm's
+		// paren and then a group, and `case x in (a|b)|(c|d))` is two
+		// groups and no arm paren. Set unconditionally rather than only on
+		// the paren branch: the *second* alternative of a list is read by
+		// `casePatterns` whichever way the first one arrived, and while
+		// this was inside the branch a list whose first pattern was a group
+		// left the rest of it in command position, where `(` is an operator
+		// and `(a|b)|(c|d))` was `parse error near `(''`.
 		saved := p.lex.inArgument
+		p.lex.inArgument = true
 		if p.at(TokLeftParen) {
-			// Each pattern stands where an argument does from here on, so a
-			// `(` beginning one belongs to it — `case x in ((a|b))` is the
-			// arm's paren and then a group. Set before the `p.next()` that
-			// reads the first pattern, which is the token it has to reach.
-			p.lex.inArgument = true
+			// Set before the `p.next()` that reads the first pattern, which
+			// is the token it has to reach.
 			p.next()
 		}
 		if !p.casePatterns(it) {

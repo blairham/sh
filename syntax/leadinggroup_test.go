@@ -174,3 +174,79 @@ func TestTheParenthesisedItemListReadsTheSameWords(t *testing.T) {
 		"the list's own opening paren is lexed as an arithmetic command, which "+
 			"this change does not reach")
 }
+
+// A `case` arm's leading `(` may be the *pattern's* rather than the arm's
+// own, and which one it is cannot be seen from the character: both readings
+// start at the same byte, and what separates them is whether the arm is left
+// a `)` to close it (#1218).
+//
+// Measured 2026-09-07 on zsh 5.9.2, each probe in a script file of its own
+// under `env -i`. Every row here is accepted there and refused by dash, bash
+// 5.3, bash-as-`sh`, bash 3.2 and ksh93 alike — five of six — which is what
+// makes it one dialect's answer rather than the core's, and the opposite of
+// what the issue expected.
+func TestACaseArmsLeadingParenMayBeThePatternsOwn(t *testing.T) {
+	on := loopGlobQuals()
+	off := Core()
+	for _, src := range []string{
+		// The group as the whole pattern: two `)`, the group's and the
+		// arm's. This is the shape the issue was filed on.
+		`case x in (a|b)) :;; esac`,
+		`case x in (ab|cd)) :;; esac`,
+		// An empty alternative in one, which is this dialect's own.
+		`case x in (|a)) :;; esac`,
+		// The group carrying pattern text of its own, which is where the
+		// two readings stop being interchangeable: a group and a
+		// two-element list match the same subjects, so only a group with
+		// something attached to it can be told apart at all.
+		`case x in (a)b) :;; esac`,
+		`case x in (a|b)x) :;; esac`,
+		`case x in (a)*) :;; esac`,
+		`case x in (a)(b)) :;; esac`,
+		// A list of groups: the second alternative is read after the first,
+		// and while argument position was set only on the arm-paren branch
+		// this was `parse error near `(''`.
+		`case x in (a|b)|(c|d)) :;; esac`,
+		`case x in (a|b) | (c|d)) :;; esac`,
+		// A group inside the group, so three `)` in a row.
+		`case x in ((a|b))) :;; esac`,
+		// Blanks before the arm's `)`, on both readings of what precedes
+		// them.
+		`case x in (a|b) ) :;; esac`,
+		`case x in (a)b ) :;; esac`,
+		// A later arm reaches the same state, which is a separate read.
+		`case x in a) :;; (b|c)) :;; esac`,
+	} {
+		mustParse(t, src, on, "a case arm's leading paren is the pattern's")
+		mustFail(t, src, off, "and it is not, without the flags")
+	}
+}
+
+// The other half of the same decision, and the half a rule that always chose
+// the group would get wrong: where nothing is left to close the arm, the
+// leading `(` is the arm's own.
+//
+// `case x in (a) b)` is the discriminating row. Both readings parse the
+// leading group; only the arm reading is available, and it then refuses `b`
+// where the arm's `)` belongs — which is what zsh 5.9.2 answers, “parse
+// error near `)' “.
+func TestACaseArmsLeadingParenIsItsOwnWhenNoParenIsLeftForIt(t *testing.T) {
+	on := loopGlobQuals()
+	// One `)` and a body behind it: the arm's paren, however much pattern
+	// language the list holds.
+	for _, src := range []string{
+		`case x in (a) :;; esac`,
+		`case x in (a|b) :;; esac`,
+		`case x in ((a|b)) :;; esac`,
+		`case x in (a|b|c) :;; esac`,
+	} {
+		mustParse(t, src, on, "the arm's own paren")
+	}
+	// And the shapes neither reading can take. Refused here and there.
+	for _, src := range []string{
+		`case x in (a) b) :;; esac`,
+		`case x in (a|b) c) :;; esac`,
+	} {
+		mustFail(t, src, on, "neither reading leaves the arm a paren")
+	}
+}

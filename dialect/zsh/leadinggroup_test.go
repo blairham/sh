@@ -125,3 +125,71 @@ for x (a done); do echo "3=$x"; done`)
 		t.Errorf("`for x in a b do …` = %v, want the refusal to name `done`", err)
 	}
 }
+
+// A `case` arm's leading `(` read as the *pattern's*, run rather than only
+// parsed — and behavioral because parsing is not the question here. A group
+// and a two-element pattern list match identically, so a reading that picked
+// the wrong one would still parse and still answer `hit` on most subjects;
+// the rows that separate them are the ones where the group carries text of
+// its own, and the `miss` subjects beside each one (#1218).
+func TestACaseArmsLeadingParenMayBeThePatternsOwn(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		// The shape the issue was filed on.
+		{`case ab in (ab|cd)) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case xy in (ab|cd)) echo hit;; *) echo miss;; esac`, "miss"},
+		// The group carrying pattern text: `(a)b` matches `ab` and not `a`,
+		// which a two-element list `a`,`b` would have the other way round.
+		// This is the row that says the group reading is real.
+		{`case ab in (a)b) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case a in (a)b) echo hit;; *) echo miss;; esac`, "miss"},
+		{`case b in (a)b) echo hit;; *) echo miss;; esac`, "miss"},
+		{`case ax in (a|b)x) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case a in (a|b)x) echo hit;; *) echo miss;; esac`, "miss"},
+		{`case ab in (a)(b)) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case ab in (a)*) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case b in (a)*) echo hit;; *) echo miss;; esac`, "miss"},
+		// A list of groups, and a subject for each alternative plus one
+		// outside both.
+		{`case a in (a|b)|(c|d)) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case c in (a|b)|(c|d)) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case x in (a|b)|(c|d)) echo hit;; *) echo miss;; esac`, "miss"},
+		{`case a in (a|b) | (c|d)) echo hit;; *) echo miss;; esac`, "hit"},
+		// Nested, so three `)` in a row.
+		{`case a in ((a|b))) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case ab in ((a|b))) echo hit;; *) echo miss;; esac`, "miss"},
+		// Blanks before the arm's `)`.
+		{`case a in (a|b) ) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case ab in (a|b) ) echo hit;; *) echo miss;; esac`, "miss"},
+		{`case ab in (a)b ) echo hit;; *) echo miss;; esac`, "hit"},
+		// An empty alternative in the group, this dialect's own.
+		{`case a in (|a)) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case "" in (|a)) echo hit;; *) echo miss;; esac`, "hit"},
+		// The arm's own paren, which is the reading a rule that always
+		// chose the group would have broken. Kept beside the rest so the
+		// boundary is one table rather than two.
+		{`case a in (a|b) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case ab in (a|b) echo hit;; *) echo miss;; esac`, "miss"},
+		{`case a in ((a|b)) echo hit;; *) echo miss;; esac`, "hit"},
+		{`case a in (a) echo hit;; *) echo miss;; esac`, "hit"},
+	} {
+		out, _ := answersRun(t, tc.src)
+		if got := strings.TrimSpace(out); got != tc.want {
+			t.Errorf("%s: said %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}
+
+// And the shapes neither reading can take, refused here as in zsh 5.9.2.
+// `(a) b)` is the discriminating one: the blank means the group cannot go on
+// being a word, so only the arm reading is left, and it then finds `b` where
+// the arm's `)` belongs.
+func TestACaseArmNeedsAParenLeftToCloseIt(t *testing.T) {
+	for _, src := range []string{
+		`case ab in (a) b) echo hit;; *) echo miss;; esac`,
+		`case ab in (a|b) c) echo hit;; *) echo miss;; esac`,
+	} {
+		if !parseFails(t, src) {
+			t.Errorf("%s: parsed, where no parenthesis is left to close the arm", src)
+		}
+	}
+}

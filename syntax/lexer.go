@@ -741,19 +741,31 @@ func (l *Lexer) endsWord(c byte) bool {
 // token is part of the word rather than an operator.
 //
 // Where an argument may stand it always is, which is what `inArgument` says.
-// At the start of a `case` arm it is only where the paren opens a **glob
-// flag**, because the arm has a paren of its own and the two are otherwise
-// indistinguishable. Measured on zsh 5.9.2:
+// At the start of a `case` arm both readings are available at the same
+// character — the arm carries an optional paren of its own, and a pattern
+// may be a group — and what separates them is not the character but whether
+// the arm is left a `)` to close it. Measured on zsh 5.9.2, 2026-09-07, each
+// probe in a script file of its own under `env -i`:
 //
-//	case x in (a)          the arm's paren, pattern `a`
-//	case x in ((a|b))      the arm's paren, pattern `(a|b)`
-//	case x in (#i)a)       *no* arm paren, pattern `(#i)a`
-//	case x in ((#i)a)      the arm's paren, pattern `(#i)a`
+//	case x in (a) …          the arm's paren, pattern `a`
+//	case x in ((a|b)) …      the arm's paren, pattern `(a|b)`
+//	case x in ((#i)a) …      the arm's paren, pattern `(#i)a`
+//	case x in (a|b)) …       *no* arm paren, pattern `(a|b)`
+//	case x in (a)b) …        *no* arm paren, pattern `(a)b`
+//	case x in (#i)a) …       *no* arm paren, pattern `(#i)a`
+//	case x in (a|b) ) …      *no* arm paren; a blank before the arm's `)`
+//	case x in (a) b) …       refused: the arm's paren, then `b` is not `)`
 //
-// So the `#` is the discriminator and not the depth: the first two rows and
-// the last differ from the third in nothing else. Two shapes that reading
-// leaves refused are written down in the spec rather than guessed at —
-// `case x in (a)b)` and `case x in (#i*)`, which that shell also takes.
+// The `#` looked like the discriminator and is not — rows four, five and
+// seven have no `#` in them and are the pattern's paren all the same, and
+// the previous note here recorded `case x in (a)b)` as refused where that
+// shell answers it. The `#` rows are subsumed rather than special: what
+// decides them is the same thing that decides the rest.
+//
+// A group and a two-element pattern list match identically, so the two
+// readings can only be told apart where the group carries text of its own —
+// `(a)b)`, `(a|b)x)` — or where the arm reading runs out of parentheses.
+// That is why the rule is about what follows the list and not about it.
 //
 // Read only where the *operator table* would otherwise take the paren. Once
 // the token is known to be a word, `inArgument` alone decides how a leading
@@ -762,7 +774,57 @@ func (l *Lexer) leadingParenBelongsToTheWord() bool {
 	if l.inArgument {
 		return true
 	}
-	return l.inCaseArm && l.peek() == '(' && l.peekAt(1) == '#'
+	if !l.inCaseArm || l.peek() != '(' {
+		return false
+	}
+	// A glob flag is decided by the `#` alone, because the arm reading is
+	// not available behind one at all: `#` where a word may begin opens a
+	// *comment*, so `case x in (#i*)` read as the arm's paren swallows the
+	// rest of the line. That shape is refused either way — this shell
+	// answers `bad pattern: #i*` and reads the pattern — and the `#` is
+	// what keeps the refusal pointing at the pattern rather than at the
+	// arm's own paren.
+	if l.peekAt(1) == '#' {
+		return true
+	}
+	return l.caseArmParenOpensAGroup()
+}
+
+// caseArmParenOpensAGroup reports whether the `(` beginning a `case` arm is
+// the *pattern's* rather than the arm's own, by reading the pattern list it
+// would open and asking whether a `)` is left to close the arm.
+//
+// The lookahead is a throwaway lexer over the rest of the source, driven as
+// an argument, rather than a hand-written scan for the matching `)`. That is
+// the point of it: a group is taken whole — nesting, blanks and glob flags
+// alike — by the scanner that already knows how, so there is no second
+// implementation of "where does this group end" to drift from the first.
+// Its diagnostics are discarded, and a probe that fails to read a list at
+// all answers no, which leaves the arm's own paren as it was.
+//
+// It inherits that scanner's blind spot for a quoted `)` (#1241) rather than
+// working around it, so the two answer the same shape the same way.
+func (l *Lexer) caseArmParenOpensAGroup() bool {
+	probe := NewLexer(l.src[l.off:], l.dialect)
+	// An argument is exactly the position a pattern list stands in once the
+	// arm's paren is out of the way, which is also what the parser sets for
+	// the patterns it reads after taking one.
+	probe.inArgument = true
+	for {
+		if probe.Next().Kind != TokWord || probe.Err() != nil {
+			return false
+		}
+		switch probe.Next().Kind {
+		case TokRightParen:
+			// The arm has its `)`, so the paren this started at was the
+			// pattern's.
+			return true
+		case TokPipe:
+			// More alternatives, and the question is unchanged.
+		default:
+			return false
+		}
+	}
 }
 
 func (l *Lexer) opensPatternGroup() bool {

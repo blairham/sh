@@ -797,9 +797,31 @@ var Corpus = []Case{
 		Why:     "how far a failed expansion reaches, which every earlier row was the wrong shape to ask: `echo $((1/0)); echo \"st=$?\"` above puts both commands in one list, and giving up the list and giving up the shell print exactly the same thing there. On three lines they part — bash reports the failure and runs `after`, and dash, ksh93 and zsh stop — so this is the row that separates `Semantics.FailedExpansionAbandonsTheLine` from a fatal error, and the one whose absence let a single unreadable expansion end a whole file in the dialect that survives one (#1171)",
 	},
 	{
+		ID: "axis/a-failed-for-word-list", Category: "semantics axes",
+		Script:  true,
+		Snippet: "echo pre\nfor i in a $((1/0)) b; do echo \"A$i\"; done\necho after\n",
+		Why:     "a failed expansion in a compound command's *heading* rather than in one of its commands, which is the same axis reaching a place that never asked it: the word list is what the loop iterates, so a failure in it costs the loop and not the one pass it would have been. Every column stops before the body — bash then runs `after` and the other three do not — and ours ran the body three times and exited 0. Good words on either side of the bad one, because a rule that abandoned only when the whole list failed would pass a single-word row (#1215)",
+	},
+	{
+		ID: "axis/a-failed-case-subject", Category: "semantics axes",
+		Script:  true,
+		Snippet: "echo pre\ncase $((1/0)) in \"\") echo E;; *) echo A;; esac\necho after\n",
+		Why:     "the same question on the subject, and the empty arm is what makes this the worst face of it rather than another row: a subject whose expansion failed is empty, and empty *matches*, so the shell chose a branch from a value it had just reported it could not compute — printing `E` at status 0, which is the one outcome nothing downstream can detect. The arm is written `\"\"` deliberately; a row with only `*)` cannot tell \"did not choose\" from \"chose the catch-all\" (#1215)",
+	},
+	{
 		ID: "axis/failed-expansion-abandons-the-line-from-c", Category: "semantics axes",
 		Snippet: "echo pre\necho $((1/0))\necho after\n",
 		Why:     "the same three lines through `-c` rather than a script file, and it is a row about the *absence* of a route rule: the answer is byte-identical to the script one in all six columns. That is worth pinning because the neighboring readonly axis has a route field derived from comparing `-c` with a `;` against a file with newlines, which varied two things at once, and this pair is the shape that keeps the same mistake from being made here (#1171, #1182)",
+	},
+	{
+		ID: "axis/a-failed-for-word-list-from-c", Category: "semantics axes",
+		Snippet: "echo pre\nfor i in a $((1/0)) b; do echo \"A$i\"; done\necho after\n",
+		Why:     "the same three lines through `-c` rather than a script file, and its answer is byte-identical to the script row in all six columns — which is the point. A fatality axis measured on the *diagonal* of route-by-separator is confirmatory for both \"the route decides\" and \"the separator decides\", and that is how a route field came to exist for a rule that has none (#1182). The same-program pair is what makes the absence of a route rule a measurement rather than an omission (#1215)",
+	},
+	{
+		ID: "axis/a-failed-case-subject-from-c", Category: "semantics axes",
+		Snippet: "echo pre\ncase $((1/0)) in \"\") echo E;; *) echo A;; esac\necho after\n",
+		Why:     "the subject's route twin, for the reason the word list's has one. Both rows answer alike everywhere, so nothing here is route-dependent, and the pair says so rather than leaving it assumed",
 	},
 	// --- tokenization -----------------------------------------------------
 	{

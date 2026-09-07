@@ -31,12 +31,20 @@ import (
 func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
 		var items []string
+		r.beginHeading()
 		if c.HasItems {
 			for _, w := range c.Items {
 				items = append(items, r.expandWord(w)...)
 			}
 		} else {
 			items = r.Params
+		}
+		if r.failedHeading() {
+			// Before the menu is drawn, which is the whole of it here: a
+			// failed heading otherwise printed a numbered menu and then
+			// *blocked at the prompt* for a choice among words the shell had
+			// said it could not read (#1215).
+			return nil
 		}
 		// An empty menu is not an endless prompt: the loop does not run, the
 		// status is 0 and nothing is printed. Unanimous, and the alternative

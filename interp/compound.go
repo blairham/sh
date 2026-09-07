@@ -195,12 +195,20 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 		// one iterates nothing. HasItems is what tells them apart, and a nil
 		// slice could not.
 		var items []string
+		r.beginHeading()
 		if c.HasItems {
 			for _, w := range c.Items {
 				items = append(items, r.expandWord(w)...)
 			}
 		} else {
 			items = r.Params
+		}
+		if r.failedHeading() {
+			// The word list is what the loop iterates, so a failure in it
+			// costs the loop rather than one pass of it: the body must not
+			// run over a word the shell has just said it could not read.
+			// It ran three times for `for i in a "$((1/0))" b` (#1215).
+			return nil
 		}
 
 		// The same two questions the conditional loops answer, and the same
@@ -279,6 +287,13 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 		// expansion has no tree until it runs — and the condition and the step
 		// are resolved *again* every time round, since what they expand to may
 		// have changed since the last one.
+		//
+		// Which is why the heading is cleared here and each part checks: a
+		// part whose *expansion* failed leaves text the arithmetic then
+		// cannot parse either, so `for (( i=$((1/0)); … ))` reported the
+		// division and then a second complaint about the `i=` that was left
+		// (#1215).
+		r.beginHeading()
 		if _, ok := r.forArithPart(c.Init, c.InitText); !ok {
 			return nil
 		}
@@ -314,6 +329,12 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 // what makes `for ((;;))` endless rather than a loop that never runs.
 func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
 	resolved, perr := r.arithTree(tree, text)
+	if r.failedHeading() {
+		// The expansion inside the part failed. Its diagnostic is written and
+		// what is left of the text is not an expression, so parsing on would
+		// complain a second time about a residue the script never wrote.
+		return 0, false
+	}
 	if perr != nil {
 		r.diagf("%s\n", r.diag().ParseFailure(perr))
 		r.status = 1
@@ -394,7 +415,14 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 		// value with a space in it stays one subject. The ordinary word
 		// pipeline split the tab to zero fields, so the arm never fired —
 		// silently, status 0.
+		r.beginHeading()
 		subject := strings.Join(r.expandWordNoSplit(c.Word), "")
+		if r.failedHeading() {
+			// Before any arm is tested, because a subject that failed is
+			// empty and empty *matches*: the `""` arm fired and the shell
+			// chose a branch from a value it could not compute (#1215).
+			return nil
+		}
 		// A case matching nothing exits 0.
 		r.status = 0
 		r.unspecified = false

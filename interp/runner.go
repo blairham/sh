@@ -2940,6 +2940,48 @@ func (r *Runner) fatal(format string, args ...any) {
 	r.fatalQuiet()
 }
 
+// beginHeading clears what expanding a compound command's *heading* is about
+// to answer, so that failedHeading asks about this heading and not about
+// whatever ran before it.
+//
+// A simple command already does this — it is the same three fields — and a
+// heading needs it for the same reason and one more: a failed expansion that
+// gave up its line leaves the flag set, and the statement loop that consumed
+// the give-up does not clear it. A heading that tested the flag without
+// clearing it first would abandon itself over the previous line's failure.
+func (r *Runner) beginHeading() {
+	r.unspecified, r.expandErr = false, false
+}
+
+// failedHeading reports whether expanding a compound command's heading
+// failed, having ended what the dialect says such a failure ends.
+//
+// The heading is the `for` word list, the `select` menu, the `case` subject
+// and the parts of an arithmetic `for` — everything expanded *before* the
+// construct decides what to run. It is a separate call from the simple
+// command's because it guards a different thing: there, a failure means the
+// command does not run; here it means the loop must not iterate and the
+// `case` must not choose an arm.
+//
+// Not choosing is the half that matters most. A subject that failed expands
+// to empty, and empty *matches* — measured, `case "$((1/0))" in "") echo E;;
+// *) echo A;; esac` reported the division and then ran the `""` arm, so the
+// shell picked a branch from a value it had just said it could not compute,
+// and exited 0 (#1215).
+func (r *Runner) failedHeading() bool {
+	if r.unspecified {
+		// An axis no dialect answered, already reported where it was asked.
+		// The construct does not run, and the status is the one ask left.
+		r.status = 2
+		return true
+	}
+	if !r.expandErr {
+		return false
+	}
+	r.failedExpansion()
+	return true
+}
+
 // failedExpansion ends what a command whose expansion failed should end.
 //
 // One dialect gives up the *line* and carries on at the next one where the

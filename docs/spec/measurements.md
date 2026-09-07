@@ -2117,6 +2117,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `help/a-bad-option-is-followed-by-the-builtins-usage` | `alias=1~ulimit=2` **2>** `alias: -Q not found~<shell>: 1: ulimit: Illegal option -Q` | `alias=2~ulimit=2` **2>** `<shell>: line 1: alias: -Q: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: ulimit: -Q: invalid option~ulimit: usage: ulimit [-SHabcdefiklmnpqrstuvxPRT] [limit]` | `alias=2~ulimit=2` **2>** `<shell>: line 1: alias: -Q: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 1: ulimit: -Q: invalid option~ulimit: usage: ulimit [-SHabcdefiklmnpqrstuvxPRT] [limit]` | `alias=2~ulimit=2` **2>** `<shell>: line 0: alias: -Q: invalid option~alias: usage: alias [-p] [name[=value] ... ]~<shell>: line 0: ulimit: -Q: invalid option~ulimit: usage: ulimit [-SHacdfilmnpqstuvx] [limit]` | **2>** `alias: -Q: unknown option~Usage: alias [-ptx] [name[=value]...]` *(status 2)* | `alias=1~ulimit=1` **2>** `<shell>:alias:1: bad option: -Q~<shell>:ulimit:1: bad option: -Q` |
 | `help/a-bad-option-to-umask-is-named-the-way-the-dialect-names-one` | `st=2~st=2` **2>** `<shell>: 1: umask: Illegal option --~<shell>: 1: umask: Illegal option -Q` | `st=2~st=2` **2>** `<shell>: line 1: umask: --: invalid option~umask: usage: umask [-p] [-S] [mode]~<shell>: line 1: umask: -Q: invalid option~umask: usage: umask [-p] [-S] [mode]` | `st=2~st=2` **2>** `<shell>: line 1: umask: --: invalid option~umask: usage: umask [-p] [-S] [mode]~<shell>: line 1: umask: -Q: invalid option~umask: usage: umask [-p] [-S] [mode]` | `st=2~st=2` **2>** `<shell>: line 0: umask: --: invalid option~umask: usage: umask [-p] [-S] [mode]~<shell>: line 0: umask: -Q: invalid option~umask: usage: umask [-p] [-S] [mode]` | `st=2~st=2` **2>** `  version         umask (AT&T Research) 1999-04-07~<shell>: umask: -Q: unknown option~Usage: umask [-S] [mask]` | `st=1~st=1` **2>** `<shell>:umask:1: bad option: -v~<shell>:umask:1: bad option: -Q` |
 | `read/fields-into-an-array` | **2>** `<shell>: 1: read: Illegal option -a~<shell>: 1: Bad substitution` *(status 2)* | `[b]` | `[b]` | `[b]` | `[]` **2>** `<shell>: read: -a: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]` | `[]` **2>** `<shell>:read:1: bad option: -a` |
+| `read/an-array-and-a-closing-whitespace-run` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=1[a]` | `n=1[a]` | `n=1[a]` | `n=1[a]` | `n=2[a][]` |
+| `read/an-array-and-a-closing-separator` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=1[a]` | `n=1[a]` | `n=1[a]` | `n=1[a]` | `n=2[a][]` |
+| `read/an-array-and-a-leading-whitespace-run` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=1[a]` | `n=1[a]` | `n=1[a]` | `n=1[a]` | `n=1[a]` |
+| `read/an-array-from-an-empty-line` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1[]` | `n=1[]` |
+| `read/an-array-from-a-line-of-whitespace` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1[]` | `n=1[]` |
+| `read/names-and-a-closing-whitespace-run` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` |
 | `read/until-a-delimiter` | `[]` **2>** `<shell>: 1: read: Illegal option -d` | `[a]` | `[a]` | `[a]` | `[a]` | `[a]` |
 | `read/a-count-of-characters` | `[]` **2>** `<shell>: 1: read: Illegal option -n` | `[abc]` | `[abc]` | `[abc]` | `[abc]` | `[]` |
 | `read/a-backslash-escapes-and-is-removed` | `[atb]` | `[atb]` | `[atb]` | `[atb]` | `[atb]` | `[atb]` |
@@ -2619,6 +2625,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `read/fields-into-an-array` — the letter is the dialect's before the behavior is: bash's -a puts the fields in the named array, ksh93 spells the option -A and refuses -a with its usage, zsh refuses it in one line, and dash refuses the option and then the subscript too
   ```sh
   echo "a b c" | { read -a arr; echo "[${arr[1]}]"; }
+  ```
+- `read/an-array-and-a-closing-whitespace-run` — whether a closing run of IFS *whitespace* opens an element of its own, which one shell answers yes where the other two say no — and answers the *opposite* way for an expansion, since `x=" a "; set -- ${=x}` is one field there. So it cannot be the same question as the trailing-separator axis and the corpus needs both rows. The letter is picked at run time because the panel does not share one: `-A` in ksh93 and zsh, `-a` in bash, and dash has neither
+  ```sh
+  printf 'a  \n' | { read -A r 2>/dev/null || read -a r 2>/dev/null; printf "n=%s" "${#r[@]}"; for e in "${r[@]}"; do printf "[%s]" "$e"; done; echo; }
+  ```
+- `read/an-array-and-a-closing-separator` — the same shape with a *non-whitespace* separator closing the line, which is the neighboring axis and the control that keeps the two apart: the columns fall the same way here, so a probe using only this row would have modeled one question where there are two and left `read -A` a field short on every whitespace line
+  ```sh
+  IFS=:; printf 'a:\n' | { read -A r 2>/dev/null || read -a r 2>/dev/null; printf "n=%s" "${#r[@]}"; for e in "${r[@]}"; do printf "[%s]" "$e"; done; echo; }
+  ```
+- `read/an-array-and-a-leading-whitespace-run` — the other end of the line, and unanimous: a leading run is absorbed in every column, so the asymmetry the two rows above record is at the tail alone. Without it a rule written as `whitespace at an edge opens a field` would look just as well supported
+  ```sh
+  printf ' a\n' | { read -A r 2>/dev/null || read -a r 2>/dev/null; printf "n=%s" "${#r[@]}"; for e in "${r[@]}"; do printf "[%s]" "$e"; done; echo; }
+  ```
+- `read/an-array-from-an-empty-line` — a line that splits into nothing at all: ksh93 and zsh leave one empty element and bash leaves none, which is a second edge question and splits the panel differently from the two above — ksh93 sides with zsh here and with bash there
+  ```sh
+  printf '\n' | { read -A r 2>/dev/null || read -a r 2>/dev/null; printf "n=%s" "${#r[@]}"; for e in "${r[@]}"; do printf "[%s]" "$e"; done; echo; }
+  ```
+- `read/an-array-from-a-line-of-whitespace` — the row that fixes the *order* of the two edge questions, and the only shape that can: this line has a closing whitespace run *and* no fields, so a shell answering yes to both could plausibly leave two elements. zsh leaves one — the closing run is asked first and the second question is not put once a field is there
+  ```sh
+  printf '   \n' | { read -A r 2>/dev/null || read -a r 2>/dev/null; printf "n=%s" "${#r[@]}"; for e in "${r[@]}"; do printf "[%s]" "$e"; done; echo; }
+  ```
+- `read/names-and-a-closing-whitespace-run` — the same line into a list of names, where the question above cannot be seen at all: the last name takes the remainder of the line and the closing whitespace comes off that remainder anyway, so every column answers `[a][b]`. It is the row that says where the axis is asked — an axis reported where it decides nothing is a refusal a script cannot act on
+  ```sh
+  printf 'a b  \n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; echo; }
   ```
 - `read/until-a-delimiter` — -d renames the delimiter: the three shells with the letter stop at the colon and leave the rest unread — the newline they would have stopped at now ordinary input — and dash refuses the option
   ```sh

@@ -157,6 +157,52 @@ type Semantics struct {
 	// behind the last separator is already there.
 	TrailingSeparatorEndsAField Answer
 
+	// ReadTrailingWhitespaceEndsAField is the same question about a closing
+	// run of IFS *whitespace*, and it is asked of `read` alone because one
+	// shell answers the two differently.
+	//
+	// Measured 2026-09-07 with a here-string into `read -A`/`-a` and the
+	// element count read back:
+	//
+	//	read -A r <<< 'a  '        bash, ksh93 [a]      · zsh [a][]
+	//	read -A r <<< ' a '        bash, ksh93 [a]      · zsh [a][]
+	//	read -A r <<< "$(printf 'a\t')"   bash, ksh93 [a] · zsh [a][]
+	//	read -A r <<< 'a: ', IFS=': '      bash, ksh93 [a] · zsh [a][]
+	//
+	// And the same shell, same IFS, through an expansion instead:
+	// `x=' a '; set -- ${=x}` is **one** field in zsh. So this cannot ride on
+	// TrailingSeparatorEndsAField — that one is measured on an expansion and
+	// is right there, and folding them would make `${=x}` grow a field zsh
+	// does not give it.
+	//
+	// A *leading* run of whitespace is still absorbed — `read -A r <<< ' a'`
+	// is one element in all three — so the asymmetry is at the tail here as
+	// it is above, and the run rather than the byte decides: `a::` with
+	// `IFS=:` is three elements in zsh and not four.
+	//
+	// Only the array target can see it. With a list of names the last name
+	// takes the remainder of the *line* and the closing whitespace comes off
+	// that remainder anyway, so `read x <<< 'a  '` is `a` in every column
+	// whichever way this is answered — which is why it is asked in `read`'s
+	// splitting rather than at the array store, and observed there.
+	ReadTrailingWhitespaceEndsAField Answer
+
+	// ReadNoFieldsIsOneEmptyElement leaves an array `read` filled from a line
+	// that split into nothing at all holding one empty element rather than
+	// none.
+	//
+	// Measured 2026-09-07: `read -A r <<< ''` is one empty element in ksh93
+	// and zsh and no elements in bash, and a line of nothing but IFS
+	// whitespace answers the same way in each. bash's is the ordinary field
+	// split — no text, no fields — which is what the POSIX preset takes,
+	// since the letter is not in the standard at all.
+	//
+	// Asked after ReadTrailingWhitespaceEndsAField and only where nothing is
+	// left: the shell that opens a field on a closing whitespace run already
+	// has one by then, and asking before it would give that shell two
+	// elements for a line of spaces where it gives one.
+	ReadNoFieldsIsOneEmptyElement Answer
+
 	// GlobExpansionResults matches the *result* of an expansion against the
 	// filesystem. False in zsh, where only a pattern written literally in the
 	// source is expanded. The same rule decides whether `[[ abc == $p ]]`

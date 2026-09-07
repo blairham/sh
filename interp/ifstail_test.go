@@ -245,6 +245,10 @@ func TestReadIntoAnArrayAsksTheTail(t *testing.T) {
 			// one they are about.
 			sem.LastPipelineElementInCurrentShell = interp.Yes
 			sem.TrailingSeparatorEndsAField = tail
+			// `read`'s own two edge questions, answered flat so that the one
+			// under test is the only one these snippets can reach.
+			sem.ReadTrailingWhitespaceEndsAField = interp.No
+			sem.ReadNoFieldsIsOneEmptyElement = interp.No
 			r.Semantics = &sem
 		})
 	}
@@ -293,6 +297,10 @@ func TestReadIntoNamesAsksTheTailOnlyAtTheCount(t *testing.T) {
 			sem := interp.CoreSemantics()
 			sem.LastPipelineElementInCurrentShell = interp.Yes
 			sem.TrailingSeparatorEndsAField = tail
+			// `read`'s own two edge questions, answered flat so that the one
+			// under test is the only one these snippets can reach.
+			sem.ReadTrailingWhitespaceEndsAField = interp.No
+			sem.ReadNoFieldsIsOneEmptyElement = interp.No
 			r.Semantics = &sem
 		})
 	}

@@ -2084,7 +2084,20 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// two in the rest of the panel. The mask goes with it, because an
 		// escaped separator is data — `a\:` is one element `a:` in both
 		// readings.
-		fields = r.trailingSeparatorField(fields, text, lits, ifs, set, false)
+		fields = r.readFieldsTail(fields, text, lits, ifs, set)
+		if len(fields) == 0 && r.ask(r.sem().ReadNoFieldsIsOneEmptyElement,
+			"`read` into an array leaving one empty element where the line had no fields") {
+			// A line that splits into nothing at all: two of the three shells
+			// with the letter leave one empty element and bash leaves none.
+			// After the tail above rather than before it, because the shell
+			// that opens a field on a closing whitespace run has a field by
+			// then and is not asking this — measured, `read -A r` on a line
+			// of spaces is one element there and not two.
+			fields = []string{""}
+		}
+		if r.unspecified {
+			return r.status
+		}
 		r.setArray(array, fields)
 		if clearRest {
 			for _, name := range args {
@@ -2116,6 +2129,13 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// short of them the name it would fill is the empty string it was going
 	// to be given anyway.
 	if len(fields) == len(args) {
+		// trailingSeparatorField and not readFieldsTail: `read`'s own
+		// question about a closing *whitespace* run is not asked here,
+		// because nothing on this path can answer differently for it.
+		// readRemainder takes the closing run of IFS whitespace off the
+		// remainder anyway, so `read x` on `a  ` is `a` and `read x y` on
+		// `a b  ` is `a` and `b` under either answer — and an axis reported
+		// where it decides nothing is a refusal a script cannot act on.
 		fields = r.trailingSeparatorField(fields, text, lits, ifs, set, false)
 	}
 	// `at` is the splitter's own list and is one short of `fields` exactly

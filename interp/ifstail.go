@@ -3,6 +3,8 @@
 
 package interp
 
+import "strings"
+
 // The tail of the field-splitting rule, which is the one part of it the panel
 // does not agree on. See Semantics.TrailingSeparatorEndsAField for the
 // measurements; this file is where the answer is asked and applied.
@@ -56,4 +58,59 @@ func (r *Runner) trailingSeparatorField(fields []string, s string, literal []boo
 		return fields
 	}
 	return append(fields, "")
+}
+
+// The two questions `read` asks on top of that, both of which only its own
+// splitting can see. See Semantics.ReadTrailingWhitespaceEndsAField and
+// Semantics.ReadNoFieldsIsOneEmptyElement for the measurements.
+
+// readFieldsTail is trailingSeparatorField with `read`'s extra question:
+// whether a closing run of IFS *whitespace* opens a field of its own as well.
+//
+// It is `read`'s and not the splitter's because the splitter's answer was
+// measured on an expansion and is the other way: zsh absorbs trailing
+// whitespace in `${=v}` — `x=" a "` is one field — and opens a field for it in
+// `read`. One shell, two answers, same IFS, so it cannot be one field.
+//
+// Asked only where the closing run is whitespace *and* holds no non-whitespace
+// separator, because the run with one in it has already been decided above and
+// asking again would add a second empty field.
+func (r *Runner) readFieldsTail(fields []string, s string, literal []bool, ifs string, ifsSet bool) []string {
+	if out := r.trailingSeparatorField(fields, s, literal, ifs, ifsSet, false); len(out) != len(fields) {
+		return out
+	}
+	if r.unspecified || !trailingRunIsWhitespace(s, literal, ifs, ifsSet) {
+		return fields
+	}
+	if !r.ask(r.sem().ReadTrailingWhitespaceEndsAField,
+		"a closing run of IFS whitespace opening a field of its own in `read`") {
+		return fields
+	}
+	return append(fields, "")
+}
+
+// trailingRunIsWhitespace reports whether the value ends in an unescaped run
+// of IFS whitespace and nothing else.
+//
+// The mirror of trailingRunSeparates: that one answers whether the closing run
+// holds a separator the panel disagrees about, and this one whether the run is
+// there at all with only whitespace in it. An escaped separator is data and
+// ends the run, the same rule the other follows, so `read -A` on `a\ ` is one
+// field in every reading.
+func trailingRunIsWhitespace(w string, literal []bool, ifs string, ifsSet bool) bool {
+	if ifsSet && ifs == "" {
+		return false
+	}
+	if !ifsSet {
+		ifs = " \t\n"
+	}
+	i := len(w) - 1
+	if i < 0 || (literal != nil && literal[i]) {
+		return false
+	}
+	c := w[i]
+	if c != ' ' && c != '\t' && c != '\n' {
+		return false
+	}
+	return strings.IndexByte(ifs, c) >= 0
 }

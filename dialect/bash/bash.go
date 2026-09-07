@@ -545,6 +545,12 @@ func Semantics() interp.Semantics {
 	// is the one the same binary gives under an argv[0] of `sh`, where the
 	// fatality is on and only the operands in front of the bad one are
 	// declared.
+	// `read -a` reads its edges as the ordinary field split does: a closing
+	// run of separators is absorbed, whitespace or not, and a line with no
+	// fields in it fills no elements at all — measured 2026-09-07, where
+	// ksh93 and zsh both leave one empty element.
+	s.ReadTrailingWhitespaceEndsAField = interp.No
+	s.ReadNoFieldsIsOneEmptyElement = interp.No
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.Yes
 	s.SubscriptedOperandTakesALocalDeclaration = interp.Yes

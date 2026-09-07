@@ -541,6 +541,13 @@ func Semantics() interp.Semantics {
 	// The refusal is fatal and the rest of the operand list is declared
 	// anyway: measured 2026-09-07, `export ok1=1 ":" ok2=2` read back from
 	// an EXIT trap leaves both set, wherever the bad name stands.
+	// `read -A` of a line that splits into nothing leaves one empty element
+	// rather than none — measured 2026-09-07, and the same for a line of
+	// nothing but IFS whitespace. bash leaves none. The closing whitespace
+	// run itself opens no field here, which is where this shell parts from
+	// zsh.
+	s.ReadNoFieldsIsOneEmptyElement = interp.Yes
+	s.ReadTrailingWhitespaceEndsAField = interp.No
 	s.BadNameDeclaresTheOperandsAfterIt = interp.Yes
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.Yes
 	s.SubscriptedOperandTakesALocalDeclaration = interp.Yes

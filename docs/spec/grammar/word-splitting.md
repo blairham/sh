@@ -171,7 +171,8 @@ Three things bound it, and each is a row a wrong fix gets wrong. A
 **leading** separator delimits in all six, so the asymmetry is at the
 tail alone. **Whitespace** is absorbed at both ends in zsh as well —
 `' a '` is one field everywhere — so this is the non-whitespace half of
-the rule and nothing else. And it is the closing **run** that decides
+the rule and nothing else. That last sentence is about an *expansion*;
+`read` answers it the other way and has an axis of its own, below. And it is the closing **run** that decides
 rather than the last byte: with `IFS=' :'`, `'a: '` is two fields in zsh
 and `'a  '` is one, so the trailing space does not hide the colon in
 front of it.
@@ -258,6 +259,51 @@ nowhere else**. Past it the extra empty field changes no value, because
 the remainder is the same text under either answer; short of it the name
 the extra field would fill is the empty string it was going to be given
 anyway. An array target has no such boundary and asks at every count.
+
+### `read` into an array has two edges of its own
+
+The rule above is measured on an expansion. `read` filling an **array**
+answers two more questions, and one shell answers the whitespace half of
+the rule the *opposite* way there — same shell, same `IFS`, two answers,
+which is why they cannot be one field.
+
+Measured 2026-09-07 with a here-string and the element count read back.
+The letter differs by shell — `-A` in ksh93 and zsh, `-a` in bash, and
+dash has neither — so the corpus rows pick it at run time.
+
+| line | bash 5.3 / 3.2 / as-`sh` | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `a  ` | `1 [a]` | `1 [a]` | `2 [a][]` |
+| `a	` | `1 [a]` | `1 [a]` | `2 [a][]` |
+| ` a ` | `1 [a]` | `1 [a]` | `2 [a][]` |
+| `a: ` with `IFS=' :'` | `1 [a]` | `1 [a]` | `2 [a][]` |
+| ` a` | `1 [a]` | `1 [a]` | `1 [a]` |
+| `` (empty) | 0 elements | `1 []` | `1 []` |
+| `   ` | 0 elements | `1 []` | `1 []` |
+
+**`Semantics.ReadTrailingWhitespaceEndsAField`** is the first four rows:
+a closing run of IFS whitespace opens an element of its own in zsh's
+`read`. Through an expansion the same shell absorbs it — `x=' a '; set --
+${=x}` is one field — so this is a second field and not the one above.
+A *leading* run is still absorbed, and it is the run rather than the
+byte: `a::` with `IFS=:` is three elements in zsh and not four.
+
+**`Semantics.ReadNoFieldsIsOneEmptyElement`** is the last two: a line
+that splits into nothing leaves one empty element in ksh93 and zsh and
+none in bash. ksh93 sides with zsh here and with bash above, which is
+what makes them two questions rather than one.
+
+**The order is load-bearing**, and a line of nothing but whitespace is
+the only shape that shows it: that line has a closing whitespace run
+*and* no fields, so a shell answering yes to both could leave two
+elements. zsh leaves one — the closing run is asked first, and the
+second question is not put once a field is there.
+
+Neither question is asked of a list of **names**. The last name takes the
+remainder of the line and the closing run of IFS whitespace comes off
+that remainder anyway, so `read x` on `'a  '` is `a` and `read x y` on
+`'a b  '` is `a` and `b` under either answer. An axis reported where it
+decides nothing is a refusal a script cannot act on.
 
 ## Empty and unset values produce no fields
 

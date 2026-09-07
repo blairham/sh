@@ -3110,6 +3110,36 @@ echo "st=$?"`,
 		Why:     "the letter is the dialect's before the behavior is: bash's -a puts the fields in the named array, ksh93 spells the option -A and refuses -a with its usage, zsh refuses it in one line, and dash refuses the option and then the subscript too",
 	},
 	{
+		ID: "read/an-array-and-a-closing-whitespace-run", Category: "builtins",
+		Snippet: `printf 'a  \n' | { read -A r 2>/dev/null || read -a r 2>/dev/null; printf "n=%s" "${#r[@]}"; for e in "${r[@]}"; do printf "[%s]" "$e"; done; echo; }`,
+		Why:     "whether a closing run of IFS *whitespace* opens an element of its own, which one shell answers yes where the other two say no — and answers the *opposite* way for an expansion, since `x=\" a \"; set -- ${=x}` is one field there. So it cannot be the same question as the trailing-separator axis and the corpus needs both rows. The letter is picked at run time because the panel does not share one: `-A` in ksh93 and zsh, `-a` in bash, and dash has neither",
+	},
+	{
+		ID: "read/an-array-and-a-closing-separator", Category: "builtins",
+		Snippet: `IFS=:; printf 'a:\n' | { read -A r 2>/dev/null || read -a r 2>/dev/null; printf "n=%s" "${#r[@]}"; for e in "${r[@]}"; do printf "[%s]" "$e"; done; echo; }`,
+		Why:     "the same shape with a *non-whitespace* separator closing the line, which is the neighboring axis and the control that keeps the two apart: the columns fall the same way here, so a probe using only this row would have modeled one question where there are two and left `read -A` a field short on every whitespace line",
+	},
+	{
+		ID: "read/an-array-and-a-leading-whitespace-run", Category: "builtins",
+		Snippet: `printf ' a\n' | { read -A r 2>/dev/null || read -a r 2>/dev/null; printf "n=%s" "${#r[@]}"; for e in "${r[@]}"; do printf "[%s]" "$e"; done; echo; }`,
+		Why:     "the other end of the line, and unanimous: a leading run is absorbed in every column, so the asymmetry the two rows above record is at the tail alone. Without it a rule written as `whitespace at an edge opens a field` would look just as well supported",
+	},
+	{
+		ID: "read/an-array-from-an-empty-line", Category: "builtins",
+		Snippet: `printf '\n' | { read -A r 2>/dev/null || read -a r 2>/dev/null; printf "n=%s" "${#r[@]}"; for e in "${r[@]}"; do printf "[%s]" "$e"; done; echo; }`,
+		Why:     "a line that splits into nothing at all: ksh93 and zsh leave one empty element and bash leaves none, which is a second edge question and splits the panel differently from the two above — ksh93 sides with zsh here and with bash there",
+	},
+	{
+		ID: "read/an-array-from-a-line-of-whitespace", Category: "builtins",
+		Snippet: `printf '   \n' | { read -A r 2>/dev/null || read -a r 2>/dev/null; printf "n=%s" "${#r[@]}"; for e in "${r[@]}"; do printf "[%s]" "$e"; done; echo; }`,
+		Why:     "the row that fixes the *order* of the two edge questions, and the only shape that can: this line has a closing whitespace run *and* no fields, so a shell answering yes to both could plausibly leave two elements. zsh leaves one — the closing run is asked first and the second question is not put once a field is there",
+	},
+	{
+		ID: "read/names-and-a-closing-whitespace-run", Category: "builtins",
+		Snippet: `printf 'a b  \n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; echo; }`,
+		Why:     "the same line into a list of names, where the question above cannot be seen at all: the last name takes the remainder of the line and the closing whitespace comes off that remainder anyway, so every column answers `[a][b]`. It is the row that says where the axis is asked — an axis reported where it decides nothing is a refusal a script cannot act on",
+	},
+	{
 		ID: "read/until-a-delimiter", Category: "builtins",
 		Snippet: `printf 'a:b c\n' | { read -d : v; echo "[$v]"; }`,
 		Why:     "-d renames the delimiter: the three shells with the letter stop at the colon and leave the rest unread — the newline they would have stopped at now ordinary input — and dash refuses the option",

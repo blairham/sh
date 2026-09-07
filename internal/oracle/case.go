@@ -537,7 +537,7 @@ var Corpus = []Case{
 	{
 		ID: "expand/a-value-backslash-before-a-metacharacter", Category: "expansion",
 		Snippet: `mkdir -p bs && cd bs && : > 'a\b' && : > 'a*' && v='a\*' && set -- $v && printf "[%s]" "$@"`,
-		Why:     "what a value's backslash does to the character behind it when the result is a pattern, and the panel divides: bash, bash 3.2, bash-as-sh, dash and zsh match neither name and leave the word as written, so the `*` is not a metacharacter and the backslash is still in the text; ksh93 reads the backslash as data and the `*` as live, and matches `a\\b`. Both files are present so that either reading has something to find — a directory holding neither would print the same word for both",
+		Why:     "what a value's backslash does to the character behind it when the result is a pattern, and the panel divides: bash, bash 3.2, bash-as-sh, dash and zsh match neither name and leave the word as written, so the `*` is not a metacharacter and the backslash is still in the text; ksh93 reads the backslash as data and the `*` as live, and matches `a\\b` — the axis that split is #1367's. Both files are present so that either reading has something to find — a directory holding neither would print the same word for both",
 	},
 	{
 		ID: "expand/brace", Category: "expansion",

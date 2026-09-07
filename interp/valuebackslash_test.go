@@ -74,7 +74,8 @@ func TestAValueKeepsItsBackslashThroughAWord(t *testing.T) {
 //
 // ksh93u+ is the one shell that reads it the other way, taking the backslash
 // as data and the `*` as live, and it answers `a\b`. That divergence is a
-// dialect's to hold and is recorded in the corpus rather than decided here;
+// dialect's to hold and needs an axis, which is #1367; it is recorded in the
+// corpus rather than decided here, so this asserts the five-shell reading;
 // what this pins is that the majority reading is what the escaped form
 // produces, and that the backslash is not eaten either way.
 func TestAValueBackslashTakesTheMetacharacterOffWhatFollowsIt(t *testing.T) {

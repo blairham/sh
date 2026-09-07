@@ -71,13 +71,20 @@ func TestKshRefusesAnInvocationOptionWithItsOwnUsageLine(t *testing.T) {
 	}
 }
 
-// TestKshKeepsTheSetLettersItHasAndThisShellDoesNot: ten letters ksh93 has —
-// including `-A`, which assigns an array rather than switching anything.
+// TestKshKeepsTheSetLettersItHasAndThisShellDoesNot: nine letters ksh93 has
+// and this shell does not.
+//
+// `-A` has left the list. It assigns an array rather than switching anything,
+// and it is implemented — see Semantics.SetArrayLetter. A letter both claimed
+// and refused is dead data that says the opposite of what the shell does, and
+// dialect.TestNoLetterIsBothImplementedAndNot is the invariant for the
+// builtins whose letters are an optstring; `set`'s are a switch, so this is
+// the row that has to be kept honest by hand.
 func TestKshKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
-	if got, want := ksh.Diagnostics().UnimplementedOptionLetters["set"], "bkprstABGH"; got != want {
+	if got, want := ksh.Diagnostics().UnimplementedOptionLetters["set"], "bkprstBGH"; got != want {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, want)
 	}
-	for _, l := range "bkprstABGH" {
+	for _, l := range "bkprstBGH" {
 		src := "set -" + string(l) + "\n"
 		if got := refuseInScript(t, src); !strings.Contains(got, "is not implemented yet") {
 			t.Errorf("%q said %q, want it called missing rather than unknown", src, got)

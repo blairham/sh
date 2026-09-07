@@ -4440,6 +4440,91 @@ opening brace a line of its own, zsh keeps it on the header's
 failures ends the script — a bad option included, usage lines and all:
 `Semantics.TypesetBadOptionFatal`.
 
+**`set -A name value …` assigns an array through a name a variable
+holds**, which is the thing `name=(…)` cannot do: the name is a literal
+there, so a script that holds it in a variable has no other spelling.
+ksh93 and zsh have the letter; bash calls it an invalid option and
+prints a usage block, dash calls it illegal and stops. So it is a
+dialect's answer — `Semantics.SetArrayLetter` — and that field is
+**read rather than asked**: where the answer is not yes the word is
+somebody else's invalid option, and the refusal already in place is
+that shell's own. Asking an axis there would replace a correct answer
+with a complaint about a missing dialect.
+
+It matters because zsh's own `add-zsh-hook` installs a hook with it:
+
+    typeset -ga $hook
+    set -A $hook ${(P)hook} $fn
+
+The assignment is the same whole-array store `name=(…)` reaches, so the
+array base, the unique attribute, the scalar view, a tied scalar and the
+readonly refusal are all answered once. What is new is only the parse: a
+letter that takes an operand, and which of the words behind it are
+values. Measured 2026-09-06, `env -i PATH=/usr/bin:/bin` with a scratch
+`HOME`, `ZDOTDIR` and `HISTFILE`, over a script file.
+
+**The plus form replaces from the front** and leaves the rest of the
+array standing, which is a different operation rather than the same one
+and is the half a single implementation gets wrong:
+
+    set -A b 1 2 3 4 5; set +A b Q R      [Q R 3 4 5]  — both shells
+    set -A c 1 2 3; set +A c              [1 2 3]      — both shells
+
+Unanimous, so no field. The *minus* form's answer to the same emptiness
+is not: **`Semantics.SetArrayWithNoValuesUnsetsTheName`** — ksh93 unsets
+the name and zsh leaves an array with no elements. Both count 0, so the
+difference reaches a script only through `${a+x}` and a listing, which is
+what makes it a field: a script asking whether the name is set at all
+gets opposite answers. `typeset -p a` says the same from the other side,
+nothing at all against `typeset -a a=(  )`.
+
+**Whether the options carry on past the name** —
+`Semantics.SetArrayOptionsContinuePastTheName`:
+
+    set -A ff -x -y      ksh93 `-y: unknown option`   zsh [-x -y]
+    set -A dd -- 1 2     ksh93 [1 2]                  zsh [-- 1 2]
+
+ksh93 keeps parsing, so the values are exactly the words that would have
+become the positional parameters and a `--` among them still ends the
+options; zsh stops at the name and every word behind it is a value.
+**One question, not two** — whether `--` is an operand *is* whether
+options are still being read, so both rows move together.
+
+The positional parameters are left alone either way: `set -- one two
+three; set -A a x y` keeps all three in both shells, so the letter's
+other meaning is never reached.
+
+**The refusals are where the two shells are furthest apart, and the
+location is the finding.** The name operand goes through the check every
+other builtin's operands go through, fatality included — both shells end
+the script over a bad name — and:
+
+- zsh does **not** name the builtin in the location for `set -A 1v q`
+  where `unset 1x` and `typeset 1w` from the same shell are
+  `<script>:unset:1:` and `<script>:typeset:1:`:
+  `Diagnostics.BadNameRefusalHidesTheBuiltin`.
+- ksh93 **does** name it for a frozen name, and keeps its *bracketed*
+  builtin location under it — `<script>[2]: set: ro: is read only`
+  against `<script>: line 2: ro: is read only` for a plain `ro=(x y)`.
+  One table decides both, because a dialect that puts the name in the
+  sentence is the one that keeps the builtin's location:
+  `Diagnostics.ReadonlyRefusalNamesBuiltin`.
+- `set -A` with nothing after it is a refusal in ksh93 —
+  `Diagnostics.SetArrayNeedsAName`, `set: -A: name argument expected`
+  with set's usage under it — and a *listing* of every array in zsh,
+  which is not built and is named as missing.
+
+**Three things are refused by name rather than built**: that listing, a
+subscripted name — both shells place the values from that subscript on,
+and the placement reads the array base, which is the whole of what could
+go wrong in silence — and an association, which is a different operation
+under the same spelling that the two shells do not agree about: zsh reads
+the operands as key-and-value pairs, `set -A m k1 v1 k2 v2` being two
+entries, where ksh93 stores four counted elements. Picking either would
+answer the other shell's script wrongly and say nothing about it.
+
+Corpus: `setarray/*`.
+
 **`integer` is the declaration under a third name**, and which names a
 shell has is a dialect's answer rather than an axis for the third time:
 dash has none of them, ksh93 has `typeset` and `integer`, bash has

@@ -1596,6 +1596,56 @@ type Semantics struct {
 	// two readings differ — every other spelling is parsed identically.
 	IntegerPlusFormTakesAttributesOff Answer
 
+	// SetArrayLetter is `set -A name value …`, which assigns an array through
+	// a name a variable holds — the thing `name=(…)` cannot do, because the
+	// name is a literal there.
+	//
+	// ksh93 and zsh have the letter; bash refuses it as an invalid option and
+	// dash as an illegal one. Which makes it a dialect's answer rather than
+	// an axis, and it is **read rather than asked**: where the answer is not
+	// yes the letter is somebody else's invalid option, and the refusal
+	// already in place is that shell's own real words. Asking an axis there
+	// would replace a correct answer with a complaint about a missing
+	// dialect.
+	SetArrayLetter Answer
+
+	// SetArrayOptionsContinuePastTheName decides whether the words behind
+	// `set -A name` are more options or the array's values.
+	//
+	// Measured 2026-09-06, and the two shells that have the letter answer
+	// opposite ways:
+	//
+	//	set -A ff -x -y     ksh93 -y: unknown option    zsh [-x -y]
+	//	set -A dd -- 1 2    ksh93 [1 2]                 zsh [-- 1 2]
+	//
+	// ksh93 keeps parsing, so the values are whatever the option parse does
+	// not claim — exactly the words that would have become the positional
+	// parameters — and a `--` among them still ends the options. zsh stops at
+	// the name and every word behind it is a value, dash words and `--`
+	// included.
+	//
+	// **One question, not two.** Both rows above move together, because
+	// whether `--` is an operand *is* whether options are still being read.
+	// Asked only once the letter is taken, so a shell without it never meets
+	// the question.
+	SetArrayOptionsContinuePastTheName Answer
+
+	// SetArrayWithNoValuesUnsetsTheName is `set -A name` with nothing after
+	// the name: ksh93 unsets it and zsh leaves an array with no elements.
+	//
+	//	set -A a 1 2 3; set -A a; typeset -p a
+	//	  ksh93  nothing at all — the name is gone
+	//	  zsh    typeset -a a=(  )
+	//
+	// Both answer `${#a[@]}` as 0, so the difference shows only through
+	// `${a+x}` and a listing — which is exactly what makes it worth a field:
+	// a script that tests whether the name is set gets opposite answers.
+	//
+	// The *plus* form is not this question and needs no field: `set +A a`
+	// with no values leaves the array exactly as it was in both, which is
+	// unanimous and is a different operation.
+	SetArrayWithNoValuesUnsetsTheName Answer
+
 	// JobSpecsByName resolves `%name` — the job whose command begins with
 	// the text — and `%?text`, the one whose command contains it. POSIX
 	// gives both spellings; dash answers "no such job" to every spec that

@@ -579,6 +579,18 @@ func Semantics() interp.Semantics {
 	// own `typeset +x` does unexport. `typeset -p n` says the same from the
 	// value side, `typeset -l -i n=5` against zsh's plain `typeset n=5`.
 	s.IntegerPlusFormTakesAttributesOff = interp.No
+	// `set -A name value …` assigns an array through a name a variable
+	// holds, which is this shell's spelling and zsh's alike.
+	s.SetArrayLetter = interp.Yes
+	// And the option parse carries on past the name here: `set -A ff -x -y`
+	// takes `-x` as xtrace and refuses `-y`, and `set -A dd -- 1 2` stores
+	// two elements because the `--` still ends the options. So the values are
+	// exactly the words that would have become the positional parameters.
+	s.SetArrayOptionsContinuePastTheName = interp.Yes
+	// `set -A a` with no values *unsets* the name here, where zsh leaves an
+	// array with no elements — measured with `typeset -p a`, which writes
+	// nothing at all in this shell.
+	s.SetArrayWithNoValuesUnsetsTheName = interp.Yes
 	// A bare `set` lists the variables alone, values bare until one needs
 	// quoting and `$'...'` from there.
 	s.SetListing = interp.SetListingAssignments
@@ -848,7 +860,9 @@ func Diagnostics() interp.Diagnostics {
 			// expansion, globstar and history-expansion switches. Measured
 			// 2026-09-05 by asking ksh93 for every letter of the alphabet
 			// in both cases and both signs.
-			"set": "bkprstABGH",
+			// `-A` has left this list: it assigns an array and is
+			// implemented, in Semantics.SetArrayLetter.
+			"set": "bkprstBGH",
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",
@@ -875,7 +889,15 @@ func Diagnostics() interp.Diagnostics {
 		// ksh93's one sentence for a dead -u descriptor, the number not
 		// named; the non-number wordings per letter are not modeled yet, so
 		// those fall back to the substrate's.
-		ReadBadFileDescriptor: "read: bad file unit number [Bad file descriptor]",
+		// `set -A` with no name says which operand is missing, and prints
+		// set's usage under it — measured, `set: -A: name argument expected`.
+		SetArrayNeedsAName: "set: %[1]s: name argument expected",
+		// And `set -A ro q` over a frozen name names the builtin where a
+		// plain assignment to the same name does not: `set: ro: is read
+		// only` against `ro: is read only`.
+		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
+		ReadonlyRefusalNamesBuiltin:   map[string]bool{"set": true},
+		ReadBadFileDescriptor:         "read: bad file unit number [Bad file descriptor]",
 		// ksh93 calls the coprocess the query process, and `read -p` with
 		// none running says so — the only reachable answer here, this
 		// grammar having no `|&`.
@@ -893,12 +915,17 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinBadName: map[string]string{
 			"export":   "%[1]s: %[2]s: is not an identifier",
 			"readonly": "%[1]s: %[2]s: invalid variable name",
-			"unset":    "%[1]s: %[2]s: invalid variable name",
+			// `set -A 1bad v` — the array letter's name operand, and it
+			// takes readonly's wording rather than export's.
+			"set":   "%[1]s: %[2]s: invalid variable name",
+			"unset": "%[1]s: %[2]s: invalid variable name",
 		},
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,
 		BuiltinUsage: map[string]string{
-			"set":      "Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+			"set": "Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+			// The same usage block under the array letter, which is what
+			// this shell prints for `set -A` with no name after it.
 			"export":   "Usage: export [-p] [name[=value]...]",
 			"readonly": "Usage: readonly [-p] [name[=value]...]",
 			"read": "Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]\n" +

@@ -206,6 +206,14 @@ func (r *Runner) badSubscriptOperand(builtin, operand, name string, fatal Answer
 // `unset` alone where it puts it after for the other two.
 func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int {
 	d := r.diag()
+	if d.BadNameRefusalHidesTheBuiltin[builtin] {
+		// The location does not name the builtin for this one where it does
+		// for the others — put aside for the report and given back, the way
+		// badSubscriptOperand and the readonly refusal already do it.
+		outer := r.inBuiltin
+		r.inBuiltin = ""
+		defer func() { r.inBuiltin = outer }()
+	}
 	shown := name
 	if d.BuiltinBadNameKeepsValue {
 		shown = operand

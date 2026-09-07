@@ -741,6 +741,18 @@ func Semantics() interp.Semantics {
 	// plain `typeset n=5`. ksh93, where the name carries the type, answers
 	// every one of those the other way.
 	s.IntegerPlusFormTakesAttributesOff = interp.Yes
+	// `set -A name value …` assigns an array through a name a variable
+	// holds, which is this shell's spelling and ksh93's alike.
+	s.SetArrayLetter = interp.Yes
+	// The name ends the options here: `set -A ff -x -y` stores the two dash
+	// words as elements and `set -A dd -- 1 2` stores three, the `--` among
+	// them. ksh93 keeps parsing and answers both the other way.
+	s.SetArrayOptionsContinuePastTheName = interp.No
+	// `set -A a` with no values leaves an array with no elements here —
+	// `typeset -a a=(  )` — where ksh93 unsets the name outright. Both count
+	// 0, so the difference shows only to a script that asks whether the name
+	// is set at all.
+	s.SetArrayWithNoValuesUnsetsTheName = interp.No
 	// `typeset -g x=new` with a `local x` in front assigns the *local* —
 	// the letter only widens where a new declaration would land, it does
 	// not reach past what already stands. Measured: `in=new out=out`
@@ -908,6 +920,9 @@ func Diagnostics() interp.Diagnostics {
 			"readonly": "%[2]s: can't create readonly array elements",
 		},
 		SubscriptRefusalNamesBuiltin: map[string]bool{"readonly": true},
+		// `set -A 1v q` does not name the builtin in its location where
+		// `unset 1x` and `typeset 1w` from this same shell do.
+		BadNameRefusalHidesTheBuiltin: map[string]bool{"set": true},
 		UnimplementedOptionLetters: map[string]string{
 			// zsh gives a single letter to far more of its options than the
 			// rest of the panel does: measured 2026-09-05, it refuses only
@@ -915,7 +930,9 @@ func Diagnostics() interp.Diagnostics {
 			// forty-seven. These are the ones it has and this shell does
 			// not, so a script asking for one is told it is missing rather
 			// than told this shell knows better than zsh what zsh has.
-			"set": "dgiklprstwyABDEFGHIJKLMNOPQRSTUVWXYZ",
+			// `-A` has left this list: it assigns an array and is
+			// implemented, in Semantics.SetArrayLetter.
+			"set": "dgiklprstwyBDEFGHIJKLMNOPQRSTUVWXYZ",
 			// read's letters about a terminal or the line editor — raw -k
 			// keys, -q's one keystroke, -e/-E echoing, -z and the zle pair
 			// -c/-l. The -p coprocess is implemented as its measured
@@ -1087,6 +1104,10 @@ func Diagnostics() interp.Diagnostics {
 		// The reason leads for `export` and `readonly` and trails for `unset`,
 		// which is why this is a map.
 		BuiltinBadName: map[string]string{
+			// `set -A 1bad v` — the array letter's name operand. It gets the
+			// leading-digit wording rather than this shell's usual "not
+			// valid in this context", measured: `not an identifier: 1bad`.
+			"set":      "not an identifier: %[2]s",
 			"export":   "not valid in this context: %[2]s",
 			"readonly": "not valid in this context: %[2]s",
 			"unset":    "%[2]s: invalid parameter name",

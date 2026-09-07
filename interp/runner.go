@@ -2993,9 +2993,19 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	// that puts it there for everything else: zsh writes `zsh:1: read-only
 	// variable: x` from inside `export`, not `zsh:export:1:`. So it is put
 	// aside for the report and given back.
-	outer := r.inBuiltin
-	r.inBuiltin = ""
-	defer func() { r.inBuiltin = outer }()
+	//
+	// Except where the dialect names the builtin for this very refusal, which
+	// is the one case where it belongs in the location too: ksh93 answers
+	// `set -A ro q` with `<script>[6]: set: ro: is read only` — its *builtin*
+	// location — against `<script>: line 2: ro: is read only` for a plain
+	// assignment to the same name. One table decides both, because a dialect
+	// that puts the name in the sentence is the dialect that keeps the
+	// builtin's location under it.
+	if !r.diag().ReadonlyRefusalNamesBuiltin[r.inBuiltin] {
+		outer := r.inBuiltin
+		r.inBuiltin = ""
+		defer func() { r.inBuiltin = outer }()
+	}
 	fatal := r.sem().ReadonlyReassignmentFatal
 	switch {
 	case form == assignedAlone && r.Route == RouteCommandString:

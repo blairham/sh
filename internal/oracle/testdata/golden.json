@@ -66078,6 +66078,314 @@
         "TimedOut": false
       }
     },
+    "setarray/a-name-that-is-not-a-name": {
+      "bash": {
+        "Stdout": "st=2 after",
+        "Stderr": "\u003cshell\u003e: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 after",
+        "Stderr": "\u003cshell\u003e: line 0: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -A",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: 1bad: invalid variable name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: not an identifier: 1bad",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setarray/no-values-and-whether-the-name-survives": {
+      "bash": {
+        "Stdout": "n=0 set=[]",
+        "Stderr": "\u003cscript\u003e: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~\u003cscript\u003e: line 2: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~\u003cscript\u003e: line 4: typeset: a: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "n=0 set=[]",
+        "Stderr": "\u003cscript\u003e: line 1: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~\u003cscript\u003e: line 2: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~\u003cscript\u003e: line 4: typeset: a: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -A",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "n=0 set=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "n=0 set=[x]~typeset -a a=(  )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setarray/over-a-frozen-name": {
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "\u003cscript\u003e: line 2: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "\u003cscript\u003e: line 2: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: set: Illegal option -A",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[2]: set: ro: is read only",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:2: read-only variable: ro",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setarray/the-array-assignment-through-a-held-name": {
+      "bash": {
+        "Stdout": "st=2 n=0 [] first=[]",
+        "Stderr": "\u003cshell\u003e: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2 n=0 [] first=[]",
+        "Stderr": "\u003cshell\u003e: line 0: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -A",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 n=3 [m n o] first=[m]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 n=3 [m n o] first=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setarray/the-line-a-hook-installer-assigns-with": {
+      "bash": {
+        "Stdout": "n=0 []",
+        "Stderr": "\u003cscript\u003e: line 4: ${(P)hook}: bad substitution",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: ${(P)hook}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "n=0 []",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cscript\u003e: line 4: ${(P)hook}: bad substitution",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: typeset: not found~\u003cscript\u003e: 4: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[2]: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "n=1 [my_hook]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setarray/the-plus-form-replaces-from-the-front": {
+      "bash": {
+        "Stdout": "1 n=0 []~2 n=0 []",
+        "Stderr": "\u003cscript\u003e: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~\u003cscript\u003e: line 2: set: +A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~\u003cscript\u003e: line 4: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~\u003cscript\u003e: line 5: set: +A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1 n=0 []~2 n=0 []",
+        "Stderr": "\u003cscript\u003e: line 1: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~\u003cscript\u003e: line 2: set: +A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~\u003cscript\u003e: line 4: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~\u003cscript\u003e: line 5: set: +A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -A",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1 n=5 [Q R 3 4 5]~2 n=3 [1 2 3]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1 n=5 [Q R 3 4 5]~2 n=3 [1 2 3]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setarray/whether-the-options-carry-on-past-the-name": {
+      "bash": {
+        "Stdout": "1 n=0 []~2 st=2 n=0 []",
+        "Stderr": "\u003cscript\u003e: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]~\u003cscript\u003e: line 3: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: set: -A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1 n=0 []~2 st=2 n=0 []",
+        "Stderr": "\u003cscript\u003e: line 1: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~\u003cscript\u003e: line 3: set: -A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -A",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1 n=2 [1 2]",
+        "Stderr": "\u003cscript\u003e[3]: set: -q: unknown option~\u003cscript\u003e[3]: set: -z: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1 n=3 [-- 1 2]~2 st=0 n=2 [-q -z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "setopt/a-compat-spelling-lists-under-the-canonical-name": {
       "bash": {
         "Stdout": "",

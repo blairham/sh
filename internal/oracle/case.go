@@ -8625,6 +8625,82 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the whole of the expansion half in one row: a range is matched per component and sorted with everything else, the digits in front of one are part of the word rather than a file descriptor — `2<->` names `21` and `22` and is not a redirection of descriptor 2 — and a miss is the ordinary unmatched-pattern answer, which in this shell stops the command, so `after` never runs. ksh93's cell is the second finding here and is not this change's: it *parses* `echo <->` as a redirection from a file called `-` where we refuse the `;` after it, which is a gap in the ksh grammar rather than in the range",
 	},
 	{
+		ID: "pat/an-extended-closure-is-behind-an-option", Category: "pattern matching",
+		Snippet: `[[ aaa == a# ]] && echo off-hit || echo off-miss; setopt extendedglob 2>/dev/null; [[ aaa == a# ]] && echo on-hit || echo on-miss`,
+		Why:     "the pair that says a `#` after an item is a closure only while one shell's own option is on: it answers off-miss then on-hit, and everybody else answers off-miss twice because the option does not exist there and the `#` is a character. Recorded as a pair rather than as the second half alone, because a shell that read the closure unconditionally would pass the second line and fail the first",
+	},
+	{
+		ID: "pat/the-closure-characters-are-literal-with-the-option-off", Category: "pattern matching",
+		Snippet: `[[ 'a#' == a# ]] && echo off-hit || echo off-miss; setopt extendedglob 2>/dev/null; [[ 'a#' == a# ]] && echo on-hit || echo on-miss`,
+		Why:     "the same option read from the other side, and the reason it cannot simply be left on: the two characters match themselves everywhere until the option turns them into an operator, so this row is off-hit then on-miss in the one shell and off-hit twice in the rest. Ours answered off-hit twice, which was `extendedglob` being remembered and not acted on (#1244)",
+	},
+	{
+		ID: "pat/a-case-insensitive-pattern-flag", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ ABC == (#i)abc ]] && echo hit || echo miss`,
+		Why:     "the flag the issue was named for. One shell folds case for the rest of the pattern and answers hit; the bash columns read the parentheses as a grouping and refuse the condition outright, and dash has no `[[` at all. Ours answered miss, because the five characters reached the matcher as literals — a pattern that should match quietly not matching, which is the failure class this corpus exists to catch",
+	},
+	{
+		ID: "pat/a-pattern-flag-folds-a-literal-and-not-a-bracket", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ ABC == (#i)abc ]] && echo lit-hit || echo lit-miss; [[ ABC == (#i)[abc][abc][abc] ]] && echo brk-hit || echo brk-miss`,
+		Why:     "how far the flag reaches, which is where it differs from the `nocasematch`-style option beside it: the flag folds a literal letter and leaves a bracket expression alone, so the one shell with it answers lit-hit then brk-miss. Folding everything would answer hit twice and folding nothing would answer miss twice, so only a row using both spellings can tell the three apart",
+	},
+	{
+		ID: "pat/the-lowercase-only-pattern-flag", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ ABC == (#l)abc ]] && echo down-hit || echo down-miss; [[ abc == (#l)ABC ]] && echo up-hit || echo up-miss`,
+		Why:     "the one-way fold: a lowercase letter in the pattern takes either case and an uppercase one takes only itself, so this is down-hit then up-miss and a symmetric fold would be hit twice",
+	},
+	{
+		ID: "pat/a-pattern-flag-reaches-to-the-end-of-its-group", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ ABCd == ((#i)abc)d ]] && echo in-hit || echo in-miss; [[ ABCD == ((#i)abc)d ]] && echo out-hit || echo out-miss`,
+		Why:     "where a flag stops. Inside the group the fold applies and outside it does not, so this is in-hit then out-miss; a flag that reached the whole pattern would answer hit twice and one that reached nothing would answer miss twice",
+	},
+	{
+		ID: "pat/an-extended-negation-and-exclusion", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; [[ abc == ^x* ]] && echo neg-hit || echo neg-miss; [[ acd == a*~*b* ]] && echo ex-hit || echo ex-miss; [[ abd == a*~*b* ]] && echo ex2-hit || echo ex2-miss`,
+		Why:     "the two operators that are not flags. `^` turns the sense of the rest of the branch and `~` takes a second pattern back out of the first, so the shell with them answers neg-hit, ex-hit, ex2-miss where a shell reading both characters literally answers all three the other way",
+	},
+	{
+		ID: "pat/an-exclusion-binds-looser-than-an-alternation", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ zz == (a*~*b*|zz) ]] && echo hit || echo miss`,
+		Why:     "the precedence, which cannot be seen from either operator alone: if the `|` bound tighter the exclusion would be `a*` minus `(*b*|zz)` and `zz` would be taken out, so hit is what says the `~` groups first",
+	},
+	{
+		ID: "pat/a-closure-repeats-one-item", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ abbb == ab# ]] && echo one-hit || echo one-miss; [[ abab == ab# ]] && echo run-hit || echo run-miss; [[ ababab == (ab)# ]] && echo grp-hit || echo grp-miss`,
+		Why:     "what a closure binds to. It repeats the single item in front of it and never the run of characters before it, so this is one-hit, run-miss, grp-hit — the middle row is the one a matcher that repeated the whole preceding text would get wrong",
+	},
+	{
+		ID: "pat/a-closure-with-nothing-to-repeat", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; [[ abc == *# ]]; echo "st=$?"; echo after`,
+		Why:     "the malformed end of the same operator. A `*` is not an item, so the shell with the operator calls the whole thing a bad pattern and abandons the script — neither `st=` nor `after` is printed — where the shells without it match nothing and carry on. A refusal that reported and continued would print both",
+	},
+	{
+		ID: "pat/a-pattern-flag-letter-no-shell-has", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob 2>/dev/null; [[ abc == (#Z)abc ]]; echo "st=$?"; echo after`,
+		Why:     "the other malformed shape, and the status it exits with. Twelve letters are taken bare and two more with a number; everything else is a bad pattern that stops the script at 2 from a condition — measured, the same pattern exits 0 from a `case`, 1 from `${x#…}` and 1 against the filesystem, so the status belongs to the surface rather than to the complaint",
+	},
+	{
+		ID: "pat/an-extended-flag-in-a-parameter-trim", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; v=ABCd; echo "[${v#(#i)abc}]"; w=aaab; echo "[${w##a#}]"`,
+		Why:     "the same operators in the surface furthest from a condition, because a flag honored in `[[ ]]` and dropped in `${x#pat}` is the same silent wrong answer somewhere else. The shell with them prints `[d]` and `[b]`; the rest leave both values alone",
+	},
+	{
+		ID: "pat/an-extended-flag-against-the-filesystem", Category: "pattern matching", SyntaxError: true,
+		Snippet: "setopt extendedglob 2>/dev/null\ntouch ABC abd aaa\necho (#i)ab*\necho a#\n",
+		Script:  true,
+		Why:     "and the third surface, which is the one with no `[[` in it: the flag and the closure both reach pathname expansion, so the shell with them lists `ABC abd` and then `aaa` where the rest print the two words back or refuse the parenthesis. A script file rather than `-c` because a leading `(` in an argument is read differently by route (#1053)",
+	},
+	{
+		ID: "pat/a-closure-at-the-front-of-a-pattern", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; p="#foo"; [[ "#foo" == $p ]] && echo dead-hit || echo dead-miss; [[ "#foo" == ${~p} ]] && echo live-hit || echo live-miss; echo after`,
+		Why:     "both halves of the same value in one row. Through `$p` the four characters are ordinary text and the row is dead-hit; through the flag that makes an expansion's result a pattern they are a closure with nothing to repeat, which is a bad pattern that stops the script — so `live-` and `after` never print. A shell reading the `#` as a character in both would print dead-hit, live-hit and after",
+	},
+	{
+		ID: "pat/an-extended-operator-from-a-value-is-not-an-operator", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; p="a#b"; [[ ab == $p ]] && echo live-hit || echo live-miss; [[ 'a#b' == $p ]] && echo lit-hit || echo lit-miss`,
+		Why:     "the same answer this shell already gives for a `*` arriving from a variable, asked of the closure: the characters of an expansion's result are not read as operators, so it is live-miss then lit-hit. Counting `#` as a metacharacter is what routes the question to the axis that says so, and a matcher that skipped the axis for it would answer live-hit",
+	},
+	{
 		ID: "exec/lines-run-as-they-are-read", Category: "command language", SyntaxError: true,
 		Script:  true,
 		Snippet: "echo one\n{ fi; }\necho three\n",

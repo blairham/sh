@@ -33,7 +33,7 @@ func TestTheHistoryOptionsAreNoLongerRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 149; recordedCount != want {
+	if want := 148; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

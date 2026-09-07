@@ -777,6 +777,141 @@ carries on (measured: `shopt -s failglob` then `echo zz*zz; echo after`
 on one line prints neither, and `echo after` on the next line prints),
 which is a control-flow shape nothing else needs yet.
 
+## One shell's extended pattern operators, and the option that gates them
+
+zsh has a second pattern language on top of the one above, and every part
+of it is behind `setopt extendedglob`. Measured on zsh 5.9.2, 2026-09-07,
+under `env -i` with a scratch `HOME` and `ZDOTDIR`.
+
+**With the option off, all of it is ordinary text**, and that is the
+measurement that makes the option load-bearing rather than a formality:
+
+| written | option off | option on |
+| --- | --- | --- |
+| `[[ 'a#' == a# ]]` | matches | does not |
+| `[[ aaa == a# ]]` | does not | matches |
+| `[[ '#iabc' == (#i)abc ]]` | matches — `(#i)` is a group holding one alternative | does not |
+| `[[ ABC == (#i)abc ]]` | does not | matches |
+| `[[ abc == ^x* ]]` | does not | matches |
+| `[[ '^x' == ^x ]]` | matches | does not |
+
+So the same four characters are a closure or two ordinary ones depending
+on a run-time state, which is why this is an `interp.MatchOption`
+(`ExtendedPatternOperators`) and not a grammar flag: nothing here reaches
+the lexer, and a pattern held in a variable is read the same way as one
+written down.
+
+### The four constructs, and how they bind
+
+    pat1~pat2   the exclusion: pat1, minus anything pat2 also matches
+    ^pat        the negation: anything the rest of this branch does not match
+    item#       the closure: zero or more of the item in front of it
+    item##      one or more
+    (#…)        a flag group, changing how the rest of the branch reads
+
+Precedence, each measured rather than read off a manual:
+
+- **The exclusion is looser than `|`.** `[[ zz == (a*~*b*|zz) ]]` matches,
+  which it could not if the `|` bound tighter and `zz` were being excluded.
+- **The exclusion is looser than `/`.** `**/x~*bar*` in a directory holding
+  `foo/x`, `bar/x` and `baz/sub/x` lists `baz/sub/x` and `foo/x`: the right
+  side was compared against the whole path, not against one component.
+- **The negation is tighter than `/`.** `^foo/x` lists `bar/x`, so `^` is
+  read inside one component.
+- **The negation starts where it stands** and runs to the end of its
+  branch: `[[ ab == a^x ]]` matches and `[[ ab == a^b ]]` does not.
+- **A closure binds to exactly one item**: `[[ abbb == ab# ]]` matches and
+  `[[ abab == ab# ]]` does not. An item is a group, a bracket expression,
+  an escaped character, a `?`, a numeric range or one ordinary character —
+  `(ab)#`, `[ab]#` and `?#` all match — and a `*` is **not** one: `*#` is
+  `bad pattern`, as is a third `#` (`ab###`).
+- **A `~` with nothing on one side of it is the character itself**:
+  `[[ 'a~' == a~ ]]` matches and `[[ ab == a~ ]]` does not.
+- **A `#` with nothing in front of it is the character itself**:
+  `p="#foo"; [[ "#foo" == $p ]]` matches.
+
+### The flag groups
+
+Thirteen letters are taken. Enumerated by asking `[[ abc == (#X)abc ]]`
+of all 52 letters: `b`, `B`, `e`, `i`, `l`, `m`, `q`, `s`, `u`, `I`, `M`
+and `U` are taken bare, and `a` and `c` are taken **only** with a number
+after them — `(#a)` and `(#c)` are both `bad pattern` where `(#a1)` and
+`(#c1)` are not. `(#)` with an empty body is a no-op that matches. Every
+other letter is `bad pattern`.
+
+A flag reaches to the end of the group it stands in, which is why
+`[[ ABCd == ((#i)abc)d ]]` matches and `[[ ABCD == ((#i)abc)d ]]` does
+not.
+
+**The case flags reach only the literal characters of a pattern**, which
+is the finding that separates them from `nocasematch`:
+
+    [[ ABC == (#i)abc ]]              matches
+    [[ B == (#i)\b ]]                 matches — an escaped literal folds
+    [[ ABC == (#i)?bc ]]              matches
+    [[ ABC == (#i)[abc][abc][abc] ]]  does NOT — a bracket does not fold
+    [[ ABC == (#i)[[:lower:]]## ]]    does NOT — nor does a class
+
+`(#I)` turns the folding back off (`[[ ABCdef == (#i)abc(#I)def ]]`
+matches, `[[ ABCDEF == … ]]` does not) and `(#l)` folds one way only: a
+lowercase letter in the pattern matches either case and an uppercase one
+matches only itself, so `[[ ABC == (#l)abc ]]` matches and
+`[[ abc == (#l)ABC ]]` does not.
+
+`(#c…)` is a closure rather than a flag: `a(#c3)` is `aaa`, `a(#c2,4)` is
+two to four, `a(#c2,)` is two or more, `a(#c,3)` is at most three, and
+`a(#c,)` is `a#`. It needs an item in front of it — `[[ aaa == (#c3) ]]`
+is `bad pattern`.
+
+### The status a rejected pattern exits with is the surface's
+
+All four abandon the script rather than failing the match, and the status
+differs by where the pattern stood — measured with `(#Z)a`:
+
+| surface | status |
+| --- | --- |
+| `[[ ]]` | 2 |
+| `case` | 0 |
+| `${x#pat}` | 1 |
+| pathname expansion | 1 |
+
+### A metacharacter that arrived from a value is not one
+
+`#`, `~` and `^` are read as operators only in pattern text written down,
+never in the result of an expansion — which is the same answer zsh gives
+for `*`, and the reason `${~p}` exists:
+
+    p="a#b"; [[ ab == $p ]]       does not match
+    p="a#b"; [[ ab == ${~p} ]]    matches
+    p="^x";  [[ ab == $p ]]       does not match
+    p="^x";  [[ ab == ${~p} ]]    matches
+
+### What is read and not implemented here
+
+`(#i)`, `(#I)`, `(#l)`, the `#` and `##` closures, `(#c…)`, `^`, `~` and
+the `(#q…)` spelling of a qualifier list are implemented, in every surface
+that matches a pattern: `[[ ]]`, `case`, `${x#pat}` / `${x%pat}` /
+`${x/pat/rep}`, `${x:#pat}` and the `(M)` filter, and pathname expansion.
+
+The rest is **refused by name** — `(#b)` and `(#B)` backreferences, `(#m)`
+and `(#M)`, the `(#s)` and `(#e)` anchors, `(#a1)` approximate matching,
+and `(#u)` / `(#U)`. Each needs the position of the match within the
+subject, which this matcher does not carry, so a pattern using one says
+
+    <pattern>: the (#b) pattern flag is not implemented
+
+and stops the script. That is deliberate and is the point of the whole
+entry: `(#b)` also fills `$match`, `$mbegin` and `$mend`, so a flag that
+was quietly dropped left a script reading `$match[1]` with an **empty
+value** rather than a refusal, which is the failure mode this project
+exists to avoid (#1244).
+
+One further refusal is about the walk rather than the flag: an exclusion
+that spans a path component — `**/x~*bar*` — is refused by name in
+pathname expansion, because that walk reads a pattern one component at a
+time and comparing the right side against a file's name alone would be
+the same silent wrong answer in a new place.
+
 ## What this does not cover
 
 Collating symbols and equivalence classes (`[[.a.]]`, `[[=a=]]`), which

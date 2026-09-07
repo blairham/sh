@@ -19,6 +19,14 @@ import (
 // these escapes to itself.
 const patternMeta = `*?[\()<`
 
+// extendedPatternMeta is the three characters that become metacharacters only
+// once [ExtendedPatternOperators] is on: the closure, the exclusion and the
+// negation. They are a set of their own because the question they answer is a
+// run-time one — with the option off they are ordinary text, and asking a
+// dialect about globbing a `#` it has never heard of would refuse a pattern
+// that has nothing wrong with it.
+const extendedPatternMeta = "#~^"
+
 // escapePatternMeta marks every metacharacter in text as ordinary.
 //
 // The parentheses are in the set because they are metacharacters where the
@@ -30,17 +38,25 @@ const patternMeta = `*?[\()<`
 // is four ordinary characters and an expanded one is too: measured,
 // `p="<->"; [[ 1 = $p ]]` does not match in zsh.
 //
+// `#`, `~` and `^` are marked here too, from extendedPatternMeta, and
+// unconditionally: quoted text is literal in every dialect, and an escaped
+// ordinary character is that character, so marking one where nothing reads
+// it costs nothing for the reason the paragraph below gives. Where the
+// option *is* asked is the other direction — see expansionPattern, which
+// decides whether a metacharacter that arrived from a value stays live.
+//
 // They are escaped even where they are *not* metacharacters, and that is not
 // an oversight: an escaped ordinary character is that character, so the two
 // spellings match the same text and no test could tell a guard here from its
 // absence.
 func escapePatternMeta(text string) string {
-	if !strings.ContainsAny(text, patternMeta) {
+	const meta = patternMeta + extendedPatternMeta
+	if !strings.ContainsAny(text, meta) {
 		return text
 	}
 	var b strings.Builder
 	for i := 0; i < len(text); i++ {
-		if strings.IndexByte(patternMeta, text[i]) >= 0 {
+		if strings.IndexByte(meta, text[i]) >= 0 {
 			b.WriteByte('\\')
 		}
 		b.WriteByte(text[i])
@@ -147,10 +163,26 @@ func (r *Runner) expansionPattern(v string, q syntax.Quoting, glob Answer) (stri
 	if q != syntax.Unquoted {
 		return v, false
 	}
-	if !strings.ContainsAny(v, patternMeta) {
+	if !strings.ContainsAny(v, r.patternMetaSet()) {
 		return v, true
 	}
 	return v, r.ask(glob, "globbing the result of an expansion")
+}
+
+// patternMetaSet is the characters that make the result of an expansion worth
+// asking the axis about.
+//
+// The three extended ones are in it only while the option is on, and that is
+// the measurement rather than caution: `p="a#b"; [[ ab == $p ]]` does not
+// match in real zsh with `extendedglob` set, because a `#` that arrived from
+// a value is not the closure operator — the same answer `p="a*"` gets there,
+// and the reason `${~p}` exists. Counting it as a metacharacter is what routes
+// it to the axis that says so.
+func (r *Runner) patternMetaSet() string {
+	if r.MatchOption(ExtendedPatternOperators) {
+		return patternMeta + extendedPatternMeta
+	}
+	return patternMeta
 }
 
 // matchPattern reports whether pattern matches the whole of s.
@@ -206,6 +238,15 @@ type patternOpts struct {
 	// only ever moves when the pattern or the subject holds a byte above
 	// ASCII, which is where the callers ask.
 	chars bool
+	// extended says the operators one shell keeps behind an option of its
+	// own are live: `(#…)` flag groups, the `#` and `##` closures, the `^`
+	// negation and the `~` exclusion. Off, all four are ordinary characters,
+	// which is measured — see interp/patternflags.go.
+	extended bool
+	// litFold is the case comparison a `(#i)`, `(#I)` or `(#l)` flag asked
+	// for. It reaches only the literal characters of a pattern, which is
+	// what keeps it apart from fold above.
+	litFold caseFolding
 	// escapes is the set of characters a backslash escapes. Empty means
 	// every character, which is five of the six shells' answer; a set means
 	// a backslash before anything outside it is a literal backslash and the
@@ -283,6 +324,47 @@ func matchPattern(pattern, s string, o patternOpts) bool {
 
 func matchHere(p, s string, o patternOpts) bool {
 	for len(p) > 0 {
+		if o.extended {
+			// The exclusion binds loosest, so it is read before anything
+			// else in the branch: every side is matched against the whole
+			// of what is left of the subject.
+			if left, rights, ok := splitExclusion(p, o); ok {
+				if !matchHere(left, s, o) {
+					return false
+				}
+				for _, x := range rights {
+					if matchHere(x, s, o) {
+						return false
+					}
+				}
+				return true
+			}
+			// `^` turns the sense of the rest of the branch — measured,
+			// `[[ ab == a^x ]]` matches, so it starts where it stands
+			// rather than only at the front of a pattern.
+			if p[0] == '^' {
+				return !matchHere(p[1:], s, o)
+			}
+			// A flag group has to be read before splitGroup below, which
+			// would otherwise take `(#i)` for an alternation of one.
+			if body, rest, ok := splitPatternFlags(p); ok {
+				next, unknown := applyPatternFlags(body, o)
+				if unknown != 0 {
+					// Refused by name before matching began; there is
+					// nothing this can honestly answer.
+					return false
+				}
+				o, p = next, rest
+				continue
+			}
+			// A closure repeats the one item in front of it, so the item is
+			// read here rather than by the branches below.
+			if item, rest, ok := splitClosableItem(p, o); ok {
+				if lo, hi, after, isClosure := closureBounds(rest, o); isClosure {
+					return matchRepeat(item, lo, hi, after, s, o)
+				}
+			}
+		}
 		if body, quant, rest, ok := splitGroup(p, o); ok {
 			return matchGroup(body, quant, rest, s, o)
 		}
@@ -348,13 +430,13 @@ func matchHere(p, s string, o patternOpts) bool {
 				p, s = p[1:], s[1:]
 				continue
 			}
-			if s == "" || !eqByte(p[1], s[0], o.fold) {
+			if s == "" || !o.eqPatternByte(p[1], s[0]) {
 				return false
 			}
 			p, s = p[2:], s[1:]
 
 		default:
-			if s == "" || !eqByte(p[0], s[0], o.fold) {
+			if s == "" || !o.eqPatternByte(p[0], s[0]) {
 				return false
 			}
 			p, s = p[1:], s[1:]
@@ -814,7 +896,10 @@ func isDigit(c byte) bool { return c >= '0' && c <= '9' }
 // character of the subject, so a caller that named only the pattern would
 // leave the axis unasked in exactly the case that needs it.
 func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
-	return patternOpts{
+	// Every surface that reaches here — pathname expansion, the pattern
+	// operators of parameter expansion, and the builtins that take one —
+	// exits 1 where the shell rejects a pattern. Measured on all three.
+	return r.extendedPatternOpts(patternOpts{
 		caret:        r.caretNegates(pattern),
 		bracket:      BracketLiteral,
 		chars:        r.patternCountsCharacters(append([]string{pattern}, subjects...)...),
@@ -822,7 +907,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		quantified:   r.readsQuantifiedGroups(false),
 		numericRange: r.dialect().NumericRangePattern,
 		escapes:      r.sem().PatternEscapeReaches,
-	}
+	}, pattern, 1)
 }
 
 // readsQuantifiedGroups reports whether `@(a|b)` is a group where this pattern

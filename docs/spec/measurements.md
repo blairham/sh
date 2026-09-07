@@ -7443,6 +7443,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/a-closed-stdout-is-closed-for-a-command` | `st=1~diagnosed` | `st=1~diagnosed` | `st=1~diagnosed` | `st=1~diagnosed` | `st=1~diagnosed` | `st=1~diagnosed` |
 | `redir/a-per-command-close-reaches-the-command` | `st=1~diagnosed` | `st=1~diagnosed` | `st=1~diagnosed` | `st=1~diagnosed` | `st=1~diagnosed` | `st=1~diagnosed` |
 | `redir/an-empty-stdin-is-not-a-closed-one` | `st=0~silent` | `st=0~silent` | `st=0~silent` | `st=0~silent` | `st=0~silent` | `st=0~silent` |
+| `redir/a-dup-from-a-closed-descriptor-fails-the-redirection` | `st=2` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `redir/a-dup-from-a-closed-descriptor-fails-with-nothing-to-write` | `st=2` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `redir/a-dup-read-before-the-close-survives-it` | `st=0` **2>** `z` | `st=0` **2>** `z` | `st=0` **2>** `z` | `st=0` **2>** `z` | `st=0` **2>** `z` | `st=0` **2>** `z` |
+| `redir/a-dup-from-a-closed-descriptor-does-not-fill-the-target` | **2>** `<shell>: 1: 1: Bad file descriptor` *(status 2)* | **2>** `<shell>: line 1: 1: Bad file descriptor~st=1~<shell>: line 1: 3: Bad file descriptor~st2=1` | **2>** `<shell>: line 1: 1: Bad file descriptor` *(status 1)* | **2>** `<shell>: 1: Bad file descriptor~st=1~<shell>: 3: Bad file descriptor~st2=1` | **2>** `<shell>: 1: cannot open [Bad file descriptor]` *(status 1)* | **2>** `<shell>:1: 1: bad file descriptor~st=1~<shell>:1: 3: bad file descriptor~st2=1` |
 | `redir/an-inherited-descriptor-keeps-its-number` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
 | `redir/a-dup-prefix-is-that-commands-alone` | `st=2` **2>** `<shell>: 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 6: bad file descriptor` |
 | `redir/great-amp-names-a-file` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=0 [hi]` | `st=0 [hi]` | `st=0 [hi]` | `st=1 []` **2>** `<shell>: qq: bad file unit number` | `st=0 [hi]` |
@@ -7794,6 +7798,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/an-empty-stdin-is-not-a-closed-one` — the control that makes the three rows above discriminating, and the distinction the bug collapsed: /dev/null is a descriptor with nothing in it, so the read reaches end of file and the command succeeds in silence — 0 and nothing said, unanimously. A shell that answers this and `exec 0<&-` identically is right here and wrong there, and nothing in either row alone can tell
   ```sh
   exec 0</dev/null; cat 2>e; echo "st=$?"; test -s e && echo diagnosed || echo silent
+  ```
+- `redir/a-dup-from-a-closed-descriptor-fails-the-redirection` — the duplication side of the closed-descriptor rule, which the write side above answered by accident (#1345): `>&2` reads 2 before the command runs, so a 2 the script parked closed fails the *redirection* and the command never happens. Unanimous against a 0 — dash's 2 and everyone else's 1 are the same event with the dialect's own number on it, which is why the row is worth having even though five columns agree. Nothing is said in any column, because the only stream a diagnostic could go to is the one that was closed
+  ```sh
+  exec 2>&-; echo z >&2; echo "st=$?"
+  ```
+- `redir/a-dup-from-a-closed-descriptor-fails-with-nothing-to-write` — the row that makes the one above discriminating, and the one that cannot be passed by treating a closed stream as a writable thing that fails: `true` writes nothing at all, so a shell whose failure comes from the write answers 0 here while answering that row correctly. The panel is unanimously non-zero, so the failure is the duplication's and the write is not involved
+  ```sh
+  exec 2>&-; true >&2; echo "st=$?"
+  ```
+- `redir/a-dup-read-before-the-close-survives-it` — the control for the two rows above, and the reason they are about the close rather than about `>&2`: redirections are applied left to right, so the duplication copies 2 while it is still open and the close that follows cannot reach the copy. `z` arrives and the status is 0 in all six — a shell that refused every `2>&-` would be wrong here and right there
+  ```sh
+  echo z >&2 2>&-; echo "st=$?"
+  ```
+- `redir/a-dup-from-a-closed-descriptor-does-not-fill-the-target` — the same refusal parked in the table rather than used for one command, and the row whose answer varies most: `exec 3>&1` is a redirection failure on a special builtin, so dash, ksh93 and bash-as-sh end the script there while bash, bash 3.2 and zsh carry on and then find 3 unopened too. What it pins is that the failure leaves 3 *absent* — a shell that copied the closed stream onto 3 would report a write error on the second line instead of a bad descriptor, which is what this tree did
+  ```sh
+  exec 1>&-; exec 3>&1; echo "st=$?" >&2; echo x >&3; echo "st2=$?" >&2
   ```
 - `redir/an-inherited-descriptor-keeps-its-number` — the discriminating case for how the table crosses: with 3 and 4 never opened, the file parked on 5 is still on 5 in the child and 3 is a hole, so the file holds `five`. A table packed from the bottom would put it on 3 and the file would hold `three`
   ```sh

@@ -41,6 +41,33 @@ func runSub(t *testing.T, src string) (string, int) {
 	})
 }
 
+// runAssoc is runSub with the two more answers an *association* needs: the
+// declaration attribute's grammar, the expansion flag group so that `(k)`,
+// `(v)` and `(o)` can be written in front of a search, and the measured
+// answer to whether a subscript quotes — it does not, which is what lets a
+// key hold a space without the quotes becoming part of it.
+func runAssoc(t *testing.T, src string) (string, int) {
+	t.Helper()
+	return runGrammar(t, src, func(d *syntax.Dialect) {
+		subGrammar(d)
+		d.ParamExpansionFlags = true
+		d.ParamElementSelection = true
+		d.ArrayLiteral = true
+	}, func(r *Runner) {
+		sem := *r.Semantics
+		sem.ArrayBaseIsZero = No
+		sem.GlobExpansionResults = No
+		sem.SplitParamExpansion = No
+		sem.GlobNoMatchIsError = Yes
+		sem.SubscriptIsAQuotingContext = No
+		// A quoted operator on a joined subscript applies to the joined text
+		// rather than to each element, which is the measured answer and the
+		// axis an operator written on a search reaches.
+		sem.OperatorDistributesOverStarSubscript = No
+		r.Semantics = &sem
+	})
+}
+
 // The array every row below searches. Five elements, with `beta` twice so
 // that first and last are different answers, and every element ending in `a`
 // so that a pattern has more than one match to choose between.
@@ -262,19 +289,18 @@ func TestASubscriptFlagThisImplementationDoesNotCarryIsRefusedByName(t *testing.
 }
 
 // A search over a target this does not carry is refused the same way, and the
-// refusal replaces a *silent* wrong answer in both cases: an associative
-// array looked the group up as a key and found nothing, and a scalar answered
-// out of the one-element list it is read as.
+// refusal replaces a *silent* wrong answer: a scalar answered out of the
+// one-element list it is read as, and a character position is not an element.
 func TestASubscriptSearchOverATargetThisDoesNotCarryIsRefused(t *testing.T) {
 	for _, tc := range []struct{ name, src, why string }{
 		{
-			"an associative array",
-			`typeset -A h; h[k1]=v1; printf "[%s]" "${h[(r)v1]}"`,
-			"for an associative array",
-		},
-		{
 			"a scalar",
 			`s="one two"; printf "[%s]" "${s[(r)two]}"`,
+			"for a scalar",
+		},
+		{
+			"and a scalar searched for an index",
+			`s=hello; printf "[%s]" "${s[(i)l]}"`,
 			"for a scalar",
 		},
 	} {
@@ -346,5 +372,262 @@ func TestAFlagGroupTakesTheWholeArraySpellingsAway(t *testing.T) {
 	out, status := runSub(t, subArray+`printf "[%s]" "${a[*]}"`)
 	if want := "[alpha beta gamma beta delta]"; out != want || status != 0 {
 		t.Errorf("${a[*]} = %q status %d, want %q 0", out, status, want)
+	}
+}
+
+// The association every row below searches. The keys are deliberately not in
+// sorted order as written, so a row that came back in the order it was
+// assigned would be visible; and the values repeat, so `r` and `R` have more
+// than one match to choose between.
+const subAssoc = `typeset -A m=(gamma one alpha two beta one); `
+
+// A search over an association is a different construct wearing the same four
+// letters, and the difference is the whole of what this asserts: the letters
+// select *keys* rather than indices, and the case of the letter is how many
+// matches come back rather than which end the search started from.
+//
+// Measured against zsh 5.9.2. The order the several matches come back in is
+// this implementation's own — sorted, for the reason AssocArray.keys() gives
+// — so the rows that have several assert the *set* through a sort of their
+// own where the shell's hash order would otherwise be pinned here.
+func TestASubscriptSearchOverAnAssociationSelectsKeys(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"i is the first matching key", `${m[(i)alpha]}`, "alpha"},
+		{"and it is a key and not an index", `${m[(i)*a]}`, "alpha"},
+		{"I is every matching key", `${m[(I)*a]}`, "alpha beta gamma"},
+		{"r searches the values", `${m[(r)one]}`, "one"},
+		{"and a key is not a value", `${m[(r)alpha]}`, ""},
+		{"R is every matching value", `${m[(R)one]}`, "one one"},
+		{"a literal key with no glob in it", `${m[(I)beta]}`, "beta"},
+		{"a glob matching one", `${m[(I)g*]}`, "gamma"},
+		{"a glob matching none", `${m[(I)zz*]}`, ""},
+		{"an empty pattern matches no key here", `${m[(I)]}`, ""},
+		{"i with no match is nothing, not an index", `${m[(i)zz]}`, ""},
+		{"I with no match is nothing either", `${m[(I)zz]}`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runAssoc(t, subAssoc+`printf "[%s]" "`+tc.src+`"`)
+			if out != "["+tc.want+"]" || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, "["+tc.want+"]")
+			}
+		})
+	}
+}
+
+// A key that holds a glob character is found by a group that says the operand
+// is literal, and the same group without `(e)` finds both. The pair is what
+// says `(e)` is read on this path at all — one row alone passes for an
+// implementation that ignores it.
+func TestAnExactSearchOverAnAssociation(t *testing.T) {
+	const m = `typeset -A m=(aa 1 'a*' 2); `
+	for _, tc := range []struct{ name, src, want string }{
+		{"exact finds the key spelled with the star", `${m[(Ie)a*]}`, "a*"},
+		{"and a pattern finds both", `${m[(I)a*]}`, "a* aa"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runAssoc(t, m+`printf "[%s]" "`+tc.src+`"`)
+			if out != "["+tc.want+"]" || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, "["+tc.want+"]")
+			}
+		})
+	}
+}
+
+// The two modifiers the ordered array's search reads are *ignored* over an
+// association, which is measured and not assumed: with three matching keys,
+// asking for the third match and starting at the second both still answer
+// with the first.
+//
+// Asserted because ignoring them is the kind of thing that looks like an
+// oversight and would be "fixed" into a divergence.
+func TestNthAndBeginAreIgnoredOverAnAssociation(t *testing.T) {
+	const m = `typeset -A m=(aa 1 ab 2 ac 3); `
+	for _, tc := range []struct{ name, src, want string }{
+		{"nth is ignored", `${m[(in:3:)a*]}`, "aa"},
+		{"begin is ignored", `${m[(ib:2:)a*]}`, "aa"},
+		{"and neither moves the every-match answer", `${m[(In:2:)a*]}`, "aa ab ac"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runAssoc(t, m+`printf "[%s]" "`+tc.src+`"`)
+			if out != "["+tc.want+"]" || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, "["+tc.want+"]")
+			}
+		})
+	}
+}
+
+// The search names several elements, so the three readings that ask whether a
+// subscript is a list have to agree. They did not before: a count that was a
+// width, a quoted expansion that was one field per match, and a flag group
+// handed one word made of all of them.
+func TestAnAssociationSearchIsAList(t *testing.T) {
+	const m = `typeset -A m=('a b' 1 'c d' 2); `
+	for _, tc := range []struct{ name, src, want string }{
+		{"the length is the match count", `printf "[%s]" "${#m[(I)*]}"`, "[2]"},
+		{"and zero where nothing matched", `printf "[%s]" "${#m[(I)zz]}"`, "[0]"},
+		{"quoted, the matches are joined", `printf "[%s]" "${m[(I)*]}"`, "[a b c d]"},
+		{"unquoted, one field each", `printf "[%s]" ${m[(I)*]}`, "[a b][c d]"},
+		{"quoted with @, one field each", `printf "[%s]" "${(@)m[(I)*]}"`, "[a b][c d]"},
+		{"no match quoted is one empty field", `set -- "${m[(I)zz]}"; printf "[%s]" "$#"`, "[1]"},
+		{"no match unquoted is no field", `set -- ${m[(I)zz]}; printf "[%s]" "$#"`, "[0]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runAssoc(t, m+tc.src)
+			if out != tc.want || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, tc.want)
+			}
+		})
+	}
+}
+
+// A search with no match is *set* with no elements rather than unset, which is
+// the opposite of what the same group over an ordered array answers and is
+// measured on both sides. A `-` alternative firing here is the silent shape:
+// a script reading `${m[(I)pat]-default}` would take the default for a table
+// that simply has no such hook.
+func TestAnAssociationSearchWithNoMatchIsSet(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"an association search answers even with no match", `typeset -A m=(a 1); printf "[%s]" "${m[(I)zz]-none}"`, "[]"},
+		{"a plain missing key does not", `typeset -A m=(a 1); printf "[%s]" "${m[zz]-none}"`, "[none]"},
+		{"and an ordered array's search does not either", `a=(x y); printf "[%s]" "${a[(r)zz]-none}"`, "[none]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runAssoc(t, tc.src)
+			if out != tc.want || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, tc.want)
+			}
+		})
+	}
+}
+
+// Which half of each matched pair comes back is the *expansion's* flag group,
+// not the search's, and the answer is the same whichever letter searched.
+func TestTheKeyAndValueFlagsOverAnAssociationSearch(t *testing.T) {
+	const m = `typeset -A m; m[a]=1; m[b]=2; `
+	for _, tc := range []struct{ name, src, want string }{
+		{"k over a key search is the keys", `${(k)m[(I)*]}`, "a b"},
+		{"v over a key search is the values", `${(v)m[(I)*]}`, "1 2"},
+		{"k and v interleave", `${(kv)m[(I)*]}`, "a 1 b 2"},
+		{"k over a value search is still the keys", `${(k)m[(R)*]}`, "a b"},
+		{"v over a value search is still the values", `${(v)m[(R)*]}`, "1 2"},
+		{"and a single match takes the same rule", `${(kv)m[(i)*]}`, "a 1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runAssoc(t, m+`printf "[%s]" "`+tc.src+`"`)
+			if out != "["+tc.want+"]" || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, "["+tc.want+"]")
+			}
+		})
+	}
+}
+
+// An operator written on a search follows the rule `${a[*]}` already follows,
+// and the two halves of it are opposite: quoted, the matches are joined and
+// the operator applies once to the joined text; unquoted, it applies to each.
+//
+// Measured on zsh 5.9.2 with three matching keys, and both halves are needed —
+// a shell that distributed in both would answer `a b c` where the quoted
+// spelling is `a pb pc`, and one that joined in both would answer one field
+// where the unquoted spelling is three.
+//
+// It is here rather than in the corpus because the quoted answer says which
+// match came *first*, and the corpus may not pin a key order neither shell
+// promises. Against this implementation's own sorted order it is exact.
+func TestAnOperatorOnAnAssociationSearch(t *testing.T) {
+	const m = `typeset -A m=(pa 1 pb 2 pc 3); `
+	for _, tc := range []struct{ name, src, want string }{
+		{"quoted, joined then trimmed once", `printf "[%s]" "${m[(I)p*]#p}"`, "[a pb pc]"},
+		{"unquoted, trimmed one at a time", `printf "[%s]" ${m[(I)p*]#p}`, "[a][b][c]"},
+		{"and @ keeps the fields through quotes", `printf "[%s]" "${(@)m[(I)p*]#p}"`, "[a][b][c]"},
+		{"a filter reads the joined text in quotes", `printf "[%s]" "${m[(I)p*]:#pa}"`, "[pa pb pc]"},
+		{"and a slice slices the list", `printf "[%s]" "${m[(I)p*]:1}"`, "[pb pc]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runAssoc(t, m+tc.src)
+			if out != tc.want || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, tc.want)
+			}
+		})
+	}
+}
+
+// The shape the plugin manager writes twenty-six times, sorted by a flag
+// group of its own — which is the reading that needs the search to be a list
+// rather than one word, and the one a join would silently answer with a
+// single unsorted field.
+func TestTheAssociationSearchAPluginManagerAsksWith(t *testing.T) {
+	const exts = `typeset -A e=('z-annex subcommand:wait' w 'z-annex subcommand:load' l other o); `
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a literal hook name that is there",
+			`printf "[%s]" "${e[(I)z-annex subcommand:wait]}"`,
+			"[z-annex subcommand:wait]",
+		},
+		{
+			"one that is not",
+			`printf "[%s]" "${e[(I)z-annex subcommand:nope]}"`,
+			"[]",
+		},
+		{
+			"and every subcommand, sorted, one field each",
+			`printf "[%s]" ${(o)e[(I)z-annex subcommand:*]}`,
+			"[z-annex subcommand:load][z-annex subcommand:wait]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runAssoc(t, exts+tc.src)
+			if out != tc.want || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, tc.want)
+			}
+		})
+	}
+}
+
+// A flag group that selects *nothing* leaves the ordinary reading alone over
+// an association exactly as it does over an ordered array, and an ordered
+// array's search is not list-shaped however the association's is. Both are
+// the boundary of the new reading rather than the reading itself, and both
+// are silent when they slip: a width answered as a count is `1` for a
+// five-character value, which is a number a script will happily use.
+func TestWhatIsNotAnAssociationSearch(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"an empty group over an association is still a key lookup",
+			`typeset -A m=(a hello); printf "[%s]" "${m[()a]}" "${#m[()a]}" "${m[(e)a]}"`,
+			"[hello][5][hello]",
+		},
+		{
+			"and an ordered array's search is one value, so # is its width",
+			`a=(alpha beta); printf "[%s]" "${#a[(r)alpha]}" "${#a[(i)beta]}" "${a[(r)zz]-none}"`,
+			"[5][1][none]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runAssoc(t, tc.src)
+			if out != tc.want || status != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, tc.want)
+			}
+		})
+	}
+}
+
+// The letters this still does not carry over an association are still refused
+// by name. `(k)` and `(K)` are not searches at all there — measured, `${m[(k)a]}`
+// is the value at the key `a` and `${m[(k)*]}` is nothing, because the star is
+// a key nobody assigned — so building the search did not build them, and the
+// guarantee that says so is asserted rather than assumed.
+func TestTheSubscriptFlagsStillUnbuiltOverAnAssociation(t *testing.T) {
+	for _, tc := range []struct{ src, names string }{
+		{`typeset -A m=(a 1); printf "[%s]" "${m[(k)a]}"`, "(k)"},
+		{`typeset -A m=(a 1); printf "[%s]" "${m[(K)a]}"`, "(K)"},
+		{`typeset -A m=(a 1); printf "[%s]" "${m[(w)a]}"`, "(w)"},
+	} {
+		out, status := runAssoc(t, tc.src)
+		if !strings.Contains(out, tc.names+" subscript flag is not implemented") {
+			t.Errorf("%s: output %q does not refuse %s by name", tc.src, out, tc.names)
+		}
+		if status == 0 {
+			t.Errorf("%s: status 0, want a failure", tc.src)
+		}
 	}
 }

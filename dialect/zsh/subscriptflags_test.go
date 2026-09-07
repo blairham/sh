@@ -67,7 +67,6 @@ func TestASubscriptFlagThisDialectReadsAndDoesNotCarry(t *testing.T) {
 	for _, tc := range []struct{ src, names string }{
 		{`a=(x y); printf "[%s]" "${a[(w)y]}"`, "(w)"},
 		{`a=(x y); printf "[%s]" "${a[(k)y]}"`, "(k)"},
-		{`typeset -A h; h[k]=v; printf "[%s]" "${h[(r)v]}"`, "(r)"},
 		{`s=xy; printf "[%s]" "${s[(r)y]}"`, "(r)"},
 	} {
 		out, st := runZsh(t, t.TempDir(), tc.src)
@@ -84,5 +83,72 @@ func TestAnUnreadableSubscriptFlagGroupIsArithmetic(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `a=(x y); printf "[%s]" "${a[(z)2]}"`)
 	if !strings.Contains(out, "bad math expression") || st == 0 {
 		t.Errorf(`${a[(z)2]} = %q (status %d), want an arithmetic failure`, out, st)
+	}
+}
+
+// A search over an *association* is this dialect's too, and it is a different
+// construct from the ordered array's search above: the four letters select
+// keys, and their case is how many matches come back rather than which end
+// the search started from. Measured 2026-09-07 on zsh 5.9.2.
+//
+// It is here as well as in the substrate because the preset is what makes
+// these characters a search at all — the other four read every row as
+// arithmetic and fail there — and because the *shape* below is the one the
+// plugin manager on this machine reaches before it has defined anything.
+func TestASearchOverAnAssociationIsThisDialects(t *testing.T) {
+	const m = "typeset -A m=(gamma one alpha two beta one)\n"
+	for _, tc := range []struct{ src, want string }{
+		{`printf "[%s]" "${m[(i)alpha]}"`, `[alpha]`},
+		{`printf "[%s]" "${m[(i)*a]}"`, `[alpha]`},
+		{`printf "[%s]" "${m[(I)*a]}"`, `[alpha beta gamma]`},
+		{`printf "[%s]" "${m[(r)one]}"`, `[one]`},
+		{`printf "[%s]" "${m[(R)one]}"`, `[one one]`},
+		{`printf "[%s]" "${m[(i)zz]}"`, `[]`},
+		{`printf "[%s]" "${m[(I)zz]}"`, `[]`},
+		{`printf "[%s]" "${#m[(I)*a]}"`, `[3]`},
+		{`printf "[%s]" ${(@)m[(I)*a]}`, `[alpha][beta][gamma]`},
+		{`printf "[%s]" "${(v)m[(i)alpha]}"`, `[two]`},
+	} {
+		out, st := runZsh(t, t.TempDir(), m+tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// The line the plugin manager reaches at the eleventh of its own, and the one
+// at the ninetieth: a hook table searched for a literal name and for every
+// name under a prefix. Both are `[@]`-shaped answers from a subscript nobody
+// wrote `@` in.
+func TestTheHookTableSearchAPluginManagerReaches(t *testing.T) {
+	const e = "typeset -A e=('z-annex subcommand:wait' w 'z-annex subcommand:load' l other o)\n"
+	for _, tc := range []struct{ src, want string }{
+		{`printf "[%s]" "${e[(I)z-annex subcommand:wait]}"`, `[z-annex subcommand:wait]`},
+		{`printf "[%s]" "${e[(I)z-annex subcommand:nope]}"`, `[]`},
+		{`printf "[%s]" ${(on)e[(I)z-annex subcommand:*]}`, `[z-annex subcommand:load][z-annex subcommand:wait]`},
+	} {
+		out, st := runZsh(t, t.TempDir(), e+tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// `(A)` in this dialect: nothing where the expansion does not assign, and a
+// refusal naming the flag where it does.
+func TestTheArrayFlagIsThisDialects(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`v="a|b"; printf "[%s]" "${(@Akons:|:u)v}"`, `[a][b]`},
+		{`v="a b"; printf "[%s]" "${(A)#v}"`, `[3]`},
+		{`v=abc; printf "[%s]" "${(AA)v}"`, `[abc]`},
+	} {
+		out, st := runZsh(t, t.TempDir(), tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+	out, st := runZsh(t, t.TempDir(), `printf "[%s]" "${(A)u=x y}"`)
+	if !strings.Contains(out, "(A) expansion flag is not implemented for an assignment") || st == 0 {
+		t.Errorf(`${(A)u=x y} = %q (status %d), want the assignment refused`, out, st)
 	}
 }

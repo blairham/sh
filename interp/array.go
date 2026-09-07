@@ -1339,6 +1339,12 @@ func (r *Runner) subscriptYieldsAList(e *syntax.ParamExpr) bool {
 	if r.wholeArrayIndex(e) {
 		return true
 	}
+	if r.assocSearchSubscript(e) {
+		// A search over an association names every key that matched, so the
+		// count is the count of matches: measured, `${#m[(I)*]}` on a
+		// two-element table is 2 and `${#m[(I)zz]}` is 0.
+		return true
+	}
 	if !r.subscriptIsARange(e) {
 		return false
 	}
@@ -1361,7 +1367,12 @@ func (r *Runner) subscriptJoinsElements(e *syntax.ParamExpr) bool {
 		// range, so it already falls through to one field each.
 		return false
 	}
-	return r.joinedArrayIndex(e) || r.subscriptIsARange(e)
+	// A search over an association joins for the same reason a range does:
+	// it is not `@`. Measured with two keys holding spaces —
+	// `set -- "${m[(I)*]}"` is one field holding both, `set -- ${m[(I)*]}`
+	// is one field each with the spaces intact, and `"${(@)m[(I)*]}"` is one
+	// field each again.
+	return r.joinedArrayIndex(e) || r.subscriptIsARange(e) || r.assocSearchSubscript(e)
 }
 
 // compoundElemsFolded is what a name's attributes make of an array's elements

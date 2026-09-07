@@ -576,6 +576,27 @@ func isPlainFuncName(s string) bool {
 }
 
 func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
+	if c.NameWord != nil {
+		// The name was written with an expansion in it, so it is not text
+		// until now. Expanded once, here, at the *definition*: measured on
+		// zsh 5.9.2, `w=foo; _p_${w}() { … }; w=bar` leaves `_p_foo` defined
+		// and `_p_bar` not found, so the name is fixed when the definition
+		// runs and never looked at again.
+		//
+		// The word may produce several names, and each one is a definition
+		// of its own — `set -- x y; _p_$@() { … }` defines `_p_x` and `y`
+		// there. It may also produce none, which defines nothing.
+		named := *c
+		named.NameWord = nil
+		for _, name := range r.expandWord(c.NameWord) {
+			one := named
+			one.Name = name
+			if err := r.funcDecl(&one); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	// A name the grammar admitted may still be one this dialect refuses to
 	// define: ksh93 parses `f-g()` and stops the script at the definition,
 	// with a different sentence for a dot — a discipline function is its own

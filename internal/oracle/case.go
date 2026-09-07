@@ -1285,6 +1285,21 @@ var Corpus = []Case{
 		Why:     "the same loop a `for` is, under two other words. `end` is what it adds — reserved wherever a command may begin in that shell, so `end` alone is a parse error there — and `for f (a b); …; end` is refused, which is what says the terminator belongs to the opening word rather than to the parenthesized list",
 	},
 	{
+		ID: "cmd/a-function-name-may-hold-an-expansion", Category: "command language", SyntaxError: true,
+		Snippet: `w=foo; _p_${w}() { echo HI; }; _p_foo; _p_w 2>/dev/null || echo nolit`,
+		Why:     "a plugin generating one function per widget, and one shell's alone: the other five refuse both spellings and their wordings say they are refusing a *name* — `` `_p_${w}': not a valid identifier `` and `_p_${w}: invalid function name` — so it is additive grammar rather than an axis. The second arm is the one that matters: `_p_${w}` flattened to its literal text is `_p_w`, a perfectly good name for a different function, so `did it define something` cannot tell a fix from the bug (#1256)",
+	},
+	{
+		ID: "cmd/an-expanded-function-name-is-fixed-at-the-definition", Category: "command language", SyntaxError: true,
+		Snippet: `w=foo; _p_${w}() { echo "w=$w"; }; w=bar; _p_foo; _p_bar 2>/dev/null || echo nobar`,
+		Why:     "the name is expanded once, when the definition runs, and never again — changing the variable afterwards leaves the old name defined and produces no new one. The body is the control beside it and goes the other way: it prints `w=bar`, because a body is expanded when it is *called*. Two opposite answers to `when` in one row, which is the pair that a single-arm case cannot show",
+	},
+	{
+		ID: "cmd/the-keyword-form-of-a-function-name-expansion", Category: "command language", SyntaxError: true,
+		Snippet: `w=foo; function _p_${w} { echo HI; }; _p_foo`,
+		Why:     "the same construct written with the keyword, and the half that was worse here than a refusal: this *parsed* and took the token's literal text, so it defined `_p_w` at status 0 with no diagnostic and the function the script asked for missing. bash and ksh93 both complain about the name and dash calls it a syntax error; only zsh defines it",
+	},
+	{
 		ID: "core/a-function-with-no-name-runs-where-it-stands", Category: "command language",
 		Script: true, SyntaxError: true,
 		Snippet: `() { echo "[$0][$1][$#]"; } p q`,

@@ -667,6 +667,16 @@ func (c *ArithCmdClause) commandNode() {}
 // can be any of them and can carry its own redirections.
 type FuncDecl struct {
 	Name string
+	// NameWord is the name as it was *written*, kept only where the dialect
+	// expands one — see [Dialect.FunctionNameExpands]. Nil is the ordinary
+	// case and means Name is the whole of it.
+	//
+	// It exists because Name is a string and the name may not be one until
+	// the shell runs: `w=foo; _p_${w}() { … }` defines `_p_foo`, and the
+	// literal text of that token is `_p_w`, which is a different function
+	// and a plausible one. Flattening it was silent — status 0, a function
+	// defined, and the one the script asked for missing.
+	NameWord *Word
 	// Keyword records that the `function` word was used, which is not
 	// universal: dash rejects it, and ksh93 rejects the hybrid form with
 	// parentheses as well.

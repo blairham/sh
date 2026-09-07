@@ -471,7 +471,15 @@ func (p *printer) command(c Command) {
 		// `function f { …; }` and `f() { …; }` are the same declaration to
 		// every shell that has both, and the parenthesised form is the one
 		// they all read.
-		p.str(x.Name + "() ")
+		// The name as *written* where it was written with an expansion:
+		// printing its literal text would name a different function, which
+		// is the same loss the parser used to take (see FuncDecl.NameWord).
+		if x.NameWord != nil {
+			p.word(x.NameWord)
+		} else {
+			p.str(x.Name)
+		}
+		p.str("() ")
 		p.command(x.Body)
 	case *CoprocClause:
 		p.str("coproc ")

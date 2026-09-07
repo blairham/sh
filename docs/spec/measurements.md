@@ -3773,6 +3773,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/assignment-prefix-reaches-a-builtin` | `[a][b]~n=2` | `[a][b]~n=2` | `[a][b]~n=2` | `[a][b]~n=2` | `[a][b]~n=2` | `[a][b]~n=1` |
 | `cmd/subshell-isolates-state` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
 | `cmd/brace-group-shares-state` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
+| `cmd/subshell-isolates-a-function-definition` | `gone` | `gone` | `gone` | `gone` | `gone` | `gone` |
+| `cmd/subshell-isolates-a-function-redefinition` | `old` | `old` | `old` | `old` | `old` | `old` |
+| `cmd/subshell-isolates-a-function-removal` | `yes` | `yes` | `yes` | `yes` | `yes` | `yes` |
+| `cmd/subshell-isolates-an-alias-definition` | `gone` | `gone` | `gone` | `gone` | `gone` | `gone` |
+| `cmd/subshell-isolates-an-alias-removal` | `there` | `there` | `there` | `there` | `there` | `there` |
 | `cmd/brace-group-needs-terminator` | **2>** `<shell>: 1: Syntax error: end of file unexpected (expecting "}")` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `{' unmatched` *(status 3)* | `a` |
 | `cmd/subshell-needs-no-terminator` | `a` | `a` | `a` | `a` | `a` | `a` |
 | `cmd/compound-takes-redirection` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` |
@@ -4052,6 +4057,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cmd/brace-group-shares-state` — { } runs in the current shell, which is the whole difference between them
   ```sh
   x=1; { x=2; }; echo "[$x]"
+  ```
+- `cmd/subshell-isolates-a-function-definition` — the row above asks it of a variable and this one of a *function*, which is the same question and was a different answer here: the function table was shared with a subshell where every variable table was copied, so a definition made in one was the parent's afterwards — at status 0, with a `command -v` that found it and no way for the caller to tell (#1125). Unanimous across the panel. `command -v` rather than `type` because the four word a `type` differently and the subject is whether the name is there at all
+  ```sh
+  (g(){ echo in; }); if command -v g >/dev/null 2>&1; then echo leaked; else echo gone; fi
+  ```
+- `cmd/subshell-isolates-a-function-redefinition` — the shape a script writes on purpose — run a helper in `( … )` so the version it needs stays out of the way — and the one where sharing the table is worst, because there is no diagnostic and no status to notice: the parent simply calls the subshell's function. Separate from the definition row because a name the parent already holds takes a different road into the table
+  ```sh
+  g(){ echo old; }; (g(){ echo new; }); g
+  ```
+- `cmd/subshell-isolates-a-function-removal` — the other direction, and the half a measurement of definitions alone would miss: with the table shared, a removal in a subshell took the *parent's* function away, so this printed a command-not-found where every shell in the panel prints `yes`. One shared map is two bugs, and they point opposite ways
+  ```sh
+  f(){ echo yes; }; (unset -f f); f
+  ```
+- `cmd/subshell-isolates-an-alias-definition` — the same for the alias table, where the consequence is a *parse* difference rather than a value one — an alias defined in a subshell changes how the parent's later lines are read. The `alias z=echo` first is load-bearing and not scene-setting: the table is allocated on first use, so with no alias anywhere the subshell built a map of its own and the leak did not appear at all, which is why it hid for so long
+  ```sh
+  alias z=echo; (alias q=ls); if alias q >/dev/null 2>&1; then echo leaked; else echo gone; fi
+  ```
+- `cmd/subshell-isolates-an-alias-removal` — and the removal direction for aliases, for the reason the function removal row exists: a shared table loses the parent's alias to an `unalias` that was meant to be thrown away with the subshell
+  ```sh
+  alias z=echo; (unalias z); if alias z >/dev/null 2>&1; then echo there; else echo gone; fi
   ```
 - `cmd/brace-group-needs-terminator` — { } is made of reserved words and needs a terminator before the brace — except in zsh
   ```sh

@@ -6598,6 +6598,31 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "`typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find",
 	},
 	{
+		ID: "declare/an-operand-that-is-not-a-name", Category: "declarations",
+		Snippet: `typeset ':'; echo "st=$?"; echo A`,
+		Why:     "the operand check every other declaration builtin already had. Four sentences at three statuses across six columns: dash has no such builtin and reports a command it cannot find, bash quotes the operand back as `not a valid identifier` and carries on at 1, ksh93 says `invalid variable name` and stops the script, and zsh says `not valid in this context` and stops it too — so `echo A` is the half of the row that measures the fatality rather than the wording. Taking the operand silently creates a parameter called `:` and reports success, which is a shell answering yes to a line no shell in the panel accepts (#1096)",
+	},
+	{
+		ID: "declare/an-operand-that-starts-with-a-digit", Category: "declarations",
+		Snippet: `typeset 1x; echo "st=$?"; echo A`,
+		Why:     "the same refusal for the other shape of bad name, and the row that separates the two shells with a second sentence for it: zsh says `not an identifier: 1x` here where it says `not valid in this context` for a punctuation operand, and bash and ksh93 say to both what they say to either. Written as its own case because a dialect carrying one wording for both would pass the punctuation row and fail nothing else",
+	},
+	{
+		ID: "declare/a-bad-operand-with-a-value-attached", Category: "declarations",
+		Snippet: `typeset '1x=v'; echo "st=$?"; typeset ':=v'; echo "st=$?"`,
+		Why:     "*which* part of the operand is quoted back, which is not the same question in every column: bash and ksh93 name the whole word — `1x=v` and `:=v` — and zsh names only the part before the `=`, so its second line is `not valid in this context: :` rather than `:=v`. An implementation that judged the name and then reported the name would be right in one column and one character short in two others",
+	},
+	{
+		ID: "declare/a-subscripted-operand-to-a-declaration", Category: "declarations",
+		Snippet: `typeset a[1]=v; echo "st=$?"; typeset -p a 2>&1`,
+		Why:     "the operand a declaration takes that `export` does not, and the reason the name check needed a third answer rather than reusing `export`'s: bash refuses `export a[1]=v` as a bad name and *takes* this, creating the element, and ksh93 and zsh take both. Measured before the check was routed through, because a shared answer would have made bash start refusing a line it has always accepted",
+	},
+	{
+		ID: "declare/an-integer-declaration-with-an-operand-that-is-not-a-name", Category: "declarations",
+		Snippet: `integer 1x; echo "st=$?"; echo A`,
+		Why:     "the same check under the third name, and the row that says whose name the complaint uses: ksh93's `integer` calls itself `typeset` in its own diagnostic where zsh's calls itself `integer`, so one shell renames the builtin in the sentence and the other does not. bash and dash have no such word at all",
+	},
+	{
 		ID: "declare/declare-is-the-second-name", Category: "declarations",
 		Snippet: `declare x=1; echo "[$x]"`,
 		Why:     "bash and zsh spell it `declare` as well, ksh93 only `typeset`, which makes the name a dialect's answer rather than an axis",

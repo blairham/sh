@@ -607,6 +607,9 @@ func Semantics() interp.Semantics {
 	s.DeclarationNameOperands = interp.NamesAndSpecialParameters
 	s.UnsetNameOperands = interp.NamesAndPositionals
 	s.DeclarationTakesASubscript = interp.No
+	// The declaration builtins take one: `typeset a[1]=v` sets the element
+	// and reports success, measured.
+	s.TypesetTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
 	// `unset a[@]` replaces the elements with a single empty one, which is
 	// this shell's reading of `unset` on a span rather than a special rule
@@ -1125,6 +1128,11 @@ func Diagnostics() interp.Diagnostics {
 			// issue filed from #1045.
 			"typeset": "not valid in this context: %[2]s",
 			"declare": "not valid in this context: %[2]s",
+			// `integer` names itself in its own refusal here, where ksh93's
+			// calls itself `typeset` — so it is an entry rather than a
+			// rename. Measured: `integer 1x` is
+			// `zsh:integer:1: not an identifier: 1x`.
+			"integer": "not valid in this context: %[2]s",
 		},
 		// An operand that starts with a digit is a different complaint, for
 		// the two that have one. `unset` says the same to both.
@@ -1134,6 +1142,7 @@ func Diagnostics() interp.Diagnostics {
 			"local":    "not an identifier: %[2]s",
 			"typeset":  "not an identifier: %[2]s",
 			"declare":  "not an identifier: %[2]s",
+			"integer":  "not an identifier: %[2]s",
 		},
 		BuiltinBadOptionStatus:    1,
 		PrintfUsage:               "not enough arguments",

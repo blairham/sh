@@ -456,6 +456,10 @@ func Semantics() interp.Semantics {
 	s.DeclarationNameOperands = interp.PlainNamesOnly
 	s.UnsetNameOperands = interp.PlainNamesOnly
 	s.DeclarationTakesASubscript = interp.Yes
+	// The declaration builtins take one as well — `typeset a[1]=v` creates
+	// the element — so this shell gives the two the same answer where bash
+	// splits them.
+	s.TypesetTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
 	// `@` is not a spelling for the whole array here. The brackets hold an
 	// arithmetic expression as they do everywhere else, `@` is not one, and
@@ -924,6 +928,11 @@ func Diagnostics() interp.Diagnostics {
 			// takes readonly's wording rather than export's.
 			"set":   "%[1]s: %[2]s: invalid variable name",
 			"unset": "%[1]s: %[2]s: invalid variable name",
+			// `typeset ':'` and `typeset 1x`, both `invalid variable name`
+			// and both fatal. `integer` reaches this entry rather than one of
+			// its own, because this shell's `integer 1x` calls itself
+			// `typeset` — see BuiltinComplaintName above.
+			"typeset": "%[1]s: %[2]s: invalid variable name",
 		},
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,

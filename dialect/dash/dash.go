@@ -279,6 +279,9 @@ func Semantics() interp.Semantics {
 	s.DeclarationNameOperands = interp.PlainNamesOnly
 	s.UnsetNameOperands = interp.PlainNamesOnly
 	s.DeclarationTakesASubscript = interp.No
+	// No arrays at all, so no subscripted operand is a name to any
+	// declaration here either.
+	s.TypesetTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.

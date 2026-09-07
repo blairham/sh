@@ -873,6 +873,26 @@ type Semantics struct {
 	// because that is the only place it decides anything.
 	RedirectsWriteToEveryTarget Answer
 
+	// NoclobberBlocksAppendCreate makes `set -C` stop `>>` from *creating* a
+	// file, so appending to a name that is not there is a refusal rather
+	// than a new file. Asked only under noclobber, which is the only place
+	// it decides anything.
+	//
+	// POSIX puts noclobber on `>` alone — 2.7.2 makes `>` fail when the file
+	// exists and says nothing about `>>` — so the standard's answer is No,
+	// and it is dash's, bash 5.3's, bash 3.2's and ksh93's: `set -C; echo hi
+	// >> f` on a missing `f` creates it and reports 0 in all five, bash 5.3
+	// under an argv[0] of `sh` included. zsh 5.9.2 is the departure, and
+	// refuses at 1 with `no such file or directory`. Measured 2026-09-07,
+	// with appending to a file that *does* exist as the control: all six
+	// append and report 0.
+	//
+	// It is the reason `>>|` exists. Where this is No the override has
+	// nothing to override, so a dialect that answers Yes here is the only
+	// one for which the append half of syntax.Dialect.ClobberOverrideMarker
+	// is observable — which is why the two were measured and added together.
+	NoclobberBlocksAppendCreate Answer
+
 	// KillStatus is what `kill` reports when it was given several targets
 	// and they did not all agree. Three answers, and no two of them are the
 	// majority:
@@ -4023,6 +4043,9 @@ func PosixSemantics() Semantics {
 	return Semantics{
 		SplitParamExpansion:      Yes,
 		SplitCommandSubstitution: Yes,
+		// 2.7.2 puts noclobber on `>` and says nothing about `>>`, so
+		// appending still creates. Four of the panel comply; zsh departs.
+		NoclobberBlocksAppendCreate: No,
 		// A null field from an unquoted expansion is removed, which is the
 		// reading that takes the elements one at a time — and it is dash's,
 		// the shell in the panel that targets this text. bash's join is the

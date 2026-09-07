@@ -7221,6 +7221,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
 | `redir/file-then-merge` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` |
 | `redir/multios-is-zsh-only` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[x][x]` |
+| `redir/clobber-override-bang` | `[f=one][bang=two f]` | `[f=one][bang=two f]` | `[f=one][bang=two f]` | `[f=one][bang=two f]` | `[f=one][bang=two f]` | `[f=two][bang=]` |
+| `redir/clobber-override-bang-behind-a-descriptor` | `[st=0][f=one][bang=two f]` | `[st=0][f=one][bang=two f]` | `[st=0][f=one][bang=two f]` | `[st=0][f=one][bang=two f]` | `[st=0][f=one][bang=two f]` | `[st=0][f=two][bang=]` |
+| `redir/append-override-bang` | `[st=0][f=][bang=two f]` | `[st=0][f=][bang=two f]` | `[st=0][f=][bang=two f]` | `[st=0][f=][bang=two f]` | `[st=0][f=][bang=two f]` | `[st=0][f=two][bang=]` |
+| `redir/append-override-pipe` | **2>** `<shell>: 1: Syntax error: "\|" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `set -C; echo two >>\| f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `set -C; echo two >>\| f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `\|'~<shell>: -c: line 0: `set -C; echo two >>\| f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `\|' unexpected` *(status 3)* | `[st=0][f=two]` |
+| `redir/append-override-bang-on-a-compound` | **2>** `<shell>: 1: Syntax error: word unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `f'~<shell>: -c: line 1: `set -C; for i in 1 2; do echo $i; done >>! f; printf "[st=%s][f=%s][bang=%s]" "$?" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `f'~<shell>: -c: line 1: `set -C; for i in 1 2; do echo $i; done >>! f; printf "[st=%s][f=%s][bang=%s]" "$?" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `f'~<shell>: -c: line 0: `set -C; for i in 1 2; do echo $i; done >>! f; printf "[st=%s][f=%s][bang=%s]" "$?" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `f' unexpected` *(status 3)* | `[st=0][f=1~2][bang=]` |
+| `redir/noclobber-blocks-an-append-that-creates` | `[st=0][f=hi]` | `[st=0][f=hi]` | `[st=0][f=hi]` | `[st=0][f=hi]` | `[st=0][f=hi]` | `[st=1][f=]` **2>** `<shell>:1: no such file or directory: f` |
+| `redir/noclobber-allows-an-append-to-an-existing-file` | `[st=0][f=hi]` | `[st=0][f=hi]` | `[st=0][f=hi]` | `[st=0][f=hi]` | `[st=0][f=hi]` | `[st=0][f=hi]` |
+| `redir/both-streams-clobber-override-bang` | `[st=127][f=one][bang=]` **2>** `<shell>: 1: f: not found` | `[st=0][f=one][bang=]` | `[st=0][f=one][bang=]` | `[st=0][f=one][bang=]` | `[st=127][f=one][bang=]` **2>** `<shell>: f: not found` | `[st=0][f=][bang=]` |
+| `redir/both-streams-append-override-pipe` | **2>** `<shell>: 1: Syntax error: "\|" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `set -C; echo two &>>\| f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `set -C; echo two &>>\| f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `>\|'~<shell>: -c: line 0: `set -C; echo two &>>\| f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `\|' unexpected` *(status 3)* | `[st=0][f=two]` |
 | `redirect/an-empty-target-is-not-the-working-directory` | `r=2~w=2` **2>** `<shell>: 1: cannot open : No such file~<shell>: 1: cannot create : Directory nonexistent` | `r=1~w=1` **2>** `<shell>: line 1: : No such file or directory~<shell>: line 1: : No such file or directory` | `r=1~w=1` **2>** `<shell>: line 1: : No such file or directory~<shell>: line 1: : No such file or directory` | `r=1~w=1` **2>** `<shell>: : No such file or directory~<shell>: : No such file or directory` | `r=1~w=1` **2>** `<shell>: : cannot open~<shell>: : cannot open` | `r=1~w=1` **2>** `<shell>:1: no such file or directory: ~<shell>:1: no such file or directory: ` |
 | `heredoc/a-side-effect-in-a-body-fed-to-a-program` | `u=zz` | `u=UNSET` | `u=UNSET` | `u=UNSET` | `u=UNSET` | `u=UNSET` |
 | `heredoc/a-side-effect-in-a-body-fed-to-a-builtin` | `u=zz` | `u=zz` | `u=zz` | `u=zz` | `u=zz` | `u=zz` |
@@ -7563,7 +7572,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   read -r l <&""; echo "after st=$?"
   ```
-- `redir/noclobber-refuses-both-streams-to-one-file` — `set -C` refuses this truncation exactly as it refuses a plain `>`, unanimously and each in its own words — and unlike `>` there is no override spelling to exempt, because `>|&` is a syntax error in all six. A command with no output on purpose: the two shells that have no `&>` read the line as a background `true` and a bare `>qq`, and anything the job printed would arrive against the clock
+- `redir/noclobber-refuses-both-streams-to-one-file` — `set -C` refuses this truncation exactly as it refuses a plain `>`, unanimously and each in its own words. The override, where there is one, is spelled after the whole operator rather than inside it — `>|&` is a syntax error in all six, but `&>|` and `&>!` are not, and one column reads both, which is redir/both-streams-clobber-override-bang. A command with no output on purpose: the two shells that have no `&>` read the line as a background `true` and a bare `>qq`, and anything the job printed would arrive against the clock
   ```sh
   set -C; : > qq; true &>qq; echo "st=$?"
   ```
@@ -7578,6 +7587,42 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/multios-is-zsh-only` — zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection: one spelling, two meanings, and no diagnostic to tell them apart
   ```sh
   echo x >a >b; printf "[%s][%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"
+  ```
+- `redir/clobber-override-bang` — the discriminating pair for the `!` spelling of the clobber override, with both files read back because the exit status cannot tell them apart: zsh truncates the file that was named, and the other five write a file whose name is the single character `!` holding `two f` and report 0 — the same text, two meanings, no diagnostic (#1247)
+  ```sh
+  set -C; echo one > f; echo two >! f; printf "[f=%s][bang=%s]" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"
+  ```
+- `redir/clobber-override-bang-behind-a-descriptor` — the same override with an explicit descriptor in front of it, which is where a redirection's operator is easiest to lose: the number binds to the operator and the marker still belongs to it
+  ```sh
+  set -C; echo one > f; echo two 1>! f; printf "[st=%s][f=%s][bang=%s]" "$?" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"
+  ```
+- `redir/append-override-bang` — the shape a real plugin tree writes its log with. zsh creates the file it named; the other five create `!` and report 0, so a script that logs this way gets success and no log and nothing downstream can see it (#1247)
+  ```sh
+  set -C; echo two >>! f; printf "[st=%s][f=%s][bang=%s]" "$?" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"
+  ```
+- `redir/append-override-pipe` — the same override spelled with the marker `>|` uses, and the other half of the fallback story: a `|` marker falls back to a pipe with nothing on its left, so this one is a syntax error in the five rather than a silent second meaning
+  ```sh
+  set -C; echo two >>| f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"
+  ```
+- `redir/append-override-bang-on-a-compound` — the operator on a compound command rather than a simple one, which is the shape found in the wild — and where the fallback stops being silent: `done >>! f` leaves `f` as a word after the compound, which the five refuse outright
+  ```sh
+  set -C; for i in 1 2; do echo $i; done >>! f; printf "[st=%s][f=%s][bang=%s]" "$?" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"
+  ```
+- `redir/noclobber-blocks-an-append-that-creates` — POSIX 2.7.2 puts noclobber on `>` alone, and five of the panel comply: appending to a name that is not there creates it. zsh puts the option on `>>` as well and refuses. This is the refusal `>>|` and `>>!` exist to override, so without it the override is unobservable
+  ```sh
+  set -C; echo hi >> f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"
+  ```
+- `redir/noclobber-allows-an-append-to-an-existing-file` — the control for the row above: noclobber never stops an append to a file that is already there, unanimously — so the divergence is about creating and not about appending
+  ```sh
+  set -C; : > f; echo hi >> f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"
+  ```
+- `redir/both-streams-clobber-override-bang` — the marker reaches `&>` too in the one dialect that has it, which corrects what the row on refusing both streams to one file implies: `>|&` is a syntax error in all six, but `&>|` and `&>!` are not. A command with no output on purpose, because the two shells with no `&>` read the line as a background job
+  ```sh
+  set -C; echo one > f; true &>! f; printf "[st=%s][f=%s][bang=%s]" "$?" "$(cat f 2>/dev/null)" "$(cat ./! 2>/dev/null)"
+  ```
+- `redir/both-streams-append-override-pipe` — the fourth operator the marker attaches to, and a refusal everywhere else — bash 3.2 names `>|` as the token it did not expect where bash 5.3 names `|`, which is the same grammar reached from two directions
+  ```sh
+  set -C; echo two &>>| f; printf "[st=%s][f=%s]" "$?" "$(cat f 2>/dev/null)"
   ```
 - `redirect/an-empty-target-is-not-the-working-directory` — an empty target names no file, and the same rule the file tests need: joining it onto the working directory opens the *directory*, so the read succeeds and the complaint arrives from the command as `Is a directory` rather than from the shell. Every shell in the panel refuses to open the name — with four wordings and two statuses, so the case pins the wording too
   ```sh

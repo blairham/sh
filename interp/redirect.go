@@ -254,17 +254,36 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 
 		var flags int
 		switch op {
-		case syntax.TokGreat, syntax.TokClobber:
+		case syntax.TokGreat, syntax.TokClobber, syntax.TokClobberBang:
 			flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 			if r.noclobber && op == syntax.TokGreat {
 				// Under `set -C` a plain `>` refuses to truncate a file that
 				// already exists. `>|` is the documented override, and is
 				// the one operator on this list that means the same thing in
-				// every shell measured.
+				// every shell measured; `>!` is that same override in its
+				// other spelling rather than a second operator, and which
+				// spellings exist was settled by the grammar flag long before
+				// the token arrived here.
 				flags |= os.O_EXCL
 			}
-		case syntax.TokDGreat:
+		case syntax.TokDGreat, syntax.TokDGreatClobber, syntax.TokDGreatBang:
 			flags = os.O_WRONLY | os.O_CREATE | os.O_APPEND
+			if op == syntax.TokDGreat {
+				// One dialect puts noclobber on `>>` as well: appending to a
+				// name that is not there is a refusal rather than a new file.
+				// Dropping O_CREATE is the whole of it — the open then fails
+				// with ENOENT and the ordinary cannot-create wording says
+				// what happened, which is what that dialect prints. `>>|` and
+				// `>>!` are the override, and keep the flag.
+				blocks, unanswered := r.noclobberBlocksAppend()
+				if unanswered {
+					r.redirErr = true
+					return closers, nil
+				}
+				if blocks {
+					flags &^= os.O_CREATE
+				}
+			}
 		case syntax.TokLess:
 			flags = os.O_RDONLY
 		case syntax.TokLessGreat:
@@ -273,18 +292,39 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// held. Unanimous and POSIX, and with no descriptor number it
 			// is standard input, exactly as a plain `<` is.
 			flags = os.O_RDWR | os.O_CREATE
-		case syntax.TokAmpGreat, syntax.TokAmpDGreat:
-			// Both streams to one file.
+		case syntax.TokAmpGreat, syntax.TokAmpGreatClobber, syntax.TokAmpGreatBang,
+			syntax.TokAmpDGreat, syntax.TokAmpDGreatClobber, syntax.TokAmpDGreatBang:
+			// Both streams to one file, and the override marker reaches these
+			// two operators as well in the one dialect that has it: `&>|`,
+			// `&>!`, `&>>|` and `&>>!` are the same exemption `>|` is.
+			appending := op == syntax.TokAmpDGreat ||
+				op == syntax.TokAmpDGreatClobber || op == syntax.TokAmpDGreatBang
 			flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-			if op == syntax.TokAmpDGreat {
+			switch {
+			case appending:
 				flags = os.O_WRONLY | os.O_CREATE | os.O_APPEND
-			} else if r.noclobber {
+				if op == syntax.TokAmpDGreat {
+					// The same axis: `&>>` is an append, and the dialect that
+					// puts noclobber on `>>` puts it here too.
+					blocks, unanswered := r.noclobberBlocksAppend()
+					if unanswered {
+						r.redirErr = true
+						return closers, nil
+					}
+					if blocks {
+						flags &^= os.O_CREATE
+					}
+				}
+			case op == syntax.TokAmpGreat && r.noclobber:
 				// `set -C` refuses this truncation exactly as it refuses a
 				// plain `>`, and unanimously: `set -C; : > f; echo hi &> f`
 				// is a refusal in all six of the panel, each in its own
-				// words. There is no override spelling to exempt — `>|&` is
-				// a syntax error in every one of them — so unlike `>` this
-				// needs no operator to ask about.
+				// words. The override is spelled after the whole operator
+				// rather than inside it — `>|&` is a syntax error in all six,
+				// which is what the corpus first recorded and then
+				// over-generalized — but `&>|` and `&>!` are not, so the
+				// exemption is a token of its own and lands on the cases
+				// beside this one.
 				flags |= os.O_EXCL
 			}
 			fd = -1
@@ -1060,6 +1100,27 @@ func (f GreatAmpTargetForm) String() string {
 		return "GreatAmpTargetNamesAnyFile"
 	}
 	return "GreatAmpTargetUnspecified"
+}
+
+// noclobberBlocksAppend reports whether `set -C` stops an append from
+// creating a file, and whether the axis had no answer to give.
+//
+// Asked only under noclobber, which is the only place the axis decides
+// anything: a shell that clobbers freely must not be made to answer a
+// question about a refusal it never reaches, and an unanswered axis refuses.
+// `>>` is the commonest redirection there is, so asking it unconditionally
+// would make a Runner built from a bare Semantics unable to append at all.
+//
+// The second result is read from the axis rather than from r.unspecified,
+// which is sticky: a caller that tested the flag would refuse an operator it
+// never asked about as soon as anything earlier had left it set.
+func (r *Runner) noclobberBlocksAppend() (blocks, unanswered bool) {
+	if !r.noclobber {
+		return false, false
+	}
+	a := r.sem().NoclobberBlocksAppendCreate
+	blocks = r.ask(a, "whether noclobber stops an append from creating a file")
+	return blocks, a == Unspecified
 }
 
 // isDescriptorSpec says the word after `>&` or `<&` is asking for a

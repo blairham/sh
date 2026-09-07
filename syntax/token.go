@@ -58,11 +58,23 @@ const (
 	TokGreatAmp  // >&
 	TokLessGreat // <>
 	TokClobber   // >|
-	TokDLess     // <<
-	TokDLessDash // <<-
-	TokTLess     // <<<  herestring
-	TokAmpGreat  // &>   both streams
-	TokAmpDGreat // &>>  both streams, appending
+	// The clobber-override marker in its other spellings. Core has `|` on
+	// `>` alone; one dialect takes `|` or `!` after any of the four write
+	// operators, which is [Dialect.ClobberOverrideMarker] and these seven
+	// tokens. Each is its own kind because the printer writes a redirection
+	// back with the spelling it was read with.
+	TokClobberBang      // >!
+	TokDGreatClobber    // >>|
+	TokDGreatBang       // >>!
+	TokAmpGreatClobber  // &>|
+	TokAmpGreatBang     // &>!
+	TokAmpDGreatClobber // &>>|
+	TokAmpDGreatBang    // &>>!
+	TokDLess            // <<
+	TokDLessDash        // <<-
+	TokTLess            // <<<  herestring
+	TokAmpGreat         // &>   both streams
+	TokAmpDGreat        // &>>  both streams, appending
 )
 
 // text is the source spelling of each operator, and the table the lexer
@@ -75,7 +87,11 @@ var text = map[Kind]string{
 	TokSemiPipe:  ";|",
 	TokLeftParen: "(", TokRightParen: ")",
 	TokLess: "<", TokGreat: ">", TokDGreat: ">>", TokLessAmp: "<&", TokGreatAmp: ">&",
-	TokLessGreat: "<>", TokClobber: ">|", TokDLess: "<<", TokDLessDash: "<<-",
+	TokLessGreat: "<>", TokClobber: ">|", TokClobberBang: ">!",
+	TokDGreatClobber: ">>|", TokDGreatBang: ">>!",
+	TokAmpGreatClobber: "&>|", TokAmpGreatBang: "&>!",
+	TokAmpDGreatClobber: "&>>|", TokAmpDGreatBang: "&>>!",
+	TokDLess: "<<", TokDLessDash: "<<-",
 	TokTLess: "<<<", TokAmpGreat: "&>", TokAmpDGreat: "&>>",
 }
 
@@ -106,6 +122,8 @@ func (k Kind) String() string {
 func (k Kind) IsRedirect() bool {
 	switch k {
 	case TokLess, TokGreat, TokDGreat, TokLessAmp, TokGreatAmp, TokLessGreat, TokClobber,
+		TokClobberBang, TokDGreatClobber, TokDGreatBang,
+		TokAmpGreatClobber, TokAmpGreatBang, TokAmpDGreatClobber, TokAmpDGreatBang,
 		TokDLess, TokDLessDash, TokTLess, TokAmpGreat, TokAmpDGreat:
 		return true
 	}

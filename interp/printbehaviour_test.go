@@ -82,7 +82,9 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 // layout-sensitive: ParamIndirection (8 cases), Coproc (3), CaseContinue,
 // CoprocName and PipeBothStreams (2 each), ExtendedPatternInCondition and
 // FunctionKeywordParens (1 each) — 19 between them, which is what the plain
-// core cannot read. The
+// core cannot read. ClobberOverrideMarker is an eighth, and three of its
+// cases are the same kind: `>>|`, `&>>|` and `>>!` after a compound are text
+// the core reads as a pipe or a stray word rather than as a redirection. The
 // rest change what a case *means* rather than whether it parses, and they are
 // here because the printer should be exercised on those meanings rather than
 // on whatever a narrower reading turns them into.
@@ -96,6 +98,7 @@ func corpusGrammar() syntax.Dialect {
 	// given on purpose: the corpus records both spellings, and a reading
 	// dialect narrow enough to be a shell could not read all of it.
 	d.CaseContinuePipe = true
+	d.ClobberOverrideMarker = true
 	d.Coproc = true
 	d.CoprocName = true
 	d.CurrentShellSubstitution = true

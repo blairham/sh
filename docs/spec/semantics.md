@@ -904,6 +904,72 @@ status, so the behavioral score counts them as agreeing and every other
 view calls it wording. A shell that writes to the wrong file is not a
 wording difference.
 
+## The clobber-override marker, and the refusal it overrides
+
+`>|` truncates a file that `set -C` would otherwise protect, and every
+column in the panel reads it the same way. One column generalizes it: the
+marker may be `|` **or** `!`, and it may follow any of the four write
+operators rather than `>` alone. Measured 2026-09-07 against `/bin/dash`,
+`/opt/homebrew/bin/bash` 5.3.15, that binary under an argv[0] of `sh`,
+`/bin/bash` 3.2.57, `/bin/ksh` 93u+ and `/opt/homebrew/bin/zsh` 5.9.2:
+
+| written | five columns | zsh 5.9.2 |
+| --- | --- | --- |
+| `>\|` | truncates the named file | the same |
+| `>!` | **a file named `!`** | truncates the named file |
+| `>>\|` | syntax error at the `\|` | appends, creating |
+| `>>!` | **a file named `!`** | appends, creating |
+| `&>\|` | syntax error, where `&>` exists | truncates |
+| `&>!` | **a file named `!`** | truncates |
+| `&>>\|` | syntax error, where `&>` exists | appends, creating |
+| `&>>!` | **a file named `!`** | appends, creating |
+
+It moves as one thing — no column takes some spellings and refuses others —
+so it is one grammar flag, `ClobberOverrideMarker`, and not seven.
+
+The bold cells are the reason it is a flag rather than something the lexer
+could simply learn. **The two fallbacks are not the same kind of thing.** A
+`\|` marker falls back to a pipe with nothing on its left, so the five
+*refuse* the text and say so. A `!` marker falls back to an ordinary word,
+so `echo hi >! f` writes a file whose name is the single character `!`,
+holding `hi f`, and reports 0. One spelling, two meanings, no diagnostic:
+the `&>` shape a third time, and accepting the union here would quietly pick
+one dialect's reading for text that legitimately has the other.
+
+That silence is what made it a bug for as long as it was one. The shell
+under test read `>>!` exactly as the five do and was therefore *correct for
+the core* while being wrong for the dialect that was asking — status 0, a
+file created, and not the file that was named (#1247). It shows up in a
+parse sweep only on a compound, where `done >>! f` leaves `f` as a word
+after the loop and is refused; on a simple command nothing is refused and
+nothing is said.
+
+### Noclobber on an append is a separate answer
+
+The append override has nothing to override unless `set -C` stops `>>` from
+creating a file, and there the panel splits five to one:
+
+    set -C; echo hi >> f        f absent
+
+    dash, bash 5.3, bash-as-sh, bash 3.2, ksh93 → status 0, f created
+    zsh                                         → status 1, f absent,
+                                                   `no such file or directory: f`
+
+Appending to a file that *does* exist is the control and is unanimous: all
+six append and report 0. So the divergence is about **creating**, not about
+appending.
+
+POSIX 2.7.2 puts noclobber on `>` and says nothing about `>>`, which makes
+this one of the few axes the standard answers outright: `PosixSemantics`
+says No, five columns comply, and zsh is the departure. It is the
+`NoclobberBlocksAppendCreate` axis, asked only under noclobber — `>>` is the
+commonest redirection there is, and an unanswered axis refuses, so asking it
+unconditionally would leave a bare `Semantics` unable to append at all.
+
+The two halves are recorded together because neither is testable alone:
+where the axis says No, `>>|` and `>>` do the same thing and nothing can
+tell them apart.
+
 ## Wording is a third kind of answer
 
 `Diagnostics` began as one number and now carries what a shell *says*. The

@@ -53,6 +53,12 @@ func corpusDialect() syntax.Dialect {
 	// take the operator and the corpus records what the other two say about
 	// it, so the grammar that reads every case has to have it.
 	d.PipeBothStreams = true
+	// `>!`, `>>|`, `>>!` and the same four behind `&>` — the
+	// clobber-override marker in its other spellings. One of the six columns
+	// reads them and the corpus records what the other five do instead,
+	// which for the `|` spellings is a syntax error, so the grammar that has
+	// to read every case is the one that takes them.
+	d.ClobberOverrideMarker = true
 	return d
 }
 

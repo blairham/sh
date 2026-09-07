@@ -234,6 +234,14 @@ func Dialect() syntax.Dialect {
 	// are reached with `print -p` and `read -p` rather than through an array,
 	// which is CoprocEndsInAnArray rather than a grammar flag.
 	d.Coproc = true
+	// The clobber-override marker generalized: `|` or `!`, after any of the
+	// four write operators. Measured 2026-09-07 — all seven of `>!`, `>>|`,
+	// `>>!`, `&>|`, `&>!`, `&>>|` and `&>>!` write the file they name here,
+	// and none of the other five columns reads any of them. The `!` half is
+	// the one to keep in mind: there `echo hi >! f` writes a file called `!`
+	// holding `hi f` and reports success, so the spelling is not an error
+	// elsewhere but a different meaning (#1247).
+	d.ClobberOverrideMarker = true
 	return d
 }
 
@@ -246,6 +254,13 @@ func Semantics() interp.Semantics {
 	// name a` keeps the shell in `$0` and makes both operands parameters.
 	// bash and dash let the command string name them instead.
 	s.StdinOptionNamesTheOperands = interp.Yes
+	// noclobber reaches `>>` here as well as `>`: appending to a file that is
+	// not there is `no such file or directory` at 1 rather than a new file,
+	// where POSIX puts the option on `>` alone and the other five columns
+	// comply. Measured 2026-09-07 with an append to an *existing* file as
+	// the control, which all six allow. It is what `>>|` and `>>!` are for
+	// (#1247).
+	s.NoclobberBlocksAppendCreate = interp.Yes
 	// The reading side of the same option: zsh's short spelling of noglob
 	// is `-F`, and that capital is what its `$-` reports.
 	s.NoglobLetterIsF = interp.No

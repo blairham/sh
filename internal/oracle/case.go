@@ -10528,6 +10528,24 @@ echo "read=[$l]"`,
 		Why:     "the escape family a *script* reads through the prompt language, and the row that says a script can read it at all: `%F` sets the foreground, `%f` resets it, `%K`/`%k` are the background pair, and the three arguments take three branches of the terminal's arithmetic — a name, an index above the bright eight, and a background. Recorded through `od` because the answer is escape sequences and a table of rendered bytes would show none of them. **`TERM` is named because the answer depends on it**: measured, `%F{196}` is `\\e[38;5;196m` under a 256-color terminal and `\\e[39m` — the default — under an 8-color one, which is a fact about the terminal rather than about the escape and is why the case says which terminal it asked. zsh alone has `print -P`; the other four have no `print` or refuse the letter",
 	},
 	{
+		ID: "print/a-direct-color-prompt-escape", Category: "builtins",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `print -rP '%F{#ff8800}a%F{#abc}b%K{#F0F}c%k%f' | od -An -c | tr -s ' '; echo "st=$?"`,
+		Why:     "the color spelling that is neither a name nor an index: `#rrggbb` and its three-digit form, which the terminal takes as a direct color — `38;2;r;g;b` — rather than as a position in a palette. Each digit of the short form is doubled, so `#abc` is 170, 187, 204 and not 10, 11, 12. Worth its own row because it is the one color spelling that does *not* depend on how many colors the terminal claims: measured, it draws the same bytes under `TERM=dumb` as under a 256-color terminal, where `%F{196}` does not",
+	},
+	{
+		ID: "print/a-color-prompt-escape-with-an-argument-that-is-not-one", Category: "builtins",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `for a in bogus Red 256 -1 grey x9 '#0' '#00g'; do print -rnP "%F{$a}"; done | od -An -c | tr -s ' '; for a in '' - , ' ' 0x9 '#' '#ggg'; do print -rnP "%F{$a}"; done | od -An -c | tr -s ' '; echo "st=$?"`,
+		Why:     "what an *invalid* color draws, and the row that says there are two answers rather than one. The first eight arguments draw the default — the same `\\e[39m` that `%f` gives — and the seven on the second line draw the **first color**, `\\e[30m`, because a name that is no prefix of one of the eight is malformed where a string with no digits at the front of it is nought. An implementation with one answer for both passes half of this row and is a visibly wrong color on the other half, at status 0",
+	},
+	{
+		ID: "print/a-color-prompt-escape-names-match-by-prefix", Category: "builtins",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `for a in r re red b bl blu w 'red,bold' 'red bold'; do print -rnP "%F{$a}"; done | od -An -c | tr -s ' '; echo "st=$?"`,
+		Why:     "the surprise in the color names, and the two halves of it: a name matches by **prefix**, so `re` is red and `w` is white, and an ambiguous prefix takes the *first* of the eight in the order the terminal numbers them, so `b` and `bl` are black rather than blue. The name also ends at the first character that is not a letter, which is why `red,bold` and `red bold` are both plain red. Exact names alone would answer three of these nine and draw no color for the rest",
+	},
+	{
 		ID: "print/a-prompt-escape-whose-braces-are-a-time-format", Category: "builtins",
 		Snippet: `print -rP '[%D{%Y}]'; print -rP '[%W]' | tr -c '
 ' x; echo "st=$?"`,

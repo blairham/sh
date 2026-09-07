@@ -95,6 +95,50 @@ Every parse failure is fatal and names the line. There is no recovery
 and no "unknown directive ignored": an unrecognized word is a typo in a
 security file, and continuing past it would silently drop a rule.
 
+### Which rule decides: a deny wins, and order does not matter
+
+**Any rule that denies the action decides it.** Every rule whose selector covers
+the action and whose pattern matches the path is consulted; if one of them says
+`deny`, the answer is deny. An `allow` cannot rescue a path some `deny` matched,
+whichever order the two are written in.
+
+That is a deliberate choice rather than an implementation accident, and the
+reason is **composition**: concatenating two policies has to allow only what both
+allow, and no order-dependent precedence has that property. A last-match-wins
+rule would mean appending a file could *widen* a policy, which is the wrong
+direction for a security artifact that people assemble from parts.
+
+So an allowlist is written with `default deny` and narrow `allow` rules, and with
+**no broad deny at all**:
+
+```
+version 1
+default deny exec
+allow exec /bin/echo
+```
+
+That runs `/bin/echo` and refuses every other program.
+
+The shape that does **not** work — and this is the one a reader reaches for
+first, so it is worth naming — is a broad deny with a narrow allow beside it:
+
+```
+version 1
+default allow
+deny exec /**          # matches /bin/echo too
+allow exec /bin/echo   # cannot rescue it, in either order
+```
+
+Both lines match `/bin/echo`, the deny decides, and the allow does nothing. The
+rules are read as a set, so moving the `allow` above the `deny` changes nothing
+either.
+
+**The refusal reads the same in both cases.** `exec: refused: /bin/echo` is what
+an intentionally denied path and a mis-written allowlist both produce, so a
+policy that refuses more than its author meant looks exactly like one working
+correctly. That is a known sharp edge; the diagnostic does not yet name the rule
+that decided.
+
 ### Selectors
 
 A selector names a set of the action kinds `interp` defines. The

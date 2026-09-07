@@ -8329,6 +8329,31 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the same arm with its optional paren written as well, and **no `#` anywhere in it** — which is what says this half is not about the flag's spelling at all. Two parens where no command may begin were read as an arithmetic command here, and `parse error near 'arithmetic command'` is a complaint about something the script never wrote. zsh takes it as the arm's paren in front of an alternation group and matches `b`; bash, dash and ksh93 all refuse it, so this is the one row of the family that separates zsh from the whole rest of the panel (#1161)",
 	},
 	{
+		ID: "pat/a-case-arms-leading-paren-may-be-the-patterns", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case ab in (ab|cd)) echo hit;; *) echo miss;; esac; case xy in (ab|cd)) echo hit;; *) echo miss;; esac`,
+		Why:     "the sibling of `a-case-arms-own-paren-in-front-of-a-group` with the parens the other way round: no arm paren at all, the group *is* the pattern, and the `)` behind it is the arm's. Filed as the POSIX optional leading `(` and it is not — that shape is `case ab in (ab|cd)` with one `)`, which every column takes and which we already took. Five of the six refuse this one, so it is one dialect's and not core (#1218)",
+	},
+	{
+		ID: "pat/a-case-arms-pattern-group-may-carry-text", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case ab in (a)b) echo hit;; *) echo miss;; esac; case a in (a)b) echo hit;; *) echo miss;; esac; case ax in (a|b)x) echo hit;; *) echo miss;; esac; case ab in (a)*) echo hit;; *) echo miss;; esac`,
+		Why:     "the row that makes the reading *observable*. A group and a two-element pattern list match exactly the same subjects, so `(a|b))` cannot say which of the two readings a shell chose — only a group with pattern text attached can, and `(a)b` matches `ab` where the list `a`,`b` would match neither. Written with three shapes and two subjects for the first because one subject cannot fail the wrong way",
+	},
+	{
+		ID: "pat/a-case-arms-pattern-list-of-groups", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case a in (a|b)|(c|d)) echo hit;; *) echo miss;; esac; case c in (a|b)|(c|d)) echo hit;; *) echo miss;; esac; case x in (a|b)|(c|d)) echo hit;; *) echo miss;; esac`,
+		Why:     "a whole list of groups rather than one, which is a separate read: the second alternative is reached after the first has been taken as a word, and while argument position was set only on the branch that consumed an arm paren, a list whose first pattern was a group left the rest of it in command position and answered `parse error near '|'`. A subject for each alternative and one outside both",
+	},
+	{
+		ID: "pat/an-alternative-written-as-nothing-after-a-group", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case a in (a|b)|) echo hit;; *) echo miss;; esac; case "" in (a|b)|) echo hit;; *) echo miss;; esac; case x in (a|b)|) echo hit;; *) echo miss;; esac`,
+		Why:     "a `|` standing after the group settles which paren was whose on its own, and this is the row that says so: were the leading `(` the arm's, everything to the matching `)` would already be inside its pattern list and that `)` would have closed the arm, so a `|` behind it could only begin a body and no body begins with one. Which means there need not be a *word* after it — this shell writes an alternative as nothing — and the empty subject matching is what separates the reading from a shell that merely tolerated the character. Found by mutation rather than by a script: requiring a word there was wrong on five rows, four of them refusals whose position moved",
+	},
+	{
+		ID: "pat/a-case-arm-needs-a-paren-left-to-close-it", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case ab in (a) b) echo hit;; *) echo miss;; esac; echo after`,
+		Why:     "the discriminating half, and the shape a rule that always gave the leading `(` to the pattern would get wrong. The blank stops the group from going on being a word, so only the arm reading is left — and it then finds `b` where the arm's `)` belongs. Refused in all six, including the shell that takes every row above it, which is what says the choice is about what follows the list and not about the parenthesis",
+	},
+	{
 		ID: "pat/a-case-arms-paren-in-front-of-an-expression", Category: "pattern matching", SyntaxError: true,
 		Snippet: `case 1 in ((1)) echo hit;; *) echo miss;; esac`,
 		Why:     "the same shape with no pattern language in it whatsoever, which is the row that pins *why* the arithmetic reading was wrong rather than merely that it was: `((1))` is a perfectly good expression anywhere a command may begin, and an arm is not one of those places. The control for it is `case x in a) ((1));; esac`, where an arm's **body** is ordinary commands and the expression really is one — a suspension left on for the body would have broken that instead",

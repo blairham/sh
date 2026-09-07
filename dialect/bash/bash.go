@@ -598,6 +598,12 @@ func Semantics() interp.Semantics {
 	// expands to nothing, which is the other four columns' answer too, so the
 	// difference only shows where a script asked to be told.
 	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.Yes
+	// A job started with `&` reads an empty standard input, not the shell's:
+	// measured 2026-09-07, `bash -c '/bin/cat & wait; echo ---; /bin/cat' < f`
+	// writes `---` and then the file's line, in 5.3.15 and 3.2.57 alike. What
+	// POSIX XCU 2.9.3 specifies, and what keeps the script's own `read` from
+	// losing the lines a background job would otherwise eat.
+	s.BackgroundJobInput = interp.BackgroundJobInputEmpty
 	// And it reads as nothing rather than as a zero: measured,
 	// `echo "[$!]"` writes `[]` in all three bash columns. Stated rather
 	// than left unanswered — the field is read without asking, so unanswered

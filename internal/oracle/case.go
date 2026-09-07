@@ -2842,6 +2842,17 @@ echo "st=$?"`,
 		Why:     "what the row above costs, recorded rather than left to be found. A real shell forks and knows the child's process id before the body runs, so a loop that ends after one pass takes nothing from `$!`; this shell learns a job's process from the first program the job starts, and a job standing at the back edge of a loop whose end cannot be seen has started none — so it settles on `0` here where all five name a process. A bounded computation written as a conditional loop is the shape that pays it, and the alternative was a shell that never returned at all. The pid itself cannot be recorded, so the case asks only which of the three answers it is",
 	},
 	{
+		ID: "jobs/a-background-jobs-standard-input", Category: "builtins",
+		Snippet: `/bin/cat & wait; echo "---"; /bin/cat`,
+		Stdin:   "DATA\n",
+		Why:     "which descriptor a `&` job is handed, asked so the two answers come out in opposite orders (#1287): the same standard input is read once by the job and once by the script, so a shell that hands the job an empty stream prints the marker and then the line, and one that hands over its own prints the line first because the job ate it. Five of the six do the former and POSIX XCU 2.9.3 specifies it — a background command's standard input \"shall be assigned to an empty file or /dev/null\" while job control is off — and zsh alone diverges. The trailing read is the control: it must produce the line under the majority answer, which is what proves the descriptor was live rather than merely empty. The loop `while read -r line; do process \"$line\" & done < input.txt` is the shape that loses data here, silently and at 0",
+	},
+	{
+		ID: "jobs/a-background-jobs-standard-input-when-the-script-closed-it", Category: "builtins",
+		Snippet: `exec 0<&-; /bin/cat 2>e & wait "$!"; echo "st=$?"; test -s e && echo diagnosed || echo silent`,
+		Why:     "the same question asked of an input that is not there, and it splits the five that substitute: dash and every bash replace a *closed* descriptor with the empty stream too and the job succeeds in silence, while ksh93 substitutes only what it can dup and the job meets EBADF — the same answer zsh gives for the different reason that it never substitutes at all. So it is one axis with three values rather than a switch, and the row is what holds the third down. The complaint is counted rather than printed because its wording belongs to whatever /bin/cat is on the machine, and the status is read through `wait \"$!\"` because a bare `wait` reports 0 whatever the job did",
+	},
+	{
 		ID: "jobs/wait-brings-a-background-job-back-before-the-shell-ends", Category: "builtins",
 		Snippet: `(sleep 0.2; echo LATE-42) & wait; echo NOW-42`,
 		Why:     "the same job with a `wait` in front of the ending, which every shell including this one gets right and which is the workaround the row above leaves a script needing. It is the pair that says the loss is about the shell *ending*, not about the job: nothing is wrong with the job while there is still a shell to run it",

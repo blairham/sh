@@ -601,6 +601,15 @@ func Semantics() interp.Semantics {
 	// but the two are separate answers: bash refuses both and dash refuses
 	// both, while zsh refuses `$1` and not `$!`.
 	s.LastBackgroundPidIsUnsetBeforeAnyJob = interp.No
+	// A job started with `&` reads an empty standard input, not the shell's:
+	// measured 2026-09-07, `ksh -c '/bin/cat & wait; echo ---; /bin/cat' < f`
+	// writes `---` and then the file's line on ksh93u+. POSIX XCU 2.9.3.
+	//
+	// `UnlessClosed` and not the plain answer, which is this column's alone
+	// among the four that substitute: `exec 0<&-; /bin/cat & wait` is silent
+	// at 0 in dash and bash and `cat: stdin: Bad file descriptor` here. What
+	// it cannot dup it leaves alone, so a closed fd 0 reaches the job closed.
+	s.BackgroundJobInput = interp.BackgroundJobInputEmptyUnlessClosed
 	// And it reads as nothing rather than as a zero: `echo "[$!]"` is `[]`,
 	// which is what makes ksh93's empty a *set* parameter with no value where
 	// zsh's is a value.

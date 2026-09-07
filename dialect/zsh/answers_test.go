@@ -103,6 +103,9 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.UnterminatedBracket, interp.BracketBadPattern; got != want {
 		t.Errorf("UnterminatedBracket = %v, want %v", got, want)
 	}
+	if got, want := s.BackgroundJobInput, interp.BackgroundJobInputIsTheShells; got != want {
+		t.Errorf("BackgroundJobInput = %v, want %v", got, want)
+	}
 	if got, want := s.ExitArgument, interp.ExitArgLenient; got != want {
 		t.Errorf("ExitArgument = %v, want %v", got, want)
 	}

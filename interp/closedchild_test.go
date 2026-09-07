@@ -4,8 +4,13 @@
 package interp_test
 
 import (
+	"bytes"
+	"context"
 	"strings"
 	"testing"
+
+	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // A closed descriptor and an empty one are different things, and the child is
@@ -71,23 +76,47 @@ func TestAPerCommandCloseReachesAnExternalCommand(t *testing.T) {
 	}
 }
 
-// The marker has to survive the guards a background job and a pipeline put
-// over the shell's streams. Those wrap anything that is not a real file, so
-// that two children copying from one caller's stream do not race — and a
-// wrapped closedFd is an ordinary stream again, which puts the pipe back.
+// The marker has to survive the guard a background job puts over the shell's
+// input. That wraps anything that is not a real file, so that two children
+// copying from one caller's stream do not race — and a wrapped closedFd is an
+// ordinary stream again, which puts the pipe back.
 //
-// Both directions, because the two guards are two functions: the reading one
-// is the only route lockedStdin is on, and the writing one is lockWriter's.
-// The status is asserted exactly for the reason the rows above assert it:
-// a job whose child was handed a pipe still fails, at 126 and for the shell's
-// own reason, which is not the failure being pinned.
+// Asked under the two answers that hand the job the descriptor at all, because
+// a `&` job's standard input is itself an axis (#1287): dash and bash replace
+// it with an empty stream whatever it was, so there is no marker left to
+// survive anything, and ksh93 and zsh reach the job with the closed descriptor
+// in hand. The status is asserted exactly for the reason the rows above assert
+// it: a job whose child was handed a pipe still fails, at 126 and for the
+// shell's own reason, which is not the failure being pinned.
 func TestAClosedStreamStaysClosedThroughABackgroundJobsInputGuard(t *testing.T) {
-	out, errOut, _ := runSplit(t, `exec 0<&-; /bin/cat & wait "$!"; echo "st=$?"`)
-	if out != "st=1\n" {
-		t.Errorf("stdout = %q, want exactly st=1; stderr %q", out, errOut)
+	for _, answer := range []BackgroundJobInputPolicy{
+		BackgroundJobInputEmptyUnlessClosed,
+		BackgroundJobInputIsTheShells,
+	} {
+		out, errOut, _ := runSplitWithBackgroundInput(t,
+			`exec 0<&-; /bin/cat & wait "$!"; echo "st=$?"`, answer)
+		if out != "st=1\n" {
+			t.Errorf("%v: stdout = %q, want exactly st=1; stderr %q", answer, out, errOut)
+		}
+		if errOut == "" {
+			t.Errorf("%v: the background command said nothing about a descriptor it could not read", answer)
+		}
 	}
-	if errOut == "" {
-		t.Error("the background command said nothing about a descriptor it could not read")
+}
+
+// And the control that makes the row above a measurement of the guard rather
+// than of the axis: the answer that substitutes an empty stream reads
+// end-of-file and says nothing, which is what dash and bash do — measured
+// 2026-09-07, `exec 0<&-; /bin/cat & wait` is silent at 0 there and
+// `cat: stdin: Bad file descriptor` in ksh93u+ and zsh 5.9.2.
+func TestABackgroundJobsEmptyInputReplacesEvenAClosedDescriptor(t *testing.T) {
+	out, errOut, _ := runSplitWithBackgroundInput(t,
+		`exec 0<&-; /bin/cat & wait "$!"; echo "st=$?"`, BackgroundJobInputEmpty)
+	if out != "st=0\n" {
+		t.Errorf("stdout = %q, want exactly st=0; stderr %q", out, errOut)
+	}
+	if errOut != "" {
+		t.Errorf("stderr = %q, want nothing said: the job was handed an empty stream, not a closed one", errOut)
 	}
 }
 
@@ -167,4 +196,23 @@ func TestAClosedStderrIsClosedForAReplacementStandIn(t *testing.T) {
 	if out != "dup=failed\n" {
 		t.Errorf("stdout = %q, want dup=failed: the stand-in could still duplicate a descriptor the script closed", out)
 	}
+}
+
+// runSplitWithBackgroundInput is runSplit with one axis answered: what a job
+// started with `&` reads for standard input.
+func runSplitWithBackgroundInput(t *testing.T, src string, answer BackgroundJobInputPolicy) (out, errOut string, status int) {
+	t.Helper()
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	var o, e bytes.Buffer
+	sem := testSemantics()
+	sem.BackgroundJobInput = answer
+	r := newTestRunner(t, &Runner{Stdout: &o, Stderr: &e, Semantics: &sem})
+	st, rerr := r.Run(context.Background(), f)
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	return o.String(), e.String(), st
 }

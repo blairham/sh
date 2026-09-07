@@ -5422,6 +5422,64 @@ on the rarer shape — a hang has no status to check and no diagnostic to
 read, and a job reported as having no process of its own is the answer
 this shell already gives for every background builtin.
 
+**What a `&` job reads for standard input** is an axis, and it splits the
+panel three ways rather than two (`BackgroundJobInput`, #1287). The probe
+reads one descriptor twice, so the answers come out in opposite orders
+and neither can be mistaken for the other:
+
+```sh
+printf 'DATA\n' > f
+<shell> -c '/bin/cat & wait; echo ---; /bin/cat' < f
+```
+
+| | the job reads | the script then reads |
+| --- | --- | --- |
+| dash, bash 5.3.15, bash-as-`sh`, bash 3.2.57, ksh93u+ | *(nothing)* | `DATA` |
+| zsh 5.9.2 | `DATA` | *(nothing)* |
+
+Measured 2026-09-07, and `ls -l /dev/fd/0` inside the job names what the
+five handed it: a character device with `/dev/null`'s rdev in the four,
+and the file itself in zsh. POSIX XCU 2.9.3, Asynchronous Lists, says a
+background command's standard input "shall be assigned to an empty file
+or /dev/null" while job control is disabled, so the majority is the
+specified answer and zsh is the divergence — and it is the direction that
+*steals*, because the job and the script share one descriptor:
+
+```sh
+while read -r line; do process "$line" & done < input.txt
+```
+
+loses whatever `process` reads, at status 0, with nothing said. This
+shell answered zsh's way in every dialect.
+
+**Stdin's kind is an axis of the measurement, not a detail of it.** A file
+and a pipe answer alike; `/dev/null` cannot tell the two apart, which is
+why the probe uses neither; and a *terminal* under job control is a third
+answer that neither dialect chooses. On a pty,
+`bash -i -c '/bin/cat & sleep 0.3; jobs'` lists the job `Stopped` and zsh
+lists it `suspended (tty input)` — both handed it the terminal and let the
+kernel stop it with SIGTTIN, which an empty input can never produce. So
+the substitution is conditioned on job control being off, exactly as XCU
+2.9.3 states.
+
+The third value is what a *closed* descriptor does, and it splits the five
+that substitute: `exec 0<&-; /bin/cat & wait "$!"` is silent at 0 in dash
+and every bash, which replace even a descriptor that is not there, and
+`cat: stdin: Bad file descriptor` in ksh93u+, which substitutes only what
+it can dup — the same answer zsh gives for the different reason that it
+never substitutes at all. It is read through the one field rather than a
+second, because it is the same decision asked of an input that is not
+there.
+
+Read without asking, like the `$!` fields above: an unanswered axis here
+would have to refuse `&` itself, and backgrounding a command is ordinary
+where a background job that reads standard input is rare. Unanswered is
+the POSIX answer. A redirection on the job still wins — `cat < f &` reads
+`f` in every dialect — because only the *inherited* descriptor is in
+question. Corpus:
+`jobs/a-background-jobs-standard-input` and
+`jobs/a-background-jobs-standard-input-when-the-script-closed-it`.
+
 **`wait -n`** is bash's: block until whichever job finishes first, report
 its status, 127 in silence with no jobs at all
 (`WaitNWaitsForTheNextJob`). dash refuses the option, ksh93 refuses it

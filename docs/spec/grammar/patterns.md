@@ -983,6 +983,113 @@ it is the whole of it.
 An empty match is a position like any other, so `${x//(#s)/-}` on `abc`
 is `-abc` and `${x//(#e)/-}` is `abc-`.
 
+### Reporting where a match landed
+
+`(#b)`, `(#B)`, `(#m)` and `(#M)` need more than a position: each has to
+**report** one, into parameters. Measured on zsh 5.9.2, 2026-09-07.
+
+`(#b)` turns the groups of a pattern into backreferences and fills three
+arrays; `(#B)` turns that back off. `(#m)` fills three scalars with the
+whole match; `(#M)` turns *that* off. The two sets are independent and
+compose — `[[ abc == (#m)(#b)(a)b* ]]` fills both.
+
+    [[ abc == (#b)(a)(b)c ]]    match=(a b)   mbegin=(1 2)  mend=(1 2)
+    [[ abc == (#b)a(b*) ]]      match=(bc)    mbegin=(2)    mend=(3)
+    [[ abc == (#m)a* ]]         MATCH=abc     MBEGIN=1      MEND=3
+
+**The bounds are one-based and the end is the index of the last
+character**, so an empty match has an end one below its begin:
+`[[ ac == (#b)(a)(b|)c ]]` is `mbegin=(1 2)` and `mend=(1 1)`.
+
+**They are character indices, not byte offsets.** `x=aébc;
+${x//(#m)?/<$MATCH:$MBEGIN>}` is `<a:1><é:2><b:3><c:4>`.
+
+**They move with the array base.** Under `ksharrays`, `(#m)` on `abc`
+reports `MBEGIN=0 MEND=2` and the arrays count from zero too.
+
+#### Numbering
+
+By **opening parenthesis**, outermost first, counting every group whose
+`(` is read while `(#b)` is in effect:
+
+    [[ abc == (#b)((a)(b))c ]]      match=(ab a b)
+    [[ abc == ((#b)(x)|(#b)a(b)c) ]]  match=("" b)  — the outer `(` precedes the flag
+    [[ abc == (#b)((x)|a(b)c) ]]    match=(abc "" b)  mbegin=(1 -1 2)
+
+**A group that did not participate is the empty string with -1 for both
+bounds** — the third row above, where `(x)` is numbered 2 even though the
+arm holding it is never taken. That is why a quietly dropped `(#b)` was
+never acceptable: empty is a real answer here and reads exactly like a
+feature that is absent.
+
+Both switches are **scoped to the group they stand in**, like the case
+flags: `[[ abc == (#b)(a)((#B)(b))(c) ]]` reports three groups, not four.
+Within one group the last letter wins — `(#bB)` reports none.
+
+#### Which split is reported
+
+The combination of arm and length decides nothing about *whether* a
+pattern matches and everything about what it reports:
+
+    [[ abc == (#b)(a|ab)* ]]        match=(a)      — a written arm beats a longer one
+    [[ abc == (#b)(ab|a)* ]]        match=(ab)
+    [[ ab == (#b)(|a)(b|ab) ]]      match=("" ab)  — including an empty arm
+    [[ aabab == (#b)(a*)b ]]        match=(aaba)   — within an arm, as much as it can
+    [[ abcabc == (#b)(*)(abc) ]]    match=(abc abc)
+    [[ abab == (#b)(ab)# ]]         mbegin=(3)     — a closure reports its *last* repetition
+
+#### Nothing is written unless the pattern asked and matched
+
+    match=(zz); [[ abc == (#b)abc ]]      match is still (zz)  — no group
+    match=(zz); [[ abc == (#b)(x)zz ]]    match is still (zz)  — no match
+    MATCH=zz;   [[ abc == (#m)xyz ]]      MATCH is still zz
+
+They are ordinary parameters, so `local match mbegin mend` in a function
+contains them.
+
+#### Which surfaces report
+
+`[[ ]]`, `case`, `${x#pat}`, `${x%pat}`, `${x/pat/rep}`, `${x:#pat}`, the
+`(M)` filter and an `(r)` subscript all report, in **whole-subject**
+coordinates: `x=abcd; ${x%(#b)(c)(d)}` gives `mbegin=(3 4)`.
+
+**Pathname expansion reports nothing.** `print -rl -- (#b)(a)*` leaves
+`$match` untouched, and so does `(#m)` there.
+
+#### A replacement is expanded once per match
+
+The sharpest consequence, and the one a replacement joined before the scan
+cannot express:
+
+    x=abcd; ${x//(#b)(b)(c)/[$match[1]-$match[2]]}   →  a[b-c]d
+    x=abcd; ${x//(#m)[bc]/<$MATCH:$MBEGIN:$MEND>}    →  a<b:2:2><c:3:3>d
+    x=abcb; ${x//(#b)(b)/Q}                          →  aQcQ, and mbegin=(4)
+
+so each replacement reads what *its own* match wrote, and the parameters
+are left holding the last one.
+
+#### Where a misplaced `(#m)` is read differently here
+
+`(#m)` is honored where it is **in effect at the end of the pattern's own
+top level** — which is the reading the manual's "the flag applies from
+where it stands" gives, and which is what every use of it in a real plugin
+tree needs, since all 43 of them write it at the front. Three measured
+rows do not fit that reading and are recorded rather than reproduced:
+
+| pattern | zsh | here |
+| --- | --- | --- |
+| `[[ abc == a(#m)bc ]]` | `MATCH` unset | `MATCH=abc` |
+| `[[ abc == (#m)a(#m)bc ]]` | `MATCH` unset | `MATCH=abc` |
+| `[[ abc == *(#m)* ]]` | `MATCH=abc` | `MATCH=abc` |
+
+The first two are `(#m)` standing between two runs of ordinary
+characters, and the third is the same position with the runs replaced by
+stars — so the difference is not the *position* and no rule stated in
+terms of one accounts for it. Reproducing it would mean reasoning about
+how zsh compiles a literal run, which is a fact about an implementation
+rather than about the language, and CLEANROOM.md is what forbids going and
+looking. Recorded here so the divergence is a decision.
+
 ### A `(#…)` at the end of a component is a flag group, not a qualifier
 
 The two spellings collide at exactly one place — the end of the last
@@ -1030,22 +1137,26 @@ that matches a pattern: `[[ ]]`, `case`, `${x#pat}` / `${x%pat}` /
 `${x/pat/rep}`, `${x:#pat}` and the `(M)` filter, and pathname expansion.
 
 The two anchors `(#s)` and `(#e)` are implemented on every one of those
-surfaces too: the matcher carries the offset of the piece it is matching
-within the subject the caller named, which is what an assertion about a
-position needs and what nothing else in a pattern does.
+surfaces too, and so are `(#b)`, `(#B)`, `(#m)` and `(#M)` with their
+parameters. The matcher carries the offset of the piece it is matching
+within the subject the caller named, and the offset of the pattern text it
+is reading within the pattern — the first is what an assertion about a
+position needs, and the second is what tells a group which backreference
+it is.
 
-The rest is **refused by name** — `(#b)` and `(#B)` backreferences, `(#m)`
-and `(#M)`, `(#a1)` approximate matching, and `(#u)` / `(#U)`. Carrying a
-position is not enough for those: each has to *report* one, into `$match`,
-`$mbegin`, `$mend` or their scalar kin. So a pattern using one says
+The rest is **refused by name**: `(#a1)` approximate matching, which needs
+edit distance and has no use at all in the plugin tree this was measured
+against, and `(#u)` / `(#U)`. So a pattern using one says
 
-    <pattern>: the (#b) pattern flag is not implemented
+    <pattern>: the (#a) pattern flag is not implemented
 
-and stops the script. That is deliberate and is the point of the whole
-entry: `(#b)` also fills `$match`, `$mbegin` and `$mend`, so a flag that
-was quietly dropped left a script reading `$match[1]` with an **empty
-value** rather than a refusal, which is the failure mode this project
-exists to avoid (#1244).
+and stops the script. That is deliberate and it is the convention the whole
+entry is built on: a flag that was quietly dropped left a script reading a
+plausible wrong answer rather than seeing a refusal, which is the failure
+mode this project exists to avoid (#1244). `(#b)` was the sharpest case of
+it — a dropped one left `$match[1]` **empty**, which is also what a group
+that genuinely matched nothing leaves — and it is why the flag kept
+refusing until it could fill all three arrays (#1304).
 
 One further refusal is about the walk rather than the flag: an exclusion
 that spans a path component — `**/x~*bar*` — is refused by name in

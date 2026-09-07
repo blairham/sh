@@ -769,6 +769,9 @@ func Semantics() interp.Semantics {
 	// localize the *array* refuses the operand instead of doing half of it —
 	// and it ends the script. Three wordings for the three, measured
 	// 2026-09-07, which is how a script tells which of them it ran into.
+	// The same as ksh93 and for the same measurement, `unset` included: a
+	// fatal `unset ":" ok1 ok2` removes ok1 and ok2 before it stops.
+	s.BadNameDeclaresTheOperandsAfterIt = interp.Yes
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.No
 	s.SubscriptedOperandTakesALocalDeclaration = interp.No
 	s.ReadonlyElement = interp.ReadonlyElementRefused

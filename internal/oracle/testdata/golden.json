@@ -27967,6 +27967,94 @@
         "TimedOut": false
       }
     },
+    "declare/a-bad-name-among-good-ones": {
+      "bash": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: typeset: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: typeset: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: typeset: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "NOT-FATAL~[U][U]",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e[1]: typeset: :: invalid variable name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e:typeset:1: not valid in this context: :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-bad-name-with-more-bad-names-behind-it": {
+      "bash": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: export: `:': not a valid identifier~\u003cscript\u003e: line 1: export: `1x': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[U][U]",
+        "Stderr": "\u003cscript\u003e: line 1: export: `:': not a valid identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: export: `:': not a valid identifier~\u003cscript\u003e: line 1: export: `1x': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[U][U]",
+        "Stderr": "\u003cscript\u003e: 1: export: :: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e[1]: export: :: is not an identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e:export:1: not valid in this context: :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-bad-operand-with-a-value-attached": {
       "bash": {
         "Stdout": "st=1~st=1",
@@ -42923,6 +43011,138 @@
         "Stdout": "[p q][r]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "export/a-bad-name-among-good-ones": {
+      "bash": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: export: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1][U]",
+        "Stderr": "\u003cscript\u003e: line 1: export: `:': not a valid identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: export: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[1][U]",
+        "Stderr": "\u003cscript\u003e: 1: export: :: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e[1]: export: :: is not an identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e:export:1: not valid in this context: :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "export/a-bad-name-behind-good-ones": {
+      "bash": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: export: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: export: `:': not a valid identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: export: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e: 1: export: :: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e[1]: export: :: is not an identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e:export:1: not valid in this context: :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "export/a-bad-name-in-front-of-good-ones": {
+      "bash": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: export: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[U][U]",
+        "Stderr": "\u003cscript\u003e: line 1: export: `:': not a valid identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: export: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[U][U]",
+        "Stderr": "\u003cscript\u003e: 1: export: :: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e[1]: export: :: is not an identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e:export:1: not valid in this context: :",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -74086,6 +74306,50 @@
         "TimedOut": false
       }
     },
+    "readonly/a-bad-name-among-good-ones": {
+      "bash": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: readonly: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1][U]",
+        "Stderr": "\u003cscript\u003e: line 1: readonly: `:': not a valid identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "NOT-FATAL~[1][2]",
+        "Stderr": "\u003cscript\u003e: line 1: readonly: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[1][U]",
+        "Stderr": "\u003cscript\u003e: 1: readonly: :: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e[1]: readonly: :: invalid variable name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1][2]",
+        "Stderr": "\u003cscript\u003e:readonly:1: not valid in this context: :",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "readonly/a-compound-append-is-refused": {
       "bash": {
         "Stdout": "st=1 a=[1] z=[unset]~after",
@@ -92554,6 +92818,50 @@
         "Stdout": "022",
         "Stderr": "\u003cshell\u003e:umask:1: bad symbolic mode permission: -",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unset/a-bad-name-among-names-to-remove": {
+      "bash": {
+        "Stdout": "NOT-FATAL~[U][U]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "NOT-FATAL~[U][U]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "NOT-FATAL~[U][U]",
+        "Stderr": "\u003cscript\u003e: line 1: unset: `:': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[U][2]",
+        "Stderr": "\u003cscript\u003e: 1: unset: :: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "NOT-FATAL~[U][U]",
+        "Stderr": "\u003cscript\u003e[1]: unset: :: invalid variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[U][U]",
+        "Stderr": "\u003cscript\u003e:unset:1: :: invalid parameter name",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

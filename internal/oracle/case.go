@@ -7596,6 +7596,69 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the operand a declaration takes that `export` does not, and the reason the name check needed a third answer rather than reusing `export`'s: bash refuses `export a[1]=v` as a bad name and *takes* this, creating the element, and ksh93 and zsh take both. Measured before the check was routed through, because a shared answer would have made bash start refusing a line it has always accepted",
 	},
 	{
+		ID: "declare/a-bad-name-among-good-ones", Category: "declarations",
+		// From a file: the shell that ends the script over this runs its EXIT
+		// trap on that route and not through `-c`, and the trap is the only
+		// window onto what was declared before it stopped.
+		Script:  true,
+		Snippet: `trap 'echo "[${ok1-U}][${ok2-U}]"' EXIT; typeset ok1=1 ":" ok2=2; echo NOT-FATAL`,
+		Why:     "how much of the operand list a fatal bad name takes with it, read from an EXIT trap because the fatality otherwise hides the answer — a probe that reads the names back on the next line never runs in the three columns that stop. ksh93 and zsh declare both good operands and *then* stop; bash reports and carries on, so it declares both by running to the end. Nothing here declared any of them",
+	},
+	{
+		ID: "export/a-bad-name-in-front-of-good-ones", Category: "declarations",
+		// From a file: the shell that ends the script over this runs its EXIT
+		// trap on that route and not through `-c`, and the trap is the only
+		// window onto what was declared before it stopped.
+		Script:  true,
+		Snippet: `trap 'echo "[${ok1-U}][${ok2-U}]"' EXIT; export ":" ok1=1 ok2=2; echo NOT-FATAL`,
+		Why:     "the position of the bad name is the variable, and this is the end of it that splits the panel two ways: ksh93 and zsh export both names standing *behind* the refusal, and bash-as-`sh` and dash export neither. `export` rather than `typeset` because bash-as-`sh` is only fatal for the builtins POSIX calls special, which is what puts a second answer on the board",
+	},
+	{
+		ID: "export/a-bad-name-among-good-ones", Category: "declarations",
+		// From a file: the shell that ends the script over this runs its EXIT
+		// trap on that route and not through `-c`, and the trap is the only
+		// window onto what was declared before it stopped.
+		Script:  true,
+		Snippet: `trap 'echo "[${ok1-U}][${ok2-U}]"' EXIT; export ok1=1 ":" ok2=2; echo NOT-FATAL`,
+		Why:     "the middle of the same list, and the row that says the two answers are `all of them` against `the ones in front of it` rather than `all` against `none`: bash-as-`sh` and dash leave ok1 set and ok2 unset here, where the row above leaves both unset and the row below leaves both set",
+	},
+	{
+		ID: "export/a-bad-name-behind-good-ones", Category: "declarations",
+		// From a file: the shell that ends the script over this runs its EXIT
+		// trap on that route and not through `-c`, and the trap is the only
+		// window onto what was declared before it stopped.
+		Script:  true,
+		Snippet: `trap 'echo "[${ok1-U}][${ok2-U}]"' EXIT; export ok1=1 ok2=2 ":"; echo NOT-FATAL`,
+		Why:     "the control for the pair above: with nothing standing behind the refusal every column exports both, so a shell that agreed here and nowhere else would look right to a one-position probe. It is also the row that shows the refusal is still fatal in four columns — `NOT-FATAL` is missing from them",
+	},
+	{
+		ID: "unset/a-bad-name-among-names-to-remove", Category: "declarations",
+		// From a file: the shell that ends the script over this runs its EXIT
+		// trap on that route and not through `-c`, and the trap is the only
+		// window onto what was declared before it stopped.
+		Script:  true,
+		Snippet: `ok1=1 ok2=2; trap 'echo "[${ok1-U}][${ok2-U}]"' EXIT; unset ok1 ":" ok2; echo NOT-FATAL`,
+		Why:     "the same question asked of the builtin that *removes* names, which is where the two shells that are quiet about a bad `unset` operand part from the two that are not: bash 5.3 says nothing at all and removes both, ksh93 complains and removes both without stopping, and zsh complains, removes both and stops. Removing neither — which is what a discarded operand list gives — is nobody's answer",
+	},
+	{
+		ID: "readonly/a-bad-name-among-good-ones", Category: "declarations",
+		// From a file: the shell that ends the script over this runs its EXIT
+		// trap on that route and not through `-c`, and the trap is the only
+		// window onto what was declared before it stopped.
+		Script:  true,
+		Snippet: `trap 'echo "[${ok1-U}][${ok2-U}]"' EXIT; readonly ok1=1 ":" ok2=2; echo NOT-FATAL`,
+		Why:     "the third builtin on the shared name check, kept because the freeze is not the assignment: a shell could declare the good operands and not freeze them, and only a row that reads them back after the fatality can tell. Same split as `export`",
+	},
+	{
+		ID: "declare/a-bad-name-with-more-bad-names-behind-it", Category: "declarations",
+		// From a file: the shell that ends the script over this runs its EXIT
+		// trap on that route and not through `-c`, and the trap is the only
+		// window onto what was declared before it stopped.
+		Script:  true,
+		Snippet: `trap 'echo "[${ok1-U}][${ok2-U}]"' EXIT; export ":" ok1=1 "1x" ok2=2; echo NOT-FATAL`,
+		Why:     "how many complaints a *fatal* refusal writes when more bad names follow it, which is what says the operands behind it are collected in silence rather than judged again: every column that stops writes exactly one line, and bash — which does not stop — writes one per bad operand. A fix that kept looking and kept reporting would add a line no shell writes",
+	},
+	{
 		ID: "declare/a-subscripted-operand-is-not-a-pattern", Category: "declarations",
 		Snippet: `: > 'a1=v'; typeset a[1]=v; echo "[${a[1]}] a1=[$a1]"`,
 		Why:     "the discriminator for whether a declaration's subscripted operand goes through pathname expansion, and the only shape that can tell: a file literally named `a1=v` is on disk, so the operand *has* a match. Every column still assigns the element and leaves `a1` empty, in the shell that would refuse a pattern with no match as much as in the four that would leave it as written — so the operand is an assignment there as much as `n=3` is. Reading only the first span of the word could not see it either way, and this shell read the word as a pattern and set a scalar called `a1` (#1203)",

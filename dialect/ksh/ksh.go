@@ -538,6 +538,10 @@ func Semantics() interp.Semantics {
 	// `readonly a[1]=v` writes v and freezes `a` over it, and a declaration
 	// inside a function writes the caller's array, which is this shell's
 	// answer about scope rather than about subscripts.
+	// The refusal is fatal and the rest of the operand list is declared
+	// anyway: measured 2026-09-07, `export ok1=1 ":" ok2=2` read back from
+	// an EXIT trap leaves both set, wherever the bad name stands.
+	s.BadNameDeclaresTheOperandsAfterIt = interp.Yes
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.Yes
 	s.SubscriptedOperandTakesALocalDeclaration = interp.Yes
 	s.ReadonlyElement = interp.ReadonlyElementWritten

@@ -308,6 +308,9 @@ func Semantics() interp.Semantics {
 	s.DeclarationTakesASubscript = interp.No
 	// No arrays at all, so no subscripted operand is a name to any
 	// declaration here either.
+	// A fatal refusal takes the operands after it with it: measured
+	// 2026-09-07, `export ok1=1 ":" ok2=2` leaves ok1 set and ok2 unset.
+	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.TypesetTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that

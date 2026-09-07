@@ -822,8 +822,8 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 	}
 	// After `-f`, so that a function name keeps its own laxer rule: bash
 	// takes `unset -f 1x` without a word where it refuses `unset 1x`.
-	args, status := r.builtinNames("unset", args, strings.ContainsRune(opts, 'v'))
-	if r.ctl == controlExit {
+	args, status, ended := r.builtinNames("unset", args, strings.ContainsRune(opts, 'v'))
+	if r.unspecified {
 		return status
 	}
 	for _, name := range args {
@@ -903,6 +903,12 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 			continue
 		}
 		r.unsetName(name)
+	}
+	if ended {
+		// The names that were names are removed first and the script stops
+		// after them: measured, a fatal `unset ":" ok1 ok2` leaves neither
+		// ok1 nor ok2 standing in the shell that ends the script over it.
+		return r.endAfterABadName(status)
 	}
 	return status
 }
@@ -1058,8 +1064,8 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		return r.declarePrintForm(args, r.bareOrDashP(opts, r.sem().ExportListing),
 			func(d declaration) bool { return d.exported })
 	}
-	args, status := r.builtinNames("export", args, false)
-	if r.ctl == controlExit {
+	args, status, ended := r.builtinNames("export", args, false)
+	if r.unspecified {
 		return status
 	}
 	for _, a := range args {
@@ -1090,6 +1096,10 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		// an explicit "no" can take that off. Deleting the record put the
 		// question back to the environment, which answers yes.
 		r.exported[name] = !strings.ContainsRune(opts, 'n')
+	}
+	if ended {
+		// See biDeclare: the names are exported and then the script stops.
+		return r.endAfterABadName(status)
 	}
 	if r.assignFailed && status == 0 {
 		// A name it refused to assign is the builtin's failure, not just a
@@ -2413,8 +2423,8 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		}
 		return r.bareLocalListing()
 	}
-	args, status := r.builtinNames("local", args, false)
-	if r.ctl == controlExit {
+	args, status, ended := r.builtinNames("local", args, false)
+	if r.unspecified {
 		return status
 	}
 	for _, a := range args {
@@ -2494,6 +2504,11 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			r.markReadonly(name)
 		}
 	}
+	if ended {
+		// See biDeclare: `local` is the same declaration under another word
+		// and gives up the same amount of the line.
+		return r.endAfterABadName(status)
+	}
 	if r.assignFailed && status == 0 {
 		// See biExport.
 		return 1
@@ -2524,8 +2539,8 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		return r.declarePrintForm(nil, r.bareOrDashP(opts, r.sem().ReadonlyListing),
 			func(d declaration) bool { return d.readonly })
 	}
-	args, status := r.builtinNames("readonly", args, false)
-	if r.ctl == controlExit {
+	args, status, ended := r.builtinNames("readonly", args, false)
+	if r.unspecified {
 		return status
 	}
 	for _, a := range args {
@@ -2567,6 +2582,10 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			}
 		}
 		r.markReadonly(name)
+	}
+	if ended {
+		// See biDeclare.
+		return r.endAfterABadName(status)
 	}
 	if r.assignFailed && status == 0 {
 		// See biExport.

@@ -540,6 +540,12 @@ func Semantics() interp.Semantics {
 	// and empty, reports `a: readonly variable` and reports success — and
 	// naming it here would need the refusal to run after the freeze rather
 	// than instead of it (#1203).
+	// Never asked here, because a bad name is not fatal in this shell: it
+	// reports each one and declares the good ones by carrying on. The answer
+	// is the one the same binary gives under an argv[0] of `sh`, where the
+	// fatality is on and only the operands in front of the bad one are
+	// declared.
+	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.Yes
 	s.SubscriptedOperandTakesALocalDeclaration = interp.Yes
 	// A single subscript on a name that is no array is refused rather than

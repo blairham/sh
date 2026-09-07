@@ -2364,6 +2364,18 @@ type Diagnostics struct {
 	// `!: parameter not set`, which is exactly the pair this field and
 	// UnboundVariable already carry.
 	UnboundPositional string
+	// AssignThroughExpansionBadName is an assignment written inside an
+	// expansion whose parameter cannot be assigned to at all — `${#::=w}`,
+	// where `#` is not a name. One verb: the name, without its `$`.
+	//
+	// Its own field rather than a reuse of a builtin's bad-name wording
+	// because the two are worded differently by the shell that has the
+	// construct: `set -A 1v q` there is `not an identifier: 1v` with the
+	// builtin hidden, and this is `not an identifier: #` from an expansion
+	// that names no builtin to hide. The sentences coincide today and the
+	// routes do not, and one field for both would tie a future change on
+	// either route to the other.
+	AssignThroughExpansionBadName string
 	// BadPattern is a pattern the dialect rejects. One verb: the pattern.
 	BadPattern string
 	// CannotOpen is a redirection that could not be opened for reading. Two

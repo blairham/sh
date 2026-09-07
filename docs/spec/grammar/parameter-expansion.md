@@ -1613,8 +1613,130 @@ read.
 - `GLOB_SUBST` is recorded-and-inert, so `setopt globsubst; ${=g}` splits
   but does not then match — which the tilde flag's section already records
   for its own half.
-- `${v::=word}`, the always-assign operator, is unread, so `${=v::=p q}` is
-  too.
+
+## A third assignment operator: `${name::=word}` — zsh only
+
+    ${name=word}     assign when the parameter is unset
+    ${name:=word}    assign when it is unset **or** empty
+    ${name::=word}   assign, always
+
+The third one asks nothing. Measured 2026-09-07 on zsh 5.9.2, over the
+three states of the parameter that the two above it disagree on:
+
+| written | unset | set and empty | set to `old` |
+| --- | --- | --- | --- |
+| `${v=new}` | `new` | *(empty)* | `old` |
+| `${v:=new}` | `new` | `new` | `old` |
+| `${v::=new}` | `new` | `new` | `new` |
+
+and the value left behind is the value substituted, in every cell where
+the assignment fired. The third column is the whole of what separates the
+operator from the two beside it: an implementation that read `::=` as
+`:=` would be right twice and plausible the third time.
+
+**One shell in the panel has it, and the other four are the evidence for
+the grammar flag.** Measured the same day, `v=old; ${v::=new}`:
+
+| shell | answer |
+| --- | --- |
+| zsh 5.9.2 | `new`, and `v` is `new` |
+| bash 5.3.15 | `v: =new: arithmetic syntax error: operand expected` |
+| bash as `sh` | the same |
+| bash 3.2.57 | `v: =new: syntax error: operand expected` |
+| ksh93 | `:=new: arithmetic syntax error` |
+| dash | `Bad substitution` |
+
+The four refusals are all the same reading: an empty offset and a length
+of `=new`. So this is additive grammar rather than one syntax meaning two
+things — and reading it the substring way is not a quiet mis-answer, it is
+that arithmetic error, eighteen lines of it on one real startup, from a
+plugin manager whose own message formatter writes `${ZI[…]::=…}` (#1369).
+
+### The disambiguation is one character wide
+
+Only `=` makes the operator. Measured, with `v=old`:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `${v::=D}` | `D`, assigned |
+| `${v::-D}` | *(empty)* — an offset of nothing, a length of `-D` |
+| `${v::+D}` | *(empty)* — the same |
+| `${v::?D}` | fails in arithmetic on the word `D` |
+| `${v::}` | *(empty)* |
+
+So the second colon opens an operator for exactly one character and an
+offset for the rest, and a grammar that widened the reading by one would
+break shapes every shell in the panel shares.
+
+### What it may name
+
+A name, a positional, or `0`. Anything else is refused, and the refusal is
+fatal — measured on all three routes, `-c`, a script file and a function
+body, each ending the script at status 1:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `${v::=w}` | assigns `v` |
+| `${1::=w}` | assigns `$1` |
+| `${0::=w}` | assigns `$0` |
+| `${@::=w}` | `not an identifier: @` |
+| `${*::=w}` | `not an identifier: *` |
+| `${#::=w}` | `not an identifier: #` |
+| `${?::=w}` | `not an identifier: ?` |
+| `${-::=w}` | `not an identifier: -` |
+| `${${v}::=w}` | `not an identifier: ` — an expansion where the name would be |
+
+The refusal reaches the parameters `${@=w}` and `${*=w}` never do, because
+those two are always *set* and the test never fires; this operator has no
+test, so every one of them is reached on every run. The word is expanded
+first: `${#::=$(echo RAN >&2)}` writes RAN and then refuses the name, so a
+command substitution in the word runs even on the failing line.
+
+### It composes the way the other operators do
+
+Measured, all four:
+
+    setopt nounset; unset v; ${v::=new}   new — the value is never read
+    v=old; ${#v::=abcd}                   4, and v is abcd
+    ${(U)v::=abc}                         ABC, and v is abc
+    ${=v::=p q}                           two fields, and v is `p q`
+
+A readonly parameter refuses through the same door every other assignment
+to one goes through — `read-only variable: v`, fatal.
+
+### Grammar
+
+Read only when the dialect's `ParamAssignAlways` is on; elsewhere the same
+characters are `ParamSubstring`, which is what the four refusals above are
+evidence of. The parsed node carries `ParamAssignAlways` as its operator
+and the text after the `=` as its word.
+
+It is its own operator and not `ParamAssign` with a second colon: the
+conditional assignment *asks*, and has a non-firing side on which the
+parameter's own value is substituted, where this one has neither. `Colon`
+has no meaning on the node.
+
+### What the corpus pins
+
+`param/the-always-assign-operator` (the three states, with the value left
+behind), `param/the-always-assign-operator-beside-the-conditional` (the
+pair, on one starting value) and
+`param/only-the-equals-makes-the-always-assign` (the two near-misses).
+
+### What this implementation does not match
+
+Both are older than this operator and are reached by it rather than caused
+by it — each has a second, simpler reproducer that has nothing to do with
+`::=`:
+
+- An assignment to a **positional** does not reach the positional list.
+  `set --; ${1::=new}` leaves `$1` reading `new` and `$#` at 0 where the
+  shell says 1, and `set -- p q; ${1::=new}` leaves `$1` as `p`. The same
+  is true of `${1:=new}` and `${1=new}` when their test fires.
+- Assigning a **scalar over an existing indexed array** leaves the array
+  standing: `a=(1 2 3); ${a::=x y}` substitutes `x y` and `a` is still the
+  three elements, where the shell leaves the scalar `x y`. `read a` over
+  an array does the same thing, which is where this belongs.
 
 ## A subscript without braces — zsh only
 

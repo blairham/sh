@@ -66,6 +66,20 @@ const (
 	// on [ParamExpr.Transform]; the set is fixed, and a letter outside it is
 	// a bad substitution rather than a shape of its own.
 	ParamTransform
+	// ParamAssignAlways is `::=`: assign the word and substitute it, with no
+	// test at all.
+	//
+	// It is not ParamAssign with a second colon. ParamAssign *asks* — is the
+	// parameter unset, or unset-or-empty when a colon was written — and
+	// substitutes the parameter when the answer is no; this operator asks
+	// nothing, so [ParamExpr.Colon] has no meaning on it and there is no
+	// non-firing side for the parameter's own value to be returned on.
+	//
+	// One grammar in the panel has it. The rest read the same characters as
+	// a substring whose offset is empty and whose length is `=word`, and
+	// fail in arithmetic — `${v::=rst}` is `operand expected at \`=rst'` in
+	// bash 5.3, bash 3.2 and ksh93, and a bad substitution in dash.
+	ParamAssignAlways
 )
 
 func (o ParamOp) String() string {
@@ -74,6 +88,8 @@ func (o ParamOp) String() string {
 		return "-"
 	case ParamAssign:
 		return "="
+	case ParamAssignAlways:
+		return "::="
 	case ParamError:
 		return "?"
 	case ParamAlternate:
@@ -747,6 +763,21 @@ func (p *Parser) scanParamOp(s string, e *ParamExpr) (ParamOp, string, bool) {
 		return condOp(s[1]), s[2:], true
 	}
 	switch {
+	// `::=` is the always-assign operator, and it has to be read before the
+	// substring below: there, `${v::=w}` is an offset of nothing and a
+	// length of `=w`, which is the arithmetic error `operand expected at
+	// \`=w'` — the whole of #1369, eighteen lines of one real startup. It
+	// cannot collide with the colon-prefixed conditionals ahead of the
+	// switch: their second character is one of `-=?+` and this one's is
+	// another colon.
+	//
+	// Only `=` gets the reading. Measured 2026-09-07 on zsh 5.9.2:
+	// `${v::-new}` and `${v::+new}` are substrings and answer empty, and
+	// `${v::?new}` is `bad math expression: operator expected at \`new'` —
+	// so the second colon opens an operator for exactly one character and a
+	// substring for the rest.
+	case p.dialect.ParamAssignAlways && strings.HasPrefix(s, "::="):
+		return ParamAssignAlways, s[3:], true
 	// A `:` followed by one of these three is an operator rather than the
 	// start of an offset, and that one character is the whole
 	// disambiguation. Before the substring case, because everything here

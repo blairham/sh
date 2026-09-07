@@ -6927,6 +6927,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/colon-extends-the-test-empty` | `[D][]` | `[D][]` | `[D][]` | `[D][]` | `[D][]` | `[D][]` |
 | `param/plus-is-the-mirror` | `[][][A][][A][A]` | `[][][A][][A][A]` | `[][][A][][A][A]` | `[][][A][][A][A]` | `[][][A][][A][A]` | `[][][A][][A][A]` |
 | `param/assign-has-a-side-effect` | `[V][V]` | `[V][V]` | `[V][V]` | `[V][V]` | `[V][V]` | `[V][V]` |
+| `param/the-always-assign-operator` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][]` **2>** `<shell>: line 1: e: =B: arithmetic syntax error: operand expected (error token is "=B")` *(status 1)* | `[][]` **2>** `<shell>: line 1: e: =B: arithmetic syntax error: operand expected (error token is "=B")` *(status 1)* | `[][]` **2>** `<shell>: e: =B: syntax error: operand expected (error token is "=B")` *(status 1)* | **2>** `<shell>: :=A: arithmetic syntax error` *(status 1)* | `[A][A][B][B][C][C]` |
+| `param/the-always-assign-operator-beside-the-conditional` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: a: =new: arithmetic syntax error: operand expected (error token is "=new")` *(status 1)* | **2>** `<shell>: line 1: a: =new: arithmetic syntax error: operand expected (error token is "=new")` *(status 1)* | **2>** `<shell>: a: =new: syntax error: operand expected (error token is "=new")` *(status 1)* | **2>** `<shell>: :=new: arithmetic syntax error` *(status 1)* | `[new][new][old][old]` |
+| `param/only-the-equals-makes-the-always-assign` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][][old]` | `[][][old]` | `[][][old]` | **2>** `<shell>: :-D: arithmetic syntax error` *(status 1)* | `[][][old]` |
 | `param/word-is-itself-expanded` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` |
 | `param/prefix-shortest-and-longest` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` |
 | `param/suffix-shortest-and-longest` | `[a.b][a]` | `[a.b][a]` | `[a.b][a]` | `[a.b][a]` | `[a.b][a]` | `[a.b][a]` |
@@ -7187,6 +7190,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/assign-has-a-side-effect` — := leaves the variable set afterwards — the only expansion here with a side effect
   ```sh
   unset u; printf "[%s]" "${u:=V}"; printf "[%s]" "$u"
+  ```
+- `param/the-always-assign-operator` — `::=` assigns every time and substitutes what it assigned, where `:=` assigns on two of these three states and `=` on one — so the third pair, a set and non-empty parameter, is the whole of what separates the operator from the two beside it. One shell in the panel has the construct and the other four read the same characters as a substring whose length is `=A`, which is the arithmetic error this row records for them: `${v::=rst}` on the plugin manager's own formatter line printed eighteen of it on every startup (#1369)
+  ```sh
+  unset u; printf "[%s]" "${u::=A}" "$u"; e=; printf "[%s]" "${e::=B}" "$e"; s=old; printf "[%s]" "${s::=C}" "$s"; echo
+  ```
+- `param/the-always-assign-operator-beside-the-conditional` — the pair, on one line and one starting value: the always-assign leaves `new` and the colon-assign leaves `old`. Written as a pair rather than as two values because a recorded value would pass for an implementation that had read `::=` as `:=` — which is exactly the reading a grammar without the operator falls back to
+  ```sh
+  a=old; b=old; printf "[%s]" "${a::=new}" "$a" "${b:=new}" "$b"; echo
+  ```
+- `param/only-the-equals-makes-the-always-assign` — the disambiguation is one character wide, and this is the row that says so: with a second colon in front of them `-` and `+` are *not* operators, they are an offset of nothing and a length of `-D`, so the answer is empty and `v` is untouched. A grammar that widened `::` by one character would answer `D` here and pass every row above
+  ```sh
+  v=old; printf "[%s]" "${v::-D}" "${v::+D}" "$v"; echo
   ```
 - `param/word-is-itself-expanded` — the word is a word, not a literal, so the AST cannot store it as a string
   ```sh

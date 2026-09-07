@@ -329,6 +329,12 @@ Measured: `pat/a-numeric-range-is-any-number`,
     *(.)     the regular files among the matches
     *(/)     the directories
     *(@)     the symbolic links, by their own type
+    *(p)     the FIFOs
+    *(%)     the device nodes, block and character alike
+    *(x)     the ones their owner may execute — and `r` and `w` beside it
+    *(E)     the ones their group may execute — with `A` read and `I` write
+    *(X)     the ones the world may execute — with `R` read and `W` write
+    *(s)     set-user-ID; `S` is set-group-ID and `t` is the sticky bit
     *(^.)    `^` turns the sense of what follows
     *(.,/)   `,` is an or; two qualifiers side by side are an and
     *(N)     a miss is no error and the word is deleted
@@ -338,7 +344,22 @@ zsh alone has them. The list narrows what the pattern in front of it
 matched, so it is a **filter over the match set** rather than anything
 the matcher does character by character. Measured 2026-09-06 on zsh
 5.9.2 against a directory holding `d1/`, `f1`, `f2`, a link `l1` and a
-hidden `.dot`.
+hidden `.dot`, and the permission and mode letters on 2026-09-07 against
+the same directory with `x` made executable and a second one holding a
+0644 `plain`, a 4755 `suid`, a sticky directory and a FIFO.
+
+**The three permission triples are what the run had to establish**, and
+no naming convention predicts them: owner is `r w x`, group is `A I E`
+and world is `R W X`. The fixture's modes were 0644 and 0755, so `A`
+listing every name and `I` listing none puts that pair on the group
+triple, and `E` and `X` agreeing on the 0755 names are separated only by
+`W` — world write — being empty where `w` is not.
+
+**A permission letter is a question about the file and not about this
+process.** It reads the mode from the same lstat the type tests read, so
+a symbolic link answers for itself: `*(x)` lists `l1`, whose target `f1`
+is 0600. zsh has separate letters for the effective user's own access
+and they are not these; see below.
 
 **The disambiguation is exactly one character.** A group holding a `|`
 is the alternation `PatternAlternation` already reads, and a group
@@ -518,19 +539,31 @@ accept.
 
 ### What is read and not implemented
 
-The type tests `.`, `/` and `@`, the `^` that turns them, the `,` that
-unions them, and `N` and `D`. Everything else in that language — the
-permission tests `r`, `w` and `x`, `p` and `=` and `%` for the other file
-types, the `-` prefix that follows a link before testing, `e` and `+` for
-a command's verdict, `o`, `O`, `Y` and `[n,m]` for ordering and counting,
+The type tests `.`, `/`, `@`, `p` and `%`, the nine permission letters,
+`s`, `S` and `t` for the bits outside the permission triples, the `^`
+that turns any of them, the `,` that unions them, and `N` and `D`.
+
+Everything else in that language — `=` for a socket, the `%b` and `%c`
+spellings that separate the two kinds of device, `f` and its mode
+argument, the `-` prefix that follows a link before testing, `e` and `+`
+for a command's verdict, `U`, `G`, `u` and `g` for ownership, `o`, `O`,
+`Y` and `[n,m]` for ordering and counting, `a`, `m` and `c` for times,
 and the `(#q…)` form that needs `extended_glob` — is refused by name with
-the shell's own wording rather than answered wrong. `*(x)` here is
-`unknown file attribute: x`, where the shell would list the executable
-files.
+the shell's own wording rather than answered wrong. `*(f755)` here is
+`unknown file attribute: f`, where the shell would list the names at that
+mode.
+
+`S` and `%` are read and unproven in the positive direction, which is a
+fact about what a test process may create rather than about the shell:
+both need privileges. What is asserted of them is that they are
+*claimed* — the miss names the whole word, not the letter — which is the
+half that separates a read letter from an unknown one.
 
 That refusal is what let this set be enumerated exactly, and it is
 asserted rather than assumed: see
-`TestAnUnknownQualifierIsRefusedByName`.
+`TestAnUnknownQualifierIsRefusedByName`,
+`TestThePermissionQualifiersReadTheMode` and
+`TestTheModeBitQualifiers`.
 
 ## Run-time switches over the language
 

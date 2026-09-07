@@ -25,6 +25,41 @@ import (
 //	echo *(D)     .dot d1 f1 f2   hidden names included
 //	echo zz*(N)   (nothing, 0)    a miss is not an error, and the word goes
 //
+// The permission and remaining type tests were measured the same way, on
+// 2026-09-07, against a second directory holding a regular `plain` (0644), a
+// `suid` file at 4755, a sticky directory `stick` at 1777, and a FIFO `fifo`
+// — plus, for the nine permission letters, the first directory with `x` made
+// executable:
+//
+//	echo *(x)     d1 l1 x         executable by its owner
+//	echo *(r)     everything      readable by its owner
+//	echo *(w)     everything      writable by its owner
+//	echo *(A)     everything      readable by its group
+//	echo *(I)     no matches      writable by its group
+//	echo *(E)     d1 l1 x         executable by its group
+//	echo *(R)     everything      readable by the world
+//	echo *(W)     no matches      writable by the world
+//	echo *(X)     d1 l1 x         executable by the world
+//	echo *(s)     suid            set-user-ID
+//	echo *(t)     stick           the sticky bit
+//	echo *(p)     fifo            a FIFO, by its own type
+//	echo *(%)     null zero disk0 a device, measured in /dev
+//	echo *(.x)    suid            side by side is still an and
+//	echo *(^x)    fifo plain      and `^` still turns the sense
+//
+// Three letters are read here and unproven in the positive direction, which
+// is a fact about what this machine would let a test create rather than about
+// the shell: `S` (set-group-ID) and a block or character `%` need privileges,
+// and the run recorded them as *accepted* — `no matches found: *(S)`, not
+// `unknown file attribute: S` — which is what says the letter is claimed.
+//
+// **The three permission triples are the measurement's own finding.** Owner
+// is `r w x`, group is `A I E` and world is `R W X`, which no naming
+// convention would have suggested: the directory's modes were 0644 and 0755,
+// so `A` listing everything and `I` listing nothing places `A` and `I` on the
+// group triple, and `E` and `X` agreeing on the 0755 names separates group
+// from world only because `W` — world write — is empty where `w` is not.
+//
 // **The list is qualifiers only when it has no `|` in it.** A group holding
 // one is the alternation the dialect already reads — `echo f*(1|2)` is
 // `f1 f2`, where `1` on its own is `unknown file attribute: 1`. That single
@@ -122,7 +157,9 @@ func parseGlobQualifiers(list string) (globQualifiers, byte, bool) {
 			q.allowNoMatch = true
 		case 'D':
 			q.seeHidden = true
-		case '.', '/', '@':
+		case '.', '/', '@', 'p', '%',
+			'r', 'w', 'x', 'A', 'I', 'E', 'R', 'W', 'X',
+			's', 'S', 't':
 			section = append(section, globTypeTest{kind: c, negated: negate})
 		default:
 			return q, c, false
@@ -155,6 +192,15 @@ func sectionKeeps(section []globTypeTest, mode fs.FileMode) bool {
 // globTypeMatches is what each type qualifier asks of a file's mode, read
 // from an lstat: `@` is a symbolic link by its *own* type, so a link to a
 // regular file is `@` and not `.`.
+//
+// A permission letter reads the same mode, and reading it from the lstat is
+// what makes a symbolic link answer for *itself* rather than for what it
+// points at — measured, `*(x)` lists `l1`, whose target `f1` is 0600.
+//
+// The question is about the bit and not about this process: `x` is "the owner
+// may execute", which is a property of the file, and it stays true of a file
+// this shell could not execute. zsh has separate letters for the effective
+// user's own access, and they are refused by name; see patterns.md.
 func globTypeMatches(kind byte, mode fs.FileMode) bool {
 	switch kind {
 	case '.':
@@ -163,8 +209,35 @@ func globTypeMatches(kind byte, mode fs.FileMode) bool {
 		return mode.IsDir()
 	case '@':
 		return mode&fs.ModeSymlink != 0
+	case 'p':
+		return mode&fs.ModeNamedPipe != 0
+	case '%':
+		// Block and character devices alike. The `%b` and `%c` spellings
+		// that separate them take an argument this list does not read yet,
+		// and are refused rather than folded in here.
+		return mode&fs.ModeDevice != 0
+	case 's':
+		return mode&fs.ModeSetuid != 0
+	case 'S':
+		return mode&fs.ModeSetgid != 0
+	case 't':
+		return mode&fs.ModeSticky != 0
+	}
+	if bit, ok := globPermissionBits[kind]; ok {
+		return mode.Perm()&bit != 0
 	}
 	return false
+}
+
+// globPermissionBits is the nine permission letters, in the three triples the
+// measurement put them in rather than in the three a reader would guess.
+//
+// Only Perm() is consulted, so the set-ID and sticky bits — which live
+// outside it in fs.FileMode — cannot leak into a permission answer.
+var globPermissionBits = map[byte]fs.FileMode{
+	'r': 0o400, 'w': 0o200, 'x': 0o100,
+	'A': 0o040, 'I': 0o020, 'E': 0o010,
+	'R': 0o004, 'W': 0o002, 'X': 0o001,
 }
 
 // fieldQualifiers reads the qualifier list a field carries, if the dialect

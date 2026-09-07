@@ -235,3 +235,144 @@ func containsSub(s, sub string) bool {
 	}
 	return false
 }
+
+// permissionDir holds one name per mode the permission letters have to tell
+// apart: a 0644 regular file, a 0755 one, a set-user-ID one, and a sticky
+// directory.
+//
+// Three of the letters have no name here, and deliberately: `S`, `%` and `p`
+// need a set-group-ID file, a device node and a FIFO, none of which this
+// process can be relied on to create on every platform the suite runs on.
+// What they are asserted for instead is that they are *claimed* — a miss that
+// names the word rather than the letter — which is the half that separates a
+// read letter from an unknown one.
+func permissionDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	// 0644 and 0755 are the two modes the measurement used, and the letters
+	// are separated by exactly that difference: `w` holds of both, `W` of
+	// neither, and `E` and `X` only of the 0755 names.
+	for name, mode := range map[string]os.FileMode{
+		"plain": 0o644,
+		"prog":  0o755,
+		"suid":  0o755 | os.ModeSetuid,
+	} {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(p, mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "stick"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// 0755 rather than the 1777 a real sticky directory carries: the point
+	// of the fixture is that `I` and `W` hold of nothing here, and a
+	// world-writable directory would satisfy both and make the two rows that
+	// separate the triples vacuous.
+	if err := os.Chmod(filepath.Join(dir, "stick"), 0o755|os.ModeSticky); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// The nine permission letters read the file's mode, in the three triples the
+// panel run put them in.
+//
+// Measured on zsh 5.9.2, 2026-09-07. The point of listing all nine rather
+// than one per triple is that the triples were the finding: nothing about
+// `A`, `I` and `E` says "group", and the assignment is readable only from
+// which of them hold of 0644 and which of 0755.
+func TestThePermissionQualifiersReadTheMode(t *testing.T) {
+	dir := permissionDir(t)
+	for _, tc := range []struct{ list, want string }{
+		// Owner: every name here is owner-readable and owner-writable, and
+		// only the 0755 pair is owner-executable.
+		{"r", "[plain][prog][stick][suid]"},
+		{"w", "[plain][prog][stick][suid]"},
+		{"x", "[prog][stick][suid]"},
+		// Group: 0644 and 0755 both grant group read and neither grants
+		// group write, which is what places these three on this triple.
+		{"A", "[plain][prog][stick][suid]"},
+		{"I", ""},
+		{"E", "[prog][stick][suid]"},
+		// World: the same shape again, and `W` being empty where `w` is not
+		// is the whole of what separates world from owner here.
+		{"R", "[plain][prog][stick][suid]"},
+		{"W", ""},
+		{"X", "[prog][stick][suid]"},
+	} {
+		out, st := runQualified(t, dir, `printf "[%s]" *(`+tc.list+`)`)
+		if tc.want == "" {
+			if !containsSub(out, "no matches found: *("+tc.list+")") || st == 0 {
+				t.Errorf("*(%s) = %q (status %d), want a fatal miss", tc.list, out, st)
+			}
+			continue
+		}
+		if out != tc.want || st != 0 {
+			t.Errorf("*(%s) = %q (status %d), want %q at 0", tc.list, out, st, tc.want)
+		}
+	}
+}
+
+// The set-ID, sticky and FIFO letters ask about the bits that live outside
+// Perm(), and only Perm() answers a permission letter — so a set-user-ID file
+// at 4755 is `s` and is not any of the nine.
+func TestTheModeBitQualifiers(t *testing.T) {
+	dir := permissionDir(t)
+	for _, tc := range []struct{ list, want string }{
+		{"s", "[suid]"},
+		{"t", "[stick]"},
+		// A directory is not a regular file, so this is the `.` test and the
+		// sticky one disagreeing, which is what an `and` should do.
+		{".t", ""},
+		// `S` and `%` are claimed rather than refused. Neither can be
+		// created here without privileges, so what is asserted is the half
+		// that distinguishes a read letter from an unknown one: the miss
+		// names the whole word, and not the letter.
+		{"S", ""},
+		{"%", ""},
+		{"p", ""},
+	} {
+		out, st := runQualified(t, dir, `printf "[%s]" *(`+tc.list+`)`)
+		if tc.want == "" {
+			if !containsSub(out, "no matches found: *("+tc.list+")") || st == 0 {
+				t.Errorf("*(%s) = %q (status %d), want a fatal miss naming the word", tc.list, out, st)
+			}
+			if containsSub(out, "unknown file attribute") {
+				t.Errorf("*(%s) = %q, want the letter claimed rather than refused", tc.list, out)
+			}
+			continue
+		}
+		if out != tc.want || st != 0 {
+			t.Errorf("*(%s) = %q (status %d), want %q at 0", tc.list, out, st, tc.want)
+		}
+	}
+}
+
+// A group standing for the whole word is a qualifier list over an empty
+// pattern, and an empty pattern matches nothing — so `echo (x)` names the
+// word rather than the letter.
+//
+// This is the input #1053 was filed on, and the wording it asked for. What it
+// read as a competition between the qualifier production and the alternation
+// one is neither: `x` is zsh's owner-execute test, and the only thing wrong
+// was that this refused a letter it had.
+func TestABareQualifierListNamesTheWord(t *testing.T) {
+	dir := permissionDir(t)
+	for _, src := range []string{`echo (x)`, `echo (.)`, `echo prog(x)`} {
+		out, st := runQualified(t, dir, src)
+		if src == `echo prog(x)` {
+			if out != "prog\n" || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", src, out, st, "prog\n")
+			}
+			continue
+		}
+		want := "no matches found: " + src[len("echo "):]
+		if !containsSub(out, want) || st == 0 {
+			t.Errorf("%s = %q (status %d), want %q and a failure", src, out, st, want)
+		}
+	}
+}

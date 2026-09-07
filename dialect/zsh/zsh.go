@@ -150,6 +150,12 @@ func Dialect() syntax.Dialect {
 	// 5.9.2, which reads more kinds of name through it than the other two that
 	// have it; see interp.Semantics.ParameterIsSetSeesSpecials.
 	d.ParameterIsSetTest = true
+	// A function definition's name is a *word*, so an expansion in one names
+	// the function the expansion produces: `w=foo; _p_${w}() { … }` defines
+	// `_p_foo`. This shell's alone — the other five refuse both spellings,
+	// and say so as a complaint about a name rather than about the grammar.
+	// It is how a plugin generates one function per widget.
+	d.FunctionNameExpands = true
 	// A `(` where an argument may stand belongs to the word: `echo MY ( x )`
 	// is two words there and a syntax error in the other four. Measured
 	// 2026-09-06 on zsh 5.9.2 — `unknown file attribute:` names the space

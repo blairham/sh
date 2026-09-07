@@ -988,6 +988,23 @@ type Dialect struct {
 	// about two classes of name; see interp.Semantics.
 	ParameterIsSetTest bool
 
+	// FunctionNameExpands reads a function definition's name as a *word*
+	// rather than as literal text, so an expansion in one names the function
+	// the expansion produces: `w=foo; _p_${w}() { … }` defines `_p_foo`.
+	//
+	// One dialect's, and it is the only one — dash, bash 5.3, bash-as-`sh`,
+	// bash 3.2 and ksh93 all refuse both spellings, and their wordings say
+	// they are refusing a *name*: `` `_p_${w}': not a valid identifier `` and
+	// `_p_${w}: invalid function name`. So this is additive grammar rather
+	// than an axis.
+	//
+	// The flag also decides what happens without it. The keyword form parsed
+	// either way and took the token's literal text, which for `_p_${w}` is
+	// `_p_w` — a different function, defined at status 0, with the one the
+	// script asked for missing. Off, a name holding an expansion is refused
+	// rather than flattened.
+	FunctionNameExpands bool
+
 	// PatternAlternation enables a bare `(a|b)` inside a pattern word, which
 	// zsh has and the others do not: `a(b|c)` matches `ab` there. It is why
 	// `@(abc|xyz)` is a literal `@` followed by a group in zsh rather than an

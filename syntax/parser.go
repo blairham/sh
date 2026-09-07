@@ -1504,6 +1504,21 @@ const funcNamePunctuation = "!#%+,-./:@]^"
 // isFuncName is isName with that punctuation, per the flag, and with the bytes
 // above ASCII — a name written in another script is a name to every shell that
 // has punctuated ones at all.
+// tokenHoldsAnExpansion reports whether a word token has a span the shell
+// would expand, which is exactly when [Token.Literal] loses information.
+//
+// The test the name check needs: `_p_${w}` flattens to `_p_w`, a perfectly
+// good name for a different function, so "is the literal a name" cannot see
+// the difference and answered yes.
+func tokenHoldsAnExpansion(t Token) bool {
+	for _, s := range t.Spans {
+		if s.Kind != Literal {
+			return true
+		}
+	}
+	return false
+}
+
 func isFuncName(s string, punctuation bool) bool {
 	if isName(s) {
 		return true
@@ -1742,7 +1757,12 @@ func (p *Parser) declarationArray(c *SimpleCmd) (a *Assign, consumed bool) {
 
 // looksLikeFuncDef reports whether the current word begins `name()`.
 func (p *Parser) looksLikeFuncDef() bool {
-	if p.tok.IsQuoted() || len(p.tok.Spans) != 1 || p.tok.Spans[0].Kind != Literal {
+	// One unquoted literal span is the ordinary name. Where the dialect
+	// expands a name, several spans are allowed and an expansion among them
+	// is the point — but quoting still is not, so `'q'()` is refused here as
+	// it was before.
+	expands := p.dialect.FunctionNameExpands && !p.tok.IsQuoted()
+	if p.tok.IsQuoted() || (!expands && (len(p.tok.Spans) != 1 || p.tok.Spans[0].Kind != Literal)) {
 		return false
 	}
 	if p.dialect.FuncDefAtParen {
@@ -1759,6 +1779,25 @@ func (p *Parser) looksLikeFuncDef() bool {
 	// so it cannot contain `=`. Without this, `a=()` — an empty array — was
 	// read as a definition of a function called `a=`, because a parenthesis
 	// pair follows either way.
+	if p.dialect.FunctionNameExpands && tokenHoldsAnExpansion(p.tok) {
+		// The name is a word here, so whether its *text* is a name cannot be
+		// known until it is expanded. The parentheses are what say this is a
+		// definition at all — except where the word is an assignment's name
+		// half, because an array assignment is a parenthesis after a word
+		// too and the subscript is where a loop ordinarily puts an
+		// expansion: `a[$i]=()` empties an element and defines nothing.
+		//
+		// The reading is lexical, which is what tells the two apart. In
+		// `a[$i]=` the `=` follows a name and a subscript written as literal
+		// text, so the word is an assignment; in `_p_${w}=` the `=` follows
+		// an expansion, so it is not one, and the function it defines is
+		// named `_p_foo=` — measured on zsh 5.9.2, which lists it under
+		// `${(k)functions}` with no variable `_p_foo` anywhere.
+		if _, isAssign := p.isAssign(p.tok); isAssign {
+			return false
+		}
+		return p.lex.peekIsFuncParens()
+	}
 	if !isFuncName(p.tok.Literal(), p.dialect.FunctionNamePunctuation) {
 		return false
 	}
@@ -1767,7 +1806,13 @@ func (p *Parser) looksLikeFuncDef() bool {
 
 func (p *Parser) parseFuncPosix() Command {
 	fn := &FuncDecl{Name: p.tok.Literal(), Start: p.tok.Pos}
-	p.next()
+	if p.dialect.FunctionNameExpands && tokenHoldsAnExpansion(p.tok) {
+		// A name that is not text until the shell runs, kept whole. p.word()
+		// consumes it, which is the p.next() the plain path takes.
+		fn.NameWord = p.word()
+	} else {
+		p.next()
+	}
 	p.next() // (
 	if !p.at(TokRightParen) {
 		p.failUnexpectedOperand(")")
@@ -1778,7 +1823,8 @@ func (p *Parser) parseFuncPosix() Command {
 	// checks the name once the parens close: dash's `f-g() { :; }` is
 	// `Bad function name`, said only after `[[ ( -n x ) ]]`-shaped text has
 	// already reached its own unexpected-word diagnosis above.
-	if p.dialect.FuncDefAtParen && !p.dialect.FunctionNamePunctuation && !isName(fn.Name) {
+	if p.dialect.FuncDefAtParen && !p.dialect.FunctionNamePunctuation &&
+		fn.NameWord == nil && !isName(fn.Name) {
 		p.fail("Bad function name")
 		return fn
 	}
@@ -1897,12 +1943,29 @@ func (p *Parser) parseAnonFunc(keyword bool) Command {
 func (p *Parser) parseFuncKeyword() Command {
 	fn := &FuncDecl{Keyword: true, Start: p.tok.Pos}
 	p.next()
-	if p.tok.Kind != TokWord || !isFuncName(p.tok.Literal(), p.dialect.FunctionNamePunctuation) {
+	if p.tok.Kind != TokWord {
 		p.fail("expected a name after `function`")
 		return fn
 	}
-	fn.Name = p.tok.Literal()
-	p.next()
+	if expanded := tokenHoldsAnExpansion(p.tok); expanded {
+		// A name that is not text until the shell runs. Where the dialect
+		// expands one it is kept as a word; where it does not, it is refused
+		// — this used to fall through to Literal(), which turns `_p_${w}`
+		// into `_p_w` and defines a function nobody asked for, at status 0.
+		if !p.dialect.FunctionNameExpands {
+			p.fail("expected a name after `function`")
+			return fn
+		}
+		fn.Name = p.tok.Literal()
+		fn.NameWord = p.word()
+	} else {
+		if !isFuncName(p.tok.Literal(), p.dialect.FunctionNamePunctuation) {
+			p.fail("expected a name after `function`")
+			return fn
+		}
+		fn.Name = p.tok.Literal()
+		p.next()
+	}
 	if p.at(TokLeftParen) {
 		// The hybrid `function f() {}`: bash and zsh take it, ksh93 rejects
 		// it. Accepting it everywhere the keyword exists meant the ksh

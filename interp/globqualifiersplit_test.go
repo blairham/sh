@@ -86,9 +86,52 @@ func TestAGroupIsAMetacharacterOnlyWhereItCloses(t *testing.T) {
 		{`a*b`, false, true},
 		{`a?b`, true, true},
 	} {
-		if got := hasUnescapedMeta(tc.field, false, tc.patternGroup); got != tc.wantIsMeta {
-			t.Errorf("hasUnescapedMeta(%q, false, %v) = %v, want %v",
+		if got := hasUnescapedMeta(tc.field, false, tc.patternGroup, false); got != tc.wantIsMeta {
+			t.Errorf("hasUnescapedMeta(%q, false, %v, false) = %v, want %v",
 				tc.field, tc.patternGroup, got, tc.wantIsMeta)
+		}
+	}
+	// The quantified group is the third dialect answer in the same
+	// predicate, and it is asked here rather than through a directory
+	// because the claim is about the *characters*: `@(` is a group and `@x`
+	// is a file name.
+	for _, tc := range []struct {
+		field                       string
+		extendedPattern, wantIsMeta bool
+	}{
+		{`@(a|b)`, true, true},
+		{`+(a|b)`, true, true},
+		{`!(a)`, true, true},
+		// The two whose quantifier is a metacharacter anyway, which is why
+		// they answered yes before the flag existed and hid the gap.
+		{`*(a|b)`, false, true},
+		{`?(a|b)`, false, true},
+		// Off, and the three are ordinary characters again.
+		{`@(a|b)`, false, false},
+		{`+(a|b)`, false, false},
+		{`!(a)`, false, false},
+		// A quantifier with nothing behind it is an ordinary character
+		// under the flag too.
+		{`@a`, true, false},
+		{`+a`, true, false},
+		{`!a`, true, false},
+		// Unclosed, like the bare group's own unclosed row.
+		{`@(a`, true, false},
+		// The `(` must be the byte *after* the quantifier and not merely
+		// somewhere behind it. `@a(b)` is `syntax error at line 1: `('
+		// unexpected` in ksh93, so no source can put such a field here — but
+		// a value can (`p='@a(b)'; echo $p`), and the predicate's contract is
+		// what this file tests. A mutant that dropped the adjacency check
+		// survived every row until this one.
+		{`@a(b)`, true, false},
+		{`+a(b)`, true, false},
+		// Escaped, which is what keeps a quoted group and one from a value
+		// literal here as well.
+		{`\@(a|b)`, true, false},
+	} {
+		if got := hasUnescapedMeta(tc.field, false, false, tc.extendedPattern); got != tc.wantIsMeta {
+			t.Errorf("hasUnescapedMeta(%q, false, false, %v) = %v, want %v",
+				tc.field, tc.extendedPattern, got, tc.wantIsMeta)
 		}
 	}
 }

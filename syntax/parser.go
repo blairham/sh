@@ -1426,12 +1426,33 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 			return a
 		}
 		a.IsArray = true
+		// Between the parentheses an element stands where an argument does,
+		// so a `(` that begins one belongs to the *element* — which is the
+		// flag the lexer already has for it, set here for the same reason
+		// parseSimple sets it before each argument.
+		//
+		// Without it the assignment found its closing `)` by counting, and a
+		// glob flag opens one that is part of a word: `files=( (#i)a )` was
+		// `expected ) to close an array assignment` where zsh accepts it, and
+		// so was every other parenthesised shape that stands at the *front*
+		// of an element. The three that stand after a pattern —
+		// `*(-.DN)`, `*~(*/*)` and `*.(zip|tgz)` — were already right,
+		// because mid-word the lexer folds the group without being told
+		// (#1149).
+		//
+		// Restored rather than cleared, because an assignment is read at
+		// command position as well as after a word, and the token *after*
+		// the array is not an argument either way — parseSimple's own defer
+		// is what ends argument position for the command.
+		saved := p.lex.inArgument
+		p.lex.inArgument = true
 		p.next()
 		p.skipNewlines()
 		for p.tok.Kind == TokWord && p.err == nil {
 			a.Elems = append(a.Elems, p.word())
 			p.skipNewlines()
 		}
+		p.lex.inArgument = saved
 		if !p.at(TokRightParen) {
 			p.fail("expected ) to close an array assignment")
 			return a

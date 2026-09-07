@@ -400,12 +400,50 @@ four characters — this being also the shell that does not re-read an
 expansion's result as a pattern. `(` and `)` are in the escape set for
 that reason.
 
+**An array literal's element is one of those positions**, and it was the
+one left out. `files=( (#i)a )` is accepted by that shell and was
+``expected ) to close an array assignment`` here, because the assignment
+found its closing `)` by *counting* parentheses and a group at the front
+of an element opens one that belongs to the word. So does a group on a
+later element — `files=( x (#i)a )` — which is a different parser state
+and had to be asked separately.
+
+The three parenthesised shapes that stand *after* a pattern were already
+right, and that is what says where the boundary was:
+
+    files=( *(-.DN) )                       already parsed
+    files=( *~(*/*|.(_backup|git))/* )      already parsed
+    files=( *.(zip|tgz) )                   already parsed
+    files=( (#i)a )                         did not
+
+Mid-word the lexer folds a group without being told; only at the *front*
+of a word does it need to know what position it is in. The fix is the
+flag this section is about, set while the elements are read and restored
+afterwards — an assignment is read at command position as well as after
+a word, and the token after the array is an argument in neither case.
+
+Nothing about matching changes with it: `files=( (#i)a )` parses and the
+flag is then an unimplemented one, so the pattern reaches the filesystem
+as written and misses. `(#i)` and its neighbours are the `(#q…)` form
+listed under "read and not implemented" below (#1053); this was only ever
+about the parse (#1149).
+
 Grammar flag: `GlobQualifiers` — core: off; `zsh`: on. The matcher reads
 the same flag, the way it reads `PatternAlternation` and
 `NumericRangePattern`. Measured:
 `pat/a-trailing-group-is-a-list-of-qualifiers`,
 `pat/a-qualifier-list-is-not-an-alternation`,
-`pat/a-paren-where-an-argument-stands`.
+`pat/a-paren-where-an-argument-stands`,
+`pat/a-glob-flag-where-an-array-element-begins`,
+`pat/a-glob-flag-on-a-later-array-element`.
+
+**Two positions still count rather than read**, measured and filed rather
+than fixed here: a `case` arm whose pattern begins with a group —
+`case x in ((#i)*.zip)` and even the flagless `case x in ((a|b))`, both
+accepted by that shell and both `parse error near 'arithmetic command'`
+here — and `;` as an element separator inside an array literal, which
+that shell and ksh93 accept. The first is the line
+`~/.zi/bin/lib/zsh/install.zsh` stops on once the array form parses.
 
 ### What is read and not implemented
 

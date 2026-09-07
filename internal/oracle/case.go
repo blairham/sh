@@ -7496,6 +7496,16 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the disambiguation is exactly one character, and the row is four readings of the same three-character shape. A group with no `|` is a list — so `f1(.)` sends a literal name to the filesystem, a name being no pattern on its own. A group *with* one is the alternation that shell already had, and `f(1|2)` matches two files where `1` alone would be an unknown attribute. `N` makes a miss no error and deletes the word, which is why `printf` still writes its format once. And a character no qualifier claims is named and fatal, so `after` is not reached",
 	},
 	{
+		ID: "pat/a-glob-flag-where-an-array-element-begins", Category: "pattern matching", SyntaxError: true,
+		Snippet: `files=( (#i)zz ); echo "n=${#files[@]}"; echo after`,
+		Why:     "the same rule as `a-paren-where-an-argument-stands`, one production over: an array literal's element stands where an argument does, so the `(` belongs to the element and not to the assignment. The assignment used to find its closing `)` by counting, and a flag opens one that is part of a word — `expected ) to close an array assignment` where the shell reaches the pattern and reports the miss. The pattern matches nothing on purpose: the row is about the element being *read*, and an unmatched pattern is fatal there, so `after` is never printed in any of the five",
+	},
+	{
+		ID: "pat/a-glob-flag-on-a-later-array-element", Category: "pattern matching", SyntaxError: true,
+		Snippet: `files=( x (#i)zz ); echo "n=${#files[@]}"; echo after`,
+		Why:     "and the second element, which is a different parser state from the first — a word has been read, so a `(` after one had already to be told apart from the assignment's own. Worth its own row because a fix that only handled the leading position would leave this one counting",
+	},
+	{
 		ID: "pat/a-paren-where-an-argument-stands", Category: "pattern matching", SyntaxError: true,
 		Snippet: `echo MY ( x ); echo after`,
 		Why:     "the same three characters are a syntax error after a word in four shells and one argument in the fifth, where they are a pattern carrying a qualifier list — the complaint names the *space* inside the group, which is what says it was read as a list and not as anything of the shell's. Command position is the whole of the difference there: `( x )` written where a command begins is still a subshell, which `core/two-subshells-with-nothing-between-them` still pins from the other side",

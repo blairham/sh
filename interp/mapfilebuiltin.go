@@ -137,6 +137,11 @@ func biMapfile(r *Runner, _ context.Context, name string, args []string) int {
 	// reads next. End of input with no trailing delimiter still yields the
 	// element, and is not a failure — unlike `read`, a mapfile that reaches
 	// the end read everything it was asked for.
+	//
+	// The third stream a builtin waits on, and so the third place a
+	// background job's pid has to settle before it does — see
+	// settleBackgroundJobBeforeABlockingRead.
+	r.settleBackgroundJobBeforeABlockingRead(in)
 	next := directByteSource(in)
 	var elems []string
 	var b strings.Builder

@@ -5080,6 +5080,41 @@ the workaround a script has, and
 `jobs/an-ampersand-returns-when-an-external-commands-redirection-blocks`
 record that `&` comes back — which is a row that timed out before.
 
+**And a fourth trigger, filed as #1277.** The same wait had a second way
+of never ending, and a coprocess reached it every time rather than by
+arrangement: `coproc read x; echo AFTER` printed nothing here and prints
+the marker at once in zsh 5.9.2, bash 5.3.15 and ksh93u+ 2012-08-01. A
+coprocess reads a pipe the shell holds the write end of, so a `read` in
+its body waits by construction; nothing external runs, the job never
+ends, and the shell that started it waited on a process id that was never
+coming. `coproc cat` did not hang, which is what says the subject is the
+*builtin* and not a body that reads — `cat` is a program, and a program
+starting is one of the triggers already there.
+
+So: **a background job is settled without a process id when it is about to
+read a stream that has nothing waiting on it.** The stream is asked rather
+than assumed, with the same poll `read -t 0` uses — a regular file, a
+here-document and an exhausted stream all answer a read at once, so the
+job is left alone and `{ read x < file; sleep 1 } &` still reports the
+sleep's process id. That is the `> log` half of the trade above, in the
+other direction.
+
+The coprocess is not the only route. `{ read x } &` finishes at once under
+`/dev/null` and hangs when standard input is a pipe with a writer and no
+data, so on the `&` route it is the stream's kind that decides. Nor is
+`read` the only builtin: `mapfile` and `readarray` under their one
+implementation, and the `select` clause, wait on a stream the same way and
+hung the same way — three places that read rather than one, which is why
+the settling is a call each of them makes rather than something written
+into `read`. Both spellings of a coprocess get it, `coproc` and ksh93's
+`|&` alike, because both start the job through one path.
+
+What stays: a job whose body neither reads nor ever runs a program —
+`{ while :; do :; done } &` — still never settles, and starting it still
+does not return. That is the same missing fork, with no point in it where
+the job can be said to be waiting on anything outside the shell, and it is
+#1283 rather than something papered over here.
+
 **`wait -n`** is bash's: block until whichever job finishes first, report
 its status, 127 in silence with no jobs at all
 (`WaitNWaitsForTheNextJob`). dash refuses the option, ksh93 refuses it

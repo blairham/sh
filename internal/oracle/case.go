@@ -9748,6 +9748,11 @@ out=$(CDPATH=./pool cd sub)
 		Why:     "a compound command needs no name in front of it, which is what separates the two grammars rather than the keyword: the shell with no name for a coprocess still takes `{ … }` here, where the one that reads a name would have read `{` as the name's absence. bash 3.2, dash and ksh93 date the construct by refusing the `}`",
 	},
 	{
+		ID: "commands/a-coprocess-whose-body-reads-does-not-block-the-shell", Category: "commands",
+		Snippet: `coproc read -r l; print -p fed; echo AFTER`,
+		Why:     "the shell carries on while the coprocess waits, which is what forking gives every shell in the panel for free and a shell that runs its jobs on goroutines has to arrange (#1277). A coprocess reads a pipe the *shell* holds the write end of, so a `read` in its body waits by construction and never ends on its own — and the shell that started it printed nothing at all here until the job's pid settled at the point it began to wait. `print -p` is what feeds it afterwards, and the reason this row can be measured safely: without it the coprocess outlives the shell in one column and holds the pipe whoever is reading the run is waiting on. bash has neither the letter nor a `print`, so its column says the same thing through a command that was not found; the other three have no `coproc` word either and reach `AFTER` by never starting one",
+	},
+	{
 		ID: "commands/the-coprocess-letters-with-nothing-started", Category: "commands",
 		Snippet: `print -p x; echo "p=$?"; read -p y; echo "r=$?"`,
 		Why:     "the same two letters before any `coproc`, which is the refusal each shell keeps for the case: two sentences and 1 in the shell that has both letters and a coprocess, two others and 1 in the shell that has the letters and no way here to start one, and in the two without `print` a command that was not found at 127 with `-p` reading as a prompt",
@@ -9979,6 +9984,14 @@ print -p hello
 read -p line
 echo "got=[$line]"`,
 		Why: "the construct the operator *is*, where the three rows above only show what it is not. ksh93 backgrounds the command with a pipe on each of its named streams and `print -p` and `read -p` are how a script reaches them — there being no `coproc` word there and no name to publish under. bash 5.3 and zsh read the two bytes as a pipe of both streams instead, so `cat |&` needs a command after it and they refuse the newline; bash 3.2 and dash have no `|&` at all and blame the ampersand. One spelling, and the row that names the coprocess rather than the gap (#1141)",
+	},
+	{
+		ID: "pipe/a-coprocess-operator-whose-body-reads-does-not-block-the-shell", Category: "redirection",
+		Script: true,
+		Snippet: `read -r l |&
+print -p fed
+echo AFTER`,
+		Why: "the same waiting body reached by the other spelling, which is why the fix for it is on the path both share rather than on the word. ksh93 backgrounds the `read` onto the coprocess pipe and reaches the next line at once; the two shells that read `|&` as a pipe of both streams run the `read` in a pipeline instead and get there by a `print` that is not theirs, and bash 3.2 and dash have no `|&` and blame the ampersand. The feed is what ends the coprocess in the column that has one (#1277)",
 	},
 	{
 		ID: "pipe/a-coprocess-operator-ends-the-whole-and-or", Category: "redirection",

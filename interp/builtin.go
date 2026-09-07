@@ -1951,9 +1951,16 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 		return 1
 	case timed:
+		// A deadline bounds the wait but does not remove it, and a shell
+		// that started this job is blocked for the whole of it.
+		r.settleBackgroundJobBeforeABlockingRead(in)
 		var stop func()
 		next, stop = r.timedByteSource(ctx, in, timeout)
 		defer stop()
+	default:
+		// The read that never returns, which is the one a coprocess makes
+		// by construction.
+		r.settleBackgroundJobBeforeABlockingRead(in)
 	}
 	text, lits, end := readSegment(next, raw, delim, count, exact)
 
@@ -2294,7 +2301,12 @@ func literalMask(at []int, n int) []bool {
 // last unterminated line twice — once as the line, once as the empty read
 // after it.
 func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
-	text, _, end := readSegment(directByteSource(r.In()), raw, '\n', -1, false)
+	in := r.In()
+	// `select` reads here, and a `select` in the body of a background job
+	// waits on its stream exactly as `read` does — see
+	// settleBackgroundJobBeforeABlockingRead.
+	r.settleBackgroundJobBeforeABlockingRead(in)
+	text, _, end := readSegment(directByteSource(in), raw, '\n', -1, false)
 	return text, end == endEOF
 }
 

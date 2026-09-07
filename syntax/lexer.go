@@ -4,6 +4,7 @@
 package syntax
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -214,7 +215,7 @@ func (l *Lexer) advance() byte {
 // the text from the opener to the end of its line, and the line the input
 // ran out on in both conventions.
 func (l *Lexer) failUnmatched(open Pos, opener, closer, msg string) {
-	if l.err != nil {
+	if l.err != nil && !l.replacesUnmatched() {
 		return
 	}
 	// From the start of the word rather than from the opener, which is what
@@ -246,6 +247,39 @@ func (l *Lexer) failUnmatched(open Pos, opener, closer, msg string) {
 		Token: opener, Expected: closer, LastToken: near,
 		EndLine: after, EofLine: l.line,
 	}
+}
+
+// replacesUnmatched reports whether a construct noticing that the input ran
+// out should take the complaint from one *inside* it that noticed first.
+//
+// Which construct is blamed when they nest is a dialect question, and it is
+// answered by the order the reports arrive in rather than by anything having
+// to look around: the scanners recurse, so the innermost one to run out
+// returns first and the enclosing ones follow it outwards. Keeping the first
+// report blames the innermost, and letting each replace the last blames the
+// outermost.
+//
+// Measured 2026-09-07, `-n` over a script file, on constructs nested both
+// ways round:
+//
+//	echo $( echo "hi          bash, dash, ksh93 blame the `"`
+//	echo "${x:-"$( echo hi    the same three blame the `$(`
+//	echo $(( 1 + `echo 2      and the backquote
+//
+// so those three name the innermost in every arrangement. zsh names the
+// outermost in the same rows, which is why `echo "$( echo hi` is `unmatched
+// "` there and `unexpected EOF while looking for matching )` in bash.
+//
+// Only an unmatched construct may be replaced. Anything else that has
+// already failed is a different diagnosis and the first one stands, which is
+// what keeps this from turning a real refusal into a report about a
+// delimiter that was merely still open when it happened.
+func (l *Lexer) replacesUnmatched() bool {
+	if !l.dialect.UnmatchedBlamesTheOutermost {
+		return false
+	}
+	var se *Error
+	return errors.As(l.err, &se) && se.Kind == ErrUnmatched
 }
 
 func (l *Lexer) fail(p Pos, format string, args ...any) {
@@ -1669,6 +1703,23 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			depth--
 			l.advance()
 		default:
+			// A substitution written in the body is stepped over whole, so
+			// a `}` inside it does not close this expansion and a `)` or a
+			// backquote it never closes is blamed on the substitution
+			// rather than on the brace. `${x:-$(echo hi` is `unexpected EOF
+			// while looking for matching )` in bash, dash and ksh93, and the
+			// backquoted spelling the same — both were `${` here, which is
+			// the same cause as the nested case #1151 is about, one scanner
+			// over.
+			//
+			// This is the *body* of the expansion holding a program, which
+			// is a different question from what skipSubstitution's own note
+			// declines to answer: that one is about a `${ }` written inside
+			// a quote being skipped as text, where the panel disagrees over
+			// what quoting means. What a `$( )` contains is not in dispute.
+			if l.skipSubstitution() {
+				continue
+			}
 			l.advance()
 		}
 	}
@@ -1772,6 +1823,7 @@ func unescapeBackquoted(s string) string {
 // the whole of their specification, and `escapes` is the flag that already
 // separates the two.
 func (l *Lexer) skipQuoted(quote byte, escapes bool) {
+	open := l.pos()
 	l.advance() // opening quote
 	for !l.eof() {
 		c := l.peek()
@@ -1791,6 +1843,30 @@ func (l *Lexer) skipQuoted(quote byte, escapes bool) {
 		}
 		l.advance()
 	}
+	// The input ran out inside this quote, and saying so is the whole of
+	// what the skippers were missing: a delimiter scan used to return
+	// quietly here, so the construct *enclosing* it reached end of input and
+	// named its own opener — which meant the outermost was blamed in every
+	// dialect, including the three that name the innermost (#1151).
+	//
+	// ranOut is deliberately not called here, and the two questions part on
+	// exactly this point. What a *diagnostic* blames is the innermost
+	// construct in three of the four dialects; what a **prompt** is still
+	// waiting on is the outermost, which is what Lexer.openWord answers and
+	// what Parser.Open reports — `echo $( echo 'x` is a substitution that is
+	// still open, and the quote inside it is not the thing a continuation
+	// prompt is for. The enclosing scanner records it on its way past.
+	l.failUnmatched(open, string(quote), string(quote), unterminatedQuoteMsg(quote))
+}
+
+// unterminatedQuoteMsg is the substrate's own sentence for a quote the input
+// ran out inside, matching what scanWord says for the same failure so the two
+// routes into it cannot drift apart.
+func unterminatedQuoteMsg(quote byte) string {
+	if quote == '\'' {
+		return "unterminated single quote"
+	}
+	return "unterminated double quote"
 }
 
 // skipSubstitution steps over a substitution beginning at the cursor and
@@ -1812,13 +1888,26 @@ func (l *Lexer) skipSubstitution() bool {
 	if l.peek() != '$' || l.peekAt(1) != '(' {
 		return false
 	}
+	open := l.pos()
 	l.advance() // $
 	l.advance() // (
 	// The arithmetic spelling needs no case of its own. Its second `(` is
 	// the next character skipToDepth reads, and counting it there is what
 	// makes both `)` at the other end belong to the construct — so one loop
 	// serves `$( )` and `$(( ))` alike.
-	l.skipToDepth(1)
+	if !l.skipToDepth(1) {
+		// It ran out rather than finding the `)`, and it is the construct
+		// three of the four dialects blame — `echo "${x:-"$( echo hi` is
+		// `unexpected EOF while looking for matching )` in bash, exactly as
+		// the un-nested shape is. Before this the skip returned quietly and
+		// the `${` around it was blamed instead (#1151).
+		//
+		// Named as the plain substitution and not the arithmetic one: this
+		// skip does not know which it stepped over, and the two spellings
+		// are told apart by their closers, which it never reached. The
+		// scanners that *do* know still report their own.
+		l.failUnmatched(open, "$(", ")", "unterminated "+CommandSubst.String())
+	}
 	return true
 }
 
@@ -1836,7 +1925,7 @@ func (l *Lexer) skipSubstitution() bool {
 // Recurring was tried and every mutant of it read the same, in all four
 // dialects and across the corpus, because it can only arrive at the state
 // counting arrives at.
-func (l *Lexer) skipToDepth(depth int) {
+func (l *Lexer) skipToDepth(depth int) bool {
 	for depth > 0 && !l.eof() {
 		switch c := l.peek(); c {
 		case '\'':
@@ -1860,9 +1949,11 @@ func (l *Lexer) skipToDepth(depth int) {
 			l.advance()
 		}
 	}
+	return depth == 0
 }
 
 func (l *Lexer) skipBackticks() {
+	open := l.pos()
 	l.advance()
 	for !l.eof() {
 		switch l.peek() {
@@ -1877,6 +1968,12 @@ func (l *Lexer) skipBackticks() {
 		default:
 			l.advance()
 		}
+	}
+	// Ran out rather than finding the closing mark. The dialect that ends an
+	// unterminated quote at end of input and runs is asked here for the same
+	// reason scanBackticks asks it: there is nothing unfinished there.
+	if !l.dialect.CloseQuotesAtEOF {
+		l.failUnmatched(open, "`", "`", "unterminated backquote substitution")
 	}
 }
 

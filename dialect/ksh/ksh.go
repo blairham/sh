@@ -807,7 +807,7 @@ func Diagnostics() interp.Diagnostics {
 		// runs out inside is closed and run, which is the grammar flag.
 		// The `"` case is a `${` that began inside a double quote, and it
 		// is worded as the quote character standing where it should not.
-		UnmatchedQuote:    "syntax error at line %[4]d: `%[1]s' unexpected",
+		UnmatchedQuote:    "syntax error at line %[4]d: `%[1]s' unmatched",
 		UnmatchedCmdSubst: "syntax error at line %[4]d: `(' unmatched",
 		// A process substitution reaches a different *diagnosis* here, not
 		// only a different sentence: `$(` is an unmatched parenthesis named

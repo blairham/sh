@@ -6,6 +6,7 @@ package bash_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -45,30 +46,45 @@ func TestASubshellDoesNotLoseWhereTheParentsFunctionCameFrom(t *testing.T) {
 // A child's environment is the only place it is observable, and that is not a
 // detour — it is the whole of what exporting a function means. It is not a
 // shell variable (`${!BASH_FUNC@}` is empty in bash 5.3.15 with one exported,
-// checked), and this shell's `export -p -f` prints nothing yet, so a probe
-// that reports its own environment is what there is to ask.
+// checked), and this shell's `export -p -f` prints nothing yet.
+//
+// The command is `env` itself, by absolute path, and **not** a script that
+// runs it. That is the whole reason this test is shaped as it is: the entry
+// is called `BASH_FUNC_g%%`, which is not a valid variable name, and a POSIX
+// shell in between drops it on import. A `#!/bin/sh` probe passed on macOS,
+// where /bin/sh is bash and keeps its own entry, and failed on Linux, where
+// it is dash and does not — a platform split that says nothing about the
+// shell under test.
 //
 // Measured against bash 5.3.15: `g(){ :; }; export -f g` puts exactly one
-// `BASH_FUNC_g%%` entry in a command's environment and `(export -f g)` puts
-// none. The second half is the control — without it this would pass in a
-// shell that had stopped exporting functions at all.
+// such entry in a command's environment and `(export -f g)` puts none. The
+// second row is the control — without it this would pass in a shell that had
+// stopped exporting functions at all.
 func TestASubshellsFunctionExportDoesNotEscape(t *testing.T) {
-	dir := t.TempDir()
-	probe := filepath.Join(dir, "probe")
-	// Its own PATH, because the shell under test is given only this
-	// directory and the probe needs two real commands.
-	body := "#!/bin/sh\nPATH=/usr/bin:/bin\nexport PATH\nenv | grep -c '^BASH_FUNC' || true\n"
-	if err := os.WriteFile(probe, []byte(body), 0o700); err != nil {
-		t.Fatalf("writing the probe: %v", err)
+	const env = "/usr/bin/env"
+	if _, err := os.Stat(env); err != nil {
+		t.Skipf("no %s here: %v", env, err)
 	}
-	for _, tc := range []struct{ name, src, want string }{
-		{"exported in a subshell", "g(){ :; }\n(export -f g)\nprobe", "0\n"},
-		{"exported at the top level", "g(){ :; }\nexport -f g\nprobe", "1\n"},
+	for _, tc := range []struct {
+		name, src string
+		want      int
+	}{
+		{"exported in a subshell", "g(){ :; }\n(export -f g)\n" + env, 0},
+		{"exported at the top level", "g(){ :; }\nexport -f g\n" + env, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := runBash(t, dir, tc.src)
-			if out != tc.want || st != 0 {
-				t.Errorf("a command's environment carried %q (status %d), want %q", out, st, tc.want)
+			out, st := runBash(t, t.TempDir(), tc.src)
+			if st != 0 {
+				t.Fatalf("status %d, output %q", st, out)
+			}
+			got := 0
+			for _, line := range strings.Split(out, "\n") {
+				if strings.HasPrefix(line, "BASH_FUNC") {
+					got++
+				}
+			}
+			if got != tc.want {
+				t.Errorf("a command's environment carried %d exported function(s), want %d", got, tc.want)
 			}
 		})
 	}

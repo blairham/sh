@@ -401,7 +401,7 @@ func (r *Runner) SetNamedOption(name string, on bool) int {
 	r.line = 0
 	r.atInvocation = true
 	defer func() { r.atInvocation = false }()
-	return r.ApplyNamedOption(name, on)
+	return r.namedOptionAnswer(r.setNamedOption(name, on))
 }
 
 // ApplyNamedOption is SetNamedOption from inside a running script: a
@@ -409,7 +409,12 @@ func (r *Runner) SetNamedOption(name string, on bool) int {
 // through here, where the line a complaint would name is the one being run
 // rather than the zero an invocation reports.
 func (r *Runner) ApplyNamedOption(name string, on bool) int {
-	ok := r.setOption(name, on)
+	return r.namedOptionAnswer(r.setOption(name, on))
+}
+
+// namedOptionAnswer turns "did it work" into the status the two exported
+// entry points hand back.
+func (r *Runner) namedOptionAnswer(ok bool) int {
 	if r.unspecified {
 		r.unspecified = false
 		return 2
@@ -418,6 +423,35 @@ func (r *Runner) ApplyNamedOption(name string, on bool) int {
 		return r.setOptionFailure()
 	}
 	return 0
+}
+
+// setNamedOption reads a `set -o` operand in the namespace the *script* means
+// by one: the dialect's own where it installed one with SetOptionTable, and
+// the substrate's otherwise.
+//
+// Separate from setOption, which stays the substrate's own table, because the
+// dialect's entries are written in terms of it — zsh's `err_exit` moves the
+// substrate's `errexit` — so one function serving both would call itself.
+// This is the seam a `set -o` operand and an invocation's `-o` arrive at, and
+// setOption is the seam a dialect's own option builtin arrives at.
+func (r *Runner) setNamedOption(name string, on bool) bool {
+	if r.optionMover == nil {
+		return r.setOption(name, on)
+	}
+	moved, known := r.optionMover(name, on)
+	switch {
+	case !known:
+		return r.badSetOptionName(name)
+	case moved:
+		return true
+	}
+	// A name this shell has and will not move. Spoken here rather than by the
+	// dialect so that the location, the status and whether it ends the script
+	// are the same three answers every other refused `set` option gets.
+	d := r.diag()
+	r.saySetRefusal(Wording(d.SetImmovableOptionName, "set: %[1]s: not implemented", name),
+		d.SetInvalidOptionNameUsage, true)
+	return r.setRefusalStatus("a `set -o` name this shell will not move ending the script")
 }
 
 // AddSetOptions declares the `set -o` names this shell has beyond the ones
@@ -473,6 +507,26 @@ func (o setOption) state(r *Runner) bool {
 	return o.on
 }
 
+// listedOptions is every row a `set -o` listing writes: the dialect's own
+// table where it installed one with SetOptionTable, and the substrate's names
+// with their states otherwise.
+//
+// One shape for both, because the four listing layouts are the same four
+// whichever namespace supplies the rows — a name and whether it is on is all
+// any of them writes.
+func (r *Runner) listedOptions() []ListedOption {
+	if r.optionListing != nil {
+		return r.optionListing()
+	}
+	names := r.listedOptionNames()
+	rows := make([]ListedOption, 0, len(names))
+	for _, n := range names {
+		o, _ := r.lookupSetOption(n)
+		rows = append(rows, ListedOption{Name: n, On: o.state(r)})
+	}
+	return rows
+}
+
 // listedOptionNames is every name this shell answers `set -o` with, sorted.
 func (r *Runner) listedOptionNames() []string {
 	names := make([]string, 0, len(commonSetOptions)+len(r.extraOptions))
@@ -492,26 +546,24 @@ func (r *Runner) listedOptionNames() []string {
 // re-inputtable commands, except the dialect whose one line names only what
 // is on.
 func (r *Runner) listOptions(plus bool) int {
-	names := r.listedOptionNames()
+	rows := r.listedOptions()
 	if plus {
 		if r.diag().PlusOListsActive {
 			line := "set --default"
-			for _, n := range names {
-				o, _ := r.lookupSetOption(n)
-				if o.state(r) {
-					line += " --" + n
+			for _, row := range rows {
+				if row.On {
+					line += " --" + row.Name
 				}
 			}
 			r.printf("%s\n", line)
 			return 0
 		}
-		for _, n := range names {
-			o, _ := r.lookupSetOption(n)
+		for _, row := range rows {
 			sign := "+"
-			if o.state(r) {
+			if row.On {
 				sign = "-"
 			}
-			r.printf("set %so %s\n", sign, n)
+			r.printf("set %so %s\n", sign, row.Name)
 		}
 		return 0
 	}
@@ -526,13 +578,12 @@ func (r *Runner) listOptions(plus bool) int {
 	if r.diag().OptionListingTabbed {
 		sep = "\t"
 	}
-	for _, n := range names {
-		o, _ := r.lookupSetOption(n)
+	for _, row := range rows {
 		state := "off"
-		if o.state(r) {
+		if row.On {
 			state = "on"
 		}
-		r.printf("%-*s%s%s\n", width, n, sep, state)
+		r.printf("%-*s%s%s\n", width, row.Name, sep, state)
 	}
 	return 0
 }

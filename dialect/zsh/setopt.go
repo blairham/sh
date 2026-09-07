@@ -628,6 +628,64 @@ func registerSetopt(r *interp.Runner) {
 	r.Register("setopt", setoptBuiltin(true))
 	r.Register("unsetopt", setoptBuiltin(false))
 	r.SetOptionNamespace(func(name string) (bool, bool) { return conditionOption(r, name) })
+	// And the same namespace by its other name. zsh's `set -o` is `setopt`
+	// under a POSIX spelling rather than a table of its own — measured,
+	// `set -o autocd` then `setopt` reports `autocd`, and `setopt autocd`
+	// then `set +o` writes `set -o autocd` — so a `set -o` listing there is
+	// 185 rows where every other shell writes a couple of dozen. This
+	// dialect wrote the substrate's shared two dozen until #1080: a capture
+	// surface recorded a zsh with 23 options, in a vocabulary that shell
+	// does not use for output, and said nothing about the 170 that decide
+	// what it does.
+	r.SetOptionTable(
+		func() []interp.ListedOption { return listedOptions(r) },
+		func(name string, on bool) (moved, known bool) { return moveOption(r, name, on) },
+	)
+}
+
+// listedOptions is the `set -o` and `set +o` listing: every option in the
+// table, in the same order and the same spelling a bare `setopt` uses.
+//
+// One printed spelling per option, the one that is off by default — measured,
+// zsh writes `noaliases`, `allexport`, `noalwayslastprompt` in that order and
+// nothing about the twelve borrowed sh and ksh spellings, which it accepts as
+// input and never lists. So a row's state is its *deviation from zsh's
+// default*, exactly as listZshOptions computes it: `noaliases off` in a shell
+// where aliases work, and `autocd on` after `setopt autocd`.
+func listedOptions(r *interp.Runner) []interp.ListedOption {
+	rows := make([]interp.ListedOption, 0, len(zshOptions))
+	for _, o := range zshOptions {
+		rows = append(rows, interp.ListedOption{
+			Name: spellOption(o.base, !o.def),
+			On:   o.get(r) != o.def,
+		})
+	}
+	return rows
+}
+
+// moveOption is `set -o name` and `set +o name` reaching this namespace, and
+// it decides without speaking: the substrate words the refusal, because the
+// same one is worded three ways depending on whether a script, an invocation
+// or an inherited value asked. That is the whole difference between this and
+// setOption below, which is `setopt`'s own and does speak.
+//
+// The name is resolved exactly as `setopt` resolves it — case folded,
+// underscores ignored, one `no` prefix negating, the twelve compat spellings
+// included — because it is the same namespace and a shell with two answers
+// for `set -o Err_Exit` and `setopt Err_Exit` would have two namespaces.
+func moveOption(r *interp.Runner, name string, on bool) (moved, known bool) {
+	o, inverted, ok := resolveOptionName(normalizeOption(name))
+	if !ok {
+		return false, false
+	}
+	want := on != inverted
+	if o.set != nil {
+		return o.set(r, want) == 0, true
+	}
+	// Fixed: granted where it is already where it is being asked to be, and
+	// refused otherwise — the same bargain setOption strikes, with the
+	// sentence left to the caller.
+	return o.get(r) == want, true
 }
 
 // setOption moves one option by name, reporting what `setopt` would. Shared

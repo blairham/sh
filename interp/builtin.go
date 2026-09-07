@@ -170,7 +170,9 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 				return r.listOptions(!on)
 			}
 			i++
-			if !r.setOption(args[i], on) {
+			// The namespace the *script* means by a `set -o` name, which is
+			// the dialect's own where it has one (#1080).
+			if !r.setNamedOption(args[i], on) {
 				return r.setOptionFailure()
 			}
 			continue

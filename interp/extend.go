@@ -519,6 +519,51 @@ func (r *Runner) SetOptionNamespace(lookup func(name string) (on, known bool)) {
 	r.optionNamespace = lookup
 }
 
+// ListedOption is one row of a dialect's own `set -o` listing: the spelling
+// this shell prints for the name, and whether that spelling is in effect.
+//
+// The spelling is the dialect's and is not derived from the name here,
+// because it is not always the name. zsh prints each option in the direction
+// that is *off* by default — `noclobber` for one that defaults on, `autocd`
+// for one that defaults off — so a row is `noclobber` with On false in a
+// shell that clobbers, and the same shell's `set -o noclobber` makes it true.
+type ListedOption struct {
+	Name string
+	On   bool
+}
+
+// SetOptionTable installs the `set -o` namespace of a dialect that has one of
+// its own: the rows `set -o` and `set +o` write, and what moving one name
+// does.
+//
+// It is [Runner.SetOptionNamespace] reached by the other route, and a dialect
+// that installs one installs both — measured, `set -o Err_Exit`,
+// `setopt err_exit` and `[[ -o err_exit ]]` are one namespace in zsh, where
+// its `set -o` writes 185 rows against the couple of dozen names every shell
+// shares. Ours wrote the shared two dozen in that shell, so `set +o` — a
+// capture surface, one of the three sections a harness snapshots — recorded a
+// zsh with 23 options and said nothing about the 170 that decide what it does
+// (#1080).
+//
+// move reports two things and neither is a status. `known` false is a name
+// this shell does not have, which is refused in the dialect's own words on
+// whichever of the three routes asked — a script's `set -o`, an invocation's,
+// or an inherited value — and that wording, its status and whether it ends
+// the script are already Diagnostics and Semantics values. `moved` false with
+// `known` true is a name the shell has and will not move, which is
+// Diagnostics.SetImmovableOptionName. So the mover is **silent**: it decides,
+// and this package speaks, which is the only way one refusal can be worded
+// three ways by route.
+//
+// It does not replace [Runner.ApplyNamedOption], which stays on the
+// substrate's own table on purpose: that is the seam a dialect's option
+// builtin uses to move a substrate option by its substrate name, so routing
+// it here as well would have zsh's `setopt err_exit` call back into the table
+// it is being called from.
+func (r *Runner) SetOptionTable(listed func() []ListedOption, move func(name string, on bool) (moved, known bool)) {
+	r.optionListing, r.optionMover = listed, move
+}
+
 // DialectOption reads one option name through this shell's own option
 // namespace: the names `setopt` and `[[ -o ]]` take where a dialect has
 // installed one, and the `set -o` names where it has not.

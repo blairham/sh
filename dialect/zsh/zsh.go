@@ -840,6 +840,7 @@ func Diagnostics() interp.Diagnostics {
 		DeclareNoSuchVariable:    "no such variable: %[1]s",
 		LocationNamesTheFunction: true,
 		SetInvalidOptionName:     "no such option: %[1]s",
+		SetImmovableOptionName:   "can't change option: %[1]s",
 		// The bare letter with a dash written in front of it: this shell
 		// echoes `-q` for `set +q` as dash does, rather than the sign it was
 		// asked with. `set` is named in the location, not in the sentence.

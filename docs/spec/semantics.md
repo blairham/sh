@@ -2740,6 +2740,52 @@ ones that are off, both ordered by canonical name and both naming the
 canonical option rather than the compat spelling that may have set it. In a
 shell that has changed nothing that is 1 line and 184.
 
+**`set -o` is this namespace under a POSIX spelling, not a table of its
+own** (#1080). Measured: `set +o` writes 185 rows in the same order and the
+same spellings a bare `setopt` uses, `set -o autocd` is then visible to
+`setopt`, `setopt autocd` is visible to `set +o`, and `set -o Err_Exit` is
+folded exactly as `setopt Err_Exit` is. So the two builtins are one
+namespace and `set -o` is the third door into it, beside `setopt` and
+`[[ -o ]]`.
+
+This dialect wrote the *substrate's* shared names there instead: 23 rows
+against zsh's 185, in bash's vocabulary — `braceexpand`, `hashall`,
+`histexpand`, `nolog`, `notify`, `onecmd`, `physical` and `trackall` are
+eight names ours listed that zsh never writes, and 170 of zsh's were
+absent. Both exit 0 and neither says a word, which is what made it the
+silent kind rather than a missing feature: `set +o` is a capture surface —
+one of the three sections an agent harness snapshots and sources back
+before every later command — so a caller recorded a zsh with 23 options,
+learnt nothing about the 170 that decide what that shell does, and never
+found out it had asked the wrong question. Our *bash* wrote 27 and matched
+real bash exactly, which is what said this was a dialect answering with
+another shell's vocabulary.
+
+The substrate seam is `Runner.SetOptionTable`, beside the
+`SetOptionNamespace` that `[[ -o ]]` already used: a dialect supplies the
+listing's rows and a silent mover, and this package words the refusals,
+because the same refusal is worded three ways depending on whether a script,
+an invocation or an inherited value asked. It is deliberately not
+`ApplyNamedOption`, which stays on the substrate's own table — that is the
+seam this dialect's entries use to move a substrate option by its substrate
+name, so routing it through the table as well would have `setopt err_exit`
+call back into the table it was called from.
+
+Two consequences worth stating, because both are divergences rather than
+wins. Recording is unchanged: a listing 185 rows long still says nothing
+about whether a name is acted on, and 149 of them are remembered and not
+acted on exactly as before — the table is longer in the listing because zsh
+lists that many, not because more of it is implemented. And a `set -o` name
+this shell has and will not move now answers `can't change option` at 1,
+**fatally**, where it used to answer `not implemented` at 2 and carry on.
+That is right for the names zsh itself refuses — measured, `set -o onecmd`
+says exactly that and stops the script there too — and it reaches the
+thirteen fixed names that are this shell's own, which real zsh grants:
+`set -o physical` and `set -o histexpand` are the two of those the eight
+above name. The alternative is a second, gentler refusal for our own
+immovable names, which would be a second notion of what a refused `set -o`
+is.
+
 **A known inaccuracy, inherited rather than introduced.** The table records
 zsh's default for each name, which is what the listings compare against.
 Four entries hold this shell's own state there instead — `banghist`,
@@ -2750,6 +2796,13 @@ to zsh's 184 lines and would move the same four lines of divergence onto the
 bare `setopt` listing, because the underlying fact is that this shell's
 state genuinely differs from zsh's for those four. It is a trade rather than
 a fix, and it is left where it was found.
+
+It is visible in three listings now rather than one, because `set -o` and
+`set +o` write from the same table (#1080) and the printed spelling is
+derived from the recorded default: those two write `banghist`, `noemacs`,
+`hashcmds` and `nointeractivecomments` where zsh writes `nobanghist`,
+`emacs`, `nohashcmds` and `interactivecomments`. Four rows of 185; the other
+181 are byte-identical to zsh 5.9.2's, in the same order.
 
 Two names are one-way. `noexec` ignores being turned back off in all four
 shells — and with it on, the command that would do so never runs anyway.

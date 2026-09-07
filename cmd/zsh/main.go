@@ -34,6 +34,7 @@ func shell() driver.Shell {
 		EditorStyle:  zsh.EditorStyle(),
 		KeyBindings:  zsh.KeyBindings,
 		HistoryStyle: zsh.HistoryStyle(),
+		HookStyle:    zsh.HookStyle(),
 	}
 }
 

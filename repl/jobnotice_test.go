@@ -34,7 +34,7 @@ func TestANoticeWaitsForAPromptThatIsNotAContinuation(t *testing.T) {
 			var pending strings.Builder
 			pending.WriteString(tc.pending)
 
-			if got := s.beforeReading(&pending).text; got != tc.wantPrompt {
+			if got := s.beforeReading(t.Context(), nil, &pending).text; got != tc.wantPrompt {
 				t.Errorf("prompt = %q, want %q", got, tc.wantPrompt)
 			}
 			if got := strings.Contains(errs.String(), "Done"); got != tc.wantNotice {

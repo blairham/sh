@@ -219,6 +219,29 @@ func (c *outputCapture) close() {
 	c.conduit.close()
 }
 
+// settled waits for what a hook printed to reach the terminal, and keeps none
+// of it.
+//
+// Two things want it and they are the same wait. A hook prints through the
+// Runner's streams, which under a block store are the far end of a
+// pseudo-terminal a goroutine forwards to the real one; the *prompt* is
+// written to the terminal directly by the editor. So without this the two
+// races, and the race is visible — measured on 2026-09-07 through a pty, two
+// identical runs of the same session, one of which drew `RDY> ` above the
+// `precmd` output it was meant to follow.
+//
+// And what a hook printed is not what the command printed. The capture is
+// emptied rather than read, so a `precmd` banner is not recorded as the output
+// of the command typed after it, and a `preexec` banner is not recorded as the
+// output of the command it announced.
+func (s Shell) settled() {
+	if s.capture == nil {
+		return
+	}
+	s.capture.conduit.drain()
+	_, _, _ = s.capture.cap.Take()
+}
+
 // closeBlock records what came of it.
 //
 // A blank line is not a block. Every shell in the panel treats a bare newline

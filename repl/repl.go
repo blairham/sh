@@ -83,6 +83,13 @@ type Shell struct {
 	// substrate's own wording and filters nothing.
 	History HistoryStyle
 
+	// Hooks are the functions this dialect runs between commands — one
+	// before every prompt and one before every line runs. The zero value is
+	// a dialect with none, which is three of the four. See hooks.go, which
+	// carries the measurement of when each fires, what it is told and what
+	// it may not change.
+	Hooks HookStyle
+
 	// Highlighter colors the line as it is typed. Nil draws it plainly, which
 	// is what every shell in the panel does and what a front end that has not
 	// said gets.
@@ -199,6 +206,20 @@ type Shell struct {
 	// which are the only things that know a line has been accepted.
 	counts *counts
 
+	// hooks is what this session has already said about a hook it will not
+	// fire, so it says it once. Set by Run, beside counts and for the same
+	// reason: a Shell is copied by value and a notice given by a copy has to
+	// count for the session.
+	hooks *hookState
+
+	// capture is where the Runner's output goes when this session keeps
+	// blocks — the same value the loops are handed, held here because one
+	// caller is not in the block path at all. A hook prints through the
+	// Runner's streams, which is the far end of a conduit a goroutine
+	// forwards, so between a hook and the prompt drawn after it there is
+	// something to wait for. See settled.
+	capture *outputCapture
+
 	// Name is what the shell calls itself, for a prompt that draws it —
 	// bash's `\s`. Empty draws nothing, which is what a caller that has not
 	// said gets.
@@ -229,6 +250,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	hist := s.historyFile()
 	earlier := s.recalled(ctx, hist)
 	s.counts = &counts{history: len(earlier)}
+	s.hooks = &hookState{reported: map[string]bool{}}
 	// Where this session records a command and what came of it. Opened here
 	// rather than in either loop so the two cannot disagree about whether a
 	// session keeps blocks, which is the mistake beforeReading already
@@ -240,6 +262,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// captured stream is not a terminal to the child on the other end of it —
 	// see blocks.Capture.Stream.
 	capture := s.captureOutput()
+	s.capture = capture
 	// Closed on the way out, so that whatever is still in the conduit reaches
 	// the terminal before the process does anything else with it.
 	defer capture.close()
@@ -301,7 +324,13 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	record := s.recording(ed, &added)
 	var pending strings.Builder
 	for {
-		line, err := ed.readLine(s.beforeReading(&pending))
+		drawn := s.beforeReading(ctx, state, &pending)
+		if s.Runner.Exited() {
+			// A prompt hook called `exit`. Measured, zsh's session ends
+			// there and draws no prompt, so this one does not read a line.
+			return s.status(), nil
+		}
+		line, err := ed.readLine(drawn)
 		switch {
 		case errors.Is(err, ErrInterrupted):
 			// ^C abandons whatever was half-typed, including the earlier
@@ -343,7 +372,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			continue
 		}
 		b := s.beginBlock(text)
-		done := s.run(ctx, state, stmts)
+		done := s.run(ctx, state, text, stmts)
 		s.closeBlock(ctx, store, capture, b)
 		if s.interrupted(sig) {
 			// The terminal echoed `^C` where the cursor was and left it
@@ -362,7 +391,33 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 // The terminal goes back to its own line discipline first. A command is not
 // the editor: it may want echo, it may want ^C to interrupt it, and it will
 // print lines that need the terminal translating them.
-func (s Shell) run(ctx context.Context, state *terminalState, stmts []*syntax.File) bool {
+func (s Shell) run(ctx context.Context, state *terminalState, typed string, stmts []*syntax.File) bool {
+	var done bool
+	s.inLineDiscipline(state, func() { done = s.runStmts(ctx, typed, stmts) })
+	return done
+}
+
+// inLineDiscipline runs f with the terminal in its own line discipline, and
+// puts raw mode back afterwards.
+//
+// Three things need it and they need exactly the same thing: a command, the
+// interpreter's warning about stopped jobs, and a hook — each is the shell
+// speaking to the person or handing the terminal to something that will,
+// rather than the editor drawing a line. Raw mode has OPOST off, so a newline
+// written under it is a line feed and nothing else, and the next thing drawn
+// starts wherever the last one ended.
+//
+// One helper rather than three copies, because the copies were the bug: the
+// second one existed before this and the third would have been written without
+// the restore, which is precisely the failure it prevents.
+//
+// A nil state is a session with no terminal to hand back — runPlain's — and
+// there f simply runs.
+func (s Shell) inLineDiscipline(state *terminalState, f func()) {
+	if state == nil {
+		f()
+		return
+	}
 	if err := state.restore(); err != nil {
 		s.errf("%v\n", err)
 	}
@@ -371,7 +426,7 @@ func (s Shell) run(ctx context.Context, state *terminalState, stmts []*syntax.Fi
 			s.errf("%v\n", err)
 		}
 	}()
-	return s.runStmts(ctx, stmts)
+	f()
 }
 
 // interrupted reports whether the line that just ran was ended by a ^C, which
@@ -399,15 +454,9 @@ func (s Shell) interrupted(sig *interrupts) bool {
 // the length of it is the same thing running a command does, and for the same
 // reason: this is the shell speaking to the person rather than drawing a line.
 func (s Shell) heldForStoppedJobs(state *terminalState) bool {
-	if err := state.restore(); err != nil {
-		s.errf("%v\n", err)
-	}
-	defer func() {
-		if _, err := makeRaw(s.inFile()); err != nil {
-			s.errf("%v\n", err)
-		}
-	}()
-	return s.Runner.HoldsExitForStoppedJobs()
+	var held bool
+	s.inLineDiscipline(state, func() { held = s.Runner.HoldsExitForStoppedJobs() })
+	return held
 }
 
 // runStmts executes the statements of one accepted line, reporting whether the
@@ -422,7 +471,20 @@ func (s Shell) heldForStoppedJobs(state *terminalState) bool {
 // report is written with the terminal in its own line discipline, exactly as a
 // command's own output is. interp goes on panicking, which is correct for a
 // library; see internal/panicguard.
-func (s Shell) runStmts(ctx context.Context, stmts []*syntax.File) (done bool) {
+func (s Shell) runStmts(ctx context.Context, typed string, stmts []*syntax.File) (done bool) {
+	// The command hook fires here: after the line was read and before any of
+	// it runs, which is what it is for, and inside run's restore so that what
+	// it prints reaches a terminal in its own line discipline. Nothing fires
+	// for a line with nothing in it — measured, an empty line draws a prompt
+	// and runs no `preexec` — and nothing fires for a line the parser
+	// refused, which never reaches here at all.
+	if len(stmts) > 0 {
+		s.fireBeforeCommand(ctx, typed, stmts)
+		s.settled()
+		if s.Runner.Exited() {
+			return true
+		}
+	}
 	if s.guard().Do(func() { done = s.runEach(ctx, stmts) }) {
 		// The line never finished, so it has no status of its own and must
 		// not keep the one before it: `$?` says it failed, and the `&&` on
@@ -508,9 +570,20 @@ func (s Shell) runEach(ctx context.Context, stmts []*syntax.File) bool {
 // directory, the privilege character and a bracketed color at the
 // continuation prompt, zsh 5.9.2 drew the same from its own language, and both
 // re-ran a command substitution in it.
-func (s Shell) beforeReading(pending *strings.Builder) drawnPrompt {
+func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending *strings.Builder) drawnPrompt {
 	continuing := pending.Len() > 0
 	s.reportFinishedJobs(continuing)
+	// After the notices and before the prompt is expanded, which is the
+	// order measured — see hooks.go. In the terminal's own line discipline,
+	// for the reason heldForStoppedJobs is: a hook is a shell function and
+	// its output goes to the Runner's streams, which nothing here translates,
+	// so a newline written in raw mode would leave the next line where the
+	// last one ended.
+	s.inLineDiscipline(state, func() {
+		s.reportUnfiredHooks()
+		s.fireBeforePrompt(ctx, continuing)
+		s.settled()
+	})
 	// The contributions and the parameter are rendered and then measured
 	// together, in one drawPrompt, because the markers that say "none of this
 	// is a column" have to be taken out of both and the count has to cover
@@ -614,7 +687,10 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outpu
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
 	for {
-		s.errf("%s", s.beforeReading(&pending).text)
+		s.errf("%s", s.beforeReading(ctx, nil, &pending).text)
+		if s.Runner.Exited() {
+			return s.status(), nil
+		}
 
 		line, err := in.ReadString('\n')
 		if line == "" && err != nil {
@@ -645,7 +721,7 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outpu
 			continue
 		}
 		b := s.beginBlock(text)
-		done := s.runStmts(ctx, stmts)
+		done := s.runStmts(ctx, text, stmts)
 		s.closeBlock(ctx, store, capture, b)
 		if done {
 			return s.status(), nil

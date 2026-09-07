@@ -26,11 +26,21 @@ import "strings"
 // decisions are about quoting and about where a statement ends.
 
 // Print renders a parsed file as source that parses to the same tree.
-func Print(f *File) string {
+func Print(f *File) string { return PrintFileWith(f, Layout{}) }
+
+// PrintFileWith renders a parsed file with a chosen arrangement, which is what
+// [PrintWith] is to [PrintCommand].
+//
+// A whole file rather than one command, because the thing a prompt loop has in
+// hand is a *line*, and a line can hold several statements. `true;false` typed
+// at a zsh prompt reaches `preexec` as `true; false` in its second argument
+// and as two lines in its third, from one input — so both forms are a file
+// printed two ways, and neither is a command printed at all.
+func PrintFileWith(f *File, l Layout) string {
 	if f == nil {
 		return ""
 	}
-	var p printer
+	p := printer{layout: l}
 	p.lines(f.Stmts)
 	return p.b.String()
 }

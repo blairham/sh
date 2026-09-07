@@ -39,7 +39,7 @@ func TestProvidersAreDrawnBeforeThePromptParameter(t *testing.T) {
 		},
 	}
 	var pending strings.Builder
-	got := s.beforeReading(&pending)
+	got := s.beforeReading(t.Context(), nil, &pending)
 	if got.text != "onetwo$ " {
 		t.Errorf("the prompt is %q, want %q", got.text, "onetwo$ ")
 	}
@@ -57,7 +57,7 @@ func TestProvidersAreDrawnAtTheContinuationPromptAndToldSo(t *testing.T) {
 	}
 	var pending strings.Builder
 	pending.WriteString("for i in a b\n")
-	got := s.beforeReading(&pending)
+	got := s.beforeReading(t.Context(), nil, &pending)
 	if got.text != "seg> " {
 		t.Errorf("the continuation prompt is %q, want %q", got.text, "seg> ")
 	}
@@ -71,7 +71,7 @@ func TestProvidersAreDrawnAtTheContinuationPromptAndToldSo(t *testing.T) {
 func TestASessionWithoutProvidersDrawsOnlyTheParameter(t *testing.T) {
 	s := Shell{Runner: newTestRunner(map[string]string{"PS1": "$ "})}
 	var pending strings.Builder
-	if got := s.beforeReading(&pending); got.text != "$ " {
+	if got := s.beforeReading(t.Context(), nil, &pending); got.text != "$ " {
 		t.Errorf("the prompt is %q, want %q", got.text, "$ ")
 	}
 }
@@ -85,7 +85,7 @@ func TestANilProviderInTheListIsSkipped(t *testing.T) {
 		},
 	}
 	var pending strings.Builder
-	if got := s.beforeReading(&pending); got.text != "here$ " {
+	if got := s.beforeReading(t.Context(), nil, &pending); got.text != "here$ " {
 		t.Errorf("the prompt is %q, want %q", got.text, "here$ ")
 	}
 }
@@ -106,7 +106,7 @@ func TestNonPrintingTextIsDrawnAndNotCounted(t *testing.T) {
 		},
 	}
 	var pending strings.Builder
-	got := s.beforeReading(&pending)
+	got := s.beforeReading(t.Context(), nil, &pending)
 	if want := "\x1b]0;a title\aseg\x1b[0m$ "; got.text != want {
 		t.Errorf("the prompt bytes are %q, want %q", got.text, want)
 	}
@@ -148,7 +148,7 @@ func TestAProviderThatPanicsCostsOnlyItsOwnSegment(t *testing.T) {
 		},
 	}
 	var pending strings.Builder
-	got := s.beforeReading(&pending)
+	got := s.beforeReading(t.Context(), nil, &pending)
 	if got.text != "beforeafter$ " {
 		t.Errorf("the prompt is %q, want %q", got.text, "beforeafter$ ")
 	}
@@ -173,18 +173,18 @@ func TestAProviderIsToldWhatTheLastCommandWas(t *testing.T) {
 
 	// Nothing has run yet.
 	var pending strings.Builder
-	s.beforeReading(&pending)
+	s.beforeReading(t.Context(), nil, &pending)
 
 	b := s.beginBlock("echo hi")
 	clock.step = 1500 * time.Millisecond
 	s.closeBlock(t.Context(), nil, nil, b)
-	s.beforeReading(&pending)
+	s.beforeReading(t.Context(), nil, &pending)
 
 	// A blank line is not a command and must not replace it, which is the
 	// rule the block store already follows: pressing return should not clear
 	// the duration of the command being looked at.
 	s.closeBlock(t.Context(), nil, nil, s.beginBlock("   "))
-	s.beforeReading(&pending)
+	s.beforeReading(t.Context(), nil, &pending)
 
 	want := []PromptInfo{
 		{Dir: "/where/it/ran"},
@@ -215,7 +215,7 @@ func TestAProviderIsToldTheExitStatus(t *testing.T) {
 	p := &recordingProvider{}
 	s := Shell{Runner: r, PromptProviders: []PromptProvider{p}}
 	var pending strings.Builder
-	s.beforeReading(&pending)
+	s.beforeReading(t.Context(), nil, &pending)
 	if len(p.told) != 1 || p.told[0].Status != 3 {
 		t.Errorf("the provider was told %+v, want a status of 3", p.told)
 	}
@@ -254,7 +254,7 @@ func TestAProviderIsToldHowManyJobsTheShellIsLookingAfter(t *testing.T) {
 	p := &recordingProvider{}
 	s := Shell{Runner: r, PromptProviders: []PromptProvider{p}}
 	var pending strings.Builder
-	s.beforeReading(&pending)
+	s.beforeReading(t.Context(), nil, &pending)
 
 	if err := syscall.Kill(jobs[0].PID, syscall.SIGKILL); err != nil {
 		t.Fatalf("ending the job: %v", err)
@@ -262,7 +262,7 @@ func TestAProviderIsToldHowManyJobsTheShellIsLookingAfter(t *testing.T) {
 	for _, j := range jobs {
 		j.Wait()
 	}
-	s.beforeReading(&pending)
+	s.beforeReading(t.Context(), nil, &pending)
 
 	if len(p.told) != 2 {
 		t.Fatalf("the provider was told %d times, want 2", len(p.told))

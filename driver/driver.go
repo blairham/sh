@@ -79,6 +79,12 @@ type Shell struct {
 	// in the substrate's own wording and records everything.
 	HistoryStyle repl.HistoryStyle
 
+	// HookStyle is what this dialect runs between one command and the next —
+	// the prompt hook and the command hook, and the names of any it has and
+	// this shell does not fire. The zero value is a dialect with none, which
+	// is three of the four.
+	HookStyle repl.HookStyle
+
 	// Highlighter colors the line as an interactive session types it. Nil is
 	// every dialect binary, because measured, no real shell colors a line as
 	// it is typed.

@@ -4,6 +4,7 @@
 package repl
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -226,5 +227,5 @@ func drawn(s Shell, continuing bool) string {
 	if continuing {
 		pending.WriteString("for i in 1\n")
 	}
-	return s.beforeReading(&pending).text
+	return s.beforeReading(context.Background(), nil, &pending).text
 }

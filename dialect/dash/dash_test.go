@@ -121,6 +121,12 @@ func TestSemantics(t *testing.T) {
 		// dash has no `typeset`, so TypesetLocalNeedsKeywordFunction is absent
 		// rather than false — the axis does not arise.
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.Unspecified},
+		// `local` over a name `readonly` froze is refused here, so the axis
+		// is answered with this shell's own spelling of the freeze rather
+		// than left unspecified for want of a `typeset -r`. There is no
+		// plus form at all, so removing the attribute cannot be asked.
+		{"DeclarationMayShadowAReadonly", s.DeclarationMayShadowAReadonly, interp.No},
+		{"ReadonlyAttributeCanBeRemoved", s.ReadonlyAttributeCanBeRemoved, interp.Unspecified},
 		{"EchoInterpretsEscapes", s.EchoInterpretsEscapes, interp.Yes},
 		{"LengthOfSpecialIsCount", s.LengthOfSpecialIsCount, interp.No},
 		{"BraceExpansion", s.BraceExpansion, interp.No},

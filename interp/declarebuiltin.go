@@ -50,6 +50,21 @@ type declareFlags struct {
 	// carries the type itself — see Semantics.IntegerNameForcesTheAttribute,
 	// which is where the other reading lives.
 	integerForced bool
+	// readonlyOff records the sign of the *last* `r` letter the command
+	// wrote, rather than the sign of its last option word, because those are
+	// not the same question and the letter is the one that decides.
+	// `typeset -r +x n` freezes n in all three shells that spell both
+	// letters — measured 2026-09-07 — and reading the word's sign made it a
+	// request to *unfreeze*, which is a refusal where the shells say nothing.
+	//
+	// Mixed signs on the letter itself are a third question and the panel
+	// gives it three answers: `typeset -r +r n` leaves n writable in bash
+	// and zsh and freezes it in ksh93, and `typeset +r -r n` freezes it in
+	// zsh alone. Last occurrence wins here, which is zsh's rule exactly and
+	// bash's in the shape a script would write; the disagreement is recorded
+	// rather than modeled, as no script writes both signs of one letter on
+	// one line.
+	readonlyOff bool
 	// integerOff records that an `i` was written in a *plus* word, as
 	// against a plus word that carried some other letter. Only the explicit
 	// spelling may cancel a forced attribute, so the two have to be told
@@ -134,6 +149,7 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				}
 			case 'r':
 				f.readonly = true
+				f.readonlyOff = f.remove
 			case 'x':
 				f.export = true
 			case 'A':
@@ -310,7 +326,11 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		if r.declarationShadowRefused(name) {
 			// Reported, and the next operand still declared: bash's
 			// `local y=1 x=5 z=2` over a frozen `x` leaves y and z local.
-			if r.unspecified {
+			if r.unspecified || r.ctl == controlExit {
+				// Unless the refusal was fatal, where there is no next
+				// operand and no status of the builtin's either: falling
+				// through to the `return 1` below overwrote the status the
+				// fatal error had set, and dash exits 2 for one of those.
 				return r.status
 			}
 			r.assignFailed = true
@@ -362,6 +382,14 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// same shape `+r` already has.
 			r.markAssoc(name)
 		}
+		if f.readonly && f.readonlyOff {
+			if code := r.removeReadonly(name, hasValue); code != 0 {
+				return code
+			}
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+		}
 		switch {
 		case hasValue && f.global:
 			r.setGlobalVar(name, value)
@@ -393,7 +421,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// pins that rather than the guard that appeared to do it.
 			r.declareEmpty(name, fresh, f.export || f.readonly)
 		}
-		if f.readonly && !f.remove {
+		if f.readonly && !f.readonlyOff {
 			r.markReadonly(name)
 		}
 	}
@@ -569,9 +597,11 @@ func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
 
 // markReadonly freezes a name.
 //
-// Never undone: a readonly name cannot be made writable again in any shell in
-// the panel, so `+r` does nothing rather than reversing it — which is what
-// they do.
+// Undone in one dialect: zsh's `typeset +r` takes the attribute back off, and
+// bash and ksh93 refuse to. So `+r` is an answered question rather than a
+// no-op — see removeReadonly and Semantics.ReadonlyAttributeCanBeRemoved. The
+// note that used to stand here said no shell in the panel could unfreeze a
+// name, and it had been measured on bash and ksh93 alone (#1168).
 //
 // A name the running declaration is also assigning to as an operand is frozen
 // *after* that assignment rather than now: see the freezing field and
@@ -586,6 +616,42 @@ func (r *Runner) markReadonly(name string) {
 		r.readonly = map[string]bool{}
 	}
 	r.readonly[name] = true
+}
+
+// removeReadonly answers a plus form that asked for the readonly attribute
+// back off a name — `typeset +r x`.
+//
+// One dialect grants it and two refuse, and the refusal is the ordinary
+// readonly refusal through a declaration rather than a sentence of its own:
+// see Semantics.ReadonlyAttributeCanBeRemoved. Nothing is asked about a name
+// that is not frozen, which is every `typeset +r` a script writes to make
+// sure a name is writable — the plus form on a free name reports 0 and says
+// nothing in all three shells that spell it.
+//
+// hasValue is whether the same operand also carries an assignment, and it
+// decides which of the two refusals speaks. `typeset +r x=5` on a frozen name
+// is refused as an *assignment* — measured, and it is the shape that tells
+// the two apart: ksh93 answers the valueless form in its builtin location
+// with the builtin named and this one in the plain line form. So a plus form
+// with a value says nothing here and lets the assignment behind it report.
+//
+// The freeze is dropped before that assignment rather than after, which is
+// the whole of what the shell that grants this does: `typeset -r x=1;
+// typeset +r x=5` leaves 5 there.
+func (r *Runner) removeReadonly(name string, hasValue bool) int {
+	if !r.readonly[name] {
+		return 0
+	}
+	if r.ask(r.sem().ReadonlyAttributeCanBeRemoved,
+		"the readonly attribute being taken off a name") {
+		delete(r.readonly, name)
+		return 0
+	}
+	if r.unspecified || hasValue {
+		return r.status
+	}
+	r.refuseReadonly(name, removedAttribute)
+	return r.status
 }
 
 // applyDeferredFreeze freezes the names markReadonly held back, now that the
@@ -1163,18 +1229,22 @@ func (r *Runner) shadow(name string) (fresh bool) {
 			sc.removedBefore = map[string]bool{}
 		}
 		sc.removedBefore[name] = r.removed[name]
-		if r.readonly[name] {
-			// The frozen attribute is displaced with the value, in the
-			// dialect that lets a declaration shadow one — the caller
-			// checked the axis before getting here. Saved so the outer name
-			// is frozen again on return: a function that thawed a readonly
-			// for good would be a hole in the whole point of the attribute.
-			if sc.savedReadonly == nil {
-				sc.savedReadonly = map[string]bool{}
-			}
-			sc.savedReadonly[name] = true
-			delete(r.readonly, name)
+		// The frozen attribute is displaced with the value, in the dialect
+		// that lets a declaration shadow one — the caller checked the axis
+		// before getting here. Saved so the outer name is frozen again on
+		// return: a function that thawed a readonly for good would be a hole
+		// in the whole point of the attribute.
+		//
+		// Recorded whether or not there was a freeze, because the same entry
+		// is what takes back a freeze this *call* adds — see
+		// scope.savedReadonly. The delete below is unconditional for the
+		// same reason there is no `if` around it: a name with nothing
+		// recorded is a delete of a key that is not there.
+		if sc.savedReadonly == nil {
+			sc.savedReadonly = map[string]bool{}
 		}
+		sc.savedReadonly[name] = r.readonly[name]
+		delete(r.readonly, name)
 	}
 	// Arrays live in a table of their own, so a name has to be saved from
 	// both. Saving only the scalar left `f() { local a; a=(x y); }` writing a

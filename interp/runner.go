@@ -2881,12 +2881,22 @@ type scope struct {
 	savedAssoc   map[string]AssocArray
 	assocExisted map[string]bool
 	// savedReadonly is whether a shadowed name was frozen when the
-	// declaration displaced it, for the dialect that lets a local shadow a
-	// readonly. Taking the attribute off is a change to the runner's record
-	// and has to be put back like the value — otherwise the outer name comes
-	// back assignable, which is a frozen name quietly thawed by a function
-	// call. One map rather than two, because r.readonly is a set: absent and
-	// false mean the same thing there.
+	// declaration displaced it. Taking the attribute off is a change to the
+	// runner's record and has to be put back like the value — otherwise the
+	// outer name comes back assignable, which is a frozen name quietly
+	// thawed by a function call.
+	//
+	// Written for *every* name a declaration shadows and not only for the
+	// ones that arrived frozen, because the entry has two jobs and the
+	// second one needs the false. A `false` here says the shell had nothing
+	// frozen under this name when the call took it, so anything frozen by
+	// the time the call returns was frozen *by the call* and goes away with
+	// it: `f() { local -r y=1; }; f; y=2` leaves y writable in bash, ksh93
+	// and zsh alike, and recording only the true left the caller's y frozen
+	// for the rest of the script.
+	//
+	// So absent and false do not mean the same thing here, though they do in
+	// r.readonly: absent means this scope never shadowed the name at all.
 	savedReadonly map[string]bool
 	// savedExported and exportedSpoken are the export attribute a shadowed
 	// name had, for the dialects where a local does not inherit it. Taking
@@ -3065,7 +3075,24 @@ const (
 	// assignedByDeclaration is an assignment made through a declaration
 	// utility — `export x=2`, `typeset x=2`, `readonly x=2`.
 	assignedByDeclaration
+	// removedAttribute is not an assignment at all: it is `typeset +r x`
+	// asking for an attribute the name may not give up, in a dialect that
+	// does not let it — see Semantics.ReadonlyAttributeCanBeRemoved.
+	//
+	// A form rather than a refusal of its own, because everything the
+	// refusal decides it already decides the same way: the sentence is the
+	// declaration's, and so is the fatality, and so is giving up nothing of
+	// the enclosing line. Only which builtins name themselves differs, and
+	// that is one table — see Diagnostics.ReadonlyRemovalNamesBuiltin.
+	removedAttribute
 )
+
+// declaresRatherThanAssigns reports whether the form is one a *declaration*
+// utility wrote, which is the question three of refuseReadonly's answers turn
+// on: the wording, the fatality, and whether the rest of the line is given up.
+func (f assignForm) declaresRatherThanAssigns() bool {
+	return f == assignedByDeclaration || f == removedAttribute
+}
 
 // setVarAs sets a variable, knowing how the assignment was written.
 // attributeFolded is what a name's attributes make of a value: the integer
@@ -3098,6 +3125,18 @@ func (r *Runner) attributeFolded(name, value string) (string, bool) {
 		value = strings.ToUpper(value)
 	}
 	return value, true
+}
+
+// readonlyRefusalNamesBuiltin reports whether the running builtin puts its own
+// name in this refusal. A plus form refused the attribute it wanted to remove
+// asks a different table, because one shell answers the two shapes
+// differently through the identical word — see
+// Diagnostics.ReadonlyRemovalNamesBuiltin.
+func (r *Runner) readonlyRefusalNamesBuiltin(form assignForm) bool {
+	if form == removedAttribute && r.diag().ReadonlyRemovalNamesBuiltin != nil {
+		return r.diag().ReadonlyRemovalNamesBuiltin[r.inBuiltin]
+	}
+	return r.diag().ReadonlyRefusalNamesBuiltin[r.inBuiltin]
 }
 
 // refuseReadonly reports whether an assignment to a frozen name is refused,
@@ -3137,8 +3176,8 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	// explicit indexes and a spare argument becomes "%!(EXTRA …)", which is
 	// what Wording's own note is about.
 	msg := Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name)
-	if form == assignedByDeclaration && r.diag().ReadonlyVariableInDeclaration != "" &&
-		r.diag().ReadonlyRefusalNamesBuiltin[r.inBuiltin] {
+	if form.declaresRatherThanAssigns() && r.diag().ReadonlyVariableInDeclaration != "" &&
+		r.readonlyRefusalNamesBuiltin(form) {
 		msg = Wording(r.diag().ReadonlyVariableInDeclaration, "", name, r.inBuiltin)
 	}
 	// The builtin has been taken for the wording above where a dialect wants
@@ -3154,17 +3193,17 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	// assignment to the same name. One table decides both, because a dialect
 	// that puts the name in the sentence is the dialect that keeps the
 	// builtin's location under it.
-	if !r.diag().ReadonlyRefusalNamesBuiltin[r.inBuiltin] {
+	if !r.readonlyRefusalNamesBuiltin(form) {
 		outer := r.inBuiltin
 		r.inBuiltin = ""
 		defer func() { r.inBuiltin = outer }()
 	}
 	fatal := r.sem().ReadonlyReassignmentFatal
 	switch {
-	case form == assignedByDeclaration:
-		// A third answer, and a different set of shells from either of the two
-		// above: `export x=2` stops dash, ksh93 and zsh, and bash reports it
-		// and carries on — by both invocation routes.
+	case form.declaresRatherThanAssigns():
+		// A second answer, and a different set of shells: `export x=2` stops
+		// dash, ksh93 and zsh, and bash reports it and carries on — by both
+		// invocation routes.
 		fatal = r.sem().ReadonlyReassignmentByDeclarationFatal
 	}
 	if r.ask(fatal, "a readonly reassignment being fatal") {
@@ -3182,7 +3221,7 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	// and `readonly x=2` against a readonly name all report and run the next
 	// command on the same line, which is the tell that this is about a bare
 	// assignment failing rather than about the refusal.
-	if form != assignedByDeclaration {
+	if !form.declaresRatherThanAssigns() {
 		r.ctl, r.abandonLine = controlAbandon, r.line
 	}
 	return true

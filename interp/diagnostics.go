@@ -1959,6 +1959,23 @@ type Diagnostics struct {
 	// two spellings POSIX has. dash names both of the two it has. ksh93 and
 	// zsh name none, including ksh93's own `typeset`.
 	ReadonlyRefusalNamesBuiltin map[string]bool
+	// ReadonlyRemovalNamesBuiltin is the same set for a *plus* form refused
+	// the attribute it asked to take off — `typeset +r x` on a frozen name.
+	// Nil falls back to ReadonlyRefusalNamesBuiltin, which is what every
+	// dialect but one wants.
+	//
+	// A set of its own because one shell answers the two shapes differently
+	// through the identical word. Measured 2026-09-07:
+	//
+	//	ksh93  typeset x=2    → <script>: line 2: x: is read only
+	//	       typeset +r x   → <script>[2]: typeset: x: is read only
+	//
+	// One word, two sentences and two locations, so the builtin's name
+	// cannot decide it alone. The plus form there takes the shape `set -A`
+	// takes — the builtin's own location with the builtin named — and the
+	// assignment through the same word takes the plain line form. bash names
+	// the builtin for both and needs no second answer.
+	ReadonlyRemovalNamesBuiltin map[string]bool
 
 	// DeclareNoSuchVariable is what `declare -p` and `typeset -p` say about
 	// a name that is not there. One verb: the name. The message follows the

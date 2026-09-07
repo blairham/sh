@@ -87,6 +87,12 @@ func TestSemantics(t *testing.T) {
 		// declaration that creates the name leaves it unset.
 		{"AttributeRereadsTheValueItFinds", s.AttributeRereadsTheValueItFinds, interp.Yes},
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.Yes},
+		// And a `typeset` in one of those keyword functions may shadow a
+		// frozen name, as zsh does — measured through the word this shell
+		// has rather than through the `local` it has not. Taking the
+		// attribute off is refused here, which is where it parts from zsh.
+		{"DeclarationMayShadowAReadonly", s.DeclarationMayShadowAReadonly, interp.Yes},
+		{"ReadonlyAttributeCanBeRemoved", s.ReadonlyAttributeCanBeRemoved, interp.No},
 		{"IndirectionYieldsName", s.IndirectionYieldsName, interp.Yes},
 		// The brace-range answers: `{01..3}` is `1 2 3`, `{10..1..3}` is
 		// `10` and `{1..10..-3}` is `1`, and `{3..1..-1}` keeps the

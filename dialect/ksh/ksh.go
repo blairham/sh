@@ -268,11 +268,28 @@ func Semantics() interp.Semantics {
 	s.MissingFileIsOlder = interp.Yes
 	s.TerminalTestRequiresANumber = interp.No
 	s.ArithNameValueRecurses = interp.Yes
-	// This shell has no `local` at all, and its `typeset` over a frozen name
-	// is fatal rather than a refusal that carries on — which is
-	// ReadonlyReassignmentFatal and not this field. So the shadow question
-	// is answered no: nothing here may declare over a frozen name.
-	s.DeclarationMayShadowAReadonly = interp.No
+	// This shell has no `local`, and it answers all the same: `typeset` in a
+	// *keyword*-defined function is a local here — see
+	// TypesetLocalNeedsKeywordFunction — and the shadow it declares over a
+	// frozen name is a writable one, as in zsh. Measured 2026-09-07:
+	//
+	//	typeset -r x=1
+	//	function f { typeset x=2; echo "in=[$x]"; }
+	//	f; echo "st=$? out=[$x]"
+	//	→ in=[2], st=0 out=[1]
+	//
+	// Written `f() { … }` instead there is no scope to shadow into, so the
+	// same `typeset` is an ordinary assignment to the frozen global and is
+	// fatal — which is TypesetLocalNeedsKeywordFunction and
+	// ReadonlyReassignmentFatal doing their jobs, and not an answer to this.
+	// Reading that fatality as this axis's answer is what put `No` here, and
+	// it made a keyword function refuse a declaration this shell takes
+	// (#1177).
+	s.DeclarationMayShadowAReadonly = interp.Yes
+	// The attribute cannot come off, though, which is where this shell parts
+	// from zsh and why the two are separate questions: `typeset +r x` on a
+	// frozen name is `typeset: x: is read only` and ends the script.
+	s.ReadonlyAttributeCanBeRemoved = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// But an attribute added to a name that already holds a value re-reads
 	// that value at once: `FOO=bar; typeset -i FOO` stores 0 over the text,
@@ -948,7 +965,13 @@ func Diagnostics() interp.Diagnostics {
 		// only` against `ro: is read only`.
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
 		ReadonlyRefusalNamesBuiltin:   map[string]bool{"set": true},
-		ReadBadFileDescriptor:         "read: bad file unit number [Bad file descriptor]",
+		// And `typeset` names itself for a refused *removal* alone. Measured
+		// 2026-09-07: `typeset +r x` is `<script>[2]: typeset: x: is read
+		// only` where `typeset x=2` on the same name is `<script>: line 2:
+		// x: is read only`. One word, two shapes, two sentences — which is
+		// what the second table is for.
+		ReadonlyRemovalNamesBuiltin: map[string]bool{"typeset": true},
+		ReadBadFileDescriptor:       "read: bad file unit number [Bad file descriptor]",
 		// ksh93 calls the coprocess the query process, and `read -p` with
 		// none running says so — the only reachable answer here, this
 		// grammar having no `|&`.

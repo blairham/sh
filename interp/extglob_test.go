@@ -6,6 +6,8 @@ package interp_test
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -275,5 +277,205 @@ func TestParenthesesFromAnExpansionAreEscaped(t *testing.T) {
 	// And a shell with no groups leaves them alone either way.
 	if got := condRunGlob(t, asText, false, false, false, No); got != "yes" {
 		t.Errorf("got %s, want yes", got)
+	}
+}
+
+// A quantified group reaches the **filesystem**, which it did not before
+// #1042: `echo @(a|b)` was passed through as text where every shell with the
+// construct lists the files.
+//
+// The gap was in the predicate that decides whether a field is a pattern at
+// all. It counts `*`, `?`, a closed `[`, a range where the dialect has one
+// and — since #995 — a bare `(` where the dialect has those; it did not count
+// a *quantified* group, so a field holding one and nothing else never reached
+// the walk. `*(a|b)` and `?(a|b)` worked all along and hid it, their
+// quantifier being a metacharacter in its own right, which is why the gap
+// showed up as three of the five quantifiers rather than as the construct.
+//
+// Measured 2026-09-07 in a directory holding `a` and `b`, on ksh93u+
+// 2012-08-01 and on bash 5.3.15 and 3.2.57 under `shopt -s extglob`. All
+// three answer `a b` to `@(a|b)`, `+(a|b)`, `?(a|b)` and `*(a|b)`, and `b` to
+// `!(a)`.
+func TestAQuantifiedGroupReachesTheFilesystem(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"a", "b"} {
+		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct{ pattern, want string }{
+		// The three that were passed through as text.
+		{`@(a|b)`, `[a][b]`},
+		{`+(a|b)`, `[a][b]`},
+		{`!(a)`, `[b]`},
+		// And the two whose quantifier was already a metacharacter, which
+		// is what made the gap invisible.
+		{`?(a|b)`, `[a][b]`},
+		{`*(a|b)`, `[a][b]`},
+		// A group behind a literal is the same construct in a different
+		// place, and matches nothing here — `a@(x|y)` names no file, so the
+		// word is passed through, which is ksh93's answer too.
+		{`a@(x|y)`, `[a@(x|y)]`},
+		// A quantifier with no group behind it is an ordinary character:
+		// `@x` is a file name, not a pattern, in every shell in the panel.
+		{`@a`, `[@a]`},
+	} {
+		got := runExtendedIn(t, dir, `printf "[%s]" `+tc.pattern)
+		if got != tc.want {
+			t.Errorf("%s = %q, want %q", tc.pattern, got, tc.want)
+		}
+	}
+	// Without the flag the field is not a pattern at all and the text
+	// stands, which is the same answer read the other way round: the
+	// predicate reads the dialect and not the characters.
+	if got := runPlainIn(t, dir, `printf "[%s]" @a`); got != `[@a]` {
+		t.Errorf("without the flag: got %q, want %q", got, `[@a]`)
+	}
+}
+
+// runExtendedIn runs src in dir under a dialect with quantified groups, which
+// is the flag the rows above are about.
+func runExtendedIn(t *testing.T, dir, src string) string {
+	t.Helper()
+	return runGlobIn(t, dir, src, true)
+}
+
+func runPlainIn(t *testing.T, dir, src string) string {
+	t.Helper()
+	return runGlobIn(t, dir, src, false)
+}
+
+func runGlobIn(t *testing.T, dir, src string, extended bool) string {
+	t.Helper()
+	d := syntax.Core()
+	d.ExtendedPattern = extended
+	f, err := syntax.Parse(src, d)
+	if err != nil {
+		return "parse: " + err.Error()
+	}
+	var out bytes.Buffer
+	s := PosixSemantics()
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dir: dir, Dialect: &d, Semantics: &s})
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(out.String())
+}
+
+// The leading-period rule is **not** suspended by a quantifier, and this is
+// the row the issue expected to go the other way.
+//
+// #1042 read `*(.)` answering `.` and `..` as evidence that the quantifier is
+// exempt from the rule "in both other shells". Measured 2026-09-07, it is one
+// shell and not two: in a directory holding `a` and `b`,
+//
+//	ksh93u+          echo *(.)   →  . ..
+//	bash 5.3.15      echo *(.)   →  *(.)   — no match, passed through
+//	bash 3.2.57      echo *(.)   →  *(.)   — the same
+//
+// A pattern's leading character here is the `*`, not a literal period, so a
+// hidden name is not matched — and `.` and `..` are not entries this walk
+// offers at all. bash agrees on both counts; ksh93 offers them and is the
+// divergence `pat/a-trailing-group-is-a-list-of-qualifiers` records in its
+// column, for that reason rather than for the one the issue supposed.
+//
+// So this asserts what the fix does *not* change, which is the half a
+// predicate about metacharacters has no business deciding.
+func TestAQuantifierDoesNotSuspendTheLeadingPeriodRule(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"a", ".hid"} {
+		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct{ pattern, want string }{
+		// The pattern reaches the walk now — that is the fix — and matches
+		// no hidden name, so the word is passed through.
+		{`*(.)`, `[*(.)]`},
+		{`@(.)`, `[@(.)]`},
+		// A group whose own first character is a literal period is a
+		// **second axis** and is not this fix's. Two answers, and they
+		// split a shell rather than two shells — measured 2026-09-07 in a
+		// directory holding `a` and `.hid`:
+		//
+		//	                  bash 5.3.15  bash 3.2.57  ksh93u+
+		//	echo @(.hid)      .hid         @(.hid)      .hid
+		//	echo @(a|.hid)    .hid a       a            .hid a
+		//	echo *(.hid)      .hid         *(.hid)      .hid
+		//	echo .@(hid)      .hid         .hid         .hid
+		//
+		// So bash 5.3 and ksh93 look *inside* the group for a literal
+		// period and any alternative will do, where bash 3.2 does not —
+		// and the last row, whose period is outside the group, is the one
+		// all three agree on. A version difference inside one preset is
+		// the shape `${x^^}` has and it is not answerable by a grammar
+		// flag, so it is measured here and left as it stands rather than
+		// guessed at. This answers as bash 3.2 does.
+		{`@(.hid)`, `[@(.hid)]`},
+		{`@(a|.hid)`, `[a]`},
+		// The period outside the group is the row every shell agrees on,
+		// and it works here.
+		{`.@(hid)`, `[.hid]`},
+	} {
+		if got := runExtendedIn(t, dir, `printf "[%s]" `+tc.pattern); got != tc.want {
+			t.Errorf("%s = %q, want %q", tc.pattern, got, tc.want)
+		}
+	}
+}
+
+// A quantified group is a metacharacter at the **expansion** sites too, which
+// is the other half of one predicate read twice: a field with a metacharacter
+// in it is escaped where the dialect does not glob the result of an expansion,
+// and one with none is left alone because it has nothing to protect.
+//
+// It needs a dialect no preset is — quantified groups *and* a refusal to glob
+// an expansion's result — because the two shells with the construct both glob
+// such a result and the shell that does not has no quantified groups. That is
+// a fact about today's panel and not about the code: the two questions are
+// independent, the sites read both, and a mutant that dropped the flag at
+// either of them survived every row until this one.
+//
+// What it asserts is the *escaping*: with the flag, `@(a|b)` arriving from a
+// value is protected and prints as six characters; without it the same field
+// is thought to hold nothing worth protecting.
+func TestAQuantifiedGroupFromAnExpansionIsEscaped(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"a", "b"} {
+		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := func(src string) string {
+		t.Helper()
+		d := syntax.Core()
+		d.ExtendedPattern = true
+		f, err := syntax.Parse(src, d)
+		if err != nil {
+			t.Fatalf("parse %q: %v", src, err)
+		}
+		var out bytes.Buffer
+		s := PosixSemantics()
+		// The axis no preset combines with the flag above.
+		s.GlobExpansionResults = No
+		r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dir: dir, Dialect: &d, Semantics: &s})
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		return strings.TrimSpace(out.String())
+	}
+	// The scalar site: an unquoted `$p` whose value is a group.
+	if got, want := run(`p='@(a|b)'; printf "[%s]" $p`), `[@(a|b)]`; got != want {
+		t.Errorf("scalar: got %q, want %q", got, want)
+	}
+	// And the list site, which is a second call with its own flags: an
+	// array's elements go through a different path from a scalar's value.
+	if got, want := run(`set -- '@(a|b)'; printf "[%s]" $@`), `[@(a|b)]`; got != want {
+		t.Errorf("list: got %q, want %q", got, want)
+	}
+	// The row that says the escaping is what did it rather than the value
+	// simply never being a pattern: written in the source, the same six
+	// characters do reach the filesystem.
+	if got, want := run(`printf "[%s]" @(a|b)`), `[a][b]`; got != want {
+		t.Errorf("written out: got %q, want %q", got, want)
 	}
 }

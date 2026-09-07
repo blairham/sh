@@ -59082,6 +59082,50 @@
         "TimedOut": false
       }
     },
+    "pat/a-quantifier-does-not-suspend-the-leading-period": {
+      "bash": {
+        "Stdout": "[.hid]~[.hid][a]~[.hid]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[.hid]~[.hid][a]~[.hid]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[@(.hid)]~[a]~[.hid]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 3: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[.hid]~[.hid][a]~[.hid]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:3: unknown file attribute: h",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pat/a-question-mark-is-one-byte-in-a-single-byte-locale": {
       "bash": {
         "Stdout": "six",
@@ -59518,6 +59562,50 @@
         "Stdout": "[abcdabcd]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/an-extended-pattern-reaches-the-filesystem": {
+      "bash": {
+        "Stdout": "[a][b]~[a][b]~[b]~[@a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[a][b]~[a][b]~[b]~[@a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[a][b]~[a][b]~[b]~[@a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 3: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[a][b]~[a][b]~[b]~[@a]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:3: no matches found: @(a|b)",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

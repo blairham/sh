@@ -8167,6 +8167,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pat/case-subject-is-not-globbed` | `literal empty` | `literal empty` | `literal empty` | `literal empty` | `literal empty` | `literal empty` |
 | `pat/extended-patterns-are-not-core` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `at` | *(no output, status 0)* |
 | `pat/extended-pattern-quantifiers` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac'` *(status 2)* | `q~plus~bang` | *(no output, status 0)* |
+| `pat/an-extended-pattern-reaches-the-filesystem` | **2>** `<script>: 3: Syntax error: "(" unexpected` *(status 2)* | `[a][b]~[a][b]~[b]~[@a]` | `[a][b]~[a][b]~[b]~[@a]` | `[a][b]~[a][b]~[b]~[@a]` | `[a][b]~[a][b]~[b]~[@a]` | **2>** `<script>:3: no matches found: @(a\|b)` *(status 1)* |
+| `pat/a-quantifier-does-not-suspend-the-leading-period` | **2>** `<script>: 3: Syntax error: "(" unexpected` *(status 2)* | `[.hid]~[.hid][a]~[.hid]` | `[.hid]~[.hid][a]~[.hid]` | `[@(.hid)]~[a]~[.hid]` | `[.hid]~[.hid][a]~[.hid]` | **2>** `<script>:3: unknown file attribute: h` *(status 1)* |
 | `pat/extended-patterns-in-a-condition` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `yes` | `yes` | **2>** `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 0: syntax error near `@(a'~<shell>: -c: line 0: `[[ abc == @(abc\|xyz) ]] && echo yes \|\| echo no'` *(status 2)* | `yes` | `no` |
 | `pat/a-bare-group-is-alternation` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case ab in a(b\|c)) echo yes;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case ab in a(b\|c)) echo yes;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case ab in a(b\|c)) echo yes;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `yes` |
 | `pat/a-literal-at-before-a-bare-group` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case @abc in @(abc\|xyz)) echo yes;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case @abc in @(abc\|xyz)) echo yes;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case @abc in @(abc\|xyz)) echo yes;; *) echo no;; esac'` *(status 2)* | `no` | `yes` |
@@ -8356,6 +8358,23 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pat/extended-pattern-quantifiers` — the rest of the family, which only ksh93 has in a `case` pattern — zsh reads each `?`, `+` and `!` as an ordinary character in front of a group of its own, so none of them match
   ```sh
   case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac
+  ```
+- `pat/an-extended-pattern-reaches-the-filesystem` — a quantified group as a *word*, where every other extended-pattern row asks about one as an operand. ksh93 and both bashes list the files; dash has no such pattern and zsh reads the `@` as an ordinary character in front of a group of its own, so its group matches nothing and the miss is fatal there. The last probe is the row that keeps the fix from being `an @ is a metacharacter`: `@a` is a file name and not a pattern in every column. Written over two lines so bash reaches the option — `extglob` is not in force until the line after the one that sets it (#1042)
+  ```sh
+  shopt -s extglob 2>/dev/null
+  mkdir -p xd; : > xd/a; : > xd/b; cd xd
+  printf "[%s]" @(a|b); echo
+  printf "[%s]" +(a|b); echo
+  printf "[%s]" !(a); echo
+  printf "[%s]" @a; echo
+  ```
+- `pat/a-quantifier-does-not-suspend-the-leading-period` — whether the leading-period rule looks *inside* a group, and it is the row that splits a shell rather than two shells: bash 5.3 and ksh93 find the hidden name through any alternative of the group, and bash 3.2 finds it through none of them. The third probe, whose period stands outside the group, is what every column agrees on — so the disagreement is about where the literal period has to be and not about whether the rule applies. A version difference inside one preset is the shape `${x^^}` has and no grammar flag answers it; this is measured rather than guessed at, and this shell answers as bash 3.2 does (#1042)
+  ```sh
+  shopt -s extglob 2>/dev/null
+  mkdir -p pd; : > pd/a; : > pd/.hid; cd pd
+  printf "[%s]" @(.hid); echo
+  printf "[%s]" @(a|.hid); echo
+  printf "[%s]" .@(hid); echo
   ```
 - `pat/extended-patterns-in-a-condition` — bash has extended patterns here and nowhere else — the same text is a syntax error in a `case` pattern there — so where they are available is a separate question from whether the shell has them
   ```sh

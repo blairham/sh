@@ -990,6 +990,7 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) [
 	split := sp.answer(r.sem().SplitParamExpansion)
 	numericRange := r.dialect().NumericRangePattern
 	patternGroup := r.dialect().PatternAlternation
+	extendedPattern := r.dialect().ExtendedPattern
 	var out []string
 	for _, el := range elems {
 		if el == "" {
@@ -1014,7 +1015,7 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) [
 		// Before the split rather than after, as the scalar path does it:
 		// what the escape adds is backslashes, which no IFS puts a field
 		// boundary on.
-		if hasUnescapedMeta(el, numericRange, patternGroup) &&
+		if hasUnescapedMeta(el, numericRange, patternGroup, extendedPattern) &&
 			!r.ask(glob, "globbing the result of an expansion") {
 			el = globEscape(el)
 		}
@@ -1181,7 +1182,8 @@ func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, ax
 	if ifs, _ := r.ifs(); containsAnyOf(v, ifs) {
 		doSplit = r.ask(split, axis)
 	}
-	if hasUnescapedMeta(v, r.dialect().NumericRangePattern, r.dialect().PatternAlternation) &&
+	if hasUnescapedMeta(v, r.dialect().NumericRangePattern, r.dialect().PatternAlternation,
+		r.dialect().ExtendedPattern) &&
 		!r.ask(glob, "globbing the result of an expansion") {
 		// zsh does not treat the result of an expansion as a pattern. The
 		// same rule decides `[[ abc == $p ]]`, which is one behavior

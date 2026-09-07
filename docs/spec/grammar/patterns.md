@@ -290,6 +290,80 @@ Grammar flag: `ExtendedPattern` — core: off; `ksh`: on. bash's narrower
 `ExtendedPatternInCondition` turns them on inside `[[ ]]` and nowhere
 else, which is where bash reads them.
 
+### A quantified group reaches the filesystem
+
+`echo @(a|b)` lists the files, and the same flag decides it. Measured
+2026-09-07 in a directory holding `a` and `b`, on ksh93u+ 2012-08-01 and
+on bash 5.3.15 and 3.2.57 under `shopt -s extglob`:
+
+| written | ksh93 | bash 5.3 | bash 3.2 | zsh |
+| --- | --- | --- | --- | --- |
+| `echo @(a\|b)` | `a b` | `a b` | `a b` | no match |
+| `echo +(a\|b)` | `a b` | `a b` | `a b` | no match |
+| `echo !(a)` | `b` | `b` | `b` | `number expected` |
+| `echo @a` | `@a` | `@a` | `@a` | `@a` |
+
+zsh reads the `@` as an ordinary character in front of a bare group of
+its own, so its group matches nothing and the miss is fatal there — the
+same reading its `case` column gives above. The last row is the one that
+keeps the rule from being "an `@` is a metacharacter": a quantifier with
+no `(` behind it is an ordinary character everywhere.
+
+The predicate that decides whether a field is a pattern at all counts
+`*`, `?`, a closed `[`, a range where the dialect has one and a bare `(`
+where the dialect has those. It did **not** count a quantified group, so
+a field holding one and nothing else never reached the walk — and
+`*(a|b)` and `?(a|b)` worked all along and hid it, their quantifier being
+a metacharacter in its own right. That is why the gap showed up as three
+of the five quantifiers rather than as the construct (#1042). Measured:
+`pat/an-extended-pattern-reaches-the-filesystem`.
+
+The `(` has to be the byte **directly after** the quantifier. `@a(b)` is
+``syntax error at line 1: `(' unexpected`` in ksh93, so no source can put
+such a field in front of the matcher — but a value can, and the predicate
+answers about the characters rather than about where they came from.
+
+The same predicate is read a second time, at the **expansion** sites: a
+field with a metacharacter in it is escaped where the dialect does not
+glob the result of an expansion, and one with none is left alone because
+it has nothing to protect. No preset combines the two — both shells with
+quantified groups glob such a result, and the shell that does not has no
+quantified groups — so that half is asserted against a dialect assembled
+for it rather than against a shell. The two questions are independent and
+the sites read both.
+
+### The leading-period rule and a group's own period
+
+Whether the rule looks *inside* a group is a **second axis**, and it
+splits a shell rather than two shells. Measured the same day in a
+directory holding `a` and `.hid`:
+
+| written | bash 5.3 | bash 3.2 | ksh93 |
+| --- | --- | --- | --- |
+| `echo @(.hid)` | `.hid` | `@(.hid)` | `.hid` |
+| `echo @(a\|.hid)` | `.hid a` | `a` | `.hid a` |
+| `echo *(.hid)` | `.hid` | `*(.hid)` | `.hid` |
+| `echo .@(hid)` | `.hid` | `.hid` | `.hid` |
+
+So bash 5.3 and ksh93 find the hidden name through *any* alternative of
+the group, and bash 3.2 through none of them. The last row, whose period
+stands outside the group, is what every column agrees on — so the
+disagreement is about where the literal period has to be and not about
+whether the rule applies at all.
+
+A version difference inside one preset is the shape `${x^^}` has and no
+grammar flag answers it, so this is written down rather than guessed at.
+**This shell answers as bash 3.2 does.** Measured:
+`pat/a-quantifier-does-not-suspend-the-leading-period`.
+
+And `*(.)` is a separate row again: `. ..` in ksh93 and `*(.)` in bash
+5.3 and 3.2 alike, the pattern's leading character being the `*` and
+`.`/`..` not being entries this walk offers. #1042 was filed expecting
+both bashes to answer `. ..`; they do not, and the quantifier is not
+exempt from the leading-period rule in either of them. That divergence is
+ksh93's alone and is what `pat/a-trailing-group-is-a-list-of-qualifiers`
+records in its column.
+
 ### A group may stand for no text at all
 
 One repetition of an arm that matches nothing is nothing, so a group with

@@ -52,10 +52,11 @@ func globUnescape(s string) string {
 
 // hasUnescapedMeta reports whether a field is a pattern at all.
 //
-// numericRange and patternGroup are the two constructs here whose being a
-// metacharacter is a dialect question rather than a universal: a `<` and a
-// `(` are ordinary characters in a field everywhere else, and in the shells
-// without ranges or bare groups neither ever reaches a pattern at all.
+// numericRange, patternGroup and extendedPattern are the three constructs
+// here whose being a metacharacter is a dialect question rather than a
+// universal: a `<`, a `(` and an `@` are ordinary characters in a field
+// everywhere else, and in the shells without ranges, bare groups or
+// quantified groups none of them ever reaches a pattern at all.
 //
 // The group is what makes `echo f(1|2)` list `f1` and `f2` — an alternation
 // with no `*` or `?` beside it is still a pattern — and it is the same
@@ -63,10 +64,34 @@ func globUnescape(s string) string {
 // six characters: a field with a metacharacter in it is escaped where the
 // dialect does not glob the result of an expansion, and one with none is not
 // escaped because it has nothing to protect.
-func hasUnescapedMeta(s string, numericRange, patternGroup bool) bool {
+//
+// **The quantified group is the same answer a third time**, and it was
+// missing: `echo @(a|b)` reached the filesystem in no dialect, because `@`
+// is not a metacharacter and the `(` behind it is only counted where bare
+// groups are. `*(a|b)` and `?(a|b)` worked all along and hid it, their
+// quantifier being a metacharacter in its own right — which is why the gap
+// showed up as three of the five quantifiers rather than as the construct
+// (#1042).
+func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern bool) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\\' {
 			i++
+			continue
+		}
+		if extendedPattern && quantifiesAGroup(s, i) {
+			// The quantifier and its group are one construct, so the `(` is
+			// consumed with it rather than left to be counted again below —
+			// which matters in the dialect that has both, where a bare `(`
+			// is a metacharacter on its own.
+			//
+			// `i+1` is where the `(` is, and asking at `i` instead is an
+			// equivalent mutant rather than a gap: closesGroup skips every
+			// byte that is not a parenthesis, and the byte at `i` is a
+			// quantifier. Recorded so the next reader does not go looking
+			// for the row that would kill it.
+			if closesGroup(s, i+1) {
+				return true
+			}
 			continue
 		}
 		if s[i] == '(' && patternGroup {
@@ -120,6 +145,23 @@ func numericRangeWidth(s string) (int, bool) {
 // counting the nested pairs and skipping the ones a backslash claims. An
 // unclosed `(` is an ordinary character, the same way an unterminated bracket
 // expression is.
+// quantifiesAGroup reports whether the byte at i is one of the five
+// quantifiers with a `(` behind it.
+//
+// The `(` is the whole of the test: `@` and `+` and `!` are ordinary
+// characters anywhere else in a field, and `echo @x` looks for a file called
+// `@x` in every shell in the panel.
+func quantifiesAGroup(s string, i int) bool {
+	if i+1 >= len(s) || s[i+1] != '(' {
+		return false
+	}
+	switch s[i] {
+	case '@', '?', '+', '*', '!':
+		return true
+	}
+	return false
+}
+
 func closesGroup(s string, i int) bool {
 	depth := 0
 	for ; i < len(s); i++ {
@@ -207,7 +249,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		return nil, false
 	}
 	if !hasQuals && !hasUnescapedMeta(field, r.dialect().NumericRangePattern,
-		r.dialect().PatternAlternation) {
+		r.dialect().PatternAlternation, r.dialect().ExtendedPattern) {
 		return nil, false
 	}
 	// A list makes the field a pattern whatever is in front of it: `f1(.)`

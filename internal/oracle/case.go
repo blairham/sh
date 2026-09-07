@@ -7968,6 +7968,27 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the rest of the family, which only ksh93 has in a `case` pattern — zsh reads each `?`, `+` and `!` as an ordinary character in front of a group of its own, so none of them match",
 	},
 	{
+		ID: "pat/an-extended-pattern-reaches-the-filesystem", Category: "pattern matching", SyntaxError: true,
+		Snippet: `shopt -s extglob 2>/dev/null
+mkdir -p xd; : > xd/a; : > xd/b; cd xd
+printf "[%s]" @(a|b); echo
+printf "[%s]" +(a|b); echo
+printf "[%s]" !(a); echo
+printf "[%s]" @a; echo`,
+		Script: true,
+		Why:    "a quantified group as a *word*, where every other extended-pattern row asks about one as an operand. ksh93 and both bashes list the files; dash has no such pattern and zsh reads the `@` as an ordinary character in front of a group of its own, so its group matches nothing and the miss is fatal there. The last probe is the row that keeps the fix from being `an @ is a metacharacter`: `@a` is a file name and not a pattern in every column. Written over two lines so bash reaches the option — `extglob` is not in force until the line after the one that sets it (#1042)",
+	},
+	{
+		ID: "pat/a-quantifier-does-not-suspend-the-leading-period", Category: "pattern matching", SyntaxError: true,
+		Snippet: `shopt -s extglob 2>/dev/null
+mkdir -p pd; : > pd/a; : > pd/.hid; cd pd
+printf "[%s]" @(.hid); echo
+printf "[%s]" @(a|.hid); echo
+printf "[%s]" .@(hid); echo`,
+		Script: true,
+		Why:    "whether the leading-period rule looks *inside* a group, and it is the row that splits a shell rather than two shells: bash 5.3 and ksh93 find the hidden name through any alternative of the group, and bash 3.2 finds it through none of them. The third probe, whose period stands outside the group, is what every column agrees on — so the disagreement is about where the literal period has to be and not about whether the rule applies. A version difference inside one preset is the shape `${x^^}` has and no grammar flag answers it; this is measured rather than guessed at, and this shell answers as bash 3.2 does (#1042)",
+	},
+	{
 		ID: "pat/extended-patterns-in-a-condition", Category: "pattern matching",
 		Snippet: `[[ abc == @(abc|xyz) ]] && echo yes || echo no`,
 		Why:     "bash has extended patterns here and nowhere else — the same text is a syntax error in a `case` pattern there — so where they are available is a separate question from whether the shell has them",

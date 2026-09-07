@@ -1038,8 +1038,11 @@ func Diagnostics() interp.Diagnostics {
 		// and marks it at exactly twenty as well — see the field. The other
 		// three print the whole word or none of it.
 		UnmatchedNearMaxBytes: 20,
-		UnmatchedBraceSubst:   "closing brace expected",
-		SyntaxErrorStatus:     1,
+		// The word again, the same as for `$(` — and for `$[` too, which
+		// this shell has and refuses the same way.
+		UnmatchedArithSubst: "parse error near `%[3]s'",
+		UnmatchedBraceSubst: "closing brace expected",
+		SyntaxErrorStatus:   1,
 		// zsh alone answers "a syntax error" differently depending on where it
 		// read the text: 1 from -c, 126 from a file `.` opened.
 		SourcedSyntaxErrorStatus: 126,

@@ -18,6 +18,12 @@ func corpusDialect() syntax.Dialect {
 	d := syntax.Core()
 	// `${!x}` and `${!prefix*}` — the param/ indirection cases.
 	d.ParamIndirection = true
+	// `$[1+2` — the older arithmetic spelling. Two of the six shells have
+	// the construct and refuse it unterminated; the other two run the line
+	// as text, and the corpus records both answers. Same reason as
+	// HeredocEndsAtClosingParen below: the grammar that has to *read* every
+	// case is the one that takes the construct.
+	d.DollarBracketArith = true
 	// `;;&` — the case-continue cases.
 	d.CaseContinue = true
 	// `function f() { …; }`, both markers at once.

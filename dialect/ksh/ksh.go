@@ -805,6 +805,11 @@ func Diagnostics() interp.Diagnostics {
 		// `v=$(echo hi` answers "syntax error at line 1: `(' unmatched".
 		UnmatchedProcSubst:  "syntax error at line %[5]d: `end of file' unexpected",
 		UnmatchedBraceSubst: "%[3]s{: bad substitution",
+		// Exactly what it says for `$(`: this shell blames the parenthesis
+		// and the opener's line and does not distinguish the two
+		// constructs. Written out rather than shared with UnmatchedCmdSubst
+		// so that a later change to one cannot silently move the other.
+		UnmatchedArithSubst: "syntax error at line %[4]d: `(' unmatched",
 		SyntaxErrorStatus:   3,
 		// The status is never reached — a file `.` cannot open ends the script
 		// here — but the wording is, and it names the operand and the reason in

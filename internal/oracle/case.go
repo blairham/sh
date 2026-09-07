@@ -4236,6 +4236,18 @@ EOF
 		Why:     "the word a construct ran out inside, made long enough to reach the limit the one shell that quotes it back cuts at. Thirty-one bytes against a limit of twenty, so that shell prints twenty and marks them and the other four are unmoved — two of them print the whole word in their own sentence and two name no text at all, which is what says the limit belongs to the rendering of this one dialect's `near` and not to every quoted text. Measured 2026-09-07: the mark is appended at exactly twenty as well, where nothing has been cut, so a row at the boundary is worth more than a row far past it and the unit test carries that one",
 	},
 	{
+		ID: "unterminated/an-arithmetic-substitution-that-never-closes", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo $((1+2\necho after\n",
+		Why:     "the construct whose parentheses hold an *expression* rather than a program, which #1023 left worded by the lexer. All four dialects said the lexer's own sentence and none said what its shell says, and the panel gives four: the closer echoed back at the opener's line, `Missing '))'` at the line the input ran out on, the parenthesis blamed at the opener's line, and the word quoted at the end. The line is the reason this row exists rather than following from the `$(` one — the shell that reports `$(` at the line after the input's last reports this at line 1, so the two constructs disagree inside one column and a row that measured only the sentence would not have seen it",
+	},
+	{
+		ID: "unterminated/an-arithmetic-substitution-in-the-older-spelling", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo $[1+2\necho after\n",
+		Why:     "the same failure from the same helper in the spelling only two of the panel have, and it is the row that says the closer belongs to the construct rather than to the wording: the shell that echoes the closer says `]` here and `)` for `$((`, so one sentence with the closer as a verb serves both and a sentence with `)` written into it would be wrong on this line. The other columns are the interesting half — the two shells without the construct do not refuse the line at all, one running it silently and the other accepting it with a warning about the `$`, which is a status of 0 where the two that have it stop",
+	},
+	{
 		ID: "unterminated/a-process-substitution-that-never-closes", Category: "syntax errors", SyntaxError: true,
 		Script:  true,
 		Snippet: "cat <(echo hi\necho after\n",

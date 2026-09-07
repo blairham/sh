@@ -104,6 +104,23 @@ func (r *Runner) setAssocElem(name, key, value string) {
 		}
 		r.AssocArrays[name] = a
 	}
+	// What the name's attributes make of the value, the same fold an array's
+	// elements get in storeArray and a scalar gets in setVarAs — asked for
+	// rather than assumed, because an element is where the panel splits. See
+	// compoundElemsFolded.
+	if r.attributeWouldChange(name, value) {
+		if r.ask(r.sem().CompoundElementsGoThroughTheAttribute,
+			"an element written to an attributed name going through the attribute") {
+			v, ok := r.attributeFolded(name, value)
+			if !ok {
+				return
+			}
+			value = v
+		}
+		if r.unspecified {
+			return
+		}
+	}
 	a[key] = value
 	// See nameIsBack: a keyed table is the one store that does not keep a
 	// scalar view, so it is the one that has to lift the mark itself. An

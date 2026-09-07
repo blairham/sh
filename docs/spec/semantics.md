@@ -7964,8 +7964,131 @@ last of which asks it of a *child* — so the re-read is a change to the
 value and not a way of rendering it.
 
 Two divergences beside it, measured and not modeled: ksh93 folds an
-array's elements under `-u` where zsh leaves them alone, and zsh renders
-`0x10` under `-i` as `16#10` where ksh93 gives `16`.
+zsh renders `0x10` under `-i` as `16#10` where ksh93 gives `16`; that one is
+open as its own question.
+
+**`CompoundAttribute`** — bash keeps the elements · dash unspecified · ksh93 folds every element · zsh replaces it with a scalar
+
+The same question of a value that is *compound* — an array or a keyed
+table — and it splits the panel **three** ways where the scalar one splits
+it two. The two shells that share the scalar answer disagree with each
+other about what reaching back into an array even means.
+
+    arr=(a b); typeset -i arr      bash `a b`   ksh93 `0 0`   zsh `0`, one element
+    brr=(a b); typeset -u brr      bash `a b`   ksh93 `A B`   zsh `a b`
+    typeset -A m; m[k]=v
+    typeset -i m; export m         bash `v`, nothing to the child
+                                   ksh93 `0`, nothing to the child
+                                   zsh   empty, and the child is told `m=0`
+
+Measured 2026-09-07, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`,
+`ZDOTDIR` and `HISTFILE`, from a script file.
+
+zsh's answer is the strangest and the row worth repeating: the array does
+not keep its length — `${#arr[@]}` is 1 afterwards — and a later
+`arr[0]=3+4` is refused, the name no longer being an array. It is a
+**fresh** scalar and not a fold of anything: `(7 8)`, `(x y)` and
+`(0x10 9)` all leave `0`, which is exactly what that dialect's
+`DeclaredNameWithoutValueIsEmpty` = yes gives a name it has never held. So
+nothing is stored for it here; the compound value is discarded and the
+declaration carries on into the branch a fresh name takes.
+
+**The letter matters for that answer and for that one only.** A shell
+replaces the compound because the letter changed what *kind* of name it
+is, and a case letter changes no kind: in zsh `typeset -u` over an array
+leaves two elements where `typeset -i` leaves one. The other two answers
+apply to every letter alike.
+
+The keyed table is the row a scalar-only reading cannot produce. An array
+keeps its first element in the scalar table, so a scalar re-read of it
+rewrites a copy nothing reads back; a table keeps nothing there, so the
+same slip invents a scalar — and `export m` then hands a child `m=0` for a
+name with no scalar value at all.
+
+Not a widening of `AttributeRereadsTheValueItFinds`: bash is the one
+column where the two questions cannot be told apart, and the other two
+part company across both spellings. It sits in the family `ArraysAreSparse`
+and `ArrayBaseIsZero` belong to.
+
+Pinned by `declare/an-attribute-over-an-array-is-three-answers`,
+`declare/an-attribute-over-a-keyed-table` and
+`declare/an-array-becoming-a-scalar-keeps-nothing`.
+
+**`CompoundElementsGoThroughTheAttribute`** — bash yes · dash unspecified · ksh93 yes · zsh no
+
+Folds what is written to *one element* of an array or a keyed table
+through the attribute the name carries, the way a scalar assignment
+already does everywhere.
+
+    typeset -ia a=(1 2); a[1]=3+4       bash, ksh93 `1 7`
+    typeset -ua q=(ab cd); q[1]=ef      bash, ksh93 `AB EF`   zsh `ef cd`
+    typeset -A m; typeset -i m
+    m[k]=7+7                            bash, ksh93 `14`
+
+A *later write* rather than a reach-back, which is why it is a separate
+question from the one above: bash answers no there and yes here, exactly
+as it does for a scalar. For a scalar the write needs no dialect at all —
+`typeset -i n; n=3+4` is 7 and `typeset -u d; d=again` is AGAIN in every
+shell that spells the letter — and an element is where the panel splits.
+
+zsh does not fold an array's elements at all: its case letters reach a
+scalar's expansion and stop there, and its integer letter never meets an
+array, having replaced it under the field above. So the answer is read off
+the case letters, which are the only ones that dialect can be asked about
+here.
+
+Asked only where the name carries one of the three letters and a value the
+fold would change, so an ordinary array never needs a dialect and an array
+of canonical numbers under `-i` needs none either.
+
+Pinned by `declare/an-element-written-through-the-names-attribute` and
+`declare/an-append-and-a-declarations-own-literal-both-fold`.
+
+**`ArrayLiteralAssignmentStartsTheNameOver`** — bash no · dash unspecified · ksh93 yes · zsh no
+
+Makes `a=(x y)` *re-create* the name — the attributes it carries and all —
+rather than replacing only its elements.
+
+    typeset -ia z=(1); z=(5+5 6+6); typeset -p z; z[0]=3+4
+      bash    declare -ai z=([0]="10" [1]="12")   then `7 12`
+      ksh93   typeset -a z=(5+5 6+6)              then `3+4 6+6`
+
+ksh93 keeps neither the fold nor the letter: the listing has lost the
+`-i`, and the element write after it is not folded either — which is what
+says the attribute is **gone** rather than merely bypassed by the one
+assignment that replaced the elements. The case letters answer the same
+way (`typeset -a q=(gh ij)` in ksh93 against bash's `declare -au`), and
+zsh, which can only be asked through a case letter, keeps it.
+
+The same idea `unset` is a rule about and that
+`InheritedValueSurvivesADeclaredType` is the other side of: a name whose
+whole value is replaced may be a *new* name in one of these shells.
+
+Asked only for three things at once, and each is what a wider reading gets
+wrong:
+
+- The **plain assignment** spelling. A declaration's own operand —
+  `typeset -ia d=(5+5 6+6)` — folds to `10 12` in both, so the letters
+  cannot have gone there. `syntax.Assign.Operand` tells the two apart.
+- Not an **append**: `f+=(8+8)` is 16 in both.
+- Not a **keyed** literal: `typeset -A m; typeset -i m; m[k]=1;
+  m=([j]=2+2)` keeps the attribute in both and folds the `2+2` to 4.
+- The name must have something to **start over**. The *first* array
+  literal a declared name receives keeps the letter and folds in both —
+  `typeset -ia b; b=(5+5 6+6)` is `10 12` and lists as `typeset -a -i
+  b=(10 12)`.
+
+One measured shape is left out by that last reading and is recorded rather
+than modeled: `typeset -i a; a=(5+5 6+6)`, where the declaration named no
+array letter at all, drops the attribute in ksh93 even though `a` was
+holding nothing. What ksh93 turns on there is whether `-a` was written,
+and this engine does not record that letter — an array is dynamic here, so
+`typeset -a arr` needs no record to work. Recording it to reach that one
+shape is a change to that decision rather than part of this one.
+
+Pinned by `declare/a-whole-array-assignment-re-creates-the-name`,
+`declare/a-keyed-table-replaced-keeps-its-attribute` and
+`declare/an-append-and-a-declarations-own-literal-both-fold`.
 
 **`InheritedValueSurvivesADeclaredType`** — bash yes · dash unspecified · ksh93 no · zsh yes
 

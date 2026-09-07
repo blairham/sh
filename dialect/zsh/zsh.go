@@ -437,6 +437,9 @@ func Semantics() interp.Semantics {
 	// answers both no and ksh93 answers them differently from each other.
 	s.AttributeRereadsTheValueItFinds = interp.Yes
 	s.InheritedValueSurvivesADeclaredType = interp.Yes
+	s.CompoundElementsGoThroughTheAttribute = interp.No
+	s.CompoundAttribute = interp.CompoundAttributeReplacesItWithAScalar
+	s.ArrayLiteralAssignmentStartsTheNameOver = interp.No
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	// A local does not inherit the export attribute of the name it shadows.
 	// Measured with a real child: `export FOO=bar; f() { local FOO=baz; env;

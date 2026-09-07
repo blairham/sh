@@ -91,6 +91,14 @@ func (r *Runner) storeArray(name string, a Array) {
 	if r.unique[name] {
 		a = r.uniqueElems(a)
 	}
+	// And what the name's other attributes make of each element, for the
+	// same reason and at the same one place: a write is a write however it
+	// was spelled, so an element assignment, an append and a literal all
+	// come here and all fold. See compoundElemsFolded.
+	a = r.compoundElemsFolded(name, a)
+	if r.unspecified {
+		return
+	}
 	r.Arrays[name] = a
 	// A plain `$a` has to keep working. The first element is stored rather
 	// than the scalar view, because *which* view it is depends on a dialect
@@ -1354,4 +1362,62 @@ func (r *Runner) subscriptJoinsElements(e *syntax.ParamExpr) bool {
 		return false
 	}
 	return r.joinedArrayIndex(e) || r.subscriptIsARange(e)
+}
+
+// compoundElemsFolded is what a name's attributes make of an array's elements
+// — the compound half of attributeFolded.
+//
+// A scalar assignment through an attributed name needs no dialect: `typeset
+// -i n; n=3+4` is 7 and `typeset -u d; d=again` is AGAIN in every shell that
+// spells the letter. An *element* is where the panel splits, so the fold is
+// asked for rather than assumed — see
+// Semantics.CompoundElementsGoThroughTheAttribute.
+//
+// Asked only when the name actually carries one of these attributes, so an
+// ordinary array never needs a dialect. A value the fold would return
+// unchanged is left alone without asking either, which is what keeps an array
+// of canonical numbers under `-i` free of the question.
+func (r *Runner) compoundElemsFolded(name string, a Array) Array {
+	// A fast path and not a rule: attributeWouldChange answers no for every
+	// element of a name with none of these attributes, so removing this
+	// changes nothing observable — it only stops the loop below from walking
+	// every array this shell ever stores.
+	if !r.integer[name] && !r.lowered[name] && !r.uppered[name] {
+		return a
+	}
+	changed := false
+	for _, sub := range a.subscripts() {
+		if r.attributeWouldChange(name, a[sub]) {
+			changed = true
+			break
+		}
+	}
+	if !changed {
+		return a
+	}
+	if !r.ask(r.sem().CompoundElementsGoThroughTheAttribute,
+		"an element written to an attributed name going through the attribute") {
+		return a
+	}
+	return r.foldedElems(name, a)
+}
+
+// foldedElems folds every element of an array through the name's attributes,
+// with no question asked. Its own function because the two callers ask
+// different questions of different dialect fields and then want the same
+// arithmetic: a *write* asks CompoundElementsGoThroughTheAttribute, and an
+// attribute arriving over a standing array asks CompoundAttribute.
+func (r *Runner) foldedElems(name string, a Array) Array {
+	folded := Array{}
+	for _, sub := range a.subscripts() {
+		v, ok := r.attributeFolded(name, a[sub])
+		if !ok {
+			// The integer evaluation failed and has already said so, which
+			// is the one case attributeFolded stores nothing for. The array
+			// is left as it stands rather than half rewritten.
+			return a
+		}
+		folded[sub] = v
+	}
+	return folded
 }

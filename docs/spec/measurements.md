@@ -9613,6 +9613,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/an-inherited-name-started-over-is-a-fresh-one` | `st=127~[mix]~E=mix` **2>** `<shell>: 1: typeset: not found~<shell>: 2: typeset: not found` | `declare -xu E="jj"~st=0~[MIX]~E=MIX` | `declare -xu E="jj"~st=0~[MIX]~E=MIX` | `declare -x E="jj"~st=0~[mix]~E=mix` **2>** `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `typeset -u E~st=0~[MIX]~(no child)` | `export -u E=jj~st=0~[MIX]~E=MIX` |
 | `declare/an-inherited-name-the-same-declaration-also-exports` | `ix[3+4] env=1~ir[6+6] env=1~two[SET][4+4] env=1` **2>** `<shell>: 1: typeset: not found~<shell>: 2: typeset: not found~<shell>: 3: typeset: not found~<shell>: 3: typeset: not found` | `ix[3+4] env=1~ir[6+6] env=1~two[SET][4+4] env=1` | `ix[3+4] env=1~ir[6+6] env=1~two[SET][4+4] env=1` | `ix[3+4] env=1~ir[6+6] env=1~two[SET][4+4] env=1` | `ix[7] env=1~ir[12] env=1~two[][] env=0` | `ix[7] env=1~ir[12] env=1~two[SET][8] env=1` |
 | `declare/an-inherited-name-the-script-assigned-first` | `[SET][bar] env=1` **2>** `<shell>: 2: typeset: not found` | `[SET][bar] env=1` | `[SET][bar] env=1` | `[SET][bar] env=1` | `[SET][0] env=1` | `[SET][0] env=1` |
+| `declare/an-attribute-over-an-array-is-three-answers` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `i=[a b] n=2~u=[a b] n=2` | `i=[a b] n=2~u=[a b] n=2` | `i=[a b] n=2~u=[a b] n=2` **2>** `<shell>: line 1: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `i=[0 0] n=2~u=[A B] n=2` | `i=[0] n=1~u=[a b] n=2` |
+| `declare/an-attribute-over-a-keyed-table` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 2: typeset: not found~<shell>: 3: Bad substitution` *(status 2)* | `[v] n=1~(no child)` | `[v] n=1~(no child)` | `[v] n=1~(no child)` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[0] n=1~(no child)` | `[] n=1~m=0` |
+| `declare/an-array-becoming-a-scalar-keeps-nothing` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `1 n=2 [7 8]~2 [x y]~3 [0x10 9]` | `1 n=2 [7 8]~2 [x y]~3 [0x10 9]` | `1 n=2 [7 8]~2 [x y]~3 [0x10 9]` | `1 n=2 [7 8]~2 [0 0]~3 [16 9]` | `1 n=1 [0]~2 [0]~3 [0]` |
+| `declare/an-element-written-through-the-names-attribute` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `1 [1 7]~2 [AB EF]~3 [14]` | `1 [1 7]~2 [AB EF]~3 [14]` | `1 [1 7]~2 [ab ef]~3 [14]` **2>** `<shell>: line 1: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 2: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1 [1 7]~2 [AB EF]~3 [14]` | **2>** `<shell>:typeset:1: a: inconsistent type for assignment` *(status 1)* |
+| `declare/an-append-and-a-declarations-own-literal-both-fold` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `1 [10 12]~2 [14]~3 [1 16]~4 [AB CD]` | `1 [10 12]~2 [14]~3 [1 16]~4 [AB CD]` | `1 [5+5 6+6]~2 [14]~3 [1 16]~4 [ab cd]` **2>** `<shell>: line 3: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1 [10 12]~2 [14]~3 [1 16]~4 [AB CD]` | **2>** `<shell>:typeset:1: d: inconsistent type for assignment` *(status 1)* |
+| `declare/a-whole-array-assignment-re-creates-the-name` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -ai z=([0]="10" [1]="12")~[7 12]` | `declare -ai z=([0]="10" [1]="12")~[7 12]` | `declare -ai z='([0]="10" [1]="12")'~[7 12]` | `typeset -a z=(5+5 6+6)~[3+4 6+6]` | **2>** `<shell>:typeset:1: z: inconsistent type for assignment` *(status 1)* |
+| `declare/a-keyed-table-replaced-keeps-its-attribute` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found~<shell>: 1: m[k]=1: not found~<shell>: 2: Syntax error: "(" unexpected` *(status 2)* | `[6][4]` | `[6][4]` | `[6][6]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[6][4]` | **2>** `<shell>:1: m: assignment to invalid subscript range` *(status 1)* |
 | `declare/a-local-that-shadows-a-readonly` | `in=[2]~running~st=0 out=[]~after` **2>** `<script>: 1: typeset: not found` | `in=[1]~running~st=0 out=[1]~after` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~running~st=0 out=[1]~after` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~running~st=0 out=[1]~after` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~running~st=0 out=[1]~after` **2>** `<script>: line 2: local: not found` | `in=[2]~running~st=0 out=[1]~after` |
 | `declare/a-valueless-local-that-shadows-a-readonly` | `in=[UNSET]~st=0 out=[]` **2>** `<script>: 1: typeset: not found` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: x: readonly variable` | `in=[1]~st=0 out=[1]` **2>** `<script>: line 2: local: not found` | `in=[]~st=0 out=[1]` |
 | `declare/a-refused-shadow-keeps-the-other-operands` | `in y=[1] x=[5] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: 1: typeset: not found` | `in y=[1] x=[1] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: x: readonly variable` | `in y=[1] x=[1] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: x: readonly variable` | `in y=[1] x=[1] z=[2]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: x: readonly variable` | `in y=[outer] x=[1] z=[outer]~out y=[outer] z=[outer]` **2>** `<script>: line 3: local: not found` | `in y=[1] x=[5] z=[2]~out y=[outer] z=[outer]` |
@@ -9997,6 +10004,53 @@ grades it and nothing drift-checks it either, for the same reason.
   D=$D
   typeset -i D
   echo "[${D+SET}][$D] env=$(env | grep -c '^D=')"
+  ```
+- `declare/an-attribute-over-an-array-is-three-answers` — the compound half of the re-read, and it splits the panel **three** ways where the scalar question splits it two — with the two shells that share the scalar answer disagreeing with each other about what reaching back into an array even means. bash leaves both alone; ksh93 re-reads every element in place, `0 0` and `A B`, keeping the length; zsh replaces the array with a single scalar under `-i`, so `${#arr[@]}` is **1**, and leaves it alone under `-u`. Three answers to the first column and no two shells alike across both, which is what makes it a field of its own rather than a widening of the scalar one (#1120)
+  ```sh
+  arr=(a b); typeset -i arr; echo "i=[${arr[@]}] n=${#arr[@]}"
+  brr=(a b); typeset -u brr; echo "u=[${brr[@]}] n=${#brr[@]}"
+  ```
+- `declare/an-attribute-over-a-keyed-table` — the fourth shape, and the one where the answer reaches a *child*: bash keeps `v`, ksh93 folds the element to `0` under its own key, and zsh discards the table for a scalar — so `${m[k]}` is empty and the child is told `m=0` for a name that has no scalar value at all — the only column that tells a child anything here. The last column is the one a scalar-only reading cannot produce: an array keeps its first element in the scalar table and hides the slip, and a table keeps nothing there, so this is where inventing a scalar shows
+  ```sh
+  typeset -A m; m[k]=v
+  typeset -i m
+  echo "[${m[k]}] n=${#m[@]}"
+  export m
+  env | grep '^m=' || echo '(no child)'
+  ```
+- `declare/an-array-becoming-a-scalar-keeps-nothing` — which of the three answers each column gives, read off values that tell them apart. `(7 8)` is already canonical, so only a shell that *replaces* the array changes it — and zsh answers `0` for all three, which says the scalar is a **fresh** name of the declared type and not a fold of anything the array held. ksh93 folds each element and the arithmetic shows: `(x y)` is `0 0` and `(0x10 9)` is `16 9`. bash leaves every one of them as written
+  ```sh
+  a=(7 8); typeset -i a; echo "1 n=${#a[@]} [${a[@]}]"
+  b=(x y); typeset -i b; echo "2 [${b[@]}]"
+  c=(0x10 9); typeset -i c; echo "3 [${c[@]}]"
+  ```
+- `declare/an-element-written-through-the-names-attribute` — the other half of the same surface, and a *later write* rather than a reach-back: a scalar assignment through an attributed name needs no dialect anywhere, and an element is where the panel splits. bash and ksh93 fold every element write — `1 7`, `AB EF`, `14` — and zsh folds an array's elements not at all: its case letters reach a scalar's expansion and stop there, and its integer letter never meets an array, having replaced it above. So `[ef cd]` there, with the first element the write did not touch still lower-case
+  ```sh
+  typeset -ia a=(1 2); a[1]=3+4; echo "1 [${a[@]}]"
+  typeset -ua q=(ab cd); q[1]=ef; echo "2 [${q[@]}]"
+  typeset -A m; typeset -i m; m[k]=7+7; echo "3 [${m[k]}]"
+  ```
+- `declare/an-append-and-a-declarations-own-literal-both-fold` — the two spellings that are **not** the replacement below, which is what makes the replacement a question rather than a rule: a declaration's own array literal and an append both fold in bash 5.3 and ksh93 alike — `10 12`, `14`, `1 16`, `AB CD`. `syntax.Assign.Operand` is what tells the first from a plain assignment of the same shape, and `Append` the second, and a reading that took every whole-array assignment as re-creating the name would lose all four. bash 3.2 splits the two: it folds the appends and leaves the declaration's own literal as written, which is a version fact rather than a fifth answer
+  ```sh
+  typeset -ia d=(5+5 6+6); echo "1 [${d[@]}]"
+  typeset -ia e; e+=(7+7); echo "2 [${e[@]}]"
+  typeset -ia f=(1); f+=(8+8); echo "3 [${f[@]}]"
+  typeset -ua g; g=(ab cd); echo "4 [${g[@]}]"
+  ```
+- `declare/a-whole-array-assignment-re-creates-the-name` — replacing a whole array is a *new name* in one shell and new elements in the other, and the listing is what says which: bash keeps `declare -ai z=([0]="10" [1]="12")` and folds the element write after it to 7, where ksh93 lists `typeset -a z=(5+5 6+6)` — the `-i` gone — and leaves the later `3+4` as written. The element write is the load-bearing half: it says the attribute is **gone** rather than merely bypassed by the one assignment that replaced the elements
+  ```sh
+  typeset -ia z=(1)
+  z=(5+5 6+6)
+  typeset -p z
+  z[0]=3+4
+  echo "[${z[@]}]"
+  ```
+- `declare/a-keyed-table-replaced-keeps-its-attribute` — the bound on the row above, and the reason it is about *this spelling* rather than about replacing a compound value in general: the keyed literal keeps the attribute in both columns that have `-A`, so `2+2` folds to 4 as it lands and `3+3` folds to 6 after it. A wider reading of the rule would take the attribute off a table no shell takes it off. bash 3.2 has no `-A` and answers `[6][6]` for two plain scalars instead; zsh refuses the line, its `-i` having made `m` a scalar already
+  ```sh
+  typeset -A m; typeset -i m; m[k]=1
+  m=([j]=2+2)
+  m[k]=3+3
+  echo "[${m[k]}][${m[j]}]"
   ```
 - `declare/a-local-that-shadows-a-readonly` — whether a declaration inside a function may make a local of a name the shell has frozen, and the two shells that can be asked answer opposite ways. zsh takes the shadow — `in=[2]`, the function runs on, and the outer 1 is back afterwards — where bash reports `local: x: readonly variable`, leaves the *outer* value in view and **still runs the rest of the function**. Three things ride on the refusal and each was wrong here: it names the builtin the script wrote, the builtin reports 1 rather than abandoning anything, and the outer value is what the body sees. ksh93 has no `local` and dash no `typeset -r`, so those two columns record the absence rather than an answer (#1159)
   ```sh

@@ -1676,6 +1676,83 @@ type Semantics struct {
 	// bash yes (both builds), ksh93 no, zsh yes. dash has no declaration
 	// builtin with a type letter and never arrives.
 	InheritedValueSurvivesADeclaredType Answer
+	// CompoundElementsGoThroughTheAttribute folds what is written to one
+	// element of an array or a keyed table through the attribute the *name*
+	// carries, the way a scalar assignment already does everywhere.
+	//
+	// For a scalar this needs no dialect: `typeset -i n; n=3+4` is 7 and
+	// `typeset -u d; d=again` is AGAIN in every shell that spells the letter.
+	// An element is where the panel splits.
+	//
+	//	typeset -ia a=(1 2); a[1]=3+4     bash, ksh93 `1 7`
+	//	typeset -ua q=(ab cd); q[1]=ef    bash, ksh93 `AB EF`   zsh `ef cd`
+	//	typeset -A m; typeset -i m
+	//	m[k]=7+7                          bash, ksh93 `14`
+	//
+	// bash and ksh93 fold every element write. zsh does not fold an array's
+	// elements at all: its case letters reach a scalar's expansion and stop
+	// there, and its integer letter never meets an array in the first place —
+	// see CompoundMeetingANewAttribute, where that letter replaces the array
+	// with a scalar. So the answer is read off the case letters, which are
+	// the only ones that dialect can be asked about here.
+	//
+	// Asked only where a name with one of these attributes has an element
+	// written to it, so an array with no attribute needs no dialect.
+	CompoundElementsGoThroughTheAttribute Answer
+	// ArrayLiteralAssignmentStartsTheNameOver makes `a=(x y)` *re-create* the
+	// name — the attributes it carries and all — rather than replacing only
+	// its elements.
+	//
+	//	typeset -ia z=(1); z=(5+5 6+6); typeset -p z; z[0]=3+4
+	//	  bash    declare -ai z=([0]="10" [1]="12")   then `7 12`
+	//	  ksh93   typeset -a z=(5+5 6+6)              then `3+4 6+6`
+	//
+	// ksh93 keeps neither the fold nor the letter: the listing has lost the
+	// `-i`, and the element write after it is not folded either, which is
+	// what says the attribute is *gone* rather than merely bypassed by that
+	// one assignment. The case letters answer the same way in both — bash
+	// keeps `-u` and folds, ksh93 lists `typeset -a q=(gh ij)` — and zsh,
+	// which can only be asked through a case letter, keeps it: `typeset -au
+	// q=( gh ij )`.
+	//
+	// The same idea `unset` is a rule about and that
+	// InheritedValueSurvivesADeclaredType is the other side of: a name whose
+	// whole value is replaced may be a *new* name in one of these shells.
+	//
+	// Asked only for the plain assignment spelling, and this is where the
+	// spelling earns its own question: a declaration's own operand —
+	// `typeset -ia d=(5+5 6+6)` — folds to `10 12` in **both**, so the
+	// letters cannot have gone there. It is `syntax.Assign.Operand` that
+	// tells the two apart, and an append is not it either: `f+=(8+8)` is 16
+	// in both.
+	//
+	// And asked only where the name has something to start over: the
+	// *first* array literal a declared name receives keeps the letter and
+	// folds in both — `typeset -ia b; b=(5+5 6+6)` is `10 12` and lists as
+	// `typeset -a -i b=(10 12)` — so what re-creates the name is replacing a
+	// value it is already holding.
+	//
+	// One measured shape is left out by that reading and is recorded rather
+	// than modeled: `typeset -i a; a=(5+5 6+6)`, where the declaration named
+	// no array letter at all, drops the attribute in ksh93 (`typeset -a
+	// a=(5+5 6+6)`) even though `a` was holding nothing. What ksh93 turns on
+	// there is whether `-a` was written, and this engine does not record that
+	// letter — an array is dynamic here, so `typeset -a arr` needs no record
+	// to work. Recording it to reach this one shape is a change to that
+	// decision rather than part of this one; #1120's follow-up has it.
+	//
+	// And asked only for the *indexed* literal. A keyed one keeps the
+	// attribute in both: `typeset -A m; typeset -i m; m[k]=1; m=([j]=2+2)`
+	// lists as `typeset -A -i m=(…)` in ksh93 with the `2+2` folded to 4,
+	// where the indexed spelling on the same line loses the letter. So it is
+	// this spelling and not "replacing a compound value" in general — a
+	// wider reading would take the attribute off a table no shell takes it
+	// off.
+	ArrayLiteralAssignmentStartsTheNameOver Answer
+	// CompoundAttribute is what an attribute a declaration has just added
+	// makes of a compound value the name is already holding — see
+	// CompoundAttributePolicy, where the three answers are.
+	CompoundAttribute CompoundAttributePolicy
 
 	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
 	// hide any outer `u` — the local exists unset, so `${u-UNSET}` fires the
@@ -4994,6 +5071,91 @@ func (r *Runner) bracketPolicy() BracketPolicy {
 // place, so the array keeps its length. The third answer parts from the other
 // two only over whether `@` is an expression, and `3` is one in every reading,
 // so at a single subscript it removes like the first.
+// CompoundAttributePolicy is what an attribute a declaration has just added
+// makes of a value the name is already holding when that value is *compound*
+// — an array or a keyed table.
+//
+// The scalar question is AttributeRereadsTheValueItFinds and it splits the
+// panel two ways: bash waits for the next assignment, ksh93 and zsh re-read.
+// For a compound value it splits **three** ways, and the two shells that share
+// the scalar answer disagree with each other about what reaching back into an
+// array even means. So it is a second question with its own answer per shell
+// rather than a widening of the first, in the family ArraysAreSparse and
+// ArrayBaseIsZero already belong to.
+//
+//	arr=(a b); typeset -i arr      bash `a b`   ksh93 `0 0`   zsh `0`, one element
+//	brr=(a b); typeset -u brr      bash `a b`   ksh93 `A B`   zsh `a b`
+//	typeset -A m; m[k]=v
+//	typeset -i m                   bash `v`     ksh93 `0`     zsh empty, and
+//	                                                          the child is told `m=0`
+//
+// Measured 2026-09-07, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`,
+// `ZDOTDIR` and `HISTFILE`, from a script file.
+type CompoundAttributePolicy int
+
+const (
+	// CompoundAttributeUnspecified is no answer, and it is refused rather
+	// than guessed: the three readings leave three different names behind,
+	// and one of them leaves no array at all.
+	CompoundAttributeUnspecified CompoundAttributePolicy = iota
+	// CompoundAttributeKeepsTheElements leaves the compound value exactly as
+	// it stands and waits for the next write: bash, in both builds measured,
+	// where `arr=(a b); typeset -i arr` still reads `a b` and the listing
+	// carries the letter over untouched elements. It is the same answer that
+	// shell gives for a scalar, which is what makes bash the one column
+	// where the two questions cannot be told apart.
+	CompoundAttributeKeepsTheElements
+	// CompoundAttributeFoldsEveryElement re-reads each element through the
+	// attribute in place, keeping the shape: ksh93, where `(a b)` under `-i`
+	// becomes `0 0` and under `-u` becomes `A B`, `(0x10 9)` becomes `16 9`,
+	// and a keyed table's `5+5` becomes 10 under its own key. The array
+	// keeps its length and the table keeps its keys.
+	CompoundAttributeFoldsEveryElement
+	// CompoundAttributeReplacesItWithAScalar discards the compound value
+	// outright and leaves the name a *fresh* scalar of the declared type:
+	// zsh, where `arr=(a b); typeset -i arr` leaves one element and
+	// `${#arr[@]}` is 1, a keyed table comes back empty, and a later
+	// `arr[0]=3+4` is refused because the name is no longer an array.
+	//
+	// A fresh one and not a fold of anything: `(7 8)`, `(x y)` and
+	// `(0x10 9)` all leave `0`, which is exactly what that dialect's
+	// DeclaredNameWithoutValueIsEmpty = yes gives a name it has never held.
+	// The child is told `0` too, so it is the value and not a rendering.
+	//
+	// Only the letter that names a **type** does this, because only that
+	// letter changes what kind of name it is. The case letters change no
+	// kind and leave the compound alone in that shell — which is
+	// CompoundElementsGoThroughTheAttribute answering no there, and is why
+	// this policy is read for the integer letter and that field for the
+	// others.
+	CompoundAttributeReplacesItWithAScalar
+)
+
+func (p CompoundAttributePolicy) String() string {
+	switch p {
+	case CompoundAttributeKeepsTheElements:
+		return "keeps the elements"
+	case CompoundAttributeFoldsEveryElement:
+		return "folds every element"
+	case CompoundAttributeReplacesItWithAScalar:
+		return "replaces it with a scalar"
+	}
+	return "unspecified"
+}
+
+// compoundAttribute resolves the axis, refusing an unanswered dialect rather
+// than guessing at it: one answer leaves the array alone, one rewrites every
+// element and one leaves no array at all.
+func (r *Runner) compoundAttribute() CompoundAttributePolicy {
+	p := r.sem().CompoundAttribute
+	if p == CompoundAttributeUnspecified {
+		r.diagf("%s\n", r.unanswered("an attribute added to a name already holding an array"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
 type UnsetArraySpanPolicy int
 
 const (

@@ -743,8 +743,16 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry bool)
 			if r.unspecified {
 				return
 			}
-			r.rereadStandingValue(name)
-			return
+			if !r.rereadStandingValue(name) {
+				return
+			}
+			// The one answer that starts the name over too: a compound value
+			// discarded so the declaration can bring the name into being
+			// afresh as a scalar of the declared type. Same fall-through and
+			// for the same reason as above.
+			if r.unspecified {
+				return
+			}
 		}
 	}
 	if r.ask(r.sem().DeclaredNameWithoutValueIsEmpty, "a declaration without a value setting the name") {
@@ -920,6 +928,98 @@ func (r *Runner) declaresAType(name string) bool {
 	return r.integer[name] || r.lowered[name] || r.uppered[name]
 }
 
+// compoundNameHolds reports whether the name is holding an array or a keyed
+// table — the two values a scalar re-read has nothing to say about.
+func (r *Runner) compoundNameHolds(name string) bool {
+	if _, ok := r.assocFor(name); ok {
+		return true
+	}
+	_, ok := r.Arrays[name]
+	return ok
+}
+
+// compoundMeetingAnAttribute is what an attribute a declaration has just
+// added makes of a compound value the name is already holding.
+//
+// Three answers where the scalar question has two, and the two shells that
+// share the scalar answer disagree with each other about this one — see
+// Semantics.CompoundAttributePolicy for the measurements and for why it is a
+// second question rather than a widening of the first.
+//
+// The letter matters for one of the three answers and for that one only. A
+// shell that replaces the compound with a scalar does so because the letter
+// changed what *kind* of name it is, and a case letter changes no kind: in
+// that dialect `arr=(a b); typeset -u arr` still reads `a b` with two
+// elements where `typeset -i arr` leaves one. So the replacement is read for
+// the type letter and the other two answers for every letter alike.
+// The result says the compound value was discarded and the declaration
+// should carry on as though the name had been holding nothing.
+func (r *Runner) compoundMeetingAnAttribute(name string) (startedOver bool) {
+	switch r.compoundAttribute() {
+	case CompoundAttributeKeepsTheElements:
+		// The elements stand and the attribute waits for the next write,
+		// which is the same answer this shell gives a scalar. Written out
+		// rather than left to the default so that all three answers are
+		// visible here; nothing can tell it from the default, which is what
+		// a mutation of the case label showed.
+	case CompoundAttributeFoldsEveryElement:
+		if a, ok := r.assocFor(name); ok {
+			r.foldAssocElems(name, a)
+			return false
+		}
+		// storeArray is not used, deliberately: it asks
+		// CompoundElementsGoThroughTheAttribute, which is a question about a
+		// *write*, and this is not one. Both fields answer yes in the one
+		// dialect that folds here, so routing through it would pass every
+		// test and make one field answer for two.
+		r.Arrays[name] = r.foldedElems(name, r.Arrays[name])
+	case CompoundAttributeReplacesItWithAScalar:
+		if !r.integer[name] {
+			// A case letter changes no kind, so there is nothing to replace
+			// the compound with. Measured in the one dialect that answers
+			// this way: the array keeps its length and its elements.
+			return false
+		}
+		r.compoundBecomesAScalar(name)
+		return true
+	}
+	return false
+}
+
+// foldAssocElems folds every element of a keyed table in place, under its own
+// key. Written out rather than routed through setAssocElem for the reason
+// compoundMeetingAnAttribute gives: that path asks the write question.
+func (r *Runner) foldAssocElems(name string, a AssocArray) {
+	for k, v := range a {
+		folded, ok := r.attributeFolded(name, v)
+		if !ok {
+			// The evaluation failed and has said so; the table is left as it
+			// stands rather than half rewritten.
+			return
+		}
+		a[k] = folded
+	}
+}
+
+// compoundBecomesAScalar discards a compound value so the declaration can
+// bring the name into being afresh as a scalar of the declared type.
+//
+// Nothing is stored here, which is the whole of why it is right: the value
+// the name comes back holding is whatever a *fresh* declaration of it would
+// leave, and that is DeclaredNameWithoutValueIsEmpty's to answer. The dialect
+// that replaces answers that question yes, so the name comes back holding the
+// empty string read through the integer attribute — 0. Measured, and it is 0
+// for `(7 8)`, `(x y)` and `(0x10 9)` alike, so it is a fresh name and not a
+// fold of anything the array held.
+//
+// The caller returns straight into those branches, so this only has to clear
+// what stands in their way.
+func (r *Runner) compoundBecomesAScalar(name string) {
+	delete(r.Arrays, name)
+	delete(r.AssocArrays, name)
+	delete(r.Vars, name)
+}
+
 // rereadStandingValue applies an attribute a declaration has just added to the
 // value the name was already holding, where the dialect says it reaches back.
 //
@@ -949,7 +1049,26 @@ func (r *Runner) declaresAType(name string) bool {
 // elements as they are under both case letters, measured `a b` from `arr=(a
 // b); typeset -u arr`, where ksh93 folds them; that divergence is recorded and
 // not modeled.
-func (r *Runner) rereadStandingValue(name string) {
+// The result says whether the name was *started over* rather than read back:
+// one of the three compound answers discards the value so that the
+// declaration continues as though the name had been holding nothing, which is
+// the caller's business and not this function's.
+func (r *Runner) rereadStandingValue(name string) (startedOver bool) {
+	if r.compoundNameHolds(name) && r.declaresAType(name) {
+		// A compound value is a question of its own, with three answers
+		// where the scalar one has two — see compoundMeetingAnAttribute. It
+		// stands ahead of the scalar read rather than inside it because an
+		// array keeps its first element in the scalar table, so a scalar
+		// re-read here would quietly rewrite a copy nothing reads back and
+		// leave the elements as they were.
+		//
+		// Asked only where one of the three letters that says something
+		// about a value has arrived. Without one, all three answers are
+		// "nothing happens" — so a bare `typeset -A m` must not be made to
+		// ask, and it was: `markAssoc` puts the empty table there before
+		// this runs, so every declaration of a table reached the question.
+		return r.compoundMeetingAnAttribute(name)
+	}
 	// The value the name holds, wherever it is being held. A name the script
 	// never assigned is still holding what it was started with, and reading
 	// only the table skipped exactly that: `INHERITED=bar sh -c 'typeset -i
@@ -961,25 +1080,23 @@ func (r *Runner) rereadStandingValue(name string) {
 	v, ok := r.Vars[name]
 	if !ok {
 		if v, ok = r.inheritedValue(name); !ok {
-			// An array or an associative table — declaredNameHolds counts
-			// those too — or an exported name with no value anywhere. A
-			// scalar re-read has nothing to say about any of them: measured,
-			// `arr=(a b); typeset -u arr` leaves `a b` in zsh where ksh93
-			// folds the elements, and that divergence is recorded and not
-			// modeled.
-			return
+			// An exported name with no value anywhere. A compound value has
+			// already been answered above, so there is nothing left here for
+			// a scalar re-read to say anything about.
+			return false
 		}
 	}
 	if !r.attributeWouldChange(name, v) {
-		return
+		return false
 	}
 	if !r.ask(r.sem().AttributeRereadsTheValueItFinds,
 		"an attribute re-reading the value the name already holds") {
-		return
+		return false
 	}
 	if folded, ok := r.attributeFolded(name, v); ok {
 		r.Vars[name] = folded
 	}
+	return false
 }
 
 // attributeWouldChange reports whether re-reading a value through the name's

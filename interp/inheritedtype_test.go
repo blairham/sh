@@ -26,6 +26,10 @@ func withInheritedType(survives, rereads Answer) func(*Semantics) {
 		s.DeclaredNameWithoutValueIsEmpty = No
 		s.InheritedValueSurvivesADeclaredType = survives
 		s.AttributeRereadsTheValueItFinds = rereads
+		// A compound value is a question of its own and not this one; the
+		// answer that keeps the elements is what lets these cases assert
+		// that a table is left alone rather than discarded.
+		s.CompoundAttribute = CompoundAttributeKeepsTheElements
 	}
 }
 

@@ -371,6 +371,41 @@ var Corpus = []Case{
 		Why:     "`read` feeds the same splitter, and the last name takes the remainder of the line — which is text rather than a field, so it keeps the separators the input had. Five shells give `b` and the sixth `b:`, which is the trailing separator surviving in the one shell where it delimits. Two facts in one row: an implementation that rejoins the remainder from its fields answers `b c` for `a:b:c` in every shell, which no shell in the panel does",
 	},
 	{
+		ID: "ifs/read-remainder-keeps-its-separators", Category: "IFS",
+		Snippet: `IFS=:; printf 'a:b:c\n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; }`,
+		Why:     "the remainder is the text of the line and not the remaining fields put back together: all six keep the colon between `b` and `c`. Rebuilding it from the fields joins them on a hard space, which is a value of the right length and the right words at status 0 with nothing said — the row is here because that answer is `[a][b c]` and looks entirely reasonable",
+	},
+	{
+		ID: "ifs/read-remainder-passwd-idiom", Category: "IFS",
+		Snippet: `printf 'root:x:0:0:Root User:/root:/bin/sh\n' | { IFS=: read -r user rest; printf "[%s][%s]" "$user" "$rest"; }`,
+		Why:     "the shape scripts actually write, `while IFS=: read -r user rest`, at its full width. It is the row that says the previous one is not a curiosity: six colons go missing at once and anything that splits `$rest` again finds one field. The embedded space in `Root User` is deliberate — it is what a rejoin's output looks like everywhere else on the line",
+	},
+	{
+		ID: "ifs/read-remainder-closing-ws-comes-off", Category: "IFS",
+		Snippet: `printf 'a:b:c  \n' | { IFS=': ' read -r x y; printf "[%s]" "$y"; }; printf 'a:b:c  \n' | { IFS=: read -r x y; printf "[%s]" "$y"; }`,
+		Why:     "the trim at the end of the remainder is IFS whitespace and nothing else, asked twice of one input: with a space in IFS the two at the end come off, and without one they are ordinary characters and stay. A trim that used unicode.IsSpace answers the first half and fails the second; one that trimmed trailing IFS *characters* would take the colon off `a:b:c::`",
+	},
+	{
+		ID: "ifs/read-remainder-closing-separator-run-stays", Category: "IFS",
+		Snippet: `IFS=:; printf 'a:b:c::\n' | { read -r x y; printf "[%s]" "$y"; }`,
+		Why:     "the other side of the trim: a closing run of non-whitespace separators is part of the remainder in all six, so the value ends in the two colons the input ended in. Paired with the row above it pins the trim to the whitespace half",
+	},
+	{
+		ID: "ifs/read-one-name-is-the-whole-line", Category: "IFS",
+		Snippet: `IFS=:; printf ':a:b:\n' | { read -r line; printf "[%s]" "$line"; }`,
+		Why:     "one name is the remainder from the first field, which is the whole line — leading separator, trailing separator and all, in all six. It is the case that separates the remainder from the *last field*: the last field here is `b`",
+	},
+	{
+		ID: "ifs/nonws-trailing-read-one-name", Category: "IFS",
+		Snippet: `IFS=:; printf 'a:\n' | { read -r l; printf "[%s]" "$l"; }`,
+		Why:     "the tail axis reaching a single name: five shells give `a` and zsh `a:`, because in zsh the trailing separator opens a second field and one name against two fields is a remainder rather than a field. The row a fix that made the remainder unconditional would fail in the five, and one that never reached it would fail in the sixth",
+	},
+	{
+		ID: "ifs/nonws-only-read-remainder", Category: "IFS",
+		Snippet: `IFS=:; printf '::\n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; }`,
+		Why:     "a line of nothing but separators, which is where the two readings are furthest apart with the least in the input: two empty fields in five shells and three in zsh, so the second name is empty there and `:` in the sixth",
+	},
+	{
 		ID: "ifs/nonws-only-delimiters", Category: "IFS",
 		Snippet: `IFS=:; x="::"; set -- $x; echo "n=$#"`,
 		Why:     "pins the asymmetry as a count rather than as a rendering",

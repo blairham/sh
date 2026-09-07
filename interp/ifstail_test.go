@@ -276,6 +276,82 @@ func TestReadIntoAnArrayAsksTheTail(t *testing.T) {
 	}
 }
 
+// A list of names takes the last one as the remainder of the *line*, so the
+// extra field the tail can open changes a value there only at one count: where
+// the line held exactly one field per name. One more and the remainder is the
+// same text under either answer; one fewer and the name gets the empty string
+// either way. `read`'s names ask at that count and nowhere else, which is what
+// keeps the axis off `IFS=: read -r user rest` on an ordinary passwd line.
+//
+// Measured 2026-09-07: `IFS=:; printf 'a:b:\n' | { read -r x y; }` gives `b`
+// in five shells and `b:` in zsh, and it is the same fact as the array row
+// above seen through a different target.
+func TestReadIntoNamesAsksTheTailOnlyAtTheCount(t *testing.T) {
+	readRun := func(t *testing.T, src string, tail interp.Answer) (string, int) {
+		t.Helper()
+		return run(t, src, func(r *interp.Runner) {
+			sem := interp.CoreSemantics()
+			sem.LastPipelineElementInCurrentShell = interp.Yes
+			sem.TrailingSeparatorEndsAField = tail
+			r.Semantics = &sem
+		})
+	}
+	for _, tc := range []struct{ name, src, absorbed, opens string }{
+		{
+			"one field per name, and the last one is a field",
+			`IFS=:; printf 'a:b:\n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; }`,
+			`[a][b]`, `[a][b:]`,
+		},
+		{
+			"one name and one field is the same count",
+			`IFS=:; printf 'a:\n' | { read -r l; printf "[%s]" "$l"; }`,
+			`[a]`, `[a:]`,
+		},
+		{
+			"a line of nothing but separators reaches it too",
+			`IFS=:; printf '::\n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; }`,
+			`[][]`, `[][:]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if out, st := readRun(t, tc.src, interp.No); out != tc.absorbed || st != 0 {
+				t.Errorf("absorbed: got %q status %d, want %q at 0", out, st, tc.absorbed)
+			}
+			if out, st := readRun(t, tc.src, interp.Yes); out != tc.opens || st != 0 {
+				t.Errorf("opens a field: got %q status %d, want %q at 0", out, st, tc.opens)
+			}
+		})
+	}
+	// The guard, and the half a test of the two answers alone cannot see:
+	// away from that count the question is not put at all, so the *core* —
+	// which answers it with nothing — still runs these without a word and
+	// without a refusal.
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"more fields than names: the remainder holds the run either way",
+			`IFS=:; printf 'a:b:c::\n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; }`,
+			`[a][b:c::]`,
+		},
+		{
+			"fewer fields than names: the name it would fill is empty either way",
+			`IFS=:; printf 'a:\n' | { read -r x y z; printf "[%s][%s][%s]" "$x" "$y" "$z"; }`,
+			`[a][][]`,
+		},
+		{
+			"a whitespace IFS never reaches it",
+			`printf 'a b \n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; }`,
+			`[a][b]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := readRun(t, tc.src, interp.Unspecified)
+			if out != tc.want || st != 0 {
+				t.Errorf("unanswered: got %q status %d, want %q at 0 with nothing said", out, st, tc.want)
+			}
+		})
+	}
+}
+
 // The presets. POSIX.1-2024 2.6.5 answers this one — "once the input is empty,
 // the candidate shall become an output field if and only if it is not empty" —
 // so the specification's preset absorbs, and dash, bash and ksh93 comply.

@@ -2048,7 +2048,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// split, which is why the mask rides along rather than the processing
 	// being a pre-pass over the string.
 	ifs, set := r.ifs()
-	fields := splitFieldsLiteral(text, lits, ifs, set)
+	fields, at := splitFieldsAt(text, lits, ifs, set, false)
 	if array != "" {
 		// An array target takes the fields *as* fields, so the tail of the
 		// splitting rule is live here: `IFS=:; read -A a` on `a:b:` fills
@@ -2065,28 +2065,78 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 		return status
 	}
-	// The last variable takes the whole remainder, which is what makes
-	// `read a b` put "c d" in b for input "a c d".
+	// The last name takes the remainder of the *line* from where its own
+	// field began — the text as it was read, separators and all. Rebuilding
+	// it from the fields and joining them on a hard space is the wrong
+	// answer all six shells disagree with, and a silent one: `IFS=: read -r
+	// user rest` on a passwd line gave the right number of words with every
+	// colon replaced by a space, at status 0 (#1208). Only the closing run of
+	// IFS *whitespace* comes off it, which is why the offset rather than the
+	// field is what this needs.
 	//
-	// The remainder is text and not a field, so the tail of the splitting
-	// rule is not asked here: the shell where a trailing separator delimits
-	// puts `b:` in `b` for `IFS=:; read a b` on `a:b:`, which the extra
-	// *field* does not produce. That the remainder is rejoined on a hard
-	// space at all is a divergence of its own and unanimous against us — all
-	// six shells keep the separators the input had, so `IFS=:; read a b` on
-	// `a:b:c` gives `b:c` where this gives `b c` — and it is filed rather
-	// than fixed under a question about the tail.
+	// It is a remainder only where the line held more fields than there were
+	// names. One field per name means the last name takes its own field, so
+	// `IFS=: read x y` on `a:b:` gives `b` and not `b:` — and that is where
+	// the tail of the splitting rule becomes visible through `read`'s names:
+	// the shell that opens a field on a trailing separator has one field
+	// more than there are names, reaches the remainder, and keeps the colon
+	// the other five absorb.
+	//
+	// Asked at that count and nowhere else on this path, which is the whole
+	// of where the two readings differ. Past the names the extra empty field
+	// changes no value — the remainder is the same text either way — and
+	// short of them the name it would fill is the empty string it was going
+	// to be given anyway.
+	if len(fields) == len(args) {
+		fields = r.trailingSeparatorField(fields, text, lits, ifs, set, false)
+	}
+	// `at` is the splitter's own list and is one short of `fields` exactly
+	// when the answer above added one. The short entry is never the one read:
+	// an offset is read only for the name at len(args)-1, and the field that
+	// was added sits at len(args). Reaching the remainder at all means either
+	// the splitter found more fields than there are names — so `at` is longer
+	// than `args` — or the tail answer carried a count that was equal, which
+	// leaves `at` exactly as long.
 	for i, name := range args {
 		switch {
 		case i >= len(fields):
 			r.setVar(name, "")
-		case i == len(args)-1:
-			r.setVar(name, strings.Join(fields[i:], " "))
+		case i == len(args)-1 && len(fields) > len(args):
+			r.setVar(name, readRemainder(text, at[i], lits, ifs))
 		default:
 			r.setVar(name, fields[i])
 		}
 	}
 	return status
+}
+
+// readRemainder is the value the last name on a `read` takes when the line
+// held more fields than there were names: the text from that field's start to
+// the end of the line.
+//
+// What comes off the end is the closing run of IFS whitespace and nothing
+// else. A closing non-whitespace separator stays — `IFS=: read x y` on
+// `a:b:c::` gives `b:c::` in all six shells — and a whitespace character that
+// is not in IFS stays too, which is why the mask and IFS both have to be
+// consulted rather than unicode.IsSpace. The escape mask is honored on the
+// same reasoning the splitter honors it: a backslashed space is data.
+func readRemainder(text string, start int, literal []bool, ifs string) string {
+	end := len(text)
+	for end > start {
+		i := end - 1
+		if literal != nil && literal[i] {
+			break
+		}
+		c := text[i]
+		if c != ' ' && c != '\t' && c != '\n' {
+			break
+		}
+		if strings.IndexByte(ifs, c) < 0 {
+			break
+		}
+		end--
+	}
+	return text[start:end]
 }
 
 // readBadNumber is a count, timeout or descriptor argument that is not a

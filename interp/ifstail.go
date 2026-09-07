@@ -31,12 +31,17 @@ func (r *Runner) splitFieldsAsk(s, ifs string, ifsSet bool) []string {
 // split that has already happened.
 //
 // It is separate from splitFieldsAsking for `read`, which splits once and uses
-// the fields two ways: an array target takes them as fields, where this
-// question is live, and a list of names takes the last one as the remainder of
-// the line, which is text rather than a field and is not this question.
+// the fields two ways. An array target takes them as fields, where this
+// question is live at every count. A list of names takes the last one as the
+// remainder of the *line* — text rather than a field — and there the extra
+// field changes a value only when it carries the count from one field per name
+// to one more than there are names: `IFS=: read x y` on `a:b:` is `b` where
+// the separator is absorbed and `b:` where it opens a field. So `read`'s names
+// call this at that count and not otherwise, which is the caller's guard and
+// not one this function can put.
 //
-// Two guards, and both are what keeps the axis off the ordinary script rather
-// than an optimization. It is asked only where the two readings differ — a
+// Two guards here, and both are what keeps the axis off the ordinary script
+// rather than an optimization. It is asked only where the two readings differ — a
 // closing run of separators holding a non-whitespace one — so a whitespace IFS
 // never reaches it and neither does a value ending in anything else. And under
 // the edge-keeping rule of a quoted `${=spec}` the field behind the last

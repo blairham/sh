@@ -110,10 +110,13 @@ func installPrefix(exe string) string {
 // seedFunctionSearch gives the function search path its default, for a
 // dialect that has one and an environment that said nothing about it.
 //
-// Called after the dialect's own Register, because the parameter is *tied* —
-// `FPATH` and `fpath` are one value in two shapes — and the tie is one of the
-// things Register installs. Setting the scalar before it exists would fill a
-// name nothing reads.
+// Called after the dialect's own Register, which is where a dialect installs
+// the tie that makes the array half of the parameter follow the scalar. The
+// two orders happen to agree today and that is not what the position rests on:
+// a tie seeds its array from a scalar it finds already set, so seeding first
+// works only for as long as it keeps doing that. After is the order that does
+// not depend on it — a mutation confirmed the swap survives every test in the
+// tree, which is exactly why the reason is written down rather than assumed.
 //
 // The whole of the front end's part in this: which parameter is the dialect's
 // answer, and what goes in it is a fact about this process that no library may

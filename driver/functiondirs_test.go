@@ -26,8 +26,8 @@ import (
 
 // searchShell is a dialect with a function search path and the tie that makes
 // its array half follow. The tie is installed by Register because that is
-// where a real dialect installs its own, and the order matters: the seed has
-// to come after it or it fills a scalar nothing mirrors.
+// where a real dialect installs its own, which is also what puts it on the
+// same side of the seed as a real one.
 func searchShell() driver.Shell {
 	sh := shell()
 	sh.Semantics.FunctionSearchVariable = "SH_TEST_SEARCH"
@@ -128,6 +128,45 @@ func TestAShellArrivesWithItsInstallationsFunctionDirectories(t *testing.T) {
 	}
 }
 
+// TestTheBinaryIsFoundThroughALinkToWhereItWasInstalled keeps the derivation
+// pointing at the tree the binary was installed into rather than the one a
+// link to it sits in.
+//
+// A shell is reached through a link constantly — a `bin` directory of links is
+// how most package managers put one on PATH — and reading the prefix off the
+// link's own directory names two directories in somebody else's tree. Written
+// against a real link because the whole of what is being checked is a
+// filesystem operation.
+func TestTheBinaryIsFoundThroughALinkToWhereItWasInstalled(t *testing.T) {
+	root := t.TempDir()
+	installed := filepath.Join(root, "real", "libexec", "sh")
+	if err := os.MkdirAll(installed, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(installed, "zsh")
+	if err := os.WriteFile(binary, nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	links := filepath.Join(root, "bin")
+	if err := os.MkdirAll(links, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(links, "zsh")
+	if err := os.Symlink(binary, link); err != nil {
+		t.Fatal(err)
+	}
+	// The comparison is against the *resolved* installation, because a
+	// scratch directory is itself reached through a link on some systems and
+	// the derivation resolves the whole path.
+	want, err := filepath.EvalSymlinks(filepath.Join(root, "real"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := driver.InstallPrefixForTest(link); got != want {
+		t.Errorf("through a link: prefix = %q, want %q", got, want)
+	}
+}
+
 // TestTheEnvironmentReplacesTheDefaultRatherThanAddingToIt is the measured
 // rule, and the empty case is the half that is easy to get wrong.
 //
@@ -160,6 +199,26 @@ func TestTheEnvironmentReplacesTheDefaultRatherThanAddingToIt(t *testing.T) {
 			t.Errorf("with an empty value in the environment = %q, want %q", out, "\nn=1\n")
 		}
 	})
+}
+
+// TestAnotherNameThatStartsTheSameWayIsNotTheName keeps the environment
+// question exact.
+//
+// "Does the environment mention this name" is a lookup and not a prefix
+// match, and the difference is a shell whose default is silently suppressed
+// by a variable that merely starts with the same letters — `FPATH_EXTRA` set
+// by anything at all would have done it, and the symptom would be the empty
+// search path this whole change is about, back again for a reason nothing
+// would connect to it.
+func TestAnotherNameThatStartsTheSameWayIsNotTheName(t *testing.T) {
+	t.Setenv("SH_TEST_SEARCHER", "/not/the/name")
+	out, errs, code := runArgs(t, searchShell(), "testsh", "-c", `echo "n=${#sh_test_search[@]}"`)
+	if code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+	if out != "n=2\n" {
+		t.Errorf("with a longer name in the environment = %q, want the default's %q", out, "n=2\n")
+	}
 }
 
 // TestADialectWithNoFunctionSearchGetsNoDefault keeps the seam narrow.

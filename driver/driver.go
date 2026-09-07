@@ -1134,8 +1134,8 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 	}
 	// And the one parameter a shell arrives with a value in that no dialect
 	// can hold, because the value is where this binary was installed rather
-	// than anything about the language. After Register, which is what ties
-	// the scalar to its array. See functiondirs.go.
+	// than anything about the language. After Register, which is where a
+	// dialect installs the tie the value has to reach. See functiondirs.go.
 	sh.seedFunctionSearch(r)
 	return r
 }

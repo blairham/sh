@@ -933,9 +933,19 @@ func (r *Runner) unsetName(name string) {
 		r.unsetName(other)
 	}
 	delete(r.Vars, name)
-	delete(r.exported, name)
+	// Recorded off rather than deleted, which the tri-state is there for:
+	// deleting the record puts the question back to the environment, and the
+	// environment still names an inherited name — so `unset IMPORTED;
+	// IMPORTED=second` handed the child a name the script had unset. The
+	// removal record used to stand in for this, and stopped once an
+	// assignment began lifting it. See isExported and nameIsBack.
+	if r.exported == nil {
+		r.exported = map[string]bool{}
+	}
+	r.exported[name] = false
 	delete(r.Arrays, name)
 	delete(r.AssocArrays, name)
+	r.clearAttributes(name)
 	// Recorded as well as deleted: a name that came from the environment is
 	// not in Vars to begin with, and deleting nothing left it visible to
 	// every lookup — `unset PATH` did not clear PATH.
@@ -943,6 +953,50 @@ func (r *Runner) unsetName(name string) {
 		r.removed = map[string]bool{}
 	}
 	r.removed[name] = true
+}
+
+// clearAttributes takes a name's attributes away, which is the other half of
+// what `unset` does and the half that was missing.
+//
+// Unanimous across every shell in the panel that spells the letters at all,
+// which is what makes it a rule and not an axis: `typeset -i n=5; unset n;
+// n=3+4` reads back the four characters in bash 5.3.15, ksh93u+ and zsh
+// 5.9.2, and so does every other letter — `-u`, `-l`, `-U` and `-A` all stop
+// applying, and `-x` stops reaching a child. The name went, so what it was
+// declared to be went with it, and a name assigned afterwards is a plain new
+// name.
+//
+// One place rather than one per letter. The maps are keyed by name and
+// nothing on the unset path deleted from them, so every attribute survived
+// its own name: `unset PATH; PATH=a:a:b` under a `-U` name silently lost the
+// duplicate, and `unset n; n=3+4` under an `-i` name stored 7.
+//
+// Not reached for a readonly name, which refuses the `unset` outright before
+// this — measured, `typeset -r r=1; unset r` is status 1 in bash, ksh93 and
+// zsh alike — and not reached for an element or a span, which are not the
+// name. Both of those are `unsetName`'s callers' doing rather than this
+// function's; see biUnset, where the refusal stands ahead of the subscript
+// and the subscripted spellings never come here.
+//
+// The export attribute, both arrays and any tie are cleared by unsetName
+// itself: the tie is untied first because half a tie is not a state this
+// shell has, and the associative attribute *is* the table, so deleting the
+// table is what takes the attribute off.
+func (r *Runner) clearAttributes(name string) {
+	delete(r.integer, name)
+	delete(r.lowered, name)
+	delete(r.uppered, name)
+	delete(r.hidden, name)
+	delete(r.unique, name)
+	// Runner.declaredEmpty is deliberately *not* cleared here. It looked like
+	// one of these and is not: nothing can observe it for a removed name.
+	// hiddenExports is its only reader and it walks the exported set, which
+	// `unset` has just written off; an assignment clears the flag before it
+	// stores; and a second `typeset -x` on the name re-declares it empty
+	// anyway. Measured for both routes — `typeset -x d; unset d; export d`
+	// and `typeset -x g; unset g; typeset -x g` — and no shell in the panel
+	// tells a child anything either way. A line here would be one no mutant
+	// could kill.
 }
 
 // biExport marks a name for the environment, and assigns when given a value.

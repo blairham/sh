@@ -3100,10 +3100,38 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// declaration had left there. declareEmpty records the flag *after*
 	// calling here, which is what lets one function do both.
 	delete(r.declaredEmpty, name)
+	r.nameIsBack(name)
 	r.Vars[name] = value
 	// And the other half of a tie, if this name is one. After the store, so
 	// that the mirror's own read of this name sees the new value.
 	r.mirrorScalarToArray(name, value)
+}
+
+// nameIsBack forgets that `unset` had taken a name away, which is what
+// storing a value into it means.
+//
+// The record is kept as well as the value deleted, because a name that came
+// from the environment is not in Vars to begin with and deleting nothing left
+// it visible — see unsetName. So the record has to be lifted again by hand
+// when the name comes back, and it was not: every read went on working,
+// because a stored value answers ahead of the record, and everything that
+// asks the record *directly* went on being told the name is gone.
+//
+// A listing is what that was visible in. `unset q; q=7; typeset -p q` reports
+// the name as missing in every dialect here, where bash, ksh93 and zsh all
+// say the name back with its value — and before `unset` cleared attributes it
+// was worse than missing, listing `declare -i q` with no value at all: an
+// attribute that should have gone, over a value that was there. One rule with
+// #1047 rather than a second: `unset` leaves two records behind and both have
+// to be lifted by whatever brings the name back.
+//
+// Called from the two stores rather than from the dozen assignment spellings
+// above them: the scalar table, and the keyed one. An indexed array needs no
+// call of its own — storeArray keeps `$a` in step through setVar, so it lifts
+// the mark by that route, and a call beside it was a line no mutation could
+// kill.
+func (r *Runner) nameIsBack(name string) {
+	delete(r.removed, name)
 }
 
 // ensurePWD gives `$PWD` a value before the first command runs.

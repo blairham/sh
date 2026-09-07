@@ -95,6 +95,15 @@ func TestAnExpandedNameIsNotCheckedAsTextAtTheParen(t *testing.T) {
 	d := nameExpands()
 	d.FuncDefAtParen = true
 	d.FunctionNamePunctuation = false
+	// The written name has to be one whose *literal text* is not a name, or
+	// the check passes for the wrong reason and the guard is invisible:
+	// `_p_${w}` flattens to `_p_w`, which `isName` is happy with. `_p_${w}-x`
+	// flattens to `_p_w-x`, which it is not.
+	for _, src := range []string{`_p_${w}-x() { :; }`, `_p_${w}.x() { :; }`, `${w}-x() { :; }`} {
+		if _, err := Parse(src, d); err != nil {
+			t.Errorf("%s: an expanded name where the paren commits: %v", src, err)
+		}
+	}
 	if _, err := Parse(`_p_${w}() { :; }`, d); err != nil {
 		t.Errorf("an expanded name where the paren commits: %v", err)
 	}

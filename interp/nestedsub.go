@@ -226,11 +226,25 @@ func (r *Runner) paramIsAList(e *syntax.ParamExpr) bool {
 		// A nested inner is a value: measured, `${${${s}}[2]}` on `hello` is
 		// `e`, so the depth does not make a list of a string. An inner that
 		// came to a list is refused a level down, by name.
+		//
+		// The nesting clause is also what keeps this from *asking*: the four
+		// conditionals below read yieldsTheArray, which expands a nested
+		// inner again to find out whether the test fired. No answer changes
+		// — a nested inner is not a list either way — so a mutation that
+		// drops it shows nothing but one more run of the inner's command
+		// substitution, which is #1404's subject rather than this one's.
 		return false
 	}
 	if e.Prefix != 0 {
 		// `${!pre@}` is the names, one field each, where `${!pre*}` is one
 		// joined field — the same difference `$@` has from `$*`.
+		//
+		// No grammar reaches this today: the one dialect with an expansion
+		// in the name position has no `${!…}` at all, so nothing can write
+		// the pairing and no test can tell this line from its absence. It
+		// stays for the reason bareArrayAsList keeps its own unreachable
+		// guard — what it prevents is a different construct's answer rather
+		// than a different field count.
 		return e.Prefix == '@'
 	}
 	if e.Index != nil {

@@ -37781,21 +37781,21 @@
     },
     "heredoc/a-delimiter-closes-three-substitutions": {
       "bash": {
-        "Stdout": "n=0 after",
+        "Stdout": "n=1 after",
         "Stderr": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `E')",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "n=0 after",
+        "Stdout": "n=1 after",
         "Stderr": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `E')",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "n=0 after",
+        "Stdout": "n=1 after",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -37809,7 +37809,7 @@
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "n=0 after",
+        "Stdout": "n=1 after",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -37817,7 +37817,7 @@
       },
       "zsh": {
         "Stdout": "",
-        "Stderr": "\u003cscript\u003e:6: parse error near `$(: $(: $(cat \u003c\u003cE'",
+        "Stderr": "\u003cscript\u003e:6: parse error near `$(echo $(echo $(cat ...'",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false
@@ -78737,6 +78737,50 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cscript\u003e:4: parse error near `\u003c(echo hi'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "unterminated/a-quoted-word-longer-than-the-shell-prints": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: unexpected EOF while looking for matching `)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 4: unexpected EOF while looking for matching `)'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: unexpected EOF while looking for matching `)'~\u003cscript\u003e: line 4: syntax error: unexpected end of file",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 4: Syntax error: end of file unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: syntax error at line 1: `(' unmatched",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:4: parse error near `v=$(echo one two thr...'",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false

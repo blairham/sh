@@ -4219,8 +4219,8 @@ EOF
 		ID: "heredoc/a-delimiter-closes-three-substitutions", Category: "redirection",
 		Script:     true,
 		Unfinished: true,
-		Snippet:    "set -- $(: $(: $(cat <<E\nz\nE)))\necho \"n=$# after\"\n",
-		Why:        "a third level, because the remark has to travel one parse further to be seen and a carry that goes exactly one level would pass the two-level row. Each enclosing read succeeds where the innermost one failed, so the depth of the nesting is the depth of the carry. `:` rather than `echo` keeps the word short enough that the shell which truncates a quoted word at twenty characters does not, which is a different question",
+		Snippet:    "set -- $(echo $(echo $(cat <<E\nz\nE)))\necho \"n=$# after\"\n",
+		Why:        "a third level, because the remark has to travel one parse further to be seen and a carry that goes exactly one level would pass the two-level row. Each enclosing read succeeds where the innermost one failed, so the depth of the nesting is the depth of the carry. `echo` rather than `:`, which is what it was written with while the shell that cuts a quoted word at twenty bytes was still printing it whole here (#1024): the word is now thirty bytes and cut, so this row carries the elision as well as the carry, which is the shape #1095 wanted for it",
 	},
 	{
 		ID: "heredoc/a-substitution-that-is-not-a-dollar-sign", Category: "redirection",
@@ -4228,6 +4228,12 @@ EOF
 		Unfinished: true,
 		Snippet:    "cat <(cat <<EOF\na\nEOF)\necho done\n",
 		Why:        "the same shape spelled the other way. What decides the remark is that the parentheses hold a *program*, not which sigil opened them — bash 5.3 says the same thing here as for `$( )`, bash 3.2 and ksh93 stay silent as they do there, and the two that have no process substitution refuse the line outright. The counter-case is arithmetic: `$(( a << b ))` is a shift and reading it as a program would invent a here-document",
+	},
+	{
+		ID: "unterminated/a-quoted-word-longer-than-the-shell-prints", Category: "syntax errors", SyntaxError: true,
+		Script:  true,
+		Snippet: "v=$(echo one two three four five\necho after\n",
+		Why:     "the word a construct ran out inside, made long enough to reach the limit the one shell that quotes it back cuts at. Thirty-one bytes against a limit of twenty, so that shell prints twenty and marks them and the other four are unmoved — two of them print the whole word in their own sentence and two name no text at all, which is what says the limit belongs to the rendering of this one dialect's `near` and not to every quoted text. Measured 2026-09-07: the mark is appended at exactly twenty as well, where nothing has been cut, so a row at the boundary is worth more than a row far past it and the unit test carries that one",
 	},
 	{
 		ID: "unterminated/a-process-substitution-that-never-closes", Category: "syntax errors", SyntaxError: true,

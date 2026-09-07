@@ -64,3 +64,39 @@ func TestCommandSubstitutionCarriesTheDialectStatus(t *testing.T) {
 		}
 	}
 }
+
+// UnmatchedNearMaxBytes is a length rather than a code path, so the two
+// answers worth pinning are the limit doing its job and zero meaning "all of
+// it" — the answer three of the four presets give, and the one a dialect gets
+// by saying nothing.
+//
+// Named for the field and not for a shell, which is the rule for a test in
+// this package: what the dialect that elides actually prints is pinned beside
+// that dialect.
+func TestUnmatchedNearMaxBytesCutsTheQuotedWordAndZeroKeepsIt(t *testing.T) {
+	const src = "v=$(echo bbbbbbbbbbbbbbbbbbbbbbbb\n"
+	_, err := syntax.Parse(src, syntax.Dialect{})
+	if err == nil {
+		t.Fatalf("%q parsed, want a refusal", src)
+	}
+	const whole = "v=$(echo bbbbbbbbbbbbbbbbbbbbbbbb"
+	for _, tc := range []struct {
+		why   string
+		limit int
+		want  string
+	}{
+		{"zero keeps the whole word", 0, whole},
+		{"a negative limit is zero", -1, whole},
+		{"a limit shorter than the word cuts and marks it", 20, whole[:20] + "..."},
+		{"a limit the word exactly reaches marks it uncut", len(whole), whole + "..."},
+		{"a limit longer than the word leaves it alone", len(whole) + 1, whole},
+	} {
+		d := Diagnostics{
+			UnmatchedCmdSubst:     "near `%[3]s'",
+			UnmatchedNearMaxBytes: tc.limit,
+		}
+		if got, want := d.ParseFailure(err), "near `"+tc.want+"'"; got != want {
+			t.Errorf("%s (limit %d):\n got %q\nwant %q", tc.why, tc.limit, got, want)
+		}
+	}
+}

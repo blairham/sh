@@ -38,6 +38,17 @@ func Prelude() string { return identity + functions }
 // `set -- "$@" "$1"; shift` means the same thing in both — which is what
 // keeps the two texts one dialect apart rather than one index apart.
 //
+// Every read of the stack is written `${DIRSTACK[@]+"${DIRSTACK[@]}"}` and
+// not `"${DIRSTACK[@]}"`, because nothing declares the name until the first
+// push and this shell reads an *undeclared* name through a subscript as a
+// scalar — Semantics.UnsetNameAtIsOneEmptyField, which real zsh answers yes.
+// Unguarded, the first `pushd` stored an empty entry beside the old
+// directory and `dirs` printed a trailing space for it, in the one shape a
+// count cannot see. Real zsh has no such state to reach: its stack parameter
+// is an array from startup. The guard is the idiom that holds either way,
+// and it is the same text in the bash prelude so the two stay one dialect
+// apart.
+//
 // Out of scope, and recorded in docs/spec/semantics.md: `pushd old new`, the
 // substitution form, and `-c` in company with a printing letter, which this
 // engine measures as doing nothing at all.
@@ -78,7 +89,7 @@ dirs() {
 		DIRSTACK=()
 		return 0
 	fi
-	set -- "$PWD" "${DIRSTACK[@]}"
+	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
 	__d=
 	for __c in "$@"; do
 		if [ -z "$__long" ]; then
@@ -101,7 +112,7 @@ dirs() {
 }
 __dirs_rotate() {
 	local __spec=$1 __i __new
-	set -- "$PWD" "${DIRSTACK[@]}"
+	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
 	case $__spec in
 	+*) __i=${__spec#+} ;;
 	*)  __i=$(( $# - 1 - ${__spec#-} )) ;;
@@ -148,7 +159,7 @@ pushd() {
 		return 0
 	fi
 	cd "$1" || return 1
-	DIRSTACK=("$__old" "${DIRSTACK[@]}")
+	DIRSTACK=("$__old" ${DIRSTACK[@]+"${DIRSTACK[@]}"})
 }
 popd() {
 	local __spec= __i __k __len
@@ -162,7 +173,7 @@ popd() {
 		diagnose "directory stack empty"
 		return 1
 	fi
-	set -- "$PWD" "${DIRSTACK[@]}"
+	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
 	__i=0
 	if [ -n "$__spec" ]; then
 		case $__spec in

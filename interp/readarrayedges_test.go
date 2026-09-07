@@ -27,10 +27,11 @@ func readEdges(t *testing.T, src string, whitespace, none interp.Answer) (string
 		sem.TrailingSeparatorEndsAField = interp.No
 		sem.ReadTrailingWhitespaceEndsAField = whitespace
 		sem.ReadNoFieldsIsOneEmptyElement = none
-		// Reading an empty array back through a quoted `[@]` is an axis of
-		// its own, and the rows below have to read an empty array. Answered
-		// flat as the shells with the letter answer it — no field.
-		sem.EmptyArrayAtIsOneEmptyField = interp.No
+		// Reading a name back through a quoted `[@]` when nothing filled it
+		// is an axis of its own, and the rows below can leave the name
+		// untouched. Answered flat as the shells with the letter answer it —
+		// no field.
+		sem.UnsetNameAtIsOneEmptyField = interp.No
 		r.Semantics = &sem
 	})
 }
@@ -213,7 +214,7 @@ func TestAnUnansweredNeighborStopsTheClosingRunQuestion(t *testing.T) {
 		sem := interp.CoreSemantics()
 		sem.ReadOptions = "rA"
 		sem.LastPipelineElementInCurrentShell = interp.Yes
-		sem.EmptyArrayAtIsOneEmptyField = interp.No
+		sem.UnsetNameAtIsOneEmptyField = interp.No
 		sem.ReadNoFieldsIsOneEmptyElement = interp.No
 		// Both left unanswered: the first is asked, and the second must not
 		// be reached once it has said so.

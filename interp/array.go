@@ -1017,6 +1017,27 @@ func (r *Runner) subscriptTarget(e *syntax.ParamExpr) (elems []string, scalar, o
 	return nil, false, false
 }
 
+// subscriptNameIsAbsent reports whether the name a subscript was written on
+// holds nothing at all: no array, no association, no value, and no special
+// parameter behind it.
+//
+// It separates the two questions a quoted whole-array subscript with no
+// elements used to answer with one: an array that exists and is empty, and a
+// name that was never given anything. Only the second splits the panel — see
+// Semantics.UnsetNameAtIsOneEmptyField, which is asked nowhere else.
+//
+// The association is asked separately because a declared one is not reached by
+// subscriptTarget at all: arraySubscript answers it on an earlier branch, so a
+// `typeset -A m` with no keys would look absent here and take the unset
+// answer.
+func (r *Runner) subscriptNameIsAbsent(e *syntax.ParamExpr) bool {
+	if _, ok := r.assocFor(e.Name); ok {
+		return false
+	}
+	_, _, ok := r.subscriptTarget(e)
+	return !ok
+}
+
 // splitSubscriptRange splits `1,3` into its two halves, reporting whether the
 // subscript is written as a pair at all.
 //

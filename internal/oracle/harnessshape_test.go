@@ -156,18 +156,23 @@ func TestAnArgvThatDroppedTheCasesWordsIsReported(t *testing.T) {
 // standard input, the name it was called by, and the environment — because
 // those are the only inputs there are. Two cases alike in all five are one
 // case counted twice, and the corpus percentage is a headline number.
-// It found two pairs already in the tree when it was written, and they are
-// listed rather than deleted. Both are deliberate cross-references — a case
+// It found two pairs already in the tree when it was written, and they were
+// listed rather than deleted. Both were deliberate cross-references — a case
 // filed under two chapters, each Why pointing at the other — so removing
 // either would delete evidence somebody wrote on purpose, and `corpus-guard`
 // treats a lost case as a regression whatever the reason. What is worth
-// knowing is recorded here instead: the corpus percentage counts each of these
-// two facts twice, and the maintainer can decide whether a chapter's
+// knowing is recorded here instead: the corpus percentage counts each of the
+// remaining facts twice, and the maintainer can decide whether a chapter's
 // cross-reference should be a case at all.
+//
+// One of the two pairs is gone, and not by being deduplicated: both its cases
+// ran `a=(); set -- "${a[@]}"` and both were retired, because that line does
+// not build an empty array in ksh93 at all (#1379). The chapters each carry
+// a row of their own now, asking different questions, so the pair is not a
+// pair any more.
 //
 // The list is by pair, so a *new* duplicate of one of these still fails.
 var knownDuplicateCases = map[string]string{
-	"param/an-empty-array-quoted-at":   "array/a-quoted-empty-array-is-not-the-same-question",
 	"syntax/an-unmatched-double-quote": "token/an-unterminated-quote-at-end-of-input",
 }
 

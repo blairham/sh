@@ -56,10 +56,10 @@ func TestAnUnquotedGapIsNoField(t *testing.T) {
 	}
 }
 
-// How many fields a quoted *empty array* makes is a different question, and
-// the only one of the two a dialect answers. Asking that axis about a single
-// subscript is what made a gap disappear.
-func TestAQuotedEmptyArrayIsTheAxisAlone(t *testing.T) {
+// How many fields a quoted `[@]` on a name that holds *nothing* makes is a
+// different question, and the only one of the group a dialect answers. Asking
+// that axis about a single subscript is what made a gap disappear.
+func TestAQuotedAtOnAnAbsentNameIsTheAxisAlone(t *testing.T) {
 	for _, c := range []struct {
 		name string
 		one  Answer
@@ -69,33 +69,83 @@ func TestAQuotedEmptyArrayIsTheAxisAlone(t *testing.T) {
 		{"one empty field", Yes, "n=1"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			out := runEmptyArrayAxis(t, c.one, `a=(); set -- "${a[@]}"; echo "n=$#"`)
+			out := runUnsetAtAxis(t, c.one, `set -- "${a[@]}"; echo "n=$#"`)
 			if out != c.want {
 				t.Errorf("got %q, want %q", out, c.want)
 			}
+			// An array that exists and has no elements is no field under
+			// either answer: emptiness is not what the axis asks about, and
+			// no column in the panel gives it a field.
+			empty := runUnsetAtAxis(t, c.one, `a=(); set -- "${a[@]}"; echo "n=$#"`)
+			if empty != "n=0" {
+				t.Errorf("a declared empty array gave %q under this answer, want n=0", empty)
+			}
 			// A single subscript is one field under either answer, because
 			// the axis is not its question.
-			gap := runEmptyArrayAxis(t, c.one,
+			gap := runUnsetAtAxis(t, c.one,
 				`a=(x); a[5]=y; set -- "${a[0]}" "${a[1]}" "${a[5]}"; echo "n=$#"`)
 			if gap != "n=3" {
 				t.Errorf("a gap gave %q under this answer, want n=3", gap)
 			}
 			// `[*]` joins, so a quoted one is a single field with nothing to
 			// join — unanimous, and so not the axis either.
-			star := runEmptyArrayAxis(t, c.one, `a=(); set -- "${a[*]}"; echo "n=$#"`)
+			star := runUnsetAtAxis(t, c.one, `set -- "${a[*]}"; echo "n=$#"`)
 			if star != "n=1" {
 				t.Errorf("a star gave %q under this answer, want n=1", star)
+			}
+			// Nor is the count: `${#a[@]}` is zero on an absent name in
+			// every column, whatever the field question answers.
+			n := runUnsetAtAxis(t, c.one, `echo "n=${#a[@]}"`)
+			if n != "n=0" {
+				t.Errorf("a length gave %q under this answer, want n=0", n)
+			}
+			// Nor the unquoted spelling, which splitting empties either way.
+			bare := runUnsetAtAxis(t, c.one, `set -- ${a[@]}; echo "n=$#"`)
+			if bare != "n=0" {
+				t.Errorf("an unquoted at gave %q under this answer, want n=0", bare)
 			}
 		})
 	}
 }
 
-// runEmptyArrayAxis runs src with EmptyArrayAtIsOneEmptyField set to answer.
-func runEmptyArrayAxis(t *testing.T, answer Answer, src string) string {
+// A list that exists and is empty without any *array store* behind it, which
+// is the third shape the guard has to get right and the one no assignment can
+// reach: a produced array whose producer has nothing to produce yet.
+//
+// Written because a guard keyed on the array table rather than on what the
+// name holds passes every stored-array row above and fails only here — and
+// the shells this substrate presets have such parameters, empty until a
+// `disable` or an `alias -g` fills them, so the dialect that answers yes
+// would hand every read of one a field it has not got.
+func TestAProducedArrayWithNothingToProduceIsNoField(t *testing.T) {
+	for _, answer := range []Answer{Yes, No} {
+		out, _ := runGrammar(t, `set -- "${produced[@]}"; echo "n=$#"`, nil, func(r *Runner) {
+			sem := *r.Semantics
+			sem.UnsetNameAtIsOneEmptyField = answer
+			r.Semantics = &sem
+			r.SetDynamicArray("produced", func(*Runner) []string { return nil })
+		})
+		if got := strings.TrimSpace(out); got != "n=0" {
+			t.Errorf("%v: got %q, want n=0 — the name holds a list, it is only empty", answer, got)
+		}
+	}
+	// The control: the same producer with something to produce keeps its
+	// fields, so the row above is not passing because the parameter is
+	// unreachable.
+	out, _ := runGrammar(t, `set -- "${produced[@]}"; echo "n=$#"`, nil, func(r *Runner) {
+		r.SetDynamicArray("produced", func(*Runner) []string { return []string{"x", "y"} })
+	})
+	if got := strings.TrimSpace(out); got != "n=2" {
+		t.Errorf("a producer with two elements gave %q, want n=2", got)
+	}
+}
+
+// runUnsetAtAxis runs src with UnsetNameAtIsOneEmptyField set to answer.
+func runUnsetAtAxis(t *testing.T, answer Answer, src string) string {
 	t.Helper()
 	out, _ := runGrammar(t, src, nil, func(r *Runner) {
 		sem := *r.Semantics
-		sem.EmptyArrayAtIsOneEmptyField = answer
+		sem.UnsetNameAtIsOneEmptyField = answer
 		r.Semantics = &sem
 	})
 	return strings.TrimSpace(out)

@@ -274,18 +274,45 @@ func TestABareScalarNameIsNotAList(t *testing.T) {
 	}
 }
 
-func TestAnEmptyArrayQuotedAtIsAnAxis(t *testing.T) {
-	out, _ := axisRun(t, `a=(); set -- "${a[@]}"; echo "n=$#"`, func(s *Semantics) {
-		s.EmptyArrayAtIsOneEmptyField = Yes
+// A quoted `"${a[@]}"` on a name that holds nothing is the axis; the same
+// spelling on an array that exists and has no elements is not.
+//
+// Both halves are asserted here because the axis was written without the
+// second: one answer to "how many fields does an empty list make" was given
+// to the unset name and to the declared empty array alike, and the dialect
+// that answered yes handed a spurious empty argument to every
+// `f "${arr[@]}"` written before anything filled `arr`.
+func TestAQuotedAtOnAnUnsetNameIsAnAxis(t *testing.T) {
+	out, _ := axisRun(t, `set -- "${a[@]}"; echo "n=$#"`, func(s *Semantics) {
+		s.UnsetNameAtIsOneEmptyField = Yes
 	})
 	if !strings.Contains(out, "n=1") {
 		t.Errorf("got %q, want one empty field", out)
 	}
-	out, _ = axisRun(t, `a=(); set -- "${a[@]}"; echo "n=$#"`, func(s *Semantics) {
-		s.EmptyArrayAtIsOneEmptyField = No
+	out, _ = axisRun(t, `set -- "${a[@]}"; echo "n=$#"`, func(s *Semantics) {
+		s.UnsetNameAtIsOneEmptyField = No
 	})
 	if !strings.Contains(out, "n=0") {
 		t.Errorf("got %q, want none", out)
+	}
+	// An array that exists and has no elements asks nothing, under either
+	// answer, and is no field in every column measured.
+	for _, a := range []Answer{Yes, No} {
+		out, _ = axisRun(t, `a=(); set -- "${a[@]}"; echo "n=$#"`, func(s *Semantics) {
+			s.UnsetNameAtIsOneEmptyField = a
+		})
+		if !strings.Contains(out, "n=0") {
+			t.Errorf("%v: declared empty array gave %q, want n=0 without a question", a, out)
+		}
+		// And an association declared with no keys is the same shape,
+		// reached down a different branch: it never sees subscriptTarget, so
+		// a guard that only asked that would take it for absent.
+		out, _ = axisRun(t, `typeset -A m; set -- "${m[@]}"; echo "n=$#"`, func(s *Semantics) {
+			s.UnsetNameAtIsOneEmptyField = a
+		})
+		if !strings.Contains(out, "n=0") {
+			t.Errorf("%v: declared empty association gave %q, want n=0", a, out)
+		}
 	}
 	// A non-empty array asks nothing and keeps its fields either way.
 	out, _ = axisRun(t, `a=(x y); set -- "${a[@]}"; echo "n=$#"`, func(s *Semantics) {})

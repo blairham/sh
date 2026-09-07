@@ -6404,7 +6404,13 @@ so bash 3.2 is a column in the golden record and not a dialect.
   empty indexed array: `${#a[@]}` is 1 for it and `unset "a[-1]"` says
   nothing. We model `a=()` as an empty array, so our ksh refuses that one
   spelling where ksh93 does not. The difference is what `a=()` builds
-  rather than where the boundary is.
+  rather than where the boundary is. The same fact retired an axis —
+  `UnsetNameAtIsOneEmptyField` below, which was `EmptyArrayAtIsOneEmptyField`
+  and was measured from `a=()` counting one field in ksh93 (#1379). This
+  entry and the table in `grammar/commands.md` were each enough to refuse
+  that measurement; neither was consulted, because the corpus row that fed
+  it counted fields and never printed one. **Cross-reference an entry here
+  before reading a divergence off a count.**
 - zsh blanks a **scalar** through an in-range subscript — `a=v; unset
   "a[1]"` leaves `a` empty at 0 — where we leave the value standing. It is
   the blanking reading applied to a name that is no array, and a separate
@@ -7782,10 +7788,46 @@ The store is sparse either way — only the reading differs — so this is
 asked when an array *has* a gap and never otherwise, which is almost
 every array there is.
 
-**`EmptyArrayAtIsOneEmptyField`** — bash no · dash no · ksh93 yes · zsh no
+**`UnsetNameAtIsOneEmptyField`** — bash no · dash n/a · ksh93 no · zsh yes
 
-Hands a quoted "${a[@]}" of an empty array one empty field: ksh93 alone,
-and the reason careful scripts write "${a[@]+"${a[@]}"}".
+Hands a quoted `"${a[@]}"` written on a name that holds nothing at all
+one empty field. zsh alone, where a name that is not a declared array
+reads as a scalar, and an unset scalar under quotes is the one empty
+field `"$a"` gives.
+
+A question about **existence** and not about emptiness. An array that
+exists and has no elements is no field in every column, so that half is
+core and asks nobody. Measured 2026-09-07, with a *function* rather than
+`set --` so the positional-parameter builtin is not a confound, and with
+each shell's own way of declaring an empty array:
+
+| shape, count of fields | dash | bash 5.3 | bash as sh | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `unset a; f "${a[@]}"` | *n/a* | 0 | 0 | 0 | 0 | **1** |
+| declared, no elements | *n/a* | 0 | 0 | 0 | 0 | 0 |
+| `f "${a[@]}"` on one element | *n/a* | 1 | 1 | 1 | 1 | 1 |
+
+The compound variable is not new evidence: it is in `grammar/commands.md`'s
+array-literal table and in the "recorded rather than reproduced" list above.
+
+The declared row is spelled `a=()` for bash and zsh and `set -A a` for
+ksh93, and the difference is the whole reason this axis is named for
+existence. It was `EmptyArrayAtIsOneEmptyField`, ksh93 yes, recorded from
+`a=(); set -- "${a[@]}"; echo "n=$#"` answering `n=1` there. **ksh93 does
+not read `a=()` as an array literal.** It builds a *compound* variable —
+`typeset -p a` reports `typeset -C a=()` — whose value is the three bytes
+`(`, newline, `)`, so the one field that row counted was not an empty
+one. A count-only snippet cannot tell those apart, and the corpus row
+recorded the agreement of a coincidence for as long as it stood. Asked
+with `set -A a`, ksh93 gives no field; and `set -A a` on an array that
+already has elements leaves the name *unset*, so ksh93 has no
+declared-and-empty state to answer for at all.
+
+zsh is the column that splits the two states, and in the opposite
+direction from the one that story predicted: `a=()` there is a set, empty
+array and no field, while a name nothing declared is one field. The
+careful idiom `"${a[@]+"${a[@]}"}"` guards the unset name, which is what
+it was always for.
 
 
 ### arithmetic
@@ -9204,9 +9246,9 @@ The spelling used to do nothing at all. `@` is not an arithmetic
 expression, so the subscript failed to evaluate and the element nobody
 named was quietly not removed: the array came back whole at status 0, in
 the shape a script writes to start a list over. It is a different question
-from `EmptyArrayAtIsOneEmptyField`, which is about how many *fields* a
-quoted `"${a[@]}"` of an empty array makes and is answered after this one
-has already decided whether the array is empty.
+from `UnsetNameAtIsOneEmptyField`, which is about how many *fields* a
+quoted `"${a[@]}"` on a name holding nothing makes and is reached only
+once this one has taken the array away.
 
 **`UnsetEndsTheProducedPipelineStatus`** — bash no · dash unspecified · ksh93 unspecified · zsh yes
 

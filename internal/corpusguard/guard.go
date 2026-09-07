@@ -41,9 +41,10 @@
 // number to bump and no list to keep in step, so it cannot go stale.
 //
 // The invariant is not aspirational. Replaying every commit that has ever
-// touched case.go, no case ID has ever left main — the set has only grown,
-// across the whole history of the file. Retired is the deliberate exception,
-// and it is empty.
+// touched case.go, no case ID has ever left main by accident — the set has
+// only grown, across the whole history of the file. Retired is the deliberate
+// exception, and it holds only the cases whose *snippet* was found to be
+// measuring something other than what their ID claimed.
 package corpusguard
 
 import (
@@ -68,7 +69,20 @@ const CasePath = "internal/oracle/case.go"
 //
 // Losing an entry from this map is fail-safe — the guard starts reporting the
 // ID again — which is the direction a merge hazard should point.
-var Retired = map[string]string{}
+var Retired = map[string]string{
+	// Both measured `a=(); set -- "${a[@]}"; echo "n=$#"` and recorded
+	// ksh93 at n=1 against bash's and zsh's n=0, and a semantics axis was
+	// built on the difference. `a=()` is not an array literal in ksh93: it
+	// builds a *compound* variable whose value is the three bytes `(`,
+	// newline, `)`, so the one field the count saw was not an empty one and
+	// the divergence was between two unrelated behaviors. A count-only
+	// snippet cannot be repaired in place — the evidence under the ID is
+	// evidence about the wrong question — so each is retired for a row that
+	// shows what the field holds, or that asks the question the ID claimed
+	// (#1379).
+	"array/a-quoted-empty-array-is-not-the-same-question": "the snippet measured ksh93's compound variable rather than an empty array; replaced by array/a-quoted-at-on-a-name-that-holds-nothing, array/a-declared-empty-array-quoted-at and param/an-empty-array-literal-shows-what-its-field-holds",
+	"param/an-empty-array-quoted-at":                      "the same snippet and the same confound; replaced by param/an-empty-array-literal-shows-what-its-field-holds, which records the field's contents",
+}
 
 // idLine matches the ID field of a corpus entry in the *text* of case.go.
 //

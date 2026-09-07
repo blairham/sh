@@ -2140,6 +2140,21 @@ type Diagnostics struct {
 	// Empty falls back to ArithExpressionRanOut, which is what the two
 	// dialects that word the two failures identically want.
 	ArithOperandExpected string
+	// ArithIllegalByte is the reason when the arithmetic reader met a byte
+	// that is part of no token at all, at a position where the expression
+	// could legally have stopped: `$((@))` and `$((1 @))` are
+	// `illegal character: @` in the one shell that has this sentence.
+	//
+	// One verb, the refused byte — not the text from it to the end of the
+	// expression, which is what ArithOperandExpected takes. The two sentences
+	// name different things about the same failure, which is why this cannot
+	// be a second wording of that field.
+	//
+	// Empty falls back to ArithOperandExpected, which is right for the three
+	// dialects that have no such sentence — and they never reach it anyway,
+	// because the kind is only produced where Dialect.ArithBytesRefusedOutright
+	// names the byte.
+	ArithIllegalByte string
 	// ArithExpressionRanOut is the reason when an expression wanted a value
 	// and reached the end of the text instead: `$((1+))`, `$((~))`. One verb,
 	// the operator that was left wanting, which only the shell that names one
@@ -2582,6 +2597,11 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 			// be kept in step with the first.
 			reason, fallback = d.ArithOperandExpected, "operand expected"
 		}
+	case syntax.ErrArithIllegalByte:
+		reason, fallback = d.ArithIllegalByte, "illegal character"
+		if reason == "" {
+			reason = d.ArithOperandExpected
+		}
 	case syntax.ErrArithCharacterMissing:
 		reason, fallback = d.ArithCharacterMissing, "character missing after ##"
 	case syntax.ErrArithOperator:
@@ -2650,7 +2670,8 @@ func (d Diagnostics) ParseFailure(err error) string {
 		// not read, %[2]d the line.
 		return Wording(d.BadSubstitution, se.Msg, se.Token, se.Pos.Line)
 	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator,
-		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing:
+		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing,
+		syntax.ErrArithIllegalByte:
 		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)
@@ -3030,7 +3051,8 @@ func (d Diagnostics) runtimeRefusal(err error) (int, bool) {
 			return d.ForNameStatus, true
 		}
 	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator,
-		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing:
+		syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing,
+		syntax.ErrArithIllegalByte:
 		// A malformed expression is found while expanding in bash, so the
 		// command fails rather than the script failing to parse. The same
 		// three consequences follow as for `for` with a bad name, which is

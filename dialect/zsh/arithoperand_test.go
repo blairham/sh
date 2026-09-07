@@ -62,3 +62,59 @@ func TestASubstringOffsetIsReadAlone(t *testing.T) {
 		t.Errorf("got %q, want it to contain %q", out, want)
 	}
 }
+
+// This shell has a *third* sentence, for a byte its arithmetic reader refuses
+// as part of no token at all — and it gives that sentence only where the
+// expression could legally have stopped. Measured against zsh 5.9.2
+// (2026-09-07), by trying every ASCII punctuation byte in five positions.
+func TestAByteTheReaderRefusesAnswersForItself(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		// Nothing read yet.
+		{"@", "bad math expression: illegal character: @"},
+		{"{", "bad math expression: illegal character: {"},
+		{"}", "bad math expression: illegal character: }"},
+		{";", "bad math expression: illegal character: ;"},
+		{"  @  ", "bad math expression: illegal character: @"},
+		{"@1", "bad math expression: illegal character: @"},
+		// Where an operator belonged.
+		{"1 @", "bad math expression: illegal character: @"},
+		{"1@", "bad math expression: illegal character: @"},
+		{"a@", "bad math expression: illegal character: @"},
+		{"(1) @", "bad math expression: illegal character: @"},
+		{"1+2 @", "bad math expression: illegal character: @"},
+		{"1 ;", "bad math expression: illegal character: ;"},
+		{"1 {", "bad math expression: illegal character: {"},
+		{"1 }", "bad math expression: illegal character: }"},
+		// The byte alone, not the run and not the rest of the text — which
+		// is what separates this sentence from the operand one, since the two
+		// name different things about the same failure.
+		{"1 @@", "bad math expression: illegal character: @"},
+		// And where an operand was wanted, the same byte gets the *other*
+		// sentence. This is the half that makes it positional rather than a
+		// property of the byte, and it is the row a byte table alone would
+		// get wrong.
+		{"1+@", "bad math expression: operand expected at `@'"},
+		{"+@", "bad math expression: operand expected at `@'"},
+		{"~@", "bad math expression: operand expected at `@'"},
+		{"1?2:@", "bad math expression: operand expected at `@'"},
+		{"1+;", "bad math expression: operand expected at `;'"},
+	} {
+		if got := arithLine(t, tc.src); got != arithLoc+tc.want+"\n" {
+			t.Errorf("$((%s)): got %q, want %q", tc.src, got, arithLoc+tc.want+"\n")
+		}
+	}
+}
+
+// A byte this reader does *not* refuse keeps the sentence it had, in the same
+// shell that refuses the others — which is what makes the table a table.
+func TestAByteTheReaderAcceptsKeepsItsOwnSentence(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"%", "bad math expression: operand expected at `%'"},
+		{"1+", "bad math expression: operand expected at end of string"},
+		{"1 2", "bad math expression: operator expected at `2'"},
+	} {
+		if got := arithLine(t, tc.src); got != arithLoc+tc.want+"\n" {
+			t.Errorf("$((%s)): got %q, want %q", tc.src, got, arithLoc+tc.want+"\n")
+		}
+	}
+}

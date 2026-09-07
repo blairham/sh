@@ -228,3 +228,139 @@ func TestTheSweepOnlyAsksTheReferenceToParse(t *testing.T) {
 		t.Errorf("the reference was called with %q, want -n so that it parses rather than runs", argv)
 	}
 }
+
+// A framework file is sourced rather than run, so it has no shebang and
+// declares nothing: the name is all there is. Pointing the sweep at a real
+// plugin tree without this found 41 files in a tree holding 123 `.zsh`, and
+// the parse failures that prompted the root were in the ones with no first
+// line to read.
+func TestFindIdentifiesAFrameworkFileByName(t *testing.T) {
+	dir := t.TempDir()
+	zsh := map[string]bool{}
+	bash := map[string]bool{}
+	for _, tc := range []struct {
+		name, body string
+		want       *map[string]bool
+	}{
+		{"prompt.zsh", "typeset -g x=1\n", &zsh},
+		{"git.plugin.zsh", "alias g=git\n", &zsh},
+		{"agnoster.zsh-theme", "PROMPT='%~ '\n", &zsh},
+		{"UPPER.ZSH", "typeset -g y=1\n", &zsh},
+		{"lib.sh", "x=1\n", &bash},
+		{"helpers.bash", "x=1\n", &bash},
+		// A first line still wins where there is one: the marker says zsh
+		// whatever the name is, and the sweep already knew that.
+		{"_git", "#compdef git\n", &zsh},
+	} {
+		(*tc.want)[write(t, dir, tc.name, tc.body)] = true
+	}
+	for _, tc := range []struct{ name, body string }{
+		// The kernel obeys the shebang, so a name is a leftover beside one.
+		{"tool.sh", "#!/usr/bin/perl\nprint 1;\n"},
+		// A bats file is a suite in a language that is bash with a @test
+		// header — neither ours to read nor ours to parse.
+		{"cases.bats", "@test \"works\" {\n  true\n}\n"},
+		{"README.md", "# notes\n"},
+		{"data.json", "{}\n"},
+		{"noextension", "x=1\n"},
+	} {
+		write(t, dir, tc.name, tc.body)
+	}
+
+	for _, tc := range []struct {
+		name   string
+		shells map[string]bool
+		want   map[string]bool
+	}{
+		{"zsh", wild.ZshScope, zsh},
+		{"bash", wild.BashScope, bash},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, _ := wild.Find(wild.Scope{Dirs: []string{dir}, Shells: tc.shells})
+			if len(got) != len(tc.want) {
+				t.Fatalf("found %d, want %d: %v", len(got), len(tc.want), got)
+			}
+			for _, p := range got {
+				if !tc.want[p] {
+					t.Errorf("found %s, which this scope does not claim", p)
+				}
+			}
+		})
+	}
+}
+
+// FrameworkDepth is the constant that makes a configured root reach a plugin's
+// own code. A bin directory is flat; a framework tree is a checkout per
+// plugin, and the file that matters sits several levels inside one.
+func TestFrameworkDepthReachesInsideACheckout(t *testing.T) {
+	dir := t.TempDir()
+	deep := filepath.Join(dir, "plugins", "author---name", "internal", "lib", "src")
+	if err := os.MkdirAll(deep, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	want := write(t, deep, "prompt.zsh", "typeset -g x=1\n")
+
+	got, _ := wild.Find(wild.Scope{Dirs: []string{dir}, Shells: wild.ZshScope, Depth: wild.FrameworkDepth})
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("at FrameworkDepth found %v, want %s", got, want)
+	}
+	// The control, and the reason the constant exists: the depth a bin
+	// directory needs does not reach this.
+	if got, _ := wild.Find(wild.Scope{Dirs: []string{dir}, Shells: wild.ZshScope}); len(got) != 0 {
+		t.Errorf("at DefaultDepth found %v, want none — the constant would be doing nothing", got)
+	}
+}
+
+// Where the extra roots come from, and why they come from the environment: no
+// default could be right, because the path is one machine's.
+func TestDirsFromReadsTheEnvironment(t *testing.T) {
+	sep := string(os.PathListSeparator)
+	for _, tc := range []struct {
+		name  string
+		value string
+		set   bool
+		want  []string
+	}{
+		{"unset is no roots, which is what CI has", "", false, nil},
+		{"empty is no roots", "", true, nil},
+		{"one root", "/a", true, []string{"/a"}},
+		{"several, separated like PATH", "/a" + sep + "/b", true, []string{"/a", "/b"}},
+		{"an empty entry is not a root", "/a" + sep + sep + "/b", true, []string{"/a", "/b"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			get := func(name string) (string, bool) {
+				if name != wild.DirsVar {
+					t.Errorf("asked for %q, want %q", name, wild.DirsVar)
+				}
+				return tc.value, tc.set
+			}
+			got := wild.DirsFrom(get)
+			if len(got) != len(tc.want) {
+				t.Fatalf("DirsFrom = %v, want %v", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("DirsFrom[%d] = %q, want %q", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// A missing root is skipped rather than fatal, so one variable serves a laptop
+// and a CI runner — and it is still worth naming, because what a silent skip
+// hides is a typo, and a typo here reads as a clean sweep.
+func TestAbsentNamesTheRootsThatAreNotDirectories(t *testing.T) {
+	dir := t.TempDir()
+	file := write(t, dir, "notadir.zsh", "x=1\n")
+	got := wild.Absent([]string{dir, file, filepath.Join(dir, "nope")})
+	want := []string{file, filepath.Join(dir, "nope")}
+	if len(got) != len(want) {
+		t.Fatalf("Absent = %v, want %v", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("Absent[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}

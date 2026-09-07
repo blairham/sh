@@ -12,6 +12,15 @@
 // one: the answer depends on what happens to be installed, so it cannot be
 // the same twice on two machines. What it is good at is finding the questions
 // nobody thought to put in the corpus.
+//
+// It sweeps two populations and names both. The installed programs under
+// /bin, /etc and the package manager's trees are what -dirs holds; the plugin
+// and framework trees a shell sources at startup are configured in
+// SH_WILD_DIRS, because their location is one machine's and no default could
+// be right. The second is where every daily-driver construct found so far
+// lived, and its absence is printed rather than passed over: "0 failures" over
+// a population that was never looked at is the reading this report has to make
+// impossible.
 package main
 
 import (
@@ -33,7 +42,7 @@ import (
 func main() {
 	var (
 		dirs = flag.String("dirs", strings.Join(wild.DefaultDirs, ","),
-			"comma-separated directories to sweep")
+			"comma-separated directories of installed programs to sweep; "+wild.DirsVar+" adds the framework trees a shell sources at startup")
 		which = flag.String("dialect", "bash",
 			"which dialect to grade, and so which shebangs count: bash or zsh")
 		reference = flag.String("reference", "",
@@ -71,36 +80,97 @@ func main() {
 		*reference = p
 	}
 
-	scope := wild.Scope{Dirs: strings.Split(*dirs, ","), Shells: shells, Depth: *depth}
+	installed := wild.Scope{Dirs: strings.Split(*dirs, ","), Shells: shells, Depth: *depth}
+	frameworks := wild.Scope{Dirs: wild.DirsFrom(os.LookupEnv), Shells: shells, Depth: frameworkDepth(*depth)}
 	if *list {
 		// The run sweep executes third-party code, and the only responsible
 		// way to choose what it runs is to read the scripts first. Nothing
 		// else prints the population, so choosing a subset meant guessing at
 		// it — which is how a sweep ends up running something nobody looked at.
-		paths, _ := wild.Find(scope)
-		for _, p := range paths {
-			fmt.Println(p)
+		for _, scope := range []wild.Scope{installed, frameworks} {
+			paths, _ := wild.Find(scope)
+			for _, p := range paths {
+				fmt.Println(p)
+			}
 		}
 		return
 	}
-	rep := wild.Sweep(context.Background(), scope, dialect, *reference)
 
-	fmt.Printf("scripts found: %d   parsed: %d   refused by %s too: %d   failures: %d\n",
-		rep.Scanned, rep.Parsed, refName(*reference), rep.NotShell, len(rep.Failures))
-	// Skipped files are counted and never named: printing a path would
-	// invite the reader to open a file CLEANROOM.md forbids opening.
-	if len(rep.Skipped) > 0 {
-		fmt.Printf("skipped without reading: %s — CLEANROOM.md forbids opening these, so they are counted, never listed\n",
-			skipSummary(rep.Skipped))
-	}
-	report(rep, *verbose)
+	// Absent roots are announced only where somebody named them. The default
+	// list deliberately holds directories a given machine will not have — one
+	// list serving a mac and a container is the point of it — so reporting
+	// those every run would train a reader to skip the line that matters.
+	rep := sweep(installedPopulation, installed, dialect, *reference, *verbose, isSet("dirs"))
+	sweep(frameworkPopulation, frameworks, dialect, *reference, *verbose, true)
+
 	if *run != "" {
 		under := wild.UnderTest{Path: *run, Args: strings.Fields(*runargs), Contained: *contained}
-		runSweep(under, *reference, scope, rep, *timeout, *verbose)
+		// The installed population only. A framework file is *sourced* — it
+		// defines a function or sets an option for the shell that reads it —
+		// so running one with `--version` executes somebody's startup code to
+		// learn nothing, and the probes this sweep is built on assume a
+		// program that was meant to be invoked.
+		runSweep(under, *reference, installed, rep, *timeout, *verbose)
 	}
 	// A report rather than a gate: the count is the point, and failing here
 	// would fail on whichever machine happens to have the oddest scripts.
 	_ = os.Stdout.Sync()
+}
+
+// The two populations, named because the difference between them is what this
+// sweep was read as answering and did not.
+//
+// A bin directory holds programs a person runs; a framework tree holds the
+// code a person's shell reads before it draws a prompt. `make wild` reported
+// "0 failures" on a day a real plugin tree held twenty-two parse failures over
+// three bugs, and the number was not wrong — it was a regression guard over
+// one population being quoted as coverage of the other. Both are named on
+// every run now, including the one that was not swept, because a population
+// nobody mentions is the one a reader assumes was included.
+const (
+	installedPopulation = "installed programs"
+	frameworkPopulation = "framework trees"
+)
+
+// sweep runs one population and prints it, and returns the report so a run
+// sweep can skip what already failed to parse.
+//
+// A population with no roots prints what it would take to have some rather
+// than nothing at all. Silence is what let "0 failures" be read as "nothing on
+// this machine fails".
+func sweep(name string, scope wild.Scope, dialect syntax.Dialect, reference string, verbose, named bool) wild.Report {
+	if len(scope.Dirs) == 0 {
+		fmt.Printf("%s: not swept — no roots configured. Set %s to the plugin or framework trees a shell sources at startup, separated like PATH.\n",
+			name, wild.DirsVar)
+		return wild.Report{}
+	}
+	// An absent root is skipped rather than fatal, so one variable serves a
+	// laptop and a CI runner — but it is said out loud, because the thing a
+	// silent skip hides is a typo, and a typo here reads as a clean sweep.
+	if absent := wild.Absent(scope.Dirs); named && len(absent) > 0 {
+		fmt.Printf("%s: %d of %d roots are not directories here and were skipped: %s\n",
+			name, len(absent), len(scope.Dirs), strings.Join(absent, " "))
+	}
+	rep := wild.Sweep(context.Background(), scope, dialect, reference)
+	fmt.Printf("%s: scripts found: %d   parsed: %d   refused by %s too: %d   failures: %d\n",
+		name, rep.Scanned, rep.Parsed, refName(reference), rep.NotShell, len(rep.Failures))
+	// Skipped files are counted and never named: printing a path would
+	// invite the reader to open a file CLEANROOM.md forbids opening.
+	if len(rep.Skipped) > 0 {
+		fmt.Printf("%s: skipped without reading: %s — CLEANROOM.md forbids opening these, so they are counted, never listed\n",
+			name, skipSummary(rep.Skipped))
+	}
+	report(name, rep, verbose)
+	return rep
+}
+
+// frameworkDepth is how far to descend below a configured root: deeper than a
+// bin directory by default, and whatever was asked for when -depth was given.
+func frameworkDepth(depth int) int {
+	if isSet("depth") {
+		return depth
+	}
+	return wild.FrameworkDepth
 }
 
 // report prints the failures ranked by cause, largest first.
@@ -109,12 +179,12 @@ func main() {
 // facing sixty lines cannot tell whether that is sixty problems or three, and
 // the sweep is the only thing that can tell them. The paths stay available
 // under -v, since a cause without an example is a category rather than a bug.
-func report(rep wild.Report, verbose bool) {
+func report(name string, rep wild.Report, verbose bool) {
 	causes := wild.Causes(rep.Failures)
 	if len(causes) == 0 {
 		return
 	}
-	fmt.Printf("\nnot parsed, by cause (%d causes over %d scripts):\n", len(causes), len(rep.Failures))
+	fmt.Printf("\n%s not parsed, by cause (%d causes over %d scripts):\n", name, len(causes), len(rep.Failures))
 	for _, c := range causes {
 		fmt.Printf("  %4d  %s\n", c.Count(), c.Reason)
 		if c.Example.Text != "" {

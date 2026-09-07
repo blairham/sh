@@ -486,8 +486,21 @@ silently ate apostrophes were found the same way. Scripts in the wild ask
 different questions, in bulk, and were written without knowing this
 implementation exists.
 
-Four things about how it looks are worth knowing, because each was a blind
+Five things about how it looks are worth knowing, because each was a blind
 spot before it was a flag.
+
+**It sweeps two populations and names both.** `-dirs` holds the installed
+programs — `/bin`, `/etc`, the package manager's trees — and `SH_WILD_DIRS`
+holds the plugin and framework trees a shell *sources at startup*, separated
+like `PATH`. The second has no default and never will: the path is one
+machine's, one plugin manager's and one person's, and baking this machine's
+layout into a binary is an argument already lost elsewhere in this tree. An
+absent root is skipped, so CI sweeps exactly what it swept before. The split
+exists because `make wild` reported **0 failures** on a day a real plugin tree
+held 22 parse failures over three bugs — a regression guard over one
+population being quoted as coverage of the other. A population that was not
+swept is now printed saying so, because the one nobody mentions is the one a
+reader assumes was included.
 
 **It reports causes, not failures.** Failures come out grouped by what went
 wrong — the kind, and the token where the token is one the grammar knows —
@@ -511,7 +524,15 @@ zsh script is a shell script, answers a different question.
 execing them, so they say what they are with `#compdef` or `#autoload` on
 the first line. Looking only for `#!` found eleven zsh scripts on a machine
 holding several dozen, and the ones it missed — every completion a package
-installs — are the most interesting zsh on the machine.
+installs — are the most interesting zsh on the machine. A framework file
+declares nothing at all: it is *sourced* by a line in somebody's startup file,
+so the name is the only evidence, and `.sh`, `.bash`, `.zsh` and `.zsh-theme`
+are read as what they say when the first line is silent. Without that, a real
+plugin tree yielded 41 files while holding 123 `.zsh` — a root added and the
+population still missing. A shebang still wins where there is one, since the
+kernel obeys it and a `.sh` file starting `#!/usr/bin/perl` is perl. `.bats`
+is deliberately excluded: it is a suite in a language that is bash with a
+`@test` header, and it is neither ours to read nor ours to parse.
 
 The deny-list draws one further line, and it is a fine one.
 `/opt/homebrew/Cellar/zsh/5.9.2/…` and `/usr/share/zsh/5.9/functions` are

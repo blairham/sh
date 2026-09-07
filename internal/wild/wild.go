@@ -76,6 +76,72 @@ var DefaultDirs = []string{
 	"/etc", "/usr/libexec", "/opt/homebrew/opt",
 }
 
+// DirsVar names the environment variable that adds roots to a sweep, as a
+// list separated like PATH.
+//
+// The roots this is for are the plugin and framework trees a shell sources at
+// startup, and they are the population DefaultDirs does not hold: a bin
+// directory holds programs a person *runs*, and a framework tree holds the
+// code a person's shell reads before it draws a prompt. Every daily-driver
+// construct found so far lives in the second, and `make wild` said "0
+// failures" on a day one held twenty-two parse failures, because it was never
+// looking there.
+//
+// The environment rather than a constant here, and that is the whole point of
+// the variable. There is no portable place a framework tree lives — the path
+// is one machine's, one plugin manager's and one person's — and baking this
+// machine's layout into a binary is the argument already lost once elsewhere
+// in this tree. An absent root is skipped, so a machine that has none, and
+// every CI runner, sweeps exactly what it swept before.
+const DirsVar = "SH_WILD_DIRS"
+
+// FrameworkDepth is how far below a configured root the sweep descends.
+//
+// Deeper than DefaultDepth because the shapes differ. A bin directory is flat
+// and its helpers sit a few levels down, while a framework tree is a checkout
+// per plugin: a plugin manager's layout reaches a plugin's own library
+// directory at five or six, and stopping at four reads the top of each
+// checkout and none of the code below it.
+const FrameworkDepth = 8
+
+// DirsFrom is the roots configured in the environment, in order, with empty
+// entries dropped.
+//
+// The lookup is passed in rather than read from the process, which is the rule
+// the rest of the tree follows: a package that reached for os.Getenv would be
+// answering for whichever process it happened to be linked into.
+// Set-but-empty and unset are the same answer here, so the lookup's second
+// result is not consulted: an empty list of roots is no roots either way.
+// Elsewhere in the tree that distinction carries meaning — an empty HISTFILE
+// is a person saying do not remember this session — and here there is nothing
+// for it to say.
+func DirsFrom(get func(string) (string, bool)) []string {
+	value, _ := get(DirsVar)
+	var dirs []string
+	for _, dir := range strings.Split(value, string(os.PathListSeparator)) {
+		if dir != "" {
+			dirs = append(dirs, dir)
+		}
+	}
+	return dirs
+}
+
+// Absent is the roots that are not directories on this machine.
+//
+// A missing root is not an error — that is what lets one variable serve a
+// laptop and a CI runner — but it is worth *saying*, because the failure a
+// silent skip hides is a typo, and a sweep that quietly covered nothing would
+// report the same "0 failures" this variable exists to stop being misread.
+func Absent(dirs []string) []string {
+	var absent []string
+	for _, dir := range dirs {
+		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+			absent = append(absent, dir)
+		}
+	}
+	return absent
+}
+
 // BashScope and ZshScope are the shebangs each dialect is answerable for.
 //
 // `sh` belongs to the bash scope on the machines this runs on rather than by
@@ -320,7 +386,10 @@ func shellOf(path string) string {
 	line, _, _ := strings.Cut(string(head[:n]), "\n")
 	line = strings.TrimSpace(line)
 	if !strings.HasPrefix(line, "#!") {
-		return autoloaded(line)
+		if name := autoloaded(line); name != "" {
+			return name
+		}
+		return named(path)
 	}
 	// `#!/bin/sh`, `#!/bin/bash -e`, `#!/usr/bin/env bash`. The interpreter
 	// is the last path component of the first word, or the word after `env`.
@@ -333,6 +402,32 @@ func shellOf(path string) string {
 		name = filepath.Base(fields[1])
 	}
 	return name
+}
+
+// shellExtensions are the file names that say what a file is when nothing
+// inside it does.
+//
+// The third convention, and the one that carries a framework tree. A plugin's
+// code is neither run by the kernel nor autoloaded by the shell — it is
+// *sourced*, by a line in somebody's startup file, so it needs no shebang and
+// declares nothing, and the name is all there is. Pointing the sweep at a real
+// plugin tree without this found 41 files in a tree holding 123 `.zsh`, which
+// is a root added and the population still missing: the parse failures that
+// prompted the root were in the files with no first line to read.
+//
+// Deliberately not .bats. A bats file is a test suite in a language that is
+// bash with a `@test` header, so it is neither ours to read nor ours to parse.
+var shellExtensions = map[string]string{
+	".sh": "sh", ".bash": "bash", ".zsh": "zsh", ".zsh-theme": "zsh",
+}
+
+// named answers with the shell a file's name claims, or "".
+//
+// Weaker evidence than a shebang and used only when there is none: a shebang
+// is what the kernel obeys, so a `.sh` file that starts `#!/usr/bin/perl` is
+// perl and the name is a leftover.
+func named(path string) string {
+	return shellExtensions[strings.ToLower(filepath.Ext(path))]
 }
 
 // autoloadMarkers are the first lines that declare a file to be a zsh function

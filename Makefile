@@ -114,7 +114,7 @@ conformance-gated: ## Run the corpus twice — plain and under a sandbox policy 
 	@go build -o $(BINDIR)/sh-under-test ./cmd/sh
 	@go run ./cmd/oracle -bin $(BINDIR)/sh-under-test -binargs "-dialect bash" -gated $(ARGS)
 
-wild: ## Parse the shell scripts installed on this machine and report what fails
+wild: ## Parse the shell scripts installed on this machine and report what fails (SH_WILD_DIRS adds framework trees)
 	@go run ./cmd/wild $(ARGS)
 
 wild-run: ## Also RUN each script that parses, under both shells, and report where they disagree

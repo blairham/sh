@@ -1555,12 +1555,6 @@ func assignNameSplit(w *syntax.Word) (span, off int, ok bool) {
 					// word goes back to being an ordinary operand.
 					return 0, 0, false
 				}
-				if depth == 0 && !isPlainName(name) {
-					// `[1]=v` and `a-b[1]=v` are not names with subscripts,
-					// so the word is not an assignment and the bracket is a
-					// pattern's.
-					return 0, 0, false
-				}
 				depth++
 			case c == ']':
 				if depth > 0 {
@@ -1568,6 +1562,13 @@ func assignNameSplit(w *syntax.Word) (span, off int, ok bool) {
 					closed = depth == 0
 				}
 			case c == '=' && depth == 0:
+				// The one name test, and it is enough for the bracket as
+				// well: nothing is added to `name` once a subscript has
+				// closed, so the text judged here is exactly the text in
+				// front of the `[`. A second test there could only refuse
+				// what this one refuses — `[1]=v` and `a-b[1]=v` both arrive
+				// with the same `name` either way — which is why there is
+				// not one.
 				if !isPlainName(name) {
 					return 0, 0, false
 				}
@@ -1613,23 +1614,12 @@ func (r *Runner) expandAssignArg(w *syntax.Word) string {
 
 // expandAssignName expands the name half of a declaration's operand.
 //
-// A name with no subscript is its own text and is handed back without the
-// expander seeing it at all: that is the shape every declaration had before
-// subscripts reached this path, and routing it through an expansion is a
-// change to what `typeset n=3` does rather than to what `typeset a[$i]=v`
-// does.
+// As an assignment's value is expanded — never split, never matched against
+// the filesystem — because a subscript may hold an expansion and everything
+// else in the name half is literal by the time it gets here. A fast path for
+// the wholly literal name was written first and then removed: it could not be
+// told from this, since a literal word expands to itself, so it was a branch
+// no mutation could kill.
 func (r *Runner) expandAssignName(w *syntax.Word) string {
-	literal := true
-	text := ""
-	for _, s := range w.Spans {
-		if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
-			literal = false
-			break
-		}
-		text += s.Value
-	}
-	if literal {
-		return text
-	}
 	return r.expandAssignValue(w)
 }

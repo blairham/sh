@@ -32,6 +32,9 @@ func declareElementSemantics() Semantics {
 	s.ArraysAreSparse = Yes
 	s.CompoundElementsGoThroughTheAttribute = Yes
 	s.IntegerBaseComesFromTheValueAssigned = No
+	// The letters the declarations below write. The core names none, so a
+	// test asking what `-g` or `-i` does has to say the word exists first.
+	s.DeclareOptions = "aAfFgilprux"
 	return s
 }
 
@@ -212,12 +215,16 @@ func TestAnUnansweredReadonlyElementPolicyRefusesTheDeclaration(t *testing.T) {
 // A name already frozen refuses the element by the *base* name, which is the
 // rule `unset a[0]` follows: the subscript is never reached.
 func TestADeclaredElementOfAFrozenArrayIsRefusedByItsBase(t *testing.T) {
-	out, status := runDeclareElement(t, `readonly a=x; typeset a[1]=v; echo "st=$?"`, func(s *Semantics) {
-		s.ReadonlyReassignmentFatal = No
-		s.ReadonlyReassignmentByDeclarationFatal = No
-	})
-	if !strings.Contains(out, "sh: a: readonly variable") {
-		t.Errorf("typeset a[1]=v on a frozen name = %q (status %d), want `a` named", out, status)
+	out, status := runDeclareElement(t,
+		`readonly a=z; typeset a[1]=v; echo "st=$? [$a][${a[1]}]"`, func(s *Semantics) {
+			s.ReadonlyReassignmentFatal = No
+			s.ReadonlyReassignmentByDeclarationFatal = No
+		})
+	// The refusal names `a`, the value it was holding is still there, and the
+	// element was not written — the last of the three is what says the guard
+	// stopped the store rather than only reporting on the way past it.
+	if want := "sh: a: readonly variable\nst=1 [z][]\n"; out != want || status != 0 {
+		t.Errorf("typeset a[1]=v on a frozen name = %q (status %d), want %q at 0", out, status, want)
 	}
 }
 
@@ -249,5 +256,76 @@ func TestExportWritesTheElementItsOperandNames(t *testing.T) {
 	out, status := runDeclareElement(t, `export a[1]=v; echo "[${a[1]}] st=$?"`, nil)
 	if want := "[v] st=0\n"; out != want || status != 0 {
 		t.Errorf("export a[1]=v = %q (status %d), want %q at 0", out, status, want)
+	}
+}
+
+// `-g` never takes a shadow, so the element lands on the global array and
+// survives the function's return — which is the whole of what the letter
+// means, and it is also why the local axis is not asked when it is written.
+func TestAGlobalElementDeclarationTakesNoShadow(t *testing.T) {
+	for _, local := range []Answer{Yes, No} {
+		out, status := runDeclareElement(t,
+			`a=(x y); f() { typeset -g a[1]=v; }; f; echo "[${a[1]}]"`, func(s *Semantics) {
+				s.SubscriptedOperandTakesALocalDeclaration = local
+			})
+		if want := "[v]\n"; out != want || status != 0 {
+			t.Errorf("typeset -g a[1]=v with the local axis %v = %q (status %d), want %q at 0",
+				local, out, status, want)
+		}
+	}
+}
+
+// A plus form is the letter being taken *off*, so neither refusal is asked:
+// `typeset +r a[1]=v` and `typeset +i a[1]=5` write the element in every
+// column, including the one that refuses both minus forms.
+func TestAPlusFormAsksNeitherElementRefusal(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`typeset +r a[1]=v; echo "[${a[1]}]"`, "[v]\n"},
+		{`typeset +i a[1]=5; echo "[${a[1]}]"`, "[5]\n"},
+	} {
+		out, status := runDeclareElement(t, tc.src, func(s *Semantics) {
+			s.ReadonlyElement = ReadonlyElementRefused
+			s.SubscriptedOperandTakesTheIntegerAttribute = No
+		})
+		if out != tc.want || status != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, status, tc.want)
+		}
+	}
+}
+
+// The attribute on the same declaration decides how the subscript is read:
+// `typeset -A m[k]=v` places a key rather than an element numbered by
+// whatever `k` evaluates to.
+func TestAnAssociativeAttributeOnTheSameDeclarationKeysTheSubscript(t *testing.T) {
+	out, status := runDeclareElement(t, `typeset -A m[k]=v; echo "[${m[k]}]"`, nil)
+	if want := "[v]\n"; out != want || status != 0 {
+		t.Errorf("typeset -A m[k]=v = %q (status %d), want %q at 0", out, status, want)
+	}
+}
+
+// A word whose name half is not a name is an ordinary operand, so its value
+// is split and matched like any other word — which is what every column does
+// with `typeset 1x=$y`: the complaint names `1x=p`, not `1x=p q`.
+func TestAnOperandWithABadNameIsSplitLikeAnyOtherWord(t *testing.T) {
+	// Two bad names in the value rather than one, so the *number* of
+	// complaints says whether the word was split: unsplit it is one operand
+	// and one line, split it is two of each.
+	out, status := runDeclareElement(t, `y="p 2z"; typeset 1x=$y`, func(s *Semantics) {
+		s.BadNameToDeclarationFatal = No
+	})
+	want := "sh: typeset: `1x': not a valid identifier\n" +
+		"sh: typeset: `2z': not a valid identifier\n"
+	if out != want || status == 0 {
+		t.Errorf("typeset 1x=$y = %q (status %d), want %q and a failure", out, status, want)
+	}
+}
+
+// And so is one whose name half holds an expansion: `a$n=$y` is not an
+// assignment in any column, so the value splits and only the first field
+// reaches the name.
+func TestAnOperandWhoseNameHoldsAnExpansionIsSplitToo(t *testing.T) {
+	out, status := runDeclareElement(t, `n=x; y="p q"; typeset a$n=$y; echo "[$ax]"`, nil)
+	if want := "[p]\n"; out != want || status != 0 {
+		t.Errorf("typeset a$n=$y = %q (status %d), want %q at 0", out, status, want)
 	}
 }

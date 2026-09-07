@@ -72,3 +72,22 @@ func TestTheSubscriptRangeComplaintDoesNotNameTheBuiltin(t *testing.T) {
 		}
 	}
 }
+
+// One subscript and no more. `a[1][2]=v` is not a name with a subscript in any
+// column, so it stays an ordinary word — and here that word is a pattern with
+// no match, which is what makes the difference visible at all.
+func TestASecondSubscriptIsNotPartOfTheName(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `typeset a[1][2]=v`)
+	if want := "zsh:1: no matches found: a[1][2]=v\n"; out != want || st != 1 {
+		t.Errorf("typeset a[1][2]=v = %q (status %d), want %q at 1", out, st, want)
+	}
+}
+
+// `-g` takes no shadow, so it never asks the local refusal: the element lands
+// on the global array and is there after the function returns.
+func TestAGlobalElementDeclarationIsNotRefused(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `f() { typeset -g a[1]=v; }; f; echo "[${a[1]}]"`)
+	if want := "[v]\n"; out != want || st != 0 {
+		t.Errorf("typeset -g a[1]=v = %q (status %d), want %q at 0", out, st, want)
+	}
+}

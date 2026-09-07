@@ -5006,6 +5006,16 @@ echo "st=$?"`,
 		Why:     "the scanner takes everything to the matching `)` rather than stopping at a blank, so a space inside a group is part of the pattern and matches a space in the subject. It is the rule a group already had, reached from a position it could not be reached from before",
 	},
 	{
+		ID: "cond/a-pattern-operands-group-ends-at-an-operator", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `k='a<b'; [[ $k == (a<b) ]] && echo hit || echo miss; echo after`,
+		Why:     "the exception to `a-group-is-one-word-whitespace-and-all`: the scanner takes a blank and stops at `;`, `<`, `>` or `&`, so the word ended at the `<` and the rest of the group was left with nowhere to go. Every column refuses it and the row is about *where* — the shell with bare groups blames the `<`, the three bashes blame the `(` they could not read as an operand, ksh93 blames the `(` as an operator and dash has no `[[ ]]` at all. It parsed here and matched until #1175, which is the guard this pins",
+	},
+	{
+		ID: "cond/a-regex-operands-group-keeps-its-operators", Category: "[[ ]] and (( ))",
+		Snippet: `k='a<b'; [[ $k =~ (a<b) ]]; echo "lt=$?"; k2='a;b'; [[ $k2 =~ (a;b) ]]; echo "semi=$?"; [[ ab =~ (a<b) ]]; echo "no=$?"`,
+		Why:     "and the operand that does *not* end there, which is the pair that makes the rule a rule about two constructs rather than about parentheses. A regular expression owns its `<` and its `;`: all four shells with `=~` match `a<b` and `a;b` against those groups and fail `ab` against the first, so the characters are regex text and not a redirection or a terminator. zsh is the dissenter and refuses the `<` while parsing, which is where its wording layer answers; dash has no `[[ ]]`. Written beside the pattern operand's row deliberately — the two differ in nothing a reader can see, and the shells still separate them (#1175)",
+	},
+	{
 		ID: "cond/a-quoted-group-is-a-literal", Category: "[[ ]] and (( ))",
 		Snippet: `k=a; [[ $k == "(a|b)" ]] && echo hit || echo miss; k="(a|b)"; [[ $k == "(a|b)" ]] && echo hit || echo miss`,
 		Why:     "the same per-span quoting that decides whether `a*` is a pattern decides whether a group is one, so this parses everywhere and matches nowhere but against the literal text. It is the case that keeps the fix from being `a group is always a group`",

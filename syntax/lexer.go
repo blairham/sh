@@ -824,6 +824,26 @@ func (l *Lexer) scanPatternGroup() string {
 // because a pattern group may hold an alternation — `echo ( a|b )` is one
 // word, which the shell then reports as matching nothing.
 //
+// **It is the scanner for every group that starts a word**, which is three
+// routes rather than a generalization of one. A *pattern* operand's leading
+// group ends at the same four characters — measured on zsh 5.9.2, 2026-09-07,
+// from a script file under `env -i`, each probe in a file of its own so the
+// first refusal does not hide the rest:
+//
+//	[[ $k == (a<b) ]]    parse error near `<'
+//	[[ $k == (a>b) ]]    parse error near `>'
+//	[[ $k == (a;b) ]]    parse error near `;'
+//	[[ $k == (a&b) ]]    parse error near `&'
+//	[[ $k == (a|b) ]]    matches — the `|` is the group's
+//
+// A *regular expression's* operand is the other answer, and it never comes
+// through here: scanWord takes a regex group whole at its own case above, and
+// the four shells with `=~` agree it should — `[[ 'a<b' =~ (a<b) ]]` and
+// `[[ 'a;b' =~ (a;b) ]]` both match in bash 5.3, bash 3.2, bash-as-`sh` and
+// ksh93, where zsh refuses the `<` while parsing. So a regex operand owns its
+// operators and a pattern operand does not, which is a difference between two
+// constructs rather than the accident it looked like (#1175).
+//
 // Unterminated input is scanPatternGroup's business rather than an operator's,
 // so it delegates the whole scan when nothing stops it.
 func (l *Lexer) scanArgumentGroup() string {
@@ -831,6 +851,13 @@ func (l *Lexer) scanArgumentGroup() string {
 	depth := 0
 	for !l.eof() {
 		c := l.peek()
+		// `depth > 0` cannot be false at one of those four bytes and is
+		// kept for what it says rather than for what it decides: this is
+		// entered on a `(`, so the only pass with depth zero is the first
+		// one and its byte is that `(`. Mutating it to `depth >= 0` survives
+		// the suite, and that is an equivalent mutant rather than a gap —
+		// recorded here so the next reader does not go looking for the row
+		// that would kill it.
 		if depth > 0 && strings.IndexByte(";<>&", c) >= 0 {
 			return l.src[start:l.off]
 		}
@@ -924,28 +951,30 @@ func (l *Lexer) scanWord(start Pos) Token {
 		case c == '(' && l.opensPatternGroup():
 			// A parenthesised group belongs to the word rather than ending
 			// it. Mid-word everywhere, and at the *start* of one only where
-			// an argument may stand in the dialect that reads qualifiers:
-			// elsewhere a leading `(` opens a subshell, or is the paren a
-			// `case` arm may carry, and neither is a pattern.
+			// the parser has said a word may begin with one: elsewhere a
+			// leading `(` opens a subshell, or is the paren a `case` arm may
+			// carry, and neither is a pattern.
 			if lit.Len() == 0 {
 				litPos = l.pos()
 			}
-			// `inArgument` and not leadingParenBelongsToTheWord: the
-			// difference between the two group scanners is only whether the
-			// group ends the word at a shell operator, and at a `case` arm
-			// that is unobservable — `case x in (#i;a)b)` and
-			// `case x in (#i<a)b)` are refused by that shell either way, and
-			// by this one under both readings. A mutant swapping them
-			// survived every row, which is the evidence that the wider
-			// condition decided nothing here (#1161).
-			if lit.Len() == 0 && l.inArgument {
-				// The group that stands for the whole word ends the word at
-				// a shell operator rather than swallowing it, which is
-				// measured: `echo ( a <b )` is a parse error at the `)`
-				// there, because the `<` ended the word and the `)` was
-				// left with nowhere to go. Nothing more is needed to stop
-				// the word — the loop's own end-of-word test answers for
-				// the operator on the next pass.
+			// **Position, not route.** A group that starts a word ends the
+			// word at a shell operator whichever of the three ways it got
+			// here, which is measured rather than assumed — see
+			// scanArgumentGroup, where the pattern operand's four probes
+			// are.
+			//
+			// An `l.inArgument` guard used to stand in this condition, so
+			// only the argument route reached scanArgumentGroup and the
+			// pattern route swallowed operators. Removing it survived the
+			// whole suite, which is what #1175 was filed about; the shells
+			// do distinguish the two, and the row that says so is the
+			// second one in scanArgumentGroup's list. What #1161 measured
+			// still holds — a `case` arm cannot tell the two scanners
+			// apart, `case x in (#i;a)b)` and `case x in (#i<a)b)` being
+			// refused under both readings — so that route is unaffected
+			// either way and is no reason to keep a guard the pattern route
+			// answers wrong.
+			if lit.Len() == 0 {
 				lit.WriteString(l.scanArgumentGroup())
 				continue
 			}

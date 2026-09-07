@@ -86,6 +86,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `ifs/nonws-adjacent-empty-field` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a::b]` |
 | `ifs/nonws-leading` | `[][a]` | `[][a]` | `[][a]` | `[][a]` | `[][a]` | `[:a]` |
 | `ifs/nonws-trailing` | `[a]` | `[a]` | `[a]` | `[a]` | `[a]` | `[a:]` |
+| `ifs/nonws-trailing-split-on` | `1[a]` **2>** `<shell>: 1: setopt: not found` | `1[a]` **2>** `<shell>: line 1: setopt: command not found` | `1[a]` **2>** `<shell>: line 1: setopt: command not found` | `1[a]` **2>** `<shell>: setopt: command not found` | `1[a]` **2>** `<shell>: setopt: not found` | `2[a][]` |
+| `ifs/nonws-trailing-doubled-split-on` | `2[a][]` **2>** `<shell>: 1: setopt: not found` | `2[a][]` **2>** `<shell>: line 1: setopt: command not found` | `2[a][]` **2>** `<shell>: line 1: setopt: command not found` | `2[a][]` **2>** `<shell>: setopt: command not found` | `2[a][]` **2>** `<shell>: setopt: not found` | `3[a][][]` |
+| `ifs/nonws-trailing-pair-split-on` | `2[a][b]` **2>** `<shell>: 1: setopt: not found` | `2[a][b]` **2>** `<shell>: line 1: setopt: command not found` | `2[a][b]` **2>** `<shell>: line 1: setopt: command not found` | `2[a][b]` **2>** `<shell>: setopt: command not found` | `2[a][b]` **2>** `<shell>: setopt: not found` | `3[a][b][]` |
+| `ifs/nonws-both-ends-split-on` | `2[][a]` **2>** `<shell>: 1: setopt: not found` | `2[][a]` **2>** `<shell>: line 1: setopt: command not found` | `2[][a]` **2>** `<shell>: line 1: setopt: command not found` | `2[][a]` **2>** `<shell>: setopt: command not found` | `2[][a]` **2>** `<shell>: setopt: not found` | `3[][a][]` |
+| `ifs/ws-trailing-absorbed-split-on` | `1[a]` **2>** `<shell>: 1: setopt: not found` | `1[a]` **2>** `<shell>: line 1: setopt: command not found` | `1[a]` **2>** `<shell>: line 1: setopt: command not found` | `1[a]` **2>** `<shell>: setopt: command not found` | `1[a]` **2>** `<shell>: setopt: not found` | `1[a]` |
+| `ifs/mixed-trailing-run-split-on` | `1[a] 1[a]` **2>** `<shell>: 1: setopt: not found` | `1[a] 1[a]` **2>** `<shell>: line 1: setopt: command not found` | `1[a] 1[a]` **2>** `<shell>: line 1: setopt: command not found` | `1[a] 1[a]` **2>** `<shell>: setopt: command not found` | `1[a] 1[a]` **2>** `<shell>: setopt: not found` | `2[a][] 1[a]` |
+| `ifs/nonws-trailing-cmdsub` | `1[a]` | `1[a]` | `1[a]` | `1[a]` | `1[a]` | `2[a][]` |
+| `ifs/nonws-trailing-read-remainder` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b:]` |
 | `ifs/nonws-only-delimiters` | `n=2` | `n=2` | `n=2` | `n=2` | `n=2` | `n=1` |
 | `ifs/mixed-ws-around-nonws` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a : b]` |
 | `ifs/mixed-adjacent-nonws` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a::b]` |
@@ -115,6 +123,38 @@ grades it and nothing drift-checks it either, for the same reason.
 - `ifs/nonws-trailing` — the other half: a trailing delimiter does not. A symmetric implementation fails here
   ```sh
   IFS=:; x="a:"; set -- $x; printf "[%s]" "$@"
+  ```
+- `ifs/nonws-trailing-split-on` — the row that turns the asymmetry above from a fact into an axis: with the splitting turned on in the shell that has it off, a trailing separator *delimits* there and is absorbed in the other five — two fields against one. The `setopt` is not found in the other five and costs them nothing, which is what lets one snippet ask the same question of all six. The count is printed with the fields because `[a]` and `[a][]` are the same characters once the boundaries are gone, and a wrong answer here is a plausible count at status 0
+  ```sh
+  setopt shwordsplit; IFS=:; x="a:"; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `ifs/nonws-trailing-doubled-split-on` — one separator at the tail against two: the fifth shell answers two fields here and the sixth three, so the extra field is the tail's and not a miscount of the pair. An implementation that special-cased a value *ending* in a separator by keeping the whole run would answer four
+  ```sh
+  setopt shwordsplit; IFS=:; x="a::"; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `ifs/nonws-trailing-pair-split-on` — the shape a real script writes — a list padded with a trailing separator on purpose, which is the ordinary way to write one. Three fields in the shell that delimits and two in the rest, so a `for` loop over it runs one iteration fewer with nothing to say so
+  ```sh
+  setopt shwordsplit; IFS=:; x="a:b:"; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `ifs/nonws-both-ends-split-on` — the leading separator delimits in all six and the trailing one in one, so this row holds both halves at once. It is the row a fix that made the rule symmetric would pass while breaking the five shells it was not about
+  ```sh
+  setopt shwordsplit; IFS=:; x=":a:"; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `ifs/ws-trailing-absorbed-split-on` — the guard, and the reason the axis is the non-whitespace half alone: under the default IFS whitespace is absorbed at both ends in all six shells, the one that delimits on a trailing separator included. A fix that stopped absorbing anything would break the shell it was written to match
+  ```sh
+  setopt shwordsplit; x=" a "; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `ifs/mixed-trailing-run-split-on` — it is the closing *run* of separators that decides and not the last byte: the trailing space does not hide the colon in front of it, so this is two fields where `'a  '` is one. A reading that looked at the last character alone would answer one here
+  ```sh
+  setopt shwordsplit; IFS=" :"; x="a: "; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"; y="a  "; set -- $y; printf " %d" "$#"; printf "[%s]" "$@"
+  ```
+- `ifs/nonws-trailing-cmdsub` — the same divergence with no option set and no flag written, which is what says it is reachable by ordinary means in every shell: an unquoted command substitution is split in all six, including the one that leaves parameter expansions alone, so the tail question is asked here whatever the splitting option says
+  ```sh
+  IFS=:; set -- $(printf "a:"); printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `ifs/nonws-trailing-read-remainder` — `read` feeds the same splitter, and the last name takes the remainder of the line — which is text rather than a field, so it keeps the separators the input had. Five shells give `b` and the sixth `b:`, which is the trailing separator surviving in the one shell where it delimits. Two facts in one row: an implementation that rejoins the remainder from its fields answers `b c` for `a:b:c` in every shell, which no shell in the panel does
+  ```sh
+  IFS=:; printf 'a:b:\n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; }
   ```
 - `ifs/nonws-only-delimiters` — pins the asymmetry as a count rather than as a rendering
   ```sh

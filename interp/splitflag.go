@@ -119,6 +119,6 @@ func (r *Runner) splitFlagFields(s syntax.Span, sp splitPolicy, parts []string) 
 		return parts
 	}
 	ifs, set := r.ifs()
-	return splitFieldsEdges(strings.Join(parts, ifsFirst(ifs, set)), nil, ifs, set,
+	return r.splitFieldsAsking(strings.Join(parts, ifsFirst(ifs, set)), nil, ifs, set,
 		s.Quoting != syntax.Unquoted)
 }

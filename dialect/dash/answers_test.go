@@ -86,6 +86,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		// split, and this shell complies: `IFS=-; set -- x y z; v=${@}` is
 		// `x-y-z` here and in zsh, against `x y z` in bash and ksh93.
 		{"UnsplitAtListJoinsOnIFS", s.UnsplitAtListJoinsOnIFS, interp.Yes},
+		{"TrailingSeparatorEndsAField", s.TrailingSeparatorEndsAField, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},

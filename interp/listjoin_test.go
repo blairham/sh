@@ -32,6 +32,13 @@ func joinRun(t *testing.T, src string, join Answer) (string, int) {
 		s.SplitParamExpansion = Yes
 		s.GlobExpansionResults = Yes
 		s.UnquotedListJoinsOnIFS = join
+		// The rows below are the five-shell reading of the tail, which is the
+		// one every expectation here was measured against: a trailing
+		// separator is absorbed, so `x:y:` is two fields and `"x:"` taken
+		// alone is one. The sixth shell's answer is a question of its own —
+		// see TrailingSeparatorEndsAField — and pinning it here is what keeps
+		// a row about the *join* from moving when that one is answered.
+		s.TrailingSeparatorEndsAField = No
 	})
 }
 

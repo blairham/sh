@@ -1412,12 +1412,6 @@ read.
 
 ### What this implementation does not match
 
-- **A trailing non-whitespace separator.** `IFS=:; v='a:'; ${=v}` is two
-  fields in zsh, the second empty, and one here. That is not this flag: it
-  is the splitter, which absorbs a trailing delimiter the way POSIX, bash,
-  ksh93 and dash all do and zsh alone does not — `setopt shwordsplit;
-  IFS=:; $v` divides the panel the same way. An axis of its own, and the
-  quoted form above is right because the edge-keeping rule is written here.
 - `GLOB_SUBST` is recorded-and-inert, so `setopt globsubst; ${=g}` splits
   but does not then match — which the tilde flag's section already records
   for its own half.

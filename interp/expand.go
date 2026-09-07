@@ -118,7 +118,7 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 		// the shell that has the construct. Splitting runs first and every
 		// field it produced is at the head of a word of its own, exactly as
 		// the elements of a list are.
-		parts := r.tildeFlagElements(s, head, splitFields(text, ifs, set))
+		parts := r.tildeFlagElements(s, head, r.splitFieldsAsk(text, ifs, set))
 		if len(parts) == 0 {
 			// An unquoted expansion of an empty value produces no field at
 			// all, so nothing is appended and nothing is started.
@@ -246,7 +246,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 			continue
 		}
 		ifs, set := r.ifs()
-		parts := splitFields(text, ifs, set)
+		parts := r.splitFieldsAsk(text, ifs, set)
 		if len(parts) == 0 {
 			continue
 		}
@@ -598,7 +598,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			if s.Quoting != syntax.Unquoted {
 				return []string{globEscape(joined)}, true
 			}
-			return splitFields(joined, ifs, set), true
+			return r.splitFieldsAsk(joined, ifs, set), true
 		}
 		if s.Quoting != syntax.Unquoted {
 			return escapeAll(names), true
@@ -798,7 +798,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			if s.Quoting != syntax.Unquoted {
 				return []string{globEscape(joined)}, true
 			}
-			return splitFields(joined, ifs, set), true
+			return r.splitFieldsAsk(joined, ifs, set), true
 		}
 		if s.Quoting != syntax.Unquoted {
 			return escapeAll(elems), true
@@ -1019,7 +1019,7 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) [
 			el = globEscape(el)
 		}
 		if doSplit {
-			out = append(out, splitFields(el, ifs, set)...)
+			out = append(out, r.splitFieldsAsk(el, ifs, set)...)
 			continue
 		}
 		out = append(out, el)

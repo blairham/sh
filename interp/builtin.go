@@ -1896,6 +1896,13 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	ifs, set := r.ifs()
 	fields := splitFieldsLiteral(text, lits, ifs, set)
 	if array != "" {
+		// An array target takes the fields *as* fields, so the tail of the
+		// splitting rule is live here: `IFS=:; read -A a` on `a:b:` fills
+		// three elements in the shell where a trailing separator delimits and
+		// two in the rest of the panel. The mask goes with it, because an
+		// escaped separator is data — `a\:` is one element `a:` in both
+		// readings.
+		fields = r.trailingSeparatorField(fields, text, lits, ifs, set, false)
 		r.setArray(array, fields)
 		if clearRest {
 			for _, name := range args {
@@ -1906,6 +1913,15 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	}
 	// The last variable takes the whole remainder, which is what makes
 	// `read a b` put "c d" in b for input "a c d".
+	//
+	// The remainder is text and not a field, so the tail of the splitting
+	// rule is not asked here: the shell where a trailing separator delimits
+	// puts `b:` in `b` for `IFS=:; read a b` on `a:b:`, which the extra
+	// *field* does not produce. That the remainder is rejoined on a hard
+	// space at all is a divergence of its own and unanimous against us — all
+	// six shells keep the separators the input had, so `IFS=:; read a b` on
+	// `a:b:c` gives `b:c` where this gives `b c` — and it is filed rather
+	// than fixed under a question about the tail.
 	for i, name := range args {
 		switch {
 		case i >= len(fields):

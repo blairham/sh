@@ -331,6 +331,46 @@ var Corpus = []Case{
 		Why:     "the other half: a trailing delimiter does not. A symmetric implementation fails here",
 	},
 	{
+		ID: "ifs/nonws-trailing-split-on", Category: "IFS",
+		Snippet: `setopt shwordsplit; IFS=:; x="a:"; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the row that turns the asymmetry above from a fact into an axis: with the splitting turned on in the shell that has it off, a trailing separator *delimits* there and is absorbed in the other five — two fields against one. The `setopt` is not found in the other five and costs them nothing, which is what lets one snippet ask the same question of all six. The count is printed with the fields because `[a]` and `[a][]` are the same characters once the boundaries are gone, and a wrong answer here is a plausible count at status 0",
+	},
+	{
+		ID: "ifs/nonws-trailing-doubled-split-on", Category: "IFS",
+		Snippet: `setopt shwordsplit; IFS=:; x="a::"; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "one separator at the tail against two: the fifth shell answers two fields here and the sixth three, so the extra field is the tail's and not a miscount of the pair. An implementation that special-cased a value *ending* in a separator by keeping the whole run would answer four",
+	},
+	{
+		ID: "ifs/nonws-trailing-pair-split-on", Category: "IFS",
+		Snippet: `setopt shwordsplit; IFS=:; x="a:b:"; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the shape a real script writes — a list padded with a trailing separator on purpose, which is the ordinary way to write one. Three fields in the shell that delimits and two in the rest, so a `for` loop over it runs one iteration fewer with nothing to say so",
+	},
+	{
+		ID: "ifs/nonws-both-ends-split-on", Category: "IFS",
+		Snippet: `setopt shwordsplit; IFS=:; x=":a:"; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the leading separator delimits in all six and the trailing one in one, so this row holds both halves at once. It is the row a fix that made the rule symmetric would pass while breaking the five shells it was not about",
+	},
+	{
+		ID: "ifs/ws-trailing-absorbed-split-on", Category: "IFS",
+		Snippet: `setopt shwordsplit; x=" a "; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the guard, and the reason the axis is the non-whitespace half alone: under the default IFS whitespace is absorbed at both ends in all six shells, the one that delimits on a trailing separator included. A fix that stopped absorbing anything would break the shell it was written to match",
+	},
+	{
+		ID: "ifs/mixed-trailing-run-split-on", Category: "IFS",
+		Snippet: `setopt shwordsplit; IFS=" :"; x="a: "; set -- $x; printf "%d" "$#"; printf "[%s]" "$@"; y="a  "; set -- $y; printf " %d" "$#"; printf "[%s]" "$@"`,
+		Why:     "it is the closing *run* of separators that decides and not the last byte: the trailing space does not hide the colon in front of it, so this is two fields where `'a  '` is one. A reading that looked at the last character alone would answer one here",
+	},
+	{
+		ID: "ifs/nonws-trailing-cmdsub", Category: "IFS",
+		Snippet: `IFS=:; set -- $(printf "a:"); printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the same divergence with no option set and no flag written, which is what says it is reachable by ordinary means in every shell: an unquoted command substitution is split in all six, including the one that leaves parameter expansions alone, so the tail question is asked here whatever the splitting option says",
+	},
+	{
+		ID: "ifs/nonws-trailing-read-remainder", Category: "IFS",
+		Snippet: `IFS=:; printf 'a:b:\n' | { read -r x y; printf "[%s][%s]" "$x" "$y"; }`,
+		Why:     "`read` feeds the same splitter, and the last name takes the remainder of the line — which is text rather than a field, so it keeps the separators the input had. Five shells give `b` and the sixth `b:`, which is the trailing separator surviving in the one shell where it delimits. Two facts in one row: an implementation that rejoins the remainder from its fields answers `b c` for `a:b:c` in every shell, which no shell in the panel does",
+	},
+	{
 		ID: "ifs/nonws-only-delimiters", Category: "IFS",
 		Snippet: `IFS=:; x="::"; set -- $x; echo "n=$#"`,
 		Why:     "pins the asymmetry as a count rather than as a rendering",

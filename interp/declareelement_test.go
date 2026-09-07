@@ -297,8 +297,12 @@ func TestAPlusFormAsksNeitherElementRefusal(t *testing.T) {
 // `typeset -A m[k]=v` places a key rather than an element numbered by
 // whatever `k` evaluates to.
 func TestAnAssociativeAttributeOnTheSameDeclarationKeysTheSubscript(t *testing.T) {
-	out, status := runDeclareElement(t, `typeset -A m[k]=v; echo "[${m[k]}]"`, nil)
-	if want := "[v]\n"; out != want || status != 0 {
+	// Two keys rather than one, because one cannot tell the readings apart:
+	// an unset name is zero to the arithmetic reading, so a single `m[k]`
+	// lands on element 0 and reads back out of it either way.
+	out, status := runDeclareElement(t,
+		`typeset -A m[k]=v; typeset m[j]=w; echo "[${m[k]}][${m[j]}]"`, nil)
+	if want := "[v][w]\n"; out != want || status != 0 {
 		t.Errorf("typeset -A m[k]=v = %q (status %d), want %q at 0", out, status, want)
 	}
 }

@@ -106,7 +106,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 			return nil, false, false
 		}
 	}
-	if strings.ContainsRune(e.Flags, 'A') && e.Op == syntax.ParamAssign {
+	if strings.ContainsRune(e.Flags, 'A') && isAssignOp(e.Op) {
 		// `(A)` is the one flag whose whole job is a *side effect*: it makes
 		// the name an array — `(AA)` an association — where the expansion
 		// assigns, and does nothing at all where it does not. Measured on
@@ -271,6 +271,45 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 		words = orderWords(e, words)
 	}
 	return words, isList, true
+}
+
+// assignThroughFlags is the assignment side of `${(U)u:=def}` and of
+// `${(U)v::=abc}`: the word is stored as written and the flags apply only to
+// what is substituted, which is measured — the first leaves `def` behind and
+// expands to `DEF`, the second leaves `abc` and expands to `ABC`.
+//
+// One function for both operators so the two cannot drift: the only
+// difference between them is *whether* this runs, which is the caller's
+// question and not this one's.
+func (r *Runner) assignThroughFlags(e *syntax.ParamExpr) ([]string, bool, bool) {
+	v := r.joinWord(e.Arg)
+	switch {
+	case e.Index != nil && !r.wholeArrayIndex(e):
+		r.assignSubscript(e, v)
+	case e.Op == syntax.ParamAssignAlways:
+		// The name check belongs to the operator that always assigns, for
+		// the reason it does on the path without a flag group: a `${(U)#::=w}`
+		// that answered `W` would be an assignment to nothing at status 0.
+		if !r.assignableParamName(e.Name) {
+			return nil, false, false
+		}
+		r.setVar(e.Name, v)
+	case e.Name != "":
+		r.setVar(e.Name, v)
+	}
+	return []string{v}, false, true
+}
+
+// isAssignOp reports whether an operator assigns — the conditional `=` and
+// `:=`, which assign when their test fires, and `::=`, which always does.
+//
+// The `(A)` flag's refusal asks this rather than naming ParamAssign, because
+// the flag's job is to say what *kind* of parameter the assignment leaves
+// behind and every operator that assigns has that question. Measured
+// 2026-09-07 on zsh 5.9.2: `unset u; ${(A)u=x y}` and `unset u; ${(A)u::=x y}`
+// both leave `typeset -a u=( 'x y' )`.
+func isAssignOp(op syntax.ParamOp) bool {
+	return op == syntax.ParamAssign || op == syntax.ParamAssignAlways
 }
 
 // flagKeepsFields reports whether a double-quoted result keeps one field per
@@ -451,17 +490,13 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 		}
 	case syntax.ParamAssign:
 		if fires {
-			v := r.joinWord(e.Arg)
-			// The side effect stores the word as written; the flags apply
-			// only to what is substituted — measured, `${(U)u:=def}` leaves
-			// `def` behind and expands to `DEF`.
-			if e.Index != nil && !r.wholeArrayIndex(e) {
-				r.assignSubscript(e, v)
-			} else if e.Name != "" {
-				r.setVar(e.Name, v)
-			}
-			return []string{v}, false, true
+			return r.assignThroughFlags(e)
 		}
+	case syntax.ParamAssignAlways:
+		// No test, so the assignment is the only branch there is. The flags
+		// still apply to what is substituted and not to what is stored:
+		// measured, `${(U)v::=abc}` is `ABC` and leaves `abc` behind.
+		return r.assignThroughFlags(e)
 	case syntax.ParamAlternate:
 		if fires {
 			return []string{""}, false, true

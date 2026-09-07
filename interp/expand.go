@@ -1486,6 +1486,11 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			return v
 		}
 		return value
+	case syntax.ParamAssignAlways:
+		// No test at all, which is the whole of what makes this a different
+		// operator: `fires` above is not consulted and there is no
+		// non-firing side to return `value` on.
+		return r.assignAlways(e, subscript)
 	case syntax.ParamAlternate:
 		if fires {
 			return ""
@@ -1525,6 +1530,67 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	}
 	// Anything else is left empty rather than guessed at.
 	return ""
+}
+
+// assignAlways is `${name::=word}`: the word is expanded, stored, and
+// substituted, with no test on what the parameter held.
+//
+// The three steps are in the order the shell that has the construct runs
+// them, which is measured rather than assumed. `${#::=$(echo RAN >&2)}` on
+// zsh 5.9.2 writes RAN and *then* refuses the name, so the word is expanded
+// before the target is checked and a command substitution in it runs even on
+// the failing line. Checking first would have been the tidier code and the
+// wrong side effect.
+func (r *Runner) assignAlways(e *syntax.ParamExpr, subscript bool) string {
+	v := r.joinWord(e.Arg)
+	if subscript {
+		r.assignSubscript(e, v)
+		return v
+	}
+	if !r.assignableParamName(e.Name) {
+		return ""
+	}
+	r.setVar(e.Name, v)
+	return v
+}
+
+// assignableParamName reports whether an assignment written inside an
+// expansion can name this parameter at all, and ends the script when it
+// cannot.
+//
+// A name or a run of digits, and nothing else. Measured 2026-09-07 on zsh
+// 5.9.2, which is the only shell in the panel with an operator that assigns
+// unconditionally and therefore the only one that reaches this question on
+// every parameter:
+//
+//	${v::=new}   assigns v            a name
+//	${1::=new}   assigns $1           a positional
+//	${0::=new}   assigns $0           and `0` with it
+//	${@::=new}   not an identifier: @
+//	${*::=new}   not an identifier: *
+//	${#::=new}   not an identifier: #
+//	${?::=new}   not an identifier: ?
+//	${-::=new}   not an identifier: -
+//	${${v}::=x}  not an identifier:    an expansion where the name would be
+//
+// The last row is why the empty name is refused rather than waved through:
+// there is no parameter for the assignment to land on, and the shell says so
+// with the name left blank rather than assigning to something invented.
+//
+// Fatal, and measured fatal: the refusal ends the script at status 1 on all
+// three routes — `-c`, a script file and a function body — so it goes through
+// fatalExpansion rather than carrying a status of its own.
+//
+// The wording's fallback is that shell's own, for the reason EqualsNotFound's
+// is: a dialect without the grammar never builds a node that reaches here, so
+// there is no second answer for the substrate to hold a neutral one against.
+func (r *Runner) assignableParamName(name string) bool {
+	if isNameLike(name) || isPositional(name) {
+		return true
+	}
+	r.fatalExpansion("%s\n", Wording(r.diag().AssignThroughExpansionBadName,
+		"not an identifier: %[1]s", name))
+	return false
 }
 
 // assignSubscript is `${a[i]:=v}`, which assigns to the element rather than to
@@ -2781,6 +2847,12 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 	}
 	switch e.Op {
 	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamAlternate, syntax.ParamError:
+		return
+	case syntax.ParamAssignAlways:
+		// The always-assign operator never reads the value, so there is
+		// nothing for `set -u` to be about. Measured 2026-09-07 on zsh
+		// 5.9.2, the only shell with the construct: `setopt nounset; unset
+		// v; ${v::=new}` is `new` at status 0.
 		return
 	}
 	switch e.Name {

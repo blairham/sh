@@ -5977,6 +5977,21 @@ echo "st=$?"`,
 		Why:     ":= leaves the variable set afterwards — the only expansion here with a side effect",
 	},
 	{
+		ID: "param/the-always-assign-operator", Category: "parameter expansion",
+		Snippet: `unset u; printf "[%s]" "${u::=A}" "$u"; e=; printf "[%s]" "${e::=B}" "$e"; s=old; printf "[%s]" "${s::=C}" "$s"; echo`,
+		Why:     "`::=` assigns every time and substitutes what it assigned, where `:=` assigns on two of these three states and `=` on one — so the third pair, a set and non-empty parameter, is the whole of what separates the operator from the two beside it. One shell in the panel has the construct and the other four read the same characters as a substring whose length is `=A`, which is the arithmetic error this row records for them: `${v::=rst}` on the plugin manager's own formatter line printed eighteen of it on every startup (#1369)",
+	},
+	{
+		ID: "param/the-always-assign-operator-beside-the-conditional", Category: "parameter expansion",
+		Snippet: `a=old; b=old; printf "[%s]" "${a::=new}" "$a" "${b:=new}" "$b"; echo`,
+		Why:     "the pair, on one line and one starting value: the always-assign leaves `new` and the colon-assign leaves `old`. Written as a pair rather than as two values because a recorded value would pass for an implementation that had read `::=` as `:=` — which is exactly the reading a grammar without the operator falls back to",
+	},
+	{
+		ID: "param/only-the-equals-makes-the-always-assign", Category: "parameter expansion",
+		Snippet: `v=old; printf "[%s]" "${v::-D}" "${v::+D}" "$v"; echo`,
+		Why:     "the disambiguation is one character wide, and this is the row that says so: with a second colon in front of them `-` and `+` are *not* operators, they are an offset of nothing and a length of `-D`, so the answer is empty and `v` is untouched. A grammar that widened `::` by one character would answer `D` here and pass every row above",
+	},
+	{
 		ID: "param/word-is-itself-expanded", Category: "parameter expansion",
 		Snippet: `unset u; d=DEF; printf "[%s]" "${u:-$d}" "${u:-$(echo sub)}"`,
 		Why:     "the word is a word, not a literal, so the AST cannot store it as a string",

@@ -212,6 +212,19 @@ func Dialect() syntax.Dialect {
 	// shell has — the trims, the substring, the replacement, the four
 	// conditionals and the element exclusion — measured 2026-09-06.
 	d.ParamLengthTakesAnOperator = true
+	// `${name::=word}`, the assignment that runs every time. Measured
+	// 2026-09-07 on zsh 5.9.2 against the rest of the panel: bash 5.3, bash
+	// 3.2 and bash as `sh` read the same text as a substring and answer
+	// `=word: arithmetic syntax error: operand expected`, ksh93 answers
+	// `:=word: arithmetic syntax error`, and dash — which has no substring —
+	// says `Bad substitution`. So this shell alone, and the four refusals
+	// are the evidence that it is additive rather than a shared syntax read
+	// two ways.
+	//
+	// `~/.zi/bin/zi.zsh` writes it on the line its own message formatter is
+	// built out of, which is why an unread `::=` printed eighteen arithmetic
+	// errors and one line of raw markup on every startup (#1369).
+	d.ParamAssignAlways = true
 	// An expansion where a parameter name would be — `${${v}#a}`, which is
 	// how this shell applies one expansion to the result of another and is
 	// idiomatic here rather than a corner. Measured 2026-09-05 on zsh 5.9.2

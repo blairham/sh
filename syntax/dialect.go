@@ -945,6 +945,30 @@ type Dialect struct {
 	// refuse while reading; it does not.
 	ParamLengthTakesAnOperator bool
 
+	// ParamAssignAlways enables `${name::=word}`, the assignment that runs
+	// every time: the word is stored and substituted whatever the parameter
+	// held, where `${name:=word}` stores it only when the parameter is unset
+	// or empty and `${name=word}` only when it is unset.
+	//
+	// One shell in the panel has it. The other four read the same characters
+	// as `${name:off:len}` with an empty offset and a length of `=word`, and
+	// fail in arithmetic there — `operand expected at \`=word'` — or, in
+	// dash, which has no substring at all, call it a bad substitution.
+	//
+	// A grammar flag rather than a semantics axis, for the reason
+	// ParamLengthTakesAnOperator is one: the disagreement is over whether
+	// the text is a third assignment operator or a substring, which is a
+	// question about what was written and not about what it means. A shell
+	// without the flag must keep reading it as a substring, because that is
+	// what its own arithmetic error is evidence of.
+	//
+	// The flag is what tells the two readings apart *before* either is
+	// evaluated, and reading it the substring way is not a quiet
+	// mis-answer — it is the arithmetic error that stood between a real
+	// plugin manager and its own colored output for eighteen lines of one
+	// startup (#1369).
+	ParamAssignAlways bool
+
 	// NestedParamExpansion enables an expansion to stand where a parameter
 	// name would: `${${v}}` applies one expansion to the result of another,
 	// and `${${v}#a}` applies the outer operator to what the inner came to.

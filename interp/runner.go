@@ -1239,6 +1239,33 @@ func (r *Runner) clone() *Runner {
 	// still visible.
 	c.inheritTraps(r)
 	c.completions = maps.Clone(r.completions)
+	// The tables that say what a command *name* means, on the same terms as
+	// the variable tables above: a subshell inherits them and owns what it
+	// then does to them. All four shells in the panel agree, and they agree
+	// in both directions — `(g(){ :; }); type g` finds nothing afterwards,
+	// and `f(){ :; }; (unset -f f); type f` still finds `f`. Sharing the maps
+	// made a definition made in a subshell the parent's, and a removal made
+	// in one the parent's too, at status 0 with nothing said either way.
+	//
+	// maps.Clone keeps a nil map nil, which matters: every writer below
+	// allocates lazily, so a parent that has no aliases at all still gets a
+	// subshell with a table of its own. That is why the alias half of this
+	// hid for so long — with no alias defined first, the subshell's `alias`
+	// built the map that the parent's field never pointed at, and the leak
+	// only appeared once the parent had one.
+	//
+	// preludeFuncs is deliberately NOT among them. It is a record of what the
+	// dialect's own shell text declared, written only while the prelude is
+	// being sourced and never deleted from — so there is no moment at which a
+	// subshell could change it, and a copy per subshell would be a copy of
+	// something nobody writes. What a script *did* to one of those names is
+	// in funcs, which is copied; this is only how the shell recognizes its own
+	// declaration when it sees it again.
+	c.funcs = maps.Clone(r.funcs)
+	c.funcFiles = maps.Clone(r.funcFiles)
+	c.exportedFuncs = maps.Clone(r.exportedFuncs)
+	c.aliases = maps.Clone(r.aliases)
+	c.disabledBuiltins = maps.Clone(r.disabledBuiltins)
 	return &c
 }
 

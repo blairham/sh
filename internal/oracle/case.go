@@ -4570,6 +4570,31 @@ echo "st=$?"`,
 		Why:     "{ } runs in the current shell, which is the whole difference between them",
 	},
 	{
+		ID: "cmd/subshell-isolates-a-function-definition", Category: "command language",
+		Snippet: `(g(){ echo in; }); if command -v g >/dev/null 2>&1; then echo leaked; else echo gone; fi`,
+		Why:     "the row above asks it of a variable and this one of a *function*, which is the same question and was a different answer here: the function table was shared with a subshell where every variable table was copied, so a definition made in one was the parent's afterwards — at status 0, with a `command -v` that found it and no way for the caller to tell (#1125). Unanimous across the panel. `command -v` rather than `type` because the four word a `type` differently and the subject is whether the name is there at all",
+	},
+	{
+		ID: "cmd/subshell-isolates-a-function-redefinition", Category: "command language",
+		Snippet: `g(){ echo old; }; (g(){ echo new; }); g`,
+		Why:     "the shape a script writes on purpose — run a helper in `( … )` so the version it needs stays out of the way — and the one where sharing the table is worst, because there is no diagnostic and no status to notice: the parent simply calls the subshell's function. Separate from the definition row because a name the parent already holds takes a different road into the table",
+	},
+	{
+		ID: "cmd/subshell-isolates-a-function-removal", Category: "command language",
+		Snippet: `f(){ echo yes; }; (unset -f f); f`,
+		Why:     "the other direction, and the half a measurement of definitions alone would miss: with the table shared, a removal in a subshell took the *parent's* function away, so this printed a command-not-found where every shell in the panel prints `yes`. One shared map is two bugs, and they point opposite ways",
+	},
+	{
+		ID: "cmd/subshell-isolates-an-alias-definition", Category: "command language",
+		Snippet: `alias z=echo; (alias q=ls); if alias q >/dev/null 2>&1; then echo leaked; else echo gone; fi`,
+		Why:     "the same for the alias table, where the consequence is a *parse* difference rather than a value one — an alias defined in a subshell changes how the parent's later lines are read. The `alias z=echo` first is load-bearing and not scene-setting: the table is allocated on first use, so with no alias anywhere the subshell built a map of its own and the leak did not appear at all, which is why it hid for so long",
+	},
+	{
+		ID: "cmd/subshell-isolates-an-alias-removal", Category: "command language",
+		Snippet: `alias z=echo; (unalias z); if alias z >/dev/null 2>&1; then echo there; else echo gone; fi`,
+		Why:     "and the removal direction for aliases, for the reason the function removal row exists: a shared table loses the parent's alias to an `unalias` that was meant to be thrown away with the subshell",
+	},
+	{
 		ID: "cmd/brace-group-needs-terminator", SyntaxError: true, Category: "command language",
 		Snippet: `{ echo a }`,
 		Why:     "{ } is made of reserved words and needs a terminator before the brace — except in zsh",

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package repl
+package interp
 
 import "testing"
 
@@ -62,28 +62,37 @@ func TestWhatAColorCodeWrites(t *testing.T) {
 }
 
 // Where the code ends, which is what decides whether the text after it is text.
-func TestWhereAColorCodesArgumentEnds(t *testing.T) {
+func TestWhereACodesArgumentEnds(t *testing.T) {
 	for _, tc := range []struct {
-		name, in string
-		want     string
-		wantEnd  int
+		name, in   string
+		want       string
+		wantEnd    int
+		wantBraced bool
 	}{
 		// The braces and everything in them belong to the code.
-		{"braced", "{red}x", "red", 4},
-		{"empty braces", "{}x", "", 1},
+		{"braced", "{red}x", "red", 4, true},
+		// Empty braces are braces, and the third result is the only thing
+		// that says so. It is a measured difference and not tidiness: zsh
+		// draws `%D` as the plain date and `%D{}` as nothing at all, so a
+		// code reading a `strftime` format has to tell an empty format from
+		// the absence of one. A color code reads the two the same way round —
+		// `%F` and `%F{}` both draw `\e[30m` — which is why the distinction
+		// is reported rather than acted on here.
+		{"empty braces", "{}x", "", 1, true},
 		// No braces at all: the argument is empty and the code ended before
 		// the letters, which is measured — zsh drew `%Fred` as a color and
 		// then `red`.
-		{"unbraced", "red", "", -1},
-		{"nothing after it", "", "", -1},
+		{"unbraced", "red", "", -1, false},
+		{"nothing after it", "", "", -1, false},
 		// An opening brace with no closing one is the rest of the prompt,
 		// because there is no later text for the rest to be text of.
-		{"unterminated", "{red", "red", 3},
+		{"unterminated", "{red", "red", 3, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			arg, end := colorArgument([]rune(tc.in), 0)
-			if arg != tc.want || end != tc.wantEnd {
-				t.Errorf("colorArgument(%q) = %q, %d, want %q, %d", tc.in, arg, end, tc.want, tc.wantEnd)
+			arg, end, braced := promptArgument([]rune(tc.in), 0)
+			if arg != tc.want || end != tc.wantEnd || braced != tc.wantBraced {
+				t.Errorf("promptArgument(%q) = %q, %d, %v, want %q, %d, %v",
+					tc.in, arg, end, braced, tc.want, tc.wantEnd, tc.wantBraced)
 			}
 		})
 	}

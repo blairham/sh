@@ -3,7 +3,7 @@
 
 package ksh
 
-import "github.com/blairham/sh/repl"
+import "github.com/blairham/sh/interp"
 
 // PromptStyle is what ksh93 does to a prompt parameter's value before drawing
 // it.
@@ -16,8 +16,8 @@ import "github.com/blairham/sh/repl"
 //
 // Measured through a pty rather than taken from documentation: the panel
 // disagrees about this, and the disagreement is why the field exists.
-func PromptStyle() repl.PromptStyle {
-	return repl.PromptStyle{
+func PromptStyle() interp.PromptStyle {
+	return interp.PromptStyle{
 		Expand: true,
 		// Measured with nothing assigned: real ksh93 prompts `$ ` and continues
 		// with `> `, which is what the substrate does anyway. Stated rather than
@@ -32,7 +32,7 @@ func PromptStyle() repl.PromptStyle {
 		// table entry: dropping the backslash leaves a bare `!`, and a bare
 		// `!` is the history number in ksh93 — which History is for.
 		Escape:  '\\',
-		Unknown: repl.DropEscape,
+		Unknown: interp.DropEscape,
 		// Measured: `<!>` drew 1, 2 and 3 on successive prompts with a
 		// writable history file, `<!!>` drew `<!>`, and `<a!b>` drew `<a1b>`.
 		// bash, dash and zsh draw a bare `!` as a bare `!`.

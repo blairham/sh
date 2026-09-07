@@ -290,3 +290,38 @@ func pipeWith(t *testing.T, s string) *os.File {
 	t.Cleanup(func() { _ = r.Close() })
 	return r
 }
+
+// The front end hands the prompt-escape table to *both* readers.
+//
+// `driver.Shell.PromptStyle` reaches the line editor, which every other test
+// here is about, and it reaches the interpreter too — so a shell whose front
+// end supplied a table answers `${(%)…}` from that table and not from an
+// empty one. That is what makes "one table" true for a caller who assembles a
+// dialect out of the three vectors rather than calling a dialect package's
+// Apply, and it is the only assertion that fails if the front end stops
+// handing it over (#1090).
+//
+// A table written here rather than taken from a dialect, because the subject
+// is the wiring and not a shell: one row, and a row whose answer cannot come
+// from anywhere else.
+func TestThePromptTableReachesTheInterpreterToo(t *testing.T) {
+	sh := shell()
+	sh.Dialect.ParamExpansionFlags = true
+	sh.PromptStyle = repl.PromptStyle{
+		Escape: '%',
+		Codes:  map[rune]repl.PromptField{'%': repl.FieldEscape},
+	}
+	out, errs, code := runArgs(t, sh, "testsh", "-c", `echo "[${(%):-100%%}]"`)
+	if out != "[100%]\n" || errs != "" || code != 0 {
+		t.Errorf("out=%q errs=%q code=%d, want %q clean", out, errs, code, "[100%]\n")
+	}
+	// And with no table the same expansion transforms nothing, which is what
+	// says the answer above came from the table rather than from a built-in
+	// reading of the escape.
+	bare := shell()
+	bare.Dialect.ParamExpansionFlags = true
+	out, errs, code = runArgs(t, bare, "testsh", "-c", `echo "[${(%):-100%%}]"`)
+	if out != "[100%%]\n" || errs != "" || code != 0 {
+		t.Errorf("with no table: out=%q errs=%q code=%d, want %q clean", out, errs, code, "[100%%]\n")
+	}
+}

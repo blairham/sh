@@ -10502,6 +10502,18 @@ echo "read=[$l]"`,
 		Why:     "zsh's prompt language has about forty escapes and this shell carries four of them. `%q` is one it does not, and zsh drops it silently — `[]` and 0 — so the row records the difference between dropping an escape and naming it as missing. Naming it is the choice here: a prompt quietly short of a field is the kind of wrong answer nobody reports",
 	},
 	{
+		ID: "print/a-color-prompt-escape-a-script-can-reach", Category: "builtins",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `print -rP '%F{red}r%f%F{196}i%f%K{blue}b%k' | od -An -c | tr -s ' '; echo "st=$?"`,
+		Why:     "the escape family a *script* reads through the prompt language, and the row that says a script can read it at all: `%F` sets the foreground, `%f` resets it, `%K`/`%k` are the background pair, and the three arguments take three branches of the terminal's arithmetic — a name, an index above the bright eight, and a background. Recorded through `od` because the answer is escape sequences and a table of rendered bytes would show none of them. **`TERM` is named because the answer depends on it**: measured, `%F{196}` is `\\e[38;5;196m` under a 256-color terminal and `\\e[39m` — the default — under an 8-color one, which is a fact about the terminal rather than about the escape and is why the case says which terminal it asked. zsh alone has `print -P`; the other four have no `print` or refuse the letter",
+	},
+	{
+		ID: "print/a-prompt-escape-whose-braces-are-a-time-format", Category: "builtins",
+		Snippet: `print -rP '[%D{%Y}]'; print -rP '[%W]' | tr -c '
+' x; echo "st=$?"`,
+		Why: "the one code of this shell's prompt language whose braces are a `strftime` format rather than a color, which is a *mechanism* and not a row of values — so the row exists to say the mechanism is reached. The year is written out because it is the one part of a clock a test can name; the second line is a fixed-width date reduced to its shape, so the case records the width without recording the day it ran",
+	},
+	{
 		ID: "print/the-raw-letter-leaves-the-prompt-pass-alone", Category: "builtins",
 		Snippet: `print -rP 'a\tb%%'; echo "st=$?"`,
 		Why:     "`-r` suppresses the backslash pass and not the prompt one: the tab stays two characters and the `%%` still becomes one `%`. The two letters are about different passes, which is what a shell folding them into one `raw` flag would get wrong",

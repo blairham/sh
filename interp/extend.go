@@ -499,6 +499,51 @@ func (r *Runner) NamedOption(name string) (on, known bool) {
 // case that says this is a fact about the process and not about the script.
 func (r *Runner) SetPromptUser(name string) { r.promptUser = name }
 
+// SetPromptHost names the machine the `%m` and `%M` prompt escapes report.
+//
+// Carried in for the reason SetPromptUser is: the host name comes from the
+// system, and a Runner embedded in another program must not go asking. The
+// shell binaries fill it in beside the login name they already read.
+//
+// A runner nobody told refuses both escapes by name rather than drawing an
+// empty host, which would be a prompt describing no machine at status 0.
+func (r *Runner) SetPromptHost(name string) { r.promptHost = name }
+
+// SetPromptStyle installs the prompt-escape table this dialect spells.
+//
+// The same value the prompt drawer is given — `repl.PromptStyle` is an alias
+// for [PromptStyle], not a copy — so a dialect fills in one table and both
+// readers read it. Before this there were two, and `print -P '%F{196}…'` was
+// refused by name while a drawn prompt answered it (#1090).
+//
+// A runner nobody told has no escape character, and therefore no escape
+// language: `${(%)v}` is the value as it stands. That is the substrate's own
+// answer rather than a borrowed one, and it is reachable only through this
+// package's own API — the one dialect whose grammar reads the `%` flag at all
+// supplies the table in its Apply.
+func (r *Runner) SetPromptStyle(st PromptStyle) { r.promptStyle = st }
+
+// PromptField is what this runner can answer about one prompt code, for a
+// prompt drawer that has a Runner and wants the interpreter's answer rather
+// than one of its own.
+//
+// The drawer answers the session's facts itself — its history number, its
+// terminal, what the parser is still inside — and reaches for this where the
+// answer belongs to the interpreter, so that a code written *in* a prompt and
+// the same code expanded by a script agree. The second result is false where
+// this runner has no answer, which is the by-name refusal's condition.
+func (r *Runner) PromptField(f PromptField, arg string, braced bool) (string, bool) {
+	return r.promptField(f, arg, braced)
+}
+
+// PromptStyleValue is the table this runner was given, for a caller that has
+// to hand the same one to a prompt drawer.
+//
+// Exported so that "the drawer reads the same table" can be *asserted* rather
+// than arranged: a test can compare what the front end gave the editor with
+// what the interpreter answers from. See driver.
+func (r *Runner) PromptStyleValue() PromptStyle { return r.promptStyle }
+
 // SetOptionNamespace installs the names `[[ -o name ]]` reads, for a dialect
 // whose option namespace is wider than the `set -o` names it declares.
 //

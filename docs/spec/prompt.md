@@ -3,11 +3,10 @@
 What a shell does to `PS1` and `PS2` before drawing them, and what the
 line editor has to know about the result.
 
-**Governed by:** `repl.PromptStyle`, which is the dialect's answer and not
-the semantics vector's — a prompt is drawn by the front end rather than by
-the interpreter, so "which shell am I" is data here in the same way it is
-there, and the two vectors are separate because a `Runner` embedded in
-another program has no prompt at all.
+**Governed by:** `interp.PromptStyle`, which is the dialect's answer and not
+the semantics vector's — "which shell am I" is data here in the same way it
+is there. It is aliased as `repl.PromptStyle`, and the alias is the point:
+there is **one** table, read by two readers.
 
 **Measured:** through a pseudo-terminal on macOS 25.5, 2026-09-05, one code
 per prompt, with the drawn bytes compared as hex rather than read off the
@@ -16,6 +15,44 @@ was `/opt/homebrew/bin/bash` 5.3.15, `/bin/bash` 3.2.57 and
 `/opt/homebrew/bin/zsh` 5.9.2, each started with its startup files
 suppressed, in a scratch `HOME`, and driven by typing an assignment to the
 parameter and waiting for the next prompt.
+
+## Two readers, one table
+
+The escape language is asked for twice, and the two askers are in different
+packages.
+
+- **A prompt is drawn** from it, by the line editor, which is the whole of
+  the rest of this document.
+- **A script asks for the same expansion by name** — zsh's `${(%)…}`, and
+  its other spelling `print -P`, which are one expansion rather than two.
+
+They used to be two tables. `interp` carried four escapes — `%%`, `%x`,
+`%N`, `%n` — and refused everything else by name; `repl.PromptStyle`
+carried about forty. So the shell answered `%F{196}` when drawing a prompt
+and refused it when a script wrote `print -P '%F{196}…'`: one question, two
+answers, and the larger table was the one a script could not reach. The
+table now lives where both readers can see it and the alias makes them the
+same Go type, so a dialect fills in one table and both readers read it.
+
+**What is still two is the resolver, and that is a fact about the readers
+rather than about the language.** A drawer knows things a script's
+expansion does not, and each is measured:
+
+| code | a drawn prompt | `${(%)…}` and `print -P` | measured |
+| --- | --- | --- | --- |
+| `%!` `%h` | the session's history number | **refused by name** | zsh answers 0 under `-c`, which is a plausible number for a question nobody answered |
+| `%y` `%l` | the terminal's name | **refused by name** | zsh answers `()` with no terminal |
+| `%_` | the construct being continued | nothing | `print -P '%_'` is empty — a script that reached an expansion has parsed |
+| `%{` `%}` | the editor's width markers | nothing | `print -P '%{X%}'` is `X`, and neither marker reaches the output |
+| a newline | `\r\n` | `\n` | the terminal is in raw mode while a prompt is drawn, so a bare newline leaves the cursor where it was across |
+
+A code in **no** part of the table splits the same way, and this is the
+convention that let the whole surface be enumerated exactly rather than
+guessed: a prompt has to draw something and draws whatever the dialect's
+"never heard of it" answer is, and a script's expansion **refuses the
+escape by name**. `${(%):-%q}` says which escape it could not answer where
+the shell it copies drops it silently at status 0, because a prompt quietly
+short of a field is the kind of wrong answer nobody reports.
 
 ## Three passes, in this order
 
@@ -128,7 +165,7 @@ does.
 | `%*` `%T` | clock, **hour not padded** | `6:11:43`, `6:11`, and `0:17:07` after midnight |
 | `%t` `%@` | twelve-hour clock, hour padded with a space | ` 6:11AM`, `12:17AM` |
 | `%w` `%W` `%D` | dates | `Sun 6`, `09/06/26`, `26-09-06` |
-| `%D{fmt}` | strftime | `2026-09-05 15:05:41` |
+| `%D{fmt}` | strftime — the braces replace the plain date | `2026-09-05 15:05:41`; `%D{%H:%M}` → `04:25`, and `%D{}` → **nothing**, so the braces being there is the question and not what is in them |
 | `%!` `%h` | history number | `75`, `77` on successive prompts |
 | `%j` `%?` | live jobs, last exit status | `0`, `0` |
 | `%i` `%L` `%N` | line number, `$SHLVL`, the shell's own name | `106`, `2`, `/opt/homebrew/bin/zsh` |
@@ -142,6 +179,8 @@ does.
 | `%K{c}` `%k` | background color, and default | `\e[44m` for `blue`, `\e[49m` |
 | `%E` | clear to the end of the line | `\e[K` |
 | `%(x.a.b)` | a question, and one of two texts | `%(?.ok.bad)` drew `ok` |
+| `%x` | the file being read | `/opt/homebrew/bin/zsh` at a prompt, the sourced file's path in one |
+| a trailing `%` | **dropped, not drawn** | `PS1='x%'` drew `x`, and `print -P 'x%'` is `x` too — both readers, so it is a row of the table and bash and ksh93 draw the character |
 | anything else | **nothing at all** | `%q` → nothing |
 
 The clock is where the two languages disagree about the same fact rather
@@ -160,12 +199,20 @@ case — `%F{Red}`, `%F{bogus}`, `%F{256}` and `%F{-1}` all drew the default
 `\e[39m` — and an empty argument is black rather than the default, since
 `%F` and `%F{}` both drew `\e[30m`.
 
-`%D{fmt}` and the `%(x.a.b)` ternary are measured and not implemented, both
-because each needs a mechanism rather than a row: a strftime translation
-for the first, and a question the substrate can ask itself for the second.
-Nor are `%i`, `%L`, `%N`, `%l` and the `%N~` truncations, each of which is
-a value nothing has been asked for yet; they are recorded here so that
-adding one is a lookup rather than another measuring session.
+`%D{fmt}` is implemented: the braces are read the way a color code's are
+and handed to `interp.Strftime`, which is the same formatter
+`printf '%(fmt)T'` writes through — a second implementation of one format
+language is the thing that would drift. The clock is still each reader's
+own, which is the resolver split doing what it is for: a prompt is tested
+with an injected clock and a script's expansion with the runner's.
+
+The `%(x.a.b)` ternary is measured and not implemented, and it is the one
+shape left that needs a *mechanism* rather than a row: a question the
+substrate can ask itself. Nor are `%i`, `%L`, `%l` and the `%N~`
+truncations, each of which is a value nothing has been asked for yet; they
+are recorded here so that adding one is a lookup rather than another
+measuring session. Every one of them is refused by name when a script asks
+for the expansion, so nothing on this list can be reached by accident.
 
 ## What the panel does with a code it has never heard of
 

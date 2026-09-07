@@ -480,3 +480,51 @@ func TestAWaitBlocksUntilTheMarkIsDrawnAgain(t *testing.T) {
 		t.Errorf("the wait returned after %v, before the second prompt was drawn at %v", waited, late)
 	}
 }
+
+// A color prompt code reaches the terminal as the terminal's own bytes, with
+// the arithmetic that turned an argument into them done once for both readers.
+//
+// The other place this can be asked is a script — `print -P '%F{196}…'` — and
+// that is the whole of #1090: the escape table used to be two tables, and the
+// one a script could reach carried four escapes while the one a prompt was
+// drawn from carried about forty. They are one table and one walker now, so
+// the sequence this test watches go out on the wire is produced by the same
+// code a script's expansion runs. What this half adds is that it *goes out on
+// the wire*: a test reading a pipe has no editor in it, and a test that
+// stripped the escape sequences would pass with the color wrong.
+//
+// The table is written here rather than taken from a dialect, because it is a
+// statement about the arithmetic and not about a shell: 196 is above the first
+// sixteen, so it is the terminal's 256-color index form, and `%f` is the same
+// default the dialect names as a fixed sequence.
+func TestAColorCodesArgumentReachesTheTerminalAsBytes(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	control, tty := terminal(t)
+	sh := shell()
+	sh.PromptStyle = repl.PromptStyle{
+		Escape:    '%',
+		Colors:    map[rune]repl.PromptColor{'F': repl.Foreground, 'K': repl.Background},
+		Sequences: map[rune]string{'f': "\x1b[39m", 'k': "\x1b[49m"},
+		Unknown:   repl.DropBoth,
+	}
+	sh.Stdin, sh.Stdout, sh.Stderr = tty, tty, tty
+
+	drawn := watch(t, control)
+	done := make(chan int, 1)
+	go func() { done <- driver.MainArgs(sh, []string{"testsh"}) }()
+
+	drawn.awaitReadyForInput(t)
+	// Three shapes in one prompt, and each takes a different branch of the
+	// arithmetic: a name, an index above the bright eight, and a background.
+	write(t, control, `PS1='%F{red}r%f%F{196}i%f%K{blue}b%k> '`+"\r")
+	drawn.await(t, "\x1b[31mr\x1b[39m\x1b[38;5;196mi\x1b[39m\x1b[44mb\x1b[49m> ")
+
+	write(t, control, "\x04") // ^D at the prompt this test just waited for
+	select {
+	case <-done:
+	case <-time.After(sessionBudget):
+		_ = control.Close()
+		t.Fatalf("the session did not end; drawn so far: %q", drawn.text())
+	}
+}

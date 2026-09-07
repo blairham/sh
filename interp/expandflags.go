@@ -502,62 +502,31 @@ func (r *Runner) PromptExpand(text string) (string, bool) {
 	return r.promptEscapes(text, nil)
 }
 
-// promptEscapes is the `%` flag over one word. Only the escapes that name
-// the file being read are carried — `%x` and `%N`, the ones scripts use to
-// find their own path, plus `%n` and the literal `%%` — and anything else is
-// refused by name rather than answered wrong: the construct's home shell
-// implements its entire prompt language here, and this slice does not pretend
-// to.
+// promptEscapes is the `%` flag over one word.
+//
+// The dialect's table and the one walker, which is the whole of #1090: this
+// used to carry four escapes of its own — `%%`, `%x`, `%N`, `%n` — and refuse
+// the rest by name, while the prompt drawer read a second table of about
+// forty. So `print -P '%F{196}…'` was refused and a drawn prompt answered it.
+// The four are rows of the one table now: `%x` and `%N` became
+// FieldSourceFile and FieldUnitName, and `%%` and `%n` were already there as
+// FieldEscape and FieldUser.
+//
+// The refusal stays, and it is still the promise: an escape this shell cannot
+// answer is named rather than dropped. What names it is now the resolver
+// saying it has no answer — for the session's own facts, which a Runner has
+// not got — or the table listing the code as Unsupported, for the shapes
+// needing a mechanism rather than a value. See interp/prompt.go.
 //
 // e is the expansion this is the `%` flag of, and nil where a *builtin*
 // asked — see PromptExpand. It decides only how a refusal names the place it
 // happened.
 func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr) (string, bool) {
-	var b strings.Builder
-	for i := 0; i < len(v); i++ {
-		if v[i] != '%' {
-			b.WriteByte(v[i])
-			continue
-		}
-		if i+1 >= len(v) {
-			// A `%` with nothing after it is dropped, not written: measured,
-			// `${(%)v}` on `x%` is `x` and on `%` alone is empty. It was
-			// written through, which is the one place this expansion said
-			// more than the shell it copies.
-			break
-		}
-		i++
-		switch v[i] {
-		case '%':
-			b.WriteByte('%')
-		case 'x':
-			// The file being read: the sourced file, the script, or — under
-			// `-c`, where there is no file — what the shell calls itself.
-			if f := r.currentFile(); f != "" {
-				b.WriteString(f)
-			} else {
-				b.WriteString(r.name())
-			}
-		case 'N':
-			b.WriteString(r.promptUnitName())
-		case 'n':
-			// The user the shell runs as. Answered only where somebody told
-			// this runner who that is (SetPromptUser); a runner nobody told
-			// refuses it with the rest rather than expanding to nothing,
-			// which would be a wrong answer wearing a success.
-			//
-			// Spelled as a call rather than a `break` into the default: a
-			// `break` inside a Go switch leaves the switch, so it would have
-			// produced exactly the silence this is here to avoid.
-			if r.promptUser == "" {
-				return r.refusePromptEscape(e, v[i])
-			}
-			b.WriteString(r.promptUser)
-		default:
-			return r.refusePromptEscape(e, v[i])
-		}
+	out, code, ok := ExpandPromptStyle(r.promptStyle, v, r.promptField)
+	if !ok {
+		return r.refusePromptEscape(e, code)
 	}
-	return b.String(), true
+	return out, true
 }
 
 // refusePromptEscape says, by name, that an escape is not carried here.
@@ -577,7 +546,7 @@ func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr) (string, bool) {
 // the next one, and the builtin's own operands were expanded before it ran.
 // It is left out because it would be false rather than because it would
 // break, and a mutation that puts it back survives for that reason.
-func (r *Runner) refusePromptEscape(e *syntax.ParamExpr, c byte) (string, bool) {
+func (r *Runner) refusePromptEscape(e *syntax.ParamExpr, c rune) (string, bool) {
 	if e == nil {
 		r.diagf("the %%%c prompt escape is not implemented\n", c)
 		return "", false

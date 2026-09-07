@@ -1390,6 +1390,18 @@ func Apply(r *interp.Runner) {
 	if u, err := user.Current(); err == nil {
 		r.SetPromptUser(u.Username)
 	}
+	// The machine's name, for `%m` and `%M`, read here for the same reason
+	// and in the same class: nothing a script does changes it, two shells in
+	// one program genuinely share it, and it has no other source.
+	if h, err := os.Hostname(); err == nil {
+		r.SetPromptHost(h)
+	}
+	// And the prompt-escape table, which is the *same* value the prompt
+	// drawer is handed — repl.PromptStyle is an alias for interp.PromptStyle,
+	// not a copy. This is what makes `print -P '%F{196}…'` and a drawn prompt
+	// one answer rather than two: before it, this shell drew `%F{196}` at a
+	// prompt and refused it by name in a script (#1090).
+	r.SetPromptStyle(PromptStyle())
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {

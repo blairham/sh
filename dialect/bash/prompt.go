@@ -6,7 +6,7 @@ package bash
 import (
 	"fmt"
 
-	"github.com/blairham/sh/repl"
+	"github.com/blairham/sh/interp"
 )
 
 // PromptStyle is what bash does to a prompt parameter's value before drawing
@@ -27,43 +27,43 @@ import (
 //
 // Measured through a pty rather than taken from documentation: the panel
 // disagrees about this, and the disagreement is why the field exists.
-func PromptStyle() repl.PromptStyle {
-	return repl.PromptStyle{
+func PromptStyle() interp.PromptStyle {
+	return interp.PromptStyle{
 		Expand: true,
 		// Measured, one code per prompt, through a pty, against bash 5.3.15
 		// and bash 3.2.57. The two agree on the whole language: every
 		// difference between them was the value of the moment — the clock, the
 		// version and the history number — and not the table.
 		Escape: '\\',
-		Codes: map[rune]repl.PromptField{
-			'u':  repl.FieldUser,
-			'h':  repl.FieldHost,
-			'H':  repl.FieldHostFull,
-			'w':  repl.FieldCwd,
-			'W':  repl.FieldCwdBase,
-			's':  repl.FieldShellName,
-			'$':  repl.FieldPrivilege,
-			'n':  repl.FieldNewline,
-			'r':  repl.FieldReturn,
-			't':  repl.FieldTime24,
-			'T':  repl.FieldTime12,
-			'A':  repl.FieldTime24HM,
-			'@':  repl.FieldTime12AMPM,
-			'd':  repl.FieldDate,
-			'v':  repl.FieldVersion,
-			'V':  repl.FieldVersionFull,
-			'!':  repl.FieldHistoryNumber,
-			'#':  repl.FieldCommandNumber,
-			'j':  repl.FieldJobCount,
-			'l':  repl.FieldTerminalName,
-			'\\': repl.FieldEscape,
+		Codes: map[rune]interp.PromptField{
+			'u':  interp.FieldUser,
+			'h':  interp.FieldHost,
+			'H':  interp.FieldHostFull,
+			'w':  interp.FieldCwd,
+			'W':  interp.FieldCwdBase,
+			's':  interp.FieldShellName,
+			'$':  interp.FieldPrivilege,
+			'n':  interp.FieldNewline,
+			'r':  interp.FieldReturn,
+			't':  interp.FieldTime24,
+			'T':  interp.FieldTime12,
+			'A':  interp.FieldTime24HM,
+			'@':  interp.FieldTime12AMPM,
+			'd':  interp.FieldDate,
+			'v':  interp.FieldVersion,
+			'V':  interp.FieldVersionFull,
+			'!':  interp.FieldHistoryNumber,
+			'#':  interp.FieldCommandNumber,
+			'j':  interp.FieldJobCount,
+			'l':  interp.FieldTerminalName,
+			'\\': interp.FieldEscape,
 			// The two that decide whether a colored prompt is drawn in the
 			// right place. Measured: `\[X\]` drew X and neither bracket, and
 			// `\[\e]0;title\a\]X` put the title sequence on the wire and drew
 			// X — which is the case that cannot be told apart from text by
 			// looking at it.
-			'[': repl.FieldNonPrintingStart,
-			']': repl.FieldNonPrintingEnd,
+			'[': interp.FieldNonPrintingStart,
+			']': interp.FieldNonPrintingEnd,
 		},
 		// The characters a prompt has no letter for. Measured one byte each:
 		// `\e` drew 1b and `\a` drew 07. Without the first, the way every
@@ -77,7 +77,7 @@ func PromptStyle() repl.PromptStyle {
 		// were left as written.
 		Octal: true,
 		// `\q` draws `\q`.
-		Unknown:   repl.KeepBoth,
+		Unknown:   interp.KeepBoth,
 		Privilege: "$",
 		// The same numbers the prelude puts in BASH_VERSION. Measured: real
 		// bash drew 5.3 for \v and 5.3.15 for \V, and ours claims 5.3.15.

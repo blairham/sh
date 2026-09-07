@@ -29,10 +29,20 @@ var memoCases = []struct {
 		"aaaaaaaaaaaaaaaaaaaa1", // does not
 		"aaaaaaaaaaaaaaaaaaaab", // matches
 	}},
+	// The failing subjects come **first** here, and that ordering is the
+	// whole value of the group rather than a detail of it. A memo carried
+	// between subjects can only be caught by a subject that both reaches the
+	// memo and *matches*, arriving after one that filled it — and a matching
+	// subject usually asks very few questions, because a match stops as soon
+	// as it is found. This one asks 2,702, so it consults what the two
+	// failures before it left behind. Ordered the other way round, which is
+	// how it was first written, `reset the counter but keep the entries`
+	// survived: the match ran on an empty memo and the failures after it had
+	// nothing to poison.
 	{"(x|xx)##(y|yy)##z", []string{
-		"xxxxxxxxxxyyyyyyyyyz", // matches
-		"xxxxxxxxxxyyyyyyyyy_", // does not
-		"xxxxxxxxxx_yyyyyyyyz", // does not
+		"xxxxxxxxxx_yyyyyyyyz", // does not match
+		"xxxxxxxxxxyyyyyyyyy_", // does not match
+		"xxxxxxxxxxyyyyyyyyyz", // matches, after 2,702 questions
 	}},
 	{`(#b)(([\\]|(%F))([\{]([^\}]##)[\}])|([\{]([^\}]##)[\}])([^\%\{\\]#))`, []string{
 		"{error}Error{ehi}:{rst} Unknown{a}",

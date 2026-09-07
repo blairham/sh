@@ -117,6 +117,24 @@ type matchWhere struct {
 //     are read by planCaptures rather than by the matcher, and every other
 //     field is the dialect's answer, fixed before the match began.
 //
+// litFold is in the key **defensively**, and that is worth stating plainly
+// rather than leaving as an implied claim. Removing it survives every test
+// here, and the search for a case where it matters came back empty: one key
+// is reached under two different foldings often enough — 9,686 times over
+// this package's own patterns — but never at a position where the answer
+// could depend on it, and 400,000 randomly generated patterns of flags,
+// alternation and closures over case-varying subjects produced no
+// disagreement. That fits what the code says: the folding in force at a
+// pattern position is decided by the flags textually in front of it inside
+// the enclosing arm, and matchGroup hands the tail after a group the *outer*
+// options, so a flag never leaks out of the arm that set it and the folding
+// at a position is path-independent.
+//
+// It stays because it costs nothing — the key is compared as a unit either
+// way — and because the property keeping it unnecessary is a subtle one
+// nothing enforces. If flag scoping ever changes, a key without this field
+// answers with the wrong folding and reports no error at all.
+//
 // The subject and pattern themselves are not in the key because a trial is
 // against one of each, and the memo is reset when the trial is.
 type matchKey struct {

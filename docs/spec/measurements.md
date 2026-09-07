@@ -6924,6 +6924,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
 | `redir/file-then-merge` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` |
 | `redir/multios-is-zsh-only` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[x][x]` |
+| `redirect/an-empty-target-is-not-the-working-directory` | `r=2~w=2` **2>** `<shell>: 1: cannot open : No such file~<shell>: 1: cannot create : Directory nonexistent` | `r=1~w=1` **2>** `<shell>: line 1: : No such file or directory~<shell>: line 1: : No such file or directory` | `r=1~w=1` **2>** `<shell>: line 1: : No such file or directory~<shell>: line 1: : No such file or directory` | `r=1~w=1` **2>** `<shell>: : No such file or directory~<shell>: : No such file or directory` | `r=1~w=1` **2>** `<shell>: : cannot open~<shell>: : cannot open` | `r=1~w=1` **2>** `<shell>:1: no such file or directory: ~<shell>:1: no such file or directory: ` |
 | `heredoc/quotes-in-the-body-are-literal` | `don't say "hi"` | `don't say "hi"` | `don't say "hi"` | `don't say "hi"` | `don't say "hi"` | `don't say "hi"` |
 | `heredoc/a-backslash-escapes-three-things` | `$x \ \n \' \"` | `$x \ \n \' \"` | `$x \ \n \' \"` | `$x \ \n \' \"` | `$x \ \n \' \"` | `$x \ \n \' \"` |
 | `heredoc/an-unquoted-body-expands` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` |
@@ -7273,6 +7274,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/multios-is-zsh-only` — zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection: one spelling, two meanings, and no diagnostic to tell them apart
   ```sh
   echo x >a >b; printf "[%s][%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"
+  ```
+- `redirect/an-empty-target-is-not-the-working-directory` — an empty target names no file, and the same rule the file tests need: joining it onto the working directory opens the *directory*, so the read succeeds and the complaint arrives from the command as `Is a directory` rather than from the shell. Every shell in the panel refuses to open the name — with four wordings and two statuses, so the case pins the wording too
+  ```sh
+  printf secret > in-there; cat < ""; echo "r=$?"; echo hi > ""; echo "w=$?"
   ```
 - `heredoc/quotes-in-the-body-are-literal` — a here-document body is not a word: a quote in it is an ordinary character with nothing to quote, so running the word lexer over it removed them and turned don't into dont — silently, with status 0
   ```sh
@@ -8414,6 +8419,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cond/newer-older-and-equal-times` | `neither` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `newer~older~neither` | `newer~older~neither` | `newer~older~neither` | `newer~older~neither` | `newer~older~neither` |
 | `cond/a-missing-file-is-older-diverges` | `nt=127~ot=127~mirror=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `nt=0~ot=0~mirror=1` | `nt=0~ot=0~mirror=1` | `nt=0~ot=0~mirror=1` | `nt=0~ot=0~mirror=1` | `nt=1~ot=1~mirror=1` |
 | `cond/same-file-is-identity` | `distinct` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `linked~distinct` | `linked~distinct` | `linked~distinct` | `linked~distinct` | `linked~distinct` |
+| `cond/empty-operand-is-not-a-path` | `d=127~e=127~r=127~s=127~f=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `d=1~e=1~r=1~s=1~f=1` | `d=1~e=1~r=1~s=1~f=1` | `d=1~e=1~r=1~s=1~f=1` | `d=1~e=1~r=1~s=1~f=1` | `d=1~e=1~r=1~s=1~f=1` |
+| `cond/empty-operand-is-not-the-working-directory` | `empty=127~dot=127~wempty=127~wdot=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `empty=1~dot=0~wempty=1~wdot=0` | `empty=1~dot=0~wempty=1~wdot=0` | `empty=1~dot=0~wempty=1~wdot=0` | `empty=1~dot=0~wempty=1~wdot=0` | `empty=1~dot=0~wempty=1~wdot=0` |
+| `cond/empty-operand-in-the-file-comparisons` | `ee=127~fe=127~nt=127~ot=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `ee=1~fe=1~nt=1~ot=1` | `ee=1~fe=1~nt=1~ot=1` | `ee=1~fe=1~nt=1~ot=1` | `ee=1~fe=1~nt=1~ot=1` | `ee=1~fe=1~nt=1~ot=1` |
 | `cond/terminal-test-closed-descriptors` | `t0=127~t1=127~t99=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` |
 | `cond/terminal-test-non-number-diverges` | `st=127` **2>** `<shell>: 1: [[: not found` | `st=2` **2>** `<shell>: line 1: [[: x: integer expected` | `st=2` **2>** `<shell>: line 1: [[: x: integer expected` | `st=1` | `st=1` | `st=1` |
 | `cond/option-test-reads-a-set-option` | **2>** `<shell>: 1: [[: not found` *(status 127)* | `on=0~off=1` | `on=0~off=1` | `on=0~off=1` | `on=0~off=1` | `on=0~off=1` |
@@ -8511,6 +8519,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cond/same-file-is-identity` — -ef is identity rather than equality: a hard link to the file compares equal and a file with the same content does not
   ```sh
   touch a c; ln a b; [[ a -ef b ]] && echo linked; [[ a -ef c ]] || echo distinct
+  ```
+- `cond/empty-operand-is-not-a-path` — an empty operand is not a path, so every file question about it is false — the whole panel agrees, and `[[ -d $x ]]` guarding a computed directory is the reason it matters. Joining an empty operand onto the working directory instead makes the five answers 0 0 0 0 1: only `-f` stays right, because a directory is not a regular file, and that is why the wrong answer is easy to miss
+  ```sh
+  [[ -d $NOPE ]]; echo "d=$?"; [[ -e $NOPE ]]; echo "e=$?"; [[ -r $NOPE ]]; echo "r=$?"; [[ -s $NOPE ]]; echo "s=$?"; [[ -f $NOPE ]]; echo "f=$?"
+  ```
+- `cond/empty-operand-is-not-the-working-directory` — the pair that separates the two readings. `.` is the spelling that means the working directory and answers true; an empty operand names nothing and answers false. A shell that resolves the empty one against its own directory gives the same answer to both
+  ```sh
+  [[ -d "" ]]; echo "empty=$?"; [[ -d . ]]; echo "dot=$?"; [[ -w "" ]]; echo "wempty=$?"; [[ -w . ]]; echo "wdot=$?"
+  ```
+- `cond/empty-operand-in-the-file-comparisons` — the binary comparisons take their operands the same way, so they need the same probe: two empty operands are not the same file anywhere in the panel. Resolving both against the working directory makes `[[ "" -ef "" ]]` compare that directory with itself and answer *true*
+  ```sh
+  touch f; [[ "" -ef "" ]]; echo "ee=$?"; [[ f -ef "" ]]; echo "fe=$?"; [[ "" -nt f ]]; echo "nt=$?"; [[ f -ot "" ]]; echo "ot=$?"
   ```
 - `cond/terminal-test-closed-descriptors` — -t asks whether a descriptor is a terminal, and under the harness none is: stdin is /dev/null and stdout a pipe, so every answer is a quiet false — which is also the honest permanent answer for a runner whose streams are io.Writers
   ```sh
@@ -8803,6 +8823,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `test/double-equal-unequal` | `st=2` **2>** `<shell>: 1: test: a: unexpected operator` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
 | `test/file-comparisons` | `nt=0~ot=0~ef=0` | `nt=0~ot=0~ef=0` | `nt=0~ot=0~ef=0` | `nt=0~ot=0~ef=0` | `nt=0~ot=0~ef=0` | `nt=0~ot=0~ef=0` |
 | `test/a-missing-file-is-older-diverges` | `nt=1~ot=1` | `nt=0~ot=0` | `nt=0~ot=0` | `nt=0~ot=0` | `nt=0~ot=0` | `nt=1~ot=1` |
+| `test/empty-operand-is-not-a-path` | `d=1~e=1~x=1~f=1` | `d=1~e=1~x=1~f=1` | `d=1~e=1~x=1~f=1` | `d=1~e=1~x=1~f=1` | `d=1~e=1~x=1~f=1` | `d=1~e=1~x=1~f=1` |
+| `test/empty-operand-however-it-became-empty` | `unset=1~empty=1~sub=1~lit=1` | `unset=1~empty=1~sub=1~lit=1` | `unset=1~empty=1~sub=1~lit=1` | `unset=1~empty=1~sub=1~lit=1` | `unset=1~empty=1~sub=1~lit=1` | `unset=1~empty=1~sub=1~lit=1` |
 | `test/terminal-test-non-number-diverges` | `st=2~closed=1` **2>** `<shell>: 1: test: Illegal number: x` | `st=2~closed=1` **2>** `<shell>: line 1: test: x: integer expected` | `st=2~closed=1` **2>** `<shell>: line 1: test: x: integer expected` | `st=1~closed=1` | `st=1~closed=1` | `st=1~closed=1` |
 
 - `test/argument-count-decides` — POSIX defines `test` by argument count before grammar, which is why `test -f` alone is *true*: one argument is a string, and `-f` is a non-empty one. Two arguments make the same word an operator
@@ -8864,6 +8886,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `test/a-missing-file-is-older-diverges` — the MissingFileIsOlder axis on the builtin's surface, where dash joins in: bash and ksh93 answer true, dash and zsh want both files to exist — the same split each shell shows in its `[[ ]]`, so it is one axis and not two
   ```sh
   touch f; test f -nt missing; echo "nt=$?"; test missing -ot f; echo "ot=$?"
+  ```
+- `test/empty-operand-is-not-a-path` — the same rule on the builtin's surface, and measured through both of its spellings: the two constructs obtain an operand differently and answer the filesystem question identically, so an empty one is false in `[ ]` and `test` exactly as in `[[ ]]`
+  ```sh
+  [ -d "$NOPE" ]; echo "d=$?"; test -e "$NOPE"; echo "e=$?"; [ -x "$NOPE" ]; echo "x=$?"; [ -f "$NOPE" ]; echo "f=$?"
+  ```
+- `test/empty-operand-however-it-became-empty` — unset, set-and-empty, a substitution that printed nothing, and a literal empty word are four states of the variable table and one operand: expansion has made them the same word before the builtin sees it, so a caller needs all four rejected and the panel rejects all four alike
+  ```sh
+  unset u; e=; z=$(false); [ -d "$u" ]; echo "unset=$?"; [ -d "$e" ]; echo "empty=$?"; [ -d "$z" ]; echo "sub=$?"; [ -d "" ]; echo "lit=$?"
   ```
 - `test/terminal-test-non-number-diverges` — the TerminalTestRequiresANumber axis: bash and dash refuse the operand with their integer wordings at 2, ksh93 and zsh answer a plain false at 1 — while a numeric descriptor that is simply not a terminal is a quiet 1 everywhere
   ```sh

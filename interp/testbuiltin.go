@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"strconv"
 	"strings"
@@ -367,6 +368,28 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 // `=` above all, and a shared entry point would invite sharing the parts
 // that must not be.
 func (r *Runner) fileTest(op, operand string) bool {
+	if operand == "" {
+		// An empty operand is not a path, so the answer is false for every
+		// question below without asking the filesystem — measured across
+		// bash 5.3, bash 3.2, dash, ksh93 and zsh 5.9.2, in `[ ]`, `test`
+		// and `[[ ]]` alike, and unanimous. Unset, set-and-empty and
+		// `$(false)` are one case here rather than three: expansion has
+		// already made them the same empty word, and the panel does not
+		// distinguish them either.
+		//
+		// Answered at the one place the operand becomes a path, not in the
+		// sixteen arms: atDir used to resolve "" against the runner's
+		// directory, so `-e -d -s -r -w -x` all stat'd a directory that
+		// exists and all said **true**. `-f` was false only because a
+		// directory is not a regular file, which is why the wrong answer
+		// survived — the guard most scripts write, `[ -f "$x" ]`, is the
+		// one that happened to work, and `[ -d "$dir" ]` is the one that
+		// let a script build its whole layout under `/`.
+		//
+		// It also keeps a non-path out of the policy gate: an empty operand
+		// asks the filesystem nothing, so it is not a probe to audit.
+		return false
+	}
 	path := r.atDir(operand)
 	// Through the gate, like every stat; a denied one is err != nil here,
 	// so every test below reads it as the file not existing.
@@ -407,6 +430,25 @@ func (r *Runner) fileTest(op, operand string) bool {
 	return false
 }
 
+// compareStat stats one side of a binary file comparison.
+//
+// An empty operand is a file that is not there, for the reason fileTest
+// gives: it is not a path. Said here so both sides get it and the answer
+// then falls to the same rules a name that does not exist falls to — the
+// MissingFileIsOlder axis below, which measures the same split for an empty
+// operand as for a missing one: `[ f -nt "" ]` is true in bash and ksh93,
+// false in dash and zsh.
+//
+// Without it, `[ "" -ef "" ]` was **true**: both sides resolved to the
+// runner's directory and os.SameFile agreed they were the same file. Every
+// shell in the panel says false.
+func (r *Runner) compareStat(operand string) (os.FileInfo, error) {
+	if operand == "" {
+		return nil, fs.ErrNotExist
+	}
+	return r.stat(r.atDir(operand))
+}
+
 // compareFiles is `a -nt b`, `a -ot b` and `a -ef b` — the binary file
 // comparisons, shared with `[[ ]]` exactly as fileTest is.
 //
@@ -421,8 +463,8 @@ func (r *Runner) fileTest(op, operand string) bool {
 // a missing one, which the axis and the false branches below already read
 // as absence — the documented deny semantics for ActionStat.
 func (r *Runner) compareFiles(op, left, right string) (bool, error) {
-	li, lerr := r.stat(r.atDir(left))
-	ri, rerr := r.stat(r.atDir(right))
+	li, lerr := r.compareStat(left)
+	ri, rerr := r.compareStat(right)
 	switch op {
 	case "-nt":
 		if lerr != nil {

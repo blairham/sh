@@ -462,7 +462,15 @@ func (r *Runner) resolveDotPath(name string) (display, path string, err error) {
 // passed in a test that happened to run from the right directory and found
 // nothing anywhere else. redirect.go resolves paths the same way, for the same
 // reason.
+// An empty path stays empty rather than becoming the directory itself.
+// filepath.Join(r.Dir, "") is r.Dir, so joining is how an operand that names
+// nothing turns into an operand that names something that certainly exists —
+// which is a wrong answer no caller can see is wrong. It made every file test
+// a directory answers yes to say yes to an unset variable; see fileTest.
 func (r *Runner) atDir(path string) string {
+	if path == "" {
+		return ""
+	}
 	if !filepath.IsAbs(path) && r.Dir != "" {
 		return filepath.Join(r.Dir, path)
 	}

@@ -5567,7 +5567,7 @@ Issue #699. Six are a pure function of the string:
 Seven need something a string does not carry, which is why performing
 them made `applyModifier` a method:
 
-    :a  an absolute path, made **lexically** — `..` and `.` cancelled by
+    :a  an absolute path, made **lexically** — `..` and `.` canceled by
         name and no link followed. Against the *physical* working
         directory, which is neither `$PWD` nor the Runner's logical
         directory after a `cd` through a link: measured, with `/tmp` a
@@ -5576,7 +5576,7 @@ them made `applyModifier` a method:
         value stays empty.
     :A  the same, then resolved on the disk.
     :P  resolved on the disk, with `..` applied to what has already been
-        resolved rather than cancelled by name. That is the whole
+        resolved rather than canceled by name. That is the whole
         difference from `:A`, and `link2/..` shows it: `:A` gives the
         link's parent by name, `:P` the parent of what it points at.
         Two smaller ones — an empty value is the working directory here

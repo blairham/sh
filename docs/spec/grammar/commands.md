@@ -2018,6 +2018,28 @@ that fails with 127 and `coproc MY { cat; }` is a syntax error at the
 `}`. The same rule `;&` follows in the `case` table above, from
 `../core.md`.
 
+**Starting a coprocess does not wait for it.** Measured 2026-09-07 with
+standard input at `/dev/null` and a five-second bound:
+
+| written | zsh 5.9.2 | bash 5.3.15 | ksh93u+ |
+| --- | --- | --- | --- |
+| `coproc read x; echo AFTER` | `AFTER`, 0 | `AFTER`, 0 | no such word |
+| `coproc cat; echo AFTER` | `AFTER`, 0 | `AFTER`, 0 | no such word |
+| `read x \|&` then `echo AFTER` | pipe of both streams | the same | `AFTER`, 0 |
+
+What the body *is* cannot matter, because every shell in the panel forks
+before the body runs anything at all — and a coprocess whose body waits
+on its input is the ordinary case rather than a corner of it, since its
+input is a pipe the shell itself holds the write end of. `read x` there
+waits by construction and no input on the shell's own standard input
+ends it: zsh's coprocess is still there after the shell has exited, which
+is what makes this the one shape of the construct that cannot be measured
+without feeding it something.
+
+A shell that runs its jobs in one process has that to reconstruct rather
+than inherit; `../semantics.md` has where, and #1277 is what it cost
+before it was there.
+
 Corpus: `commands/coproc-is-one-dialect-s-keyword`, and the
 name-before-a-compound rule in all three of its shapes —
 `commands/coproc-names-a-compound` for a brace group,
@@ -2026,4 +2048,8 @@ forget, and `commands/coproc-does-not-name-a-simple-command` for the
 side that says the rule is a rule. The last of those runs a *function*
 called `MY`, because bash's `MY: command not found` arrives from a
 background job whenever that job gets to it, and a case graded on a
-racing diagnostic grades nothing.
+racing diagnostic grades nothing. The waiting body is
+`commands/a-coprocess-whose-body-reads-does-not-block-the-shell` and, for
+the operator's spelling of the same thing,
+`pipe/a-coprocess-operator-whose-body-reads-does-not-block-the-shell`;
+both feed the coprocess a line afterwards so it ends with the run.

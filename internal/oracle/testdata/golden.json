@@ -16967,6 +16967,50 @@
         "TimedOut": false
       }
     },
+    "commands/a-coprocess-whose-body-reads-does-not-block-the-shell": {
+      "bash": {
+        "Stdout": "AFTER",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "AFTER",
+        "Stderr": "\u003cshell\u003e: line 1: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "AFTER",
+        "Stderr": "\u003cshell\u003e: coproc: command not found~\u003cshell\u003e: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "AFTER",
+        "Stderr": "\u003cshell\u003e: 1: coproc: not found~\u003cshell\u003e: 1: print: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "AFTER",
+        "Stderr": "\u003cshell\u003e: coproc: not found~\u003cshell\u003e: print: no query process [Bad file descriptor]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "AFTER",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "commands/a-list-beginning-with-a-separator": {
       "bash": {
         "Stdout": "",
@@ -65193,6 +65237,50 @@
       "zsh": {
         "Stdout": "A~read=[]",
         "Stderr": "\u003cscript\u003e:read:2: -p: no coprocess",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "pipe/a-coprocess-operator-whose-body-reads-does-not-block-the-shell": {
+      "bash": {
+        "Stdout": "AFTER",
+        "Stderr": "\u003cscript\u003e: line 2: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "AFTER",
+        "Stderr": "\u003cscript\u003e: line 2: print: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: syntax error near unexpected token `\u0026'~\u003cscript\u003e: line 1: `read -r l |\u0026'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: Syntax error: \"\u0026\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "AFTER",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "AFTER",
+        "Stderr": "\u003cscript\u003e:print:2: -p: no coprocess",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

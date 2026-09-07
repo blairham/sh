@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -149,6 +150,48 @@ func (r *Runner) settleBackgroundJobBeforeABlockingOpen(path string) {
 		return
 	}
 	if fi.Mode()&os.ModeNamedPipe == 0 {
+		return
+	}
+	r.bg.settleNoPID()
+}
+
+// settleBackgroundJobBeforeABlockingRead settles a background job's pid when
+// the job is about to read a stream that has nothing waiting on it.
+//
+// The same reasoning as the blocking open above, reached from the other side
+// of the same wait. Starting a background job — `&`, `coproc`, or ksh93's `|&`
+// — blocks until the job's pid has settled, and the two events that settle it
+// are a process having started and the job having ended. A job whose body is a
+// builtin that *reads* reaches neither: nothing external runs, and the read
+// does not return while the stream stays open. So the shell that started it
+// waited for an answer that was never coming, and the hang was total —
+// measured, `coproc read x; echo AFTER` printed nothing here and printed
+// `AFTER` at once in zsh 5.9.2, bash 5.3.15 and ksh93u+ 2012-08-01, all of
+// which fork before the body runs a thing.
+//
+// A coprocess reaches it every time rather than by arrangement, which is why
+// this is a hang a script cannot avoid: its input is a pipe the *shell* holds
+// the write end of, so a `read` in its body waits by construction and no
+// amount of input on the shell's own stdin ends it. The `&` route needs the
+// stream to be one that waits — `{ read x } &` under `/dev/null` finishes at
+// once and only hangs when standard input is a pipe with a writer and no data.
+//
+// The stream is asked rather than assumed, with the poll a shell already has
+// for `read -t 0`: a regular file, a here-document and an exhausted stream all
+// answer at once, so the job is left alone and `{ read x < file; sleep 1 } &`
+// still reports the sleep's pid. Only a stream with nothing waiting on it
+// settles the job, and 0 is the truthful answer there for the reason the open
+// case gives — nothing has started, and while the job stands here nothing will.
+//
+// What it does not reach is a body that neither reads nor ever runs a program:
+// `{ while :; do :; done } &` still never settles, because there is no point in
+// it where the job is waiting on anything outside the shell. That is #1283, and
+// it needs a different contract for `$!` rather than a fifth trigger.
+func (r *Runner) settleBackgroundJobBeforeABlockingRead(in io.Reader) {
+	if r.bg == nil {
+		return
+	}
+	if inputWaiting(in) {
 		return
 	}
 	r.bg.settleNoPID()

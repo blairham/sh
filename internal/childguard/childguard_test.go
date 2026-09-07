@@ -173,8 +173,25 @@ func TestTheReportNamesTheMarkerItLookedFor(t *testing.T) {
 	said := captureStderr(t, func() {
 		_ = (guarded{m: runner{code: 0}, marker: marker, grace: 50 * time.Millisecond}).Run()
 	})
-	if !strings.Contains(said, marker) {
-		t.Errorf("the report does not name the marker it looked for.\ngot:\n%s", said)
+	// The *header* line, not the report as a whole. A marker is by
+	// construction a substring of every command line listed underneath it, so
+	// asking whether the report mentions it anywhere is a question that
+	// answers itself — measured: a mutant that drops the marker from the
+	// header survives that assertion, because the `cat` line still carries
+	// the string. The header is the only line that has to say what was looked
+	// for.
+	header := ""
+	for _, line := range strings.Split(said, "\n") {
+		if strings.HasPrefix(line, "childguard: the tests left ") {
+			header = line
+			break
+		}
+	}
+	if header == "" {
+		t.Fatalf("the report has no header line.\ngot:\n%s", said)
+	}
+	if !strings.Contains(header, marker) {
+		t.Errorf("the header does not name the marker it looked for.\ngot: %s", header)
 	}
 	if !strings.Contains(said, strconv.Itoa(held.Process.Pid)) {
 		t.Errorf("the report does not name the process it found (pid %d).\ngot:\n%s", held.Process.Pid, said)

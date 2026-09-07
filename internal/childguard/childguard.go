@@ -55,7 +55,7 @@
 // fixtures spinning at 11% of a core each, from a run that was killed, and
 // what fixed it was the fixture noticing its own end of input rather than
 // anything this package could have said afterwards. A guard reports the
-// ordinary leak. Self-defence is what covers the other kind.
+// ordinary leak. Self-defense is what covers the other kind.
 package childguard
 
 import (

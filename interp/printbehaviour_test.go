@@ -91,6 +91,11 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 func corpusGrammar() syntax.Dialect {
 	d := syntax.Core()
 	d.CaseContinue = true
+	// And zsh's spelling of the same terminator. No real shell has both —
+	// each refuses the other's — so this pair is a superset the printer is
+	// given on purpose: the corpus records both spellings, and a reading
+	// dialect narrow enough to be a shell could not read all of it.
+	d.CaseContinuePipe = true
 	d.Coproc = true
 	d.CoprocName = true
 	d.CurrentShellSubstitution = true

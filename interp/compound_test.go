@@ -167,6 +167,85 @@ func TestCaseFallthroughFollowsEachArmsTerminator(t *testing.T) {
 	}
 }
 
+// runSemiPipe is run() with zsh's spelling of that terminator enabled by
+// name. A core test names the flag, not the shell.
+func runSemiPipe(t *testing.T, src string) (string, int) {
+	t.Helper()
+	return runGrammar(t, src, func(d *syntax.Dialect) { d.CaseContinuePipe = true }, nil)
+}
+
+// TestSemiPipeIsTheOtherSpellingOfCaseContinue — `;|` and `;;&` are one
+// terminator under two operators, and the interpreter answers them with one
+// branch because they mean the same thing rather than nearly the same.
+//
+// Measured 2026-09-07 over a script file: every program below prints
+// letter-for-letter the same in zsh with `;|` as in bash 5.3 with `;;&`.
+// The pair that proves they are not `;&` is the middle arm whose pattern
+// does *not* match — `;&` runs its body without testing it and prints Z,
+// while `;|` and `;;&` skip it and reach the `*`. The filing's own program
+// could not tell the three apart, because with three arms and a matching
+// subject `;&` and `;|` give the same output.
+func TestSemiPipeIsTheOtherSpellingOfCaseContinue(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"later patterns keep being tested",
+			`case b in b) echo 1 ;| z) echo 2 ;; *) echo star ;; esac`,
+			"1\nstar\n",
+		},
+		{
+			"and that is not fall-through",
+			`case b in b) echo 1 ;& z) echo 2 ;; *) echo star ;; esac`,
+			"1\n2\n",
+		},
+		{
+			"on the last arm there is nothing left to test",
+			`case b in b) echo B ;| esac; echo after`,
+			"B\nafter\n",
+		},
+		{
+			"it composes with fall-through both ways",
+			`case b in b) echo 1 ;| z) echo 2 ;; b) echo 3 ;& q) echo 4 ;; b) echo 5 ;; esac`,
+			"1\n3\n4\n",
+		},
+		{
+			"a pattern list keeps its own alternation",
+			`case b in a|b) echo hit ;| *) echo star ;; esac`,
+			"hit\nstar\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, st := runSemiPipe(t, tc.src)
+			if got != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, got, st, tc.want)
+			}
+		})
+	}
+	// The same programs under the bash spelling, to the same bytes. If these
+	// two lists ever disagree, one of the branches has grown a difference the
+	// panel does not have.
+	for _, tc := range []struct{ pipeSrc, ampSrc string }{
+		{
+			`case b in b) echo 1 ;| z) echo 2 ;; *) echo star ;; esac`,
+			`case b in b) echo 1 ;;& z) echo 2 ;; *) echo star ;; esac`,
+		},
+		{
+			`case b in b) echo 1 ;| z) echo 2 ;; b) echo 3 ;& q) echo 4 ;; b) echo 5 ;; esac`,
+			`case b in b) echo 1 ;;& z) echo 2 ;; b) echo 3 ;& q) echo 4 ;; b) echo 5 ;; esac`,
+		},
+	} {
+		pipeOut, pipeSt := runSemiPipe(t, tc.pipeSrc)
+		ampOut, ampSt := runCaseContinue(t, tc.ampSrc)
+		if pipeOut != ampOut || pipeSt != ampSt {
+			t.Errorf("`;|` gave %q (%d) where `;;&` gave %q (%d) — one terminator, two spellings",
+				pipeOut, pipeSt, ampOut, ampSt)
+		}
+	}
+	// The status is the last body's, as it is for every other terminator.
+	if _, st := runSemiPipe(t, `case b in b) true ;| *) false ;; esac`); st != 1 {
+		t.Errorf("status = %d, want the last body's 1", st)
+	}
+}
+
 func TestPipelines(t *testing.T) {
 	if got, _ := run(t, `echo hi | cat`, nil); got != "hi\n" {
 		t.Errorf("got %q", got)

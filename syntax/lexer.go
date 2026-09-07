@@ -634,7 +634,7 @@ var operators = []Kind{
 	TokDSemiAmp, TokTLess, TokAmpDGreat, TokDLessDash, // 3 bytes
 	TokAndAnd, TokOrOr, TokDSemi, TokSemiAmp, TokDGreat, TokLessAmp, TokGreatAmp,
 	TokLessGreat, TokClobber, TokDLess, TokAmpGreat,
-	TokAmpBang, TokAmpPipe, TokPipeAmp, // 2 bytes
+	TokAmpBang, TokAmpPipe, TokPipeAmp, TokSemiPipe, // 2 bytes
 	TokAmp, TokPipe, TokSemi, TokLeftParen, TokRightParen, TokLess, TokGreat, // 1 byte
 }
 
@@ -647,6 +647,8 @@ func (l *Lexer) enabled(k Kind) bool {
 		return l.dialect.CaseFallthrough
 	case TokDSemiAmp:
 		return l.dialect.CaseContinue
+	case TokSemiPipe:
+		return l.dialect.CaseContinuePipe
 	case TokTLess:
 		return l.dialect.Herestring
 	case TokAmpBang, TokAmpPipe:

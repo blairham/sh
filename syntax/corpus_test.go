@@ -26,6 +26,11 @@ func corpusDialect() syntax.Dialect {
 	d.DollarBracketArith = true
 	// `;;&` — the case-continue cases.
 	d.CaseContinue = true
+	// `;|` — the same terminator spelled zsh's way, which no shell has
+	// alongside `;;&`: each refuses the other. Both are on here for the
+	// reason above — the grammar that has to *read* every case is wider
+	// than any one shell, and the corpus records both spellings.
+	d.CaseContinuePipe = true
 	// `function f() { …; }`, both markers at once.
 	d.FunctionKeywordParens = true
 	// `[[ x == @(a|b) ]]` — extended patterns where a condition reads them.

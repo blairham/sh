@@ -124,6 +124,14 @@ func Dialect() syntax.Dialect {
 	// matches one of those schemes or none at all. `~/.zi/bin/lib/zsh/install.zsh`
 	// is written that way and the other four shells refuse the line.
 	d.CasePatternMayBeEmpty = true
+	// `;|` is this shell's spelling of bash's `;;&`: the arm runs and the
+	// later patterns keep being tested. The two are mutually exclusive —
+	// `;;&` is ``parse error near `&'`` here, which CaseContinue staying off
+	// already gives us — so this is a flag of its own rather than a second
+	// value of that one. `~/.zi/plugins/romkatv---powerlevel10k/gitstatus/mbuild`
+	// is written with it and was the last file in that tree we could not
+	// parse.
+	d.CaseContinuePipe = true
 	// `<->` is a number and `<1-9>` a bounded one, where every other panel
 	// shell reads the `<` as a redirection. Measured 2026-09-05 on zsh
 	// 5.9.2: `[[ 1 = <-> ]]` is 0 here and a syntax error in bash 5.3, bash

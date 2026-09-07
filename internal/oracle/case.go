@@ -4920,6 +4920,17 @@ echo "st=$?"`,
 		Why:     ";;& keeps testing later patterns and is bash-only — lumping it with ;& would put a bash construct in the core",
 	},
 	{
+		ID: "cmd/case-continue-matching-zsh-spelling", Category: "command language",
+		Snippet: `case b in b) echo one ;| z) echo two ;; *) echo star ;; esac`,
+		Why:     "`;|` is zsh's spelling of `;;&`, and the two are mutually exclusive: zsh runs this and refuses `;;&`, bash 4-and-later is the other way round, and dash, bash 3.2 and ksh93 have neither. The middle arm's pattern does not match, which is what separates this terminator from `;&`: `;&` would run `two` without testing it, and keeping-to-test skips it and reaches the `*`",
+	},
+	{
+		ID: "cmd/case-continue-matching-zsh-spelling-outside-a-case", Category: "command language",
+		SyntaxError: true,
+		Snippet:     `echo a ;| echo b`,
+		Why:         "the tokenization, and the sharpest evidence for it: zsh names the whole operator — ``parse error near `;|'`` — where dash, bash and ksh93 name the bare `|`, because those three lex a `;` and then a `|` and zsh lexes one token. So the operator is not confined to a `case` arm, and a dialect without it must land its refusal on the `|` rather than word a second sentence",
+	},
+	{
 		ID: "cmd/case-fallthrough-chain", Category: "command language",
 		Snippet: `case a in a) echo one;& b) echo two;& c) echo three;; esac`,
 		Why:     "each arm reached by ;& has a terminator of its own to honor — honoring only the matched arm's ran one extra body and stopped",

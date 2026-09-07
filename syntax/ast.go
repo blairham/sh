@@ -546,8 +546,11 @@ func (c *CaseClause) commandNode() {}
 type CaseItem struct {
 	Patterns []*Word
 	Body     []*Stmt
-	// Term is TokDSemi, TokSemiAmp or TokDSemiAmp. They are separate operators rather
-	// than one "case extension": `;&` is core and `;;&` is bash only.
+	// Term is TokDSemi, TokSemiAmp, TokDSemiAmp or TokSemiPipe. They are
+	// separate operators rather than one "case extension": `;&` is core,
+	// `;;&` is bash only, and `;|` is zsh's spelling of `;;&` — kept as its
+	// own Kind because the two spellings are mutually exclusive, so a tree
+	// that folded them together could not be printed back in either shell.
 	Term    Kind
 	TermPos Pos
 	Start   Pos

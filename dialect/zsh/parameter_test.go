@@ -501,3 +501,111 @@ func TestTheProducedParametersStayOutOfASetListing(t *testing.T) {
 		t.Errorf("`set` status %d, want 0", st)
 	}
 }
+
+// **Each of the eighteen refuses by name**, one name at a time.
+//
+// The eight read routes are graded against `jobstates` alone above, which is
+// right for the routes — they are a property of the expansion and not of the
+// name. This is the other axis and it was missing: nothing named the roster,
+// so deleting an entry from it left every test in this package green and left
+// that parameter reading `0` at status 0, which is the exact failure the whole
+// of #1146 and #1152 exists to prevent. Present on the absent side, in the
+// mechanism written to close it (#1137).
+//
+// It is also where the roster shrinks. The day `$modules` is a live view, this
+// fails at the name until it is moved out of absentModuleParams and into
+// implementedModuleParams, which is a great deal better than nobody noticing
+// that a refusal is still registered over something that now works.
+func TestEveryAbsentParameterRefusesByName(t *testing.T) {
+	for _, name := range absentModuleParams() {
+		t.Run(name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), `print -r -- "n=${#`+name+`}"`)
+			want := "zsh:1: " + name + ": parameter not implemented yet\n"
+			if out != want || st != 1 {
+				t.Errorf("$%s = %q (status %d), want %q", name, out, st, want)
+			}
+		})
+	}
+}
+
+// **And the three rosters account for the module, exactly once each.**
+//
+// `zsh/parameter` names thirty-three parameters and the gate opens only when
+// every one of them is implemented or refuses by name. That is held by
+// zmodloadHolds already. What was not held is the *classification*: a name
+// could be in two rosters, or in none, and the shell would still load the
+// module — one of the two answers would simply win and nothing would say
+// which. A parameter promoted from absent to implemented and left in both
+// lists is the shape that costs the most, because the refusal is registered
+// after the view and would take it back.
+//
+// All four lists are spelled out rather than read from the package, for the
+// reason emptyModuleParams gives: a census that asked the implementation what
+// it thought would agree with it whatever it said. Their being separate lists
+// is what makes this an assertion.
+func TestTheThreeRostersAccountForTheModuleExactlyOnce(t *testing.T) {
+	seen := map[string]string{}
+	for roster, names := range map[string][]string{
+		"implemented": implementedModuleParams(),
+		"empty":       emptyModuleParams(),
+		"absent":      absentModuleParams(),
+	} {
+		for _, name := range names {
+			if other, dup := seen[name]; dup {
+				t.Errorf("$%s is in both the %s and the %s roster; the later registration would take the earlier one back", name, other, roster)
+				continue
+			}
+			seen[name] = roster
+		}
+	}
+	for _, name := range moduleParams() {
+		if _, ok := seen[name]; !ok {
+			t.Errorf("$%s is named by zsh/parameter and is in no roster, so nothing says what a read of it does", name)
+		}
+		delete(seen, name)
+	}
+	for name, roster := range seen {
+		t.Errorf("$%s is in the %s roster and is not named by zsh/parameter", name, roster)
+	}
+	if got, want := len(moduleParams()), 33; got != want {
+		t.Errorf("zsh/parameter names %d parameters here, want %d — measured against zsh 5.9.2 with `zmodload -lF zsh/parameter`", got, want)
+	}
+}
+
+// moduleParams is the thirty-three parameters `zsh/parameter` provides,
+// measured 2026-09-07 as `zmodload -lF zsh/parameter` in zsh 5.9.2 and sorted.
+func moduleParams() []string {
+	return []string{
+		"aliases", "builtins", "commands", "dirstack", "dis_aliases",
+		"dis_builtins", "dis_functions", "dis_functions_source",
+		"dis_galiases", "dis_patchars", "dis_reswords", "dis_saliases",
+		"funcfiletrace", "funcsourcetrace", "funcstack", "functions",
+		"functions_source", "functrace", "galiases", "history", "historywords",
+		"jobdirs", "jobstates", "jobtexts", "modules", "nameddirs", "options",
+		"parameters", "patchars", "reswords", "saliases", "userdirs",
+		"usergroups",
+	}
+}
+
+// implementedModuleParams is the five that are live views (#1060) — the five
+// a real plugin manager reads, and the only five it reads.
+func implementedModuleParams() []string {
+	return []string{"aliases", "builtins", "commands", "functions", "options"}
+}
+
+// absentModuleParams is the eighteen this shell has not got, each registered
+// with [interp.Runner.SetAbsentParameter] so that reading one is refused at
+// the expansion that asked (#1152).
+//
+// Every one of them is non-empty, or can be, in a shell that has it — so
+// reading empty would be a claim and not an answer, which is what separates
+// these from the ten above. Eight are answerable from a table this shell
+// already keeps and ten need a seam that does not exist; #1137 is the survey.
+func absentModuleParams() []string {
+	return []string{
+		"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
+		"funcstack", "functions_source", "functrace", "history", "historywords",
+		"jobdirs", "jobstates", "jobtexts", "modules", "parameters",
+		"patchars", "reswords", "userdirs", "usergroups",
+	}
+}

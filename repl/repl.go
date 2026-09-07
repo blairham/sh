@@ -439,12 +439,48 @@ func (s Shell) guard() panicguard.Guard {
 }
 
 // runEach is runStmts without the guard around it.
+//
+// **A fatal error in what was typed costs the line and not the session.** A
+// prompt is a boundary in the same sense a file is: the text a person just
+// gave the shell is one unit of input, and an error in it ends *that* and asks
+// for the next line. Measured through a pseudo-terminal, one keystroke at a
+// time, with `set -u` and `echo X${NOPE}`: bash 5.3, zsh 5.9.2, ksh93u+ **and
+// dash** all print the diagnostic and draw the next prompt, and so does every
+// other fatal expansion asked — `${x?word}`, `${x:?word}`, a division by
+// zero, a substitution that will not read, a readonly reassignment where the
+// dialect calls one fatal. This shell ended the session for all of them, in
+// all four dialects, so one mistyped variable name under `set -u` closed the
+// terminal (#1124).
+//
+// The **third site** of the boundary #1104 built, and the same mechanism:
+// `.` and `eval` are the first — see Semantics.FatalErrorEndsBorrowedTextOnly
+// — and a startup file the second, in driver.startup. Not a new one, which is
+// what made this a call rather than a design: interp.Runner.GiveUpTheLine.
+//
+// The axis it answers differently is `${x?word}`. Two dialects document that
+// operand as ending the shell and do end it in a script; at a prompt all four
+// draw the next prompt, so this site asks nothing where the other two ask
+// (#1122). Whether the *borrowed text* boundary caught it first is beside the
+// point here: an error that reached this line ends the line whichever
+// dialect it is.
+//
+// It deliberately catches only an *error*. `exit` is not one: `exit`, `exit 7`
+// and `eval 'exit 7'` all end the session in every shell measured, and so does
+// errexit firing — `set -e` then `false` is a session gone in all four —
+// which is exactly what these calls do not catch.
 func (s Shell) runEach(ctx context.Context, stmts []*syntax.File) bool {
 	for _, st := range stmts {
 		if err := s.Runner.RunPart(ctx, st); err != nil {
 			// Refused rather than silently skipped, the same way the script
 			// driver does it.
 			s.errf("%v\n", err)
+			return false
+		}
+		if s.Runner.GiveUpTheLine() {
+			// An error the line gave up over. The status it left behind is
+			// the line's status, exactly as a command's own failure would
+			// be, and the statements after it in the same line are not run:
+			// what a person typed is the unit, and the unit is over.
 			return false
 		}
 		if s.Runner.Exited() {

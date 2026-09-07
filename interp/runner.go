@@ -2653,9 +2653,13 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	// emptiness the shell's own reads and writes get, spelled the way a
 	// process spells it — and cheaper, since a non-file reader or writer
 	// makes os/exec build a pipe and copy through it.
-	cmd.Stdin = r.Stdin
-	cmd.Stdout = r.Stdout
-	cmd.Stderr = r.Stderr
+	//
+	// A stream the script *closed* is the one thing that must not arrive as
+	// that emptiness, and childIn and childOut are where the difference is
+	// kept: an empty descriptor reads end-of-file and a closed one fails.
+	cmd.Stdin = childIn(r.Stdin)
+	cmd.Stdout = childOut(r.Stdout)
+	cmd.Stderr = childOut(r.Stderr)
 	// The descriptors past the three named streams, rebuilt into the child's
 	// own table — see childFiles for why that has to be done by hand and why
 	// the numbering is preserved rather than packed.

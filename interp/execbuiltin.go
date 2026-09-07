@@ -153,9 +153,9 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	}
 	cmd.Dir = r.Dir
 	cmd.Env = r.environ()
-	cmd.Stdin = r.Stdin
-	cmd.Stdout = r.stdout()
-	cmd.Stderr = r.stderr()
+	cmd.Stdin = childIn(r.Stdin)
+	cmd.Stdout = childOut(r.stdout())
+	cmd.Stderr = childOut(r.stderr())
 	// Standing in for a process replacement means standing in for what one
 	// inherits, so the descriptor table crosses here as it does for any other
 	// external command.

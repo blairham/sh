@@ -70,27 +70,19 @@ func (w *callersWriter) String() string {
 // round number and a sentence, in twenty seconds. It is not there to let a
 // slow run pass — a healthy round is milliseconds.
 //
-// What the stop actually is, measured rather than assumed, because the issue's
-// first reading was that the goroutine draining the child was blocked on a
-// write and the lock was involved. It is neither. Reproduced at
-// `GOMAXPROCS=1`, around one run in three of 1,500 rounds, with a goroutine
-// dump and `lsof` and `sample` on the child:
+// What the stop actually was, measured rather than assumed, because the
+// issue's first reading was that the goroutine draining the child was blocked
+// on a write and the lock was involved. It was neither. Reproduced at
+// `GOMAXPROCS=1`, with a goroutine dump and `lsof` and `sample` on the child:
+// the shell in `wait4`, both drains in `poll.Read`, the substitution's
+// producer goroutine finished, and `cat` asleep in `read` on a pipe with no
+// writer at all — waiting for an end-of-file that had already been and gone.
 //
-//   - the shell is in `cmd.Wait`, in `wait4` on the `cat` it started;
-//   - both of os/exec's drain goroutines are in `poll.Read`, waiting on
-//     `cat`'s output pipes — no write is blocked and no mutex is held;
-//   - `cat` holds the substitution's fifo open for reading, has taken the
-//     four bytes the substitution wrote, and is asleep in `read`.
-//
-// So the substituted command is waiting for an end-of-file that never comes.
-// A probe at the moment of the stop settles who is at fault: opening the
-// fifo's write end succeeds *immediately* — so nothing else holds one — and
-// closing it again releases `cat` at once. The pipe therefore had **no writer
-// and a reader that was never woken**: the shell's own close of the write end
-// did not deliver the end-of-file, and a later one did.
-//
-// That is a defect in the shell rather than in this test — `cat <(cmd)` can
-// hang a script — and it is #1079. This test's job is to stop hiding it.
+// That was a defect in the shell rather than in this test — `cat <(cmd)` can
+// hang a script — and it was #1079, fixed in interp.nudgeFifoEOF, which
+// carries the mechanism and the numbers. This test's job was to stop hiding
+// it, and the case that watches for its return is
+// TestAProcessSubstitutionAlwaysDeliversItsEndOfFile.
 func TestAChildsStreamTakesTheLockTheShellPutsOverACallersWriter(t *testing.T) {
 	for _, tc := range []struct{ name, src string }{
 		{"a process substitution beside a child", `cat <(echo sub; echo noise >&2)`},

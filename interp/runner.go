@@ -988,6 +988,18 @@ type Runner struct {
 	// applyRedirs, which saves and restores it. See heredocprocess.go.
 	redirForOwnProcess bool
 
+	// canceledChunk records that the chunk that just finished stopped
+	// because the caller canceled it, which releaseCancellation has already
+	// put the shell back on its feet after. Read by Run, to keep the EXIT
+	// trap out of a run that was asked to stop.
+	canceledChunk bool
+
+	// cancelWatch is what a caller's cancellation is watched for, set once
+	// per chunk in RunPart and shared with every clone of this Runner. Nil
+	// unless the caller supplied a cancelable context, which is what keeps
+	// the per-command check to a comparison; see cancel.go.
+	cancelWatch *cancelWatch
+
 	// abandonLine is the line the statement that gave up was on, so the rest
 	// of that *line* is given up with it. Measured: `r=2; echo one` on one
 	// line prints nothing, and `r=2` with `echo one` on the line after it
@@ -1608,9 +1620,22 @@ func (r *Runner) allowed(ctx context.Context, a Action) bool {
 }
 
 // Run executes a whole file, returning the last command's status.
+//
+// The context is consulted at every command, so a caller can stop a runaway
+// script: cancel it, or give it a deadline, and Run returns with the
+// context's own error — `errors.Is(err, context.Canceled)` or
+// `context.DeadlineExceeded` — and the status a shell stopped from outside
+// reports. See cancel.go for what that costs and what else Run's error can
+// be.
 func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 	if err := r.RunPart(ctx, f); err != nil {
-		r.runExitTrap(ctx)
+		if !r.canceledChunk {
+			// A canceled run does not go on to run more of the script, and
+			// the EXIT trap is more of the script. The other thing this
+			// error can be — a construct this shell has not got — is the
+			// script ending, and there the trap belongs.
+			r.runExitTrap(ctx)
+		}
 		return r.status, err
 	}
 	return r.Finish(ctx), nil
@@ -1624,6 +1649,9 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 // Nothing is torn down here. Finish does that, once, however many chunks ran.
 func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ctx = ctx
+	// Read once, here, rather than per command: see cancel.go for why that
+	// is the difference between honoring the context and paying for it.
+	r.watch(ctx)
 	// A chunk is a typed line, and whether the shell has just shown the person
 	// its stopped jobs is a fact about the line before this one — see the two
 	// fields for what that buys over remembering it forever.
@@ -1666,6 +1694,16 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 		if r.ctl == controlExit {
 			break
 		}
+	}
+	if r.stoppedByTheCaller() {
+		// The shell goes back into ordinary flow — the cancellation ended
+		// this chunk and not the session; see releaseCancellation — and the
+		// caller's own error is what says the chunk stopped. Read from the
+		// context rather than remembered, because Canceled and
+		// DeadlineExceeded are different answers and only the context knows
+		// which this was.
+		r.releaseCancellation()
+		return ctx.Err()
 	}
 	return nil
 }
@@ -2084,6 +2122,20 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 	// statement, and everything after it on the line ran as though nothing
 	// had happened.
 	if r.takeInterrupt() {
+		return nil
+	}
+	// And the same door for a caller that has asked the run to stop. Beside
+	// the interrupt rather than in the loop drivers, for the reason the
+	// interrupt is here: this is the one place a loop of the shell's own
+	// commands passes through. See cancel.go.
+	//
+	// Returning here is a fast exit rather than the thing that stops the
+	// command: canceled() sets the control flow, and every dispatcher below
+	// refuses once that is set. Measured by mutation — dropping the return
+	// leaves the behavior identical, and the difference is only whether a
+	// stopped shell walks through a command's bookkeeping to find out it is
+	// not running it.
+	if r.canceled() {
 		return nil
 	}
 	if c != nil {

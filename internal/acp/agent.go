@@ -214,8 +214,20 @@ func (a *Agent) newSession(params json.RawMessage) (any, error) {
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInternalError, "no empty input for the session: %v", err)
 	}
 	sh.Stdin = empty
-	sh.Gate = &Gate{Ask: s.ask, Remembered: s.mem}
-	sh.Events = s
+	// The template's gate goes *inside* this one rather than being replaced by
+	// it. A policy handed to `-acp` is what the invocation asked for, and a
+	// session that assigned over it would take the flag and mean nothing by
+	// it — which is what this line did until #1335: `-acp -policy p` requested
+	// permission for every exec, the client answered allow-once, and a program
+	// the policy refused ran anyway.
+	//
+	// Order is the whole of the rule, and it is the one docs/design/acp.md
+	// states: the inner gate first, and its refusal is final and unaskable. A
+	// person offered a button that overrides the sandbox is a sandbox that is
+	// advisory — and on this route "a person" may be an agent harness that
+	// answers by itself, which would make it advisory with nobody watching.
+	sh.Gate = &Gate{Inner: sh.Gate, Ask: s.ask, Remembered: s.mem}
+	sh.Events = watched(sh.Events, s)
 	shell, code := driver.NewSession(sh)
 	if shell == nil {
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInternalError, "the shell would not start: status %d", code)
@@ -226,6 +238,36 @@ func (a *Agent) newSession(params json.RawMessage) (any, error) {
 	a.sessions[id] = s
 	a.mu.Unlock()
 	return NewSessionResponse{SessionID: id}, nil
+}
+
+// watched is where a session's events go: to the client, and to whatever the
+// invocation was already writing them to.
+//
+// The same argument cmd/sh makes about a plugin's observer, in the place the
+// same mistake was made: `-audit f` writes a file and `-trace-events` writes
+// to the terminal, and somebody who served ACP from a shell that was already
+// keeping a record did not ask for the record to stop. An audit trail a
+// protocol front end can silence is not an audit trail — and until #1335 this
+// was an assignment, so `sh -acp -audit f` created the file, wrote nothing to
+// it, and said nothing about either.
+//
+// Nil stays nil rather than becoming a discard, so a shell nobody pointed a
+// sink at still pays one nil check per event.
+func watched(already interp.Sink, s *session) interp.Sink {
+	if already == nil {
+		return s
+	}
+	return bothSinks{outer: already, session: s}
+}
+
+// bothSinks feeds two sinks as one, the record before the client: what a shell
+// did is written down whether or not the connection is still there to hear
+// about it.
+type bothSinks struct{ outer, session interp.Sink }
+
+func (b bothSinks) Emit(ctx context.Context, e interp.Event) {
+	b.outer.Emit(ctx, e)
+	b.session.Emit(ctx, e)
 }
 
 func (a *Agent) session(id string) *session {

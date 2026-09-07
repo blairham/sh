@@ -222,7 +222,7 @@ func TestACPTakesNoOperands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code := serveACP(sh, []string{"-c", "echo hi"}); code == 0 {
+	if code := serveACP(sh, []string{"-c", "echo hi"}, strings.NewReader(""), io.Discard); code == 0 {
 		t.Error("operands were accepted; they would have been ignored")
 	}
 }

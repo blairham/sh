@@ -15,7 +15,7 @@ import (
 func helped(t *testing.T, args ...string) (out, errs string, code int) {
 	t.Helper()
 	var o, e bytes.Buffer
-	code = run(append([]string{"sh"}, args...), &o, &e)
+	code = run(append([]string{"sh"}, args...), nil, &o, &e)
 	return o.String(), e.String(), code
 }
 

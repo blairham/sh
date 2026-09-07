@@ -87,6 +87,10 @@ not start unless the policy names it. What a plugin then does with its own
 descriptors is its own business, exactly as for any command the shell was
 allowed to start.
 
+A policy reaches an ACP session too: -acp -policy p governs every session a
+client opens, its refusal is final, and nobody is asked about an action the
+policy already refused. -audit and -trace-events keep recording under -acp.
+
 A policy on an agent reaches what the agent asks this shell for: the files it
 reads and writes, and the commands it asks us to run. A command it runs in its
 own process instead is its own fork and its own exec, and no gate sees it —

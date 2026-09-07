@@ -16,6 +16,7 @@ import (
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/acp"
+	"github.com/blairham/sh/interp"
 
 	"github.com/blairham/sh/internal/jsonrpc"
 )
@@ -131,13 +132,23 @@ func (c *client) questions() int {
 // initializes, and opens a session in a directory of its own.
 func connect(t *testing.T, c *client) (*client, string, string) {
 	t.Helper()
+	return connectGated(t, c, nil)
+}
+
+// connectGated is the same, on a shell that already has a gate — an embedder's
+// sandbox policy, or `-policy` on the command line.
+//
+// One helper with a parameter rather than two, because the pair of them is how
+// a fix goes into one route and not the other.
+func connectGated(t *testing.T, c *client, inner interp.Gate) (*client, string, string) {
+	t.Helper()
 	if c == nil {
 		c = &client{}
 	}
 	dir := t.TempDir()
 	a, b := net.Pipe()
 	agent := acp.NewAgent(
-		driver.Shell{Name: "sh"},
+		driver.Shell{Name: "sh", Gate: inner},
 		acp.Implementation{Name: "sh", Version: "test"},
 	)
 	c.conn = jsonrpc.NewConn(b, b, c)
@@ -568,5 +579,80 @@ func TestAFailingCommandIsAFailedToolCallAndAnOrdinaryTurn(t *testing.T) {
 	raw, _ := end["rawOutput"].(map[string]any)
 	if raw["exitStatus"] != float64(1) {
 		t.Errorf("exitStatus = %v, want 1", raw["exitStatus"])
+	}
+}
+
+// refuser is a gate standing in for a sandbox policy: it refuses one program
+// and records every action it was asked about.
+//
+// Not a policy.Policy, deliberately. This package must hold the composition
+// rule on its own — a test that could only fail when the policy file format
+// agrees with it is a test about two things, and cmd/sh already asks the
+// question with a real `-policy` file on the command line.
+type refuser struct {
+	program string
+
+	mu   sync.Mutex
+	seen []interp.Action
+}
+
+func (g *refuser) Allow(_ context.Context, a interp.Action) interp.Decision {
+	g.mu.Lock()
+	g.seen = append(g.seen, a)
+	g.mu.Unlock()
+	if a.Kind == interp.ActionExec && a.Path == g.program {
+		return interp.Deny
+	}
+	return interp.Allow
+}
+
+func (g *refuser) consulted() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return len(g.seen)
+}
+
+// TestASessionWrapsTheShellsGateRatherThanReplacingIt is #1335 where the
+// mistake was: a session assigned its permission gate over the template's, so
+// a shell handed a policy served ACP without one.
+//
+// The assertion is that the client is not asked. A refusal that is put to
+// somebody is a refusal somebody can overturn, and on this route the somebody
+// may be an agent harness answering its own questions — so a policy that only
+// holds while the far end is careful holds nothing. The client here answers
+// allow-once to everything, which is what such a harness is.
+func TestASessionWrapsTheShellsGateRatherThanReplacingIt(t *testing.T) {
+	t.Parallel()
+	inner := &refuser{program: "/bin/echo"}
+	c, id, _ := connectGated(t, nil, inner)
+
+	prompt(t, c, id, "/bin/echo tripwire")
+	if n := c.questions(); n != 0 {
+		t.Errorf("the client was asked %d time(s) about an exec the inner gate refuses;\n"+
+			"\ta policy refusal is not negotiable and nobody is asked about one", n)
+	}
+	if got := c.text(acp.StreamStdout); strings.Contains(got, "tripwire") {
+		t.Errorf("stdout = %q, want the refused command not to have run", got)
+	}
+	if inner.consulted() == 0 {
+		t.Error("the inner gate was never consulted at all: the session replaced it")
+	}
+}
+
+// The control, and it is the half that keeps the fix honest: an action the
+// inner gate permits is still escalated. A gate that answered every question
+// itself would pass the test above and would have turned `-acp` into a shell
+// that asks nobody about anything.
+func TestAnActionTheInnerGateAllowsIsStillAskedAbout(t *testing.T) {
+	t.Parallel()
+	inner := &refuser{program: "/nothing-this-test-runs"}
+	c, id, _ := connectGated(t, nil, inner)
+
+	prompt(t, c, id, "/bin/echo tripwire")
+	if n := c.questions(); n != 1 {
+		t.Errorf("the client was asked %d time(s), want exactly once", n)
+	}
+	if got := c.text(acp.StreamStdout); !strings.Contains(got, "tripwire") {
+		t.Errorf("stdout = %q, want the allowed command to have run", got)
 	}
 }

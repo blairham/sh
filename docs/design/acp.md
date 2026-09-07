@@ -422,8 +422,8 @@ with that rather than duplicating it.
 
 ### Composition with a real policy
 
-The ACP gate wraps an inner `interp.Gate` — nil today, a sandbox policy
-tomorrow:
+The ACP gate wraps an inner `interp.Gate`, which is whatever gate the
+shell already had — `-policy`, `-deny`, or an embedder's own:
 
 1. the inner gate is consulted first; if it denies, the action is denied
    and **no one is asked**. A policy refusal is not negotiable, and
@@ -436,6 +436,39 @@ tomorrow:
 This is why no third `Ask` decision is needed in `interp`. The
 interpreter's question stays binary; *who answers it* is the front end's
 arrangement.
+
+**The wiring is the part that was missing, and for a while it was.** The
+rule above was written and unit-tested before there was a policy to put
+inside it, and `session/new` then assigned its gate *over* the
+template's rather than around it — so `sh -acp -policy p` took the flag
+and consulted the rules nowhere. Measured on `main` at the time (#1335):
+a policy of `default deny exec` plus `allow exec /bin/echo` refused
+`/usr/bin/curl` under `-c`, and ran it under `-acp` as soon as the
+client answered `allow-once`. The tell was not that curl ran. It was
+that permission was **requested at all**, with a policy present and
+without one alike: the question was the same either way, which is what
+"the policy is not being asked" looks like from the outside.
+
+Two things follow for anything built on this seam. The first is that a
+test about this route asserts the request **does not happen**, not that
+the command was refused — a client answering reject makes a broken shell
+look correct. The second is why that matters more here than at a prompt:
+the far end of `-acp` is not necessarily a person. An agent harness
+answers permission requests itself, and one configured to auto-approve
+turns every escalation into an allow, so a policy that is merely *asked
+about* is a policy that is gone, with nobody in a position to notice.
+
+### The event sink composes the same way
+
+A session's events go to the client **and** to whatever sink the
+invocation installed. `-audit f` writes a file and `-trace-events`
+writes to the terminal, and somebody who served ACP from a shell that
+was already keeping a record did not ask for the record to stop: an
+audit trail a front end can silence is not an audit trail. This was the
+same assignment-instead-of-composition mistake, on the line below the
+gate, with the same shape — `sh -acp -audit f` created the file and
+wrote nothing to it — and it is fixed with the same rule `cmd/sh`
+already applies to a plugin's observer.
 
 ### The four option kinds
 

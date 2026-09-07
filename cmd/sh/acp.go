@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/blairham/sh/driver"
@@ -38,7 +39,13 @@ var version = "0.0.0-dev"
 
 // serveACP runs the protocol until the client closes our input, and returns
 // the status to exit with.
-func serveACP(sh driver.Shell, rest []string) int {
+//
+// in and out are the connection, and they are passed rather than reached for:
+// they are the process's standard input and output when this is a binary, and
+// they are a pipe when a test is the client. That is not tidiness — a route
+// that opens its own streams is a route no test can be on the other end of,
+// and `-acp -policy p` was wrong for as long as it was untestable (#1335).
+func serveACP(sh driver.Shell, rest []string, in io.Reader, out io.Writer) int {
 	if len(rest) > 0 {
 		// There is no invocation to read here: a session's directory and its
 		// program both arrive as messages. Operands would be silently
@@ -57,7 +64,7 @@ func serveACP(sh driver.Shell, rest []string) int {
 	// there — the shell's own output goes back as session updates, on writers
 	// each session gives its runner. Standard error stays ours: the protocol
 	// says an agent may log there and that a client may ignore it.
-	err := agent.Serve(ctx, os.Stdin, os.Stdout)
+	err := agent.Serve(ctx, in, out)
 	// Every session's EXIT trap fires once, as the end of a script does,
 	// before this process goes.
 	agent.Close(ctx)

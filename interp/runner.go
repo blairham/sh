@@ -3123,11 +3123,15 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	// Fatal everywhere but bash, measured with a plain assignment in a
 	// script — which is the contaminated-probe case oracle.md records.
 	//
-	// And in bash it is fatal after all when the program came from an
-	// argument: `bash -c 'readonly x=1; x=2; echo after'` stops and exits 1,
-	// where the same three lines in a file print `after` and exit 0. Only for
-	// an assignment standing alone — `export x=2` and `x=2 cmd` are not fatal
-	// there either way.
+	// The invocation route has nothing to do with it, which took a full
+	// route-by-separator square to see: `bash -c 'readonly x=1; x=2; echo
+	// after'` stops and exits 1, and so does the same one-line program from
+	// a *file*; the same three commands on three lines print `after` and exit
+	// 0 by **both** routes. What ends is the command list, which is
+	// controlAbandon below. The field that used to be read here was measured
+	// from the two cells on the diagonal of that square — `-c` with a `;`
+	// against a file with newlines — which varied two things at once and is
+	// confirmatory for either reading (#1182).
 	//
 	// Two arguments only where the wording asks for two: a format with no
 	// explicit indexes and a spare argument becomes "%!(EXTRA …)", which is
@@ -3157,8 +3161,6 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	}
 	fatal := r.sem().ReadonlyReassignmentFatal
 	switch {
-	case form == assignedAlone && r.Route == RouteCommandString:
-		fatal = r.sem().ReadonlyReassignmentFatalFromCommandString
 	case form == assignedByDeclaration:
 		// A third answer, and a different set of shells from either of the two
 		// above: `export x=2` stops dash, ksh93 and zsh, and bash reports it

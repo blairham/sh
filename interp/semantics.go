@@ -1387,18 +1387,6 @@ type Semantics struct {
 	// rather than picking one.
 	FailedExpansionAbandonsTheLine Answer
 
-	// ReadonlyReassignmentFatalFromCommandString is the same question for a
-	// shell whose program came from an argument rather than from a file.
-	//
-	// One dialect answers the two differently: `bash -c 'readonly x=1;
-	// x=2; echo after'` stops and exits 1, and the same three lines in a
-	// file print `after` and exit 0. The other three are fatal either way.
-	//
-	// Asked only for an assignment standing as a command of its own. The
-	// dialect that splits is not fatal for `export x=2` or `x=2 cmd` by
-	// either route, so those keep the answer above.
-	ReadonlyReassignmentFatalFromCommandString Answer
-
 	// ReadonlyReassignmentFatal ends the script when a readonly variable is
 	// assigned. True everywhere but bash, measured with a plain assignment in
 	// a script file — adding a redirect makes it a command and reverses the
@@ -3910,9 +3898,8 @@ func PosixSemantics() Semantics {
 		// The standard describes one refusal and says nothing about a
 		// second, so the preset stops at the first the way three of the
 		// panel do.
-		SetReportsEveryBadOption:                   No,
-		ReadonlyReassignmentFatal:                  Yes,
-		ReadonlyReassignmentFatalFromCommandString: Yes,
+		SetReportsEveryBadOption:  No,
+		ReadonlyReassignmentFatal: Yes,
 		// XCU makes an expansion error fatal to a non-interactive shell, so
 		// the standard's preset does not survive one.
 		FailedExpansionAbandonsTheLine:         No,

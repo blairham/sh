@@ -326,7 +326,6 @@ func Semantics() interp.Semantics {
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	s.ReadonlyReassignmentFatal = interp.No
-	s.ReadonlyReassignmentFatalFromCommandString = interp.Yes
 	// A failed expansion gives up the line here and the shell carries on at
 	// the next one, which is this shell alone among the four. Measured over
 	// both routes and both separators — see the axis for the 2x2 — on a bad

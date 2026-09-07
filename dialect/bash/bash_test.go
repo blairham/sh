@@ -124,7 +124,6 @@ func TestSemantics(t *testing.T) {
 		{"MonitorNeedsATerminal", s.MonitorNeedsATerminal, interp.No},
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.Yes},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
-		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},
 		// The one shell in the panel that survives a failed expansion: it
 		// gives up the line and runs the next one, where the other three end
 		// the shell. Measured over both routes and both separators (#1171).

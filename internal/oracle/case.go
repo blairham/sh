@@ -786,6 +786,17 @@ var Corpus = []Case{
 		Why:     "must be a plain assignment in a script: adding a redirect makes it a command and reverses the answer",
 	},
 	{
+		ID: "axis/readonly-reassign-from-c", Category: "semantics axes",
+		Snippet: "readonly r=1\nr=2\necho survived\n",
+		Why:     "the same three lines through `-c`, and the row whose absence cost a wrong axis. `Semantics.ReadonlyReassignmentFatalFromCommandString` existed because `-c 'readonly r=1; r=2; echo survived'` stops and the three lines in a *file* print `survived` — two cells that differ in both the route and the separator, which is the diagonal of the square and confirmatory for either reading. The full square says the separator decides and the route decides nothing: bash is 1 for one line and 0 for three by **both** routes, and dash, ksh93 and zsh are fatal in all four cells. This row is the other end of the diagonal, so the pair can only be read one way (#1182)",
+	},
+	{
+		ID: "axis/readonly-reassign-in-one-list", Category: "semantics axes",
+		Script:  true,
+		Snippet: "readonly r=1; r=2; echo survived\n",
+		Why:     "the third corner: the same program as `axis/readonly-reassign` with `;` where it has newlines, over the same route. What ends is the command *list*, so the `echo` goes with the refusal here and runs there — which is the difference the removed field was reading as a route. Cheap to record and the only row that makes the separator visible on a fixed route",
+	},
+	{
 		ID: "axis/arith-error-status", Category: "semantics axes",
 		Snippet: `echo $((1/0)); echo "st=$?"`,
 		Why:     "dash exits 2 where bash, ksh93 and zsh exit 1; found by a test disagreeing with the conformance run, not by the sweep",

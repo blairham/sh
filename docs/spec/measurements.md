@@ -1241,6 +1241,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `axis/readonly-reassign-status` | **2>** `<script>: 2: r: is read only` *(status 2)* | `st=1` **2>** `<script>: line 2: r: readonly variable` | **2>** `<script>: line 2: r: readonly variable` *(status 1)* | `st=1` **2>** `<script>: line 2: r: readonly variable` | **2>** `<script>: line 2: r: is read only` *(status 1)* | **2>** `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/readonly-reassign-declaration-status` | **2>** `<script>: 2: export: r: is read only` *(status 2)* | `st=1` **2>** `<script>: line 2: r: readonly variable` | **2>** `<script>: line 2: r: readonly variable` *(status 1)* | `st=1` **2>** `<script>: line 2: r: readonly variable` | **2>** `<script>: line 2: r: is read only` *(status 1)* | **2>** `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/readonly-reassign` | **2>** `<script>: 2: r: is read only` *(status 2)* | `survived` **2>** `<script>: line 2: r: readonly variable` | **2>** `<script>: line 2: r: readonly variable` *(status 1)* | `survived` **2>** `<script>: line 2: r: readonly variable` | **2>** `<script>: line 2: r: is read only` *(status 1)* | **2>** `<script>:2: read-only variable: r` *(status 1)* |
+| `axis/readonly-reassign-from-c` | **2>** `<shell>: 2: r: is read only` *(status 2)* | `survived` **2>** `<shell>: line 2: r: readonly variable` | **2>** `<shell>: line 2: r: readonly variable` *(status 127)* | `survived` **2>** `<shell>: line 1: r: readonly variable` | **2>** `<shell>: line 2: r: is read only` *(status 1)* | **2>** `<shell>:2: read-only variable: r` *(status 1)* |
+| `axis/readonly-reassign-in-one-list` | **2>** `<script>: 1: r: is read only` *(status 2)* | **2>** `<script>: line 1: r: readonly variable` *(status 1)* | **2>** `<script>: line 1: r: readonly variable` *(status 1)* | **2>** `<script>: line 1: r: readonly variable` *(status 1)* | **2>** `<script>: line 1: r: is read only` *(status 1)* | **2>** `<script>:1: read-only variable: r` *(status 1)* |
 | `axis/arith-error-status` | **2>** `<shell>: 1: arithmetic expression: division by zero: "1/0"` *(status 2)* | **2>** `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | **2>** `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 127)* | **2>** `<shell>: 1/0: division by 0 (error token is "0")` *(status 1)* | **2>** `<shell>: 1/0: divide by zero` *(status 1)* | **2>** `<shell>:1: division by zero` *(status 1)* |
 | `axis/failed-expansion-abandons-the-line` | `pre` **2>** `<script>: 2: arithmetic expression: division by zero: "1/0"` *(status 2)* | `pre~after` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `pre` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` *(status 1)* | `pre~after` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `pre` **2>** `<script>: line 2: 1/0: divide by zero` *(status 1)* | `pre` **2>** `<script>:2: division by zero` *(status 1)* |
 | `axis/a-failed-for-word-list` | `pre` **2>** `<script>: 2: arithmetic expression: division by zero: "1/0"` *(status 2)* | `pre~after` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `pre` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` *(status 1)* | `pre~after` **2>** `<script>: line 2: 1/0: division by 0 (error token is "0")` | `pre` **2>** `<script>: line 2: 1/0: divide by zero` *(status 1)* | `pre` **2>** `<script>:2: division by zero` *(status 1)* |
@@ -1417,6 +1419,16 @@ grades it and nothing drift-checks it either, for the same reason.
   readonly r=1
   r=2
   echo survived
+  ```
+- `axis/readonly-reassign-from-c` — the same three lines through `-c`, and the row whose absence cost a wrong axis. `Semantics.ReadonlyReassignmentFatalFromCommandString` existed because `-c 'readonly r=1; r=2; echo survived'` stops and the three lines in a *file* print `survived` — two cells that differ in both the route and the separator, which is the diagonal of the square and confirmatory for either reading. The full square says the separator decides and the route decides nothing: bash is 1 for one line and 0 for three by **both** routes, and dash, ksh93 and zsh are fatal in all four cells. This row is the other end of the diagonal, so the pair can only be read one way (#1182)
+  ```sh
+  readonly r=1
+  r=2
+  echo survived
+  ```
+- `axis/readonly-reassign-in-one-list` — the third corner: the same program as `axis/readonly-reassign` with `;` where it has newlines, over the same route. What ends is the command *list*, so the `echo` goes with the refusal here and runs there — which is the difference the removed field was reading as a route. Cheap to record and the only row that makes the separator visible on a fixed route
+  ```sh
+  readonly r=1; r=2; echo survived
   ```
 - `axis/arith-error-status` — dash exits 2 where bash, ksh93 and zsh exit 1; found by a test disagreeing with the conformance run, not by the sweep
   ```sh

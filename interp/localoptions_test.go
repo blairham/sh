@@ -34,7 +34,6 @@ func TestLocalReadsTheDialectsLetters(t *testing.T) {
 	out, errs, _ = declRun(t, src, func(s *Semantics) {
 		s.LocalOptions = "air"
 		s.ReadonlyReassignmentFatal = Yes
-		s.ReadonlyReassignmentFatalFromCommandString = Yes
 	}, Diagnostics{})
 	if !strings.Contains(errs, "readonly") {
 		t.Errorf("stderr = %q, want the readonly refusal", errs)

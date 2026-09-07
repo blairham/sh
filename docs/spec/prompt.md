@@ -177,6 +177,7 @@ does.
 | `%S` `%s` | standout on and off | `\e[7m`, `\e[27m` |
 | `%F{c}` `%f` | foreground color, and default | `\e[31m` for `red`, `\e[39m` |
 | `%K{c}` `%k` | background color, and default | `\e[44m` for `blue`, `\e[49m` |
+| `%F{#rrggbb}` | a direct color, under every `TERM` | `\e[38;2;255;136;0m` for `#ff8800` |
 | `%E` | clear to the end of the line | `\e[K` |
 | `%(x.a.b)` | a question, and one of two texts | `%(?.ok.bad)` drew `ok` |
 | `%x` | the file being read | `/opt/homebrew/bin/zsh` at a prompt, the sourced file's path in one |
@@ -189,15 +190,55 @@ than about the spelling: measured at the same moment, bash's `\t` drew
 is — zsh drew `0:17:07`, so the zero is taken off rather than replaced with
 a space, and the hour keeps a digit.
 
-The colors are the terminal's arithmetic rather than the dialect's, so they
-are written once for whichever dialect asks: 30 to 37 are the eight
+### The colors
+
+The sequences are the terminal's arithmetic rather than the dialect's, so
+they are written once for whichever dialect asks: 30 to 37 are the eight
 foreground colors, 40 to 47 the same backgrounds, 90 and 100 their bright
-halves, 39 and 49 the defaults, and `38;5;n` / `48;5;n` everything above
-15. Measured: `%F{2}` → `\e[32m`, `%F{9}` → `\e[91m`, `%F{200}` →
-`\e[38;5;200m`, `%K{5}` → `\e[45m`. The names are lower case and only lower
-case — `%F{Red}`, `%F{bogus}`, `%F{256}` and `%F{-1}` all drew the default
-`\e[39m` — and an empty argument is black rather than the default, since
-`%F` and `%F{}` both drew `\e[30m`.
+halves, 39 and 49 the defaults, `38;5;n` / `48;5;n` everything from 16 to
+255, and `38;2;r;g;b` / `48;2;r;g;b` a direct color. Measured: `%F{2}` →
+`\e[32m`, `%F{9}` → `\e[91m`, `%F{200}` → `\e[38;5;200m`, `%K{5}` →
+`\e[45m`, `%F{#ff8800}` → `\e[38;2;255;136;0m`.
+
+**How the braces are read**, from 91 arguments measured in both layers on
+zsh 5.9.2 with `TERM=xterm-256color`. Four readings, and three of them are
+surprises:
+
+| the argument | read as | measured |
+| --- | --- | --- |
+| starts with a letter | a **name, by prefix** | `re` → red, `w` → white |
+| an ambiguous prefix | the **first** of the eight in the terminal's numbering | `b` and `bl` → **black**, not blue |
+| a run of letters that is no prefix | the default | `bogus`, `grey`, `bo`, `x9` → `\e[39m` |
+| the name ends at the first non-letter | the letters before it | `red,`, `red bold`, `red;bold` → red |
+| anything else | the digits at the front, as C's `strtol` | ` 2` → 2, `+9` → 9, `9x` → 9, `1red` → 1 |
+| **no digits at the front** | **nought**, which is the first color | `-`, `+`, `,`, ` `, `0x9`, ` red ` → `\e[30m` |
+| a number outside 0…255 | the default | `256`, `-1` → `\e[39m` |
+| `#rrggbb`, `#rgb` | a **direct color**, short digits doubled | `#abc` → 170, 187, 204 |
+| `#` whose hex run starts badly | nought — no number at all | `#`, `#g`, `#ggg` → `\e[30m` |
+| `#` whose hex run starts well and is malformed | the default | `#0`, `#0000`, `#00g` → `\e[39m` |
+
+So an *invalid* color has **two** answers and not one, and which of them
+depends on whether the argument looked like the start of a number. An
+implementation with a single answer for both is a visibly wrong color on
+half of the shapes, at status 0.
+
+The names are lower case and only lower case: `%F{RED}` and `%F{Red}` drew
+the default. An empty argument is black rather than the default, since `%F`
+and `%F{}` both drew `\e[30m` — which is the no-digits reading above, and
+not a rule of its own.
+
+**One thing here depends on the terminal rather than on the shell, and is
+deliberately not modeled.** Measured, `%F{9}` drew `\e[91m` under
+`TERM=xterm-256color` and `\e[39m` — the default — under `TERM=xterm`,
+which reports eight colors; `%F{200}` drew `\e[38;5;200m` and `\e[39m` the
+same way round. So an index above seven is answered by asking terminfo how
+many colors there are, and below eight it is not. This implementation
+models the 256-color terminal unconditionally, which is what every terminal
+a person runs a shell in reports and is the wrong answer on a genuinely
+eight-color one. Matching it means reading a capability database, which is
+a seam this substrate has not got. The `#rrggbb` form is the evidence that
+the two questions are separate: it drew the same direct-color sequence under
+every `TERM` measured, `dumb` included.
 
 `%D{fmt}` is implemented: the braces are read the way a color code's are
 and handed to `interp.Strftime`, which is the same formatter

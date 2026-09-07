@@ -530,18 +530,55 @@ func promptOctalByte(enabled bool, runes []rune, i int) (byte, bool) {
 // The dialect says which half of the screen its code paints and what was
 // written in the braces; everything below is the terminal's own arithmetic —
 // the select-graphic-rendition parameters, where 30 to 37 are the eight
-// foreground colors, 90 to 97 their bright halves, 39 the default, and
-// `38;5;n` the 256-color extension. Those numbers belong to the terminal in
-// the same way the cell widths in cellwidth.go do, so a second dialect with a
-// color code gets them without saying them again.
+// foreground colors, 90 to 97 their bright halves, 39 the default, `38;5;n`
+// the 256-color extension and `38;2;r;g;b` the direct-color one. Those
+// numbers belong to the terminal in the same way the cell widths in
+// repl/cellwidth.go do, so a second dialect with a color code gets them
+// without saying them again.
 //
-// Measured against zsh 5.9.2 through a pty, one code per prompt: `%F{red}`
-// drew `\e[31m`, `%F{2}` drew `\e[32m`, `%F{9}` drew `\e[91m`, `%F{200}` drew
-// `\e[38;5;200m` and `%K{blue}` drew `\e[44m`.
+// Measured against zsh 5.9.2, `TERM=xterm-256color`, 93 arguments in both
+// layers — the whole grid is in interp/promptcolor_test.go and the rule it
+// yields is in colorIndex below.
+//
+// **One thing here is deliberately not the shell's answer, and it is
+// recorded rather than matched: the count of colors the *terminal* claims.**
+// Measured, `%F{9}` is `\e[91m` under `TERM=xterm-256color` and `\e[39m` —
+// the default — under `TERM=xterm`, which reports eight; `%F{200}` is
+// `\e[38;5;200m` and `\e[39m` the same way round. So an index above seven is
+// answered by asking terminfo how many colors there are, and below eight it
+// is not. This models the 256-color terminal unconditionally, which is what
+// every terminal a person runs this in reports, and it is the wrong answer
+// on a genuinely eight-color one. Matching it means reading terminfo, which
+// is a capability database rather than a shell behavior and is a seam this
+// substrate has not got — the `#rrggbb` form below is the evidence that the
+// two questions are separate, since it draws the same direct-color sequence
+// under *every* TERM including `dumb`.
 func colorSequence(layer PromptColor, arg string) string {
-	n, ok := colorNumber(arg)
+	if len(arg) > 0 && arg[0] == '#' {
+		if rgb, ok := directColor(arg); ok {
+			// The direct-color form, which is its own answer rather than an
+			// index into anything: `%F{#ff8800}` drew `\e[38;2;255;136;0m`
+			// and `%K{#ff8800}` drew `\e[48;2;…`, and both did so under
+			// every TERM measured.
+			return "\x1b[" + strconv.Itoa(colorExtended(layer)) + ";2;" +
+				strconv.Itoa(rgb[0]) + ";" + strconv.Itoa(rgb[1]) + ";" +
+				strconv.Itoa(rgb[2]) + "m"
+		}
+		// A `#` that is not that form splits two ways, and the split is
+		// measured rather than tidy: a run of hex digits that *starts* badly
+		// is no number at all and comes to nought, which is the first color
+		// — `%F{#}`, `%F{#g}` and `%F{#ggg}` all drew `\e[30m`. A run that
+		// starts well and is the wrong length or ends badly is a malformed
+		// number, and that is the default — `%F{#0}`, `%F{#0000}` and
+		// `%F{#00g}` drew `\e[39m`.
+		if len(arg) > 1 && isHexDigit(arg[1]) {
+			return sgr(defaultColor(layer))
+		}
+		return sgr(colorBase(layer))
+	}
+	n, ok := colorIndex(arg)
 	if !ok {
-		// Anything the table and the number range both refuse is the
+		// Anything the names and the number range both refuse is the
 		// terminal's default. Measured: `%F{bogus}`, `%F{Red}` — the names are
 		// lower case and only lower case — `%F{256}` and `%F{-1}` all drew
 		// `\e[39m`, which is the same answer `%f` gives.
@@ -559,29 +596,143 @@ func colorSequence(layer PromptColor, arg string) string {
 	}
 }
 
-// colorNumber reads what was written in the braces.
+// directColor reads the `#rrggbb` and `#rgb` forms, and reports whether the
+// argument was one at all.
 //
-// A name, or a number from 0 to 255, and nothing else. The empty argument is 0
-// rather than the default, which is measured and is not what it looks like:
-// zsh drew `%F` and `%F{}` both as `\e[30m`, the same as `%F{black}`.
-func colorNumber(arg string) (int, bool) {
-	if arg == "" {
-		return 0, true
+// Three hex digits or six, and each of the three doubled in the short form:
+// `%F{#fff}` drew `38;2;255;255;255` and `%F{#abc}` drew `38;2;170;187;204`.
+// No other length is one — `#0`, `#00`, `#0000`, `#f`, `#ff`, `#ffff` and
+// `#fffff` all drew the plain default — and the case of the letters does not
+// matter, since `#FF8800` and `#ff8800` drew the same bytes.
+//
+// The second result is false for an argument that is not this form, which
+// includes a `#` whose digits are not hex at all: `%F{#ggg}` and `%F{#}` drew
+// `\e[30m`, the *first* color, where `%F{#00g}` drew the default. That split
+// is measured and is the reason this counts the leading hex digits rather
+// than only checking the length — a run that starts badly is no number, and
+// falls to colorIndex's reading of a string with no digits in it, which is
+// nought. A run that starts well and ends badly is a malformed number, and
+// that is the default.
+// isHexDigit and hexValue are builtin.go's, shared rather than written twice:
+// `$'\x41'` and `%F{#ff8800}` read the same digits.
+func directColor(arg string) ([3]int, bool) {
+	if len(arg) == 0 || arg[0] != '#' {
+		return [3]int{}, false
 	}
-	if n, ok := colorNames[arg]; ok {
-		return n, true
+	h := arg[1:]
+	digits := 0
+	for digits < len(h) && isHexDigit(h[digits]) {
+		digits++
 	}
-	n, err := strconv.Atoi(arg)
-	if err != nil || n < 0 || n > 255 {
+	if digits != len(h) || (digits != 3 && digits != 6) {
+		return [3]int{}, false
+	}
+	var rgb [3]int
+	for i := range rgb {
+		if digits == 3 {
+			// Each digit doubled, which is the usual reading and is what was
+			// measured: `#f` in a channel is 255 and not 15.
+			v := hexValue(h[i])
+			rgb[i] = v*16 + v
+			continue
+		}
+		rgb[i] = hexValue(h[2*i])*16 + hexValue(h[2*i+1])
+	}
+	return rgb, true
+}
+
+// colorIndex reads an argument that is not the direct-color form as an index
+// into the terminal's palette, and reports whether it is one at all.
+//
+// The rule, derived from 93 measured arguments in both layers rather than
+// guessed at, and it is three readings rather than one:
+//
+//	#…       the direct-color form and its two malformed readings, all three
+//	         answered by colorSequence before this is called.
+//	a letter a *name*, matched by prefix.
+//	anything the digits at the front of it, and nought where there are none.
+//
+// The middle one is the surprise and it is measured twice over: `%F{re}` drew
+// red and `%F{b}` drew *black* rather than being ambiguous with blue, so a
+// prefix matches the first of the eight in the order the terminal numbers
+// them. The name ends at the first character that is not a letter — `%F{red,}`,
+// `%F{red bold}` and `%F{red;bold}` all drew red — and a run of letters that
+// is not a prefix of any of them is the default, which is why `%F{bogus}`,
+// `%F{grey}` and `%F{x9}` draw no color while `%F{,red}` draws black.
+//
+// The last reading is C's `strtol` and is measured as such: leading
+// whitespace is skipped (`%F{  9}` is 9), a sign is taken (`%F{+9}` is 9),
+// trailing junk is ignored (`%F{9x}` is 9 and `%F{1red}` is 1), and a string
+// with no digits at the front is nought rather than an error — which is what
+// makes `%F{-}`, `%F{,}`, `%F{ }`, `%F{0x9}` and `%F{ red }` all draw the
+// first color. Out of the range 0 to 255 is the default: `%F{256}` and
+// `%F{-1}` drew `\e[39m`.
+func colorIndex(arg string) (int, bool) {
+	if len(arg) > 0 && isLetter(arg[0]) {
+		return colorNamed(arg)
+	}
+	n, ok := decimalAtTheFront(arg)
+	if !ok || n < 0 || n > 255 {
 		return 0, false
 	}
 	return n, true
 }
 
+// colorNamed matches a run of letters against the eight names by prefix, the
+// first in the terminal's own numbering winning an ambiguous one.
+func colorNamed(arg string) (int, bool) {
+	end := 0
+	for end < len(arg) && isLetter(arg[end]) {
+		end++
+	}
+	name := arg[:end]
+	for i, full := range colorNames {
+		if strings.HasPrefix(full, name) {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
 // colorNames is the eight the terminal names, in the order it numbers them.
-var colorNames = map[string]int{
-	"black": 0, "red": 1, "green": 2, "yellow": 3,
-	"blue": 4, "magenta": 5, "cyan": 6, "white": 7,
+//
+// A slice and not a map, because the order decides an ambiguous prefix:
+// `%F{b}` drew black and not blue.
+var colorNames = [8]string{
+	"black", "red", "green", "yellow",
+	"blue", "magenta", "cyan", "white",
+}
+
+// decimalAtTheFront reads the number a C `strtol` would: leading whitespace,
+// an optional sign, then digits, and whatever follows is ignored.
+//
+// The second result is false only for an overflow that cannot be a color
+// anyway. No digits at all is nought and *true*, which is measured — see
+// colorIndex — and is the one place this differs from every other numeric
+// reading in this package.
+func decimalAtTheFront(arg string) (int, bool) {
+	i := 0
+	for i < len(arg) && (arg[i] == ' ' || arg[i] == '\t' || arg[i] == '\n') {
+		i++
+	}
+	sign := 1
+	if i < len(arg) && (arg[i] == '+' || arg[i] == '-') {
+		if arg[i] == '-' {
+			sign = -1
+		}
+		i++
+	}
+	n := 0
+	for i < len(arg) && arg[i] >= '0' && arg[i] <= '9' {
+		n = n*10 + int(arg[i]-'0')
+		if n > 1<<20 {
+			// Far past any color, and stopping here keeps the loop from
+			// overflowing on a long run of digits.
+			return 0, false
+		}
+		i++
+	}
+	return sign * n, true
 }
 
 func colorBase(layer PromptColor) int {

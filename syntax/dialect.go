@@ -800,6 +800,24 @@ type Dialect struct {
 	// does not.
 	ArithFloat bool
 
+	// ArithBytesRefusedOutright are the bytes this shell's arithmetic reader
+	// refuses as part of no token at all, and reports at the byte rather than
+	// as a missing operand: `$((@))` is `illegal character: @` in the one
+	// shell in the panel that has the sentence.
+	//
+	// A table of bytes and not a code path, which is the whole reason it is
+	// here: three of the four have no such sentence, and for them this is
+	// empty and every failure keeps the wording it already had. The bytes are
+	// measured, not derived — every other punctuation byte tried is either a
+	// math token in that shell or can begin a value.
+	//
+	// It does not decide on its own. The same byte gets the operand sentence
+	// where an operator has just been consumed and a value is wanted, so the
+	// parser asks this only at the two positions where the expression could
+	// legally have stopped: before anything has been read, and where an
+	// operator belonged.
+	ArithBytesRefusedOutright string
+
 	// ExtendedPattern enables `@(a|b)`, `?(a)`, `+(a)`, `*(a)` and `!(a)` in
 	// a pattern: a group with a quantifier in front of it. ksh93 has them
 	// wherever a pattern may stand.

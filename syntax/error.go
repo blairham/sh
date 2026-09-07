@@ -77,6 +77,23 @@ const (
 	// `character missing after ##` — and a dialect without the operator never
 	// reaches it at all.
 	ErrArithCharacterMissing
+	// ErrArithIllegalByte is a byte the dialect's arithmetic reader refuses as
+	// part of no token at all, reported *at the byte* rather than as a
+	// missing operand.
+	//
+	// Its own kind because one shell in the panel has a third sentence for it
+	// — `illegal character: @` — and gives that sentence only where the token
+	// stream could legally have ended: at the start of the expression, or
+	// where an operator belonged. Where an operator has just been consumed
+	// and an operand is wanted, the same byte gets the operand sentence
+	// instead, so the byte alone does not decide. See Dialect's
+	// ArithBytesRefusedOutright, which is the table; the position is the
+	// parser's to know.
+	//
+	// Token is the single refused byte, which is what that shell names — not
+	// the text from it to the end of the expression, which is what the
+	// operand failures name.
+	ErrArithIllegalByte
 	// ErrUnexpected is a token where the grammar wanted something else. The
 	// panel names the token three ways and one of them names its *class*
 	// instead — dash says "word unexpected" for an ordinary word and quotes

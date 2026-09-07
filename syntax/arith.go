@@ -250,17 +250,25 @@ func (p *Parser) parseArith(src string, at Pos) ArithExpr {
 	e := a.expr()
 	a.space()
 	if e != nil && a.off < len(a.src) {
-		a.failArith(a.leftoverKind(), a.src[a.off:])
+		kind := a.leftoverKind()
+		// The two operand and operator failures name everything from here to
+		// the end of the expression; the byte's own verdict names the byte.
+		token := a.src[a.off:]
+		if kind == ErrArithIllegalByte {
+			token = a.src[a.off : a.off+1]
+		}
+		a.failArith(kind, token)
 	}
 	return e
 }
 
-// leftoverKind tells the two ways an expression can have something left over
-// apart: an operand where an operator belonged, or text that could be neither.
+// leftoverKind tells the three ways an expression can have something left
+// over apart: an operand where an operator belonged, a byte the dialect's
+// reader refuses outright, or text that could be neither.
 //
-// Only one shell in the panel words them differently, but the distinction is
-// the parser's to make — it is about what the text could have been, which is a
-// grammar question and not a wording one.
+// Only one shell in the panel words all three differently, but the
+// distinction is the parser's to make — it is about what the text could have
+// been, which is a grammar question and not a wording one.
 func (a *arithParser) leftoverKind() ErrorKind {
 	c := a.src[a.off]
 	switch {
@@ -268,7 +276,35 @@ func (a *arithParser) leftoverKind() ErrorKind {
 		c == '_', c == '(', c == '$':
 		return ErrArithOperator
 	}
+	// Where an operator belonged is one of the two positions the byte's own
+	// verdict stands at, the expression having read a complete value and been
+	// able to stop.
+	if a.refusedOutright() {
+		return ErrArithIllegalByte
+	}
 	return ErrArithBadOperator
+}
+
+// refusedOutright reports whether the byte at the cursor is one this dialect's
+// arithmetic reader refuses as part of no token.
+func (a *arithParser) refusedOutright() bool {
+	return a.off < len(a.src) &&
+		strings.IndexByte(a.dial.ArithBytesRefusedOutright, a.src[a.off]) >= 0
+}
+
+// nothingReadYet reports whether the expression has consumed nothing but
+// whitespace, which is the *other* position a refused byte's own verdict
+// stands at.
+//
+// Asked of the text rather than kept as a flag, and that is deliberate: the
+// question is "could this expression have stopped here", and the answer is a
+// property of what has been consumed, not of which of the seven frames that
+// consume an operator happened to recurse last. A flag would have to be set
+// at every one of them and would be wrong the first time one was added —
+// `$((  @  ))` is `illegal character` in that shell, so the cursor being at
+// offset zero is not the test either.
+func (a *arithParser) nothingReadYet() bool {
+	return strings.TrimLeft(a.src[:a.off], " \t\n") == ""
 }
 
 // failArith records an arithmetic failure with the whole expression and the
@@ -548,6 +584,16 @@ func (a *arithParser) primary() ArithExpr {
 	// the operand names the operator it was left holding. The two are the
 	// same failure to two of the panel and different failures to the other
 	// two, and this is the only place the parser can tell them apart.
+	//
+	// Unless the byte itself is one this dialect refuses and nothing has been
+	// read yet, which is the start of the expression: there is no operator to
+	// have been left wanting an operand, so the byte answers for itself. The
+	// token is the byte alone rather than the rest of the text, because that
+	// is what the sentence names.
+	if a.refusedOutright() && a.nothingReadYet() {
+		a.failArith(ErrArithIllegalByte, a.src[a.off:a.off+1])
+		return nil
+	}
 	a.failArith(ErrArithOperand, a.src[a.off:])
 	return nil
 }

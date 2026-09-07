@@ -5821,7 +5821,22 @@ echo unreachable`,
 	{
 		ID: "arith/an-operand-a-lexer-refuses-outright", Category: "arithmetic",
 		Snippet: `echo "[$((@))]"; echo "st=$?"`,
-		Why:     "a byte that is not part of any arithmetic token, which zsh alone words a third way — `illegal character: @` rather than the operand sentence it gives `%`. The row is recorded rather than reproduced: the third wording turns on where in the expression the byte stands as well as on which byte it is, since `$((1+@))` gets the operand sentence and `$((1 @))` and `$((@))` do not, and that is a lexer's table rather than a grammar rule. bash, ksh93 and dash word it exactly as they word `%`, so three of the four columns pass",
+		Why:     "a byte that is part of no arithmetic token, which zsh alone words a third way — `illegal character: @` rather than the operand sentence it gives `%`. bash, ksh93 and dash word it exactly as they word `%`. The byte alone does not decide, which is why the three rows below it exist: the same `@` gets the operand sentence where an operator has just been consumed. Two tables and no code path — the bytes are Dialect.ArithBytesRefusedOutright and the sentence Diagnostics.ArithIllegalByte, and both are empty for the three shells that have neither",
+	},
+	{
+		ID: "arith/a-refused-byte-where-an-operator-belonged", Category: "arithmetic",
+		Snippet: `echo "[$((1 @))]"; echo "st=$?"`,
+		Why:     "the second position the byte answers for itself at: a complete value has been read and the expression could have stopped, so zsh reports the byte rather than a missing operand. bash splits here too and already did — `invalid arithmetic operator` where an operand position gets `operand expected` — but on a byte set of its own, so the two shells' tables overlap without matching",
+	},
+	{
+		ID: "arith/a-refused-byte-where-an-operand-belonged", Category: "arithmetic",
+		Snippet: `echo "[$((1+@))]"; echo "st=$?"`,
+		Why:     "and the position where it does not: an operator has just been consumed, so the failure is the operator's and zsh names the text from the byte to the end of the expression instead. Same byte, same shell, different sentence — which is the whole reason the byte table cannot be read on its own. This row and the two around it are one measurement in three parts and are worth nothing separately",
+	},
+	{
+		ID: "arith/a-refused-byte-with-nothing-read-but-space", Category: "arithmetic",
+		Snippet: `echo "[$((  @  ))]"; echo "st=$?"`,
+		Why:     "whitespace is not reading. The cursor is not at the start of the text and zsh still gives the byte its own verdict, which rules out the offset as the test — what decides is whether anything has been *consumed*, and here nothing has",
 	},
 	{
 		ID: "arith/the-error-names-what-was-consumed", Category: "arithmetic",

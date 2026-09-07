@@ -77,6 +77,32 @@ func Dialect() syntax.Dialect {
 	d.OpenEndedAndOr = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
+	// The bytes this shell's arithmetic reader refuses as part of no token at
+	// all, so they are reported at the byte — `illegal character: @` — rather
+	// than as a value it could not read. Measured 2026-09-07 against zsh
+	// 5.9.2 by trying every ASCII punctuation byte in five positions: every
+	// other one is either a math token here (`% & * = | : , < > / ? #`) or
+	// can begin a value (`$` is the process id, `?` the last status, `#` the
+	// character-code operator).
+	//
+	// Only where the expression could have stopped, which the parser decides:
+	// `$((1+@))` gets the operand sentence from the same byte because an
+	// operator has just been consumed. #698 has the whole table.
+	//
+	// `\` and `]` are in the table although `$(( ))` cannot put them in front
+	// of the reader — a backslash escapes the closing paren, and `$((]))` is
+	// re-read as `$( (]) )` — because `let` can, and there they answer the
+	// same way: `let $'\134'` and `let 'a[1]]'` are both `illegal character`.
+	// A backquote is refused by that reader too and is *not* here: nothing in
+	// this shell reaches the reader with one, so it would be a row no
+	// measurement of ours could hold honest.
+	//
+	// The control bytes are also not here. That shell refuses every one but
+	// tab and newline, and renders them in caret notation — `illegal
+	// character: ^A` — which is a second change: the caret reaches the
+	// operand sentence as well, so ``operand expected at `^A'`` would have to
+	// move with it. Recorded rather than half-done.
+	d.ArithBytesRefusedOutright = "'@;{}\\]"
 	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a
 	// literal `@` followed by a group here rather than an extended pattern.
 	d.PatternAlternation = true
@@ -1025,6 +1051,7 @@ func Diagnostics() interp.Diagnostics {
 		// with a known one — `${x:i}` names `i` and `${x:ha}` names nothing.
 		UnrecognizedModifier:      "unrecognized modifier `%[1]s'",
 		UnrecognizedModifierAlone: "unrecognized modifier",
+		ArithIllegalByte:          "bad math expression: illegal character: %[1]s",
 		ArithOperandExpected:      "bad math expression: operand expected at `%[1]s'",
 		ArithExpressionRanOut:     "bad math expression: operand expected at end of string",
 		ArithOperatorExpected:     "bad math expression: operator expected at `%[1]s'",

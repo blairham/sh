@@ -5687,25 +5687,65 @@ keep in step:
     ${x:2:1+}    ksh93  1+: more tokens expected      a length has nothing after it
     ${x:1+:2}    ksh93  1+:2: arithmetic syntax error
 
-#### Still recorded rather than reproduced: zsh's third wording
+#### zsh's third wording: a byte the reader refuses outright
 
-zsh has a third sentence for a byte that is not part of any arithmetic
-token — `illegal character: @` — and it is not modeled. It is not a
-question of *which* byte alone; it is also where the byte stands:
+Issue #698. zsh has a third sentence for a byte that is part of no
+arithmetic token — `illegal character: @` — and it is not a question of
+*which* byte alone; it is also where the byte stands:
 
     $((@))       illegal character: @          nothing read yet
     $((1 @))     illegal character: @          where an operator belonged
     $((1+@))     operand expected at `@'       where an operand belonged
     $((+@))      operand expected at `@'       after a unary operator too
-    $((1 :))     operand expected at end of string    `:` *is* a math token
+    $((  @  ))   illegal character: @          whitespace is not reading
+    $((1 @@))    illegal character: @          the byte, not the run
     $((1 2))     operator expected at `2'      a value where an operator belonged
 
-The refused set measured is `@ { } ; '`; every other byte tried is either
-a math token or can begin a value. Reproducing the sentence therefore
-needs that shell's lexical table *and* a rule about position, which is a
-lexer's internals rather than a grammar question, and this repository
-learns behavior by running binaries. `arith/an-operand-a-lexer-refuses-outright`
-records it: three of the four columns pass and the zsh column is the work.
+**The observable rule.** The byte's own verdict stands where the
+expression could legally have stopped — before anything has been
+consumed, or where an operator belonged — and the parser's "operand
+expected at <rest>" wins where an operator has just been consumed and a
+value is wanted. The two sentences also name different things about the
+same failure: the byte's names the **single byte**, the operand's names
+the text from it to the end of the expression. `$((1+@2))` is
+``operand expected at `@2'`` and `$((1 @@))` is `illegal character: @`.
+
+**Two tables and no code path.** `Dialect.ArithBytesRefusedOutright` is
+the bytes and `Diagnostics.ArithIllegalByte` the sentence; both are empty
+for the three shells that have neither, and an empty table leaves every
+failure with exactly the kind it had. The position is the parser's, and it
+is asked of the text rather than kept as a flag: "has anything but
+whitespace been consumed" is a property of what was read, where a flag
+would have to be set at each of the seven frames that consume an operator
+and would be wrong the first time one was added. `$((  @  ))` is what
+rules out the cursor's offset as the test.
+
+**The refused set measured is `' ; @ \ ] { }`** — seven bytes; every
+other punctuation byte tried is either a math token in that shell
+(`% & * = | : , < > / ? #`) or can begin a value (`$` is the process id,
+`?` the last status, `#` the character-code operator). #698 recorded five
+of the seven, which is the set reachable through `$(( ))`: a `\` escapes
+the closing paren and `$((]))` is re-read as `$( (]) )`, so those two
+reach the reader only through `let`, where they are measured and where
+they agree. A backquote is refused by that reader too and is deliberately
+**not** in the table — nothing in this shell reaches the reader with one,
+so it would be a row no measurement of ours could hold honest.
+
+**Still recorded rather than reproduced**, and each is a different
+mechanism rather than more of this one:
+
+- The **control bytes.** That shell refuses every byte but tab and
+  newline, in caret notation — `illegal character: ^A` — and the caret
+  reaches the *operand* sentence as well (``operand expected at `^A'``),
+  so it is a rendering rule across three wordings rather than seven more
+  table entries.
+- **`$((1 :))`** is `operand expected at end of string` there and
+  `operator expected at `:'` here, and **`$((1 : 2))`** is a *fourth*
+  sentence — `':' without '?'`. A stray `:` is a math token that shell
+  consumes and then wants an operand after; ours only takes one after a
+  `?`. A parser-shape difference, not a byte.
+- **`$((}))`** reaches our word lexer as `parse error near `}'` where
+  `$(( } ))` reaches the reader and answers correctly.
 
 ## A subscript before the first element
 

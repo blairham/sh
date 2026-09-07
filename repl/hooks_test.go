@@ -475,3 +475,35 @@ func TestWhatAHookPrintsIsNotACommandsOutput(t *testing.T) {
 		})
 	}
 }
+
+// A prompt hook that ends the session ends it before the prompt is written,
+// and nothing more is read.
+//
+// Driven through the loop that has no editor, because it is the one that had
+// the prompt already written when this was found — the two loops must not
+// disagree about it, which is the standing hazard beforeReading documents.
+func TestAPromptHookThatExitsDrawsNoPrompt(t *testing.T) {
+	var out, errs strings.Builder
+	r := newTestRunner(map[string]string{"PS1": "RDY> "})
+	r.Stdout, r.Stderr = &out, &out
+	s := Shell{
+		Runner: r, In: strings.NewReader("echo unreachable\n"),
+		Out: &out, Err: &errs, Name: "sh", Hooks: hooksLikeZsh(),
+	}
+	define(t, r, "precmd", `echo bye; exit 3`)
+
+	status, err := s.Run(t.Context())
+	if err != nil {
+		t.Fatalf("running: %v", err)
+	}
+
+	if status != 3 {
+		t.Errorf("the session ended with %d, want 3", status)
+	}
+	if errs.String() != "" {
+		t.Errorf("a prompt was drawn: %q", errs.String())
+	}
+	if got := out.String(); got != "bye\n" {
+		t.Errorf("the session ran %q, want the hook alone", got)
+	}
+}

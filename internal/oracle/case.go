@@ -6205,6 +6205,21 @@ echo unreachable`,
 		Why:     "-ef is identity rather than equality: a hard link to the file compares equal and a file with the same content does not",
 	},
 	{
+		ID: "cond/empty-operand-is-not-a-path", Category: "conditions",
+		Snippet: `[[ -d $NOPE ]]; echo "d=$?"; [[ -e $NOPE ]]; echo "e=$?"; [[ -r $NOPE ]]; echo "r=$?"; [[ -s $NOPE ]]; echo "s=$?"; [[ -f $NOPE ]]; echo "f=$?"`,
+		Why:     "an empty operand is not a path, so every file question about it is false — the whole panel agrees, and `[[ -d $x ]]` guarding a computed directory is the reason it matters. Joining an empty operand onto the working directory instead makes the five answers 0 0 0 0 1: only `-f` stays right, because a directory is not a regular file, and that is why the wrong answer is easy to miss",
+	},
+	{
+		ID: "cond/empty-operand-is-not-the-working-directory", Category: "conditions",
+		Snippet: `[[ -d "" ]]; echo "empty=$?"; [[ -d . ]]; echo "dot=$?"; [[ -w "" ]]; echo "wempty=$?"; [[ -w . ]]; echo "wdot=$?"`,
+		Why:     "the pair that separates the two readings. `.` is the spelling that means the working directory and answers true; an empty operand names nothing and answers false. A shell that resolves the empty one against its own directory gives the same answer to both",
+	},
+	{
+		ID: "cond/empty-operand-in-the-file-comparisons", Category: "conditions",
+		Snippet: `touch f; [[ "" -ef "" ]]; echo "ee=$?"; [[ f -ef "" ]]; echo "fe=$?"; [[ "" -nt f ]]; echo "nt=$?"; [[ f -ot "" ]]; echo "ot=$?"`,
+		Why:     "the binary comparisons take their operands the same way, so they need the same probe: two empty operands are not the same file anywhere in the panel. Resolving both against the working directory makes `[[ \"\" -ef \"\" ]]` compare that directory with itself and answer *true*",
+	},
+	{
 		ID: "cond/terminal-test-closed-descriptors", Category: "conditions",
 		Snippet: `[[ -t 0 ]]; echo "t0=$?"; [[ -t 1 ]]; echo "t1=$?"; [[ -t 99 ]]; echo "t99=$?"`,
 		Why:     "-t asks whether a descriptor is a terminal, and under the harness none is: stdin is /dev/null and stdout a pipe, so every answer is a quiet false — which is also the honest permanent answer for a runner whose streams are io.Writers",
@@ -6492,6 +6507,21 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		ID: "test/a-missing-file-is-older-diverges", Category: "test",
 		Snippet: `touch f; test f -nt missing; echo "nt=$?"; test missing -ot f; echo "ot=$?"`,
 		Why:     "the MissingFileIsOlder axis on the builtin's surface, where dash joins in: bash and ksh93 answer true, dash and zsh want both files to exist — the same split each shell shows in its `[[ ]]`, so it is one axis and not two",
+	},
+	{
+		ID: "redirect/an-empty-target-is-not-the-working-directory", Category: "redirection",
+		Snippet: `printf secret > in-there; cat < ""; echo "r=$?"; echo hi > ""; echo "w=$?"`,
+		Why:     "an empty target names no file, and the same rule the file tests need: joining it onto the working directory opens the *directory*, so the read succeeds and the complaint arrives from the command as `Is a directory` rather than from the shell. Every shell in the panel refuses to open the name — with four wordings and two statuses, so the case pins the wording too",
+	},
+	{
+		ID: "test/empty-operand-is-not-a-path", Category: "test",
+		Snippet: `[ -d "$NOPE" ]; echo "d=$?"; test -e "$NOPE"; echo "e=$?"; [ -x "$NOPE" ]; echo "x=$?"; [ -f "$NOPE" ]; echo "f=$?"`,
+		Why:     "the same rule on the builtin's surface, and measured through both of its spellings: the two constructs obtain an operand differently and answer the filesystem question identically, so an empty one is false in `[ ]` and `test` exactly as in `[[ ]]`",
+	},
+	{
+		ID: "test/empty-operand-however-it-became-empty", Category: "test",
+		Snippet: `unset u; e=; z=$(false); [ -d "$u" ]; echo "unset=$?"; [ -d "$e" ]; echo "empty=$?"; [ -d "$z" ]; echo "sub=$?"; [ -d "" ]; echo "lit=$?"`,
+		Why:     "unset, set-and-empty, a substitution that printed nothing, and a literal empty word are four states of the variable table and one operand: expansion has made them the same word before the builtin sees it, so a caller needs all four rejected and the panel rejects all four alike",
 	},
 	{
 		ID: "test/terminal-test-non-number-diverges", Category: "test",

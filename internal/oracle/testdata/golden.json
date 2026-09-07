@@ -18419,6 +18419,138 @@
         "TimedOut": false
       }
     },
+    "cond/empty-operand-in-the-file-comparisons": {
+      "bash": {
+        "Stdout": "ee=1~fe=1~nt=1~ot=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ee=1~fe=1~nt=1~ot=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ee=1~fe=1~nt=1~ot=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "ee=127~fe=127~nt=127~ot=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "ee=1~fe=1~nt=1~ot=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ee=1~fe=1~nt=1~ot=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/empty-operand-is-not-a-path": {
+      "bash": {
+        "Stdout": "d=1~e=1~r=1~s=1~f=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "d=1~e=1~r=1~s=1~f=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "d=1~e=1~r=1~s=1~f=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "d=127~e=127~r=127~s=127~f=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "d=1~e=1~r=1~s=1~f=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "d=1~e=1~r=1~s=1~f=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/empty-operand-is-not-the-working-directory": {
+      "bash": {
+        "Stdout": "empty=1~dot=0~wempty=1~wdot=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "empty=1~dot=0~wempty=1~wdot=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "empty=1~dot=0~wempty=1~wdot=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "empty=127~dot=127~wempty=127~wdot=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "empty=1~dot=0~wempty=1~wdot=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "empty=1~dot=0~wempty=1~wdot=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cond/escaped-parens-in-a-regex": {
       "bash": {
         "Stdout": "y",
@@ -67530,6 +67662,50 @@
         "TimedOut": false
       }
     },
+    "redirect/an-empty-target-is-not-the-working-directory": {
+      "bash": {
+        "Stdout": "r=1~w=1",
+        "Stderr": "\u003cshell\u003e: line 1: : No such file or directory~\u003cshell\u003e: line 1: : No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "r=1~w=1",
+        "Stderr": "\u003cshell\u003e: line 1: : No such file or directory~\u003cshell\u003e: line 1: : No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "r=1~w=1",
+        "Stderr": "\u003cshell\u003e: : No such file or directory~\u003cshell\u003e: : No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "r=2~w=2",
+        "Stderr": "\u003cshell\u003e: 1: cannot open : No such file~\u003cshell\u003e: 1: cannot create : Directory nonexistent",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "r=1~w=1",
+        "Stderr": "\u003cshell\u003e: : cannot open~\u003cshell\u003e: : cannot open",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "r=1~w=1",
+        "Stderr": "\u003cshell\u003e:1: no such file or directory: ~\u003cshell\u003e:1: no such file or directory: ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "return/inside-a-sourced-file": {
       "bash": {
         "Stdout": "st=7",
@@ -74852,6 +75028,94 @@
       },
       "zsh": {
         "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "test/empty-operand-however-it-became-empty": {
+      "bash": {
+        "Stdout": "unset=1~empty=1~sub=1~lit=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "unset=1~empty=1~sub=1~lit=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "unset=1~empty=1~sub=1~lit=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "unset=1~empty=1~sub=1~lit=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "unset=1~empty=1~sub=1~lit=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "unset=1~empty=1~sub=1~lit=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "test/empty-operand-is-not-a-path": {
+      "bash": {
+        "Stdout": "d=1~e=1~x=1~f=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "d=1~e=1~x=1~f=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "d=1~e=1~x=1~f=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "d=1~e=1~x=1~f=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "d=1~e=1~x=1~f=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "d=1~e=1~x=1~f=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

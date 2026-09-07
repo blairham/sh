@@ -243,6 +243,54 @@ a block device, and files with each bit set — and they are the same
 questions `test` asks, so the two constructs share the code that asks
 them.
 
+### An empty operand is not a path
+
+Every file test above is **false** when its operand is empty, without
+asking the filesystem. Measured 2026-09-07 on bash 5.3, bash 3.2, dash,
+ksh93 and zsh 5.9.2 under `env -i`, in `[ ]`, `test` and `[[ ]]`: all
+sixteen operators, all five shells, status 1. Unanimous, so core, and no
+axis.
+
+It is worth its own entry because getting it wrong is silent. An empty
+operand joined onto the shell's working directory becomes a path that
+*certainly* exists, so `-e`, `-d`, `-s`, `-r`, `-w` and `-x` all answer
+**true** — and `-f` still answers false, a directory not being a regular
+file. Six wrong and one right, and the one that is right is the one most
+scripts use, so nothing looks broken until something else fails:
+
+    [[ -d $XDG_CACHE_HOME ]] && CACHE=$XDG_CACHE_HOME/app
+
+With the variable unset that guard passes, `CACHE` becomes `/app`, and
+what is observed is a `mkdir` failing at the filesystem root, several
+frames away from the test that lied. `[[ -d $dir ]]` is *the* idiom for
+"did I compute a path", and it has to be able to say no.
+
+The pair that tells the two readings apart:
+
+    [[ -d "" ]]   →  false
+    [[ -d .  ]]   →  true
+
+`.` is the spelling that means the working directory. An empty word
+names nothing.
+
+Unset, set-and-empty, and a substitution that printed nothing are one
+case, not three: expansion has already made them the same empty word
+before the test sees it, and the panel does not distinguish them either.
+A caller needs all three rejected and gets that from the one rule.
+
+The binary comparisons take their operands the same way, so the rule is
+theirs too — an empty side is a file that is not there, which puts it on
+the `MissingFileIsOlder` axis below with exactly the values a missing
+*name* gets. `[[ "" -ef "" ]]` is false everywhere; resolving both sides
+against the working directory would compare that directory with itself
+and answer true.
+
+Corpus: `cond/empty-operand-is-not-a-path`,
+`cond/empty-operand-is-not-the-working-directory`,
+`cond/empty-operand-in-the-file-comparisons`,
+`test/empty-operand-is-not-a-path`,
+`test/empty-operand-however-it-became-empty`.
+
 `-t` is unanimous on every descriptor the harness can offer: stdin on
 `/dev/null`, stdout into a pipe, and a descriptor that was never open
 are all a quiet false. A runner whose streams are io.Writers gives that

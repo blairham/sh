@@ -11,7 +11,6 @@ import (
 	"io/fs"
 	"maps"
 	"os"
-	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -287,15 +286,15 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			}
 		}
 
-		path := name
-		if name != "" && r.Dir != "" && !filepath.IsAbs(path) {
-			// A name that is not there is not a relative one. Joining it to
-			// the working directory turns "no name" into *the directory*,
-			// which then opens: `cd /tmp; cat < $unset` read the directory
-			// rather than failing, and only because the shell had been told
-			// where it was. Every shell reports that it cannot open "".
-			path = filepath.Join(r.Dir, path)
-		}
+		// A name that is not there is not a relative one. Joining it to the
+		// working directory turns "no name" into *the directory*, which then
+		// opens: `cd /tmp; cat < $unset` read the directory rather than
+		// failing, and only because the shell had been told where it was.
+		// Every shell reports that it cannot open "". atDir is where that
+		// rule lives now — it was written here first, and the file tests had
+		// the identical bug because the rule had not reached the resolution
+		// they shared (#1189).
+		path := r.atDir(name)
 		action := r.act(Action{Kind: ActionOpen, Path: path, Write: flags != os.O_RDONLY})
 		// Unless the path is a pipe this shell made for a substitution in
 		// this very command: `cmd > >(inner)` redirects to a name the

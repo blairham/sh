@@ -1839,8 +1839,8 @@ func expandEchoEscapes(s string, hex, esc, capEsc bool) (expanded string, stoppe
 // `-q` is a third, and belongs to one shell — see CdHasQuietOption. zsh has a
 // fourth, `-s`, which refuses a path with a symlink component (`cd -s link`
 // and `cd -s link/deep` are both `not a directory` there while `cd -s real`
-// moves); it is not carried yet and is filed as #1569 rather than guessed at, so it
-// still reaches the unknown-letter question below.
+// moves); it is not carried yet and is filed as #1569 rather than guessed
+// at, so it still reaches the unknown-letter question below.
 //
 // A lone `-` is not an option — it is the previous directory — which the
 // length test leaves alone. `--` ends the options in all six, which is what
@@ -1888,6 +1888,7 @@ func (r *Runner) cdOptions(args []string) (rest []string, physical bool, code in
 				// letter, and dialect/zsh's
 				// TestChpwdIsUnfiredWhichIsWhatMakesCdQuietHonest fails the
 				// day it does and says so there.
+				//
 				// `continue` rather than `break`, and the two are the same
 				// thing here: this switch is inside the letter loop, so
 				// breaking the switch also goes on to the next letter. A

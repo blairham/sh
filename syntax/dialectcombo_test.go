@@ -5,7 +5,9 @@ package syntax_test
 
 import (
 	"math/rand/v2"
+	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -71,8 +73,8 @@ type namedDialect struct {
 // failure is reproducible; math/rand/v2's PCG is documented to be stable,
 // which a test that names a seed relies on.
 //
-// A vector per flag is 67 subtests over the whole corpus, which is why they
-// run in parallel: the sweep is seconds of wall time that way and a minute
+// A vector per flag is 98 subtests over the whole corpus, which is why they
+// run in parallel: the sweep is seconds of wall time that way and minutes
 // serially, and a test nobody wants to wait for is a test somebody skips.
 func combinationVectors() []namedDialect {
 	fields := dialectBoolFields()
@@ -163,11 +165,110 @@ func inputsFor(src string) []string {
 // The failure prints the input and the vector's name, which is enough to
 // rebuild the dialect by hand: `every-flag-but-CoprocName` is `syntax.Core()`
 // with everything on except that one.
+//
+// Two things narrow what a single run of this does, and neither narrows what
+// is proved. vectorShard is which vectors this run took, and the runs that
+// share the sweep between them cover all of it. casesFor is how far each
+// vector reads, and it is the whole corpus unless the binary is instrumented,
+// in which case this is not the run that proves the property — see casesFor.
+// vectorShard is the slice of the vectors this run is answerable for, read
+// from SH_DIALECTCOMBO_SHARD as "offset/stride" — "1/2" being the second of
+// two. Unset is the whole sweep, which is what a developer gets and what
+// `make test` runs.
+//
+// CI splits the sweep across the two operating systems it already builds on.
+// The property is one of the parser and not of the platform, so running the
+// whole of it twice only made it possible for two runs of one question to
+// disagree, while one leg sat idle waiting for the other. Split, each leg
+// answers for half and the pair still answers for all of it.
+//
+// Half each rather than all of it on whichever leg looks idle, and that is
+// measured rather than assumed: across runs the Linux leg is steady — 90s of
+// interp, 206s of instrumented tests, twice within a second of each other —
+// while the macOS leg moved 1.5x between two runs an hour apart, 110s of
+// interp against 167s. Giving the sweep to macOS outright was tried and
+// timed: it took 59s off the Linux leg and then landed on a macOS runner
+// having a slow day, which cost more than the split had saved. A bet on which
+// leg is faster is a bet this workflow loses about half the time.
+//
+// The split is by stride rather than by halves so that each leg gets a mix:
+// contiguous halves would hand one leg every `every-flag-but-X` and the other
+// every mixture, and a leg that is late or unavailable would then take a
+// whole kind of vector with it rather than every other one.
+//
+// A malformed value is a failure and not a fallback. Silently sweeping
+// everything would only be slow, but silently sweeping nothing is a green
+// check for a sweep that never ran, and this is the file where that would be
+// least visible.
+func vectorShard(t *testing.T) (offset, stride int) {
+	t.Helper()
+	spec := os.Getenv("SH_DIALECTCOMBO_SHARD")
+	if spec == "" {
+		return 0, 1
+	}
+	o, st, ok := strings.Cut(spec, "/")
+	offset, errOffset := strconv.Atoi(o)
+	stride, errStride := strconv.Atoi(st)
+	if !ok || errOffset != nil || errStride != nil || stride < 1 || offset < 0 || offset >= stride {
+		t.Fatalf("SH_DIALECTCOMBO_SHARD=%q: want \"offset/stride\", 0 <= offset < stride", spec)
+	}
+	return offset, stride
+}
+
+// raceProbeCases is how many corpus cases a vector parses when the binary was
+// built with -race. It is not a sample of the sweep; the sweep is elsewhere.
+// See casesFor.
+const raceProbeCases = 100
+
+// casesFor is the corpus a vector parses, which is all of it — except under
+// the race detector, where it is a window of raceProbeCases that moves with
+// the vector's index.
+//
+// The distinction is between the two properties this file used to answer at
+// once. The one it exists for is that no combination of dialect flags can make
+// the parser panic, and that is proved over every case under every vector —
+// 132 vectors x 2542 cases on the day this was written, each expanded again by
+// inputsFor. Nothing about that is sampled or shortened: it is what `make
+// test` runs and what CI's uninstrumented step runs, and it is the whole
+// corpus every time.
+//
+// The other property was never this test's to prove and was being paid for on
+// every case anyway. `recover()` is what catches a panic, and it catches one
+// exactly as well without instrumentation; what -race contributes is the
+// separate question of whether concurrent parses share state they must not.
+// Measured on the two-core runner CI is gated by rather than on a laptop that
+// hides the cost behind cores the runner does not have: the same 32 vectors
+// took 89s instrumented against 19s not, a factor of 4.7, and this package was
+// 525s of the 649s that job spent testing the entire module.
+//
+// So under -race the flag coverage is unchanged, because a shared-state bug in
+// the parser belongs to the code path a flag opens rather than to the input
+// that walks it: every vector still runs, still in parallel, which is what
+// gives the detector two goroutines to compare. What shrinks is how far each
+// one reads, and the window rotates with the index so the vectors between them
+// still walk the whole corpus.
+func casesFor(index int) []oracle.Case {
+	n := len(oracle.Corpus)
+	if !raceDetector || n <= raceProbeCases {
+		return oracle.Corpus
+	}
+	start := (index * raceProbeCases) % n
+	if end := start + raceProbeCases; end <= n {
+		return oracle.Corpus[start:end]
+	}
+	out := append([]oracle.Case(nil), oracle.Corpus[start:]...)
+	return append(out, oracle.Corpus[:start+raceProbeCases-n]...)
+}
+
 func TestNoDialectCombinationPanics(t *testing.T) {
-	for _, v := range combinationVectors() {
+	offset, stride := vectorShard(t)
+	for i, v := range combinationVectors() {
+		if i%stride != offset {
+			continue
+		}
 		t.Run(v.name, func(t *testing.T) {
 			t.Parallel()
-			for _, c := range oracle.Corpus {
+			for _, c := range casesFor(i) {
 				for _, src := range inputsFor(c.Snippet) {
 					func() {
 						defer func() {

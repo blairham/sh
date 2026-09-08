@@ -8380,6 +8380,36 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "`+i` takes the attribute away, which is the one place a shell spells an option with a plus",
 	},
 	{
+		ID: "declare/integer-attribute-makes-append-add", Category: "declarations",
+		Snippet: "typeset -i a=1; a+=2; echo \"1[$a]\"\ntypeset -i c=1 d=2; c+=d; echo \"2[$c]\"\ne=1; f=2; e+=f; echo \"3[$e]\"\ng=1; g+=2; echo \"4[$g]\"\ntypeset -i h=1; h+=2; typeset +i h; h+=3; echo \"5[$h]\"",
+		Why:     "`+=` is one spelling over two operations, and the *name* says which: an integer name **adds** — `3` and `3` — where a plain one joins the characters, `1f` and `12`. The last line is the pair that shows the attribute is what decides and not the operator, since taking it off with `+i` turns the very next `+=` back into a join: `33`. Unanimous in all four columns that spell the letter, so this is the core's answer and not an axis. It was `12` here at status 0 with nothing said, and the name form was worse — we joined first, made the text `1d`, and then failed to read it as a number, which is what broke a real plugin manager's return-value accounting (#1482)",
+	},
+	{
+		ID: "declare/integer-append-evaluates-the-right-side", Category: "declarations",
+		Snippet: "typeset -i a=1 b=2; a+=b+1; echo \"1[$a]\"\ntypeset -i c=1; c+=\" 2 \"; echo \"2[$c]\"\ntypeset -i d=1; d+=\"2+3\"; echo \"3[$d]\"\ntypeset -i e=1; e+=nosuch; echo \"4[$e]\"\ntypeset -i f=1; f+=; echo \"5[$f]\"\ntypeset -i g; g+=2; echo \"6[$g]\"",
+		Why:     "the right-hand side of an integer `+=` is a whole expression rather than a number: `4`, `3` through the spaces, `6` for `2+3`, and `1` where the word is an unset name — which is zero and not an error, the same reading a plain assignment gives it. An empty right side is zero too, so `+=` with nothing after it leaves the value alone at `1`. The last line has no value to add to and the attribute still holds: `2`, not the empty string joined to anything",
+	},
+	{
+		ID: "declare/integer-append-and-the-output-base", Category: "declarations",
+		Snippet: "typeset -i16 a=255; a+=1; echo \"1[$a]\"\ntypeset -i b=1; b+=0x10; echo \"2[$b]\"; b=5; echo \"3[$b]\"",
+		Why:     "the sum is written back out in the name's base rather than in decimal — `16#100` — and the base a `+=` is *told* sticks to the name exactly as a plain assignment's does: after `b+=0x10` zsh reads `16#11`, and the plain `b=5` after it reads `16#5`. bash has no base option at all and answers the first line with usage, which leaves the append to a name that never got the letter",
+	},
+	{
+		ID: "declare/integer-append-to-an-element", Category: "declarations",
+		Snippet: "typeset -i a; a[0]=1; a[0]+=2; echo \"1[${a[0]}]\"",
+		Why:     "the attribute belongs to the name, so an *element* of it adds too: `3` in bash and ksh93. zsh has no subscripted assignment through a scalar declaration and refuses the line by name, which is why the row stops there. Kept apart from the scalar row because the element reaches a different store — an append that was fixed only in the scalar path would still read `12` here",
+	},
+	{
+		ID: "declare/float-attribute-makes-append-add", Category: "declarations",
+		Snippet: "typeset -F 3 a=1.5; a+=2.25; echo \"1[$a]\"\ntypeset -F 3 b=1; b+=; echo \"2[$b]\"",
+		Why:     "the same rule under the other numeric letter, and the reason `+=` asks about the *value* a name holds rather than about the integer letter alone: `3.750` in the two shells that spell `-F`, written in the name's precision. An empty right side is zero here too, so the second line keeps `1.000`. bash has no float letter and joins the characters of a name that was never declared",
+	},
+	{
+		ID: "declare/integer-append-that-will-not-parse", Category: "declarations",
+		Snippet: "typeset -i a=1; a+=2+; echo \"unreached[$a]\"",
+		Why:     "what a failed append says and where it stops: every column blames `2+` alone and none of them mentions the `1` standing in front of it, which is the evidence that the two sides are evaluated apart and never joined into one expression first. Fatal at status 1 with nothing stored, the same as a plain integer assignment that will not parse. We used to blame `12+`, and that wording was the tell for the whole bug",
+	},
+	{
 		ID: "declare/unset-takes-the-integer-attribute-away", Category: "declarations",
 		Snippet: "typeset -i n=5\nunset n\nn=3+4\necho \"[$n]\"",
 		Why:     "`unset` removes the name *and* what it was declared to be, so a name assigned afterwards is a plain new name: `3+4` and not 7. Unanimous across every column that has the letter, which is what makes it a rule rather than an axis — and it is the ground the other attribute rows stand on, because a shell whose attribute maps are keyed by name and are never deleted from gives the *old* attribute to the *new* value, silently and at status 0. `unset PATH; PATH=a:a:b` is the shape that made it visible (#1047)",

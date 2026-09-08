@@ -919,22 +919,38 @@ func operandNames(c *syntax.SimpleCmd) map[string]bool {
 // that will not parse *is* an error, and a fatal one: bash and zsh both stop
 // the script rather than store something.
 func (r *Runner) integerValue(text string) (string, bool) {
+	v, ok := r.integerNumber(text)
+	if !ok {
+		return "", false
+	}
+	return itoa(v), true
+}
+
+// integerNumber is integerValue before the number is written down.
+//
+// Its own function because `+=` wants the number rather than the text: an
+// attributed name adds, so the value it holds and the expression on the right
+// have to meet as integers, and neither of them is the answer on its own.
+// Folded out of integerValue rather than copied beside it — the parse, the
+// dialect it parses under and the wording of both failures are one thing, and
+// a second evaluator here is the shape that has cost this tree seven bugs.
+func (r *Runner) integerNumber(text string) (int, bool) {
 	text = strings.TrimSpace(text)
 	if text == "" {
-		return "0", true
+		return 0, true
 	}
 	p := syntax.NewParser("", r.dialect())
 	e := p.ParseArithFor(text, syntax.Pos{})
 	if err := p.Err(); err != nil {
 		r.fatal("%s\n", r.diag().ParseFailure(err))
-		return "", false
+		return 0, false
 	}
 	v, err := r.evalArith(e)
 	if err != nil {
 		r.fatal("%v\n", err)
-		return "", false
+		return 0, false
 	}
-	return itoa(v), true
+	return v, true
 }
 
 // defaultFloatPlaces is how many decimal places `-F` writes with no number

@@ -1283,6 +1283,31 @@ var Corpus = []Case{
 		Why:     "appending to an array adds to its end rather than to its first element, which is the same spelling doing a different thing",
 	},
 	{
+		ID: "core/appending-an-array-literal-to-a-scalar", Category: "parameters",
+		Snippet: `a=1; a+=(2); echo "[${a[*]}] n=${#a[@]} [${a[0]}][${a[1]}]"`,
+		Why:     "an array-literal append over a name holding a *scalar* keeps that value as the first element rather than starting a fresh array from the words. Unanimous across all five shells with arrays, so it is the core being wrong rather than an axis, and the failure was silent: status 0 and a plausible one-element array where the script's own value had been. The two subscripts are what say *where* the kept value landed, and they are the array base rather than a second rule -- `[1][2]` where the first element is 0 and `[][1]` where it is 1, which is the same answer written twice. A row printing only the joined elements would pass with the value placed anywhere at all",
+	},
+	{
+		ID: "core/appending-an-array-literal-to-an-empty-scalar", Category: "parameters",
+		Snippet: `a=; a+=(2); echo "[${a[*]}] n=${#a[@]}"`,
+		Why:     "the empty string is a value like any other and is kept, so the array is two elements with an empty one in front. Recorded apart from the unset row because those are the two states a single count cannot tell apart from the outside, and an implementation that promoted only a *non-empty* scalar would answer this one exactly as it answers that one",
+	},
+	{
+		ID: "core/appending-an-array-literal-to-an-unset-name", Category: "parameters",
+		Snippet: `unset a; a+=(2); echo "[${a[*]}] n=${#a[@]}"`,
+		Why:     "the other half of the pair: a name holding nothing has nothing to keep, so the literal's words are the whole array and the count is one. It is the row a fix is likeliest to break, because the natural way to keep a scalar reads the name and puts whatever came back in front of the words -- and for an unset name that is an empty string nobody asked for",
+	},
+	{
+		ID: "core/appending-an-array-literal-to-a-scalar-holding-a-space", Category: "parameters",
+		Snippet: `a="x y"; a+=(2); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the kept value is one element however many words it looks like -- `[x y][2]`, not `[x][y][2]`. The elements are printed one to a bracket rather than joined, because the joined form is `x y 2` under either reading and would record nothing. It is the specific wrong turn a fix takes by handing the old value back through the same field splitting the literal's own words go through",
+	},
+	{
+		ID: "core/appending-an-empty-array-literal-to-a-scalar", Category: "parameters",
+		Snippet: `a=1; a+=(); echo "[${a[*]}] n=${#a[@]}"`,
+		Why:     "an append with no words still promotes: bash 5.3.15, bash 3.2.57, bash as sh and zsh 5.9.2 all leave the one element the name was already holding. ksh93 is the divergence and it is about the empty parentheses rather than about the scalar -- it reads `()` as a compound-variable literal and lists `typeset -C a=()` for an unset name too, so it says nothing either way about what a scalar on the left is worth. Recorded because it is the shape where a promotion that happened only when there were words to add would be invisible",
+	},
+	{
 		ID: "core/array-star-joins", Category: "parameters",
 		Snippet: `a=(one two); echo "[${a[*]}]"; IFS=-; echo "[${a[*]}]"`,
 		Why:     "`[*]` is one field with the elements joined by the first character of IFS where `[@]` is one field each — the same difference `$*` has from `$@`",

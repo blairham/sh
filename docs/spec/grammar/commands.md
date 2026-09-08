@@ -529,6 +529,38 @@ One corner splits the panel and is silent:
 compound variable instead — `typeset -p a` answers `typeset -C a=()`,
 `${#a[@]}` is 1, and `${a[0]}` renders as the two-line text `(` `)`.
 
+**`a+=(…)` over a name holding a scalar keeps that value as the first
+element.** The append promotes what is there and then adds; it does not
+build a fresh array from the words. Measured 2026-09-08, panel and
+machine as `../oracle.md`:
+
+| probe | bash 5 | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `a=1; a+=(2)` | `1 2` | `1 2` | `1 2` | `1 2` |
+| `a=; a+=(2)` | `'' 2` | `'' 2` | `'' 2` | `'' 2` |
+| `unset a; a+=(2)` | `2` | `2` | `2` | `2` |
+| `a="x y"; a+=(2)` | 2 elements | 2 elements | 2 elements | 2 elements |
+| `a=1; a+=()` | `1` | `1` | **compound** | `1` |
+
+Unanimous, so it is core and not an axis. The kept value lands at the
+*base* — `a=1; a+=(2)` answers `[1][2]` for `${a[0]}${a[1]}` where the
+first element is 0 and `[][1]` where it is 1 — which is one rule with two
+spellings rather than a placement of its own. An *empty* scalar is a
+value and is kept; an unset name has nothing to keep, and the inherited
+environment counts as holding one (`a=1 sh -c 'a+=(2)'` is `1 2`
+throughout). The last row is ksh93's compound-variable reading of empty
+parentheses, which it gives an unset name too and which therefore says
+nothing about the scalar; see the `a=()` corner above.
+
+The whole-array spelling still **replaces**: `a=1; a=(2)` is one element
+in every column. So this belongs to the operator and not to "an array
+store finding a scalar", and `set -A` confirms it from the other side —
+`a=1; set -A a Q` and `a=1; set +A a Q` are both `(Q)` in ksh93 and zsh,
+the two shells with the letter. Corpus:
+`core/appending-an-array-literal-to-a-scalar` and the four rows beside
+it. This implementation built the array from the words alone and answered
+`2`, at status 0 (#1502).
+
 ### A subscript inside the literal
 
 An element may name where it goes: `a=([2]=c [1]=b)` is two elements, at

@@ -795,6 +795,43 @@ type Semantics struct {
 	// a second time where zsh carries on to `b`.
 	GetoptsAssignmentRestartsWord Answer
 
+	// GetoptsPositionIsFunctionLocal gives every shell function call its own
+	// `getopts` cursor: OPTIND starts the call at 1 whatever the caller had
+	// reached, and the caller's position comes back when the call returns.
+	//
+	// zsh alone, and it is the parameter itself that is local rather than
+	// only the builtin's bookkeeping — an explicit assignment inside the
+	// function does not escape either:
+	//
+	//	g() { echo "entry=$OPTIND"; OPTIND=7; }
+	//	OPTIND=3; g; echo "after=$OPTIND"
+	//
+	// answers entry=1 after=3 in zsh and entry=3 after=7 in bash, bash 3.2,
+	// dash and ksh93. The position *inside* a clustered word is saved with
+	// it, which a shared cursor cannot express: with `-ab` half read, a
+	// function scanning `-cd` of its own reads both `c` and `d` in zsh and
+	// only `d` everywhere else, and on return the caller still finds its
+	// `b`.
+	//
+	// dash looks close and is not: it leaves OPTIND at 2 on the way out and
+	// starts the *next* scan at 1 because its `getopts` resets the cursor
+	// when it runs out of options. zsh shows 2 inside the function and 1
+	// outside, which is a restore rather than a reset.
+	//
+	// What this does not cover is `unset OPTIND`, which takes the parameter
+	// away rather than giving the call a value of its own: the name stays
+	// gone after the function returns in every shell measured, so there is
+	// nothing for the return to put back. A function entered with OPTIND
+	// already unset is not handed a cursor at 1 either.
+	//
+	// Why it earns an axis rather than a note: a shell function that parses
+	// options is only reusable if the second call starts over, so zsh's own
+	// function library is written *without* the `local OPTIND=1` the others
+	// need. `add-zsh-hook -Uz precmd f` followed by any second
+	// `add-zsh-hook` had the second call reading its arguments from index 2
+	// and printing its usage — see #1392.
+	GetoptsPositionIsFunctionLocal Answer
+
 	// GetoptsClearsOptarg empties OPTARG when `getopts` reports a bad option
 	// rather than leaving it unset. zsh alone, and a script testing
 	// `${OPTARG-}` can tell the two apart.
@@ -4523,6 +4560,7 @@ func PosixSemantics() Semantics {
 		BraceExpansion:                 No,
 		BracketCaretNegates:            No,
 		ExitTrapIsFunctionLocal:        No,
+		GetoptsPositionIsFunctionLocal: No,
 		SignalHandlerSeesEarlierStatus: No,
 		// POSIX says a bare `exit` reports the status of the last command,
 		// and in an EXIT trap it names the value `$?` had when the trap was

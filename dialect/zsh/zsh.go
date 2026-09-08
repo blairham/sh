@@ -729,6 +729,11 @@ func Semantics() interp.Semantics {
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
 	s.DollarSingleNulTruncates = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.No
+	// OPTIND is local to a shell function here: the call starts at 1 and the
+	// caller's position — words and the place inside a clustered word alike —
+	// comes back on return. It is what lets this shell's own function
+	// library parse options without resetting OPTIND by hand.
+	s.GetoptsPositionIsFunctionLocal = interp.Yes
 	s.GetoptsClearsOptarg = interp.Yes
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.No

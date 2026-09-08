@@ -130,6 +130,7 @@ func TestSemantics(t *testing.T) {
 		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.No},
 		{"TerminalTestRequiresANumber", s.TerminalTestRequiresANumber, interp.No},
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.No},
+		{"TestAndArithmeticUpdatePipelineStatus", s.TestAndArithmeticUpdatePipelineStatus, interp.No},
 		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.Yes},
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.Yes},
 		{"ArrayNameWithoutSubscriptIsTheList", s.ArrayNameWithoutSubscriptIsTheList, interp.Yes},

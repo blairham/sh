@@ -9257,7 +9257,17 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 	{
 		ID: "pipestatus/a-compound-command-records-its-own", Category: "pipeline status",
 		Snippet: `if false | true; then :; fi; echo "[${PIPESTATUS[@]}]"`,
-		Why:     "the `if` is the command that just ran, so the record holds its status and not the pipeline inside it — the inner one is gone by the time the clause finishes",
+		Why:     "what a compound leaves behind: the pipeline inside it is gone by the time the clause finishes, and one element holding 0 is what is left. It does not say *which* of the two routes got there — the `:` in the body records 0 and the clause recording its own 0 look identical here — so it pins the value and not the mechanism",
+	},
+	{
+		ID: "pipestatus/a-compound-command-with-a-body-that-writes-nothing", Category: "pipeline status",
+		Snippet: `if false | true; then (( 1 )); fi; echo "[${PIPESTATUS[@]}]"`,
+		Why:     "the discriminating version of the row above: `(( 1 ))` is chosen for the body because it leaves the record alone in the shell that would otherwise obscure the answer, so one element holding 0 here is the clause's own status and not the body's. bash and zsh agree, which is what makes it a rule rather than an axis",
+	},
+	{
+		ID: "pipestatus/a-compound-command-with-a-body-that-writes-nothing-in-zsh", Category: "pipeline status",
+		Snippet: `if false | true; then (( 1 )); fi; echo "[${pipestatus[@]}]"`,
+		Why:     "the same under zsh's name for the record, where the body genuinely writes nothing — so the single element can only have come from the clause",
 	},
 	{
 		ID: "pipestatus/negation-does-not-reach-it", Category: "pipeline status",
@@ -9273,6 +9283,51 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		ID: "pipestatus/a-bare-assignment-in-zsh", Category: "pipeline status",
 		Snippet: `false | true; x=1; echo "[${pipestatus[@]}]"`,
 		Why:     "the other half of that axis, under the name that makes it observable in the shell that answers the other way",
+	},
+	{
+		ID: "pipestatus/a-test-clause", Category: "pipeline status",
+		Snippet: `false | true; [[ a = a ]]; echo "[${PIPESTATUS[@]}]"`,
+		Why:     "the axis: bash counts `[[ … ]]` as a command and replaces the record with one element holding its own status, so a script that tests an element of the record destroys the rest of it in the act of reading it",
+	},
+	{
+		ID: "pipestatus/a-test-clause-in-zsh", Category: "pipeline status",
+		Snippet: `false | true; [[ a = a ]]; echo "[${pipestatus[@]}]"`,
+		Why:     "the other half of that axis, under the name that makes it observable: zsh runs `[[ … ]]` without making a job, and a job is what writes the record, so the pipeline's two elements are still there",
+	},
+	{
+		ID: "pipestatus/an-arithmetic-command", Category: "pipeline status",
+		Snippet: `false | true; (( 1 )); echo "st=$? [${PIPESTATUS[@]}]"`,
+		Why:     "the same axis on the other construct it covers, with `$?` alongside to show the two records move independently — `(( 1 ))` succeeds, which is the inverse of the expression's truth, and bash writes that 0 over the elements",
+	},
+	{
+		ID: "pipestatus/an-arithmetic-command-in-zsh", Category: "pipeline status",
+		Snippet: `false | true; (( 1 )); echo "st=$? [${pipestatus[@]}]"`,
+		Why:     "zsh moves `$?` and leaves the elements, which is what makes the two separable at all: one axis for `[[ … ]]` and `(( … ))` together, because no shell answers them differently",
+	},
+	{
+		ID: "pipestatus/reading-it-twice-in-one-chain", Category: "pipeline status",
+		Snippet: `false | true; if (( pipestatus[1] == 141 )); then echo signal; elif (( pipestatus[1] )); then echo "code=${pipestatus[1]}"; else echo clean; fi`,
+		Why:     "the shape real code uses — test an element, then branch on it — and the one the axis is worth an axis for. In zsh all three reads see the pipeline's first element. Where `(( … ))` writes the record, the first test writes its own status over what it just read, the `elif` is true for a reason unrelated to the pipeline, and the message reports 0 for a pipeline that failed",
+	},
+	{
+		ID: "pipestatus/a-redirected-test-clause-in-zsh", Category: "pipeline status",
+		Snippet: `false | true; [[ a = a ]] >/dev/null; echo "[${pipestatus[@]}]"`,
+		Why:     "the escape hatch: a redirection makes a pipeline of the construct, and a pipeline writes the record even in the shell that would otherwise leave it — so the answer is about the bare form and not about `[[ … ]]` as such",
+	},
+	{
+		ID: "pipestatus/a-negated-test-clause-in-zsh", Category: "pipeline status",
+		Snippet: `false | true; ! [[ a = a ]]; echo "st=$? [${pipestatus[@]}]"`,
+		Why:     "`!` is the other escape hatch, and the status recorded is the one from before the inversion: `$?` is 1 where the record holds 0",
+	},
+	{
+		ID: "pipestatus/a-redirected-bare-assignment-in-zsh", Category: "pipeline status",
+		Snippet: `false | true; x=1 >/dev/null; echo "[${pipestatus[@]}]"`,
+		Why:     "the same escape hatch on the assignment axis, which is why the two share one predicate rather than one apiece — the bare form leaves the record alone in zsh and the redirected one does not",
+	},
+	{
+		ID: "pipestatus/a-negated-bare-assignment-in-zsh", Category: "pipeline status",
+		Snippet: `false | true; ! x=1; echo "st=$? [${pipestatus[@]}]"`,
+		Why:     "and `!` on the assignment, the fourth corner of that pair: neither axis is asked once the construct has been made into a pipeline",
 	},
 	{
 		ID: "pipestatus/unset-then-another-pipeline", Category: "pipeline status",

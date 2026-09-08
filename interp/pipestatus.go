@@ -17,6 +17,11 @@ import "github.com/blairham/sh/syntax"
 // element, and so does a compound one: after `if false | true; then :; fi` the
 // record holds the `if`'s own status and not the pipeline inside it, because
 // the `if` is the command that just ran.
+//
+// What does *not* record is the subject of the two axes below. zsh runs a bare
+// assignment, `[[ … ]]` and `(( … ))` without making a job, and a job is what
+// writes the record; bash writes it for all three. Neither shell is asked
+// about a compound command, which records in both.
 
 // SetPipelineStatus exposes the last pipeline's statuses under a name.
 //
@@ -46,29 +51,60 @@ func (r *Runner) recordPipeStatus(statuses []int) {
 
 // recordSingleStatus is recordPipeStatus for a pipeline of one.
 //
-// The name check is load-bearing rather than thrift: without it the axis
+// The name check is load-bearing rather than thrift: without it the axes
 // below would be asked for every `x=1` in a shell that has no name for the
 // record, and the bare core would refuse an assignment over a difference
 // nothing in that shell could see.
 //
-// Whether a bare assignment counts is the axis. bash says yes, so `false |
-// true; x=1` leaves a one-element record holding 0; zsh says no and leaves the
-// pipeline's two elements in place. It is asked only for an assignment with no
-// command name, because that is the only shape the two answer differently.
-func (r *Runner) recordSingleStatus(c syntax.Command) {
+// A leading `!` records whatever the answer, and the status it records is the
+// one from before the inversion — `! x=1` and `! [[ a = a ]]` both leave a
+// one-element record holding 0 in zsh, where the un-negated forms leave the
+// pipeline's elements alone. Measured, and it is the same reason a
+// redirection records: `!` makes a pipeline of the thing, and zsh writes the
+// record for a pipeline.
+//
+// This is one function and not three because the three constructs share the
+// escape hatch, not only the shape of the question. Splitting them is how a
+// `[[ … ]]` helper would come to know about `!` while the assignment it was
+// copied from did not.
+func (r *Runner) recordSingleStatus(p *syntax.Pipeline) {
 	if r.pipeStatusName == "" {
 		return
 	}
-	if isBareAssignment(c) &&
-		!r.ask(r.sem().AssignmentUpdatesPipelineStatus, "a bare assignment counting as a command for the pipeline status") {
+	if !p.Negated && !r.countsForPipelineStatus(p.Cmds[0]) {
 		return
 	}
 	r.recordPipeStatus([]int{r.status})
 }
 
-func isBareAssignment(c syntax.Command) bool {
-	x, ok := c.(*syntax.SimpleCmd)
-	return ok && len(x.Args) == 0 && len(x.Assigns) > 0
+// countsForPipelineStatus reports whether this command writes the record.
+//
+// Everything not named here does, in every shell that keeps a record at all,
+// so nothing is asked about it. The three that are named are the three zsh
+// runs without making a job; a redirection on any of them makes one, which is
+// why each checks for that before it asks anything.
+func (r *Runner) countsForPipelineStatus(c syntax.Command) bool {
+	switch x := c.(type) {
+	case *syntax.SimpleCmd:
+		if len(x.Args) > 0 || len(x.Assigns) == 0 || len(x.Redirs) > 0 {
+			return true
+		}
+		return r.ask(r.sem().AssignmentUpdatesPipelineStatus,
+			"a bare assignment counting as a command for the pipeline status")
+	case *syntax.TestClause:
+		if len(x.Redirs) > 0 {
+			return true
+		}
+		return r.ask(r.sem().TestAndArithmeticUpdatePipelineStatus,
+			"`[[ … ]]` counting as a command for the pipeline status")
+	case *syntax.ArithCmdClause:
+		if len(x.Redirs) > 0 {
+			return true
+		}
+		return r.ask(r.sem().TestAndArithmeticUpdatePipelineStatus,
+			"`(( … ))` counting as a command for the pipeline status")
+	}
+	return true
 }
 
 // pipelineStatuses produces the record when the dialect's name is read.

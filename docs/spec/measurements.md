@@ -12212,9 +12212,20 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pipestatus/lowercase-is-zsh` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[1 0 1]` |
 | `pipestatus/a-single-command-records-one` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[1]` | `[1]` | `[1]` | `[]` | `[]` |
 | `pipestatus/a-compound-command-records-its-own` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[0]` | `[0]` | `[0]` | `[]` | `[]` |
+| `pipestatus/a-compound-command-with-a-body-that-writes-nothing` | **2>** `<shell>: 1: 1: not found~<shell>: 1: Bad substitution` *(status 2)* | `[0]` | `[0]` | `[0]` | `[]` | `[]` |
+| `pipestatus/a-compound-command-with-a-body-that-writes-nothing-in-zsh` | **2>** `<shell>: 1: 1: not found~<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[0]` |
 | `pipestatus/negation-does-not-reach-it` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `st=1 [1 0]` | `st=1 [1 0]` | `st=1 [1 0]` | `st=1 []` | `st=1 []` |
 | `pipestatus/a-bare-assignment` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[0]` | `[0]` | `[0]` | `[]` | `[]` |
 | `pipestatus/a-bare-assignment-in-zsh` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[1 0]` |
+| `pipestatus/a-test-clause` | **2>** `<shell>: 1: [[: not found~<shell>: 1: Bad substitution` *(status 2)* | `[0]` | `[0]` | `[0]` | `[]` | `[]` |
+| `pipestatus/a-test-clause-in-zsh` | **2>** `<shell>: 1: [[: not found~<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[1 0]` |
+| `pipestatus/an-arithmetic-command` | **2>** `<shell>: 1: 1: not found~<shell>: 1: Bad substitution` *(status 2)* | `st=0 [0]` | `st=0 [0]` | `st=0 [0]` | `st=0 []` | `st=0 []` |
+| `pipestatus/an-arithmetic-command-in-zsh` | **2>** `<shell>: 1: 1: not found~<shell>: 1: Bad substitution` *(status 2)* | `st=0 []` | `st=0 []` | `st=0 []` | `st=0 []` | `st=0 [1 0]` |
+| `pipestatus/reading-it-twice-in-one-chain` | `clean` **2>** `<shell>: 1: pipestatus[1]: not found~<shell>: 1: pipestatus[1]: not found` | `clean` | `clean` | `clean` | `clean` | `code=1` |
+| `pipestatus/a-redirected-test-clause-in-zsh` | **2>** `<shell>: 1: [[: not found~<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[0]` |
+| `pipestatus/a-negated-test-clause-in-zsh` | **2>** `<shell>: 1: [[: not found~<shell>: 1: Bad substitution` *(status 2)* | `st=1 []` | `st=1 []` | `st=1 []` | `st=1 []` | `st=1 [0]` |
+| `pipestatus/a-redirected-bare-assignment-in-zsh` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[0]` |
+| `pipestatus/a-negated-bare-assignment-in-zsh` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `st=1 []` | `st=1 []` | `st=1 []` | `st=1 []` | `st=1 [0]` |
 | `pipestatus/unset-then-another-pipeline` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[1 0]` | `[1 0]` | `[1 0]` | `[]` | `[]` |
 | `pipestatus/unset-then-another-pipeline-in-zsh` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[]` |
 | `pipestatus/read-as-a-plain-parameter` | `[]` | `[1]` | `[1]` | `[1]` | `[]` | `[]` |
@@ -12290,9 +12301,17 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   false; echo "[${PIPESTATUS[@]}]"
   ```
-- `pipestatus/a-compound-command-records-its-own` — the `if` is the command that just ran, so the record holds its status and not the pipeline inside it — the inner one is gone by the time the clause finishes
+- `pipestatus/a-compound-command-records-its-own` — what a compound leaves behind: the pipeline inside it is gone by the time the clause finishes, and one element holding 0 is what is left. It does not say *which* of the two routes got there — the `:` in the body records 0 and the clause recording its own 0 look identical here — so it pins the value and not the mechanism
   ```sh
   if false | true; then :; fi; echo "[${PIPESTATUS[@]}]"
+  ```
+- `pipestatus/a-compound-command-with-a-body-that-writes-nothing` — the discriminating version of the row above: `(( 1 ))` is chosen for the body because it leaves the record alone in the shell that would otherwise obscure the answer, so one element holding 0 here is the clause's own status and not the body's. bash and zsh agree, which is what makes it a rule rather than an axis
+  ```sh
+  if false | true; then (( 1 )); fi; echo "[${PIPESTATUS[@]}]"
+  ```
+- `pipestatus/a-compound-command-with-a-body-that-writes-nothing-in-zsh` — the same under zsh's name for the record, where the body genuinely writes nothing — so the single element can only have come from the clause
+  ```sh
+  if false | true; then (( 1 )); fi; echo "[${pipestatus[@]}]"
   ```
 - `pipestatus/negation-does-not-reach-it` — `!` inverts what the pipeline reports and not what its elements did, so the record is taken before the inversion
   ```sh
@@ -12305,6 +12324,42 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pipestatus/a-bare-assignment-in-zsh` — the other half of that axis, under the name that makes it observable in the shell that answers the other way
   ```sh
   false | true; x=1; echo "[${pipestatus[@]}]"
+  ```
+- `pipestatus/a-test-clause` — the axis: bash counts `[[ … ]]` as a command and replaces the record with one element holding its own status, so a script that tests an element of the record destroys the rest of it in the act of reading it
+  ```sh
+  false | true; [[ a = a ]]; echo "[${PIPESTATUS[@]}]"
+  ```
+- `pipestatus/a-test-clause-in-zsh` — the other half of that axis, under the name that makes it observable: zsh runs `[[ … ]]` without making a job, and a job is what writes the record, so the pipeline's two elements are still there
+  ```sh
+  false | true; [[ a = a ]]; echo "[${pipestatus[@]}]"
+  ```
+- `pipestatus/an-arithmetic-command` — the same axis on the other construct it covers, with `$?` alongside to show the two records move independently — `(( 1 ))` succeeds, which is the inverse of the expression's truth, and bash writes that 0 over the elements
+  ```sh
+  false | true; (( 1 )); echo "st=$? [${PIPESTATUS[@]}]"
+  ```
+- `pipestatus/an-arithmetic-command-in-zsh` — zsh moves `$?` and leaves the elements, which is what makes the two separable at all: one axis for `[[ … ]]` and `(( … ))` together, because no shell answers them differently
+  ```sh
+  false | true; (( 1 )); echo "st=$? [${pipestatus[@]}]"
+  ```
+- `pipestatus/reading-it-twice-in-one-chain` — the shape real code uses — test an element, then branch on it — and the one the axis is worth an axis for. In zsh all three reads see the pipeline's first element. Where `(( … ))` writes the record, the first test writes its own status over what it just read, the `elif` is true for a reason unrelated to the pipeline, and the message reports 0 for a pipeline that failed
+  ```sh
+  false | true; if (( pipestatus[1] == 141 )); then echo signal; elif (( pipestatus[1] )); then echo "code=${pipestatus[1]}"; else echo clean; fi
+  ```
+- `pipestatus/a-redirected-test-clause-in-zsh` — the escape hatch: a redirection makes a pipeline of the construct, and a pipeline writes the record even in the shell that would otherwise leave it — so the answer is about the bare form and not about `[[ … ]]` as such
+  ```sh
+  false | true; [[ a = a ]] >/dev/null; echo "[${pipestatus[@]}]"
+  ```
+- `pipestatus/a-negated-test-clause-in-zsh` — `!` is the other escape hatch, and the status recorded is the one from before the inversion: `$?` is 1 where the record holds 0
+  ```sh
+  false | true; ! [[ a = a ]]; echo "st=$? [${pipestatus[@]}]"
+  ```
+- `pipestatus/a-redirected-bare-assignment-in-zsh` — the same escape hatch on the assignment axis, which is why the two share one predicate rather than one apiece — the bare form leaves the record alone in zsh and the redirected one does not
+  ```sh
+  false | true; x=1 >/dev/null; echo "[${pipestatus[@]}]"
+  ```
+- `pipestatus/a-negated-bare-assignment-in-zsh` — and `!` on the assignment, the fourth corner of that pair: neither axis is asked once the construct has been made into a pipeline
+  ```sh
+  false | true; ! x=1; echo "st=$? [${pipestatus[@]}]"
   ```
 - `pipestatus/unset-then-another-pipeline` — in bash the producer outlives `unset` and the next pipeline fills the name again, which is the opposite of what a produced *scalar* does — `unset RANDOM` leaves an ordinary empty name in every shell
   ```sh

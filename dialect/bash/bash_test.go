@@ -77,6 +77,7 @@ func TestSemantics(t *testing.T) {
 		{"SetFTurnsOffGlobbing", s.SetFTurnsOffGlobbing, interp.Yes},
 		{"NoglobLetterIsF", s.NoglobLetterIsF, interp.Yes},
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.Yes},
+		{"TestAndArithmeticUpdatePipelineStatus", s.TestAndArithmeticUpdatePipelineStatus, interp.Yes},
 		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.No},
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.No},
 		{"ArrayNameWithoutSubscriptIsTheList", s.ArrayNameWithoutSubscriptIsTheList, interp.No},

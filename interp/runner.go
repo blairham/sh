@@ -2158,7 +2158,7 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 		} else if err := r.command(ctx, p.Cmds[0]); err != nil {
 			return err
 		}
-		r.recordSingleStatus(p.Cmds[0])
+		r.recordSingleStatus(p)
 	} else if err := r.runPipeline(ctx, p, timing); err != nil {
 		return err
 	}

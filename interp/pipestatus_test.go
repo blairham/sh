@@ -78,12 +78,149 @@ func TestAssignmentUpdatesPipelineStatusIsAnAxis(t *testing.T) {
 	}
 	// Every other shape of command updates it whatever the answer, so nothing
 	// is asked for those.
-	for _, a := range []Answer{Yes, No, Unspecified} {
-		out, _ := run(t, `false | true; :; echo "${P[@]}"`, named("P", func(s *Semantics) {
-			s.AssignmentUpdatesPipelineStatus = a
+	// `x=1 true` is the shape that makes the Args check load-bearing: an
+	// assignment in front of a command name is that command's, and the
+	// command records whatever the answer.
+	for _, src := range []string{`false | true; :; echo "${P[@]}"`, `false | true; x=1 true; echo "${P[@]}"`} {
+		for _, a := range []Answer{Yes, No, Unspecified} {
+			out, _ := run(t, src, named("P", func(s *Semantics) {
+				s.AssignmentUpdatesPipelineStatus = a
+			}))
+			if strings.TrimSpace(out) != "0" {
+				t.Errorf("%v: %s gave %q, want 0 with no dialect needed", a, src, strings.TrimSpace(out))
+			}
+		}
+	}
+}
+
+// enableTestAndArith turns on the two constructs whose effect on the record is
+// the axis below: `[[ … ]]` and `(( … ))`, neither of which the core grammar
+// has.
+func enableTestAndArith(d *syntax.Dialect) {
+	d.DoubleBracket = true
+	d.ArithCommand = true
+}
+
+// Whether `[[ … ]]` and `(( … ))` count as commands for the record.
+//
+// Every case here puts the construct *between* the pipeline and the read,
+// because that is the only place the answer is visible: a script that reads
+// the record straight after a pipeline gets the same two elements whatever the
+// answer, so a test written that way passes against both.
+//
+// The wants are elements rather than a count. `[[ a = b ]]` with Yes leaves
+// one element holding 1, and asserting only the length would also accept a
+// record holding 0 — the value the bug this fixes actually produced by its
+// third write.
+func TestTestAndArithmeticUpdatePipelineStatusIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		yes  string
+		no   string
+	}{
+		// `(( 1 ))` succeeds and `(( 0 ))` fails, so the Yes column below is
+		// the inverse of the expression's truth rather than a copy of it.
+		{"a true test", `false | true; [[ a = a ]]; echo "${P[@]}"`, "0", "1 0"},
+		{"a false test", `false | true; [[ a = b ]]; echo "${P[@]}"`, "1", "1 0"},
+		{"true arithmetic", `false | true; (( 1 )); echo "${P[@]}"`, "0", "1 0"},
+		{"false arithmetic", `false | true; (( 0 )); echo "${P[@]}"`, "1", "1 0"},
+		// `$?` is a separate record and tracks the construct either way,
+		// which is what makes the two distinguishable at all.
+		{"the status still moves", `false | true; (( 0 )); echo "$? ${P[@]}"`, "1 1", "1 1 0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, w := range []struct {
+				a    Answer
+				want string
+			}{{Yes, tc.yes}, {No, tc.no}} {
+				out, _ := runGrammar(t, tc.src, enableTestAndArith, named("P", func(s *Semantics) {
+					s.TestAndArithmeticUpdatePipelineStatus = w.a
+				}))
+				if got := strings.TrimSpace(out); got != w.want {
+					t.Errorf("%v: got %q, want %q", w.a, got, w.want)
+				}
+			}
+		})
+	}
+}
+
+// The shape real code uses, and the one the bug was found in: test an element,
+// then branch on it. Three reads of the record in one if/elif chain.
+//
+// With Yes the first `(( … ))` writes its own status over the array it just
+// read, so the `elif` reads that instead of the pipeline's — and the chain
+// reports a status the pipeline never had. It is the mechanism behind a failed
+// clone being reported as `code: 0`.
+func TestReadingTheRecordTwiceInOneChain(t *testing.T) {
+	const src = `false | true; if (( P[0] == 141 )); then echo signal; ` +
+		`elif (( P[0] )); then echo "code=${P[0]}"; else echo clean; fi`
+	for _, tc := range []struct {
+		a    Answer
+		want string
+	}{
+		// The first test read 1, was false, and left it alone: the second
+		// read still sees 1 and the message reports it.
+		{No, "code=1"},
+		// With Yes the chain reports a status the pipeline never had, and
+		// gets there by two separate writes. The first test is false, so it
+		// writes *its own* 1 over the pipeline's 1 — the `elif` is then true
+		// for a reason that has nothing to do with the pipeline. Its own
+		// `(( … ))` writes 0 before the message is expanded, so the number
+		// printed is 0. This is `Clone failed (code: 0)` in full.
+		{Yes, "code=0"},
+	} {
+		out, _ := runGrammar(t, src, enableTestAndArith, named("P", func(s *Semantics) {
+			s.TestAndArithmeticUpdatePipelineStatus = tc.a
 		}))
-		if strings.TrimSpace(out) != "0" {
-			t.Errorf("%v: a builtin gave %q, want 0 with no dialect needed", a, strings.TrimSpace(out))
+		if got := strings.TrimSpace(out); got != tc.want {
+			t.Errorf("%v: got %q, want %q", tc.a, got, tc.want)
+		}
+	}
+}
+
+// A redirection or a leading `!` makes a pipeline of the construct, and a
+// pipeline writes the record whatever the axis says. Shared by all three of
+// the constructs the axes cover, which is why they share one predicate: a
+// second helper written for `[[ … ]]` alone would not have carried this.
+func TestNegationAndRedirectionAlwaysWriteTheRecord(t *testing.T) {
+	for _, src := range []string{
+		`false | true; ! [[ a = a ]]; echo "${P[@]}"`,
+		`false | true; ! (( 1 )); echo "${P[@]}"`,
+		`false | true; ! x=1; echo "${P[@]}"`,
+		`false | true; [[ a = a ]] >/dev/null; echo "${P[@]}"`,
+		`false | true; (( 1 )) >/dev/null; echo "${P[@]}"`,
+		`false | true; x=1 >/dev/null; echo "${P[@]}"`,
+	} {
+		for _, a := range []Answer{Yes, No} {
+			out, _ := runGrammar(t, src, enableTestAndArith, named("P", func(s *Semantics) {
+				s.TestAndArithmeticUpdatePipelineStatus = a
+				s.AssignmentUpdatesPipelineStatus = a
+			}))
+			// The status recorded under `!` is the one from before the
+			// inversion, so every line here leaves a single 0.
+			if got := strings.TrimSpace(out); got != "0" {
+				t.Errorf("%v: %s gave %q, want 0 whatever the answer", a, src, got)
+			}
+		}
+	}
+}
+
+// A compound command writes the record, and neither axis is asked about one.
+//
+// The `(( … ))` in the body is what makes this discriminating. Write `:`
+// there instead and the body's own write leaves the same single 0 the clause
+// would, so the snippet cannot tell a clause that writes from one that is
+// transparent — which is exactly what the corpus row of that shape could not
+// tell, and why its reason now says so.
+func TestACompoundCommandWritesTheRecord(t *testing.T) {
+	const src = `if false | true; then (( 1 )); fi; echo "${P[@]}"`
+	for _, a := range []Answer{Yes, No} {
+		out, _ := runGrammar(t, src, enableTestAndArith, named("P", func(s *Semantics) {
+			s.TestAndArithmeticUpdatePipelineStatus = a
+		}))
+		if got := strings.TrimSpace(out); got != "0" {
+			t.Errorf("%v: got %q, want the clause's own status alone", a, got)
 		}
 	}
 }
@@ -142,7 +279,9 @@ func TestArrayScalarIsTheWholeArrayIsAnAxis(t *testing.T) {
 // Without the guard, the bare core refused every `x=1` over a difference
 // nothing in that shell could observe.
 func TestNoNameAsksNoAxis(t *testing.T) {
-	f, err := syntax.Parse(`false | true; x=1; echo done`, syntax.Core())
+	d := syntax.Core()
+	enableTestAndArith(&d)
+	f, err := syntax.Parse(`false | true; x=1; [[ a = a ]]; (( 1 )); echo done`, d)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -71,6 +71,7 @@ func TestSemantics(t *testing.T) {
 		// ksh93 has no name for the pipeline status, so neither axis
 		// arises; the scalar view of an array does.
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.Unspecified},
+		{"TestAndArithmeticUpdatePipelineStatus", s.TestAndArithmeticUpdatePipelineStatus, interp.Unspecified},
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.No},
 		{"ArrayNameWithoutSubscriptIsTheList", s.ArrayNameWithoutSubscriptIsTheList, interp.No},
 		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.Yes},

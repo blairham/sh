@@ -78,6 +78,7 @@ func testSemantics() Semantics {
 	// Jobs, pipelines and what a pipeline leaves behind.
 	s.PipefailOption = Yes
 	s.AssignmentUpdatesPipelineStatus = Yes
+	s.TestAndArithmeticUpdatePipelineStatus = Yes
 	s.CoprocEndsInAnArray = Yes
 	s.JobsShowBackgroundCommand = Yes
 	s.WaitNWaitsForTheNextJob = Yes

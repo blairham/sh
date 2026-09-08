@@ -6,7 +6,6 @@ package zsh
 
 import (
 	"os"
-	"os/user"
 	"strconv"
 
 	"github.com/blairham/sh/interp"
@@ -1623,23 +1622,16 @@ func Apply(r *interp.Runner) {
 	// kept for the redraws. What is *not* different is who may ask: the core
 	// still does not, this dialect still does, and the reasoning above about
 	// uid, process and environment stands unchanged.
-	r.SetPromptUserFunc(func() string {
-		u, err := user.Current()
-		if err != nil {
-			return ""
-		}
-		return u.Username
-	})
-	// The machine's name, for `%m` and `%M`, asked the same way. It is cheap
-	// — 3.9 µs — and deferred anyway, so that the pair is one idiom rather
-	// than an eager half beside a lazy one.
-	r.SetPromptHostFunc(func() string {
-		h, err := os.Hostname()
-		if err != nil {
-			return ""
-		}
-		return h
-	})
+	//
+	// The question itself is interp.LoginName rather than a closure written
+	// here, and that is #1446: bash needs the same answer for `\u`, and while
+	// this was the only asker the drawer grew a lookup of its own that read
+	// `$USER` — which is empty under `env -i` and names the wrong person under
+	// `env USER=someone-else`. One question, every asker.
+	r.SetPromptUserFunc(interp.LoginName)
+	// The machine's name, for `%m` and `%M`, asked the same way and from the
+	// same place.
+	r.SetPromptHostFunc(interp.MachineName)
 	// And the prompt-escape table, which is the *same* value the prompt
 	// drawer is handed — repl.PromptStyle is an alias for interp.PromptStyle,
 	// not a copy. This is what makes `print -P '%F{196}…'` and a drawn prompt

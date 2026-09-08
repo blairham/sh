@@ -39,6 +39,11 @@ const (
 	// The directory the prompt escape should draw, given that the session
 	// starts in its own home.
 	cwdMark = "~"
+	// What separates the two escapes inside the prompt's brackets. The user
+	// escape's answer is this machine's login name rather than a constant, so
+	// the row that grades it reads what lies between this and the closing
+	// bracket and compares it against the system's own answer.
+	promptFieldSep = "|"
 )
 
 // completionTarget is the file Tab is asked to complete, and completionPrefix
@@ -105,11 +110,11 @@ SMOKE_RC=yes
 export SMOKE_RC
 alias smokealias='echo alias-$((6 * 7))-ok'
 smokefunc() { echo function-$((6 * 7))-ok; }
-PS1='%s%s]%s'
+PS1='%s%s%s%s]%s'
 PS2='%s'
 %s
 %s
-`, rcPromptPrefix, d.CwdEscape, promptAnchor, continuationPrompt,
+`, rcPromptPrefix, d.CwdEscape, promptFieldSep, d.UserEscape, promptAnchor, continuationPrompt,
 		strings.Join(d.RebindKeyInViMode, "\n"), d.RebindKey)
 }
 
@@ -159,7 +164,7 @@ func environment(dir, path string, d Dialect) []string {
 		"LANG=C",
 		"LC_ALL=C",
 		// The prompt of a shell that read no startup file. See envPromptPrefix.
-		"PS1=" + envPromptPrefix + d.CwdEscape + "]" + promptAnchor,
+		"PS1=" + envPromptPrefix + d.CwdEscape + promptFieldSep + d.UserEscape + "]" + promptAnchor,
 		"PS2=" + continuationPrompt,
 	}
 }

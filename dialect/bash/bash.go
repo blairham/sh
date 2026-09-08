@@ -1189,6 +1189,32 @@ func Apply(r *interp.Runner) {
 	// blessed since it was written.
 	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
+	// The login name for that same uid, for the `\u` prompt escape, and the
+	// machine's name for `\h` and `\H`. Asked here for the reason the uid
+	// above is, and asked through interp.LoginName rather than through a
+	// closure of this package's own, because zsh's `%n` is the same question
+	// under another spelling — the escape's *letter* is this dialect's and
+	// resolving a login name is not.
+	//
+	// This is #1446. `%n` had an asker and `\u` had none, so the drawer fell
+	// back to a lookup of its own that read `$USER` and `$LOGNAME`; with
+	// neither set — `env -i`, `sudo -i`, a container, a cron job, a login
+	// shell a daemon started — `\u` drew nothing, and the `\u@\h:\w\$ `
+	// that most distributions ship rendered `@host:~$`. Every other escape in
+	// that prompt was byte-identical to bash 5.3.15, which is what made it
+	// look like a working prompt.
+	//
+	// Deferred rather than resolved here, which #1423 measured and this must
+	// not undo: `user.Current` is 0.83-1.10 ms on darwin — Directory Services
+	// — and Apply runs on every invocation, so asking eagerly would spend a
+	// millisecond of every `bash -c ':'` on an escape that route cannot draw.
+	// SetPromptUserFunc asks at the first draw and keeps the answer, which is
+	// the right trade in both directions: a prompt is redrawn on every
+	// keystroke that redraws the line, and a login name does not change while
+	// a shell runs, so a resolver called per draw would pay that millisecond
+	// per *character typed*.
+	r.SetPromptUserFunc(interp.LoginName)
+	r.SetPromptHostFunc(interp.MachineName)
 	// Where the script is, which is a stack rather than a value — see
 	// callstack.go for why it cannot be stored.
 	registerCallStack(r)

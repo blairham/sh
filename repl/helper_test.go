@@ -24,5 +24,23 @@ func newTestRunner(vars map[string]string) *interp.Runner {
 	// environment — so the externals these tests reach (sleep, cat) get a
 	// PATH handed in, from the two directories every supported platform
 	// keeps the basics in.
-	return &interp.Runner{Semantics: &sem, Vars: vars, Env: []string{"PATH=/usr/bin:/bin"}}
+	r := &interp.Runner{Semantics: &sem, Vars: vars, Env: []string{"PATH=/usr/bin:/bin"}}
+	// Told who is typing and where, which is what a shell binary does at
+	// startup — dialect/bash and dialect/zsh both call SetPromptUserFunc with
+	// interp.LoginName. The drawer does not read these names out of the
+	// environment and must not: `%n` and `\u` are measured to ignore `USER`,
+	// `LOGNAME` and `HOSTNAME` in every column of the panel, so a test that
+	// set only the variable would be asserting a behavior no shell has.
+	//
+	// Taken from the map the caller already passes so that the tests written
+	// against those keys keep saying what they said. What they now say is
+	// "this shell was told", and TestTheDrawnUserIsWhatTheShellWasTold is the
+	// row that holds the two apart.
+	if v, ok := vars["USER"]; ok {
+		r.SetPromptUser(v)
+	}
+	if v, ok := vars["HOSTNAME"]; ok {
+		r.SetPromptHost(v)
+	}
+	return r
 }

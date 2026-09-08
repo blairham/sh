@@ -6698,6 +6698,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `xtrace/quoting-diverges` | `hello wor` **2>** `+ x=hello wor~+ echo hello wor` | `hello wor` **2>** `+ x='hello wor'~+ echo 'hello wor'` | `hello wor` **2>** `+ x='hello wor'~+ echo 'hello wor'` | `hello wor` **2>** `+ x='hello wor'~+ echo 'hello wor'` | `hello wor` **2>** `+ x='hello wor'~+ echo 'hello wor'` | `hello wor` **2>** `+<shell>:1> x='hello wor' ~+<shell>:1> echo 'hello wor'` |
 | `xtrace/embedded-quote-diverges` | `it's` **2>** `+ x=it's~+ echo it's` | `it's` **2>** `+ x='it'\''s'~+ echo 'it'\''s'` | `it's` **2>** `+ x='it'\''s'~+ echo 'it'\''s'` | `it's` **2>** `+ x='it'\''s'~+ echo 'it'\''s'` | `it's` **2>** `+ x=$'it\'s'~+ echo $'it\'s'` | `it's` **2>** `+<shell>:1> x='it'\''s' ~+<shell>:1> echo 'it'\''s'` |
 | `xtrace/prefix-diverges` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+ f~+ echo in` | `in` **2>** `+<shell>:1> f~+f:0> echo in` |
+| `xtrace/ps4-draws-the-user-escape` | `differs` | `names-the-login-name` | `names-the-login-name` | `names-the-login-name` | `differs` | `differs` |
+| `xtrace/ps4-user-escape-is-not-a-variable` | `differs~[impostor]` | `names-the-login-name~[impostor]` | `names-the-login-name~[impostor]` | `names-the-login-name~[impostor]` | `differs~[impostor]` | `differs~[impostor]` |
 | `xtrace/assignments-per-line-diverges` | **2>** `+ a=1 b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+<shell>:1> a=1 b=2 ` |
 | `xtrace/disabling-set-diverges` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` | `done` **2>** `+<shell>:1> set +x` |
 | `xtrace/compound-header-diverges` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+<shell>:1> i=1~+<shell>:1> echo 1~+<shell>:1> i=2~+<shell>:1> echo 2` |
@@ -6790,6 +6792,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `xtrace/prefix-diverges` — zsh names the script and line, and the function and 0 inside one, where the others print a bare plus
   ```sh
   set -x; f() { echo in; }; f
+  ```
+- `xtrace/ps4-draws-the-user-escape` — `PS4` goes through the prompt language, which makes the trace prefix the only route to a prompt escape that needs no terminal — every other one has to be typed at a session. Written as a comparison against `id -un` rather than as a name, so the record is a fact about the escape and not about the machine that made it: a row holding a login name passes on one laptop and rots everywhere else. bash draws the password database's answer in both its versions and under `sh`, so the escape survives the argv[0] that costs it process substitution; dash and ksh93 have no user escape, zsh reads `%` there instead, and the three of them draw the two characters or drop the backslash. The redirection is what keeps the drawn name out of the record while still letting the shell see it. This shell answers `differs` for a reason that is not #1446 and is not fixed by it — it does not read `PS4` at all (#1454), and `-dialect bash` has no prompt language to read it with (#1455)
+  ```sh
+  exec 3>&2 2>trace; PS4='<\u>'; set -x; :; set +x; exec 2>&3; grep -qF "<$(id -un)>" trace && echo names-the-login-name || echo differs
+  ```
+- `xtrace/ps4-user-escape-is-not-a-variable` — the half that decides how `\u` may be implemented, and the bash-side companion to `param/prompt-percent-user-is-not-a-variable`: it is a fact about the *process*, so assigning `USER` or `LOGNAME` does not move it — nor does injecting them before the shell starts, measured separately. Reading either name would make `env USER=someone-else bash` draw the wrong person at the moment somebody had just said which account they meant. The variable is echoed back in the same run, so the row also says the assignment really happened and the escape simply did not consult it
+  ```sh
+  USER=impostor; LOGNAME=impostor; exec 3>&2 2>trace; PS4='<\u>'; set -x; :; set +x; exec 2>&3; grep -qF "<$(id -un)>" trace && echo names-the-login-name || echo differs; echo "[$USER]"
   ```
 - `xtrace/assignments-per-line-diverges` — bash and ksh93 give each assignment its own line; dash and zsh put them on one
   ```sh

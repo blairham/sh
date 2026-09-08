@@ -63,6 +63,12 @@ type Dialect struct {
 	// CwdEscape draws the working directory in a prompt, ~-abbreviated:
 	// bash's \w, zsh's %~.
 	CwdEscape string
+	// UserEscape draws the person the shell is running as: bash's \u, zsh's
+	// %n. A second escape beside the directory one because the two are
+	// answered from different places — the directory from the session's own
+	// PWD, the login name from the system — and a suite that graded only the
+	// first reported 22 of 22 while `\u` drew nothing at all (#1446).
+	UserEscape string
 	// DefaultPrompt is the tail of what this shell prompts with when no
 	// prompt parameter took effect. It is what the suite falls back to
 	// synchronizing on, so that a shell honoring neither PS1 nor its rc file
@@ -99,7 +105,7 @@ type Dialect struct {
 // shells being imitated, taken from their manuals and from running them.
 func Bash() Dialect {
 	return Dialect{
-		Name: "bash", RCFile: ".bashrc", CwdEscape: `\w`, DefaultPrompt: "$ ",
+		Name: "bash", RCFile: ".bashrc", CwdEscape: `\w`, UserEscape: `\u`, DefaultPrompt: "$ ",
 		// The quoted form, which is the one that takes a whole sequence —
 		// measured, bash reads the left side of an unquoted `keyseq:function`
 		// as the name of a single key.
@@ -117,7 +123,7 @@ func Zsh() Dialect {
 	// spells its prompt escapes with a percent rather than a backslash, and
 	// lists a job in lower case.
 	return Dialect{
-		Name: "zsh", RCFile: ".zshrc", CwdEscape: "%~", DefaultPrompt: "% ",
+		Name: "zsh", RCFile: ".zshrc", CwdEscape: "%~", UserEscape: "%n", DefaultPrompt: "% ",
 		// The caret notation, which is this shell's and not the other's.
 		RebindKey: "bindkey '^G' beginning-of-line",
 		// `bindkey -v` rather than `set -o vi`, which is how this shell's own

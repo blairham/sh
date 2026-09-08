@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"os/user"
 	"strconv"
 	"strings"
 	"time"
@@ -221,15 +222,53 @@ func checks() []check {
 				// working directory is exactly `~` — one right answer, rather
 				// than a path that differs per run.
 				for _, prefix := range []string{rcPromptPrefix, envPromptPrefix} {
-					if strings.Contains(s.startup, prefix+cwdMark+"]") {
-						return Pass, "drew " + quote(prefix+cwdMark+"]") + " for " + s.dialect.CwdEscape
+					if strings.Contains(s.startup, prefix+cwdMark+promptFieldSep) {
+						return Pass, "drew " + quote(cwdMark) + " for " + s.dialect.CwdEscape
 					}
 				}
-				if !strings.Contains(s.startup, rcPromptPrefix) && !strings.Contains(s.startup, envPromptPrefix) {
+				if !drewOneOfOurPrompts(s) {
 					return Blocked, "no PS1 of ours was drawn at all, so there was no escape to render: " +
 						s.startupDrawn()
 				}
 				return Fail, s.dialect.CwdEscape + " was not rendered as " + quote(cwdMark) + ": " + s.startupDrawn()
+			},
+		},
+		{
+			name:   `the prompt's user escape`,
+			proves: `a prompt escape answered from the system rather than from the session — \u and %n`,
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				// Beside the directory escape rather than folded into it,
+				// because the two are answered from different places and only
+				// this one was broken: the directory comes from the session's
+				// own PWD and the login name from the password database. This
+				// suite reported 22 of 22 while `\u` drew nothing, which is
+				// #1446 — the default `\u@\h:\w\$ ` of most distributions
+				// rendered `@host:~$`, and an empty prompt component announces
+				// nothing.
+				//
+				// Compared against the system's own answer rather than against
+				// a name: asserting the field is merely non-empty passes
+				// against a hardcoded string, and asserting a literal name
+				// passes only on the machine that wrote it.
+				//
+				// The session's environment carries no USER or LOGNAME, which
+				// is deliberate and is the shape the fault lived in — `env
+				// -i`, `sudo -i`, a container, a cron job. A prompt drawing
+				// the right name here is drawing it from the system.
+				u, err := user.Current()
+				if err != nil {
+					return Blocked, "this process has no user to compare against: " + err.Error()
+				}
+				for _, prefix := range []string{rcPromptPrefix, envPromptPrefix} {
+					if strings.Contains(s.startup, prefix+cwdMark+promptFieldSep+u.Username+"]") {
+						return Pass, "drew " + quote(u.Username) + " for " + s.dialect.UserEscape
+					}
+				}
+				if !drewOneOfOurPrompts(s) {
+					return Blocked, "no PS1 of ours was drawn at all, so there was no escape to render: " +
+						s.startupDrawn()
+				}
+				return Fail, s.dialect.UserEscape + " was not rendered as " + quote(u.Username) + ": " + s.startupDrawn()
 			},
 		},
 		{
@@ -643,3 +682,10 @@ func bareLineFeeds(drawn string) int {
 
 // screenTail is the end of what was drawn, for a failure to read.
 func screenTail(drawn string) string { return quote(Readable(LastLines(drawn, 3))) }
+
+// drewOneOfOurPrompts reports whether either prompt this suite sets reached
+// the screen, which is what separates an escape that rendered wrongly from a
+// shell that never used our PS1 at all.
+func drewOneOfOurPrompts(s *session) bool {
+	return strings.Contains(s.startup, rcPromptPrefix) || strings.Contains(s.startup, envPromptPrefix)
+}

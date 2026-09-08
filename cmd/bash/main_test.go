@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -296,5 +297,78 @@ func TestTheModeCanBeEnteredByOptionToo(t *testing.T) {
 	}
 	if !strings.Contains(out, "read-env") || strings.Contains(out, "read-rc") {
 		t.Errorf("out = %q, want the standard's file in the mode", out)
+	}
+}
+
+// `\u` draws the person the shell is running as, end to end and through the
+// prompt loop.
+//
+// This is #1446, and the escape drew *nothing*. The default `\u@\h:\w\$ `
+// of most Linux distributions therefore rendered `@host:~$`, which still looks
+// like a prompt — an empty component announces nothing, which is what made it
+// a silent wrong answer in the most visible piece of UI the shell has.
+//
+// Compared against the system's own answer rather than against a name, which
+// is the difference between a test and a coincidence: asserting the prompt is
+// merely non-empty passes against a hardcoded string, and asserting a literal
+// name passes only on the machine that wrote it.
+//
+// `USER` and `LOGNAME` are cleared first, because the environment with neither
+// is where the fault lived and is not exotic: `env -i`, `sudo -i`, a
+// container, a cron job, and a login shell a daemon started all reach it.
+func TestThePromptUserEscapeNamesTheLoginName(t *testing.T) {
+	u, err := user.Current()
+	if err != nil {
+		t.Skipf("no user for this process: %v", err)
+	}
+	home := scratchHome(t)
+	clearEnv(t, "USER", "LOGNAME", "USERNAME")
+	writeHomeFile(t, home, ".bashrc", `PS1='<\u>'`+"\n")
+
+	out, errs, _ := prompt(t, "", "bash", "-i")
+	if want := "<" + u.Username + ">"; !strings.Contains(out+errs, want) {
+		t.Errorf("the session drew %q / %q, want a prompt containing %q", out, errs, want)
+	}
+}
+
+// And it is not read out of a variable, which is measured rather than assumed.
+//
+// bash 5.3.15 and bash 3.2.57 both draw the password database's answer with
+// `USER` and `LOGNAME` injected before the shell starts and assigned inside
+// it, exactly as zsh 5.9.2 does for `%n`. A prompt that preferred the variable
+// would name the wrong person under `env USER=someone-else` — and preferring
+// it is what the drawer used to do, which is why `\u` was empty rather than
+// wrong: nothing had set the variable either.
+func TestThePromptUserEscapeIgnoresTheEnvironmentNames(t *testing.T) {
+	u, err := user.Current()
+	if err != nil {
+		t.Skipf("no user for this process: %v", err)
+	}
+	if u.Username == "impostor" {
+		t.Skip("the probe name is this machine's real one")
+	}
+	home := scratchHome(t)
+	t.Setenv("USER", "impostor")
+	t.Setenv("LOGNAME", "impostor")
+	writeHomeFile(t, home, ".bashrc", `PS1='<\u>'`+"\n")
+
+	out, errs, _ := prompt(t, "", "bash", "-i")
+	drawn := out + errs
+	if want := "<" + u.Username + ">"; !strings.Contains(drawn, want) {
+		t.Errorf("the session drew %q, want a prompt containing %q", drawn, want)
+	}
+	if strings.Contains(drawn, "<impostor>") {
+		t.Error("the escape followed the variable, which no shell in the panel does")
+	}
+}
+
+// clearEnv unsets names for the length of a test. t.Setenv registers the
+// restore and there is no t.Unsetenv, so the empty value is set first and then
+// removed — the same two steps scratchHome takes for the startup inputs.
+func clearEnv(t *testing.T, names ...string) {
+	t.Helper()
+	for _, name := range names {
+		t.Setenv(name, "")
+		_ = os.Unsetenv(name)
 	}
 }

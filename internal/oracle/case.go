@@ -12642,6 +12642,90 @@ echo "read=[$l]"`,
 		Why:     "not a failure in any of them. Every shell starts for the first time without one, and a complaint would be the first thing anybody saw — the same answer the non-interactive file gives, recorded separately because they are read on different routes",
 	},
 
+	// --- the prompt parameters a shell starts with (#1421) ------------
+	//
+	// Every column sets a default PS1 and no two of them set the same one:
+	// `\s-\v\$ ` in the three bash members, `$ ` in dash and ksh93,
+	// `%m%# ` in zsh. That is a table of values rather than an axis — there
+	// is no disagreement about whether there *is* a default — and the values
+	// themselves are pinned in each dialect's own tests, where a string can
+	// be asserted whole.
+	//
+	// What is recorded here is the *shape*, deliberately. A default prompt
+	// holds `\s` and `\v`, so the drawn text is the shell's own name and
+	// version — machine- and build-specific, and a row holding it would rot
+	// on the next release. `${PS1+set}` and `${PS1:+nonempty}` are the two
+	// facts a startup file's guard actually reads, and they are the same on
+	// every machine.
+	{
+		ID: "prompt/the-default-prompt-is-a-parameter-at-a-prompt", Category: "invocation",
+		Args:    []string{"-i", "-c", ArgSnippet},
+		Snippet: `echo "[${PS1+set}][${PS1:+nonempty}]"`,
+		Why:     "unanimous, and the whole of #1421: an interactive shell has PS1 set to something non-empty before it runs anything. Drawing a prompt is not the same fact — the drawer falls back to the dialect's default when nothing was assigned, so a shell whose PS1 is empty still shows `bash-5.3$ ` and looks right. `[ -z \"$PS1\" ] && return` at the top of a real `~/.bashrc` reads the parameter and not the screen, and with an empty one it fires at a prompt and skips the whole file",
+	},
+	{
+		ID: "prompt/the-default-prompt-is-not-a-parameter-without-one", Category: "invocation",
+		Args:    []string{"-c", ArgSnippet},
+		Snippet: `echo "[${PS1+set}][${PS1-unset}]"`,
+		Why:     "the other side of the same guard, and the direction it is easy to break by getting the value right: three answers here where the row above is unanimous. bash 5.3.15, bash 3.2.57, bash under argv[0] `sh` and ksh93 leave PS1 *unset* with nobody to prompt — which is exactly what the guard detects — dash assigns the same `$ ` it prompts with, and zsh assigns the empty string. Set-and-empty is a third answer rather than a spelling of unset, which is why the row prints both `+` and `-`",
+	},
+	// --- `return` in a startup file (#1422) ---------------------------
+	//
+	// A startup file *is* a sourced script, so a `return` in one is accepted,
+	// stops reading the file there, and is diagnosed by nobody. That is how a
+	// real `~/.bashrc` bails out early. Ours refused it, which both wrote a
+	// line into every startup and left the file running past the point it
+	// meant to stop.
+	//
+	// The probes are **unconditional** on purpose. The natural one —
+	// `[ -z "$PS1" ] && return` — cannot tell the hypotheses apart: where PS1
+	// is set the guard never fires and the `return` never runs, so the file
+	// reads as accepted whether or not the shell would have accepted it.
+	//
+	// `Argv0: "sh"` because that is the one name every column reads `$ENV`
+	// under, which is what makes this the same question in all six.
+	{
+		ID: "startup/a-return-in-a-startup-file-stops-it", Category: "invocation",
+		Argv0:   "sh",
+		Env:     []string{"ENV=" + ArgScript},
+		Args:    []string{"-i", "-c", `printf "MAIN<%s>\n" "$?"`},
+		Snippet: "echo BEFORE\nreturn 3\necho AFTER\n",
+		Why:     "unanimous on the part that matters: BEFORE runs, AFTER does not, and no column says a word about it. The status splits — the three bash members leave 0 and dash, ksh93 and zsh leave 3 — which is the argument being discarded rather than the return being refused; see the two cases after this one for what isolates that",
+	},
+	{
+		ID: "startup/a-startup-files-return-argument", Category: "invocation",
+		Argv0:   "sh",
+		Env:     []string{"ENV=" + ArgScript},
+		Args:    []string{"-i", "-c", `printf "MAIN<%s>\n" "$?"`},
+		Snippet: "echo BEFORE\nfalse\nreturn 3\n",
+		Why:     "the same split with a failing command in front of the `return`, which is what says bash discards the *argument* rather than the file's status: bash leaves 1, the status `false` left, where dash, ksh93 and zsh leave the 3 that was written. Semantics.StartupFileReturnCarriesItsArgument",
+	},
+	{
+		ID: "startup/a-startup-files-bare-return", Category: "invocation",
+		Argv0:   "sh",
+		Env:     []string{"ENV=" + ArgScript},
+		Args:    []string{"-i", "-c", `printf "MAIN<%s>\n" "$?"`},
+		Snippet: "echo BEFORE\nfalse\nreturn\n",
+		Why:     "and unanimous again with no argument to discard: every column leaves 1, the last command's status. The three together are what make the axis about the argument and about nothing else — pair them with startup/a-startup-file-carries-its-status-out",
+	},
+	{
+		ID: "startup/a-startup-file-carries-its-status-out", Category: "invocation",
+		Argv0:   "sh",
+		Env:     []string{"ENV=" + ArgScript},
+		Args:    []string{"-i", "-c", `printf "MAIN<%s>\n" "$?"`},
+		Snippet: "echo BEFORE\n(exit 5)\n",
+		Why:     "the control: with no `return` in it at all, a startup file's status reaches the first thing the shell runs afterwards in every column, bash included. So bash does carry the file's status out and discards only the number written on a `return`",
+	},
+
+	{
+		ID: "prompt/the-startup-file-sees-the-default-prompt", Category: "invocation",
+		Argv0:   "sh",
+		Env:     []string{"ENV=" + ArgScript},
+		Args:    []string{"-i", "-c", "echo main"},
+		Snippet: `echo "RC[${PS1+set}][${PS1:+nonempty}]"`,
+		Why:     "the daily-driver shape: what a person's run-commands file finds when it runs. Five of the six columns have the default in hand before the file, which is what makes the guard mean what it was written to mean. ksh93 is the one that waits — PS1 is unset while `$ENV` runs and reads `$ ` by the time a prompt is drawn, while its PS2 and PS4 are already set — so the disagreement is about the moment and not the value, and it is a row of the prompt table rather than an axis",
+	},
+
 	// --- the shapes an automated caller writes (#499) ------------------
 	//
 	// A coding-agent harness, an editor's terminal and a CI wrapper each

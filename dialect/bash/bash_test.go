@@ -123,6 +123,13 @@ func TestSemantics(t *testing.T) {
 		{"SetHLetterTracksCommands", s.SetHLetterTracksCommands, interp.Yes},
 		{"MonitorNeedsATerminal", s.MonitorNeedsATerminal, interp.No},
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.Yes},
+		// And the neighboring question, which is about a `return` this shell
+		// *does* obey: one at the top of a startup file. bash discards the
+		// argument there — measured through a pty, an rc of `return 3` leaves
+		// `$?` as 0 at the first prompt and `false; return 3` leaves 1, while
+		// `(exit 5)` as the last line leaves 5. So the file's status carries
+		// out and the number on the `return` does not (#1422).
+		{"StartupFileReturnCarriesItsArgument", s.StartupFileReturnCarriesItsArgument, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
 		// The one shell in the panel that survives a failed expansion: it
 		// gives up the line and runs the next one, where the other three end

@@ -1383,6 +1383,35 @@ type Semantics struct {
 	// the one case they split on.
 	ReturnOutsideAFunctionIsRefused Answer
 
+	// StartupFileReturnCarriesItsArgument makes `return 3` at the top of a
+	// startup file leave `$?` as 3, instead of leaving whatever the command
+	// before it left. True in dash, ksh93 and zsh; false in bash.
+	//
+	// A startup file *is* a sourced script — every shell in the panel accepts
+	// a `return` in one, stops reading the file there and says nothing — so
+	// the question is only what the argument does. Measured through a pty
+	// with the rc file as the whole probe, reading `$?` at the first prompt:
+	//
+	//	rc              bash  bash32  dash  ksh93  zsh
+	//	return 3           0       0     3      3    3
+	//	false; return 3    1       1     3      3    3
+	//	false; return      1       1     1      1    1
+	//	(exit 5)           5       5     5      5    5
+	//
+	// The last two rows are what make this about the argument and nothing
+	// else. bash does carry a startup file's status out — `(exit 5)` leaves
+	// 5 — and a `return` with no argument means the last command's status
+	// everywhere, so the only thing bash discards is the number written on
+	// the `return` itself.
+	//
+	// Asked only of a `return` at the top level of the startup file. A
+	// `return` inside a function the file calls, or inside a file the file
+	// sources, carries its argument in bash too: measured, an rc running
+	// `f(){ return 3; }; f` or `. inner.sh` where inner returns 3 leaves 3 at
+	// the prompt in bash 5.3.15. So this is a property of the outermost
+	// frame rather than of `return`.
+	StartupFileReturnCarriesItsArgument Answer
+
 	// UnknownConditionOptionIsAStatus makes `[[ -o name ]]` with a name this
 	// shell does not have a status of its own with a complaint, instead of
 	// the plain false that a name it has but has not set would give. True in

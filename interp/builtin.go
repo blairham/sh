@@ -1839,7 +1839,7 @@ func expandEchoEscapes(s string, hex, esc, capEsc bool) (expanded string, stoppe
 // `-q` is a third, and belongs to one shell — see CdHasQuietOption. zsh has a
 // fourth, `-s`, which refuses a path with a symlink component (`cd -s link`
 // and `cd -s link/deep` are both `not a directory` there while `cd -s real`
-// moves); it is not carried yet and is filed rather than guessed at, so it
+// moves); it is not carried yet and is filed as #1569 rather than guessed at, so it
 // still reaches the unknown-letter question below.
 //
 // A lone `-` is not an option — it is the previous directory — which the

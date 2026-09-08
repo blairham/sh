@@ -6791,7 +6791,8 @@ zsh has a fourth letter, `-s`, which refuses a path with a symlink
 component: `cd -s link` and `cd -s link/deep` are both `not a directory`
 there while `cd -s real` moves. It is not carried and reaches the
 unknown-letter question, so `cd -s dir` is read as a directory called
-`-s` in our zsh where the real one moves. Filed rather than guessed at.
+`-s` in our zsh where the real one moves. Filed as #1569 rather than
+guessed at.
 
 **`CdWithoutHomeIsAnError`** — bash yes · dash no · ksh93 yes · zsh no
 

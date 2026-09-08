@@ -959,14 +959,35 @@ type Diagnostics struct {
 	// Semantics.StoppedJobsHoldTheExit, which is what decides whether it
 	// stays at all. One verb: the shell's own name.
 	//
+	// It wins over RunningJobsAtExit where there is one of each: measured,
+	// a session holding a suspended job and a `sleep 40 &` is told about the
+	// suspended one in both shells that say anything.
+	//
 	// Written without the location prefix every other diagnostic carries:
 	// one of the two shells that says this names itself in the sentence and
 	// the other names nobody, and neither writes a line number.
 	StoppedJobsAtExit string
 
+	// RunningJobsAtExit is the same warning for a job that is still running,
+	// which a shell gives only where the session has asked it to — see
+	// Runner.ChecksRunningJobsAtExit. Measured through a pseudo-terminal:
+	// bash 5.3.15 with `shopt -s checkjobs` says `There are running jobs.`
+	// and zsh 5.9.2 says `zsh: you have running jobs.`, each the same shape
+	// as its own stopped-job sentence with one word changed.
+	//
+	// A second wording rather than a parameter of the first, because the two
+	// shells do not build it the same way: one says `stopped`/`running` where
+	// the other says `suspended`/`running`, so there is no shared sentence
+	// with a word in it.
+	RunningJobsAtExit string
+
 	// StoppedJobsAtExitStatus is what the `exit` that was held back reports.
 	// Zero is what zsh answers, which is also the shape of a dialect that
 	// never holds an exit at all; bash answers 1, a builtin that failed.
+	//
+	// One number for both kinds of job, which is measured and not assumed:
+	// `exit` held back by a *running* job reports 1 in bash and 0 in zsh,
+	// exactly as the stopped one does.
 	StoppedJobsAtExitStatus int
 
 	// EmptyRedirectTarget replaces CannotOpen and CannotCreate where the

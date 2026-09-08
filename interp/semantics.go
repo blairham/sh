@@ -3345,6 +3345,20 @@ type Semantics struct {
 	// `exit` still warns; and a job stopping afterwards starts it over.
 	StoppedJobsHoldTheExit Answer
 
+	// HeldExitListsTheJobs follows that warning with the job table — the
+	// same rows `jobs` writes. bash does and zsh does not: measured through a
+	// pseudo-terminal, `shopt -s checkjobs` then `exit` writes
+	// `There are running jobs.` and `[1]+  Running   sleep 40 &` under it,
+	// where zsh writes `you have running jobs.` and nothing else, whatever
+	// its own options are set to.
+	//
+	// Reached only in a shell that holds an exit at all, so dash and ksh93
+	// never answer it. Asked *with* Runner.ChecksRunningJobsAtExit rather
+	// than instead of it, because in bash the listing is the other half of
+	// what one `checkjobs` buys: with the option off the sentence still
+	// appears for a stopped job and the table under it does not.
+	HeldExitListsTheJobs Answer
+
 	// CdpathAnnouncesTheDirectory prints where CDPATH sent a `cd`, when
 	// the winning entry was not a plain dot — three of the four; zsh moves
 	// in silence.

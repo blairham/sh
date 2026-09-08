@@ -281,14 +281,15 @@ func TestShoptHistoryNamesAreOnAndTheRestStayRefused(t *testing.T) {
 			t.Errorf("shopt -u %s = %q status %d, want a refusal", name, out, st)
 		}
 	}
-	// Refused, because nothing here implements them. The list is four names
+	// Refused, because nothing here implements it. The list is five names
 	// shorter than it was: #1445 built `checkwinsize`, `autocd`,
-	// `no_empty_cmd_completion` and `cdspell`, and each of those is asserted
-	// by behavior below rather than by its bit. What is left is refused for
-	// the reason this test exists — granting one would be exactly the quiet
-	// lie #1352 named. `dirspell` is refused on the stronger ground that it
-	// could not be reproduced in bash 5.3.15 at all; see shopt.go.
-	for _, name := range []string{"dirspell", "checkjobs"} {
+	// `no_empty_cmd_completion`, `cdspell` and `checkjobs`, and each of those
+	// is asserted by behavior rather than by its bit. What is left is refused
+	// for the reason this test exists — granting it would be exactly the
+	// quiet lie #1352 named. `dirspell` is refused on the ground that it is
+	// visible in bash 5.3.15 only beside `direxpand`, which this shell does
+	// not do either; see shopt.go.
+	for _, name := range []string{"dirspell"} {
 		out, st := runBash(t, t.TempDir(), "shopt -s "+name)
 		if st != 1 || !strings.Contains(out, "shopt: "+name+": not implemented") {
 			t.Errorf("shopt -s %s = %q status %d, want a refusal by name", name, out, st)
@@ -722,6 +723,49 @@ func TestCdspellCorrectsAnInteractiveCd(t *testing.T) {
 		out, _ := runBash(t, t.TempDir(), tc.src)
 		if want := fmt.Sprintf("%-20s\t%s\n", "cdspell", tc.want); out != want {
 			t.Errorf("%s = %q, want %q", tc.src, out, want)
+		}
+	}
+}
+
+// `shopt -s checkjobs` moves the switch that holds an exit for a job that is
+// still running, and the assertion is that it moves *that* one and not the
+// stopped-job check beside it.
+//
+// The split is measured rather than assumed, and it is where this shell parts
+// company with zsh: `shopt -u checkjobs` in bash 5.3.15 still says
+// `There are stopped jobs.` and stays, where `unsetopt checkjobs` in zsh
+// 5.9.2 leaves at the first `exit`. So this name governs the running half
+// alone. Driven through a pseudo-terminal on 2026-09-08; the behavior itself
+// is graded in the smoke suite, since a held exit needs a prompt to be held
+// at.
+func TestCheckjobsMovesTheRunningJobHold(t *testing.T) {
+	r := preset.Runner(dialecttest.Base{Dir: t.TempDir()})
+	if r.ChecksRunningJobsAtExit() {
+		t.Error("a fresh bash holds the exit for a running job, but `shopt checkjobs` is off in bash 5.3.15")
+	}
+	out, st := runBash(t, t.TempDir(), `shopt checkjobs`)
+	if want := "checkjobs           \toff\n"; out != want || st != 1 {
+		t.Errorf("shopt checkjobs = %q status %d, want %q status 1", out, st, want)
+	}
+	for _, tc := range []struct {
+		src  string
+		want bool
+	}{
+		{`shopt -s checkjobs`, true},
+		{`shopt -s checkjobs; shopt -u checkjobs`, false},
+	} {
+		r := preset.Runner(dialecttest.Base{Dir: t.TempDir()})
+		f := preset.Parse(t, tc.src)
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatalf("%s: %v", tc.src, err)
+		}
+		if got := r.ChecksRunningJobsAtExit(); got != tc.want {
+			t.Errorf("%s: ChecksRunningJobsAtExit() = %v, want %v", tc.src, got, tc.want)
+		}
+		// The other half is not this name's to move, in either direction.
+		if !r.ChecksStoppedJobsAtExit() {
+			t.Errorf("%s: turned the stopped-job check off, which is zsh's `checkjobs` and not this one",
+				tc.src)
 		}
 	}
 }

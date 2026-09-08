@@ -804,7 +804,7 @@ func (r *Runner) announceStopped(j *Job) {
 	// A new stop is something the person has not been shown, whether or not
 	// an earlier one was — measured, a `jobs` listing followed by a second ^Z
 	// makes bash warn about stopped jobs at the next `exit` all over again.
-	r.toldOfStoppedJobs, r.tellingOfStoppedJobs = false, false
+	r.toldOfJobsAtExit, r.tellingOfJobsAtExit = false, false
 	if !r.JobControl {
 		return
 	}
@@ -871,34 +871,67 @@ func (r *Runner) reapJobs() {
 	}
 }
 
-// HoldsExitForStoppedJobs reports whether this shell should stay rather than
-// exit, because leaving now would abandon a job that is stopped — and says so
-// when it does.
+// HoldsExitForJobs reports whether this shell should stay rather than exit,
+// because leaving now would abandon a job — and says so when it does.
 //
 // Exported because both ways out of a session reach it and only one of them is
 // in this package: `exit` is a builtin, and the end of input is the front
 // end's. Measured, the two are the same warning in the same words.
 //
+// Two kinds of job, asked in one place because the shells answer them in one
+// sentence. A stopped job is the older half and is governed by
+// Semantics.StoppedJobsHoldTheExit; a running one is
+// Runner.ChecksRunningJobsAtExit, which both shells that hold spell
+// `checkjobs`. Measured through a pseudo-terminal on 2026-09-08 against bash
+// 5.3.15 and zsh 5.9.2, and every rule below is one of those runs:
+//
+//   - Stopped wins the sentence. With a job suspended *and* a `sleep 40 &` in
+//     the table, bash says `There are stopped jobs.` and zsh says
+//     `you have suspended jobs.` — neither mentions the running one, though
+//     bash's listing under the sentence shows both.
+//   - The running half needs the option and the stopped half does not, in
+//     bash. `shopt -u checkjobs` still warns about a suspended job and no
+//     longer warns about a running one.
+//   - In zsh the option is the master of both, which is
+//     Runner.ChecksStoppedJobsAtExit: `unsetopt checkjobs` and a suspended job
+//     is an exit that happens.
+//   - The status the held `exit` reports is the same for either kind — 1 in
+//     bash, 0 in zsh — so Diagnostics.StoppedJobsAtExitStatus answers for
+//     both and did not have to grow a twin.
+//
 // Once, and what "once" means is measured rather than assumed. The warning
 // itself counts as having been told, so a second `exit` leaves; so does a
 // `jobs` listing, which is the shell showing the same thing on purpose; and a
 // job stopping afterwards starts the count again. Any other command in between
-// does not — bash and zsh both warn again after an `echo`.
-func (r *Runner) HoldsExitForStoppedJobs() bool {
-	if !r.JobControl || r.toldOfStoppedJobs {
+// does not — bash and zsh both warn again after an `echo`, and both warn again
+// after the `echo $?` that reads the held exit's own status.
+func (r *Runner) HoldsExitForJobs() bool {
+	if !r.JobControl || r.toldOfJobsAtExit {
 		return false
 	}
-	stopped := false
+	stopped, running := false, false
 	for _, j := range r.jobs {
-		if j.Stopped && !j.Finished() {
+		switch {
+		case j.Finished():
+		case j.Stopped:
 			stopped = true
-			break
+		default:
+			running = true
 		}
 	}
-	if !stopped {
+	// Stopped first, because that is the order the sentence is chosen in and
+	// not merely the order the fields are declared in: a session with one of
+	// each is told about the stopped one.
+	wording := ""
+	switch {
+	case stopped && r.ChecksStoppedJobsAtExit():
+		wording = Wording(r.diag().StoppedJobsAtExit, "there are stopped jobs", r.name())
+	case running && r.ChecksRunningJobsAtExit():
+		wording = Wording(r.diag().RunningJobsAtExit, "there are running jobs", r.name())
+	default:
 		return false
 	}
-	if !r.ask(r.sem().StoppedJobsHoldTheExit, "an exit held back by a stopped job") {
+	if !r.ask(r.sem().StoppedJobsHoldTheExit, "an exit held back by a job that would be abandoned") {
 		// Unspecified is left to the caller: the axis has already complained,
 		// and a shell that cannot say whether to stay had better leave than
 		// refuse to.
@@ -907,13 +940,42 @@ func (r *Runner) HoldsExitForStoppedJobs() bool {
 	// Both, and the second is what carries it to the next chunk: `exit` twice
 	// leaves, and the end of input twice leaves without any chunk running
 	// between the two.
-	r.toldOfStoppedJobs, r.tellingOfStoppedJobs = true, true
+	r.toldOfJobsAtExit, r.tellingOfJobsAtExit = true, true
 	// Written plainly rather than through the dialect's location prefix: one
 	// of the two shells that says this names itself in the sentence and the
 	// other names nobody at all, and neither writes the line number a prompt's
 	// diagnostics carry.
-	r.errf("%s\n", Wording(r.diag().StoppedJobsAtExit, "there are stopped jobs", r.name()))
+	r.errf("%s\n", wording)
+	r.listJobsHeldAtExit()
 	return true
+}
+
+// listJobsHeldAtExit prints the job table under the sentence, where the shell
+// does that.
+//
+// Two conditions and they are different in kind. Whether this shell ever
+// lists is Semantics.HeldExitListsTheJobs — bash does and zsh does not, in
+// every case measured. Whether it lists *now* is the option, because bash's
+// one `checkjobs` buys both halves of checking the jobs: with it off, the
+// stopped-job sentence still appears and the table under it does not.
+//
+// Not asked through Runner.ask, because it is only ever reached in a shell
+// that has already held an exit — the two dialects that never hold have no
+// answer to give and are never put the question.
+func (r *Runner) listJobsHeldAtExit() {
+	if !r.ChecksRunningJobsAtExit() || r.sem().HeldExitListsTheJobs != Yes {
+		return
+	}
+	// The same rows `jobs` writes, current-and-previous markers and all:
+	// measured, the table under the sentence is `[1]+  Stopped ...` beside
+	// `[2]-  Running ...`, which is the listing's own line and not a second
+	// rendering of it.
+	for i, j := range r.jobs {
+		if j.Finished() {
+			continue
+		}
+		r.errf("%s\n", r.jobLineAs(i, j, true, false))
+	}
 }
 
 // LastCommandWasInterrupted reports whether the command that just ran ended

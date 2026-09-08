@@ -2883,9 +2883,9 @@ first is unanimous across the table.** Every name is one of five kinds:
 | substrate-backed | 11 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e` |
 | axis- or matcher-backed | 7 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`) |
 | fixed | 18 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted |
-| store-backed, read by the front end | 1 | `histignorespace`: kept where a recorded name is kept, and read by the line editor before it records a line |
-| switch-backed | 1 | `autocd`: moves a capability the substrate holds under no option name of its own — a bare directory name really is read as a `cd` |
-| **recorded** | 147 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| store-backed, read by the front end | 2 | `histignorespace`, read by the line editor before it records a line, and `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for. Both are kept where a recorded name is kept, because the substrate has no `set -o` name for either |
+| switch-backed | 2 | `autocd` and `checkjobs`: each moves a capability the substrate holds under no option name of its own — a bare directory name really is read as a `cd`, and a job still running really does hold the exit |
+| **recorded** | 145 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -2902,9 +2902,18 @@ bash spells the identical capability `autocd` too, so a dialect that
 implemented it for itself would have implemented it *instead* of the other
 one (#1445). It is the sixth row above — one capability in the substrate,
 two shells' names over it, and only whether the substitution is announced
-told apart, by an axis. Nothing else about the split moved: 147 of 185 is
-still most of the table, and the count above is the one produced by counting
-the constructors in `dialect/zsh/setopt.go`.
+told apart, by an axis. `checkjobs` and `checkrunningjobs` are the fifth and
+sixth, and they left together because they are one question asked twice: the
+first is the master over whether the shell looks at its job table before
+leaving, the second narrows that to suspended jobs only, and neither can be
+read without the other — which is why one is switch-backed and the other is
+store-backed rather than both being one or the other (#1445). bash spells the
+master `checkjobs` as well, so this is the second capability in the substrate
+with two shells' names over it; the defaults differ (bash off, zsh on) and so
+does the reach, since bash's name governs only the running half while zsh's
+governs both. Nothing else about the split moved: 145 of 185 is still most of
+the table, and the count above is the one produced by counting the
+constructors in `dialect/zsh/setopt.go`.
 
 The recorded kind is the change of position, and it is deliberate. A real
 `~/.zshrc` opens with a dozen `setopt` lines about completion, correction,
@@ -2971,7 +2980,7 @@ call back into the table it was called from.
 
 Two consequences worth stating, because both are divergences rather than
 wins. Recording is unchanged: a listing 185 rows long still says nothing
-about whether a name is acted on, and 147 of them are remembered and not
+about whether a name is acted on, and 145 of them are remembered and not
 acted on exactly as before — the table is longer in the listing because zsh
 lists that many, not because more of it is implemented. And a `set -o` name
 this shell has and will not move now answers `can't change option` at 1,
@@ -4402,7 +4411,7 @@ than missing:
   the chain rather than the last; `-x` sets the tab width of a printed body.
   Each is refused as not implemented rather than as unknown, the same
   distinction `compgen` draws between an action a shell lacks and a typo.
-- zsh `setopt` names of the **recorded** kind: 147 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 145 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150; neither was the count
   the table produces. It is now counted from the constructors.)

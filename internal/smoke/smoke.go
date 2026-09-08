@@ -127,6 +127,31 @@ type Dialect struct {
 	// without one to refuse, and both answers are that shell's own.
 	CdSpellOption string
 
+	// CheckJobsOption is the rc-file line that asks this shell to look at its
+	// job table before it leaves, or empty for a shell that already does.
+	//
+	// Empty is an assertion rather than a gap, the same way CdSpellOption's
+	// is: both shells spell the option `checkjobs` and they start it in
+	// different places — measured, bash 5.3.15 leaves at once with a
+	// `sleep 40 &` in the table and zsh 5.9.2 started with `-f` stays and
+	// says so. So the bash column has to ask and the zsh column has to be
+	// right without asking, and a row that set it in both would never notice
+	// zsh's default going missing.
+	CheckJobsOption string
+
+	// RunningJobsAtExit is what this shell says when an exit is held back by
+	// a job that is still running. The two wordings share no phrase —
+	// `There are running jobs.` against `zsh: you have running jobs.` — which
+	// is why it is a whole sentence per dialect rather than a word.
+	RunningJobsAtExit string
+
+	// ListsJobsAtExit says the sentence is followed by the job table. bash
+	// does while its option is on and zsh never does, measured both ways, and
+	// the row asserts the absence as well as the presence: a shell that
+	// printed the table where zsh does not would be adding output to
+	// somebody's terminal on the way out.
+	ListsJobsAtExit bool
+
 	// JobRunning and JobStopped are the words this shell lists a job's state
 	// with. They differ, and the difference is the point of having a column
 	// per dialect: bash writes `Running` and `Stopped`, zsh writes `running`
@@ -149,10 +174,13 @@ func Bash() Dialect {
 			"set -o vi",
 			`bind -m vi-insert '"\C-o": beginning-of-line'`,
 		},
-		PromptHook:    `PROMPT_COMMAND='SMOKE_HOOK=$((SMOKE_HOOK + 1))'`,
-		AutoCdOption:  "shopt -s autocd",
-		CdSpellOption: "shopt -s cdspell",
-		JobRunning:    "Running", JobStopped: "Stopped",
+		PromptHook:        `PROMPT_COMMAND='SMOKE_HOOK=$((SMOKE_HOOK + 1))'`,
+		AutoCdOption:      "shopt -s autocd",
+		CdSpellOption:     "shopt -s cdspell",
+		CheckJobsOption:   "shopt -s checkjobs",
+		RunningJobsAtExit: "There are running jobs.",
+		ListsJobsAtExit:   true,
+		JobRunning:        "Running", JobStopped: "Stopped",
 	}
 }
 
@@ -170,10 +198,13 @@ func Zsh() Dialect {
 			"bindkey -v",
 			"bindkey -M viins '^O' beginning-of-line",
 		},
-		PromptHook:    "precmd() { SMOKE_HOOK=$((SMOKE_HOOK + 1)); }",
-		AutoCdOption:  "setopt autocd",
-		CdSpellOption: "",
-		JobRunning:    "running", JobStopped: "suspended",
+		PromptHook:        "precmd() { SMOKE_HOOK=$((SMOKE_HOOK + 1)); }",
+		AutoCdOption:      "setopt autocd",
+		CdSpellOption:     "",
+		CheckJobsOption:   "",
+		RunningJobsAtExit: "you have running jobs.",
+		ListsJobsAtExit:   false,
+		JobRunning:        "running", JobStopped: "suspended",
 	}
 }
 

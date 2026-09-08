@@ -44,4 +44,17 @@ func TestWhatBashSaysAboutASuspendedJob(t *testing.T) {
 	if bash.Semantics().StoppedJobsHoldTheExit != interp.Yes {
 		t.Error("bash stays rather than leaving a job stopped")
 	}
+	// And the same sentence for a job still going, which is what
+	// `shopt -s checkjobs` asks for: measured through a pseudo-terminal,
+	// `There are running jobs.` — the stopped one's shape with one word
+	// changed, and nothing shared between them to build it from.
+	if got, want := dg.RunningJobsAtExit, "There are running jobs."; got != want {
+		t.Errorf("RunningJobsAtExit = %q, want %q", got, want)
+	}
+	// This shell writes the job table under either sentence while the option
+	// is on, which zsh never does. Measured: `[1]+  Stopped ./ticker` and
+	// `[2]-  Running sleep 40 &` below `There are stopped jobs.`
+	if bash.Semantics().HeldExitListsTheJobs != interp.Yes {
+		t.Error("bash writes the job table under the warning it holds an exit with")
+	}
 }

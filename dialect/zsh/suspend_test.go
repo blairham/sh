@@ -47,4 +47,15 @@ func TestWhatZshSaysAboutASuspendedJob(t *testing.T) {
 	if zsh.Semantics().StoppedJobsHoldTheExit != interp.Yes {
 		t.Error("zsh stays rather than leaving a job stopped")
 	}
+	// The same for a job still going, which this shell checks for unasked.
+	if got, want := dg.RunningJobsAtExit, "%[1]s: you have running jobs."; got != want {
+		t.Errorf("RunningJobsAtExit = %q, want %q", got, want)
+	}
+	// And the sentence is the whole of it here: measured, zsh draws the next
+	// prompt straight after and never the job table, whichever way its own
+	// two option names are set. The absence is the assertion — a shell that
+	// listed would be adding output to somebody's terminal on the way out.
+	if zsh.Semantics().HeldExitListsTheJobs != interp.No {
+		t.Error("zsh says the sentence and nothing else")
+	}
 }

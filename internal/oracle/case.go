@@ -10917,6 +10917,16 @@ echo "st=$? alive"`,
 		Why:     "both bash versions have this name, unlike `autocd` — 3.2 accepts it too — and the rest of the row is the half that keeps an implementation honest: with the option on and accepted, a script's `cd` still refuses the misspelling and stays put, because correcting one is something bash keeps for a person. What it corrects at a prompt is a pseudo-terminal's question and is graded in the smoke suite",
 	},
 	{
+		ID: "shopt/checkjobs-is-accepted-and-still-not-a-script-feature", Category: "shell options",
+		Snippet: `shopt -s checkjobs; echo "st=$?"; sleep 5 >/dev/null 2>&1 & exit 7; echo unreached`,
+		Why:     "the fifth of the six names #1429 refused to be built (#1445), leaving only `dirspell`, and the row is the pair the other four already have: the name is the 5.3 binary's under either argv[0] and 3.2 answers `invalid shell option name`, and with the option on and accepted a *script* still leaves at once with a job of its own still running. That second half is the one an implementation is most likely to get too right — the hold is a person's, so a script that stopped to warn would have made every `&` before an `exit` a hang. What it says at a prompt needs a pseudo-terminal and is graded in the smoke suite",
+	},
+	{
+		ID: "shopt/checkjobs-round-trips-from-off", Category: "shell options",
+		Snippet: `shopt checkjobs; shopt -s checkjobs; shopt checkjobs; shopt -u checkjobs; shopt checkjobs; echo st=$?`,
+		Why:     "the default is the load-bearing half here, and it is the opposite of the neighboring shell's: bash starts this *off*, so a `sleep 40 &` and an `exit` leave, where zsh starts its own `checkjobs` on and stays. A shell that granted the name by writing `true` into a table would report it `on` before anything asked. The final status is the query's, which is 1 for an option that is off — the same shape `shopt checkwinsize` pins for a name that is on",
+	},
+	{
 		ID: "cd/no-operand-with-a-home-that-is-not-there", Category: "builtins",
 		Snippet: `HOME=/nonexistent-dir; cd; echo "st=$?"`,
 		Why:     "unanimous, and the shape of a crash rather than of a disagreement: every column names the *value of HOME* and none of them names nothing, because the place a `cd` was asked for is the place it reports. Ours indexed an empty operand list to write that sentence and took the shell down with it — `sudo -i`, a container, a home that has been removed. The statuses split the way a failed `cd` always splits here, which is the second thing the row pins",

@@ -642,6 +642,10 @@ func Semantics() interp.Semantics {
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.
 	s.StoppedJobsHoldTheExit = interp.Yes
+	// And says only the sentence: measured, zsh writes `you have running
+	// jobs.` and draws the next prompt, with no table under it, whichever way
+	// `checkjobs` and `checkrunningjobs` are set.
+	s.HeldExitListsTheJobs = interp.No
 	// CDPATH moves in silence here.
 	s.CdpathAnnouncesTheDirectory = interp.No
 	// And so does `autocd`: `setopt autocd` then `subdir` at a prompt moves
@@ -1277,6 +1281,7 @@ func Diagnostics() interp.Diagnostics {
 		// nothing — measured, `echo $?` after the refusal says 0, where
 		// bash's says 1.
 		StoppedJobsAtExit: "%[1]s: you have suspended jobs.",
+		RunningJobsAtExit: "%[1]s: you have running jobs.",
 		// The reason first and the name after it, which is zsh's shape and
 		// nobody else's. Lowercased, which LowercaseReason already says.
 		// Same either way — zsh does not distinguish opening from creating.
@@ -1673,6 +1678,12 @@ func Apply(r *interp.Runner) {
 	// two shells' worth of naming above it is exactly the shape a second copy
 	// gets written into, so there is one: interp.Runner.TracksWindowSize.
 	r.SetTracksWindowSize(true)
+	// A job still running holds the exit here, where bash needs to be asked:
+	// measured, zsh 5.9.2 started with `-f` answers `sleep 40 &` then `exit`
+	// with `you have running jobs.` and stays, and bash 5.3.15 leaves. Both
+	// shells spell the option `checkjobs`; only the defaults differ, and this
+	// is where this one's is set. See interp.Runner.ChecksRunningJobsAtExit.
+	r.SetChecksRunningJobsAtExit(true)
 	registerEmulate(r)
 	// This shell's own question about a name, under two names: `whence` and
 	// `where`. Not ksh93's builtin under the same spelling — the stream, the

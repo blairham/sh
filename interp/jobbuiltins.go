@@ -114,7 +114,7 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	// form that prints only process ids clears it just the same. This chunk's
 	// flag rather than the one `exit` reads: a listing suppresses the warning
 	// for the line after it, and not for a line after that.
-	r.tellingOfStoppedJobs = true
+	r.tellingOfJobsAtExit = true
 	form, code := r.jobsForm(opts)
 	if code != 0 {
 		return code

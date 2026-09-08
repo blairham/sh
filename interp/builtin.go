@@ -3065,10 +3065,11 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 // every shell measured.
 func biExit(r *Runner, _ context.Context, args []string) int {
 	// Asked before the operand is read, because the shell is not going
-	// anywhere: `exit 3` with a job stopped stays, and the 3 is never used.
+	// anywhere: `exit 3` with a job the shell is checking for stays, and the
+	// 3 is never used.
 	// The status is the dialect's, and the two that stay disagree about it —
 	// bash reports a builtin that failed, zsh reports nothing of the kind.
-	if r.HoldsExitForStoppedJobs() {
+	if r.HoldsExitForJobs() {
 		return r.diag().StoppedJobsAtExitStatus
 	}
 	if len(args) > 0 {

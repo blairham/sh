@@ -13024,4 +13024,90 @@ echo "read=[$l]"`,
 		Snippet: `x=1; x=2 /bin/echo RAN; echo "after x=[$x]"`,
 		Why:     "the control for the whole group, and the row that says a broken harness looks different from a finding: an ordinary prefix runs the command, is taken back afterwards and complains about nothing, identically in all six columns",
 	},
+	// --- an assignment whose name is a number (#1438) -------------------
+	{
+		ID: "posassign/a-number-where-the-name-belongs", Category: "variables",
+		Snippet: `set -- x; 1=abc; echo "st=$? [$1]"`,
+		Why:     "whether a run of digits may be an assignment's *name*. zsh writes the first positional parameter; bash 5.3, that binary as `sh`, bash 3.2, dash and ksh93 all take the word as a command name and answer `command not found` at 127. Five refusals and one reading, and the row the plugin manager in `~/.zi` needs: two of its own functions assign their positionals, so a real startup printed twelve `1=username/reponame` lines and never reached a prompt",
+	},
+	{
+		ID: "posassign/the-value-is-not-split", Category: "variables",
+		Snippet: `v="a b"; set -- x; 1=$v; echo "n=$# [$1]"`,
+		Why:     "the probe that says the difference is in the **parse** rather than in what is done afterwards, which is what makes this a grammar flag and not an axis. An assignment's value is not split, so zsh keeps one parameter holding `a b`; the shells that read a command name split the same word and complain about `1=a`. `posassign/the-value-is-not-globbed` is the other half of the same statement",
+	},
+	{
+		ID: "posassign/the-value-is-not-globbed", Category: "variables",
+		Snippet: `set -- x; 1=*; echo "[$1]"`,
+		Why:     "the second half of the parse probe, and the sharper one. An assignment's value is not a pattern, so `$1` holds a literal `*`; the five that read a command name subject the whole word to filename generation, and it is the *neighboring* row that shows they did — `posassign/a-subscript-on-the-number-is-not-one` is the same shape with the flag off in every column, and the shell that calls an unmatched pattern an error refuses the line there while the other five run it. Here that shell is the one taking the assignment, so all five refusals look alike and the reading has to be pinned from the pair",
+	},
+	{
+		ID: "posassign/with-no-parameters-at-all", Category: "variables",
+		Snippet: `1=abc; echo "n=$# [$1]"`,
+		Why:     "the list is created rather than only written into: with nothing set beforehand the assignment leaves `$#` at 1. A reading that required the parameter to exist would answer 0 here and be indistinguishable on every other row",
+	},
+	{
+		ID: "posassign/an-index-past-the-end-extends-the-list", Category: "variables",
+		Snippet: `set -- a b; 9=nine; echo "n=$# [$*]"`,
+		Why:     "how far past the end it reaches, and what fills the gap: `$#` becomes 9 and the six parameters between are empty rather than absent. The count is the load-bearing half — a shell that stored the value under the name `9` and left `$#` at 2 would print nearly the same `$*`",
+	},
+	{
+		ID: "posassign/appending-to-one", Category: "variables",
+		Snippet: `set -- abc; 1+=x; echo "st=$? [$1]"`,
+		Why:     "the append spelling on the same name, which is two grammar flags meeting: dash has no `+=` at all and the four with it still have no digit name, so all five answer with the whole word as a command. The one shell that has both joins the value to what the parameter held",
+	},
+	{
+		ID: "posassign/a-list-replaces-the-one-it-names", Category: "variables", SyntaxError: true,
+		Snippet: `set -- z y w; 1=(a b); echo "[$*] n=$#"`,
+		Why:     "the array spelling, which splices rather than writes: the two words replace the one parameter and `$#` goes to 4. It is `argv[1]=(a b)` under another spelling — measured identical — and the count is what says so, since a shell that stored `a b` in the first parameter would print the same characters at `$#` 3",
+	},
+	{
+		ID: "posassign/an-empty-list-removes-it", Category: "variables", SyntaxError: true,
+		Snippet: `set -- a b c; 2=(); echo "[$*] n=$#"`,
+		Why:     "the splice with nothing in it, which is the only spelling that makes the list *shorter*. `$#` goes to 2 and the parameter it named is gone rather than empty — the reading that blanked it in place would leave three",
+	},
+	{
+		ID: "posassign/appending-a-list-follows-it", Category: "variables", SyntaxError: true,
+		Snippet: `set -- a b; 1+=(z); echo "[$*] n=$#"`,
+		Why:     "the two flags meeting again on the list form, and the row that pins where an appended word *goes*: after the parameter named and not after the last one, so `a b` becomes `a z b`. `a+=(z)` on an ordinary array does the opposite, which is what makes this worth recording rather than deriving",
+	},
+	{
+		ID: "posassign/zero-is-the-shells-own-name", Category: "variables",
+		Snippet: `set -- a b; 0=abc; case $0 in abc) echo changed;; *) echo unchanged;; esac; echo "n=$#"`,
+		Why:     "`0` is admitted by the same grammar and does not land in the list: `$0` becomes the assigned word and `$#` stays 2. Written as a case rather than by printing `$0`, because what the other five print there is a path this record must not depend on",
+	},
+	{
+		ID: "posassign/a-declaration-still-refuses-the-digits", Category: "variables",
+		Snippet: `set -- a; typeset 1=abc; echo "st=$? [$1]"`,
+		Why:     "the boundary, and the one a probe written with `local` or `typeset` would have mistaken for agreement: the shell that takes `1=abc` on its own refuses the same text as a declaration's operand — `not an identifier: 1` — so the grammar admits the digits where a *name* would stand and the utility refuses them where an *identifier* must. Both halves have to be recorded or the flag reads as wider than it is. dash has no `typeset` at all and answers with a missing command, which is that column's control rather than an opinion about the name",
+	},
+	{
+		ID: "posassign/a-subscript-on-the-number-is-not-one", Category: "variables",
+		Snippet: `set -- a b c; 1[0]=v; echo "st=$?"`,
+		Why:     "the other boundary: a subscript after the digits is not this construct anywhere, so `1[0]=v` is a command name in the shell that has the flag too — and a *pattern* there, which is why the shell that calls an unmatched glob an error refuses the line instead of running it. The assignment head insists on a name in front of the bracket in every column",
+	},
+	{
+		ID: "posassign/in-front-of-a-builtin-it-stays", Category: "variables",
+		Snippet: `set -- a b; 1=X shift; echo "[$*]"`,
+		Why:     "a prefix to a builtin is applied and not taken back, which an ordinary name's prefix is: the parameter becomes `X`, `shift` then drops it, and `b` is what is left. The five without the grammar run `shift` with the word as its command name and leave `a b`, so the row grades the whole shape rather than only the store",
+	},
+	{
+		ID: "posassign/in-front-of-a-function-the-caller-keeps-it", Category: "variables",
+		Snippet: `set -- a b; f() { echo "in [$*]"; }; 1=X f y; echo "out [$*]"`,
+		Why:     "the same prefix on a function, where two things have to be true at once: the body gets its own parameters — `y` — and the write lands on the caller's, which the line after the call shows. A prefix made visible to the body instead would print `in [X]` and is the plausible wrong reading",
+	},
+	{
+		ID: "posassign/in-front-of-an-external-command-it-does-not", Category: "variables",
+		Snippet: `set -- a b; 1=X /bin/echo hi; echo "[$*]"`,
+		Why:     "the one place the construct does nothing at all: the parameters are unchanged after an external command, so a prefix that is a number is neither applied nor exported. It is the counterpart to the builtin row, and the two together say the assignment goes to *this* shell or nowhere",
+	},
+	{
+		ID: "posassign/leading-zeros-are-read-as-a-number", Category: "variables",
+		Snippet: `set -- a; 01=z; echo "[$1] n=$#"`,
+		Why:     "the digits are read as a number rather than matched against a canonical spelling, so `01` is the first parameter. A rule written as a comparison against the decimal text would refuse this and look right on every other row",
+	},
+	{
+		ID: "posassign/a-digit-with-a-letter-is-not-a-name", Category: "variables",
+		Snippet: `set -- a; 1a=z; echo "st=$?"`,
+		Why:     "the control the whole group needs: a name that merely *starts* with a digit is not admitted anywhere, so all six columns answer `command not found` at 127. Without it a flag that let any word beginning with a digit be an assignment would pass every other row here",
+	},
 }

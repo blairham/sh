@@ -2479,6 +2479,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			if a.Operand {
 				continue
 			}
+			if r.prefixAssignsPositional(a) {
+				continue
+			}
 			r.refusePrefix(a.Name, true)
 		}
 		return r.callFunc(ctx, fn, argv[1:])
@@ -2496,6 +2499,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		for _, a := range c.Assigns {
 			if a.Operand {
 				// An argument to the builtin, not a prefix to it.
+				continue
+			}
+			if r.prefixAssignsPositional(a) {
+				// The parameters are not in the table the undo below saves,
+				// so this one is not taken back — which is measured, not a
+				// gap. See Runner.prefixAssignsPositional.
 				continue
 			}
 			v := strings.Join(r.expandWord(a.Value), " ")
@@ -2593,6 +2602,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			// assignment is a builtin, so no external command ever gets here
 			// with one. Kept so that the two kinds are told apart wherever
 			// assignments are read, rather than in some of the places.
+			continue
+		}
+		if _, ok := positionalAssignIndex(a.Name); ok {
+			// A positional parameter in front of an external command is the
+			// one place the construct does nothing: `set -- a b; 1=X
+			// /bin/echo hi` leaves `a b`, and `1=X /usr/bin/env` shows the
+			// child no `1`. Not applied and not exported, which is both
+			// halves of that.
 			continue
 		}
 		value := strings.Join(r.expandWord(a.Value), " ")
@@ -3654,6 +3671,15 @@ func (r *Runner) assign(a *syntax.Assign) {
 	// line and names only the variable, exactly as `a=(p q)` and `a[0]=z` do.
 	// The array operand goes through the assignment machinery in every shell
 	// that has it, and the builtin's name never reaches it.
+	if n, ok := positionalAssignIndex(a.Name); ok {
+		// A number where the name would be, which one dialect's grammar
+		// admits. Ahead of the refusal because a positional parameter cannot
+		// be frozen — `readonly 1` is `not an identifier: 1` in the shell
+		// that has this — so there is nothing for refuseReadonly to consult
+		// and a name of `1` in the frozen set would have come from nowhere.
+		r.assignPositional(a, n)
+		return
+	}
 	if r.refuseReadonly(a.Name, assignedAlone) {
 		return
 	}

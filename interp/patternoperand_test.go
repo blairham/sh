@@ -4,7 +4,6 @@
 package interp_test
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -151,21 +150,22 @@ func TestAnExpandedPatternWithoutAMetacharacterAsksNothing(t *testing.T) {
 // is the reason this file now asserts on the scratch directory (#902).
 func TestAProcessSubstitutionInAPatternIsPerformed(t *testing.T) {
 	tmp := t.TempDir()
+	// The directory the substitution made for its pipe is the evidence that
+	// one was made. Asserting on a variable the command sets would prove
+	// nothing: the command runs in a child — and here it never starts at
+	// all, because nothing opens the path, so the directory is the only
+	// thing that happened. Named rather than globbed for, since the shell
+	// removes it on its way out now (#1284); see pipeDirMade.
+	var r *Runner
 	out, st := runGrammar(t, `case abc in <(:)) printf "[hit]";; *) printf "[miss]";; esac`,
-		patternGrammar, func(r *Runner) { r.Env = append(withoutTMPDIR(r.Env), "TMPDIR="+tmp) })
+		patternGrammar, func(rr *Runner) {
+			r = rr
+			rr.Env = append(withoutTMPDIR(rr.Env), "TMPDIR="+tmp)
+		})
 	if want := "[miss]"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
 	}
-	// The directory a substitution makes to hold its pipe is the evidence
-	// that one was made. Asserting on a variable the command sets would
-	// prove nothing: the command runs in a child.
-	made, err := filepath.Glob(filepath.Join(tmp, "sh-procsub*"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(made) == 0 {
-		t.Error("no process substitution ran")
-	}
+	gone(t, pipeDirMade(t, r, tmp))
 }
 
 // And the arm does not match the text inside the substitution, which is the

@@ -336,7 +336,6 @@ type Runner struct {
 	// procSubs are the named pipes this command's process substitutions made,
 	// waiting to be removed once it is done with them.
 	procSubs    []procSubPipe
-	procSubSeq  int
 	procSubHome *procSubDirs
 	// substRan records that a command substitution reported a status during
 	// the expansion just performed — see simple().
@@ -1327,6 +1326,11 @@ const maxDepth = 256
 
 // clone copies the state for a subshell, so nothing it does escapes.
 func (r *Runner) clone() *Runner {
+	// Before the copy, so parent and subshell share one box for the pipe
+	// directory rather than each making its own. See procSubHomeBox: a
+	// substitution made only inside a subshell used to leave a directory the
+	// parent could not clean up because it had never been told about it.
+	r.procSubHomeBox()
 	c := *r
 	c.inSubshell = true
 	// A subshell body is not running inside the frames the copy inherited.
@@ -1741,6 +1745,18 @@ func (r *Runner) Finish(ctx context.Context) int {
 	if !r.inSubshell {
 		r.stopSignals()
 	}
+	// After the EXIT trap and before the death below, which is the only
+	// window that covers both: the trap body can run a process substitution
+	// of its own, and DieBySignal does not come back.
+	//
+	// Here rather than in the front end because every route out of a shell
+	// passes through Finish and only some of them pass through any one
+	// caller — a script, `-c`, a prompt, a Session that was closed, and a
+	// library embedder calling Run. Wired into one of those and not the rest
+	// is what shipped: CleanUp existed, was tested, and was called by nothing
+	// outside interp's own suite, so every invocation of every dialect binary
+	// that used `<(…)` left its directory in /tmp. See #1284.
+	r.cleanUpAtEnd()
 	if r.killedBy != "" && r.DieBySignal != nil {
 		// Last, because a shell that is dying still runs its EXIT trap first
 		// where the dialect says so. This does not come back.

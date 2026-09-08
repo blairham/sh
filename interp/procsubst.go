@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -261,8 +262,15 @@ func (r *Runner) newFifo() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	r.procSubSeq++
-	path := filepath.Join(dir, "sub"+strconv.Itoa(r.procSubSeq))
+	// From the box rather than from this Runner, because the directory is
+	// the box's and every shell in the tree makes its pipes in it. A counter
+	// per Runner numbered from whatever the clone happened to copy, so the
+	// two halves of `cat <(echo a) | ( cat <(echo b) )` — clones taken from
+	// the same parent, running at the same time — both asked for `sub1` in
+	// the one directory and the second mkfifo said the file exists.
+	//
+	// Atomic for the same reason: those two are goroutines.
+	path := filepath.Join(dir, "sub"+strconv.FormatUint(r.procSubHomeBox().seq.Add(1), 10))
 	if err := mkfifo(path); err != nil {
 		return "", err
 	}
@@ -279,27 +287,50 @@ type procSubDirs struct {
 	once sync.Once
 	dir  string
 	err  error
+	// seq numbers the pipes inside dir. Here and not on the Runner because
+	// the directory is here: distinct names are only needed within one
+	// directory, and one directory is what a whole shell tree has.
+	seq atomic.Uint64
 }
 
 func (r *Runner) procSubDir() (string, error) {
-	if r.procSubHome == nil {
-		r.procSubHome = &procSubDirs{}
-	}
+	home := r.procSubHomeBox()
 	// Read out here rather than inside the closure: this runs on the
 	// goroutine that is expanding the word, which is where every other read
 	// of the variable table happens, and once.Do would otherwise be the one
 	// place a second goroutine reads r.Vars.
-	home := r.tempHome()
-	r.procSubHome.once.Do(func() {
+	parent := r.tempHome()
+	home.once.Do(func() {
 		// An explicit parent, never MkdirTemp's empty one. Empty means
 		// os.TempDir, which is os.Getenv("TMPDIR") wearing a different name
 		// — the process's environment, read from inside the library, on the
 		// live path of every substitution. It is the os.Getwd fallback the
 		// glob path used to have, in a second place.
 		//nolint:forbidigo // the parent is the Runner's, computed above; only MkdirTemp's empty-string form asks the process
-		r.procSubHome.dir, r.procSubHome.err = os.MkdirTemp(home, procSubDirPrefix)
+		home.dir, home.err = os.MkdirTemp(parent, procSubDirPrefix)
 	})
-	return r.procSubHome.dir, r.procSubHome.err
+	return home.dir, home.err
+}
+
+// procSubHomeBox is the box the pipe directory goes in, made if this shell has
+// not needed one yet.
+//
+// One box per shell *tree*, not per Runner, which is why clone asks for it
+// too. A subshell copies the pointer, so parent and child name the same
+// directory and the second one to want a pipe does not make a second
+// directory — that is the property the once is there for.
+//
+// A clone taken before the box exists is where that broke. `( cat <(echo hi) )`
+// cloned a nil pointer, the subshell then made a box of its own, and the
+// parent finished knowing nothing about the directory in it: the one route
+// that still leaked after Finish learned to clean up, because the shell doing
+// the cleaning had never heard of what was left. Making the box on the way
+// into clone is what keeps the two halves talking.
+func (r *Runner) procSubHomeBox() *procSubDirs {
+	if r.procSubHome == nil {
+		r.procSubHome = &procSubDirs{}
+	}
+	return r.procSubHome
 }
 
 // tempHome is where this shell puts what it has to write to disk.
@@ -380,14 +411,45 @@ func removeProcSubs(pipes []procSubPipe) {
 
 // CleanUp removes what this shell made for itself.
 //
-// Only the directory the named pipes went in, at present. A caller that runs
-// many scripts on one Runner should call it when finished; a binary that exits
-// need not, since the directory is under this shell's temporary one — TMPDIR
-// as the Runner reads it, which for a shell binary is the machine's. An
-// embedder that points a Runner's TMPDIR somewhere of its own is the case
-// where nothing else would ever remove it, which is the reason this is public.
+// Only the directory the named pipes went in, at present. Finish calls it, so
+// a shell that ran to its end — a binary, a Session that was closed, a
+// Runner.Run that returned — has already had this done. It stays public for
+// the caller that drives a Runner with RunPart and never reaches Finish,
+// which is the one shape that would otherwise leave the directory.
+//
+// It was documented the other way round once: that a binary which exits need
+// not bother, since the directory is under the machine's temporary one. That
+// was wrong in the way a leak is always wrong — nothing removes /tmp between
+// reboots, so every invocation that used a substitution left a directory
+// there for good. 10,585 of them accumulated in one working session (#1284).
+//
+// Not safe to call from a subshell: clone shares the directory with its
+// parent rather than making a second one, so a copy removing it would take
+// the original's pipes away mid-command. Finish and the `exec` replacement
+// both ask cleanUpAtEnd instead, which is this behind that guard.
 func (r *Runner) CleanUp() {
 	if r.procSubHome != nil && r.procSubHome.dir != "" {
 		_ = os.RemoveAll(r.procSubHome.dir)
 	}
+}
+
+// cleanUpAtEnd is CleanUp for the two places a shell stops being one.
+//
+// Guarded on the subshell flag, which is the same guard runExitTrap uses and
+// for the same reason: a clone is a shell ending, but it is not *the* shell
+// ending, and the directory belongs to the whole tree. clone copies the
+// procSubDirs pointer rather than the directory, so `( cat <(echo hi) )` in a
+// long script would otherwise remove the parent's directory on the way out of
+// the parentheses and leave every later substitution making a pipe in a
+// directory that is not there.
+//
+// One helper called from both places rather than the line written twice: the
+// two exits are already easy to fix one and forget the other — that is how
+// this bug reached a shipped binary in the first place, with CleanUp written
+// and nothing calling it.
+func (r *Runner) cleanUpAtEnd() {
+	if r.inSubshell {
+		return
+	}
+	r.CleanUp()
 }

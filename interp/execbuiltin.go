@@ -132,6 +132,13 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		// replacement has only the numbers this process is holding at the
 		// moment of the execve. So `exec >log; exec /bin/echo hi` wrote to
 		// the terminal, past a redirection the script had already made.
+		// This shell's last act, so what it made for itself goes now:
+		// nothing after a successful execve is this shell, and Finish is not
+		// on this road. The pipes of the command carrying the `exec` are
+		// unlinked with it, which is what removeProcSubs would have done at
+		// the end of that command had there been an end — a name going away
+		// under an open descriptor is the ordinary case here, not a race.
+		r.cleanUpAtEnd()
 		err := r.ReplaceProcess(path, withArgv0(argv, argv0), r.environ(), r.replacementFiles())
 		// Only reached if the replacement failed, which is the one case where
 		// there is still a shell to report it.

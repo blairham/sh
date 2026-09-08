@@ -52,30 +52,46 @@ var (
 	buildOnce sync.Once
 	buildDir  string
 	buildErr  error
+	// buildLog is what the compiler said, kept rather than logged because
+	// buildTheShells runs under a sync.Once and the testing.TB that
+	// happens to trigger it is not the only one that wants to know.
+	buildLog string
 )
+
+// buildTheShells builds the four dialect binaries into a directory of their
+// own.
+//
+// All four, not the two the benchmarks measure. The performance gate grades
+// every dialect against the shell it claims to be (#1403), and building them
+// in one place is what keeps a gate run from grading whatever was last left in
+// the directory — `make build` is `go build ./...` and writes no binaries at
+// all, so several of that issue's earlier "results" were stale-binary
+// artifacts.
+func buildTheShells() {
+	buildDir, buildErr = os.MkdirTemp("", "startupcost")
+	if buildErr != nil {
+		return
+	}
+	for bin, pkg := range map[string]string{
+		"our-bash": "./cmd/bash",
+		"our-zsh":  "./cmd/zsh",
+		"our-ksh":  "./cmd/ksh",
+		"our-dash": "./cmd/dash",
+	} {
+		cmd := exec.Command("go", "build", "-o", filepath.Join(buildDir, bin), pkg)
+		cmd.Dir = "../.."
+		if out, err := cmd.CombinedOutput(); err != nil {
+			buildErr, buildLog = err, string(out)
+			return
+		}
+	}
+}
 
 func ours(tb testing.TB) []startupcost.Subject {
 	tb.Helper()
-	buildOnce.Do(func() {
-		buildDir, buildErr = os.MkdirTemp("", "startupcost")
-		if buildErr != nil {
-			return
-		}
-		for bin, pkg := range map[string]string{
-			"our-bash": "./cmd/bash",
-			"our-zsh":  "./cmd/zsh",
-		} {
-			cmd := exec.Command("go", "build", "-o", filepath.Join(buildDir, bin), pkg)
-			cmd.Dir = "../.."
-			if out, err := cmd.CombinedOutput(); err != nil {
-				buildErr = err
-				tb.Logf("build %s: %s", pkg, out)
-				return
-			}
-		}
-	})
+	buildOnce.Do(buildTheShells)
 	if buildErr != nil {
-		tb.Skipf("cannot build the shells to measure: %v", buildErr)
+		tb.Skipf("cannot build the shells to measure: %v\n%s", buildErr, buildLog)
 	}
 	// Warmed once. The first execution of a freshly linked binary on macOS
 	// pays a one-time validation cost that a shell somebody installed months
@@ -88,6 +104,19 @@ func ours(tb testing.TB) []startupcost.Subject {
 		}
 	}
 	return subjects
+}
+
+// buildDirFor is where the four binaries were built, for a caller that wants
+// the directory rather than the two subjects the benchmarks measure.
+//
+// Shares buildOnce with ours, so a run that does both builds once.
+func buildDirFor(tb testing.TB) string {
+	tb.Helper()
+	buildOnce.Do(buildTheShells)
+	if buildErr != nil {
+		tb.Skipf("cannot build the shells to measure: %v", buildErr)
+	}
+	return buildDir
 }
 
 func references(tb testing.TB) []startupcost.Subject {

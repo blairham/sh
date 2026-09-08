@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"sort"
+	"sync"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -497,7 +498,24 @@ func (r *Runner) NamedOption(name string) (on, known bool) {
 // prompt, in zsh and in bash's `\u` alike. Reading one of those names would
 // have made `env USER=someone-else zsh` draw the wrong person, which is the
 // case that says this is a fact about the process and not about the script.
-func (r *Runner) SetPromptUser(name string) { r.promptUser = name }
+func (r *Runner) SetPromptUser(name string) { r.promptUser = func() string { return name } }
+
+// SetPromptUserFunc is SetPromptUser with the asking deferred to the moment
+// something draws `%n`, and is the form a shell binary should prefer.
+//
+// The rule SetPromptUser states is unchanged — this package still does not ask
+// the system anything, it calls back what the caller handed it. What changes is
+// *when*. Measured on darwin, `os/user.Current` costs 0.83-1.10 ms with cgo
+// and 0.81-1.29 ms without, because it is Directory Services either way; asked
+// eagerly it was ~25% of a `zsh -c ':'`, spent on an escape that route cannot
+// draw (#1403).
+//
+// The answer is asked for once and kept, because a prompt is redrawn on every
+// keystroke that redraws the line and a login name does not change while a
+// shell runs. A function that answers empty is refused exactly as
+// SetPromptUser("") is: told, and with no answer, is not the same as not told,
+// but both are wrong to draw.
+func (r *Runner) SetPromptUserFunc(ask func() string) { r.promptUser = sync.OnceValue(ask) }
 
 // SetPromptHost names the machine the `%m` and `%M` prompt escapes report.
 //
@@ -507,7 +525,17 @@ func (r *Runner) SetPromptUser(name string) { r.promptUser = name }
 //
 // A runner nobody told refuses both escapes by name rather than drawing an
 // empty host, which would be a prompt describing no machine at status 0.
-func (r *Runner) SetPromptHost(name string) { r.promptHost = name }
+func (r *Runner) SetPromptHost(name string) { r.promptHost = func() string { return name } }
+
+// SetPromptHostFunc is SetPromptHost with the asking deferred to the moment
+// something draws `%m` or `%M`, and is the form a shell binary should prefer.
+//
+// The same shape as SetPromptUserFunc and installed beside it, so that the two
+// facts a prompt wants about the machine are carried in the same way. The host
+// name itself is cheap — `os.Hostname` measures 3.9 µs — and this exists so
+// that the pair does not have one eager half and one lazy one, which is the
+// kind of asymmetry a later reader has to re-derive.
+func (r *Runner) SetPromptHostFunc(ask func() string) { r.promptHost = sync.OnceValue(ask) }
 
 // SetPromptStyle installs the prompt-escape table this dialect spells.
 //

@@ -158,3 +158,176 @@ dullest possible way: the pattern work sat in the rc without `setopt
 extendedglob`, so every metacharacter in it was an ordinary character,
 the substitution replaced nothing, and the case ran in 10ms while looking
 entirely plausible.
+
+## The gate, and the floor underneath it
+
+Everything above measures. `make perfgate` **fails**, and it is the
+release bar for v0.0.0: *"performance is a must requirement before
+0.0.0, no dialect can be slower than the original"*, and *"our zsh MUST
+be faster than zsh"* — faster, not comparable (#1403).
+
+It grades all four dialect binaries against the shells they claim to be,
+on the `-c` route, which is the acceptance criterion #1403 states. The
+references are the oracle panel's own entries, because the shell being
+compared against has to be the shell the corpus was recorded from.
+
+Two programs per dialect, and the second one is why the first is
+trustworthy:
+
+- **bare** is `-c ':'`, a builtin that does nothing in all six panel
+  members. It is what a script's every subshell pays. It cannot check
+  its own work, so it is additionally required to exit 0.
+- **workload** is a two-thousand-iteration `while`, a `for` over ten
+  words, a `case`, and two substring expansions, written in the
+  common-denominator language so that all four dialects and all four
+  references run the same text. It **prints what it computed**, and a
+  time is accepted only if the run also produced
+  `ANS:2017:defghij:abcdefg`.
+
+That check is the whole reason the workload is shaped that way rather
+than as a bare loop. This repository has now been caught three times by
+an instrument that timed a shell *refusing* the construct under test —
+the clock faithfully measures a shell doing nothing, and a refusal posts
+the best number in the table. A fourth trap of the same family is a
+reference shell that is not installed: the gate reports that as **NOT
+MEASURED** and fails on it, rather than letting a machine missing half
+the panel read as green.
+
+Three things about the method, each of which was wrong once:
+
+**Interleaved.** Within a batch each subject gets one invocation in
+turn, so a load spike lands on ours and on the original alike. Measuring
+one subject to completion and then the next lets a busy machine invent a
+2x difference between two copies of the same binary.
+
+**Minimum, not mean.** Measured here under load averages between 8 and
+31 — other agents run on this machine — the batch mean moved by a factor
+of three between batches while the minimum moved by a tenth. The minimum
+is the sample that got a clean run; a mean is a measurement of the load.
+The load average is printed above every table for that reason.
+
+**No tolerance.** Strictly faster. A gate that allowed 5% would be
+answering a question nobody asked.
+
+The gate is a target of its own and not part of `go test ./...`, for the
+reason `make startup` is: it spawns several thousand processes and its
+answer depends on what else the machine is doing. What keeps it from
+rotting is that the tests *around* it always run — one manufactures a
+subject doing strictly more work than the same shell and requires the
+gate to catch it, one hands it a program that runs nothing and requires
+the gate to refuse rather than score it, one checks the workload's
+expected answer against every reference shell installed, and one fails
+if a dialect is missing from the table altogether.
+
+### What it found, and the part that is not ours
+
+The floor was measured before optimizing anything, interleaved, 240
+samples each, load 18:
+
+| | size | wall-min | cpu-min |
+| --- | --- | --- | --- |
+| `/bin/dash -c ':'` | 120K | **1.30 ms** | 0.83 ms |
+| empty **C** binary | 17K | 1.36 ms | 0.85 ms |
+| empty C padded to 6.1M | 6.1M | 1.40 ms | 0.83 ms |
+| empty **Go** binary | 1.7M | **1.92 ms** | 1.28 ms |
+| empty Go padded to 8.2M | 8.2M | 2.08 ms | 1.42 ms |
+
+**The Go runtime costs 0.56 ms over an empty C binary, and real dash —
+doing actual work — starts faster than an empty Go binary that does
+nothing.** Binary size is nearly free: 6 MB of padding costs C 0.04 ms
+and Go 0.16 ms, so size is not the lever either.
+
+So `ours-dash` faster than `/bin/dash` is **not reachable in Go**. The
+gate says so rather than being widened to hide it; whether v0.0.0's bar
+keeps that column is a decision for the maintainer, not for the
+instrument.
+
+An earlier attempt at these figures reported "empty C 2.06 ms, empty Go
+2.05 ms, Go pays no startup penalty". That does not reproduce, and the
+reason is the fourth measurement trap: a harness whose own overhead is
+within an order of magnitude of what it measures is measuring itself.
+
+### Two things that were ours, and were removed
+
+A binary importing `driver` and a dialect, whose `main` does nothing at
+all, cost 2.84 ms against the empty Go binary's 1.92. So most of our own
+fixed cost was being paid **before `main` ran**, which is not where
+#1403 expected it — the three vectors turned out to be free, `dash`
+constructing all three and running `-c ':'` in 0.15 ms.
+
+**`user.Current()` on every invocation.** `dialect/zsh` asked the system
+for the login name in `Apply`, to fill the `%n` prompt escape. Measured
+cold: 0.83–1.10 ms, and 0.81–1.29 ms with `CGO_ENABLED=0` too, so it is
+macOS Directory Services either way rather than cgo. Every `zsh -c` and
+every subshell paid a millisecond to learn a name that route can never
+draw. It is now carried in as a *question* — `SetPromptUserFunc` — asked
+when `%n` is drawn and remembered afterwards. The rule it was written
+for is untouched: `interp` still does not ask the system anything, it
+calls back what the binary handed it.
+
+**A credential scanner compiled at package init.** `driver` links `repl`
+so a shell can prompt, `repl` links `internal/secret` so a prompt can
+redact, and Go initializes a linked package whether or not the route
+that wants it is taken. `GODEBUG=inittrace=1` charged every `sh -c` in
+the tree **0.34 ms and 2228 allocations** to compile a dozen regular
+expressions for a prompt it was never going to draw — the largest single
+entry in the whole trace, ours or the standard library's. One
+`sync.OnceValue` moves it to the first line that is redacted.
+
+Together, interleaved, 200 samples each, load 8.4:
+
+| dialect | before | after | original |
+| --- | --- | --- | --- |
+| zsh | 4.07 ms | **3.19 ms** | 2.90 ms |
+| ksh | 2.94 ms | **2.81 ms** | 2.77 ms |
+| dash | 2.88 ms | **2.70 ms** | 1.31 ms |
+
+### What is left, measured and not guessed
+
+**The prelude, on every invocation.** `bash` and `zsh` ship ~190 lines
+of shell defining `dirs`/`pushd`/`popd`/`__dirs_rotate`, and
+`driver.Shell.source` parses and runs the whole thing before the script's
+first line — every `-c`, every subshell, whether or not anything calls
+them. In-process, with `-benchmem`:
+
+| | ns/op | B/op | allocs/op |
+| --- | --- | --- | --- |
+| `syntax.Parse(bash prelude)` | 322,000 | 238,681 | 3,954 |
+| `syntax.Parse(zsh prelude)` | 332,000 | 203,423 | 3,409 |
+| `syntax.Parse(ksh prelude)` | 964 | 1,928 | 22 |
+| whole `-c ':'`, bash, with prelude | 365,000 | 260,231 | 4,064 |
+| whole `-c ':'`, bash, prelude removed | **26,900** | 18,512 | 54 |
+| whole `-c ':'`, zsh, with prelude | 392,000 | 248,922 | 3,646 |
+| whole `-c ':'`, zsh, prelude removed | **79,000** | 44,458 | 214 |
+
+**The prelude is 93% of bash's in-process startup and 78% of zsh's** —
+0.33 ms and 240 KB of allocation in a process that has not yet grown a
+heap. Making it lazy needs the core to be able to install a function
+definition on first reference, which is a change to argue for on its own:
+`type pushd`, `declare -f`, `command -v` and completion all have to keep
+seeing it, and a name-triggered source that missed one of those would be
+a correctness bug wearing a speedup.
+
+**Interpreter throughput, which is a different problem.** The gate's
+workload separates startup from execution, and the difference is not
+flattering. Subtracting each dialect's bare figure from its workload
+figure, load 26:
+
+| dialect | ours, work alone | original, work alone |
+| --- | --- | --- |
+| bash | 3.36 ms | 5.37 ms |
+| zsh | 4.31 ms | **2.38 ms** |
+| ksh | 4.03 ms | **1.60 ms** |
+| dash | 2.89 ms | 4.16 ms |
+
+We are ~1.8x slower than zsh and **~2.5x slower than ksh93** at running
+a two-thousand-iteration arithmetic loop, and faster than both bash and
+dash at the same thing. #1403 named startup as the problem; on the
+workload half, startup is not where the gap is. That is its own piece of
+work and it is not in this note.
+
+**`driver`'s own init, at 0.24 ms**, is `keepTheRuntimeOffTheLowDescriptors`
+— about 230 syscalls to hold the low descriptor range while the runtime
+takes its own from above it. That is the price of a documented crash
+class, not an oversight; cutting it means lowering the ceiling, which is
+a semantic decision and not a performance one.

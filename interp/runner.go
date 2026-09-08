@@ -937,17 +937,28 @@ type Runner struct {
 	// extraOptions are the `set -o` names this dialect has beyond the ones
 	// every shell has. Declared through AddSetOptions; see setoptions.go.
 	extraOptions map[string]bool
-	// promptUser is the login name the `%n` prompt escape reports, brought in
-	// by whoever is allowed to ask the system for it. Empty in a runner
-	// nobody told, where the escape is refused rather than guessed at.
-	// Installed through SetPromptUser; see extend.go.
-	promptUser string
-	// promptHost is the machine's name the `%m` and `%M` prompt escapes
-	// report, carried in the same way and for the same reason: a Runner
-	// embedded in another program does not go asking the operating system
-	// what host it is on. Empty in a runner nobody told, where both escapes
-	// are refused rather than guessed at. Installed through SetPromptHost.
-	promptHost string
+	// promptUser answers the login name the `%n` prompt escape reports,
+	// brought in by whoever is allowed to ask the system for it. Nil in a
+	// runner nobody told, where the escape is refused rather than guessed
+	// at; a function that answers empty is a runner that was told and has
+	// no answer, which is refused the same way.
+	//
+	// A function rather than a string because the asking is what costs.
+	// Measured on darwin, `user.Current` is 0.83-1.10 ms — Directory
+	// Services, with or without cgo — and it was paid by every `sh -c`
+	// and every subshell to fill an escape that only a prompt can draw
+	// (#1403). The rule it exists for is untouched: this package still
+	// does not go asking, it calls back what the binary handed it, and it
+	// does so when the prompt asks rather than when the shell starts.
+	// Installed through SetPromptUser or SetPromptUserFunc; see extend.go.
+	promptUser func() string
+	// promptHost answers the machine's name the `%m` and `%M` prompt
+	// escapes report, carried in the same way and for the same reason: a
+	// Runner embedded in another program does not go asking the operating
+	// system what host it is on. Nil in a runner nobody told, where both
+	// escapes are refused rather than guessed at. Installed through
+	// SetPromptHost or SetPromptHostFunc.
+	promptHost func() string
 	// promptStyle is the prompt-escape table this shell's dialect supplies —
 	// the same table the prompt drawer reads, which is the whole of #1090.
 	// The zero value has no escape character and so no escape language, which

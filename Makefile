@@ -36,7 +36,7 @@ PREFIX ?= /usr/local
 SHELLDIR ?= $(PREFIX)/libexec/sh
 SHELLS := sh bash zsh ksh dash
 
-.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects wild wild-run wild-run-contained smoke startup install uninstall
+.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects wild wild-run wild-run-contained smoke startup perfgate install uninstall
 
 all: build
 
@@ -146,3 +146,6 @@ conformance-dialects: ## Grade each dialect binary against the shell it claims t
 
 startup: ## Time process start to a prompt, and the -c path, against the real shells
 	@go test ./internal/startupcost/ -run XXX -bench . -benchtime 40x -count 3 $(ARGS)
+
+perfgate: ## Fail if any dialect is slower than the shell it claims to be (#1403)
+	@SH_PERFGATE=1 go test ./internal/startupcost/ -run TestNoDialectIsSlowerThanItsOriginal -v -count 1 -timeout 30m $(ARGS)

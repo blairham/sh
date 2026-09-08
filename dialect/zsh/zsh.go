@@ -1569,21 +1569,39 @@ func Apply(r *interp.Runner) {
 	// $UID has no other source. Same class as $$, which .golangci.yml has
 	// blessed since it was written.
 	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
-	// The login name for that same uid, for the `%n` prompt escape. Read
+	// The login name for that same uid, for the `%n` prompt escape. Asked
 	// here for the reason the uid above is: nothing a script does changes
 	// it, two shells in one program genuinely have the same one, and it has
 	// no other source. Measured as a fact about the *process* rather than
 	// about the environment — `%n` ignores `$USER`, `$LOGNAME` and
 	// `$USERNAME` however they are set — so it is not read out of a variable.
-	if u, err := user.Current(); err == nil {
-		r.SetPromptUser(u.Username)
-	}
-	// The machine's name, for `%m` and `%M`, read here for the same reason
-	// and in the same class: nothing a script does changes it, two shells in
-	// one program genuinely share it, and it has no other source.
-	if h, err := os.Hostname(); err == nil {
-		r.SetPromptHost(h)
-	}
+	//
+	// Handed over as a *question* rather than as an answer, and that is the
+	// whole of #1403's zsh column. `user.Current` measures 0.83-1.10 ms on
+	// darwin — Directory Services, and no cheaper with cgo off — and Apply
+	// runs on every invocation, so `zsh -c ':'` and every subshell paid a
+	// millisecond to learn a name only a prompt can draw. Asked when `%n` is
+	// drawn, the cost lands on the one route that wants it and the answer is
+	// kept for the redraws. What is *not* different is who may ask: the core
+	// still does not, this dialect still does, and the reasoning above about
+	// uid, process and environment stands unchanged.
+	r.SetPromptUserFunc(func() string {
+		u, err := user.Current()
+		if err != nil {
+			return ""
+		}
+		return u.Username
+	})
+	// The machine's name, for `%m` and `%M`, asked the same way. It is cheap
+	// — 3.9 µs — and deferred anyway, so that the pair is one idiom rather
+	// than an eager half beside a lazy one.
+	r.SetPromptHostFunc(func() string {
+		h, err := os.Hostname()
+		if err != nil {
+			return ""
+		}
+		return h
+	})
 	// And the prompt-escape table, which is the *same* value the prompt
 	// drawer is handed — repl.PromptStyle is an alias for interp.PromptStyle,
 	// not a copy. This is what makes `print -P '%F{196}…'` and a drawn prompt

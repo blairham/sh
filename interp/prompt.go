@@ -785,6 +785,29 @@ func sgr(n int) string { return "\x1b[" + strconv.Itoa(n) + "m" }
 //	         needs its width markers there.
 //	newline  `\n`, where a prompt drawn in raw mode needs `\r\n` with it.
 //
+// askPromptUser is the login name, asked of whoever carried it in.
+//
+// One accessor rather than a nil check at each use, because there are three
+// uses — `%n`, `%m`, `%M` — and a fourth reader that forgot the check would
+// panic on every runner nobody told, which is most of them. Empty covers both
+// "not told" and "told, and there is no answer": neither is drawable, and the
+// caller refuses on the string rather than having to know which it met.
+func (r *Runner) askPromptUser() string {
+	if r.promptUser == nil {
+		return ""
+	}
+	return r.promptUser()
+}
+
+// askPromptHost is the machine's name, asked the same way and for the same
+// reason.
+func (r *Runner) askPromptHost() string {
+	if r.promptHost == nil {
+		return ""
+	}
+	return r.promptHost()
+}
+
 // arg is the braces after the code, for the Formats entries.
 func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bool) {
 	st := r.promptStyle
@@ -796,15 +819,18 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		// (SetPromptUser); a runner nobody told refuses it with the rest
 		// rather than expanding to nothing, which would be a wrong answer
 		// wearing a success.
-		if r.promptUser == "" {
+		name := r.askPromptUser()
+		if name == "" {
 			return "", false
 		}
-		return r.promptUser, true
+		return name, true
 	case FieldHost:
-		host, _, _ := strings.Cut(r.promptHost, ".")
-		return host, r.promptHost != ""
+		full := r.askPromptHost()
+		host, _, _ := strings.Cut(full, ".")
+		return host, full != ""
 	case FieldHostFull:
-		return r.promptHost, r.promptHost != ""
+		full := r.askPromptHost()
+		return full, full != ""
 	case FieldCwd:
 		return abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME")), true
 	case FieldCwdFull:

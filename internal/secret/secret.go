@@ -52,6 +52,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // Placeholder is what [Scanner.Redact] leaves where a credential was.
@@ -87,9 +88,22 @@ type rule struct {
 // One compiled copy, shared: the patterns are constant, matching does not
 // mutate them, and a shell that recompiled a dozen regular expressions per
 // line typed would be paying for this feature at the prompt.
-func Default() *Scanner { return defaultScanner }
+//
+// Compiled on the first ask rather than at package init, which is #1403.
+// `driver` links `repl` so that a shell can prompt, `repl` links this so that
+// a prompt can redact, and Go initializes a linked package whether or not the
+// route that wants it is taken — so `GODEBUG=inittrace=1` charged **every**
+// `sh -c` in the tree 0.34 ms and 2228 allocations to compile a dozen regular
+// expressions for a prompt it was never going to draw. That was the largest
+// single entry in the whole init trace, ours or the standard library's.
+//
+// Still one shared copy and still compiled once: sync.OnceValue keeps both
+// properties, so a prompt pays the 0.34 ms once on the first line it redacts
+// and every route that never redacts pays nothing. The rules are constant, so
+// there is nothing to invalidate and no reason for a second entry point.
+func Default() *Scanner { return defaultScanner() }
 
-var defaultScanner = newScanner(defaultRules)
+var defaultScanner = sync.OnceValue(func() *Scanner { return newScanner(defaultRules) })
 
 func newScanner(table []ruleSource) *Scanner {
 	s := &Scanner{rules: make([]rule, 0, len(table))}

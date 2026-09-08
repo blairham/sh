@@ -163,14 +163,16 @@ func (r *Runner) removeMathFunc(name string) {
 // order lists `ee` first, and registering them backwards lists `aa` first, so
 // the order is the table's and not the alphabet's.
 func (r *Runner) mathFuncListing() []string {
+	// mathOrder holds exactly the registered names and nothing else, which
+	// is why there is no second check here for a name the table no longer
+	// has: registerMathFunc and removeMathFunc are the only writers and both
+	// keep the two in step. A guard here as well would be a second mechanism
+	// for one invariant, and the one that is never wrong is the one that
+	// stops being maintained.
 	out := make([]string, 0, len(r.mathOrder))
 	for i := len(r.mathOrder) - 1; i >= 0; i-- {
 		name := r.mathOrder[i]
-		fn, ok := r.mathFuncs[name]
-		if !ok {
-			continue
-		}
-		out = append(out, "functions -M "+mathFuncSpec(name, fn))
+		out = append(out, "functions -M "+mathFuncSpec(name, r.mathFuncs[name]))
 	}
 	return out
 }

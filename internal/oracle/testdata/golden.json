@@ -44643,6 +44643,270 @@
         "TimedOut": false
       }
     },
+    "getopts/a-functions-cursor-inside-a-clustered-word": {
+      "bash": {
+        "Stdout": "outer1=a~[d] g=2~outer2=[?] st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "outer1=a~[d] g=2~outer2=[?] st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "outer1=a~[d] g=2~outer2=[?] st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "outer1=a~[c][d] g=2~outer2=[b] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "outer1=a~[d] g=2~outer2=[?] st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "outer1=a~[c][d] g=2~outer2=[b] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/a-nested-call-has-its-own-cursor": {
+      "bash": {
+        "Stdout": " outer=9~  inner=6~ outer-after=3~top=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " outer=9~  inner=6~ outer-after=3~top=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " outer=9~  inner=6~ outer-after=3~top=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " outer=9~  inner=6~ outer-after=3~top=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " outer=9~  inner=6~ outer-after=3~top=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " outer=1~  inner=1~ outer-after=6~top=9",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/an-anonymous-function-has-its-own-cursor": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 1: `OPTIND=4; () { echo \"anon=$OPTIND\"; OPTIND=8; }; echo \"after=$OPTIND\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 1: `OPTIND=4; () { echo \"anon=$OPTIND\"; OPTIND=8; }; echo \"after=$OPTIND\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `)'~\u003cshell\u003e: -c: line 0: `OPTIND=4; () { echo \"anon=$OPTIND\"; OPTIND=8; }; echo \"after=$OPTIND\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \")\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `)' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "anon=1~after=4",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/an-assignment-to-optind-inside-a-function": {
+      "bash": {
+        "Stdout": "entry=3~set=7~after=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "entry=3~set=7~after=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "entry=3~set=7~after=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "entry=3~set=7~after=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "entry=3~set=7~after=7",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "entry=1~set=7~after=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/an-option-parsing-function-called-twice": {
+      "bash": {
+        "Stdout": "ok one~usage",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ok one~usage",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ok one~usage",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "ok one~ok two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "ok one~usage",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ok one~ok two",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/an-unset-optind-is-not-a-fresh-cursor": {
+      "bash": {
+        "Stdout": "in=[UNSET]~after=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[UNSET]~after=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[UNSET]~after=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: Illegal number: ",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[UNSET]~after=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[UNSET]~after=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "getopts/argument-attached-or-apart": {
       "bash": {
         "Stdout": "[b][val]~[b][val]",
@@ -44725,6 +44989,50 @@
       },
       "zsh": {
         "Stdout": "[a][b] ind=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/dash-restarts-a-scan-that-found-nothing": {
+      "bash": {
+        "Stdout": "in=2~a1=2~in=2~a2=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=2~a1=2~in=2~a2=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=2~a1=2~in=2~a2=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=2~a1=2~in=1~a2=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=2~a1=2~in=2~a2=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=2~a1=1~in=1~a2=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -44863,6 +45171,50 @@
         "TimedOut": false
       }
     },
+    "getopts/optind-across-two-calls-of-one-function": {
+      "bash": {
+        "Stdout": "in=3~after1=3~in=3~after2=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=3~after1=3~in=3~after2=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=3~after1=3~in=3~after2=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=3~after1=3~in=3~after2=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=3~after1=3~in=3~after2=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=3~after1=1~in=3~after2=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "getopts/optind-ignores-an-inherited-value": {
       "bash": {
         "Stdout": "OPTIND=[1]",
@@ -44945,6 +45297,50 @@
       },
       "zsh": {
         "Stdout": "OPTIND=[1]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/optind-unset-then-assigned-in-a-function": {
+      "bash": {
+        "Stdout": "in=9~after=[9]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=9~after=[9]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=9~after=[9]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: Illegal number: ",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=9~after=[9]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=9~after=[5]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -45078,6 +45474,50 @@
       "zsh": {
         "Stdout": "st=0 o=[?]",
         "Stderr": "\u003cshell\u003e:1: bad option: -z",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/unsetting-optind-in-a-function-keeps-it-gone": {
+      "bash": {
+        "Stdout": "after=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: Illegal number: ",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after=[UNSET]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after=[UNSET]",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

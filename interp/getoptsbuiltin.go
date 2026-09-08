@@ -265,3 +265,110 @@ func (r *Runner) clearOptarg() {
 	}
 	r.removed["OPTARG"] = true
 }
+
+// localizeGetoptsCursor arranges for this function call to have a `getopts`
+// cursor of its own, in the dialect where OPTIND is local to a function.
+//
+// Both halves of the position are the cursor: OPTIND, which counts words, and
+// optChar, which is how far into a clustered word the scan has read. Saving
+// only OPTIND left a function that scans its own `-cd` with the caller's
+// half-spent `-ab` still in hand, so it skipped `c` — the measurement that
+// says the intra-word position travels with the value.
+//
+// # Where the axis is asked, and why not here
+//
+// Every function call comes through here, and most of them have nothing to do
+// with getopts. Asking the axis on the way in would put the unanswered-axis
+// diagnostic in front of every function call a bare `Semantics` ever makes —
+// an axis is asked where the shells can be *told apart*, and at the top of a
+// call they usually cannot be:
+//
+//   - A cursor already at the start of the first word is what zsh would hand
+//     the call anyway, so the entry value is 1 either way and there is
+//     nothing to reset. The question is put off to the return, and asked
+//     there only if the body moved the cursor — a call that never ran
+//     `getopts` leaves nothing for the two answers to disagree about.
+//   - A cursor part-way along is the case where the entry value differs, so
+//     that is where the question is asked on the way in.
+//
+// So the ask happens at most once per call and only where an answer changes
+// what a script can see. `askedIn` is what keeps the return from asking a
+// second time about the same call.
+//
+// # The two silences, both measured
+//
+// A call entered with OPTIND *unset* is not handed a cursor at 1: zsh reads
+// the name as unset inside the function too, because `unset` of this
+// parameter takes it away rather than emptying it. So there is nothing to
+// localize, and nothing is asked.
+//
+// A call that unsets OPTIND itself does not get the caller's back either:
+// `OPTIND=5; h() { unset OPTIND; }; h` leaves the name gone in every panel
+// shell that can unset it at all (dash refuses the unset outright). That is
+// the same fact from the other side — the parameter was removed, not
+// shadowed — and it is why the restore asks whether the name is still there
+// instead of putting the value back unconditionally.
+func (r *Runner) localizeGetoptsCursor(sc *scope) {
+	if _, set := r.getVar("OPTIND"); !set {
+		return
+	}
+	held, inVars := r.Vars["OPTIND"]
+	wasRemoved := r.removed["OPTIND"]
+	char, assigned := r.optChar, r.optindAssigned
+
+	// Whether the caller had read anything yet. A cursor at the first
+	// character of the first word is indistinguishable from the fresh one
+	// zsh would install, so only a used cursor makes the entry differ.
+	fresh := held == "1" && inVars && char <= 1
+	askedIn := false
+	if !fresh {
+		askedIn = true
+		if !r.ask(r.sem().GetoptsPositionIsFunctionLocal, getoptsLocalAxis) {
+			return
+		}
+		// Quietly, because this is the shell handing the call a cursor
+		// rather than the script assigning one: setVar would record an
+		// assignment the script never made, and the axis that reads that
+		// record drops the position inside a word on the strength of it.
+		r.setVarQuietly("OPTIND", "1")
+		r.optChar, r.optindAssigned = 1, false
+	}
+
+	sc.onReturn = append(sc.onReturn, func() {
+		now, still := r.getVar("OPTIND")
+		if !askedIn {
+			// Nothing was reset on the way in, so the call is only
+			// distinguishable if its body moved the cursor.
+			if still && now == held && r.optChar == char && r.optindAssigned == assigned {
+				return
+			}
+			if !r.ask(r.sem().GetoptsPositionIsFunctionLocal, getoptsLocalAxis) {
+				return
+			}
+		}
+		// The scan position comes back whatever became of the parameter: it
+		// is the caller's place in the caller's words, and a name the call
+		// took away says nothing about that.
+		r.optChar, r.optindAssigned = char, assigned
+		if !still {
+			return
+		}
+		if inVars {
+			r.Vars["OPTIND"] = held
+		} else {
+			delete(r.Vars, "OPTIND")
+		}
+		if wasRemoved {
+			if r.removed == nil {
+				r.removed = map[string]bool{}
+			}
+			r.removed["OPTIND"] = true
+		} else {
+			delete(r.removed, "OPTIND")
+		}
+	})
+}
+
+// getoptsLocalAxis names the axis in a diagnostic, in one place because two
+// call sites ask it about the same call.
+const getoptsLocalAxis = "the `getopts` cursor being local to a function"

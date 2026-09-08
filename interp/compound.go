@@ -679,6 +679,11 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 	// A scope the function's locals unwind into.
 	sc := &scope{saved: map[string]string{}, existed: map[string]bool{}, keyword: fn.Keyword}
 	r.scopes = append(r.scopes, sc)
+	// And a `getopts` cursor of its own, where the dialect gives a function
+	// one. A function that parses options is only callable twice if the
+	// second call starts over, which is why one shell's own function library
+	// is written without the `local OPTIND=1` the others need.
+	r.localizeGetoptsCursor(sc)
 	// What the EXIT trap was on the way in, so zsh can tell whether this
 	// function set one of its own.
 	outerTrap, outerDepth := r.exitTrap, r.trapDepth

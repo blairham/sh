@@ -1742,6 +1742,57 @@ echo "reached-after st=$?"`,
 		Why:     "the way a function is written so it can be called twice: a local OPTIND starts each scan at 1 and leaves the caller's alone. Five of the six do exactly that; ksh93 has no `local`, so its OPTIND is the one global and the second call finds the scan already finished — which is not a getopts difference but the `local` axis reaching a builtin's state, and the reason a portable function resets OPTIND by assigning to it rather than by declaring it",
 	},
 	{
+		ID: "getopts/optind-across-two-calls-of-one-function", Category: "getopts",
+		Snippet: `g() { while getopts "ab" o; do :; done; echo "in=$OPTIND"; }; g -a -b x; echo "after1=$OPTIND"; g -a -b x; echo "after2=$OPTIND"`,
+		Why:     "the GetoptsPositionIsFunctionLocal axis, and it takes a *sequence* to see: a function that parses options is only reusable if the second call starts over. zsh shows 3 inside the call and 1 outside it, so the cursor is saved and restored rather than shared, and the second call starts over; the other five leave the 3 behind and their second call finds the scan already finished. One call cannot tell any of that apart, which is how zsh's `add-zsh-hook` came to print its usage for every hook after the first (#1392). The row after this one is the near-miss it has to be told from — dash reaches 1 too, in a different shape and for a different reason",
+	},
+	{
+		ID: "getopts/dash-restarts-a-scan-that-found-nothing", Category: "getopts",
+		Snippet: `g() { while getopts "Uzd" o; do :; done; echo "in=$OPTIND"; }; g -Uz x y; echo "a1=$OPTIND"; g x y; echo "a2=$OPTIND"`,
+		Why:     "the near-miss the axis has to be told from, and the reason the row above is not enough on its own. Here dash ends at 1 like zsh, but for a different reason and with a different signature: dash's 1 shows up *outside* the function too — `a1=2` then `in=1` — because its getopts restarted a scan that found no option where it was pointed, while zsh's pair is `in=2` inside and `a1=1` outside, which only a restore can produce. bash, bash-as-sh, bash 3.2 and ksh93 sit at 2 throughout. A fix that reset the cursor when a scan came up empty would match this row and still leave `add-zsh-hook` broken, since its second call is handed a hook name that is not an option and would be shifted past all the same",
+	},
+	{
+		ID: "getopts/an-assignment-to-optind-inside-a-function", Category: "getopts",
+		Snippet: `g() { echo "entry=$OPTIND"; OPTIND=7; echo "set=$OPTIND"; }; OPTIND=3; g; echo "after=$OPTIND"`,
+		Why:     "no getopts here at all, which is the point: it is the *parameter* that is local to a function in zsh and not merely the builtin's bookkeeping. zsh hands the call a 1 whatever the caller had reached and keeps the caller's 3 when it returns; the other five read 3 on entry and let the 7 out. It separates the restore from dash's reset-when-exhausted, which needs a loop to run out of options and so cannot answer a snippet with no loop in it",
+	},
+	{
+		ID: "getopts/a-functions-cursor-inside-a-clustered-word", Category: "getopts",
+		Snippet: `g() { set -- -cd; while getopts "cd" x; do printf "[%s]" "$x"; done; echo " g=$OPTIND"; }; set -- -ab; getopts "ab" o; echo "outer1=$o"; g; getopts "ab" o; st=$?; echo "outer2=[$o] st=$st"`,
+		Why:     "the half of the position OPTIND cannot hold: with the caller's `-ab` half read, zsh's function scans its own `-cd` from the beginning and reads both letters, and the caller then still finds its `b`. The other five carry the intra-word cursor into the call, so the function skips `c`, and the caller's `b` is gone when it returns. A save of OPTIND alone passes the row above and fails this one",
+	},
+	{
+		ID: "getopts/a-nested-call-has-its-own-cursor", Category: "getopts",
+		Snippet: `inner() { echo "  inner=$OPTIND"; OPTIND=3; }; outer() { echo " outer=$OPTIND"; OPTIND=6; inner; echo " outer-after=$OPTIND"; }; OPTIND=9; outer; echo "top=$OPTIND"`,
+		Why:     "one saved copy is not enough: each call has its own, so zsh unwinds 1/1/6/9 where a single save would put 9 back over the middle frame's 6. The control on the implementation rather than on the shells — the five columns that share one global read 9/6/3/3 and cannot show the mistake",
+	},
+	{
+		ID: "getopts/an-unset-optind-is-not-a-fresh-cursor", Category: "getopts",
+		Snippet: `g() { echo "in=[${OPTIND-UNSET}]"; }; unset OPTIND; g; echo "after=[${OPTIND-UNSET}]"`,
+		Why:     "the boundary of the axis, and a silence rather than a value: `unset` takes this parameter away instead of emptying it, and a call entered without one is not handed a cursor at 1. A shell that localized by writing 1 unconditionally would answer `in=[1]` here, which none of the panel does — so it is a limit on the local rather than a disagreement. dash is the one column that never gets that far: it refuses to unset this name at all, complaining `unset: Illegal number:` about an argument it read as a count, so the five that can unset it are the ones that agree",
+	},
+	{
+		ID: "getopts/unsetting-optind-in-a-function-keeps-it-gone", Category: "getopts",
+		Snippet: `h() { unset OPTIND; }; OPTIND=5; h; echo "after=[${OPTIND-UNSET}]"`,
+		Why:     "the same limit from the other side, and agreed by every column that can unset the name: an assignment inside a zsh function does not escape but an `unset` of it does, because the parameter was removed rather than shadowed and there is nothing left for the return to put back. The row that stops a restore from resurrecting a name the call took away. dash refuses the unset here as well, which is its answer rather than a gap in the evidence",
+	},
+	{
+		ID: "getopts/optind-unset-then-assigned-in-a-function", Category: "getopts",
+		Snippet: `h() { unset OPTIND; OPTIND=9; echo "in=$OPTIND"; }; OPTIND=5; h; echo "after=[${OPTIND-UNSET}]"`,
+		Why:     "the pair of the two rows above, and the one place they disagree: the name is gone and then written again, and zsh still restores the caller's 5 where the four that reach the assignment keep the 9 (dash refuses the unset, as above). So it is the *state of the name when the call returns* that decides, not whether an `unset` was ever executed — recorded because reading the two unanimous rows alone would suggest an unset anywhere in the body cancels the restore, and it does not",
+	},
+	{
+		ID: "getopts/an-option-parsing-function-called-twice", Category: "getopts",
+		Snippet: `add() { while getopts "Uz" f; do :; done; shift $((OPTIND-1)); case "$1" in one|two) echo "ok $1";; *) echo "usage";; esac; }; add -Uz one; add two`,
+		Why:     "the shape the bug arrived in, written out rather than borrowed: parse options, shift past them, then validate the first operand against a list. zsh answers `ok one` `ok two` because the second call starts its scan over; the other five shift by 2 on the second call and validate an operand that is not there, so the second call prints its usage. It is the whole failure of `add-zsh-hook -Uz precmd f` followed by any second `add-zsh-hook` (#1392), and it is worth a row of its own beside the axis because the axis rows report a number while this one reports a script doing the wrong thing",
+	},
+	{
+		ID: "getopts/an-anonymous-function-has-its-own-cursor", Category: "getopts",
+		SyntaxError: true,
+		Snippet:     `OPTIND=4; () { echo "anon=$OPTIND"; OPTIND=8; }; echo "after=$OPTIND"`,
+		Why:         "the local is the function *call* and not the `function` word: zsh's anonymous function gets one too, answering 1 and leaving the caller's 4 alone. The other five have no such syntax and record the parse error, which is the honest column — and for the implementation it is the row that says the localizing belongs where a call is entered rather than in the builtin that declares a named one. Marked SyntaxError for the same reason `core/a-function-with-no-name-runs-where-it-stands` is: the shared grammar the corpus is read with leaves `()` out, because taking it there makes `( )` ambiguous with an empty subshell, which is a case of its own",
+	},
+	{
 		ID: "getopts/clustered-options", Category: "getopts",
 		Snippet: `set -- -ab; while getopts "ab" o; do printf "[%s]" "$o"; done; echo " ind=$OPTIND"`,
 		Why:     "two options in one word, which is why the position inside a word cannot be OPTIND — that counts words",

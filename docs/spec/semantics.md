@@ -8282,6 +8282,61 @@ rather than the value: `set -- -ab; getopts ab o; OPTIND=1` writes the
 number OPTIND already held, and those three still restart and read `a` a
 second time where zsh carries on to `b`.
 
+**`GetoptsPositionIsFunctionLocal`** — bash no · dash no · ksh93 no · zsh yes
+
+Gives every shell function call its own `getopts` cursor: `OPTIND` starts
+the call at 1 whatever the caller had reached, and the caller's position
+comes back when the call returns.
+
+It is the *parameter* that is local and not only the builtin's
+bookkeeping, which a snippet with no `getopts` in it shows
+(`getopts/an-assignment-to-optind-inside-a-function`):
+
+    g() { echo "entry=$OPTIND"; OPTIND=7; }
+    OPTIND=3; g; echo "after=$OPTIND"
+
+answers `entry=1 after=3` in zsh and `entry=3 after=7` in the other five.
+The position *inside* a clustered word travels with the value, which a
+shared cursor cannot express: with `-ab` half read, a function scanning
+its own `-cd` reads both `c` and `d` in zsh and only `d` everywhere else,
+and the caller still finds its `b` on return
+(`getopts/a-functions-cursor-inside-a-clustered-word`). Each call has its
+own, so nesting unwinds frame by frame rather than through one saved copy
+(`getopts/a-nested-call-has-its-own-cursor`), and zsh's *anonymous*
+function gets one too — it is the call that localizes, not the `function`
+word (`getopts/an-anonymous-function-has-its-own-cursor`).
+
+dash is the near-miss and has to be told apart deliberately: its
+`getopts` restarts a scan that found no option where it was pointed, so
+it can also reach 1 on a second call
+(`getopts/dash-restarts-a-scan-that-found-nothing`). The signatures
+differ — dash's 1 is visible outside the function as well, where zsh
+reads 2 inside the call and 1 outside, which only a restore produces. A
+fix that reset the cursor whenever a scan came up empty would match
+dash's row and still leave the bug below in place.
+
+Two limits, both measured, and both silences rather than values. A call
+entered with `OPTIND` *unset* is not handed a cursor at 1
+(`getopts/an-unset-optind-is-not-a-fresh-cursor`), and a call that unsets
+`OPTIND` itself does not get the caller's back
+(`getopts/unsetting-optind-in-a-function-keeps-it-gone`): `unset` takes
+this parameter away rather than emptying it, so there is nothing left to
+restore. What decides is the state of the name when the call *returns*
+and not whether an `unset` was executed — unset and then assigned again,
+zsh still restores the caller's value
+(`getopts/optind-unset-then-assigned-in-a-function`). dash refuses to
+unset the name at all, complaining `unset: Illegal number:` about an
+argument it read as a count, so those rows are agreed by the five that
+can reach the question.
+
+Why it is an axis and not a curiosity: a shell function that parses
+options is only reusable if the second call starts over, so zsh's own
+function library is written *without* the `local OPTIND=1` the others
+need. `add-zsh-hook -Uz precmd f` followed by any second `add-zsh-hook`
+had the second call reading its arguments from index 2 and printing its
+usage, which is what a shared cursor does to a script that never asked
+for one (`getopts/an-option-parsing-function-called-twice`).
+
 **`GetoptsClearsOptarg`** — bash no · dash no · ksh93 no · zsh yes
 
 Empties OPTARG when `getopts` reports a bad option rather than leaving

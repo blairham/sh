@@ -11570,6 +11570,54 @@ echo "read=[$l]"`,
 		Snippet: `bindkey -q; echo "st=$?"; bindkey -r; echo "short=$?"`,
 		Why:     "`bad option: -q` where zstyle says `invalid option`, and a usage complaint that names the letter that was short — `not enough arguments for -r` — where zstyle's names nothing",
 	},
+	// --- bash's `bind` and the two `set -o` editing modes (#1352). The other
+	// four shells have no `bind` at all, and their command-not-found answers
+	// are the evidence of that. What is recorded here is the part a real
+	// `~/.bashrc` depends on: which of the two argument forms actually binds
+	// a key, that a function name the shell has never heard of costs nothing,
+	// and that the two editing-mode names are one state with three values.
+	{
+		ID: "bind/the-two-argument-forms-are-not-one-form", Category: "builtins",
+		Snippet: `bind "\C-l":clear-screen; echo "name=$?"; bind "\C-x\C-a":beginning-of-line; echo "seq=$?"; ` +
+			`bind '"\C-x\C-a": beginning-of-line'; echo "quoted=$?"`,
+		Why: "the finding a config depends on and the one an implementation gets wrong: the left side of a bare " +
+			"`keyseq:function` is the name of a *single key*, so `\\C-l` binds and `\\C-x\\C-a` binds nothing at all " +
+			"— silently, at status 0 — while the same sequence inside double quotes binds for real. A shell reading " +
+			"the second as two bytes would bind a key bash leaves alone. The warning ahead of each is the other half: " +
+			"`bind` in a shell with no line editor answers every question and remarks first",
+	},
+	{
+		ID: "bind/an-unknown-function-name-costs-nothing", Category: "builtins",
+		Snippet: `bind '"\C-x\C-t": no-such-widget'; echo "st=$?"; bind -q no-such-widget; echo "q=$?"`,
+		Why: "a plugin's binding for something this shell has not got must leave the keyboard as it was: making the " +
+			"binding is status 0 and silence, and *asking* about the same name is `unknown function name` at 1. Two " +
+			"different answers to two different questions, and the quiet one is the one a config needs. It is also the " +
+			"opposite of zsh, which stores the unknown name and lets the key stop working — see " +
+			"bindkey/an-unknown-widget-is-accepted-in-silence",
+	},
+	{
+		ID: "bind/refuses-a-bad-option-with-a-usage-line", Category: "builtins",
+		Snippet: `bind -Z; echo "st=$?"; bind -m nosuch "\C-l":clear-screen; echo "keymap=$?"`,
+		Why: "two refusals with two statuses and two shapes: an unknown letter is `invalid option`, the builtin's whole " +
+			"usage line, and 2, where a keymap name outside the eight is a backtick-and-quote `nosuch' with no usage " +
+			"line and 1. A shell giving both the same status would let a script mistake a typo for a missing keymap",
+	},
+	{
+		ID: "editing-mode/the-two-names-are-one-state-with-three-values", Category: "builtins",
+		Snippet: `mode() { case :$SHELLOPTS: in *:vi:*) printf vi;; esac; ` +
+			`case :$SHELLOPTS: in *:emacs:*) printf emacs;; esac; echo " st=$1"; }` + "\n" +
+			`set -o vi; mode $?` + "\n" +
+			`set +o vi; mode $?` + "\n" +
+			`set -o emacs; mode $?` + "\n" +
+			`set +o emacs; mode $?` + "\n" +
+			`set -o vi; set +o emacs; mode $?`,
+		Why: "`vi` and `emacs` are one state under two names, and it has *three* values rather than two: `set -o vi` " +
+			"turns `emacs` off in the same breath, and `set +o vi` afterwards leaves both off rather than putting " +
+			"`emacs` back. Turning one on is the only way back to a mode being selected, and turning off the one that " +
+			"is not selected moves nothing. Read through `$SHELLOPTS` rather than the listing, so the row is about the " +
+			"two names and not about the padding of a table. Every step is status 0 — the request is granted in every " +
+			"direction, which is what a shell that refuses `set -o vi` outright gets wrong",
+	},
 	{
 		ID: "bindkey/names-the-keymaps", Category: "builtins",
 		Snippet: `bindkey -l; echo "st=$?"; bindkey -M nosuchmap '^A' beginning-of-line; echo "bad=$?"`,

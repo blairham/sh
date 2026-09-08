@@ -41,9 +41,10 @@ func TestTurningOffWhatThisShellNeverDoesSucceeds(t *testing.T) {
 // `posix` was on this list until it became a mode this shell really has —
 // which is the shape of the rule rather than an exception to it: the promise
 // can be made now, so the request is granted. TestPosixModeMovesAnAxis is
-// where it is held to it.
+// where it is held to it. `vi` left the list the same way, and
+// TestTheTwoEditingModesAreOneStateWithThreeValues is where it is held to it.
 func TestTurningOnWhatThisShellDoesNotDoIsRefused(t *testing.T) {
-	for _, name := range []string{"notify", "vi"} {
+	for _, name := range []string{"notify"} {
 		t.Run(name, func(t *testing.T) {
 			// The status of `set` itself, which a later command would
 			// otherwise replace — the first version of this test asserted
@@ -741,4 +742,59 @@ func TestAliasExpansionAndPosixModeAreIndependent(t *testing.T) {
 	if !r.AliasExpansion() {
 		t.Errorf("leaving posix mode did not restore a base that was on")
 	}
+}
+
+// The two editing-mode names are one state, and it has three values.
+//
+// Measured in bash 5.3 and ksh93 alike, and the third value is the reason a
+// bool would not do: `set -o vi` turns `emacs` off in the same breath, and
+// `set +o vi` afterwards leaves *both* off rather than putting `emacs` back.
+// Turning one on is the only way back to a mode being selected.
+func TestTheTwoEditingModesAreOneStateWithThreeValues(t *testing.T) {
+	// The listing is what a script reads the state through, and both names
+	// are in it, so one script line can show both answers at once.
+	for _, tc := range []struct{ name, src, want string }{
+		{"a fresh shell is in emacs mode", "", "emacs on\nvi off"},
+		{"vi turns emacs off", "set -o vi\n", "emacs off\nvi on"},
+		{"emacs turns vi off", "set -o vi\nset -o emacs\n", "emacs on\nvi off"},
+		{"turning vi off leaves neither", "set -o vi\nset +o vi\n", "emacs off\nvi off"},
+		{"turning emacs off leaves neither", "set +o emacs\n", "emacs off\nvi off"},
+		{
+			// Turning off the mode that is not selected moves nothing: the
+			// request has already been granted.
+			"turning off the other one moves nothing", "set -o vi\nset +o emacs\n",
+			"emacs off\nvi on",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src+"set -o\n", withExtras)
+			for _, want := range strings.Split(tc.want, "\n") {
+				name, state := want[:strings.Index(want, " ")], want[strings.Index(want, " ")+1:]
+				if !hasOptionRow(out, name, state) {
+					t.Errorf("want %s %s; listing was %q", name, state, out)
+				}
+			}
+		})
+	}
+	// And neither name is refused any more, in either direction — the
+	// refusal is what this replaced.
+	for _, src := range []string{"set -o vi", "set +o vi", "set -o emacs", "set +o emacs"} {
+		out, _ := run(t, src+"\necho \"st=$?\"\n", withExtras)
+		if strings.Contains(out, "not implemented") || !strings.Contains(out, "st=0") {
+			t.Errorf("%q said %q, want a granted request", src, out)
+		}
+	}
+}
+
+// hasOptionRow reads one row out of a `set -o` listing without depending on
+// how it is padded, since the padding is a dialect's and this is the core's
+// test.
+func hasOptionRow(listing, name, state string) bool {
+	for _, line := range strings.Split(listing, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[0] == name && fields[1] == state {
+			return true
+		}
+	}
+	return false
 }

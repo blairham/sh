@@ -13139,6 +13139,138 @@
         "TimedOut": false
       }
     },
+    "bind/an-unknown-function-name-costs-nothing": {
+      "bash": {
+        "Stdout": "st=0~q=1",
+        "Stderr": "\u003cshell\u003e: line 1: bind: warning: line editing not enabled~\u003cshell\u003e: line 1: bind: warning: line editing not enabled~\u003cshell\u003e: line 1: bind: `no-such-widget': unknown function name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~q=1",
+        "Stderr": "\u003cshell\u003e: line 1: bind: warning: line editing not enabled~\u003cshell\u003e: line 1: bind: warning: line editing not enabled~\u003cshell\u003e: line 1: bind: `no-such-widget': unknown function name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~q=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~q=127",
+        "Stderr": "\u003cshell\u003e: 1: bind: not found~\u003cshell\u003e: 1: bind: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~q=127",
+        "Stderr": "\u003cshell\u003e: bind: not found~\u003cshell\u003e: bind: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127~q=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: bind~\u003cshell\u003e:1: command not found: bind",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "bind/refuses-a-bad-option-with-a-usage-line": {
+      "bash": {
+        "Stdout": "st=2~keymap=1",
+        "Stderr": "\u003cshell\u003e: line 1: bind: warning: line editing not enabled~\u003cshell\u003e: line 1: bind: -Z: invalid option~bind: usage: bind [-lpsvPSVX] [-m keymap] [-f filename] [-q name] [-u name] [-r keyseq] [-x keyseq:shell-command] [keyseq:readline-function or readline-command]~\u003cshell\u003e: line 1: bind: warning: line editing not enabled~\u003cshell\u003e: line 1: bind: `nosuch': invalid keymap name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~keymap=1",
+        "Stderr": "\u003cshell\u003e: line 1: bind: warning: line editing not enabled~\u003cshell\u003e: line 1: bind: -Z: invalid option~bind: usage: bind [-lpsvPSVX] [-m keymap] [-f filename] [-q name] [-u name] [-r keyseq] [-x keyseq:shell-command] [keyseq:readline-function or readline-command]~\u003cshell\u003e: line 1: bind: warning: line editing not enabled~\u003cshell\u003e: line 1: bind: `nosuch': invalid keymap name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~keymap=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~keymap=127",
+        "Stderr": "\u003cshell\u003e: 1: bind: not found~\u003cshell\u003e: 1: bind: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~keymap=127",
+        "Stderr": "\u003cshell\u003e: bind: not found~\u003cshell\u003e: bind: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127~keymap=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: bind~\u003cshell\u003e:1: command not found: bind",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "bind/the-two-argument-forms-are-not-one-form": {
+      "bash": {
+        "Stdout": "name=0~seq=0~quoted=0",
+        "Stderr": "\u003cshell\u003e: line 1: bind: warning: line editing not enabled~\u003cshell\u003e: line 1: bind: warning: line editing not enabled~\u003cshell\u003e: line 1: bind: warning: line editing not enabled",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "name=0~seq=0~quoted=0",
+        "Stderr": "\u003cshell\u003e: line 1: bind: warning: line editing not enabled~\u003cshell\u003e: line 1: bind: warning: line editing not enabled~\u003cshell\u003e: line 1: bind: warning: line editing not enabled",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "name=1~seq=1~quoted=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "name=127~seq=127~quoted=127",
+        "Stderr": "\u003cshell\u003e: 1: bind: not found~\u003cshell\u003e: 1: bind: not found~\u003cshell\u003e: 1: bind: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "name=127~seq=127~quoted=127",
+        "Stderr": "\u003cshell\u003e: bind: not found~\u003cshell\u003e: bind: not found~\u003cshell\u003e: bind: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "name=127~seq=127~quoted=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: bind~\u003cshell\u003e:1: command not found: bind~\u003cshell\u003e:1: command not found: bind",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "bindkey/an-unknown-widget-is-accepted-in-silence": {
       "bash": {
         "Stdout": "st=127",
@@ -36101,6 +36233,50 @@
       },
       "zsh": {
         "Stdout": " 61 1b 5a 3a 61 5c 45 5a 0a ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "editing-mode/the-two-names-are-one-state-with-three-values": {
+      "bash": {
+        "Stdout": "vi st=0~ st=0~emacs st=0~ st=0~vi st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "vi st=0~ st=0~emacs st=0~ st=0~vi st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "vi st=0~ st=0~emacs st=0~ st=0~vi st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " st=0~ st=0~ st=0~ st=0~ st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " st=0~ st=0~ st=0~ st=0~ st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " st=0~ st=0~ st=0~ st=0~ st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

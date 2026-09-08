@@ -93,7 +93,29 @@ var (
 	// carry a mark — `for i in 1 2`, `do` and `done` print nothing, and a
 	// wait on any of them would be answered by the echo of the keystrokes.
 	multiLineProbe = probe{"echo loop-$((6 * 7))-ok", "loop-42-ok"}
+	// The two rebinding rows. Each line is typed in two pieces with the
+	// rebound key between them, so the mark appears only if the key moved the
+	// cursor back to the start — the tail is typed first and the head after
+	// it, which is the same shape repl/bindings_test.go uses for an override.
+	//
+	// A mark that is not in either piece, because a wait on text the line
+	// contains is answered by the terminal's echo — see the type's comment.
+	rebindProbe   = probe{`echo "rebound-$((6 * 7))-ok"`, "rebound-42-ok"}
+	rebindViProbe = probe{`echo "vibound-$((6 * 7))-ok"`, "vibound-42-ok"}
 )
+
+// typedAroundKey is one probe's line split so the rebound key is pressed
+// between the two halves: the tail first, then the key, then the head.
+//
+// The tail alone is not a command — `-ok"` on its own is an unfinished quote —
+// so a shell where the key did nothing does not print the mark, and does not
+// run anything either. It says the continuation prompt instead, which names
+// itself, so a failure reads as a failure rather than as a timeout.
+func typedAroundKey(p probe, key string) string {
+	const split = `-ok"`
+	head := strings.TrimSuffix(p.line, split)
+	return split + key + head + "\r"
+}
 
 // multiLineLoop is the loop as a person types it: four lines, three of which
 // leave the construct unfinished.
@@ -126,6 +148,7 @@ func probes() []probe {
 		rcProbe, aliasProbe, functionProbe, pipelineProbe,
 		recallProbe, searchProbe, chaffProbe, tickProbe, completionProbe,
 		undoProbe, escapeProbe, multiLineProbe,
+		rebindProbe, rebindViProbe,
 	}
 }
 
@@ -378,6 +401,47 @@ func checks() []check {
 					return Fail, "^_ did not put back what ^U took: " + err.Error()
 				}
 				return Pass, "^U took the line and ^_ gave it back"
+			},
+		},
+		{
+			name:   "a key rebound in the rc file",
+			proves: "a key binding written in a startup file is the one the editor honors",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				if err := s.atPrompt(); err != nil {
+					return Fail, err.Error()
+				}
+				// ^G is the key, because no shell here acts on it by itself —
+				// so the mark cannot be the editor's own dispatch having done
+				// the work.
+				if err := s.send(typedAroundKey(rebindProbe, "\a")); err != nil {
+					return Fail, err.Error()
+				}
+				if err := s.screen.Await(rebindProbe.mark, budget); err != nil {
+					return Fail, "the rc file's binding for ^G did not move the cursor: " + err.Error()
+				}
+				return Pass, "^G ran the action the rc file bound it to"
+			},
+		},
+		{
+			name:   "a key rebound for the editing mode the rc file selects",
+			proves: "a binding written for a vi keymap is live once the rc file has selected vi editing",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				if err := s.atPrompt(); err != nil {
+					return Fail, err.Error()
+				}
+				// ^O, and a different key from the row above on purpose: this
+				// one is bound only in the keymap the mode makes current, so
+				// a pass says the mode was accepted *and* that the binding
+				// written for it is the live one. That pair is the whole of
+				// what a real bash rc file asks — `set -o vi` and then `bind
+				// -m vi-insert` (#1352).
+				if err := s.send(typedAroundKey(rebindViProbe, "\x0f")); err != nil {
+					return Fail, err.Error()
+				}
+				if err := s.screen.Await(rebindViProbe.mark, budget); err != nil {
+					return Fail, "the rc file's vi-keymap binding for ^O did not move the cursor: " + err.Error()
+				}
+				return Pass, "^O ran the action bound in the keymap vi editing selects"
 			},
 		},
 		{

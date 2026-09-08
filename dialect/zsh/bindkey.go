@@ -122,51 +122,73 @@ const undefinedKey = "undefined-key"
 // defaultBindings is what each keymap does before anyone changes it: the keys
 // this editor acts on, under this shell's names for them.
 //
+// Derived from repl.DefaultBindings rather than written out again, because the
+// keys are the editor's and only the names are this shell's — and because the
+// copy that used to be written out here had drifted from the editor: it was
+// missing `M-^H`, which kills a word back, and all four numbered spellings of
+// Home and End, so `bindkey` reported five keys as unbound in a shell where
+// pressing them works. See repl/defaultkeys.go, whose test pins the table
+// against the editor's own dispatch.
+//
 // Not zsh's whole keymap. See the file comment — the two `main` maps differ
 // only in that `viins` leaves the letters to insert themselves, which they do
 // here in either case because this editor has no command mode.
-var defaultBindings = map[string]string{
-	"\x01":     "beginning-of-line",
-	"\x05":     "end-of-line",
-	"\x02":     "backward-char",
-	"\x06":     "forward-char",
-	"\x0b":     "kill-line",
-	"\x15":     "kill-whole-line",
-	"\x17":     "backward-kill-word",
-	"\x19":     "yank",
-	"\x14":     "transpose-chars",
-	"\x0c":     "clear-screen",
-	"\x10":     "up-line-or-history",
-	"\x0e":     "down-line-or-history",
-	"\x12":     "history-incremental-search-backward",
-	"\x04":     "delete-char-or-list",
-	"\x08":     "backward-delete-char",
-	"\x7f":     "backward-delete-char",
-	"\x09":     "expand-or-complete",
-	"\x0a":     "accept-line",
-	"\x0d":     "accept-line",
-	"\x1bb":    "backward-word",
-	"\x1bB":    "backward-word",
-	"\x1bf":    "forward-word",
-	"\x1bF":    "forward-word",
-	"\x1bd":    "kill-word",
-	"\x1bD":    "kill-word",
-	"\x1b\x7f": "backward-kill-word",
-	"\x1b[A":   "up-line-or-history",
-	"\x1b[B":   "down-line-or-history",
-	"\x1b[C":   "forward-char",
-	"\x1b[D":   "backward-char",
-	"\x1bOA":   "up-line-or-history",
-	"\x1bOB":   "down-line-or-history",
-	"\x1bOC":   "forward-char",
-	"\x1bOD":   "backward-char",
-	"\x1b[H":   "beginning-of-line",
-	"\x1b[F":   "end-of-line",
-	"\x1b[3~":  "delete-char",
-	"\x1f":     "undo",
-	"\x18\x15": "undo",
-	"\x1b.":    "insert-last-word",
-	"\x1b_":    "insert-last-word",
+var defaultBindings = buildDefaultBindings()
+
+// widgetNames is this shell's canonical name for each action, which is the
+// one a listing prints. The reverse of bindkeyWidgets, which cannot be
+// inverted automatically because it is many names to one action on purpose:
+// `vi-beginning-of-line` reaches the same place and is not what `bindkey`
+// says back.
+var widgetNames = map[repl.Widget]string{
+	repl.WidgetBeginningOfLine:       "beginning-of-line",
+	repl.WidgetEndOfLine:             "end-of-line",
+	repl.WidgetBackwardChar:          "backward-char",
+	repl.WidgetForwardChar:           "forward-char",
+	repl.WidgetBackwardWord:          "backward-word",
+	repl.WidgetForwardWord:           "forward-word",
+	repl.WidgetKillLine:              "kill-line",
+	repl.WidgetKillWholeLine:         "kill-whole-line",
+	repl.WidgetKillWordBefore:        "backward-kill-word",
+	repl.WidgetKillWordAfter:         "kill-word",
+	repl.WidgetYank:                  "yank",
+	repl.WidgetTransposeChars:        "transpose-chars",
+	repl.WidgetPreviousHistory:       "up-line-or-history",
+	repl.WidgetNextHistory:           "down-line-or-history",
+	repl.WidgetSearchHistoryBackward: "history-incremental-search-backward",
+	repl.WidgetClearScreen:           "clear-screen",
+	repl.WidgetDeleteChar:            "delete-char",
+	repl.WidgetBackwardDeleteChar:    "backward-delete-char",
+	repl.WidgetComplete:              "expand-or-complete",
+	repl.WidgetUndo:                  "undo",
+	repl.WidgetInsertLastWord:        "insert-last-word",
+}
+
+// editorControlKeys are the keys the editor reads that are not actions a key
+// can be bound to — accepting a line, and the `^D` that is end-of-input on an
+// empty one — under this shell's names for them.
+//
+// Separate from the derived table because repl has no Widget for any of them
+// and deliberately does not: a widget constant with nothing behind it would
+// be a name a person could bind and press to no effect. What to call the keys
+// is still this shell's question, which is why the answer is here.
+var editorControlKeys = map[string]string{
+	"\x04": "delete-char-or-list",
+	"\x0a": "accept-line",
+	"\x0d": "accept-line",
+}
+
+func buildDefaultBindings() map[string]string {
+	out := map[string]string{}
+	for seq, w := range repl.DefaultBindings() {
+		if name := widgetNames[w]; name != "" {
+			out[seq] = name
+		}
+	}
+	for seq, name := range editorControlKeys {
+		out[seq] = name
+	}
+	return out
 }
 
 // registerBindkey installs the builtin.

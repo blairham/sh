@@ -4214,6 +4214,11 @@ What was built, all through the extension seam — registered builtins in each
   not-built list for the same reason and by the same rule — see below.
 - **zsh `sched`** (dialect/zsh/sched.go): a command line put aside until a
   time. Unrelated to the line editor despite arriving with it; see below.
+- **bash `bind`** (dialect/bash/bind.go): the same key table under
+  readline's names, and the two `set -o` editing modes with it. See below
+  for why this moved out of the not-built list, and for the two measured
+  findings that make it a different builtin from `bindkey` rather than a
+  translation of one.
 
 Deliberately **not** built, so the next sweep counts each as scoped rather
 than missing:
@@ -4276,6 +4281,71 @@ than missing:
   keymap. `-p`, `-R`, `-N`, `-A`, `-D` and `-d` — prefix bindings, key
   ranges, and making, aliasing or destroying a keymap — are refused as not
   implemented, the distinction `whence` draws between a gap and a typo.
+
+  **bash `bind` is the same layer with a different vocabulary, and two
+  measured facts make it a different builtin rather than a translation.**
+
+  The first is that **the two argument forms are not one form.** `bind
+  'keyseq:function'` reads its left side as the name of a *single key* —
+  `\C-l`, `Control-l`, `DEL`, `x` — and `bind '"keyseq": function'`, with
+  double quotes inside the word, reads it as a whole escape sequence.
+  Measured under a pseudo-terminal against bash 5.3.15:
+
+  | written | what it binds |
+  | --- | --- |
+  | `bind "\C-l":clear-screen` | `^L` — a valid key name |
+  | `bind "\C-x\C-a":beginning-of-line` | **nothing**, silently, at status 0 |
+  | `bind '"\C-x\C-a": beginning-of-line'` | `^X^A` |
+  | `bind "\e[Z":beginning-of-line` | a backslash, silently, at status 0 |
+
+  So an implementation reading the second row as two bytes would bind a key
+  real bash leaves alone. The three `bind -m vi-insert "\C-l":clear-screen`
+  lines that opened #1352 are all the first row's shape, which is why they
+  work in bash and had to be made to work here.
+
+  The second is that **an unknown function name is not stored** — the
+  opposite of zsh. `bind '"^X^T": no-such-widget'` is status 0 and silence
+  and `bind -p` has no row for it, so the key goes on doing what it did;
+  zsh stores its unknown name and the key stops working. Both were measured
+  the same way. Asking about the name is a different question with a
+  different answer: `bind -q no-such` is `unknown function name` at 1.
+
+  What it does not do, on the same rule `bindkey` follows: **`bind -l` names
+  this editor's functions and not readline's 176.** `kill-whole-line` is
+  deliberately absent, because this editor's `^U` takes the line back to its
+  start — which is readline's `unix-line-discard`, a name that *is* offered
+  — where readline's `kill-whole-line` takes the whole line and is bound to
+  no key in bash 5.3. Offering it would be offering a name that does
+  something else. `bind -s` stores and lists a key bound to text and the key
+  is inert, which is the same partial `bindkey -s` keeps.
+
+  **The default listing is not a third copy of the editor's keys.** Both
+  builtins derive it from `repl.DefaultBindings`, whose test types every key
+  in the table and compares the accepted line against the same widget
+  reached through the override layer — so an entry naming the wrong action,
+  or naming a key the dispatch ignores, fails. The one hand-written copy
+  that preceded it had already drifted: it was missing `M-^H`, which kills a
+  word back, and all four numbered spellings of Home and End, so `bindkey`
+  reported five keys as unbound in a shell where pressing them works.
+
+  **`set -o vi` and `set -o emacs` are one state with three values.**
+  Measured in bash 5.3 and ksh93 alike: `set -o vi` turns `emacs` off in the
+  same breath, and `set +o vi` afterwards leaves **both** off rather than
+  putting `emacs` back — so "neither" is a state a script can observe and a
+  bool could not hold. Turning one on is the only way back. What the mode
+  selects here is which keymap `bind` acts on without `-m`: `set -o vi`
+  makes `vi-insert` current, measured, which is what makes an rc file's `set
+  -o vi` followed by `bind -m vi-insert` do what it says. It selects nothing
+  else, because this editor has no command mode — the same documented
+  partial as zsh's `vicmd`.
+
+  One divergence it inherits rather than introduces: a **non-interactive**
+  bash reports both `vi` and `emacs` off, where this shell reports `emacs`
+  on in every route. That answer predates this work and is deliberate — see
+  `interp/shellopts.go`, where reporting `emacs` off to match a listing
+  while the editor really does read `^A`, `^E` and `^B` is named as the lie
+  the file exists to avoid.
+
 - zsh's own `print`: zsh has one — shared ksh ancestry — with its own flags
   and wording (`bad file number: 9` where ksh93 brackets the errno). Its
   `whence` is built now, above; `print` stays command-not-found, visible in
@@ -4309,9 +4379,21 @@ than missing:
   builtin` where ksh93 says `is a special shell builtin` for the special
   ones. Neither is `-a`'s to fix.
 - ksh93 `hist`: interactive history editing, and there is no history.
-- bash `bind`: readline's. The seam zsh's `bindkey` reaches the editor
-  through is the core's rather than zsh's, so this is now a matter of
-  measuring readline's names and wordings rather than of architecture.
+- bash `bind -x` and `-X`, and `-v`, `-V` and `-f`: running a shell command
+  from a key, and readline's own variables. `bind` itself is built (see
+  below) and these refuse by name inside it, for the same reason `zle`'s
+  missing halves do. `-x` is the one with machinery already behind it —
+  `repl.Binding.Function` and `driver.Shell.RunWidget` carry a name this
+  package does not look inside, so the command text could ride that seam —
+  and what is missing is bash's own half: what `READLINE_LINE` and
+  `READLINE_POINT` are while the command runs, and what happens to the line
+  when it changes them, are unmeasured. `-v` and `-V` would be reporting
+  settings nothing here reads.
+- bash `bind -m emacs-meta` and `-m emacs-ctlx`: readline's two **prefix**
+  keymaps. This editor reads a key sequence whole rather than through a
+  prefix map, so a binding recorded in one could never fire; refused as not
+  implemented rather than as an invalid keymap name, since bash really has
+  them. It is the same refusal `bindkey -p` makes, for the same reason.
 - bash `history` and `fc`'s editing half: no history file in a
   non-interactive core; `fc` itself already answers with its measured
   empty-history refusal.

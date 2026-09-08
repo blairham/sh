@@ -78,15 +78,70 @@ var commonSetOptions = map[string]setOption{
 	"monitor": {try: (*Runner).setMonitor, get: func(r *Runner) bool { return r.monitor }},
 
 	// The rest of the unanimous names, none of which this shell has yet.
-	// Every one of them is off here: we do not defer a job notice, do not
-	// hold the session open at end-of-file, and have no vi mode.
+	// Every one of them is off here: we do not defer a job notice and do
+	// not hold the session open at end-of-file.
 	"notify":    {},
 	"ignoreeof": {},
 	"nolog":     {},
-	"vi":        {},
-	// The exception, and it is on: the line editor reads ^A, ^E and ^B,
-	// which is what this name means.
-	"emacs": {on: true},
+
+	// The two editing modes, and they are one state under two names — see
+	// Runner.editingMode and EditingMode. `emacs` starts on, because the
+	// line editor really does read ^A, ^E and ^B, which is what that name
+	// means; asking for `vi` selects the other keymap, which is as much as
+	// this editor can promise and exactly what the zsh dialect's `bindkey
+	// -v` already promises.
+	//
+	// Turning either *off* leaves neither on rather than swapping to the
+	// other, measured in bash 5.3 and ksh93 both: `set -o vi; set +o vi`
+	// reports `emacs off` and `vi off`.
+	"vi": {
+		apply: func(r *Runner, on bool) { r.setEditingMode(EditingModeVi, on) },
+		get:   func(r *Runner) bool { return r.editingMode == EditingModeVi },
+	},
+	"emacs": {
+		apply: func(r *Runner, on bool) { r.setEditingMode(EditingModeEmacs, on) },
+		get:   func(r *Runner) bool { return r.editingMode == EditingModeEmacs },
+	},
+}
+
+// EditingMode is which of `set -o emacs` and `set -o vi` is selected.
+//
+// Exported because a dialect's binding builtin needs it: which keymap `bind`
+// or `bindkey` acts on without being told is this and nothing else, and the
+// keymap *names* are the dialect's — `emacs` and `vi-insert` in one, `emacs`
+// and `viins` in the other. So the core holds which mode, and each dialect
+// spells it.
+type EditingMode int
+
+// The three states, and the zero value is the one every shell in the panel
+// starts an interactive session in.
+const (
+	EditingModeEmacs EditingMode = iota
+	EditingModeVi
+
+	// EditingModeNone is what turning the selected mode off leaves behind,
+	// and it is a real state rather than an absence: `set +o emacs` in bash
+	// 5.3 reports `emacs off` *and* `vi off`, so a script can observe it.
+	EditingModeNone
+)
+
+// EditingMode reports which editing mode is selected, for a dialect deciding
+// which keymap its binding builtin acts on.
+func (r *Runner) EditingMode() EditingMode { return r.editingMode }
+
+// setEditingMode is the write half of the two option names.
+//
+// Turning a mode on selects it; turning one off leaves neither selected,
+// which is the measurement and not a shortcut — see the table entries. Asking
+// to turn off a mode that is not the selected one moves nothing, because the
+// request has already been granted.
+func (r *Runner) setEditingMode(mode EditingMode, on bool) {
+	switch {
+	case on:
+		r.editingMode = mode
+	case r.editingMode == mode:
+		r.editingMode = EditingModeNone
+	}
 }
 
 // extraSetOptions are names that belong to some shells and not others, with

@@ -1242,6 +1242,32 @@ func (r *Runner) resultReadsAsPattern(esc string) bool {
 		r.dialect().ExtendedPattern, r.MatchOption(ExtendedPatternOperators)) {
 		return true
 	}
+	// The second gap of the same shape, and #1331 is the one that opened it.
+	// A `|` on its own is not a metacharacter — hasUnescapedMeta does not
+	// count one and must not, since a field holding nothing else is not a
+	// pattern and is not sent to the filesystem. It becomes one only inside
+	// a group, and a group is something the *rest of the word* can supply:
+	// once an expansion inside `( … )` is read as an expansion rather than
+	// as its own source text, the `|` in its value lands between two
+	// alternatives that nobody wrote.
+	//
+	// Measured on zsh 5.9.2, 2026-09-08, in a directory holding `ice.zsh`,
+	// `other.zsh` and one file literally named `ice|x.zsh`:
+	//
+	//	L="ice|other"; print -r -- ($L).zsh   no matches found: (ice|other).zsh
+	//	L="ice|x";     print -r -- ($L).zsh   ice|x.zsh
+	//
+	// The second row is the discriminating one: the `|` is a character the
+	// name has to contain, not a choice between two names. Both follow from
+	// GlobExpansionResults, which is why this only reports that the axis is
+	// worth asking — the dialects that answer yes still read the `|`.
+	//
+	// Asked only where the dialect has somewhere for a `|` to mean
+	// something. Where there are no groups at all it is text however it
+	// arrived, and asking would refuse a field with nothing wrong with it.
+	if (r.dialect().PatternAlternation || r.dialect().ExtendedPattern) && hasUnescapedByte(esc, '|') {
+		return true
+	}
 	// Composed with the axis rather than short-circuiting it: a dialect that
 	// both globs expansion results and calls an unterminated bracket a bad
 	// pattern would be right to refuse this field, since there the result

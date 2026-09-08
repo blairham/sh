@@ -1106,10 +1106,14 @@ func (l *Lexer) scanPatternGroup() string {
 // operators and a pattern operand does not, which is a difference between two
 // constructs rather than the accident it looked like (#1175).
 //
-// Expansions inside a group are *not* read here and stay literal text, which
-// is what they were before and is measured as wrong: zsh 5.9.2 expands
-// `v='\<'; [[ '<x' == (${~v})* ]]` to a match. That is a gap of its own and
-// filed as one — this scanner is about quoting.
+// Expansions inside a group *are* read here, through the same
+// substitutionSpans the rest of a word goes through. They were literal text
+// until #1331 and that was the second half of the same omission this scanner
+// began as: quoting was shared with scanWord and expansion was not, so
+// `[[ b == ("b") ]]` worked and `L=wait; [[ wait == ($L) ]]` matched the two
+// characters `$L`. What an expansion's value is *worth* once it is here — a
+// pattern or ordinary text — is the interpreter's GlobExpansionResults axis,
+// answered where every other expansion's is.
 func (l *Lexer) scanGroupSpans() []Span {
 	var spans []Span
 	var lit strings.Builder
@@ -1209,23 +1213,20 @@ func (l *Lexer) scanGroupSpans() []Span {
 				Pos:     escPos,
 			})
 
-		case c == '\'':
-			flush()
-			if s, ok := l.scanSingle(); ok {
-				spans = append(spans, s)
-			}
-
-		case c == '"':
-			flush()
-			spans = append(spans, l.scanDouble()...)
-
-		case c == '$' && l.peekAt(1) == '\'' && l.dialect.DollarSingleQuote:
-			flush()
-			if s, ok := l.scanDollarSingle(); ok {
-				spans = append(spans, s)
-			}
-
 		default:
+			// The quoting and substitution forms, from the same list scanWord
+			// reads. A group used to keep its own copy of it, holding the
+			// quoting half and none of the expansions; see substitutionSpans
+			// for what that cost (#1331).
+			//
+			// A substitution's own parentheses never reach `depth` below,
+			// because the scanner that takes it balances them itself — which
+			// is why `(a$(echo ')')b)` closes at the last `)` and not at the
+			// one inside the command.
+			if ss, ok := l.substitutionSpans(flush); ok {
+				spans = append(spans, ss...)
+				break
+			}
 			keep(c)
 			switch c {
 			case '(':
@@ -1360,55 +1361,6 @@ func (l *Lexer) scanWord(start Pos) Token {
 			flush()
 			spans = append(spans, l.scanGroupSpans()...)
 
-		case c == '\'':
-			flush()
-			if s, ok := l.scanSingle(); ok {
-				spans = append(spans, s)
-			}
-
-		case c == '"':
-			flush()
-			spans = append(spans, l.scanDouble()...)
-
-		case c == '$' && l.peekAt(1) == '\'' && l.dialect.DollarSingleQuote:
-			flush()
-			if s, ok := l.scanDollarSingle(); ok {
-				spans = append(spans, s)
-			}
-
-		case c == '$' && l.peekAt(1) == '"' && l.dialect.DollarDoubleQuote:
-			// `$"..."` marks the string for locale translation. With no
-			// message catalog every shell that has the form reads it as a
-			// plain double-quoted string — same escapes, same expansions — so
-			// the `$` contributes nothing and the spans are exactly what a
-			// bare `"` produces. The printer therefore writes them back as
-			// plain quotes: the two spellings parse to identical trees, and
-			// recording the `$` would be keeping a byte the tree has no
-			// question for. Where the flag is off, the `$` falls through to
-			// the literal path, which is what dash and zsh do with it.
-			flush()
-			l.advance() // $
-			spans = append(spans, l.scanDouble()...)
-
-		case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
-			// `$((` is arithmetic. A command substitution whose first
-			// construct is a subshell has to be written `$( (`, which is the
-			// only disambiguation available and is decided here: by the time
-			// the parser sees tokens the choice has been made.
-			flush()
-			spans = append(spans, l.scanParens(ArithSubst, Unquoted))
-
-		case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
-			// The older spelling of the case above. Where the flag is off
-			// this falls through to the literal path, which leaves a `$` and
-			// a bracket expression — what ksh93 and dash do with it.
-			flush()
-			spans = append(spans, l.scanBracket(Unquoted))
-
-		case c == '$' && l.peekAt(1) == '(':
-			flush()
-			spans = append(spans, l.scanParens(CommandSubst, Unquoted))
-
 		case l.startsProcSubst():
 			// Unquoted only, and that is not an omission: `"<(echo hi)"` is
 			// its own ten characters of text in every shell in the panel,
@@ -1420,19 +1372,16 @@ func (l *Lexer) scanWord(start Pos) Token {
 			flush()
 			spans = append(spans, l.scanParens(procSubstKind(c), Unquoted))
 
-		case c == '$' && l.peekAt(1) == '{':
-			flush()
-			spans = append(spans, l.scanBraces(Unquoted))
-
-		case c == '$' && isBareParam(l.peekAt(1)):
-			flush()
-			spans = append(spans, l.scanBareParam(Unquoted))
-
-		case c == '`':
-			flush()
-			spans = append(spans, l.scanBackticks(Unquoted))
-
 		default:
+			// Every other quoting and substitution form, from the list
+			// scanGroupSpans reads from too. The cases above are the ones a
+			// group does not get and cannot share — a regular expression's
+			// parentheses, a subscript's flag group, the group itself, and
+			// the `<(` whose first byte a group reads as an operator.
+			if ss, ok := l.substitutionSpans(flush); ok {
+				spans = append(spans, ss...)
+				break
+			}
 			if lit.Len() == 0 {
 				litPos = l.pos()
 			}
@@ -1451,6 +1400,108 @@ func (l *Lexer) scanWord(start Pos) Token {
 		Text:  l.src[start.Offset:l.off],
 		Spans: spans,
 	}
+}
+
+// substitutionSpans scans the quoting or substitution construct standing at
+// the cursor and returns its spans, reporting false and consuming nothing
+// where none stands there. `flush` runs before the scan wherever one does, so
+// the run of literal text in front of it keeps its place in the word.
+//
+// **It is the one list, and being one is the whole point of it.** scanWord
+// and scanGroupSpans each held a copy, and the group's copy had the *quoting*
+// forms and none of the expansions: `[[ b == ("b") ]]` was read, and
+// `L=wait; [[ wait == ($L) ]]` asked whether `wait` is the two characters
+// `$L`, answered no, and said nothing anywhere. The other half of the same
+// omission is louder — `L=ice; print -r -- (${L}).zsh` reported
+// `no matches found: (${L}).zsh`, naming a pattern nobody wrote (#1331).
+//
+// A group is not a second language. An expansion inside one is the same
+// expansion it is anywhere else in a word, and its *value* is the pattern
+// text: measured 2026-09-08, `[[ '$L' = ($L) ]]` does not match in zsh 5.9.2
+// and `[[ '$L' = @($L) ]]` does not match in bash 5.3, bash 3.2 or ksh93 —
+// the same answer read from both dialects that have the construct.
+// Whether the metacharacters in that value are then live is the question the
+// interpreter's GlobExpansionResults axis already answers, and it is answered
+// where every other expansion's is rather than a second time here.
+//
+// Process substitution is deliberately *not* in the list. `<(` and `>(` are
+// the only forms in it whose first byte is also one of the four operators
+// that end a word inside a group, and there the operator wins. Measured on
+// zsh 5.9.2, the only dialect with bare groups:
+//
+//	[[ x = (a<(echo x)b) ]]     process substitution … cannot be used here
+//	print -r -- (a<(echo x)b)   number expected
+//
+// Both are refusals, so reading the `<(` as a substitution inside a group
+// would make two constructs work that the shell does not have. It stays a
+// case of scanWord's own.
+func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
+	c := l.peek()
+	switch {
+	case c == '\'':
+		flush()
+		if s, ok := l.scanSingle(); ok {
+			return []Span{s}, true
+		}
+		return nil, true
+
+	case c == '"':
+		flush()
+		return l.scanDouble(), true
+
+	case c == '$' && l.peekAt(1) == '\'' && l.dialect.DollarSingleQuote:
+		flush()
+		if s, ok := l.scanDollarSingle(); ok {
+			return []Span{s}, true
+		}
+		return nil, true
+
+	case c == '$' && l.peekAt(1) == '"' && l.dialect.DollarDoubleQuote:
+		// `$"..."` marks the string for locale translation. With no message
+		// catalog every shell that has the form reads it as a plain
+		// double-quoted string — same escapes, same expansions — so the `$`
+		// contributes nothing and the spans are exactly what a bare `"`
+		// produces. The printer therefore writes them back as plain quotes:
+		// the two spellings parse to identical trees, and recording the `$`
+		// would be keeping a byte the tree has no question for. Where the
+		// flag is off, the `$` falls through to the literal path, which is
+		// what dash and zsh do with it.
+		flush()
+		l.advance() // $
+		return l.scanDouble(), true
+
+	case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
+		// `$((` is arithmetic. A command substitution whose first construct
+		// is a subshell has to be written `$( (`, which is the only
+		// disambiguation available and is decided here: by the time the
+		// parser sees tokens the choice has been made.
+		flush()
+		return []Span{l.scanParens(ArithSubst, Unquoted)}, true
+
+	case c == '$' && l.peekAt(1) == '[' && l.dialect.DollarBracketArith:
+		// The older spelling of the case above. Where the flag is off this
+		// falls through to the literal path, which leaves a `$` and a bracket
+		// expression — what ksh93 and dash do with it.
+		flush()
+		return []Span{l.scanBracket(Unquoted)}, true
+
+	case c == '$' && l.peekAt(1) == '(':
+		flush()
+		return []Span{l.scanParens(CommandSubst, Unquoted)}, true
+
+	case c == '$' && l.peekAt(1) == '{':
+		flush()
+		return []Span{l.scanBraces(Unquoted)}, true
+
+	case c == '$' && isBareParam(l.peekAt(1)):
+		flush()
+		return []Span{l.scanBareParam(Unquoted)}, true
+
+	case c == '`':
+		flush()
+		return []Span{l.scanBackticks(Unquoted)}, true
+	}
+	return nil, false
 }
 
 // scanSingle reads '...'. Single quotes protect everything, and no escape

@@ -186,9 +186,14 @@ func TestStarStarAloneIsItsOwnQuestion(t *testing.T) {
 		{true, `echo **`, "d d/e d/e/f d/f f"},
 		{false, `echo d/**`, "d/e d/f"},
 		{true, `echo d/**`, "d/ d/e d/e/f d/f"},
-		// Written with the slash, and level-crossing either way.
-		{false, `echo **/`, "d d/e"},
-		{true, `echo **/`, "d d/e"},
+		// Written with the slash, and level-crossing either way. The
+		// matches carry the slash the pattern was written with, which is
+		// what bash with the option and zsh without one both answer and
+		// what these two rows asserted the other way round until #1350:
+		// they were the shape that shows the loss most plainly, and they
+		// forbade the right answer.
+		{false, `echo **/`, "d/ d/e/"},
+		{true, `echo **/`, "d/ d/e/"},
 		{false, `echo **/f`, "d/e/f d/f f"},
 		{true, `echo **/f`, "d/e/f d/f f"},
 	} {

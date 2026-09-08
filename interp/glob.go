@@ -364,6 +364,30 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	starstarAlone := r.MatchOption(StarStarAloneCrossesDirectories)
 	parts := strings.Split(field, "/")
 
+	// The slashes a pattern ends with are text, and they come back on every
+	// match. `*/` is the standard spelling of "directories only" and the
+	// whole panel answers `d1/ d2/` where this walk answered `d1 d2` — a
+	// quiet wrong answer rather than a loud one, because the name alone is
+	// still usable for `cd` and only stops being right once something joins
+	// it to a second path or compares the two spellings (#1350).
+	//
+	// The filtering that makes the idiom mean what it means was already
+	// here: the empty component the trailing slash leaves in parts is what
+	// puts the real one under `i < len(parts)-1` and keeps only directories.
+	// So all that was missing is writing the slash back.
+	//
+	// **The run is reproduced as written rather than normalized to one**,
+	// which is measured and is where the panel splits. dash, ksh93 and zsh
+	// answer `d1//` for `*//` and `d1///` for `*///` — the trailing text
+	// comes back byte for byte — while bash alone collapses the run to a
+	// single slash. Reproducing it is the same rule the mid-pattern case
+	// already follows unanimously, `cx//*` being `cx//ax` in all six
+	// columns, so it is the reading that stays consistent rather than the
+	// one that needs a second rule for the end of the word. bash's collapse
+	// is a divergence recorded in the corpus and not implemented; it is a
+	// question about a shape no script writes.
+	trail := field[len(strings.TrimRight(field, "/")):]
+
 	// An absolute pattern starts at the root; a relative one at the working
 	// directory, which is the shell's rather than the process's.
 	base := r.workDir()
@@ -465,9 +489,15 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			// lists what is beneath the directory, never the directory.
 			continue
 		}
-		if self {
+		if self && trail == "" {
+			// The zero-level `**` writes its own separator, and only when
+			// the pattern did not already ask for one. `cx/**/` is
+			// `cx/ cx/dx/` in the two shells that cross levels, not
+			// `cx// cx/dx/`, so the two sources of a trailing slash are one
+			// slash and not two.
 			d += "/"
 		}
+		d += trail
 		out = append(out, d)
 	}
 	sortMatches(out)

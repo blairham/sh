@@ -318,8 +318,18 @@ type SimpleCmd struct {
 	Assigns []*Assign
 	Args    []*Word
 	Redirs  []*Redirect
-	Start   Pos
-	Stop    Pos
+	// Precommands are the reserved words taken away in front of this
+	// command — see [Dialect.ReservedPrecommands]. They are kept rather than
+	// dropped because printing a tree has to print the program that was
+	// read: dropping the word would leave `nocorrect mv a b` printing as
+	// `mv a b`, which is a different program in a shell that corrects
+	// spelling.
+	//
+	// Nothing that *runs* the command reads them. That is the point of the
+	// class: a word the grammar removes is a word the command cannot see.
+	Precommands []*Word
+	Start       Pos
+	Stop        Pos
 }
 
 func (c *SimpleCmd) Pos() Pos     { return c.Start }

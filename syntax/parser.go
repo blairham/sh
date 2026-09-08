@@ -234,6 +234,17 @@ var reservedWords = map[string]bool{
 	"function": true, "select": true, "time": true,
 }
 
+// atReservedPrecommand reports whether the current token is one of the words
+// the dialect takes away in front of a command — see
+// [Dialect.ReservedPrecommands]. Quoting removes the reservation, exactly as
+// it does for `if`: `\nocorrect echo hi` is `command not found`.
+func (p *Parser) atReservedPrecommand() bool {
+	if p.tok.Kind != TokWord || p.tok.IsQuoted() {
+		return false
+	}
+	return p.dialect.ReservedPrecommands[p.tok.Literal()]
+}
+
 func (p *Parser) atStopWord() bool {
 	if p.tok.Kind != TokWord || p.tok.IsQuoted() {
 		return false
@@ -1603,6 +1614,28 @@ func (p *Parser) parseSimple() Command {
 			if !seenArg && len(c.Assigns) == 0 && p.looksLikeFuncDef() {
 				return p.parseFuncPosix()
 			}
+			if !seenArg && p.atReservedPrecommand() {
+				c.Precommands = append(c.Precommands, p.word())
+				// The word after it stands where a command word stands, so
+				// an alias there expands: `alias e=echo; nocorrect e hi`
+				// prints `hi`. parseCommand expanded the *first* word before
+				// dispatching here and this is the next one, so the call has
+				// to be made again — leaving it out made the alias an
+				// ordinary command name and `command not found` the answer.
+				if p.Aliases != nil {
+					p.aliasNextWord = false
+					p.expandAlias(map[string]bool{})
+				}
+				// And only a simple command may follow. A reserved word has
+				// nowhere to go after it — `nocorrect if true; then echo hi;
+				// fi` is `parse error near `if'` in the shell that has the
+				// word, not an `if` with a modifier in front of it.
+				if p.atStopWord() || p.at(TokWord) && !p.tok.IsQuoted() && reservedWords[p.tok.Literal()] {
+					p.failUnexpected("")
+					return c
+				}
+				continue
+			}
 			if h, ok := p.isAssign(p.tok); ok && !seenArg {
 				c.Assigns = append(c.Assigns, p.parseAssign(h))
 				continue
@@ -1656,7 +1689,12 @@ func (p *Parser) parseSimple() Command {
 			return c
 		default:
 			c.Stop = p.tok.Pos
-			if len(c.Assigns) == 0 && len(c.Args) == 0 && len(c.Redirs) == 0 {
+			// Precommands count towards the command existing. `nocorrect`
+			// with nothing after it is a command that runs nothing and
+			// succeeds in the shell that has the word, and returning nil
+			// here left the word consumed and the command gone — which
+			// parseCommand reads as end of input.
+			if len(c.Assigns) == 0 && len(c.Args) == 0 && len(c.Redirs) == 0 && len(c.Precommands) == 0 {
 				return nil
 			}
 			return c

@@ -68,6 +68,7 @@ func seedTables(r *Runner) {
 	r.floatPrecision = map[string]int{"seed": 3}
 	r.lowered = map[string]bool{"seed": true}
 	r.mathFuncs = map[string]mathFunc{"seed": {}}
+	r.precommands = map[string]PrecommandModifier{"seed": PrecommandNoGlob}
 	r.preludeFuncs = map[string]*syntax.FuncDecl{"seed": nil}
 	r.readonly = map[string]bool{"seed": true}
 	r.removed = map[string]bool{"seed": true}

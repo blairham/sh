@@ -99,6 +99,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// change nobody would think to look at this file for.
 	c.freezing = maps.Clone(r.freezing)
 	c.declaring = maps.Clone(r.declaring)
+	c.precommands = maps.Clone(r.precommands)
 
 	// The option table, on the same terms: `(setopt …)` is the subshell's.
 	c.extraOptions = maps.Clone(r.extraOptions)

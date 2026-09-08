@@ -13743,4 +13743,122 @@ echo "read=[$l]"`,
 		Snippet: `set -- a; 1a=z; echo "st=$?"`,
 		Why:     "the control the whole group needs: a name that merely *starts* with a digit is not admitted anywhere, so all six columns answer `command not found` at 127. Without it a flag that let any word beginning with a digit be an assignment would pass every other row here",
 	},
+	// --- precommand modifiers -----------------------------------------
+	//
+	// Words that stand in front of a command, are taken away before it runs,
+	// and change what happens to the words behind them. One shell in the
+	// panel has a family of them and the other four have none, so most of
+	// these rows are `command not found` in five columns — which is the
+	// record: the name is either the modifier or an ordinary command, and
+	// nothing in between (#1526).
+	{
+		ID: "pre/an-unmatched-pattern-without-the-modifier", Category: "command language",
+		Snippet: `echo a[b]c`,
+		Why:     "the control the whole group needs, and the half that was already right: a bracket expression matching no file is passed through by four shells and is a *fatal* error in the fifth. Without it every row below could be explained by pathname expansion being wrong rather than by the modifier being ignored",
+	},
+	{
+		ID: "pre/noglob-stops-the-match", Category: "command language",
+		Snippet: `noglob echo a[b]c`,
+		Why:     "the pair with the row above: the same pattern, one word further along, stands as written in the shell that has `noglob` and is `command not found` in the four that do not. Graded on the output rather than the status, because a status of 1 is what the unmatched pattern produced too",
+	},
+	{
+		ID: "pre/noglob-covers-every-word", Category: "command language",
+		Snippet: `noglob echo a[b]c d[e]f`,
+		Why:     "the modifier is not about the first word behind it. A reading that unglobbed one argument would print the second as a diagnostic and stop, which is a different line at a different status",
+	},
+	{
+		ID: "pre/noglob-does-not-match-the-command-word-either", Category: "command language",
+		Snippet: `noglob a[b]c`,
+		Why:     "the word that becomes the command name is unmatched too, so the failure is `command not found: a[b]c` and not `no matches found`. Which of the two diagnostics arrives is what says whether the scan ran before the match or after it",
+	},
+	{
+		ID: "pre/noglob-is-a-builtin-and-not-grammar", Category: "command language",
+		Snippet: `c=noglob; $c echo a[b]c`,
+		Why:     "an expansion can produce it, which is the fact that decides where it is implemented: the words are expanded, the leading one is read, and only then is anything matched. A modifier recognized in the grammar could not be written this way",
+	},
+	{
+		ID: "pre/a-list-can-carry-the-modifier", Category: "command language",
+		Snippet: `c=(noglob echo); $c a[b]c`,
+		Why:     "the scan is over *fields* and not over words: one word produced two and the front of that list is what was read. The narrower rule — a word that expanded to more than one field is not a modifier — passes every other row in this group and fails here",
+	},
+	{
+		ID: "pre/an-unsplit-word-holding-both-is-not-two", Category: "command language",
+		Snippet: `c="noglob echo"; $c a[b]c`,
+		Why:     "the control for the row above, and the reason it is about fields rather than about text: this shell does not split a parameter expansion, so the same two words in one field are a command name and the pattern is matched. `${=c}` splits it and the modifier comes back",
+	},
+	{
+		ID: "pre/a-quoted-noglob-is-still-the-modifier", Category: "command language",
+		Snippet: `\noglob echo a[b]c`,
+		Why:     "quoting does not take this one away, where it takes `if` away — the same fact as the row above from the other side, and the exact opposite of what quoting does to `nocorrect` below",
+	},
+	{
+		ID: "pre/after-noglob-an-assignment-is-a-command-word", Category: "command language",
+		Snippet: `noglob x=1 echo a[b]c`,
+		Why:     "what follows a builtin is a command word, so `x=1` is a command name here and not a prefix — `command not found: x=1` in the shell with the modifier, and `command not found: noglob` in the four without. The pair with the `nocorrect` row of the same shape is what separates the two mechanisms",
+	},
+	{
+		ID: "pre/noglob-ends-with-the-command", Category: "command language",
+		Snippet: `f() { echo a[b]c; }; noglob f`,
+		Why:     "it covers this command's words and not what they reach: a function called through the modifier still matches in its own body, which is fatal in the shell that has the modifier at all. A runner that set the option instead of unglobbing the words would print the three characters here",
+	},
+	{
+		ID: "pre/noglob-does-not-reach-a-redirection-target", Category: "command language",
+		Snippet: `noglob echo x >out[1].txt; echo "st=$?"`,
+		Why:     "the one part of the command it does not reach, measured rather than assumed: a redirection target is expanded by another route and an unmatched pattern there is still fatal. The plausible wrong reading — a flag set for the whole command — would create the file and print `st=0`",
+	},
+	{
+		ID: "pre/noglob-does-not-outlast-the-command", Category: "command language",
+		Snippet: `noglob echo a[b]c; echo a[b]c`,
+		Why:     "the modifier is not the option under another spelling: the next command matches again, so what it switched off went back on. A runner that reached for the `set -o noglob` flag instead would print the three characters twice — and would answer for the flag in `$-` while it was flipped",
+	},
+	{
+		ID: "pre/command-stops-the-scan", Category: "command language",
+		Snippet: `command noglob echo a[b]c`,
+		Why:     "`command` says the word behind it is a program, so the scan stops there and the pattern is matched after all. It is the row that keeps the family from being one rule, and the boundary the two rows below stand against",
+	},
+	{
+		ID: "pre/builtin-does-not-stop-the-scan", Category: "command language",
+		Snippet: `builtin noglob echo a[b]c`,
+		Why:     "`builtin` says the word behind it is a builtin, and the modifier is one — so the scan carries on and the pattern stands. Paired with the `command` row above, this is the whole of the ordering rule",
+	},
+	{
+		ID: "pre/exec-does-not-stop-the-scan", Category: "command language",
+		Snippet: `exec noglob echo a[b]c`,
+		Why:     "the third shared word, on the same question. It behaves as `builtin` does rather than as `command` does, which is not derivable from what the three are for and is why each one is a row",
+	},
+	{
+		ID: "pre/nocorrect-is-taken-away-before-the-command-is-read", Category: "command language",
+		Snippet: `nocorrect x=1 echo hi; echo "x=[$x]"`,
+		Why:     "the same shape as the `noglob` row above and the opposite answer: this word is grammar, so it is gone before `x=1` is read and the assignment is still a prefix — the command runs and the variable does not survive it. The four without the word report `command not found` and print an empty value for the same reason",
+	},
+	{
+		ID: "pre/nocorrect-cannot-come-from-an-expansion", Category: "command language",
+		Snippet: `x=nocorrect; $x echo hi`,
+		Why:     "grammar cannot be produced by an expansion, so this is `command not found` in all six columns while the identical shape with `noglob` runs in one of them. It is the discriminating pair for where each of the two is implemented",
+	},
+	{
+		ID: "pre/a-quoted-nocorrect-is-a-command-name", Category: "command language",
+		Snippet: `\nocorrect echo hi`,
+		Why:     "quoting removes the reservation, exactly as it does for `if` — and again the opposite of what it does to `noglob`. All six columns agree here, which is what makes the disagreement on the unquoted word meaningful",
+	},
+	{
+		ID: "pre/nocorrect-is-not-noglob", Category: "command language",
+		Snippet: `nocorrect echo a[b]c`,
+		Why:     "the word that is a modifier does not do the other modifier's work: spelling correction is what it turns off, and the pattern behind it is matched and fatal. A shell that treated every precommand word as `noglob` would print the three characters",
+	},
+	{
+		ID: "pre/the-two-modifiers-in-order", Category: "command language",
+		Snippet: `nocorrect noglob echo a[b]c`,
+		Why:     "grammar first, then the builtin: the reserved word is consumed while the line is read and the builtin is read after the words are expanded, so this order works",
+	},
+	{
+		ID: "pre/the-two-modifiers-in-the-other-order", Category: "command language",
+		Snippet: `noglob nocorrect echo a[b]c`,
+		Why:     "and the other order does not, which is the sharpest evidence in the group that they are two mechanisms rather than one list: by the time the builtin is read the grammar has finished, so `nocorrect` is an ordinary word and `command not found`",
+	},
+	{
+		ID: "pre/an-ordinary-word-elsewhere", Category: "command language",
+		Snippet: `echo noglob nocorrect`,
+		Why:     "neither word is reserved anywhere but in command position, so all six columns print both of them. The control that keeps a rule written for the whole word list from passing the rest of this group",
+	},
 }

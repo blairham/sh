@@ -309,11 +309,15 @@ func classEnd(p string, j int) (int, bool) {
 	if !strings.HasPrefix(p[j:], "[:") {
 		return 0, false
 	}
-	k := strings.Index(p[j:], ":]")
+	// After the opening `[:`, so its own colon cannot close it: `[[:]` is a
+	// bracket holding `[` and `:` and not a class with an empty name.
+	// matchBracket makes the same choice at the same text, and both are
+	// measured — see the note there.
+	k := strings.Index(p[j+2:], ":]")
 	if k < 0 {
 		return 0, false
 	}
-	return j + k + 1, true
+	return j + 2 + k + 1, true
 }
 
 // splitClosableItem peels the one item a closure could repeat.

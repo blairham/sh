@@ -9369,6 +9369,11 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the same fault reached by three more routes, which is what says it was in the *item* and not in how `#` was read. The shell with them prints `[X]`, `[]`, `[bX]` and `[X]`: `(#c2)` is a count and never touches the `#` scan at all, a single `#` is zero-or-more, and `[a-z]##` is the control that always worked — a range has no inner `]`. Ours printed `[abX]`, `[abX]`, `[bX]` and `[X]`, so the two class spellings failed to match anything while the range matched correctly. The third field is a **second** non-discriminating form worth recording beside the `//` one: the *shortest* match of one-or-more is one character, which is exactly what the bug produced, so `#` and `%` are as blind to this as `//` is",
 	},
 	{
+		ID: "pat/a-class-that-never-closes-is-not-one", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; v="cape[X"; echo "[${v##[[:space]##}]"`,
+		Why:     "the other end of the same scan: `[:` with no `:]` after it is not a class, so the bracket is the ordinary one holding `[`, `:`, `s`, `p`, `a`, `c` and `e` — and the closure repeats *that*. The shell with closures prints `[X]`, having taken all six of `cape[`; the rest leave the value alone, having no closure to read. It is the row that says the class case is a special reading and not the only reading, which a scan that swallowed the rest of the pattern on a missing `:]` would fail while every well-formed class still passed",
+	},
+	{
 		ID: "pat/a-bash-closure-over-a-class-is-a-different-operator", Category: "pattern matching",
 		Snippet: `shopt -s extglob 2>/dev/null; v=abX; echo "[${v##+([[:alpha:]])}]"`,
 		Why:     "the row that keeps the two families apart. `+(…)` is a quantified *group* and not a postfix closure, so it is read by a different part of the matcher and was already right: bash 5.3, bash 3.2, bash-as-sh and ksh93 all print `[]` and so did ours throughout #1409, where `[[:alpha:]]##` was one character short. zsh and dash print the value back — zsh has no `+(` and dash has neither. Folding this into the closure rows would have made a broken matcher look half-covered",

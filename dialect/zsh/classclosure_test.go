@@ -124,6 +124,43 @@ func TestAClosureOverACharacterClassRepeatsTheWholeBracket(t *testing.T) {
 			`setopt extendedglob; v=aab; echo "[${v##[[=a=]]##}]"`,
 			"[aab]",
 		},
+		// A `[:` with no `:]` after it is not a class, so the bracket is the
+		// ordinary one holding `[`, `:`, `s`, `p`, `a`, `c` and `e` — and
+		// the closure repeats that. `cape[` is six of them.
+		{
+			"a class that never closes is not one",
+			`setopt extendedglob; v="cape[X"; echo "[${v##[[:space]##}]"`,
+			"[X]",
+		},
+		// The colon that opens a class may not also close it. `[[:]` is a
+		// bracket holding `[` and `:`, which is what both shells that read
+		// it say — measured 2026-09-07, `[[ ":" == [[:] ]]` matches and
+		// `[[ x == [[:] ]]` does not in bash 5.3.15 and zsh 5.9.2 alike.
+		// Reading the `:]` from the `[` instead gave the class a name
+		// running from offset 3 to offset 2 and **panicked the shell**, on
+		// every surface, which is why the rows below assert a status too.
+		{
+			"a colon cannot open and close one class",
+			`setopt extendedglob; v=":::"; echo "[${v##[[:]##}]"`,
+			"[]",
+		},
+		{
+			"the degenerate bracket holds its two characters",
+			`setopt extendedglob; [[ ":" == [[:] ]] && echo colon-hit || echo colon-miss`,
+			"colon-hit",
+		},
+		{
+			"and holds nothing else",
+			`setopt extendedglob; [[ x == [[:] ]] && echo x-hit || echo x-miss`,
+			"x-miss",
+		},
+		// A well-formed class is unaffected by that, which is the control on
+		// it: the name is still read whole.
+		{
+			"a class whose name is one letter",
+			`setopt extendedglob; v=1a; echo "[${v#[[:digit:]]}]"`,
+			"[a]",
+		},
 		// With the option off the same characters are literal, which is what
 		// keeps the closure from being read where no shell reads one.
 		{

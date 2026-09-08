@@ -913,6 +913,16 @@ Precedence, each measured rather than read off a manual:
   `2ab` either way. Only `##`, `%%`, `(M)` and a single anchored
   replacement observe the length of one match.
 
+  A `[:` with no `:]` **after** it is not a class, and neither is one whose
+  only colon is its own: `[[:space]` is the ordinary bracket holding `[`,
+  `:`, `s`, `p`, `a`, `c` and `e`, so `v="cape[X"; ${v##[[:space]##}` is
+  `X`; and `[[:]` is the bracket holding `[` and `:`, which is why
+  `[[ ":" == [[:] ]]` matches and `[[ x == [[:] ]]` does not in bash 5.3.15
+  and zsh 5.9.2 alike. Reading the closing `:]` from the `[` rather than
+  from after the `[:` lets one colon do both jobs, which gave the class a
+  name running from offset 3 to offset 2 and panicked this shell on every
+  surface that matches a pattern.
+
   `+([[:alpha:]])` is a **different operator** — a quantified group, in
   bash and ksh93 — and is read elsewhere in the matcher. `v=abX;
   ${v##+([[:alpha:]])}` under `shopt -s extglob` is empty in bash 5.3,

@@ -288,6 +288,24 @@ func TestASubscriptFlagThisImplementationDoesNotCarryIsRefusedByName(t *testing.
 	}
 }
 
+// An *array's* search matches the whole element, which is the line the scalar
+// search sits on the other side of: the two share one matcher, and the string
+// search is the only one that asks whether the operand matches at the start.
+//
+// Measured: `${a[(r)be]}` finds nothing where `${a[(r)be*]}` finds `beta`, so
+// a prefix that is not the whole element is a miss and the index says so.
+// Without this row a matcher that answered *both* searches with a prefix
+// match passes everything else in this file.
+func TestAnArraySearchMatchesTheWholeElement(t *testing.T) {
+	out, status := runSub(t, subArray+`printf "[%s]" "${a[(r)be]}" "${a[(i)be]}" "${a[(I)be]}" "${a[(r)alph]}"`)
+	if want := "[][6][0][]"; out != want {
+		t.Errorf("= %q, want %q", out, want)
+	}
+	if status != 0 {
+		t.Errorf("status %d, want 0", status)
+	}
+}
+
 // A search over a plain string counts through its *characters*, which is the
 // third target the construct is written on and the one a plugin manager
 // reaches three times before it has loaded anything.

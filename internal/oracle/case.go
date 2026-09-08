@@ -4115,6 +4115,11 @@ echo "st=$?"`,
 		Why:     "the four selecting flags in one row, with their two no-match answers: `r` and `R` are the first and last matching element, `i` and `I` their indices, and a search that matches nothing is one *past* the last element for `i` and one *before* the first for `I` — which is what makes `a[(i)new]=v` an append. A row that pinned only the hits would pass with the misses answering an empty string",
 	},
 	{
+		ID: "array/a-subscript-search-matches-the-whole-element", Category: "expansion",
+		Snippet: `a=(alpha beta gamma); printf "[%s]" "${a[(r)be]}" "${a[(i)be]}" "${a[(r)be*]}"; echo`,
+		Why:     "where the ordered array's search draws its line, which is the *other* side of the line the search over a plain string draws: an element matches when the operand matches the whole of it, so a prefix is a miss and the index is one past the last element. The third field is the same prefix with a `*` on it, which does find the element — so the row separates \"the operand is a pattern\" from \"the match is anchored at both ends\", and an implementation that answered both searches with a prefix match would pass every other row in this file",
+	},
+	{
 		ID: "array/a-subscript-flag-group-exact-matching", Category: "expansion",
 		Snippet: `a=(alpha beta gamma); printf "[%s]" "${a[(r)be*]}" "${a[(re)be*]}" "${a[(re)beta]}"; echo`,
 		Why:     "`(e)` is what turns the operand from a pattern into a string, and `(re)` — the combination every real script writes — is \"the first element *equal* to this\". The three together are the whole difference: without the `e` the pattern matches, with it the same text matches nothing, and the literal spelling still finds its element",

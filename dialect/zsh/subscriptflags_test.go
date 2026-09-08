@@ -26,6 +26,10 @@ func TestASubscriptFlagGroupIsThisDialects(t *testing.T) {
 		{`printf "[%s]" "${a[(I)zz]}"`, `[0]`},
 		{`printf "[%s]" "${a[(re)be*]}"`, `[]`},
 		{`printf "[%s]" "${a[(re)beta]}"`, `[beta]`},
+		// The whole element, not a prefix of it — the line the search over a
+		// string sits on the other side of, since that one matches at the
+		// start of what it is handed.
+		{`printf "[%s]" "${a[(r)be]}" "${a[(i)be]}"`, `[][6]`},
 		{`printf "[%s]" "${a[(rn:2:)*a]}"`, `[beta]`},
 		{`printf "[%s]" "${a[(rb:3:)*a]}"`, `[gamma]`},
 		// The brace-less spelling, which is a lexer question in this dialect

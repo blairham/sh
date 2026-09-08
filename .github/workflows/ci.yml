@@ -152,7 +152,7 @@ jobs:
         # what main was. Either can be absent, and the guard falls back to a
         # merge base rather than skipping.
         BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-      run: go run ./cmd/corpusguard -base "$BASE"
+      run: go run ./internal/cmd/corpusguard -base "$BASE"
 
   oracle:
     name: Oracle (report only)
@@ -191,4 +191,4 @@ jobs:
       # What is left here is the one question only a panel can answer, and
       # only a panel that matches the record can answer it: `make check`
       # locally.
-      run: go run ./cmd/oracle -check || true
+      run: go run ./internal/cmd/oracle -check || true

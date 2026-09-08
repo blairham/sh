@@ -13,7 +13,7 @@
 // committed count or a committed list.
 //
 //	corpus-guard                 # compare against the merge base with main
-//	go run ./cmd/corpusguard -base <sha>
+//	go run ./internal/cmd/corpusguard -base <sha>
 package main
 
 import (

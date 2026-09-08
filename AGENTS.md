@@ -75,8 +75,12 @@ refuses what every real shell accepts is a core nobody can write against.
     cmd/sh            the substrate's driver, with -dialect
     cmd/bash cmd/zsh  dialect binaries, as proof the library goal holds
     cmd/dash cmd/ksh  …
-    cmd/oracle        records what real shells do
-    cmd/smoke         drives a session through a terminal, per-feature
+    internal/cmd/     the instruments: not shipped, and under internal/
+                      so nothing outside the module can import them
+      oracle          records what real shells do
+      smoke           drives a session through a terminal, per-feature
+      wild            parses the shell scripts installed on this machine
+      corpusguard     fails when the corpus has lost a case
 
 **The core does not know its successors.** `syntax` and `interp` define the
 questions — a grammar flag, a semantics axis, a diagnostic value — and each
@@ -578,7 +582,7 @@ pipeline, a mistyped variable name, a background job, `^Z` and `fg`, and
 shell whose rc file is never
 read fails four rows for one reason and a suite that stops at the first of
 them reports a shell about which nothing else is known. `internal/smoke`
-holds it and `cmd/smoke` prints the table.
+holds it and `internal/cmd/smoke` prints the table.
 
 It exists because the interactive surface has no other test. The corpus
 invokes everything with `-c`, `make wild` reads scripts and `make wild-run`

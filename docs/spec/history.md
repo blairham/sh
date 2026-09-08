@@ -17,7 +17,7 @@ throughout, because mixing them would be dishonest:
 
 Measured by hand on 2026-09-05, macOS 26 on arm64: bash 5.3.15,
 bash 3.2.57 (`/bin/bash`), zsh 5.9.2, ksh93u+ 2012-08-01 (`/bin/ksh`)
-and dash. By hand rather than through `cmd/oracle`, because every
+and dash. By hand rather than through `internal/cmd/oracle`, because every
 observation here needs an *interactive* shell with a `HISTFILE` of its
 own and the corpus harness runs snippets non-interactively — the same
 reason there are no corpus rows for it.

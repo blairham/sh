@@ -96,42 +96,42 @@ uninstall: ## Remove the shells `make install` put in $(SHELLDIR)
 	@echo "if this was your login shell, change it back first — chsh -s /bin/zsh — and drop the line from /etc/shells"
 
 corpus-guard: ## Fail if the corpus has lost a case since the merge base with main
-	@go run ./cmd/corpusguard
+	@go run ./internal/cmd/corpusguard
 
 oracle: ## Regenerate docs/spec/measurements.md and the golden record from a live panel run
-	go run ./cmd/oracle
+	go run ./internal/cmd/oracle
 
 oracle-check: ## Fail if the reference shells no longer behave as recorded
-	go run ./cmd/oracle -check
+	go run ./internal/cmd/oracle -check
 
 conformance: ## Grade the core driver against bash over the whole corpus
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/sh-under-test ./cmd/sh
-	@go run ./cmd/oracle -bin $(BINDIR)/sh-under-test -binargs "-dialect bash" $(ARGS)
+	@go run ./internal/cmd/oracle -bin $(BINDIR)/sh-under-test -binargs "-dialect bash" $(ARGS)
 
 conformance-gated: ## Run the corpus twice — plain and under a sandbox policy — and report what the policy changed
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/sh-under-test ./cmd/sh
-	@go run ./cmd/oracle -bin $(BINDIR)/sh-under-test -binargs "-dialect bash" -gated $(ARGS)
+	@go run ./internal/cmd/oracle -bin $(BINDIR)/sh-under-test -binargs "-dialect bash" -gated $(ARGS)
 
 wild: ## Parse the shell scripts installed on this machine and report what fails (SH_WILD_DIRS adds framework trees)
-	@go run ./cmd/wild $(ARGS)
+	@go run ./internal/cmd/wild $(ARGS)
 
 wild-run: ## Also RUN each script that parses, under both shells, and report where they disagree
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/wild-bash ./cmd/bash
-	@go run ./cmd/wild -run $(BINDIR)/wild-bash $(ARGS)
+	@go run ./internal/cmd/wild -run $(BINDIR)/wild-bash $(ARGS)
 
 wild-run-contained: ## wild-run with the shell under a policy: it may write only in the directory each run is given
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/wild-sh ./cmd/sh
-	@go run ./cmd/wild -run $(BINDIR)/wild-sh -runargs "-dialect bash" -contained $(ARGS)
+	@go run ./internal/cmd/wild -run $(BINDIR)/wild-sh -runargs "-dialect bash" -contained $(ARGS)
 
 smoke: ## Drive a realistic interactive session through a pty and report, per feature, what works
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/smoke-bash ./cmd/bash
 	@go build -o $(BINDIR)/smoke-zsh ./cmd/zsh
-	@go run ./cmd/smoke -bash $(BINDIR)/smoke-bash -zsh $(BINDIR)/smoke-zsh $(ARGS)
+	@go run ./internal/cmd/smoke -bash $(BINDIR)/smoke-bash -zsh $(BINDIR)/smoke-zsh $(ARGS)
 
 conformance-dialects: ## Grade each dialect binary against the shell it claims to be
 	@mkdir -p $(BINDIR)
@@ -139,10 +139,10 @@ conformance-dialects: ## Grade each dialect binary against the shell it claims t
 	@go build -o $(BINDIR)/our-zsh ./cmd/zsh
 	@go build -o $(BINDIR)/our-dash ./cmd/dash
 	@go build -o $(BINDIR)/our-ksh ./cmd/ksh
-	@go run ./cmd/oracle -bin $(BINDIR)/our-bash -against bash $(ARGS)
-	@go run ./cmd/oracle -bin $(BINDIR)/our-zsh -against zsh $(ARGS)
-	@go run ./cmd/oracle -bin $(BINDIR)/our-dash -against dash $(ARGS)
-	@go run ./cmd/oracle -bin $(BINDIR)/our-ksh -against ksh93 $(ARGS)
+	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-bash -against bash $(ARGS)
+	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-zsh -against zsh $(ARGS)
+	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-dash -against dash $(ARGS)
+	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-ksh -against ksh93 $(ARGS)
 
 startup: ## Time process start to a prompt, and the -c path, against the real shells
 	@go test ./internal/startupcost/ -run XXX -bench . -benchtime 40x -count 3 $(ARGS)

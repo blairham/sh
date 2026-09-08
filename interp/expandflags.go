@@ -22,7 +22,7 @@ import (
 // else the grammar accepted is refused *by name* when the expansion is
 // reached, because the only thing worse than refusing a flag is answering it
 // wrong with status 0.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwWA~"
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwWA~Z"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -304,6 +304,32 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		words = []string{joinLiveSep(words, r.flagJoinSep(e), escapeSep)}
 		isList = false
 	}
+	// The shell-split flag, `${(Z:opts:)v}`, which reads the value as a
+	// command line. It stands here rather than beside the other splits at
+	// rule 11, and the place is measured on zsh 5.9.2 — the one shell that
+	// has the flag — from both sides:
+	//
+	//	v="a|b";  "${(Z+n+q)v}"   a\|b       one field: the `q` ran first
+	//	v="'a|b'"; "${(Z+n+Q)v}"  a | b     three: the `Q` ran first
+	//	v="b  a"; "${(oZ+n+)v}"   a b       sorted: the ordering ran after
+	//
+	// The first two are the discriminating ones. A split that ran at rule 11
+	// would hand `q` three words and give back three fields, and would hand
+	// `Q` one quoted word and give back one — both the opposite of what the
+	// shell answers. The third pins the other end: the words this makes are
+	// what `(o)` sorts, so it cannot go last either.
+	//
+	// `(f)` and `(s)` compose with it rather than racing it, measured the
+	// same day: `${(fZ+n+)v}` on `a:b\nc` is `a:b` and `c`, each line then
+	// read as a command line of its own.
+	if opts, ok := shellSplitOpts(e); ok {
+		split := make([]string, 0, len(words))
+		for _, w := range words {
+			split = append(split, r.splitShellWords(w, opts)...)
+		}
+		words, isList = split, true
+	}
+
 	// The ordering step is last of all, which is *later* than the rule
 	// numbers suggest and later than this file used to put it. Three
 	// measurements fix it there rather than one:
@@ -550,7 +576,7 @@ func (r *Runner) splitFlagged(w string, e *syntax.ParamExpr) []string {
 // a plausible count at status 0, which is the failure this codebase minds
 // most (#1097).
 func splitFlagEdges(e *syntax.ParamExpr, quoted bool) bool {
-	return quoted && strings.ContainsAny(e.Flags, "fs")
+	return quoted && (strings.ContainsAny(e.Flags, "fs") || shellSplitActive(e))
 }
 
 // flagBase is the value the pipeline starts from: the words, whether the

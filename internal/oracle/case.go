@@ -6712,6 +6712,31 @@ echo "st=$?"`,
 		Why:     "(f) is the line-splitting flag — the read-a-command's-output-into-an-array idiom, and the one split that does not consult IFS",
 	},
 	{
+		ID: "param/the-shell-split-flag-splits-a-value-as-a-line", Category: "parameter expansion",
+		Snippet: `v="a 'b c' d  e"; printf "[%s]" ${(Z+n+)v}; echo`,
+		Why:     "`(Z)` splits a value the way the shell splits a command line, and the quoting is kept in the word rather than removed — `'b c'` arrives with its quotes on, which is what separates this from every other split flag and from IFS field splitting. The run of blanks is in the row because a splitter that used a separator would make an empty field there. zsh alone has the construct; the other five call the expansion a bad substitution or refuse it while reading",
+	},
+	{
+		ID: "param/the-shell-split-flag-reads-its-option-letters", Category: "parameter expansion",
+		Snippet: `v=$'a # hi\nb'; printf "[%s]" ${(Z+n+)v}; printf "<%s>" ${(Z+cn+)v}; printf "{%s}" ${(Z+Cn+)v}; echo`,
+		Why:     "the three option letters on one value that separates all of them: with neither comment letter a `#` is an ordinary character and `# hi` is two words, `c` keeps the comment as one word, and `C` drops it. Written as one snippet because the letters are only meaningful against each other — a reading that ignored the argument entirely would print the same thing three times",
+	},
+	{
+		ID: "param/the-shell-split-flag-turns-a-newline-into-a-semicolon", Category: "parameter expansion",
+		Snippet: `v=$'a\n\nb'; printf "[%s]" ${(Z+C+)v}; printf "<%s>" ${(Z+Cn+)v}; echo`,
+		Why:     "what the `n` option is for, and what happens without it: a newline is a word of its own and the word is `;` — the terminator's spelling and not the newline's — one per newline, so a blank line is a word too. The `n` half is on the same line because dropping the newlines and turning them into semicolons are the two plausible readings and only the pair says which is which",
+	},
+	{
+		ID: "param/the-shell-split-flag-is-off-with-no-options", Category: "parameter expansion",
+		Snippet: `v="a  b"; printf "[%s]" "${(Z::)v}"; printf "<%s>" "${(Z+n+)v}"; echo`,
+		Why:     "an empty option list turns the flag off rather than splitting with no options set, which is the opposite of the reading the flag's name invites: the value comes back with both its blanks where the same value with one option is two words. The row exists because `${(Z::)v}` is the shape a script writes when it means `(z)`, and answering it as a split would be a plausible wrong answer at status 0",
+	},
+	{
+		ID: "param/the-shell-split-flag-refuses-an-option-by-position", Category: "parameter expansion",
+		Snippet: `v="a b"; printf "[%s]" ${(Z:x:)v}; echo "st=$?"`,
+		Why:     "an option letter the flag does not have is an error *in the flags*, at the letter's own position, rather than the by-name refusal an unbuilt flag letter gets — two different complaints, and a reader has to be able to tell which one they got. Only `c`, `C` and `n` exist, established by trying the whole alphabet one letter at a time",
+	},
+	{
 		ID: "param/expansion-flags-at-keeps-array-fields", Category: "parameter expansion",
 		Snippet: `a=(x "y z" ""); printf "<%s>" "${(@)a}"; printf "{%s}" "${a}"; echo`,
 		Why:     "in double quotes an array is joined on the first character of IFS unless (@) is present, which keeps one field per element including the empty one — the flag spelling of what \"${a[@]}\" says with a subscript",

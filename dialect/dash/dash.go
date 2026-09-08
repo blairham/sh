@@ -356,6 +356,7 @@ func Semantics() interp.Semantics {
 	s.ReportsAnyKilledPipelineElement = interp.Yes
 	s.ChildInterruptEndsTheScript = interp.No
 	s.CdRefusesUnknownOption = interp.Yes
+	s.CdHasQuietOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
 	s.BadSetOptionNameFatal = interp.Yes
 	// dash has no `[[ ]]` to ask it in; answered so that a shell built from

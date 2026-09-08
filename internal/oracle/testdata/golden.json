@@ -15295,6 +15295,182 @@
         "TimedOut": false
       }
     },
+    "cd/a-directory-whose-name-begins-with-a-dash": {
+      "bash": {
+        "Stdout": "st=0~moved~st=2~stayed",
+        "Stderr": "\u003cshell\u003e: line 6: cd: -d: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~moved~st=2~stayed",
+        "Stderr": "\u003cshell\u003e: line 6: cd: -d: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~moved~st=1~stayed",
+        "Stderr": "\u003cshell\u003e: line 5: cd: -d: invalid option~cd: usage: cd [-L|-P] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0~moved~st=2~stayed",
+        "Stderr": "\u003cshell\u003e: 6: cd: Illegal option -d",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~moved~st=2~stayed",
+        "Stderr": "\u003cshell\u003e[6]: cd: -d: unknown option~\u003cshell\u003e[6]: cd: -a: unknown option~\u003cshell\u003e[6]: cd: -s: unknown option~\u003cshell\u003e[6]: cd: -h: unknown option~\u003cshell\u003e[6]: cd: -d: unknown option~\u003cshell\u003e[6]: cd: -i: unknown option~\u003cshell\u003e[6]: cd: -r: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~moved~st=0~moved",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/a-letter-no-shell-in-the-panel-has": {
+      "bash": {
+        "Stdout": "st=2~stayed",
+        "Stderr": "\u003cshell\u003e: line 2: cd: -Z: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~stayed",
+        "Stderr": "\u003cshell\u003e: line 2: cd: -Z: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~stayed",
+        "Stderr": "\u003cshell\u003e: line 1: cd: -Z: invalid option~cd: usage: cd [-L|-P] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~stayed",
+        "Stderr": "\u003cshell\u003e: 2: cd: Illegal option -Z",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2~stayed",
+        "Stderr": "\u003cshell\u003e[2]: cd: -Z: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~stayed",
+        "Stderr": "\u003cshell\u003e:cd:2: string not in pwd: -Z",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/a-quiet-option-bundled-with-a-path-option": {
+      "bash": {
+        "Stdout": "st=2~stayed",
+        "Stderr": "\u003cshell\u003e: line 2: cd: -q: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~stayed",
+        "Stderr": "\u003cshell\u003e: line 2: cd: -q: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~stayed",
+        "Stderr": "\u003cshell\u003e: line 1: cd: -q: invalid option~cd: usage: cd [-L|-P] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~stayed",
+        "Stderr": "\u003cshell\u003e: 2: cd: Illegal option -q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2~stayed",
+        "Stderr": "\u003cshell\u003e[2]: cd: -q: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~resolved",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/a-quiet-option-only-one-shell-has": {
+      "bash": {
+        "Stdout": "st=2~stayed",
+        "Stderr": "\u003cshell\u003e: line 2: cd: -q: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~stayed",
+        "Stderr": "\u003cshell\u003e: line 2: cd: -q: invalid option~cd: usage: cd [-L|[-P [-e]]] [-@] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~stayed",
+        "Stderr": "\u003cshell\u003e: line 1: cd: -q: invalid option~cd: usage: cd [-L|-P] [dir]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~stayed",
+        "Stderr": "\u003cshell\u003e: 2: cd: Illegal option -q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2~stayed",
+        "Stderr": "\u003cshell\u003e[2]: cd: -q: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~moved",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cd/cdpath-may-announce-the-move": {
       "bash": {
         "Stdout": "announced",

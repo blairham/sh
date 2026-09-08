@@ -683,6 +683,7 @@ func Semantics() interp.Semantics {
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.No
 	s.CdRefusesUnknownOption = interp.Yes
+	s.CdHasQuietOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
 	s.BadSetOptionNameFatal = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.No

@@ -113,6 +113,7 @@ func TestSemantics(t *testing.T) {
 		{"ReportsAnyKilledPipelineElement", s.ReportsAnyKilledPipelineElement, interp.No},
 		{"ChildInterruptEndsTheScript", s.ChildInterruptEndsTheScript, interp.No},
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
+		{"CdHasQuietOption", s.CdHasQuietOption, interp.No},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.No},
 		// A `[[ -o ]]` name this shell does not have is a quiet false, which

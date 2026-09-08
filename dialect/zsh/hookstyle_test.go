@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -56,6 +57,35 @@ func TestTheHooksThisShellDoesNotFireAreNamed(t *testing.T) {
 			t.Errorf("%s is named as unfired and is not one of this shell's hooks", name)
 		}
 	}
+}
+
+// The tripwire for `cd -q`, which is the *whole* of what that letter does.
+//
+// Measured 2026-09-08 in zsh 5.9.2: a `chpwd` function and a name in
+// `chpwd_functions` both ran on a plain `cd` and neither ran on `cd -q`, and
+// nothing else changed — `cd -q -` still printed the directory at a prompt
+// and a CDPATH move stayed silent either way. So `-q` is hook suppression and
+// nothing besides.
+//
+// This shell fires no `chpwd`, which is why interp's cdOptions can grant the
+// letter and be done: what `-q` asks for is already true here. That reasoning
+// is only sound while the two halves stay in step, and this is what keeps
+// them there. If `chpwd` leaves this list — because it gained a firing site
+// inside `cd` — the suppression stops being free and cdOptions has to carry
+// the flag to that site. Failing here rather than silently is the difference
+// between a letter that is honored and one that is swallowed. #1558.
+func TestChpwdIsUnfiredWhichIsWhatMakesCdQuietHonest(t *testing.T) {
+	if zsh.Semantics().CdHasQuietOption != interp.Yes {
+		t.Fatalf("this shell has `cd -q`; the preset says %v", zsh.Semantics().CdHasQuietOption)
+	}
+	for _, name := range zsh.HookStyle().Unfired {
+		if name == "chpwd" {
+			return
+		}
+	}
+	t.Error("chpwd now has a firing site, so `cd -q` has something to suppress: " +
+		"interp/builtin.go's cdOptions grants the letter and does nothing with it, " +
+		"and that is only correct while this is true. Carry the flag to the new site.")
 }
 
 // The command hook's third argument is the line about to run, laid out the way

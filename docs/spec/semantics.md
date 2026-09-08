@@ -6761,7 +6761,37 @@ directory. True in bash, dash and ksh93; zsh looks for somewhere called
 leading dash word is the first of them there.
 
 Only about an *unknown* letter. `-L` and `-P` are options in all four
-and are not asked about.
+and are not asked about, and `-q` is asked about separately below because
+it is a letter one shell genuinely *has*.
+
+**`CdHasQuietOption`** — bash no · dash no · ksh93 no · zsh yes
+
+Gives `cd` the `-q` of zsh, the one option letter beyond `-L` and `-P`
+that any of the panel has.
+
+What the letter means there is hook suppression, and nothing else.
+Measured 2026-09-08: a `chpwd` function and a name in `chpwd_functions`
+both ran on a plain `cd` and neither ran on `cd -q`; `cd -q -` still
+wrote the directory at an interactive prompt, and a CDPATH move stayed
+silent with the letter and without it. So a shell that fires no `chpwd`
+has already done everything `-q` asks for, and this shell is such a
+shell — `chpwd` has no firing site and repl's `HookStyle.Unfired` names
+it and refuses it by name once per session. The letter is honored here
+rather than swallowed, and it is carried because it is a *letter*:
+without it `cd -q /tmp` went looking for a directory called `-q`, which
+is the shape a plugin manager that wraps every move in `cd -q` cannot
+survive (#1558).
+
+Asked only when a `q` is actually seen, so the five columns without the
+letter never reach the question and answer the word the way they answer
+any other letter they do not have — `CdRefusesUnknownOption` above is the
+next question when this one says no.
+
+zsh has a fourth letter, `-s`, which refuses a path with a symlink
+component: `cd -s link` and `cd -s link/deep` are both `not a directory`
+there while `cd -s real` moves. It is not carried and reaches the
+unknown-letter question, so `cd -s dir` is read as a directory called
+`-s` in our zsh where the real one moves. Filed rather than guessed at.
 
 **`CdWithoutHomeIsAnError`** — bash yes · dash no · ksh93 yes · zsh no
 

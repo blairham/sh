@@ -201,6 +201,16 @@ type ParamExpr struct {
 	// no `s` at all.
 	SplitSep string
 	JoinSep  string
+	// ShellSplitOpts is the argument of the `Z` flag: the option letters
+	// written between its delimiters, `${(Z+Cn+)v}` carrying "Cn".
+	//
+	// Empty is meaningful and is not the same as no `Z` at all. Measured on
+	// zsh 5.9.2, the one shell with the flag: `${(Z::)v}` on `a  b` is the
+	// value unchanged, double space and all, where `${(z)v}` is `a b` — so
+	// an empty option list turns the whole flag off rather than splitting
+	// with no options set. Flags carrying a `Z` is what says the flag was
+	// written; this is what says whether it does anything.
+	ShellSplitOpts string
 	// FlagsErrPos is the 1-based position, counted from the `$`, of the
 	// first character the flag group could not read, and 0 when it read
 	// cleanly. The error is the interpreter's to report — reached in a
@@ -599,12 +609,36 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 				e.SplitSep = arg
 			case 'j':
 				e.JoinSep = arg
+			case 'Z':
+				if k := strings.IndexFunc(arg, notAShellSplitOpt); k >= 0 {
+					// An option letter the flag does not have is an error
+					// *in the flags*, at the letter, rather than a refusal
+					// when the expansion is reached — which is the opposite
+					// of how an unknown flag letter is handled and is
+					// measured that way: `${(Z:x:)v}` is `error in flags
+					// near position 6`, the position of the `x`, on the one
+					// shell that has the flag.
+					e.FlagsErrPos = i + 1 + k + 3
+					return ""
+				}
+				e.ShellSplitOpts = arg
 			}
 			i += j + 2
 		}
 	}
 	e.FlagsErrPos = len(src) + 2
 	return ""
+}
+
+// paramShellSplitOpts are the option letters the `Z` flag's argument may
+// carry, established by trying the whole alphabet one letter at a time
+// against the shell that has the flag: `c`, `C` and `n`, and nothing else —
+// every other letter, digit and punctuation mark is an error in the flags at
+// its own position.
+const paramShellSplitOpts = "cCn"
+
+func notAShellSplitOpt(r rune) bool {
+	return !strings.ContainsRune(paramShellSplitOpts, r)
 }
 
 // matchingFlagDelimiter is the character that closes a flag argument: the

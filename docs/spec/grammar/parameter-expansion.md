@@ -873,6 +873,7 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(w)` | with `${#…}`: words | `v="a b  c"; ${(w)#v}` | `3` |
 | `(W)` | with `${#…}`: words, empties too | `v="a b  c"; ${(W)#v}` | `4` |
 | `(p)` | read the next flags' arguments with escapes | `a=(x y); ${(pj:\n:)a}` | `x`, newline, `y` |
+| `(Z:opts:)` | split a value as a command line | `v="a b  c"; ${(Z+n+)v}` | `a`, `b`, `c` |
 
 Details, each measured:
 
@@ -1275,13 +1276,138 @@ honest report: the padding is what is absent, not the escapes.
 whole flag alphabet, and the interpreter refuses a letter it does not
 carry when the expansion is reached — and that is the whole of what they
 share. `(p)` reads *arguments*; `(z)` splits a *value* the way the shell
-reads a line, and needs the lexical decision recorded under "What this
-implementation refuses" below. Building one does not move the other.
+reads a line. Building one does not move the other.
+
+### `(Z:opts:)` — split a value the way the shell splits a line
+
+The capital is the one with an argument, and the argument is **option
+letters** rather than a separator: `${(Z+Cn+)v}`, which is what a plugin
+manager's message formatter writes for every diagnostic it prints. The
+delimiters are part of the syntax and are the same set the `s` and `j`
+separators take, matched pairs included — `(Z:n:)`, `(Z+n+)`, `(Z[n])`,
+`(Z<n>)` all read the same option.
+
+**Three option letters exist**, confirmed by trying the whole alphabet
+against the shell one letter at a time. Every other character is an error
+*in the flags*, at the letter's own position — `${(Z:x:)v}` is `error in
+flags near position 6` — which is a different complaint from the by-name
+refusal an unbuilt flag letter gets, and deliberately so: one says the
+construct is not spelled that way and the other says this implementation
+has not built it.
+
+| letters | `a # hi` + newline + `b` splits as |
+| --- | --- |
+| none | `a` `#` `hi` `;` `b` |
+| `c` | `a` `# hi` `;` `b` |
+| `C` | `a` `;` `b` |
+| `n` | `a` `#` `hi` `b` |
+| `Cn` | `a` `b` |
+
+- **`n`** makes an unquoted newline ordinary whitespace. Without it each
+  newline is a word of its own and the word is `;` — the terminator's
+  spelling, not the newline's — one per newline, at either edge:
+  `$'a\n\n\nb'` is five words.
+- **`c`** keeps a comment as one word, `#` and all, running to the end of
+  the line and not taking the newline with it.
+- **`C`** drops the comment entirely.
+- **With neither, there are no comments at all.** `a # hi` is three words
+  and `a #hi` is two — the same answer an interactive shell without
+  `interactive_comments` gives, which is what "split like the shell" means
+  for a *value* somebody typed. This is the lexical decision the previous
+  note here left standing; it is taken now, as `syntax.CommentMode`, a
+  per-call mode on the lexer rather than a `Dialect` value, because it is
+  a property of *this read* and not of the language.
+- **`c` wins where both are written**, and it is not the last letter that
+  decides: `${(Z+cC+)v}` and `${(Z+Cc+)v}` on `a # hi` are both `a` and
+  `# hi`.
+- **Inside a substitution a kept comment and a skipped one behave alike**,
+  and both swallow the closing parenthesis: `v='a $(b # c) d'` is two
+  words under `c` and under `C`, the second being `$(b # c) d` with the
+  `$(` never closed, and three words with neither letter.
+
+**An empty option list turns the flag off**, which is the opposite of the
+reading "the same split, with options" invites: `${(Z::)v}` on `a  b` is
+the value unchanged, both blanks and all, where `${(z)v}` is `a b`. So the
+letter being present is not the question — the argument being non-empty
+is.
+
+**The words are the source they were written as**, quotes included:
+`a 'b c' d` is `a`, `'b c'`, `d`, and `a b\ c d` keeps the backslash.
+Operators are words of their own, substitutions are one word each and are
+never run, a here-document's body is never read (`a <<EOF` and the lines
+under it are six ordinary words), and input that ends inside a quote or a
+substitution is no error at all — the rest of the text is the last word.
+A value that is nothing but blanks, or nothing but a comment that `C`
+dropped, is one empty field in quotes and none without them, which is the
+edge rule `(f)` and `(s)` already follow.
+
+**Where the split sits** is measured from both sides and it is *not* with
+the other splits at rule 11:
+
+| probe | zsh 5.9.2 | if it split at rule 11 |
+| --- | --- | --- |
+| `v="a\|b"; "${(Z+n+q)v}"` | one field, `a\|b` | three fields |
+| `v="'a\|b'"; "${(Z+n+Q)v}"` | three fields, `a` `\|` `b` | one field |
+| `v="b  a"; "${(oZ+n+)v}"` | `a b` | — |
+
+So it runs after the quoting flags and before the ordering step. `(f)` and
+`(s)` compose with it rather than racing it — each field they make is then
+read as a command line of its own — and a length is still taken before it,
+so `${(Z+n+)#v}` on `a b  c` is 6 and not 3.
+
+**An array is not joined before it**, which is where it parts company with
+every other split flag. Measured with `a=('"x' 'y"')`:
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `${(Z+n+)a}` | `"x` `y"` — each element read on its own |
+| `"${(Z+n+)a}"` | `"x y"` — the join quoting itself asks for |
+| `"${(@Z+n+)a}"` | `"x` `y"` — that join declined again |
+| `${(s.:.)b}` on `("p:q" "r:s")` | `p` `q r` `s` — joined first |
+
+So only the *quoted* join reaches it, and the forced join a split normally
+asks for does not.
+
+**The empty field belongs to the expansion, not to any word in it.** An
+element with no shell words in it contributes none — `a=('' x)` under
+`"${(@Z+n+)a}"` is the single field `x` — while a result with nothing in it
+anywhere is one empty field: `a=()` under the same spelling is 1, where
+`"${(@)a}"` on that array is 0.
+
+**The split is `syntax.Lexer` and nothing else.** "Split like the shell
+would" already has an answer in this tree, and a second scanner beside it
+would agree on `a b` and part company over `a"b c"d`, `$(f x)`, `a#b` and
+every other place a word boundary is not a blank. `syntax.ShellWords` walks
+the token stream and keeps the source each token covers — the source rather
+than `Token.Text`, because `TokArithCmd` carries the expression with its
+parentheses already stripped.
+
+One boundary is spelled back rather than reported: a **one-digit** file
+descriptor joins the redirection operator it was written against, so
+`2>&1` is `2>&` and `1`. Measured, and one digit only — `22>&1` is `22`,
+`>&`, `1`, and `{v}> f` is `{v}`, `>`, `f`. Two of those three are already
+answered before the rule: an IO number is only one when it is *adjacent*,
+so a spaced digit never reaches it, and a dialect without multi-digit
+descriptors reads `22` as an ordinary word. The width test is carrying the
+named descriptor and a multi-digit one wherever a dialect has them.
+
+**One measured divergence remains.** A `(` that *starts* a token belongs to
+the word when it stands where an argument may — `a (b c) d` is three words
+in zsh and six here — and command position is the whole of the difference:
+`(b c) d` and `a; (b c) d` split the parenthesis off in that shell too. The
+lexer already has the flag for it, `inArgument`, and the *parser* is what
+sets it, because deciding it needs to know that `a="x"` is an assignment
+and that `then` is a keyword — neither of which a token stream says. A
+state machine here would answer `a (b c) d` and `a="x" (b c)` right and
+wrong respectively, trading one wrong answer for another, so the question
+is left where the knowledge is rather than copied. Filed as #1514 rather
+than hidden; nothing in the flag's own surface reaches it.
 
 ### What this implementation refuses
 
 Flags zsh has and this slice does not — `(e)` (expand the result again),
-`(z)` (split by shell parsing), `(t)`, `(D)`, padding, and the rest of the
+`(z)` (split by shell parsing with no options — the capital `(Z:opts:)` is
+built), `(t)`, `(D)`, padding, and the rest of the
 alphabet, plus the `q-`/`q+` variants and
 `(qqq…)` beyond four — are refused at run time naming the flag, with the
 same fatal shape as an unrecognized one. Refusing loudly is the honest
@@ -1309,15 +1435,13 @@ measurements are here so the next change starts from them:
   error at all — `echo "unterminated` is two words, the second one with
   its opening quote still on it.
 
-  **`(z)` needs one lexical decision this slice has not taken**: a `#`
-  is not a comment there. `v="a # b"` is three words, and that does not
-  change with `interactive_comments` either way, so the split runs a
-  lexer in a mode where the character is ordinary. Everything else it
-  needs, `syntax.Lexer` already answers — including the unterminated
-  quote, whose token arrives with the right text before the error does.
-  Whether "a `#` begins a comment" becomes a `syntax.Dialect` value, and
-  whether a runtime option rather than a dialect is what varies it, is
-  the question standing in front of the flag.
+  The lexical decision this needed — a `#` is not a comment there — has
+  been taken for the capital `(Z:opts:)` and is `syntax.CommentMode`, a
+  per-call mode on the lexer rather than a `syntax.Dialect` value: it is
+  a property of the read and not of the language. `(z)` is the same
+  split with no options, and what still stands in front of it is only
+  that nothing has needed it — the flag a real configuration writes is
+  the capital.
 
 ### `(~)` is a modifier too, and it is not `${~name}`
 
@@ -1418,8 +1542,10 @@ The group is read only when the dialect's `ParamExpansionFlags` is on;
 elsewhere `${(…)…}` follows the bad-substitution split above — deferred to
 run time via the `Bad` node everywhere but the parse-time dialect. The
 parsed node carries the flag letters in order plus the two separators
-(`SplitSep`, `JoinSep`); the printer writes the span back raw, so the
-construct round-trips.
+(`SplitSep`, `JoinSep`) and the `Z` flag's option letters
+(`ShellSplitOpts`); the printer writes the span back raw, so the
+construct round-trips. An empty `ShellSplitOpts` with a `Z` in `Flags` is
+meaningful and means the flag does nothing, which is measured.
 
 The separators are kept **as written**, escapes and all, and that is what
 lets `(p)` be answered entirely in the interpreter: the letter order in

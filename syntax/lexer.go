@@ -143,6 +143,11 @@ type Lexer struct {
 	pending       []*Redirect
 	pendingQuoted []bool
 
+	// comments says what an unquoted `#` where a word could begin means.
+	// The zero value is the shell's ordinary rule and is what every parse
+	// uses; the other two exist for ShellWords. See CommentMode.
+	comments CommentMode
+
 	// heredocEnd is where the last here-document body read here finished:
 	// the line that closed it, which is the delimiter's own line, or the
 	// last line there was where the input ended before the delimiter did.
@@ -357,6 +362,10 @@ func (l *Lexer) Next() Token {
 		return Token{Kind: TokEOF, Pos: start, End: start}
 	}
 
+	if l.comments == CommentsKept && l.peek() == '#' {
+		return l.scanCommentWord(start)
+	}
+
 	if l.peek() == '\n' && !l.newlineIsText() {
 		l.advance()
 		// The newline is where any pending here-document bodies begin.
@@ -527,6 +536,13 @@ func (l *Lexer) skipBlanksAndComments() {
 		case c == '#':
 			// Only where a word could begin, which is the case here: mid-word
 			// this function is not running. `echo a#b` prints a#b.
+			if l.comments != CommentsSkipped {
+				// The `#` is the caller's to deal with: either it opens no
+				// comment at all and starts an ordinary word, or Next
+				// hands the comment back as a token. Either way nothing is
+				// consumed here.
+				return
+			}
 			l.skipComment()
 		default:
 			return
@@ -550,6 +566,57 @@ func (l *Lexer) skipBlanksAndComments() {
 func (l *Lexer) skipComment() {
 	for !l.eof() && l.peek() != '\n' {
 		l.advance()
+	}
+}
+
+// CommentMode says what an unquoted `#` standing where a word could begin
+// means to this lexer.
+//
+// The zero value is the shell's own rule and is what every parse in this
+// package uses. The other two exist for [ShellWords], which re-reads a
+// *value* as a command line rather than reading a program, and there the
+// question has three answers rather than one — see the note on that function.
+// A token stream produced under either of them is not a program: the parser
+// is never handed one, and neither mode is reachable except by asking.
+type CommentMode uint8
+
+const (
+	// CommentsSkipped is the ordinary rule: a `#` opens a comment, the
+	// comment runs to the end of the line, and none of it is a token.
+	CommentsSkipped CommentMode = iota
+	// CommentsOrdinaryText has no comments at all: a `#` is a character of
+	// the word it stands in, wherever it stands.
+	CommentsOrdinaryText
+	// CommentsKept makes a comment one word, `#` included, running to the
+	// end of the line and not taking the newline with it.
+	CommentsKept
+)
+
+// commentsExist reports whether a `#` opens a comment for the *raw* scans —
+// the bodies of `$( )`, `<( )` and `${ ;}`, which have no word structure to
+// consult and only need to find their closing character.
+//
+// Two of the three modes answer yes, which is not an oversight. Measured on
+// zsh 5.9.2 with `v='a $(b # c) d'`: with the comment options off the whole
+// `$(b # c)` is one word, and with either of them on the `#` opens a comment
+// that swallows the `)` and the rest becomes a single unterminated word. So
+// keeping a comment as a token is a rule about the *command line*, and inside
+// a substitution a kept comment and a skipped one behave alike.
+func (l *Lexer) commentsExist() bool { return l.comments != CommentsOrdinaryText }
+
+// scanCommentWord takes a comment as a single word token, for CommentsKept.
+// It stops at the newline rather than consuming it, so the newline is still
+// the caller's to see — measured: the shell that has the construct answers
+// `a`, `# hi`, `;`, `b` for a two-line value, and the `;` is the newline.
+func (l *Lexer) scanCommentWord(start Pos) Token {
+	l.skipComment()
+	text := l.src[start.Offset:l.off]
+	return Token{
+		Kind:  TokWord,
+		Pos:   start,
+		End:   l.pos(),
+		Text:  text,
+		Spans: []Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: start}},
 	}
 }
 
@@ -1906,7 +1973,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			//
 			// And gated on the byte in front, because a raw scan has no word
 			// structure: `<(echo a#b)` prints `a#b` everywhere.
-			if holdsCommands(kind) && commentCouldStart(l.prevByte()) {
+			if holdsCommands(kind) && l.commentsExist() && commentCouldStart(l.prevByte()) {
 				l.skipComment()
 				continue
 			}
@@ -2229,7 +2296,7 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			// a comment (`${ echo x#y; }` yields `x#y`), and a comment runs
 			// to the newline, so `${ echo hi # cmt }` is `unexpected EOF
 			// while looking for matching }` rather than a closed expansion.
-			if brace && commentCouldStart(l.prevByte()) {
+			if brace && l.commentsExist() && commentCouldStart(l.prevByte()) {
 				l.skipComment()
 				continue
 			}

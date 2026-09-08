@@ -44,9 +44,7 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 			return
 		}
 	}
-	if f.assoc && !f.remove {
-		r.markAssoc(base)
-	}
+	r.markDeclaredCompound(base, f)
 	if r.refuseReadonly(base, assignedByDeclaration) {
 		// A name already frozen refuses the element as it refuses the
 		// variable, and by the base's name: `readonly a; typeset a[1]=v`

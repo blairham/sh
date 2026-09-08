@@ -116,8 +116,71 @@ func newPtyConduit(real *os.File, out io.Writer, keep func(io.Writer) io.Writer)
 	c.mark = newConduitMark()
 	c.resize()
 	c.watchResize()
-	go c.pump(keep(out))
+	go c.pump(keep(&conduitOut{w: out, real: real}))
 	return c, nil
+}
+
+// conduitOut is where the pump writes, and it is what makes the conduit's
+// newlines whole however the real terminal happens to be set at the time.
+//
+// **The inner terminal's newlines are bare on purpose** — its own output
+// discipline is off so that the real one does the translating rather than both
+// of them doing it and producing `\r\r\n`. That is right whenever the real
+// terminal is in its own line discipline, and it is exactly wrong when it is
+// not: raw mode has OPOST off, so a newline arriving then moves down without
+// returning the carriage and the next thing drawn starts where the last one
+// ended (#1356).
+//
+// There is no arranging for that never to happen. The boundary between a
+// command and the next prompt can be held — see Shell.inLineDiscipline, which
+// waits for this pump before taking the mode away — but a **background job**
+// prints while a person is typing, and there is no cooked window there at all
+// to hold. Measured, a job started with `&` printing six lines at a prompt:
+// six bare line feeds here against none in bash 5.3.15.
+//
+// So the translation is not a second switch that has to agree with the
+// terminal's; it *reads* the terminal's. One source of truth, which is the
+// same reason the test for this asks the terminal what mode it is in rather
+// than trusting its own bookkeeping. One ioctl per read of the inner terminal
+// — per 32KB, not per byte.
+type conduitOut struct {
+	w    io.Writer
+	real *os.File
+	// crlf carries the "was the last byte a carriage return" state across
+	// writes, and is fed on every write whichever branch is taken: a chunk
+	// that ends in `\r` while the terminal is cooked, followed by one
+	// beginning with `\n` while it is raw, would otherwise gain a return
+	// that was already there.
+	crlf crlf
+}
+
+func (o *conduitOut) Write(p []byte) (int, error) {
+	if translatesNewlines(o.real) {
+		// The terminal is doing it, so doing it here as well is the
+		// `\r\r\n` this arrangement exists to avoid. The state is still
+		// carried, which is what the field's comment is about.
+		o.crlf.afterR = len(p) > 0 && p[len(p)-1] == '\r'
+		return o.w.Write(p)
+	}
+	o.crlf.w = o.w
+	return o.crlf.Write(p)
+}
+
+// translatesNewlines reports whether the terminal is post-processing its
+// output, which is what turns a newline into a carriage return and a newline.
+//
+// Unknown counts as no: a terminal that will not answer is one this cannot
+// reason about, and adding a return that was already there costs a blank
+// column where leaving one out costs every line after it.
+func translatesNewlines(f *os.File) bool {
+	if f == nil {
+		return false
+	}
+	var t syscall.Termios
+	if err := ioctl(int(f.Fd()), tcGets, &t); err != nil {
+		return false
+	}
+	return t.Oflag&syscall.OPOST != 0
 }
 
 // Stream is the file a child writes to, and it is a terminal.

@@ -951,3 +951,120 @@ func TestASessionThatEndsTakesItsConduitWithIt(t *testing.T) {
 			after, sessions, before)
 	}
 }
+
+// A newline the conduit carries arrives whole whichever mode the terminal is
+// in, which is the half of #1356 that has no boundary to hold.
+//
+// The inner terminal's own output discipline is off on purpose, so its
+// newlines are bare and the real terminal is what translates them. That is
+// right while the real terminal is in its own line discipline and exactly
+// wrong while it is not — and a **background job** prints while a person is
+// typing, which is to say while it is not, and there is no cooked window
+// anywhere to move the write into. Measured against bash 5.3.15, a job started
+// with `&` printing six lines at a prompt: six bare line feeds before this and
+// none after, against none in bash either way.
+//
+// Both modes are asserted, and the second is what says the fix is a reading of
+// the terminal rather than a second switch beside it: doing the translation
+// while the terminal is already doing it gives `\r\r\n`, which is the failure
+// that made the inner terminal's discipline go off in the first place.
+func TestTheConduitsNewlinesArriveWholeInEitherMode(t *testing.T) {
+	// The same answer both ways round, which is the point: what the person
+	// sees does not depend on which mode the shell happened to be in.
+	for _, tc := range []struct {
+		name string
+		raw  bool
+		want string
+	}{
+		{"the terminal is not translating, so the conduit does", true, "one\r\ntwo\r\n"},
+		{"the terminal is translating, so the conduit does not", false, "one\r\ntwo\r\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			control, terminal, err := pty.Open()
+			if err != nil {
+				t.Skipf("no pseudo-terminal: %v", err)
+			}
+			t.Cleanup(func() {
+				_ = terminal.Close()
+				_ = control.Close()
+			})
+			var state *terminalState
+			if tc.raw {
+				if state, err = makeRaw(terminal); err != nil {
+					t.Fatalf("raw mode: %v", err)
+				}
+				t.Cleanup(func() { _ = state.restore() })
+			}
+			seen := collectTerminal(control)
+
+			out := &conduitOut{w: terminal, real: terminal}
+			if _, err := io.WriteString(out, "one\ntwo\n"); err != nil {
+				t.Fatalf("writing: %v", err)
+			}
+			if got := seen(); got != tc.want {
+				t.Errorf("the terminal saw %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// And a carriage return that ends one write is not counted twice by the next,
+// which is the whole reason the state is carried across both branches.
+//
+// The case is a chunk ending in `\r` written while the terminal is translating
+// and the next beginning with `\n` written while it is not. Rare, and the kind
+// of rare that shows up as one stray blank column nobody can reproduce.
+func TestACarriageReturnAcrossAWriteIsNotDoubled(t *testing.T) {
+	control, terminal, err := pty.Open()
+	if err != nil {
+		t.Skipf("no pseudo-terminal: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = terminal.Close()
+		_ = control.Close()
+	})
+	seen := collectTerminal(control)
+	out := &conduitOut{w: terminal, real: terminal}
+	// Cooked for the first write, so the terminal is translating and the
+	// conduit is not.
+	if _, err := io.WriteString(out, "one\r"); err != nil {
+		t.Fatalf("writing: %v", err)
+	}
+	state, err := makeRaw(terminal)
+	if err != nil {
+		t.Fatalf("raw mode: %v", err)
+	}
+	t.Cleanup(func() { _ = state.restore() })
+	if _, err := io.WriteString(out, "\ntwo\n"); err != nil {
+		t.Fatalf("writing: %v", err)
+	}
+	if got, want := seen(), "one\r\ntwo\r\n"; got != want {
+		t.Errorf("the terminal saw %q, want %q", got, want)
+	}
+}
+
+// collectTerminal starts reading a terminal and answers with what has arrived.
+func collectTerminal(r io.Reader) func() string {
+	var mu sync.Mutex
+	var b strings.Builder
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := r.Read(buf)
+			mu.Lock()
+			b.Write(buf[:n])
+			mu.Unlock()
+			if err != nil {
+				return
+			}
+		}
+	}()
+	return func() string {
+		// A moment for the last of it, since what is measured is the write
+		// that just happened.
+		time.Sleep(120 * time.Millisecond)
+		mu.Lock()
+		defer mu.Unlock()
+		return b.String()
+	}
+}

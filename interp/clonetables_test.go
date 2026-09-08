@@ -44,6 +44,7 @@ func seedTables(r *Runner) {
 		"seed": func(*Runner, string, string, bool) {},
 	}
 	r.dynamicWriters = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
+	r.absentElements = map[string]string{"seed": "v"}
 	r.absentParams = map[string]string{"seed": "v"}
 	r.aliases = map[string]string{"seed": "v"}
 	r.assigned = map[string]string{"seed": "v"}

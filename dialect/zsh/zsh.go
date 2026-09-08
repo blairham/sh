@@ -1520,6 +1520,10 @@ func Apply(r *interp.Runner) {
 	// three clock reads through Runner.Now and a formatter over the same
 	// format language `printf '%(fmt)T'` writes. See datetime.go.
 	registerDatetimeModule(r)
+	// And `zsh/terminfo`'s and `zsh/termcap`'s one parameter each: the
+	// terminal's capabilities under two name systems, over the values in
+	// repl.TerminalCapabilities. See terminfo.go.
+	registerTerminfoModules(r)
 	// This shell's richer `echo`, and not ksh93's builtin of the same
 	// spelling: different letters, a different escape set and different
 	// wordings, all measured side by side. See print.go.

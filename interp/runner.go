@@ -476,6 +476,18 @@ type Runner struct {
 	// dialect fills it in through SetAbsentParameter — see absentparam.go.
 	absentParams map[string]string
 
+	// absentElements are the produced associations that answer only the keys
+	// their producer holds, to the sentence a read of any other key is
+	// refused with.
+	//
+	// absentParams one level down, and needed for the same reason: a table
+	// that answers a handful of the keys its name is asked for has no way to
+	// say so through a value, because the value it would give — the empty
+	// string — is also the true answer for a key the thing being viewed
+	// genuinely has nothing under. A dialect fills it in through
+	// SetAbsentElements; see absentparam.go.
+	absentElements map[string]string
+
 	// started is when this runner was made, which is what `SECONDS` counts
 	// from in the dialects that have it.
 	started time.Time

@@ -308,9 +308,10 @@ Whether the metacharacters in the value are then *live* is not a second
 question. It is `GlobExpansionResults`, asked where every other
 expansion's is:
 
-    L='a|b'; [[ a == ($L) ]]      no match in zsh; `alt` in bash and ksh93
+    L='a|b'; [[ a == ($L) ]]      no match in zsh
     L='a|b'; [[ 'a|b' == ($L) ]]  matches in zsh — the `|` was a character
     L='a|b'; [[ a == (${~L}) ]]   matches: the flag overrides the axis
+    L='a|b'; [[ a == @($L) ]]     matches in bash and ksh93, which glob it
 
 The `|` needed one addition to make that true. It is the one
 metacharacter a *group* introduces, so a value can only carry a live one

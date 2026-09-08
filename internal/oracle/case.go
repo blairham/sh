@@ -9473,9 +9473,11 @@ printf "[%s]" .@(hid); echo`,
 			"second probe is why the row needs two: `*(/)` is the qualifier " +
 			"saying directories, and it answers `[ax_dir][cx]` — no slash, " +
 			"because none was written, and no `sym`, because the qualifier does " +
-			"not follow a link where `*/` does. The other five refuse `*(` " +
-			"while parsing, ksh93 taking `*(/)` as a quantified group that " +
-			"matches nothing",
+			"not follow a link where `*/` does. The other five refuse it while " +
+			"parsing and never reach either probe — ksh93 included, its " +
+			"complaint arriving at the `(` behind a slash, where it has no " +
+			"quantifier to attach the group to; elsewhere it reads `*(/)` as " +
+			"a quantified group and leaves it standing",
 	},
 	{
 		ID: "pat/a-qualifier-list-is-not-an-alternation", Category: "pattern matching", SyntaxError: true,

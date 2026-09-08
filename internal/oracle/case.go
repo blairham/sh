@@ -6883,7 +6883,7 @@ echo unreachable`,
 	{
 		ID: "pat/an-escaped-bracket-is-a-member-not-the-terminator", Category: "pattern matching",
 		Snippet: `for s in a ']' b c; do case $s in [a\]b]) printf "[%s]" "$s";; esac; done; echo`,
-		Why:     "the terminator is protected as well, so the set has three members and does not end at the escaped one. bash, bash 3.2, bash as sh, ksh93 and zsh agree on all three; dash reads the same expression as a two-member set holding the bracket and b, which is a divergence about where the expression ends rather than about the escape and is recorded here rather than modelled",
+		Why:     "the terminator is protected as well, so the set has three members and does not end at the escaped one. bash, bash 3.2, bash as sh, ksh93 and zsh agree on all three; dash reads the same expression as a two-member set holding the bracket and b, which is a divergence about where the expression ends rather than about the escape and is recorded here rather than modeled",
 	},
 	{
 		ID: "pat/an-escape-in-a-bracket-expression-globs", Category: "pattern matching",

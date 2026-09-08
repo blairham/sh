@@ -1265,6 +1265,15 @@ func (r *Runner) resultReadsAsPattern(esc string) bool {
 	// Asked only where the dialect has somewhere for a `|` to mean
 	// something. Where there are no groups at all it is text however it
 	// arrived, and asking would refuse a field with nothing wrong with it.
+	//
+	// Dropping that guard survives the suite, and it is an equivalent mutant
+	// on the panel rather than a gap — recorded so the next reader does not
+	// go looking for the row that would kill it. The only dialect that
+	// answers No to the axis is also the only one with bare groups, so every
+	// dialect the guard excludes answers Yes and hands back the same live
+	// text either way. What it changes is which fields *ask*, and that is
+	// only observable in a core with the axis unset, where asking refuses a
+	// field holding a `|` and nothing else.
 	if (r.dialect().PatternAlternation || r.dialect().ExtendedPattern) && hasUnescapedByte(esc, '|') {
 		return true
 	}

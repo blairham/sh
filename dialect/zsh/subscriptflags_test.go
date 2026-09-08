@@ -118,6 +118,10 @@ func TestASearchOverAScalarIsThisDialects(t *testing.T) {
 		// lands.
 		{`printf "[%s]" "${s[(I)*]}" "${s[(I)?]}"`, `[12][11]`},
 		{`printf "[%s]" "${s[(ie)lo]}" "${s[(in:2:)l]}" "${s[(ib:5:)l]}"`, `[4][4][10]`},
+		// A start outside the string searches nothing in either direction,
+		// and `(b:expr:)` cannot name the position past the last character
+		// even though the backward walk begins there on its own.
+		{`printf "[%s]" "${s[(ib:99:)l]}" "${s[(Ib:99:)l]}" "${s[(Ib:12:)*]}"`, `[12][0][0]`},
 		// An empty string answers neither end, which the rule above does not
 		// predict.
 		{`e=; printf "[%s]" "${e[(i)x]}" "${e[(I)x]}"`, `[0][0]`},

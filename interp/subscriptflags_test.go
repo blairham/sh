@@ -337,6 +337,10 @@ func TestASubscriptSearchOverAScalarIsACharacterPosition(t *testing.T) {
 		{"an empty match lands past the end", `printf "[%s]" "${s[(I)*]}" "${s[(I)?]}"`, "[6][5]"},
 		{"the modifiers are read here too", `printf "[%s]" "${s[(ie)lo]}" "${s[(ie)[lo]]}"`, "[4][6]"},
 		{"including which match and where from", `printf "[%s]" "${s[(in:2:)l]}" "${s[(ib:4:)l]}" "${s[(Ib:3:)l]}"`, "[4][4][3]"},
+		// A start outside the string does not search at all, in either
+		// direction, so both answer their own miss rather than clamping to
+		// an end and finding something there.
+		{"and a start outside it searches nothing", `printf "[%s]" "${s[(ib:9:)l]}" "${s[(Ib:9:)l]}" "${s[(ib:-9:)l]}"`, "[6][0][6]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, status := runSub(t, s+tc.src)

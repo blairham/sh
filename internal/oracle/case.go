@@ -4198,8 +4198,8 @@ echo "st=$?"`,
 	},
 	{
 		ID: "array/a-subscript-search-over-a-scalar-reads-the-modifiers", Category: "expansion",
-		Snippet: `s=hello; printf "[%s]" "${s[(ie)lo]}" "${s[(ie)[lo]]}" "${s[(in:2:)l]}" "${s[(ib:4:)l]}" "${s[(Ib:3:)l]}"; echo`,
-		Why:     "the three modifiers an ordered array's search reads are read over a string too, and each field is the one that would change if it were not: `(e)` finds the literal two characters and then fails to find a literal `[lo]` that the pattern reading would have found at once, `(n:2:)` takes the second of the two `l`s, and `(b:expr:)` moves the start forwards and backwards. An association ignores two of the three, so a shared implementation that ignored them everywhere would still pass the association's rows",
+		Snippet: `s=hello; printf "[%s]" "${s[(ie)lo]}" "${s[(ie)[lo]]}" "${s[(in:2:)l]}" "${s[(ib:4:)l]}" "${s[(Ib:3:)l]}" "${s[(ib:9:)l]}"; echo`,
+		Why:     "the three modifiers an ordered array's search reads are read over a string too, and each field is the one that would change if it were not: `(e)` finds the literal two characters and then fails to find a literal `[lo]` that the pattern reading would have found at once, `(n:2:)` takes the second of the two `l`s, and `(b:expr:)` moves the start forwards and backwards. The last field is a start *outside* the string, which searches nothing rather than clamping to an end — without it an implementation that ignored a start it could not use would find the first `l` and answer 3. An association ignores two of the three, so a shared implementation that ignored them everywhere would still pass the association's rows",
 	},
 	{
 		ID: "array/a-subscript-search-over-a-scalar-as-an-option-test", Category: "expansion",

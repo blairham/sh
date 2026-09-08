@@ -7675,7 +7675,7 @@
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "[4][6][4][4][3]",
+        "Stdout": "[4][6][4][4][3][6]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -30,12 +30,44 @@ type literalElem struct {
 	fields []string
 }
 
-// literalElems expands an array literal's elements once.
+// literalElems expands an array literal's elements once, and reports whether
+// the expansion is one the assignment may be made from.
 //
 // Once matters: the value of an element may have side effects — `[$((i++))]=v`
 // — so deciding the shape and then re-expanding to place it would run them
 // twice.
-func (r *Runner) literalElems(elems []*syntax.Word) []literalElem {
+//
+// The second result is the whole of #1568, and it is a bool rather than a
+// check inside each caller because the compiler is what makes the three of
+// them agree. An element list is a *heading* in exactly the sense
+// Runner.failedHeading means: it is expanded before the construct decides
+// what to store, so a failure in it costs the store rather than one element
+// of it. Measured 2026-09-08 in a directory where nothing matches, with
+// `reply=(keep); eval "reply=(nomatch*)"; typeset -p reply`:
+//
+//	zsh 5.9.2            `no matches found: nomatch*`, and `reply` is `( keep )`
+//	bash 5.3.15, failglob `no match: nomatch*`,          and `reply` is `([0]="keep")`
+//
+// — the *whole* assignment abandoned in both shells that call an unmatched
+// pattern an error, not the failing element alone: `reply=(keep); eval
+// "reply=(readable.sh nomatch* readable.sh)"` leaves `( keep )` in zsh and
+// `([0]="keep")` in bash, and from an unset name zsh does not create `reply`
+// at all — `typeset -p reply` is `no such variable`. We reported the miss and
+// then stored the unexpanded pattern, which is what `~/.zi/bin/zi.zsh` then
+// handed to `.` four times in a real startup.
+//
+// Not a dialect axis. Whether an unmatched pattern is an error already is one
+// — Semantics.GlobNoMatchIsError, asked in Runner.glob — and every column that
+// answers yes abandons the store. The consequence is core; only the trigger
+// is dialectal.
+//
+// And not the glob alone, which is what makes this the store's rule rather
+// than the matcher's. The same three lines with `$((1/0))` or, under `set
+// -u`, `$NOPEVAR` where the pattern was leave `reply` holding `keep` in zsh,
+// bash and ksh93 alike, and left us holding the words that *did* expand — at
+// status 0 for the division, so the shell reported a value it had just said
+// it could not compute and called it success.
+func (r *Runner) literalElems(elems []*syntax.Word) ([]literalElem, bool) {
 	out := make([]literalElem, 0, len(elems))
 	for _, w := range elems {
 		if sub, value, ok := r.assocElem(w); ok {
@@ -44,7 +76,7 @@ func (r *Runner) literalElems(elems []*syntax.Word) []literalElem {
 		}
 		out = append(out, literalElem{fields: r.expandWord(w)})
 	}
-	return out
+	return out, !r.failedHeading()
 }
 
 // assignArrayLiteral is `a=(…)` and `a+=(…)` on a name with no associative
@@ -56,7 +88,13 @@ func (r *Runner) literalElems(elems []*syntax.Word) []literalElem {
 // text — `${a[0]}` answered the six characters `[2]=c` — and nothing reported
 // it, so the array looked populated and was not.
 func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo bool) {
-	parsed := r.literalElems(elems)
+	parsed, ok := r.literalElems(elems)
+	if !ok {
+		// The elements were not read, so there is nothing to store and the
+		// name keeps whatever it was holding. Before literalSubscriptIsAKey,
+		// because a half-expanded list is not evidence about the shape either.
+		return
+	}
 	if r.literalSubscriptIsAKey(parsed) {
 		// The subscript is text rather than an expression, and a literal
 		// written with one declares a keyed array — one concept with two

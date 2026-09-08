@@ -440,6 +440,12 @@ func Semantics() interp.Semantics {
 	// is the half of this zsh answers the other way.
 	s.ParamErrorIsAnExitRequest = interp.No
 	s.DotPassesArguments = interp.Yes
+	// A directory operand is an error, and a fatal one through
+	// DotMissingFileFatal: measured, `. ./` is `.: ./: cannot open [Is a
+	// directory]` and the script ends there. No wording of its own — that
+	// is the one sentence ksh93 uses for every `.` failure, with the reason
+	// filling the bracket, so DotCannotOpen already carries it.
+	s.DotDirectoryOperandIsAnError = interp.Yes
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes

@@ -243,7 +243,13 @@ func (r *Runner) assocScalar(a AssocArray) (string, bool) {
 // assignAssocLiteral is `m=([k]=v …)` on a declared name — and `m+=(…)`,
 // which keeps the elements already there where `=` starts over.
 func (r *Runner) assignAssocLiteral(name string, elems []*syntax.Word, appendTo bool) {
-	r.assignAssocElems(name, r.literalElems(elems), appendTo)
+	parsed, ok := r.literalElems(elems)
+	if !ok {
+		// A failed element list costs the whole table, exactly as it costs
+		// the whole indexed array — see literalElems.
+		return
+	}
+	r.assignAssocElems(name, parsed, appendTo)
 }
 
 // assignAssocElems places an already-expanded literal into the keyed table.

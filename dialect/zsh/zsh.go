@@ -764,6 +764,13 @@ func Semantics() interp.Semantics {
 	s.ParamErrorIsAnExitRequest = interp.Yes
 	s.DotMissingFileFatal = interp.No
 	s.DotPassesArguments = interp.Yes
+	// zsh opens a directory operand, reads no commands out of it and calls
+	// that a script that did nothing: measured, `. ./` is silent at status
+	// 0 and `. ./ && echo ok` prints `ok`. dash agrees; bash and ksh93 do
+	// not. We reported `no such file or directory: ./` at 127 — the status
+	// that says the path was never opened — four times in a real startup
+	// (#1577).
+	s.DotDirectoryOperandIsAnError = interp.No
 	// zsh and ksh93 drop the EXIT trap when an exec fails; dash and bash
 	// still run it.
 	s.ExecFailureRunsExitTrap = interp.No

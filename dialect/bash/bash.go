@@ -410,6 +410,11 @@ func Semantics() interp.Semantics {
 	s.ParamErrorIsAnExitRequest = interp.No
 	s.DotMissingFileFatal = interp.No
 	s.DotPassesArguments = interp.Yes
+	// A directory operand is an error here and success in zsh and dash.
+	// Measured, `. ./` is `bash: line 1: .: ./: is a directory` at 1, and
+	// the script carries on — the same status and the same survival a file
+	// that is not there gets, with a sentence of its own.
+	s.DotDirectoryOperandIsAnError = interp.Yes
 	// The only shell in the panel that looks in the current directory once
 	// PATH has missed. Measured: `PATH=/usr/bin:/bin; . f.sh` finds an f.sh in
 	// the current directory here, and is "not found" in the other three.
@@ -990,6 +995,12 @@ func Diagnostics() interp.Diagnostics {
 		// failure, which is why they are two fields.
 		DotCannotOpen:       "%[1]s: %[2]s",
 		DotCannotOpenStatus: 1,
+		// The one `.` failure bash gives a sentence of its own, and the one
+		// it names the builtin in — `source ./` says `source:` where `. ./`
+		// says `.:`, which is why the format takes the invoked name. Its
+		// reason is spelled in lower case, unlike the strerror text
+		// DotCannotOpen carries, so it is written out rather than passed in.
+		DotIsADirectory: "%[3]s: %[1]s: is a directory",
 		// bash names neither the builtin nor the operation: just the command
 		// and the reason, the same shape it uses for `.`.
 		CannotExecute: "%[1]s: %[2]s",

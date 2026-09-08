@@ -3231,6 +3231,34 @@ type Semantics struct {
 	// to hold what is really three independent questions.
 	DotWithNoOperandIsAnError Answer
 
+	// DotDirectoryOperandIsAnError decides whether `.` naming a **directory**
+	// is a failure at all, which the panel is split down the middle on.
+	// Measured 2026-09-08, `. ./` from a script file in a scratch directory:
+	//
+	//	zsh 5.9.2   silent, status 0
+	//	dash        silent, status 0
+	//	bash 5.3.15 `.: ./: is a directory`, status 1, and the script carries on
+	//	bash as sh  the same
+	//	bash 3.2.57 the same
+	//	ksh93u+     `.: ./: cannot open [Is a directory]`, and the script ends
+	//
+	// Two shells open the directory, read no commands out of it and call that
+	// a script that did nothing; four call it an error. So it is an axis and
+	// not a wording fix — a fix that answered only the sentence would leave the
+	// status wrong for two columns and invent a diagnostic for them.
+	//
+	// Separate from DotMissingFileFatal, which decides what an error here
+	// *costs* and already splits the four that report one the right way: ksh93
+	// ends the script and bash reports and carries on. Separate from
+	// DotWithNoOperandIsAnError for the same reason that one is separate from
+	// the status — three independent questions about one builtin.
+	//
+	// A path that does not exist is not this axis. Every column reports that
+	// one, and we already match each of them; the tell that this was a
+	// different question was our answering `no such file or directory` at 127
+	// for a path that does exist (#1577).
+	DotDirectoryOperandIsAnError Answer
+
 	// DotMissingFileFatal ends the script when `.` cannot read its file.
 	// True in dash and ksh93, false in bash and zsh — the same split as
 	// ShiftPastEndFatal, and for the same POSIX reason.
@@ -5219,6 +5247,12 @@ func PosixSemantics() Semantics {
 		WaitForAJobFailsWhenInterrupted: No,
 		DotMissingFileFatal:             Yes,
 		DotWithNoOperandIsAnError:       Yes,
+		// The standard gives `.` a file to read commands from and says nothing
+		// about a directory. dash, the panel's POSIX-faithful member, reads it
+		// to its end, finds no commands and reports success — so the preset
+		// follows the shell rather than the silence, the same way the `exec`
+		// exit-trap answer below does.
+		DotDirectoryOperandIsAnError: No,
 		// The standard gives `.` a filename and nothing else; passing
 		// positional parameters to a sourced file is an extension three of
 		// the four grew. And it reads the file from PATH, with no mention of

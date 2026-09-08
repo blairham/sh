@@ -497,6 +497,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `subst/a-case-inside-a-substitution` | `[yes]` | `[yes]` | `[yes]` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;;'~<shell>: -c: line 0: `x=$(case a in a) echo yes;; esac); echo "[$x]"'` *(status 2)* | `[yes]` | `[yes]` |
 | `subst/a-substitution-inside-an-arm` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` |
 | `glob/matches-are-in-order` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` |
+| `glob/a-trailing-slash-stays-on-every-match` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` |
+| `glob/a-trailing-slash-without-the-slash` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` |
+| `glob/a-trailing-slash-under-a-literal-component` | `[cx/dx/]` | `[cx/dx/]` | `[cx/dx/]` | `[cx/dx/]` | `[cx/dx/]` | `[cx/dx/]` |
+| `glob/a-trailing-slash-on-a-pattern-matching-nothing` | `[zz*/]` | `[zz*/]` | `[zz*/]` | `[zz*/]` | `[zz*/]` | **2>** `<shell>:1: no matches found: zz*/` *(status 1)* |
 | `length/of-a-one-element-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `one=5~two=5~none=0` | `one=5~two=5~none=0` | `one=5~two=5~none=0` | `one=5~two=5~none=3` | `one=1~two=2~none=0` |
 | `length/of-an-array-holding-one-empty-string` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a x=([0]="")~one=0~two=0` | `declare -a x=([0]="")~one=0~two=0` | `declare -a x='([0]="")'~one=0~two=0` | `typeset -a x=('')~one=0~two=0` | `typeset -a x=( '' )~one=1~two=2` |
 | `length/a-hash-in-the-name-position-of-an-operator` | `[2][2][w][w][2]` | `[2][2][w][w][2]` | `[2][2][w][w][2]` | `[2][2][w][w][2]` | `[2][2][w][w][2]` | `[2][2][w][w][2]` |
@@ -1511,6 +1515,22 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   mkdir -p g && cd g && : > Apple && : > banana && : > Cherry && : > _under && : > 1digit && echo *
   ```
+- `glob/a-trailing-slash-stays-on-every-match` — `*/` is the standard spelling of "the directories here", and every column keeps the slash on every match: `[ax_dir/][cx/][sym/]` in bash 5.3, that binary as sh, bash 3.2, dash, ksh93 and zsh alike. Unanimous, so it is the core rather than any dialect, and the row exists because the corpus had none for a trailing slash at all — which is why nothing caught the walk dropping it (#1350). A symbolic link to a directory is one of the matches and a link to a file is not, so the filtering is on what the name resolves to
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" */; echo
+  ```
+- `glob/a-trailing-slash-without-the-slash` — the same directory through the same pattern with the slash taken off, which is what makes the row above a measurement of the slash rather than of the listing: five names here, three there, and none of the five carries a separator
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" *; echo
+  ```
+- `glob/a-trailing-slash-under-a-literal-component` — a slash in the middle and a slash at the end in one pattern. All six answer `[cx/dx/]`, so the middle one separates components and the last one is written back — two jobs for the same byte, and a fix that treated the trailing one as a separator would answer `cx/dx`
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" cx/*/; echo
+  ```
+- `glob/a-trailing-slash-on-a-pattern-matching-nothing` — the miss keeps the word whole, slash and all, in the five columns that pass an unmatched pattern through; zsh reports `no matches found: zz*/` and names the slash too. So the slash is part of the word rather than a thing the walk consumed, on both sides of that axis
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" zz*/; echo
+  ```
 - `length/of-a-one-element-array` — the shells split on what `${#a}` of an array means — one counts the elements and the others measure the scalar a bare name yields — and the split is visible at *one* element as much as at two: 1 against 5 for `a=(hello)`. A reading that skipped the question at one element on the grounds that such an array is its own element is true of the value and false of its length, and answers a plausible number at status 0
   ```sh
   a=(hello); echo "one=${#a}"; a=(hello there); echo "two=${#a}"; a=(); echo "none=${#a}"
@@ -1607,6 +1627,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/readonly-letter-carries-its-own-sign` | `st=0 n=[2]~end` **2>** `<script>: 2: typeset: not found` | `st=1 n=[1]~end` **2>** `<script>: line 3: n: readonly variable` | **2>** `<script>: line 3: n: readonly variable` *(status 1)* | `st=1 n=[1]~end` **2>** `<script>: line 3: n: readonly variable` | **2>** `<script>: line 3: n: is read only` *(status 1)* | **2>** `<script>:3: read-only variable: n` *(status 1)* |
 | `axis/readonly-removed-by-local-in-the-same-call` | **2>** `<script>: 1: local: -r: bad variable name` *(status 2)* | `st=1~end` **2>** `<script>: line 1: local: y: readonly variable~<script>: line 1: y: readonly variable` | **2>** `<script>: line 1: local: y: readonly variable~<script>: line 1: y: readonly variable` *(status 1)* | `st=1~end` **2>** `<script>: line 1: local: y: readonly variable~<script>: line 1: y: readonly variable` | `in=[2]~st=0~end` **2>** `<script>: line 1: local: not found~<script>: line 1: local: not found` | `in=[2]~st=0~end` |
 | `core/a-plus-word-beside-the-readonly-letter-removes-nothing` | `d=127~st=0 x=[2]~end` **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found` | `d=0~st=1 x=[1]~end` **2>** `<script>: line 4: x: readonly variable` | `d=0` **2>** `<script>: line 4: x: readonly variable` *(status 1)* | `d=0~st=1 x=[1]~end` **2>** `<script>: line 4: x: readonly variable` | `d=0` **2>** `<script>: line 4: x: is read only` *(status 1)* | `d=0` **2>** `<script>:4: read-only variable: x` *(status 1)* |
+| `glob/a-trailing-slash-run-is-reproduced-except-in-bash` | `[ax_dir//][cx//][sym//]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir/][cx/][sym/]` | `[ax_dir//][cx//][sym//]` | `[ax_dir//][cx//][sym//]` |
 | `axis/export-a-subscripted-operand` | **2>** `<script>: 1: export: a[0]: bad variable name` *(status 2)* | `st=1~after` **2>** `<script>: line 1: export: `a[0]': not a valid identifier` | **2>** `<script>: line 1: export: `a[0]': not a valid identifier` *(status 1)* | `st=1~after` **2>** `<script>: line 1: export: `a[0]': not a valid identifier` | `st=0~after` | **2>** `<script>:1: a: assignment to invalid subscript range` *(status 1)* |
 | `axis/readonly-a-subscripted-operand` | **2>** `<script>: 1: readonly: a[0]: bad variable name` *(status 2)* | `st=1~after` **2>** `<script>: line 1: readonly: `a[0]': not a valid identifier` | **2>** `<script>: line 1: readonly: `a[0]': not a valid identifier` *(status 1)* | `st=1~after` **2>** `<script>: line 1: readonly: `a[0]': not a valid identifier` | `st=0~after` | **2>** `<script>:readonly:1: a[0]: can't create readonly array elements` *(status 1)* |
 | `axis/unset-a-subscripted-operand` | **2>** `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` |
@@ -2032,6 +2053,10 @@ grades it and nothing drift-checks it either, for the same reason.
   x=2
   echo "st=$? x=[$x]"
   echo end
+  ```
+- `glob/a-trailing-slash-run-is-reproduced-except-in-bash` — where the panel splits, and the reason the row above is not read as "normalize the end to one slash": dash, ksh93 and zsh reproduce the run as written and answer `[ax_dir//][cx//][sym//]`, while bash 5.3, bash-as-sh and bash 3.2 collapse it to `[ax_dir/][cx/][sym/]`. Reproducing it is the rule the mid-pattern case already follows unanimously — `cx//*` is `cx//ax` in all six — so it is what this shell does in every dialect; bash's collapse is recorded and not implemented, being a shape no script writes (#1350)
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" *//; echo
   ```
 - `axis/export-a-subscripted-operand` — ksh93 takes it, bash and dash refuse it in the words they give any bad name, and zsh has a complaint of its own about the subscript — naming the base rather than the operand, and without naming the builtin in the location where its other messages do
   ```sh

@@ -10777,6 +10777,54 @@ echo after`,
 		Why:     "byte order, which every shell in the panel gives under the LC_ALL=C both sweeps run in. Outside that locale three of the four collate and dash does not, and the two platforms disagree about where punctuation goes — none of which this can record, which is exactly why the ordering it does record is worth pinning",
 	},
 	{
+		ID: "glob/a-trailing-slash-stays-on-every-match", Category: "expansion",
+		Snippet: `mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" */; echo`,
+		Why: "`*/` is the standard spelling of \"the directories here\", and every " +
+			"column keeps the slash on every match: `[ax_dir/][cx/][sym/]` in " +
+			"bash 5.3, that binary as sh, bash 3.2, dash, ksh93 and zsh alike. " +
+			"Unanimous, so it is the core rather than any dialect, and the row " +
+			"exists because the corpus had none for a trailing slash at all — " +
+			"which is why nothing caught the walk dropping it (#1350). A " +
+			"symbolic link to a directory is one of the matches and a link to a " +
+			"file is not, so the filtering is on what the name resolves to",
+	},
+	{
+		ID: "glob/a-trailing-slash-without-the-slash", Category: "expansion",
+		Snippet: `mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" *; echo`,
+		Why: "the same directory through the same pattern with the slash taken " +
+			"off, which is what makes the row above a measurement of the slash " +
+			"rather than of the listing: five names here, three there, and none " +
+			"of the five carries a separator",
+	},
+	{
+		ID: "glob/a-trailing-slash-under-a-literal-component", Category: "expansion",
+		Snippet: `mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" cx/*/; echo`,
+		Why: "a slash in the middle and a slash at the end in one pattern. All " +
+			"six answer `[cx/dx/]`, so the middle one separates components and " +
+			"the last one is written back — two jobs for the same byte, and a " +
+			"fix that treated the trailing one as a separator would answer `cx/dx`",
+	},
+	{
+		ID: "glob/a-trailing-slash-on-a-pattern-matching-nothing", Category: "expansion",
+		Snippet: `mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" zz*/; echo`,
+		Why: "the miss keeps the word whole, slash and all, in the five columns " +
+			"that pass an unmatched pattern through; zsh reports `no matches " +
+			"found: zz*/` and names the slash too. So the slash is part of the " +
+			"word rather than a thing the walk consumed, on both sides of that axis",
+	},
+	{
+		ID: "glob/a-trailing-slash-run-is-reproduced-except-in-bash", Category: "semantics axes",
+		Snippet: `mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" *//; echo`,
+		Why: "where the panel splits, and the reason the row above is not read " +
+			"as \"normalize the end to one slash\": dash, ksh93 and zsh reproduce " +
+			"the run as written and answer `[ax_dir//][cx//][sym//]`, while bash " +
+			"5.3, bash-as-sh and bash 3.2 collapse it to `[ax_dir/][cx/][sym/]`. " +
+			"Reproducing it is the rule the mid-pattern case already follows " +
+			"unanimously — `cx//*` is `cx//ax` in all six — so it is what this " +
+			"shell does in every dialect; bash's collapse is recorded and not " +
+			"implemented, being a shape no script writes (#1350)",
+	},
+	{
 		ID: "axis/export-a-subscripted-operand", Category: "semantics axes",
 		Script:  true,
 		Snippet: "export 'a[0]'\necho \"st=$?\"\necho after",

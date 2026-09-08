@@ -1064,6 +1064,42 @@ type Dialect struct {
 	// an implementation that appended it would be inventing one.
 	NestedParamExpansion bool
 
+	// NamelessParamExpansion enables an expansion with no parameter name at
+	// all: `${}` is the empty string, `${:-abc}` is `abc` because the name
+	// that is not there is never set, and `${%x}` trims a suffix off the
+	// nothing in front of it. One shell in the panel has it; the other five
+	// call every one of those texts a bad substitution.
+	//
+	// A grammar flag rather than a semantics axis, for the reason
+	// NestedParamExpansion is one: without it there is no parameter at the
+	// front of `${:-abc}`, so the expansion is unreadable rather than
+	// differently read, and there is nothing for a value to switch between.
+	// Measured 2026-09-08 on the six-column panel:
+	//
+	//	${:-abc}   abc   bash, bash-as-sh, bash 3.2 and dash: bad
+	//	                 substitution; ksh93: `:' unexpected while reading
+	//	${}        ``    the same five refusals
+	//	${%x}      ``    and again
+	//
+	// What the flag does *not* relax is a character that is a parameter or a
+	// prefix in its own right, because those are taken before the name scan
+	// ever runs and the nameless reading never competes: `${-x}` is a bad
+	// substitution in all six — `-` is the name `$-` and `x` is a stray word
+	// after it — `${?x}` is the same with `$?`, and `${#}` is `$#` in all
+	// six rather than a length over nothing. Widening the guard leaves every
+	// one of those exactly where it was, which is the measured answer.
+	//
+	// The flag also decides `${#:-w}`, which is the one place the two
+	// readings of `#` are separated by nothing else: with the nameless form
+	// the `#` is a length over `${:-w}` and zsh answers `1`, and without it
+	// the `#` is the parameter `$#` and the other five answer `2` — see
+	// hashIsTheParameter.
+	//
+	// `~/.zi/bin/zi.zsh` writes `${:-…}` inside the nested expansion that
+	// builds the argv of every non-zsh plugin, which is why the empty name
+	// is a daily-driver blocker rather than a corner (#1529).
+	NamelessParamExpansion bool
+
 	// ParamIndirection enables `${!x}` to *parse*. bash and ksh93 accept it;
 	// dash and zsh reject it outright.
 	//

@@ -280,7 +280,7 @@ way without, and unanimously. So the trim reading requires an operand,
 and a bare `${#%}` is a bad substitution in five of the six for the same
 reason — no operand for the trim and no name for the length.
 
-Three shapes are open, and each is a **parse** divergence rather than a
+Three shapes were open, and each is a **parse** divergence rather than a
 value one:
 
 | probe | five shells | zsh 5.9.2 |
@@ -291,11 +291,87 @@ value one:
 
 zsh reads the first two as a length over `$-` and `$?` with a stray word
 after them, and the third as the length of the nameless `${:-w}` — an
-expansion with no name at all, which this grammar does not have. This
-implementation refuses all three, which is zsh's answer for two of them
-and nobody's for the third. Taking the five-shell side would replace one
-shell's loud refusal with a plausible number, so it waits on a grammar
-flag rather than being guessed.
+expansion with no name at all.
+
+The third is now answered, by `NamelessParamExpansion`: with the nameless
+form in the grammar the `#` is the length prefix and there is something
+for it to be the length *of*, and without the form the `#` is the
+parameter `$#` with a default that never fires. One flag, both answers,
+and it is the only place the two readings of a leading `#` are separated
+by nothing else — `${#:+w}` is `w` and `${#:=w}` and `${#:?w}` are `2` in
+all six, so the exception is exactly one operator wide. See "An expansion
+with no name at all" below.
+
+The first two are still open. Separating them needs a **backtracking**
+parse rather than a lookahead — `${#-}` is a length and `${#-w}` is the
+parameter, so the reading is decided by what fails rather than by what
+follows — and this implementation refuses both, which is zsh's answer.
+Taking the five-shell side would replace one shell's loud refusal with a
+plausible number, so it is still filed rather than guessed.
+
+### An expansion with no name at all
+
+zsh alone reads `${` with no parameter in front of the operator. The name
+that is not there is never set and never non-empty, so the conditionals
+answer from that rather than from a value. Measured 2026-09-08 across the
+six-column panel, where the other five call every one of these a bad
+substitution:
+
+| probe | zsh 5.9.2 | reading |
+| --- | --- | --- |
+| `${:-abc}` | `abc` | the default always fires |
+| `${:+abc}` | `` | and the alternate never does |
+| `${}` | `` | nothing between the braces is the empty string |
+| `${:-}` | `` | and so is an empty operand |
+| `${%x}` | `` | a trim over the nothing in front of it |
+| `${:-x${v}y}` | `xqy` | the operand is an ordinary word, with `v=q` |
+| `${:-${:-a}}` | `a` | and one of these nests inside another |
+| `${:=abc}` | `not an identifier: ` | nothing to assign to, and fatal |
+| `${:?abc}` | `: abc` | unset, so the report always fires |
+
+Grammar flag: `NamelessParamExpansion` — zsh yes, everyone else no. A
+grammar flag rather than a semantics axis for the reason
+`NestedParamExpansion` is one: without it there is no parameter at the
+front of `${:-abc}` at all, so the expansion is unreadable rather than
+differently read, and there is nothing for a value to switch between.
+
+**The flag group does not decide it.** `${(%):-%x}` reading while
+`${:-%x}` did not was this implementation's bug, not zsh's grammar: the
+group is what renders the result — `${(U):-abc}` is `ABC`, `${(q):-a b}`
+is `a\ b`, `${(s.,.):-a,b}` is two fields — and the reading is the same
+with it and without it. A `~`, `=` or `^` run relaxes the name the same
+way and for the same reason, and none of them is the reason the name may
+be absent.
+
+**A character that is a parameter is not a missing name.** This is the
+trap the form sets, and it is where widening the guard would have gone
+wrong. `-`, `?` and `#` are taken as names before the operator scan runs,
+so the nameless reading never competes for them:
+
+| probe | all six | reading |
+| --- | --- | --- |
+| `${-}` | the option letters | `$-`, in every shell |
+| `${-x}` | `bad substitution` | `$-` with a stray word after it |
+| `${?x}` | `bad substitution` | and the same over `$?` |
+| `${#}` | the count | `$#`, in every shell |
+
+`${-x}` is two characters from `${:-x}` and is nothing like it. Asking
+only *whether* those error cannot tell the two readings apart, because
+both error; `${-}` is where they differ, and it is silent — the parameter
+reading answers the option letters and a nameless one would answer the
+empty string, both at status 0.
+
+`~/.zi/bin/zi.zsh` writes the form on the line that builds the argv of
+every non-zsh plugin — `${(s: :):-${${:-${(@s: :):--o}" "${(s:
+:)^ICE[opts]}}:#-o }}` — which is why it is a daily-driver blocker rather
+than a corner (#1529).
+
+**What this implementation does not match.** `${@:=w}` and `${*:=w}` are
+refused by all six — four wordings and two statuses — and `${1:=w}` is
+refused by five and *assigns* in zsh. This implementation lets all three
+through silently, which predates the nameless form and is filed
+separately; the empty name goes through the same door `${::=w}` uses and
+is refused.
 
 ## Extensions
 
@@ -3355,6 +3431,8 @@ reason: `${$((6*7))[1]}`.
                            ${u:-<(:)} carries one — bash only
     NestedParamExpansion   ${${v}#a}, an expansion where a name belongs
                            — zsh only
+    NamelessParamExpansion ${:-abc} and ${}, an expansion with no
+                           parameter name at all — zsh only
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
 `ParamTransformations`, `ParamExpansionFlags`, `ParamTildeFlag`,
@@ -3371,7 +3449,10 @@ again: the four shells that lack it read `${a[(r)v]}` as arithmetic, and
 so does the shell that has it whenever the group is not one it knows. `ChainedSubscript` is false for both because the same text
 has five readings across the panel: two shells refuse it, one ignores
 the second subscript, one answers empty, and one has no arrays. `NestedParamExpansion` is false for both on the same evidence:
-the other five columns refuse it, in three different wordings.
+the other five columns refuse it, in three different wordings. So is
+`NamelessParamExpansion`, on evidence of exactly that shape — `${:-abc}`
+is `bad substitution` in the three bashes, `Bad substitution` in dash and
+`` `:' unexpected `` while reading in ksh93.
 
 ## What this does not cover
 

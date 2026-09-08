@@ -260,6 +260,16 @@ func Dialect() syntax.Dialect {
 	// against the rest of the panel: bash 3.2 and 5.3 answer `bad
 	// substitution` and ksh93 a syntax error, so this shell alone.
 	d.NestedParamExpansion = true
+	// An expansion with no parameter name at all: `${:-abc}` is `abc`, `${}`
+	// is the empty string, and `${%x}` trims a suffix off the nothing in
+	// front of it. Measured 2026-09-08 on zsh 5.9.2 against the rest of the
+	// panel: bash 5.3, bash as `sh`, bash 3.2 and dash all answer `bad
+	// substitution`, and ksh93 refuses `:' while reading. This shell alone.
+	//
+	// `~/.zi/bin/zi.zsh` writes it inside the nested expansion that builds
+	// the argv of every non-zsh plugin, so the two flags arrive together on
+	// the same real line (#1529).
+	d.NamelessParamExpansion = true
 	// A parameter written without braces carries a subscript here, and `$#a`
 	// is a count rather than `$#` with a letter after it. Measured 2026-09-05
 	// on zsh 5.9.2: `a=(x y z); echo $a[1]` prints `x` and `echo $#a` prints

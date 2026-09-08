@@ -1734,6 +1734,28 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 				r.assignSubscript(e, v)
 				return v
 			}
+			if e.Name == "" && !r.assignableParamName(e.Name) {
+				// The nameless expansion, which only the grammar with
+				// NamelessParamExpansion can even write: there is no
+				// parameter for the assignment to land on, and the shell
+				// that has the form says so rather than assigning to
+				// something invented. `${:=abc}` and `${::=abc}` are both
+				// `not an identifier: ` there, with the name left blank —
+				// the same refusal, so it goes through the same door rather
+				// than a second copy of the wording.
+				//
+				// Asked of the empty name alone because that is the name
+				// this operator newly reaches (#1529). Its neighbours split
+				// the panel and are a separate question: measured 2026-09-08
+				// with `set --`, `${@:=abc}` is `$@: cannot assign in this
+				// way` in the three bashes, `@: bad variable name` at status
+				// 2 in dash, `${@:=abc}: bad substitution` in ksh93 and `not
+				// an identifier: @` in zsh, and `${1:=abc}` is refused by
+				// four of them and *assigns* in zsh. Four wordings, two
+				// statuses and a positional axis — filed rather than
+				// guessed at here, where the empty name has one answer.
+				return ""
+			}
 			r.setVar(e.Name, v)
 			return v
 		}

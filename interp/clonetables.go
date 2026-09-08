@@ -135,6 +135,16 @@ func (c *Runner) ownTables(r *Runner) {
 	c.DynamicArrays = maps.Clone(r.DynamicArrays)
 	c.DynamicAssocs = maps.Clone(r.DynamicAssocs)
 	c.dynamicAssocWriters = maps.Clone(r.dynamicAssocWriters)
+	// dynamicWriters travels with Dynamic, and sharing it alone would be
+	// worse than sharing either. UnsetDynamic deletes from three tables —
+	// Dynamic, this one, and assigned — and the other two are copied above.
+	// So a subshell ending a produced parameter would take the parent's
+	// writer while leaving the parent's producer: the name still answers
+	// every read, and an assignment to it lands nowhere and says nothing,
+	// which is the silent-write case SetDynamicWriter exists to prevent.
+	// The call-scoped parameters its doc comment describes are a line
+	// editor's, so a widget running in a subshell is the live path.
+	c.dynamicWriters = maps.Clone(r.dynamicWriters)
 	c.custom = maps.Clone(r.custom)
 
 	// traps, inheritedIgnored and selfPending are deliberately not here.

@@ -2176,6 +2176,32 @@ type Semantics struct {
 	// which is what those two really do with it.
 	IntegerOptions string
 
+	// FunctionsOptions is the set of letters the `functions` builtin takes,
+	// spelled the way DeclareOptions is.
+	//
+	// A separate field rather than DeclareOptions over again, because the
+	// name that means `typeset -f` does not take `typeset`'s letters:
+	// measured 2026-09-08, zsh 5.9.2 refuses `functions -f`, `-F` and `-p`
+	// as bad options though its `typeset` spells all three, and takes `-c`,
+	// `-k`, `-m`, `-s`, `-t`, `-u`, `-x`, `-z`, `-M`, `-T`, `-U` and `-W`,
+	// which its `typeset` does not. So a shell that reused the declaration's
+	// set would accept `functions -a`, which is an array attribute in
+	// neither shell, and refuse `functions -m`, which is a listing in one.
+	//
+	// Only the letters this engine both spells and acts on belong here; the
+	// rest are Diagnostics.UnimplementedOptionLetters, so a script meets
+	// "not implemented yet" for a letter zsh really has and "bad option" for
+	// one it does not. Empty means the builtin takes no letters at all,
+	// which is a real answer — whether the word exists is Register's, not
+	// this field's.
+	FunctionsOptions string
+
+	// UnfunctionOptions is the same for `unfunction`, whose set is one
+	// letter: measured, zsh takes `-m` and refuses every other letter of the
+	// alphabet in both cases as a bad option — including the `-f` that is
+	// the option this name stands for.
+	UnfunctionOptions string
+
 	// IntegerAttributeTakesABase is `-i` reading an output base — `typeset
 	// -i 16 n=255` and its attached spelling `-i16` — so that the name
 	// prints in that base afterwards rather than in decimal.

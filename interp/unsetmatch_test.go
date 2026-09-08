@@ -52,11 +52,32 @@ func TestUnsetMatchesNamesAgainstAPattern(t *testing.T) {
 	if !strings.Contains(out, "[gone]") || st != 0 {
 		t.Errorf("out %q status %d, want an environment name matched too", out, st)
 	}
-	// With nothing to match the letter is refused rather than treated as a
-	// bare `unset`, which is silent. Measured on zsh 5.9.2.
+	// Nothing matching at all is 1 rather than 0 — measured on zsh 5.9.2,
+	// which is the only shell with the letter: a removal that removed
+	// nothing has not done what it was asked. This reported success, so a
+	// script clearing a namespace could not tell an empty one from a typo.
+	out, st = run(t, `unset -m "zz*"; echo "st=$?"`, withSem(unsetSem("vfm")))
+	if out != "st=1\n" {
+		t.Errorf("out %q status %d, want 1 with nothing matched", out, st)
+	}
+	// With nothing to match, the complaint is the dialect's and not this
+	// package's: a dialect that says nothing when `unset` has nothing to
+	// unset is three of the panel, and one that complains is zsh. Both
+	// halves are asserted, because a wording read from a permissive base
+	// would pass either way (#1386).
 	out, st = run(t, `unset -m; echo "st=$?"`, withSem(unsetSem("vfm")))
-	if !strings.Contains(out, "unset: not enough arguments\n") || !strings.Contains(out, "st=1\n") {
-		t.Errorf("out %q status %d, want the letter refused with nothing to match", out, st)
+	if out != "st=0\n" {
+		t.Errorf("out %q status %d, want silence at 0 where the dialect words nothing", out, st)
+	}
+	speaks := func(r *Runner) {
+		withSem(unsetSem("vfm"))(r)
+		r.Diagnostics = &Diagnostics{UnsetNoOperands: "%[1]s: not enough arguments"}
+	}
+	for _, src := range []string{`unset -m`, `unset`, `unset -v`, `unset -f`} {
+		out, st = run(t, src+`; echo "st=$?"`, speaks)
+		if !strings.Contains(out, "unset: not enough arguments\n") || !strings.Contains(out, "st=1\n") {
+			t.Errorf("%s: out %q status %d, want the one complaint for every spelling", src, out, st)
+		}
 	}
 }
 

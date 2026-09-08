@@ -877,20 +877,93 @@ func (r *Runner) unsetReadonly(name string) int {
 	return 1
 }
 
+// unsetWithoutOperands is `unset` with nothing to unset — no operand at all,
+// no name after `-v` or `-f`, and no pattern after `-m`.
+//
+// One place because the panel answers it once, not once per spelling:
+// measured 2026-09-08, zsh 5.9.2 writes `not enough arguments` at 1 for every
+// one of those four, and bash 5.3, bash 3.2 and dash are silent at 0 for
+// every one they have. So the wording is the whole answer and an empty one
+// means the dialect says nothing and reports success.
+//
+// ksh93 is the panel member this does not yet cover: it writes its usage line
+// and, `unset` being one of its special builtins, ends the script. That is
+// the usage-line shape rather than this sentence, and it is left recorded in
+// the corpus rather than guessed at here.
+func (r *Runner) unsetWithoutOperands(name string) int {
+	wording := r.diag().UnsetNoOperands
+	if wording == "" {
+		return 0
+	}
+	r.diagf("%s\n", Wording(wording, "%[1]s: not enough arguments", name))
+	return 1
+}
+
+// unsetFunctions is the `-f` half of `unset`, which is the whole of
+// `unfunction`.
+//
+// Its own function because the second name must be the *same* removal and not
+// a copy of it: the name check, the prelude's functions being untouchable and
+// the "no such hash table element" complaint are all one implementation, so a
+// fix to any of them reaches both words. See functionsbuiltin.go.
+func (r *Runner) unsetFunctions(names []string, matching bool) int {
+	if matching {
+		return r.unsetMatchingFunctions(names)
+	}
+	status := 0
+	for _, name := range names {
+		if code := r.unsetFunction(name); code != 0 {
+			status = code
+		}
+	}
+	return status
+}
+
+// unsetMatchingFunctions is `unset -f -m`, and so `unfunction -m`: each
+// operand is a pattern and every function whose *name* it matches goes.
+//
+// The letter used to be read before `-f` was, so `unset -f -m 'zi-*'` walked
+// the *parameter* table and removed variables while every function it named
+// survived — a wrong thing done in silence at status 0, which is the failure
+// class this tree keeps finding.
+//
+// Nothing matching is 1 rather than 0, measured on all three spellings: a
+// removal that removed nothing has not done what it was asked, where the
+// listing under the same letter has. One pattern matching is enough —
+// `unfunction -m 'f*' 'zz*'` with an `fa` defined is 0.
+func (r *Runner) unsetMatchingFunctions(patterns []string) int {
+	matched := false
+	for _, pattern := range patterns {
+		o := r.patternOpts(pattern)
+		// Collected before anything is removed, because the table being
+		// walked is the one being changed.
+		for _, name := range r.scriptFuncNames() {
+			if !matchPattern(pattern, name, o) {
+				continue
+			}
+			matched = true
+			r.removeFunction(name)
+		}
+	}
+	if !matched {
+		return 1
+	}
+	return 0
+}
+
 // unsetMatching is `unset -m`: each operand is a pattern, and every parameter
 // whose name it matches goes.
 //
 // The names are collected before anything is removed, because the tables are
 // what is being walked; and they are sorted so that a diagnostic from one
 // removal — a readonly name — arrives in the same order every run.
+//
+// Nothing matching is 1, the same answer the function table's `-m` gives and
+// measured the same way: `unset -m 'zz*'` in zsh 5.9.2 with no such parameter
+// is a silent 1, and this reported success.
 func (r *Runner) unsetMatching(patterns []string) int {
-	if len(patterns) == 0 {
-		// Measured: zsh refuses the letter with nothing to match rather
-		// than treating it as `unset` with no operands, which is silent.
-		r.diagf("%s\n", Wording(r.diag().UnsetPatternUsage, "%[1]s: not enough arguments", "unset"))
-		return 1
-	}
 	status := 0
+	matched := false
 	for _, pattern := range patterns {
 		// Collected before anything is removed, because what is being
 		// walked is the tables themselves; and sorted, so that a refusal
@@ -900,6 +973,7 @@ func (r *Runner) unsetMatching(patterns []string) int {
 			if !matchPattern(pattern, name, o) {
 				continue
 			}
+			matched = true
 			if code := r.unsetReadonly(name); code != 0 {
 				status = code
 				if r.ctl == controlExit {
@@ -909,6 +983,9 @@ func (r *Runner) unsetMatching(patterns []string) int {
 			}
 			r.unsetName(name)
 		}
+	}
+	if !matched && status == 0 {
+		return 1
 	}
 	return status
 }
@@ -961,26 +1038,32 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
-	if strings.ContainsRune(opts, 'm') {
-		// `unset -m` reads its operands as patterns and unsets every
-		// parameter whose *name* matches one. Ahead of `-f`, because the
-		// two are the same question asked of two namespaces and only the
-		// variable one is measured here; and ahead of the name check,
-		// because a pattern is not a name and would not survive it.
-		return r.unsetMatching(args)
+	if len(args) == 0 {
+		// Nothing to unset, however it was spelled. Ahead of every branch
+		// below because the one shell that complains gives the same sentence
+		// for a bare `unset`, for `-v` and `-f` with no name, and for `-m`
+		// with no pattern — see unsetWithoutOperands.
+		return r.unsetWithoutOperands("unset")
 	}
 	if strings.ContainsRune(opts, 'f') {
 		// `unset -f` is about functions and not about variables, unanimously
 		// — and the option was read and then ignored, so a function survived
 		// being unset and went on answering to its name. The exported set
 		// goes with it: what is not a function cannot be carried as one.
-		status := 0
-		for _, name := range args {
-			if code := r.unsetFunction(name); code != 0 {
-				status = code
-			}
-		}
-		return status
+		//
+		// Ahead of `-m` rather than behind it, which is the fix and not the
+		// arrangement: `-m` used to be read first and take the operands as
+		// patterns over the *parameter* table, so `unset -f -m 'f*'` removed
+		// variables and left every function it was asked about standing.
+		// The two letters together are one question — which namespace the
+		// patterns are matched in — and `-f` is what answers it.
+		return r.unsetFunctions(args, strings.ContainsRune(opts, 'm'))
+	}
+	if strings.ContainsRune(opts, 'm') {
+		// `unset -m` reads its operands as patterns and unsets every
+		// parameter whose *name* matches one. Ahead of the name check,
+		// because a pattern is not a name and would not survive it.
+		return r.unsetMatching(args)
 	}
 	// After `-f`, so that a function name keeps its own laxer rule: bash
 	// takes `unset -f 1x` without a word where it refuses `unset 1x`.

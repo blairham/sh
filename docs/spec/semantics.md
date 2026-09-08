@@ -7070,6 +7070,34 @@ Asked only where there is nothing to return from. Inside a function and
 inside a sourced file all four obey it, so the question is about the one
 case they split on.
 
+**`StartupFileReturnCarriesItsArgument`** — bash no · dash yes · ksh93 yes · zsh yes
+
+Makes `return 3` at the top of a startup file leave `$?` as 3, instead of
+leaving whatever the command before it left.
+
+A startup file *is* a sourced script, so a `return` in one is accepted by
+every shell in the panel, stops reading the file there, and is diagnosed
+by nobody. The split is over the argument alone. Measured 2026-09-07
+through a pty, reading `$?` at the first prompt:
+
+| rc file | bash 5.3.15 | bash32 | bash-as-sh | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `return 3` | 0 | 0 | 0 | 3 | 3 | 3 |
+| `false; return 3` | 1 | 1 | 1 | 3 | 3 | 3 |
+| `false; return` | 1 | 1 | 1 | 1 | 1 | 1 |
+| `(exit 5)` | 5 | 5 | 5 | 5 | 5 | 5 |
+
+The last two rows are what make it the argument and nothing else: bash
+does carry a startup file's status out, and a bare `return` means the
+last command's status everywhere.
+
+Asked only of a `return` at the top level of the startup file. One inside
+a function the file calls, or inside a file the file sources, carries its
+argument in bash too — measured, an rc running `f(){ return 3; }; f` or
+`. inner.sh` leaves 3 in bash 5.3.15 — so it is a property of the
+outermost frame rather than of `return`. See `docs/spec/invocation.md`
+for the neighbouring routes.
+
 
 ### jobs, `kill` and background work
 

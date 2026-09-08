@@ -152,6 +152,11 @@ func TestSemantics(t *testing.T) {
 		{"SetHasTheHLetter", s.SetHasTheHLetter, interp.No},
 		{"MonitorNeedsATerminal", s.MonitorNeedsATerminal, interp.Yes},
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
+		// And a `return` at the top of a startup file, which every shell in
+		// the panel obeys: this one keeps the argument, where bash discards
+		// it. Measured through a pty — an rc of `return 3` and one of
+		// `false; return 3` both leave `$?` as 3 at the first prompt (#1422).
+		{"StartupFileReturnCarriesItsArgument", s.StartupFileReturnCarriesItsArgument, interp.Yes},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
 		// A failed expansion ends the shell here, which is the standard's
 		// answer and this preset's by inheritance (#1171).

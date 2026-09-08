@@ -655,6 +655,13 @@ func Semantics() interp.Semantics {
 	s.BadSetOptionNameFatal = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.Yes
+	// A startup file is a sourced script, so a `return` in one is accepted
+	// everywhere — the split is only over what its argument does. bash
+	// discards it: measured through a pty, an rc of `return 3` leaves `$?`
+	// as 0 at the first prompt and one of `false; return 3` leaves 1, while
+	// `(exit 5)` as the last line leaves 5. So the file's status does
+	// carry out and the number on the `return` does not.
+	s.StartupFileReturnCarriesItsArgument = interp.No
 	s.LoneDashIsAnOption = interp.No
 	s.UnsetFunctionChecksTheName = interp.No
 	s.UnsetFunctionReportsMissing = interp.No

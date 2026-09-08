@@ -270,3 +270,47 @@ func TestAnExitInAStartupFileStillEndsTheSession(t *testing.T) {
 		t.Errorf("status = %d, want 3", r.ExitStatus())
 	}
 }
+
+// A startup file is a sourced script, which is what gives a `return` in one
+// something to return from.
+//
+// The probe is deliberately **unconditional**. The natural one —
+// `[ -z "$PS1" ] && return` — cannot tell the hypotheses apart: where PS1 is
+// set the guard never fires and the `return` never runs, so the file reads as
+// accepted whether or not the shell would have accepted it (#1422).
+//
+// Measured through a pty with `echo BEFORE; return 3; echo AFTER` as the whole
+// file: bash 5.3.15, bash 3.2.57, bash under argv[0] `sh`, dash, ksh93 and zsh
+// 5.9.2 all print BEFORE, stop there, and diagnose nothing.
+func TestAReturnInAStartupFileIsObeyed(t *testing.T) {
+	home := t.TempDir()
+	write(t, filepath.Join(home, "rc.sh"), "BEFORE=yes\nreturn 3\nAFTER=yes\n")
+	sem := interp.PosixSemantics()
+	// The answer that refuses a `return` with nothing to return from, on
+	// purpose: a startup file has to be a place one is obeyed *whatever* a
+	// script's own top level does, and a test that answered No here would
+	// pass for a shell that had never been given a frame.
+	sem.ReturnOutsideAFunctionIsRefused = interp.Yes
+	sem.StartupFileReturnCarriesItsArgument = interp.Yes
+	out := &strings.Builder{}
+	sh := Shell{Semantics: sem, Stdout: out, Stderr: out}
+	r := &interp.Runner{
+		Semantics: &sem, Stdout: out, Stderr: out,
+		Vars: map[string]string{"HOME": home, "ENV": filepath.Join(home, "rc.sh")},
+	}
+	if code := sh.startup(r, source{interactive: true}); code != 0 {
+		t.Fatalf("startup reported %d", code)
+	}
+	if _, ok := r.GetVar("BEFORE"); !ok {
+		t.Error("the lines before the return did not run")
+	}
+	if _, ok := r.GetVar("AFTER"); ok {
+		t.Error("the file did not stop at the return")
+	}
+	if said := out.String(); said != "" {
+		t.Errorf("said %q, want nothing — no shell in the panel diagnoses this", said)
+	}
+	if r.ExitStatus() != 3 {
+		t.Errorf("status = %d, want the returned 3", r.ExitStatus())
+	}
+}

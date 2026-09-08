@@ -12669,6 +12669,54 @@ echo "read=[$l]"`,
 		Snippet: `echo "[${PS1+set}][${PS1-unset}]"`,
 		Why:     "the other side of the same guard, and the direction it is easy to break by getting the value right: three answers here where the row above is unanimous. bash 5.3.15, bash 3.2.57, bash under argv[0] `sh` and ksh93 leave PS1 *unset* with nobody to prompt — which is exactly what the guard detects — dash assigns the same `$ ` it prompts with, and zsh assigns the empty string. Set-and-empty is a third answer rather than a spelling of unset, which is why the row prints both `+` and `-`",
 	},
+	// --- `return` in a startup file (#1422) ---------------------------
+	//
+	// A startup file *is* a sourced script, so a `return` in one is accepted,
+	// stops reading the file there, and is diagnosed by nobody. That is how a
+	// real `~/.bashrc` bails out early. Ours refused it, which both wrote a
+	// line into every startup and left the file running past the point it
+	// meant to stop.
+	//
+	// The probes are **unconditional** on purpose. The natural one —
+	// `[ -z "$PS1" ] && return` — cannot tell the hypotheses apart: where PS1
+	// is set the guard never fires and the `return` never runs, so the file
+	// reads as accepted whether or not the shell would have accepted it.
+	//
+	// `Argv0: "sh"` because that is the one name every column reads `$ENV`
+	// under, which is what makes this the same question in all six.
+	{
+		ID: "startup/a-return-in-a-startup-file-stops-it", Category: "invocation",
+		Argv0:   "sh",
+		Env:     []string{"ENV=" + ArgScript},
+		Args:    []string{"-i", "-c", `printf "MAIN<%s>\n" "$?"`},
+		Snippet: "echo BEFORE\nreturn 3\necho AFTER\n",
+		Why:     "unanimous on the part that matters: BEFORE runs, AFTER does not, and no column says a word about it. The status splits — the three bash members leave 0 and dash, ksh93 and zsh leave 3 — which is the argument being discarded rather than the return being refused; see the two cases after this one for what isolates that",
+	},
+	{
+		ID: "startup/a-startup-files-return-argument", Category: "invocation",
+		Argv0:   "sh",
+		Env:     []string{"ENV=" + ArgScript},
+		Args:    []string{"-i", "-c", `printf "MAIN<%s>\n" "$?"`},
+		Snippet: "echo BEFORE\nfalse\nreturn 3\n",
+		Why:     "the same split with a failing command in front of the `return`, which is what says bash discards the *argument* rather than the file's status: bash leaves 1, the status `false` left, where dash, ksh93 and zsh leave the 3 that was written. Semantics.StartupFileReturnCarriesItsArgument",
+	},
+	{
+		ID: "startup/a-startup-files-bare-return", Category: "invocation",
+		Argv0:   "sh",
+		Env:     []string{"ENV=" + ArgScript},
+		Args:    []string{"-i", "-c", `printf "MAIN<%s>\n" "$?"`},
+		Snippet: "echo BEFORE\nfalse\nreturn\n",
+		Why:     "and unanimous again with no argument to discard: every column leaves 1, the last command's status. The three together are what make the axis about the argument and about nothing else — pair them with startup/a-startup-file-carries-its-status-out",
+	},
+	{
+		ID: "startup/a-startup-file-carries-its-status-out", Category: "invocation",
+		Argv0:   "sh",
+		Env:     []string{"ENV=" + ArgScript},
+		Args:    []string{"-i", "-c", `printf "MAIN<%s>\n" "$?"`},
+		Snippet: "echo BEFORE\n(exit 5)\n",
+		Why:     "the control: with no `return` in it at all, a startup file's status reaches the first thing the shell runs afterwards in every column, bash included. So bash does carry the file's status out and discards only the number written on a `return`",
+	},
+
 	{
 		ID: "prompt/the-startup-file-sees-the-default-prompt", Category: "invocation",
 		Argv0:   "sh",

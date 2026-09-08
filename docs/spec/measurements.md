@@ -12177,6 +12177,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `env/the-interactive-file-that-is-not-there` | `main` **2>** `<shell>: 0: can't access tty; job control turned off` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: no job control in this shell` | `main` | `main` |
 | `prompt/the-default-prompt-is-a-parameter-at-a-prompt` | `[set][nonempty]` **2>** `<shell>: 0: can't access tty; job control turned off` | `[set][nonempty]` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `[set][nonempty]` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `[set][nonempty]` **2>** `<shell>: no job control in this shell` | `[set][nonempty]` | `[set][nonempty]` |
 | `prompt/the-default-prompt-is-not-a-parameter-without-one` | `[set][$ ]` | `[][unset]` | `[][unset]` | `[][unset]` | `[][unset]` | `[set][]` |
+| `startup/a-return-in-a-startup-file-stops-it` | `BEFORE~MAIN<3>` **2>** `<shell>: 0: can't access tty; job control turned off` | `BEFORE~MAIN<0>` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `BEFORE~MAIN<0>` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `BEFORE~MAIN<0>` **2>** `<shell>: no job control in this shell` | `BEFORE~MAIN<3>` | `BEFORE~MAIN<3>` |
+| `startup/a-startup-files-return-argument` | `BEFORE~MAIN<3>` **2>** `<shell>: 0: can't access tty; job control turned off` | `BEFORE~MAIN<1>` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `BEFORE~MAIN<1>` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `BEFORE~MAIN<1>` **2>** `<shell>: no job control in this shell` | `BEFORE~MAIN<3>` | `BEFORE~MAIN<3>` |
+| `startup/a-startup-files-bare-return` | `BEFORE~MAIN<1>` **2>** `<shell>: 0: can't access tty; job control turned off` | `BEFORE~MAIN<1>` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `BEFORE~MAIN<1>` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `BEFORE~MAIN<1>` **2>** `<shell>: no job control in this shell` | `BEFORE~MAIN<1>` | `BEFORE~MAIN<1>` |
+| `startup/a-startup-file-carries-its-status-out` | `BEFORE~MAIN<5>` **2>** `<shell>: 0: can't access tty; job control turned off` | `BEFORE~MAIN<5>` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `BEFORE~MAIN<5>` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `BEFORE~MAIN<5>` **2>** `<shell>: no job control in this shell` | `BEFORE~MAIN<5>` | `BEFORE~MAIN<5>` |
 | `prompt/the-startup-file-sees-the-default-prompt` | `RC[set][nonempty]~main` **2>** `<shell>: 0: can't access tty; job control turned off` | `RC[set][nonempty]~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `RC[set][nonempty]~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `RC[set][nonempty]~main` **2>** `<shell>: no job control in this shell` | `RC[][]~main` | `RC[set][nonempty]~main` |
 
 - `set/posix-mode-makes-a-failed-redirection-fatal` — the same binary, both answers: bash 5.3 and bash 3.2 print `after` without this line and stop at 1 with it, which is the bash-as-`sh` column reached at run time. The other three have no such name and refuse the `set` instead, each in its own words
@@ -12485,6 +12489,29 @@ grades it and nothing drift-checks it either, for the same reason.
 - `prompt/the-default-prompt-is-not-a-parameter-without-one` — the other side of the same guard, and the direction it is easy to break by getting the value right: three answers here where the row above is unanimous. bash 5.3.15, bash 3.2.57, bash under argv[0] `sh` and ksh93 leave PS1 *unset* with nobody to prompt — which is exactly what the guard detects — dash assigns the same `$ ` it prompts with, and zsh assigns the empty string. Set-and-empty is a third answer rather than a spelling of unset, which is why the row prints both `+` and `-`
   ```sh
   echo "[${PS1+set}][${PS1-unset}]"
+  ```
+- `startup/a-return-in-a-startup-file-stops-it` — unanimous on the part that matters: BEFORE runs, AFTER does not, and no column says a word about it. The status splits — the three bash members leave 0 and dash, ksh93 and zsh leave 3 — which is the argument being discarded rather than the return being refused; see the two cases after this one for what isolates that
+  ```sh
+  echo BEFORE
+  return 3
+  echo AFTER
+  ```
+- `startup/a-startup-files-return-argument` — the same split with a failing command in front of the `return`, which is what says bash discards the *argument* rather than the file's status: bash leaves 1, the status `false` left, where dash, ksh93 and zsh leave the 3 that was written. Semantics.StartupFileReturnCarriesItsArgument
+  ```sh
+  echo BEFORE
+  false
+  return 3
+  ```
+- `startup/a-startup-files-bare-return` — and unanimous again with no argument to discard: every column leaves 1, the last command's status. The three together are what make the axis about the argument and about nothing else — pair them with startup/a-startup-file-carries-its-status-out
+  ```sh
+  echo BEFORE
+  false
+  return
+  ```
+- `startup/a-startup-file-carries-its-status-out` — the control: with no `return` in it at all, a startup file's status reaches the first thing the shell runs afterwards in every column, bash included. So bash does carry the file's status out and discards only the number written on a `return`
+  ```sh
+  echo BEFORE
+  (exit 5)
   ```
 - `prompt/the-startup-file-sees-the-default-prompt` — the daily-driver shape: what a person's run-commands file finds when it runs. Five of the six columns have the default in hand before the file, which is what makes the guard mean what it was written to mean. ksh93 is the one that waits — PS1 is unset while `$ENV` runs and reads `$ ` by the time a prompt is drawn, while its PS2 and PS4 are already set — so the disagreement is about the moment and not the value, and it is a row of the prompt table rather than an axis
   ```sh

@@ -294,7 +294,12 @@ func (sh Shell) sourceText(r *interp.Runner, path, text string) int {
 		sh.errf("%s", sh.Diagnostics.ParseDiagnostic(path, text, perr, text))
 		return sh.Diagnostics.StatusForParseError(perr)
 	}
-	if _, err := r.Run(context.Background(), f); err != nil {
+	// As the sourced script it is, which is what gives a `return` in it
+	// something to return from: every shell in the panel accepts one in a
+	// startup file, stops reading the file there and says nothing (#1422).
+	// Run would have made this a script's own top level, where the refusal
+	// belongs.
+	if _, err := r.RunStartupFile(context.Background(), f); err != nil {
 		sh.errf("%s", sh.Diagnostics.Report(path, 1, err.Error()+"\n"))
 		return usageStatus
 	}

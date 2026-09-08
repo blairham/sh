@@ -1661,3 +1661,56 @@ environment of the shell already running it, so until this existed neither
 startup input could be graded at all — only described. A value may name the
 scratch script with `ArgScript`, which is what lets a case point the startup
 file at its own snippet.
+
+## `return` in a startup file
+
+A startup file **is** a sourced script, so a `return` in one is legal. It is
+how a real `~/.bashrc` bails out early, most often as the guard
+`[ -z "$PS1" ] && return`.
+
+**Measured** 2026-09-07 through a pseudo-terminal — no `-c`, no `-i` — with
+the rc file as the whole probe and `$?` read at the first prompt. The probe is
+**unconditional** (`echo BEFORE; return 3; echo AFTER`) on purpose: the
+natural guard cannot tell the hypotheses apart, because where `PS1` is set the
+guard never fires and the `return` never runs.
+
+Unanimous on what happens: every column prints `BEFORE`, stops reading the
+file there, and **diagnoses nothing**.
+
+The split is over the argument, and over nothing else:
+
+| rc file | bash 5.3.15 | bash32 | bash-as-sh | dash | ksh93 | zsh |
+|---|---|---|---|---|---|---|
+| `return 3` | 0 | 0 | 0 | 3 | 3 | 3 |
+| `false; return 3` | 1 | 1 | 1 | 3 | 3 | 3 |
+| `false; return` | 1 | 1 | 1 | 1 | 1 | 1 |
+| `(exit 5)` | 5 | 5 | 5 | 5 | 5 | 5 |
+
+The last two rows are what make it about the argument. bash does carry a
+startup file's status out — `(exit 5)` leaves 5 — and a `return` with no
+argument means the last command's status everywhere. The only thing bash
+discards is the number written on the `return` itself, and only when the
+`return` is at the **top level of the startup file**: an rc running
+`f(){ return 3; }; f`, or `. inner.sh` where inner returns 3, leaves 3 in bash
+too. `Semantics.StartupFileReturnCarriesItsArgument`.
+
+Recorded as `startup/a-return-in-a-startup-file-stops-it`,
+`startup/a-startup-files-return-argument`, `startup/a-startup-files-bare-return`
+and `startup/a-startup-file-carries-its-status-out`.
+
+### The neighbouring routes, for contrast
+
+| where the `return` is | bash 5.3.15 / bash32 | bash-as-sh | dash / ksh93 / zsh |
+|---|---|---|---|
+| a startup file | obeyed, silent | obeyed, silent | obeyed, silent |
+| a file given to `.` | obeyed, status is the argument | same | same |
+| the top level of a script | refused, script carries on, exit 0 | refused, script **stops**, exit 2 | obeyed, script ends with the argument |
+| an interactive prompt | refused, session continues | refused, session continues | accepted silently |
+
+The third row is `Semantics.ReturnOutsideAFunctionIsRefused` plus the
+special-builtin fatality that POSIX mode adds, and it was already right. The
+first row is the one that was wrong: the front end parsed a startup file for
+the sake of a diagnostic that names it as a file, and then handed the
+statements to the entry point for a *script's own top level* — so there was
+nothing to return from, and the refusal that belongs to the third row fired in
+the first. `interp.Runner.RunStartupFile` is the entry point that does not.

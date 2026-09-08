@@ -84,6 +84,46 @@ func TestEveryDialectResolvesToARegisteredShell(t *testing.T) {
 	}
 }
 
+// The same rule for the prompt table, which is the half that got away.
+//
+// A dialect's default prompts stopped being decoration when they became
+// *parameters*: an interactive shell assigns them into PS1 and PS2 before its
+// startup files, so a script can read them and the standard rc guard
+// `[ -z "$PS1" ] && return` turns on them (#1421). Left out of this
+// constructor, `sh -dialect bash` was a bash whose PS1 was unset where
+// `./bash`'s was `\s-\v\$ ` — and this is the binary the conformance
+// harness grades, so the corpus would have scored the core driver down for a
+// difference the dialect binary does not have.
+//
+// Non-empty rather than compared to a literal: which string belongs to which
+// shell is asserted in dialect/<shell>/prompt_test.go, and repeating it here
+// would be a second copy to forget. What this asks is that the table traveled
+// at all.
+func TestEveryDialectResolvesWithItsPromptTable(t *testing.T) {
+	for _, name := range []string{"bash", "zsh", "ksh", "dash"} {
+		sh, err := pickDialect(name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if sh.PromptStyle.Default == "" || sh.PromptStyle.DefaultContinued == "" {
+			t.Errorf("%s: default prompts %q/%q, want the dialect's own",
+				name, sh.PromptStyle.Default, sh.PromptStyle.DefaultContinued)
+		}
+	}
+	for _, name := range []string{"core", "posix"} {
+		sh, err := pickDialect(name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		// A shell with no dialect invents no prompt: the substrate's own
+		// `$ ` and `> ` stay something the drawer falls back to rather than a
+		// value written into PS1.
+		if sh.PromptStyle.Default != "" {
+			t.Errorf("%s: default prompt = %q, want none", name, sh.PromptStyle.Default)
+		}
+	}
+}
+
 func TestDetailShowsQuotingPerSpan(t *testing.T) {
 	// The quoting is the part that decides what happens to a word later and
 	// the part hardest to see by eye, so the dump has to make it visible.

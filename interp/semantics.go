@@ -3269,6 +3269,21 @@ type Semantics struct {
 	// the panel answers a=[X].
 	ReadRefusesABadNameBeforeReading Answer
 
+	// ReadCountJudgesTheNamesAfterTheFirst keeps judging `read`'s operands
+	// as names when `-n` or `-N` gave it a count.
+	//
+	// bash does; ksh93 stops at the first. Measured 2026-09-07 with
+	// `printf 'XYZW\n' | { read -n 3 a 1bad; }`: bash refuses `1bad` and
+	// fills a with XYZ, and ksh93 fills a with XYZ and says nothing. Without
+	// a count the two agree — `read a 1bad` is refused in both — so it is
+	// the count that moves it and not the operand.
+	//
+	// Left unanswered in the two dialects that cannot reach it: dash has no
+	// count letter at all, and zsh's `-k` reads from the terminal rather
+	// than from the stream, so neither ever asks. An answer there would be a
+	// claim nothing measured.
+	ReadCountJudgesTheNamesAfterTheFirst Answer
+
 	// ReadPromptOperand says whether `read`'s first operand may carry a
 	// prompt after a `?`, and what an operand that is nothing else names.
 	//
@@ -4907,6 +4922,10 @@ func PosixSemantics() Semantics {
 		// ones that are not names, which puts the check on the arguments
 		// rather than on the line: nothing has been read when it fails.
 		ReadRefusesABadNameBeforeReading: Yes,
+		// ReadCountJudgesTheNamesAfterTheFirst is left unanswered on
+		// purpose: the standard has no `-n` and no `-N`, so a core with no
+		// count never asks, and an answer here would be read as a reading of
+		// a sentence that does not exist.
 		// The core has arrays — they are in the common denominator even
 		// though POSIX has none — so `unset a[0]` names an element and
 		// removes it, which is what three of the four do and the only part

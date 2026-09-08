@@ -182,3 +182,32 @@ func TestTheReadPromptOperandIsTwoDialectsAndOneOfThemIsStricter(t *testing.T) {
 		})
 	}
 }
+
+// A count changes who is judged past the first name, and it is the only thing
+// that does: `printf 'XYZW\n' | { b=keep; read -n 3 a 1bad b; }` refuses in
+// bash and is quiet in ksh93, where `read a 1bad` is refused in both. The
+// filling stops at the bad name in each — b keeps what it had — so what the
+// count releases is the complaint and not the list.
+//
+// dash and zsh are not rows here because neither can reach it: dash has no
+// count letter, and zsh's `-n` is a flag rather than a count.
+func TestAReadCountReleasesTheNamesAfterTheFirstInOneDialect(t *testing.T) {
+	for _, c := range []struct {
+		dialect string
+		want    string
+	}{
+		{"bash", "bash: line 1: read: `1bad': not a valid identifier\nst=1 a=[XYZ] b=[keep]\n"},
+		{"ksh", "st=0 a=[XYZ] b=[keep]\n"},
+	} {
+		t.Run(c.dialect, func(t *testing.T) {
+			out, _, err := presets[c.dialect].Combined(t, dialecttest.Base{},
+				`printf 'XYZW\n' | { b=keep; read -n 3 a 1bad b; echo "st=$? a=[$a] b=[$b]"; }`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out != c.want {
+				t.Errorf("said %q, want %q", out, c.want)
+			}
+		})
+	}
+}

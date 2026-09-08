@@ -441,12 +441,20 @@ every shell reports `a` as not found. That measures same-line-versus-next
 line, which is what `alias/not-on-the-line-that-defines-it` covers. The
 route only shows itself when the `-c` string carries a real newline.
 
-So `Dialect.ExpandAliases` is a **set of routes**, `AliasRoutes`, and the
-front end asks it with the route it read: a command string, a file, or
-standard input. That is the same three-way split `$0` already turns on,
-and for the same reason — how a program arrived is the front end's fact
-and nothing else knows it. The parser never reads the set; whoever knows
-the route hands the table of aliases in, or leaves it nil.
+So `Dialect.ExpandAliases` is a **set of routes**, `ProgramRoutes`, and
+the front end asks it with the route it read: a command string, a file,
+or standard input. That is the same three-way split `$0` already turns
+on, and for the same reason — how a program arrived is the front end's
+fact and nothing else knows it. The parser never reads *this* set;
+whoever knows the route hands the table of aliases in, or leaves it nil.
+
+It is no longer the only question of that shape. `CloseQuotesAtEOF` is a
+set of the same routes, and the parser does read that one: ksh93 ends an
+unterminated quote at the end of a command string and refuses the same
+text in a file, so the route rides on `Dialect.ProgramRoute` and the
+lexer asks whether it is in the set. The empty route is in no set, which
+is what makes the strict answer what a parse gets when nobody said how
+its text arrived.
 
 The algorithm, four rules, each measured and unanimous across the shells
 that expand aliases in scripts:

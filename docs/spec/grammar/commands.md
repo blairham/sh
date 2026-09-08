@@ -246,8 +246,9 @@ prompt with PS2 there, so the terminal answer is unanimous and the
 disagreement is only about what a *file* ending on the operator means.
 
 Whether input that ran out ends the list therefore depends on the route
-it arrived by, the way alias expansion does (`AliasRoutes`), and it
-cannot be answered by a flag the parser reads on its own. Until it is
+it arrived by, the way alias expansion does and the way an unterminated
+quote does (`ProgramRoutes`), and it cannot be answered by a flag the
+parser reads on its own. Until it is
 asked where it is answered, input ending on `&&` stays **unfinished** in
 every dialect — right for the terminal in all six columns, and right for
 a file in five of the six.

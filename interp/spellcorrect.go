@@ -159,7 +159,6 @@ func (r *Runner) correctPath(operand string) string {
 	if strings.HasPrefix(operand, "/") {
 		at = "/"
 	}
-	corrected := false
 	for i, part := range parts {
 		if part == "" || part == "." || part == ".." {
 			// An empty part is the leading slash or a trailing one; both are
@@ -176,17 +175,23 @@ func (r *Runner) correctPath(operand string) string {
 			return ""
 		}
 		parts[i] = match
-		corrected = true
 		at = filepath.Join(at, match)
 	}
-	if !corrected {
+	fixed := strings.Join(parts, "/")
+	if fixed == operand {
 		// Nothing was wrong with the spelling, so whatever stopped `cd` is
 		// not something this can fix — a permission, a name that is a file,
 		// a symlink that leads nowhere. Answering with the operand unchanged
 		// would make the caller print a "correction" that corrected nothing.
+		//
+		// Asked of the text rather than of a flag set while walking, which is
+		// the difference between an invariant and a convention: withinOneEdit
+		// refuses a name identical to the one typed, and a flag would have
+		// been trusting it to. Two guards where one of them cannot be wrong
+		// is worth more than one that has to be read to be believed.
 		return ""
 	}
-	return strings.Join(parts, "/")
+	return fixed
 }
 
 // cdCorrected is `cd`'s second attempt at an operand that did not resolve: the

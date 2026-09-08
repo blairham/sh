@@ -211,3 +211,36 @@ func TestAReadCountReleasesTheNamesAfterTheFirstInOneDialect(t *testing.T) {
 		})
 	}
 }
+
+// The array letter decides whether the array survives an operand behind it
+// that is not a name, and the two dialects that have a letter answer it
+// oppositely. Measured 2026-09-07 with `printf 'X Y Z\n'`:
+//
+//	bash    read -a arr 1bad   `1bad' refused, ${arr[@]} empty
+//	ksh93   read -A arr 1bad   1bad refused, arr holding the line
+//
+// Here rather than only in interp, because this is where the array
+// expansion works: the standard has no arrays, so a synthetic vector renders
+// `${arr[@]}` empty whether the array was filled or not — which is exactly
+// how a mutant that filled it anyway came to survive.
+func TestTheReadArrayLetterDecidesWhetherTheArraySurvivesARefusal(t *testing.T) {
+	for _, c := range []struct{ dialect, src, want string }{
+		{"bash", `printf 'X Y Z\n' | { b=keep; read -a arr 1bad b; echo "st=$? arr=[${arr[@]}] b=[$b]"; }`, "st=1 arr=[] b=[keep]"},
+		{"ksh", `printf 'X Y Z\n' | { b=keep; read -A arr 1bad b; echo "st=$? arr=[${arr[@]}] b=[$b]"; }`, "st=1 arr=[X Y Z] b=[keep]"},
+		// And with the bad name behind a good one, where the check in front
+		// of the read cannot reach it: bash ignores the operands its `-a`
+		// left standing and ksh93 judges them.
+		{"bash", `printf 'X Y Z\n' | { read -a arr good 1bad; echo "st=$? arr=[${arr[@]}] good=[$good]"; }`, "st=0 arr=[X Y Z] good=[]"},
+		{"ksh", `printf 'X Y Z\n' | { read -A arr good 1bad; echo "st=$? arr=[${arr[@]}] good=[$good]"; }`, "st=1 arr=[X Y Z] good=[]"},
+	} {
+		t.Run(c.dialect, func(t *testing.T) {
+			out, _, err := presets[c.dialect].Combined(t, dialecttest.Base{}, c.src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out, c.want) {
+				t.Errorf("said %q, want %q", out, c.want)
+			}
+		})
+	}
+}

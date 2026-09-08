@@ -10,6 +10,20 @@ import (
 	. "github.com/blairham/sh/interp"
 )
 
+// arraySemantics answers what an array *expansion* needs, which permissive() does not:
+// the standard has no arrays, so `${arr[@]}` reads back empty under it however
+// full the array is. A row asserting that a refusal left an array untouched
+// cannot see the difference without this — the mutant that filled it anyway
+// survived, because both answers rendered `arr=[]`.
+func arraySemantics(s *Semantics) {
+	s.ArraysAreSparse = Yes
+	s.ArrayScalarIsTheWholeArray = No
+	s.ArrayLiteralSubscriptIsAKey = No
+	s.NegativeSubscriptPastTheStartInserts = No
+	s.IndirectionYieldsName = No
+	s.ArithNameValueRecurses = Yes
+}
+
 // readRun is optRun with `read`'s own fatality turned off, so a test that is
 // not about the fatality gets to see what happened after the refusal.
 func readRun(t *testing.T, tweak func(*Semantics), dg Diagnostics, src string) (string, int) {
@@ -455,15 +469,17 @@ func TestAnExactCountStopsFillingAtABadReadName(t *testing.T) {
 	}
 }
 
-// Whether the array is still filled once an operand behind it is not a name
-// rides the letter rather than an axis, because the letters differ and no
-// shell has both. Measured 2026-09-07 with `b=keep` on the end of each:
+// Which operands are judged at all rides the array letter, because the
+// letters differ and no shell has both. Measured 2026-09-07:
 //
-//	bash    read -a arr 1bad b   `1bad' refused, ${arr[@]} empty, b keep
-//	ksh93   read -A arr 1bad b   1bad refused, arr holds the line, b keep
+//	bash    read -a arr good 1bad   0, array filled, not a word said
+//	ksh93   read -A arr good 1bad   1bad refused, array filled behind it
 //
-// The clearing `-A` does to the operands after its array stops at the bad
-// name too, which is what leaves b alone in the second row.
+// bash's `-a` takes the array's name in the option's argument and ignores
+// the operands after it — `b=keep; read -a arr b` leaves b as keep — so only
+// the first is judged, by the check in front of the read. ksh93's `-A` takes
+// its name from among the operands and judges the rest, clearing the ones it
+// filled and stopping at the bad one.
 func TestWhetherAReadArrayIsFilledBehindABadNameRidesTheLetter(t *testing.T) {
 	for _, c := range []struct{ name, letters, src, want string }{
 		{
@@ -478,9 +494,27 @@ func TestWhetherAReadArrayIsFilledBehindABadNameRidesTheLetter(t *testing.T) {
 			`printf 'X Y Z\n' | { b=keep; read -A arr 1bad b; echo "st=$? arr=[${arr[@]}] b=[$b]"; }`,
 			"st=1 arr=[X Y Z] b=[keep]",
 		},
+		{
+			// The row the walk got wrong: with the bad name behind a good
+			// one the check in front of the read never sees it, so this is
+			// the operands themselves being judged or not.
+			"the option's argument ignores what follows it",
+			"ra:",
+			`printf 'X Y Z\n' | { read -a arr good 1bad; echo "st=$? arr=[${arr[@]}] good=[$good]"; }`,
+			"st=0 arr=[X Y Z] good=[]",
+		},
+		{
+			"an operand's array judges what follows it",
+			"rA",
+			`printf 'X Y Z\n' | { read -A arr good 1bad; echo "st=$? arr=[${arr[@]}] good=[$good]"; }`,
+			"st=1 arr=[X Y Z] good=[]",
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			out, _ := readRun(t, func(s *Semantics) { s.ReadOptions = c.letters }, Diagnostics{}, c.src)
+			out, _ := readRun(t, func(s *Semantics) {
+				s.ReadOptions = c.letters
+				arraySemantics(s)
+			}, Diagnostics{}, c.src)
 			if !strings.Contains(out, c.want) {
 				t.Errorf("said %q, want %q", out, c.want)
 			}
@@ -488,7 +522,10 @@ func TestWhetherAReadArrayIsFilledBehindABadNameRidesTheLetter(t *testing.T) {
 	}
 	// An array with no bad operand behind it is filled either way, so the
 	// rule above is about the refusal rather than about the letter alone.
-	out, _ := readRun(t, func(s *Semantics) { s.ReadOptions = "ra:" }, Diagnostics{},
+	out, _ := readRun(t, func(s *Semantics) {
+		s.ReadOptions = "ra:"
+		arraySemantics(s)
+	}, Diagnostics{},
 		`printf 'X Y Z\n' | { read -a arr; echo "st=$? arr=[${arr[@]}]"; }`)
 	if !strings.Contains(out, "st=0 arr=[X Y Z]") {
 		t.Errorf("said %q, want a clean array read to fill it", out)
@@ -498,6 +535,7 @@ func TestWhetherAReadArrayIsFilledBehindABadNameRidesTheLetter(t *testing.T) {
 	out, _ = readRun(t, func(s *Semantics) {
 		s.ReadOptions = "rAN:"
 		s.ReadCountJudgesTheNamesAfterTheFirst = No
+		arraySemantics(s)
 	}, Diagnostics{}, `printf 'XYZW\n' | { b=keep; read -A -N 3 arr 1bad b; echo "st=$? arr=[${arr[@]}] b=[$b]"; }`)
 	if !strings.Contains(out, "st=0 arr=[XYZ] b=[keep]") {
 		t.Errorf("said %q, want st=0 arr=[XYZ] b=[keep]", out)

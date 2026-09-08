@@ -78662,6 +78662,50 @@
         "TimedOut": false
       }
     },
+    "read/an-array-and-a-bad-name-the-first-operand-hides": {
+      "bash": {
+        "Stdout": "st=0 arr=[X Y Z] good=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 arr=[X Y Z] good=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0 arr=[X Y Z] good=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -a~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2 arr=[] good=[]",
+        "Stderr": "\u003cshell\u003e: read: -a: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 arr=[] good=[]",
+        "Stderr": "\u003cshell\u003e:read:1: bad option: -a",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "read/an-array-and-a-closing-separator": {
       "bash": {
         "Stdout": "n=1[a]",

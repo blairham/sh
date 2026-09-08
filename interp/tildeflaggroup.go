@@ -205,18 +205,25 @@ func (r *Runner) markedSeparatorPattern(s syntax.Span) (text string, live, ok bo
 //     past: `${(~j.|.)a#p}` would have to trim a pattern out of text that has
 //     not been joined yet, and where the expansion is quoted, out of text
 //     that has.
-//   - `(qq)` and up, `(q-)`, `(Q)` and `(%)` — the steps that are not a
-//     per-character rewrite. A single `(q)` is one, and is carried; `(q-)`
-//     is not one despite being spelled with a single `q`, because it wraps
-//     a whole word rather than rewriting its characters. Measured with the
-//     same `d`, `${(~q-j.|.)d}` is `'a b|c'` — one pair of quotes round the
-//     join — where quoting each word on its own gives `'a b'|c`.
+//   - `(qq)` and up, `(q-)`, `(q+)`, `(Q)` and `(%)` — the steps that are
+//     not a per-character rewrite. A single `(q)` is one, and is carried;
+//     the two modifier styles are not, despite being spelled with a single
+//     `q`, because each wraps a whole word rather than rewriting its
+//     characters. Measured with the same `d`, `${(~q-j.|.)d}` and
+//     `${(~q+j.|.)d}` are both `'a b|c'` — one pair of quotes round the
+//     join — where quoting each word on its own gives `'a b'|c`. `q+` is
+//     the further one: a value it renders moves into a single `$'…'` round
+//     the join, which no per-word rewrite could produce at all.
+//
+// Which is the whole reason the refusal is by *name* and not by a count of
+// `q` characters. It was written that way once, and `(q-)` — one `q`, like
+// the plain flag it is nothing like — went straight through it.
 //
 // Named rather than answered wrongly at status 0, which is this file's whole
 // convention: a `(~)` read as a no-op turns a plugin manager's alternation
 // into one long literal, and that is a name sent to the wrong loader rather
 // than a line that fails.
-func tildeMarkRefusal(e *syntax.ParamExpr, markJoin, ifsSplit, minimal bool) (string, bool) {
+func tildeMarkRefusal(e *syntax.ParamExpr, markJoin, ifsSplit bool) (string, bool) {
 	if tildeMarksSplitSep(e) {
 		return "for the (s) separator", true
 	}
@@ -229,10 +236,10 @@ func tildeMarkRefusal(e *syntax.ParamExpr, markJoin, ifsSplit, minimal bool) (st
 	if e.Op != syntax.ParamNone {
 		return "beside an operator", true
 	}
-	if minimal {
-		// Ahead of the count, because a group spelling minimal quoting has
+	if e.QuoteModifier != 0 {
+		// Ahead of the count, because a group spelling either modifier has
 		// exactly one `q` and would otherwise fall through to being carried.
-		return "beside the (q-) flag", true
+		return "beside the (q" + string(e.QuoteModifier) + ") flag", true
 	}
 	if n := strings.Count(e.Flags, "q"); n > 1 {
 		return "beside the (" + strings.Repeat("q", n) + ") flag", true

@@ -12,7 +12,7 @@ import (
 )
 
 // The expansion flags that decide which words survive and in what order:
-// `u` keeps the first of each repeat, and `o`, `O`, `n` and `i` sort.
+// `u` keeps the first of each repeat, and `o`, `O`, `n`, `i` and `-` sort.
 //
 // They are one function because they are one step of the pipeline. Measured
 // on zsh 5.9.2 under the C locale, which is what the corpus runs in:
@@ -28,6 +28,35 @@ import (
 //	a=(c a b);      ${(@a)a}   c a b        the index, so the order it was written in
 //	a=(c a b);      ${(@aO)a}  b a c        and that reversed
 //
+// `-` is `n` with a leading minus read as a sign rather than as text, and it
+// is the one sort flag whose spelling is shared with something else: the
+// character a `q` eats. The parser settles that, keeping the eaten one out of
+// Flags, so a `-` reaching this file is always this flag. Measured on zsh
+// 5.9.2, 2026-09-08, under LC_ALL=C with `b=(-1 -10 -3 2 10)`:
+//
+//	${(@o)b}    -1 -10 -3 10 2   lexical
+//	${(@n)b}    -1 -3 -10 2 10   numeric, the `-` read as text
+//	${(@-)b}    -10 -3 -1 2 10   numeric, the `-` read as a sign
+//	${(@O-)b}   10 2 -1 -3 -10   and reversed
+//	${(@n-)b}   -10 -3 -1 2 10   `-` implies `n` rather than modifying one
+//	${(@a-)b}   -1 -10 -3 2 10   and `a` still beats it, as it beats `n`
+//
+// It is not a number *parse*, which three more rows say — same shell, same
+// day:
+//
+//	e=(-1 -1.5);      ${(@-)e}   -1 -1.5      a decimal point is not part of
+//	                                          the number, so -1.5 is `-1`
+//	                                          then `.5` and sorts *after* -1
+//	c=(+5 -5 5);      ${(@-)c}   +5 -5 5      a leading `+` is not a sign; it
+//	                                          is compared as the byte it is,
+//	                                          and 0x2b sorts ahead of 0x2d
+//	m=(x-1 x-10 x-3); ${(@-)m}   x-10 x-3 x-1 and the sign need not stand at
+//	                                          the word's start
+//
+// The last is the row that fixes where the reading goes: not a prefix test on
+// the word, but the digit-run comparison itself, which is already the place
+// `n` reads a run of digits as a number.
+//
 // Where the step sits is measured too, and it is not where the manual's rule
 // numbers would put it by name. The sort runs *after* the operator —
 // `a=(zb ya); ${(@o)a#z}` is `b ya`, which is trim-then-sort and not the
@@ -37,7 +66,9 @@ import (
 // `${(oj.-.)a}` is `c-a-b` unsorted, one word being already in order.
 
 // orderFlags are the letters this step answers.
-const orderFlags = "uoOnia"
+// The `-` in here is the signed sort and never the `q` modifier, which
+// the parser keeps out of Flags.
+const orderFlags = "uoOnia-"
 
 // orderWords applies them, in the one order that reproduces every
 // composition measured: the repeats go first and the sort follows.
@@ -47,6 +78,7 @@ const orderFlags = "uoOnia"
 // observable when both are written — but it is when only `u` is, and that is
 // what fixes the order here.
 func orderWords(e *syntax.ParamExpr, words []string) []string {
+	signed := signedSortFlag(e)
 	if strings.ContainsRune(e.Flags, 'u') {
 		seen := make(map[string]bool, len(words))
 		out := words[:0:0]
@@ -59,7 +91,7 @@ func orderWords(e *syntax.ParamExpr, words []string) []string {
 		}
 		words = out
 	}
-	if !strings.ContainsAny(e.Flags, "oOnia") {
+	if !strings.ContainsAny(e.Flags, "oOnia") && !signed {
 		return words
 	}
 	descending := strings.ContainsRune(e.Flags, 'O')
@@ -78,12 +110,15 @@ func orderWords(e *syntax.ParamExpr, words []string) []string {
 	// `i` sorts on its own: `a=(c a b); ${(@i)a}` is `a b c`, so it is not
 	// only a modifier of `o`.
 	fold := strings.ContainsRune(e.Flags, 'i')
-	numeric := strings.ContainsRune(e.Flags, 'n')
+	// `-` implies `n` rather than modifying one: `${(@-)b}` and `${(@n-)b}`
+	// are the same answer, so the signed reading always arrives with the
+	// numeric one and never on its own.
+	numeric := strings.ContainsRune(e.Flags, 'n') || signed
 	// Stable, because a fold makes ties reachable and they keep the order
 	// they were written in: `${(@oi)a}` on `(B a C b)` is `a B b C`, with the
 	// `B` still ahead of the `b`.
 	sort.SliceStable(words, func(i, j int) bool {
-		c := compareWords(words[i], words[j], fold, numeric)
+		c := compareWords(words[i], words[j], fold, numeric, signed)
 		if descending {
 			return c > 0
 		}
@@ -94,14 +129,14 @@ func orderWords(e *syntax.ParamExpr, words []string) []string {
 
 // compareWords orders two words: bytewise, or by the numbers inside them
 // when `n` was written, and either with case folded away or not.
-func compareWords(a, b string, fold, numeric bool) int {
+func compareWords(a, b string, fold, numeric, signed bool) int {
 	if !numeric {
 		if fold {
 			return strings.Compare(strings.ToLower(a), strings.ToLower(b))
 		}
 		return strings.Compare(a, b)
 	}
-	if c := compareNatural(a, b, fold); c != 0 {
+	if c := compareNatural(a, b, fold, signed); c != 0 {
 		return c
 	}
 	// Numerically equal and not the same text: `(001 1 01)` comes back
@@ -115,9 +150,32 @@ func compareWords(a, b string, fold, numeric bool) int {
 // `x1 x9 x10` is the shape it exists for: the digits need not be the whole
 // word, so a word is a sequence of digit and non-digit runs and the two are
 // compared differently.
-func compareNatural(a, b string, fold bool) int {
+//
+// signed is the `-` flag: a `-` standing in front of a digit run, in *both*
+// words at the same point, is that run's sign, and the comparison of the two
+// runs is inverted. In one word only it is no sign at all and falls through
+// to the character comparison — which is what keeps `-1` ahead of `-y`, and
+// what makes the flag invisible outside a pair of negatives, every digit
+// sorting above the `-` at 0x2d anyway.
+func compareNatural(a, b string, fold, signed bool) int {
 	i, j := 0, 0
 	for i < len(a) && j < len(b) {
+		if signed && a[i] == '-' && b[j] == '-' &&
+			i+1 < len(a) && j+1 < len(b) && isDigit(a[i+1]) && isDigit(b[j+1]) {
+			i++
+			j++
+			ai, bj := i, j
+			for i < len(a) && isDigit(a[i]) {
+				i++
+			}
+			for j < len(b) && isDigit(b[j]) {
+				j++
+			}
+			if c := compareDigitRuns(a[ai:i], b[bj:j]); c != 0 {
+				return -c
+			}
+			continue
+		}
 		if isDigit(a[i]) && isDigit(b[j]) {
 			ai, bj := i, j
 			for i < len(a) && isDigit(a[i]) {

@@ -36,6 +36,7 @@ func TestTheOrderingFlags(t *testing.T) {
 		{"nor at the end of it", `a=(a1b a10b a2b); printf "[%s]" "${(@n)a}"`, "[a1b][a2b][a10b]"},
 		{"a numeric tie falls back to the text", `a=(001 1 01); printf "[%s]" "${(@n)a}"`, "[001][01][1]"},
 		{"a sign is not part of the number", `a=(-1 2 -3); printf "[%s]" "${(@n)a}"`, "[-1][-3][2]"},
+		{"where the signed sort reads it", `a=(-1 2 -3); printf "[%s]" "${(@-)a}"`, "[-3][-1][2]"},
 		{"O reverses the numeric sort too", `a=(10 9 1); printf "[%s]" "${(@nO)a}"`, "[10][9][1]"},
 		{"and the letters may be written either way round", `a=(10 9 1); printf "[%s]" "${(@On)a}"`, "[10][9][1]"},
 		// Case. Byte order separates the cases; `i` folds them, and the tie
@@ -116,6 +117,71 @@ func TestTheOrderingFlags(t *testing.T) {
 // Sixteen is not arbitrary. Go's unstable sort is its stable one below a
 // threshold, so a smaller array could not tell the two apart and the claim
 // would be untested.
+// The signed-numeric sort, which is `n` with a leading minus read as a sign.
+//
+// The flag is invisible over anything but a pair of negatives — every digit
+// sorts above the `-` at 0x2d, so a negative is ahead of a positive under
+// either reading — which is why the data here is negatives and why `(10 9 1)`
+// would say nothing at all.
+//
+// Measured on zsh 5.9.2, 2026-09-08, under LC_ALL=C.
+func TestTheSignedNumericSort(t *testing.T) {
+	const b = `b=(-1 -10 -3 2 10); `
+	for _, tc := range []struct{ name, src, want string }{
+		// The three readings of the same five elements, which is what says
+		// this is a third sort and not a spelling of one of the other two.
+		{"o is lexical", b + `printf "[%s]" "${(@o)b}"`, "[-1][-10][-3][10][2]"},
+		{"n reads the minus as text", b + `printf "[%s]" "${(@n)b}"`, "[-1][-3][-10][2][10]"},
+		{"and the signed sort reads it as a sign", b + `printf "[%s]" "${(@-)b}"`, "[-10][-3][-1][2][10]"},
+		// It sorts on its own, so it is not merely a modifier of `n`, and
+		// writing both changes nothing.
+		{"it implies n", b + `printf "[%s]" "${(@n-)b}"`, "[-10][-3][-1][2][10]"},
+		{"in either written order", b + `printf "[%s]" "${(@-n)b}"`, "[-10][-3][-1][2][10]"},
+		{"o adds nothing to it", b + `printf "[%s]" "${(@o-)b}"`, "[-10][-3][-1][2][10]"},
+		{"O reverses it", b + `printf "[%s]" "${(@O-)b}"`, "[10][2][-1][-3][-10]"},
+		{"either way round", b + `printf "[%s]" "${(@-O)b}"`, "[10][2][-1][-3][-10]"},
+		// `a` is a sort key rather than a comparison and beats it, the way
+		// it beats `n`.
+		{"a beats it", b + `printf "[%s]" "${(@a-)b}"`, "[-1][-10][-3][2][10]"},
+		{"in either order", b + `printf "[%s]" "${(@-a)b}"`, "[-1][-10][-3][2][10]"},
+		// It is not a number parse. A decimal point is not part of the
+		// number, so -1.5 is `-1` and then `.5`, and sorts *after* -1.
+		{"a decimal point is not part of the number", `a=(-1 -1.5); printf "[%s]" "${(@-)a}"`, "[-1][-1.5]"},
+		// A leading `+` is not a sign: it is the byte it is, and 0x2b is
+		// ahead of the `-` at 0x2d and of every digit.
+		{"a leading plus is not a sign", `a=(+5 -5 5); printf "[%s]" "${(@-)a}"`, "[+5][-5][5]"},
+		// And the sign need not stand at the word's start, which is the row
+		// that fixes the reading in the digit-run comparison rather than in
+		// a prefix test on the word.
+		{"the sign need not open the word", `a=(x-1 x-10 x-3 x2 x10); printf "[%s]" "${(@-)a}"`, "[x-10][x-3][x-1][x2][x10]"},
+		{"where n reads the same words as text", `a=(x-1 x-10 x-3 x2 x10); printf "[%s]" "${(@n)a}"`, "[x-1][x-3][x-10][x2][x10]"},
+		// A `-` in one word only is no sign, so `-1` stays ahead of `-y`.
+		{"a minus in one word only is not a sign", `a=(-1 -y -3); printf "[%s]" "${(@-)a}"`, "[-3][-1][-y]"},
+		// Ties. Numerically equal negatives fall back to byte order, the
+		// same fallback `n` has.
+		{"a numeric tie falls back to the text", `a=(-001 -1 -01); printf "[%s]" "${(@-)a}"`, "[-001][-01][-1]"},
+		{"and minus zero is not a number apart", `a=(-0 0 -00); printf "[%s]" "${(@-)a}"`, "[-0][-00][0]"},
+		// It folds and it dedupes like the rest of the family.
+		{"i folds it", `a=(-B -a -C -b); printf "[%s]" "${(@-i)a}"`, "[-a][-B][-b][-C]"},
+		{"and without the fold it is byte order", `a=(-B -a -C -b); printf "[%s]" "${(@-)a}"`, "[-B][-C][-a][-b]"},
+		{"u runs first", `a=(-1 -1 -01 2 2); printf "[%s]" "${(@-u)a}"`, "[-01][-1][2]"},
+		// An empty element sorts first, having nothing to compare.
+		{"an empty element sorts first", `a=(-1 "" 2 -3); printf "[%s]" "${(@-)a}"`, "[][-3][-1][2]"},
+		// Non-numeric elements are compared as text, and land where their
+		// first byte puts them.
+		{"non-numeric elements are text", `a=(x -1 2 -y 0 abc -3); printf "[%s]" "${(@-)a}"`, "[-3][-1][-y][0][2][abc][x]"},
+		// A scalar has nothing to sort, and the flag is not an error there.
+		{"a scalar is left alone", `v=hello; printf "[%s]" "${(-)v}"`, "[hello]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runGrammar(t, tc.src, ordering, nil)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
 func TestATieKeepsTheOrderItWasWrittenIn(t *testing.T) {
 	const src = `a=(B1 b1 B2 b2 B3 b3 B4 b4 B5 b5 B6 b6 B7 b7 A1 a1); printf "[%s]" "${(@oi)a}"`
 	want := "[A1][a1][B1][b1][B2][b2][B3][b3][B4][b4][B5][b5][B6][b6][B7][b7]"

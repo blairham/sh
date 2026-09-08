@@ -23,6 +23,83 @@ func dollarSingleSem(c DollarSingleControlPolicy, u DollarSingleUnknownPolicy, n
 	return s
 }
 
+// caretMetaSem is the fourth axis on its own, with the other three answered
+// so that nothing else in a snippet asks a question.
+func caretMetaSem(a Answer) Semantics {
+	s := dollarSingleSem(DollarSingleControlAbsent, DollarSingleUnknownDropsBackslash, No)
+	s.DollarSingleCaretMeta = a
+	return s
+}
+
+// `\C-X` and `\M-X` inside `$'…'`, which one shell of the panel has.
+//
+// This is the reading side of what the `q+` expansion flag writes, so the
+// rows are picked to cover what that flag can produce — every control byte,
+// delete, and every byte above 0x7f — and then the corners a reading gets
+// wrong. Measured on zsh 5.9.2, 2026-09-08, by `od`.
+func TestDollarSingleCaretAndMeta(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// The mask, not an uppercase-and-toggle: the two agree over the
+		// letters and part over a digit, which is why `\C-1` is here.
+		{"an uppercase letter", `printf '%s' $'\C-A'`, "\x01"},
+		{"a lowercase letter", `printf '%s' $'\C-a'`, "\x01"},
+		{"a digit", `printf '%s' $'\C-1'`, "\x11"},
+		{"a bracket", `printf '%s' $'\C-['`, "\x1b"},
+		{"an at sign is the zero byte", `printf '%s' $'\C-@x'`, "\x00x"},
+		{"a space", `printf '%s' $'\C- '`, "\x00"},
+		{"a minus, which is not the separator twice", `printf '%s' $'\C--'`, "\x0d"},
+		// The separator is optional in both, which is what says it is a
+		// separator rather than part of the escape's name.
+		{"the dash may be left out", `printf '%s' $'\CA'`, "\x01"},
+		{"for meta too", `printf '%s' $'\Mx'`, "\xf8"},
+		// `?` is the one character the mask is not applied to, and it is the
+		// byte exactly: a meta bit takes it out of the rule.
+		{"a question mark is delete", `printf '%s' $'\C-?'`, "\x7f"},
+		{"by way of an escape as well", `printf '%s' $'\C-\x3f'`, "\x7f"},
+		{"where the delete byte itself is masked", `printf '%s' $'\C-\x7f'`, "\x1f"},
+		{"and a meta question mark is not delete", `printf '%s' $'\C-\M-?'`, "\x9f"},
+		// Meta sets the high bit over whatever the argument came to.
+		{"a letter", `printf '%s' $'\M-x'`, "\xf8"},
+		{"a named escape", `printf '%s' $'\M-\t'`, "\x89"},
+		{"a control escape", `printf '%s' $'\M-\C-?'`, "\xff"},
+		{"the zero byte with the bit set", `printf '%s' $'\M-\C-@x'`, "\x80x"},
+		{"a space", `printf '%s' $'\M- '`, "\xa0"},
+		{"a backslash", `printf '%s' $'\M-\\'`, "\xdc"},
+		// The mask keeps the high bit it finds, so the two compose in
+		// either order.
+		{"control over meta", `printf '%s' $'\C-\M-x'`, "\x98"},
+		{"meta over control", `printf '%s' $'\M-\C-x'`, "\x98"},
+		// An escape with nothing to work on produces nothing at all, rather
+		// than the characters it was written with.
+		{"a control with no argument", `printf '%s' $'x\C'`, "x"},
+		{"a meta with no argument", `printf '%s' $'x\M-'`, "x"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, st := run(t, tc.src, withSem(caretMetaSem(Yes)))
+			if got != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q", got, st, tc.want)
+			}
+		})
+	}
+}
+
+// Where the dialect has neither, the backslash is before a character nothing
+// claims and the unknown-escape axis decides it — the same division of labor
+// `\c` gets. Measured: bash keeps both characters, so `$'\C-A'` there is the
+// four characters it was written as.
+func TestDollarSingleCaretAndMetaAbsent(t *testing.T) {
+	sem := caretMetaSem(No)
+	sem.DollarSingleUnknownEscape = DollarSingleUnknownKeepsBackslash
+	for _, tc := range []struct{ src, want string }{
+		{`printf '%s' $'\C-A'`, `\C-A`},
+		{`printf '%s' $'\M-x'`, `\M-x`},
+	} {
+		if got, st := run(t, tc.src, withSem(sem)); got != tc.want || st != 0 {
+			t.Errorf("%s: got %q (status %d), want %q", tc.src, got, st, tc.want)
+		}
+	}
+}
+
 // `\cX` decodes two different ways, and the difference is invisible over
 // letters.
 //
@@ -140,6 +217,8 @@ func TestDollarSingleAxesAreAskedOnlyWhereTheyDecide(t *testing.T) {
 	}
 	for _, tc := range []struct{ name, src string }{
 		{"a control character", `printf '%s' $'\cA'`},
+		{"a caret escape", `printf '%s' $'\C-A'`},
+		{"a meta escape", `printf '%s' $'\M-x'`},
 		{"an escape with no meaning", `printf '%s' $'\q'`},
 		{"a zero byte", `printf '%s' $'a\0b'`},
 	} {

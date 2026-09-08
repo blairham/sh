@@ -459,6 +459,7 @@ func Semantics() interp.Semantics {
 	s.DollarSingleBackslashC = interp.DollarSingleControlMasked
 	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownKeepsBackslash
 	s.DollarSingleNulTruncates = interp.Yes
+	s.DollarSingleCaretMeta = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	s.CdWithoutHomeIsAnError = interp.Yes

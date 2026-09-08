@@ -3381,6 +3381,27 @@ func (r *Runner) expandDollarSingle(s string) string {
 				return b.String()
 			}
 			i += 1 + used
+		case c == 'C' || c == 'M':
+			if !r.ask(r.sem().DollarSingleCaretMeta, "the `\\C-` and `\\M-` escapes of a `$'…'`") {
+				// A shell without them, or one that has not said. Either
+				// way the backslash is before a character nothing here
+				// claims, and the unknown rule decides it.
+				r.writeUnknownEscape(&b, c)
+				i += 2
+				continue
+			}
+			v, next, ok := caretMetaEscape(s, i)
+			if !ok {
+				// Nothing left to make a byte out of: measured, `$'x\C'`
+				// and `$'x\M-'` are both `x`, the escape producing nothing
+				// rather than the characters it was written with.
+				i = next
+				continue
+			}
+			if !r.writeDecodedByte(&b, v) {
+				return b.String()
+			}
+			i = next
 		case c == 'c':
 			p := r.dollarSingleControl()
 			if p == DollarSingleControlAbsent {
@@ -3491,6 +3512,86 @@ func controlArgument(p DollarSingleControlPolicy, s string, i int) (byte, int, b
 	}
 	// An escape ksh93 does not know loses its backslash, and what `\c`
 	// controls is the character that survives.
+	return s[i+1], i + 2, true
+}
+
+// caretMetaEscape reads the `\C-…` or `\M-…` starting at i, where s[i] is
+// the backslash, and returns the byte it comes to and the offset past it. ok
+// is false when the escape has no argument at all, which produces nothing.
+//
+// The separating `-` is optional and the argument may be a further escape,
+// this one included. Measured on zsh 5.9.2, 2026-09-08, by `od`:
+//
+//	$'\C-A'  01   $'\CA'      01   the dash is optional
+//	$'\C-a'  01   $'\C-1'     11   the argument is masked, not uppercased
+//	$'\C-?'  7f   $'\C-\x7f'  1f   and `?` alone is the delete byte
+//	$'\C-\M-?' 9f              which a meta bit takes it out of
+//	$'\C--'  0d   $'\C- '     00   every other character is masked plainly
+//	$'\M-x'  f8   $'\Mx'      f8   meta sets the high bit
+//	$'\M-\t' 89   $'\M-\C-?'  ff   over whatever the argument came to
+//	$'\C-\M-x' 98              and the mask keeps the high bit it finds
+//	$'x\C'   78   $'x\M-'     78   an escape with no argument is nothing
+//
+// One measured spelling is not reproduced: `$'\C-\C-?'` is 7f on that shell
+// where masking twice gives 1f, so its `?` rule survives a control it has
+// already applied. A doubled control is written nowhere — the flag that
+// writes these never nests one — and reproducing it would mean carrying the
+// argument's *spelling* past the point it became a byte.
+func caretMetaEscape(s string, i int) (byte, int, bool) {
+	meta := s[i+1] == 'M'
+	j := i + 2
+	if j < len(s) && s[j] == '-' {
+		j++
+	}
+	x, next, ok := caretMetaArgument(s, j)
+	if !ok {
+		return 0, j, false
+	}
+	if meta {
+		return x | 0x80, next, true
+	}
+	if x == '?' {
+		// The one character the mask is not applied to, and it is the byte
+		// exactly rather than its low seven bits: measured, `$'\C-\x3f'` is
+		// 7f like `$'\C-?'`, where `$'\C-\M-?'` is 9f and not ff — the meta
+		// bit takes the argument out of the rule rather than riding through
+		// it.
+		return 0x7f, next, true
+	}
+	// 0x9f and not 0x1f: the high bit is kept, so a meta byte stays one.
+	return x & 0x9f, next, true
+}
+
+// caretMetaArgument reads the one character, or escape, that a `\C-` or
+// `\M-` controls.
+//
+// It is this file's own reading rather than controlArgument's, because that
+// one answers for `\c` and carries three shells' policies for it; the two
+// agree on the ordinary escapes and only this one takes a nested `\C-`.
+func caretMetaArgument(s string, i int) (byte, int, bool) {
+	switch {
+	case i >= len(s):
+		return 0, i, false
+	case s[i] != '\\' || i+1 >= len(s):
+		return s[i], i + 1, true
+	}
+	switch c := s[i+1]; {
+	case c == 'C' || c == 'M':
+		return caretMetaEscape(s, i)
+	case c == 'x':
+		if n, used := scanBase(s[i+2:], 16, 2); used > 0 {
+			return byte(n), i + 2 + used, true
+		}
+	case c >= '0' && c <= '7':
+		n, used := scanBase(s[i+1:], 8, 3)
+		return byte(n), i + 1 + used, true
+	default:
+		if v, ok := simpleEscape(c); ok {
+			return v, i + 2, true
+		}
+	}
+	// An escape nothing claims loses its backslash, and what is controlled
+	// is the character that survives.
 	return s[i+1], i + 2, true
 }
 

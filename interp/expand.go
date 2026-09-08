@@ -1734,6 +1734,9 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 				r.assignSubscript(e, v)
 				return v
 			}
+			if !r.assignableTarget(e.Op, e.Name) {
+				return ""
+			}
 			r.setVar(e.Name, v)
 			return v
 		}
@@ -1836,6 +1839,40 @@ func (r *Runner) assignAlways(e *syntax.ParamExpr, subscript bool) string {
 // The wording's fallback is that shell's own, for the reason EqualsNotFound's
 // is: a dialect without the grammar never builds a node that reaches here, so
 // there is no second answer for the substrate to hold a neutral one against.
+// assignableTarget is assignableParamName asked of the names each assigning
+// operator actually reaches, and it is one door so the two cannot drift
+// apart. They already had: the unconditional `${name::=word}` asked the
+// question on both routes through the expander and the conditional
+// `${name:=word}` asked it on neither, so `${(U):=abc}` answered `ABC` at
+// status 0 where the shell refuses.
+//
+// The unconditional operator asks it of every name. The conditional one asks
+// it only of the *empty* name — the one the nameless expansion newly reaches
+// (#1529), and the one every shell that can write it refuses the same way.
+// Its other refusals are not one answer: measured 2026-09-08 with `set --`,
+// `${@:=abc}` is `$@: cannot assign in this way` in the three bashes, `@: bad
+// variable name` at status 2 in dash, `${@:=abc}: bad substitution` in ksh93
+// and `not an identifier: @` in zsh, and `${1:=abc}` is refused by five and
+// *assigns* in zsh. Four wordings, two statuses and a positional axis — #1541
+// rather than guessed at here.
+//
+// **A surviving mutant lives on that line, deliberately.** Widening the
+// conditional operator to the same rule as the unconditional one — dropping
+// the `op !=` half so both ask about every name — passes the whole suite.
+// Nothing kills it because nothing may: the wide rule is *closer* to zsh,
+// which would say `not an identifier: @`, and *further* from bash, dash and
+// ksh93, which each refuse in their own words at their own status. Either
+// answer is wrong somewhere, and a test pinning this narrow one would be a
+// test asserting a bug. The question is #1541's to settle with the four
+// wordings in hand; until then the line is the one that changes nothing
+// outside the name #1529 introduced.
+func (r *Runner) assignableTarget(op syntax.ParamOp, name string) bool {
+	if op != syntax.ParamAssignAlways && name != "" {
+		return true
+	}
+	return r.assignableParamName(name)
+}
+
 func (r *Runner) assignableParamName(name string) bool {
 	if isNameLike(name) || isPositional(name) {
 		return true

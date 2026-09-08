@@ -407,7 +407,8 @@ scan:
 	}
 
 	switch {
-	case strings.HasPrefix(s, "#") && len(s) > 1 && !hashIsTheParameter(s[1:]):
+	case strings.HasPrefix(s, "#") && len(s) > 1 &&
+		!hashIsTheParameter(s[1:], p.dialect.NamelessParamExpansion):
 		e.Length = true
 		s = s[1:]
 	case strings.HasPrefix(s, "!") && len(s) > 1 && !strings.ContainsAny(s[1:2], ":-+=?"):
@@ -442,7 +443,7 @@ scan:
 		e.Name, s = scanParamName(s)
 	}
 	if e.Name == "" && !e.HasFlags && e.TildeFlags == 0 && e.SplitFlags == 0 &&
-		e.RcExpandFlags == 0 && e.Inner == nil {
+		e.RcExpandFlags == 0 && e.Inner == nil && !p.dialect.NamelessParamExpansion {
 		if !p.dialect.BadSubstitutionAtParseTime {
 			// The majority defers an unreadable expansion to the run, the
 			// same way an unknown operator is deferred: a `${%x}` in a
@@ -451,11 +452,19 @@ scan:
 			return e
 		}
 		p.failKind(ErrBadSubstitution, "expected a parameter name in ${%s}", src)
-		if pe, isErr := p.err.(*Error); isErr && s != "" {
+		if pe, isErr := p.err.(*Error); isErr {
 			// The character standing where the name belonged, for the one
 			// dialect that words this as a syntax error naming the token —
 			// left empty, it printed `' unexpected.
-			pe.Token = firstRune(s)
+			//
+			// With nothing at all between the braces the character standing
+			// there is the brace that closed them: measured, `${}` in ksh93
+			// is `syntax error at line 1: `}' unexpected`, naming the `}`
+			// rather than the nothing in front of it.
+			pe.Token = "}"
+			if s != "" {
+				pe.Token = firstRune(s)
+			}
 		}
 		return e
 	}
@@ -463,6 +472,14 @@ scan:
 	// and `${(%):-%x}` is all operator — so an operator may still follow.
 	// A tilde run relaxes it the same way, and so do an `=` run and a `^`
 	// run: `${~}`, `${=}` and `${^}` are the empty string too.
+	//
+	// NamelessParamExpansion relaxes it with none of those in front of it,
+	// which is what the group was standing in for: `${(%):-%x}` read here
+	// only because the group happened to be present, and `${:-%x}` did not,
+	// so the group was gating a reading it has nothing to do with. With the
+	// flag the name may simply be absent, and the group is back to deciding
+	// only how the result is rendered — measured, `${(U):-abc}` is `ABC` and
+	// `${:-abc}` is `abc`, the same reading with and without it.
 
 	// `${!name@}` and `${!name*}` are the names beginning with name, not a
 	// value at all. Only after `!`, and only when the whole rest is the one
@@ -746,13 +763,19 @@ func matchingFlagDelimiter(open byte) byte {
 //	${#:-w}   1       the length of the nameless `${:-w}`, which is `w`
 //
 // So `-` and `?` are names and stay lengths, and `:-` is a third reading
-// again — the nameless expansion this grammar does not have. The operators
-// that read `#` as the parameter and are not in this set are filed rather
-// than carried: `${##2}`, `${#%2}`, `${#/2/X}` and `${#:0:1}` are all `$#`
-// there, and `${##}` is the *length* of `$#`, which is the same two
+// again — the nameless expansion, which is `nameless`'s whole job here. The
+// operators that read `#` as the parameter and are not in this set are filed
+// rather than carried: `${##2}`, `${#%2}`, `${#/2/X}` and `${#:0:1}` are all
+// `$#` there, and `${##}` is the *length* of `$#`, which is the same two
 // characters resolved the other way — a backtracking parse rather than a
 // lookahead, and not a set this can express.
-func hashIsTheParameter(s string) bool {
+//
+// nameless is NamelessParamExpansion, and `:-` is the only place it changes
+// the answer. Measured 2026-09-08 with `set -- p q`: `${#:-w}` is `2` in the
+// five shells without the nameless form and `1` in the one with it, while
+// `${#:+w}` is `w`, `${#:=w}` is `2` and `${#:?w}` is `2` in all six — so
+// the divergence is `:-` alone and not the colon.
+func hashIsTheParameter(s string, nameless bool) bool {
 	switch {
 	case s == "":
 		return false
@@ -761,14 +784,16 @@ func hashIsTheParameter(s string) bool {
 		// compete: `${#=w}` and `${#+w}` are `$#` in all six shells.
 		return true
 	case s[0] == ':':
-		// Every `:` operator but `:-`. That one is the exception rather than
-		// a rule about the colon, and it is measured: `${#:-w}` is `$#` in
-		// five shells and 1 in zsh, where it is the length of the nameless
-		// `${:-w}`. Reading it as the parameter here would answer five
-		// shells and give the sixth a plausible number instead of the loud
-		// refusal it has now, which is the wrong trade — see the follow-up
-		// the spec entry names.
-		return len(s) > 1 && s[1] != '-'
+		// Every `:` operator, and `:-` as well in a grammar with no nameless
+		// expansion to be a length over: there `${#:-w}` is `$#` with a
+		// default that never fires, and the five answer `2`.
+		//
+		// Where the nameless form exists, `:-` is the exception rather than
+		// a rule about the colon: `${#:-w}` is the length of `${:-w}`, which
+		// is `1`. Nothing else in the colon family moves with it — `${#:+w}`
+		// is `w` and `${#:=w}` and `${#:?w}` are `2` in all six — so the
+		// exception is exactly one operator wide.
+		return len(s) > 1 && (!nameless || s[1] != '-')
 	case s[0] == '%' || s[0] == '/':
 		// With an operand. `${#%2}` and `${#/2/X}` are `$#` trimmed and
 		// replaced in every shell that has the operator, while a bare

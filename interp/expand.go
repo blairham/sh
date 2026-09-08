@@ -1436,7 +1436,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// word must result — a pattern operand, say — which is the manual's
 		// final rule: the words are rejoined with the first character of
 		// IFS.
-		words, _, ok := r.flaggedWords(e, splitNever, false)
+		words, _, _, ok := r.flaggedWords(e, splitNever, false, nil)
 		if !ok {
 			return ""
 		}

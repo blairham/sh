@@ -22,7 +22,7 @@ import (
 // else the grammar accepted is refused *by name* when the expansion is
 // reached, because the only thing worse than refusing a flag is answering it
 // wrong with status 0.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwWA"
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwWA~"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -36,20 +36,36 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 		return nil, false
 	}
 	quoted := s.Quoting != syntax.Unquoted
-	words, isList, ok := r.flaggedWords(e, sp, quoted)
+	// A `(~)` in the group exempts the separator this expansion *inserts*
+	// from the escape the rest of the result gets, so whether that escape
+	// runs has to be known at the join rather than after it — see
+	// interp/tildeflaggroup.go. Asked only where a separator is marked, so
+	// no other expansion answers this question twice.
+	var escapeSep func(string) string
+	if tildeMarksJoinSep(e) {
+		if quoted ||
+			!r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
+			escapeSep = globEscape
+		}
+	}
+	words, isList, escaped, ok := r.flaggedWords(e, sp, quoted, escapeSep)
 	if !ok {
 		return nil, true
 	}
 	if !isList {
 		v := words[0]
 		if quoted {
-			return []string{globEscape(v)}, true
+			if !escaped {
+				v = globEscape(v)
+			}
+			return []string{v}, true
 		}
 		if v == "" {
 			// An unquoted expansion of an empty value is no field at all.
 			return nil, true
 		}
-		if !r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
+		if !escaped &&
+			!r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
 			v = globEscape(v)
 		}
 		// `${(U)~g}` is measured: the group is read, the case applied, and
@@ -88,7 +104,12 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 
 // flaggedWords runs the flag pipeline and returns the resulting words, raw.
 // ok is false when the expansion failed and the failure has been reported.
-func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) (words []string, isList, ok bool) {
+// escapeSep says whether the escape that a marked `(~)` separator has to sit
+// outside of would run at all; escaped reports that it has already been done
+// here, around that separator, so the caller must not do it again.
+func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
+	escapeSep func(string) string,
+) (words []string, isList, escaped, ok bool) {
 	if e.FlagsErrPos > 0 {
 		// A character the group could not carry, deferred here by the
 		// parser: reached in a branch never taken, it is no error at all,
@@ -97,14 +118,24 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 			"error in flags near position %[1]d in '%[2]s'",
 			e.FlagsErrPos, "${"+e.Src+"}"))
 		r.expandErr = true
-		return nil, false, false
+		return nil, false, false, false
 	}
 	for _, c := range e.Flags {
 		if !r.paramFlagCarried(c) {
 			r.diagf("${%s}: the (%c) expansion flag is not implemented\n", e.Src, c)
 			r.expandErr = true
-			return nil, false, false
+			return nil, false, false, false
 		}
+	}
+	// `(~)` marks the string argument of a flag written behind it, and the
+	// only argument this interpreter can hold marked is the join separator.
+	// The compositions it cannot are named rather than carried — see
+	// interp/tildeflaggroup.go for the measurement behind each.
+	markJoin := tildeMarksJoinSep(e)
+	if why, refuse := tildeMarkRefusal(e, markJoin, splitFlagInGroup(e, sp)); refuse {
+		r.diagf("${%s}: the (~) expansion flag is not implemented %s\n", e.Src, why)
+		r.expandErr = true
+		return nil, false, false, false
 	}
 	if strings.ContainsRune(e.Flags, 'A') && isAssignOp(e.Op) {
 		// `(A)` is the one flag whose whole job is a *side effect*: it makes
@@ -132,13 +163,13 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 		// nothing to go on. The refusal is a statement about the construct.
 		r.diagf("${%s}: the (A) expansion flag is not implemented for an assignment\n", e.Src)
 		r.expandErr = true
-		return nil, false, false
+		return nil, false, false, false
 	}
 	if strings.Count(e.Flags, "q") > 4 {
 		r.diagf("${%s}: the (%s) expansion flag is not implemented\n",
 			e.Src, strings.Repeat("q", strings.Count(e.Flags, "q")))
 		r.expandErr = true
-		return nil, false, false
+		return nil, false, false, false
 	}
 
 	words, set, isList := r.flagBase(e)
@@ -156,7 +187,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 	// anything. In front of the nounset check on purpose: `set -u` is not
 	// tripped by asking.
 	if setTestAnswers(e) {
-		return []string{setTestResult(set)}, false, true
+		return []string{setTestResult(set)}, false, false, true
 	}
 
 	if !set && e.Name != "" {
@@ -174,7 +205,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 	// well — so the join is skipped rather than undone, and `(c)` reads a
 	// separator of its own where it wants one.
 	joined := false
-	if quoted && isList && !e.Length && !r.flagKeepsFields(e) {
+	if quoted && isList && !e.Length && !r.flagKeepsFields(e) && !markJoin {
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
 		isList = false
 		joined = true
@@ -185,7 +216,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 	// `${(U)u:=def}` assigns def and substitutes DEF.
 	words, isList, ok = r.applyFlagOp(e, words, set, isList)
 	if !ok {
-		return nil, false, false
+		return nil, false, false, false
 	}
 
 	// Rule 9: length — the element count for a list and the value's own
@@ -200,7 +231,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 	hasSplit := strings.ContainsAny(e.Flags, "fs") || ifsSplit
 	// Rule 10: forced joining, ahead of a split — `${(s.:.)a}` on an array
 	// joins its elements with IFS's first character and splits the result.
-	if (strings.ContainsRune(e.Flags, 'j') || hasSplit) && !joined && isList {
+	if (strings.ContainsRune(e.Flags, 'j') || hasSplit) && !joined && isList && !markJoin {
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
 		isList = false
 	}
@@ -235,7 +266,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 		for i, w := range words {
 			v, pok := r.promptEscapes(w, e)
 			if !pok {
-				return nil, false, false
+				return nil, false, false, false
 			}
 			words[i] = v
 		}
@@ -254,6 +285,25 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 			words[i] = r.unquoteFlagged(w)
 		}
 	}
+	// A marked separator's join, held back to here from rule 10.
+	//
+	// The shell being modeled joins at rule 10 and marks the separator so
+	// the steps between there and here step over it. Holding the join back
+	// instead is the same answer wherever those steps rewrite text one
+	// character at a time — `b=('a b' 'c'); ${(~qj.|.)b}` is `a\ b|c` either
+	// way, since `q` marks a character at a time and never the bar — and the
+	// steps where it is *not* the same answer are refused by name in
+	// tildeflaggroup.go rather than held back through.
+	//
+	// Ordering is the one step that has to see the join, and it is the next
+	// one: `c=(x a); ${(~oj.|.)c}` is `x|a`, unsorted, exactly as
+	// `${(oj.|.)c}` is, and `e=(p p q); ${(~uj.|.)e}` keeps both `p`s for the
+	// same reason — the sort and the dedup have one word by the time they
+	// run.
+	if markJoin {
+		words = []string{joinLiveSep(words, r.flagJoinSep(e), escapeSep)}
+		isList = false
+	}
 	// The ordering step is last of all, which is *later* than the rule
 	// numbers suggest and later than this file used to put it. Three
 	// measurements fix it there rather than one:
@@ -270,7 +320,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool) 
 	if orderApplies(e) {
 		words = orderWords(e, words)
 	}
-	return words, isList, true
+	return words, isList, markJoin && escapeSep != nil, true
 }
 
 // assignThroughFlags is the assignment side of `${(U)u:=def}` and of

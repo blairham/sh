@@ -118,6 +118,13 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 	switch s.Kind {
 	case syntax.ParamExp:
+		// A group that marks its join separator answers for itself: the
+		// words it joined are literal and the separator between them is not,
+		// which is one string neither of the two answers below can be. See
+		// interp/tildeflaggroup.go.
+		if text, live, ok := r.markedSeparatorPattern(s); ok {
+			return text, live
+		}
 		// The `${~spec}` flag reaches here too, and that is measured rather
 		// than assumed: `p='a*'; [[ abc == ${~p} ]]` is true in the shell
 		// that has the construct where `${p}` alone is false, and

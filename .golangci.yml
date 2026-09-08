@@ -28,6 +28,20 @@ run:
   # which is both the 54x tax a per-worktree cache would charge every new
   # worktree, and the reason the five-second lock timeout was ever reached.
   allow-parallel-runners: true
+  # And a cap on how much of the machine each of those parallel runners takes.
+  # golangci-lint defaults its internal parallelism to every CPU, so on an
+  # 18-core machine one run asks for all 18 — and with allow-parallel-runners
+  # above, several agents committing at once ask for 18 each. Measured: two
+  # concurrent runs at 260% and 884% CPU, 3GB resident apiece, 63% of the
+  # machine's total CPU spent linting while everything else waited. A commit
+  # is not the only thing happening on a developer's laptop.
+  #
+  # Four is chosen so that the realistic worst case stays near the core count
+  # rather than five times over it, and because the tax is small: linting is
+  # dominated by loading and typechecking the package graph, which is where
+  # the shared warm cache above already does the work. CI runners have fewer
+  # cores than this anyway, so it changes nothing there.
+  concurrency: 4
 
 linters:
   settings:

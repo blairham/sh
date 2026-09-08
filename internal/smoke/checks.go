@@ -62,6 +62,14 @@ var (
 	rcProbe       = probe{`printf 'rc=%s\n' "$SMOKE_RC"`, "rc=yes"}
 	aliasProbe    = probe{"smokealias", "alias-42-ok"}
 	functionProbe = probe{"smokefunc", "function-42-ok"}
+	// The before-every-prompt hook, read rather than printed. The rc file
+	// installs a hook that counts; this asks whether it ever ran, and the
+	// answer is a number the hook produced and the line does not contain.
+	//
+	// It is the row #1458 would have failed: the variable was accepted, kept
+	// and never read, so the count stayed at nothing and the prompt drew as
+	// though the file had said nothing at all — at status 0 and in silence.
+	hookProbe = probe{`printf 'hook=%s\n' "$((SMOKE_HOOK > 0))"`, "hook=1"}
 	// Uppercased by the second stage, so the mark can only come from the
 	// pipeline having run.
 	pipelineProbe = probe{"echo pipe-$((6 * 7)) | tr a-z A-Z", "PIPE-42"}
@@ -147,7 +155,7 @@ const (
 // probes is every one of them, for the test that holds the invariant.
 func probes() []probe {
 	return []probe{
-		rcProbe, aliasProbe, functionProbe, pipelineProbe,
+		rcProbe, aliasProbe, functionProbe, hookProbe, pipelineProbe,
 		recallProbe, searchProbe, chaffProbe, tickProbe, completionProbe,
 		undoProbe, escapeProbe, multiLineProbe,
 		rebindProbe, rebindViProbe,
@@ -185,6 +193,17 @@ func checks() []check {
 					return Fail, err.Error()
 				}
 				return Pass, "smokefunc ran"
+			},
+		},
+		{
+			name:   "hook before every prompt",
+			proves: "the hook this dialect runs before each prompt was installed from the rc file and fires",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				if err := s.runProbe(hookProbe); err != nil {
+					return Fail, "~/" + s.dialect.RCFile +
+						" installs a hook that counts and the count is still nothing: " + err.Error()
+				}
+				return Pass, "the rc file's hook ran before the prompt"
 			},
 		},
 		{

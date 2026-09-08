@@ -7440,6 +7440,16 @@ echo unreachable`,
 		Why:     "reads like it should leave the status alone and does not: an eval with no commands clears a failure rather than preserving it",
 	},
 	{
+		ID: "eval/text-sees-the-callers-status", Category: "eval and dot",
+		Snippet: `false; eval 'echo st=$?'`,
+		Why:     "the pair-mate of the empty eval above, and the half that is easy to answer with the same line and get wrong: an eval with nothing in it *clears* a failure, so a shell that clears the status before running the text satisfies that row and then shows the text 0 where all six shells show 1 — borrowed text reading success immediately after a failure, at status 0 and with nothing said. It is also what every prompt hook rests on, since the hook is handed the status of the line before it (#1458)",
+	},
+	{
+		ID: "dot/text-sees-the-callers-status", Category: "eval and dot",
+		Snippet: `echo 'echo st=$?' > p.sh; false; . ./p.sh`,
+		Why:     "the same question from a file, and it is a second row rather than a duplicate: `.` and `eval` disagree about `return`, about what a failure inside them costs and about what a diagnostic calls the text, so agreeing here is a measurement and not an inference",
+	},
+	{
 		ID: "eval/is-transparent-to-return", Category: "eval and dot",
 		Snippet: `f() { eval return 3; echo NOT-REACHED; }; f; echo st=$?`,
 		Why:     "eval is not a scope: `return` inside it returns from the function around it, which is the opposite of what a sourced file does",

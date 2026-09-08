@@ -92,6 +92,20 @@ type Dialect struct {
 	// `bind -m vi-insert`.
 	RebindKeyInViMode []string
 
+	// PromptHook is the rc-file line that installs this shell's before-every-
+	// prompt hook, in its own spelling and its own mechanism: bash sets the
+	// variable `PROMPT_COMMAND` to command *text*, zsh defines a function
+	// called `precmd`. The two are not one feature spelled twice, which is
+	// why this is a whole line per dialect rather than a name — see
+	// repl.HookStyle.
+	//
+	// It counts rather than prints. A hook that wrote a mark would write it
+	// before *every* prompt, and every other row's wait for its own mark
+	// would then be answered by a hook's output arriving first; the count is
+	// read later by an ordinary probe, so the session it is measured in is
+	// the same session the rest of the suite runs in.
+	PromptHook string
+
 	// JobRunning and JobStopped are the words this shell lists a job's state
 	// with. They differ, and the difference is the point of having a column
 	// per dialect: bash writes `Running` and `Stopped`, zsh writes `running`
@@ -114,6 +128,7 @@ func Bash() Dialect {
 			"set -o vi",
 			`bind -m vi-insert '"\C-o": beginning-of-line'`,
 		},
+		PromptHook: `PROMPT_COMMAND='SMOKE_HOOK=$((SMOKE_HOOK + 1))'`,
 		JobRunning: "Running", JobStopped: "Stopped",
 	}
 }
@@ -132,6 +147,7 @@ func Zsh() Dialect {
 			"bindkey -v",
 			"bindkey -M viins '^O' beginning-of-line",
 		},
+		PromptHook: "precmd() { SMOKE_HOOK=$((SMOKE_HOOK + 1)); }",
 		JobRunning: "running", JobStopped: "suspended",
 	}
 }

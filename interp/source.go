@@ -43,6 +43,15 @@ type sourced struct {
 	// label names the text in a diagnostic: "eval", or the path of the file.
 	label string
 
+	// named, when set, is what a diagnostic calls this text whatever the
+	// dialect's own word for eval's text or for a sourced file would be. It
+	// is the name of the *variable* the text came out of: measured, bash
+	// reports a syntax error in `PROMPT_COMMAND` as `PROMPT_COMMAND: line N:`
+	// — neither the builtin's name nor the `(eval)` one dialect writes — and
+	// that name is the person's only way back to the text. See
+	// Runner.EvalVariable, its one caller.
+	named string
+
 	// eval marks the text as `eval`'s rather than a file's, because one
 	// dialect calls it something of its own — `(eval)` — where the others
 	// use the builtin's name.
@@ -78,6 +87,11 @@ type sourced struct {
 // sourceName is what a diagnostic calls this text.
 func (s sourced) sourceName(d Diagnostics) string {
 	switch {
+	case s.named != "":
+		// A variable's name beats both, because neither of the others is
+		// true of it: the text is not a file and the person did not type
+		// `eval`.
+		return s.named
 	case s.eval && d.EvalSourceName != "":
 		return d.EvalSourceName
 	case !s.eval && d.SourceFileIsTheBuiltin:
@@ -156,11 +170,6 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	r.inBuiltin = ""
 	defer func() { r.inBuiltin = outer }()
 
-	// Cleared before the first command rather than after the last, which is
-	// what makes an empty script report success: with nothing to run the loop
-	// below never executes and this is the answer. An `if len(f.Stmts) == 0`
-	// guard stood here too and was dead — removing it changed no test, and
-	// removing this line failed two.
 	if s.catchReturn {
 		// Inside a sourced file there is something for a `return` to return
 		// from, which is the question one dialect asks before allowing one
@@ -168,7 +177,22 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		r.sourceDepth++
 		defer func() { r.sourceDepth-- }()
 	}
-	r.status = 0
+	// Cleared only when there is nothing to run, which is where the two
+	// measured facts part company. `false; eval ""` and `false; . empty.sh`
+	// both end at 0 in every shell in the panel, so text with no commands in
+	// it *clears* a failure rather than preserving it — but `false; eval
+	// "echo $?"` prints 1 in all six, so text with a command in it is shown
+	// the caller's status and not a fresh one.
+	//
+	// This cleared it before the first command instead, which answered the
+	// first fact and got the second wrong in the direction nothing catches:
+	// borrowed text asking `$?` read 0 after a failure — success, reported at
+	// status 0, by the parameter whose whole job is to say otherwise. It is
+	// also what a prompt hook needs, since every one of them is handed the
+	// status of the line before it (repl's fireChain).
+	if len(f.Stmts) == 0 {
+		r.status = 0
+	}
 	// Borrowed text is a *file* of statements as far as giving one up goes,
 	// which is what abandoned records: measured, `readonly r=1` and then
 	// `r=2` inside `eval` or inside a sourced file reports, gives up that

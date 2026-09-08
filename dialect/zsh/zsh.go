@@ -169,6 +169,20 @@ func Dialect() syntax.Dialect {
 	// and say so as a complaint about a name rather than about the grammar.
 	// It is how a plugin generates one function per widget.
 	d.FunctionNameExpands = true
+	// After the keyword, the word is the name whatever is in it — the empty
+	// string, a space, a semicolon, a dollar, all of it — and this shell is
+	// the only one in the panel that reads it that way. The other four with
+	// the keyword parse the line and refuse the *name* where it runs, two of
+	// them without stopping; dash has no keyword to reach it with. See
+	// syntax.Dialect.FunctionKeywordNameIsAnyWord for the six columns and for
+	// the one group the flag does not carry, the names that shell matches
+	// against the filesystem.
+	//
+	// Reached in the wild because a plugin manager builds definitions by
+	// expansion and quotes the name with `${(q)…}`, so whatever the value it
+	// meant to use came to arrives as a quoted word: an empty one (#1548) or
+	// one holding a space (#1560).
+	d.FunctionKeywordNameIsAnyWord = true
 	// A `(` where an argument may stand belongs to the word: `echo MY ( x )`
 	// is two words there and a syntax error in the other four. Measured
 	// 2026-09-06 on zsh 5.9.2 — `unknown file attribute:` names the space

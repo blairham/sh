@@ -109,6 +109,7 @@ func corpusGrammar() syntax.Dialect {
 	d.FdVariableSubscript = true
 	d.FuncDefAtParen = true
 	d.FunctionKeywordParens = true
+	d.FunctionKeywordNameIsAnyWord = true
 	d.MultiDigitFdNumber = true
 	d.ParamCaseChange = true
 	d.ParamIndirection = true

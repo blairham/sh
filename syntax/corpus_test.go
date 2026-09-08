@@ -39,6 +39,11 @@ func corpusDialect() syntax.Dialect {
 	d.CasePatternListSpansNewlines = true
 	// `function f() { …; }`, both markers at once.
 	d.FunctionKeywordParens = true
+	// `function '' { … }` — the empty string as a name, which one of the six
+	// defines and four refuse where the definition runs rather than while
+	// reading it. The grammar that has to *read* every case is the one that
+	// takes the construct, as above.
+	d.FunctionKeywordNameIsAnyWord = true
 	// `[[ x == @(a|b) ]]` — extended patterns where a condition reads them.
 	d.ExtendedPatternInCondition = true
 	// One case records `f() echo hi` as a syntax error, which only a

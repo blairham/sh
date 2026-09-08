@@ -1554,6 +1554,48 @@ func tokenHoldsAnExpansion(t Token) bool {
 	return false
 }
 
+// keywordFuncName reports whether the word after the `function` keyword is a
+// name.
+//
+// Two readings, and which one runs is [Dialect.FunctionKeywordNameIsAnyWord].
+// Without it the name is checked as text, exactly as the POSIX form's is, and
+// the two share isFuncName so that they cannot come apart. With it there is no
+// text check at all: the shell that has the flag reads a word and the word is
+// the name, whatever is in it.
+//
+// The one thing the flag does not carry is a name the shell would match
+// against the *filesystem*. Measured on zsh 5.9.2: `function a*b { :; }` is
+// `no matches found: a*b`, `a?b` the same, and `a[b` is `bad pattern: a[b` —
+// so those are not definitions there either, and taking them as literal names
+// here would put a function called `a*b` in the table at status 0 where the
+// shell being modeled defines nothing. A refusal is the visible answer and a
+// plausible wrong definition is not, so they stay refused. The quoting is what
+// decides it and is read per span: `'a*b'` is ordinary text and is a name,
+// `a*'b'` is not, because the `*` in it is still bare.
+func (p *Parser) keywordFuncName(t Token) bool {
+	if !p.dialect.FunctionKeywordNameIsAnyWord {
+		return isFuncName(t.Literal(), p.dialect.FunctionNamePunctuation)
+	}
+	return !holdsBarePatternCharacter(t)
+}
+
+// holdsBarePatternCharacter reports whether any literal span of t that the
+// shell would match against the filesystem carries a pattern character.
+//
+// Per span rather than over [Token.Literal], because quoting is what decides
+// whether a character is a pattern and Literal has already dropped it.
+func holdsBarePatternCharacter(t Token) bool {
+	for _, s := range t.Spans {
+		if s.Kind != Literal || s.Quoting != Unquoted {
+			continue
+		}
+		if strings.ContainsAny(s.Value, "*?[") {
+			return true
+		}
+	}
+	return false
+}
+
 func isFuncName(s string, punctuation bool) bool {
 	if isName(s) {
 		return true
@@ -2025,7 +2067,7 @@ func (p *Parser) parseFuncKeyword() Command {
 		fn.Name = p.tok.Literal()
 		fn.NameWord = p.word()
 	} else {
-		if !isFuncName(p.tok.Literal(), p.dialect.FunctionNamePunctuation) {
+		if !p.keywordFuncName(p.tok) {
 			p.fail("expected a name after `function`")
 			return fn
 		}

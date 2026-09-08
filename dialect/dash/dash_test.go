@@ -141,6 +141,7 @@ func TestSemantics(t *testing.T) {
 		{"ReportsAnyKilledPipelineElement", s.ReportsAnyKilledPipelineElement, interp.Yes},
 		{"ChildInterruptEndsTheScript", s.ChildInterruptEndsTheScript, interp.No},
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
+		{"CdHasQuietOption", s.CdHasQuietOption, interp.No},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
 		// Answered although this shell has no `[[ ]]` to ask it in, so a

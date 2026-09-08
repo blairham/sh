@@ -1506,6 +1506,28 @@ type Semantics struct {
 	// and are not asked about.
 	CdRefusesUnknownOption Answer
 
+	// CdHasQuietOption gives `cd` the `-q` of zsh, which is the one letter
+	// beyond `-L` and `-P` that any of the panel has. True in zsh alone.
+	//
+	// What the letter means there is *hook suppression*: measured 2026-09-08,
+	// a `chpwd` function and a `chpwd_functions` entry both ran on a plain
+	// `cd` and neither ran on `cd -q`. It is not about printing — `cd -q -`
+	// still wrote the directory at an interactive prompt, and a CDPATH move
+	// stayed silent with the letter and without it — so a shell that fires no
+	// `chpwd` has already done everything `-q` asks for.
+	//
+	// This shell is such a shell: `chpwd` has no firing site, and repl's
+	// Hooks.Unfired names it and refuses it by name once per session. So the
+	// letter is honored here rather than swallowed, and it is carried for the
+	// reason it is a *letter* and not an operand — without it `cd -q /tmp`
+	// went looking for a directory called `-q`, which is #1558.
+	//
+	// Asked only when a `q` is actually seen, so the three shells without the
+	// letter never reach the question and answer the word the way they answer
+	// any other letter they do not have — see CdRefusesUnknownOption, which
+	// is the next question when this one says no.
+	CdHasQuietOption Answer
+
 	// ChildInterruptEndsTheScript stops the script when a child was ended by
 	// an interrupt, instead of carrying on with the next command. True in
 	// ksh93 alone, and for SIGINT alone — measured across QUIT, TERM, HUP,

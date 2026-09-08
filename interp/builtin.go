@@ -1831,13 +1831,22 @@ func expandEchoEscapes(s string, hex, esc, capEsc bool) (expanded string, stoppe
 // right place for a demonstration and the wrong one to leave it.
 // cdOptions reads `cd`'s leading options.
 //
-// `-L` and `-P` are the two, and they are unanimous: the default and `-L`
-// keep the name the directory was reached by, and `-P` resolves it. Measured
-// through a symlink, where all four print the link's path for the first two
-// and the real one for the third.
+// `-L` and `-P` are the unanimous two: the default and `-L` keep the name the
+// directory was reached by, and `-P` resolves it. Measured through a symlink,
+// where all four print the link's path for the first two and the real one for
+// the third.
+//
+// `-q` is a third, and belongs to one shell — see CdHasQuietOption. zsh has a
+// fourth, `-s`, which refuses a path with a symlink component (`cd -s link`
+// and `cd -s link/deep` are both `not a directory` there while `cd -s real`
+// moves); it is not carried yet and is filed as #1569 rather than guessed
+// at, so it still reaches the unknown-letter question below.
 //
 // A lone `-` is not an option — it is the previous directory — which the
-// length test leaves alone.
+// length test leaves alone. `--` ends the options in all six, which is what
+// lets a directory whose name begins with a dash be reached at all: measured,
+// `cd -- -dashdir` moves in every one of them and `cd -dashdir` moves only in
+// zsh, where the word is an operand rather than a bundle of letters.
 func (r *Runner) cdOptions(args []string) (rest []string, physical bool, code int) {
 	sawLogical, sawPhysical := false, false
 	done := func(rest []string, code int) ([]string, bool, int) {
@@ -1864,6 +1873,46 @@ func (r *Runner) cdOptions(args []string) (rest []string, physical bool, code in
 				physical, sawLogical = false, true
 			case 'P':
 				physical, sawPhysical = true, true
+			case 'q':
+				// zsh's quiet `cd`, and the letter that stops a plugin
+				// manager dead: the loader wraps every move in an anonymous
+				// function precisely so the directory hooks stay quiet, and
+				// without the letter here the whole word became the operand
+				// and the move never happened. #1558.
+				//
+				// Honored rather than accepted: what `-q` asks is that
+				// `chpwd` and `chpwd_functions` not run, and nothing here
+				// fires them — repl's Hooks.Unfired names `chpwd` and the
+				// session refuses it by name once. When `chpwd` gains a
+				// firing site inside this function it has to read this
+				// letter, and dialect/zsh's
+				// TestChpwdIsUnfiredWhichIsWhatMakesCdQuietHonest fails the
+				// day it does and says so there.
+				//
+				// `continue` rather than `break`, and the two are the same
+				// thing here: this switch is inside the letter loop, so
+				// breaking the switch also goes on to the next letter. A
+				// mutation run cannot tell them apart and no test can, which
+				// is why the word is chosen for the reader — the letter is
+				// done and the next one is next, said once.
+				//
+				// Unanswered stops here rather than falling through, and the
+				// difference is what a shell with no dialect *says*. The
+				// question below is reached only by this one having defaulted
+				// to no, so falling through would name two unanswered axes
+				// where one was asked — and the reader would have to work out
+				// which of them decided. `cd -Z` names one axis; `cd -q` now
+				// names one too.
+				if a := r.sem().CdHasQuietOption; a != No {
+					if r.ask(a, "`cd -q`") {
+						continue
+					}
+					return nil, physical, r.status
+				}
+				// A shell without the letter answers the word the way it
+				// answers any other letter it does not have, which is the
+				// next question rather than a second rule.
+				fallthrough
 			default:
 				// The one place the panel splits: three of them refuse a
 				// letter `cd` does not have, and zsh reads the word as

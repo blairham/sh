@@ -3593,6 +3593,26 @@ echo "st=$?"`,
 		Why:     "given both, three of them let the last one win and zsh gives `-P` the answer wherever it stands, so the two orders agree in one shell and disagree in the other three. Written out rather than looped over a variable, because a loop would have measured word splitting instead — the variable stays one word in zsh and the case would have said nothing about `cd` at all",
 	},
 	{
+		ID: "cd/a-quiet-option-only-one-shell-has", Category: "builtins",
+		Snippet: "mkdir -p sub\ncd -q sub\necho \"st=$?\"\ncase $PWD in */sub) echo moved;; *) echo stayed;; esac\n",
+		Why:     "`cd -q` is zsh's, and it is the only option letter beyond `-L` and `-P` that any of the panel has. There it suppresses `chpwd` and `chpwd_functions` and does nothing else — measured, both ran on a plain `cd` and neither on this one, while `cd -q -` still printed the directory. The other five refuse the letter by name and stay where they were, each in its own words and at its own status. The `case` prints a token rather than the path because the path is this machine's; what is compared is whether the move happened, which a status alone cannot say — reading the letter as the operand also fails, and fails differently",
+	},
+	{
+		ID: "cd/a-quiet-option-bundled-with-a-path-option", Category: "builtins",
+		Snippet: "mkdir -p real/sub && ln -s real link\ncd -qP link/sub\necho \"st=$?\"\ncase $PWD in *link*) echo kept;; */sub) echo resolved;; *) echo stayed;; esac\n",
+		Why:     "the letter bundled rather than alone, which is the shape that says it is read as an option and not as a word that happens to start with a dash: in the shell that has it both letters apply and the path comes back resolved, and in the five that do not the bundle is refused at the `q` before the `P` is ever reached. Written with `-qP` rather than `-q -P` because a separate word would be answered by the operand rule alone",
+	},
+	{
+		ID: "cd/a-letter-no-shell-in-the-panel-has", Category: "builtins",
+		Snippet: "mkdir -p sub\ncd -Z sub\necho \"st=$?\"\ncase $PWD in */sub) echo moved;; *) echo stayed;; esac\n",
+		Why:     "the counter-case to the two above, and the reason the quiet letter is a question of its own rather than a loosening of this one. Five of the panel refuse a letter `cd` does not have; zsh reads the word as somewhere to go instead, because its `cd` takes two operands and a leading-dash word is the first of them there, which is why its complaint is about the *pwd* and not about an option. Probed separately: with a directory actually called `-Z` beside it, `cd -Z` moves into it there. Nobody moves here, and the columns still disagree about why — two statuses and five sentences, counting bash 3.2's shorter usage line as its own",
+	},
+	{
+		ID: "cd/a-directory-whose-name-begins-with-a-dash", Category: "builtins",
+		Snippet: "mkdir -- -dashdir\ncd -- -dashdir\necho \"st=$?\"\ncase $PWD in *-dashdir) echo moved;; *) echo stayed;; esac\ncd ..\ncd -dashdir\necho \"st=$?\"\ncase $PWD in *-dashdir) echo moved;; *) echo stayed;; esac\n",
+		Why:     "the two halves of what `--` is for. With it, every one of the six reaches the directory — unanimous, and the only spelling that is. Without it the same word is a bundle of option letters in five of them, which is why `cd -dashdir` is refused over a `-d` nobody wrote as an option, and an operand in the sixth. The pair is the evidence: either line alone would leave the end-of-options marker looking like decoration",
+	},
+	{
 		ID: "cd/pwd-p-resolves-symlinks", Category: "builtins",
 		Snippet: `mkdir -p a/b; ln -s a/b l; cd l; pwd -P | grep -c "/a/b$"; pwd | grep -c "/l$"`,
 		Why:     "`pwd -P` reports where the directory is with symlinks resolved, and a plain `pwd` keeps the name it was reached by — both unanimous, and `pwd -L -P` (not shown) lets the last option win in all four as well",

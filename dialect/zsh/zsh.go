@@ -1001,6 +1001,10 @@ func Semantics() interp.Semantics {
 	s.ReportsAnyKilledPipelineElement = interp.No
 	s.ChildInterruptEndsTheScript = interp.No
 	s.CdRefusesUnknownOption = interp.No
+	// `cd -q` suppresses `chpwd` and `chpwd_functions` here, and nothing
+	// else: measured, both ran on a plain `cd` and neither on `cd -q`, while
+	// `cd -q -` still printed the directory. #1558.
+	s.CdHasQuietOption = interp.Yes
 	s.CdLastPathOptionWins = interp.No
 	s.BadSetOptionNameFatal = interp.Yes
 	s.UnknownConditionOptionIsAStatus = interp.Yes

@@ -132,4 +132,14 @@ func TestAppendingALiteralToAnInheritedScalarKeepsIt(t *testing.T) {
 	if got := strings.TrimSpace(out); got != "[1][2] n=2" {
 		t.Errorf("got %q, want the inherited value kept as the first element", got)
 	}
+	// And `unset` takes an inherited value away as surely as it takes a
+	// stored one: the environment is not allowed to put it back underneath
+	// the append. Measured `a=1 sh -c 'unset a; a+=(2)'` -- one element in
+	// every column.
+	out, _ = runGrammar(t, `unset a; a+=(2); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		func(d *syntax.Dialect) { d.ParamIndirection = true },
+		func(r *Runner) { r.Env = append(r.Env, "a=1") })
+	if got := strings.TrimSpace(out); got != "[2] n=1" {
+		t.Errorf("after unset: got %q, want the inherited value gone", got)
+	}
 }

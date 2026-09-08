@@ -467,10 +467,37 @@ func (p *printer) command(c Command) {
 		p.str("((" + x.Expr + "))")
 		p.redirs(x.Redirs)
 	case *FuncDecl:
-		// Without the `function` keyword even where it was written with one:
-		// `function f { …; }` and `f() { …; }` are the same declaration to
-		// every shell that has both, and the parenthesised form is the one
-		// they all read.
+		// With the `function` keyword where it was written with one. The
+		// note that used to stand here said the two spellings are the same
+		// declaration to every shell that has both, and that is measurably
+		// wrong of the one shell for which the word carries meaning: in
+		// ksh93 `typeset` in a `function f { …; }` body declares a local
+		// and in an `f() { …; }` body assigns the global. That is the axis
+		// Semantics.TypesetLocalNeedsKeywordFunction records and the reason
+		// FuncDecl.Keyword is in the tree at all, so a print that dropped
+		// the word handed back a program whose locals leak — silently, at
+		// exit 0, which is what a formatter built on this printer would
+		// have done to every keyword function it touched (#1406).
+		//
+		// ksh93 says the same thing about itself: its own `typeset -f`
+		// writes `function f { …; }` back for the one and `f() { …; }` for
+		// the other, and `eval "$(typeset -f f)"` keeps the locality only
+		// because it does.
+		//
+		// Unconditional rather than a Layout option, and no dialect is
+		// asked: a tree can only carry the keyword if the grammar that read
+		// it has the keyword, so writing it back is writing what that
+		// grammar reads. The same reasoning AnonFunc above already prints
+		// on, from the same field.
+		//
+		// The hybrid `function f() { …; }` comes back in the keyword form
+		// without its parentheses, which is the tree it parsed to: the
+		// parser consumes them and records nothing, because the only shell
+		// that parts the two spellings refuses the hybrid outright and the
+		// two that take it treat all three alike.
+		if x.Keyword {
+			p.str("function ")
+		}
 		// The name as *written* where it was written with an expansion:
 		// printing its literal text would name a different function, which
 		// is the same loss the parser used to take (see FuncDecl.NameWord).
@@ -479,7 +506,11 @@ func (p *printer) command(c Command) {
 		} else {
 			p.str(x.Name)
 		}
-		p.str("() ")
+		if x.Keyword {
+			p.str(" ")
+		} else {
+			p.str("() ")
+		}
 		p.command(x.Body)
 	case *CoprocClause:
 		p.str("coproc ")

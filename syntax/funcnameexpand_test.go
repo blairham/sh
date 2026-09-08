@@ -125,7 +125,14 @@ func TestAnExpandedFunctionNamePrintsBackAsAWord(t *testing.T) {
 		// literal `_p_w` would name a different function.
 		{`_p_${w}() { :; }`, "_p_$w() { :; }"},
 		{`_p_$w() { :; }`, "_p_$w() { :; }"},
-		{`function _p_${w} { :; }`, "_p_$w() { :; }"},
+		// The keyword form keeps its keyword, which is the other half of
+		// the same rule: an expanded name and the `function` word are both
+		// things the tree recorded and the printer used to drop. This row
+		// wanted `_p_$w() { :; }` until #1406 — the name survived and the
+		// declaration did not, and in ksh93 that is a different program,
+		// because `typeset` in a keyword body declares a local and in a
+		// bare one assigns the global.
+		{`function _p_${w} { :; }`, "function _p_$w { :; }"},
 		{`plain() { :; }`, "plain() { :; }"},
 	} {
 		f, err := Parse(tc.src, on)

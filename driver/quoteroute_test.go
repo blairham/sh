@@ -109,6 +109,25 @@ func TestASessionsInputIsACommandString(t *testing.T) {
 	if got := out.String(); got != "abc\n" {
 		t.Errorf("output %q, want %q", got, "abc\n")
 	}
+	// The same, through the dialect that reads an input whole before running
+	// any of it: a second parse of the same text by a second call, and a
+	// route attached to one of the two is a route attached to neither.
+	out.Reset()
+	errs.Reset()
+	whole := driver.Shell{Name: "sh", Dir: t.TempDir(), Stdout: &out, Stderr: &errs, KeepProcess: true}
+	whole.Dialect = syntax.Core()
+	whole.Dialect.CloseQuotesAtEOF = syntax.RouteFromCommandString
+	whole.Diagnostics.CommandStringParsedWhole = true
+	sw, code := driver.NewSession(whole)
+	if code != 0 || sw == nil {
+		t.Fatalf("NewSession: status %d", code)
+	}
+	if status := sw.Run(t.Context(), `echo "abc`); status != 0 {
+		t.Fatalf("whole-first: status %d, stderr %q", status, errs.String())
+	}
+	if got := out.String(); got != "abc\n" {
+		t.Errorf("whole-first: output %q, want %q", got, "abc\n")
+	}
 	// And the same input refuses where the dialect names no route at all,
 	// which is what says the session is answering the flag rather than
 	// ignoring it.
@@ -149,5 +168,34 @@ func TestAGrammarChangeMidProgramKeepsTheRoute(t *testing.T) {
 	}
 	if out != "abc\n\n" {
 		t.Errorf("output %q, want abc and the newline the quote swallowed", out)
+	}
+}
+
+// TestTheWholeFirstParseIsOnTheRouteToo.
+//
+// One dialect reads a command string whole before running any of it, so the
+// failure is reported before anything has run. That is a second parse of the
+// same text through a different call, and a route attached to one of the two
+// is a route attached to neither: the whole-first parse would refuse a quote
+// the line-by-line one then closed, and the shell would report a syntax error
+// for a program it was about to run.
+//
+// Diagnostics.CommandStringParsedWhole is the switch, set here rather than
+// named as a shell's — the front end reads the vector.
+func TestTheWholeFirstParseIsOnTheRouteToo(t *testing.T) {
+	sh := quoteRouteShell()
+	sh.Diagnostics.CommandStringParsedWhole = true
+	out, errs, code := runArgs(t, sh, "testsh", "-c", "echo one\necho \"abc\n")
+	if code != 0 || errs != "" {
+		t.Errorf("status %d stderr %q, want the whole-first parse to accept it", code, errs)
+	}
+	if out != "one\nabc\n\n" {
+		t.Errorf("output %q, want one, then abc carrying the newline it swallowed", out)
+	}
+	// And the same shell refuses it from a file, which is what says the
+	// whole-first parse is answering the route rather than always accepting.
+	_, errs, code = runArgs(t, sh, "testsh", writeScript(t, "echo one\necho \"abc\n"))
+	if code != 9 || !strings.Contains(errs, "unterminated double quote") {
+		t.Errorf("from a file: status %d stderr %q, want the refusal", code, errs)
 	}
 }

@@ -95,6 +95,28 @@ func (s sourced) naming(d Diagnostics) SourceNaming {
 	return d.SourceFileNaming
 }
 
+// route is how this text reached the parser, for the grammar answer that
+// depends on it.
+//
+// The fourth measured difference between the pair, and the one that is about
+// the *text* rather than about the run around it. Measured 2026-09-07,
+// ksh93u+ 2012-08-01, from a script file so that neither answer can be the
+// invocation's:
+//
+//	eval "echo 'abc"   prints abc, status 0
+//	. ./q.sh           `q.sh: syntax error at line 1: `'' unmatched`
+//
+// where q.sh holds that same line. So a string handed over is a command
+// string wherever it was handed over from, and a file is a file — which is
+// exactly the split syntax.Dialect.CloseQuotesAtEOF records for the
+// invocation, reached by a second pair of doors.
+func (s sourced) route() syntax.ProgramRoutes {
+	if s.eval {
+		return syntax.RouteFromCommandString
+	}
+	return syntax.RouteFromScriptFile
+}
+
 // runSourced parses src and runs it on this runner.
 //
 // The status is the last command's, or 0 when nothing ran — which is not the
@@ -102,7 +124,7 @@ func (s sourced) naming(d Diagnostics) SourceNaming {
 // . empty.sh` both end at 0 in every shell in the panel, so an empty script
 // *clears* a failure rather than preserving it.
 func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
-	p := syntax.NewParser(src, r.dialect())
+	p := syntax.NewParser(src, r.dialect().On(s.route()))
 	f := p.Parse()
 	if err := p.Err(); err != nil {
 		// The failure's own line, not the caller's. `.` on line 1 of a script

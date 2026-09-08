@@ -25,7 +25,7 @@ func Dialect() syntax.Dialect {
 	// Measured 2026-09-05: `zsh -c 'alias hi=...; hi'` does not expand and
 	// the same two lines in a file, or on standard input, do. The route is
 	// the whole of the difference — nothing about the shell changes.
-	d.ExpandAliases = syntax.AliasFromScriptFile | syntax.AliasOnStandardInput
+	d.ExpandAliases = syntax.RouteFromScriptFile | syntax.RouteOnStandardInput
 	// And a body's newlines are lines of the program, as they are in the two
 	// that expand by every route.
 	d.AliasBodyCountsLines = true

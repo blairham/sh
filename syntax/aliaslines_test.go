@@ -118,19 +118,19 @@ func TestLineShiftReportsWhatTheExpansionsAdded(t *testing.T) {
 
 // The set of routes a dialect expands on, which is a set because one shell in
 // the panel answers differently on two of the three.
-func TestAliasRoutesIsASet(t *testing.T) {
+func TestProgramRoutesIsASet(t *testing.T) {
 	for _, c := range []struct {
 		name  string
-		set   syntax.AliasRoutes
-		route syntax.AliasRoutes
+		set   syntax.ProgramRoutes
+		route syntax.ProgramRoutes
 		want  bool
 	}{
-		{"every route holds the command string", syntax.AliasOnEveryRoute, syntax.AliasFromCommandString, true},
-		{"every route holds a file", syntax.AliasOnEveryRoute, syntax.AliasFromScriptFile, true},
-		{"every route holds standard input", syntax.AliasOnEveryRoute, syntax.AliasOnStandardInput, true},
-		{"no route holds nothing", syntax.AliasOnNoRoute, syntax.AliasFromScriptFile, false},
-		{"a pair holds one of them", syntax.AliasFromScriptFile | syntax.AliasOnStandardInput, syntax.AliasFromScriptFile, true},
-		{"and not the third", syntax.AliasFromScriptFile | syntax.AliasOnStandardInput, syntax.AliasFromCommandString, false},
+		{"every route holds the command string", syntax.RouteOnEveryRoute, syntax.RouteFromCommandString, true},
+		{"every route holds a file", syntax.RouteOnEveryRoute, syntax.RouteFromScriptFile, true},
+		{"every route holds standard input", syntax.RouteOnEveryRoute, syntax.RouteOnStandardInput, true},
+		{"no route holds nothing", syntax.RouteOnNoRoute, syntax.RouteFromScriptFile, false},
+		{"a pair holds one of them", syntax.RouteFromScriptFile | syntax.RouteOnStandardInput, syntax.RouteFromScriptFile, true},
+		{"and not the third", syntax.RouteFromScriptFile | syntax.RouteOnStandardInput, syntax.RouteFromCommandString, false},
 	} {
 		if got := c.set.Has(c.route); got != c.want {
 			t.Errorf("%s: Has = %v, want %v", c.name, got, c.want)

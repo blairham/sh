@@ -61,7 +61,7 @@ func NewSession(sh Shell) (*Session, int) {
 	r := sh.newRunner(sh.Name, nil, sh.Diagnostics, interp.RouteCommandString)
 	// Every input is a command string, so the route's answer is the same for
 	// all of them and is settled here rather than per input.
-	r.SetAliasExpansionBase(sh.Dialect.ExpandAliases.Has(syntax.AliasFromCommandString))
+	r.SetAliasExpansionBase(sh.Dialect.ExpandAliases.Has(syntax.RouteFromCommandString))
 	if sh.Prelude != "" {
 		if code := sh.source(r, sh.Name); code != 0 {
 			return nil, code
@@ -96,7 +96,7 @@ func (s *Session) run(ctx context.Context, src string) int {
 		// runner's dialect rather than the shell's, because a previous input
 		// may have changed it: `set -o posix` in one turn governs the parse
 		// of the next.
-		p := syntax.NewParser(src, s.dialect())
+		p := syntax.NewParser(src, s.dialect().On(syntax.RouteFromCommandString))
 		p.Parse()
 		if err := p.Err(); err != nil {
 			s.sh.sayRemarks(in.dg, in.name, p.Remarks(), 0)
@@ -104,7 +104,7 @@ func (s *Session) run(ctx context.Context, src string) int {
 			return in.dg.StatusForParseError(err)
 		}
 	}
-	pr := wholeProgram(src, s.dialect())
+	pr := wholeProgram(src, s.dialect().On(syntax.RouteFromCommandString))
 	// Aliases are expanded when a line is parsed and the table is the
 	// runner's, so joining the two is the front end's job here exactly as it
 	// is for a script. An alias defined by one input is available to the next,

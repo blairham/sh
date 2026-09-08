@@ -4809,6 +4809,76 @@ echo "st=$?"`,
 		Why:     "the same construct where the name is not an array, which splits the panel a second time and along a different line: the refusing shell says the same sentence it says for an array, and the splicing shell — which had no complaint at all a moment ago — refuses this one, because a string has no span to replace. Whether the rest of the line runs is the other half of the row",
 	},
 	{
+		ID: "array/an-array-literal-through-a-subscript-range", Category: "expansion",
+		Snippet: `a=(1 2 3); a[2,3]=(x y); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "a *range* where one element's subscript would go, which in the shell that reads ranges replaces the whole span — two elements out, two in, and the array stays three long. It grew instead: the arithmetic comma's reading took the pair for its right operand, so the line ran as `a[3]=(x y)` and left `[1][2][x][y]` — four elements with the old element 2 still standing in front of the new ones, at status 0 with nothing said. The fields are printed with delimiters rather than counted because a count is a hash of the answer here: an off-by-one at either end of a span leaves the length right and the contents wrong",
+	},
+	{
+		ID: "array/a-subscript-range-replaced-by-fewer-or-more-words", Category: "expansion",
+		Snippet: `a=(1 2 3); a[2,3]=(x); printf "[%s]" "${a[@]}"; echo -n " n=${#a[@]}"; b=(1 2 3); b[2,3]=(x y z); printf " [%s]" "${b[@]}"; echo " n=${#b[@]}"`,
+		Why:     "the two directions the equal-length row cannot see: a span replaced by fewer words shrinks the array and by more grows it, so the length is the words' count less the span's rather than a property of the range. Both halves in one snippet because the failure that put this case here was a splice at the low end that never removed the span — which is wrong in the same direction for all three counts, and a case pinning only one of them would have read as a fix",
+	},
+	{
+		ID: "array/an-empty-literal-through-a-subscript-range", Category: "expansion",
+		Snippet: `a=(1 2 3); a[2,3]=(); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "no words at all replacing a span of two, which *deletes* it — the same reading `array/an-empty-array-literal-through-a-subscript` records at a span of one, and the row that says a range assignment is a replacement rather than an insertion. A reading that spliced without removing left the span in place and the array unchanged, which is a plausible answer and a silent one",
+	},
+	{
+		ID: "array/a-reversed-subscript-range-on-the-left", Category: "expansion",
+		Snippet: `a=(1 2 3); a[3,2]=(x); printf "[%s]" "${a[@]}"; echo -n " n=${#a[@]}"; b=(1 2 3); b[1,0]=(y); printf " [%s]" "${b[@]}"; echo " n=${#b[@]}"`,
+		Why:     "an end before the start is a span with nothing in it, so the words are *inserted* where it would have begun and nothing comes out — the array gains exactly the words' count. Measured rather than derived, and it is the same answer `array/unsetting-a-reversed-range` gives from the other route, which is what makes the two one rule. The second half reaches position 1 the same way, and it was refused outright before: `1,0` under the arithmetic comma is `0`, which is below the first element, so a line that inserts at the front ended the script instead",
+	},
+	{
+		ID: "array/a-subscript-range-on-the-left-past-the-end", Category: "expansion",
+		Snippet: `a=(1 2 3); a[5,6]=(x); printf "[%s]" "${a[@]}"; echo -n " n=${#a[@]}"; b=(1 2 3); b[2,10]=(x y); printf " [%s]" "${b[@]}"; echo " n=${#b[@]}"`,
+		Why:     "the two ends of the same clamp, and they are not symmetric. A *start* past the last element has nothing to replace, so the gap becomes empty elements and the words follow them — the padding a single subscript already does for `a[5]=(x)`. An *end* past the last is simply the last, so `a[2,10]` on three elements is the span 2 through 3 and the array does not grow to eleven. It grew to eleven: the arithmetic comma read the pair as `10` and padded to it",
+	},
+	{
+		ID: "array/a-subscript-range-on-the-left-below-the-first-element", Category: "expansion",
+		Snippet: `a=(1 2 3); a[0,2]=(x y); echo -n "st=$? "; printf "[%s]" "${a[@]}"; echo -n " n=${#a[@]}"; b=(1 2 3); b[0,0]=(z); echo " st=$? n=${#b[@]}"`,
+		Why:     "the below-the-first-element refusal is a rule about the *span* and not about the subscript that starts it, the same pair `array/unsetting-a-range-below-the-first-element` draws from `unset`: a range beginning out of reach and ending inside is clamped to the first element and replaces from there, and one lying wholly out of reach ends the script. Both halves are needed because a check on the start alone would refuse the first and a check on neither would accept the second",
+	},
+	{
+		ID: "array/a-subscript-range-on-the-left-from-the-end", Category: "expansion",
+		Snippet: `a=(1 2 3); a[-2,-1]=(x y); printf "[%s]" "${a[@]}"; echo -n " n=${#a[@]}"; b=(1 2 3); b[2,-1]=(z); printf " [%s]" "${b[@]}"; echo " n=${#b[@]}"`,
+		Why:     "each end of a range takes the negative rule a single subscript takes, counted back from the last element — which is *not* the rule `unset` follows over a span, where only `-1` acts. Two constructs reading one spelling two ways, and the pair is why this is measured at both ends rather than assumed from either",
+	},
+	{
+		ID: "array/appending-an-array-literal-through-a-subscript-range", Category: "expansion",
+		Snippet: `a=(1 2 3); a[2,10]+=(x); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the operator decides whether there is a range at all, and this is the row that says so: `+=` reads none. The subscript is `2,10` rather than `2,3` because only an end out of reach can tell the two hypotheses apart — the arithmetic comma's `10` pads to eleven elements, where a span clamped to the last would append at four. Recorded because a fix that read the range wherever it saw a comma would have made this eleven-element answer four, and no other row could see the loss",
+	},
+	{
+		ID: "array/a-scalar-value-through-a-subscript-range", Category: "expansion",
+		Snippet: `a=(1 2 3); a[2,3]=x; printf "[%s]" "${a[@]}"; echo -n " n=${#a[@]}"; b=(1 2 3); b[2,3]+=x; printf " [%s]" "${b[@]}"; echo " n=${#b[@]}"`,
+		Why:     "the same span with a plain value rather than a literal, which is one word replacing it — so the two spellings of a range assignment differ only in how many words there are. And `+=` again reads no range on this route either: it joins element *3*, the arithmetic comma's operand, leaving `[1][2][3x]`. The pair is what keeps a fix from being applied to the operator by symmetry",
+	},
+	{
+		ID: "array/a-subscript-range-on-the-left-of-an-unset-name", Category: "expansion",
+		Snippet: `unset a; a[2,3]=(x y); echo -n "st=$? "; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "a name holding nothing becomes an array, and the span starts past the end of the nothing it holds — so the padding rule applies from zero elements and the answer is one empty element followed by the words. It was two empties and the words: the arithmetic comma's `3` padded one place further than the span's start does",
+	},
+	{
+		ID: "array/a-subscript-range-on-the-left-with-a-third-half", Category: "expansion",
+		Snippet: `a=(1 2 3); a[1,2,3]=(x y); echo -n "st=$? "; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the left of an assignment and the inside of an expansion disagree about a second comma, and the disagreement is measured rather than tidied away: `${a[1,2,3]}` is a bad substitution in the shell that reads ranges, while this line splits at the *first* comma and lets the arithmetic have the rest — the span 1 through `2,3`, which is 3, so the words replace every element. Pinned because the obvious tidying is to make both refuse, and that would break the half a script can reach",
+	},
+	{
+		ID: "array/a-subscript-range-on-the-left-of-a-table", Category: "expansion",
+		Snippet: `typeset -A h; h[k]=v; h[a,b]=(x y); echo "st=$?"; echo "n=${#h[@]}"`,
+		Why:     "a table has keys rather than positions, so there is no span for a literal's words to replace and the shell that splices refuses this by name where it accepted the indexed form. Recorded beside the range rows because a fix reaching for the comma before asking about the attribute would splice a table's values by their insertion order, which is an order no shell promises",
+	},
+	{
+		ID: "array/a-subscript-range-on-the-left-of-a-table-with-a-value", Category: "expansion",
+		Snippet: `typeset -A h; h[k]=v; h[a,b]=x; echo -n "st=$? n=${#h[@]} "; printf "[%s]" "${h[a,b]}"; echo`,
+		Why:     "the other half of the attribute's rule, and the sharper one: with a plain value the comma is not a separator at all but part of the *key*, so the three characters `a,b` name an element of their own and `k` is left alone. It is `assoc/the-subscript-is-not-arithmetic` at a comma — the switch has to be thrown before the subscript is read — and the row a range fix is likeliest to break, because a table's subscript is the one place a comma means nothing",
+	},
+	{
+		ID: "array/a-subscript-range-end-that-will-not-evaluate", Category: "expansion",
+		Snippet: `a=(1 2 3); a[2,3/0]=(x y); echo "st=$?"; echo "n=${#a[@]}"`,
+		Why:     "an end that fails to evaluate is blamed as arithmetic and ends the script — the same complaint the identical text inside `$(( ))` makes, and the same one a single bad subscript makes. It matters that the range reading does not swallow it: a pair resolved half-way and spliced anyway would write somewhere plausible at status 0, which is the shape every other row here exists to rule out",
+	},
+	{
 		ID: "assoc/unsetting-at-is-a-key-and-not-every-element", Category: "expansion",
 		Snippet: `typeset -A m; m[k]=v; m[j]=w; unset "m[@]"; echo "n=${#m[@]}"`,
 		Why:     "the whole-array reading belongs to the indexed array alone. With the attribute on, `@` is a key like any other and nothing was stored under it, so all three that have the attribute leave both elements where they are — including the two that clear an indexed array through the same spelling. It is the boundary a fix is likeliest to cross by accident, because the two kinds share a builtin and an operand shape",

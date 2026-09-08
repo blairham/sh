@@ -9953,6 +9953,77 @@ subscript back as written, and does not evaluate it: `a[1/0]=(p q)` is
 `cannot assign list to array member` there and `division by zero` in the
 shell that splices.
 
+### And where the subscript is a range
+
+The dialect that reads `a[1,3]` as a range (`SubscriptCommaIsARange`) reads
+one on the *left* of an assignment too, and there it names a span of
+elements the words replace. So the length changes by the words' count less
+the span's — it grows, shrinks, or holds — where the single-subscript form
+above always changes it by the literal's count less one.
+
+Measured 2026-09-07 on zsh 5.9.2, with `a=(1 2 3)` and the fields printed
+rather than counted:
+
+    a[2,3]=(x y)      [1][x][y]        an equal count replaces, length holds
+    a[2,3]=(x)        [1][x]           fewer shrinks
+    a[2,3]=(x y z)    [1][x][y][z]     more grows
+    a[2,3]=()         [1]              none deletes the span
+    a[2,3]=x          [1][x]           a plain value is one word
+    a[2,10]=(x y)     [1][x][y]        an end past the last is the last
+    a[2,-1]=(x)       [1][x]           a negative end counts back from it
+    a[0,2]=(x y)      [x][y][3]        a start below the first is the first
+    a[3,2]=(x)        [1][2][x][3]     an empty span *inserts* and takes nothing
+    a[5,6]=(x)        [1][2][3][‸][x]  a start past the last pads, then places
+    a[0,0]=(x)        refused          the span is wholly below the first
+    a[1,2,3]=(x y)    [x][y]           the span 1 through the arithmetic `2,3`
+
+(‸ is an empty element.) Every one of those is the span `unset "a[lo,hi]"`
+already resolves — the same clamps, the same reversed-range insertion, the
+same below-the-first-element refusal — so the two constructs share one
+resolution rather than each having its own. The reversed range is again the
+row that proves the reading is a replacement: an empty span still puts the
+words in.
+
+Two of these rows are the panel's, not a symmetry's, and both were wrong
+here until they were run.
+
+**`+=` reads no range at all.** It takes the arithmetic-comma value of the
+whole subscript, exactly as it does without a comma. Only an end out of
+reach can show it, because every pair that fits inside the array gives the
+same answer under both readings:
+
+    a[2,10]+=(x)   [1][2][3][‸][‸][‸][‸][‸][‸][‸][x]   eleven, not four
+    a[2,3]+=x      [1][2][3x]                          joins element 3
+
+So the operator decides whether there is a range, and a fix that read the
+comma wherever it saw one would have turned the first row into four
+elements with nothing else able to see the loss.
+
+**A table's subscript is the one place a comma means nothing.** With a
+plain value the characters are part of the key — `typeset -A h; h=(k v);
+h[a,b]=x` stores under the three characters `a,b` and leaves `k` alone,
+which is `assoc/the-subscript-is-not-arithmetic` at a comma. With a literal
+it is refused as a slice, the same sentence a table's single subscript gets
+above. The attribute has to be asked about before the comma is read.
+
+The reading also parts company with the expansion's over a *third* half.
+`${a[1,2,3]}` is `bad substitution` there, while the assignment splits at
+the first comma and lets the arithmetic have the rest. Measured, not
+tidied — making both refuse would break the half a script can reach.
+
+It was doing none of this. The whole subscript went through the arithmetic
+comma operator, whose value is its right operand, so `a[2,3]=(x y)` ran as
+`a[3]=(x y)`: four elements, the old element 2 still standing in front of
+the new ones, status 0, and nothing said. A count would not have found it
+either — an off-by-one at either end of a span leaves the length right and
+the contents wrong, which is why every row above is compared field by
+field.
+
+A range on a plain *string* is a span of characters there (`s=hello;
+s[2,3]=x` is `hxlo`), and that is not modeled: the single subscript
+`s[2]=x` has no character write behind it yet either, so a range would be
+the same absent construct wearing a pair.
+
 ### The letter that had to start meaning something
 
 `typeset -a a; a[2]=(p q)` splices and `typeset a; a[2]=(p q)` is refused,

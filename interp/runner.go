@@ -3730,6 +3730,22 @@ func (r *Runner) assign(a *syntax.Assign) {
 		// wording of our own that named the array rather than the expression,
 		// and it carried on to the next command.
 		text := r.joinWord(a.Index)
+		// A range on the left names a span of elements rather than one, and
+		// the value is the single word that replaces the whole span:
+		// `a=(1 2 3); a[2,3]=x` is `[1][x]`. Ahead of the single-subscript
+		// reading because that one would take the pair for the arithmetic
+		// comma's right operand and write element 3, leaving element 2 in
+		// front of it — see Runner.assignSpan.
+		from, to, outcome := r.assignSpan(a, text)
+		switch {
+		case outcome == spanReported:
+			return
+		case outcome == spanResolved && r.spanReplacesElements(a.Name):
+			elems, _ := r.arrayElemsOfTheName(a.Name)
+			r.spliceElementSpan(a.Name, text, elems, from, to,
+				[]string{r.expandAssignValue(a.Value)})
+			return
+		}
 		idx, err := r.subscriptValue(text)
 		if err != nil {
 			r.fatal("%s\n", r.subscriptFailure(text, err))

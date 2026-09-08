@@ -84,7 +84,7 @@ func TestTheMinimalQuotingFlag(t *testing.T) {
 		// A multibyte rune passes through, and so does a byte that is not
 		// part of one.
 		{"a multibyte rune is not a reason to quote", `v=aéb; printf "[%s]" "${(q-)v}"`, "[aéb]"},
-		{"though its neighbours may be", `v="aé b"; printf "[%s]" "${(q-)v}"`, "['aé b']"},
+		{"though its neighbors may be", `v="aé b"; printf "[%s]" "${(q-)v}"`, "['aé b']"},
 		// The two characters that are special only where a word starts.
 		// These are the rows a table keyed on the character alone fails.
 		{"a tilde needs quotes at the start", `v="~x"; printf "[%s]" "${(q-)v}"`, "['~x']"},
@@ -181,9 +181,9 @@ func TestTheExtendedQuotingFlag(t *testing.T) {
 		{"a backslash inside it", "v=$'a\\001b\\\\c'; printf \"[%s]\" \"${(q+)v}\"", `[$'a\C-Ab\\c']`},
 		{"a bang inside it is not escaped", "v=$'a\\001b!c'; printf \"[%s]\" \"${(q+)v}\"", `[$'a\C-Ab!c']`},
 		{"nor is a space", "v=$'a\\001b c'; printf \"[%s]\" \"${(q+)v}\"", `[$'a\C-Ab c']`},
-		// A rune passes through, and only its neighbours ask for quotes.
+		// A rune passes through, and only its neighbors ask for quotes.
 		{"a multibyte rune is not a reason to render", `v=aéb; printf "[%s]" "${(q+)v}"`, "[aéb]"},
-		{"though its neighbours may quote", `v="aé b"; printf "[%s]" "${(q+)v}"`, "['aé b']"},
+		{"though its neighbors may quote", `v="aé b"; printf "[%s]" "${(q+)v}"`, "['aé b']"},
 		// The join runs first and the quoting wraps what it produced, which
 		// is why a marked separator is refused beside this flag.
 		{"a join is quoted once, not per element", `d=('a b' c); printf "[%s]" "${(q+j.|.)d}"`, "['a b|c']"},

@@ -825,8 +825,19 @@ func substitutedNothing(e *syntax.ParamExpr, words []string, fired bool) bool {
 			return false
 		}
 	default:
+		// Doubled on purpose, and a mutation that lets the assigning forms
+		// through here changes no answer: applyFlagOp reaches those through
+		// assignThroughFlags and never asks this at all. The guard that
+		// holds today is the call site; this one is what holds if a later
+		// caller is added, and it is the readable statement of which
+		// operators the state belongs to.
 		return false
 	}
+	// The text test is likewise doubled: quoteWithBackslashes acts on this
+	// only where the value it was handed is empty, so a mutation dropping it
+	// survives, and a test written to catch that would be asserting nothing.
+	// It stays because the name of this function is a claim about the value,
+	// and a reader who moved the consumer would have nothing else to go on.
 	return len(words) == 1 && words[0] == ""
 }
 

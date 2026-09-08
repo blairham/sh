@@ -158,6 +158,26 @@ func (sh Shell) runScheduled(r *interp.Runner) func(context.Context) {
 	return func(ctx context.Context) { sh.RunScheduled(r, ctx) }
 }
 
+// And the two the editor waits on something other than the terminal through.
+// Nil for the same reason again: repl skips the wait entirely rather than
+// waiting on an empty list, which is what keeps a keystroke in a session with
+// nothing armed exactly as cheap as it was.
+func (sh Shell) watchedDescriptors(r *interp.Runner) func() []int {
+	if sh.WatchedDescriptors == nil {
+		return nil
+	}
+	return func() []int { return sh.WatchedDescriptors(r) }
+}
+
+func (sh Shell) descriptorReady(r *interp.Runner) func(context.Context, int, repl.Line) (repl.Line, bool) {
+	if sh.DescriptorReady == nil {
+		return nil
+	}
+	return func(ctx context.Context, fd int, in repl.Line) (repl.Line, bool) {
+		return sh.DescriptorReady(r, ctx, fd, in)
+	}
+}
+
 // hasTerminal reports whether any of this shell's three standard streams is a
 // terminal, which is what an interactive shell reads to decide whether to run
 // the monitor.
@@ -294,7 +314,12 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// this runner, for the reason the bindings are.
 		RunWidget:    sh.runWidget(r),
 		RunScheduled: sh.runScheduled(r),
-		Name:         name,
+		// And what it wants waited on beside the terminal while it waits for
+		// a key, and what it does when one of those wakes. Bound to this
+		// runner too, because the table a handler arms is this session's.
+		WatchedDescriptors: sh.watchedDescriptors(r),
+		DescriptorReady:    sh.descriptorReady(r),
+		Name:               name,
 		// The same policy and observer the Runner is given, because a
 		// session gated for what a script does and ungated for what the
 		// prompt does has a hole shaped exactly like `HISTFILE=/somewhere`.

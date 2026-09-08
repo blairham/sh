@@ -165,11 +165,15 @@ func TestZleRefusesEachMistakeItsOwnWay(t *testing.T) {
 //
 // This is the whole reason the builtin is worth having: a `zle` that took
 // everything would be worse than the `command not found` it replaces, because
-// a plugin would then believe its widget existed. `zle -F` is the one that
-// matters — the callback on a descriptor, which is how a plugin in this shell
-// does asynchrony — and it is refused by name rather than half-built.
+// a plugin would then believe its widget existed.
+//
+// `F` and `w` used to be on this list and are not any more — the callback on a
+// descriptor is built, in zlewatch.go — which is the shape of progress this
+// test is meant to record: a letter leaves the list by being implemented and
+// by nothing else. The three remaining spellings that need a seam repl has not
+// got are named in zle.go's own comment rather than here.
 func TestALetterThisShellHasNotGotSaysSo(t *testing.T) {
-	for _, letter := range []string{"F", "R", "M", "U", "C", "I", "K", "T", "w", "c", "f", "g", "m", "r", "G"} {
+	for _, letter := range []string{"R", "M", "U", "C", "I", "K", "T", "c", "f", "g", "m", "r", "G"} {
 		out, st := runZsh(t, t.TempDir(), "zle -"+letter+" x y\n")
 		want := "zsh:zle:1: -" + letter + " is not implemented yet\n"
 		if out != want || st != 1 {

@@ -1,0 +1,15 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build !(darwin || dragonfly || freebsd || linux || netbsd || openbsd)
+
+package fdset
+
+// ReadableNow cannot be asked on a system without a descriptor set, so every
+// stream counts as ready — the same answer a caller gives anything else it
+// cannot ask.
+func ReadableNow(int) bool { return true }
+
+// Wait has nothing to wait on here, and says so rather than answering "nothing
+// is ready" — which a caller would read as an idle moment that had passed.
+func Wait(int, []int) ([]int, bool, error) { return nil, false, ErrUnsupported }

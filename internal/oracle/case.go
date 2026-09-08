@@ -11888,6 +11888,41 @@ echo "read=[$l]"`,
 		Why:     "the line a widget would edit exists only while the editor is holding one, so invoking one from a script is `widgets can only be called when ZLE is active` at 1 — and `zle` with no arguments at all is status 1 and not one word, which is the only refusal in this builtin that says nothing",
 	},
 	{
+		ID: "zle/a-descriptor-callback-is-armed-and-said-back", Category: "builtins",
+		Snippet: `h() { :; }; zle -F 3 h; echo "st=$?"; zle -F`,
+		Why:     "the row `zle -F` rests on: arming a callback on a descriptor is status 0 and silence — from a script, with no editor anywhere near — and `zle -F` says it back as the command that would arm it again. This is how a plugin manager does asynchrony, and a shell that refused it ended the session at the prompt hook that armed it",
+	},
+	{
+		ID: "zle/arming-a-callback-needs-nothing-to-be-there-yet", Category: "builtins",
+		Snippet: `h() { :; }; zle -F 3 nosuchfn; echo "fn=$?"; zle -F 55 h; echo "fd=$?"; zle -F 99999 h; echo "big=$?"; zle -F`,
+		Why:     "a handler that is nowhere, a descriptor that was never open and a descriptor number no process has are all status 0 and silence, and all three are stored. What makes the order in a real startup file work: a plugin arms its callback before it opens the descriptor and before it defines the function, so a shell that checked either here would fail it",
+	},
+	{
+		ID: "zle/the-watcher-listing-is-in-arming-order", Category: "builtins",
+		Snippet: `h() { :; }; g() { :; }; zle -F 5 h; zle -F 2 g; zle -F 9 h; zle -F; echo --; zle -F 5 g; zle -F`,
+		Why:     "the one thing about this listing that cannot be guessed: it is in the order the watchers were armed and *not* sorted, which is the opposite of what `zle -l` does with widgets — and re-arming a descriptor replaces it where it stands rather than moving it to the end",
+	},
+	{
+		ID: "zle/omitting-the-handler-removes-the-watcher", Category: "builtins",
+		Snippet: `h() { :; }; zle -F 3 h; zle -F 3; echo "gone=$?"; zle -F; echo --; zle -F 3; echo "again=$?"`,
+		Why:     "the middle arity is a removal — two operands arm, one removes, none lists — and removing one that is not there is `No handler installed for fd 3` at 1, the only complaint in this operation about state rather than about the words used. A handler removes itself this way, which is the whole of how a plugin stops being called",
+	},
+	{
+		ID: "zle/a-negative-descriptor-is-not-a-removal", Category: "builtins",
+		Snippet: `zle -F -3; echo "neg=$?"; zle -F 3x h; echo "junk=$?"; h() { :; }; zle -F 007 h; zle -F; zle -F 3 h x; echo "many=$?"`,
+		Why:     "`zle -F -3` reads like a removal and is `Bad file descriptor number for -F: -3` at 1 — a signed parse of the whole word and then a refusal of the negative ones, which is why `007` arms 7 and `3x` is refused. A shell that took `-$fd` as a removal would make a plugin's careless spelling appear to work",
+	},
+	{
+		ID: "zle/minus-w-is-a-modifier-and-not-an-operation", Category: "builtins",
+		Snippet: `zle -w; echo "bare=$?"; f() { :; }; zle -N -w a f; echo "def=$?"; zle -l -L; h() { :; }; zle -F -w 3 h; zle -F`,
+		Why:     "`-w` alone is the bare `zle` — status 1 and not a word — and makes no difference to `-N`. It changes only what `-F` arms, and the listing writes it back with the letter, because with `-w` the callback is a widget handed the line and without it an ordinary function handed only the descriptor",
+	},
+	{
+		ID: "zle/a-minus-then-a-digit-is-an-operand", Category: "builtins",
+		Snippet: `zle -0; echo "st=$?"; zle -5 x; echo "two=$?"`,
+		Why:     "where option parsing stops: a word of `-` and then a digit is an operand, so `zle -0` is an attempt to *call* a widget of that name and says `widgets can only be called when ZLE is active` rather than `bad option`. It is the rule underneath `zle -F -3` reaching the descriptor parser at all",
+	},
+	{
 		ID: "zle/the-line-parameters-are-not-there-outside-a-widget", Category: "builtins",
 		Snippet: `print -r -- "[${BUFFER-UNSET}][${CURSOR-UNSET}][${LBUFFER-UNSET}][${WIDGET-UNSET}]"; BUFFER=hi; print -r -- "[$BUFFER]"`,
 		Why:     "the parameters a widget reads the line as are `local` to its call — `${(t)BUFFER}` says `scalar-local-special` — so a script that is not running a widget finds them unset and assigning to one there is an ordinary variable assignment. A shell that registered them for the session would answer a plugin's `[[ -n $BUFFER ]]` wrongly at every prompt",

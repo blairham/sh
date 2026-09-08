@@ -137,11 +137,40 @@ type Shell struct {
 	// elapsed entry from the *idle* read, so a command set aside for two
 	// seconds runs two seconds later whether or not anybody types; here it
 	// runs at the next prompt, which for an idle terminal is later — and for
-	// a person who is typing, sooner is impossible either way. Firing on time
-	// means this loop waiting on more than the terminal, which is a change to
-	// how a key is read rather than an addition beside it, and it is not made
-	// here.
+	// a person who is typing, sooner is impossible either way.
+	//
+	// The idle read now exists — see WatchedDescriptors — and this still does
+	// not use it, which is a decision and not an oversight. The editor waits
+	// on more than the terminal only while a descriptor is actually armed, so
+	// hanging a timer off that wait would fire a scheduled command on time in
+	// a session that happened to have a watcher and late in one that did not.
+	// Late in both is the answer a person can predict.
 	RunScheduled func(ctx context.Context)
+
+	// WatchedDescriptors is which descriptors, beside the terminal, this
+	// editor should wait on while it waits for a key. Nil — and an empty list
+	// — is a session that waits on the terminal alone, which is what a front
+	// end without a way to arm one gets, and which is read exactly the way a
+	// key was read before this seam existed.
+	//
+	// A function rather than a value for the reason KeyBindings is one: the
+	// list is state that changes while the session runs, and a handler that
+	// arms the next descriptor before it returns is the ordinary case.
+	WatchedDescriptors func() []int
+
+	// DescriptorReady is called when one of WatchedDescriptors has become
+	// readable. It is given the line as the editor holds it and answers with
+	// the line as it was left; false leaves the line alone and draws nothing.
+	//
+	// The same round trip RunWidget is, keyed on a descriptor rather than on a
+	// key, and false means something different here: not "the shell declined"
+	// but "the line is untouched and whatever was printed is the shell's
+	// business". Measured, that is the common case — a descriptor callback in
+	// the shell being modeled prints where the cursor was and does not redraw
+	// — and the spelling that does want the line back is the exception. See
+	// watchfd.go for the four measurements that shape this, and dialect/zsh
+	// for what a shell calls the command that arms one.
+	DescriptorReady func(ctx context.Context, fd int, in Line) (Line, bool)
 
 	// History is how this dialect draws a search of the session's history and
 	// what it declines to put in it. The zero value searches in the
@@ -373,7 +402,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	s.Runner.TakeInterrupt = sig.take
 	defer func() { s.Runner.TakeInterrupt = nil }()
 
-	ed := s.newEditor(ctx)
+	ed := s.newEditor(ctx, state)
 	ed.history = earlier
 	// What this session will write, which is not the same list as what it can
 	// recall. The two used to be one — the new tail of the editor's history —
@@ -1308,7 +1337,7 @@ func (s Shell) historyRules() historyRules {
 // directories, those reads go through the gate, and the seam a completer
 // answers through carries no context to consult it with. See
 // shellCompleter.ctx.
-func (s Shell) newEditor(ctx context.Context) *editor {
+func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 	return &editor{
 		in: s.In, out: s.Out, comp: s.completer(ctx),
 		// The shell's directory, not the process's, and asked fresh: a
@@ -1345,6 +1374,19 @@ func (s Shell) newEditor(ctx context.Context) *editor {
 		// And how one of the shell's own actions is run, with this session's
 		// context closed over.
 		runFunc: s.shellWidgets(ctx),
+		// What the shell wants waited on beside the terminal, how it answers
+		// a descriptor that woke, and which descriptor a key arrives on. All
+		// three nil-or-negative in a session with nothing armed, which is
+		// what makes the wait skipped entirely — see watchfd.go.
+		watch:           s.watchedDescriptors(),
+		descriptorReady: s.descriptorHandlers(ctx, state),
+		inFd: func() int {
+			f := s.inFile()
+			if f == nil {
+				return -1
+			}
+			return int(f.Fd())
+		},
 		// The width comes from the input, which is the terminal; the output
 		// may be a file the session was started with, and its size is not the
 		// screen's.

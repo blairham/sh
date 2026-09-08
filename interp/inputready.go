@@ -3,7 +3,11 @@
 
 package interp
 
-import "io"
+import (
+	"io"
+
+	"github.com/blairham/sh/internal/fdset"
+)
 
 // inputWaiting reports whether a read on in would find something without
 // waiting — a byte, or the end of the stream.
@@ -18,6 +22,10 @@ import "io"
 // waiting, which is also the answer where the descriptor cannot be asked. A
 // read is the only other way to find out and a read is what the question
 // exists to avoid, so the honest fallback is the one that says "go ahead".
+//
+// The asking itself is internal/fdset's, which is also where the line editor
+// asks its own version of this question — see that package for why the two
+// callers share the substrate rather than each carrying a copy of it.
 func inputWaiting(in io.Reader) bool {
 	f, ok := in.(interface{ Fd() uintptr })
 	if !ok {
@@ -28,5 +36,5 @@ func inputWaiting(in io.Reader) bool {
 		// Closed out from under the Runner. A read on it returns at once.
 		return true
 	}
-	return readableNow(fd)
+	return fdset.ReadableNow(fd)
 }

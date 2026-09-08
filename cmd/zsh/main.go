@@ -35,8 +35,12 @@ func shell() driver.Shell {
 		KeyBindings:  zsh.KeyBindings,
 		RunWidget:    zsh.RunWidget,
 		RunScheduled: zsh.RunScheduled,
-		HistoryStyle: zsh.HistoryStyle(),
-		HookStyle:    zsh.HookStyle(),
+		// What the editor waits on beside the terminal, and what happens when
+		// one of those wakes: `zle -F`.
+		WatchedDescriptors: zsh.WatchedDescriptors,
+		DescriptorReady:    zsh.DescriptorReady,
+		HistoryStyle:       zsh.HistoryStyle(),
+		HookStyle:          zsh.HookStyle(),
 	}
 }
 

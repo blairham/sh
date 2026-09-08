@@ -258,6 +258,16 @@ func TestTheTildeGroupFlagIsRefusedWhereItCannotBeCarried(t *testing.T) {
 			"testsh: ${(~q-j.|.)d}: the (~) expansion flag is not implemented beside the (q-) flag\n",
 		},
 		{
+			// And the extended form, which is the same family and the
+			// further case: measured, `${(~q+j.|.)d}` is `'a b|c'` too, and
+			// a value it renders would put one `$'…'` round the whole join,
+			// which no per-word rewrite could produce at all. It has one
+			// `q` like the one above, so a count would carry it.
+			"and the extended form of it, on one q as well",
+			`d=('a b' c); printf "[%s]" "${(~q+j.|.)d}"`,
+			"testsh: ${(~q+j.|.)d}: the (~) expansion flag is not implemented beside the (q+) flag\n",
+		},
+		{
 			"and the unquoting takes a level off the join",
 			`k=("'a" "b'"); printf "[%s]" "${(~Qj.|.)k}"`,
 			"testsh: ${(~Qj.|.)k}: the (~) expansion flag is not implemented beside the (Q) flag\n",

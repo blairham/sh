@@ -157,6 +157,12 @@ func TestTheSignedNumericSort(t *testing.T) {
 		{"where n reads the same words as text", `a=(x-1 x-10 x-3 x2 x10); printf "[%s]" "${(@n)a}"`, "[x-1][x-3][x-10][x2][x10]"},
 		// A `-` in one word only is no sign, so `-1` stays ahead of `-y`.
 		{"a minus in one word only is not a sign", `a=(-1 -y -3); printf "[%s]" "${(@-)a}"`, "[-3][-1][-y]"},
+		// The same rule on the other side of the digits, and it is the row
+		// that says *both* words have to carry a sign for either to: `.` is
+		// below `0`, so `-.5` sorts ahead of every negative number, where a
+		// reading that took one word's digits as licence would read `-1` as
+		// a number against nothing and put it first.
+		{"and both words must carry one", `a=(-1 -.5 -10 -2); printf "[%s]" "${(@-)a}"`, "[-.5][-10][-2][-1]"},
 		// Ties. Numerically equal negatives fall back to byte order, the
 		// same fallback `n` has.
 		{"a numeric tie falls back to the text", `a=(-001 -1 -01); printf "[%s]" "${(@-)a}"`, "[-001][-01][-1]"},

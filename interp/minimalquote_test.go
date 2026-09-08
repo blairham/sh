@@ -170,6 +170,7 @@ func TestTheExtendedQuotingFlag(t *testing.T) {
 		{"a newline likewise", "v=$'a\\nb'; printf \"[%s]\" \"${(q+)v}\"", "[$'a\\nb']"},
 		{"delete", "v=$'a\\177b'; printf \"[%s]\" \"${(q+)v}\"", `[$'a\C-?b']`},
 		{"escape, which has no name in this vocabulary", "v=$'a\\033b'; printf \"[%s]\" \"${(q+)v}\"", `[$'a\C-[b']`},
+		{"the last control byte", "v=$'a\\037b'; printf \"[%s]\" \"${(q+)v}\"", `[$'a\C-_b']`},
 		{"a byte that is no rune takes the meta prefix", "v=$'a\\377b'; printf \"[%s]\" \"${(q+)v}\"", `[$'a\M-\C-?b']`},
 		{"the low end of it", "v=$'a\\200b'; printf \"[%s]\" \"${(q+)v}\"", `[$'a\M-\C-@b']`},
 		{"where the low seven bits are printable", "v=$'a\\240b'; printf \"[%s]\" \"${(q+)v}\"", `[$'a\M- b']`},

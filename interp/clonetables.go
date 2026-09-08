@@ -136,9 +136,11 @@ func (c *Runner) ownTables(r *Runner) {
 	c.DynamicAssocs = maps.Clone(r.DynamicAssocs)
 	c.dynamicAssocWriters = maps.Clone(r.dynamicAssocWriters)
 	// dynamicWriters travels with Dynamic, and sharing it alone would be
-	// worse than sharing either. UnsetDynamic deletes from three tables —
-	// Dynamic, this one, and assigned — and the other two are copied above.
-	// So a subshell ending a produced parameter would take the parent's
+	// worse than sharing either. UnsetDynamic ends a produced parameter by
+	// deleting from several tables at once — Dynamic, this one, assigned, and
+	// whatever else is added to it later — and every other one of them is
+	// copied here. So a subshell ending such a parameter would take the
+	// parent's
 	// writer while leaving the parent's producer: the name still answers
 	// every read, and an assignment to it lands nowhere and says nothing,
 	// which is the silent-write case SetDynamicWriter exists to prevent.

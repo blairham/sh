@@ -5,8 +5,11 @@ package repl
 
 import (
 	"context"
+	"io"
+	"sync"
 
 	"github.com/blairham/sh/internal/fdset"
+	"github.com/blairham/sh/interp"
 )
 
 // Waiting on something other than the terminal.
@@ -90,9 +93,25 @@ import (
 //     opens and the offers come tens of thousands of times a second. With
 //     nothing armed both are 0%, so the watcher is the whole of it. That is
 //     what makes a control key typed at such a prompt a coin toss rather than
-//     a narrow race, and closing it means either matching that raw mode or
-//     restoring only when a handler actually writes. Neither is a rate, and
-//     both change measured behavior elsewhere — see #1463.
+//     a narrow race, and it is what lazyDiscipline below closes: the terminal
+//     is handed back at a handler's *first byte* and not before, so a handler
+//     that prints nothing — which is the one that spins — never opens the
+//     window at all. Measured the same way afterwards, ICANON is set in 0 of
+//     the samples taken while such a watcher is armed, which is what that
+//     shell reads.
+//
+//     **Not a rate**, and that is the other half of the answer. A rate would
+//     have been a divergence: the shell being modeled offers the descriptor
+//     four times as often as this loop does and holds the core while it is
+//     armed, so there is no slower loop to converge on. What was ours was
+//     never the frequency; it was the flap underneath it.
+//
+//     **Nor its raw mode**, which was the other way to close it and is a
+//     bigger change than it looks. Keeping OPOST and ONLCR would end the flap
+//     for every handler at once, but that shell's zle mode also keeps ISIG,
+//     and ISIG turns the `^C` this editor reads as a byte into a signal —
+//     which is behavior this package measures and pins elsewhere. The narrow
+//     fix is the one that touches only the descriptor path.
 
 // descriptorHandlers is how a session answers a descriptor that has become
 // readable, with this session's context and terminal closed over.
@@ -107,19 +126,263 @@ func (s Shell) descriptorHandlers(ctx context.Context, state *terminalState) fun
 	return func(fd int, in Line) (Line, bool) {
 		var out Line
 		var ok bool
-		// In the terminal's own line discipline, measured — and behind the
-		// guard a typed line, a hook and a key bound to a shell action all
-		// run behind. The stronger version of shellwidget.go's reason applies
-		// here: this code runs because a *descriptor* woke, at a moment
-		// nobody chose, so a panic in it would end a session over something
-		// the person at the keyboard did not do.
-		s.inLineDiscipline(state, func() {
+		// In raw mode until it writes something — see runHandler, and the
+		// last bullet of the file comment for what the eager restore this
+		// replaced cost. Behind the guard a typed line, a hook and a key
+		// bound to a shell action all run behind: the stronger version of
+		// shellwidget.go's reason applies here, because this code runs
+		// because a *descriptor* woke, at a moment nobody chose, so a panic
+		// in it would end a session over something the person at the keyboard
+		// did not do.
+		s.runHandler(state, func() {
 			if guard.Do(func() { out, ok = s.DescriptorReady(ctx, fd, in) }) {
 				out, ok = Line{}, false
 			}
 		})
+		if ok {
+			// The line is coming back and the editor is about to draw it, so
+			// whatever the handler printed has to have arrived first. Under a
+			// block store that is not the same event as the handler
+			// returning — see drained, and #1356, which is this ordering at
+			// the boundary between a command and the next prompt. Only where
+			// the line comes back, because that is the only answer this
+			// editor draws anything for, and a handler that spins prints
+			// nothing and asks for nothing.
+			s.drained()
+		}
 		return out, ok
 	}
+}
+
+// runHandler runs one descriptor handler with the terminal in whichever
+// discipline that handler's output needs, and no other.
+//
+// Three answers rather than one, because "what does this handler's output
+// need" has three of them and only the first is new:
+//
+//   - **Nothing, where something else is already translating.** Under a block
+//     store the Runner's streams are the far end of a pseudo-terminal whose
+//     pump asks the real terminal, per write, whether it is still adding the
+//     carriage returns and adds them itself where it is not — see conduitOut,
+//     which does that for a background job printing at a prompt and needs no
+//     help from this. The handler runs in raw mode from beginning to end, and
+//     a child it starts keeps a real terminal on its output, which is the
+//     price lockWriter refuses to pay in interp for the same reason.
+//   - **The restore, at the first byte and not before.** With the streams
+//     going straight to the terminal, only the kernel can translate, so the
+//     terminal has to be handed back — but not until there is something to
+//     write. That is lazyDiscipline.
+//   - **The restore, for the whole call**, where there are no streams to
+//     watch. A Shell with no Runner cannot have a write noticed, and guessing
+//     that a handler will print nothing is not something this can do on a
+//     caller's behalf; it gets what every handler got before the flap was
+//     measured.
+//
+// # What else a handler now finds, and why it is the right way round
+//
+// Output is what the restore was for, but the discipline is not only about
+// output: in raw mode ISIG is off, so a `^C` typed while a handler is running
+// is a byte the editor reads rather than a signal, and ICANON and ECHO are off,
+// so a handler that reads the *terminal* is handed bytes as they are typed
+// rather than a line. Both of those move toward the shell being modeled rather
+// than away from it — measured, it never leaves raw mode for a handler at all,
+// so what a handler finds there is exactly this.
+//
+// And the direction is what makes it a fix rather than a trade. The window
+// this closes is one a person types into: the `^C` that used to become a
+// signal, and the `^D` a line discipline stores as a NUL, were bytes meant for
+// the editor that the handler's restore took away — four fifths of an idle
+// prompt of them, which is #1448 and #1463.
+func (s Shell) runHandler(state *terminalState, f func()) {
+	switch {
+	case state == nil, s.translatesOutput():
+		f()
+	case s.Runner == nil:
+		s.inLineDiscipline(state, f)
+	default:
+		l := &lazyDiscipline{s: s, state: state, r: s.Runner}
+		defer l.done()
+		l.watch()
+		f()
+	}
+}
+
+// translatesOutput reports whether something other than the terminal's own
+// line discipline is putting the carriage returns back into what the Runner
+// writes.
+//
+// One question with one answer for the whole session: captureOutput points
+// *both* of the Runner's streams at the conduit or neither of them, so there
+// is no half of this to get right per stream.
+func (s Shell) translatesOutput() bool {
+	return s.capture != nil && s.capture.conduit != nil
+}
+
+// A lazyDiscipline is the terminal handed back at a handler's first byte.
+//
+// **The write is what is watched, because the write is what the restore is
+// for.** Raw mode has OPOST off, so a newline written under it moves down
+// without returning the carriage; a handler that writes nothing cannot be
+// harmed by that, and the measurement in the file comment is what a handler
+// that writes nothing was costing — four fifths of an idle prompt spent in
+// the terminal's own line discipline, where a `^D` is stored by the line
+// discipline as a NUL and a `^C` is a signal rather than a byte the editor
+// reads.
+//
+// # Why the streams and not the terminal
+//
+// There is nowhere else to notice it. What a handler prints goes through the
+// Runner's streams, which this package already owns the wiring of —
+// captureOutput points them at a conduit at the start of a session — and the
+// kernel offers no way to ask a terminal whether anything has been written to
+// it. So the streams are wrapped for the length of one call and the wrapper is
+// what notices.
+//
+// # One call, and the cost of that
+//
+// interp hands a child `r.Stdout` directly: an *os.File is inherited as a
+// descriptor and anything else makes os/exec build a pipe, so a wrapped
+// stream costs a child its terminal — `test -t 1` says no, `ls` stops
+// colorizing. That price is written down twice already, in lockWriter and in
+// blocks.CaptureMode, and neither pays it for a whole session. Nor does this:
+// the wrapper goes on for one handler call and comes off at the end of it.
+//
+// **Which means an external command run by a handler is on a pipe for that
+// call**, and that is the whole of what this costs. It is stated rather than
+// hidden, and it is narrower than it reads: the *default* session takes the
+// first of runHandler's three answers and is never wrapped at all, so this is
+// the price of a session that turned the block store off. The command's
+// output still reaches the terminal with the translation on, because the copy
+// os/exec makes goes through this wrapper and hands the terminal back on its
+// way past.
+//
+// **Taking the wrapper off at the first byte instead would be a data race**,
+// which is why it is not done, and the reason is worth writing down because
+// the shape of it is invisible at the call site. The first byte does not
+// always arrive on the editor's goroutine: os/exec copies a child's output on
+// one of its own, so a write that came from a child would be putting the
+// Runner's stream back from a goroutine the Runner does not belong to, while
+// the editor is reading it. The Runner's streams are the editor goroutine's
+// to write — captureOutput writes them once, at the start — and this keeps
+// that true: watch and done are both on it.
+//
+// # A handler may outlive its own streams
+//
+// A job the handler starts with `&` carries the wrapper away in its clone of
+// the Runner and goes on writing through it after the call has ended, on its
+// own goroutine. So the wrapper expires rather than merely being taken off,
+// and a write that arrives afterwards is passed through untouched: a
+// background job must not be able to take the terminal away from an editor
+// that is drawing a line. The mutex is for that goroutine and for the child's
+// copier — the handler itself runs on the editor's.
+type lazyDiscipline struct {
+	s     Shell
+	state *terminalState
+	r     *interp.Runner
+
+	// out and err are the Runner's streams as they were, and what the
+	// wrappers write through.
+	out, err io.Writer
+
+	mu sync.Mutex
+	// handed is whether the terminal has been given back, so it is given back
+	// once and taken back once.
+	handed bool
+	// expired is whether this call has ended, after which a write is somebody
+	// else's — see the last section of the type comment.
+	expired bool
+}
+
+// watch puts the wrappers on.
+//
+// A nil stream is left nil: nil means *empty* to interp — a writer that
+// discards, and /dev/null to a child — so nothing written to one can reach a
+// terminal and there is nothing there to notice.
+func (l *lazyDiscipline) watch() {
+	l.out, l.err = l.r.Stdout, l.r.Stderr
+	if l.out != nil {
+		l.r.Stdout = &lazyStream{l: l, w: l.out}
+	}
+	if l.err != nil {
+		l.r.Stderr = &lazyStream{l: l, w: l.err}
+	}
+}
+
+// hand gives the terminal back, once, before the byte that asked for it is
+// written.
+//
+// It can be called from a goroutine that is not the editor's — a child's
+// output is copied on one of os/exec's — which is what the lock is for and
+// what keeps the Runner's streams out of it; see the type comment.
+func (l *lazyDiscipline) hand() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.handed || l.expired {
+		return
+	}
+	l.handed = true
+	if err := l.state.restore(); err != nil {
+		l.s.errf("%v\n", err)
+	}
+}
+
+// done ends the call: the wrappers come off, and raw mode comes back if the
+// handler took the terminal.
+//
+// **Nothing is waited for first, and that is a statement rather than an
+// omission.** inLineDiscipline waits for the conduit before it takes raw mode
+// back, because a command's last bytes may still be in flight when the command
+// returns and raw mode landing between the two sends the tail out with the
+// newline translation already gone. Here there is nothing in flight to wait
+// for: the only thing that stands between a handler and the terminal is that
+// conduit, and a session that has one never reaches this branch at all — it
+// takes the first of runHandler's three, where the terminal is never handed
+// back. A drain here would be a call that cannot do anything, which is worse
+// than none, because it reads as a wait something is relying on.
+func (l *lazyDiscipline) done() {
+	l.mu.Lock()
+	l.expired = true
+	handed := l.handed
+	l.unwrap()
+	l.mu.Unlock()
+	if !handed {
+		return
+	}
+	if _, err := makeRaw(l.s.inFile()); err != nil {
+		l.s.errf("%v\n", err)
+	}
+}
+
+// unwrap puts the Runner's streams back, and only where a wrapper is still
+// what is there.
+//
+// A handler that redirected the shell's own output — `exec >somewhere` — has
+// already replaced them, and putting back what was there before would undo
+// that on the way out of a handler nobody was watching. Asked of the stream
+// rather than remembered, because the shell's answer is the one in the
+// Runner and this call's bookkeeping cannot have heard about it.
+//
+// A wrapper found here is always this call's: one goes on per call, comes off
+// at the end of the same call, and a handler cannot be running inside a
+// handler.
+func (l *lazyDiscipline) unwrap() {
+	if _, ok := l.r.Stdout.(*lazyStream); ok {
+		l.r.Stdout = l.out
+	}
+	if _, ok := l.r.Stderr.(*lazyStream); ok {
+		l.r.Stderr = l.err
+	}
+}
+
+// A lazyStream is one of the Runner's streams while a handler is running.
+type lazyStream struct {
+	l *lazyDiscipline
+	w io.Writer
+}
+
+func (w *lazyStream) Write(p []byte) (int, error) {
+	w.l.hand()
+	return w.w.Write(p)
 }
 
 // watchedDescriptors is which descriptors the shell wants waited on, asked

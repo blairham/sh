@@ -34,11 +34,15 @@ import (
 type session struct {
 	t       *testing.T
 	control *os.File
-	screen  *syncBuffer // what the editor draws, including the prompt
-	ran     *syncBuffer // what the commands printed
-	errs    *syncBuffer
-	done    chan error
-	prompt  int
+	// tty is the shell's end of the same pseudo-terminal, which is the one
+	// whose line discipline the editor changes — a test that asks what mode
+	// the session's terminal is in has to ask this one.
+	tty    *os.File
+	screen *syncBuffer // what the editor draws, including the prompt
+	ran    *syncBuffer // what the commands printed
+	errs   *syncBuffer
+	done   chan error
+	prompt int
 }
 
 func newSession(t *testing.T) *session { return newSessionWith(t, nil) }
@@ -73,7 +77,7 @@ func newSessionWith(t *testing.T, configure func(*Shell)) *session {
 		configure(&s)
 	}
 	se := &session{
-		t: t, control: control, screen: screen, ran: ran, errs: errs,
+		t: t, control: control, tty: tty, screen: screen, ran: ran, errs: errs,
 		done: make(chan error, 1),
 	}
 	go func() { _, err := s.Run(t.Context()); se.done <- err }()

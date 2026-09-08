@@ -7,7 +7,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/blairham/sh/interp"
@@ -105,19 +104,44 @@ func (s Shell) promptField(f PromptField, arg string, braced bool) (string, bool
 // field is what one code draws.
 //
 // The values come from the shell's own variables wherever the shell has an
-// answer of its own, and from the process only where it cannot: a session that
-// has assigned PWD or HOME means it, and asking the operating system instead
-// would draw a prompt describing a different shell than the one being typed
-// into.
+// answer of its own: a session that has assigned PWD or HOME means it, and
+// asking the operating system instead would draw a prompt describing a
+// different shell than the one being typed into.
+//
+// Where it has none, the answer is asked of the Runner rather than of the
+// process — see askRunner. Which of the two a code takes is measured per code
+// and not assumed: a directory is the session's, and a login name is not,
+// because every shell in the panel draws the password database's answer for it
+// however `$USER` is set.
 func (s Shell) field(f PromptField, arg string, braced bool) string {
 	switch f {
-	case FieldUser:
-		return s.userName()
-	case FieldHost:
-		host, _, _ := strings.Cut(s.hostName(), ".")
-		return host
-	case FieldHostFull:
-		return s.hostName()
+	case FieldUser, FieldHost, FieldHostFull:
+		// Who is typing and where, which only the shell that was built knows
+		// — asked of the Runner for the reason `%x` below is, so that `\u`
+		// drawn in a prompt and `${(%):-%n}` written in a script are one
+		// answer rather than two. See interp.LoginName, which is the one
+		// question all of them ask.
+		//
+		// This was two answers, and #1446 is what that cost. The lookup here
+		// read `$USER` and `$LOGNAME` and fell through to nothing, where the
+		// one beside it fell through to the *system*; so `\h` was right and
+		// `\u` was empty, and a prompt short of only its user still looks
+		// like a prompt. Reading the variables was wrong on its own terms
+		// too, and measured: bash 5.3.15, bash 3.2.57 and zsh 5.9.2 all draw
+		// the password database's answer with `USER=someone-else` injected
+		// before the shell starts and assigned inside it, and all three draw
+		// the system's host name with `HOSTNAME=elsewhere` set the same two
+		// ways. A prompt that followed either variable named the wrong
+		// person, or the wrong machine, at exactly the moment somebody had
+		// said which one they meant.
+		//
+		// The cost is paid once. SetPromptUserFunc keeps the first answer,
+		// which a prompt needs: the line editor redraws the whole prompt on
+		// every keystroke, and `user.Current` is 0.83-1.10 ms on darwin
+		// (#1423). Resolving per draw would put a millisecond of Directory
+		// Services behind every character typed; resolving eagerly at startup
+		// would put it in front of every `-c` run that can never draw one.
+		return s.askRunner(f, arg, braced)
 	case FieldCwd:
 		return abbreviate(s.varOr("PWD", ""), s.varOr("HOME", ""))
 	case FieldCwdFull:
@@ -173,11 +197,7 @@ func (s Shell) field(f PromptField, arg string, braced bool) string {
 		// itself. Asked of the Runner rather than answered here, so that
 		// `${(%):-%x}` typed at the prompt and `%x` written *in* the prompt
 		// are the same answer.
-		if s.Runner == nil {
-			return ""
-		}
-		v, _ := s.Runner.PromptField(f, arg, braced)
-		return v
+		return s.askRunner(f, arg, braced)
 	case FieldExitStatus:
 		if s.Runner == nil {
 			return "0"
@@ -237,43 +257,20 @@ func isClockField(f PromptField) bool {
 	return f >= FieldTime24 && f <= FieldDateYearMonthDay
 }
 
-// userName is who the shell is running as.
+// askRunner is one code answered by the interpreter rather than here.
 //
-// USER and LOGNAME first, because a session that set one has said who it is;
-// the process's own answer only if neither is there.
-//
-// **That is not what the panel does, and the difference is recorded rather
-// than fixed here.** Measured on zsh 5.9.2 and bash 5.3.15: `%n` and `\u`
-// both ignore USER, LOGNAME and USERNAME entirely — assigned inside the shell
-// or injected before it starts — and name the login name for the real uid, so
-// `env USER=someone-else zsh` still draws the real person. This resolution
-// draws `someone-else`.
-//
-// It is left standing because the variables are also how a prompt is *tested*
-// without process state, which is the whole shape of this package's tests.
-// Closing it means an injectable seam for the system's own answer, which is a
-// change to argue for on its own; `${(%):-%n}` took the other route and is
-// told who the user is (interp.Runner.SetPromptUser).
-func (s Shell) userName() string {
-	if v := s.varOr("USER", ""); v != "" {
-		return v
+// The seam the whole resolver split rests on: a shell is *told* who it is
+// running as, what machine it is on and what file it is reading, and the front
+// end reads back the same answer a script would get for the same escape. A
+// Shell with no Runner has not been told, and draws nothing rather than
+// inventing something — which is also how a prompt is tested without process
+// state, since a test builds a Runner and tells it what to say.
+func (s Shell) askRunner(f PromptField, arg string, braced bool) string {
+	if s.Runner == nil {
+		return ""
 	}
-	if v := s.varOr("LOGNAME", ""); v != "" {
-		return v
-	}
-	return ""
-}
-
-// hostName is the machine's name, asked once and kept.
-//
-// A prompt is drawn on every keystroke that redraws the line, and the name
-// does not change while a shell is running.
-func (s Shell) hostName() string {
-	if v := s.varOr("HOSTNAME", ""); v != "" {
-		return v
-	}
-	hostOnce.Do(func() { host, _ = os.Hostname() })
-	return host
+	v, _ := s.Runner.PromptField(f, arg, braced)
+	return v
 }
 
 // unpadHour takes the leading zero off an hour below ten.
@@ -322,12 +319,6 @@ func (s Shell) varOr(name, fallback string) string {
 	}
 	return fallback
 }
-
-// The host name is one syscall for the life of the shell.
-var (
-	hostOnce sync.Once
-	host     string
-)
 
 // now is the clock a prompt with the time in it reads.
 //

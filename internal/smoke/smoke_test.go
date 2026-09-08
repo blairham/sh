@@ -63,9 +63,11 @@ func TestBothPromptsEndInTheAnchor(t *testing.T) {
 		}
 		// The escape has to be *in* the prompt, or the row that grades it
 		// grades nothing.
-		if !strings.Contains(env, d.CwdEscape) || !strings.Contains(rcText(d), d.CwdEscape) {
-			t.Errorf("%s: %q is not in both prompts, so the escape row would have nothing to read",
-				d.Name, d.CwdEscape)
+		for _, escape := range []string{d.CwdEscape, d.UserEscape} {
+			if !strings.Contains(env, escape) || !strings.Contains(rcText(d), escape) {
+				t.Errorf("%s: %q is not in both prompts, so the escape row would have nothing to read",
+					d.Name, escape)
+			}
 		}
 	}
 }
@@ -239,7 +241,7 @@ func TestTheJobWordingIsPerDialect(t *testing.T) {
 		t.Error("the two dialects were given the same job wording, which is not what they print")
 	}
 	for _, d := range []Dialect{Bash(), Zsh()} {
-		if d.JobRunning == "" || d.JobStopped == "" || d.RCFile == "" || d.CwdEscape == "" {
+		if d.JobRunning == "" || d.JobStopped == "" || d.RCFile == "" || d.CwdEscape == "" || d.UserEscape == "" {
 			t.Errorf("%s is missing part of its description: %+v", d.Name, d)
 		}
 	}

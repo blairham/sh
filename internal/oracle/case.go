@@ -2691,6 +2691,16 @@ echo "reached-after st=$?"`,
 		Why:     "zsh names the script and line, and the function and 0 inside one, where the others print a bare plus",
 	},
 	{
+		ID: "xtrace/ps4-draws-the-user-escape", Category: "shell options",
+		Snippet: `exec 3>&2 2>trace; PS4='<\u>'; set -x; :; set +x; exec 2>&3; grep -qF "<$(id -un)>" trace && echo names-the-login-name || echo differs`,
+		Why:     "`PS4` goes through the prompt language, which makes the trace prefix the only route to a prompt escape that needs no terminal — every other one has to be typed at a session. Written as a comparison against `id -un` rather than as a name, so the record is a fact about the escape and not about the machine that made it: a row holding a login name passes on one laptop and rots everywhere else. bash draws the password database's answer in both its versions and under `sh`, so the escape survives the argv[0] that costs it process substitution; dash and ksh93 have no user escape, zsh reads `%` there instead, and the three of them draw the two characters or drop the backslash. The redirection is what keeps the drawn name out of the record while still letting the shell see it. This shell answers `differs` for a reason that is not #1446 and is not fixed by it — it does not read `PS4` at all (#1454), and `-dialect bash` has no prompt language to read it with (#1455)",
+	},
+	{
+		ID: "xtrace/ps4-user-escape-is-not-a-variable", Category: "shell options",
+		Snippet: `USER=impostor; LOGNAME=impostor; exec 3>&2 2>trace; PS4='<\u>'; set -x; :; set +x; exec 2>&3; grep -qF "<$(id -un)>" trace && echo names-the-login-name || echo differs; echo "[$USER]"`,
+		Why:     "the half that decides how `\\u` may be implemented, and the bash-side companion to `param/prompt-percent-user-is-not-a-variable`: it is a fact about the *process*, so assigning `USER` or `LOGNAME` does not move it — nor does injecting them before the shell starts, measured separately. Reading either name would make `env USER=someone-else bash` draw the wrong person at the moment somebody had just said which account they meant. The variable is echoed back in the same run, so the row also says the assignment really happened and the escape simply did not consult it",
+	},
+	{
 		ID: "xtrace/assignments-per-line-diverges", Category: "shell options",
 		Snippet: `set -x; a=1 b=2`,
 		Why:     "bash and ksh93 give each assignment its own line; dash and zsh put them on one",

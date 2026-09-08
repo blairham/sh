@@ -1888,6 +1888,12 @@ func (r *Runner) cdOptions(args []string) (rest []string, physical bool, code in
 				// letter, and dialect/zsh's
 				// TestChpwdIsUnfiredWhichIsWhatMakesCdQuietHonest fails the
 				// day it does and says so there.
+				// `continue` rather than `break`, and the two are the same
+				// thing here: this switch is inside the letter loop, so
+				// breaking the switch also goes on to the next letter. A
+				// mutation run cannot tell them apart and no test can, which
+				// is why the word is chosen for the reader — the letter is
+				// done and the next one is next, said once.
 				if r.ask(r.sem().CdHasQuietOption, "`cd -q`") {
 					continue
 				}

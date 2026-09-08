@@ -25,7 +25,7 @@ import (
 func TestCdQuietIsAnOptionInTheOneShellThatHasIt(t *testing.T) {
 	// resolved says whether `-P` was in the line, and it is asserted rather
 	// than left alone because the quiet letter is the sort of thing that is
-	// easy to grant by borrowing the neighbouring case: a `q` that also set
+	// easy to grant by borrowing the neighboring case: a `q` that also set
 	// the physical flag, or that marked `-P` as seen, would move to the right
 	// directory under every check that only asks where it landed. It would
 	// land there by the *other* name.

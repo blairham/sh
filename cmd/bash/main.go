@@ -38,6 +38,7 @@ func shell() driver.Shell {
 		EditorStyle:  bash.EditorStyle(),
 		KeyBindings:  bash.KeyBindings,
 		HistoryStyle: bash.HistoryStyle(),
+		HookStyle:    bash.HookStyle(),
 	}
 }
 

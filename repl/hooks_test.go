@@ -4,6 +4,7 @@
 package repl
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -505,5 +506,288 @@ func TestAPromptHookThatExitsDrawsNoPrompt(t *testing.T) {
 	}
 	if got := out.String(); got != "bye\n" {
 		t.Errorf("the session ran %q, want the hook alone", got)
+	}
+}
+
+// The neighboring mechanism: a variable whose *text* is evaluated before every
+// prompt, against what bash 5.3.15 was measured doing — see hooks.go and
+// dialect/bash's HookStyle for the runs these assertions come from.
+
+// hooksLikeBash is the shape the one dialect with an evaluated hook asks for,
+// spelled out here for the reason hooksLikeZsh is: dialect/bash imports this
+// package, so a test in it cannot import the dialect back. What the dialect's
+// own table holds is asserted in dialect/bash, beside the measurement.
+func hooksLikeBash() HookStyle {
+	return HookStyle{BeforePromptVariable: "PROMPT_COMMAND"}
+}
+
+// A scalar is one command text, and an array is one per element in order.
+func TestThePromptVariableRunsItsTextAndEveryElementOfAList(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		set  func(r *interp.Runner)
+		want string
+	}{
+		{"a scalar is one text", func(r *interp.Runner) {
+			r.SetVar("PROMPT_COMMAND", "echo A; echo B")
+		}, "A\nB\n"},
+		{"an array is one text per element", func(r *interp.Runner) {
+			r.SetArray("PROMPT_COMMAND", []string{"echo A", "echo B", "echo C"})
+		}, "A\nB\nC\n"},
+		{"an empty element runs nothing and stops nothing", func(r *interp.Runner) {
+			r.SetArray("PROMPT_COMMAND", []string{"echo A", "", "   ", "echo B"})
+		}, "A\nB\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s, out := hookShell(t, hooksLikeBash())
+			c.set(s.Runner)
+
+			s.fireBeforePrompt(t.Context(), false)
+
+			if got := out.String(); got != c.want {
+				t.Errorf("the chain printed %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// Every element is told the status of the line before the prompt, and none of
+// them can change what the next command reads.
+//
+// Measured: after `(exit 5)`, an array whose second element ran `false` still
+// showed the third element 5, and the next line typed read `$?` as 5.
+func TestThePromptVariableIsToldTheStatusAndCannotChangeIt(t *testing.T) {
+	s, out := hookShell(t, hooksLikeBash())
+	s.Runner.SetArray("PROMPT_COMMAND", []string{
+		`echo "one=$?"`, `echo "two=$?"; false`, `echo "three=$?"`,
+	})
+	s.Runner.SetExitStatus(5)
+
+	s.fireBeforePrompt(t.Context(), false)
+
+	const want = "one=5\ntwo=5\nthree=5\n"
+	if got := out.String(); got != want {
+		t.Errorf("the chain saw %q, want %q", got, want)
+	}
+	if got := s.Runner.ExitStatus(); got != 5 {
+		t.Errorf("$? after the chain is %d, want 5", got)
+	}
+}
+
+// The chain is the value as the prompt found it.
+//
+// Measured: an element that assigned a whole new array to the name did not
+// change what the rest of *that* chain ran, and the new value took effect at
+// the next prompt. It is the half of "read the name every time" that a
+// snapshot could get wrong in either direction — re-reading mid-chain would
+// run the new list here, and reading once per session would never run it.
+func TestThePromptVariableChainIsTheValueThePromptFound(t *testing.T) {
+	s, out := hookShell(t, hooksLikeBash())
+	s.Runner.SetArray("PROMPT_COMMAND", []string{
+		`echo old-one; PROMPT_COMMAND=(new-two)`, `echo old-two`,
+	})
+	define(t, s.Runner, "new-two", `echo new-two`)
+
+	s.fireBeforePrompt(t.Context(), false)
+	s.fireBeforePrompt(t.Context(), false)
+
+	const want = "old-one\nold-two\nnew-two\n"
+	if got := out.String(); got != want {
+		t.Errorf("the two prompts ran %q, want %q", got, want)
+	}
+}
+
+// Unset is silent and runs nothing, and so is a dialect that has no such
+// variable at all with one set.
+func TestAPromptVariableWithNothingBehindItRunsNothing(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		style HookStyle
+		set   func(r *interp.Runner)
+	}{
+		{"unset", hooksLikeBash(), func(*interp.Runner) {}},
+		{"empty", hooksLikeBash(), func(r *interp.Runner) { r.SetVar("PROMPT_COMMAND", "") }},
+		{"a dialect without one", HookStyle{}, func(r *interp.Runner) {
+			r.SetVar("PROMPT_COMMAND", "echo ran")
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s, out := hookShell(t, c.style)
+			c.set(s.Runner)
+
+			s.fireBeforePrompt(t.Context(), false)
+
+			if got := out.String(); got != "" {
+				t.Errorf("the chain printed %q, want nothing", got)
+			}
+		})
+	}
+}
+
+// Text that will not parse is reported against the variable's name, the
+// variable is left set, and the session carries on.
+//
+// The name is the whole point of the assertion. Measured, bash says
+// `PROMPT_COMMAND: line N: syntax error …`; a shell that said `eval` there
+// would send the person looking for a builtin they never ran.
+func TestTextThePromptVariableCannotParseIsReportedAgainstItsName(t *testing.T) {
+	// A runner whose dialect does *not* make a parse failure inside a special
+	// builtin fatal, because that axis decides whether the rest of the chain
+	// runs and bash answers No to it. The default here is POSIX, which
+	// answers Yes and would end the session — a true answer about a shell
+	// this test is not about.
+	s, out := hookShell(t, hooksLikeBash())
+	sem := interp.PosixSemantics()
+	sem.BuiltinSyntaxErrorFatal = interp.No
+	s.Runner.Semantics = &sem
+	s.Runner.SetArray("PROMPT_COMMAND", []string{"echo before", "if", "echo after"})
+
+	s.fireBeforePrompt(t.Context(), false)
+
+	got := out.String()
+	if !strings.Contains(got, "PROMPT_COMMAND:") {
+		t.Errorf("the failure was reported as %q, want the variable named in it", got)
+	}
+	if strings.Contains(got, "eval") {
+		t.Errorf("the failure was reported as %q, want no mention of a builtin", got)
+	}
+	// And it stops nothing: the element after the bad one still ran.
+	if !strings.Contains(got, "before") || !strings.Contains(got, "after") {
+		t.Errorf("the chain printed %q, want both of the elements that parse", got)
+	}
+	// Fired again, it complains again, because the variable is still set.
+	if s.fireBeforePrompt(t.Context(), false); strings.Count(out.String(), "PROMPT_COMMAND:") < 2 {
+		t.Errorf("the second prompt said %q, want the same complaint again", out.String())
+	}
+}
+
+// A continuation prompt is the middle of a line, and evaluates nothing.
+func TestThePromptVariableDoesNotFireAtAContinuationPrompt(t *testing.T) {
+	s, out := hookShell(t, hooksLikeBash())
+	s.Runner.SetVar("PROMPT_COMMAND", "echo ran")
+
+	s.fireBeforePrompt(t.Context(), true)
+
+	if got := out.String(); got != "" {
+		t.Errorf("a continuation prompt ran %q, want nothing", got)
+	}
+}
+
+// A shell assembled by hand with no Runner must not take the session down.
+func TestThePromptVariableOnASessionWithoutARunnerDoesNothing(t *testing.T) {
+	s := Shell{Hooks: hooksLikeBash()}
+	s.fireBeforePrompt(t.Context(), false)
+}
+
+// The whole thing, through a real terminal, one keystroke at a time.
+//
+// The unit tests above call the firing directly, which says what a chain does
+// and nothing about whether the loop reaches it — and #1458 was exactly that:
+// the variable was accepted, kept, and never read, at status 0 and in silence.
+// This is the test that would have failed.
+//
+// The transcript is asserted whole rather than by containment, because the
+// claims are about order and count: before the first prompt with nothing run
+// yet, once per line after, including the empty one, and told each line's
+// status without reaching the next.
+func TestThePromptVariableFiresThroughATerminal(t *testing.T) {
+	s := newSessionWith(t, func(sh *Shell) {
+		sh.Hooks = hooksLikeBash()
+		sh.Runner.SetArray("PROMPT_COMMAND", []string{`echo "pc $?"`, `echo "pc2"`})
+	})
+	s.typeLine("echo one\n")
+	waitFor(t, s.ran, "one\n", "the command's output")
+	s.typeLine("(exit 7)\n")
+	s.typeLine("echo st=$?\n")
+	waitFor(t, s.ran, "st=7", "the status the line read")
+	s.end()
+
+	want := strings.Join([]string{
+		"pc 0", "pc2", // before the first prompt, with nothing run yet
+		"one",         //
+		"pc 0", "pc2", // before the second prompt
+		"pc 7", "pc2", // told what the line before it left
+		"st=7",        // which no element of the chain disturbed
+		"pc 0", "pc2", // before the prompt ^D was typed at
+		"",
+	}, "\n")
+	if got := s.ran.String(); got != want {
+		t.Errorf("the session ran\n%q\nwant\n%q", got, want)
+	}
+}
+
+// An element that ends the session ends it there: the rest of that element
+// does not run, the rest of the chain does not run, and no prompt is drawn.
+//
+// Measured: `PROMPT_COMMAND='echo A; exit 3; echo NOTREACHED'` printed `A` and
+// the shell was gone with status 3.
+func TestAPromptVariableThatExitsDrawsNoPrompt(t *testing.T) {
+	var out, errs strings.Builder
+	r := newTestRunner(map[string]string{"PS1": "RDY> "})
+	r.Stdout, r.Stderr = &out, &out
+	s := Shell{
+		Runner: r, In: strings.NewReader("echo unreachable\n"),
+		Out: &out, Err: &errs, Name: "sh", Hooks: hooksLikeBash(),
+	}
+	r.SetArray("PROMPT_COMMAND", []string{"echo bye; exit 3; echo NOTREACHED", "echo never"})
+
+	status, err := s.Run(t.Context())
+	if err != nil {
+		t.Fatalf("running: %v", err)
+	}
+
+	if status != 3 {
+		t.Errorf("the session ended with %d, want 3", status)
+	}
+	if errs.String() != "" {
+		t.Errorf("a prompt was drawn: %q", errs.String())
+	}
+	if got := out.String(); got != "bye\n" {
+		t.Errorf("the session ran %q, want the first element up to the exit", got)
+	}
+}
+
+// A hook item that raises an interpreter bug costs its own item and not the
+// rest of the chain, and never the session.
+//
+// The reason to guard at all is the reason a typed line is guarded: the
+// process *is* the session, and a session open for hours must not end over a
+// hook somebody wrote for decoration. Both chains are asserted because both
+// run through the same fireChain — a guard that covered one of them would be
+// exactly the shape of bug that helper exists to prevent.
+func TestABugInOneHookItemCostsThatItemAlone(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		style HookStyle
+		set   func(t *testing.T, s Shell)
+	}{
+		{"the evaluated chain", hooksLikeBash(), func(_ *testing.T, s Shell) {
+			s.Runner.SetArray("PROMPT_COMMAND", []string{"boom", "echo after"})
+		}},
+		{"the function chain", hooksLikeZsh(), func(t *testing.T, s Shell) {
+			define(t, s.Runner, "one", `boom`)
+			define(t, s.Runner, "two", `echo after`)
+			s.Runner.SetArray("precmd_functions", []string{"one", "two"})
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var out, errs strings.Builder
+			r := newTestRunner(nil)
+			r.Register("boom", func(*interp.Runner, context.Context, []string) int {
+				panic("an invariant broke")
+			})
+			r.Stdout, r.Stderr = &out, &out
+			s := Shell{Runner: r, Out: &out, Err: &errs, Name: "testsh", Hooks: c.style}
+			c.set(t, s)
+
+			s.fireBeforePrompt(t.Context(), false)
+
+			if !strings.Contains(errs.String(), "testsh: internal error: an invariant broke") {
+				t.Errorf("the bug was reported as %q, want it named as this shell's", errs.String())
+			}
+			if got := out.String(); !strings.Contains(got, "after") {
+				t.Errorf("the chain printed %q, want the item after the bug to have run", got)
+			}
+		})
 	}
 }

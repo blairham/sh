@@ -71,22 +71,55 @@ import (
 // PATH is passed over in silence too — only a function runs. See
 // interp.CallFunction, which is where that rule lives.
 //
-// # PROMPT_COMMAND is not this
+// # The neighboring mechanism, which is a second field and not this one
 //
-// bash's neighbor was measured beside it, 5.3.15, same harness. It fires at
-// the same site — before the prompt is expanded, at startup, after an empty
-// line, after a parse error — and it preserves `$?` the same way. There the
-// resemblance stops: `PROMPT_COMMAND` holds **command text**, evaluated, and
-// as an array it holds one command string per element; zsh's hooks hold
-// **function names**, called. One is `eval`, the other is a call, and a shell
-// with one has neither the array-of-names nor the `preexec` half of the other.
-// So the *site* is shared and the mechanism is not, which is why this type
-// names functions and does not pretend to be able to hold a command. bash's
-// side of it is not implemented here at all.
+// bash's `PROMPT_COMMAND` was measured beside these, 5.3.15 and 3.2.57, same
+// harness, on 2026-09-07. It fires at the same site — before the prompt is
+// expanded, at startup, after an empty line, after a parse error, never at a
+// continuation prompt, always after the job notices — and it preserves `$?`
+// the same way, element by element. There the resemblance stops:
+// `PROMPT_COMMAND` holds **command text**, evaluated, and as an array holds
+// one command string per element; zsh's hooks hold **function names**, called.
+// One is `eval`, the other is a call, and a shell with one has neither the
+// array-of-names nor the `preexec` half of the other.
+//
+// So the *site* is shared and the mechanism is not, which is why BeforePrompt
+// names a function and BeforePromptVariable names a variable, rather than one
+// field pretending to hold both. What they do share is the *chain* — save the
+// status, run each item behind the panic guard, put the status back before
+// each and after the last, stop at an item that exited — and that is fireChain,
+// written once and called by both. A second loop beside it is how a fix comes
+// to be carried by one caller and not the other.
 type HookStyle struct {
 	// BeforePrompt is the function run before each prompt — zsh's `precmd`.
 	// Empty is a dialect without one.
 	BeforePrompt string
+
+	// BeforePromptVariable is the *variable* whose command text is evaluated
+	// before each prompt — bash's `PROMPT_COMMAND`. Empty is a dialect
+	// without one, which is three of the four.
+	//
+	// A variable's name rather than its text, because the value is read at
+	// every prompt and not once at the start: measured, a `PROMPT_COMMAND`
+	// that assigns to `PROMPT_COMMAND` runs the *old* text out to its end and
+	// the new text from the next prompt on, which is what reading the name
+	// each time gives and what holding the text could not.
+	//
+	// **Every element, in order, when it holds an array.** bash 5.3.15 with
+	// `PROMPT_COMMAND=('echo A' 'echo B; false' 'echo C=$?')` printed `A`,
+	// `B` and `C=` the status of the line *before* the prompt — so a failing
+	// element stops nothing and no element sees another's status. The list is
+	// the value as it stood when the prompt began: an element that replaced
+	// the array mid-chain did not change what the rest of that chain ran.
+	//
+	// bash 3.2.57 is the one panel member that reads the same variable as a
+	// scalar — the array above printed `A` alone there, which is element 0
+	// and nothing after it. It is recorded here rather than made an axis
+	// because this tree carries one bash, and the array form is 5.3's.
+	//
+	// Empty and whitespace-only text run nothing and report nothing, measured
+	// in both builds, so there is no case for the chain to skip.
+	BeforePromptVariable string
 
 	// BeforeCommand is the function run after a line is read and before it
 	// runs — zsh's `preexec`. Empty is a dialect without one.
@@ -152,7 +185,9 @@ type hookState struct {
 	reported map[string]bool
 }
 
-// fireBeforePrompt runs the prompt hook, if this dialect has one.
+// fireBeforePrompt runs the prompt hooks this dialect has: the function it
+// names, and the variable whose text it evaluates. A dialect has one of them
+// or neither — no shell in the panel has both.
 //
 // Not at a continuation prompt, which is measured: an unfinished construct
 // draws PS2 and fires nothing. It reads as an ordering rule and is really the
@@ -163,6 +198,36 @@ func (s Shell) fireBeforePrompt(ctx context.Context, continuing bool) {
 		return
 	}
 	s.fireHook(ctx, s.Hooks.BeforePrompt)
+	s.fireEvaluated(ctx, s.Hooks.BeforePromptVariable)
+}
+
+// fireEvaluated runs the chain a *variable* holds: bash's `PROMPT_COMMAND`.
+//
+// The value is read once, here, and the chain runs over what it read — which
+// is measured rather than convenient. bash 5.3.15 with a first element that
+// assigned a whole new array to the name still ran the *old* second element,
+// and took the new array from the next prompt on.
+//
+// One value read as a list, because that is what the shell does with it: a
+// scalar is one command text and an array is one per element, and GetArray
+// answers both — a plain variable is a one-element array to the reader that
+// underlies it, which is the same reading `${x[0]}` gets.
+//
+// No ordering question against the function hook above, and no measurement to
+// settle one: no shell in the panel has both. They are written in the order a
+// reader would guess and nothing depends on it.
+func (s Shell) fireEvaluated(ctx context.Context, name string) {
+	if name == "" || s.Runner == nil {
+		return
+	}
+	// The absent case needs no branch of its own and deliberately does not
+	// have one: GetArray answers a name nothing has been put under with an
+	// empty list, and a chain of nothing runs nothing. A guard here would be
+	// a condition no test could reach and no behavior could distinguish.
+	text, _ := s.Runner.GetArray(name)
+	s.fireChain(ctx, text, func(cmd string) {
+		_ = s.Runner.EvalVariable(ctx, name, cmd)
+	})
 }
 
 // fireBeforeCommand runs the command hook with the three arguments zsh passes,
@@ -196,8 +261,8 @@ func (s Shell) printed(stmts []*syntax.File, layout syntax.Layout, sep string) s
 	return strings.Join(parts, sep)
 }
 
-// fireHook runs one hook's whole chain: the function of that name, then every
-// function named in its list, in order.
+// fireHook runs one *function* hook's whole chain: the function of that name,
+// then every function named in its list, in order.
 //
 // Each call is behind the panic guard a typed line already runs behind, and
 // separately rather than all of them together, for the reason a prompt
@@ -213,11 +278,33 @@ func (s Shell) fireHook(ctx context.Context, name string, args ...string) {
 	if name == "" || s.Runner == nil {
 		return
 	}
+	s.fireChain(ctx, s.hookChain(name), func(fn string) {
+		_, _ = s.Runner.CallFunction(ctx, fn, args...)
+	})
+}
+
+// fireChain runs one chain of hook items and is the whole of what the two
+// mechanisms share.
+//
+// Both kinds of hook this session has are a *list* run in order under the same
+// four rules — the status is saved and put back around every item, each item
+// runs behind the panic guard, a failing item stops nothing, and an item that
+// exited ends the chain — and only what one item *is* differs: a function to
+// call, or command text to evaluate. So the rules live here once and the
+// difference is the closure.
+//
+// Written this way rather than as a second loop beside the first because a
+// second loop is how a rule comes to be carried by one caller and not the
+// other. Every one of the four above was a bug somewhere before it was a rule.
+func (s Shell) fireChain(ctx context.Context, items []string, run func(item string)) {
+	if s.Runner == nil {
+		return
+	}
 	status := s.Runner.ExitStatus()
 	guard := s.guard()
-	for _, fn := range s.hookChain(name) {
+	for _, item := range items {
 		s.Runner.SetExitStatus(status)
-		guard.Do(func() { _, _ = s.Runner.CallFunction(ctx, fn, args...) })
+		guard.Do(func() { run(item) })
 		if s.Runner.Exited() {
 			return
 		}

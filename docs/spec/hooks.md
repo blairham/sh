@@ -1,35 +1,59 @@
 # Hooks: what a shell runs between commands
 
-The functions a session runs on its own account — one before every prompt,
-one after a line has been read and before it runs — and what each is told.
+What a session runs on its own account between one command and the next — one
+before every prompt, one after a line has been read and before it runs — and
+what each is told. A hook is a **function** to call in one shell and a
+**variable** of command text to evaluate in another; both are here.
 
 **Governed by:** `repl.HookStyle`, the dialect's answer and not the semantics
 vector's. It is a table of names and one layout, filled in by
-`dialect/zsh.HookStyle()` and left empty by the other three, which is what a
-dialect with no hooks is.
+`dialect/zsh.HookStyle()` and `dialect/bash.HookStyle()` and left empty by the
+other two, which is what a dialect with no hooks is.
 
-**Measured:** through a paced pseudo-terminal on macOS 25.5, 2026-09-07, one
-keystroke at a time, waiting on the next prompt rather than on output.
-`/opt/homebrew/bin/zsh` 5.9.2 and `/opt/homebrew/bin/bash` 5.3.15, each in a
-scratch `HOME` with `ZDOTDIR` and `HISTFILE` redirected into it, driven from a
-startup file that defined every hook and printed a marker from each.
+Two fields, because there are two mechanisms: `BeforePrompt` names a
+**function** to call and `BeforePromptVariable` names a **variable** whose
+command text is **evaluated**. What they share is the *chain* — save `$?`, run
+each item behind the panic guard, put the status back before each and after the
+last, stop at an item that exited — and that is `repl`'s `fireChain`, written
+once and called by both.
 
-`precmd` fires **per prompt**, so a non-interactive `-c` run answers zero for
-every shell and discriminates nothing. Nothing in this entry can be measured
-by the corpus, and none of it is in the corpus.
+**Measured:** through a paced pseudo-terminal on macOS 25.5, 2026-09-07 and
+2026-09-08, one keystroke at a time, waiting on the next prompt rather than on
+output. `/opt/homebrew/bin/zsh` 5.9.2, `/opt/homebrew/bin/bash` 5.3.15, that
+same binary again under an argv[0] of `sh`, `/bin/bash` 3.2.57, `/bin/dash`
+and `/bin/ksh` — each in a scratch `HOME` with `ZDOTDIR`, `ENV` and `HISTFILE`
+redirected into it, driven from a startup file that defined every hook and
+printed a marker from each. The line editor redraws a prompt on every
+keystroke, so the reading is always the *first* prompt drawn.
+
+A hook fires **per prompt**, so a non-interactive `-c` run answers zero for
+every shell and discriminates nothing — measured for `PROMPT_COMMAND` as well,
+in all six columns, with `-c`, with `-i -c`, and from a script file: none of
+them ran it and none of them said anything. Nothing in this entry can be
+measured by the corpus, and none of it is in the corpus.
 
 ## Which shells have them
 
-| | zsh 5.9.2 | bash 5.3.15 | bash 3.2.57 | ksh93 | dash |
-| --- | --- | --- | --- | --- | --- |
-| before every prompt | `precmd` + `precmd_functions` | `PROMPT_COMMAND` | `PROMPT_COMMAND` | — | — |
-| before every command | `preexec` + `preexec_functions` | — | — | — | — |
+The six columns, measured 2026-09-07 and 2026-09-08. `bash-as-sh` is the same
+5.3.15 binary under an argv[0] of `sh`, which changes nothing here.
+
+| | zsh 5.9.2 | bash 5.3.15 | bash-as-sh | bash 3.2.57 | ksh93 | dash |
+| --- | --- | --- | --- | --- | --- | --- |
+| before every prompt | `precmd` + `precmd_functions` | `PROMPT_COMMAND` | `PROMPT_COMMAND` | `PROMPT_COMMAND` | — | — |
+| an array of them | — (a list of *names*) | each element, in order | each element, in order | element 0 alone | — | — |
+| before every command | `preexec` + `preexec_functions` | — | — | — | — | — |
 
 Two mechanisms, not one spelling of one. zsh's hooks hold **function names**
 and call them; bash's `PROMPT_COMMAND` holds **command text** and evaluates it,
 and as an array holds one command string per element. A shell with one has
 neither the array-of-names nor the `preexec` half of the other, so they share a
-firing site and nothing else. Only zsh's is implemented here.
+firing site and nothing else.
+
+Both are implemented here. The array is 5.3's: bash 3.2.57 reads the same
+variable as a scalar, so `PROMPT_COMMAND=('echo A' 'echo B' 'echo C')` printed
+`A` alone there and `A B C` in 5.3. This tree carries one bash and it is 5.3's,
+so that difference is recorded and not offered as an axis — one shell's older
+build is not a disagreement between shells.
 
 ## The chain
 
@@ -59,6 +83,12 @@ Measured, with `precmd` itself defined and
   returning 3, the third still ran.
 
 ## When each fires
+
+Every clause below was measured for both mechanisms, and they answer alike.
+The transcript is zsh's; bash 5.3.15 and 3.2.57 were driven through the same
+harness with `PROMPT_COMMAND` in place of the four names, and moved no cell —
+before the first prompt, after an empty line, after a refused line, never at
+`PS2`, and always after the job notices.
 
 Measured with a startup file defining all four names, and a prompt whose text
 was produced by a command substitution so that prompt expansion left a marker
@@ -107,9 +137,60 @@ bash's `PROMPT_COMMAND` preserves `$?` identically — with an element that fail
 with `command not found`, the next line still read the previous command's
 status — so this is not an axis, it is the answer both shells give.
 
+The same fact one level down is what a hook *sees*, and it is not the hook
+machinery's at all: borrowed text is shown the caller's status. `false; eval
+'echo $?'` prints 1 in all six columns, and `false; . f.sh` with `echo $?` in
+the file prints 1 in all six — while `false; eval ""` and an empty file both
+report 0. Two rows, not one, and a shell that clears the status before running
+the text answers the second and gets the first wrong: `eval` and `.` then read
+success immediately after a failure, and so does every prompt hook, since the
+hook *is* borrowed text and the status is the whole of what it is told
+(`eval/text-sees-the-callers-status`, `dot/text-sees-the-callers-status`).
+
 `exit` inside a hook is the exception that ends the chain: a `precmd` that
 called `exit 3` on its second firing ended the session and drew no further
-prompt.
+prompt, and `PROMPT_COMMAND='echo A; exit 3; echo NOTREACHED'` printed `A` and
+was gone with status 3 — the rest of the element and the rest of the array both
+unrun.
+
+## The evaluated hook
+
+bash's is a **variable**, not a function, and its value is command text. It is
+read at every prompt rather than once, which is what makes a `PROMPT_COMMAND`
+that assigns to `PROMPT_COMMAND` work: measured, the old text ran out to its
+end and the new text took effect from the next prompt on.
+
+An **array** is one command string per element, run in order:
+
+    PROMPT_COMMAND=('echo A' 'echo B; false' 'echo C=$?')
+
+printed `A`, `B`, and `C=` the status of the line *before* the prompt — so a
+failing element stops nothing and no element sees another's status, exactly as
+in the function chain. Empty and whitespace-only elements run nothing and say
+nothing. The list is the value as the prompt found it: an element that replaced
+the whole array mid-chain did not change what the rest of that chain ran.
+
+Text that will not parse is reported **against the variable's name**, the
+variable is left set, and the session carries on — so the same complaint
+arrives at every prompt after:
+
+    bash: PROMPT_COMMAND: line 3: syntax error near unexpected token `('
+    bash: PROMPT_COMMAND: line 3: `echo unbalanced ((('
+
+The name is the load-bearing part. The text is in a variable and the person's
+only way back to it is that variable's name; a failure reported as `eval` would
+send them looking for a builtin they never ran. `interp.Runner.EvalVariable` is
+where that naming lives, and it is the other half of the seam
+`interp.Runner.CallFunction` is: one runs a hook whose value is a *name*, the
+other a hook whose value is *text*, and neither can be reached through the
+other.
+
+Unset and empty run nothing and report nothing. This shell is silent for both.
+
+After a line the parser refused, the hook is told the status that refusal set —
+2 in bash 5.3.15 and **258** in 3.2.57, which is the same per-shell answer
+`repl.Shell.ParseFailureStatus` carries and the same column that cannot be an
+exit status at all.
 
 ## What the command hook is told
 
@@ -157,6 +238,9 @@ and none of them is the prompt loop:
 Measured for `chpwd`: typing `cd /tmp` ran `zshaddhistory`, then `chpwd`, then
 `chpwd_functions`, and only then that line's `precmd` — so it belongs inside
 `cd` and not at the prompt, where it would also miss a `cd` inside a function.
+
+bash has no such list: every hook it has is `PROMPT_COMMAND` and it runs, so
+`dialect/bash.HookStyle()` names nothing as unfired. What follows is zsh's.
 
 This shell fires none of the four, and **says so by name**, once per name, the
 first time it sees one defined:

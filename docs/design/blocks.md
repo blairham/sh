@@ -318,6 +318,29 @@ Two more things the inner terminal has to be told, both measured:
   mark, not a wait for quiet, which is the same discipline the pty tests
   follow and for the same reason: a wait for quiet passes early on a slow
   writer and hangs on a busy one, and neither failure is visible.
+- **The drain has to happen before the terminal goes back to raw mode**,
+  and it did not — which is #1356, a prompt drawn where the last output
+  ended. The two facts above compose into a bug: the conduit's newlines
+  are bare, because its own output discipline is off, and the real
+  terminal is what translates them. So the copy has to land while the
+  real terminal is still in its own line discipline. The drain was on the
+  other side of that switch — the command returned, raw mode came back in
+  `inLineDiscipline`'s `defer`, and *then* the block was taken and the
+  conduit drained — so a copy that had not caught up sent its tail out
+  with `OPOST` already off.
+
+  Captured once in nineteen runs, which is what a goroutine losing a race
+  by microseconds looks like:
+
+      BAD   …echo SECOND\r\x1b[23C\r\nSECOND\np-bash-5.3$      a bare \n
+      GOOD  …echo SECOND\r\x1b[23C\r\nSECOND\r\np-bash-5.3$
+
+  The wait now happens in that `defer`, ahead of the raw mode, so the
+  helper's promise is complete: the terminal does not stop translating
+  until everything the shell handed it has arrived. It waits without
+  emptying the capture, because the block that records the output is read
+  after it — draining and discarding there would have lost every
+  command's body from the store.
 
 #### So the default moved, and the setting grew a third answer
 

@@ -417,6 +417,24 @@ insert themselves as they would in either mode here. Both dialects have the
 same gap and closing it would serve both at once, which is why it is filed on
 its own rather than carried by either.
 
+`repl/crlf.go` and `Shell.inLineDiscipline` are the two halves of one rule:
+**while the editor holds the terminal, nothing may reach it with a newline the
+terminal will not translate.** Raw mode turns `OPOST` off, so a bare line feed
+moves down without returning the carriage and the next thing drawn starts
+wherever the last one ended. The session's own messages take the first half —
+they are written through a translating writer. Everything the *shell* hands the
+terminal takes the second: the terminal is put back in its own line discipline
+for the length of it, and the mode is not taken away again until the output has
+arrived.
+
+That second clause is #1356 and it was missing. Under a block store a command's
+output goes through a pseudo-terminal whose own discipline is off and a
+goroutine copies it to the real one, so the command returning and its last
+bytes arriving are two events — and raw mode was coming back between them. It
+had bitten twice before on the *hook* paths, which is why the helper exists at
+all; the command's own output was the third and it arrived by the one route the
+restore alone did not cover.
+
 ## Measured, and deliberately not a field
 
 Three places where the two shells differ and the difference is written down

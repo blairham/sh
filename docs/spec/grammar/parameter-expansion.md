@@ -369,9 +369,8 @@ than a corner (#1529).
 **What this implementation does not match.** `${@:=w}` and `${*:=w}` are
 refused by all six — four wordings and two statuses — and `${1:=w}` is
 refused by five and *assigns* in zsh. This implementation lets all three
-through silently, which predates the nameless form and is filed
-separately; the empty name goes through the same door `${::=w}` uses and
-is refused.
+through silently, which predates the nameless form and is #1541; the
+empty name goes through the same door `${::=w}` uses and is refused.
 
 ## Extensions
 

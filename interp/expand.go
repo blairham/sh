@@ -1752,7 +1752,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 				// 2 in dash, `${@:=abc}: bad substitution` in ksh93 and `not
 				// an identifier: @` in zsh, and `${1:=abc}` is refused by
 				// four of them and *assigns* in zsh. Four wordings, two
-				// statuses and a positional axis — filed rather than
+				// statuses and a positional axis — #1541 rather than
 				// guessed at here, where the empty name has one answer.
 				return ""
 			}

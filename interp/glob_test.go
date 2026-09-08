@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 func TestParameterTrimming(t *testing.T) {
@@ -123,6 +124,150 @@ func TestASubstitutedWordInsideAnUnmatchedPositionIsNotMatched(t *testing.T) {
 			t.Errorf("%s = %s, want %s", tc.src, got, tc.want)
 		}
 	}
+}
+
+// A substituted word's quoting survives it, and the match that word takes
+// part in is the *enclosing* word's.
+//
+// Two halves of one fault, and it is one fault because both come of expanding
+// the operand through the entry point that finishes a whole word: it matched
+// what it had in hand and handed back the unescaped result, so the quoting
+// inside it was gone before anything else could read it.
+//
+// Measured 2026-09-08 across bash 5.3.15, that build as `sh`, bash 3.2.57,
+// dash, ksh93 and zsh 5.9.2, in a directory holding `Xay` and `Xby`. All six
+// agree on every row:
+//
+//	${u:-"X[a-b]y"}    X[a-b]y     quoted: seven characters, not a pattern
+//	${u:+"X[a-b]y"}    X[a-b]y     and `+` is the same operand rule
+//	${u-"X[a-b]y"}     X[a-b]y     and so is the colonless spelling
+//	X${u:-[a-b]}y      Xay Xby     unquoted: the whole word is the pattern
+//
+// The last row is the one the operand-alone match could never give: it found
+// no file named `[a-b]`, so a shell whose unmatched-pattern rule is fatal
+// stopped the command there.
+//
+// This is the shape a real `zi.zsh` hits at its color table, which is why it
+// is worth a test rather than only a corpus row. That file chooses its
+// separator characters by testing `$LANG` itself, in the shape
+//
+//	${${${(M)LANG:#*UTF-8*}:+…}:-…}
+//
+// with a `$'…'` color sequence on each side — so a UTF-8 locale takes the
+// `+` operand of the *inner* expansion, whose fields the outer one then
+// carries, and the C locale takes the `-` operand of the outer one, which is
+// the only side nothing wrapped. A color sequence opens `ESC [`, so that
+// operand is an unterminated bracket expression once its quoting is lost,
+// and zsh's answer to that is fatal: `bad pattern` at the line, under
+// `LANG=C` and not under `LANG=en_US.UTF-8` (#1500).
+func TestASubstitutedWordKeepsItsQuotingAndIsMatchedWithTheWordAroundIt(t *testing.T) {
+	dir := globDir(t)
+	for _, tc := range []struct{ name, src, want string }{
+		{"a quoted operand is text", `unset u; printf "[%s]" ${u:-"a.[a-c]"}`, `[a.[a-c]]`},
+		{"and `+` is the same rule", `u=set; printf "[%s]" ${u:+"a.[a-c]"}`, `[a.[a-c]]`},
+		{"and so is the colonless spelling", `unset u; printf "[%s]" ${u-"a.[a-c]"}`, `[a.[a-c]]`},
+		{"a single-quoted operand too", `unset u; printf "[%s]" ${u:-'a.[a-c]'}`, `[a.[a-c]]`},
+		// The unquoted operand still matches, and it matches as part of the
+		// word it sits in rather than on its own.
+		{"an unquoted operand is a pattern", `unset u; printf "[%s]" ${u:-a.[a-c]}`, `[a.b]`},
+		{"matched with the word around it", `unset u; printf "[%s]" a.${u:-[a-c]}`, `[a.b]`},
+		{"and the text around it counts", `unset u; printf "[%s]" q.${u:-[a-c]}`, `[q.[a-c]]`},
+		// Half quoted and half not is the discriminating shape: one field,
+		// with a live metacharacter beside a marked one.
+		{"quoting is per span, not per operand", `unset u; printf "[%s]" ${u:-"a."[a-c]}`, `[a.b]`},
+		{"the other way round", `unset u; printf "[%s]" ${u:-a."[a-c]"}`, `[a.[a-c]]`},
+		// The braces are the operand's own stage and they run before the
+		// match, so a braced operand keeps its quoting through both. It is
+		// the row that says the brace branch and the plain one answer the
+		// same question — a fix applied to one of them and not the other
+		// would pass every row above (zsh 5.9.2 gives the same two fields).
+		{"a braced operand keeps its quoting", `unset u; printf "[%s]" ${u:-{a,q}."[a-c]"}`, `[a.[a-c]][q.[a-c]]`},
+		{"and an unquoted one still matches", `unset u; printf "[%s]" ${u:-{a,q}.[a-c]}`, `[a.b][q.[a-c]]`},
+		// A backslash in the operand is text and stays in the text, which
+		// is #1222's rule reaching this path: dropping the marks dropped
+		// it with them, so `v=${u:-"a\b"}` assigned `ab` where all six
+		// assign three characters (measured 2026-09-08).
+		{"a backslash in the operand survives", `unset u; v=${u:-"a\b"}; printf "[%s]" "$v"`, `[a\b]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := runIn(t, dir, tc.src); got != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// The escape sequence that found it, in the form a startup file writes one.
+//
+// `$'…'` is a quoting form, so its text is never a pattern — and every color
+// sequence opens with `ESC [`, which is an unterminated bracket expression
+// the moment that stops being true. Separate from the rows above because it
+// needs a grammar the core does not carry, and because the byte rather than
+// the bracket is what a reader of #1500 will come looking for.
+func TestAnEscapeSequenceInASubstitutedWordIsText(t *testing.T) {
+	dir := globDir(t)
+	dollarSingle := func(d *syntax.Dialect) { d.DollarSingleQuote = true }
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"the operand of `-`", `unset u; printf "[%s]" ${u:-$'\e[38;5;82m«-»\e[0m'}`,
+			"[\x1b[38;5;82m«-»\x1b[0m]",
+		},
+		{"the operand of `+`", `u=set; printf "[%s]" ${u:+$'\e[1m'}`, "[\x1b[1m]"},
+		{"and the value it lands in", `unset u; v=${u:-$'\e[0m'}; printf "[%s]" "$v"`, "[\x1b[0m]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, st := runGrammar(t, tc.src, dollarSingle, func(r *Runner) { r.Dir = dir })
+			if got != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, got, st, tc.want)
+			}
+		})
+	}
+}
+
+// The assigning operators store the word, not what it would have matched.
+//
+// `${u:=word}` and `${u::=word}` substitute through the parameter, and the
+// word reaches it as text: measured 2026-09-08 in a directory holding `Xay`
+// and `Xby`, `u=; printf "<%s>" "${u:=X[a-b]y}"` leaves `X[a-b]y` in the
+// parameter in all six of bash 5.3.15, that build as `sh`, bash 3.2.57, dash,
+// ksh93 and zsh 5.9.2. Matching on the way in stored the listing instead —
+// `Xay Xby`, in the variable, where every one of them keeps the seven
+// characters (#1500).
+//
+// What the *expansion* then comes to is a different question with a different
+// answer, and it is GlobExpansionResults: the five read the stored value
+// back as a pattern and zsh does not. That axis is asked elsewhere; this test
+// reads the parameter through quotes so it does not depend on it.
+func TestAnAssigningOperatorStoresTheWordUnmatched(t *testing.T) {
+	dir := globDir(t)
+	for _, tc := range []struct{ name, src, want string }{
+		{"`:=` stores the text", `unset u; : ${u:=a.[a-c]}; printf "[%s]" "$u"`, `[a.[a-c]]`},
+		{"a quoted word likewise", `unset u; : ${u:="a.[a-c]"}; printf "[%s]" "$u"`, `[a.[a-c]]`},
+		{"and a plain word is unaffected", `unset u; : ${u:=vis}; printf "[%s]" "$u"`, `[vis]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := runIn(t, dir, tc.src); got != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, got, tc.want)
+			}
+		})
+	}
+	// `::=` is the same rule from the operator that asks nothing, and it is
+	// a separate call rather than a row above because it needs a grammar
+	// the core does not carry. Without it a mutant reverting only the
+	// unconditional half survives every row in this file.
+	//
+	// The parameter is read through quotes here for the reason the rows
+	// above are: what the *expansion* comes to is GlobExpansionResults',
+	// which a synthetic core does not answer the way zsh does, and this
+	// case is about what the assignment stored.
+	t.Run("and the unconditional spelling", func(t *testing.T) {
+		src := `u=old; : ${u::=a.[a-c]}; printf "[%s]" "$u"`
+		got, st := runGrammar(t, src, func(d *syntax.Dialect) { d.ParamAssignAlways = true },
+			func(r *Runner) { r.Dir = dir })
+		if want := `[a.[a-c]]`; got != want || st != 0 {
+			t.Errorf("%s = %s (status %d), want %s at 0", src, got, st, want)
+		}
+	})
 }
 
 func TestQuotingDecidesWhetherAFieldIsAPattern(t *testing.T) {

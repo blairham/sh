@@ -9636,6 +9636,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pat/unterminated-bracket-from-a-value` | `[a[1m][a[1m]~a[1m~after` | `[a[1m][a[1m]~a[1m~after` | `[a[1m][a[1m]~a[1m~after` | `[a[1m][a[1m]~a[1m~after` | `[a[1m][a[1m]~a[1m~after` | `[a[1m][a[1m]` **2>** `<shell>:1: bad pattern: a[1m` *(status 1)* |
 | `pat/unterminated-bracket-from-a-substitution` | `[a[1m][a[1m][a[1m]` | `[a[1m][a[1m][a[1m]` | `[a[1m][a[1m][a[1m]` | `[a[1m][a[1m][a[1m]` | `[a[1m][a[1m][a[1m]` | `[a[1m][a[1m][a[1m]` |
 | `pat/unterminated-bracket-from-a-value-holding-an-escape` | `[1m` | `[1m` | `[1m` | `[1m` | `[1m` | `[1m` |
+| `pat/a-quoted-substituted-word-is-not-a-pattern` | `[X[a-b]y][X[a-b]y]` | `[X[a-b]y][X[a-b]y]` | `[X[a-b]y][X[a-b]y]` | `[X[a-b]y][X[a-b]y]` | `[X[a-b]y][X[a-b]y]` | `[X[a-b]y][X[a-b]y]` |
+| `pat/an-unquoted-substituted-word-is-matched-with-its-word` | `[Xay][Xby]` | `[Xay][Xby]` | `[Xay][Xby]` | `[Xay][Xby]` | `[Xay][Xby]` | `[Xay][Xby]` |
+| `pat/an-escape-sequence-in-a-substituted-word` | `[1m` | `[1m` | `[1m` | `[1m` | `[1m` | `[1m` |
+| `pat/an-assigning-operator-stores-the-word-unmatched` | `<X[a-b]y>` | `<X[a-b]y>` | `<X[a-b]y>` | `<X[a-b]y>` | `<X[a-b]y>` | `<X[a-b]y>` |
+| `pat/a-locale-chosen-substituted-word-under-the-c-locale` | **2>** `<shell>: 1: Bad substitution` | **2>** `<shell>: line 1: ${${${(M)LANG:#*UTF-8*}:+u}:-$(printf "\033[1m")}: bad substitution` | **2>** `<shell>: line 1: ${${${(M)LANG:#*UTF-8*}:+u}:-$(printf "\033[1m")}: bad substitution` | **2>** `<shell>: ${${${(M)LANG:#*UTF-8*}:+u}:-$(printf "\033[1m")}: bad substitution` | **2>** `<shell>: syntax error at line 1: `!' unexpected` *(status 3)* | `[1m` |
+| `pat/a-locale-chosen-substituted-word-under-a-utf8-locale` | **2>** `<shell>: 1: Bad substitution` | **2>** `<shell>: line 1: ${${${(M)LANG:#*UTF-8*}:+u}:-$(printf "\033[1m")}: bad substitution` | **2>** `<shell>: line 1: ${${${(M)LANG:#*UTF-8*}:+u}:-$(printf "\033[1m")}: bad substitution` | **2>** `<shell>: ${${${(M)LANG:#*UTF-8*}:+u}:-$(printf "\033[1m")}: bad substitution` | **2>** `<shell>: syntax error at line 1: `!' unexpected` *(status 3)* | `u` |
 | `pat/bracket-from-a-value-is-never-a-pattern-in-zsh` | `[a[b]][zzfile]` | `[a[b]][zzfile]` | `[a[b]][zzfile]` | `[a[b]][zzfile]` | `[a[b]][zzfile]` | `[a[b]][zz*]` |
 | `pat/star-stops-at-slash-in-glob` | `[*f]` | `[*f]` | `[*f]` | `[*f]` | `[*f]` | **2>** `<shell>:1: no matches found: *f` *(status 1)* |
 | `pat/only-a-leading-period-is-special` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` |
@@ -9851,6 +9857,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pat/unterminated-bracket-from-a-value-holding-an-escape` — the reduction this matters for: a terminal escape sequence is an `ESC` and then `[`, so a shell that reads an unquoted expansion's brackets as a pattern cannot hold a color in a variable. The `tr` removes the escape byte so the row records the printable remainder rather than a control character
   ```sh
   e=$(printf "\033[1m"); printf "%s" $e | tr -d "\033"; echo
+  ```
+- `pat/a-quoted-substituted-word-is-not-a-pattern` — quoting inside the operand of `-` or `+` survives the substitution: all six print the seven characters. The operand was expanded through the entry point that finishes a whole word, which matched it and handed back the result unescaped, so the quotes were gone before the enclosing word was matched and both fields became the listing (#1500)
+  ```sh
+  touch Xay Xby; u=; v=s; printf "[%s]" ${u:-"X[a-b]y"} ${v:+"X[a-b]y"}; echo
+  ```
+- `pat/an-unquoted-substituted-word-is-matched-with-its-word` — and the other half of the same fault: an unquoted operand is a pattern, but the pattern is the *word* it sits in. Matching the operand alone looked for a file named `[a-b]`, found none, and in the shell where that is fatal stopped the command — where all six here match `Xay` and `Xby`
+  ```sh
+  touch Xay Xby; u=; printf "[%s]" X${u:-[a-b]}y; echo
+  ```
+- `pat/an-escape-sequence-in-a-substituted-word` — the shape #1500 was found in: every ANSI color sequence opens `ESC [`, so an operand carrying one is an unterminated bracket expression the moment its quoting is lost — and zsh calls that a bad pattern rather than passing it through. The `tr` removes the escape byte so the row records the printable remainder. Sibling of pat/unterminated-bracket-from-a-value-holding-an-escape, which asks the same question of a plain variable
+  ```sh
+  u=; printf "%s" ${u:-"$(printf "\033[1m")"} | tr -d "\033"; echo
+  ```
+- `pat/an-assigning-operator-stores-the-word-unmatched` — the word an assigning operator substitutes reaches the parameter as text in all six: the bracket expression is never matched on its way in. Matching it stored the listing instead — `Xay Xby`, in the variable — and took the question of what the *expansion* comes to away from GlobExpansionResults, which is the axis that owns it and which pat/bracket-from-a-value-is-never-a-pattern-in-zsh pins
+  ```sh
+  touch Xay Xby; u=; : ${u:=X[a-b]y}; printf "<%s>" "$u"; echo
+  ```
+- `pat/a-locale-chosen-substituted-word-under-the-c-locale` — the construct a real zsh plugin manager picks its box-drawing characters with, and the reason #1500 read as a locale bug. LANG is pinned rather than inherited: the harness sets LC_ALL=C and leaves LANG unset, and this row means nothing if a machine supplies one. Under this locale the `(M)LANG:#*UTF-8*` match yields nothing, so the outermost `-` operand is what substitutes — and it is the one operand nothing wraps, so it reached the match live and was refused
+  ```sh
+  printf "%s" ${${${(M)LANG:#*UTF-8*}:+u}:-$(printf "\033[1m")} | tr -d "\033"; echo
+  ```
+- `pat/a-locale-chosen-substituted-word-under-a-utf8-locale` — the same text with the one variable changed, which is what makes the pair worth having. Here the `+` operand of the *inner* expansion substitutes, the outer one carries its fields, and nothing is matched — so this row passed throughout while the row above did not. The locale never decided anything about patterns; it decided which operand the file takes
+  ```sh
+  printf "%s" ${${${(M)LANG:#*UTF-8*}:+u}:-$(printf "\033[1m")} | tr -d "\033"; echo
   ```
 - `pat/bracket-from-a-value-is-never-a-pattern-in-zsh` — a *terminated* bracket from a value, beside the star that says why: both are legal patterns, and the shell that does not glob an expansion's result passes both through where the others expand the star. That is the axis the row above must not disturb — a fix that stopped refusing the unterminated bracket by making expansion results non-patterns everywhere would move this row too
   ```sh

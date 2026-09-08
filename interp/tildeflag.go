@@ -135,3 +135,46 @@ func (r *Runner) tildeValue(v string) string {
 	// left alone rather than guessed at.
 	return v
 }
+
+// tildeFlagFields applies the `${~spec}` flag to the fields a substituted
+// word came to — the operand of `${~x:-word}` and `${~x:+word}`.
+//
+// Both halves, and the pattern half is why it has to exist at all: the flag
+// overrides quoting, so a quoted operand becomes a pattern where an unquoted
+// one already was. Measured on zsh 5.9.2, 2026-09-08, in a directory holding
+// `Xay` and `Xby` and with `~` naming a directory holding `zz`:
+//
+//	${~u:-"X[a-b]y"}   Xay Xby     the quotes do not stop the match
+//	${~~u:-X[a-b]y}    Xay Xby     and the off parity does not either: the
+//	                               operand's own metacharacters are written
+//	                               rather than substituted, so they were
+//	                               never the flag's to switch off
+//	${~u:-"~/zz"}      HOME/zz     the tilde half reaches the operand too
+//
+// The middle row is the one that says where the flag stops. It is the same
+// rule the scalar path follows through escapeResult — the flag decides
+// whether the *result* reads as a pattern and leaves written text alone — so
+// the marks stay put when the flag is off and come off when it is on.
+//
+// The tilde half is here rather than in the caller for the reason the pattern
+// half is: the operand's fields never reach the split path where
+// tildeFlagElements is applied, so `${~u:-"~/zz"}` was the text it was
+// written as (#1500).
+func (r *Runner) tildeFlagFields(s syntax.Span, head bool, fields []string) []string {
+	if !tildeFlagOn(s) || len(fields) == 0 {
+		return fields
+	}
+	// The marks come off before the tilde is looked for and the value's own
+	// backslashes go back on after, which is exactly what escapeResult does
+	// for an expansion whose result is a pattern: live metacharacters,
+	// literal backslashes.
+	plain := make([]string, len(fields))
+	for i, f := range fields {
+		plain[i] = globUnescape(f)
+	}
+	plain = r.tildeFlagElements(s, head, plain)
+	for i, v := range plain {
+		plain[i] = escapeValueBackslashes(v)
+	}
+	return plain
+}

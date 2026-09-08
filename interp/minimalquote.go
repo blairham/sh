@@ -250,19 +250,6 @@ func extendedByteEscape(c byte) string {
 	return string(c)
 }
 
-// quoteModifierAt is where the eaten `+` or `-` stood in the group, and -1
-// when the group had none.
-//
-// It is always the character directly behind the group's `q`, the parser
-// accepting it nowhere else, so this is a derivation from QuoteModifier
-// rather than a second reading of the rule that set it.
-func quoteModifierAt(e *syntax.ParamExpr) int {
-	if e == nil || e.QuoteModifier == 0 {
-		return -1
-	}
-	return strings.IndexByte(e.Flags, 'q') + 1
-}
-
 // extendedQuoteRefusal names the one legal spelling of `q+` this interpreter
 // does not carry: a `q+` with a further `q` in the group.
 //

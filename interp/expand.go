@@ -25,6 +25,24 @@ import (
 // can tell which parts were quoted. Splitting applies only to the unquoted
 // ones, which is why a"b c"d is one field and $x with a space in it is two.
 func (r *Runner) expandWord(w *syntax.Word) []string {
+	return r.globFields(r.expandWordEscaped(w))
+}
+
+// expandWordEscaped is expandWord stopped one stage early: the fields are
+// built, and each one still carries the marks saying which of its
+// metacharacters were quoted. Pathname expansion has not run.
+//
+// It exists because a word can be expanded *inside* another word — the
+// operand of `${x-word}` is the case that matters — and a nested word that
+// globs on its own is wrong twice over. It matches against the filesystem
+// with only its own text in hand, so `X${u:-[a-b]}y` matched `[a-b]` where
+// every shell in the panel matches `X[a-b]y`; and it comes back unescaped,
+// so the quoting inside it is gone by the time the enclosing word globs and
+// `${u:-"X[a-b]y"}` was a pattern where all six read it as text (#1500).
+//
+// Handing the marked fields back instead lets the enclosing word do what it
+// does with every other field: one match, at the end, over the whole thing.
+func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 	if w == nil {
 		return nil
 	}
@@ -37,11 +55,11 @@ func (r *Runner) expandWord(w *syntax.Word) []string {
 		r.ask(r.sem().BraceExpansion, "brace expansion") {
 		var out []string
 		for _, bw := range words {
-			out = append(out, r.expandOneWord(bw)...)
+			out = append(out, r.expandOneWordFields(bw)...)
 		}
 		return out
 	}
-	return r.expandOneWord(w)
+	return r.expandOneWordFields(w)
 }
 
 // inWord records the word being expanded and returns the undo, so a
@@ -56,8 +74,16 @@ func (r *Runner) inWord(w *syntax.Word) func() {
 	return func() { r.expandingWord, r.expandingSpan = prevWord, prevSpan }
 }
 
-// expandOneWord is the pipeline for a single word, after braces.
+// expandOneWord is the pipeline for a single word, after braces: fields, then
+// pathname expansion over them.
 func (r *Runner) expandOneWord(w *syntax.Word) []string {
+	return r.globFields(r.expandOneWordFields(w))
+}
+
+// expandOneWordFields is that pipeline stopped before the match, giving the
+// fields in their marked form. See expandWordEscaped for why the two stages
+// are separable.
+func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 	if w == nil {
 		return nil
 	}
@@ -132,10 +158,32 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 	if len(fields) == 1 && fields[0] == "" && !any {
 		return nil
 	}
+	return fields
+}
 
-	// Pathname expansion is the last stage, and it acts on whole fields: a
-	// pattern that matches nothing is passed through unchanged — unless the
-	// run-time option deletes it, which is what the second result reports.
+// globFields is pathname expansion, the last stage of a word: it acts on
+// whole fields, and a pattern that matches nothing is passed through
+// unchanged — unless the run-time option deletes it, which is what glob's
+// second result reports. The marks come off here, once the match has had its
+// look at them.
+//
+// One copy, because there are two callers and they were separate loops: an
+// ordinary word and a redirection target, which reads its own word twice. A
+// change made to one of them and not the other is the shape this repository
+// keeps finding, so the stage is a function rather than a paragraph typed
+// twice.
+//
+// The nil guard is equivalent rather than load-bearing, and is written down
+// as such: without it a nil argument comes back as an empty non-nil slice,
+// which every caller here reads the same way — `len(…) == 0`, or a join that
+// is the empty string either way. A mutant deleting it survives the suite on
+// purpose. It stays because the nil is the "no fields at all" answer the word
+// pipeline returns, and round-tripping it through a stage should not quietly
+// change which of the two a caller gets back.
+func (r *Runner) globFields(fields []string) []string {
+	if fields == nil {
+		return nil
+	}
 	out := make([]string, 0, len(fields))
 	for _, f := range fields {
 		matches, dropped := r.glob(f)
@@ -259,19 +307,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 	if len(fields) == 1 && fields[0] == "" && !any {
 		return nil, plain
 	}
-	out := make([]string, 0, len(fields))
-	for _, f := range fields {
-		matches, dropped := r.glob(f)
-		if len(matches) > 0 {
-			out = append(out, matches...)
-			continue
-		}
-		if dropped {
-			continue
-		}
-		out = append(out, globUnescape(f))
-	}
-	return out, plain
+	return r.globFields(fields), plain
 }
 
 // substitutedWordFields expands the word a `-` or `+` substituted, keeping the
@@ -281,7 +317,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 // is not what it came to — both of which leave the caller to carry on as
 // before. The test for which it came to is testFires, the same one
 // expandParam applies, so the two cannot drift apart.
-func (r *Runner) substitutedWordFields(s syntax.Span) ([]string, bool) {
+func (r *Runner) substitutedWordFields(s syntax.Span, head bool) ([]string, bool) {
 	e := s.Param
 	if e.Arg == nil || e.Length || e.Indirect {
 		return nil, false
@@ -317,7 +353,16 @@ func (r *Runner) substitutedWordFields(s syntax.Span) ([]string, bool) {
 		defer r.withoutGlobbing()()
 		return escapeAll(r.expandWord(e.Arg)), true
 	}
-	return r.expandWord(e.Arg), true
+	// Unquoted, so the word's own metacharacters are live and its quoted
+	// ones are not — which is a distinction only the marked form can carry,
+	// and expandWord drops it. Both halves of that were wrong against all
+	// six shells: `${u:-"X[a-b]y"}` globbed where every one of them prints
+	// the seven characters, and `X${u:-[a-b]}y` matched the operand alone
+	// where every one of them matches the whole word (#1500).
+	//
+	// So the fields go back marked and the enclosing word matches them, in
+	// the one place it matches every other field.
+	return r.tildeFlagFields(s, head, r.expandWordEscaped(e.Arg)), true
 }
 
 // withoutGlobbing suspends pathname expansion for one nested expansion, and
@@ -614,7 +659,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// Only when the word is what the expansion came to. When the *parameter*
 	// is what it came to, the array path below is the one that gives its
 	// fields.
-	if fields, ok := r.substitutedWordFields(s); ok {
+	if fields, ok := r.substitutedWordFields(s, head); ok {
 		return fields, true
 	}
 	// `${a[@]}` is one field per element for the same reason `"$@"` is one
@@ -1553,7 +1598,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		return value
 	case syntax.ParamAssign:
 		if fires {
-			v := r.joinWord(e.Arg)
+			v := r.substitutedWordText(e.Arg)
 			// The side effect that outlives the expansion — and with a
 			// subscript it belongs to the *element*. Assigning to the name
 			// would replace the whole array with one string, which is worse
@@ -1622,7 +1667,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 // the failing line. Checking first would have been the tidier code and the
 // wrong side effect.
 func (r *Runner) assignAlways(e *syntax.ParamExpr, subscript bool) string {
-	v := r.joinWord(e.Arg)
+	v := r.substitutedWordText(e.Arg)
 	if subscript {
 		r.assignSubscript(e, v)
 		return v
@@ -2507,6 +2552,29 @@ func (r *Runner) joinWord(w *syntax.Word) string {
 	return strings.Join(r.expandWord(w), " ")
 }
 
+// substitutedWordText is the text an operator's word comes to where the
+// operator takes it as a *value* rather than as fields of the command line:
+// the assigning forms `:=` and `::=`, and the word `?` complains with.
+//
+// Not matched against the filesystem. `u=; printf "<%s>" "${u:=X[a-b]y}"`
+// stores those seven characters in all six panel shells — the bracket
+// expression never reaches a match on its way into the parameter — and what
+// becomes of them afterwards is the ordinary rule for an expansion's result,
+// which GlobExpansionResults already answers: bash, bash-as-sh, bash 3.2,
+// dash and ksh93 read them back as a pattern, zsh does not. Measured
+// 2026-09-08 in a directory holding `Xay` and `Xby`: the five print
+// `[Xay][Xby]` from the expansion and `<X[a-b]y>` from the variable, zsh
+// prints `[X[a-b]y]` and the same variable.
+//
+// Matching here stored the listing instead — `Xay Xby`, in the parameter,
+// where every shell in the panel keeps the text — and took the question away
+// from the axis that owns it (#1500). A diagnostic's word is the same shape:
+// `${u?X[a-b]y}` names the word, not the files it would have found.
+func (r *Runner) substitutedWordText(w *syntax.Word) string {
+	defer r.withoutGlobbing()()
+	return r.joinWord(w)
+}
+
 // replacementOf is the text a `${x/pat/rep}` substitutes.
 //
 // **A replacement is text, not a pattern**, and this is the only reason it
@@ -2907,7 +2975,7 @@ func escapeAll(in []string) []string {
 // decides differently how to say so — two of them have a phrase covering
 // both, one says only "not set" either way, and one tells them apart.
 func (r *Runner) paramErrorWord(e *syntax.ParamExpr, set bool) string {
-	if w := r.joinWord(e.Arg); w != "" {
+	if w := r.substitutedWordText(e.Arg); w != "" {
 		return w
 	}
 	const notSet = "parameter not set"

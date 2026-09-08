@@ -128,6 +128,46 @@ func TestTheTwoDoorsToAnUnexpandableParameter(t *testing.T) {
 	}
 }
 
+// The word `?` complains with names the word, not the files it would have
+// matched.
+//
+// A diagnostic's text is not a pattern in any of them: with `a.b` present,
+// `unset u; echo ${u?a.[a-c]}` says `u: a.[a-c]` on zsh 5.9.2, bash 5.3.15,
+// dash and ksh93 alike, measured 2026-09-08. We said `u: a.b` — the operand
+// went through the same matching entry point the substituting operators used,
+// so the error a script raises to say what is missing named a file instead
+// (#1500).
+//
+// Its own runner rather than a row in the table above, because the assertion
+// only means anything in a directory the test owns: paramErr runs where the
+// test process happens to be, and a pattern matched there would find whatever
+// is in the package directory.
+//
+// The expansion is written **unquoted**, and that is the whole of what makes
+// the case discriminating. Quoted, the operand never reached the match even
+// with the fault in place, so `echo "${u?a.[a-c]}"` named the word before
+// this change and after it — a probe that cannot tell the two apart.
+func TestTheWordAnErrorComplainsWithIsNotAPattern(t *testing.T) {
+	dir := globDir(t)
+	var buf strings.Builder
+	sem := PosixSemantics()
+	sem.FatalErrorStatusIsOne = Yes
+	dg := Diagnostics{}
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh", Dir: dir,
+	})
+	f, err := syntax.Parse("unset u\necho ${u?a.[a-c]}\n", syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); !strings.Contains(got, "u: a.[a-c]") {
+		t.Errorf("said %q, want %q in it", got, "u: a.[a-c]")
+	}
+}
+
 func paramErrRun(t *testing.T, src string, dg Diagnostics) string {
 	t.Helper()
 	out, _ := paramErr(t, src, dg)

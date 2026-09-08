@@ -141,6 +141,48 @@ which is not a second answer about operands but this one, since a
 process substitution is no more written inside double quotes here than
 anywhere else.
 
+### Where a word operand is matched
+
+A word operand is part of the word it is written in, and it is matched
+there — once, at the end, with whatever surrounds it. With files `Xay`
+and `Xby` present, all six give two fields for
+
+    printf '[%s]' X${u:-[a-b]}y
+
+and the pattern they matched is `X[a-b]y`, not `[a-b]`. Matching the
+operand on its own is a different question with a different answer: it
+looks for a file named `[a-b]`, finds none, and in zsh — where an
+unmatched pattern is fatal — stops the command that would otherwise have
+printed both files.
+
+Quoting inside the operand is the operand's own, and it reaches that
+match intact: `${u:-"X[a-b]y"}` and `${u:+"X[a-b]y"}` are the seven
+characters in all six, where `${u:-X[a-b]y}` is the two files. Losing it
+is how a color sequence becomes a pattern — `ESC [` opens every one of
+them, so an operand carrying a color is an unterminated bracket
+expression the moment its quotes stop counting, and zsh refuses that
+outright rather than passing it through.
+
+The **assigning** operators are the exception that shows the rule from
+the other side. `${u:=X[a-b]y}` puts those seven characters in `u` in all
+six: the operand is not matched on its way into the parameter. What the
+expansion then comes to is the ordinary question about an expansion's
+result — bash, bash-as-sh, bash 3.2, dash and ksh93 read the stored value
+back as a pattern and print both files, zsh prints the seven characters —
+and that is `GlobExpansionResults` from `semantics.md`, not a rule of the
+operator's.
+
+The word `${x?word}` complains with goes the same way as an assigning
+operator's, and for a plainer reason: it is a diagnostic. With `a.b`
+present, `unset u; echo ${u?a.[a-c]}` says `u: a.[a-c]` in zsh, bash,
+dash and ksh93 alike.
+
+The `${~spec}` flag overrides the first of these and not the second.
+`${~u:-"X[a-b]y"}` matches despite the quotes, because the flag decides
+whether the result reads as a pattern; `${~~u:-X[a-b]y}` still matches,
+because the operand's own metacharacters were written rather than
+substituted and were never the flag's to switch off.
+
 ## Pattern removal
 
     ${x#pat}   shortest matching prefix removed

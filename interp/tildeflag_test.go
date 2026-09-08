@@ -152,6 +152,37 @@ func TestTheTildeFlagExpandsATildeAndAPattern(t *testing.T) {
 			`[DIR/inner.sh][DIR/inner2.sh][DIR/inner3.sh]`,
 		},
 		{
+			// The tilde half reaches that operand too, and it did not:
+			// the operand's fields never pass through the split path
+			// where tildeFlagElements is applied, so this was the text
+			// it was written as (#1500).
+			"and the tilde half reaches the operand as well",
+			`printf "[%s]" ${~nosuch:-"~/zz"}`,
+			`[HOME/zz]`,
+		},
+		{
+			// Where a written tilde would have expanded, which is the
+			// head of a word — the same limit the value form has.
+			"only at the head, there as everywhere",
+			`printf "[%s]" X${~nosuch:-"~/zz"}`,
+			`[X~/zz]`,
+		},
+		{
+			// The off parity switches off the flag, not the operand's own
+			// metacharacters: those are written rather than substituted,
+			// so they were never the flag's to reach. Measured on zsh
+			// 5.9.2 — `${~~u:-X[a-b]y}` matches and `${~~u:-"X[a-b]y"}`
+			// does not.
+			"the off parity leaves a written pattern written",
+			`printf "[%s]" ${~~nosuch:-$D/inn*.sh}`,
+			`[DIR/inner.sh][DIR/inner2.sh][DIR/inner3.sh]`,
+		},
+		{
+			"and leaves a quoted operand quoted",
+			`printf "[%s]" ${~~nosuch:-"$D/inn*.sh"}`,
+			`[DIR/inn*.sh]`,
+		},
+		{
 			"a length leaves nothing for the flag to do",
 			`v='~/zz'; printf "[%s]" ${~#v}`,
 			`[4]`,

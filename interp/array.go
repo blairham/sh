@@ -286,6 +286,65 @@ func (r *Runner) appendArrayElem(name string, idx int, sub, value string) {
 	r.setArrayElem(name, idx, sub, value)
 }
 
+// appendScalarToArray is `a+=x` where `a` is holding an array: the value joins
+// the array rather than replacing it with a string.
+//
+// It replaced it. `a=(1 2); a+=x` left `declare -- a="1x"` in the bash
+// dialect and `typeset a='1 2x'` in the zsh one — a plain scalar at status 0,
+// with no diagnostic, where every shell in the panel that has arrays leaves an
+// array. `assign`'s scalar branch ends by deleting the name's array, which is
+// right for `a=x` and wrong for `a+=x`, and the value it joined was the
+// *scalar view* of the whole array rather than an element, which is where the
+// `1 2x` came from (#1571).
+//
+// Where the value joins is a real disagreement and is asked rather than
+// picked. Measured 2026-09-08 with `a=(1 2); a+=x; typeset -p a`:
+//
+//	bash 5.3.15         declare -a a=([0]="1x" [1]="2")   n=2
+//	bash 5.3.15 as sh   declare -a a=([0]="1x" [1]="2")   n=2
+//	bash 3.2.57         declare -a a=([0]="1x" [1]="2")   n=2
+//	ksh93               typeset -a a=(1x 2)               n=2
+//	zsh 5.9.2           typeset -a a=( 1 2 x )            n=3
+//
+// Four join the first element and one adds a new one, so it is
+// ScalarAppendedToAnArrayBecomesANewElement and not a rule. dash has no
+// arrays.
+//
+// The joining answer goes through appendArrayElem at the base, which is the
+// same operation `a[0]+=x` is — measured, that is exactly where the value
+// lands, at the *base* and not at the lowest subscript standing:
+// `a=([5]=q); a+=x` is `declare -a a=([0]="x" [5]="q")` in bash, so an array
+// with no first element grows one and `q` does not move. Reusing that path is
+// also what makes the name's attributes fold once rather than twice: the join
+// is appendedValue's, so `typeset -i` adds instead of concatenating, exactly
+// as it does for the subscripted spelling.
+//
+// The adding answer lands one past the highest subscript, which is where
+// assignArrayLiteral puts an appended literal's first word — one rule about
+// where the end of an array is, not two.
+//
+// Reached only from assign's scalar branch, and deliberately not from
+// storeArray: a rule at the store would also have to decide for `a=x`, which
+// is the *other* disagreement (#1390) and lands differently — bash and ksh93
+// write the first element and leave the rest, zsh replaces the array with a
+// scalar. What is being decided here is what the append *operator* means over
+// an array, which is the same boundary #1502's fix drew from the other side.
+func (r *Runner) appendScalarToArray(name string, a Array, value string) {
+	addsAnElement := r.ask(r.sem().ScalarAppendedToAnArrayBecomesANewElement,
+		"a scalar appended to an array becoming a new element")
+	if r.unspecified {
+		return
+	}
+	if !addsAnElement {
+		// The subscript as written, for the complaint that names one — the
+		// base is never below the first element, so nothing can reach it.
+		r.appendArrayElem(name, r.arrayBase(), strconv.Itoa(r.arrayBase()), value)
+		return
+	}
+	a[a.pastTheEnd()] = value
+	r.storeArray(name, a)
+}
+
 // unsetArrayElem takes one subscript away, or blanks it where it stands.
 //
 // Which of those it is comes from UnsetArraySpan, the same field that answers

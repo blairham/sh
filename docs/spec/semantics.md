@@ -8804,6 +8804,111 @@ Pinned by `declare/an-attribute-over-an-array-is-three-answers`,
 `declare/an-attribute-over-a-keyed-table` and
 `declare/an-array-becoming-a-scalar-keeps-nothing`.
 
+**`ScalarUnderAnArrayDeclaration`** — bash becomes the first element · dash unspecified · ksh93 stays a scalar · zsh discards it
+
+**`ScalarUnderATableDeclaration`** — bash becomes the first element · dash unspecified · ksh93 becomes the first element · zsh discards it
+
+The **converse** of `CompoundAttribute`: what an array or table *letter*
+makes of a scalar the name is already holding. It splits the panel three
+ways as well, and no two answers lose the same thing.
+
+    b=1; typeset -a b     bash `declare -a b=([0]="1")`  n=1  `$b` is 1
+                          ksh93 `b=1`                    n=1  `$b` is 1
+                          zsh   `typeset -a b=( )`       n=0  `$b` is empty
+    a=1; typeset -A a     bash `declare -A a=([0]="1" )` n=1
+                          ksh93 `typeset -A a=([0]=1)`   n=1
+                          zsh   `typeset -A a=( )`       n=0
+
+Measured 2026-09-08, panel and machine as `oracle.md`. dash has neither
+letter; bash 3.2.57 answers `-a` as bash 5 does and has no `-A`.
+
+**Two fields because ksh93 answers the two letters differently**, and it
+is the whole of why: bash promotes under both and zsh discards under
+both, so one field would have had to be wrong for one of ksh93's letters
+whichever way it was set.
+
+ksh93's `-a` answer is a genuine third state and not a rendering of
+bash's, which two probes say. A one-element array of that shell's own
+making *does* carry the letter — `b=(1); typeset -p b` is
+`typeset -a b=(1)` — and a bare `typeset -a`, which lists every name
+carrying the attribute, prints nothing at all after `b=1; typeset -a b`.
+The declaration recorded nothing and converted nothing; the name is still
+the scalar it was, and that shell lets a scalar be subscripted, which is
+why `${b[0]}` and `${#b[@]}` cannot tell it from bash's promotion.
+
+Asked only where the name is holding a scalar in the cell being declared.
+An unset name is unanimous — `unset b; typeset -a b` is an array of no
+elements in all three — and so is a name already holding an array, which
+every column leaves standing. A declaration carrying its own value is not
+this question either: `b=1; typeset -a b=(9)` is the one element `9`
+everywhere.
+
+**A local declaration builds the array cell rather than converting one**,
+and that is core rather than a fourth answer. bash promotes at the top
+level and through `-g` — `b=1; typeset -a b` and
+`b=1; f() { typeset -ga b; }; f` both list `declare -a b=([0]="1")` —
+and empties under every local spelling, with `f() { local b=1; local -a b; }`,
+`local b=1; declare -a b` and `local b=1; typeset -a b` all
+`declare -a b=()`. The shadow being *fresh* is not what decides it, since
+`local b=1` has already taken the copy, and it is not the letter in
+general, since `local b=1; local -i b` keeps the `1`. No dialect is asked:
+zsh discards a held scalar wherever it finds one and ksh93 declares
+nothing local in a plain function, so the two shells with an answer of
+their own reach the same place by their own route.
+
+It shows through an append, which is how it was found:
+`a=1; typeset -A a; a+=([k]=v)` is two entries in bash and ksh93 and one
+in zsh, because the value is already placed or already gone by the time
+the append runs. This implementation answered every column with zsh's,
+which matched one shell by accident and lost the script's own value in
+the other two at status 0 (#1572).
+
+Pinned by `declare/an-array-declaration-over-a-name-holding-a-scalar`,
+`declare/a-table-declaration-over-a-name-holding-a-scalar`,
+`declare/an-array-declaration-over-an-empty-scalar`,
+`declare/an-array-declaration-over-an-unset-name`,
+`declare/an-array-declaration-over-a-name-already-holding-an-array`,
+`declare/an-array-declaration-over-a-scalar-holding-a-space`,
+`declare/a-table-declaration-over-a-scalar-then-appended` and
+`declare/a-local-array-declaration-over-a-local-scalar`.
+
+**`ScalarAppendedToAnArrayBecomesANewElement`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Where `a+=x` puts the value when the name is holding an **array**: joined
+onto the first element, or added after the last.
+
+    a=(1 2); a+=x     bash `([0]="1x" [1]="2")`  n=2
+                      ksh93 `(1x 2)`             n=2
+                      zsh   `( 1 2 x )`          n=3
+
+Measured 2026-09-08; bash 3.2.57 and bash under argv[0] of `sh` answer as
+bash 5 does, and dash has no arrays.
+
+The join is at the **base** and not at the lowest subscript standing:
+`a=([5]=q); a+=x` is `declare -a a=([0]="x" [5]="q")`, so an element grows
+at 0 where there was none and `q` does not move. It is `a[0]+=x` and not
+"append to the first element there is", which are the same operation on a
+dense array and different ones here. The empty string is a value on both
+sides — `a=(1 2); a+=""` leaves bash's two elements alone and gives zsh a
+third that is empty — and the appended value is one value however many
+words it looks like.
+
+Asked only where the name is holding an array. A name holding a scalar or
+holding nothing is the ordinary string append and stays a plain scalar in
+every column, and the array-literal spelling `a+=(x)` is not this question
+either: it adds an element in every shell that has arrays, which is why
+that one has no field. Note that zsh's answer here is **not** its answer
+to `a+=(x)`.
+
+A plain `a=x` over an array is a third question and is open (#1390): bash
+and ksh93 write the first element and leave the rest, zsh replaces the
+array with a scalar.
+
+Pinned by `array/appending-a-scalar-to-an-array` and the five rows beside
+it. This implementation deleted the array and left a plain string — `1x`
+under bash's reading and `1 2x` under zsh's, the scalar *view* of the
+whole array with the value stuck on the end — at status 0 (#1571).
+
 **`CompoundElementsGoThroughTheAttribute`** — bash yes · dash unspecified · ksh93 yes · zsh no
 
 Folds what is written to *one element* of an array or a keyed table

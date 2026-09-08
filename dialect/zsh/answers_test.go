@@ -309,3 +309,43 @@ func TestTheOtherArithmeticSpelling(t *testing.T) {
 		})
 	}
 }
+
+// The three array axes #1571 and #1572 opened, pinned here as behavior so a
+// preset edit cannot silently flip one — and this shell is the odd column in
+// all three.
+//
+// `a+=x` over a name holding an array adds a *new element* after the last
+// rather than joining the first: `typeset -a a=( 1 2 x )`, three elements,
+// measured 2026-09-08 on 5.9.2, where bash and ksh93 have two. Note this is
+// not the same question as `a+=(x)`, which every shell with arrays agrees
+// about (#1502).
+func TestAScalarAppendedToAnArrayAddsANewElement(t *testing.T) {
+	out, st := answersRun(t, `a=(1 2); a+=x; printf '[%s]' "${a[@]}"; echo " n=${#a[@]}"`)
+	if want := "[1][2][x] n=3\n"; out != want || st != 0 {
+		t.Errorf("got %q at %d, want %q at 0", out, st, want)
+	}
+}
+
+// Both array letters given to a name already holding a scalar throw that value
+// away and leave the name an empty compound: `b=1; typeset -a b` is
+// `typeset -a b=(  )` and `b=1; typeset -A b` is `typeset -A b=( )`, both with
+// `${#b[@]}` of 0 and `$b` empty. Measured 2026-09-08.
+//
+// This is the one column that loses the script's own value, and it was the
+// answer this implementation gave every dialect — matching this shell by
+// accident and losing the value in the other two at status 0 (#1572). The
+// count is what is asserted, because it is the count that separates this
+// answer from the other two.
+func TestAnArrayLetterOverAScalarDiscardsTheValue(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{"the array letter", `typeset -a b`},
+		{"the table letter", `typeset -A b`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, `b=1; `+tc.src+`; printf '[%s]' "${b[@]}"; echo " n=${#b[@]} v=[$b]"`)
+			if want := "[] n=0 v=[]\n"; out != want || st != 0 {
+				t.Errorf("got %q at %d, want %q at 0", out, st, want)
+			}
+		})
+	}
+}

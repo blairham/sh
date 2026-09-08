@@ -578,11 +578,116 @@ func (r *Runner) markDeclaredCompound(name string, f declareFlags) {
 		return
 	}
 	if f.array {
-		r.markIndexed(name)
+		v, p := r.declaredCompoundOverAScalar(name, f, r.sem().ScalarUnderAnArrayDeclaration,
+			"an array declaration over a name already holding a scalar")
+		switch p {
+		case ScalarUnderACompoundBecomesTheFirstElement:
+			r.markIndexed(name)
+			r.storeArray(name, Array{0: v})
+		case ScalarUnderACompoundDiscardsIt:
+			r.markIndexed(name)
+		case ScalarUnderACompoundStaysAScalar:
+			// The declaration records nothing and converts nothing: the name
+			// is the scalar it was. Not the same as promoting it, even where
+			// a scalar answers `${b[0]}` and `${#b[@]}` as an array of one
+			// would — a bare `typeset -a` afterwards does not list the name.
+		}
 	}
 	if f.assoc {
-		r.markAssoc(name)
+		v, p := r.declaredCompoundOverAScalar(name, f, r.sem().ScalarUnderATableDeclaration,
+			"a table declaration over a name already holding a scalar")
+		switch p {
+		case ScalarUnderACompoundBecomesTheFirstElement:
+			r.markAssoc(name)
+			// Under the key `0`, which is a key like any other and is what
+			// both promoting shells write — `a=1; typeset -A a` lists as
+			// `declare -A a=([0]="1" )` in bash and `typeset -A a=([0]=1)` in
+			// ksh93. The array base plays no part: a table has no positions.
+			r.setAssocElem(name, "0", v)
+		case ScalarUnderACompoundDiscardsIt:
+			r.markAssoc(name)
+		case ScalarUnderACompoundStaysAScalar:
+			// No dialect measured answers the table letter this way; the
+			// value exists because the two letters share one policy and
+			// ksh93 answers them differently.
+		}
 	}
+}
+
+// declaredCompoundOverAScalar resolves ScalarUnderAnArrayDeclaration or
+// ScalarUnderATableDeclaration for one name, and hands back the value the
+// promoting answer keeps.
+//
+// The dialect is asked only where there is a scalar to make something of, and
+// that is not a shortcut: an *unset* name is unanimous — `unset b; typeset -a
+// b` is an array of no elements in bash, ksh93 and zsh alike — and so is a
+// name already holding an array or a table, which every column leaves standing
+// exactly as it is. Asking anyway would refuse `typeset -a opts` under a
+// dialect that has no answer to a question `typeset -a opts` does not raise.
+//
+// A *produced* array is not a scalar to be converted either: it has the
+// attribute already, and markIndexed leaves it to its producer.
+//
+// Nor is a value standing in a cell this scope has made *local*. A local
+// declaration builds the array cell rather than converting one, and that is
+// measured rather than assumed: bash promotes at the top level and through
+// `-g` — `b=1; typeset -a b` and `b=1; f() { typeset -ga b; }; f` both list
+// `declare -a b=([0]="1")` — and empties under every local spelling, with
+// `f() { local b=1; local -a b; }`, `local b=1; declare -a b` and
+// `local b=1; typeset -a b` all `declare -a b=()`. The shadow being *fresh*
+// is not what decides it: `local b=1` has already taken the copy, and the
+// second declaration on the next line empties the cell anyway. Nor is it the
+// letter's doing in general — `local b=1; local -i b` keeps the `1` — so what
+// is new is the array cell in particular.
+//
+// No dialect is asked, because none of them disagrees here: zsh discards a
+// held scalar wherever it finds one, and ksh93's `typeset` inside a plain
+// function declares nothing local at all, so the two shells with an answer of
+// their own reach the same place by their own route.
+func (r *Runner) declaredCompoundOverAScalar(name string, f declareFlags, p ScalarUnderACompoundPolicy, what string) (string, ScalarUnderACompoundPolicy) {
+	if _, ok := r.Arrays[name]; ok {
+		return "", ScalarUnderACompoundDiscardsIt
+	}
+	if r.assocDeclared(name) {
+		return "", ScalarUnderACompoundDiscardsIt
+	}
+	if _, produced := r.DynamicArrays[name]; produced {
+		return "", ScalarUnderACompoundDiscardsIt
+	}
+	// `!f.global` because a `-g` declaration is not a local one whatever the
+	// scope has shadowed. It is deliberately unpinned: the only shape that
+	// tells it from `r.localCell(name)` alone is a `-g` letter written where
+	// the name is *also* locally shadowed, and that shape already answers
+	// wrong here for a reason of its own — `b=1; f() { local b=2; typeset -ga
+	// b; }; f` leaves bash's *global* an array of `1` and its local the
+	// scalar `2` untouched, where this engine writes the local cell and never
+	// reaches the global array at all. A test would have to pin that wrong
+	// answer to reach the term. See the mutation note in the pull request.
+	if !f.global && r.localCell(name) {
+		return "", ScalarUnderACompoundDiscardsIt
+	}
+	// getVar rather than Runner.Vars, for the reason appendedOverAScalar
+	// gives: a name the script was *started* with reads back through the
+	// environment, and it is a value the name is holding like any other.
+	v, held := r.getVar(name)
+	if !held {
+		return "", ScalarUnderACompoundDiscardsIt
+	}
+	return v, r.scalarUnderACompound(p, what)
+}
+
+// localCell reports whether the innermost scope has already taken the name
+// over, so the cell a declaration is about to write is this function's own.
+//
+// shadow's `fresh` answers a narrower question — whether the copy was taken
+// on *this* line — and a name declared twice in one function needs the wider
+// one.
+func (r *Runner) localCell(name string) bool {
+	if len(r.scopes) == 0 {
+		return false
+	}
+	_, saved := r.scopes[len(r.scopes)-1].saved[name]
+	return saved
 }
 
 // applyAttributes records what a name has been declared to be.

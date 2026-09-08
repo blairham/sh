@@ -299,6 +299,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/removing-one-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=3 all=[p  r]` |
 | `array/appending-to-an-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]~[x][yQ][z]` | `[x][yQ]~[x][yQ][z]` | **2>** `<shell>: a[-1]: bad array subscript` *(status 1)* | `[x][yQ]~[x][yQ][z]` | `[x][yQ]~[x][yQ][z]` |
 | `array/appending-to-an-element-inherits-the-base` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[xQ][y]` |
+| `array/appending-a-scalar-to-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[1x][2] n=2` | `[1x][2] n=2` | `[1x][2] n=2` | `[1x][2] n=2` | `[1][2][x] n=3` |
+| `array/appending-an-empty-scalar-to-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[1][2] n=2` | `[1][2] n=2` | `[1][2] n=2` | `[1][2] n=2` | `[1][2][] n=3` |
+| `array/appending-a-scalar-to-an-array-with-an-empty-first-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][2] n=2` | `[x][2] n=2` | `[x][2] n=2` | `[x][2] n=2` | `[][2][x] n=3` |
+| `array/appending-a-scalar-to-a-sparse-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][q] n=2` | `[x][q] n=2` | `[x][q] n=2` | `[x][q] n=2` | `[][][][][q][x] n=6` |
+| `array/appending-a-scalar-holding-a-space-to-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[1p q][2] n=2` | `[1p q][2] n=2` | `[1p q][2] n=2` | `[1p q][2] n=2` | `[1][2][p q] n=3` |
+| `array/appending-a-scalar-to-an-unset-name-is-a-scalar` | **2>** `<shell>: 1: a+=x: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x] n=1` | `[x] n=1` | `[x] n=1` | `[x] n=1` | `[x] n=1` |
 | `array/appending-to-an-unset-element` | **2>** `<shell>: 1: a[3]+=Q: not found~<shell>: 1: Bad substitution` *(status 2)* | `[Q]` | `[Q]` | `[Q]` | `[Q]` | `[Q]` |
 | `array/appending-to-an-associative-element` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]+=x: not found~<shell>: 1: m[k]+=Q: not found~<shell>: 1: Bad substitution` *(status 2)* | `[xQ]` | `[xQ]` | `[xQ]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[xQ]` | `[xQ]` |
 | `array/a-literal-with-a-space-before-it` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `a= (echo x); echo "n=${#a[@]} 0=${a[0]} 1=${a[1]}"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `a= (echo x); echo "n=${#a[@]} 0=${a[0]} 1=${a[1]}"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `a= (echo x); echo "n=${#a[@]} 0=${a[0]} 1=${a[1]}"'` *(status 2)* | `n=2 0=echo 1=x` | **2>** `<shell>:1: parse error near `('` *(status 1)* |
@@ -741,6 +747,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/appending-to-an-element-inherits-the-base` — the base axis reaches the append: the same numeral names the second element in two shells and the first in the third, exactly as a plain `a[1]=Q` does. Appending is therefore not a form with a subscript rule of its own, which is the claim worth pinning before anything special-cases it
   ```sh
   a=(x y); a[1]+=Q; printf "[%s]" "${a[@]}"; echo
+  ```
+- `array/appending-a-scalar-to-an-array` — the third spelling of `+=` and the one this implementation destroyed the array for: a *scalar* appended to a name that is holding an array. It answered the single string `1x` in the bash dialect and `1 2x` in the zsh one, at status 0 and with no diagnostic, where every shell in the panel with arrays leaves an array standing (#1571). Where the value joins is a genuine disagreement rather than a rule -- bash 5.3.15, the same binary under argv[0] of `sh`, bash 3.2.57 and ksh93 all join the *first element* and leave the rest, `[1x][2]`, and zsh adds a third, `[1][2][x]` -- so it is Semantics.ScalarAppendedToAnArrayBecomesANewElement. The elements are printed one to a bracket rather than joined because `1x 2` and `1 2 x` are the only thing that tells the two answers apart, and the count is beside them because a fix that joined the *last* element would print the same brackets in a different order
+  ```sh
+  a=(1 2); a+=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/appending-an-empty-scalar-to-an-array` — the empty string is a value on both sides of the axis: the joining shells leave the array exactly as it stands, `[1][2]`, and zsh grows a third element that is empty, `[1][2][]` with n=3. The row an implementation that skipped an empty append as a no-op would fail in one column only, and the count is what says so -- the brackets alone read as two elements and a stray pair either way
+  ```sh
+  a=(1 2); a+=""; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/appending-a-scalar-to-an-array-with-an-empty-first-element` — the other half of the pair above: an empty *element* is joined like any other, so the joining shells answer `[x][2]` and still have two elements where zsh has three. Together the two rows say the emptiness is never a special case on either side, which is the shape a fix guarding on a non-empty string gets wrong in exactly one of them
+  ```sh
+  a=("" 2); a+=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/appending-a-scalar-to-a-sparse-array` — *which* element the joining shells join: the base, and not the lowest subscript that has anything in it. bash lists `declare -a a=([0]="x" [5]="q")` for this -- an element grows at 0 where there was none and `q` does not move -- so `[x][q]` is the order and the count is two. It is the probe that tells `a[0]+=x` from "append to the first element standing", which are the same operation on a dense array and different ones here. zsh has no sparse array to be asked and pads instead, six elements with the appended one last
+  ```sh
+  a=([5]=q); a+=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/appending-a-scalar-holding-a-space-to-an-array` — the appended value is one value however many words it looks like: `[1p q][2]` where the join is, `[1][2][p q]` where the add is, and never a `[p][q]`. The wrong turn is handing the value through the field splitting an array literal's own words go through, which would leave three elements in the joining shells and four in zsh -- and the joined `${a[*]}` reading would be `1p q 2` under both readings and record nothing
+  ```sh
+  a=(1 2); a+="p q"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/appending-a-scalar-to-an-unset-name-is-a-scalar` — the boundary the axis stops at, and it is unanimous: a name that is holding no array is the ordinary string append and stays a plain scalar in every column, zsh included. Recorded because a fix reaching for the array store whenever `+=` is written would make an array here and nothing in `[x] n=1` would say so -- a one-element array prints exactly the same
+  ```sh
+  unset a; a+=x; echo "[$a] n=${#a[@]}"
   ```
 - `array/appending-to-an-unset-element` — an element that was never assigned has nothing to append to, and all three place the value as it stands rather than refusing. Unanimous, and it is the half a fix is most likely to get wrong by reading an absent element as an error instead of as an empty one
   ```sh
@@ -11814,6 +11844,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/an-attribute-over-an-array-is-three-answers` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `i=[a b] n=2~u=[a b] n=2` | `i=[a b] n=2~u=[a b] n=2` | `i=[a b] n=2~u=[a b] n=2` **2>** `<shell>: line 1: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `i=[0 0] n=2~u=[A B] n=2` | `i=[0] n=1~u=[a b] n=2` |
 | `declare/an-attribute-over-a-keyed-table` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 2: typeset: not found~<shell>: 3: Bad substitution` *(status 2)* | `[v] n=1~(no child)` | `[v] n=1~(no child)` | `[v] n=1~(no child)` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[0] n=1~(no child)` | `[] n=1~m=0` |
 | `declare/an-array-becoming-a-scalar-keeps-nothing` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `1 n=2 [7 8]~2 [x y]~3 [0x10 9]` | `1 n=2 [7 8]~2 [x y]~3 [0x10 9]` | `1 n=2 [7 8]~2 [x y]~3 [0x10 9]` | `1 n=2 [7 8]~2 [0 0]~3 [16 9]` | `1 n=1 [0]~2 [0]~3 [0]` |
+| `declare/an-array-declaration-over-a-name-holding-a-scalar` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: Bad substitution` *(status 2)* | `[1] n=1~declare -a b=([0]="1")` | `[1] n=1~declare -a b=([0]="1")` | `[1] n=1~declare -a b='([0]="1")'` | `[1] n=1~b=1` | `[] n=0~typeset -a b=(  )` |
+| `declare/a-table-declaration-over-a-name-holding-a-scalar` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: Bad substitution` *(status 2)* | `[1] n=1~declare -A a=([0]="1" )` | `[1] n=1~declare -A a=([0]="1" )` | `[1] n=1~declare -- a="1"` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[1] n=1~typeset -A a=([0]=1)` | `[] n=0~typeset -A a=( )` |
+| `declare/an-array-declaration-over-an-empty-scalar` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: Bad substitution` *(status 2)* | `[] n=1` | `[] n=1` | `[] n=1` | `[] n=1` | `[] n=0` |
+| `declare/an-array-declaration-over-an-unset-name` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `n=0~[9] n=1` | `n=0~[9] n=1` | `n=0~[9] n=1` | `n=0~[9] n=1` | `n=0~[9] n=1` |
+| `declare/an-array-declaration-over-a-name-already-holding-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[1][2] n=2` | `[1][2] n=2` | `[1][2] n=2` | `[1][2] n=2` | `[1][2] n=2` |
+| `declare/an-array-declaration-over-a-scalar-holding-a-space` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x y] n=1` | `[x y] n=1` | `[x y] n=1` | `[x y] n=1` | `[] n=0` |
+| `declare/a-table-declaration-over-a-scalar-then-appended` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `n=2 [1][v]` | `n=2 [1][v]` | `n=1 [1v][1v]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `n=2 [1][v]` | `n=1 [][v]` |
+| `declare/a-local-array-declaration-over-a-local-scalar` | **2>** `<shell>: 1: local: -a: bad variable name` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=0` **2>** `<shell>: local: not found~<shell>: local: not found` | `n=0` |
 | `declare/an-element-written-through-the-names-attribute` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `1 [1 7]~2 [AB EF]~3 [14]` | `1 [1 7]~2 [AB EF]~3 [14]` | `1 [1 7]~2 [ab ef]~3 [14]` **2>** `<shell>: line 1: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 2: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1 [1 7]~2 [AB EF]~3 [14]` | **2>** `<shell>:typeset:1: a: inconsistent type for assignment` *(status 1)* |
 | `declare/an-append-and-a-declarations-own-literal-both-fold` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `1 [10 12]~2 [14]~3 [1 16]~4 [AB CD]` | `1 [10 12]~2 [14]~3 [1 16]~4 [AB CD]` | `1 [5+5 6+6]~2 [14]~3 [1 16]~4 [ab cd]` **2>** `<shell>: line 3: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1 [10 12]~2 [14]~3 [1 16]~4 [AB CD]` | **2>** `<shell>:typeset:1: d: inconsistent type for assignment` *(status 1)* |
 | `declare/a-whole-array-assignment-re-creates-the-name` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -ai z=([0]="10" [1]="12")~[7 12]` | `declare -ai z=([0]="10" [1]="12")~[7 12]` | `declare -ai z='([0]="10" [1]="12")'~[7 12]` | `typeset -a z=(5+5 6+6)~[3+4 6+6]` | **2>** `<shell>:typeset:1: z: inconsistent type for assignment` *(status 1)* |
@@ -12533,6 +12571,38 @@ grades it and nothing drift-checks it either, for the same reason.
   a=(7 8); typeset -i a; echo "1 n=${#a[@]} [${a[@]}]"
   b=(x y); typeset -i b; echo "2 [${b[@]}]"
   c=(0x10 9); typeset -i c; echo "3 [${c[@]}]"
+  ```
+- `declare/an-array-declaration-over-a-name-holding-a-scalar` — the converse of the three rows above: the array *letter* given to a name that is already holding a scalar, rather than an attribute given to a name holding an array. Three answers again, and no two of them lose the same thing -- bash promotes the value to the first element and lists `declare -a b=([0]="1")`, ksh93 converts nothing and records nothing so `typeset -p` still says `b=1`, and zsh throws the value away and leaves `typeset -a b=(  )` with a count of 0. This implementation answered every dialect with zsh's, which matched one column by accident and lost the script's own value in the other two at status 0 (#1572). The listing is load-bearing and the count is not: ksh93 lets a scalar be subscripted, so `$b` and `${#b[@]}` cannot tell its answer from bash's, and a bare `typeset -a` afterwards -- which lists every name carrying the attribute -- prints nothing there
+  ```sh
+  b=1; typeset -a b; echo "[$b] n=${#b[@]}"; typeset -p b
+  ```
+- `declare/a-table-declaration-over-a-name-holding-a-scalar` — the same question asked of the *other* array letter, and the row that makes it two axes rather than one: ksh93 answers this one differently from `-a` above, promoting the value under the key `0` -- `typeset -A a=([0]=1)` -- where its array letter converted nothing at all. bash promotes under both letters and zsh discards under both, so ksh93 is the whole of the disagreement, and one field would have had to be wrong for one of its two letters whichever way it was set. bash 3.2 has no `-A` and says so
+  ```sh
+  a=1; typeset -A a; echo "[$a] n=${#a[@]}"; typeset -p a
+  ```
+- `declare/an-array-declaration-over-an-empty-scalar` — the empty string is a value and the promoting shells keep it, so the array is one element long and that element is empty -- `[] n=1` in bash and ksh93 against `[] n=0` in zsh, where the brackets are identical and only the count says which happened. The row an implementation that promoted a non-empty scalar and treated the empty one as nothing would fail, and the only place it could be caught: every other probe of an empty first element reads the same as no element at all
+  ```sh
+  b=; typeset -a b; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"
+  ```
+- `declare/an-array-declaration-over-an-unset-name` — the boundary the axis stops at: a name holding nothing has nothing for any of the three answers to differ about, and all of them leave an array of no elements. The append afterwards is what makes that observable rather than merely counted -- an implementation that promoted whatever the name *read back as* would put an empty first element in front of the 9 and answer `[][9] n=2`, which is a state no count alone can distinguish from this one. Written this way rather than with `typeset -p` because the listing of a declared array with no value is its own question and not this one
+  ```sh
+  unset b; typeset -a b; echo "n=${#b[@]}"; b+=(9); printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"
+  ```
+- `declare/an-array-declaration-over-a-name-already-holding-an-array` — the other boundary, and unanimous: declaring the attribute a name already has leaves every element exactly where it was, in all three shells. The negative that keeps the axis about a *scalar* -- a fix that emptied or re-created the store whenever the letter was written would pass every promoting row above and lose an array here, silently, which is the shape `local -a` had (#1535)
+  ```sh
+  a=(1 2); typeset -a a; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `declare/an-array-declaration-over-a-scalar-holding-a-space` — the promoted value is one element however many words it looks like: `[x y] n=1` in bash and ksh93, never `[x][y] n=2`. The wrong turn is handing the held value through the field splitting an array literal's own words go through, and it is invisible on a value with no space in it -- which is every other row here
+  ```sh
+  b="x y"; typeset -a b; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"
+  ```
+- `declare/a-table-declaration-over-a-scalar-then-appended` — the shape the declaration's data loss was found through, and the reason it is the *declaration* that owns it rather than the append: by the time `a+=([k]=v)` runs the value is already gone or already at key `0`, so bash and ksh93 answer two entries with `1` still under `0` and zsh answers one. Both subscripts are printed because the count alone would let a fix put the kept value under any key at all -- and `${a[0]}` is what says the key is `0` and not, say, the empty string
+  ```sh
+  a=1; typeset -A a; a+=([k]=v); echo "n=${#a[@]} [${a[0]}][${a[k]}]"
+  ```
+- `declare/a-local-array-declaration-over-a-local-scalar` — where bash does *not* promote: a local declaration builds the array cell rather than converting one, so the value the same function put in the name a line earlier is gone and the count is 0. It is not the shadow being fresh -- `local b=1` has already taken it -- and not the letter in general, since `local b=1; local -i b` keeps the `1`; it is the array cell in particular, and `typeset -ga b` over the same value at the top level promotes. No dialect is asked for it: zsh discards a held scalar wherever it finds one and ksh93 has no `local` at all, so the one shell with an answer of its own is the one shell that changes it
+  ```sh
+  f() { local b=1; local -a b; echo "n=${#b[@]}"; }; f
   ```
 - `declare/an-element-written-through-the-names-attribute` — the other half of the same surface, and a *later write* rather than a reach-back: a scalar assignment through an attributed name needs no dialect anywhere, and an element is where the panel splits. bash and ksh93 fold every element write — `1 7`, `AB EF`, `14` — and zsh folds an array's elements not at all: its case letters reach a scalar's expansion and stop there, and its integer letter never meets an array, having replaced it above. So `[ef cd]` there, with the first element the write did not touch still lower-case
   ```sh

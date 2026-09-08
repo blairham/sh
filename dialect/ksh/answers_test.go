@@ -226,3 +226,43 @@ func TestTheOlderArithmeticSpellingIsNotRead(t *testing.T) {
 		t.Errorf("got %q at %d, want %q at 0", out, st, want)
 	}
 }
+
+// The three array axes #1571 and #1572 opened, pinned here as behavior so a
+// preset edit cannot silently flip one — and this shell is the reason two of
+// them are separate axes at all.
+//
+// `a+=x` over a name holding an array joins the first element and leaves the
+// rest standing: `typeset -a a=(1x 2)`, two elements, measured 2026-09-08 on
+// ksh93u+. bash agrees; zsh adds a third element instead.
+func TestAScalarAppendedToAnArrayJoinsTheFirstElement(t *testing.T) {
+	out, st := answersRun(t, `a=(1 2); a+=x; printf '[%s]' "${a[@]}"; echo " n=${#a[@]}"`)
+	if want := "[1x][2] n=2\n"; out != want || st != 0 {
+		t.Errorf("got %q at %d, want %q at 0", out, st, want)
+	}
+}
+
+// The two array letters over a name already holding a scalar answer
+// *differently here*, which is the whole of why they are two fields rather
+// than one: `b=1; typeset -a b` converts nothing and records nothing, so
+// `typeset -p b` still says `b=1`, while `b=1; typeset -A b` promotes the
+// value under the key `0` and lists `typeset -A b=([0]=1)`. Measured
+// 2026-09-08. bash promotes under both letters and zsh discards under both.
+//
+// The listing is the only thing that separates the array letter's answer from
+// bash's: this shell lets a scalar be subscripted, so `${b[0]}` and
+// `${#b[@]}` read the same either way. A bare `typeset -a` afterwards — which
+// lists every name carrying the attribute — prints nothing, which is the
+// second probe that says the declaration recorded nothing.
+func TestTheTwoArrayLettersOverAScalarAnswerDifferently(t *testing.T) {
+	for _, tc := range []struct{ name, src, list string }{
+		{"the array letter converts nothing", `typeset -a b`, "b=1"},
+		{"the table letter promotes", `typeset -A b`, `typeset -A b=([0]=1)`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, `b=1; `+tc.src+`; typeset -p b; echo "n=${#b[@]}"`)
+			if !strings.Contains(out, tc.list) || !strings.Contains(out, "n=1") || st != 0 {
+				t.Errorf("got %q at %d, want %q and a count of 1 at 0", out, st, tc.list)
+			}
+		})
+	}
+}

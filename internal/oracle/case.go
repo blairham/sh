@@ -3909,6 +3909,36 @@ echo "st=$?"`,
 		Why:     "the base axis reaches the append: the same numeral names the second element in two shells and the first in the third, exactly as a plain `a[1]=Q` does. Appending is therefore not a form with a subscript rule of its own, which is the claim worth pinning before anything special-cases it",
 	},
 	{
+		ID: "array/appending-a-scalar-to-an-array", Category: "expansion",
+		Snippet: `a=(1 2); a+=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the third spelling of `+=` and the one this implementation destroyed the array for: a *scalar* appended to a name that is holding an array. It answered the single string `1x` in the bash dialect and `1 2x` in the zsh one, at status 0 and with no diagnostic, where every shell in the panel with arrays leaves an array standing (#1571). Where the value joins is a genuine disagreement rather than a rule -- bash 5.3.15, the same binary under argv[0] of `sh`, bash 3.2.57 and ksh93 all join the *first element* and leave the rest, `[1x][2]`, and zsh adds a third, `[1][2][x]` -- so it is Semantics.ScalarAppendedToAnArrayBecomesANewElement. The elements are printed one to a bracket rather than joined because `1x 2` and `1 2 x` are the only thing that tells the two answers apart, and the count is beside them because a fix that joined the *last* element would print the same brackets in a different order",
+	},
+	{
+		ID: "array/appending-an-empty-scalar-to-an-array", Category: "expansion",
+		Snippet: `a=(1 2); a+=""; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the empty string is a value on both sides of the axis: the joining shells leave the array exactly as it stands, `[1][2]`, and zsh grows a third element that is empty, `[1][2][]` with n=3. The row an implementation that skipped an empty append as a no-op would fail in one column only, and the count is what says so -- the brackets alone read as two elements and a stray pair either way",
+	},
+	{
+		ID: "array/appending-a-scalar-to-an-array-with-an-empty-first-element", Category: "expansion",
+		Snippet: `a=("" 2); a+=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the other half of the pair above: an empty *element* is joined like any other, so the joining shells answer `[x][2]` and still have two elements where zsh has three. Together the two rows say the emptiness is never a special case on either side, which is the shape a fix guarding on a non-empty string gets wrong in exactly one of them",
+	},
+	{
+		ID: "array/appending-a-scalar-to-a-sparse-array", Category: "expansion",
+		Snippet: `a=([5]=q); a+=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "*which* element the joining shells join: the base, and not the lowest subscript that has anything in it. bash lists `declare -a a=([0]=\"x\" [5]=\"q\")` for this -- an element grows at 0 where there was none and `q` does not move -- so `[x][q]` is the order and the count is two. It is the probe that tells `a[0]+=x` from \"append to the first element standing\", which are the same operation on a dense array and different ones here. zsh has no sparse array to be asked and pads instead, six elements with the appended one last",
+	},
+	{
+		ID: "array/appending-a-scalar-holding-a-space-to-an-array", Category: "expansion",
+		Snippet: `a=(1 2); a+="p q"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the appended value is one value however many words it looks like: `[1p q][2]` where the join is, `[1][2][p q]` where the add is, and never a `[p][q]`. The wrong turn is handing the value through the field splitting an array literal's own words go through, which would leave three elements in the joining shells and four in zsh -- and the joined `${a[*]}` reading would be `1p q 2` under both readings and record nothing",
+	},
+	{
+		ID: "array/appending-a-scalar-to-an-unset-name-is-a-scalar", Category: "expansion",
+		Snippet: `unset a; a+=x; echo "[$a] n=${#a[@]}"`,
+		Why:     "the boundary the axis stops at, and it is unanimous: a name that is holding no array is the ordinary string append and stays a plain scalar in every column, zsh included. Recorded because a fix reaching for the array store whenever `+=` is written would make an array here and nothing in `[x] n=1` would say so -- a one-element array prints exactly the same",
+	},
+	{
 		ID: "array/appending-to-an-unset-element", Category: "expansion",
 		Snippet: `a[3]+=Q; echo "[${a[3]}]"`,
 		Why:     "an element that was never assigned has nothing to append to, and all three place the value as it stands rather than refusing. Unanimous, and it is the half a fix is most likely to get wrong by reading an absent element as an error instead of as an empty one",
@@ -9241,6 +9271,46 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		ID: "declare/an-array-becoming-a-scalar-keeps-nothing", Category: "declarations",
 		Snippet: "a=(7 8); typeset -i a; echo \"1 n=${#a[@]} [${a[@]}]\"\nb=(x y); typeset -i b; echo \"2 [${b[@]}]\"\nc=(0x10 9); typeset -i c; echo \"3 [${c[@]}]\"",
 		Why:     "which of the three answers each column gives, read off values that tell them apart. `(7 8)` is already canonical, so only a shell that *replaces* the array changes it — and zsh answers `0` for all three, which says the scalar is a **fresh** name of the declared type and not a fold of anything the array held. ksh93 folds each element and the arithmetic shows: `(x y)` is `0 0` and `(0x10 9)` is `16 9`. bash leaves every one of them as written",
+	},
+	{
+		ID: "declare/an-array-declaration-over-a-name-holding-a-scalar", Category: "declarations",
+		Snippet: `b=1; typeset -a b; echo "[$b] n=${#b[@]}"; typeset -p b`,
+		Why:     "the converse of the three rows above: the array *letter* given to a name that is already holding a scalar, rather than an attribute given to a name holding an array. Three answers again, and no two of them lose the same thing -- bash promotes the value to the first element and lists `declare -a b=([0]=\"1\")`, ksh93 converts nothing and records nothing so `typeset -p` still says `b=1`, and zsh throws the value away and leaves `typeset -a b=(  )` with a count of 0. This implementation answered every dialect with zsh's, which matched one column by accident and lost the script's own value in the other two at status 0 (#1572). The listing is load-bearing and the count is not: ksh93 lets a scalar be subscripted, so `$b` and `${#b[@]}` cannot tell its answer from bash's, and a bare `typeset -a` afterwards -- which lists every name carrying the attribute -- prints nothing there",
+	},
+	{
+		ID: "declare/a-table-declaration-over-a-name-holding-a-scalar", Category: "declarations",
+		Snippet: `a=1; typeset -A a; echo "[$a] n=${#a[@]}"; typeset -p a`,
+		Why:     "the same question asked of the *other* array letter, and the row that makes it two axes rather than one: ksh93 answers this one differently from `-a` above, promoting the value under the key `0` -- `typeset -A a=([0]=1)` -- where its array letter converted nothing at all. bash promotes under both letters and zsh discards under both, so ksh93 is the whole of the disagreement, and one field would have had to be wrong for one of its two letters whichever way it was set. bash 3.2 has no `-A` and says so",
+	},
+	{
+		ID: "declare/an-array-declaration-over-an-empty-scalar", Category: "declarations",
+		Snippet: `b=; typeset -a b; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`,
+		Why:     "the empty string is a value and the promoting shells keep it, so the array is one element long and that element is empty -- `[] n=1` in bash and ksh93 against `[] n=0` in zsh, where the brackets are identical and only the count says which happened. The row an implementation that promoted a non-empty scalar and treated the empty one as nothing would fail, and the only place it could be caught: every other probe of an empty first element reads the same as no element at all",
+	},
+	{
+		ID: "declare/an-array-declaration-over-an-unset-name", Category: "declarations",
+		Snippet: `unset b; typeset -a b; echo "n=${#b[@]}"; b+=(9); printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`,
+		Why:     "the boundary the axis stops at: a name holding nothing has nothing for any of the three answers to differ about, and all of them leave an array of no elements. The append afterwards is what makes that observable rather than merely counted -- an implementation that promoted whatever the name *read back as* would put an empty first element in front of the 9 and answer `[][9] n=2`, which is a state no count alone can distinguish from this one. Written this way rather than with `typeset -p` because the listing of a declared array with no value is its own question and not this one",
+	},
+	{
+		ID: "declare/an-array-declaration-over-a-name-already-holding-an-array", Category: "declarations",
+		Snippet: `a=(1 2); typeset -a a; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the other boundary, and unanimous: declaring the attribute a name already has leaves every element exactly where it was, in all three shells. The negative that keeps the axis about a *scalar* -- a fix that emptied or re-created the store whenever the letter was written would pass every promoting row above and lose an array here, silently, which is the shape `local -a` had (#1535)",
+	},
+	{
+		ID: "declare/an-array-declaration-over-a-scalar-holding-a-space", Category: "declarations",
+		Snippet: `b="x y"; typeset -a b; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`,
+		Why:     "the promoted value is one element however many words it looks like: `[x y] n=1` in bash and ksh93, never `[x][y] n=2`. The wrong turn is handing the held value through the field splitting an array literal's own words go through, and it is invisible on a value with no space in it -- which is every other row here",
+	},
+	{
+		ID: "declare/a-table-declaration-over-a-scalar-then-appended", Category: "declarations",
+		Snippet: `a=1; typeset -A a; a+=([k]=v); echo "n=${#a[@]} [${a[0]}][${a[k]}]"`,
+		Why:     "the shape the declaration's data loss was found through, and the reason it is the *declaration* that owns it rather than the append: by the time `a+=([k]=v)` runs the value is already gone or already at key `0`, so bash and ksh93 answer two entries with `1` still under `0` and zsh answers one. Both subscripts are printed because the count alone would let a fix put the kept value under any key at all -- and `${a[0]}` is what says the key is `0` and not, say, the empty string",
+	},
+	{
+		ID: "declare/a-local-array-declaration-over-a-local-scalar", Category: "declarations",
+		Snippet: `f() { local b=1; local -a b; echo "n=${#b[@]}"; }; f`,
+		Why:     "where bash does *not* promote: a local declaration builds the array cell rather than converting one, so the value the same function put in the name a line earlier is gone and the count is 0. It is not the shadow being fresh -- `local b=1` has already taken it -- and not the letter in general, since `local b=1; local -i b` keeps the `1`; it is the array cell in particular, and `typeset -ga b` over the same value at the top level promotes. No dialect is asked for it: zsh discards a held scalar wherever it finds one and ksh93 has no `local` at all, so the one shell with an answer of its own is the one shell that changes it",
 	},
 	{
 		ID: "declare/an-element-written-through-the-names-attribute", Category: "declarations",

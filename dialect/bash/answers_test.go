@@ -243,3 +243,43 @@ func TestTheOlderArithmeticSpelling(t *testing.T) {
 		t.Errorf("got %q at %d, want the two spellings to agree", out, st)
 	}
 }
+
+// The three array axes #1571 and #1572 opened, pinned here as behavior so a
+// preset edit cannot silently flip one — which is what this file is for, and
+// what nothing else would have caught: the interp suites set the axes
+// themselves and prove what each *value* does, never which value this preset
+// gives.
+//
+// `a+=x` over a name holding an array joins the first element and leaves the
+// rest standing. Measured 2026-09-08 on 5.3.15, on the same binary under
+// argv[0] of `sh`, and on the 3.2.57 macOS ships — all three
+// `declare -a a=([0]="1x" [1]="2")`, two elements, where zsh has three.
+func TestAScalarAppendedToAnArrayJoinsTheFirstElement(t *testing.T) {
+	out, st := answersRun(t, `a=(1 2); a+=x; printf '[%s]' "${a[@]}"; echo " n=${#a[@]}"`)
+	if want := "[1x][2] n=2\n"; out != want || st != 0 {
+		t.Errorf("got %q at %d, want %q at 0", out, st, want)
+	}
+}
+
+// Both array letters given to a name already holding a scalar promote that
+// value: `b=1; typeset -a b` lists `declare -a b=([0]="1")` and
+// `b=1; typeset -A b` lists `declare -A b=([0]="1" )`, measured 2026-09-08.
+// 3.2.57 answers the array letter the same way and has no `-A` at all.
+//
+// The *listing* is what is asserted and the count is not enough on its own:
+// ksh93 leaves the name a scalar, and a scalar there reads back through
+// `${b[@]}` and `${#b[@]}` exactly as this shell's promotion does — so a probe
+// through the elements alone would pass under that shell's answer too.
+func TestAnArrayLetterOverAScalarPromotesTheValue(t *testing.T) {
+	for _, tc := range []struct{ name, src, list string }{
+		{"the array letter", `typeset -a b`, `declare -a b=([0]="1")`},
+		{"the table letter", `typeset -A b`, `declare -A b=([0]="1" )`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, `b=1; `+tc.src+`; typeset -p b; echo "n=${#b[@]}"`)
+			if !strings.Contains(out, tc.list) || !strings.Contains(out, "n=1") || st != 0 {
+				t.Errorf("got %q at %d, want %q and a count of 1 at 0", out, st, tc.list)
+			}
+		})
+	}
+}

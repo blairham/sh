@@ -48,6 +48,14 @@ func testSemantics() Semantics {
 	s.ArrayScalarIsTheWholeArray = No
 	s.ArrayLiteralSubscriptIsAKey = No
 	s.NegativeSubscriptPastTheStartInserts = No
+	// `a+=x` over a name holding an array, and the two array letters given to
+	// a name holding a scalar. bash's answers, which is the floor these
+	// suites assert against; the tests that are *about* them set them
+	// themselves and assert every side — see arrayscalarappend_test.go and
+	// declaredcompound_test.go.
+	s.ScalarAppendedToAnArrayBecomesANewElement = No
+	s.ScalarUnderAnArrayDeclaration = ScalarUnderACompoundBecomesTheFirstElement
+	s.ScalarUnderATableDeclaration = ScalarUnderACompoundBecomesTheFirstElement
 	s.IndirectionYieldsName = No
 	s.ArithNameValueRecurses = Yes
 	s.BraceExpansion = Yes

@@ -1979,10 +1979,59 @@ type Semantics struct {
 	// wider reading would take the attribute off a table no shell takes it
 	// off.
 	ArrayLiteralAssignmentStartsTheNameOver Answer
+	// ScalarAppendedToAnArrayBecomesANewElement decides where `a+=x` puts
+	// the value when the name is holding an *array*: after the last element,
+	// or joined onto the first one.
+	//
+	// Measured 2026-09-08, panel and machine as docs/spec/oracle.md, with
+	// `a=(1 2); a+=x; typeset -p a`:
+	//
+	//	bash 5.3.15         declare -a a=([0]="1x" [1]="2")   n=2
+	//	bash 5.3.15 as sh   declare -a a=([0]="1x" [1]="2")   n=2
+	//	bash 3.2.57         declare -a a=([0]="1x" [1]="2")   n=2
+	//	ksh93               typeset -a a=(1x 2)               n=2
+	//	zsh 5.9.2           typeset -a a=( 1 2 x )            n=3
+	//
+	// So No in bash, bash as `sh`, bash 3.2 and ksh93, and Yes in zsh. dash
+	// has no arrays and reports the parenthesis, which is the absence rather
+	// than a sixth answer. The count is what tells the two apart from the
+	// outside; the listing is what says which element moved.
+	//
+	// The join is at the *base* rather than at the lowest subscript standing,
+	// which a sparse array is what shows: `a=([5]=q); a+=x` is
+	// `declare -a a=([0]="x" [5]="q")` in bash, so the value lands at the
+	// first element whether or not there is one there, and `q` is left where
+	// it was. The empty string is a value on both sides of the axis —
+	// `a=(1 2); a+=""` leaves bash's two elements alone and gives zsh a third
+	// that is empty — and the value joins whole however many words it looks
+	// like: `a+="p q"` is one element in every column.
+	//
+	// Asked only where the name is holding an array. An *unset* name and a
+	// name holding a scalar are the string append, which is unanimous and
+	// core: `unset a; a+=x` leaves a plain scalar in every column. The
+	// array-literal spelling `a+=(x)` is not this question either — it adds
+	// an element in every shell that has arrays, which is why that one has no
+	// field. See Runner.appendScalarToArray.
+	ScalarAppendedToAnArrayBecomesANewElement Answer
 	// CompoundAttribute is what an attribute a declaration has just added
 	// makes of a compound value the name is already holding — see
 	// CompoundAttributePolicy, where the three answers are.
 	CompoundAttribute CompoundAttributePolicy
+	// ScalarUnderAnArrayDeclaration is what `typeset -a` makes of a scalar
+	// the name is already holding — see ScalarUnderACompoundPolicy, where the
+	// three answers are. The converse of CompoundAttribute above, which asks
+	// what an attribute makes of an array.
+	ScalarUnderAnArrayDeclaration ScalarUnderACompoundPolicy
+	// ScalarUnderATableDeclaration is the same question asked of `typeset -A`.
+	//
+	// A second field and not a widening of the one above, because one shell
+	// answers the two letters differently: measured 2026-09-08, ksh93 leaves
+	// `b=1; typeset -a b` a plain scalar and takes `a=1; typeset -A a` to
+	// `typeset -A a=([0]=1)`. bash promotes under both letters and zsh
+	// discards under both, so ksh93 is the whole of why this is two questions
+	// — and one field would have had to give it an answer that is wrong for
+	// one of its letters whichever way it was set.
+	ScalarUnderATableDeclaration ScalarUnderACompoundPolicy
 
 	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
 	// hide any outer `u` — the local exists unset, so `${u-UNSET}` fires the
@@ -5950,6 +5999,101 @@ func (r *Runner) compoundAttribute() CompoundAttributePolicy {
 	p := r.sem().CompoundAttribute
 	if p == CompoundAttributeUnspecified {
 		r.diagf("%s\n", r.unanswered("an attribute added to a name already holding an array"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// ScalarUnderACompoundPolicy is what a declaration that gives a name the
+// array or the table attribute does with a *scalar* the name is already
+// holding. The converse of CompoundAttributePolicy, and it splits the panel
+// three ways as well.
+//
+// Measured 2026-09-08, panel and machine as docs/spec/oracle.md:
+//
+//	b=1; typeset -a b; typeset -p b
+//	  bash 5.3.15   declare -a b=([0]="1")   n=1   $b is `1`
+//	  bash 3.2.57   declare -a b=([0]="1")   n=1   $b is `1`
+//	  ksh93         b=1                      n=1   $b is `1`
+//	  zsh 5.9.2     typeset -a b=( )         n=0   $b is empty
+//
+//	a=1; typeset -A a; typeset -p a
+//	  bash 5.3.15   declare -A a=([0]="1" )  n=1
+//	  ksh93         typeset -A a=([0]=1)     n=1
+//	  zsh 5.9.2     typeset -A a=( )         n=0
+//
+// dash has neither letter and bash 3.2 has no `-A`. This implementation
+// answered every column with zsh's, which matched one shell by accident and
+// lost the value in the other two at status 0 (#1572).
+//
+// ksh93's two letters are the reason there are two fields rather than one,
+// and its `-a` answer is a genuine third state rather than a rendering of
+// bash's. Two probes say so: a one-element array of ksh93's own making lists
+// *with* the letter — `b=(1); typeset -p b` is `typeset -a b=(1)` — and a
+// bare `typeset -a`, which lists every name carrying the attribute, prints
+// nothing at all after `b=1; typeset -a b`. So the declaration recorded
+// nothing and converted nothing; the name is still the scalar it was, and
+// ksh93 lets a scalar be subscripted, which is why `${b[0]}` and `${#b[@]}`
+// cannot tell that apart from bash's promotion.
+//
+// Asked only where the name is holding a scalar *in the cell being declared*.
+// An unset name has nothing to make anything of and is unanimous — `unset b;
+// typeset -a b` is an array of no elements in all three — and so is a name
+// already holding an array, which every column leaves exactly as it stands.
+// A declaration carrying its own value is not this question either: `b=1;
+// typeset -a b=(9)` is the one element `9` everywhere, because the operand
+// replaces whatever the declaration left. See Runner.markDeclaredCompound.
+type ScalarUnderACompoundPolicy int
+
+const (
+	// ScalarUnderACompoundUnspecified is no answer, and it is refused rather
+	// than guessed at: the three readings differ over whether the script's
+	// own value is still there, which is the kind of difference no later
+	// command can report.
+	ScalarUnderACompoundUnspecified ScalarUnderACompoundPolicy = iota
+	// ScalarUnderACompoundBecomesTheFirstElement promotes: the value the name
+	// was holding becomes the array's first element, or the table's entry
+	// under the key `0`. bash for both letters, ksh93 for the table.
+	//
+	// The first element rather than any particular number, which is what the
+	// store's positions already mean — no dialect that counts from 1 promotes
+	// at all, so nothing here can be asked which subscript it is.
+	ScalarUnderACompoundBecomesTheFirstElement
+	// ScalarUnderACompoundStaysAScalar converts nothing and records nothing:
+	// the name is the scalar it was, and the declaration is a no-op. ksh93
+	// for `typeset -a`, where a bare `typeset -a` afterwards does not list
+	// the name.
+	//
+	// Not the same as promoting, even though that shell reads `${b[0]}` as
+	// the scalar and answers `${#b[@]}` with 1 either way: the listing is
+	// what tells them apart, and it is the listing a script reads to find
+	// out what a name is.
+	ScalarUnderACompoundStaysAScalar
+	// ScalarUnderACompoundDiscardsIt takes the value away and leaves the
+	// name an empty array or table: zsh, for both letters, where `$b` reads
+	// back empty and `${#b[@]}` is 0.
+	ScalarUnderACompoundDiscardsIt
+)
+
+func (p ScalarUnderACompoundPolicy) String() string {
+	switch p {
+	case ScalarUnderACompoundBecomesTheFirstElement:
+		return "becomes the first element"
+	case ScalarUnderACompoundStaysAScalar:
+		return "stays a scalar"
+	case ScalarUnderACompoundDiscardsIt:
+		return "discards it"
+	}
+	return "unspecified"
+}
+
+// scalarUnderACompound resolves one of the two axes, refusing an unanswered
+// dialect rather than guessing: one answer keeps the script's value, one
+// leaves the name a scalar and one throws the value away.
+func (r *Runner) scalarUnderACompound(p ScalarUnderACompoundPolicy, what string) ScalarUnderACompoundPolicy {
+	if p == ScalarUnderACompoundUnspecified {
+		r.diagf("%s\n", r.unanswered(what))
 		r.status = 2
 		r.unspecified = true
 	}

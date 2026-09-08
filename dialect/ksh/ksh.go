@@ -330,6 +330,22 @@ func Semantics() interp.Semantics {
 	s.InheritedValueSurvivesADeclaredType = interp.No
 	s.CompoundElementsGoThroughTheAttribute = interp.Yes
 	s.CompoundAttribute = interp.CompoundAttributeFoldsEveryElement
+	// The two array letters answer the converse differently here, which is
+	// the whole reason it is two axes. `b=1; typeset -a b` converts nothing
+	// and records nothing — `typeset -p b` is `b=1`, and a bare `typeset -a`,
+	// which lists every name carrying the attribute, prints nothing — while
+	// `a=1; typeset -A a` is `typeset -A a=([0]=1)`. Measured 2026-09-08.
+	//
+	// Staying a scalar is invisible to `${b[0]}` and `${#b[@]}` in this
+	// shell, because a scalar answers both as an array of one would; the
+	// listing is what tells it from bash's promotion, and a one-element array
+	// of this shell's own making does carry the letter — `b=(1)` lists as
+	// `typeset -a b=(1)`.
+	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundStaysAScalar
+	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundBecomesTheFirstElement
+	// `a=(1 2); a+=x` is `typeset -a a=(1x 2)`: the first element joined, the
+	// rest standing, two elements.
+	s.ScalarAppendedToAnArrayBecomesANewElement = interp.No
 	s.ArrayLiteralAssignmentStartsTheNameOver = interp.Yes
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
 	// \x does not.

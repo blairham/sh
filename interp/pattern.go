@@ -789,6 +789,103 @@ func matchNumericRange(lo, hi int64, rest string, pp int, s string, at int, o pa
 	return false
 }
 
+// unboundedReach is patternReach's answer for a pattern whose own text does
+// not say how far it can go.
+const unboundedReach = -1
+
+// patternReach is an upper bound on how many *units* of a subject the pattern
+// p can consume, or unboundedReach where there is no such bound.
+//
+// It exists to stop a search that cannot succeed, and the bound it uses is
+// the pattern's own length, which is sound for a reason worth stating: every
+// unit matchBranch consumes it consumes in the `?`, `[`, `\` or default
+// branch, and each of those advances the pattern by at least one byte as it
+// does. A group without a repeating quantifier takes one arm, and an arm is a
+// substring of the group's text, so the same accounting holds inside it. So a
+// pattern of n bytes reaches at most n units — unless it can spend one
+// stretch of its text on any number of them, and the constructs that can are
+// exactly these:
+//
+//   - `*`, which passes over as much as it likes.
+//   - the `#` closures, `(#c…)` among them, which repeat an item. Any `#`
+//     under `extendedglob` is taken for one rather than read in context; a
+//     literal `#` there is written `\#` and is skipped as an escape below.
+//   - `^` and `~`, which are not consumers at all but operators over the rest
+//     of the branch — a bare `^` matches every non-empty subject.
+//   - a numeric range, whose digits are bounded by the number it names and
+//     not by the four characters of `<->`.
+//   - a group under a `+` or a `!` quantifier, which repeat and complement
+//     respectively. `@(…)` and `?(…)` are neither and stay bounded.
+//
+// A bracket expression is stepped over whole, because every one of those
+// characters is an ordinary member inside one — `[#^~*]` is four literals and
+// reaches one unit.
+//
+// Over-estimating is always safe here and under-estimating is never, so
+// anything not understood is answered unbounded.
+//
+// #1575: without a bound, matchGroup and repeatFrom each walked every split
+// of the subject, asking questions no arm could answer yes to. A trim tries
+// every prefix of its value in turn, so the two together cost the square of
+// the length: `${x## ##}` — the ordinary idiom for stripping leading spaces —
+// took 33s on a 64,000 character value, and the startup this was found in
+// reached it on one of 524,629 characters, which is around forty minutes at a
+// hundred per cent of a core. The shell installs handlers for the signals a
+// shell handles, so SIGTERM did not end it either; it had to be killed.
+func patternReach(p string, o *patternOpts) int {
+	for i := 0; i < len(p); {
+		switch c := p[i]; {
+		case c == '\\' && i+1 < len(p) && o.escapeReaches(p[i+1]):
+			i += 2
+			continue
+		case c == '[':
+			if end, found := bracketEnd(p, i); found {
+				i = end + 1
+				continue
+			}
+		case c == '*':
+			return unboundedReach
+		case o.extended && (c == '#' || c == '^' || c == '~'):
+			return unboundedReach
+		case o.numericRange && c == '<':
+			return unboundedReach
+		case o.quantified && (c == '+' || c == '!') && i+1 < len(p) && p[i+1] == '(':
+			return unboundedReach
+		}
+		i++
+	}
+	return len(p)
+}
+
+// patternReachBounds is whether a search stops where the pattern's reach
+// does.
+//
+// A var rather than a const, for the reason memoThreshold is one: it lets a
+// test drive the same pattern down both paths and require the same answer,
+// which is the only way to say "the bound changes no answer" rather than to
+// hope it. Nothing outside a test writes it.
+var patternReachBounds = true
+
+// splitCeiling is the largest split of s, in bytes, that the pattern p could
+// still match — the end of s where p's reach is not bounded.
+func splitCeiling(p, s string, o *patternOpts) int {
+	if !patternReachBounds {
+		return len(s)
+	}
+	n := patternReach(p, o)
+	if n == unboundedReach {
+		return len(s)
+	}
+	i := 0
+	for range n {
+		if i >= len(s) {
+			break
+		}
+		i += o.unitWidth(s[i:])
+	}
+	return min(i, len(s))
+}
+
 // splitGroup peels a group off the front of a pattern.
 //
 // quant is the character in front of it, or 0 for a bare group, which the
@@ -930,7 +1027,11 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 	// capture also unwinds it when its own attempt fails, which is what
 	// lets a failed matchHere be treated as having written nothing.
 	for k, a := range arms {
-		for i := len(s); i >= 0; i-- {
+		// Every split down from the furthest this arm could possibly reach.
+		// Starting at len(s) instead asks about splits no arm can take, and
+		// the memo makes each of those cheap rather than free — which is
+		// what made a trim over a long value quadratic. See patternReach.
+		for i := splitCeiling(a, s, &o); i >= 0; i-- {
 			mark := o.where.caps.mark()
 			if !matchHere(a, s[:i], armAt[k], at, o) {
 				o.where.caps.rollback(mark)

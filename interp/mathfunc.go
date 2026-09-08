@@ -99,6 +99,14 @@ import (
 // arithmetic. Breaking it once, at the seam that created it, does.
 var runMathFuncBody func(r *Runner, fn *syntax.FuncDecl, name string, args []string) error
 
+// The context is the shell's own, r.ctx: an expression is evaluated in the
+// middle of a command and there is no other one to hand it. Passing
+// context.Background() instead is an **equivalent mutant** under this
+// package's tests and deliberately left as one — cancellation is noticed
+// through a field on the Runner rather than through the context (see
+// cancel.go), so the only difference is a child process started inside a math
+// function no longer dying with the caller's context, and no cheap test
+// discriminates that from a test that merely takes a while.
 func init() {
 	runMathFuncBody = func(r *Runner, fn *syntax.FuncDecl, name string, args []string) error {
 		return r.callFuncAs(r.ctx, fn, name, args)

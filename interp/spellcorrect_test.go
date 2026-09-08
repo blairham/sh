@@ -44,6 +44,16 @@ func TestCdCorrectsOneEditPerComponent(t *testing.T) {
 		// which is nine characters — long enough that a length-scaled budget
 		// would have allowed it, so the threshold is flat.
 		{"two edits", true, true, "alhpaa", "", ""},
+		// Two *substitutions*, which is the same length as the name and so
+		// takes a different branch from the one above: `alhpaa` is longer
+		// than `alpha` and is refused by the length check before any
+		// character is compared, where this one has to be counted.
+		{"two wrong letters", true, true, "almma", "", ""},
+		// An adjacent swap that is not the only difference. The two middle
+		// letters of `alpha` really are transposed here, so a check that
+		// stopped at the swap would take it — and the character after it is
+		// wrong as well, which makes the whole name two edits away.
+		{"a swap and a wrong letter", true, true, "alhpx", "", ""},
 		{"nothing like it", true, true, "zzzz", "", ""},
 		// Off, and in a script, the correction never happens.
 		{"the option off", false, true, "alpah", "", ""},

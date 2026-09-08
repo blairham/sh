@@ -1946,6 +1946,17 @@ interpreter's listing quotes on a different and narrower set — its own,
 measured — and the two are deliberately not folded; see
 `interp.listedFunctionName`.
 
+The quotes themselves are a third question, and the control row for
+this one: `function 'f' { … }` names `f` in zsh and in ksh93, both of
+which remove the quotes before reading the name, and is
+`` `'f'': not a valid identifier `` in every bash, which takes the word
+as its source text. So the panel splits two against three there where
+the punctuated names split it one against four, and no set of name
+characters can be what bash objected to — `f` is in every set. This
+parser removes the quotes in all of its dialects, which is right for
+zsh and ksh and wrong for bash and sh; that is #1566, measured as
+`cmd/function-keyword-with-a-quoted-ordinary-name`.
+
 A quoted name in the POSIX form — `''() { … }`, `'q'() { … }` — is read
 as a definition by zsh *and ksh93* and is refused at the parenthesis
 here; that is a second site with its own panel, #1561.

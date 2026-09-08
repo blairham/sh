@@ -51,14 +51,15 @@ import (
 // purpose: the round trip a `functions` listing has to survive is the same
 // property this counts, asked of the builtin instead of the printer.
 //
-// Nineteen since #1548 and #1560, which added seven keyword definitions whose
-// names cannot be written bare: the empty string, a space, a semicolon, a
-// pipe, a dollar, a quoted pattern and a word of punctuation. They are the
-// reason the printer quotes a name at all — written back bare, `function  {
+// Twenty since #1548 and #1560, which added eight keyword definitions whose
+// names are written quoted: the empty string, a space, a semicolon, a pipe, a
+// dollar, a pattern, a word of punctuation, and `f` — the last being the
+// control that says the quoting is the question. Seven of the eight are the
+// reason the printer quotes a name at all: written back bare, `function  {
 // … }` is the *anonymous* function and `function a b { … }` is two names, so
 // each of those is a different program, printed silently, at status 0. The
 // count is what says they are walked.
-const keywordFunctionsInTheCorpus = 19
+const keywordFunctionsInTheCorpus = 20
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 	// The arrangement a formatter asks for, alongside the zero value that a

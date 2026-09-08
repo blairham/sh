@@ -6155,7 +6155,12 @@ echo "st=$?"`,
 	{
 		ID: "cmd/function-keyword-with-a-name-of-punctuation", Category: "command language",
 		Snippet: `function '@#%' { echo p; }; '@#%'; echo st=$?`,
-		Why:     "the control for the rows above: a name of nothing but punctuation, every character of which is already in the set every keyword shell parses bare. So this one is not about quoting at all and the answers should be the ordinary punctuated-name answers — which is what says the other rows measure the quoting and not the characters",
+		Why:     "a name of nothing but punctuation, every character of which is already in the set every keyword shell parses *bare* — and the answers are not the bare answers, which is the point. Two of the six take it and four refuse it, exactly as they refuse a name holding a space, so what those four object to is not the characters. `cmd/function-keyword-with-a-quoted-ordinary-name` is the row that finishes the thought",
+	},
+	{
+		ID: "cmd/function-keyword-with-a-quoted-ordinary-name", Category: "command language",
+		Snippet: `function 'f' { echo p; }; f; echo st=$?`,
+		Why:     "the sharpest control in this group, and the row that says what the quoting is doing. The name is `f` — a name nobody could object to — and the *quotes* are all that is unusual. zsh and ksh93 remove them before reading the name and define `f`; bash 5.3, bash 3.2 and bash-as-sh take the whole word including the quotes and answer `` `'f'': not a valid identifier ``, so the name they refused was never a punctuated one at all. That splits the panel two against three where the punctuated rows split it one against four, which is what says the two questions are different — and it says the quoted-name rows measure the quoting rather than a wider set of name characters, since no set of characters can contain `f`. This implementation removes the quotes in every dialect and defines `f` in all of them, which is right for two columns and wrong for three (#1566)",
 	},
 	{
 		ID: "cmd/function-keyword-with-a-quoted-pattern-in-the-name", Category: "command language",

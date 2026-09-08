@@ -4067,6 +4067,18 @@ func (r *Runner) assign(a *syntax.Assign) {
 			r.setAssocElem(a.Name, "0", value)
 			return
 		}
+		if old, ok := r.Arrays[a.Name]; ok && a.Append {
+			// `a+=x` over a name holding an *array* joins the array. The
+			// lines below are the string append, and taking them would leave
+			// a plain scalar where the script built an array — see
+			// appendScalarToArray, which is also where the two answers about
+			// which element the value joins are asked.
+			//
+			// Only the append. A plain `a=x` over an array goes on to
+			// replace the name, which is #1390's question and not this one.
+			r.appendScalarToArray(a.Name, old, value)
+			return
+		}
 		if a.Append {
 			old, _ := r.getVar(a.Name)
 			// The operator is not the whole of what `+=` means — see

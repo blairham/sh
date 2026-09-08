@@ -572,6 +572,18 @@ func Semantics() interp.Semantics {
 	s.InheritedValueSurvivesADeclaredType = interp.Yes
 	s.CompoundElementsGoThroughTheAttribute = interp.No
 	s.CompoundAttribute = interp.CompoundAttributeReplacesItWithAScalar
+	// And the converse discards under both letters: `b=1; typeset -a b` is
+	// `typeset -a b=( )` with `${#b[@]}` 0 and `$b` empty, and `a=1;
+	// typeset -A a` is `typeset -A a=( )`. Measured 2026-09-08 against
+	// 5.9.2 — the one column that throws the script's own value away, and
+	// the one this implementation was giving every dialect.
+	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundDiscardsIt
+	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundDiscardsIt
+	// `a=(1 2); a+=x` adds a third element rather than joining the first:
+	// `typeset -a a=( 1 2 x )`. The empty string is a value and gets an
+	// element of its own — `a=(1 2); a+=""` is three elements — and a value
+	// with a space in it is still one element.
+	s.ScalarAppendedToAnArrayBecomesANewElement = interp.Yes
 	s.ArrayLiteralAssignmentStartsTheNameOver = interp.No
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	// A local does not inherit the export attribute of the name it shadows.

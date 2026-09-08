@@ -371,6 +371,20 @@ func Semantics() interp.Semantics {
 	s.InheritedValueSurvivesADeclaredType = interp.Yes
 	s.CompoundElementsGoThroughTheAttribute = interp.Yes
 	s.CompoundAttribute = interp.CompoundAttributeKeepsTheElements
+	// The converse: an array or table letter given to a name already holding
+	// a scalar promotes that value to the first element. Measured 2026-09-08,
+	// `b=1; typeset -a b` lists as `declare -a b=([0]="1")` and `a=1;
+	// typeset -A a` as `declare -A a=([0]="1" )`, and `$b` still reads `1`
+	// under both. bash 3.2.57 answers the array letter the same way and has
+	// no `-A` at all.
+	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundBecomesTheFirstElement
+	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundBecomesTheFirstElement
+	// `a=(1 2); a+=x` joins the first element and leaves the rest standing —
+	// `declare -a a=([0]="1x" [1]="2")`, two elements, in 5.3.15, in the same
+	// binary under argv[0] of `sh` and in 3.2.57. The value lands at the base
+	// whether or not an element is there: `a=([5]=q); a+=x` is
+	// `([0]="x" [5]="q")`.
+	s.ScalarAppendedToAnArrayBecomesANewElement = interp.No
 	s.ArrayLiteralAssignmentStartsTheNameOver = interp.No
 	// `local u` hides the caller's `u` — the local exists unset.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes

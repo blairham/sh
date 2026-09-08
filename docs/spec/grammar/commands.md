@@ -561,6 +561,42 @@ the two shells with the letter. Corpus:
 it. This implementation built the array from the words alone and answered
 `2`, at status 0 (#1502).
 
+**`a+=x` over a name holding an array joins the array, and *where* it
+joins is an axis.** The converse spelling, and the one without
+parentheses: it does not replace the array with a string. Measured
+2026-09-08, panel and machine as `../oracle.md`, with `a=(1 2); a+=x`:
+
+| probe | bash 5 | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `typeset -p a` | `([0]="1x" [1]="2")` | same | `(1x 2)` | `( 1 2 x )` |
+| `${#a[@]}` | 2 | 2 | 2 | **3** |
+| `a=(1 2); a+=""` | 2 elements | 2 elements | 2 elements | **3** |
+| `a=("" 2); a+=x` | `x 2` | `x 2` | `x 2` | `'' 2 x` |
+| `a=(1 2); a+="p q"` | `1p q`, `2` | same | same | `1`, `2`, `p q` |
+| `a=([5]=q); a+=x` | `[0]=x [5]=q` | same | `[0]=x [5]=q` | pads, `x` last |
+
+Four join the **first element** and leave the rest standing; zsh adds a
+**new element** after the last. So it is
+`ScalarAppendedToAnArrayBecomesANewElement`, and note that zsh's answer
+here is *not* its answer to `a+=(x)` above, which every shell agrees
+about. dash has no arrays.
+
+The join is at the *base* rather than at the lowest subscript standing,
+which the sparse row is what shows: an element grows at 0 where there was
+none and `q` does not move — so it is `a[0]+=x` and not "append to the
+first element there is". The empty string is a value on both sides, and
+the appended value is one value however many words it looks like.
+
+The boundary: a name holding **no array** is the ordinary string append
+and stays a plain scalar in every column — `unset a; a+=x` and `a=1;
+a+=x` alike. A plain `a=x` over an array is a *third* question and splits
+the panel again (#1390): bash and ksh93 write the first element and leave
+the rest, zsh replaces the array with a scalar. Corpus:
+`array/appending-a-scalar-to-an-array` and the five rows beside it. This
+implementation deleted the array and answered the single string `1x`
+under bash's reading and `1 2x` under zsh's — the scalar *view* of the
+whole array with the value stuck on the end — at status 0 (#1571).
+
 ### A subscript inside the literal
 
 An element may name where it goes: `a=([2]=c [1]=b)` is two elements, at

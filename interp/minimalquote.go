@@ -22,6 +22,13 @@ import "strings"
 //	${(oq+-)b}   -10 -3 -1 2 10   signed: a `q+` had already taken the slot
 //	${(-q-)b}    minimal quoting  and the modifier may be the later `-`
 //
+// That last row is zsh's answer and not this one's: the leading `-` is a sort
+// flag whether or not it would have changed anything, so the group is refused
+// for it. A group is refused for what is written in it rather than for what
+// that would have come to on the value in hand, which is the rule `(A)` is
+// refused under and for the same reason — a check on whether the flag *fired*
+// would carry a line on one run and refuse it on the next.
+//
 // The adjacency is literal — `${(qU-)v}` on `a b` is `a\ b`, the plain `q`
 // style — and only a lone `q` takes the modifier, `${(qq-)v}` and `${(q-q)v}`
 // both being errors in the flags rather than a doubled style with a modifier.
@@ -32,6 +39,10 @@ import "strings"
 // is written as `\'` outside the quotes. That is why `a'b c` is `a\''b c'` —
 // the `a` is bare, the quote is a backslash pair, and the run after it is
 // quoted whole because of the space. An empty value is `''`.
+//
+// This is a whole-word rewrite and not a per-character one, which matters to
+// exactly one composition: a `(~)`-marked join separator is refused beside it,
+// the way it is beside `(qq)` and up. See interp/tildeflaggroup.go.
 
 // quotableSpecials are the bytes a word cannot carry bare. Measured through
 // `${(q-)…}` one byte at a time: every other ASCII byte, every control byte

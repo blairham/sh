@@ -49,9 +49,10 @@ var shoptModes = map[string]interp.MatchOption{
 // the same behavior as well, and the two dialects wire one switch rather than
 // each carrying a copy.
 //
-// Two of them are interactive-only in bash too, so none of this was askable on
-// the `-c` route; the observables below were measured through a
-// pseudo-terminal against bash 5.3.15 on 2026-09-08.
+// All three are interactive-only in bash too — one needs a window, one needs a
+// prompt loop and one needs a Tab — so none of this was askable on the `-c`
+// route; the observables below were measured through a pseudo-terminal against
+// bash 5.3.15 on 2026-09-08.
 //
 //   - checkwinsize. $LINES and $COLUMNS follow the window. Measured: bash
 //     reports `COLUMNS=80 LINES=24` at its first prompt on an 80x24 terminal

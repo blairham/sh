@@ -2739,6 +2739,37 @@ type Semantics struct {
 	// rather than given a value here.
 	PatternEscapeReaches string
 
+	// BracketEscapeIsAlsoAMember says a backslash that protects a member of
+	// a bracket expression is a member of the set itself.
+	//
+	// False is five columns' answer: `[\)]` handed to the matcher with the
+	// backslash still in it is the one-character set `)` in bash, bash 3.2,
+	// bash as `sh`, dash and ksh93. True is zsh's, where the same set holds
+	// the backslash as well.
+	//
+	// Measured 2026-09-07 through `${~p}`, which is the only construct that
+	// hands this matcher a bracket expression holding a raw backslash — a
+	// pattern *written* in the source has had its escapes spent by quote
+	// removal long before, which is why the two routes can disagree at all
+	// and why the source route is unanimous. Four values, four exact hits:
+	//
+	//	p='[\)]'   matches `)` and `\`, not `a`
+	//	p='[\-z]'  matches `-`, `z` and `\`, not `y` — no range is formed
+	//	p='[\a]'   matches `a` and `\`
+	//	p='[\]]'   matches `]` and `\`
+	//
+	// The second row is what says the answer is *also a member* rather than
+	// *not an escape*: the `-` behind the backslash stays a member instead of
+	// becoming the range operator, so the protection happens there too. Both
+	// halves are true at once, which is exactly what this field turns on.
+	//
+	// It reaches only the results of expansions, in expansionPattern, because
+	// that is the only place a backslash arrives inside a bracket expression
+	// without having been put there to say "the source quoted this". Reading
+	// it in the matcher instead would have taken the source route with it and
+	// broken the unanimous half (#1407).
+	BracketEscapeIsAlsoAMember bool
+
 	// ParameterIsSetSeesPositionals lets `-v 1` ask about a positional
 	// parameter, and `-v 0` about the shell's name.
 	//

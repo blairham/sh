@@ -529,6 +529,16 @@ func Semantics() interp.Semantics {
 	// The backslash itself is in the set — `x\\y` matches one backslash there
 	// and not two — which is what keeps a glob-escaped value literal.
 	s.PatternEscapeReaches = `-=!*?[]()|^~#<>\`
+	// And inside a bracket expression the backslash is a member of the set as
+	// well as the protection for the character behind it, which no other
+	// column does: `p='[\)]'; [[ $s == ${~p} ]]` matches `)` here and matches
+	// a lone backslash too, and `p='[\-z]'` matches a dash, a `z` and a
+	// backslash while matching no `y` — the dash behind the backslash stays a
+	// member rather than becoming the range operator. Measured through `${~p}`
+	// because a pattern written in the source has had its escapes spent by
+	// quote removal, which is why *that* route is unanimous across the panel
+	// and this one is not (#1407).
+	s.BracketEscapeIsAlsoAMember = true
 	// And the join this shell *does* perform: an unquoted `@` list reaching
 	// a context that keeps no fields is joined on the first character of
 	// IFS, so `IFS=-; a=(x y z); v=${a[@]}` is `x-y-z` where bash and ksh93

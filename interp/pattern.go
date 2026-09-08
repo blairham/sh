@@ -27,6 +27,22 @@ const patternMeta = `*?[\()<|`
 // that has nothing wrong with it.
 const extendedPatternMeta = "#~^"
 
+// bracketMeta is the characters that mean something only *inside* a bracket
+// expression: the terminator, the range operator and the portable negation.
+// Outside one they are ordinary text, which is why they are not in
+// patternMeta — counting them there would send every expansion holding a dash
+// to the axis that decides whether an expansion's result globs.
+//
+// They are escaped by escapePatternMeta all the same, because that is the one
+// channel quoting has: a member the source quoted has to arrive at the matcher
+// still marked, and inside a bracket expression the mark is all that separates
+// `[a"-"z]` — three members — from `[a-z]`, a range. Measured 2026-09-07: all
+// six panel shells answer a, a dash and z, and this implementation answered
+// the range, having spent the quoting before the matcher could see it.
+//
+// `^` needs no entry: extendedPatternMeta already escapes it unconditionally.
+const bracketMeta = "-]!"
+
 // escapePatternMeta marks every metacharacter in text as ordinary.
 //
 // The parentheses are in the set because they are metacharacters where the
@@ -50,7 +66,7 @@ const extendedPatternMeta = "#~^"
 // spellings match the same text and no test could tell a guard here from its
 // absence.
 func escapePatternMeta(text string) string {
-	const meta = patternMeta + extendedPatternMeta
+	const meta = patternMeta + extendedPatternMeta + bracketMeta
 	if !strings.ContainsAny(text, meta) {
 		return text
 	}
@@ -166,7 +182,88 @@ func (r *Runner) expansionPattern(v string, q syntax.Quoting, glob Answer) (stri
 	if !strings.ContainsAny(v, r.patternMetaSet()) {
 		return v, true
 	}
-	return v, r.ask(glob, "globbing the result of an expansion")
+	if !r.ask(glob, "globbing the result of an expansion") {
+		return v, false
+	}
+	return r.bracketEscapeAsMember(v), true
+}
+
+// bracketEscapeAsMember rewrites a value about to be matched as a pattern so
+// that the backslashes inside its bracket expressions are members of their
+// sets as well as protection for the characters behind them — which is what
+// [Semantics.BracketEscapeIsAlsoAMember] records, and what one column does.
+//
+// It is spelled as a rewrite rather than as a flag the matcher reads because
+// the matcher cannot tell the two provenances apart. A backslash reaching it
+// inside a bracket expression is either one the *source* wrote — or one
+// patternOf inserted to carry "this member was quoted", quoting having no
+// other channel — and those are unanimously an escape and nothing more; or it
+// is one that came out of a value, which is the only case this is about. The
+// difference is visible here and nowhere downstream, so the answer is applied
+// here, in the language the matcher already speaks: `\x` becomes `\\`, the
+// backslash as a member, followed by `\x`, the member it protects.
+//
+// Off — every column but one — nothing is rewritten and the value reaches the
+// matcher as it stands.
+func (r *Runner) bracketEscapeAsMember(v string) string {
+	if !r.sem().BracketEscapeIsAlsoAMember || !strings.Contains(v, `\`) {
+		return v
+	}
+	var b strings.Builder
+	for i := 0; i < len(v); i++ {
+		switch {
+		case v[i] == '\\':
+			// Outside a bracket expression the escape rule is the one
+			// PatternEscapeReaches already carries, so this passes the pair
+			// through untouched.
+			b.WriteByte(v[i])
+			if i+1 < len(v) {
+				i++
+				b.WriteByte(v[i])
+			}
+		case v[i] == '[' && closesBracket(v, i):
+			i = writeBracketWithEscapesAsMembers(&b, v, i)
+		default:
+			b.WriteByte(v[i])
+		}
+	}
+	return b.String()
+}
+
+// writeBracketWithEscapesAsMembers copies the bracket expression opened at i
+// into b, doubling each backslash it holds, and returns the index of its
+// closing `]`.
+//
+// The prologue is copied verbatim for the reason closesBracket has one: a `!`
+// or `^` directly after the bracket negates, and a `]` directly after that is
+// a member rather than the terminator.
+func writeBracketWithEscapesAsMembers(b *strings.Builder, v string, i int) int {
+	b.WriteByte(v[i])
+	j := i + 1
+	if j < len(v) && (v[j] == '!' || v[j] == '^') {
+		b.WriteByte(v[j])
+		j++
+	}
+	if j < len(v) && v[j] == ']' {
+		b.WriteByte(v[j])
+		j++
+	}
+	for ; j < len(v); j++ {
+		if v[j] == '\\' {
+			b.WriteString(`\\`)
+			b.WriteByte('\\')
+			if j+1 < len(v) {
+				j++
+				b.WriteByte(v[j])
+			}
+			continue
+		}
+		b.WriteByte(v[j])
+		if v[j] == ']' {
+			return j
+		}
+	}
+	return j
 }
 
 // patternMetaSet is the characters that make the result of an expansion worth
@@ -907,17 +1004,16 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 			}
 		}
 
-		// One unit of the *pattern*, which is a whole character where the
-		// subject's units are. A multi-byte character's bytes are all above
+		// One member of the set, which is one unit of the *pattern* — a
+		// whole character where the subject's units are — or the unit a
+		// backslash protects. A multi-byte character's bytes are all above
 		// ASCII, so none of them can be mistaken for the `-` of a range or
 		// the `]` that ends the expression, and the scan above stays a byte
 		// scan.
-		lw := o.unitWidth(p[i:])
-		lo := p[i : i+lw]
+		lo, next := bracketMember(p, i, o)
 		// A `-` is literal at the end, which is why `[a-]` matches a dash.
-		if i+lw+1 < len(p) && p[i+lw] == '-' && p[i+lw+1] != ']' {
-			hw := o.unitWidth(p[i+lw+1:])
-			hi := p[i+lw+1 : i+lw+1+hw]
+		if next+1 < len(p) && p[next] == '-' && p[next+1] != ']' {
+			hi, after := bracketMember(p, next+1, o)
 			// Ranked rather than compared as text: `[a-é]` has to hold ç,
 			// which is between them by code point and is not between them
 			// byte for byte.
@@ -926,13 +1022,13 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 				(o.fold && inRange(ordOf(swapUnitCase(c)), from, to)) {
 				matched = true
 			}
-			i += lw + 1 + hw
+			i = after
 			continue
 		}
 		if eqUnit(lo, c, o.fold) {
 			matched = true
 		}
-		i += lw
+		i = next
 	}
 	// An unterminated bracket is not a bracket expression, and what it is
 	// instead is the dialect's answer rather than this file's.
@@ -953,6 +1049,38 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 	// dash, and the shape the matcher had before any of this: a class that
 	// can never match.
 	return "", false
+}
+
+// bracketMember reads one member of a bracket expression at i and reports
+// where it ends.
+//
+// A backslash protects the unit behind it and is not itself a member: `[\)]`
+// is the one-character set `)` in all six panel shells, measured 2026-09-07
+// on the two routes that can ask — a member written escaped in the source,
+// and a member the source *quoted*, which patternOf hands the matcher as an
+// escape because escaping is the only channel quoting has. Reading the
+// backslash as a member instead admitted it to every such set, so
+// `[[ "a\" == a[\)] ]]` answered yes where real zsh answers no (#1407).
+//
+// Which characters an escape reaches is the dialect's answer and not this
+// function's, so it is asked rather than assumed — the same call matchBranch
+// makes outside a bracket expression, which is what keeps one escape rule in
+// one place. Where the escape does not reach, the backslash is a member of
+// its own and the character behind it takes its own turn, exactly as it does
+// in the rest of the pattern.
+//
+// The protection reaches a range bound too, and that is measured rather than
+// assumed either: `[a\-z]` is the three members a, `-` and z everywhere in
+// the panel, where `[a-z]` is the range — the escape is what stops the dash
+// being read as the operator. A bound that needed no protection keeps its
+// range, so `[\a-z]` is still a through z.
+func bracketMember(p string, i int, o *patternOpts) (unit string, next int) {
+	if p[i] == '\\' && i+1 < len(p) && o.escapeReaches(p[i+1]) {
+		w := o.unitWidth(p[i+1:])
+		return p[i+1 : i+1+w], i + 1 + w
+	}
+	w := o.unitWidth(p[i:])
+	return p[i : i+w], i + w
 }
 
 // hasUnterminatedBracket reports whether a pattern contains a `[` with no

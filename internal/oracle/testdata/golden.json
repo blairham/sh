@@ -47459,6 +47459,182 @@
         "TimedOut": false
       }
     },
+    "glob/a-dot-and-a-dot-dot-component-in-the-middle": {
+      "bash": {
+        "Stdout": "[cx/./ax][cx/./dx]~[cx/../ax][cx/../ax_dir][cx/../cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[cx/./ax][cx/./dx]~[cx/../ax][cx/../ax_dir][cx/../cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[cx/./ax][cx/./dx]~[cx/../ax][cx/../ax_dir][cx/../cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[cx/./ax][cx/./dx]~[cx/../ax][cx/../ax_dir][cx/../cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[cx/./ax][cx/./dx]~[cx/../ax][cx/../ax_dir][cx/../cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[cx/./ax][cx/./dx]~[cx/../ax][cx/../ax_dir][cx/../cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "glob/a-dot-component-and-the-leading-period-rule": {
+      "bash": {
+        "Stdout": "[./ax][./cx]~[./.hid]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[./ax][./cx]~[./.hid]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[./ax][./cx]~[./.hid]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[./ax][./cx]~[./.hid]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[./ax][./cx]~[./.hid]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[./ax][./cx]~[./.hid]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "glob/a-dot-component-is-the-last-one": {
+      "bash": {
+        "Stdout": "[cx/dx/.]~[ax_dir/../ax][ax_dir/../ax_dir][ax_dir/../cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[cx/dx/.]~[ax_dir/../ax][ax_dir/../ax_dir][ax_dir/../cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[cx/dx/.]~[ax_dir/../ax][ax_dir/../ax_dir][ax_dir/../cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[cx/dx/.]~[ax_dir/../ax][ax_dir/../ax_dir][ax_dir/../cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[cx/dx/.]~[ax_dir/../ax][ax_dir/../ax_dir][ax_dir/../cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[cx/dx/.]~[ax_dir/../ax][ax_dir/../ax_dir][ax_dir/../cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "glob/a-dot-component-under-a-file": {
+      "bash": {
+        "Stdout": "[ax/./*]|st=0~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[ax/./*]|st=0~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[ax/./*]|st=0~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[ax/./*]|st=0~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[ax/./*]|st=0~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:1: no matches found: ax/./*",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "glob/a-groups-expansion-is-its-value": {
       "bash": {
         "Stdout": "",
@@ -47497,6 +47673,94 @@
       },
       "zsh": {
         "Stdout": "ice|other.zsh~ice.zsh",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "glob/a-leading-dot-component": {
+      "bash": {
+        "Stdout": "[./ax][./ax_dir][./cx]~[./cx/ax][./cx/dx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[./ax][./ax_dir][./cx]~[./cx/ax][./cx/dx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[./ax][./ax_dir][./cx]~[./cx/ax][./cx/dx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[./ax][./ax_dir][./cx]~[./cx/ax][./cx/dx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[./ax][./ax_dir][./cx]~[./cx/ax][./cx/dx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[./ax][./ax_dir][./cx]~[./cx/ax][./cx/dx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "glob/a-quoted-dot-component": {
+      "bash": {
+        "Stdout": "[./cx/ax]~[./cx/ax]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[./cx/ax]~[./cx/ax]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[./cx/ax]~[./cx/ax]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[./cx/ax]~[./cx/ax]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[./cx/ax]~[./cx/ax]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[./cx/ax]~[./cx/ax]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

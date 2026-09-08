@@ -5,7 +5,6 @@ package interp
 
 import (
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -475,6 +474,33 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			}
 			sortMatches(next)
 			next = compactSorted(next)
+		} else if lit := globUnescape(part); lit == "." || lit == ".." {
+			// `.` and `..` **name** a directory rather than describe one, so
+			// this component is joined and never matched. No listing reports
+			// either name — Go's ReadDir does not, and neither does any
+			// shell's — so matching it against one answers nothing, which is
+			// why the whole pattern used to be a miss. Measured unanimous
+			// across the six: `./cx/*` is `./cx/ax`, `cx/./*` is `cx/./ax`,
+			// `cx/../*` is `cx/../ax`, and `*/..` is `cx/..`.
+			//
+			// The literal behind the quoting marks is what is tested,
+			// because quoting a component does not change what it names:
+			// `"."/cx/*` and `\./cx/*` both list `./cx/ax` in all six. Today
+			// the two spellings coincide — globEscape marks only the
+			// metacharacters, and a period is not one — so this normalizing
+			// is defensive rather than load-bearing, and a mutation that
+			// drops it survives. It is written against the literal so that
+			// it stays right if that set ever grows.
+			//
+			// Nothing here checks that the join exists, and nothing needs to.
+			// Every directory standing at this point came out of a listing or
+			// through the descent gate below, so `dir/.` and `dir/..` both
+			// do. That gate is also the reason `ax/./*` is a miss in all six
+			// and stays one here: `ax` is a file, and it is dropped before
+			// this component is reached.
+			for _, dir := range dirs {
+				next = append(next, globJoin(dir, lit))
+			}
 		} else {
 			o := r.patternOpts(part)
 			o.fold = r.MatchOption(GlobFoldsCase)
@@ -516,20 +542,28 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	}
 
 	// Results are reported the way the pattern was written: relative if it
-	// was relative, so `echo *` lists names and not paths.
+	// was relative, so `echo *` lists names and not paths — and spelled the
+	// way the pattern spelled it, which is why this strips a prefix rather
+	// than asking filepath.Rel. Rel *cleans*, so it would answer `cx/ax`
+	// where all six columns answer `./cx/ax` even once the walk carries the
+	// component; the whole point of globJoin is undone by one call here.
+	rel := strings.TrimSuffix(base, "/") + "/"
 	out := make([]string, 0, len(dirs))
 	for _, d := range dirs {
 		self := selfDirs[d]
 		if prefix == "" {
-			if rel, err := filepath.Rel(base, d); err == nil {
-				d = rel
+			if d == base {
+				// The starting point itself, which only a zero-level `**`
+				// can produce, and which the shell with the option leaves
+				// out: `**` lists what is beneath the directory, never the
+				// directory. Asked against the base rather than against a
+				// rendered `.`, because `.` is now a spelling a pattern can
+				// legitimately produce — zsh's `.(/)` is `.` — and the two
+				// are different strings here: this one is `<base>`, that one
+				// is `<base>/.`.
+				continue
 			}
-		}
-		if d == "." {
-			// The starting point itself, which only a zero-level `**` can
-			// produce, and which the shell with the option leaves out: `**`
-			// lists what is beneath the directory, never the directory.
-			continue
+			d = strings.TrimPrefix(d, rel)
 		}
 		if self && trail == "" {
 			// The zero-level `**` writes its own separator, and only when
@@ -585,7 +619,7 @@ func (r *Runner) appendDescendants(out []string, dir string, seeHidden bool) []s
 		if !seeHidden && strings.HasPrefix(name, ".") {
 			continue
 		}
-		path := filepath.Join(dir, name)
+		path := globJoin(dir, name)
 		out = append(out, path)
 		if e.IsDir() {
 			out = r.appendDescendants(out, path, seeHidden)
@@ -671,10 +705,35 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 			continue
 		}
 		if matchPattern(pattern, name, o) {
-			out = append(out, filepath.Join(dir, name))
+			out = append(out, globJoin(dir, name))
 		}
 	}
 	return out
+}
+
+// globJoin appends one name to a directory the walk is holding, and — unlike
+// filepath.Join — does not clean.
+//
+// Cleaning is what destroyed the spelling. `filepath.Join("<base>", ".")` is
+// `<base>`, so the written form of a `.` or `..` component was gone at the
+// first join, long before anything relativized; joining the component instead
+// of matching it would have made `./cx/*` *match* and still answer `cx/ax`
+// where all six columns answer `./cx/ax`. Both helpers that build a path have
+// to agree about this — matchIn and appendDescendants — or a `**` descent
+// quietly cleans back what the component walk kept.
+//
+// An uncleaned path is what the kernel resolves anyway, and it is the more
+// faithful answer where `..` meets a symbolic link: `sym/../ax` resolves
+// through the link, which is what every shell in the panel reports, rather
+// than textually back to the link's own parent.
+//
+// A directory already ending in a separator is the one case worth a branch:
+// the root, and a Dir written with a trailing slash.
+func globJoin(dir, name string) string {
+	if strings.HasSuffix(dir, "/") {
+		return dir + name
+	}
+	return dir + "/" + name
 }
 
 // entryNames is the names of a directory listing, for the question above.

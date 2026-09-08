@@ -5,6 +5,7 @@ package interp_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -519,5 +520,82 @@ func gone(t *testing.T, path string) {
 		t.Errorf("%s is still there, want it removed", path)
 	} else if !os.IsNotExist(err) {
 		t.Fatalf("%s: %v", path, err)
+	}
+}
+
+// TestTheExecReplacementCleansUpBeforeTheExecve.
+//
+// `exec cmd` is the one end of a shell that Finish is not on: a successful
+// execve does not come back, so nothing after it is this shell and there is no
+// later moment to clean up in. The directory would be left exactly as it was
+// before #1284, on a route the ordinary tests cannot see.
+//
+// Observed from inside the hook, which is the only place it can be observed
+// from. A test cannot let the replacement happen — the process it would
+// replace is the test binary — and a hook that reports failure puts the shell
+// back on the ordinary road, where Finish cleans up and the question is
+// answered by the wrong code. So the assertion is made at the moment of the
+// call, before the answer is given.
+func TestTheExecReplacementCleansUpBeforeTheExecve(t *testing.T) {
+	tmp := t.TempDir()
+	var r *Runner
+	var atTheExecve []os.DirEntry
+	var called bool
+	// Two commands: the first makes the directory, the second is the exec
+	// that never returns. Split so the substitution is not part of the
+	// replacement's own redirections, which is a different question.
+	src := `cat <(echo hi) >/dev/null; exec /bin/echo`
+	_, st := run(t, src, func(rr *Runner) {
+		r = rr
+		rr.Env = append(testPATH(), "TMPDIR="+tmp)
+		rr.ReplaceProcess = func(string, []string, []string, []*os.File) error {
+			called = true
+			atTheExecve = subdirs(t, tmp)
+			// Reported as a failure so the test binary survives. The status
+			// afterwards is not what this test is about.
+			return errors.New("not replacing a test binary")
+		}
+	})
+	if !called {
+		t.Fatalf("the replacement was never reached (status %d) — the test proves nothing", st)
+	}
+	if len(atTheExecve) != 0 {
+		t.Errorf("%d directories still under TMPDIR at the execve: %v — nothing after "+
+			"a successful one is this shell, so this is the last moment there is",
+			len(atTheExecve), atTheExecve)
+	}
+	// And the shell did make one, so the assertion above is not vacuous.
+	if r.PipeDirForTest() == "" {
+		t.Error("no process substitution ran")
+	}
+}
+
+// TestThePipeDirectoryCarriesTheMarkerTheGuardLooksFor.
+//
+// interp names the directory and internal/childguard finds it again in a
+// process's command line, and they are two literals. The comment on
+// procSubDirPrefix has said since it was written that a prefix changed in one
+// place and not the other would leave the guard quietly finding nothing —
+// quietly being the whole problem, since a guard that matches nothing reports
+// nothing and passes.
+//
+// Written down here because a mutation run walked straight through it: renaming
+// the interp constant killed no test at all. This is the assertion that makes
+// the two literals one fact.
+func TestThePipeDirectoryCarriesTheMarkerTheGuardLooksFor(t *testing.T) {
+	tmp := t.TempDir()
+	var r *Runner
+	if _, st := run(t, `cat <(echo hi) >/dev/null`, func(rr *Runner) {
+		r = rr
+		rr.Env = append(testPATH(), "TMPDIR="+tmp)
+	}); st != 0 {
+		t.Fatalf("status %d", st)
+	}
+	dir := pipeDirMade(t, r, tmp)
+	if base := filepath.Base(dir); !strings.HasPrefix(base, childguard.PipeMarker) {
+		t.Errorf("the pipe directory is %q, want a name starting with childguard.PipeMarker (%q) — "+
+			"the guard finds these by that string in a command line, and a prefix that "+
+			"moved in one place and not the other finds nothing and says nothing",
+			base, childguard.PipeMarker)
 	}
 }

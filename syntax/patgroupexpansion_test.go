@@ -125,6 +125,51 @@ func TestASubstitutionsParenthesesAreNotTheGroups(t *testing.T) {
 	}
 }
 
+// Process substitution is the one construct substitutionSpans leaves out, and
+// the assertion is that the *word does not parse* rather than that running it
+// exits non-zero.
+//
+// The status is not a discriminator and the first version of this asserted
+// one. `eval '[[ x == (a<(echo x)b) ]]'; echo $?` is 1 whether the `<(` was
+// read or refused — refused it is a parse failure, and read it is a condition
+// that compares a subject against a path and does not match — so a mutant
+// that put `startsProcSubst` into the shared list survived the whole suite.
+// A marker file is no better: `<(touch m)` races the check, and zsh 5.9.2
+// answers "not run" for a substitution it certainly performed.
+//
+// Where the two readings differ without racing anything is the parse, which
+// is also where the decision is: zsh 5.9.2 refuses both surfaces —
+// `process substitution … cannot be used here` and `number expected` — so
+// reading one here would make two constructs work that the shell does not
+// have.
+func TestAProcessSubstitutionInsideAGroupIsNotOne(t *testing.T) {
+	on := patGroup()
+	on.ProcessSubstitution = true
+	for _, src := range []string{
+		`[[ $k == (a<(echo x)b) ]]`,
+		`echo (a<(echo x)b)`,
+		`echo (a>(echo x)b)`,
+		`echo (<(echo x))`,
+	} {
+		if _, err := Parse(src, on); err == nil {
+			t.Errorf("%s: parsed, where the `<(` has to stay the operator that ends the word", src)
+		}
+	}
+	// The controls, which are what keep the rows above about the *group*: a
+	// process substitution outside one is still a substitution, and the same
+	// group without it still parses.
+	for _, src := range []string{
+		`echo <(echo x)`,
+		`echo a<(echo x)b`,
+		`echo (axb)`,
+		`[[ $k == (a|b) ]]`,
+	} {
+		if _, err := Parse(src, on); err != nil {
+			t.Errorf("%s: %v", src, err)
+		}
+	}
+}
+
 // Printed source has to mean the same thing, which for a group holding an
 // expansion means the expansion comes back as an expansion: printing `(L)`
 // where `($L)` was written is a different pattern, and escaping the `$` is a

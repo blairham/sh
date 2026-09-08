@@ -199,6 +199,15 @@ func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, ext
 
 // hasUnescapedByte reports whether c stands in s outside an escape, for the
 // caller that has a character in mind rather than a whole alphabet.
+//
+// Dropping the escape skip survives the suite, and it is an equivalent mutant
+// for this one caller rather than a gap. The only way a marked byte here is a
+// `|` is a value that carried `\|` of its own, and escapeValueBackslashes has
+// already turned that into `\\` plus `\|`; whichever answer comes back,
+// globEscape marks the `|` and the backslash to the same string, so the
+// matcher is handed the same characters. The skip is kept for what the
+// function *says* — the marks are not the text — since a second caller with a
+// different alphabet would be told wrong without it.
 func hasUnescapedByte(s string, c byte) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\\' {

@@ -398,12 +398,6 @@ func (r *Runner) assocSearchSubscript(e *syntax.ParamExpr) bool {
 	if lastOf(e.IndexFlags.Flags, searchSubscriptFlags) == 0 {
 		return false
 	}
-	if len(e.Leading) > 0 {
-		// A chained subscript reads what the subscript before it named — a
-		// value — and never the table itself, so the name says nothing about
-		// this one: `${m[k][(r)x]}` searches the characters `m[k]` came to.
-		return false
-	}
 	_, isAssoc := r.assocFor(e.Name)
 	return isAssoc
 }

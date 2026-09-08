@@ -2905,6 +2905,27 @@ than through a name's. It is refused by name —
 rather than answered with the last subscript alone, which would be a
 plausible value at status 0.
 
+A chain behind a **search over an association** — `${m[(I)*][2]}`. zsh
+does not read the rest of the chain against what the search named at
+all: measured with `typeset -A m=(k1 vA k2 vB)`, `${m[(I)k1][1]}` is `1`
+and `${m[(I)k1][2]}` is `2` — the subscript itself, whatever the keys
+and the values are — and `${m[(r)vA][1]}` is the whole of `vA` rather
+than its first character. There is no rule there to model, so the shape
+is refused by name rather than answered with the plausible key an
+ordinary source reading would produce. A search over an *ordered* array
+is a source like any other and is read: `a=(one two three)` makes
+`${a[(r)two][1]}` the character `t` in both.
+
+### What this implementation does not match
+
+A subscript that misses is **unset** here and set-and-empty in zsh, when
+the subscript counts characters: with `a=(x y)`, `${a[1][2]-none}` is
+empty there and `none` here. It is not this construct's divergence — the
+single-subscript spelling has it too, `s=abc; ${s[9]-none}` is empty in
+zsh and `none` here, and so does the nested spelling — so the chain
+inherits it rather than introducing it, and it is recorded here because
+this is where a chain first reaches it.
+
 ### What the corpus pins
 
 `subscript/a-second-subscript-counts-characters` (the five-way split),

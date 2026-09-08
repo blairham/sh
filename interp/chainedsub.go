@@ -74,6 +74,20 @@ func (r *Runner) chainLink(e *syntax.ParamExpr, i int) *syntax.ParamExpr {
 // either way, and only a search over one tells them apart.
 func (r *Runner) chainedSubscriptSource(e *syntax.ParamExpr) (subscriptSource, bool) {
 	prev := r.chainLink(e, len(e.Leading)-1)
+	if r.assocSearchSubscript(prev) {
+		// A search over an *association* behind a chain is refused by name.
+		// The shell with the grammar does not read the rest of the chain
+		// against what the search named at all: measured on zsh 5.9.2,
+		// `typeset -A m=(k1 vA k2 vB); ${m[(I)k1][1]}` is `1` and
+		// `${m[(I)k1][2]}` is `2` — the subscript itself, whatever the keys
+		// and the values are — and `${m[(r)vA][1]}` is the whole of `vA`
+		// rather than its first character. Reading the matches as an
+		// ordinary source instead answers a plausible key at status 0, which
+		// is worse than saying so.
+		r.diagf("${%s}: a chain behind a search over an association is not implemented\n", r.paramSubject(e))
+		r.expandErr = true
+		return subscriptSource{}, false
+	}
 	elems, ok := r.arraySubscript(prev)
 	if !ok || elems == nil {
 		return subscriptSource{}, false

@@ -170,6 +170,33 @@ func TestAChainWhoseLinkNamedNothingIsUnset(t *testing.T) {
 	}
 }
 
+// A refusal from inside a chain names every subscript that was written, so a
+// reader can find the text in the script. Named `a[(w)q]` it would name a
+// subscript the file does not contain.
+func TestARefusalFromInsideAChainNamesTheWholeChain(t *testing.T) {
+	out, st := runChainedSubscript(t, `a=(x y); printf "[%s]" "${a[1][(w)q]}"`)
+	const want = "${a[1][(w)q]}: the (w) subscript flag is not implemented"
+	if !strings.Contains(out, want) {
+		t.Errorf("gave %q, want a refusal naming %q", out, want)
+	}
+	if st == 0 {
+		t.Errorf("status 0, want the unbuilt flag refused")
+	}
+}
+
+// A search over an *association* is not a source the rest of a chain reads,
+// and this refuses it by name rather than reading the matches as one.
+func TestAChainBehindAnAssociationSearchIsRefused(t *testing.T) {
+	out, st := runChainedSubscript(t, `typeset -A m; m[alpha]=1; m[beta]=2; printf "[%s]" "${m[(I)*][2]}"`)
+	const want = "${m[(I)*][2]}: a chain behind a search over an association is not implemented"
+	if !strings.Contains(out, want) {
+		t.Errorf("gave %q, want a refusal naming %q", out, want)
+	}
+	if st == 0 {
+		t.Errorf("status 0, want the unbuilt shape refused")
+	}
+}
+
 // A chain on a nested expansion is the two constructs at once and is refused
 // by name, rather than answered with the last subscript alone.
 func TestAChainOnANestedExpansionIsRefused(t *testing.T) {

@@ -2320,6 +2320,44 @@ type Diagnostics struct {
 	// differently. No verbs.
 	DivisionByZero string
 
+	// The math-function sentences: `functions -M` registers a shell function
+	// under a name arithmetic can call, and one shell in the panel has the
+	// facility, so the other five leave all seven of these empty. See
+	// interp/mathfunc.go, where each was measured.
+	//
+	// The three at the call are *complete* sentences and are not wrapped by
+	// ArithError — measured, `zsh:1: unknown function: nosuchmf` where an
+	// ordinary failure in the same place is `zsh:1: bad math expression:
+	// operand expected at end of string`. The four at the registration are a
+	// builtin's and carry its name in the location the way every other
+	// builtin complaint here does.
+
+	// MathFunctionUnknown is a name arithmetic called that no registration
+	// answers for. One verb: the name.
+	MathFunctionUnknown string
+	// MathFunctionArgumentCount is a call with too few or too many
+	// arguments. One verb: the call *as written*, source text and all — so
+	// `mf( 5 , 6 )` keeps its spaces.
+	MathFunctionArgumentCount string
+	// MathFunctionMissingImpl is a registration whose implementation is not
+	// a function when the call arrives. One verb: the implementation's name,
+	// not the registered one. Registration itself never checks, so this is
+	// the only place a name nobody defined is reported.
+	MathFunctionMissingImpl string
+	// MathFunctionTooManyOperands is a registration with a fifth operand.
+	// One verb: the builtin's name.
+	MathFunctionTooManyOperands string
+	// MathFunctionBadName is a registration whose first operand is not an
+	// identifier. Two verbs: the builtin's name and the operand.
+	MathFunctionBadName string
+	// MathFunctionBadMinimum is a minimum that is not a count. Two verbs:
+	// the builtin's name and the operand as written.
+	MathFunctionBadMinimum string
+	// MathFunctionBadMaximum is a maximum that is not a count, or one below
+	// the minimum without being the -1 that means no bound. Two verbs, as
+	// above.
+	MathFunctionBadMaximum string
+
 	// SubstringRangeError wraps a substring offset or length that would not
 	// evaluate. Two verbs: the parameter as written — `x`, or `a[@]` when a
 	// subscript was given — and the arithmetic sentence, already worded by

@@ -145,7 +145,24 @@ func (r *Runner) evalArith(e syntax.ArithExpr) (int, error) {
 	return v.asInt(), err
 }
 
+// evalNum is the value of an expression, and the point where the shell's
+// record of the *last* arithmetic value is kept up to date.
+//
+// The record is written here, at every node, rather than at the outermost one
+// only, and that is what makes the reading right: a math function's value is
+// the last arithmetic evaluated anywhere during its call, and the arguments of
+// the call are part of that — which is why an implementation that evaluates
+// nothing at all hands back its last argument. See mathfunc.go for the
+// measurement.
 func (r *Runner) evalNum(e syntax.ArithExpr) (arithNum, error) {
+	v, err := r.evalNumNode(e)
+	if err == nil {
+		r.lastArith = v
+	}
+	return v, err
+}
+
+func (r *Runner) evalNumNode(e syntax.ArithExpr) (arithNum, error) {
 	switch x := e.(type) {
 	case nil:
 		return intNum(0), nil
@@ -161,6 +178,11 @@ func (r *Runner) evalNum(e syntax.ArithExpr) (arithNum, error) {
 
 	case *syntax.ArithCharCode:
 		return intNum(r.charCode(x)), nil
+
+	case *syntax.ArithCall:
+		// The seam: an expression that runs a shell function. See
+		// mathfunc.go, which is where everything about it lives.
+		return r.evalMathFunc(x)
 
 	case *syntax.ArithUnary:
 		return r.evalUnary(x)

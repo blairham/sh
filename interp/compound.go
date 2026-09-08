@@ -650,6 +650,23 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 // because a function shares the shell's variables — the scoping is dynamic,
 // and `local` is what carves out an exception. `local` is not here yet.
 func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []string) error {
+	return r.callFuncAs(ctx, fn, fn.Name, args)
+}
+
+// callFuncAs is callFunc with the name the call is *known by* given
+// separately, for the one caller where it is not the function's own: a math
+// function runs an implementation registered under another name.
+//
+// The two names go to different places, and that split is measured rather
+// than chosen. `$0` inside the implementation is the *registered* name —
+// `functions -M mf 0 3 g; : $(( mf(1,2,3) ))` leaves `$0` as `mf` — so the
+// frame carries that one, which is what innermostCall reads. A diagnostic
+// from inside the body names the *implementation*: the same call with a
+// missing command in `g` reports `g: command not found: …`, not `mf:`, so
+// r.inFunc keeps the function's own name and so does the prelude-speaker
+// check and the recursion bound. The file the body is remembered as coming
+// from is the implementation's too, because that is where its lines are.
+func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name string, args []string) error {
 	if r.depth >= maxDepth {
 		r.diagf("%s: too deeply nested\n", fn.Name)
 		r.status = 1
@@ -669,7 +686,7 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 	// Where the function was written, so a dialect that numbers a message
 	// from the function rather than from the file can subtract it.
 	r.funcLine = fn.Pos().Line
-	r.pushFrame(Frame{File: r.funcFiles[fn.Name], Name: fn.Name})
+	r.pushFrame(Frame{File: r.funcFiles[fn.Name], Name: name})
 	defer r.popFrame()
 	// This call's own serial, because the RETURN trap fires for the one
 	// function whose body set it and for nobody else — not a caller, and

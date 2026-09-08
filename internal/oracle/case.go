@@ -8327,12 +8327,50 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 	{
 		ID: "functions/the-math-function-facility", Category: "declarations",
 		Snippet: `g() { REPLY=$(($1+100)); }; functions -M -- mf 1 1 g; echo "st=$?"; echo "[$(( mf(5) ))]"`,
-		Why:     "the one thing under this word that is not a rename: `-M` registers a shell function as a *math* function, so arithmetic can call back into the interpreter. zsh alone, and `105`. ksh93 spells `-M` as a character mapping and answers `unknown mapping name`, which is why the letter cannot be shared. Left refused by name rather than guessed at — see #1493, and the row below for what it really returns",
+		Why:     "the one thing under this word that is not a rename: `-M` registers a shell function as a *math* function, so arithmetic can call back into the interpreter. zsh alone, and `105`. ksh93 spells `-M` as a character mapping and answers `unknown mapping name`, which is why the letter cannot be shared. The idiomatic caller, right for a reason that is not its own — see the row below (#1493)",
 	},
 	{
 		ID: "functions/a-math-function-that-sets-no-reply", Category: "declarations",
 		Snippet: `g() { : $((123)); }; functions -M -- mf 1 1 g; echo "[$(( mf(5) ))]"`,
-		Why:     "the row that says the documented contract is not the implemented one, and the reason `-M` is refused rather than approximated. The function sets no `REPLY` at all and zsh answers `123` — the last arithmetic value evaluated anywhere during the call. With the `: $((123))` removed it answers `5`, the last argument. An engine that read `REPLY` would agree with zsh on every idiomatic caller and disagree here, and the plugin manager this facility exists for is exactly the caller that sets no `REPLY`: its math function ends in `return 1` or `return idx`, whose arithmetic is what comes back (#1493)",
+		Why:     "the row that says the documented contract is not the implemented one, and the reason `-M` had to be measured before it could be written. The function sets no `REPLY` at all and zsh answers `123` — the last arithmetic value evaluated anywhere during the call. With the `: $((123))` removed it answers `5`, the last argument. An engine that read `REPLY` would agree with zsh on every idiomatic caller and disagree here, and the plugin manager this facility exists for is exactly the caller that sets no `REPLY`: its math function ends in `return 1` or `return idx`, whose arithmetic is what comes back (#1493)",
+	},
+	{
+		ID: "functions/a-math-function-that-only-returns", Category: "declarations",
+		Snippet: `g() { return 42; }; functions -M -- mf 1 1 g; echo "[$(( mf(5) ))]"`,
+		Why:     "the branch the plugin manager's scheduler really takes, and the one a `REPLY` reading gets wrong in the quietest way: `return` takes an *expression* in zsh, so `return 42` is an arithmetic evaluation like any other and `42` is what the call yields. A shell that read `REPLY` — or that only recorded the operands it could not read as plain numbers — would answer `5` here, the last argument, and the scheduler would pick the wrong task with nothing said",
+	},
+	{
+		ID: "functions/a-math-function-that-evaluates-nothing", Category: "declarations",
+		Snippet: `g() { :; }; functions -M -- mf 0 3 g; echo "[$(( mf(3,4) ))]"`,
+		Why:     "the *last* argument and not the first, which is what says the value is a record of the last evaluation rather than anything about the call. Two arguments discriminate where one cannot: an engine that handed back `$1` would answer `3` and look right on every single-argument row in this file",
+	},
+	{
+		ID: "functions/a-math-function-called-with-the-wrong-count", Category: "declarations",
+		Snippet: `g() { :; }; functions -M -- mf 1 1 g; echo "[$(( mf( 5 , 6 ) ))]"`,
+		Why:     "the arity really is enforced, and the complaint quotes the call *as written* — `mf( 5 , 6 )`, spaces and all — rather than rendering the tree back. So the parser has to keep the source text of a call, which is the only reason it does. zsh alone; the five without the construct blame the leftover parenthesis instead",
+	},
+	{
+		ID: "functions/a-math-function-nobody-registered", Category: "declarations",
+		Snippet: `echo "[$(( nosuchmf(1) ))]"`,
+		Why:     "the sentence for a name arithmetic called and no registration answers for, and it stands alone — `unknown function: nosuchmf`, not wrapped as a bad math expression the way every other failure in the same place is. The other five have no call form at all and report the `(` as an operator problem, which is the grammar's absence rather than a different answer",
+	},
+	{
+		ID: "functions/a-registration-whose-function-is-not-there", Category: "declarations",
+		Script:  true,
+		Snippet: "functions -M -- mf 1 1 nodef\necho \"st=$?\"\necho \"[$(( mf(5) ))]\"\n",
+		Why:     "registration never checks the implementation: `st=0` with a name nobody defined, and the failure arrives at the *call* as `no such function: nodef` — naming the implementation, not the registered name. Three separate sentences for three separate questions, and this is the one that says a silent registration is the shell's own behavior rather than a shortcut. The plugin manager writes its registration with `2>/dev/null`, so a reimplementation that refused here would be invisible",
+	},
+	{
+		ID: "functions/the-math-function-listing-and-its-removal", Category: "declarations",
+		Script:  true,
+		Snippet: "g() { :; }\nfunctions -M mf 1 1 g\nfunctions -M mm 2\nfunctions -M\nfunctions +M mf\nfunctions -M\n",
+		Why:     "`functions -M` with no operands lists, most recently registered first, in the form that would make each one — and the form elides what a re-registration would default to, so `mm 2 2` says itself back as `functions -M mm 2` while `mf 1 1 g` keeps both counts because the implementation operand is positional. `+M` is the removal spelling; `unfunction -M` is a bad option. With operands, `-M` always *registers* and never filters the listing, which is why the whole facility has exactly one listing form",
+	},
+	{
+		ID: "functions/the-name-a-math-function-runs-under", Category: "declarations",
+		Script:  true,
+		Snippet: "g() { echo \"0=$0 #=$# *=$*\"; }\nfunctions -M -- mf 0 3 g\n: $(( mf(1+1,2*3) ))\n",
+		Why:     "what the implementation sees: `$0` is the *registered* name and not its own, the arguments arrive already evaluated — `2 6` rather than `1+1 2*3` — and they arrive as strings in the positional parameters rather than through any parameter of the facility's own. The registered name is only skin deep, though: a diagnostic raised inside the body still names `g`, so the two names go to different places",
 	},
 	{
 		ID: "declare/local-in-a-posix-function", Category: "declarations",

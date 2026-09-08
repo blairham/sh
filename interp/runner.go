@@ -1359,6 +1359,20 @@ type Runner struct {
 	lastSubst lastSubstitution
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
+	// mathFuncs holds the `functions -M` registrations: names arithmetic may
+	// call, each naming a shell function to run. mathOrder is the order they
+	// arrived in, because the listing walks it backwards. See mathfunc.go.
+	mathFuncs map[string]mathFunc
+	mathOrder []string
+	// lastArith is the value of the last arithmetic expression this shell
+	// evaluated, anywhere.
+	//
+	// It exists for one caller — a math function's return value is this and
+	// not `REPLY`, which is measured and set out in mathfunc.go — and it is
+	// the shell's rather than a call's on purpose: an evaluation from before
+	// a registration was made is still what an implementation that evaluates
+	// nothing hands back.
+	lastArith arithNum
 	// depth bounds function recursion, because a shell script can recurse
 	// and a stack overflow is not a diagnostic anyone can act on.
 	depth int

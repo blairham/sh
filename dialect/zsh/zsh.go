@@ -262,6 +262,12 @@ func Dialect() syntax.Dialect {
 	// and is not one — `a=(1 2); $((#a))` is 49, the code of the `1`, where
 	// the count is `$(( $#a ))`.
 	d.ArithCharacterCode = true
+	// And a name with a `(` touching it is a *math function* call —
+	// `$(( mf(5) ))` — where `mf` was registered with `functions -M`. The
+	// only shell in the panel with the construct; the other five read the
+	// same text as a name with a leftover parenthesis after it and say so.
+	// See interp/mathfunc.go for what running one means (#1493).
+	d.ArithFunctionCall = true
 	// `a |& b`, read exactly as bash 5.3 reads it: the left side's standard
 	// error joins its standard output on the pipe. Not the ksh93 reading of
 	// the same two characters, which is a coprocess and a different slot in
@@ -1035,10 +1041,14 @@ func Semantics() interp.Semantics {
 	// sweeping the alphabet in both cases — is autoloading, tracing, the
 	// math-function facility and the `zsh/parameter` spellings, none of
 	// which this engine has; they ride in UnimplementedOptionLetters so a
-	// script is told they are missing rather than unknown. `-m` is the
-	// exception and is implemented: it is a listing narrowed by pattern,
-	// which is the same walk the bare listing already does.
-	s.FunctionsOptions = "m"
+	// script is told they are missing rather than unknown. Two are the
+	// exception and are implemented: `-m` is a listing narrowed by pattern,
+	// which is the same walk the bare listing already does, and `-M` is the
+	// math-function facility — the one letter here that is not a listing at
+	// all. Its presence in this set is what tells interp the dialect has the
+	// facility; the capability is interp/mathfunc.go and the name is here
+	// (#1493).
+	s.FunctionsOptions = "mM"
 	// `unfunction`'s whole set, and it really is one letter: every other
 	// letter of the alphabet is a bad option there in both cases, the `-f`
 	// this name stands for included.
@@ -1322,10 +1332,9 @@ func Diagnostics() interp.Diagnostics {
 			// and -U mark a name for autoloading, -k and -z pick which
 			// shell the autoloaded file is read as, -t and -T trace, -x
 			// sets the listing's indent, -c makes one function another's
-			// copy, -W is the `zsh/parameter` writability flag and -M is
-			// the math-function facility (#1493). -m is implemented, in
-			// FunctionsOptions above.
-			"functions": "ckstuxzMTUW",
+			// copy and -W is the `zsh/parameter` writability flag. -m and
+			// -M are implemented, in FunctionsOptions above.
+			"functions": "ckstuxzTUW",
 		},
 		// The builtin's name is stripped to the location prefix as ever:
 		// `zsh:read:1: -p: no coprocess`, measured with no coprocess to
@@ -1383,6 +1392,24 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperandExpected:      "bad math expression: operand expected at `%[1]s'",
 		ArithExpressionRanOut:     "bad math expression: operand expected at end of string",
 		ArithOperatorExpected:     "bad math expression: operator expected at `%[1]s'",
+		// The math functions, which only this shell has. The three at the
+		// call stand alone rather than being wrapped as a bad math
+		// expression — measured 2026-09-08, `zsh:1: unknown function:
+		// nosuchmf` where an ordinary failure in the same place opens with
+		// `bad math expression:`. The four at the registration are the
+		// builtin's and name it in the location the way its option
+		// complaints do: `zsh:functions:1: -M: too many arguments`.
+		//
+		// `no such function` names the *implementation*: a registration is
+		// never checked when it is made, so `functions -M mf 1 1 nodef` is
+		// status 0 and this arrives at the first call.
+		MathFunctionUnknown:         "unknown function: %[1]s",
+		MathFunctionArgumentCount:   "wrong number of arguments: %[1]s",
+		MathFunctionMissingImpl:     "no such function: %[1]s",
+		MathFunctionTooManyOperands: "%[1]s: -M: too many arguments",
+		MathFunctionBadName:         "%[1]s: -M %[2]s: bad math function name",
+		MathFunctionBadMinimum:      "%[1]s: -M: invalid min number of arguments: %[2]s",
+		MathFunctionBadMaximum:      "%[1]s: -M: invalid max number of arguments: %[2]s",
 		// The operator names its two-character spelling whichever of the two
 		// was written: `$((#\))` says `after ##` as readily as `$((##))`.
 		ArithCharacterMissing: "bad math expression: character missing after ##",

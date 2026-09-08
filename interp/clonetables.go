@@ -121,6 +121,13 @@ func (c *Runner) ownTables(r *Runner) {
 	// made a definition made in a subshell the parent's, and a removal made
 	// in one the parent's too, at status 0 with nothing said either way.
 	c.funcs = maps.Clone(r.funcs)
+	// And the math-function registrations, which are the same kind of table
+	// under a second name: a `functions -M` made inside a subshell is not
+	// the parent's afterwards, and one the parent made is the subshell's to
+	// call. mathOrder is a slice and is copied outright, so a removal in the
+	// subshell cannot shorten the parent's.
+	c.mathFuncs = maps.Clone(r.mathFuncs)
+	c.mathOrder = append([]string(nil), r.mathOrder...)
 	c.funcFiles = maps.Clone(r.funcFiles)
 	c.exportedFuncs = maps.Clone(r.exportedFuncs)
 	c.aliases = maps.Clone(r.aliases)

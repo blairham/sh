@@ -45919,6 +45919,182 @@
         "TimedOut": false
       }
     },
+    "functions/a-math-function-called-with-the-wrong-count": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: functions: command not found~\u003cshell\u003e: line 1: mf( 5 , 6 ) : arithmetic syntax error in expression (error token is \"( 5 , 6 ) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: functions: command not found~\u003cshell\u003e: line 1: mf( 5 , 6 ) : arithmetic syntax error in expression (error token is \"( 5 , 6 ) \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: functions: command not found~\u003cshell\u003e: mf( 5 , 6 ) : syntax error in expression (error token is \"( 5 , 6 ) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: functions: not found~\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" mf( 5 , 6 ) \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: wrong number of arguments: mf( 5 , 6 )",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "functions/a-math-function-nobody-registered": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: nosuchmf(1) : arithmetic syntax error in expression (error token is \"(1) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: nosuchmf(1) : arithmetic syntax error in expression (error token is \"(1) \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: nosuchmf(1) : syntax error in expression (error token is \"(1) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" nosuchmf(1) \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: nosuchmf(1) : unknown function",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: unknown function: nosuchmf",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "functions/a-math-function-that-evaluates-nothing": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: functions: command not found~\u003cshell\u003e: line 1: mf(3,4) : arithmetic syntax error in expression (error token is \"(3,4) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: functions: command not found~\u003cshell\u003e: line 1: mf(3,4) : arithmetic syntax error in expression (error token is \"(3,4) \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: functions: command not found~\u003cshell\u003e: mf(3,4) : syntax error in expression (error token is \"(3,4) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: functions: not found~\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" mf(3,4) \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[4]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "functions/a-math-function-that-only-returns": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: functions: command not found~\u003cshell\u003e: line 1: mf(5) : arithmetic syntax error in expression (error token is \"(5) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: functions: command not found~\u003cshell\u003e: line 1: mf(5) : arithmetic syntax error in expression (error token is \"(5) \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: functions: command not found~\u003cshell\u003e: mf(5) : syntax error in expression (error token is \"(5) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: functions: not found~\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" mf(5) \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[42]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "functions/a-math-function-that-sets-no-reply": {
       "bash": {
         "Stdout": "",
@@ -46091,6 +46267,50 @@
         "Stdout": "1=1~2=1~3=1~4=0",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "functions/a-registration-whose-function-is-not-there": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: line 1: functions: command not found~\u003cscript\u003e: line 3: mf(5) : arithmetic syntax error in expression (error token is \"(5) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: line 1: functions: command not found~\u003cscript\u003e: line 3: mf(5) : arithmetic syntax error in expression (error token is \"(5) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: line 1: functions: command not found~\u003cscript\u003e: line 3: mf(5) : syntax error in expression (error token is \"(5) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cscript\u003e: 1: functions: not found~\u003cscript\u003e: 3: arithmetic expression: expecting EOF: \" mf(5) \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cscript\u003e:3: no such function: nodef",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -46397,6 +46617,94 @@
       },
       "zsh": {
         "Stdout": "st=0~[105]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "functions/the-math-function-listing-and-its-removal": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: functions: command not found~\u003cscript\u003e: line 3: functions: command not found~\u003cscript\u003e: line 4: functions: command not found~\u003cscript\u003e: line 5: functions: command not found~\u003cscript\u003e: line 6: functions: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: functions: command not found~\u003cscript\u003e: line 3: functions: command not found~\u003cscript\u003e: line 4: functions: command not found~\u003cscript\u003e: line 5: functions: command not found~\u003cscript\u003e: line 6: functions: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: functions: command not found~\u003cscript\u003e: line 3: functions: command not found~\u003cscript\u003e: line 4: functions: command not found~\u003cscript\u003e: line 5: functions: command not found~\u003cscript\u003e: line 6: functions: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: functions: not found~\u003cscript\u003e: 3: functions: not found~\u003cscript\u003e: 4: functions: not found~\u003cscript\u003e: 5: functions: not found~\u003cscript\u003e: 6: functions: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[2]: typeset: mf: unknown mapping name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "functions -M mm 2~functions -M mf 1 1 g~functions -M mm 2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "functions/the-name-a-math-function-runs-under": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: functions: command not found~\u003cscript\u003e: line 3: mf(1+1,2*3) : arithmetic syntax error in expression (error token is \"(1+1,2*3) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: functions: command not found~\u003cscript\u003e: line 3: mf(1+1,2*3) : arithmetic syntax error in expression (error token is \"(1+1,2*3) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: functions: command not found~\u003cscript\u003e: line 3: mf(1+1,2*3) : syntax error in expression (error token is \"(1+1,2*3) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: functions: not found~\u003cscript\u003e: 3: arithmetic expression: expecting EOF: \" mf(1+1,2*3) \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "0=mf #=2 *=2 6",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

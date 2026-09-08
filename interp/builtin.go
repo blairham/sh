@@ -163,6 +163,21 @@ func (r *Runner) statusOperand(builtin, arg string) (int, bool) {
 	// Leading zeros belong on this side too — `return 010` is 10 in all four,
 	// including the two that read `$((010))` as 8.
 	if n, err := strconv.Atoi(arg); err == nil && n >= 0 && n <= 255 {
+		// Recorded as an arithmetic evaluation where the dialect reads this
+		// operand as one, even though the shortcut above is what answered
+		// it. `return 1` in zsh really is an expression, and a math function
+		// whose implementation ends in one hands that value back — see
+		// mathfunc.go, and the plugin manager whose scheduler ends in
+		// `return 1` on one branch and `return idx` on the other. Only the
+		// second of those goes the long way round, so a record made only
+		// there would give the two branches different meanings.
+		//
+		// Read from the vector rather than through statusArgument, which
+		// reports an unanswered axis: the shortcut is what makes `return 3`
+		// work in the strict core, and asking here would refuse it.
+		if r.sem().StatusArgument == StatusArgArithmetic {
+			r.lastArith = intNum(n)
+		}
 		return n, true
 	}
 	switch r.statusArgument(builtin) {

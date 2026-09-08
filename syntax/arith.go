@@ -148,6 +148,41 @@ func (n *ArithIndex) Pos() Pos   { return n.Start }
 func (n *ArithIndex) End() Pos   { return n.Stop }
 func (n *ArithIndex) arithNode() {}
 
+// ArithCall is `name(args)` inside an arithmetic expression: a *math
+// function*, whose value is produced by running a shell function.
+//
+// One shell in the panel has the construct at all — zsh, through
+// `functions -M` — so the grammar is a dialect's, [Dialect.ArithFunctionCall],
+// and where it is off the `(` after a name is a leftover operator, which is
+// the complaint bash, dash and ksh93 make about `mf(5)`.
+//
+// The name is not resolved here and does not have to exist: an unregistered
+// name is a runtime failure with its own sentence, not a parse error, which is
+// measured — `$(( nosuchmf(1) ))` is `unknown function: nosuchmf` in zsh 5.9.2
+// and never a syntax complaint.
+type ArithCall struct {
+	Name string
+	// Args are the arguments, each an expression of its own. `mf()` with
+	// none is a call and not a name: zsh registers a math function with a
+	// minimum of zero and takes `$(( mf() ))`.
+	Args []ArithExpr
+	// Text is the call exactly as it was written, from the first byte of
+	// the name through the closing parenthesis.
+	//
+	// Kept because the one shell with the construct quotes it back verbatim
+	// when the count of arguments is wrong: measured 2026-09-08,
+	// `$(( mf( 5 , 6 ) ))` against a one-argument registration is
+	// `wrong number of arguments: mf( 5 , 6 )`, spaces and all, so the
+	// sentence is the source text rather than a rendering of the tree.
+	Text  string
+	Start Pos
+	Stop  Pos
+}
+
+func (n *ArithCall) Pos() Pos   { return n.Start }
+func (n *ArithCall) End() Pos   { return n.Stop }
+func (n *ArithCall) arithNode() {}
+
 type ArithAssign struct {
 	Name string
 	// Index is the subscript when the target is an array element, as in
@@ -560,7 +595,16 @@ func (a *arithParser) primary() ArithExpr {
 		a.src[a.off+1] >= '0' && a.src[a.off+1] <= '9' {
 		return a.number(start)
 	}
+	begin := a.off
 	if name, ok := a.name(); ok {
+		// A `(` *touching* the name is a call, and one with a space before
+		// it is not: measured, `$(( mf ( 5 ) ))` against a live registration
+		// is `bad math expression: operator expected at `( 5 ) '` where
+		// `$(( mf(5) ))` runs the function. So the test is the very next
+		// byte, before any space is skipped.
+		if a.dial.ArithFunctionCall && a.off < len(a.src) && a.src[a.off] == '(' {
+			return a.call(name, start, begin)
+		}
 		if index, sub := a.subscript(); index != nil {
 			return &ArithIndex{Name: name, Index: index, Sub: sub, Start: start, Stop: start}
 		}
@@ -596,6 +640,51 @@ func (a *arithParser) primary() ArithExpr {
 	}
 	a.failArith(ErrArithOperand, a.src[a.off:])
 	return nil
+}
+
+// call reads `name(a, b)`, the math-function call form, with the name already
+// read and begin the offset it started at.
+//
+// Arguments are parsed at the assignment level rather than through expr,
+// because the comma here separates arguments and is not the sequence
+// operator: `mf(1,2)` is two arguments in the dialect that also reads
+// `$(( 1,2 ))` as a sequence, so the two readings of `,` are told apart by
+// which of them is inside the parentheses.
+func (a *arithParser) call(name string, start Pos, begin int) ArithExpr {
+	a.off++ // the `(`
+	n := &ArithCall{Name: name, Start: start, Stop: start}
+	a.space()
+	if !a.has(")") {
+		for {
+			arg := a.assign()
+			if arg == nil {
+				return nil
+			}
+			n.Args = append(n.Args, arg)
+			a.space()
+			if a.take(",") {
+				a.space()
+				// A trailing comma before the `)` is allowed and adds no
+				// argument: measured, `mf(5,)` passes one argument and
+				// `mf(5,6,)` two. A comma with nothing *before* it is a
+				// different matter — `mf(,)` and `mf(5,,6)` are both an
+				// operand expected — which is what the loop's shape already
+				// says, because an argument is read before every comma.
+				if a.has(")") {
+					break
+				}
+				continue
+			}
+			break
+		}
+	}
+	a.space()
+	if !a.take(")") {
+		a.p.fail("expected ) in arithmetic")
+		return nil
+	}
+	n.Text = a.src[begin:a.off]
+	return n
 }
 
 // number reads a literal without converting it, including the `base#digits`

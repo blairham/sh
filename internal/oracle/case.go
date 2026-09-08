@@ -8592,6 +8592,21 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the same question of `local`, where the shell with no letters reads `-q` as a name and dies on it, and the one with no `local` at all never reaches the question",
 	},
 	{
+		ID: "declare/readonly-does-not-leave-a-subshell", Category: "declarations",
+		Snippet: `x=1; (readonly x); x=2; printf "[%s]\n" "$x"`,
+		Why:     "a subshell owns what it declares. Every shell in the panel assigns 2, and ours refused the assignment because the readonly table was one map the subshell and its parent both wrote — the visible half of #1384, whose other half is that a process substitution is such a subshell running on a goroutine",
+	},
+	{
+		ID: "declare/an-attribute-does-not-leave-a-subshell", Category: "declarations",
+		Snippet: `n=5; (typeset -i n); n=1+1; printf "[%s]" "$n"; x=abc; (typeset -u x); x=def; printf "[%s]\n" "$x"`,
+		Why:     "the same question of the attributes rather than of readonly, and it is the row that varies: the integer attribute stays behind in nobody, and the case-folding one stays behind in ksh93 alone — so a fix that gave every subshell its own tables must move the first cell and not the second",
+	},
+	{
+		ID: "declare/readonly-does-not-leave-a-process-substitution", Category: "declarations",
+		Snippet: `x=1; cat <(readonly x; echo sub) >/dev/null; x=2; printf "[%s]\n" "$x"`,
+		Why:     "the boundary that matters for #1384, because this one is a subshell the shell runs *beside* itself: the same tables, and now two writers with no schedule between them. The shell without the construct never reaches the question, which is what makes this a different row from the one above rather than a restatement",
+	},
+	{
 		ID: "set/bare-set-lists-the-variables", Category: "builtins",
 		Snippet: `v1=plain; v2='has space'; v3="quo'te"; set | grep "^v[123]"; echo "st=$?"`,
 		Why:     "one listing, three spellings of the same three values: bare-until-needed with `'\\''` for the embedded quote, always-single-quoted with the quote doubled out, and `$'...'` — filtered to the script's own names because the rest of the listing is the machine's",

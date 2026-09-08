@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"os"
 	"os/exec"
 	"strings"
@@ -1299,67 +1298,15 @@ func (r *Runner) clone() *Runner {
 	// `cat <(echo one) <(echo two)` reported a bad file descriptor for the
 	// half it had already opened.
 	c.procSubs = nil
-	c.Vars = make(map[string]string, len(r.Vars))
-	for k, v := range r.Vars {
-		c.Vars[k] = v
-	}
-	c.exported = make(map[string]bool, len(r.exported))
-	for k, v := range r.exported {
-		c.exported[k] = v
-	}
-	c.Arrays = make(map[string]Array, len(r.Arrays))
-	for k, v := range r.Arrays {
-		copied := make(Array, len(v))
-		for i, e := range v {
-			copied[i] = e
-		}
-		c.Arrays[k] = copied
-	}
-	c.AssocArrays = make(map[string]AssocArray, len(r.AssocArrays))
-	for k, v := range r.AssocArrays {
-		copied := make(AssocArray, len(v))
-		for key, e := range v {
-			copied[key] = e
-		}
-		c.AssocArrays[k] = copied
-	}
-	c.Params = append([]string(nil), r.Params...)
-	// The table is copied, the streams in it are shared: a subshell's
-	// `exec 7>&1` must not appear in the parent, and its writes through a
-	// descriptor the parent made must still land where the parent pointed it.
-	c.fds = maps.Clone(r.fds)
+	// Every table the clone must own rather than share. One list, in one
+	// place, with a test that fails when a new one is added — see
+	// clonetables.go for why that is a check rather than a convention.
+	c.ownTables(r)
 	// A subshell begins with the parent's handled traps back at their
-	// defaults — see trapsubshell.go for what crosses and what is only
-	// still visible.
+	// defaults — see trapsubshell.go for what crosses and what is only still
+	// visible. After ownTables, which is what leaves it free to build the
+	// three tables it owns from scratch.
 	c.inheritTraps(r)
-	c.completions = maps.Clone(r.completions)
-	// The tables that say what a command *name* means, on the same terms as
-	// the variable tables above: a subshell inherits them and owns what it
-	// then does to them. All four shells in the panel agree, and they agree
-	// in both directions — `(g(){ :; }); type g` finds nothing afterwards,
-	// and `f(){ :; }; (unset -f f); type f` still finds `f`. Sharing the maps
-	// made a definition made in a subshell the parent's, and a removal made
-	// in one the parent's too, at status 0 with nothing said either way.
-	//
-	// maps.Clone keeps a nil map nil, which matters: every writer below
-	// allocates lazily, so a parent that has no aliases at all still gets a
-	// subshell with a table of its own. That is why the alias half of this
-	// hid for so long — with no alias defined first, the subshell's `alias`
-	// built the map that the parent's field never pointed at, and the leak
-	// only appeared once the parent had one.
-	//
-	// preludeFuncs is deliberately NOT among them. It is a record of what the
-	// dialect's own shell text declared, written only while the prelude is
-	// being sourced and never deleted from — so there is no moment at which a
-	// subshell could change it, and a copy per subshell would be a copy of
-	// something nobody writes. What a script *did* to one of those names is
-	// in funcs, which is copied; this is only how the shell recognizes its own
-	// declaration when it sees it again.
-	c.funcs = maps.Clone(r.funcs)
-	c.funcFiles = maps.Clone(r.funcFiles)
-	c.exportedFuncs = maps.Clone(r.exportedFuncs)
-	c.aliases = maps.Clone(r.aliases)
-	c.disabledBuiltins = maps.Clone(r.disabledBuiltins)
 	return &c
 }
 

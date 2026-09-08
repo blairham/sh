@@ -533,23 +533,34 @@ func TestAProducedParameterCanBeTakenAway(t *testing.T) {
 	if want := "[gone]\n"; out != want {
 		t.Errorf("after UnsetDynamic got %q, want %q", out, want)
 	}
-	// The *writer* goes with it, which only shows on a name registered again
-	// without one: an assignment then has to land in the ordinary table
-	// rather than reaching a writer belonging to a call that is over.
-	out, _ = run(t, `BRIEF=stored
-echo "[$BRIEF]"`, func(r *Runner) {
-		var reached []string
-		r.SetDynamic("BRIEF", func(*Runner) string { return "produced" })
-		r.SetDynamicWriter("BRIEF", func(_ *Runner, v string) { reached = append(reached, v) })
-		r.UnsetDynamic("BRIEF")
-		t.Cleanup(func() {
-			if len(reached) != 0 {
-				t.Errorf("the old writer was reached with %q after UnsetDynamic", reached)
+	// The *writer* goes with it, and this is the one step the first version of
+	// this test stopped short of — which mutation testing then found, because
+	// deleting `delete(r.dynamicWriters, …)` survived it.
+	//
+	// A stale writer is unreachable while the name has no producer: the only
+	// read of the table is inside the branch that asks whether the name is
+	// produced. So the way to reach one is to register the name *again* with
+	// no writer of its own — then an assignment finds a producer, looks for a
+	// writer, and must not find the one belonging to a call that is over.
+	var reached []string
+	out, _ = run(t, `SECOND=written
+echo "[$SECOND]"`, func(r *Runner) {
+		r.SetDynamic("SECOND", func(*Runner) string { return "first" })
+		r.SetDynamicWriter("SECOND", func(_ *Runner, v string) { reached = append(reached, v) })
+		r.UnsetDynamic("SECOND")
+		// Registered again, deliberately without a writer.
+		r.SetDynamic("SECOND", func(rr *Runner) string {
+			if v, ok := rr.Assigned("SECOND"); ok {
+				return "assigned:" + v
 			}
+			return "second"
 		})
 	})
-	if want := "[stored]\n"; out != want {
-		t.Errorf("after UnsetDynamic got %q, want %q", out, want)
+	if len(reached) != 0 {
+		t.Errorf("the writer from the first registration was reached with %q", reached)
+	}
+	if want := "[assigned:written]\n"; out != want {
+		t.Errorf("after re-registering without a writer got %q, want %q", out, want)
 	}
 	// And the readonly mark goes too, which is the one no other call can
 	// lift: a produced parameter a script must not assign to is marked

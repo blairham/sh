@@ -6866,6 +6866,41 @@ echo unreachable`,
 		Why:     "the two universal bracket forms",
 	},
 	{
+		ID: "pat/an-escape-in-a-bracket-expression-is-not-a-member", Category: "pattern matching",
+		Snippet: `case ')' in a*|[\)]) printf esc;; esac; case '\' in [\)]) printf " backslash";; *) printf " no-backslash";; esac; echo`,
+		Why:     "the whole of #1407, and deliberately not spelled `[\\\\]`: an escaped member that is *itself* a backslash makes the correct set and the wrong one identical, so a probe built on one records agreement while the bug is live. With `)` as the member all six answer the one-character set — the escape protects the character behind it and the backslash is not admitted. This implementation admitted it, so `[[ \"a\\\" == a[\\)] ]]` answered yes where zsh answers no. The `a*|` arm is there to keep the first case from being a bare `[\\)]` the reader could mistake for a test of parentheses; the second arm is the discriminating one",
+	},
+	{
+		ID: "pat/a-quoted-member-in-a-bracket-expression", Category: "pattern matching",
+		Snippet: `case ')' in [")"]) printf quoted;; esac; case '\' in [")"]) printf " backslash";; *) printf " no-backslash";; esac; case ')' in [')']) printf " single";; esac; echo`,
+		Why:     "the same question with no backslash written anywhere in the source, which is what makes the fix compulsory rather than cosmetic: quoting has no channel to the matcher except an escape, so a quoted member arrives inside the bracket expression as `\\)` whatever the source spelled. All six read the one-character set; reading the inserted backslash as a member made every quoted member admit one",
+	},
+	{
+		ID: "pat/an-escaped-dash-in-a-bracket-is-not-a-range", Category: "pattern matching",
+		Snippet: `for s in a - z b; do case $s in [a\-z]) printf "[%s]" "$s";; esac; done; echo; for s in a - z b; do case $s in [a"-"z]) printf "[%s]" "$s";; esac; done; echo`,
+		Why:     "the protection reaches the range operator too: written as an escape, the dash is the third member and not the operator in all six, so every column matches a, a dash and z and none matches b. Spending the escape before the matcher left a bare `[a-z]`, which is the range — a wrong answer with no diagnostic, and the reason the escape has to survive as far as the bracket scanner. The second line asks the same thing with the dash *quoted* rather than escaped, and there ksh93 alone reads the range: five columns treat quoting as the escape's equal inside a bracket expression and ksh93 does not. This implementation gives the five-column answer, quoting reaching the matcher as an escape and nothing separating the two spellings once it does",
+	},
+	{
+		ID: "pat/an-escaped-bracket-is-a-member-not-the-terminator", Category: "pattern matching",
+		Snippet: `for s in a ']' b c; do case $s in [a\]b]) printf "[%s]" "$s";; esac; done; echo`,
+		Why:     "the terminator is protected as well, so the set has three members and does not end at the escaped one. bash, bash 3.2, bash as sh, ksh93 and zsh agree on all three; dash reads the same expression as a two-member set holding the bracket and b, which is a divergence about where the expression ends rather than about the escape and is recorded here rather than modelled",
+	},
+	{
+		ID: "pat/an-escape-in-a-bracket-expression-globs", Category: "pattern matching",
+		Snippet: `touch 'a)' 'a\' ab; printf "[%s]" a[\)]; echo`,
+		Why:     "and pathname expansion answers what `case` answers, which is the half a matcher fix could otherwise miss: the pattern expands to the one name ending in a parenthesis and never to the one ending in a backslash. Measured in a directory holding all three so a miss is visible as the extra name rather than as an unexpanded pattern",
+	},
+	{
+		ID: "pat/an-escape-in-a-bracket-expression-from-a-value", Category: "pattern matching",
+		Snippet: `p='[\)]'; for s in ')' '\' a; do case "$s" in $p) printf "[%s]" "$s";; esac; done; echo; q='[\-z]'; for s in - z '\' y; do case "$s" in $q) printf "[%s]" "$s";; esac; done; echo`,
+		Why:     "the other route, and the one place the panel does *not* agree: five shells read a backslash arriving from a value as the same escape, so the sets are `)` and `-`,z. zsh reads an expansion's result as a pattern only under an option, so both lines are empty there — its answer to this question is the row below. The pair is what says the divergence belongs to the value route alone, the source route above being unanimous",
+	},
+	{
+		ID: "pat/an-escape-in-a-bracket-expression-from-a-forced-pattern", Category: "pattern matching",
+		Snippet: `p='[\)]'; for s in ')' '\' a; do [[ $s == ${~p} ]] && printf "[%s]" "$s"; done; echo; q='[\-z]'; for s in - z '\' y; do [[ $s == ${~q} ]] && printf "[%s]" "$s"; done; echo`,
+		Why:     "zsh's answer to the row above, through the construct that forces a value to be read as a pattern — the only way to hand a matcher a bracket expression holding a backslash the lexer has not already spent. Both sets keep the backslash *as well as* the character it protects: `[\\)]` holds `)` and a backslash, and `[\\-z]` holds a dash, a z and a backslash while holding no y, so the dash stays a member rather than becoming the range operator. That is Semantics.BracketEscapeIsAlsoAMember, and it is why the answer is applied to expansion results rather than in the matcher, which cannot tell this backslash from the one quoting inserts. The other five have no `${~…}` and report a bad substitution",
+	},
+	{
 		ID: "pat/bracket-dash-at-an-edge-is-literal", Category: "pattern matching",
 		Snippet: `case - in [a-]) echo trailing;; esac; case - in [-a]) echo leading;; esac; case a in [a-]) echo a;; esac; case b in [a-]) echo range;; *) echo not-b;; esac`,
 		Why:     "a dash first or last in a bracket expression is a character rather than a range, so [a-] matches a and a literal dash and nothing between",

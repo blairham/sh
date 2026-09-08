@@ -130,6 +130,12 @@ func TestADescriptorThatBecomesReadableCallsTheShell(t *testing.T) {
 		t.Fatal(werr)
 	}
 	waitFor(t, s.screen, "x", "the keystroke")
+	// The screen as it stands *before* the descriptor wakes. Taken here and
+	// not after the callback has run, which is the whole reliability of the
+	// assertion below: a redraw happens inside the same call the callback
+	// does, so a snapshot taken afterwards has already lost the race.
+	time.Sleep(50 * time.Millisecond)
+	before := s.screen.String()
 
 	if _, werr := write.WriteString("wake\n"); werr != nil {
 		t.Fatal(werr)
@@ -147,8 +153,7 @@ func TestADescriptorThatBecomesReadableCallsTheShell(t *testing.T) {
 	// line sitting behind whatever the callback printed for itself. A shell
 	// that redrew here would put the prompt and the line underneath its own
 	// output every time a descriptor woke, which on a chatty one is a prompt
-	// scrolling up the screen on its own.
-	before := s.screen.String()
+	// walking up the screen on its own.
 	time.Sleep(150 * time.Millisecond)
 	if after := s.screen.String(); after != before {
 		t.Errorf("the screen gained %q after a callback that changed nothing", after[len(before):])

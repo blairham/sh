@@ -15,34 +15,42 @@ import (
 // descriptions, and writes what it found into arrays or into an association.
 //
 // Measured 2026-09-06 against zsh 5.9.2 with a scratch HOME and no startup
-// files, and read alongside the module's own manual page — which documents
-// the spec grammar completely, so every form below is a measured form and
-// nothing is inferred from the wording alone.
+// files, and again 2026-09-08 for `-M`. Read alongside the module's own manual
+// page — which documents the spec grammar completely — but the manual is not
+// the authority here: it calls `-M`'s results "unpredictable if the `name+`
+// specifier is used inconsistently", and they are not. Every form below is a
+// measured form.
 //
-// It is by far the most used of the module's four builtins: a real plugin
-// manager calls it five times before it has loaded anything, and it is the
-// standard way a zsh function reads its flags. Nothing in it touches the
-// filesystem, the editor or completion — it reads `$@` and writes a
-// parameter, which is why it is worth having on its own.
+// The panel puts the whole builtin here and nowhere else. `zparseopts` is
+// zsh's alone: bash 5.3.15, that binary under argv[0] `sh`, bash 3.2.57, dash
+// and ksh93 all answer `command not found` at 127, so there is no intersection
+// to place in the core and no axis for the others to disagree on. It is by far
+// the most used of the module's four builtins: a real plugin manager calls it
+// five times before it has loaded anything.
 //
-// Three things about it are easy to get plausibly wrong, and each is what
-// makes a wrong answer here worse than a refusal: the caller gets variables
-// it can read, holding values it did not ask for, at status 0.
+// Four things about it are easy to get plausibly wrong, and each is what makes
+// a wrong answer here worse than a refusal: the caller gets variables it can
+// read, holding values it did not ask for, at status 0.
 //
 //  1. **Where an argument goes.** `a:` puts the argument in an element of its
 //     own — `(-a val)` — and `a:-` and `a::` put it in the *same* element as
 //     the option, `(-aval)`. A script reading `$x[2]` gets the option's
 //     argument under one spelling and the next option under the other.
-//  2. **What "the last occurrence" means.** Without `+`, only the last
-//     appearance of *that option* survives, and several options can share one
-//     array — so the pruning is per description and the array is still in the
-//     order the command line was in.
+//  2. **Where a repeated option's answer *sits*.** Without `+` only one
+//     appearance survives, and the element it leaves behind is at the position
+//     of the **first** appearance carrying the **last** one's argument:
+//     `-a v1 -c z -a v2` against `-a arr a: c:` is `(-a v2 -c z)`, not
+//     `(-c z -a v2)`. Reading it as "keep the last occurrence" reorders the
+//     array under a script that indexes it.
 //  3. **When parsing stops.** At the first word no description covers,
 //     unless `-E`; and always at a bare `-` or `--`, `-E` or not. A parser
 //     that ran to the end of `$@` would collect flags a script meant to pass
 //     on to something else.
-//
-// `-M` is refused by name rather than built: see zparseoptsUnimplemented.
+//  4. **What `-M` moves and what it leaves.** It makes one description store
+//     under another's, and the two halves come apart: the *matched*
+//     description still decides whether an argument is taken from the command
+//     line, and the *target* decides the shape it lands in. See
+//     zparseoptsResolve.
 
 // zparseoptsArg is what a description says about its option's argument.
 type zparseoptsArg uint8
@@ -73,6 +81,9 @@ func (k zparseoptsArg) joinsArgument() bool {
 
 // zparseoptsSpec is one option description.
 type zparseoptsSpec struct {
+	// word is the description exactly as it was written, which is what the
+	// cyclic-mapping refusal quotes back.
+	word string
 	// name is the option without its leading `-`, so `a` is `-a` and `-foo`
 	// is `--foo`. Measured: a description of `foo` matches `-foo` and not
 	// `--foo`, and one of `-foo` matches `--foo` and not `-foo`.
@@ -80,9 +91,17 @@ type zparseoptsSpec struct {
 	// plus is `+`: every appearance is kept rather than only the last.
 	plus bool
 	arg  zparseoptsArg
-	// array is the `=array` half, empty when the description has none and
-	// the default array is to be used.
-	array string
+	// target is the `=` half: an array name, or under `-M` the name of
+	// another description this one stores under.
+	target string
+	// hasTarget is whether there was an `=` at all, which is not the same
+	// question as whether target is empty. `a` takes the default array and
+	// `a=` names an array called nothing — measured, `zparseopts -a A a= b`
+	// is `not an identifier: ` at 1 where `zparseopts -a A a b` is silent,
+	// and `zparseopts a= b` complains about `b` rather than about `a=`, so
+	// the empty `=` satisfies the missing-array check and then fails the
+	// name check.
+	hasTarget bool
 }
 
 // option is the word this description matches, which is also the word written
@@ -95,29 +114,15 @@ type zparseoptsOpts struct {
 	every    bool   // -E
 	strict   bool   // -F
 	keep     bool   // -K
+	alias    bool   // -M
 	array    string // -a
 	assoc    string // -A
 	hasAssoc bool
 }
 
-// zparseoptsLetters are the letters implemented here, and
-// zparseoptsUnimplemented is `-M`, which is refused by name.
-//
-// **`-M` is refused because it was measured and could not be explained**,
-// which is the one reason worth writing down. It maps several descriptions
-// onto one storage slot, and the manual itself says results "may be
-// unpredictable if the `name+` specifier is used inconsistently". Two
-// measurements need two different rules: with `-M a:=b b:=q` and `-a v -b w`
-// the array `q` comes back `(-a w)` — the *first* option's name beside the
-// *second* option's value — while the manual's own `-A bar -M a=foo b+: c:=b`
-// example keys the association by the *target* description's name. A parser
-// that picked either rule would bind the other case wrongly at status 0,
-// which is exactly the failure this builtin can cause and the reason to say
-// no. Nothing in the plugin manager this work is aimed at uses it.
-const (
-	zparseoptsLetters       = "DEFKaA"
-	zparseoptsUnimplemented = "M"
-)
+// zparseoptsLetters are this builtin's own letters. All six are implemented;
+// there is nothing here that refuses by name.
+const zparseoptsLetters = "DEFKMaA"
 
 func registerZparseopts(r *interp.Runner) {
 	r.Register("zparseopts", zparseoptsBuiltin)
@@ -136,7 +141,11 @@ func zparseoptsBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
-	return zparseoptsRun(r, opts, specs)
+	res, code := zparseoptsResolve(r, opts, specs)
+	if code != 0 {
+		return code
+	}
+	return zparseoptsRun(r, opts, specs, res)
 }
 
 // zparseoptsOptions reads this builtin's own letters.
@@ -160,9 +169,6 @@ func zparseoptsOptions(r *interp.Runner, args []string) (opts zparseoptsOpts, re
 		}
 		letter := word[1]
 		switch {
-		case strings.IndexByte(zparseoptsUnimplemented, letter) >= 0:
-			r.Diagnosef("-%c is not implemented yet\n", letter)
-			return opts, nil, 1
 		case strings.IndexByte(zparseoptsLetters, letter) < 0:
 			// Not one of ours, so the word is a description rather than a
 			// bad option — which is what makes an unstackable letter set
@@ -198,6 +204,8 @@ func zparseoptsOptions(r *interp.Runner, args []string) (opts zparseoptsOpts, re
 			opts.strict = true
 		case 'K':
 			opts.keep = true
+		case 'M':
+			opts.alias = true
 		}
 	}
 	return opts, rest, 0
@@ -217,7 +225,7 @@ func zparseoptsSpecs(r *interp.Runner, opts zparseoptsOpts, words []string) ([]z
 			r.Diagnosef("invalid option description: %s\n", word)
 			return nil, 1
 		}
-		if spec.array == "" && opts.array == "" && !opts.hasAssoc {
+		if !spec.hasTarget && opts.array == "" && !opts.hasAssoc {
 			// Measured, and it is the refusal a bare `zparseopts a` gets:
 			// nowhere to put what it finds. The word is quoted back as
 			// written, so a mistyped letter of this builtin's own — which
@@ -232,15 +240,6 @@ func zparseoptsSpecs(r *interp.Runner, opts zparseoptsOpts, words []string) ([]z
 			}
 			seen[spec.name] = true
 		}
-		if spec.array != "" && !isIdentifier(spec.array) {
-			// Real zsh's own assignment machinery complains here — `not an
-			// identifier: 1bad`, located as the shell rather than as this
-			// builtin — and then *aborts* a non-interactive shell. The
-			// sentence is reproduced and the fatality is not: see the
-			// pull request.
-			r.DiagnoseAsTheShellf("not an identifier: %s\n", spec.array)
-			return nil, 1
-		}
 		specs = append(specs, spec)
 	}
 	return specs, 0
@@ -248,7 +247,7 @@ func zparseoptsSpecs(r *interp.Runner, opts zparseoptsOpts, words []string) ([]z
 
 // parseZparseoptsSpec reads one description.
 func parseZparseoptsSpec(word string) (zparseoptsSpec, bool) {
-	var spec zparseoptsSpec
+	spec := zparseoptsSpec{word: word}
 	var name strings.Builder
 	i := 0
 	for ; i < len(word); i++ {
@@ -273,7 +272,7 @@ func parseZparseoptsSpec(word string) (zparseoptsSpec, bool) {
 		// 0 — while `zparseopts "=x"` is `no default array defined: =x`. So
 		// it is a description with *no* array, whatever follows the `=`, and
 		// the complaint about a missing default array is the one it earns.
-		return zparseoptsSpec{}, true
+		return zparseoptsSpec{word: word}, true
 	}
 	if i < len(word) && word[i] == '+' {
 		spec.plus = true
@@ -300,8 +299,123 @@ func parseZparseoptsSpec(word string) (zparseoptsSpec, bool) {
 		// `a:::=x` reaches here, and is `invalid option description` in zsh.
 		return spec, false
 	}
-	spec.array = word[i+1:]
+	spec.target, spec.hasTarget = word[i+1:], true
 	return spec, true
+}
+
+// zparseoptsResolution is where each description's matches are stored, once
+// `-M` has been read.
+//
+// Without `-M` it is the identity: every description stores under itself, in
+// its own `=array` or in the default one. `-M` is what makes it worth a pass
+// of its own.
+type zparseoptsResolution struct {
+	// terminal[i] is the description whose *storage* description i uses. It
+	// is i itself for every description that is not an alias.
+	terminal []int
+	// array[i] is the array a terminal description writes into, empty for a
+	// description that writes into no array at all. Only a terminal's entry
+	// is consulted.
+	array []string
+	// named[i] is whether description i wrote that array name itself, with
+	// an `=`. It is not `array[i] != ""`: `a=` names an array called nothing,
+	// which is a name to be refused rather than an absent one, and an alias
+	// or a self-alias has an empty array that is absent rather than refused.
+	named []bool
+}
+
+// zparseoptsResolve reads `-M` and settles, for every description, where its
+// matches go.
+//
+// **What `-M` changes is one character's meaning and nothing else**: the `=`
+// half. Without it `a=b` names the array `b`; with it, `a=b` names the
+// *description* `b` when there is one and the array `b` when there is not.
+// Measured both ways — `zparseopts -M -a A a=foo` with no description called
+// `foo` fills `foo`, exactly as the same line without `-M` does, so the letter
+// is not a mode the spec grammar switches into. The manual's own example
+// leans on this: `-A bar -M a=foo b+: c:=b` aliases `c` onto `b` and puts `-a`
+// in an array called `foo`, in the same command.
+//
+// Links follow transitively — `a:=b b:=c c:=q` puts a `-a` in `q` — and a
+// cycle of two or more is `cyclic option mapping:` quoting the description
+// that closes it, at 1, with nothing parsed and nothing stored. A description
+// aliased to *itself* is not a cycle and not an error: it is a description
+// that stores in no array at all, and `zparseopts -M -a A a=a` with `-a` on
+// the command line leaves `A` empty at status 0. It still reaches an
+// association, keyed by its own option, which is how the two halves are told
+// apart.
+//
+// Nothing here asks whether an array *name* is a name. That check is not
+// static at all — see zparseoptsStore — which is also what lets an alias name
+// a description whose spelling is no identifier: `-M -a A a=-b -b` is the
+// long-option pair `--b`/`--a` and is silent.
+func zparseoptsResolve(
+	r *interp.Runner, opts zparseoptsOpts, specs []zparseoptsSpec,
+) (zparseoptsResolution, int) {
+	res := zparseoptsResolution{
+		terminal: make([]int, len(specs)),
+		array:    make([]string, len(specs)),
+		named:    make([]bool, len(specs)),
+	}
+	link := make([]int, len(specs))
+	for i := range link {
+		link[i] = -1
+		res.terminal[i] = i
+	}
+	if opts.alias {
+		byName := make(map[string]int, len(specs))
+		for i, s := range specs {
+			if s.name != "" {
+				byName[s.name] = i
+			}
+		}
+		for i, s := range specs {
+			// The guard is hasTarget rather than a non-empty target so that
+			// it reads the same way as the missing-array check above, and
+			// the two are not distinguishable here on purpose: a description
+			// that names no option is never in byName, so an empty target
+			// never finds a link either way.
+			if !s.hasTarget {
+				continue
+			}
+			if j, ok := byName[s.target]; ok {
+				link[i] = j
+			}
+		}
+	}
+	for i := range specs {
+		seen := map[int]bool{i: true}
+		j := i
+		for link[j] >= 0 && link[j] != j {
+			next := link[j]
+			if seen[next] {
+				// The description that closes the cycle, as written — which
+				// is `b=a` for `a=b b=a` and `c=a` for `a=b b=c c=a`, and
+				// `b=a` again for `x=a a=b b=a`, where the walk enters the
+				// cycle from outside it.
+				r.Diagnosef("cyclic option mapping: %s\n", specs[j].word)
+				return zparseoptsResolution{}, 1
+			}
+			seen[next] = true
+			j = next
+		}
+		res.terminal[i] = j
+	}
+	for i, s := range specs {
+		switch {
+		case link[i] == i:
+			// Aliased to itself: no array, and not the default one either.
+		case link[i] >= 0:
+			// An alias names a description rather than an array, so it names
+			// no array — which is also why it never earns the missing-array
+			// complaint the descriptions pass raises.
+		case s.hasTarget:
+			res.array[i], res.named[i] = s.target, true
+		default:
+			res.array[i] = opts.array
+		}
+	}
+	return res, 0
 }
 
 // isIdentifier reports whether a name is one a script could read back.
@@ -323,13 +437,22 @@ func isIdentifier(name string) bool {
 
 // zparseoptsMatch is one appearance of one option on the command line, in the
 // order it appeared.
+//
+// It records what was *matched* and not what will be written. Which array the
+// match lands in, what shape it takes and which option spells it are all
+// questions about the description it stores under, which `-M` can make a
+// different one — so they are settled once, in zparseoptsStore, rather than
+// laid out here where the group is not yet known.
 type zparseoptsMatch struct {
 	spec int
-	// elems is what goes into the array: the option, and its argument either
-	// beside it or joined to it.
-	elems []string
-	// value is what goes into the association, which is the argument alone.
+	// option is the option as this word spelled it, `-` and the description's
+	// name.
+	option string
+	// value is the argument, and has says whether there was one — which is
+	// not the same as an empty one: `-a ""` and a bare `-a` under `a::` give
+	// different arrays.
 	value string
+	has   bool
 }
 
 // zparseoptsRun is the parse itself, and it is deliberately in two halves:
@@ -338,7 +461,9 @@ type zparseoptsMatch struct {
 // not performed, and option arrays are not updated" — and it is measured for
 // a missing argument as well, which fails the same way with or without the
 // letter.
-func zparseoptsRun(r *interp.Runner, opts zparseoptsOpts, specs []zparseoptsSpec) int {
+func zparseoptsRun(
+	r *interp.Runner, opts zparseoptsOpts, specs []zparseoptsSpec, res zparseoptsResolution,
+) int {
 	params := r.Params
 	var matches []zparseoptsMatch
 	consumed := make([]bool, len(params))
@@ -381,7 +506,7 @@ func zparseoptsRun(r *interp.Runner, opts zparseoptsOpts, specs []zparseoptsSpec
 		}
 		i = next
 	}
-	zparseoptsStore(r, opts, specs, matches)
+	code := zparseoptsStore(r, opts, specs, res, matches)
 	if opts.remove {
 		kept := make([]string, 0, len(params))
 		for j, p := range params {
@@ -391,7 +516,10 @@ func zparseoptsRun(r *interp.Runner, opts zparseoptsOpts, specs []zparseoptsSpec
 		}
 		r.Params = kept
 	}
-	return 0
+	// After the removal and not instead of it: a store that refuses a name
+	// still leaves `-D`'s work done, measured — `zparseopts -D -a A a=1bad`
+	// on `-a v` reports `not an identifier` and leaves `(v)` in `$@`.
+	return code
 }
 
 // zparseoptsWord matches one command-line word, which may hold several
@@ -421,7 +549,7 @@ func zparseoptsWord(
 		spec := specs[idx]
 		rest := text[len(spec.name):]
 		if spec.arg == zparseoptsNoArg {
-			out = append(out, zparseoptsMatch{spec: idx, elems: []string{spec.option()}})
+			out = append(out, zparseoptsMatch{spec: idx, option: spec.option()})
 			if rest == "" {
 				return out, next, true
 			}
@@ -434,7 +562,7 @@ func zparseoptsWord(
 		if code != 0 {
 			return nil, at, false
 		}
-		out = append(out, zparseoptsElems(idx, spec, arg, has))
+		out = append(out, zparseoptsMatch{spec: idx, option: spec.option(), value: arg, has: has})
 		return out, next, true
 	}
 	return out, next, true
@@ -468,18 +596,6 @@ func zparseoptsArgument(
 		}
 		*next = following
 		return params[following], true, 0
-	}
-}
-
-// zparseoptsElems lays one match out the way its description says to.
-func zparseoptsElems(idx int, spec zparseoptsSpec, arg string, has bool) zparseoptsMatch {
-	switch {
-	case !has:
-		return zparseoptsMatch{spec: idx, elems: []string{spec.option()}}
-	case spec.arg.joinsArgument():
-		return zparseoptsMatch{spec: idx, elems: []string{spec.option() + arg}, value: arg}
-	default:
-		return zparseoptsMatch{spec: idx, elems: []string{spec.option(), arg}, value: arg}
 	}
 }
 
@@ -521,71 +637,178 @@ func zparseoptsLongest(specs []zparseoptsSpec, text string) int {
 
 // zparseoptsStore writes what was found.
 //
-// The order is the command line's and the pruning is per description: without
-// `+` only a description's last appearance survives, and several descriptions
-// may share one array — `-a arr a b` against `-a -b` is `(-a -b)`, which a
-// per-array "keep the last" would have cut to one.
+// A description owns **one slot** in its array, and the slot sits where the
+// description's *first* match was: `-a v1 -c z -a v2` against `-a arr a: c:`
+// is `(-a v2 -c z)`, the second `-a` having replaced the first in place rather
+// than moving to the end. `+` is the opposite and simpler rule — every match
+// appends, in command-line order, and no slot is shared.
+//
+// Under `-M` the slot belongs to the *group*: every description aliased onto
+// one terminal shares the terminal's slot, its array, its `+` and its element
+// shape. That is what makes the two halves of a match come apart, and both
+// halves are measured:
+//
+//   - `zparseopts -M a:=b b:=q` with `-a v -b w` leaves `q` as `(-a w)` — the
+//     option the **first** match spelled beside the **last** match's argument.
+//     Neither `(-a v)` nor `(-b w)` is the answer, and both are what a reading
+//     that kept one whole match would give.
+//   - where the terminal joins its argument, the option in the element is the
+//     **terminal's** and not the match's: `-M a:=b b:-=q` with `-a v` is
+//     `(-bv)`. With `+` on that terminal, every element is spelled the
+//     terminal's way — `(-bv1 -bw -bv2)` — where an unjoined terminal spells
+//     each element the way its own match was written, `(-b w -a v)`.
+//
+// Which arrays are cleared is the whole of `-K`: without it every array a
+// terminal description names is replaced, matched or not, **and so is the
+// default array whether or not any description names it** — `A=(pre);
+// zparseopts -a A a=q` with no arguments at all leaves `A` empty. With `-K` an
+// array whose descriptions never matched keeps what it held.
 func zparseoptsStore(
-	r *interp.Runner, opts zparseoptsOpts, specs []zparseoptsSpec, matches []zparseoptsMatch,
-) {
-	last := make(map[int]int, len(specs))
-	for i, m := range matches {
-		last[m.spec] = i
-	}
-	slots := map[string][]string{}
+	r *interp.Runner, opts zparseoptsOpts, specs []zparseoptsSpec,
+	res zparseoptsResolution, matches []zparseoptsMatch,
+) int {
+	lists := map[string][][]string{}
 	used := map[string]bool{}
+	slotAt := make(map[int]int, len(specs))
+	firstOption := make(map[int]string, len(specs))
 	assoc := map[string]string{}
-	for i, m := range matches {
-		spec := specs[m.spec]
-		if !spec.plus && last[m.spec] != i {
-			continue
+	for _, m := range matches {
+		group := res.terminal[m.spec]
+		target := specs[group]
+		if _, ok := firstOption[group]; !ok {
+			firstOption[group] = m.option
 		}
-		name := spec.array
-		if name == "" {
-			name = opts.array
+		option := m.option
+		if !target.plus {
+			// The slot keeps the spelling that opened it; only the argument
+			// is replaced. Without `-M` this is the same word either way,
+			// which is why the rule is invisible until an alias is in play.
+			option = firstOption[group]
 		}
-		if name != "" {
-			slots[name] = append(slots[name], m.elems...)
+		elems := zparseoptsElems(target, option, m.value, m.has)
+		if name := res.array[group]; name != "" {
 			used[name] = true
+			at, ok := slotAt[group]
+			switch {
+			case target.plus:
+				lists[name] = append(lists[name], elems)
+			case ok:
+				lists[name][at] = elems
+			default:
+				slotAt[group] = len(lists[name])
+				lists[name] = append(lists[name], elems)
+			}
 		}
-		if spec.plus {
-			assoc[spec.option()] += m.value
+		// The association is keyed by the *terminal's* option however the
+		// match was spelled, which is the manual's own example: `c:=b` puts
+		// `-c3`'s argument under `-b`.
+		if target.plus {
+			assoc[target.option()] += m.value
 			continue
 		}
-		assoc[spec.option()] = m.value
+		assoc[target.option()] = m.value
 	}
-	// Which arrays are cleared is the whole of `-K`: without it every array
-	// a description names is replaced, matched or not; with it one whose
-	// descriptions never matched keeps what it held.
-	for _, s := range specs {
-		name := s.array
-		if name == "" {
-			name = opts.array
-		}
-		if name == "" || used[name] {
+	bad, refused := "", false
+	for _, name := range zparseoptsArrays(opts, specs, res) {
+		if !used[name] && opts.keep {
+			// Never written, so never checked: `zparseopts -K -a A a=1bad`
+			// with nothing to match is a silent 0, and the same line with a
+			// `-a` on the command line is not.
 			continue
 		}
-		if !opts.keep {
-			r.SetArray(name, nil)
+		if !isIdentifier(name) {
+			if !refused {
+				bad, refused = name, true
+			}
+			continue
 		}
-	}
-	for name, elems := range slots {
+		var elems []string
+		for _, slot := range lists[name] {
+			elems = append(elems, slot...)
+		}
 		r.SetArray(name, elems)
 	}
-	if !opts.hasAssoc {
-		return
-	}
-	table := map[string]string{}
-	if opts.keep {
-		// `-K` preserves the individual elements of an association, where
-		// for an array it preserves the whole thing or none of it. Measured
-		// both ways.
-		if existing, ok := r.GetAssoc(opts.assoc); ok {
-			table = existing
+	if opts.hasAssoc {
+		if !isIdentifier(opts.assoc) {
+			if !refused {
+				bad, refused = opts.assoc, true
+			}
+		} else {
+			table := map[string]string{}
+			if opts.keep {
+				// `-K` preserves the individual elements of an association,
+				// where for an array it preserves the whole thing or none of
+				// it. Measured both ways.
+				if existing, ok := r.GetAssoc(opts.assoc); ok {
+					table = existing
+				}
+			}
+			for k, v := range assoc {
+				table[k] = v
+			}
+			r.SetAssoc(opts.assoc, table)
 		}
 	}
-	for k, v := range assoc {
-		table[k] = v
+	if !refused {
+		return 0
 	}
-	r.SetAssoc(opts.assoc, table)
+	// Real zsh's own assignment machinery complains here — `not an
+	// identifier: 1bad`, located as the shell rather than as this builtin —
+	// and then *aborts* a non-interactive shell. The sentence is reproduced
+	// and the fatality is not: see the pull request.
+	r.DiagnoseAsTheShellf("not an identifier: %s\n", bad)
+	return 1
+}
+
+// zparseoptsArrays is every array this call writes, in the order the
+// not-an-identifier refusal picks its name from — which is the only thing the
+// order is observable through, since the writes themselves are to different
+// names.
+//
+// The order is measured and it is not the descriptions': the arrays a
+// description named with `=` come **last first**, and the default array comes
+// after all of them. `zparseopts -a A a=1bad b=2bad c=3bad` names `3bad`, the
+// same line with the three descriptions reversed names `1bad`, and
+// `zparseopts -a 1bad a=2bad b` names `2bad` though the last description is
+// the one using the default array. A description with no `=` contributes the
+// default array and nothing of its own, which is why it does not pull the
+// default forward.
+func zparseoptsArrays(
+	opts zparseoptsOpts, specs []zparseoptsSpec, res zparseoptsResolution,
+) []string {
+	var names []string
+	seen := map[string]bool{}
+	add := func(name string) {
+		if seen[name] {
+			return
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	for i := len(specs) - 1; i >= 0; i-- {
+		if res.named[i] {
+			add(res.array[i])
+		}
+	}
+	if opts.array != "" {
+		add(opts.array)
+	}
+	return names
+}
+
+// zparseoptsElems lays one match out the way the description it stores under
+// says to. option is the spelling the element carries where the shape leaves
+// room for one — see zparseoptsStore for which spelling that is.
+func zparseoptsElems(target zparseoptsSpec, option, value string, has bool) []string {
+	switch {
+	case !has:
+		// No argument this time, so the slot is the option alone — even
+		// where an earlier match of the same group had one: `-M a=b b:=q`
+		// with `-b w -a` leaves `(-b)` and not `(-b w)`.
+		return []string{option}
+	case target.arg.joinsArgument():
+		return []string{target.option() + value}
+	default:
+		return []string{option, value}
+	}
 }

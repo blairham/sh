@@ -12693,6 +12693,36 @@ echo "read=[$l]"`,
 		Why:     "no descriptions at all is `missing option descriptions` and 1, where a bare `zparseopts` doing nothing quietly would be the plausible answer. The builtin's name is in the location, which is where this shell puts it",
 	},
 	{
+		ID: "zparseopts/a-repeated-option-keeps-its-first-place", Category: "builtins",
+		Snippet: `set -- -a v1 -c z -a v2; zparseopts -a arr a: c:; echo "st=$? arr=[${(j:|:)arr}]"; set -- -a -c -a; zparseopts -a arr a c; echo "flag=$? arr=[${(j:|:)arr}]"`,
+		Why:     "where a repeated option's answer *sits*, which `only the last occurrence survives` does not say: the element stays at the **first** appearance's place and takes the last one's argument, so this is `(-a v2 -c z)` and not `(-c z -a v2)`. The pruning is per description and so is the slot; a reading that dropped the earlier match and appended the later one reorders the array under a script that indexes it, at 0. Nobody else has the builtin",
+	},
+	{
+		ID: "zparseopts/the-default-array-is-emptied-whether-or-not-it-is-named", Category: "builtins",
+		Snippet: `arr=(old); zparseopts -a arr a=q; echo "st=$? arr=[${(j:|:)arr}]"; arr=(old); zparseopts -K -a arr a=q; echo "keep=$? arr=[${(j:|:)arr}]"`,
+		Why:     "`-a` names the default array and no description here uses it — and it is emptied anyway, which is the half of the clearing rule that only shows when nothing names it. `-K` beside it is the whole of the difference. A rule that cleared only the arrays descriptions mention leaves a caller's earlier `arr` standing and looks like a successful parse of nothing",
+	},
+	{
+		ID: "zparseopts/the-mapping-letter-stores-under-another-description", Category: "builtins",
+		Snippet: `set -- -a -b; zparseopts -M -a arr a=b b; echo "st=$? arr=[${(j:|:)arr}] b=[${(j:|:)b}]"; set -- -a -b; zparseopts -a arr a=b b; echo "plain=$? arr=[${(j:|:)arr}] b=[${(j:|:)b}]"; set -- -a; zparseopts -M -a arr a=foo; echo "array=$? foo=[${(j:|:)foo}]"`,
+		Why:     "`-M` changes the meaning of one character and nothing else: `=` names another *description* when there is one by that name and an array when there is not, which the three runs are — the same line with and without the letter answers oppositely, and the third shows the letter is not a mode the grammar switches into. The two mapped descriptions then share one slot, so `(-a)` is the whole answer where the plain reading gives two arrays with one element each",
+	},
+	{
+		ID: "zparseopts/a-mapped-option-keeps-its-own-argument-rule", Category: "builtins",
+		Snippet: `set -- -a v -b; zparseopts -D -M a:=b b=q; echo "st=$? q=[${(j:|:)q}] argv=[${(j:|:)@}]"; set -- -a v; zparseopts -D -M a=b b:=q; echo "other=$? q=[${(j:|:)q}] argv=[${(j:|:)@}]"; set -- -a v -b w; zparseopts -M a:=b b:-=q; echo "joined=$? q=[${(j:|:)q}]"`,
+		Why:     "the two halves of a mapped match come apart, and this is the pair that says which is which: the **matched** description decides whether an argument is taken off the command line — `-a v` swallows `v` in the first run and leaves it in the second — and the **target** decides the shape it lands in, down to spelling the joined element with its own option. A reading that took either question from one description alone is right in one run here and hands the caller the wrong word in the other",
+	},
+	{
+		ID: "zparseopts/a-mapping-cycle-and-a-mapping-to-itself", Category: "builtins",
+		Snippet: `set -- -a -b; zparseopts -M -a arr a=a b; echo "self=$? arr=[${(j:|:)arr}]"; zparseopts -M -a arr a=b b=c c=a 2>&1; echo "cycle=$?"`,
+		Why:     "two degenerate mappings and two different answers, which is why they are one row: a description mapped onto *itself* is not an error and stores in no array at all, at 0, while a cycle of two or more is `cyclic option mapping:` at 1 quoting the description that closes it. Treating the self-mapping as the cycle it looks like refuses a line this shell runs",
+	},
+	{
+		ID: "zparseopts/a-refusal-leaves-the-name-as-it-found-it", Category: "builtins",
+		Snippet: `f() { local -a opts=(p q); zparseopts -F -a opts X 2>&1; print -r -- "st=$?"; typeset -p opts; }; f -Z; g() { local -a opts; zparseopts -a opts "X:::y" 2>&1; print -r -- "st=$? n=${#opts[@]}"; typeset -p opts; }; g -X`,
+		Why:     "a refusal that also writes the name it was given is worse than a plain refusal, because the damage is read several lines later and attributed to whatever fails next. `typeset -p` rather than the contents: an array holding nothing and a scalar holding nothing print the same and answer `${#opts}` the same, and the difference only surfaces when a later `${opts[@]}` or a subscript reads a string as though it were a list",
+	},
+	{
 		ID: "zformat/substitution-with-a-field-width", Category: "builtins",
 		Snippet: `zformat -f R "[%10c][%-10c][%5.2c]" c:hi; echo "st=$? [$R]"`,
 		Why:     "the whole of `-f`'s width grammar in one string: a minimum pads to the right, a negative minimum pads to the left, and a maximum truncates before the minimum pads. Bracketed because every one of those decisions is invisible in the text and visible only in the spaces",

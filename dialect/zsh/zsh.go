@@ -843,6 +843,11 @@ func Semantics() interp.Semantics {
 	// a subshell because the refusal is fatal here, which is the only way to
 	// have a reader left to ask.
 	s.ReadRefusesABadNameBeforeReading = interp.No
+	// ReadCountJudgesTheNamesAfterTheFirst is left unanswered here too.
+	// This shell's `-n` is a flag rather than a count and its `-k` reads
+	// from the terminal — `printf 'XYZW\n' | zsh -c 'read -k 3 a'` answers
+	// `not interactive and can't open terminal` — so no count ever reaches
+	// the operands on this route.
 	// `export a[1]=v` sets the element and reports success here, measured
 	// 2026-09-07 — and so does `readonly a[1]=v` as far as the *name* check
 	// goes, which then refuses it for a reason about elements rather than

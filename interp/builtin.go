@@ -2145,6 +2145,23 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		if r.unspecified {
 			return 2
 		}
+		// A count changes who is judged past the first name: bash carries
+		// on and ksh93 stops. Asked here rather than in front of the walk,
+		// so that it is asked only when there is a bad name past the first
+		// for it to decide about — the two dialects that have no count that
+		// reaches this leave it unanswered.
+		if i > 0 && count >= 0 && !r.ask(r.sem().ReadCountJudgesTheNamesAfterTheFirst,
+			"`read` with a count judging the names after the first") {
+			if r.unspecified {
+				return 2
+			}
+			// The filling still stops here, and only the complaint is
+			// withheld: measured, `b=keep; read -n 3 a 1bad b` leaves b as
+			// keep in the shell that says nothing, so the bad name ends the
+			// list there as surely as it does where it is reported.
+			fill = i
+			break
+		}
 		fill, badName, bad = i, name, true
 		break
 	}

@@ -343,3 +343,86 @@ func TestAnUnansweredReadNameAxisIsRefusedByName(t *testing.T) {
 		t.Errorf("said %q status %d, want a plain name to ask nothing", out, st)
 	}
 }
+
+// A subscripted operand is not judged as a name here. `read a[0]` fills the
+// element in bash, bash 3.2 and ksh93, so refusing it as a bad name would
+// answer three of the six wrongly — what this shell then does with it is a
+// separate question and this leaves it exactly where it was.
+func TestAReadOperandWithASubscriptIsNotJudgedAsAName(t *testing.T) {
+	out, st := readRun(t, func(s *Semantics) { s.ReadNameOperands = PlainNamesOnly }, Diagnostics{},
+		`printf 'text\n' | { read "a[0]"; echo "st=$?"; }`)
+	if !strings.Contains(out, "st=0") || st != 0 {
+		t.Errorf("said %q status %d, want a subscripted operand to reach no name check", out, st)
+	}
+	// And the base still has to be a name: `1bad[0]` is a bad name in every
+	// column that has the word, quoted back whole.
+	if out, _ := readRun(t, nil, Diagnostics{}, `printf 'text\n' | { read "1bad[0]"; echo "st=$?"; }`); !strings.Contains(out, "st=1") {
+		t.Errorf("said %q, want a subscript on something that is not a name to be refused", out)
+	}
+}
+
+// Only the first bad name is reported, and the walk stops there. A shell that
+// reported the last would name a word the filling never reached.
+func TestOnlyTheFirstBadReadNameIsReported(t *testing.T) {
+	out, _ := readRun(t, nil, Diagnostics{}, `printf 'X Y\n' | { read 1bad 2bad; echo "st=$?"; }`)
+	if !strings.Contains(out, "`1bad'") || strings.Contains(out, "2bad") {
+		t.Errorf("said %q, want the first bad name alone", out)
+	}
+}
+
+// A count changes who is judged past the first name: bash carries on and
+// ksh93 stops. The filling stops at the bad name either way — only the
+// complaint is withheld.
+func TestAReadCountDecidesWhoIsJudgedAfterTheFirstName(t *testing.T) {
+	src := `printf 'XYZW\n' | { b=keep; read -n 3 a 1bad b; echo "st=$? a=[$a] b=[$b]"; }`
+	for _, c := range []struct {
+		judges Answer
+		want   string
+	}{
+		{Yes, "st=1 a=[XYZ] b=[keep]"},
+		{No, "st=0 a=[XYZ] b=[keep]"},
+	} {
+		out, _ := readRun(t, func(s *Semantics) {
+			s.ReadCountJudgesTheNamesAfterTheFirst = c.judges
+			s.ReadOptions = "rn:N:"
+		}, Diagnostics{}, src)
+		if !strings.Contains(out, c.want) {
+			t.Errorf("judges=%v: said %q, want %q", c.judges, out, c.want)
+		}
+	}
+	// The exact spelling takes the same answer, and the first operand is
+	// judged under a count in both: `read -N 3 1bad` is refused where
+	// `read -N 3 a 1bad` is not.
+	out, _ := readRun(t, func(s *Semantics) {
+		s.ReadCountJudgesTheNamesAfterTheFirst = No
+		s.ReadOptions = "rn:N:"
+	}, Diagnostics{}, `printf 'XYZW\n' | { read -N 3 1bad; echo "st=$?"; }`)
+	if !strings.Contains(out, "st=1") {
+		t.Errorf("said %q, want the first operand judged under a count", out)
+	}
+	// And the axis is asked only where it decides something: a count with no
+	// bad name past the first never reaches it.
+	out, st := optRun(t, func(s *Semantics) {
+		s.ReadCountJudgesTheNamesAfterTheFirst = Unspecified
+		s.ReadOptions = "rn:N:"
+	}, Diagnostics{}, `printf 'XYZW\n' | { read -n 3 a b; echo "st=$? a=[$a]"; }`)
+	if !strings.Contains(out, "st=0 a=[XYZ]") || st != 0 {
+		t.Errorf("said %q status %d, want a count with no bad name to ask nothing", out, st)
+	}
+}
+
+// The operand's prompt is written for a terminal and for nothing else, which
+// is the same rule `-p`'s prompt follows. Written unconditionally it would
+// print into a pipe nobody is reading it from — and into the *data* a script
+// is about to parse, since standard error and standard output are usually the
+// same file.
+func TestTheReadPromptOperandIsNotWrittenToAPipe(t *testing.T) {
+	out, _ := readRun(t, func(s *Semantics) { s.ReadPromptOperand = ReadPromptAloneNamesTheDefault },
+		Diagnostics{}, `printf 'text\n' | { read "v?PROMPT-42 "; echo "st=$? v=[$v]"; }`)
+	if strings.Contains(out, "PROMPT-42") {
+		t.Errorf("said %q, want no prompt where the stream is not a terminal", out)
+	}
+	if !strings.Contains(out, "st=0 v=[text]") {
+		t.Errorf("said %q, want the read to have happened all the same", out)
+	}
+}

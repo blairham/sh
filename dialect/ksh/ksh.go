@@ -550,6 +550,12 @@ func Semantics() interp.Semantics {
 	// The first operand is judged before the stream is touched:
 	// `printf 'AAA\nBBB\n' | { read 1bad; cat; }` prints both lines.
 	s.ReadRefusesABadNameBeforeReading = interp.Yes
+	// A count stops it judging past the first operand, though:
+	// `read -n 3 a 1bad` is quiet here and `read a 1bad` is not, measured
+	// with both count letters. The first operand is still judged —
+	// `read -N 3 1bad` is refused — so it is the names after it that a
+	// count releases.
+	s.ReadCountJudgesTheNamesAfterTheFirst = interp.No
 	s.DeclarationTakesASubscript = interp.Yes
 	// The declaration builtins take one as well — `typeset a[1]=v` creates
 	// the element — so this shell gives the two the same answer where bash

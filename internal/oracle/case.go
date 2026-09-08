@@ -3185,6 +3185,11 @@ echo "st=$?"`,
 		Why:     "zsh alone ends the script here; the other five report it and carry on. `read` is not a special builtin in any shell, so this is not a fatality rule reaching it from elsewhere — dash and ksh93 stop for `export 1x` and go on past this, which is the same shell answering the same kind of failure two ways depending on the builtin. No input on purpose: with the descriptor closed every column still refuses the operand rather than reporting an end of input, which is the half of the bug a status could never have shown",
 	},
 	{
+		ID: "read/a-count-and-the-names-after-the-first", Category: "builtins",
+		Snippet: `printf 'XYZW\n' | { b=keep; read -n 3 a 1bad b; echo "st=$? a=[$a] b=[$b]"; }`,
+		Why:     "the one thing that changes who is judged: with a count, ksh93 stops judging past the first operand and bash carries on — where `read a 1bad` is refused in both. The filling stops at the bad name in each, b keeping what it had, so what the count releases is the complaint and not the list. The other four columns answer a different question in the same words and are worth having for it: dash has no count letter and says so, and zsh reads `-n` as a flag rather than a count, so `3` becomes an operand there and its own refusal lands two words later",
+	},
+	{
 		ID: "help/a-builtin-answers-the-help-option", Category: "builtins",
 		Snippet: `h=$(alias --help 2>/dev/null); echo "st=$?"; printf '%s\n' "$h" | head -n 1`,
 		Why:     "one shell answers `--help` and the rest refuse it as an option nobody has, and the answer goes to standard *output* while every refusal goes to standard error — which is the whole reason a script can tell the two apart. Written as a first line and a status rather than as the block itself: bash's answer carries a paragraph of its own documentation after the synopsis, and this tree reproduces the behavior rather than another project's prose (CLEANROOM.md). It matters far past its size — one platform ships fifteen /usr/bin commands as a stub around `builtin`, so `/usr/bin/alias --help` is this exact call, and every disagreement the real-script run sweep found was this (#825, #815)",

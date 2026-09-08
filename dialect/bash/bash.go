@@ -538,6 +538,10 @@ func Semantics() interp.Semantics {
 	// 3.2 reads first and prints only BBB, so the panel's two bash columns
 	// differ here as they do on UnsetNameOperands; this preset is bash 5's.
 	s.ReadRefusesABadNameBeforeReading = interp.Yes
+	// A count changes nothing about which operands are judged here:
+	// `read -n 3 a 1bad` refuses `1bad` and fills a with the three
+	// characters, exactly as `read a 1bad` refuses it.
+	s.ReadCountJudgesTheNamesAfterTheFirst = interp.Yes
 	s.DeclarationTakesASubscript = interp.No
 	// And a *declaration* takes one where `export` does not, which is this
 	// shell alone splitting the two: `export a[1]=v` is `not a valid

@@ -153,6 +153,10 @@ func TestCdQuietIsAskedBeforeTheUnknownLetterQuestion(t *testing.T) {
 
 // A dialect that has not answered says so rather than guessing, and the thing
 // it names is `cd -q` — the shape every other unanswered axis takes.
+//
+// One axis, not two. The unknown-letter question below it is reached only by
+// this one having defaulted to no, so naming both would leave a reader to
+// work out which of them decided. `cd -Z` names one; so does this.
 func TestCdQuietUnansweredIsRefusedByName(t *testing.T) {
 	dir, _ := cdTree(t)
 	sem := PosixSemantics()
@@ -165,8 +169,15 @@ func TestCdQuietUnansweredIsRefusedByName(t *testing.T) {
 		Stdout: out, Stderr: errs,
 	})
 	runCd(t, r, "cd -q link/sub\npwd\n")
-	if got := errs.String(); !strings.Contains(got, "cd -q") {
+	got := errs.String()
+	if !strings.Contains(got, "cd -q") {
 		t.Errorf("said %q, want it to name `cd -q`", got)
+	}
+	if strings.Contains(got, "an option `cd` does not have") {
+		t.Errorf("said %q, want only the question that decided", got)
+	}
+	if n := strings.Count(got, "no dialect was chosen"); n != 1 {
+		t.Errorf("named %d unanswered axes, want 1: %q", n, got)
 	}
 	if got := strings.TrimSpace(out.String()); strings.HasSuffix(got, "sub") {
 		t.Errorf("left %q, want it to have stayed put", got)

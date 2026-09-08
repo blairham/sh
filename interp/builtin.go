@@ -1895,8 +1895,19 @@ func (r *Runner) cdOptions(args []string) (rest []string, physical bool, code in
 				// mutation run cannot tell them apart and no test can, which
 				// is why the word is chosen for the reader — the letter is
 				// done and the next one is next, said once.
-				if r.ask(r.sem().CdHasQuietOption, "`cd -q`") {
-					continue
+				//
+				// Unanswered stops here rather than falling through, and the
+				// difference is what a shell with no dialect *says*. The
+				// question below is reached only by this one having defaulted
+				// to no, so falling through would name two unanswered axes
+				// where one was asked — and the reader would have to work out
+				// which of them decided. `cd -Z` names one axis; `cd -q` now
+				// names one too.
+				if a := r.sem().CdHasQuietOption; a != No {
+					if r.ask(a, "`cd -q`") {
+						continue
+					}
+					return nil, physical, r.status
 				}
 				// A shell without the letter answers the word the way it
 				// answers any other letter it does not have, which is the

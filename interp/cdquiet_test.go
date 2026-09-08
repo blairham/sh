@@ -154,35 +154,57 @@ func TestCdQuietIsAskedBeforeTheUnknownLetterQuestion(t *testing.T) {
 // A dialect that has not answered says so rather than guessing, and the thing
 // it names is `cd -q` — the shape every other unanswered axis takes.
 //
-// One axis, not two. The unknown-letter question below it is reached only by
-// this one having defaulted to no, so naming both would leave a reader to
-// work out which of them decided. `cd -Z` names one; so does this.
+// One axis, not two. The question underneath is reached only by this one
+// having defaulted to no, so naming both would leave a reader to work out
+// which of them decided. `cd -Z` names one; so does this.
+//
+// The second row is the shipping shape and the one that discriminates:
+// PosixSemantics answers *neither* `cd` axis, so plain `sh` with no `-dialect`
+// is exactly this. The first row alone could not tell the two readings apart —
+// with the unknown-letter question answered, falling through to it produces an
+// ordinary `invalid option` and not a second unanswered-axis line, so a count
+// of one holds either way. It was written that way first and a mutant walked
+// through it.
 func TestCdQuietUnansweredIsRefusedByName(t *testing.T) {
-	dir, _ := cdTree(t)
-	sem := PosixSemantics()
-	sem.CdHasQuietOption = Unspecified
-	sem.CdRefusesUnknownOption = Yes
-	sem.CdLastPathOptionWins = Yes
-	out, errs := &strings.Builder{}, &strings.Builder{}
-	r := newTestRunner(t, &Runner{
-		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
-		Stdout: out, Stderr: errs,
-	})
-	runCd(t, r, "cd -q link/sub\npwd\n")
-	got := errs.String()
-	if !strings.Contains(got, "cd -q") {
-		t.Errorf("said %q, want it to name `cd -q`", got)
-	}
-	if strings.Contains(got, "an option `cd` does not have") {
-		t.Errorf("said %q, want only the question that decided", got)
-	}
-	if n := strings.Count(got, "no dialect was chosen"); n != 1 {
-		t.Errorf("named %d unanswered axes, want 1: %q", n, got)
-	}
-	if got := strings.TrimSpace(out.String()); strings.HasSuffix(got, "sub") {
-		t.Errorf("left %q, want it to have stayed put", got)
+	for _, c := range []struct {
+		name    string
+		refuses Answer
+	}{
+		{"with the letter question answered", Yes},
+		{"with neither answered, as plain `sh` has them", Unspecified},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir, _ := cdTree(t)
+			sem := PosixSemantics()
+			sem.CdHasQuietOption = Unspecified
+			sem.CdRefusesUnknownOption = c.refuses
+			sem.CdLastPathOptionWins = Yes
+			out, errs := &strings.Builder{}, &strings.Builder{}
+			r := newTestRunner(t, &Runner{
+				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
+				Stdout: out, Stderr: errs,
+			})
+			runCd(t, r, "cd -q link/sub\npwd\n")
+			got := errs.String()
+			if !strings.Contains(got, "cd -q") {
+				t.Errorf("said %q, want it to name `cd -q`", got)
+			}
+			if strings.Contains(got, "an option `cd` does not have") {
+				t.Errorf("said %q, want only the question that decided", got)
+			}
+			if n := strings.Count(got, unansweredTail); n != 1 {
+				t.Errorf("named %d unanswered axes, want 1: %q", n, got)
+			}
+			if got := strings.TrimSpace(out.String()); strings.HasSuffix(got, "sub") {
+				t.Errorf("left %q, want it to have stayed put", got)
+			}
+		})
 	}
 }
+
+// The sentence an unanswered axis ends with, so counting them counts axes and
+// not lines.
+const unansweredTail = "the shells disagree here and no dialect was chosen"
 
 // The letter is asked about only when a `q` is there to ask about. A shell
 // with no answer recorded still has to run a plain `cd`, a `cd -P` and a

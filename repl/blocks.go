@@ -235,11 +235,31 @@ func (c *outputCapture) close() {
 // of the command typed after it, and a `preexec` banner is not recorded as the
 // output of the command it announced.
 func (s Shell) settled() {
+	s.drained()
+	if s.capture == nil {
+		return
+	}
+	_, _, _ = s.capture.cap.Take()
+}
+
+// drained is the waiting half of settled, keeping what was captured.
+//
+// Separate from settled because the two are wanted in different places and
+// one of them must not empty the capture. A hook's output is discarded, which
+// is what settled is for; a *command's* output has to reach the terminal
+// before the terminal stops translating newlines, and it also has to still be
+// there afterwards for the block that records it. Draining and discarding at
+// that point would lose every command's body from the store, which is why
+// this is not a call to settled with a comment beside it.
+//
+// The wait is the same wait either way: the conduit's own in-band mark, so it
+// is proof that the pump has copied everything written before it rather than
+// a guess that things have gone quiet — see ptyConduit.drain.
+func (s Shell) drained() {
 	if s.capture == nil {
 		return
 	}
 	s.capture.conduit.drain()
-	_, _, _ = s.capture.cap.Take()
 }
 
 // closeBlock records what came of it.

@@ -491,6 +491,29 @@ func (s Shell) inLineDiscipline(state *terminalState, f func()) {
 		s.errf("%v\n", err)
 	}
 	defer func() {
+		// **Nothing may still be on its way to the terminal when OPOST goes
+		// off again.** A command's output does not always go straight to the
+		// terminal: under a block store it goes through a pseudo-terminal
+		// whose own output discipline is off, and a goroutine copies that to
+		// the real one. So the command returning is not the same event as its
+		// last bytes arriving, and re-entering raw mode between the two sends
+		// the tail out with the newline translation already gone — a bare
+		// line feed, and the next prompt drawn wherever the output ended.
+		//
+		// That is the failure this helper exists to prevent, arriving by the
+		// one path the restore alone did not cover. The wait is here rather
+		// than in a fourth copy of the helper because the other two callers
+		// already do it inside their own f — a hook's output is waited for
+		// by settled, before the terminal is handed back — and the command's
+		// own output was the one nobody waited for. It was waited for, in
+		// closeBlock, a few instructions after this defer had already put
+		// raw mode back.
+		//
+		// It waits on the conduit's in-band mark rather than for quiet, so
+		// it is proof and not a pause, and it keeps what was captured: the
+		// block that records the output is read after this, and draining by
+		// emptying would lose every command's body from the store.
+		s.drained()
 		if _, err := makeRaw(s.inFile()); err != nil {
 			s.errf("%v\n", err)
 		}

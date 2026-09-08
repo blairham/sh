@@ -5,6 +5,7 @@ package smoke
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -544,6 +545,37 @@ func checks() []check {
 			},
 		},
 		{
+			name: "every newline reached the terminal whole",
+			proves: "the next prompt starts at column 0, because nothing was written " +
+				"while the terminal had its newline translation off",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				// Asked of the whole session and asked late, because the
+				// failure is a race and any one command may win it: a
+				// pseudo-terminal's copy of a command's output can arrive
+				// after the shell has gone back to raw mode, and then the
+				// newline in it moves down without returning the carriage
+				// and the next prompt is drawn wherever the output ended
+				// (#1356).
+				//
+				// The bytes and not the layout, because the layout is what a
+				// person sees and the bytes are what says why: one missing
+				// carriage return, in a stream where every other newline has
+				// one.
+				drawn := s.screen.Text()
+				if bare := bareLineFeeds(drawn); bare > 0 {
+					return Fail, fmt.Sprintf("%d of the newlines drawn this session had no carriage "+
+						"return in front of them, so the prompt after them starts where the "+
+						"output ended: %s", bare, screenTail(drawn))
+				}
+				if !strings.Contains(drawn, "\r\n") {
+					// Nothing was measured, which is not a pass. A session
+					// that drew no line at all would otherwise report one.
+					return Blocked, "nothing with a newline in it was drawn this session"
+				}
+				return Pass, "every newline drawn was preceded by a carriage return"
+			},
+		},
+		{
 			name:           "exit leaves cleanly",
 			proves:         "the session ends when told to, with the status the shell was left holding",
 			endsTheSession: true,
@@ -590,3 +622,24 @@ func haveExternal(name string) bool {
 }
 
 func quote(s string) string { return `"` + Readable(s) + `"` }
+
+// bareLineFeeds counts the newlines with nothing returning the carriage in
+// front of them.
+//
+// That is what a newline written while the terminal has OPOST off looks like,
+// and it is the whole of #1356: the shell puts the terminal back in its own
+// line discipline to run a command, and a copy of that command's output
+// arriving after raw mode came back is written with the translation already
+// gone.
+func bareLineFeeds(drawn string) int {
+	n := 0
+	for i := 0; i < len(drawn); i++ {
+		if drawn[i] == '\n' && (i == 0 || drawn[i-1] != '\r') {
+			n++
+		}
+	}
+	return n
+}
+
+// screenTail is the end of what was drawn, for a failure to read.
+func screenTail(drawn string) string { return quote(Readable(LastLines(drawn, 3))) }

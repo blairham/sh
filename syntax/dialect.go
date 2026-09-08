@@ -897,6 +897,31 @@ type Dialect struct {
 	// the construct.
 	ParamSplitFlag bool
 
+	// ParamRcExpandFlag enables a `^` written between the `${` and the
+	// parameter: `${^name}`, which distributes the word the expansion stands
+	// in over the elements it came to — `a=(1 2); x${^a}y` is the two words
+	// `x1y` and `x2y`, where `x${a}y` is `x1` and `2y` — whatever the
+	// `RC_EXPAND_PARAM` option says. zsh alone has it; to the other four a
+	// leading `^` is not a name and the whole expansion is unreadable, which
+	// BadSubstitutionAtParseTime already splits into a parse-time refusal
+	// for ksh93 (`` `^' unexpected ``) and a deferred runtime error for the
+	// rest.
+	//
+	// The third occupant of ParamTildeFlag's slot and a grammar flag for the
+	// same reason: without it there is no parameter at the front of
+	// `${^name}` at all, so the expansion is unreadable rather than
+	// differently read.
+	//
+	// The node carries the *count*, because parity is the meaning here too:
+	// measured under `RC_EXPAND_PARAM` both ways, one `^` distributes and
+	// two do not, from either starting point.
+	//
+	// It cannot collide with anything else this grammar spells with a `^`.
+	// bash's case-conversion `^` follows the name — `${x^}` — and this one
+	// precedes it, and the pattern-negation `^` of `EXTENDED_GLOB` is not
+	// inside a `${`.
+	ParamRcExpandFlag bool
+
 	// ParamSetTestFlag enables a `+` written between the `${` and the
 	// parameter: `${+name}`, which substitutes `1` when the parameter is set
 	// and `0` when it is not, and never fails. zsh alone has it; to the

@@ -93,8 +93,7 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 	// Fields are built up span by span. A span joins onto the field before it
 	// unless splitting started a new one, which is what makes x$(f)y attach
 	// its literal text to the first and last resulting fields.
-	fields := []string{""}
-	any := false
+	b := newWordFields()
 
 	// Whether an expansion has already failed on this word. Every shell in
 	// the panel abandons the word at the first failure rather than going on
@@ -115,7 +114,7 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		// accumulated in front of this span. An empty span in front of it
 		// leaves the head where it was, which is measured — `${empty}${~t}`
 		// expands and `x${~t}` does not.
-		head := len(fields) == 1 && fields[0] == ""
+		head := b.head()
 		// `$@` is the one expansion that yields more than one field on its
 		// own, so it cannot go through expandSpan, which returns a string.
 		// The first parameter joins onto whatever precedes it and the last
@@ -123,18 +122,13 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		// literal text to the first and last fields rather than becoming
 		// words of its own.
 		if parts, ok := r.expandAt(s, splitByDialect, head); ok {
-			if len(parts) == 0 {
-				continue
-			}
-			any = true
-			fields[len(fields)-1] += parts[0]
-			fields = append(fields, parts[1:]...)
+			b.add(s, parts)
 			continue
 		}
 		text, split := r.expandSpan(s, splitByDialect, head)
 		if !split {
-			fields[len(fields)-1] += text
-			any = any || text != "" || s.Quoting != syntax.Unquoted
+			b.text(text)
+			b.any = b.any || text != "" || s.Quoting != syntax.Unquoted
 			continue
 		}
 		ifs, set := r.ifs()
@@ -144,21 +138,136 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		// the shell that has the construct. Splitting runs first and every
 		// field it produced is at the head of a word of its own, exactly as
 		// the elements of a list are.
-		parts := r.tildeFlagElements(s, head, r.splitFieldsAsk(text, ifs, set))
-		if len(parts) == 0 {
-			// An unquoted expansion of an empty value produces no field at
-			// all, so nothing is appended and nothing is started.
-			continue
-		}
-		any = true
-		fields[len(fields)-1] += parts[0]
-		fields = append(fields, parts[1:]...)
+		//
+		// An unquoted expansion of an empty value produces no field at all,
+		// so ordinarily nothing is appended and nothing is started — which
+		// add answers, along with the one reading that is not "nothing":
+		// a distributive span with no elements takes the word with it.
+		b.add(s, r.tildeFlagElements(s, head, r.splitFieldsAsk(text, ifs, set)))
 	}
 
-	if len(fields) == 1 && fields[0] == "" && !any {
+	return b.result()
+}
+
+// wordFields is the fields of one word as it is assembled, span by span.
+//
+// The shape is a run of finished fields followed by a run of *open* ones:
+// text from a later span joins every open field, and every open field is
+// finished the moment a span starts a new one after it. Ordinarily the open
+// run holds exactly one field — the word being built — and it grows only
+// where a distributive expansion multiplies it, which is why the state is a
+// run and not the single trailing field it used to be.
+//
+// One copy, because there were two: an ordinary word and a redirection
+// target, which reads its own word twice and had the lay-in rule typed out a
+// second time. globFields is a function for the same reason, and this is the
+// stage in front of it.
+type wordFields struct {
+	// all is the fields, finished ones first.
+	all []string
+	// open is where the run of open fields begins. all[:open] is finished.
+	open int
+	// any is whether anything at all reached the word — a substitution that
+	// produced a field, or literal text, or a quoted empty span. Without it
+	// a word that expanded to nothing cannot be told from a word that was
+	// never there, and the two are different: one field or none.
+	any bool
+}
+
+func newWordFields() wordFields { return wordFields{all: []string{""}} }
+
+// head reports whether nothing has been accumulated in front of the next
+// span, which is what the `${~spec}` flag's tilde half asks about.
+func (b *wordFields) head() bool { return len(b.all) == 1 && b.all[0] == "" }
+
+// text joins literal or unsplit text onto every field still open.
+func (b *wordFields) text(t string) {
+	for i := b.open; i < len(b.all); i++ {
+		b.all[i] += t
+	}
+}
+
+// add puts the fields one span produced into the word, by whichever of the
+// two rules the span asks for.
+func (b *wordFields) add(s syntax.Span, parts []string) {
+	if rcExpandOn(s) {
+		b.spread(parts)
+		return
+	}
+	b.lay(parts)
+}
+
+// lay is the ordinary rule: the first field joins whatever is open, the last
+// stays open for whatever follows, and everything between is a word of its
+// own. It is what makes `x$@y` attach its literal text to the first and last
+// fields rather than becoming words of its own.
+func (b *wordFields) lay(parts []string) {
+	if len(parts) == 0 {
+		return
+	}
+	b.any = true
+	b.text(parts[0])
+	if len(parts) == 1 {
+		return
+	}
+	// The first field closed everything that was open, since a new one
+	// started after it.
+	b.all = append(b.all, parts[1:]...)
+	b.open = len(b.all) - 1
+}
+
+// spread is the distributive rule the `${^spec}` flag asks for: every open
+// field is produced once per part, and all of them stay open, so a second
+// distributive span in the same word is a cross product.
+//
+// Order is measured: `a=(1 2); ${^a}z${^a}` is `1z1 1z2 2z1 2z2`, so the open
+// fields are the outer loop and the later span varies fastest.
+//
+// No parts is not "nothing happens", which is the one place this parts
+// company with lay: the word is produced once per element and there are no
+// elements, so it is produced no times. Measured, `a=(); x${^a}y` is no word
+// at all where `x${a}y` is the single word `xy` — and a field finished before
+// it still stands, `a=(1 2); b=(); x${a}z${^b}q` being the single word `x1`.
+func (b *wordFields) spread(parts []string) {
+	open := b.all[b.open:]
+	all := make([]string, 0, b.open+len(open)*len(parts))
+	all = append(all, b.all[:b.open]...)
+	for _, f := range open {
+		for _, p := range parts {
+			all = append(all, f+p)
+		}
+	}
+	b.all = all
+	// Guarded rather than unconditional, and the guard is equivalent rather
+	// than load-bearing: with no parts the open run is now empty, so either
+	// there are finished fields — which any cannot change the reading of —
+	// or there are none and result answers nil before any is consulted. A
+	// mutant setting it unconditionally survives the suite on purpose. It
+	// stays because "something was substituted" is false when nothing was,
+	// and the field that says so should not be made to lie by a caller that
+	// happens not to look.
+	if len(parts) > 0 {
+		b.any = true
+	}
+}
+
+// result is the fields the word came to, with the two shapes that are no
+// field at all reported as nil: a word every span left empty, and a word a
+// distributive span with no elements took away.
+//
+// The second guard is nil against an empty non-nil slice, which every caller
+// here reads the same way — the same equivalence globFields writes down, and
+// a mutant deleting it survives the suite for the same reason. It stays
+// because "no fields at all" has one spelling in this pipeline and both ways
+// of arriving there should use it.
+func (b *wordFields) result() []string {
+	if len(b.all) == 0 {
 		return nil
 	}
-	return fields
+	if len(b.all) == 1 && b.all[0] == "" && !b.any {
+		return nil
+	}
+	return b.all
 }
 
 // globFields is pathname expansion, the last stage of a word: it acts on
@@ -266,8 +375,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 	}
 	r.expandTilde(w)
 
-	fields = []string{""}
-	any := false
+	f := newWordFields()
 	var b strings.Builder
 
 	for _, s := range w.Spans {
@@ -278,33 +386,31 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 			// untouched: whether the target is read as fields at all is the
 			// redirection's own axis, and it is asked by the caller.
 			b.WriteString(r.joinUnsplit(s.Param, parts))
-			if len(parts) == 0 {
-				continue
-			}
-			any = true
-			fields[len(fields)-1] += parts[0]
-			fields = append(fields, parts[1:]...)
+			// add and not lay, though nothing can tell them apart here
+			// today: a target holding a distributive expansion is not one
+			// field under either rule, so redirectTarget's two readings
+			// already differ and the axis sends the one dialect that has
+			// the flag to the plain view. A mutant writing lay here
+			// survives. It stays add because the lay-in rule has one home,
+			// and the shape this repository keeps finding is the second
+			// copy that did not get the change.
+			f.add(s, parts)
 			continue
 		}
 		text, split := r.expandSpan(s, splitAlways, head)
 		b.WriteString(text)
 		if !split {
-			fields[len(fields)-1] += text
-			any = any || text != "" || s.Quoting != syntax.Unquoted
+			f.text(text)
+			f.any = f.any || text != "" || s.Quoting != syntax.Unquoted
 			continue
 		}
 		ifs, set := r.ifs()
-		parts := r.splitFieldsAsk(text, ifs, set)
-		if len(parts) == 0 {
-			continue
-		}
-		any = true
-		fields[len(fields)-1] += parts[0]
-		fields = append(fields, parts[1:]...)
+		f.add(s, r.splitFieldsAsk(text, ifs, set))
 	}
 	plain = globUnescape(b.String())
 
-	if len(fields) == 1 && fields[0] == "" && !any {
+	fields = f.result()
+	if fields == nil {
 		return nil, plain
 	}
 	return r.globFields(fields), plain
@@ -1881,7 +1987,9 @@ func (r *Runner) listBase(e *syntax.ParamExpr) ([]string, bool) {
 //     under either reading and every value-to-value operator agrees on it;
 //     `${a:1}` and the element-selecting three do not, because a slice takes
 //     elements where a substring takes characters and a filter can drop the
-//     only element there is. An empty array is no field under either reading.
+//     only element there is. An empty array is no field under either reading,
+//     unless the expansion is distributive, where it is the one shape that
+//     tells an empty array from a name that is not one — see the count below.
 //
 // Every one of those is a guard on the *question*, not on the answer: the
 // rewrite is local to expandAt, so a node it declines is answered from the
@@ -1948,10 +2056,21 @@ func (r *Runner) bareArrayAsList(e *syntax.ParamExpr, s syntax.Span, sp splitPol
 		return nil, false
 	}
 	// arrayElementCount reports zero for a name that is not an array at all,
-	// so the count is the whole test: a scalar and an empty array both stop
-	// here, and neither has a reading the two answers differ on.
-	n, _ := r.arrayElementCount(e.Name)
-	if n == 0 || (n == 1 && !opReadsTheList(e.Op)) {
+	// and says which of the two the zero is. Ordinarily the count is the
+	// whole test — a scalar and an empty array both stop here, and neither
+	// has a reading the two answers differ on — and a distributive expansion
+	// is the exception, because it is the one reading under which an empty
+	// list is not the same as an empty value. Measured: `a=(); x${^a}y` is
+	// no word at all, where `x${^u}y` on a name that was never an array is
+	// the single word `xy`. The list path is what can say "no fields"; the
+	// scalar path below has only the empty string to say it with.
+	n, isArray := r.arrayElementCount(e.Name)
+	switch {
+	case n == 0:
+		if !isArray || !rcExpandOn(s) {
+			return nil, false
+		}
+	case n == 1 && !opReadsTheList(e.Op):
 		return nil, false
 	}
 	// Only the unquoted spelling asks this. The quoted one is

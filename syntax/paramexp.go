@@ -250,6 +250,24 @@ type ParamExpr struct {
 	// counted on its own for parity to mean anything.
 	SplitFlags int
 
+	// RcExpandFlags is how many `^` characters were written in the same
+	// slot — `${^x}` carries 1 and `${^^x}` carries 2. Zero is the ordinary
+	// expansion.
+	//
+	// A count for the reason TildeFlags and SplitFlags are counts: parity is
+	// the meaning. An odd number distributes the word the expansion stands
+	// in over the elements the expansion came to — `a=(1 2); x${^a}y` is
+	// `x1y x2y` where `x${a}y` is `x1 2y` — and an even one refuses to, both
+	// regardless of the `RC_EXPAND_PARAM` option that would otherwise
+	// decide, which is measured.
+	//
+	// Its own field rather than a third `~`/`=` counter for the reason those
+	// two are separate from each other: the three decide three different
+	// questions and a script writes more than one of them, `${=^a}` and
+	// `${^=a}` being the same expansion, so each has to be counted on its
+	// own for parity to mean anything.
+	RcExpandFlags int
+
 	// SetTest marks a `+` written between the `${` and the parameter —
 	// `${+name}` — which asks whether the parameter is set and substitutes
 	// `1` or `0` rather than its value.
@@ -326,12 +344,12 @@ func (p *Parser) parseParamExp(src string, start Pos, q Quoting) *ParamExpr {
 		}
 	}
 
-	// A run of `~` and `=` stands between the flag group and everything
+	// A run of `~`, `=` and `^` stands between the flag group and everything
 	// else, which is where the shell that has them puts them: `${(U)~g}`
 	// reads, `${~(U)g}` is a bad substitution, and `${(U)~#g}` is a length —
-	// so after the group and in front of the `#` below. The two characters
+	// so after the group and in front of the `#` below. The three characters
 	// share the slot and are interchangeable within it, measured: `${=~g}`
-	// and `${~=g}` are the same expansion.
+	// and `${~=g}` are the same expansion, and so are `${=^a}` and `${^=a}`.
 	//
 	// In front of the `#` is what keeps `${#=word}` the assignment it is in
 	// that shell — `$#` with a default assigned to it — rather than a
@@ -343,6 +361,8 @@ scan:
 			e.TildeFlags++
 		case p.dialect.ParamSplitFlag && s[0] == '=':
 			e.SplitFlags++
+		case p.dialect.ParamRcExpandFlag && s[0] == '^':
+			e.RcExpandFlags++
 		default:
 			break scan
 		}
@@ -405,7 +425,7 @@ scan:
 		e.Name, s = scanParamName(s)
 	}
 	if e.Name == "" && !e.HasFlags && e.TildeFlags == 0 && e.SplitFlags == 0 &&
-		e.Inner == nil {
+		e.RcExpandFlags == 0 && e.Inner == nil {
 		if !p.dialect.BadSubstitutionAtParseTime {
 			// The majority defers an unreadable expansion to the run, the
 			// same way an unknown operator is deferred: a `${%x}` in a
@@ -424,8 +444,8 @@ scan:
 	}
 	// With a flag group the name may be empty — `${(U)}` is an empty string
 	// and `${(%):-%x}` is all operator — so an operator may still follow.
-	// A tilde run relaxes it the same way, and so does an `=` run: `${~}`
-	// and `${=}` are the empty string too.
+	// A tilde run relaxes it the same way, and so do an `=` run and a `^`
+	// run: `${~}`, `${=}` and `${^}` are the empty string too.
 
 	// `${!name@}` and `${!name*}` are the names beginning with name, not a
 	// value at all. Only after `!`, and only when the whole rest is the one

@@ -437,6 +437,57 @@ func TestARealPipeIsWokenByOneNumberAndReadThroughTheOther(t *testing.T) {
 	}
 }
 
+// TestADescriptorClosedUnderTheWatcherStopsBeingWaitedOn is measured
+// behavior, not tidiness: in the shell being modeled, closing the descriptor
+// out from under a watcher leaves the watcher listed and it never fires again
+// — no diagnostic, no removal, silence in every direction.
+//
+// The file object outlives the descriptor, so this is the case where asking
+// "is there a file here" answers yes and asking the kernel for its number
+// answers -1.
+func TestADescriptorClosedUnderTheWatcherStopsBeingWaitedOn(t *testing.T) {
+	shellFd, _, _, inherited := pipeAt(t)
+	arm := "h(){ :; }; zle -F " + strconv.Itoa(shellFd) + " h"
+	r, _ := watchRunnerWith(t, arm, func(rr *interp.Runner) { rr.InheritedFiles = inherited })
+	if got := zsh.WatchedDescriptors(r); len(got) != 1 {
+		t.Fatalf("waited on %v before the close, want one", got)
+	}
+	_ = inherited[shellFd-3].Close()
+	if got := zsh.WatchedDescriptors(r); len(got) != 0 {
+		t.Errorf("waited on %v after the close, want none", got)
+	}
+	// And it is still armed, which is the half that must not be tidied away.
+	f, err := syntax.Parse("zle -F", zsh.Dialect())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	r.Stdout = &out
+	if _, rerr := r.Run(context.Background(), f); rerr != nil {
+		t.Fatal(rerr)
+	}
+	if want := "zle -F " + strconv.Itoa(shellFd) + " h\n"; out.String() != want {
+		t.Errorf("listing = %q, want %q — closing the descriptor removes nothing", out.String(), want)
+	}
+}
+
+// TestTheShellsOwnStandardInputCanBeWatched, which is `zle -F 0 handler` — the
+// spelling in the issue that opened this, and the one a shell cannot answer by
+// looking in its table of *extra* descriptors, because 0 is not in it.
+func TestTheShellsOwnStandardInputCanBeWatched(t *testing.T) {
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = read.Close(); _ = write.Close() })
+	r, _ := watchRunnerWith(t, "h(){ :; }; zle -F 0 h", func(rr *interp.Runner) {
+		rr.Stdin = read
+	})
+	if got := zsh.WatchedDescriptors(r); !equalInts(got, []int{int(read.Fd())}) {
+		t.Errorf("waited on %v, want standard input's own %d", got, int(read.Fd()))
+	}
+}
+
 // TestAWatcherOnANumberNothingIsOpenAtIsNeverWaitedOn is the other side of the
 // translation: the entry is kept and said back — measured, arming one is
 // silent whatever is at the number — and it is not something the editor can

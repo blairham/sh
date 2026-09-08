@@ -233,6 +233,103 @@ func TestACallbackThatRewritesTheLineIsDrawn(t *testing.T) {
 	s.end()
 }
 
+// TestAHandlerThatDisarmsItselfIsCalledOnce is what a real handler does, and
+// it is the reason the list is asked again on every round rather than once:
+// the descriptor here stays readable for ever — nothing drains it — so a loop
+// that had collected the list before it started would go on calling a callback
+// that had already taken itself off.
+func TestAHandlerThatDisarmsItselfIsCalledOnce(t *testing.T) {
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = read.Close(); _ = write.Close() })
+	if _, werr := write.WriteString("wake\n"); werr != nil {
+		t.Fatal(werr)
+	}
+
+	p := &descriptorProbe{}
+	p.answer = func(in Line) (Line, bool) {
+		p.disarm()
+		return in, false
+	}
+	s := probeSession(t, p)
+	s.prompt++
+	waitFor(t, s.screen, "[1]", "the first prompt")
+	p.arm(int(read.Fd()))
+	// A keystroke to send the editor round the loop with it armed.
+	if _, werr := s.control.WriteString("z"); werr != nil {
+		t.Fatal(werr)
+	}
+	waitUntil(t, "the callback", func() bool { return len(p.called()) > 0 })
+	// The session still runs commands, which is what proves the loop left.
+	if _, werr := s.control.WriteString("\x15echo after-disarm\n"); werr != nil {
+		t.Fatal(werr)
+	}
+	waitFor(t, s.ran, "after-disarm", "a command after the callback disarmed itself")
+	if got := p.called(); len(got) != 1 {
+		t.Errorf("called %d times, want once — it took itself off on the first call", len(got))
+	}
+	s.end()
+}
+
+// TestOneDeadDescriptorDoesNotCostTheLiveOneItsTurn. Waiting is a question
+// about a *set*, and the kernel refuses the whole call for one bad member. So
+// a descriptor that was closed out from under a watcher — which the shell
+// being modeled keeps listing and never fires — must be dropped before the
+// question is asked, or a plugin's second watcher silently stops working
+// because its first one's descriptor was closed.
+func TestOneDeadDescriptorDoesNotCostTheLiveOneItsTurn(t *testing.T) {
+	// The live pipe first and the dead one after it, so that closing the dead
+	// one frees a number the live one is not sitting on: a test in which the
+	// two are the same descriptor proves nothing.
+	read, write, perr := os.Pipe()
+	if perr != nil {
+		t.Fatal(perr)
+	}
+	t.Cleanup(func() { _ = read.Close(); _ = write.Close() })
+	dead, deadWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadFd := int(dead.Fd())
+	_ = dead.Close()
+	_ = deadWrite.Close()
+	if live := int(read.Fd()); deadFd == live {
+		t.Fatalf("the dead and the live descriptor are both %d", live)
+	}
+
+	p := &descriptorProbe{drain: read}
+	s := probeSession(t, p)
+	s.prompt++
+	waitFor(t, s.screen, "[1]", "the first prompt")
+	// The dead one first, so it is the one the kernel would complain about.
+	p.arm(deadFd)
+	live := int(read.Fd())
+	p.arm(live)
+	if _, werr := s.control.WriteString("y"); werr != nil {
+		t.Fatal(werr)
+	}
+	waitFor(t, s.screen, "y", "the keystroke")
+	if _, werr := write.WriteString("wake\n"); werr != nil {
+		t.Fatal(werr)
+	}
+	waitUntil(t, "the live descriptor's callback", func() bool {
+		for _, fd := range p.called() {
+			if fd == live {
+				return true
+			}
+		}
+		return false
+	})
+	p.disarm()
+	if _, werr := s.control.WriteString("\x15echo both-ok\n"); werr != nil {
+		t.Fatal(werr)
+	}
+	waitFor(t, s.ran, "both-ok", "the command after the callback")
+	s.end()
+}
+
 // TestASessionWithNothingArmedIsUnchanged. The property worth stating plainly,
 // because it is what makes this safe to have at all: with no descriptor armed
 // the editor never waits on anything but the terminal, and a session that has

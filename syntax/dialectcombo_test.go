@@ -35,15 +35,23 @@ import (
 // a flag added tomorrow is covered by having been declared.
 
 // dialectBoolFields is the position of every exported bool in
-// [syntax.Dialect]. The non-bool fields are left at their zero value: an alias
-// table and a routing enum are not a grammar switch, and a nil map is the
-// "no aliases" every case here wants.
+// [syntax.Dialect], and of every exported set of routes, which is a switch
+// with a route on it rather than a different kind of thing. The rest are left
+// at their zero value: a nil map is the "no aliases" every case here wants,
+// and a skip count has no "on".
+//
+// The route sets are here because leaving them out silently narrowed the
+// sweep the day a flag became one. CloseQuotesAtEOF was a bool and is now a
+// set (#1424); had this kept reading only bools, a flag that had been swept
+// under every vector since it was declared would have stopped being swept
+// without anything saying so — which is the failure this whole file exists to
+// avoid, arriving through the reflection rather than through a preset.
 func dialectBoolFields() []int {
 	var out []int
 	t := reflect.TypeOf(syntax.Dialect{})
 	for i := range t.NumField() {
 		f := t.Field(i)
-		if f.IsExported() && f.Type.Kind() == reflect.Bool {
+		if f.IsExported() && (f.Type.Kind() == reflect.Bool || f.Type == reflect.TypeOf(syntax.RouteOnNoRoute)) {
 			out = append(out, i)
 		}
 	}
@@ -69,11 +77,26 @@ type namedDialect struct {
 func combinationVectors() []namedDialect {
 	fields := dialectBoolFields()
 	typ := reflect.TypeOf(syntax.Dialect{})
+	routes := reflect.TypeOf(syntax.RouteOnNoRoute)
 	set := func(on func(n int) bool) syntax.Dialect {
 		var d syntax.Dialect
 		v := reflect.ValueOf(&d).Elem()
 		for n, i := range fields {
-			v.Field(i).SetBool(on(n))
+			f := v.Field(i)
+			if f.Type() == routes {
+				// Every route, including ProgramRoute itself: a vector says
+				// which switches are on, and the route this program came by
+				// is what turns a route-scoped switch into an answer. Naming
+				// one route instead would have swept the flags that name a
+				// different one as though they were off.
+				var r syntax.ProgramRoutes
+				if on(n) {
+					r = syntax.RouteOnEveryRoute
+				}
+				f.SetUint(uint64(r))
+				continue
+			}
+			f.SetBool(on(n))
 		}
 		return d
 	}

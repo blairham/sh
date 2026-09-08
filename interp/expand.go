@@ -1230,7 +1230,7 @@ func (r *Runner) escapeResult(v string, glob Answer) string {
 // whether it is a pattern at all. So a value holding `a[1m` had no
 // metacharacter to protect, went to the filesystem live, and was rejected
 // there; and since `ESC [` opens every ANSI escape sequence, that made any
-// unquoted expansion of a value carrying colour fatal.
+// unquoted expansion of a value carrying color fatal.
 //
 // Asking it here rather than relaxing the refusal in glob is what keeps the
 // two provenances apart. A literal `print -r -- a[1m` is fatal in that

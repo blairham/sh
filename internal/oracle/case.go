@@ -6676,7 +6676,7 @@ echo unreachable`,
 	{
 		ID: "pat/unterminated-bracket-from-a-value-holding-an-escape", Category: "pattern matching",
 		Snippet: `e=$(printf "\033[1m"); printf "%s" $e | tr -d "\033"; echo`,
-		Why:     "the reduction this matters for: a terminal escape sequence is an `ESC` and then `[`, so a shell that reads an unquoted expansion's brackets as a pattern cannot hold a colour in a variable. The `tr` removes the escape byte so the row records the printable remainder rather than a control character",
+		Why:     "the reduction this matters for: a terminal escape sequence is an `ESC` and then `[`, so a shell that reads an unquoted expansion's brackets as a pattern cannot hold a color in a variable. The `tr` removes the escape byte so the row records the printable remainder rather than a control character",
 	},
 	{
 		ID: "pat/bracket-from-a-value-is-never-a-pattern-in-zsh", Category: "pattern matching",

@@ -7234,11 +7234,11 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   shopt checkwinsize; echo st=$?
   ```
-- `shopt/autocd-is-accepted-and-still-not-a-script-feature` — the name is 5.3's alone — 3.2 answers `invalid shell option name` — and the rest of the row is the part a shell is most likely to get *too* right: with the option on and accepted, a script still says `command not found` and stays where it is, because reading a bare directory name as a `cd` is something both shells that have the option keep for a person. The moving half needs a pseudo-terminal and is graded in the smoke suite instead
+- `shopt/autocd-is-accepted-and-still-not-a-script-feature` — the name is the 5.3 binary's, under either argv[0] — 3.2 answers `invalid shell option name` — and the rest of the row is the part a shell is most likely to get *too* right: with the option on and accepted, a script still says `command not found` and stays where it is, because reading a bare directory name as a `cd` is something both shells that have the option keep for a person. The moving half needs a pseudo-terminal and is graded in the smoke suite instead
   ```sh
   mkdir sub; shopt -s autocd; echo "st=$?"; sub; echo "st2=$?"; case $PWD in */sub) echo moved ;; *) echo stayed ;; esac
   ```
-- `shopt/no-empty-cmd-completion-round-trips` — a name whose sense is inverted, so the query before the set is the load-bearing half: both bash columns start it `off`, which is the state in which completion on an empty line *does* search PATH, and a shell that stored the option's own bit rather than the capability would have to report it `on` to mean the same thing. What the option then does to a Tab is a pseudo-terminal's question
+- `shopt/no-empty-cmd-completion-round-trips` — a name whose sense is inverted, so the query before the set is the load-bearing half: every bash column starts it `off`, which is the state in which completion on an empty line *does* search PATH, and a shell that stored the option's own bit rather than the capability would have to report it `on` to mean the same thing. What the option then does to a Tab is a pseudo-terminal's question
   ```sh
   shopt no_empty_cmd_completion; shopt -s no_empty_cmd_completion; shopt no_empty_cmd_completion; echo st=$?
   ```

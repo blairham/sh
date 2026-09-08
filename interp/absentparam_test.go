@@ -112,3 +112,92 @@ func TestAnAbsentParameterIsNotADynamicOne(t *testing.T) {
 		t.Error("a name nobody registered answered one of the two questions")
 	}
 }
+
+// **`unset "nothere[k]"` refuses too**, and that route is the write half the
+// seam was missing (#1527).
+//
+// It reached nothing above because an `unset` operand is not an expansion:
+// no word is expanded, no value is fetched, and the two places
+// refuseAbsentParameter is asked from are both in the word paths. What the
+// operand reached instead was the ordinary subscript machinery, which reads
+// the brackets of a name holding nothing as *arithmetic* — so the two keys
+// below used to split, and neither answer was about the parameter. A key whose
+// name is an unset variable evaluated to 0 and the unset was **silent at
+// status 0**; a key that happened to name a variable holding text complained
+// about that text not being a number, which is a sentence about the wrong
+// thing entirely.
+//
+// Both keys are here for that reason: a test with only one of them passes
+// against a fix that reads the subscript first.
+func TestAnAbsentParameterRefusesAnUnsetOfAnElement(t *testing.T) {
+	for _, src := range []string{
+		`unset "nothere[k]"`,
+		`unset 'nothere[somepath]'`,
+		`unset "nothere[1]"`,
+		`unset "nothere[1,2]"`,
+		`unset "nothere[@]"`,
+	} {
+		out, errs, status := runAbsentWithVar(t, src, "somepath", "/usr/local/bin")
+		if !strings.Contains(errs, "nothere: parameter not implemented yet") {
+			t.Errorf("%s: stderr = %q, want the parameter named", src, errs)
+		}
+		if status != 1 {
+			t.Errorf("%s: status = %d, want 1", src, status)
+		}
+		if out != "" {
+			t.Errorf("%s: stdout = %q, want nothing", src, out)
+		}
+	}
+}
+
+// And the script's own value is the script's on this route as on the read: a
+// name it assigned is an ordinary one and `unset` reaches into it by whatever
+// rule the axes give — here a character of a scalar, so `one` becomes `oe`.
+// The result is asserted rather than the silence, because silence alone would
+// also be what a refusal that forgot to write its sentence looks like. Without
+// this the refusal would be about owning a spelling rather than about reading
+// something absent.
+func TestUnsettingAnElementOfAnAbsentNameTheScriptOwnsIsOrdinary(t *testing.T) {
+	out, errs, status := runAbsentWithVar(t, `nothere=one
+unset "nothere[1]"
+printf '[%s]' "${nothere-gone}"`, "unused", "")
+	if want := "[oe]"; out != want {
+		t.Errorf("stdout = %q, want %q", out, want)
+	}
+	if errs != "" || status != 0 {
+		t.Errorf("stderr = %q (status %d), want silence and 0", errs, status)
+	}
+}
+
+// runAbsentWithVar is runAbsent with one ordinary variable set, so a subscript
+// naming it evaluates to that text rather than to zero — which is what tells
+// the two old answers apart.
+func runAbsentWithVar(t *testing.T, src, name, value string) (out, errs string, status int) {
+	t.Helper()
+	var o, e strings.Builder
+	r := seamRunner(t, &o, &e)
+	// The one axis these two tests need: a core with none answered refuses
+	// `unset a[k]` as a spelling the shells disagree about, several steps
+	// ahead of anything this seam decides, so an unanswered axis would report
+	// itself and the test would assert on the wrong diagnostic.
+	sem := Semantics{
+		FatalErrorStatusIsOne:       Yes,
+		UnsetTakesASubscript:        Yes,
+		ArrayBaseIsZero:             Yes,
+		ScalarSubscriptIsACharacter: Yes,
+	}
+	r.Semantics = &sem
+	r.SetAbsentParameter("nothere", "parameter not implemented yet")
+	if r.Vars == nil {
+		r.Vars = map[string]string{}
+	}
+	r.Vars[name] = value
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatalf("run %q: %v", src, err)
+	}
+	return o.String(), e.String(), r.ExitStatus()
+}

@@ -106,6 +106,41 @@ func (r *Runner) refuseAbsentParameter(e *syntax.ParamExpr) bool {
 	return true
 }
 
+// refuseAbsentParameterUnset is the *write* half, and it is `unset
+// "parameters[PATH]"`: an element taken out of a table this shell has not got.
+//
+// The read half above is asked at the top of the word paths and never sees an
+// `unset` operand, which is not an expansion and fetches nothing. So the
+// commonest write on these tables walked straight past it, and what it walked
+// into was the ordinary subscript machinery: the name holds nothing, so the
+// brackets are read as arithmetic, and `unset "parameters[PATH]"` complained
+// `invalid number: /opt/homebrew/bin:…` — a sentence about the *value of the
+// key*, pointing at a math error nobody wrote. `unset "parameters[nope]"` was
+// worse and was silent at status 0, which is this whole mechanism's own
+// failure case wearing the shape it was built to stop (#1527).
+//
+// There is nothing to copy here. zsh's own answers for these names are
+// incoherent between themselves — `read-only variable: nope` for
+// `$parameters`, `job not found: x` for `$jobtexts`, silence for `$reswords`,
+// and `$funcstack` and `$historywords` take the shell down with SIGSEGV — so
+// the panel gives no behavior to match and the rule this file already states
+// is the answer: name it, refuse it, let nothing depend on it. The sentence is
+// the read's, from the same table, so there is one of it.
+//
+// The script's own value is exempt for the read's reason: `parameters=(a b)`
+// and then `unset "parameters[1]"` is the script's array, in this shell as in
+// one where the module was never loaded.
+func (r *Runner) refuseAbsentParameterUnset(name string) (string, bool) {
+	reason, ok := r.absentParams[name]
+	if !ok {
+		return "", false
+	}
+	if _, held := r.getVar(name); held {
+		return "", false
+	}
+	return reason, true
+}
+
 // An **absent element** is a key a produced association is asked for and
 // whose producer has no answer. Reading it refuses by name; it never reads as
 // empty.

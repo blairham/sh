@@ -799,6 +799,20 @@ func (r *Runner) declareFunctions(names []string, namesOnly bool) int {
 // listedFunction is a function said back whole, in the dialect's arrangement:
 // the header the dialect writes — see Diagnostics.FunctionListingHeader —
 // and the body laid out by its function layout.
+//
+// The header is the `name ()` form for every declaration, including one
+// written with the `function` keyword, and that is measured rather than
+// overlooked. #1406 is the same question asked of syntax.Print, where the
+// answer is the other one: a tree carries FuncDecl.Keyword because ksh93's
+// `typeset` needs it, so a *printer* that dropped it handed back a program
+// whose locals leak. A listing does not, for two reasons that have to hold
+// together — bash 5.3, bash 3.2 and zsh 5.9.2 all write `f () ` back for
+// either spelling, which they may because `typeset` declares a local in both
+// bodies there; and ksh93, which does write `function f { …; }` back, has no
+// `-f` listing in this implementation to reach here at all. If one is added,
+// this line is where the keyword has to come back — the body is all that
+// goes through the printer, so the printer's fix does not reach it.
+// Measured 2026-09-08 on bash 5.3.15, bash 3.2.57, zsh 5.9.2 and ksh93u+.
 func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
 	return Wording(r.diag().FunctionListingHeader, "%[1]s () \n%[2]s",
 		name, syntax.PrintWith(fn.Body, r.functionLayout))

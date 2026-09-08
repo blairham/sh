@@ -33,16 +33,19 @@ import (
 // demanded the text back would be a test of taste. What may not change is
 // the program.
 
-// keywordFunctionsInTheCorpus counts the one round-trip failure the corpus
-// turns up that this file is not about, rather than folding it in: a function
-// written with the `function` keyword comes back in the `name()` form, and
-// the two are not the same declaration — [syntax.FuncDecl.Keyword] is in the
-// tree because one semantics axis reads it, so dropping it changes what
-// `typeset` in the body does. Filed as #1406.
+// keywordFunctionsInTheCorpus is no longer a bucket of failures. It was the
+// eleven cases whose declaration came back in the `name()` form because the
+// printer dropped the `function` keyword — not the same declaration, since
+// [syntax.FuncDecl.Keyword] is what Semantics.TypesetLocalNeedsKeywordFunction
+// reads, so what came back was a program whose locals leak. The printer
+// writes the word now (#1406) and they round trip like everything else.
 //
-// A count and not a list of ids, so that it cannot rot in either direction:
-// a new construct joining this bucket fails the test, and so does fixing the
-// printer without coming back here.
+// The count stays, and stays a count rather than a list of ids, because it is
+// the only thing standing between "these eleven pass" and "these eleven are
+// no longer reached": a case renamed or a `function` dropped from a snippet
+// would leave the property untested in silence. It is asserted against the
+// cases that *round trip* now rather than the ones skipped, so it can only be
+// satisfied by exercising them.
 const keywordFunctionsInTheCorpus = 11
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
@@ -81,7 +84,6 @@ func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 				}
 				if hasKeywordFunction(first) {
 					keywordFunctions++
-					continue
 				}
 				printed := syntax.PrintFileWith(first, l.layout)
 
@@ -104,7 +106,9 @@ func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 			}
 			if keywordFunctions != keywordFunctionsInTheCorpus {
 				t.Errorf("%d corpus cases define a function with the `function` keyword, want %d: "+
-					"#1406 has been fixed, or a case has been added — either way this file has to say so",
+					"a case has been added or has stopped using the keyword — either way this "+
+					"file has to say so, because the count is what says the keyword path above "+
+					"was walked at all",
 					keywordFunctions, keywordFunctionsInTheCorpus)
 			}
 		})
@@ -237,7 +241,8 @@ func TestAnUnmarkedParenthesisIsStillProtected(t *testing.T) {
 }
 
 // hasKeywordFunction reports whether any function in f was declared with
-// the `function` keyword. See keywordFunctionsInTheCorpus.
+// the `function` keyword. Counted rather than skipped now — see
+// keywordFunctionsInTheCorpus.
 //
 // Read through reflect accessors and never through Interface: part of the
 // tree is reached through an unexported embedded field — every compound

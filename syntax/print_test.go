@@ -196,3 +196,120 @@ func TestABackgroundStatementBeforeAClosingWord(t *testing.T) {
 		}
 	}
 }
+
+// The `function` keyword is written back where it was written.
+//
+// The whole rendered text is asserted rather than that it contains the word,
+// because the failure this replaces produced output that would satisfy a
+// `contains`: `f() { …; }` with the keyword bolted on the front is neither
+// spelling, and only comparing the line can tell "the word is there" from
+// "the declaration is right".
+//
+// The oracle is ksh93, the one shell in the panel for which the word means
+// anything and the one that says it back: `function f { echo hi; }` listed
+// with `typeset -f` there is `function f { echo hi; };` and `f() { echo hi;
+// }` is `f() { echo hi; };`. Measured 2026-09-08 on ksh93u+ 2012-08-01. bash
+// 5.3, bash 3.2 and zsh 5.9.2 all normalise both to `f () `, which they may:
+// `typeset` declares a local in either body there, so nothing distinguishes
+// them to be lost. dash has no `function` keyword at all and no tree here
+// can carry the flag under its grammar.
+func TestTheFunctionKeywordIsPrintedBack(t *testing.T) {
+	d := syntax.Core()
+	d.FunctionKeyword = true
+	d.FunctionKeywordParens = true
+	d.FunctionNamePunctuation = true
+	arranged := syntax.Layout{
+		Lines: true, Indent: "  ", Nested: true,
+		Separator: ";", KeywordTerminator: ";",
+		BraceOpenSuffix: " ", OutermostBraceOpensALine: true,
+	}
+	for _, tc := range []struct{ name, src, flat, laid string }{
+		{
+			"the keyword form", "function f { echo kw; }",
+			"function f { echo kw; }", "function f { \n  echo kw\n}",
+		},
+		{
+			// The hybrid comes back without its parentheses, which is the
+			// tree it parsed to and not a loss: ksh93 refuses this spelling
+			// outright — `syntax error at line 1: '(' unexpected` — and the
+			// two shells that take it run all three the same way.
+			"the hybrid form", "function f() { echo both; }",
+			"function f { echo both; }", "function f { \n  echo both\n}",
+		},
+		{
+			// A name the keyword form allows and the bare one may not, so
+			// the word and the name are not printed by one rule.
+			"a keyword name with punctuation", "function :f { echo ok; }",
+			"function :f { echo ok; }", "function :f { \n  echo ok\n}",
+		},
+		{
+			// The control, and the half a fix that always wrote the word
+			// would break: no keyword in, no keyword out.
+			"the bare form", "f() { echo p; }",
+			"f() { echo p; }", "f() { \n  echo p\n}",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := syntax.Parse(tc.src, d)
+			if err != nil {
+				t.Fatalf("parse %q: %v", tc.src, err)
+			}
+			if got := syntax.Print(f); got != tc.flat {
+				t.Errorf("printed %q, want %q", got, tc.flat)
+			}
+			if got := syntax.PrintFileWith(f, arranged); got != tc.laid {
+				t.Errorf("laid out as %q, want %q", got, tc.laid)
+			}
+		})
+	}
+}
+
+// And the keyword survives the trip as a *flag* and not only as text: what
+// comes back parses to a declaration that still carries it, which is what
+// the semantics axis reads. Asserted separately because a printer that wrote
+// the word into a position the parser reads as something else would pass the
+// text comparison above.
+func TestAPrintedKeywordFunctionParsesBackAsOne(t *testing.T) {
+	d := syntax.Core()
+	d.FunctionKeyword = true
+	d.FunctionKeywordParens = true
+	for _, tc := range []struct {
+		name, src string
+		want      bool
+	}{
+		{"the keyword form", "function f { echo kw; }", true},
+		{"the hybrid form", "function f() { echo both; }", true},
+		{"the bare form", "f() { echo p; }", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := syntax.Parse(tc.src, d)
+			if err != nil {
+				t.Fatalf("parse %q: %v", tc.src, err)
+			}
+			back, err := syntax.Parse(syntax.Print(f), d)
+			if err != nil {
+				t.Fatalf("printed source does not parse: %v", err)
+			}
+			if got := keywordOf(t, back); got != tc.want {
+				t.Errorf("read back with Keyword = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// keywordOf is the Keyword flag of the one declaration in f.
+func keywordOf(t *testing.T, f *syntax.File) bool {
+	t.Helper()
+	if len(f.Stmts) != 1 {
+		t.Fatalf("%d statements, want 1", len(f.Stmts))
+	}
+	pipe, ok := f.Stmts[0].Expr.(*syntax.Pipeline)
+	if !ok || len(pipe.Cmds) != 1 {
+		t.Fatalf("not a single command: %T", f.Stmts[0].Expr)
+	}
+	decl, ok := pipe.Cmds[0].(*syntax.FuncDecl)
+	if !ok {
+		t.Fatalf("not a declaration: %T", pipe.Cmds[0])
+	}
+	return decl.Keyword
+}

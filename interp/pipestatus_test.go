@@ -78,12 +78,17 @@ func TestAssignmentUpdatesPipelineStatusIsAnAxis(t *testing.T) {
 	}
 	// Every other shape of command updates it whatever the answer, so nothing
 	// is asked for those.
-	for _, a := range []Answer{Yes, No, Unspecified} {
-		out, _ := run(t, `false | true; :; echo "${P[@]}"`, named("P", func(s *Semantics) {
-			s.AssignmentUpdatesPipelineStatus = a
-		}))
-		if strings.TrimSpace(out) != "0" {
-			t.Errorf("%v: a builtin gave %q, want 0 with no dialect needed", a, strings.TrimSpace(out))
+	// `x=1 true` is the shape that makes the Args check load-bearing: an
+	// assignment in front of a command name is that command's, and the
+	// command records whatever the answer.
+	for _, src := range []string{`false | true; :; echo "${P[@]}"`, `false | true; x=1 true; echo "${P[@]}"`} {
+		for _, a := range []Answer{Yes, No, Unspecified} {
+			out, _ := run(t, src, named("P", func(s *Semantics) {
+				s.AssignmentUpdatesPipelineStatus = a
+			}))
+			if strings.TrimSpace(out) != "0" {
+				t.Errorf("%v: %s gave %q, want 0 with no dialect needed", a, src, strings.TrimSpace(out))
+			}
 		}
 	}
 }
@@ -197,6 +202,25 @@ func TestNegationAndRedirectionAlwaysWriteTheRecord(t *testing.T) {
 			if got := strings.TrimSpace(out); got != "0" {
 				t.Errorf("%v: %s gave %q, want 0 whatever the answer", a, src, got)
 			}
+		}
+	}
+}
+
+// A compound command writes the record, and neither axis is asked about one.
+//
+// The `(( … ))` in the body is what makes this discriminating. Write `:`
+// there instead and the body's own write leaves the same single 0 the clause
+// would, so the snippet cannot tell a clause that writes from one that is
+// transparent — which is exactly what the corpus row of that shape could not
+// tell, and why its reason now says so.
+func TestACompoundCommandWritesTheRecord(t *testing.T) {
+	const src = `if false | true; then (( 1 )); fi; echo "${P[@]}"`
+	for _, a := range []Answer{Yes, No} {
+		out, _ := runGrammar(t, src, enableTestAndArith, named("P", func(s *Semantics) {
+			s.TestAndArithmeticUpdatePipelineStatus = a
+		}))
+		if got := strings.TrimSpace(out); got != "0" {
+			t.Errorf("%v: got %q, want the clause's own status alone", a, got)
 		}
 	}
 }

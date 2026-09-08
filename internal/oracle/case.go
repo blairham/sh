@@ -9260,6 +9260,16 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "what a compound leaves behind: the pipeline inside it is gone by the time the clause finishes, and one element holding 0 is what is left. It does not say *which* of the two routes got there — the `:` in the body records 0 and the clause recording its own 0 look identical here — so it pins the value and not the mechanism",
 	},
 	{
+		ID: "pipestatus/a-compound-command-with-a-body-that-writes-nothing", Category: "pipeline status",
+		Snippet: `if false | true; then (( 1 )); fi; echo "[${PIPESTATUS[@]}]"`,
+		Why:     "the discriminating version of the row above: `(( 1 ))` is chosen for the body because it leaves the record alone in the shell that would otherwise obscure the answer, so one element holding 0 here is the clause's own status and not the body's. bash and zsh agree, which is what makes it a rule rather than an axis",
+	},
+	{
+		ID: "pipestatus/a-compound-command-with-a-body-that-writes-nothing-in-zsh", Category: "pipeline status",
+		Snippet: `if false | true; then (( 1 )); fi; echo "[${pipestatus[@]}]"`,
+		Why:     "the same under zsh's name for the record, where the body genuinely writes nothing — so the single element can only have come from the clause",
+	},
+	{
 		ID: "pipestatus/negation-does-not-reach-it", Category: "pipeline status",
 		Snippet: `! false | true; echo "st=$? [${PIPESTATUS[@]}]"`,
 		Why:     "`!` inverts what the pipeline reports and not what its elements did, so the record is taken before the inversion",

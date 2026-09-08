@@ -12182,6 +12182,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pipestatus/lowercase-is-zsh` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[1 0 1]` |
 | `pipestatus/a-single-command-records-one` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[1]` | `[1]` | `[1]` | `[]` | `[]` |
 | `pipestatus/a-compound-command-records-its-own` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[0]` | `[0]` | `[0]` | `[]` | `[]` |
+| `pipestatus/a-compound-command-with-a-body-that-writes-nothing` | **2>** `<shell>: 1: 1: not found~<shell>: 1: Bad substitution` *(status 2)* | `[0]` | `[0]` | `[0]` | `[]` | `[]` |
+| `pipestatus/a-compound-command-with-a-body-that-writes-nothing-in-zsh` | **2>** `<shell>: 1: 1: not found~<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[0]` |
 | `pipestatus/negation-does-not-reach-it` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `st=1 [1 0]` | `st=1 [1 0]` | `st=1 [1 0]` | `st=1 []` | `st=1 []` |
 | `pipestatus/a-bare-assignment` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[0]` | `[0]` | `[0]` | `[]` | `[]` |
 | `pipestatus/a-bare-assignment-in-zsh` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[1 0]` |
@@ -12272,6 +12274,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pipestatus/a-compound-command-records-its-own` — what a compound leaves behind: the pipeline inside it is gone by the time the clause finishes, and one element holding 0 is what is left. It does not say *which* of the two routes got there — the `:` in the body records 0 and the clause recording its own 0 look identical here — so it pins the value and not the mechanism
   ```sh
   if false | true; then :; fi; echo "[${PIPESTATUS[@]}]"
+  ```
+- `pipestatus/a-compound-command-with-a-body-that-writes-nothing` — the discriminating version of the row above: `(( 1 ))` is chosen for the body because it leaves the record alone in the shell that would otherwise obscure the answer, so one element holding 0 here is the clause's own status and not the body's. bash and zsh agree, which is what makes it a rule rather than an axis
+  ```sh
+  if false | true; then (( 1 )); fi; echo "[${PIPESTATUS[@]}]"
+  ```
+- `pipestatus/a-compound-command-with-a-body-that-writes-nothing-in-zsh` — the same under zsh's name for the record, where the body genuinely writes nothing — so the single element can only have come from the clause
+  ```sh
+  if false | true; then (( 1 )); fi; echo "[${pipestatus[@]}]"
   ```
 - `pipestatus/negation-does-not-reach-it` — `!` inverts what the pipeline reports and not what its elements did, so the record is taken before the inversion
   ```sh

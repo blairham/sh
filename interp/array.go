@@ -549,6 +549,166 @@ func (r *Runner) unsetCharacterSpan(name, v string, from, to int) int {
 	return 0
 }
 
+// spanOutcome is what resolving a range on the left of an assignment came to.
+//
+// Three answers rather than a bool, because the two failures must not be
+// confused: a subscript that is no range at all has to fall through to the
+// single-subscript reading beside it, and one that *is* a range and would not
+// resolve has already been reported — falling through there would blame the
+// same text twice, once as a pair and once as an expression.
+type spanOutcome uint8
+
+const (
+	// spanNotARange is a subscript this dialect does not read as a pair, or
+	// one whose two readings name the same element. The single subscript
+	// answers it.
+	spanNotARange spanOutcome = iota
+	// spanReported is a pair whose ends would not resolve. Already said.
+	spanReported
+	// spanResolved is a pair with both ends in hand.
+	spanResolved
+)
+
+// assignSpan resolves the span a range on the left of an assignment names,
+// where the dialect reads the comma as the separator of a range rather than as
+// the arithmetic operator whose value is its right operand.
+//
+// The order is unsetSubscriptRange's, which is the same question about the
+// same construct: a pair whose ends come to the same subscript is that
+// subscript under either reading, so it is answered by the single subscript
+// and no axis is asked — the discipline that keeps `a[2,2]=(x y)` from needing
+// a column. Only then is the axis put, and only then is a failed end blamed,
+// so a dialect without ranges reports the whole text as one expression exactly
+// as it did before.
+//
+// The *operator* decides it too, and this is the row that would not have been
+// guessed: `+=` reads no range at all. Measured on zsh 5.9.2 with `a=(1 2 3)`,
+// `a[2,10]+=(x)` gives eleven elements — `[1][2][3]`, seven empties, `[x]` —
+// which is the arithmetic comma's `10` padded to and appended at, and not the
+// span 2 through 3 with something put after it. `a[2,3]+=x` gives `[1][2][3x]`
+// for the same reason: it appends to element *3*.
+func (r *Runner) assignSpan(a *syntax.Assign, text string) (from, to int, outcome spanOutcome) {
+	if a.Append {
+		return 0, 0, spanNotARange
+	}
+	lo, hi, ok := splitSubscriptPair(text)
+	if !ok {
+		return 0, 0, spanNotARange
+	}
+	from, errLo := r.subscriptValue(lo)
+	to, errHi := r.subscriptValue(hi)
+	if errLo == nil && errHi == nil && from == to {
+		return 0, 0, spanNotARange
+	}
+	if !r.ask(r.sem().SubscriptCommaIsARange, "`${a[1,3]}` naming a range rather than one subscript") {
+		return 0, 0, spanNotARange
+	}
+	if errLo != nil {
+		r.fatal("%s\n", r.subscriptFailure(lo, errLo))
+		return 0, 0, spanReported
+	}
+	if errHi != nil {
+		// Measured: `a=(1 2 3); a[2,3/0]=(x y)` is `division by zero` and
+		// ends the script, the same complaint the identical text inside
+		// `$(( ))` makes and the same one a single bad subscript makes.
+		r.fatal("%s\n", r.subscriptFailure(hi, errHi))
+		return 0, 0, spanReported
+	}
+	return from, to, spanResolved
+}
+
+// spliceElementSpan replaces the elements a span names with words, which is
+// what both spellings of a range assignment do — `a[lo,hi]=(p q)` and
+// `a[lo,hi]=v` differ only in how many words there are. The length changes by
+// the words' count less the span's, so the array grows, shrinks or holds.
+//
+// Measured on zsh 5.9.2, the one panel member that reads a range here, with
+// `a=(1 2 3)` and fields compared rather than counted:
+//
+//	a[2,3]=(x y)      [1][x][y]        an equal count replaces, the length holds
+//	a[2,3]=(x)        [1][x]           fewer shrinks
+//	a[2,3]=(x y z)    [1][x][y][z]     more grows
+//	a[2,3]=()         [1]              none deletes the span
+//	a[2,3]=x          [1][x]           a scalar value is one word
+//	a[2,10]=(x y)     [1][x][y]        an end past the last is the last
+//	a[2,-1]=(x)       [1][x]           and a negative end counts back from it
+//	a[0,2]=(x y)      [x][y][3]        a start below the first is the first
+//	a[3,2]=(x)        [1][2][x][3]     an end before the start is an empty span,
+//	                                   so the words go in and nothing comes out
+//	a[5,6]=(x)        [1][2][3][][x]   a start past the last pads, then places
+//	a[0,0]=(x)        refused          the span is wholly below the first
+//
+// The last three are the rows a symmetry argument gets wrong. The reversed
+// range *inserts* rather than doing nothing, which is the same answer
+// unsetElementSpan gives it — one construct, one rule. The padding is what the
+// single subscript already does for `a[5]=(x)`. And the refusal is
+// spanIsBelowTheFirstElement, which is why `a[0,0]` is refused where `a[0,1]`
+// is not: one names a span entirely out of reach, the other one that begins
+// out of reach and ends inside.
+//
+// It grew the array before rather than replacing the span. The arithmetic
+// comma's reading took the pair for its right operand, so `a[2,3]=(x y)` ran
+// as `a[3]=(x y)` and gave `[1][2][x][y]` — four elements where three were
+// right, the old element 2 still standing in front of the new ones, at status
+// 0 and with nothing said. A script that then indexed what it believed it had
+// replaced is how it surfaced.
+func (r *Runner) spliceElementSpan(name, text string, elems []string, from, to int, words []string) {
+	if r.spanIsBelowTheFirstElement(from, to) {
+		r.fatal("%s\n", Wording(r.diag().BadArraySubscript,
+			"%[1]s[%[2]s]: bad array subscript", name, text))
+		return
+	}
+	first, tail, within := r.spanOver(len(elems), from, to)
+	if !within {
+		// The span begins past the last element, so there is nothing to take
+		// out: the gap becomes empty elements and the words follow them.
+		out := make([]string, 0, first+len(words))
+		out = append(out, elems...)
+		for len(out) < first {
+			out = append(out, "")
+		}
+		out = append(out, words...)
+		r.setArray(name, out)
+		return
+	}
+	out := make([]string, 0, first+len(words)+len(elems)-tail)
+	out = append(out, elems[:first]...)
+	out = append(out, words...)
+	out = append(out, elems[tail:]...)
+	r.setArray(name, out)
+}
+
+// spanReplacesElements reports whether a range on the left of a *scalar*
+// assignment reaches elements, which is what decides whether the value goes in
+// as the one word that replaces the span.
+//
+// An array does, and so does a name holding nothing at all — that becomes one,
+// so `unset a; a[2,3]=x` is `[][x]`.
+//
+// A declared table does not, and never arrives here anyway: the shell that
+// reads ranges takes the comma inside a table's subscript for part of the key
+// rather than for a separator, and the keyed branch ahead of this one already
+// does that. Measured — `typeset -A h; h=(k v); h[a,b]=x` stores under the
+// three characters `a,b` and leaves `k` alone.
+//
+// A plain string does not either, and that one is a gap rather than a rule.
+// The range reading of a string is a span of *characters* there — measured,
+// `s=hello; s[2,3]=x` is `hxlo` and `s[2,4]=QQ` is `hQQo` — but no character
+// write exists to splice into: `s[2]=x` alone already answers ` x`, having
+// turned the string into an array, so a range would be the same missing
+// construct wearing a pair. Left to the single subscript and filed apart,
+// rather than half-guessed at from here.
+func (r *Runner) spanReplacesElements(name string) bool {
+	if _, isArray := r.Arrays[name]; isArray {
+		return true
+	}
+	if r.assocDeclared(name) {
+		return false
+	}
+	_, held := r.getVar(name)
+	return !held
+}
+
 // unsetScalarElem is `unset "a[i]"` where the name is not an array.
 //
 // The panel gives three answers and each one falls out of what a subscripted
@@ -1038,19 +1198,43 @@ func (r *Runner) subscriptNameIsAbsent(e *syntax.ParamExpr) bool {
 	return !ok
 }
 
-// splitSubscriptRange splits `1,3` into its two halves, reporting whether the
-// subscript is written as a pair at all.
+// splitSubscriptPair splits a subscript at its first top-level comma, whatever
+// follows it.
 //
-// One comma exactly. Nested parentheses and brackets hold their own commas —
-// `${a[f(1,2),3]}` has two halves and not three — and a subscript with two
-// top-level commas is a pair in no shell measured, so it is left to the
-// arithmetic that reads it as an expression.
-func splitSubscriptRange(idx string) (lo, hi string, ok bool) {
-	at, extra := topLevelComma(idx)
-	if at < 0 || extra {
+// Nested parentheses and brackets hold their own commas, so `${a[f(1,2),3]}`
+// has two halves and not three. A *third* half is the caller's question rather
+// than this one's, because the two sides of an assignment answer it
+// differently — see splitSubscriptRange for the reading that refuses one and
+// assignSpan for the reading that does not.
+func splitSubscriptPair(idx string) (lo, hi string, ok bool) {
+	at, _ := topLevelComma(idx)
+	if at < 0 {
 		return "", "", false
 	}
 	return idx[:at], idx[at+1:], true
+}
+
+// splitSubscriptRange splits `1,3` into its two halves, reporting whether the
+// subscript is written as a pair at all.
+//
+// One comma exactly, which is the *reading* side's rule: a subscript with two
+// top-level commas is a pair in no shell measured there — `${a[1,2,3]}` is
+// `bad substitution` in the one shell with ranges — so it is left to the
+// arithmetic that reads it as an expression.
+//
+// The left of an assignment does not agree, and the asymmetry is measured
+// rather than tidied away: `a=(1 2 3); a[1,2,3]=(x y)` gives `[x][y]` on zsh
+// 5.9.2, which is the span 1 through the arithmetic `2,3` — so assignSpan
+// splits on the first comma and lets the arithmetic have the rest.
+func splitSubscriptRange(idx string) (lo, hi string, ok bool) {
+	lo, hi, ok = splitSubscriptPair(idx)
+	if !ok {
+		return "", "", false
+	}
+	if at, _ := topLevelComma(hi); at >= 0 {
+		return "", "", false
+	}
+	return lo, hi, true
 }
 
 // topLevelComma reports where the first comma outside any nesting is, and

@@ -54,6 +54,22 @@ func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
 		return
 	}
 	text := r.joinWord(a.Index)
+	from, to, outcome := r.assignSpan(a, text)
+	if outcome == spanReported {
+		return
+	}
+	if outcome == spanResolved {
+		// A *range* of elements rather than one: the words replace the whole
+		// span, so `a=(1 2 3); a[2,3]=(x y)` is three elements and not four.
+		// See spliceElementSpan for what each end is measured to do.
+		words, ok := r.literalWords(a.Name, a.Elems)
+		if !ok {
+			return
+		}
+		elems, _ := r.arrayElemsOfTheName(a.Name)
+		r.spliceElementSpan(a.Name, text, elems, from, to, words)
+		return
+	}
 	idx, err := r.subscriptValue(text)
 	if err != nil {
 		// The same failure, worded the same way, as the scalar element

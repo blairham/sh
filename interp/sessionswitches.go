@@ -80,6 +80,36 @@ func (r *Runner) CorrectsCdSpelling() bool { return r.cdCorrectsSpelling }
 // SetCorrectsCdSpelling moves it.
 func (r *Runner) SetCorrectsCdSpelling(on bool) { r.cdCorrectsSpelling = on }
 
+// CorrectsCompletionSpelling reports whether completion retries a directory
+// that is not there against the closest name that is — bash's `dirspell`,
+// which is `cdspell`'s correction asked for by the Tab key instead of by `cd`.
+//
+// Two switches for one corrector rather than one switch for two names,
+// because bash has two names and a session may set either alone: measured,
+// `shopt -s cdspell` corrects a typed `cd` and leaves Tab alone, and
+// `shopt -s dirspell` the other way about.
+func (r *Runner) CorrectsCompletionSpelling() bool { return r.completionCorrectsSpelling }
+
+// SetCorrectsCompletionSpelling moves it.
+func (r *Runner) SetCorrectsCompletionSpelling(on bool) { r.completionCorrectsSpelling = on }
+
+// ExpandsCompletedDirectory reports whether a completion writes the directory
+// it read back into the line, rather than keeping the directory as it was
+// typed — bash's `direxpand`.
+//
+// For the front end, which is the only half of a shell that has a line to
+// write into. The state is here rather than there for the reason
+// CompletesEmptyCommandWord's is: it is a `shopt` name a person types between
+// two keystrokes, so a completer that read it once at startup would answer
+// with a setting the session had already changed.
+//
+// The two names are a pair, and that is measured rather than assumed — see
+// Runner.CorrectedDirectory, which carries the table.
+func (r *Runner) ExpandsCompletedDirectory() bool { return r.completionExpandsDirectory }
+
+// SetExpandsCompletedDirectory moves it.
+func (r *Runner) SetExpandsCompletedDirectory(on bool) { r.completionExpandsDirectory = on }
+
 // ChecksRunningJobsAtExit reports whether a job that is still *running* holds
 // this shell's exit back, the way a stopped one does.
 //

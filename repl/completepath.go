@@ -32,7 +32,9 @@ func (s shellCompleter) paths(word string, keep func(dir string, e os.DirEntry) 
 	}
 	prefix := wordPrefix(word)
 	base := strings.TrimPrefix(dequote(word), dequote(prefix))
-	dir := s.readable(dequote(prefix))
+	typed := dequote(prefix)
+	dir := s.readable(typed)
+	quote := wordQuote(word)
 	// Through the boundary, not through os: the directory being listed is one
 	// the person at the prompt typed, which is the definition of inside. A
 	// refusal comes back as an error and is answered here the way a directory
@@ -40,9 +42,15 @@ func (s shellCompleter) paths(word string, keep func(dir string, e os.DirEntry) 
 	// boundary.Boundary.ReadDir, which carries the argument.
 	entries, err := s.bound.ReadDir(s.context(), dir)
 	if err != nil {
-		return nil
+		fixed, ok := s.corrected(typed, quote)
+		if !ok {
+			return nil
+		}
+		dir, prefix = fixed.dir, fixed.prefix
+		if entries, err = s.bound.ReadDir(s.context(), dir); err != nil {
+			return nil
+		}
 	}
-	quote := wordQuote(word)
 	// `~` and `#` mean something only at the very start of an unquoted word.
 	atStart := prefix == "" && quote == 0
 
@@ -77,6 +85,71 @@ func (s shellCompleter) paths(word string, keep func(dir string, e os.DirEntry) 
 		out = append(out, text)
 	}
 	return out
+}
+
+// correctedDir is a directory to read instead of the one that was typed, and
+// the text to put in the line in front of what is found there.
+type correctedDir struct{ dir, prefix string }
+
+// corrected is the second attempt at a directory portion that would not read:
+// bash's `dirspell`, which needs bash's `direxpand` beside it to be visible at
+// all.
+//
+// The pair is measured, and it is the whole reason this is one method rather
+// than two. Driven through a pseudo-terminal against bash 5.3.15 on
+// 2026-09-08, in a directory holding `documents/target-file.txt`:
+//
+//	shopt -s …            ls documnets/tar<TAB>
+//	(neither)             the bell, and the line as typed
+//	dirspell              the bell, and the line as typed
+//	direxpand             the bell, and the line as typed
+//	dirspell direxpand    /…/documents/target-file.txt
+//
+// The control is in every one of those sessions — `ls documents/tar<TAB>`
+// completes throughout — so what the first three rows show is a correction
+// that happened and had nowhere to go. `dirspell` decides which directory is
+// *read* and `direxpand` decides whether the directory that was read is what
+// gets *written*, and a correction the line may not carry is a correction
+// nobody sees. So a shell holding only the first offers nothing, which is what
+// the second `return nil` below is.
+//
+// Two shapes are refused before the corrector is asked, and both are measured
+// rather than reasoned. With both names on, bash corrects `documents/../
+// documnets/` and `linkdir/../documnets/tar`, and refuses `./documnets/`,
+// `././documnets/tar`, `../documnets/tar` and `alpha/./bteta/gam`. So a `.`
+// anywhere in the typed directory stops it, and a `..` stops it only where it
+// comes first. The test is on the text as *typed*, which is the only place it
+// can be: `./documnets` and `documents/../documnets` resolve to the same
+// directory and bash answers them differently.
+func (s shellCompleter) corrected(typed string, quote rune) (correctedDir, bool) {
+	if s.correctDir == nil || !correctableTyped(typed) {
+		return correctedDir{}, false
+	}
+	fixed := s.correctDir(s.readable(typed))
+	if fixed == "" || !s.expandsDirectory {
+		return correctedDir{}, false
+	}
+	// Escaped the way a name is, because it is going into the line and a
+	// directory with a space or a dollar in it would otherwise arrive as two
+	// words or as an expansion. Not atStart: a corrected directory is an
+	// absolute path, so it can neither begin with a `~` that means a home nor
+	// with a `#` that means a comment.
+	return correctedDir{dir: fixed, prefix: escapeName(fixed+"/", quote, false)}, true
+}
+
+// correctableTyped reports whether a typed directory is one bash would try to
+// correct. See corrected, which carries the measurements.
+func correctableTyped(typed string) bool {
+	if typed == "" {
+		return false
+	}
+	parts := strings.Split(strings.TrimSuffix(typed, "/"), "/")
+	for i, part := range parts {
+		if part == "." || (i == 0 && part == "..") {
+			return false
+		}
+	}
+	return true
 }
 
 // isDir reports whether an entry can be descended into.

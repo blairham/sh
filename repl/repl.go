@@ -1121,7 +1121,14 @@ func (c runnerCompleter) shell() shellCompleter {
 		// line a person types, and a completer built once at startup would
 		// take effect on the next shell.
 		emptyWordOffersNothing: !c.r.CompletesEmptyCommandWord(),
-		bound:                  c.bound, ctx: c.ctx,
+		// The pair behind `dirspell` and `direxpand`, read here for the same
+		// reason: both are lines a person types at the prompt. The corrector
+		// is handed over as a method value rather than as a bool because it
+		// reads its own option — see interp.Runner.CorrectedDirectory — so
+		// the switch is consulted at the keystroke and in one place.
+		correctDir:       c.r.CorrectedDirectory,
+		expandsDirectory: c.r.ExpandsCompletedDirectory(),
+		bound:            c.bound, ctx: c.ctx,
 	}
 }
 

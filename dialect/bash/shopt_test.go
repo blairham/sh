@@ -281,15 +281,18 @@ func TestShoptHistoryNamesAreOnAndTheRestStayRefused(t *testing.T) {
 			t.Errorf("shopt -u %s = %q status %d, want a refusal", name, out, st)
 		}
 	}
-	// Refused, because nothing here implements it. The list is five names
-	// shorter than it was: #1445 built `checkwinsize`, `autocd`,
-	// `no_empty_cmd_completion`, `cdspell` and `checkjobs`, and each of those
-	// is asserted by behavior rather than by its bit. What is left is refused
-	// for the reason this test exists — granting it would be exactly the
-	// quiet lie #1352 named. `dirspell` is refused on the ground that it is
-	// visible in bash 5.3.15 only beside `direxpand`, which this shell does
-	// not do either; see shopt.go.
-	for _, name := range []string{"dirspell"} {
+	// Nothing is left refused. The list was six names when #1429 wrote it and
+	// is empty now: #1445 built `checkwinsize`, `autocd`,
+	// `no_empty_cmd_completion`, `cdspell` and `checkjobs`, and #1562 built
+	// the last of them as the pair it turned out to be — `dirspell` is
+	// visible in bash 5.3.15 only beside `direxpand`, so the two were wired
+	// together and each is asserted by behavior rather than by its bit.
+	//
+	// Asserted as an emptiness rather than deleted, because the assertion is
+	// not "these names work" but "no name in this table is a bit somebody set
+	// and nothing read" — the quiet lie #1352 named. A name that has to be
+	// refused again belongs in this list, and the loop is here to hold it.
+	for _, name := range []string{} {
 		out, st := runBash(t, t.TempDir(), "shopt -s "+name)
 		if st != 1 || !strings.Contains(out, "shopt: "+name+": not implemented") {
 			t.Errorf("shopt -s %s = %q status %d, want a refusal by name", name, out, st)
@@ -298,6 +301,49 @@ func TestShoptHistoryNamesAreOnAndTheRestStayRefused(t *testing.T) {
 		want := fmt.Sprintf("%-20s\toff\n", name)
 		if out, st := runBash(t, t.TempDir(), "shopt "+name); st != 1 || out != want {
 			t.Errorf("shopt %s = %q status %d, want %q status 1", name, out, st, want)
+		}
+	}
+	// The pair, which round-trips like the rest of shoptSwitches. What each
+	// one *does* needs a Tab and is graded in the smoke suite.
+	for _, name := range []string{"dirspell", "direxpand"} {
+		if out, st := runBash(t, t.TempDir(), "shopt -s "+name); st != 0 || out != "" {
+			t.Errorf("shopt -s %s = %q status %d, want a quiet success", name, out, st)
+		}
+		want := fmt.Sprintf("%-20s\ton\n", name)
+		if out, st := runBash(t, t.TempDir(), "shopt -s "+name+"; shopt "+name); st != 0 || out != want {
+			t.Errorf("shopt %s after -s = %q status %d, want %q status 0", name, out, st, want)
+		}
+		// Off before anything asks, which is bash's own default and the half
+		// a `shopt -s` row cannot see.
+		offWant := fmt.Sprintf("%-20s\toff\n", name)
+		if out, st := runBash(t, t.TempDir(), "shopt "+name); st != 1 || out != offWant {
+			t.Errorf("shopt %s = %q status %d, want %q status 1", name, out, st, offWant)
+		}
+		// And back off again, which a name wired to a real switch can do and
+		// a name granted by a table entry cannot.
+		if out, st := runBash(t, t.TempDir(), "shopt -s "+name+"; shopt -u "+name+"; shopt "+name); st != 1 || out != offWant {
+			t.Errorf("shopt -u %s = %q status %d, want %q status 1", name, out, st, offWant)
+		}
+	}
+	// Each of the three spelling names moves its own switch and nobody
+	// else's. Asserted through the builtin rather than through the Runner,
+	// because a getter/setter pair proves the core holds three states and
+	// this is the only thing that proves the *table* points each name at the
+	// right one — mutation testing wired `dirspell` to `cdspell`'s switch and
+	// every other test in this package still passed.
+	for _, pair := range [][2]string{
+		{"dirspell", "cdspell"},
+		{"cdspell", "dirspell"},
+		{"direxpand", "dirspell"},
+		{"dirspell", "direxpand"},
+		{"direxpand", "cdspell"},
+		{"cdspell", "direxpand"},
+	} {
+		set, asked := pair[0], pair[1]
+		want := fmt.Sprintf("%-20s\toff\n", asked)
+		out, st := runBash(t, t.TempDir(), "shopt -s "+set+"; shopt "+asked)
+		if st != 1 || out != want {
+			t.Errorf("shopt -s %s left %s at %q status %d, want %q status 1", set, asked, out, st, want)
 		}
 	}
 }

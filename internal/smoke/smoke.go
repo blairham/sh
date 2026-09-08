@@ -127,6 +127,26 @@ type Dialect struct {
 	// without one to refuse, and both answers are that shell's own.
 	CdSpellOption string
 
+	// DirSpellOption is the pair of rc-file lines that ask this shell's
+	// *completer* to correct a misspelled directory, or empty for a shell
+	// with no such option.
+	//
+	// A pair rather than a name, and that is the finding the row exists for.
+	// Measured through a pseudo-terminal against bash 5.3.15 on 2026-09-08,
+	// in a directory holding `documents/`: with `dirspell` alone
+	// `documnets/x<TAB>` rings the bell and leaves the line as typed, with
+	// `direxpand` alone the same, and only with **both** does the line become
+	// the completed path. The control runs in every one of those sessions —
+	// the correctly spelled word completes throughout — so the first two
+	// configurations are a correction with nowhere to go. A row that set only
+	// the name the issue was filed under would have graded a working shell as
+	// broken (#1562).
+	//
+	// Empty is an assertion rather than a gap, the way CdSpellOption's is:
+	// zsh has neither name, and its `correct` is about *command* names, which
+	// is a different question and must not be mapped across.
+	DirSpellOption []string
+
 	// CheckJobsOption is the rc-file line that asks this shell to look at its
 	// job table before it leaves, or empty for a shell that already does.
 	//
@@ -177,6 +197,7 @@ func Bash() Dialect {
 		PromptHook:        `PROMPT_COMMAND='SMOKE_HOOK=$((SMOKE_HOOK + 1))'`,
 		AutoCdOption:      "shopt -s autocd",
 		CdSpellOption:     "shopt -s cdspell",
+		DirSpellOption:    []string{"shopt -s dirspell", "shopt -s direxpand"},
 		CheckJobsOption:   "shopt -s checkjobs",
 		RunningJobsAtExit: "There are running jobs.",
 		ListsJobsAtExit:   true,

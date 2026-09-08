@@ -250,3 +250,52 @@ func (r *Runner) cdCorrected(operand, from string, physical bool) (dir, shown st
 	}
 	return dir, shown, true
 }
+
+// CorrectedDirectory is the directory a completer looked for and did not
+// find, corrected to one that is there, or empty where it cannot be.
+//
+// The completer's half of the same correction `cd` reaches through
+// cdCorrected, and it is a second entry point rather than a second corrector:
+// correctPath is the only copy of the algorithm and both names arrive at it.
+// What differs is the *shape of the answer*, and that is measured rather than
+// chosen. `cd` shows a person the operand in the shape it was typed —
+// `documents/` for `documnets/` — because what it prints is a line somebody
+// reads. A completion is text going into the line, and bash puts an absolute
+// path there: with both names on and a working directory of `w`, `documnets/`
+// completes to `/…/w/documents/target-file.txt` and
+// `documents/../documnets/` completes to the same, with the `..` collapsed.
+// So this answers absolutely and cleaned, and cdCorrected answers relatively.
+//
+// The argument is a directory that has already been resolved — the tilde
+// expanded and the shell's own directory in front of it — because that is
+// what the completer holds and because a corrector asked about text it would
+// have to resolve again is a second resolver.
+//
+// Empty where the option is off, so that the switch is read in one place and
+// a caller cannot correct without it. There is no Interactive check beside it
+// for the reason there is no non-interactive completer: a script has no Tab
+// key, and a guard against a caller that cannot exist would be a guard nobody
+// could ever fail.
+func (r *Runner) CorrectedDirectory(dir string) string {
+	if !r.completionCorrectsSpelling || dir == "" {
+		return ""
+	}
+	fixed := r.correctPath(dir)
+	if fixed == "" {
+		return ""
+	}
+	if !filepath.IsAbs(fixed) {
+		fixed = filepath.Join(r.Dir, fixed)
+	} else {
+		fixed = filepath.Clean(fixed)
+	}
+	// Required to be a directory, and for the same reason cdCorrected
+	// requires it: a correction that landed on a *file* would be handed back
+	// as a directory to read, and the read would fail after the line had
+	// already been rewritten.
+	info, err := r.stat(fixed)
+	if err != nil || !info.IsDir() {
+		return ""
+	}
+	return fixed
+}

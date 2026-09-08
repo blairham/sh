@@ -11027,6 +11027,18 @@ echo "st=$? alive"`,
 		Why:     "the fifth of the six names #1429 refused to be built (#1445), leaving only `dirspell`, and the row is the pair the other four already have: the name is the 5.3 binary's under either argv[0] and 3.2 answers `invalid shell option name`, and with the option on and accepted a *script* still leaves at once with a job of its own still running. That second half is the one an implementation is most likely to get too right — the hold is a person's, so a script that stopped to warn would have made every `&` before an `exit` a hang. What it says at a prompt needs a pseudo-terminal and is graded in the smoke suite",
 	},
 	{
+		ID: "shopt/dirspell-and-direxpand-are-one-pair-and-neither-is-a-script-feature", Category: "shell options",
+		Snippet: `mkdir documents; shopt -s dirspell direxpand; echo "st=$?"; shopt -p dirspell direxpand; ` +
+			`echo documnets/*; echo "st2=$?"`,
+		Why: "the last two names #1429 collected, and the row that says why they are one row: both are the 5.3 " +
+			"binary's under either argv[0] and 3.2 answers `invalid shell option name` twice, so a script " +
+			"testing either name is testing the same thing. The rest is the half that keeps an implementation " +
+			"honest — with both on and accepted, a *script* still gets the unmatched word back verbatim, " +
+			"because correcting a misspelled directory is something bash keeps for the Tab key. What the pair " +
+			"does at a prompt is a pseudo-terminal's question and is graded in the smoke suite, where it " +
+			"needs both names to be visible at all: `dirspell` alone rings the bell (#1562)",
+	},
+	{
 		ID: "shopt/checkjobs-round-trips-from-off", Category: "shell options",
 		Snippet: `shopt checkjobs; shopt -s checkjobs; shopt checkjobs; shopt -u checkjobs; shopt checkjobs; echo st=$?`,
 		Why:     "the default is the load-bearing half here, and it is the opposite of the neighboring shell's: bash starts this *off*, so a `sleep 40 &` and an `exit` leave, where zsh starts its own `checkjobs` on and stays. A shell that granted the name by writing `true` into a table would report it `on` before anything asked. The final status is the query's, which is 1 for an option that is off — the same shape `shopt checkwinsize` pins for a name that is on",

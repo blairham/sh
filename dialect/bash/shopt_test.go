@@ -281,13 +281,14 @@ func TestShoptHistoryNamesAreOnAndTheRestStayRefused(t *testing.T) {
 			t.Errorf("shopt -u %s = %q status %d, want a refusal", name, out, st)
 		}
 	}
-	// Refused, because nothing here implements them. The list is three names
-	// shorter than it was: #1445 built `checkwinsize`, `autocd` and
-	// `no_empty_cmd_completion`, and each of those is asserted by behavior
-	// below rather than by its bit. What is left is refused for the reason
-	// this test exists — granting one would be exactly the quiet lie #1352
-	// named.
-	for _, name := range []string{"cdspell", "dirspell", "checkjobs"} {
+	// Refused, because nothing here implements them. The list is four names
+	// shorter than it was: #1445 built `checkwinsize`, `autocd`,
+	// `no_empty_cmd_completion` and `cdspell`, and each of those is asserted
+	// by behavior below rather than by its bit. What is left is refused for
+	// the reason this test exists — granting one would be exactly the quiet
+	// lie #1352 named. `dirspell` is refused on the stronger ground that it
+	// could not be reproduced in bash 5.3.15 at all; see shopt.go.
+	for _, name := range []string{"dirspell", "checkjobs"} {
 		out, st := runBash(t, t.TempDir(), "shopt -s "+name)
 		if st != 1 || !strings.Contains(out, "shopt: "+name+": not implemented") {
 			t.Errorf("shopt -s %s = %q status %d, want a refusal by name", name, out, st)
@@ -660,5 +661,45 @@ func TestNoEmptyCmdCompletionInvertsTheCapability(t *testing.T) {
 		if got := r.CompletesEmptyCommandWord(); got != tc.wantCompletes {
 			t.Errorf("%s: CompletesEmptyCommandWord() = %v, want %v", tc.src, got, tc.wantCompletes)
 		}
+	}
+}
+
+// `shopt -s cdspell` corrects a misspelled `cd`, and the test is where the
+// shell ends up rather than the bit.
+//
+// Interactive-only in bash, measured, so the same snippet has to correct at a
+// prompt and refuse in a script — which is also what keeps this out of the
+// corpus, where every row is a script.
+func TestCdspellCorrectsAnInteractiveCd(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "documents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	interactive := dialecttest.Base{Dir: dir, Vars: map[string]string{"PATH": t.TempDir()}, Interactive: true}
+	out, st, err := preset.Combined(t, interactive, `shopt -s cdspell; cd documnets; pwd`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "documents\n" + filepath.Join(dir, "documents") + "\n"
+	if out != want || st != 0 {
+		t.Errorf("out %q status %d, want %q status 0", out, st, want)
+	}
+	// Off, the same word is the ordinary refusal — which is what this shell
+	// said before the option existed.
+	out, st, err = preset.Combined(t, interactive, `cd documnets; pwd`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "cd: documnets:") || !strings.HasSuffix(out, dir+"\n") || st != 0 {
+		t.Errorf("without the option: out %q status %d, want a refusal and no move", out, st)
+	}
+	// And a script does not get it even with the option on.
+	script := dialecttest.Base{Dir: dir, Vars: map[string]string{"PATH": t.TempDir()}}
+	out, _, err = preset.Combined(t, script, `shopt -s cdspell; cd documnets; pwd`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "cd: documnets:") || !strings.HasSuffix(out, dir+"\n") {
+		t.Errorf("in a script: out %q, want a refusal and no move", out)
 	}
 }

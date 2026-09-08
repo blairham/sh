@@ -15119,6 +15119,50 @@
         "TimedOut": false
       }
     },
+    "cd/no-operand-with-a-home-that-is-not-there": {
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: cd: /nonexistent-dir: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: cd: /nonexistent-dir: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 0: cd: /nonexistent-dir: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: 1: cd: can't cd to /nonexistent-dir",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: cd: /nonexistent-dir: [No such file or directory]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:cd:1: no such file or directory: /nonexistent-dir",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cd/onto-a-file-is-a-different-reason": {
       "bash": {
         "Stdout": "st=1",
@@ -88777,6 +88821,50 @@
       "zsh": {
         "Stdout": "st=127~st2=127~stayed",
         "Stderr": "\u003cshell\u003e:1: command not found: shopt~\u003cshell\u003e:1: command not found: sub",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "shopt/cdspell-is-accepted-and-still-not-a-script-feature": {
+      "bash": {
+        "Stdout": "st=0~st2=1~stayed",
+        "Stderr": "\u003cshell\u003e: line 1: cd: documnets: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~st2=1~stayed",
+        "Stderr": "\u003cshell\u003e: line 1: cd: documnets: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~st2=1~stayed",
+        "Stderr": "\u003cshell\u003e: line 0: cd: documnets: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~st2=2~stayed",
+        "Stderr": "\u003cshell\u003e: 1: shopt: not found~\u003cshell\u003e: 1: cd: can't cd to documnets",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~st2=1~stayed",
+        "Stderr": "\u003cshell\u003e: shopt: not found~\u003cshell\u003e: cd: documnets: [No such file or directory]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127~st2=1~stayed",
+        "Stderr": "\u003cshell\u003e:1: command not found: shopt~\u003cshell\u003e:cd:1: no such file or directory: documnets",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

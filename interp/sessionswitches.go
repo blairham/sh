@@ -66,3 +66,15 @@ func (r *Runner) CompletesEmptyCommandWord() bool { return !r.emptyCommandWordOf
 // there is exactly one place in the program where the sense of the bit is
 // decided.
 func (r *Runner) SetCompletesEmptyCommandWord(on bool) { r.emptyCommandWordOffersNothing = !on }
+
+// CorrectsCdSpelling reports whether `cd` corrects a misspelled operand
+// instead of refusing it.
+//
+// One shell in the panel names this (`cdspell`) and one names the same
+// correction asked for by the completer (`dirspell`); both names are that
+// dialect's and the correction is here, in spellcorrect.go. See
+// Runner.correctPath.
+func (r *Runner) CorrectsCdSpelling() bool { return r.cdCorrectsSpelling }
+
+// SetCorrectsCdSpelling moves it.
+func (r *Runner) SetCorrectsCdSpelling(on bool) { r.cdCorrectsSpelling = on }

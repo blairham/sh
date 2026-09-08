@@ -118,6 +118,15 @@ type Dialect struct {
 	// only that a script still does *not* get it (#1445).
 	AutoCdOption string
 
+	// CdSpellOption is the rc-file line that turns on correcting a misspelled
+	// `cd` operand, or empty for a shell that has no such option.
+	//
+	// Empty is an assertion rather than a gap: bash calls this `cdspell` and
+	// zsh has no name for it at all — its `correct` is about *command* names
+	// — so the row asks the shell with the option to correct and the shell
+	// without one to refuse, and both answers are that shell's own.
+	CdSpellOption string
+
 	// JobRunning and JobStopped are the words this shell lists a job's state
 	// with. They differ, and the difference is the point of having a column
 	// per dialect: bash writes `Running` and `Stopped`, zsh writes `running`
@@ -140,9 +149,10 @@ func Bash() Dialect {
 			"set -o vi",
 			`bind -m vi-insert '"\C-o": beginning-of-line'`,
 		},
-		PromptHook:   `PROMPT_COMMAND='SMOKE_HOOK=$((SMOKE_HOOK + 1))'`,
-		AutoCdOption: "shopt -s autocd",
-		JobRunning:   "Running", JobStopped: "Stopped",
+		PromptHook:    `PROMPT_COMMAND='SMOKE_HOOK=$((SMOKE_HOOK + 1))'`,
+		AutoCdOption:  "shopt -s autocd",
+		CdSpellOption: "shopt -s cdspell",
+		JobRunning:    "Running", JobStopped: "Stopped",
 	}
 }
 
@@ -160,9 +170,10 @@ func Zsh() Dialect {
 			"bindkey -v",
 			"bindkey -M viins '^O' beginning-of-line",
 		},
-		PromptHook:   "precmd() { SMOKE_HOOK=$((SMOKE_HOOK + 1)); }",
-		AutoCdOption: "setopt autocd",
-		JobRunning:   "running", JobStopped: "suspended",
+		PromptHook:    "precmd() { SMOKE_HOOK=$((SMOKE_HOOK + 1)); }",
+		AutoCdOption:  "setopt autocd",
+		CdSpellOption: "",
+		JobRunning:    "running", JobStopped: "suspended",
 	}
 }
 

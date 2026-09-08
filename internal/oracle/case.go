@@ -10213,6 +10213,16 @@ echo "st=$? alive"`,
 		Why:     "the name is the 5.3 binary's, under either argv[0] — 3.2 answers `invalid shell option name` — and the rest of the row is the part a shell is most likely to get *too* right: with the option on and accepted, a script still says `command not found` and stays where it is, because reading a bare directory name as a `cd` is something both shells that have the option keep for a person. The moving half needs a pseudo-terminal and is graded in the smoke suite instead",
 	},
 	{
+		ID: "shopt/cdspell-is-accepted-and-still-not-a-script-feature", Category: "shell options",
+		Snippet: `mkdir documents; shopt -s cdspell; echo "st=$?"; cd documnets; echo "st2=$?"; case $PWD in */documents) echo moved ;; *) echo stayed ;; esac`,
+		Why:     "both bash versions have this name, unlike `autocd` — 3.2 accepts it too — and the rest of the row is the half that keeps an implementation honest: with the option on and accepted, a script's `cd` still refuses the misspelling and stays put, because correcting one is something bash keeps for a person. What it corrects at a prompt is a pseudo-terminal's question and is graded in the smoke suite",
+	},
+	{
+		ID: "cd/no-operand-with-a-home-that-is-not-there", Category: "builtins",
+		Snippet: `HOME=/nonexistent-dir; cd; echo "st=$?"`,
+		Why:     "unanimous, and the shape of a crash rather than of a disagreement: every column names the *value of HOME* and none of them names nothing, because the place a `cd` was asked for is the place it reports. Ours indexed an empty operand list to write that sentence and took the shell down with it — `sudo -i`, a container, a home that has been removed. The statuses split the way a failed `cd` always splits here, which is the second thing the row pins",
+	},
+	{
 		ID: "shopt/no-empty-cmd-completion-round-trips", Category: "shell options",
 		Snippet: `shopt no_empty_cmd_completion; shopt -s no_empty_cmd_completion; shopt no_empty_cmd_completion; echo st=$?`,
 		Why:     "a name whose sense is inverted, so the query before the set is the load-bearing half: every bash column starts it `off`, which is the state in which completion on an empty line *does* search PATH, and a shell that stored the option's own bit rather than the capability would have to report it `on` to mean the same thing. What the option then does to a Tab is a pseudo-terminal's question",

@@ -1644,6 +1644,21 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 		}
 	}
 
+	// What the failure below names, captured before CDPATH and before the
+	// operand is joined against the working directory: every shell in the
+	// panel reports the place it was asked for rather than the place it
+	// worked out. For `cd alpah` that is `alpah` as typed, and for a `cd`
+	// with no operand it is the *value of HOME* — measured 2026-09-08 with
+	// HOME set to a directory that is not there, where bash, dash, ksh93 and
+	// zsh all name `/nonexistent-dir` and none of them names nothing.
+	//
+	// Read from args[0] before this, which is where the crash was: with no
+	// operand there is no args[0], so `cd` with an unreachable HOME indexed
+	// an empty slice and took the shell down with it — `sudo -i`, a
+	// container, a home that has been removed. One name for both cases
+	// rather than a second guard beside the first, because a second guard is
+	// what the spelling correction below would have had to add.
+	named := dir
 	old := r.workDir()
 	announced := false
 	if !filepath.IsAbs(dir) && !dash {
@@ -1695,13 +1710,31 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 		err = &os.PathError{Op: "cd", Path: dir, Err: syscall.ENOTDIR}
 	}
 	if err != nil {
+		// A misspelling is the one failure this can still recover from, and
+		// only where the shell asked for that — see cdCorrected, which
+		// answers false in every shell that did not. The corrected operand is
+		// printed rather than merely used: bash writes `alpha/beta` for
+		// `alpah/beta` on **stdout** before moving, which is a different
+		// stream from the diagnostic below and the reason a person can tell
+		// a correction from a failure.
+		if fixed, shown, corrected := r.cdCorrected(named, old, physical); corrected {
+			dir, err = fixed, nil
+			r.printf("%s\n", shown)
+		}
+	}
+	if err != nil {
 		// The reason the operating system gave, rather than one made up
 		// here: three of the four report it, and two of those distinguish a
 		// path that is not there from one that is not a directory. Saying
 		// "no such directory" for both was a sentence no shell prints and an
 		// answer one of them can tell is wrong.
+		//
+		// The operand as it was *written*, even when a correction was tried
+		// and failed: bash says `cd: alpha/bteta/gamma: No such file or
+		// directory` for the path it could not finish correcting, naming what
+		// the person typed rather than how far it got.
 		r.diagf("%s\n", Wording(r.diag().CdCannotChange, "cd: %[1]s: %[2]s",
-			args[0], r.diag().reasonText(reason(err))))
+			named, r.diag().reasonText(reason(err))))
 		return orDefault(r.diag().CdStatus, 1)
 	}
 	// Only the runner's own directory moves. Calling os.Chdir would move the

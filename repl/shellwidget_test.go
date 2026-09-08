@@ -162,6 +162,60 @@ func TestElapsedWorkRunsBeforeThePromptHookAndKeepsTheStatus(t *testing.T) {
 	}
 }
 
+// The same two facts through a whole session rather than through one call,
+// which is what pins the *place* the ask is made from: `beforeReading` runs it
+// before the prompt hook and inside the hook's own line discipline, and a
+// straight-line reading of runElapsed cannot show that.
+func TestScheduledWorkRunsBeforeThePromptHookInASession(t *testing.T) {
+	var out, errs strings.Builder
+	r := newTestRunner(map[string]string{"PS1": "RDY> "})
+	r.Stdout, r.Stderr = &out, &out
+	s := Shell{
+		Runner: r, In: strings.NewReader("echo typed\n"),
+		Out: &out, Err: &errs, Name: "sh", Hooks: hooksLikeZsh(),
+		RunScheduled: func(context.Context) { _, _ = out.WriteString("scheduled\n") },
+	}
+	define(t, r, "precmd", `echo hook`)
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatalf("running: %v", err)
+	}
+	// Two prompts: one before the typed line and one after it.
+	want := "scheduled\nhook\ntyped\nscheduled\nhook\n"
+	if got := out.String(); got != want {
+		t.Errorf("the session ran %q, want %q", got, want)
+	}
+}
+
+// And a scheduled command that called `exit` ends the session with the status
+// it set, the way a prompt hook that did does — the status is not put back and
+// no prompt is drawn.
+func TestScheduledWorkThatExitsEndsTheSession(t *testing.T) {
+	var out, errs strings.Builder
+	r := newTestRunner(map[string]string{"PS1": "RDY> "})
+	r.Stdout, r.Stderr = &out, &out
+	s := Shell{
+		Runner: r, In: strings.NewReader("echo unreachable\n"),
+		Out: &out, Err: &errs, Name: "sh", Hooks: hooksLikeZsh(),
+	}
+	define(t, r, "scheduled_thing", `echo bye; exit 3`)
+	s.RunScheduled = func(ctx context.Context) {
+		_, _ = s.Runner.CallFunction(ctx, "scheduled_thing")
+	}
+	status, err := s.Run(t.Context())
+	if err != nil {
+		t.Fatalf("running: %v", err)
+	}
+	if status != 3 {
+		t.Errorf("the session ended with %d, want 3", status)
+	}
+	if got := out.String(); got != "bye\n" {
+		t.Errorf("the session ran %q, want the scheduled command alone", got)
+	}
+	if errs.String() != "" {
+		t.Errorf("a prompt was drawn: %q", errs.String())
+	}
+}
+
 // And a session with nothing scheduled asks nothing, which is what keeps this
 // off the cost of every prompt in three of the four dialects.
 func TestASessionWithNothingScheduledAsksNothing(t *testing.T) {

@@ -533,6 +533,37 @@ func TestAProducedParameterCanBeTakenAway(t *testing.T) {
 	if want := "[gone]\n"; out != want {
 		t.Errorf("after UnsetDynamic got %q, want %q", out, want)
 	}
+	// The *writer* goes with it, which only shows on a name registered again
+	// without one: an assignment then has to land in the ordinary table
+	// rather than reaching a writer belonging to a call that is over.
+	out, _ = run(t, `BRIEF=stored
+echo "[$BRIEF]"`, func(r *Runner) {
+		var reached []string
+		r.SetDynamic("BRIEF", func(*Runner) string { return "produced" })
+		r.SetDynamicWriter("BRIEF", func(_ *Runner, v string) { reached = append(reached, v) })
+		r.UnsetDynamic("BRIEF")
+		t.Cleanup(func() {
+			if len(reached) != 0 {
+				t.Errorf("the old writer was reached with %q after UnsetDynamic", reached)
+			}
+		})
+	})
+	if want := "[stored]\n"; out != want {
+		t.Errorf("after UnsetDynamic got %q, want %q", out, want)
+	}
+	// And the readonly mark goes too, which is the one no other call can
+	// lift: a produced parameter a script must not assign to is marked
+	// readonly rather than given a writer, so leaving the mark would make the
+	// name refuse an ordinary assignment for the rest of the session.
+	out, _ = run(t, `FROZEN=mine
+echo "[$FROZEN]"`, func(r *Runner) {
+		r.SetDynamic("FROZEN", func(*Runner) string { return "produced" })
+		r.MarkReadonly("FROZEN")
+		r.UnsetDynamic("FROZEN")
+	})
+	if want := "[mine]\n"; out != want {
+		t.Errorf("after UnsetDynamic on a readonly produced name got %q, want %q", out, want)
+	}
 	// And it leaves no trace: neither the removal `unset` records, which
 	// would keep a later SetDynamic from answering, nor the message Assigned
 	// holds, which belonged to a call that is over.

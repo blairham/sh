@@ -339,12 +339,20 @@ func (r *Runner) SetDynamicWriter(name string, write func(r *Runner, value strin
 // value where the shell being modeled says nothing at all.
 //
 // It leaves no trace: not the removal `unset` records, which would keep a
-// later SetDynamic from answering, and not the message Assigned holds, which
-// belongs to a call that is over.
+// later SetDynamic from answering, not the message Assigned holds, which
+// belongs to a call that is over, and **not the readonly mark**, which is the
+// one that had to be reached for rather than reasoned about. A produced
+// parameter a script must not assign to is marked readonly rather than given a
+// writer, and there is no other way to lift that mark; leaving it would make
+// the name refuse an ordinary assignment for the rest of the session, long
+// after the thing it belonged to had finished. `$WIDGET` in dialect/zsh is the
+// case: read-only while a widget runs — measured, real zsh answers
+// `read-only variable: WIDGET` — and an ordinary variable outside one.
 func (r *Runner) UnsetDynamic(name string) {
 	delete(r.Dynamic, name)
 	delete(r.dynamicWriters, name)
 	delete(r.assigned, name)
+	delete(r.readonly, name)
 }
 
 // SetSpecial gives a parameter a fixed value unless a script has already set

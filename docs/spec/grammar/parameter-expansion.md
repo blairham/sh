@@ -2633,9 +2633,9 @@ element, and each is one the shell declines or answers some other way:
   side answers the search now; this side still refuses, because the
   subscript it would hand on is not answered: `s=hello; s[3]=Q` is
   `heQlo` there and two spaces and a `Q` here, the string read as the
-  array of one it otherwise is with a third element written past it.
-  Returning the index the search found would turn a refusal by name into
-  that value.
+  array of one it otherwise is with a third element written past it
+  (#1532). Returning the index the search found would turn a refusal by
+  name into that value.
 - `(R)` **missing**: `assignment to invalid subscript range` there.
 - `(I)` **missing**: puts the value at the *front* there — `b[(I)nomatch]=W`
   on `(x y z)` gives `W x y z` with four elements — which is neither the
@@ -2649,7 +2649,12 @@ word ends at the parenthesis — so neither writes.
 
 `unset 'b[(r)y]'` is the one direction still unread: the subscript arrives
 as a *runtime string* rather than as a parsed word, so the group has
-nowhere to hang its operand. Filed rather than guessed.
+nowhere to hang its operand. Filed rather than guessed (#1275).
+
+A flag group inside a **range endpoint** — `${s[(r)l,(r)o]}`, which is
+`${s[3,5]}` there — is read as part of the first group's operand and
+answers empty. Filed as #1533; a negative `(b:expr:)` start past the first
+element of an *array* answers the wrong miss, filed as #1534.
 
 ### Grammar
 

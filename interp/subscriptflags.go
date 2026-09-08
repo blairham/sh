@@ -608,8 +608,7 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 		// array of one, with a third element written past it and the whole
 		// joined. Returning the index the search
 		// found would turn a refusal by name into that value, which is the
-		// one outcome worse than the refusal. See the issue the spec entry
-		// names.
+		// one outcome worse than the refusal (#1532).
 		r.refuseSubscriptFlag(e, string(search), " for a scalar")
 		return 0, false
 	}

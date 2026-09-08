@@ -15,13 +15,13 @@ import (
 
 // The whole corpus, printed and read back, compared as *trees*.
 //
-// Two properties, and the first of them is the one a printer's promise is
-// written as: what comes back parses to the same program. The round trip that
-// stood here before this file asserted only that the printed source parses
-// and that printing it again gives the same text, which is why a group could
-// be escaped into three literal characters — `echo (v5|v6)` printed as
-// `echo \(v5\|v6\)` — and pass. That form parses, reprints identically, runs
-// and exits 0, and echoes its own pattern (#1221).
+// Two properties, and the first of them is the printer's promise written as
+// a test: what comes back parses to the same program. The round trip this
+// replaces asserted only that the printed source parses and that printing it
+// again gives the same text, which is why a group escaped into three literal
+// characters passed it — `echo (v5|v6)` printed as `echo \(v5\|v6\)`, which
+// parses, reprints identically, runs, exits 0 and echoes its own pattern
+// (#1221).
 //
 // The corpus is the right adversary because nobody wrote it for a printer:
 // 2,010 snippets someone wrote to pin down a *behavior*, and they are read
@@ -33,8 +33,8 @@ import (
 // demanded the text back would be a test of taste. What may not change is
 // the program.
 
-// caseIDsThatCannotRoundTrip is the one round-trip failure the corpus turns
-// up that this file is not about, counted rather than folded in: a function
+// keywordFunctionsInTheCorpus counts the one round-trip failure the corpus
+// turns up that this file is not about, rather than folding it in: a function
 // written with the `function` keyword comes back in the `name()` form, and
 // the two are not the same declaration — [syntax.FuncDecl.Keyword] is in the
 // tree because one semantics axis reads it, so dropping it changes what
@@ -320,8 +320,8 @@ func spellingOnly(t reflect.Type, name string) bool {
 	if name == "Text" {
 		return t == stmtType || t == redirType
 	}
-	// Header, on the clauses that keep one.
-	return name == "Header" && t.Kind() == reflect.Struct
+	// Header, which only the clauses that keep one have.
+	return name == "Header"
 }
 
 func sameNode(a, b reflect.Value, path string) (string, bool) {
@@ -403,7 +403,7 @@ func sameRedirect(a, b reflect.Value, path string) (string, bool) {
 		if syntax.Kind(a.FieldByName("Op").Uint()) == syntax.TokLessAmp {
 			want = "0"
 		}
-		if got := literalOf(bn.Elem().FieldByName("Spans")); got != want {
+		if got := wordLiteral(bn); got != want {
 			return fmt.Sprintf("%s.N: the printer put %q where the operator means %q", path, got, want), false
 		}
 		bn = an
@@ -412,7 +412,7 @@ func sameRedirect(a, b reflect.Value, path string) (string, bool) {
 		return why, false
 	}
 	aop, bop := syntax.Kind(a.FieldByName("Op").Uint()), syntax.Kind(b.FieldByName("Op").Uint())
-	closing := literalOf(a.FieldByName("Word").Elem().FieldByName("Spans")) == "-"
+	closing := wordLiteral(a.FieldByName("Word")) == "-"
 	if (!closing || aop != syntax.TokLessAmp || bop != syntax.TokGreatAmp) && aop != bop {
 		return fmt.Sprintf("%s.Op: %s against %s", path, aop, bop), false
 	}
@@ -428,9 +428,15 @@ func sameRedirect(a, b reflect.Value, path string) (string, bool) {
 	return "", true
 }
 
-// literalOf joins a span slice's values, which is the word with its quotes
-// taken off and nothing else done to it.
-func literalOf(spans reflect.Value) string {
+// wordLiteral joins a word's span values, which is the word with its quotes
+// taken off and nothing else done to it. A word nothing wrote is empty: the
+// redirection a `|&` stands for is in the tree without anyone having typed
+// it.
+func wordLiteral(w reflect.Value) string {
+	if w.IsNil() {
+		return ""
+	}
+	spans := w.Elem().FieldByName("Spans")
 	var b strings.Builder
 	for i := range spans.Len() {
 		b.WriteString(spans.Index(i).FieldByName("Value").String())
@@ -448,6 +454,10 @@ func literalOf(spans reflect.Value) string {
 // whether the source protected it, and the runs are joined across span
 // boundaries: the printer may split one span into three putting quotes
 // around the middle of it, and does.
+//
+// [syntax.Span.PatternGroup] itself is not compared, and does not need to
+// be: it is what the scanner reads off an *unprotected* `(`, so comparing
+// the protection compares the flag with it.
 func sameWord(a, b reflect.Value, path string) (string, bool) {
 	x, y := atomsOf(a), atomsOf(b)
 	if len(x) != len(y) {

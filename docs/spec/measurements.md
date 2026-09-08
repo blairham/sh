@@ -9584,7 +9584,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   for s in a - z b; do case $s in [a\-z]) printf "[%s]" "$s";; esac; done; echo; for s in a - z b; do case $s in [a"-"z]) printf "[%s]" "$s";; esac; done; echo
   ```
-- `pat/an-escaped-bracket-is-a-member-not-the-terminator` — the terminator is protected as well, so the set has three members and does not end at the escaped one. bash, bash 3.2, bash as sh, ksh93 and zsh agree on all three; dash reads the same expression as a two-member set holding the bracket and b, which is a divergence about where the expression ends rather than about the escape and is recorded here rather than modelled
+- `pat/an-escaped-bracket-is-a-member-not-the-terminator` — the terminator is protected as well, so the set has three members and does not end at the escaped one. bash, bash 3.2, bash as sh, ksh93 and zsh agree on all three; dash reads the same expression as a two-member set holding the bracket and b, which is a divergence about where the expression ends rather than about the escape and is recorded here rather than modeled
   ```sh
   for s in a ']' b c; do case $s in [a\]b]) printf "[%s]" "$s";; esac; done; echo
   ```

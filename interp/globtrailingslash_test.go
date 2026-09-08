@@ -151,3 +151,26 @@ func TestATrailingSlashOnAMissThatIsAnError(t *testing.T) {
 		t.Errorf("diagnostic = %q, want it to hold %q", out, want)
 	}
 }
+
+// TestATrailingSlashSurvivesAQualifierList: the trailing group is read off
+// the end of the field before anything else looks at it, so the slash has to
+// be measured on what is left rather than on the word as written.
+//
+// zsh 5.9.2, against exactly the directory slashDir builds: `*/(N)` is
+// `[ax_dir/][cx/][sym/]`. Reading the slash off the untrimmed word would
+// answer those three names bare, the list having taken the slash out of the
+// suffix — which is a live mutant and not a hypothetical.
+func TestATrailingSlashSurvivesAQualifierList(t *testing.T) {
+	dir := slashDir(t)
+	want := `[ax_dir/][cx/][sym/]`
+	if got, _ := runQualifiedWith(t, dir, `printf "[%s]" */(N)`, nil); got != want {
+		t.Errorf(`*/(N) = %s, want %s`, got, want)
+	}
+	// The qualifier saying "directories" with no slash written, which is the
+	// control: no separator comes back, and the link is not followed where
+	// `*/` follows it.
+	want = `[ax_dir][cx]`
+	if got, _ := runQualifiedWith(t, dir, `printf "[%s]" *(/)`, nil); got != want {
+		t.Errorf(`*(/) = %s, want %s`, got, want)
+	}
+}

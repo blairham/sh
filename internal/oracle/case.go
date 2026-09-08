@@ -9464,6 +9464,20 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "one shell reads the parentheses at the end of a pattern as a list of qualifiers narrowing what it matched, and the other four read `*(` as a syntax error. Four probes rather than one because a single type test cannot show that the list is a *filter*: the regular files, the directories, the symbolic links — `l1` points at a regular file and is still a link, so the test does not follow it — and then `^`, which turns the sense of what follows and answers with everything the first probe left out",
 	},
 	{
+		ID: "pat/a-qualifier-list-behind-a-trailing-slash", Category: "pattern matching", SyntaxError: true,
+		Snippet: `mkdir -p qd/cx/dx qd/ax_dir; : > qd/ax; ln -s cx qd/sym; cd qd; printf "[%s]" */(N); printf "[%s]" *(/); echo`,
+		Why: "the list is read off the end of the field before anything else " +
+			"looks at it, and the trailing slash is still there behind it: zsh " +
+			"answers `[ax_dir/][cx/][sym/]` for `*/(N)`, so the slash the " +
+			"pattern was written with survives the stripping (#1350). The " +
+			"second probe is why the row needs two: `*(/)` is the qualifier " +
+			"saying directories, and it answers `[ax_dir][cx]` — no slash, " +
+			"because none was written, and no `sym`, because the qualifier does " +
+			"not follow a link where `*/` does. The other five refuse `*(` " +
+			"while parsing, ksh93 taking `*(/)` as a quantified group that " +
+			"matches nothing",
+	},
+	{
 		ID: "pat/a-qualifier-list-is-not-an-alternation", Category: "pattern matching", SyntaxError: true,
 		Snippet: `mkdir -p qd; : > qd/f1; : > qd/f2; cd qd; printf "[%s]" f1(.); printf "[%s]" f(1|2); printf "[%s]" zz*(N); echo; printf "[%s]" *(qq); echo after`,
 		Why:     "the disambiguation is exactly one character, and the row is four readings of the same three-character shape. A group with no `|` is a list — so `f1(.)` sends a literal name to the filesystem, a name being no pattern on its own. A group *with* one is the alternation that shell already had, and `f(1|2)` matches two files where `1` alone would be an unknown attribute. `N` makes a miss no error and deletes the word, which is why `printf` still writes its format once. And a character no qualifier claims is named and fatal, so `after` is not reached",

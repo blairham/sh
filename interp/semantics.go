@@ -3249,6 +3249,42 @@ type Semantics struct {
 	// at 2, where the other three read into REPLY.
 	ReadRequiresAVariableName Answer
 
+	// ReadRefusesABadNameBeforeReading judges `read`'s first operand as a
+	// name before it goes to the stream, rather than after.
+	//
+	// Observable, and only through the input: a refusal that comes first
+	// leaves the line for the next reader, and one that comes after has
+	// eaten it. Measured 2026-09-07 with `printf 'AAA\nBBB\n' | { read 1bad;
+	// cat; }` — bash 5.3 and ksh93 print both lines, dash and zsh print only
+	// BBB. bash 3.2 is on dash's side, which makes this a change within bash
+	// rather than a difference between shells, so the `bash32` column of a
+	// corpus case here disagrees with `bash` on purpose.
+	//
+	// It is the *first* operand and not the whole list. Every shell in the
+	// panel assigns the names in front of a bad one and then refuses:
+	// `printf 'X Y Z\n' | { c=keep; read a 1bad c; }` leaves a as X and c as
+	// keep in all six, and the line is consumed in all six, including the two
+	// that would not have read it had `1bad` come first. So a shell that
+	// checked the whole list up front would answer a=[] where every shell in
+	// the panel answers a=[X].
+	ReadRefusesABadNameBeforeReading Answer
+
+	// ReadPromptOperand says whether `read`'s first operand may carry a
+	// prompt after a `?`, and what an operand that is nothing else names.
+	//
+	// The form is ksh93's and zsh inherited it: `read "v?Name: "` reads into
+	// v and writes `Name: ` at a terminal, which is `read -p` in one word and
+	// is what scripts written for either shell use. It is the *first* operand
+	// alone — `read v "w?p"` is a bad name `w?p` in both — and the prompt is
+	// written for a terminal only, so a piped `read "v?p"` is a plain read
+	// into v.
+	//
+	// It has to be answered wherever the name check is, not beside it: the
+	// word a shell judges is the part in front of the `?`, so a check that
+	// did not know the form would refuse `read "v?Name: "` in the two shells
+	// that spell it that way.
+	ReadPromptOperand ReadPromptOperand
+
 	// StdinProgramReadInBlocks takes a program arriving on standard input
 	// as much at a time as the descriptor will give, rather than a line at
 	// a time. Whatever the block swallowed has left the descriptor, so a
@@ -4229,6 +4265,19 @@ type Semantics struct {
 	// about the kind of failure rather than about the builtin.
 	BadNameToUnsetFatal Answer
 
+	// BadNameToReadFatal ends the script when `read` is given an operand that
+	// is not a name. zsh alone: `read 1bad; echo after` prints the refusal
+	// and nothing else there, and prints `after` in the other five.
+	//
+	// A third field rather than either of the two above, and not because the
+	// panel splits differently — it does, but that alone would only make it a
+	// separate *value*. `read` is not a special builtin in any shell, so no
+	// dialect's rule about special builtins reaches it: dash and ksh93 stop
+	// the script for `export 1x` and carry on past `read 1x`, which is the
+	// same shell answering the same kind of failure two ways depending on the
+	// builtin. zsh is the one that stops here, and it stops for `export` too.
+	BadNameToReadFatal Answer
+
 	// UnsetReadonlyFatal ends a non-interactive shell when `unset` is asked
 	// to remove a readonly name. True in dash and zsh; bash and ksh93 report
 	// it, leave the value standing and carry on with a status of 1.
@@ -4272,6 +4321,15 @@ type Semantics struct {
 	// bash 5.3 checks a name for `export` and nothing at all for `unset`. One
 	// field could not say either.
 	UnsetNameOperands NameOperands
+
+	// ReadNameOperands is that question for `read`, and is a fourth field
+	// because zsh gives `read` a fourth answer: `read 1` fills `$1` there,
+	// where `export 1` and `unset ?` are both refused and `read ?` is not.
+	//
+	// Every shell in the panel refuses a word that is not a name — this is
+	// not the axis, and the refusal itself is the core's (#1440). What splits
+	// them is only how far the set reaches past a plain name.
+	ReadNameOperands NameOperands
 
 	// DeclarationTakesASubscript accepts `export a[0]` and `readonly a[0]`,
 	// naming an element rather than a variable. ksh93 does; bash and dash
@@ -4522,6 +4580,39 @@ func (n NameOperands) String() string {
 		return "AnythingIsAName"
 	}
 	return "NameOperandsUnspecified"
+}
+
+// ReadPromptOperand is what `read` makes of a `?` in its first operand.
+type ReadPromptOperand int
+
+const (
+	// ReadPromptOperandUnspecified is no answer, and is refused like any
+	// other.
+	ReadPromptOperandUnspecified ReadPromptOperand = iota
+	// ReadOperandIsAllName reads the whole word as the name: bash and dash,
+	// where `read "v?p"` is the bad name `v?p` and nothing else.
+	ReadOperandIsAllName
+	// ReadPromptNeedsANameBeforeIt takes the part in front of the `?` as the
+	// name and the rest as a prompt, and still wants a name there: ksh93,
+	// where `read "?p"` is refused for the empty name it leaves.
+	ReadPromptNeedsANameBeforeIt
+	// ReadPromptAloneNamesTheDefault is the same split with nothing in front
+	// of the `?` meaning the default name: zsh, where `read "?Press enter"`
+	// prompts and reads into REPLY. Measured 2026-09-07 — it is the shape
+	// the idiom is usually written in, and it is the one ksh93 refuses.
+	ReadPromptAloneNamesTheDefault
+)
+
+func (p ReadPromptOperand) String() string {
+	switch p {
+	case ReadOperandIsAllName:
+		return "ReadOperandIsAllName"
+	case ReadPromptNeedsANameBeforeIt:
+		return "ReadPromptNeedsANameBeforeIt"
+	case ReadPromptAloneNamesTheDefault:
+		return "ReadPromptAloneNamesTheDefault"
+	}
+	return "ReadPromptOperandUnspecified"
 }
 
 // SelectMenuLayout is how a shell draws a `select` menu. The engines differ
@@ -4803,6 +4894,19 @@ func PosixSemantics() Semantics {
 		// remove it.
 		DeclarationNameOperands: PlainNamesOnly,
 		UnsetNameOperands:       PlainNamesOnly,
+		// `read` is given the same reading: the standard's synopsis is
+		// `read var...`, and a positional parameter is not a var.
+		ReadNameOperands: PlainNamesOnly,
+		// And the standard has no prompt operand — `read` takes names and
+		// nothing else — so the whole word is the name.
+		ReadPromptOperand: ReadOperandIsAllName,
+		// `read` is not in the standard's list of special builtins, so a
+		// failure of it does not end the script. Five of the six agree.
+		BadNameToReadFatal: No,
+		// The standard has the utility check its operands and diagnose the
+		// ones that are not names, which puts the check on the arguments
+		// rather than on the line: nothing has been read when it fails.
+		ReadRefusesABadNameBeforeReading: Yes,
 		// The core has arrays — they are in the common denominator even
 		// though POSIX has none — so `unset a[0]` names an element and
 		// removes it, which is what three of the four do and the only part

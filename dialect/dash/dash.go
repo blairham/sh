@@ -301,10 +301,19 @@ func Semantics() interp.Semantics {
 	// three of them.
 	s.BadNameToDeclarationFatal = interp.Yes
 	s.BadNameToUnsetFatal = interp.Yes
+	// `read` is not one of the three, so its bad name is reported at dash's
+	// usual 2 and the script carries on.
+	s.BadNameToReadFatal = interp.No
 	// And so is a readonly name it is asked to remove.
 	s.UnsetReadonlyFatal = interp.Yes
 	s.DeclarationNameOperands = interp.PlainNamesOnly
 	s.UnsetNameOperands = interp.PlainNamesOnly
+	s.ReadNameOperands = interp.PlainNamesOnly
+	// No prompt operand: `read "v?p"` is `v?p: bad variable name`.
+	s.ReadPromptOperand = interp.ReadOperandIsAllName
+	// dash reads the line first and refuses afterwards, so the line is gone:
+	// `printf 'AAA\nBBB\n' | { read 1bad; cat; }` prints only BBB.
+	s.ReadRefusesABadNameBeforeReading = interp.No
 	s.DeclarationTakesASubscript = interp.No
 	// No arrays at all, so no subscripted operand is a name to any
 	// declaration here either.
@@ -632,6 +641,9 @@ func Diagnostics() interp.Diagnostics {
 			"readonly": "%[1]s: %[2]s: bad variable name",
 			"unset":    "%[1]s: %[2]s: bad variable name",
 			"local":    "%[1]s: %[2]s: bad variable name",
+			// `read` says the same and carries dash's 2 with it, which is
+			// how a caller tells it from the 1 that means end of input.
+			"read": "%[1]s: %[2]s: bad variable name",
 		},
 		// A `local` name that starts with a digit is refused with the
 		// builtin's name left off — `1y: bad variable name` against

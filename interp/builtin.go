@@ -1823,6 +1823,46 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		return code
 	}
 	raw := strings.Contains(opts, "r")
+
+	// The prompt operand: `read "v?Name: "` reads into v and writes `Name: `
+	// where there is a terminal to write it to. Two of the six spell it, it
+	// is the *first* operand alone — `read v "w?p"` is a bad name `w?p` in
+	// both of them — and it has to be settled here, in front of everything
+	// that looks at a name, because the word a shell judges is the part before
+	// the `?`. Before the array letter takes its own operand too: `read -A
+	// "arr?p"` prompts and fills arr in both shells that have the form.
+	//
+	// Asked only when there is a `?` to split at. The axis decides nothing
+	// for `read v`, and an axis reported where it decides nothing is a
+	// refusal a script cannot act on.
+	operandPrompt, prompted := "", false
+	if len(args) > 0 && strings.Contains(args[0], "?") {
+		style := r.sem().ReadPromptOperand
+		switch style {
+		case ReadOperandIsAllName:
+		case ReadPromptNeedsANameBeforeIt, ReadPromptAloneNamesTheDefault:
+			name, text, _ := strings.Cut(args[0], "?")
+			operandPrompt, prompted = text, true
+			if name == "" && style == ReadPromptAloneNamesTheDefault {
+				// Nothing in front of the `?` names the default, which is
+				// the shape the idiom is usually written in. Dropping the
+				// operand is what reaches it: the bare-`read` rule below is
+				// the one that knows what the default is called.
+				args = args[1:]
+				break
+			}
+			// A fresh slice: builtinOptionsArg hands back a view of the
+			// caller's words, and writing the split name into element zero
+			// of that would rewrite the command line the trace prints.
+			args = append([]string{name}, args[1:]...)
+		default:
+			r.diagf("%s\n", r.unanswered("what a `?` in `read`'s first operand means"))
+			r.status = 2
+			r.unspecified = true
+			return 2
+		}
+	}
+
 	// -s is parsed and deliberately does nothing more: silence is about a
 	// terminal's echo, and this runner never echoes what it reads. Parsing
 	// it is the point — measured, `printf x | read -s v` reads x and prints
@@ -1887,6 +1927,34 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		in = rd
 	}
 
+	// The first operand, judged before the stream is *read* in the dialects
+	// that judge it there. Observable only through the input — a refusal that
+	// comes first leaves the line for the next reader — which is why it is an
+	// axis rather than a placement this file could pick.
+	//
+	// Asked in this order, and only here: an operand that *is* a name is
+	// filled the same way whichever answer the dialect gives, so the two
+	// orders differ over a bad name and nowhere else.
+	//
+	// Behind the option handling rather than in front of it, because an
+	// option's complaint comes first: ksh93 spells `-p` as the coprocess
+	// flag and answers `read -p 'PROMPT ' v` with `read: no query
+	// process`, not with a complaint about the operand `PROMPT ` its own
+	// option left standing. In front of the prompt, so that nothing is
+	// written to a terminal for a read that is not going to happen.
+	if len(args) > 0 && !r.isReadName(args[0]) {
+		if r.unspecified {
+			return 2
+		}
+		if r.ask(r.sem().ReadRefusesABadNameBeforeReading,
+			"`read` judging its first operand before it reads") {
+			return r.badReadName(args[0])
+		}
+		if r.unspecified {
+			return 2
+		}
+	}
+
 	// The prompt: written to standard error, no newline, and only when the
 	// stream being read is a terminal — both measured in both shells whose
 	// -p takes an argument, and the second half from both sides: a pipe gets
@@ -1895,6 +1963,13 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// diagnostic path, because a prompt carries no location in any shell.
 	if prompt, ok := optArg['p']; ok && inputIsTerminal(in) {
 		r.errf("%s", prompt)
+	}
+	// The operand's prompt is written on the same terms as the option's, and
+	// measured the same way: `printf 'x\n' | zsh -c 'read "v?p"'` writes
+	// nothing and still reads into v, so the split is unconditional and only
+	// the writing is for a terminal.
+	if prompted && inputIsTerminal(in) {
+		r.errf("%s", operandPrompt)
 	}
 
 	// The delimiter: a newline unless -d renamed it. The argument's first
@@ -2045,6 +2120,34 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 		args = []string{"REPLY"}
 	}
+	// The names, judged in the order they are filled. The array goes first
+	// because it is filled first: `read -a 1bad` in bash refuses and leaves
+	// the array untouched, while ksh93's `read -A a 1bad` fills a and *then*
+	// refuses the operand after it.
+	if array != "" && !r.isReadName(array) {
+		if r.unspecified {
+			return 2
+		}
+		return r.badReadName(array)
+	}
+	// A bad operand stops the filling at itself and is reported after it,
+	// which is what leaves the names in front of it set and the ones behind
+	// it as they were. The list keeps its full length here on purpose: the
+	// last name takes the remainder of the line only when the line held more
+	// fields than there are *names*, and that count is the one the script
+	// wrote — `printf 'X Y Z\n' | { read a 1bad c; }` gives a=X in all six
+	// shells, not the whole line.
+	fill, badName, bad := len(args), "", false
+	for i, name := range args {
+		if r.isReadName(name) {
+			continue
+		}
+		if r.unspecified {
+			return 2
+		}
+		fill, badName, bad = i, name, true
+		break
+	}
 	// Only the -A spelling touches the operands after the array: it took its
 	// name from among them and clears the rest, where bash's -a leaves the
 	// names after its argument exactly as they were — both measured with
@@ -2057,20 +2160,20 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		if array != "" {
 			r.setArray(array, exactElems(text))
 			if clearRest {
-				for _, name := range args {
+				for _, name := range args[:fill] {
 					r.setVar(name, "")
 				}
 			}
-			return status
+			return r.readAfterABadName(status, badName, bad)
 		}
-		for i, name := range args {
+		for i, name := range args[:fill] {
 			v := ""
 			if i == 0 {
 				v = text
 			}
 			r.setVar(name, v)
 		}
-		return status
+		return r.readAfterABadName(status, badName, bad)
 	}
 	// Splitting sees the escapes: an escaped separator is data and does not
 	// split, which is why the mask rides along rather than the processing
@@ -2100,11 +2203,11 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 		r.setArray(array, fields)
 		if clearRest {
-			for _, name := range args {
+			for _, name := range args[:fill] {
 				r.setVar(name, "")
 			}
 		}
-		return status
+		return r.readAfterABadName(status, badName, bad)
 	}
 	// The last name takes the remainder of the *line* from where its own
 	// field began — the text as it was read, separators and all. Rebuilding
@@ -2145,7 +2248,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// the splitter found more fields than there are names — so `at` is longer
 	// than `args` — or the tail answer carried a count that was equal, which
 	// leaves `at` exactly as long.
-	for i, name := range args {
+	for i, name := range args[:fill] {
 		switch {
 		case i >= len(fields):
 			r.setVar(name, "")
@@ -2155,7 +2258,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			r.setVar(name, fields[i])
 		}
 	}
-	return status
+	return r.readAfterABadName(status, badName, bad)
 }
 
 // readRemainder is the value the last name on a `read` takes when the line

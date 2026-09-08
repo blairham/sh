@@ -540,11 +540,24 @@ func Semantics() interp.Semantics {
 	// less special: a bad *option* to it is fatal, just above.
 	s.BadNameToDeclarationFatal = interp.Yes
 	s.BadNameToUnsetFatal = interp.No
+	// And not to `read`, which is not a special builtin in any shell.
+	s.BadNameToReadFatal = interp.No
 	// Not fatal here either, and ksh93 goes further than any other member of
 	// the panel in saying so: it calls the refusal a *warning*.
 	s.UnsetReadonlyFatal = interp.No
 	s.DeclarationNameOperands = interp.PlainNamesOnly
 	s.UnsetNameOperands = interp.PlainNamesOnly
+	s.ReadNameOperands = interp.PlainNamesOnly
+	// The prompt operand is this shell's invention: `read "v?Name: "` reads
+	// into v and writes the prompt at a terminal. A `?` with nothing in front
+	// of it leaves an empty name, and ksh93 refuses that rather than reading
+	// into REPLY — `read "?p"` is `read: : invalid variable name`, the
+	// complaint naming the empty word it was left with. zsh took the form and
+	// not that half of it.
+	s.ReadPromptOperand = interp.ReadPromptNeedsANameBeforeIt
+	// The first operand is judged before the stream is touched:
+	// `printf 'AAA\nBBB\n' | { read 1bad; cat; }` prints both lines.
+	s.ReadRefusesABadNameBeforeReading = interp.Yes
 	s.DeclarationTakesASubscript = interp.Yes
 	// The declaration builtins take one as well — `typeset a[1]=v` creates
 	// the element — so this shell gives the two the same answer where bash
@@ -1086,6 +1099,10 @@ func Diagnostics() interp.Diagnostics {
 			// its own, because this shell's `integer 1x` calls itself
 			// `typeset` — see BuiltinComplaintName above.
 			"typeset": "%[1]s: %[2]s: invalid variable name",
+			// `read` takes readonly's wording too, and it names the part in
+			// front of a prompt `?`: `read "1bad?p"` is `1bad`, and
+			// `read "?p"` is the empty word the split left.
+			"read": "%[1]s: %[2]s: invalid variable name",
 		},
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,

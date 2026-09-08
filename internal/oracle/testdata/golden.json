@@ -77518,6 +77518,94 @@
         "TimedOut": false
       }
     },
+    "read/a-bad-name-and-the-line-it-did-or-did-not-eat": {
+      "bash": {
+        "Stdout": "next=[AAA]",
+        "Stderr": "\u003cshell\u003e: line 1: read: `1bad': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "next=[AAA]",
+        "Stderr": "\u003cshell\u003e: line 1: read: `1bad': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "next=[BBB]",
+        "Stderr": "\u003cshell\u003e: line 0: read: `1bad': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "next=[BBB]",
+        "Stderr": "\u003cshell\u003e: 1: read: 1bad: bad variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "next=[AAA]",
+        "Stderr": "\u003cshell\u003e: read: 1bad: invalid variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "next=[BBB]",
+        "Stderr": "\u003cshell\u003e:1: not an identifier: 1bad",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/a-bad-name-and-what-it-costs-the-script": {
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: read: `1bad': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: read: `1bad': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 0: read: `1bad': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: 1: read: 1bad: bad variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: read: 1bad: invalid variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: not an identifier: 1bad",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "read/a-count-of-characters": {
       "bash": {
         "Stdout": "[abc]",
@@ -77782,6 +77870,94 @@
         "TimedOut": false
       }
     },
+    "read/a-positional-where-a-name-is-wanted": {
+      "bash": {
+        "Stdout": "st=1 one=[]",
+        "Stderr": "\u003cshell\u003e: line 1: read: `1': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1 one=[]",
+        "Stderr": "\u003cshell\u003e: line 1: read: `1': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 one=[]",
+        "Stderr": "\u003cshell\u003e: line 0: read: `1': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 one=[]",
+        "Stderr": "\u003cshell\u003e: 1: read: 1: bad variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 one=[]",
+        "Stderr": "\u003cshell\u003e: read: 1: invalid variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 one=[X Y Z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/a-prompt-in-the-first-operand": {
+      "bash": {
+        "Stdout": "st=1 v=[]",
+        "Stderr": "\u003cshell\u003e: line 1: read: `v?p': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1 v=[]",
+        "Stderr": "\u003cshell\u003e: line 1: read: `v?p': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 v=[]",
+        "Stderr": "\u003cshell\u003e: line 0: read: `v?p': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 v=[]",
+        "Stderr": "\u003cshell\u003e: 1: read: v?p: bad variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 v=[X Y Z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 v=[X Y Z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "read/a-prompt-is-for-a-terminal-and-not-a-character-device": {
       "bash": {
         "Stdout": "st=0",
@@ -77914,6 +78090,50 @@
         "TimedOut": false
       }
     },
+    "read/a-prompt-with-no-name-in-front-of-it": {
+      "bash": {
+        "Stdout": "st=1 R=[]",
+        "Stderr": "\u003cshell\u003e: line 1: read: `?p': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1 R=[]",
+        "Stderr": "\u003cshell\u003e: line 1: read: `?p': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 R=[]",
+        "Stderr": "\u003cshell\u003e: line 0: read: `?p': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 R=[]",
+        "Stderr": "\u003cshell\u003e: 1: read: ?p: bad variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 R=[]",
+        "Stderr": "\u003cshell\u003e: read: : invalid variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 R=[X Y Z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "read/a-timeout-that-expires": {
       "bash": {
         "Stdout": "st=142 l=[]",
@@ -77954,6 +78174,50 @@
         "Stdout": "st=1 l=[keep]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/a-word-that-is-not-a-name": {
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: read: `1bad': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: read: `1bad': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 0: read: `1bad': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: 1: read: 1bad: bad variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: read: 1bad: invalid variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: not an identifier: 1bad",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -78746,6 +79010,50 @@
         "Stdout": "v=secret",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "read/the-names-in-front-of-a-bad-one": {
+      "bash": {
+        "Stdout": "st=1 a=[X] c=[keep]",
+        "Stderr": "\u003cshell\u003e: line 1: read: `1bad': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1 a=[X] c=[keep]",
+        "Stderr": "\u003cshell\u003e: line 1: read: `1bad': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 a=[X] c=[keep]",
+        "Stderr": "\u003cshell\u003e: line 0: read: `1bad': not a valid identifier",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 a=[X] c=[keep]",
+        "Stderr": "\u003cshell\u003e: 1: read: 1bad: bad variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 a=[X] c=[keep]",
+        "Stderr": "\u003cshell\u003e: read: 1bad: invalid variable name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: not an identifier: 1bad",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

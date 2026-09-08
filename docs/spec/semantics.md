@@ -7589,6 +7589,20 @@ Not a question about `unset` being less special than the other two — a
 bad *option* to ksh93's `unset` is fatal, which is what makes the split
 about the kind of failure rather than about the builtin.
 
+**`BadNameToReadFatal`** — bash no · dash no · ksh93 no · zsh yes
+
+Ends the script when `read` is given an operand that is not a name.
+`read 1bad; echo after` prints the refusal and nothing else in zsh, and
+prints `after` in the other five.
+
+A third field rather than either of the two above, and not because the
+panel splits differently — it does, but that alone would only make it a
+separate value. `read` is not a special builtin in any shell, so no
+dialect's rule about special builtins reaches it: dash and ksh93 stop
+the script for `export 1x` and carry on past `read 1x`, which is the
+same shell answering the same kind of failure two ways depending on the
+builtin. zsh is the one that stops here, and it stops for `export` too.
+
 **`UnsetReadonlyFatal`** — bash no · dash yes · ksh93 no · zsh yes
 
 Ends the script when `unset` is asked to remove a readonly name.
@@ -7683,6 +7697,41 @@ parses the definition at all.
 
 Refuses a bare `read`: dash's "arg count" at 2, where the other three
 read into REPLY.
+
+**`ReadRefusesABadNameBeforeReading`** — bash yes · dash no · ksh93 yes · zsh no
+
+Judges `read`'s first operand as a name before it goes to the stream,
+rather than after.
+
+Observable, and only through the input: a refusal that comes first
+leaves the line for the next reader, and one that comes after has eaten
+it. `printf 'AAA\nBBB\n' | { read 1bad; cat; }` prints both lines in
+bash 5.3 and ksh93 and only BBB in dash and zsh. bash 3.2 is on dash's
+side, which makes this a change within bash rather than a difference
+between shells.
+
+It is the *first* operand and not the whole list. Every shell in the
+panel assigns the names in front of a bad one and then refuses:
+`printf 'X Y Z\n' | { c=keep; read a 1bad c; }` leaves a as X and c as
+keep in all six, and the line is consumed in all six — including the two
+that would not have read it had `1bad` come first.
+
+**`ReadPromptOperand`** — bash ReadOperandIsAllName · dash ReadOperandIsAllName · ksh93 ReadPromptNeedsANameBeforeIt · zsh ReadPromptAloneNamesTheDefault
+
+Says whether `read`'s first operand may carry a prompt after a `?`, and
+what an operand that is nothing else names.
+
+The form is ksh93's and zsh inherited it: `read "v?Name: "` reads into v
+and writes `Name: ` at a terminal, which is `read -p` in one word. It is
+the first operand alone — `read v "w?p"` is a bad name `w?p` in both —
+and the prompt is written for a terminal only, so a piped `read "v?p"`
+is a plain read into v. Where the mark stands alone the two part company:
+ksh93 refuses the empty name it is left with, naming that empty word,
+and zsh reads into REPLY.
+
+It has to be answered wherever the name check is, not beside it: the
+word a shell judges is the part in front of the `?`, so a check that did
+not know the form would refuse the idiom in the two shells that spell it.
 
 **`UnsetFunctionChecksTheName`** — bash no · dash no · ksh93 yes · zsh no
 
@@ -9456,6 +9505,17 @@ two with *disjoint* sets — `export ?` is fine there and `unset ?` is
 not, while `unset 12` is fine and `export 12` is not — and bash 5.3
 checks a name for `export` and nothing at all for `unset`. One field
 could not say either.
+
+**`ReadNameOperands`** — bash PlainNamesOnly · dash PlainNamesOnly · ksh93 PlainNamesOnly · zsh NamesAndPositionals
+
+Is that question for `read`, and is a fourth field because zsh gives
+`read` a fourth answer: `read 1` fills `$1` there, where `export 1` and
+`unset ?` are both refused and `read ?` is not.
+
+Every shell in the panel refuses a word that is not a name — that is not
+the axis, and the refusal itself is the core's. `read` took such a word
+as a variable name in silence, at status 0, until #1440. What splits the
+panel is only how far the set reaches past a plain name.
 
 **`UnsetPositionalIsAllowed`** — bash no · dash no · ksh93 yes · zsh no
 

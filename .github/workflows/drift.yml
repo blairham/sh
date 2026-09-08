@@ -48,4 +48,4 @@ jobs:
       # whole corpus against every shell it can find, and doing that twice to
       # see the output *and* get the exit status is exactly the duplication
       # this pipeline has been shedding all day. The output is in the log.
-      run: go run ./cmd/oracle -check
+      run: go run ./internal/cmd/oracle -check

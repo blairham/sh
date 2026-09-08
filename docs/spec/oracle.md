@@ -215,7 +215,7 @@ rendered table shows what actually ran.
 
 ## The harness
 
-`internal/oracle` implements this, and `cmd/oracle` drives it:
+`internal/oracle` implements this, and `internal/cmd/oracle` drives it:
 
     make oracle         # re-measure, rewrite measurements.md and the golden record
     make oracle-check   # fail if the panel no longer behaves as recorded
@@ -372,7 +372,7 @@ nothing that launches this harness in practice blocks signals, so it is
 a known edge rather than a solved one. And `make` is immune to the whole
 class by accident: it resets dispositions for its own recipes, so
 `nohup make conformance` does not reproduce any of this while
-`nohup go run ./cmd/oracle` does. A guard that only works through one of
+`nohup go run ./internal/cmd/oracle` does. A guard that only works through one of
 two entry points is not a guard, which is why the fix is in the harness
 and not in the Makefile.
 

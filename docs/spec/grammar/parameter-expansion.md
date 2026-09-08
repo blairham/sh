@@ -1453,17 +1453,19 @@ are not built, so `${(pl:5::\0:)v}` is refused for the `l` rather than
 answered. The refusal fires on the letter that is missing, which is the
 honest report: the padding is what is absent, not the escapes.
 
-`(z)` is refused at the same two sites `(p)` was — the grammar reads the
-whole flag alphabet, and the interpreter refuses a letter it does not
-carry when the expansion is reached — and that is the whole of what they
-share. `(p)` reads *arguments*; `(z)` splits a *value* the way the shell
-reads a line. Building one does not move the other.
+`(z)` is not one of them and never was, though the two were listed
+together while both were unbuilt: `(p)` reads *arguments* and `(z)` splits
+a *value*. Building one did not move the other, and `(z)` was built from
+the capital's side instead — see below.
 
-### `(Z:opts:)` — split a value the way the shell splits a line
+### `(z)` and `(Z:opts:)` — split a value the way the shell splits a line
 
-The capital is the one with an argument, and the argument is **option
-letters** rather than a separator: `${(Z+Cn+)v}`, which is what a plugin
-manager's message formatter writes for every diagnostic it prints. The
+**Two spellings, one flag.** The capital is the one with an argument, and
+the argument is **option letters** rather than a separator: `${(Z+Cn+)v}`,
+which is what a plugin manager's message formatter writes for every
+diagnostic it prints. The lower case takes no argument at all and is the
+same split with no letters set — `${(z)v}` — which is the spelling a
+plugin manager's *extension hooks* write, four times per hook. The
 delimiters are part of the syntax and are the same set the `s` and `j`
 separators take, matched pairs included — `(Z:n:)`, `(Z+n+)`, `(Z[n])`,
 `(Z<n>)` all read the same option.
@@ -1508,9 +1510,38 @@ has not built it.
 
 **An empty option list turns the flag off**, which is the opposite of the
 reading "the same split, with options" invites: `${(Z::)v}` on `a  b` is
-the value unchanged, both blanks and all, where `${(z)v}` is `a b`. So the
-letter being present is not the question — the argument being non-empty
-is.
+the value unchanged, both blanks and all, where `${(z)v}` is `a b`. So for
+the *capital* the letter being present is not the question — the argument
+being non-empty is. The lower case has no argument to be empty and always
+splits, and that is the only thing the two spellings disagree about.
+
+**`z` takes no argument**, and a delimiter behind it is an error in the
+flags at the delimiter: `${(z::)v}` and `${(z:x:)v}` are both `error in
+flags near position 5`. So `${(Z::)v}` and `${(z::)v}` — the same
+characters one letter apart — fail and succeed at opposite ends of the
+same shape.
+
+**A group may write both, and then the written order decides the
+letters.** A `Z` argument *adds* its letters to whatever stands in front
+of it; a `z` *clears* them. Measured on `$'a # h\nb'`, where `C` and `n`
+each change the answer visibly:
+
+| group | words | says |
+| --- | --- | --- |
+| `${(Z+C+Z+n+)v}` | `a` `b` | two arguments union |
+| `${(Z+n+Z+C+)v}` | `a` `b` | in either order |
+| `${(zZ+n+)v}` | `a` `#` `h` `b` | an argument behind `z` counts |
+| `${(Z+n+z)v}` | `a` `#` `h` `;` `b` | a `z` behind one clears it |
+| `${(Z+C+zZ+n+)v}` | `a` `#` `h` `b` | clearing only what precedes it |
+| `${(Z+n+Z::)v}` | `a` `#` `h` `b` | an empty argument adds nothing |
+| `${(zZ::)v}` | `a` `#` `h` `;` `b` | nor does it turn the split off |
+
+The union is why the letters are accumulated while the flag group is
+*read* rather than looked up afterwards: by the time the interpreter has
+`Flags` the arguments are stripped, so where a `z` stood relative to a `Z`
+argument is no longer knowable. Keeping only the last argument — which is
+what one assignment per `Z` came to — answered the first row with the
+comment kept, at status 0.
 
 **The words are the source they were written as**, quotes included:
 `a 'b c' d` is `a`, `'b c'`, `d`, and `a b\ c d` keeps the backslash.
@@ -1587,8 +1618,7 @@ than hidden; nothing in the flag's own surface reaches it.
 ### What this implementation refuses
 
 Flags zsh has and this slice does not — `(e)` (expand the result again),
-`(z)` (split by shell parsing with no options — the capital `(Z:opts:)` is
-built), `(t)`, `(D)`, padding, and the rest of the
+`(t)`, `(D)`, padding, and the rest of the
 alphabet, plus `(q+)` (#1530), the signed-numeric sort flag `(-)` — which
 is every `-` that a `q` did not eat, #1531 — and
 `(qqq…)` beyond four — are refused at run time naming the flag, with the
@@ -1599,7 +1629,7 @@ holds it as each letter is built, because a letter added to the
 implemented set is a letter taken out of the guarantee that let this list
 be enumerated exactly.
 
-Three of them were measured while the rest of #935 was built, and the
+Two of them were measured while the rest of #935 was built, and the
 measurements are here so the next change starts from them:
 
 - **`(e)`** expands the result again — parameters, command substitutions
@@ -1608,22 +1638,9 @@ measurements are here so the next change starts from them:
   stays `1+2`.
 - **`(A)`** is carried, and the half of it that is carried is the half
   that does nothing. See "The `(A)` flag is two halves" below.
-- **`(z)`** splits the value the way the shell reads a line, keeping the
-  quoting: `v='echo "a b" c'` is three words, the middle one still
-  `"a b"` — which is the pair `${(Q)${(z)line}}` real configuration is
-  written with. Operators are words of their own (`;`, `|`, `&&`, `;;`,
-  `(`, `)`), a newline becomes `;`, an `IO` number joins the redirection
-  after it so `2>&1` is `2>&` and `1`, and an unterminated quote is no
-  error at all — `echo "unterminated` is two words, the second one with
-  its opening quote still on it.
 
-  The lexical decision this needed — a `#` is not a comment there — has
-  been taken for the capital `(Z:opts:)` and is `syntax.CommentMode`, a
-  per-call mode on the lexer rather than a `syntax.Dialect` value: it is
-  a property of the read and not of the language. `(z)` is the same
-  split with no options, and what still stands in front of it is only
-  that nothing has needed it — the flag a real configuration writes is
-  the capital.
+`(z)` was the third and is built (#1547), folded into the capital rather
+than answered beside it — see the split's own section above.
 
 ### `(~)` is a modifier too, and it is not `${~name}`
 

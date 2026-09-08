@@ -652,7 +652,21 @@ func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool
 			// The join below is what remains: a subscript naming a single
 			// element, and a range over a *scalar*, which is a substring and
 			// one value however many characters it holds. Both arrive as one
-			// element already, so the separator it uses is unreachable.
+			// element already, and so does everything else that gets here —
+			// an association's key, and a search over an *indexed* array,
+			// which names one element in the shell however its operand
+			// looks.
+			//
+			// **A surviving mutant lives on that join, deliberately.**
+			// Changing its separator — a space to an empty string, or to
+			// anything else — passes the whole suite, because nothing ever
+			// reaches it with two elements to put a separator between. A
+			// test pinning the space would be a test asserting that this
+			// branch can see a list, which is the bug this line was on the
+			// wrong side of. What keeps it honest is the predicate above,
+			// not the separator here; if a construct ever does arrive here
+			// as a list, rule 5 next door is what should join it, with the
+			// group's own `j` separator or IFS.
 			//
 			// `list != nil` is the set-ness for all three constructs this
 			// covers, measured rather than assumed. A range over a live

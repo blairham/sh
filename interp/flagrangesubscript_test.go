@@ -134,6 +134,15 @@ func TestAFlagGroupOverWhatIsNotAListStaysAScalar(t *testing.T) {
 			`s=abcdef; f "${#s[2,4]}"`,
 			`1:[3]`,
 		},
+		{
+			// The row that separates "one value" from "a list of one",
+			// which nothing else here can: every other shape of a
+			// single-element list comes back as one field too, and only
+			// the length asks which of the two it was.
+			"and the flagged length of a single index is a width, not one",
+			`a=(abc de); f "${(U)#a[1]}"`,
+			`1:[3]`,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runFlagRange(t, count+tc.src)
@@ -172,6 +181,22 @@ func TestAFlagGroupOverARangeThatNamesNothing(t *testing.T) {
 			"where a name that holds nothing at all is unset",
 			`unset a; f "${(U)a[1,3]-D}"`,
 			`1:[D]`,
+		},
+		{
+			// The same question through the subscript that *does* reach
+			// the list branch — an unset name has no range to range over,
+			// so the row above is answered before it gets there, and the
+			// set-ness the branch reports would otherwise go untested.
+			"and the whole-array subscript on an unset name is unset too",
+			`unset a; f "${(U)a[@]-D}"`,
+			`1:[D]`,
+		},
+		{
+			// Set, so `D` does not appear — and no field either, which is
+			// the pair that pins it: `0:` against the `1:[D]` above.
+			"where an array that holds no element is set and keeps no field",
+			`a=(); f "${(U)a[@]-D}"`,
+			`0:[]`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

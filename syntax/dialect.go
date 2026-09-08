@@ -1324,6 +1324,40 @@ type Dialect struct {
 	// Empty means none, which is dash: it has no array literal at all.
 	DeclarationUtilities map[string]bool
 
+	// ReservedPrecommands are words that may stand in front of a simple
+	// command, are taken away before it runs, and change nothing the command
+	// can see. zsh's `nocorrect` is the only one measured: it turns off
+	// spelling correction, which a non-interactive shell never does anyway,
+	// so what is left is a word to be consumed.
+	//
+	// A *grammar* question rather than a runtime one, which is measured
+	// rather than assumed and is the whole reason this is not a builtin like
+	// `noglob` beside it (see interp.PrecommandModifier):
+	//
+	//	nocorrect x=1 echo hi     prints `hi` — `x=1` is still an assignment
+	//	                          prefix, so the word was gone before the
+	//	                          command was read
+	//	noglob x=1 echo a[b]c     `command not found: x=1` — that one is a
+	//	                          builtin, so what follows it is a command
+	//	                          word and no longer an assignment
+	//	x=nocorrect; $x echo hi   `command not found: nocorrect` — an
+	//	                          expansion cannot produce it
+	//	x=noglob; $x echo a[b]c   prints `a[b]c` — an expansion can produce
+	//	                          that one
+	//	\nocorrect echo hi        `command not found` — quoting removes the
+	//	                          reservation, as it does for `if`
+	//
+	// It is recognized where a command word may first stand, which is after
+	// a redirection or an assignment prefix as well as at the very start:
+	// `>/dev/null nocorrect echo hi` and `x=1 nocorrect echo hi` both run
+	// the command. And the word after it stands in command position, so an
+	// alias there expands — `alias e=echo; nocorrect e hi` prints `hi`.
+	//
+	// Empty means none, which is the other four shells: `nocorrect` is an
+	// ordinary command name there and `command not found` is the right
+	// answer.
+	ReservedPrecommands map[string]bool
+
 	// ArrayLiteral enables `a=(x y)`. Absent from dash, where the `(` is a
 	// syntax error rather than a different construct — so unlike `&>`, this
 	// one is safe to be wrong about loudly.

@@ -445,11 +445,12 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 func (r *Runner) lastElementIsObservable(c syntax.Command) bool {
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:
-		if len(x.Args) == 0 {
+		args := r.afterPrecommands(x.Args)
+		if len(args) == 0 {
 			// Assignments with no command name, which persist by definition.
 			return len(x.Assigns) > 0
 		}
-		name := literalName(x.Args[0])
+		name := literalName(args[0])
 		if name == "" {
 			// Not a plain literal, so it could expand to anything; assume it
 			// matters rather than quietly picking a side.

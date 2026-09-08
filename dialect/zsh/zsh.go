@@ -34,6 +34,14 @@ func Dialect() syntax.Dialect {
 		"declare": true, "typeset": true, "local": true,
 		"export": true, "readonly": true,
 	}
+	// `nocorrect` is a reserved word here and in no other panel shell:
+	// measured 2026-09-08, `whence -w nocorrect` is `reserved` where
+	// `noglob` beside it is `builtin`, and the two behave accordingly —
+	// `nocorrect x=1 echo hi` prints `hi` because the word was gone before
+	// the assignment prefix was read, where `noglob x=1 echo a[b]c` is
+	// `command not found: x=1`. Off in the other four, where the word is an
+	// ordinary command name.
+	d.ReservedPrecommands = map[string]bool{"nocorrect": true}
 	d.FunctionKeywordParens = true
 	// `()` is one token to this lexer, which shows in the one place a
 	// diagnostic names the last token it read: `f()` with the input running
@@ -1797,6 +1805,23 @@ func Apply(r *interp.Runner) {
 	// `declare` is `typeset` under a second name rather than a second
 	// implementation. ksh93 has only the older name and dash has neither, so
 	// which names exist is a dialect's answer and not an axis.
+	// The precommand modifiers this shell has and the core does not, as a
+	// table of names — see interp.PrecommandModifier for what was measured
+	// about each of them and why `command` is not among them.
+	//
+	// `noglob` is the one with an effect: the plugin manager on the rc file
+	// this shell has to run reaches `.zi-set-m-func`, whose whole body is
+	// `noglob unset functions[m]`, and an unmatched pattern is fatal here —
+	// so the word being ignored ended that function rather than producing a
+	// wrong one (#1526).
+	//
+	// `builtin` and `exec` are named only so the scan reads past them:
+	// `builtin noglob echo a[b]c` and `exec noglob echo a[b]c` both print
+	// the three characters, measured. They keep their own builtins and do
+	// their own work.
+	r.SetPrecommand("noglob", interp.PrecommandNoGlob)
+	r.SetPrecommand("builtin", interp.PrecommandTransparent)
+	r.SetPrecommand("exec", interp.PrecommandTransparent)
 	// `integer` is `typeset` with the type already decided, and it is one of
 	// the two shells that has the word — this shell's own `add-zsh-hook`
 	// opens with `integer del list help`, so a startup file that installs a

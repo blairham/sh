@@ -1287,6 +1287,10 @@ type Runner struct {
 	// declaring names commands whose `name=value` arguments are assignments,
 	// beyond the ones the core already knows. A dialect adds its own.
 	declaring map[string]bool
+	// precommands names the words that may stand in front of a command and
+	// are read before its words are matched against the filesystem. A
+	// dialect adds its own and the core has none — see precommand.go.
+	precommands map[string]PrecommandModifier
 	// pipeStatus is what the last pipeline's elements reported, and
 	// pipeStatusName is what the dialect calls it. The record is only kept
 	// when a dialect has named it, because nothing else can read it.
@@ -2333,6 +2337,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		return nil
 	}
 	var argv []string
+	// The leading words are scanned for the dialect's precommand modifiers
+	// before any word is matched against the filesystem, which is the only
+	// order `noglob` can be honored in: what it switches off is the stage
+	// that would otherwise already have expanded the words behind it. See
+	// precommand.go for the family and what was measured about each of them.
+	scanning := len(r.precommands) > 0
+	noglob := false
 	for i, w := range c.Args {
 		if r.expandErr || r.ctl == controlExit {
 			// The command is abandoned at its first failed expansion rather
@@ -2350,7 +2361,32 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			argv = append(argv, r.expandAssignArg(w))
 			continue
 		}
-		argv = append(argv, r.expandWord(w)...)
+		// expandWord split in two, so the match can be decided between the
+		// halves rather than before the word is read.
+		fields := r.expandWordEscaped(w)
+		// Over fields and not over words: one word can produce several and
+		// the front of that list is what carries the modifier —
+		// `c=(noglob echo); $c a[b]c` prints the three characters.
+		for scanning && len(fields) > 0 {
+			m, ok := r.precommand(fields[0])
+			if !ok {
+				scanning = false
+				break
+			}
+			if m == PrecommandNoGlob {
+				// Taken away, and not matched itself: the modifier is a
+				// word of the command line and the scan reads it before
+				// anything is a pattern.
+				noglob = true
+				fields = fields[1:]
+				continue
+			}
+			// Transparent: it stays — it is a builtin with work of its own
+			// — and the scan carries on, so a modifier may stand behind it.
+			argv = append(argv, r.globFieldsUnlessSuppressed(fields[:1], noglob)...)
+			fields = fields[1:]
+		}
+		argv = append(argv, r.globFieldsUnlessSuppressed(fields, noglob)...)
 	}
 	// An array assignment written as an operand — `local a=(x y)` — reaches
 	// the utility as the bare name, and the array itself is applied once the

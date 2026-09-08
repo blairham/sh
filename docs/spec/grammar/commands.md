@@ -370,6 +370,83 @@ so the `posix` preset says yes and the two shells that ship a POSIX mode
 switch to it there; recording that as a default of "no" would have
 inverted the standard's own answer.
 
+### Precommand modifiers
+
+zsh has words that may stand in front of a simple command, are taken away
+before it runs, and change what happens to the words behind them. The other
+four shells have none of them, so every line using one is `command not found`
+there. `whence -w` sorts the family, and the classes are not decoration —
+each one is measurable:
+
+| word | class | what it does |
+| --- | --- | --- |
+| `nocorrect` | reserved | nothing here; spelling correction is interactive |
+| `noglob` | builtin | pathname expansion is not done for this command |
+| `command` | builtin | the word behind it is a program — the scan stops |
+| `builtin` | builtin | the word behind it is a builtin — the scan carries on |
+| `exec` | builtin | as `builtin`, for this question |
+
+**`noglob` is read after expansion, `nocorrect` before parsing.** That is the
+whole difference and every shape below follows from it:
+
+| probe | zsh | the other four |
+| --- | --- | --- |
+| `c=noglob; $c echo a[b]c` | `a[b]c` | `command not found: noglob` |
+| `x=nocorrect; $x echo hi` | `command not found: nocorrect` | the same |
+| `\noglob echo a[b]c` | `a[b]c` | `command not found: noglob` |
+| `\nocorrect echo hi` | `command not found: nocorrect` | the same |
+| `noglob x=1 echo a[b]c` | `command not found: x=1` | `command not found: noglob` |
+| `nocorrect x=1 echo hi` | `hi`, and `$x` is empty after | `command not found: nocorrect` |
+| `nocorrect noglob echo a[b]c` | `a[b]c` | `command not found: nocorrect` |
+| `noglob nocorrect echo a[b]c` | `command not found: nocorrect` | `command not found: noglob` |
+
+The last pair is the sharpest of them: the reserved word is consumed while the
+line is *read*, so a builtin in front of it is too late, and the builtin is
+read after the words are *expanded*, so the reserved word in front of it is
+early enough.
+
+`nocorrect` is recognized wherever a command word may first stand, which is
+after a prefix as well as at the start — `>/dev/null nocorrect echo hi` and
+`x=1 nocorrect echo hi` both run the command — and only a simple command may
+follow it: `nocorrect if true; then echo hi; fi` is a parse error.
+
+**What `noglob` covers is this command's words.** Not its redirections, not
+what its words reach:
+
+    noglob echo x >out[1].txt   →  no matches found: out[1].txt
+    f() { echo a[b]c; }
+    noglob f                    →  f: no matches found: a[b]c
+    noglob eval 'echo a[b]c'    →  no matches found: a[b]c
+    noglob echo "$(echo a[b]c)" →  no matches found: a[b]c
+
+An unmatched pattern is fatal in zsh, so a modifier that is ignored does not
+produce a wrong word — it ends the enclosing function. That is how this was
+found: a plugin manager's `.zi-set-m-func`, whose whole body is `noglob unset
+functions[m]`.
+
+**It is not the `noglob` option under another spelling.** `set -o noglob` and
+`setopt noglob` are a state the script chose, reported in `$-` and lasting until
+it is unset; the modifier lasts for one command and shows in neither:
+
+    noglob echo a[b]c; echo a[b]c   →  a[b]c, then no matches found: a[b]c
+
+**The scan is over fields, not over words.** One word can produce several, and
+the front of *that* list is what carries the modifier:
+
+    c=(noglob echo); $c a[b]c       →  a[b]c
+    c="noglob echo"; ${=c} a[b]c    →  a[b]c
+    c="noglob echo"; $c a[b]c       →  no matches found: a[b]c
+
+The last is the control: this shell does not split a parameter expansion, so
+the same two words arriving as one field are a command name.
+
+Grammar: `Dialect.ReservedPrecommands`, the words the parser takes away; they
+are kept on the tree as `SimpleCmd.Precommands` so that printing a tree prints
+the program that was read. Run time: `interp.PrecommandModifier`, a table of
+names a dialect registers, read over the leading fields before any of them is
+matched. Both are empty in the core, where the words are ordinary command
+names.
+
 ### Array assignment
 
 An assignment whose value is a parenthesized word list makes an array,

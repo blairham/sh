@@ -803,6 +803,12 @@ func (p *printer) simple(c *SimpleCmd) {
 		}
 		first = false
 	}
+	// The words the grammar took away come back first, because they were
+	// written first and printing a tree prints the program that was read.
+	for _, w := range c.Precommands {
+		sep()
+		p.word(w)
+	}
 	// Prefixes first, then the command, then the assignments written as its
 	// operands. Printing them all in front turned `typeset a=(x y)` into
 	// `a=(x y) typeset`, which is a different command: the array became the

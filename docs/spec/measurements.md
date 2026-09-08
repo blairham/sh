@@ -4863,6 +4863,28 @@ grades it and nothing drift-checks it either, for the same reason.
 | `exec/lines-run-as-they-are-read` | `one` **2>** `<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one` **2>** `<script>:2: parse error near `fi'` *(status 1)* |
 | `exec/a-line-is-the-unit-not-a-statement` | `one` **2>** `<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `echo two; { fi; }'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `echo two; { fi; }'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `echo two; { fi; }'` *(status 2)* | `one` **2>** `<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one` **2>** `<script>:2: parse error near `fi'` *(status 1)* |
 | `exec/a-construct-spans-its-lines` | `one~1~2` **2>** `<script>: 6: Syntax error: "fi" unexpected` *(status 2)* | `one~1~2` **2>** `<script>: line 6: syntax error near unexpected token `fi'~<script>: line 6: `{ fi; }'` *(status 2)* | `one~1~2` **2>** `<script>: line 6: syntax error near unexpected token `fi'~<script>: line 6: `{ fi; }'` *(status 2)* | `one~1~2` **2>** `<script>: line 6: syntax error near unexpected token `fi'~<script>: line 6: `{ fi; }'` *(status 2)* | `one~1~2` **2>** `<script>: syntax error at line 6: `fi' unexpected` *(status 3)* | `one~1~2` **2>** `<script>:6: parse error near `fi'` *(status 1)* |
+| `pre/an-unmatched-pattern-without-the-modifier` | `a[b]c` | `a[b]c` | `a[b]c` | `a[b]c` | `a[b]c` | **2>** `<shell>:1: no matches found: a[b]c` *(status 1)* |
+| `pre/noglob-stops-the-match` | **2>** `<shell>: 1: noglob: not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: not found` *(status 127)* | `a[b]c` |
+| `pre/noglob-covers-every-word` | **2>** `<shell>: 1: noglob: not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: not found` *(status 127)* | `a[b]c d[e]f` |
+| `pre/noglob-does-not-match-the-command-word-either` | **2>** `<shell>: 1: noglob: not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: not found` *(status 127)* | **2>** `<shell>:1: command not found: a[b]c` *(status 127)* |
+| `pre/noglob-is-a-builtin-and-not-grammar` | **2>** `<shell>: 1: noglob: not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: not found` *(status 127)* | `a[b]c` |
+| `pre/a-list-can-carry-the-modifier` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: not found` *(status 127)* | `a[b]c` |
+| `pre/an-unsplit-word-holding-both-is-not-two` | **2>** `<shell>: 1: noglob: not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: not found` *(status 127)* | **2>** `<shell>:1: no matches found: a[b]c` *(status 1)* |
+| `pre/a-quoted-noglob-is-still-the-modifier` | **2>** `<shell>: 1: noglob: not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: not found` *(status 127)* | `a[b]c` |
+| `pre/after-noglob-an-assignment-is-a-command-word` | **2>** `<shell>: 1: noglob: not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: not found` *(status 127)* | **2>** `<shell>:1: command not found: x=1` *(status 127)* |
+| `pre/noglob-ends-with-the-command` | **2>** `<shell>: 1: noglob: not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: not found` *(status 127)* | **2>** `f: no matches found: a[b]c` *(status 1)* |
+| `pre/noglob-does-not-reach-a-redirection-target` | `st=127` **2>** `<shell>: 1: noglob: not found` | `st=127` **2>** `<shell>: line 1: noglob: command not found` | `st=127` **2>** `<shell>: line 1: noglob: command not found` | `st=127` **2>** `<shell>: noglob: command not found` | `st=127` **2>** `<shell>: noglob: not found` | **2>** `<shell>:1: no matches found: out[1].txt` *(status 1)* |
+| `pre/noglob-does-not-outlast-the-command` | `a[b]c` **2>** `<shell>: 1: noglob: not found` | `a[b]c` **2>** `<shell>: line 1: noglob: command not found` | `a[b]c` **2>** `<shell>: line 1: noglob: command not found` | `a[b]c` **2>** `<shell>: noglob: command not found` | `a[b]c` **2>** `<shell>: noglob: not found` | `a[b]c` **2>** `<shell>:1: no matches found: a[b]c` *(status 1)* |
+| `pre/command-stops-the-scan` | **2>** `<shell>: 1: noglob: not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: not found` *(status 127)* | **2>** `<shell>:1: no matches found: a[b]c` *(status 1)* |
+| `pre/builtin-does-not-stop-the-scan` | **2>** `<shell>: 1: builtin: not found` *(status 127)* | **2>** `<shell>: line 1: builtin: noglob: not a shell builtin` *(status 1)* | **2>** `<shell>: line 1: builtin: noglob: not a shell builtin` *(status 1)* | **2>** `<shell>: line 0: builtin: noglob: not a shell builtin` *(status 1)* | **2>** `builtin: noglob: not found~builtin: a[b]c: not found` *(status 1)* | `a[b]c` |
+| `pre/exec-does-not-stop-the-scan` | **2>** `<shell>: 1: exec: noglob: not found` *(status 127)* | **2>** `<shell>: line 1: exec: noglob: not found` *(status 127)* | **2>** `<shell>: line 1: exec: noglob: not found` *(status 127)* | **2>** `<shell>: line 0: exec: noglob: not found` *(status 127)* | **2>** `<shell>: exec: noglob: not found` *(status 127)* | `a[b]c` |
+| `pre/nocorrect-is-taken-away-before-the-command-is-read` | `x=[]` **2>** `<shell>: 1: nocorrect: not found` | `x=[]` **2>** `<shell>: line 1: nocorrect: command not found` | `x=[]` **2>** `<shell>: line 1: nocorrect: command not found` | `x=[]` **2>** `<shell>: nocorrect: command not found` | `x=[]` **2>** `<shell>: nocorrect: not found` | `hi~x=[]` |
+| `pre/nocorrect-cannot-come-from-an-expansion` | **2>** `<shell>: 1: nocorrect: not found` *(status 127)* | **2>** `<shell>: line 1: nocorrect: command not found` *(status 127)* | **2>** `<shell>: line 1: nocorrect: command not found` *(status 127)* | **2>** `<shell>: nocorrect: command not found` *(status 127)* | **2>** `<shell>: nocorrect: not found` *(status 127)* | **2>** `<shell>:1: command not found: nocorrect` *(status 127)* |
+| `pre/a-quoted-nocorrect-is-a-command-name` | **2>** `<shell>: 1: nocorrect: not found` *(status 127)* | **2>** `<shell>: line 1: nocorrect: command not found` *(status 127)* | **2>** `<shell>: line 1: nocorrect: command not found` *(status 127)* | **2>** `<shell>: nocorrect: command not found` *(status 127)* | **2>** `<shell>: nocorrect: not found` *(status 127)* | **2>** `<shell>:1: command not found: nocorrect` *(status 127)* |
+| `pre/nocorrect-is-not-noglob` | **2>** `<shell>: 1: nocorrect: not found` *(status 127)* | **2>** `<shell>: line 1: nocorrect: command not found` *(status 127)* | **2>** `<shell>: line 1: nocorrect: command not found` *(status 127)* | **2>** `<shell>: nocorrect: command not found` *(status 127)* | **2>** `<shell>: nocorrect: not found` *(status 127)* | **2>** `<shell>:1: no matches found: a[b]c` *(status 1)* |
+| `pre/the-two-modifiers-in-order` | **2>** `<shell>: 1: nocorrect: not found` *(status 127)* | **2>** `<shell>: line 1: nocorrect: command not found` *(status 127)* | **2>** `<shell>: line 1: nocorrect: command not found` *(status 127)* | **2>** `<shell>: nocorrect: command not found` *(status 127)* | **2>** `<shell>: nocorrect: not found` *(status 127)* | `a[b]c` |
+| `pre/the-two-modifiers-in-the-other-order` | **2>** `<shell>: 1: noglob: not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: line 1: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: command not found` *(status 127)* | **2>** `<shell>: noglob: not found` *(status 127)* | **2>** `<shell>:1: command not found: nocorrect` *(status 127)* |
+| `pre/an-ordinary-word-elsewhere` | `noglob nocorrect` | `noglob nocorrect` | `noglob nocorrect` | `noglob nocorrect` | `noglob nocorrect` | `noglob nocorrect` |
 
 - `core/c-style-for` — a loop on a condition rather than over a list; dash does not have it and says so about the loop variable rather than about the parenthesis
   ```sh
@@ -5503,6 +5525,94 @@ grades it and nothing drift-checks it either, for the same reason.
     echo $i
   done
   { fi; }
+  ```
+- `pre/an-unmatched-pattern-without-the-modifier` — the control the whole group needs, and the half that was already right: a bracket expression matching no file is passed through by four shells and is a *fatal* error in the fifth. Without it every row below could be explained by pathname expansion being wrong rather than by the modifier being ignored
+  ```sh
+  echo a[b]c
+  ```
+- `pre/noglob-stops-the-match` — the pair with the row above: the same pattern, one word further along, stands as written in the shell that has `noglob` and is `command not found` in the four that do not. Graded on the output rather than the status, because a status of 1 is what the unmatched pattern produced too
+  ```sh
+  noglob echo a[b]c
+  ```
+- `pre/noglob-covers-every-word` — the modifier is not about the first word behind it. A reading that unglobbed one argument would print the second as a diagnostic and stop, which is a different line at a different status
+  ```sh
+  noglob echo a[b]c d[e]f
+  ```
+- `pre/noglob-does-not-match-the-command-word-either` — the word that becomes the command name is unmatched too, so the failure is `command not found: a[b]c` and not `no matches found`. Which of the two diagnostics arrives is what says whether the scan ran before the match or after it
+  ```sh
+  noglob a[b]c
+  ```
+- `pre/noglob-is-a-builtin-and-not-grammar` — an expansion can produce it, which is the fact that decides where it is implemented: the words are expanded, the leading one is read, and only then is anything matched. A modifier recognized in the grammar could not be written this way
+  ```sh
+  c=noglob; $c echo a[b]c
+  ```
+- `pre/a-list-can-carry-the-modifier` — the scan is over *fields* and not over words: one word produced two and the front of that list is what was read. The narrower rule — a word that expanded to more than one field is not a modifier — passes every other row in this group and fails here
+  ```sh
+  c=(noglob echo); $c a[b]c
+  ```
+- `pre/an-unsplit-word-holding-both-is-not-two` — the control for the row above, and the reason it is about fields rather than about text: this shell does not split a parameter expansion, so the same two words in one field are a command name and the pattern is matched. `${=c}` splits it and the modifier comes back
+  ```sh
+  c="noglob echo"; $c a[b]c
+  ```
+- `pre/a-quoted-noglob-is-still-the-modifier` — quoting does not take this one away, where it takes `if` away — the same fact as the row above from the other side, and the exact opposite of what quoting does to `nocorrect` below
+  ```sh
+  \noglob echo a[b]c
+  ```
+- `pre/after-noglob-an-assignment-is-a-command-word` — what follows a builtin is a command word, so `x=1` is a command name here and not a prefix — `command not found: x=1` in the shell with the modifier, and `command not found: noglob` in the four without. The pair with the `nocorrect` row of the same shape is what separates the two mechanisms
+  ```sh
+  noglob x=1 echo a[b]c
+  ```
+- `pre/noglob-ends-with-the-command` — it covers this command's words and not what they reach: a function called through the modifier still matches in its own body, which is fatal in the shell that has the modifier at all. A runner that set the option instead of unglobbing the words would print the three characters here
+  ```sh
+  f() { echo a[b]c; }; noglob f
+  ```
+- `pre/noglob-does-not-reach-a-redirection-target` — the one part of the command it does not reach, measured rather than assumed: a redirection target is expanded by another route and an unmatched pattern there is still fatal. The plausible wrong reading — a flag set for the whole command — would create the file and print `st=0`
+  ```sh
+  noglob echo x >out[1].txt; echo "st=$?"
+  ```
+- `pre/noglob-does-not-outlast-the-command` — the modifier is not the option under another spelling: the next command matches again, so what it switched off went back on. A runner that reached for the `set -o noglob` flag instead would print the three characters twice — and would answer for the flag in `$-` while it was flipped
+  ```sh
+  noglob echo a[b]c; echo a[b]c
+  ```
+- `pre/command-stops-the-scan` — `command` says the word behind it is a program, so the scan stops there and the pattern is matched after all. It is the row that keeps the family from being one rule, and the boundary the two rows below stand against
+  ```sh
+  command noglob echo a[b]c
+  ```
+- `pre/builtin-does-not-stop-the-scan` — `builtin` says the word behind it is a builtin, and the modifier is one — so the scan carries on and the pattern stands. Paired with the `command` row above, this is the whole of the ordering rule
+  ```sh
+  builtin noglob echo a[b]c
+  ```
+- `pre/exec-does-not-stop-the-scan` — the third shared word, on the same question. It behaves as `builtin` does rather than as `command` does, which is not derivable from what the three are for and is why each one is a row
+  ```sh
+  exec noglob echo a[b]c
+  ```
+- `pre/nocorrect-is-taken-away-before-the-command-is-read` — the same shape as the `noglob` row above and the opposite answer: this word is grammar, so it is gone before `x=1` is read and the assignment is still a prefix — the command runs and the variable does not survive it. The four without the word report `command not found` and print an empty value for the same reason
+  ```sh
+  nocorrect x=1 echo hi; echo "x=[$x]"
+  ```
+- `pre/nocorrect-cannot-come-from-an-expansion` — grammar cannot be produced by an expansion, so this is `command not found` in all six columns while the identical shape with `noglob` runs in one of them. It is the discriminating pair for where each of the two is implemented
+  ```sh
+  x=nocorrect; $x echo hi
+  ```
+- `pre/a-quoted-nocorrect-is-a-command-name` — quoting removes the reservation, exactly as it does for `if` — and again the opposite of what it does to `noglob`. All six columns agree here, which is what makes the disagreement on the unquoted word meaningful
+  ```sh
+  \nocorrect echo hi
+  ```
+- `pre/nocorrect-is-not-noglob` — the word that is a modifier does not do the other modifier's work: spelling correction is what it turns off, and the pattern behind it is matched and fatal. A shell that treated every precommand word as `noglob` would print the three characters
+  ```sh
+  nocorrect echo a[b]c
+  ```
+- `pre/the-two-modifiers-in-order` — grammar first, then the builtin: the reserved word is consumed while the line is read and the builtin is read after the words are expanded, so this order works
+  ```sh
+  nocorrect noglob echo a[b]c
+  ```
+- `pre/the-two-modifiers-in-the-other-order` — and the other order does not, which is the sharpest evidence in the group that they are two mechanisms rather than one list: by the time the builtin is read the grammar has finished, so `nocorrect` is an ordinary word and `command not found`
+  ```sh
+  noglob nocorrect echo a[b]c
+  ```
+- `pre/an-ordinary-word-elsewhere` — neither word is reserved anywhere but in command position, so all six columns print both of them. The control that keeps a rule written for the whole word list from passing the rest of this group
+  ```sh
+  echo noglob nocorrect
   ```
 
 ## getopts

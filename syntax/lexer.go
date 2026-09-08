@@ -509,13 +509,54 @@ func (l *Lexer) skipBlanksAndComments() {
 		case c == '#':
 			// Only where a word could begin, which is the case here: mid-word
 			// this function is not running. `echo a#b` prints a#b.
-			for !l.eof() && l.peek() != '\n' {
-				l.advance()
-			}
+			l.skipComment()
 		default:
 			return
 		}
 	}
+}
+
+// skipComment consumes a `#` and the rest of its line, leaving the newline.
+//
+// The one implementation of the rule. It has two callers, and the reason it
+// is a function rather than two loops is #1397: the second caller did not
+// exist, so a process substitution's body was scanned with no comment rule at
+// all, and an apostrophe in `# it's fine` opened a quote that ran to the end
+// of the file. Writing the loop again in the second place is how that would
+// come back — the same shape has bitten this repo four times — so both go
+// through here.
+func (l *Lexer) skipComment() {
+	for !l.eof() && l.peek() != '\n' {
+		l.advance()
+	}
+}
+
+// prevByte is the byte in front of the cursor, or 0 at the start of the text.
+func (l *Lexer) prevByte() byte {
+	if l.off == 0 {
+		return 0
+	}
+	return l.src[l.off-1]
+}
+
+// commentCouldStart reports whether a `#` at the cursor opens a comment, given
+// the byte in front of it.
+//
+// Only for the raw scans, which have no word structure to consult; where the
+// lexer is forming tokens the question does not arise, because
+// skipBlanksAndComments runs only between them.
+//
+// prev is the byte before the `#`, or 0 at the start of the text. Measured
+// across the panel inside `<(…)`: a comment opens at the start of the body
+// (`<(#it's tight`), after a blank or newline, and immediately after `|` or
+// `;` with no space — and does *not* open mid-word, where `echo a#b` prints
+// `a#b` in all five shells that have the construct.
+func commentCouldStart(prev byte) bool {
+	switch prev {
+	case 0, ' ', '\t', '\n', ';', '&', '|', '(', ')', '<', '>':
+		return true
+	}
+	return false
 }
 
 // tryIONumber matches digits followed with no gap by a redirection operator.
@@ -1705,7 +1746,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	}
 
 	start := l.off
-	if kind == CommandSubst {
+	if holdsCommands(kind) {
 		// Where the contents end is a question about the grammar, not about
 		// how many parentheses have been seen: a `case` arm's `)` closes
 		// nothing, so counting stops early and takes half an arm with it.
@@ -1720,6 +1761,16 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// The contents of `$( )` are the contents of a subshell, so the
 		// answer is the one the parser already knows: read a list, and stop
 		// where it stops.
+		//
+		// And the contents of `<( )` and `>( )` are a subshell too, which is
+		// what holdsCommands has said all along — but this route asked for
+		// CommandSubst by name, so the two process substitutions never took
+		// it and were left to the counting loop below. That loop knows
+		// quotes and backslashes and nothing about comments, so `<(` + `#
+		// it's fine` opened a single quote that ran to the end of the file
+		// and the refusal landed 214 lines from the cause (#1397). Reading
+		// them here is the fold: one scanner, one comment rule, one answer
+		// to where a body ends, for all three kinds that hold a program.
 		if end, remarks, ok := l.parseToClose(start); ok {
 			// What that read had to say comes back with it. A parse inside a
 			// parse otherwise says nothing — the reason takeRemarks exists
@@ -1765,6 +1816,28 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			if !l.eof() {
 				l.advance()
 			}
+		case '#':
+			// The same rule skipBlanksAndComments applies, through the same
+			// helper, because this loop is the other way into the body of a
+			// construct that holds a program and it has to agree with the
+			// parser above about what a comment is. Without it the fallback
+			// silently *accepts* what the fold correctly refuses: in
+			// `<(echo hi # cmt )` the `)` is inside the comment, every shell
+			// with the construct refuses the file, and counting found that
+			// `)` and called the substitution closed.
+			//
+			// Gated on holdsCommands because `#` is not a comment in
+			// arithmetic — `$(( 16#ff ))` is 255 in bash, bash 3.2, ksh93
+			// and zsh, and all four call `$(( 1 # c ))` an arithmetic syntax
+			// error rather than reading a comment.
+			//
+			// And gated on the byte in front, because a raw scan has no word
+			// structure: `<(echo a#b)` prints `a#b` everywhere.
+			if holdsCommands(kind) && commentCouldStart(l.prevByte()) {
+				l.skipComment()
+				continue
+			}
+			l.advance()
 		case '(':
 			depth++
 			l.advance()
@@ -2040,6 +2113,16 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	l.advance() // $
 	l.advance() // {
 	start := l.off
+	// Whether this is `${ cmd;}` or `${x}` is settled by the character after
+	// the brace, so it can be settled here — before the loop that needs the
+	// answer, rather than only at the bottom where the span kind is chosen.
+	//
+	// The loop needs it because a `#` is a comment in one form and an
+	// operator in the other: `${ echo hi # it's fine\n}` yields `hi` in bash
+	// 5.3 and ksh93, the two panel members that have the construct, while
+	// `${x#a}` strips a prefix in all six. Same hole as #1397's, one scanner
+	// over, and the same fix.
+	brace := l.dialect.CurrentShellSubstitution && start < len(l.src) && isBraceCommandStart(l.src[start])
 	depth := 1
 	for depth > 0 {
 		if l.eof() {
@@ -2065,6 +2148,19 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			if !l.eof() {
 				l.advance()
 			}
+		case '#':
+			// The command form's body is a program, so it gets the program's
+			// comment rule — through the same two helpers the other two
+			// scanners use, because writing the loop a third time is how the
+			// hole reopens. Measured in bash 5.3 and ksh93: mid-word is not
+			// a comment (`${ echo x#y; }` yields `x#y`), and a comment runs
+			// to the newline, so `${ echo hi # cmt }` is `unexpected EOF
+			// while looking for matching }` rather than a closed expansion.
+			if brace && commentCouldStart(l.prevByte()) {
+				l.skipComment()
+				continue
+			}
+			l.advance()
 		case '{':
 			depth++
 			l.advance()
@@ -2096,7 +2192,7 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	if end > start && l.src[end-1] == '}' {
 		end--
 	}
-	if l.dialect.CurrentShellSubstitution && start < len(l.src) && isBraceCommandStart(l.src[start]) {
+	if brace {
 		// `${ cmd;}` is a command and `${x}` is a parameter, and the space
 		// is the whole of the difference — which is why it is decided here,
 		// on the character after the brace, rather than by trying to read

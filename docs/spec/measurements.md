@@ -7838,6 +7838,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `procsub/two-of-them-in-one-command` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `same` | `same` | `same` | `same` | `same` |
 | `procsub/a-redirection-where-a-target-belongs` | **2>** `<shell>: 1: Syntax error: redirection unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `<'~<shell>: -c: line 1: `cat < < x; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `<'~<shell>: -c: line 1: `cat < < x; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `<'~<shell>: -c: line 0: `cat < < x; echo "st=$?"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `<' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `<'` *(status 1)* |
 | `procsub/feeds-a-loop` | **2>** `<shell>: 1: Syntax error: redirection unexpected` *(status 2)* | `[a]~[b]` | `[a]~[b]` | `[a]~[b]` | `[a]~[b]` | `[a]~[b]` |
+| `procsub/a-comment-in-the-body` | **2>** `<script>: 1: Syntax error: redirection unexpected` *(status 2)* | `hi~after` | `hi~after` | `after` **2>** `<script>: line 1: bad substitution: no closing `)' in <(~	# it's a comment~	echo hi~)` | `hi~after` | `hi~after` |
+| `procsub/a-comment-runs-past-the-closing-parenthesis` | **2>** `<script>: 1: Syntax error: redirection unexpected` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 4: `end of file' unexpected` *(status 3)* | **2>** `<script>:4: parse error near `<(echo hi # cmt )'` *(status 1)* |
+| `procsub/a-comment-after-a-separator-in-the-body` | **2>** `<script>: 1: Syntax error: redirection unexpected` *(status 2)* | `hi~bye~after` | `hi~bye~after` | **2>** `<script>: line 2: unexpected EOF while looking for matching `''~<script>: line 7: syntax error: unexpected end of file` *(status 2)* | `hi~bye~after` | `hi~bye~after` |
+| `procsub/a-hash-mid-word-in-the-body` | **2>** `<script>: 1: Syntax error: redirection unexpected` *(status 2)* | `a#b~after` | `a#b~after` | `a#b~after` | `a#b~after` | `a#b~after` |
 | `procsub/quoted-is-not-a-substitution` | `[<(echo hi)]` | `[<(echo hi)]` | `[<(echo hi)]` | `[<(echo hi)]` | `[<(echo hi)]` | `[<(echo hi)]` |
 | `redir/a-target-that-is-not-one-word` | `st=0` | `st=1` **2>** `<shell>: line 1: $e: ambiguous redirect` | `st=0` | `st=1` **2>** `<shell>: $e: ambiguous redirect` | `st=0` | `st=0` |
 | `redir/a-target-that-expands-to-nothing` | `st=2` **2>** `<shell>: 1: cannot create : Directory nonexistent` | `st=1` **2>** `<shell>: line 1: $e: ambiguous redirect` | `st=1` **2>** `<shell>: line 1: $e: ambiguous redirect` | `st=1` **2>** `<shell>: $e: ambiguous redirect` | `st=1` **2>** `<shell>: : cannot open` | `st=1` **2>** `<shell>:1: no such file or directory: ` |
@@ -7977,6 +7981,32 @@ grades it and nothing drift-checks it either, for the same reason.
 - `procsub/feeds-a-loop` — the idiom people actually reach for it with, and the reason a pipeline will not do: the loop runs in *this* shell, so what it reads is still there afterwards
   ```sh
   while read -r l; do echo "[$l]"; done < <(printf "a\nb\n")
+  ```
+- `procsub/a-comment-in-the-body` — the body of `<( )` is a program, so a `#` in it opens a comment — unanimous in every panel member that has the construct, and the apostrophe is the whole reason the row is written this way rather than with prose that happens to be quote-free. Ours read the body with a paren-counting scanner that knew quotes and backslashes and nothing about comments, so `it's` opened a single quote that ran to end of input and the refusal landed 214 lines from the cause in a real script (#1397). bash 3.2 is the one column that agrees with the old bug, and its wording says why — `bad substitution: no closing )` — which is the same scanner in the same place, fixed by later bash
+  ```sh
+  cat < <(
+  	# it's a comment
+  	echo hi
+  )
+  echo after
+  ```
+- `procsub/a-comment-runs-past-the-closing-parenthesis` — the other side of the same rule, and the row that makes the fix falsifiable rather than merely permissive: a comment ends at the newline, so the `)` written inside one closes nothing and the file is refused everywhere the construct exists. It is what a scanner that gained the comment rule in only one of its two routes gets wrong in the *accepting* direction — the parser refuses the body, the counting fallback then finds that `)` and calls the substitution closed, which is a silent pass
+  ```sh
+  cat < <(echo hi # cmt )
+  echo after
+  ```
+- `procsub/a-comment-after-a-separator-in-the-body` — a comment opens where a word could begin, and after a `;` with no blank between them is such a place — measured, because a rule written as "preceded by whitespace" passes the row above and fails this one. Same for `|` and for the `<(` itself; this spelling is the tightest of the three
+  ```sh
+  cat < <(
+  	echo hi;# it's tight
+  	echo bye
+  )
+  echo after
+  ```
+- `procsub/a-hash-mid-word-in-the-body` — the counter-case that keeps the comment rule from being a blanket one: mid-word a `#` is an ordinary character, so this prints `a#b` in all five shells that have the construct, bash 3.2 included. It is `token/comment-needs-word-boundary` asked inside the body, and it is the row a fix that skipped to the newline on every `#` would fail — that fix eats `#b)` and the substitution never closes
+  ```sh
+  cat < <(echo a#b)
+  echo after
   ```
 - `procsub/quoted-is-not-a-substitution` — the construct is unquoted-only: inside double quotes the same ten characters are text, unanimously and dash included. It is the completeness half of `procsub/reads-a-command-as-a-file` — that case says the lexer reads the form, this one says where it stops looking, and a lexer that also read it inside quotes would pass the first and fail here
   ```sh
@@ -8584,6 +8614,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | --- | --- | --- | --- | --- | --- | --- |
 | `exec/a-command-is-named-as-it-was-written` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` |
 | `subst/a-body-that-runs-in-the-current-shell` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[1][hi]` | `[1][hi]` | **2>** `<shell>: ${ x=1; echo hi;}: bad substitution` *(status 1)* | `[1][hi]` | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `subst/a-comment-in-a-current-shell-body` | **2>** `<script>: 6: Syntax error: Unterminated quoted string` *(status 2)* | `[hi]` | `[hi]` | **2>** `<script>: line 2: unexpected EOF while looking for matching `''~<script>: line 7: syntax error: unexpected end of file` *(status 2)* | `[hi]` | **2>** `<script>:7: unmatched '` *(status 1)* |
+| `subst/a-hash-mid-word-in-a-current-shell-body` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[x#y]` | `[x#y]` | **2>** `<shell>: ${ echo x#y; }: bad substitution` *(status 1)* | `[x#y]` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `subst/the-subshell-form-loses-what-it-assigns` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` |
 | `subst/a-body-is-placed-in-the-script` | **2>** `<shell>: 4: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 3: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: not found` *(status 127)* | **2>** `<shell>:4: command not found: nosuchcmd` *(status 127)* |
 | `subst/a-backquoted-body-is-placed-differently` | **2>** `<shell>: 1: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 3: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: not found` *(status 127)* | **2>** `<shell>:4: command not found: nosuchcmd` *(status 127)* |
@@ -8630,6 +8662,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `subst/a-body-that-runs-in-the-current-shell` — a third spelling of command substitution, and the only one that does not run in a subshell — so what it assigns survives, which is the whole reason it exists. Two of the panel have it, one of them only since 5.3, and the other two call it a bad substitution. The `x=0` before it and the `[$x]` after are what tell it from `$( … )`, which would leave the nought
   ```sh
   x=0; y=${ x=1; echo hi;}; echo "[$x][$y]"
+  ```
+- `subst/a-comment-in-a-current-shell-body` — the sibling hole to `procsub/a-comment-in-the-body`, found by looking for one before writing that fix rather than after: `${ cmd;}` has a body that holds a program too, and the brace scanner had no comment rule either, so the same apostrophe swallowed the rest of the file. The two panel members that have the construct both read the comment and yield `hi`. The other four are the reason the rule cannot be a blanket one — they have no such construct, so `it's` legitimately opens a quote there and they say so, each in its own words and at its own line. Ours: the two dialects with the construct now agree with their shells; the zsh dialect blames the brace where zsh blames the quote and the dash dialect names the line after the last rather than the last, both pre-existing and unchanged by #1397
+  ```sh
+  a=${
+  	# it's a comment
+  	echo hi
+  }
+  printf "[%s]\n" "$a"
+  ```
+- `subst/a-hash-mid-word-in-a-current-shell-body` — the counter-case, and the one that says the comment rule in the brace scanner is positional rather than blanket — `#` is also the strip operator in `${x#a}` and the length operator in `${#x}`, both unanimous across all six, so a scanner that skipped to the newline on every `#` inside braces would break the two commonest expansions in the language. Here it is neither: mid-word in a command body it is an ordinary character and the two shells with the construct print `x#y`
+  ```sh
+  a=${ echo x#y; }; printf "[%s]\n" "$a"
   ```
 - `subst/the-subshell-form-loses-what-it-assigns` — the same script with the older spelling, and unanimous: the assignment is lost. Recorded beside the case above because the pair is the difference — either alone says nothing about which shell the body ran in
   ```sh
@@ -8837,6 +8881,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `unterminated/a-substitution-in-an-expansions-body` | **2>** `<script>: 4: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `}'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<script>:4: closing brace expected` *(status 1)* |
 | `unterminated/a-process-substitution-that-never-closes` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 4: `end of file' unexpected` *(status 3)* | **2>** `<script>:4: parse error near `<(echo hi'` *(status 1)* |
 | `unterminated/an-output-process-substitution-that-never-closes` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 4: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<script>: line 1: unexpected EOF while looking for matching `)'~<script>: line 4: syntax error: unexpected end of file` *(status 2)* | **2>** `<script>: syntax error at line 4: `end of file' unexpected` *(status 3)* | **2>** `<script>:4: parse error near `>(echo hi'` *(status 1)* |
+| `unterminated/a-quote-is-blamed-where-it-opened-or-where-input-ran-out` | `one` **2>** `<script>: 7: Syntax error: Unterminated quoted string` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''` *(status 2)* | `one` **2>** `<script>: line 2: unexpected EOF while looking for matching `''~<script>: line 7: syntax error: unexpected end of file` *(status 2)* | `one` **2>** `<script>: syntax error at line 2: `'' unmatched` *(status 3)* | `one` **2>** `<script>:7: unmatched '` *(status 1)* |
 
 - `unterminated/a-quoted-word-longer-than-the-shell-prints` — the word a construct ran out inside, made long enough to reach the limit the one shell that quotes it back cuts at. Thirty-one bytes against a limit of twenty, so that shell prints twenty and marks them and the other four are unmoved — two of them print the whole word in their own sentence and two name no text at all, which is what says the limit belongs to the rendering of this one dialect's `near` and not to every quoted text. Measured 2026-09-07: the mark is appended at exactly twenty as well, where nothing has been cut, so a row at the boundary is worth more than a row far past it and the unit test carries that one
   ```sh
@@ -8877,6 +8922,14 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   cat >(echo hi
   echo after
+  ```
+- `unterminated/a-quote-is-blamed-where-it-opened-or-where-input-ran-out` — the plainest unterminated quote, written across enough lines that the opener and the end of input are different places — which is the whole question, and the panel splits on it. bash 5.3, the same bash called `sh`, bash 3.2 and ksh93 blame **line 2**, where the quote opened; dash and zsh blame the last line, where the input ran out. So there is no single right location and a dialect that borrowed the other one is wrong for a reader trying to find the cause. This row exists because #1397's user-visible symptom was a location 214 lines from the fault, and it was worth pinning that the location rule itself is sound and only the misparse moved the blame: a fix to the parse that let this drift would put the confusing half of that bug back. `echo one` runs first in every column, which is what says the shells read and refuse rather than refusing before they start. Ours: the four that word it agree with their shells; our ksh dialect accepts the file silently and runs to `one` with a status of 0, which is a separate pre-existing defect and not this one — it does the same on `main`
+  ```sh
+  echo one
+  x='never closed
+  echo two
+  echo three
+  echo four
   ```
 
 ## substitutions

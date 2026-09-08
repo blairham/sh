@@ -121,6 +121,46 @@ func TestAQuoteIsClosedOnlyOnTheRouteTheDialectNames(t *testing.T) {
 	}
 }
 
+// Where the route ends a quote, the construct *around* the quote is the one
+// still open, and it is what a nested refusal names.
+//
+// The rule has four call sites — both quote scanners, the backquote scanner
+// and the scan that steps over a quote while looking for a delimiter — and
+// this is the fourth. It was the one left out, so a quote the route had
+// already ended was still reported, and the enclosing substitution never got
+// to say it was the thing that ran out.
+//
+// Measured 2026-09-07, ksh93u+ 2012-08-01: `ksh -c 'echo $( echo "hi'` and
+// `ksh -c "echo \$(echo 'abc)"` are both “syntax error at line 1: `('
+// unmatched“.
+func TestOnTheLenientRouteTheEnclosingConstructIsWhatRanOut(t *testing.T) {
+	d := Core()
+	d.CloseQuotesAtEOF = RouteFromCommandString
+	d = d.On(RouteFromCommandString)
+	for _, src := range []string{`echo $( echo "hi`, `echo $(echo 'abc)`, `echo "${x:-"$( echo hi`} {
+		_, err := Parse(src, d)
+		var se *Error
+		if !errors.As(err, &se) {
+			t.Errorf("%q: %v, want an unmatched construct", src, err)
+			continue
+		}
+		if se.Token != "$(" {
+			t.Errorf("%q: blamed %q, want the substitution the quote sat in", src, se.Token)
+		}
+	}
+	// And on a route the dialect does not name, the quote is the innermost
+	// thing to run out and is named — which is what says this is the route's
+	// answer and not a scanner that stopped reporting.
+	strict := Core()
+	strict.CloseQuotesAtEOF = RouteFromCommandString
+	strict = strict.On(RouteFromScriptFile)
+	_, err := Parse(`echo $( echo "hi`, strict)
+	var se *Error
+	if !errors.As(err, &se) || se.Token != `"` {
+		t.Errorf("from a file: %v, want the quote named", err)
+	}
+}
+
 // On leaves the language alone and answers only about this program, which is
 // what lets one shell's dialect be shared by every route it is read on.
 func TestOnChangesTheRouteAndNothingElse(t *testing.T) {

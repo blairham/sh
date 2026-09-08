@@ -2343,7 +2343,17 @@ func (l *Lexer) skipQuoted(quote byte, escapes bool) {
 	// what Parser.Open reports — `echo $( echo 'x` is a substitution that is
 	// still open, and the quote inside it is not the thing a continuation
 	// prompt is for. The enclosing scanner records it on its way past.
-	l.failUnmatched(open, string(quote), string(quote), unterminatedQuoteMsg(quote))
+	//
+	// Unless the route ends a quote here, in which case there is nothing
+	// unfinished to report and the enclosing construct is the only thing
+	// still open. The fourth caller of the same rule, and the one that was
+	// left out: measured 2026-09-07, `ksh -c 'echo $( echo "hi'` and
+	// `ksh -c "echo \$(echo 'abc)"` are both ``syntax error at line 1: `('
+	// unmatched`` — the quote is closed and the substitution is what ran
+	// out — where we named the quote (#1424).
+	if !l.closesQuotesAtEOF() {
+		l.failUnmatched(open, string(quote), string(quote), unterminatedQuoteMsg(quote))
+	}
 }
 
 // unterminatedQuoteMsg is the substrate's own sentence for a quote the input

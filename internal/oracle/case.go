@@ -9117,6 +9117,11 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "a string handed to `eval` is a command string wherever it was handed over from: run from a *file*, where ksh93 refuses the same text as the script itself, this one still prints abc. That is what says the split is between a program given as a string and a program read from a stream, rather than between the invocation routes — and `echo after` shows the failure costs the eval and not the script in four of the six",
 	},
 	{
+		ID: "token/a-quote-inside-a-substitution-on-the-lenient-route", SyntaxError: true, Category: "command language",
+		Snippet: "echo $( echo \"hi",
+		Why:     "the nested arrangement on the route where one shell ends a quote at the end of input, which is the pair to `unterminated/a-quote-inside-a-substitution-that-never-closes` — the same text from a file, where every column blames the innermost. Under -c ksh93 blames the `(` instead, and that is a consequence of the flag rather than a second rule: with the quote closed the substitution is the only thing left open. Ours named the quote here, because the scan that steps over one while hunting for a delimiter was the fourth caller of a rule that had three (#1424)",
+	},
+	{
 		ID: "token/an-unterminated-quote-in-a-sourced-file", Category: "command language",
 		Script:  true,
 		Snippet: "printf 'echo \"abc\\n' > q.sh\n. ./q.sh\necho after",

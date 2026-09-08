@@ -112,9 +112,13 @@ func ShellWords(src string, d Dialect, opt ShellSplit) []string {
 		//	a {v}> f    a  {v}  >  f  and neither is a named descriptor
 		//	a 2 > f     a  2   >   f  nor a digit written apart from it
 		//
-		// The last row is already this way here: an IO number is only an IO
-		// number when it is adjacent, so a spaced digit is an ordinary word
-		// and never reaches this.
+		// Two of those rows are already answered before this: an IO number is
+		// only an IO number when it is *adjacent*, so a spaced digit never
+		// reaches here at all, and a dialect that does not take a multi-digit
+		// descriptor reads `22` as an ordinary word rather than as a number.
+		// So the width test is carrying the named descriptor, `{v}>`, and a
+		// multi-digit one wherever a dialect has them — which is why it is a
+		// length and not a `!= "{"`.
 		if n := len(out); n > 0 && t.Kind.IsRedirect() && lastWasOneDigitFd {
 			out[n-1] += w
 			lastWasOneDigitFd = false

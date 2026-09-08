@@ -53,10 +53,26 @@ func TestTheShellSplitFlagSplitsAValueLikeACommandLine(t *testing.T) {
 		{"and unquoted is none", `v=""; set -- ${(Z+n+)v}; printf "n=%d" $#; echo`, "n=0\n"},
 		{"blanks alone are the same", `v="   "; set -- "${(Z+n+)v}"; printf "n=%d" $#; echo`, "n=1\n"},
 		{"so is a value that is only a dropped comment", `v="#only"; set -- "${(Z+Cn+)v}"; printf "n=%d" $#; echo`, "n=1\n"},
+		// The empty field is the *expansion's*, not any one word's: an
+		// element that splits to nothing contributes no field at all, and
+		// only a result with nothing in it anywhere comes to the one.
+		{"an element that splits to nothing is no field", `a=('' x); set -- "${(@Z+n+)a}"; printf "n=%d" $#; printf "[%s]" "$@"; echo`, "n=1[x]\n"},
+		{"an empty array quoted is still one empty field", `a=(); set -- "${(@Z+n+)a}"; printf "n=%d" $#; echo`, "n=1\n"},
+		{"and unquoted it is none", `a=(); set -- ${(Z+n+)a}; printf "n=%d" $#; echo`, "n=0\n"},
+		{"where the same array without the split flag has no field", `a=(); set -- "${(@)a}"; printf "n=%d" $#; echo`, "n=0\n"},
 
 		// Composition, each row placing the split against one other step.
 		{"the length is taken before the split", `v="a b  c"; printf "[%s]" "${(Z+n+)#v}"; echo`, "[6]\n"},
-		{"an array is joined and then split", `a=(x "y z"); printf "[%s]" ${(Z+n+)a}; echo`, "[x][y][z]\n"},
+		// An array is *not* joined first, which is where this split parts
+		// company with `(f)` and `(s)`: each element is read as a command
+		// line of its own, so a quote opened in one does not reach the next.
+		// The quoted rows are the same array under the join that quoting
+		// itself asks for, and the `@` row is that join declined again.
+		{"an array is split element by element", `a=('"x' 'y"'); printf "[%s]" ${(Z+n+)a}; echo`, `["x][y"]` + "\n"},
+		{"quoted the array joins before the split", `a=('"x' 'y"'); printf "[%s]" "${(Z+n+)a}"; echo`, `["x y"]` + "\n"},
+		{"and the fields flag declines that join", `a=('"x' 'y"'); printf "[%s]" "${(@Z+n+)a}"; echo`, `["x][y"]` + "\n"},
+		{"where a separator split does join first", `a=("a:b" "c:d"); printf "[%s]" ${(s.:.)a}; echo`, "[a][b c][d]\n"},
+		{"an array of ordinary words", `a=(x "y z"); printf "[%s]" ${(Z+n+)a}; echo`, "[x][y][z]\n"},
 		{"the quoting flag runs first", `v="a|b"; printf "[%s]" "${(Z+n+q)v}"; echo`, `[a\|b]` + "\n"},
 		{"and the unquoting flag does too", `v="'a|b'"; printf "[%s]" "${(Z+n+Q)v}"; echo`, "[a][|][b]\n"},
 		{"the ordering flag runs after", `v="b  a"; printf "[%s]" "${(oZ+n+)v}"; echo`, "[a][b]\n"},

@@ -231,6 +231,14 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	hasSplit := strings.ContainsAny(e.Flags, "fs") || ifsSplit
 	// Rule 10: forced joining, ahead of a split — `${(s.:.)a}` on an array
 	// joins its elements with IFS's first character and splits the result.
+	// `Z` is deliberately absent from this condition, and that is measured
+	// rather than an oversight: an unquoted `${(Z+n+)a}` over the array
+	// `('"x' 'y"')` is two fields there, the elements read as command lines
+	// one at a time, where `${(s.:.)a}` over the same array is the single
+	// field `"x y` — joined first, exactly as this rule says. So the two
+	// splits differ here, and only the *quoted* join at rule 5 reaches `Z`,
+	// which is why `"${(Z+n+)a}"` on that array is one field and
+	// `"${(@Z+n+)a}"`, whose `@` skips that join, is two again.
 	if (strings.ContainsRune(e.Flags, 'j') || hasSplit) && !joined && isList && !markJoin {
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
 		isList = false
@@ -323,11 +331,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// same day: `${(fZ+n+)v}` on `a:b\nc` is `a:b` and `c`, each line then
 	// read as a command line of its own.
 	if opts, ok := shellSplitOpts(e); ok {
-		split := make([]string, 0, len(words))
-		for _, w := range words {
-			split = append(split, r.splitShellWords(w, opts)...)
-		}
-		words, isList = split, true
+		words, isList = r.splitShellWordsAll(words, opts), true
 	}
 
 	// The ordering step is last of all, which is *later* than the rule

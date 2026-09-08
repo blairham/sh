@@ -64,6 +64,11 @@ func TestShellWordsSplitsAValueTheWayTheShellWouldSplitALine(t *testing.T) {
 		{"a one-digit descriptor joins its operator", "a 2>&1", ShellSplit{}, []string{"a", "2>&", "1"}},
 		{"two digits do not", "a 22>&1", ShellSplit{}, []string{"a", "22", ">&", "1"}},
 		{"nor a digit written apart", "a 2 > f", ShellSplit{}, []string{"a", "2", ">", "f"}},
+		// A named descriptor is the row the width test rests on: two digits
+		// are not an IO number in this lexer at all — `22>&1` is an ordinary
+		// word and an operator, which is already what the shell answers —
+		// but `{v}>` *is* one, and it must not join either.
+		{"nor a named descriptor", "a {v}> f", ShellSplit{}, []string{"a", "{v}", ">", "f"}},
 
 		// A here-document operator is an operator. Nothing reads a body:
 		// what follows is more of the same value.

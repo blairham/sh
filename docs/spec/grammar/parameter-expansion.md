@@ -1325,6 +1325,25 @@ So it runs after the quoting flags and before the ordering step. `(f)` and
 read as a command line of its own — and a length is still taken before it,
 so `${(Z+n+)#v}` on `a b  c` is 6 and not 3.
 
+**An array is not joined before it**, which is where it parts company with
+every other split flag. Measured with `a=('"x' 'y"')`:
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `${(Z+n+)a}` | `"x` `y"` — each element read on its own |
+| `"${(Z+n+)a}"` | `"x y"` — the join quoting itself asks for |
+| `"${(@Z+n+)a}"` | `"x` `y"` — that join declined again |
+| `${(s.:.)b}` on `("p:q" "r:s")` | `p` `q r` `s` — joined first |
+
+So only the *quoted* join reaches it, and the forced join a split normally
+asks for does not.
+
+**The empty field belongs to the expansion, not to any word in it.** An
+element with no shell words in it contributes none — `a=('' x)` under
+`"${(@Z+n+)a}"` is the single field `x` — while a result with nothing in it
+anywhere is one empty field: `a=()` under the same spelling is 1, where
+`"${(@)a}"` on that array is 0.
+
 **The split is `syntax.Lexer` and nothing else.** "Split like the shell
 would" already has an answer in this tree, and a second scanner beside it
 would agree on `a b` and part company over `a"b c"d`, `$(f x)`, `a#b` and
@@ -1336,7 +1355,11 @@ parentheses already stripped.
 One boundary is spelled back rather than reported: a **one-digit** file
 descriptor joins the redirection operator it was written against, so
 `2>&1` is `2>&` and `1`. Measured, and one digit only — `22>&1` is `22`,
-`>&`, `1`, and `{v}> f` is `{v}`, `>`, `f`.
+`>&`, `1`, and `{v}> f` is `{v}`, `>`, `f`. Two of those three are already
+answered before the rule: an IO number is only one when it is *adjacent*,
+so a spaced digit never reaches it, and a dialect without multi-digit
+descriptors reads `22` as an ordinary word. The width test is carrying the
+named descriptor and a multi-digit one wherever a dialect has them.
 
 **One measured divergence remains.** A `(` that *starts* a token belongs to
 the word when it stands where an argument may — `a (b c) d` is three words

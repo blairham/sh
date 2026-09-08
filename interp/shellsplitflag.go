@@ -70,20 +70,38 @@ func shellSplitActive(e *syntax.ParamExpr) bool {
 // measured, `$'a\n\n\nb'` is five words and the three middle ones are each a
 // single `;`.
 //
-// A value that is nothing but blanks — or nothing but a comment that `C`
-// dropped — yields one empty word rather than none, which is the same rule
-// splitFlagged follows for an empty value and is measured the same way:
-// `v=""; set -- "${(Z+n+)v}"` is one parameter and the unquoted spelling is
-// none, the empty field being dropped at the edge rather than never made.
+// A word with no shell words in it — blanks, or a comment that `C` dropped —
+// contributes *no* field, and the one empty field a wholly empty result comes
+// to is added once at the end rather than once per word. The difference is
+// visible and is measured: with `a=(” x)`, `"${(@Z+n+)a}"` is the single
+// field `x` on the shell that has the flag, where a per-word empty would make
+// it two — and `v=""; set -- "${(Z+n+)v}"` is still one parameter, the
+// unquoted spelling none, the empty field being dropped at the edge rather
+// than never made. See splitShellWordsAll.
 func (r *Runner) splitShellWords(w string, opts string) []string {
-	words := syntax.ShellWords(w, r.dialect(), syntax.ShellSplit{
+	return syntax.ShellWords(w, r.dialect(), syntax.ShellSplit{
 		Comments:       shellSplitComments(opts),
 		NewlineIsBlank: strings.ContainsRune(opts, 'n'),
 	})
-	if len(words) == 0 {
+}
+
+// splitShellWordsAll is the `Z` split over every word the pipeline has so far.
+//
+// The empty result is the whole of why this is a function rather than a loop
+// at the call site: nothing at all becomes one empty field, and that is a
+// statement about the *expansion* and not about any one word in it. Measured
+// on zsh 5.9.2 — `a=(); set -- "${(@Z+n+)a}"` is one parameter and
+// `"${(@)a}"` on the same array is none, so the split is what makes the
+// field rather than the array having had one.
+func (r *Runner) splitShellWordsAll(words []string, opts string) []string {
+	split := make([]string, 0, len(words))
+	for _, w := range words {
+		split = append(split, r.splitShellWords(w, opts)...)
+	}
+	if len(split) == 0 {
 		return []string{""}
 	}
-	return words
+	return split
 }
 
 // shellSplitComments turns the option letters into the lexer's comment rule.

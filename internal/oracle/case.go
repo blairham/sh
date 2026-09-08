@@ -6732,6 +6732,16 @@ echo "st=$?"`,
 		Why:     "an empty option list turns the flag off rather than splitting with no options set, which is the opposite of the reading the flag's name invites: the value comes back with both its blanks where the same value with one option is two words. The row exists because `${(Z::)v}` is the shape a script writes when it means `(z)`, and answering it as a split would be a plausible wrong answer at status 0",
 	},
 	{
+		ID: "param/the-shell-split-flag-does-not-join-an-array-first", Category: "parameter expansion",
+		Snippet: `a=('"x' 'y"'); printf "[%s]" ${(Z+n+)a}; printf "<%s>" "${(Z+n+)a}"; b=("p:q" "r:s"); printf "{%s}" ${(s.:.)b}; echo`,
+		Why:     "where this split parts company with every other one: an array is *not* joined before it, so each element is read as a command line of its own and a quote opened in one does not reach the next — two fields where a join would give one. The quoted spelling is the same array under the join that quoting itself asks for, which is the half that says the join exists and is simply not this rule's. The `(s)` row is the contrast, on data whose join is visible: joined first and then split, so the middle field spans two elements",
+	},
+	{
+		ID: "param/the-shell-split-flag-drops-an-element-that-splits-to-nothing", Category: "parameter expansion",
+		Snippet: `a=('' x); set -- "${(@Z+n+)a}"; echo "empty-element=$#"; b=(); set -- "${(@Z+n+)b}"; echo "empty-array=$#"; set -- "${(@)b}"; echo "no-flag=$#"`,
+		Why:     "the empty field belongs to the whole expansion rather than to any one word in it: an element with no shell words in it contributes none, so the array `('' x)` is one field and not two, while an array with nothing in it at all is one empty field — which the same array without the split flag is not. The three counts are on one line because each is defensible alone and only the set of them says which rule is running",
+	},
+	{
 		ID: "param/the-shell-split-flag-refuses-an-option-by-position", Category: "parameter expansion",
 		Snippet: `v="a b"; printf "[%s]" ${(Z:x:)v}; echo "st=$?"`,
 		Why:     "an option letter the flag does not have is an error *in the flags*, at the letter's own position, rather than the by-name refusal an unbuilt flag letter gets — two different complaints, and a reader has to be able to tell which one they got. Only `c`, `C` and `n` exist, established by trying the whole alphabet one letter at a time",

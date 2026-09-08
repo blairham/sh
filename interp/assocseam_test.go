@@ -351,3 +351,112 @@ func TestRemoveFunctionWillNotTakeAPreludeFunction(t *testing.T) {
 		t.Errorf("after the refused removal = %q, want the prelude's function still callable", out.String())
 	}
 }
+
+// A produced association may answer only *some* of the keys its name is asked
+// for, and the ones it has no answer for refuse by name rather than reading
+// empty.
+//
+// The parameter half of this rule is SetAbsentParameter and the shape is the
+// same one level down, for a reason that is about the caller and not about how
+// far along an implementation is: the thing being viewed can legitimately have
+// nothing under a key, so an empty string is a plausible answer to a different
+// question and reaches a script as data. A name is refused for having no
+// answer; there is no way for the caller to read that as "the thing has
+// nothing there".
+//
+// Asserted with a read *after* the refusal, because the refusal is fatal to
+// the expansion and the command it was for: a mechanism that wrote the
+// sentence and carried on would print the second `printf` and pass a test
+// that only compared the diagnostic.
+func TestAKeyAProducedAssociationDoesNotAnswerRefusesByName(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	r.SetDynamicAssoc("partial", func(*Runner) AssocArray { return AssocArray{"here": "yes"} })
+	r.SetAbsentElements("partial", "no answer for that one")
+	runSeam(t, r, `printf '[%s]' "${partial[here]}"
+printf '[%s]' "${partial[nowhere]}"
+printf '[%s]' "after"`)
+	if got, want := out.String(), "[yes]"; got != want {
+		t.Errorf("output = %q, want %q — the refused expansion's command must not run, and neither must the one after it", got, want)
+	}
+	if got, want := errs.String(), "testsh:2: partial[nowhere]: no answer for that one\n"; got != want {
+		t.Errorf("diagnostic = %q, want %q", got, want)
+	}
+}
+
+// The three exemptions, and each is a question rather than a read.
+//
+// The four conditional operators are a script saying what to use when the key
+// is not there, and the set test asks whether it is there at all — so all five
+// are answered, at status 0, with nothing written. A guard that stopped the
+// shell would be worse than no guard: every caller that checks before reading
+// would stop at the check.
+func TestAskingAboutAKeyAProducedAssociationLacksIsAnswered(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	r.SetDynamicAssoc("partial", func(*Runner) AssocArray { return AssocArray{"here": "yes"} })
+	r.SetAbsentElements("partial", "no answer for that one")
+	// The set test needs the grammar that has it, which is one dialect's —
+	// named as a flag rather than as a shell, which is the rule for a test in
+	// this package.
+	d := syntax.Core()
+	d.ParamSetTestFlag = true
+	f, err := syntax.Parse(`printf '[%s][%s][%s][%s][%s][%s]' "${partial[nowhere]-d}" "${partial[nowhere]:-d}" `+
+		`"${partial[nowhere]+p}" "${partial[here]+p}" "${+partial[nowhere]}" "${+partial[here]}"`+"\n", d)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got, want := out.String(), "[d][d][][p][0][1]"; got != want {
+		t.Errorf("asking about a key = %q, want %q", got, want)
+	}
+	if errs.String() != "" {
+		t.Errorf("asking about a key wrote %q, want silence", errs.String())
+	}
+}
+
+// The whole table is neither refused nor emptied by the rule: no key was
+// named, so there is no key to refuse.
+//
+// Three spellings, because the whole-array subscript is decided on the
+// subscript as written and the refusal is placed where a *key* is known — so
+// each of these could have reached it with `@`, `*` or the empty string
+// standing in for one.
+func TestTheWholeOfAPartialAssociationIsStillReadable(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	r.SetDynamicAssoc("partial", func(*Runner) AssocArray { return AssocArray{"here": "yes"} })
+	r.SetAbsentElements("partial", "no answer for that one")
+	runSeam(t, r, `printf '[%s]' "${partial[@]}" "${partial[*]}" "${#partial[@]}"`+"\n")
+	if got, want := out.String(), "[yes][yes][1]"; got != want {
+		t.Errorf("the whole table = %q, want %q", got, want)
+	}
+	if errs.String() != "" {
+		t.Errorf("reading the whole table wrote %q, want silence", errs.String())
+	}
+}
+
+// A name with no absent-elements reason registered is untouched by any of
+// this: a key it has no value for reads as nothing, at status 0, and the
+// command runs.
+//
+// The control this pair of mechanisms needs. Every other test here registers
+// the reason, so a refusal that fired for *every* produced association would
+// pass all of them.
+func TestAProducedAssociationWithoutTheReasonStillReadsEmpty(t *testing.T) {
+	var out, errs strings.Builder
+	r := seamRunner(t, &out, &errs)
+	r.SetDynamicAssoc("plain", func(*Runner) AssocArray { return AssocArray{"here": "yes"} })
+	runSeam(t, r, `printf '[%s]' "${plain[nowhere]}"; printf '[%s]' "after"`+"\n")
+	if got, want := out.String(), "[][after]"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+	if errs.String() != "" {
+		t.Errorf("a produced association with no reason registered wrote %q, want silence", errs.String())
+	}
+	if reason, ok := r.AbsentElements("plain"); ok {
+		t.Errorf("AbsentElements(plain) = %q, true; want nothing registered", reason)
+	}
+}

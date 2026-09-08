@@ -50,25 +50,31 @@ print -r -- "both=$?"`)
 // the _regex_arguments function" — so it is not a thing that can be learned by
 // running it.
 //
-// `zsh/terminfo` is one builtin and one parameter, and this shell has neither.
-// It refuses, and it names **`terminfo` alone**: the parameter, not `echoti`
-// beside it. `terminfo` is absent in the sense that has no call site — nothing
-// is registered for it, so `${terminfo[colors]}` would read empty at status 0
+// `zsh/system` is six builtins, a function and two parameters. It refuses,
+// and it names **`systell`, `errnos` and `sysparams`**: the function and the
+// two parameters, and not one of the six builtins beside them. Those two
+// parameters are absent in the sense that has no call site — nothing is
+// registered for either, so `${sysparams[pid]}` would read empty at status 0
 // and reach a caller as data rather than as a diagnostic. That is the failure
 // this builtin was written to prevent, and the one case still left in the rule
 // after #1146: a parameter that *does* refuse by name no longer holds
 // anything, which the `zsh/parameter` test below is the other side of.
+//
+// It was `zsh/terminfo` here until #1388, which is the gate opening by itself
+// exactly as the file above says it would: the two capability parameters
+// arrived, nothing in zmodload.go changed, and both modules started loading.
 func TestAMissingBuiltinDoesNotHoldAModuleShutAndAMissingParameterDoes(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil 2>&1
 print -r -- "zutil=$?"
 zregexparse a b c 2>&1
 print -r -- "call=$?"
-zmodload zsh/terminfo 2>&1
-print -r -- "terminfo=$?"`)
+zmodload zsh/system 2>&1
+print -r -- "system=$?"`)
 	want := "zutil=0\n" +
 		"zsh:3: command not found: zregexparse\ncall=127\n" +
-		"zsh:5: failed to load module `zsh/terminfo': terminfo is not implemented yet\n" +
-		"terminfo=1\n"
+		"zsh:5: failed to load module `zsh/system': " +
+		"systell, errnos and sysparams are not implemented yet\n" +
+		"system=1\n"
 	if out != want || st != 0 {
 		t.Errorf("the two halves of the rule = %q (status %d), want %q", out, st, want)
 	}
@@ -141,7 +147,7 @@ print -r -- "opt=$?"`)
 // silenced and the status is still 1. A shell that answered 0 here sends a
 // plugin manager on to call a builtin the module was supposed to bring.
 func TestZmodloadDashSIsSilentAndStillFails(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `zmodload -s zsh/terminfo 2>&1
+	out, st := runZsh(t, t.TempDir(), `zmodload -s zsh/system 2>&1
 print -r -- "st=$?"`)
 	want := "st=1\n"
 	if out != want || st != 0 {
@@ -156,13 +162,13 @@ print -r -- "st=$?"`)
 // was already loaded cannot show it at all, because becoming loaded twice
 // looks the same as not being reached.
 func TestZmodloadAttemptsEveryModuleNamed(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `zmodload zsh/nosuchmodule zsh/terminfo zsh/main 2>&1
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/nosuchmodule zsh/system zsh/main 2>&1
 print -r -- "st=$?"
 zmodload -e zsh/main
 print -r -- "main-still=$?"`)
 	want := "zsh:1: failed to load module `zsh/nosuchmodule': not implemented yet\n" +
-		"zsh:1: failed to load module `zsh/terminfo': " +
-		"terminfo is not implemented yet\n" +
+		"zsh:1: failed to load module `zsh/system': " +
+		"systell, errnos and sysparams are not implemented yet\n" +
 		"st=1\nmain-still=0\n"
 	if out != want || st != 0 {
 		t.Errorf("three modules = %q (status %d), want %q", out, st, want)
@@ -234,13 +240,14 @@ print -r -- "X=$?"`)
 // `command not found: zmodload`, which is not something that script can act
 // on at all.
 //
-// `zsh/terminfo` rather than `zsh/zutil` or `zsh/parameter`, because both of
-// those load now — the plugin manager's lines 231 and 232 go through, and the
-// line after them is `zmodload zsh/terminfo 2>/dev/null`, written with exactly
-// this shape by a file that expects it to fail on plenty of real terminals.
+// `zsh/system` rather than `zsh/zutil` or `zsh/parameter`, because both of
+// those load now — the plugin manager's lines 231 and 232 go through — and no
+// longer `zsh/terminfo`, which loads since #1388. `zmodload zsh/zpty
+// zsh/system 2>/dev/null` is a line that file really writes, in this shape,
+// by a script that expects the module to be missing on plenty of machines.
 func TestZmodloadRefusalReachesTheScriptsOwnBranch(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
-		`zmodload zsh/terminfo 2>/dev/null || { print -r -- "aborting"; }
+		`zmodload zsh/system 2>/dev/null || { print -r -- "aborting"; }
 print -r -- "st=$?"`)
 	want := "aborting\nst=0\n"
 	if out != want || st != 0 {

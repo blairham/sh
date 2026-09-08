@@ -105,3 +105,86 @@ func (r *Runner) refuseAbsentParameter(e *syntax.ParamExpr) bool {
 	r.fatalExpansion("%s: %s\n", e.Name, reason)
 	return true
 }
+
+// An **absent element** is a key a produced association is asked for and
+// whose producer has no answer. Reading it refuses by name; it never reads as
+// empty.
+//
+// The same rule as an absent parameter, one level down, and it exists because
+// a *partial* table is a shape the parameter half cannot describe. A name is
+// either registered as produced or registered as absent, and a view that
+// answers thirteen of the keys a script asks it for is both: the parameter is
+// there, `${+name}` is 1, and a key it has no answer for is a hole in the
+// middle of something that exists.
+//
+// An empty string is the wrong thing to put in that hole, and this is the one
+// place where that is not a matter of taste. The thing being viewed can
+// legitimately have nothing under a key — measured, real zsh's
+// `$terminfo[colors]` is *absent* under `TERM=dumb`, because that terminal
+// has no colors — so a caller reading empty cannot tell "the terminal lacks
+// it" from "this shell never knew". #1388 is that confusion one layer up: a
+// plugin manager's whole color table sits behind `-n ${terminfo[colors]}`,
+// and the parameter being missing altogether read to it as a terminal with no
+// colors, so every message it printed came out as raw markup. Answering the
+// same shape from inside the parameter would have reproduced the bug with the
+// parameter present, which is worse than the absence — the absence at least
+// makes `${+terminfo}` say no.
+//
+// The three exemptions are the parameter half's, for the parameter half's
+// reasons, and the third is new because a subscript has a spelling for the
+// question that a bare name does not:
+//
+//   - **The four conditional operators.** `${terminfo[cnorm]-}` is a script
+//     saying what to use when the key is not there, and it gets it.
+//   - **A key the producer answers.** Refused only where there is no value,
+//     so a table's own keys never reach this.
+//   - **`${+terminfo[cnorm]}`.** The set test is the guard a well-written
+//     script writes in front of the read — measured across a real plugin
+//     tree, `$+terminfo[…]` is the *commonest* way these keys are touched —
+//     and it is answered rather than refused because 0 is a true answer to
+//     the question it asks. A guard that stops the shell is not a guard.
+
+// SetAbsentElements records that a produced association answers only the keys
+// its producer holds, and says what a read of any other key is told. The
+// reason is a sentence fragment: it follows `name[key]` and a colon.
+func (r *Runner) SetAbsentElements(name, reason string) {
+	if r.absentElements == nil {
+		r.absentElements = map[string]string{}
+	}
+	r.absentElements[name] = reason
+}
+
+// AbsentElements reports whether a name is a produced association that
+// refuses the keys it has no answer for, and what it says.
+func (r *Runner) AbsentElements(name string) (string, bool) {
+	reason, ok := r.absentElements[name]
+	return reason, ok
+}
+
+// refuseAbsentElement is the read: it reports whether an expansion asked a
+// partial association for a key it does not answer, and refuses it if so.
+//
+// Asked from assocSubscript rather than from the two word paths, which is the
+// opposite of where refuseAbsentParameter goes and for a reason that only
+// applies here: the key has to be *expanded* to be known, and expanding a
+// subscript twice runs whatever is in it twice. assocSubscript is the one
+// place every element read converges on with the key already in hand, so
+// there is nowhere for a route to slip past.
+func (r *Runner) refuseAbsentElement(e *syntax.ParamExpr, key string) bool {
+	if e == nil {
+		return false
+	}
+	reason, ok := r.absentElements[e.Name]
+	if !ok {
+		return false
+	}
+	switch e.Op {
+	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamAlternate, syntax.ParamError:
+		return false
+	}
+	if e.SetTest {
+		return false
+	}
+	r.fatalExpansion("%s[%s]: %s\n", e.Name, key, reason)
+	return true
+}

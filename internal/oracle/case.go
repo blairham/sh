@@ -11418,6 +11418,54 @@ echo "read=[$l]"`,
 		Snippet: `zmodload zsh/parameter 2>/dev/null; echo "n=${#jobstates} one=[${jobstates[x]}]"; echo "after=$?"`,
 		Why:     "**a recorded divergence, and the one this module's rule turns on.** zsh has the parameter and writes `n=0 one=[]`, which is the truth there — no jobs. This shell has not got it, and answering the same `0` would hand a caller an empty value for a question nobody answered, at status 0, in the spelling a plugin manager writes most (`${p[k]}` reaches no unset check at all). So it refuses by name at the expansion instead, and the row records the difference rather than leaving it to be discovered",
 	},
+	// `zsh/terminfo` and `zsh/termcap`: the terminal's capabilities as two
+	// associations (#1388). What this shell can honestly say about one is a
+	// fixed table of thirteen — see repl/terminfo.go — where real zsh reads
+	// the terminfo database, so the rows below split three ways and the split
+	// is the point. Some agree exactly, one records a deliberate refusal, and
+	// one records the `$TERM` the harness holds fixed changing zsh's answer
+	// and not ours.
+	//
+	// The harness runs every case under `TERM=dumb`, which is the strongest
+	// possible held variable for this question: real zsh's table there is 50
+	// keys with **no `colors` at all**. So a case about the capability a
+	// plugin manager reads has to say `TERM=xterm-256color` to be asking
+	// anything, and the row that leaves it alone is asking about `dumb`.
+	{
+		ID: "terminfo/the-color-test-a-plugin-manager-builds-its-table-behind", Category: "variables",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `if [[ ( ${+terminfo} -eq 1 && -n ${terminfo[colors]} ) || ( ${+termcap} -eq 1 && -n ${termcap[Co]} ) ]]; then echo built; else echo "unbuilt +ti=${+terminfo} +tc=${+termcap}"; fi; if [[ ( ${+terminfo} -eq 1 && ${terminfo[colors]} -ge 256 ) || ( ${+termcap} -eq 1 && ${termcap[Co]} -ge 256 ) ]]; then echo 256-branch; fi`,
+		Why:     "#1388, written as the file it comes from writes it. Both halves have to hold and they are different questions: `${+terminfo}` is 1 because the parameter exists, and `-n ${terminfo[colors]}` because the count is answered. With the parameters absent the test was false, a plugin manager's whole color table was never filled in, and every message it printed came out as its own markup — `{error}Error{ehi}:{rst} …` — which #1369 recorded as an arithmetic bug's doing. Nobody else in the panel has either parameter, so the five other columns are what a shell without the module says. The condition is the file's, character for character; the `then`/`fi` around it is not — that file writes zsh's brace form, which is a parse question of its own and would make this row about two things",
+	},
+	{
+		ID: "terminfo/a-capability-under-both-of-its-names", Category: "variables",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `echo "ed=[${terminfo[ed]//$'\e'/ESC}] cd=[${termcap[cd]//$'\e'/ESC}] cuu=[${terminfo[cuu]//$'\e'/ESC}] UP=[${termcap[UP]//$'\e'/ESC}] ku=[${termcap[ku]//$'\e'/ESC}]"`,
+		Why:     "one set of facts under two name systems, and the row that says they are one set: `ed` and `cd` are the same bytes, and so are `cuu` and `UP`. The parameterized form keeps terminfo's own `%p1%d` language in both, which is measured rather than tidied — zsh's `$termcap` hands out terminfo's spelling too, so a second rendering would have been this table's invention. ESC is written out because a golden record full of raw escapes is unreadable",
+	},
+	{
+		ID: "terminfo/a-capability-this-shell-does-not-answer", Category: "variables",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `echo "one=[${terminfo[cnorm]}]"; echo "after=$?"`,
+		Why:     "**a recorded divergence, and the same one `$jobstates` above records.** zsh reads the database and answers the show-cursor sequence. This shell answers thirteen capabilities and refuses the rest by name at the expansion, because the alternative is the shape #1388 was: an empty string is also what zsh gives for a capability the *terminal* genuinely lacks — measured, `${+terminfo[colors]}` there is 0 under `TERM=dumb` — so a caller reading empty cannot tell a terminal without the capability from a shell that never knew it. `cnorm` is the name because it is one a real prompt reads and one whose value is not the same in every terminal description — the xterm family and the screen family spell showing the cursor again differently, which is the second of the two tests repl/terminfo.go applies",
+	},
+	{
+		ID: "terminfo/asking-whether-a-capability-is-there", Category: "variables",
+		Snippet: `echo "set=${+terminfo[cnorm]} colon=[${terminfo[cnorm]:-none}] dash=[${terminfo[cnorm]-none}] plus=[${terminfo[cnorm]+yes}]"; echo "after=$?"`,
+		Why:     "the exemption that keeps the row above from being worse than the gap, and the one place `TERM=dumb` is the right variable to hold: neither shell has `cnorm` under it, so the two agree exactly. A guard that stops the shell is not a guard — swept across a real plugin tree, `$+terminfo[…]` is the commonest way these keys are touched, and a well-written prompt reads `cnorm` only after `(( $+terminfo[civis] && $+terminfo[cnorm] ))` has said there is something to read. So the set test answers 0 and the four conditional operators supply the script's own answer, all at status 0",
+	},
+	{
+		ID: "terminfo/both-parameters-are-readonly", Category: "variables",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `terminfo[colors]=9; echo "unreached=$?"`,
+		Why:     "zsh's own answer, measured: `read-only variable: terminfo`, and fatal — the `echo` after it never runs in either shell. Readonly rather than given a writer because a produced association with neither would take the assignment into a stored table, and a stored table is what a later read finds first, so one write would turn the view into a snapshot that never says it stopped tracking",
+	},
+	{
+		ID: "terminfo/the-two-modules-load", Category: "variables",
+		Env:     []string{"TERM=xterm-256color"},
+		Snippet: `zmodload zsh/terminfo; echo "ti=$?"; zmodload zsh/termcap; echo "tc=$?"; echoti smcup 2>&1 >/dev/null; echo "echoti=$?"`,
+		Why:     "the module rule in zmodload.go opening by itself: each module names one builtin and one parameter, the parameters arrived, and nothing in the loader changed. The builtin is still missing and that is the rule rather than an inconsistency — `command not found: echoti` on the line that ran it is loud, names itself, and is where a person would look anyway, so it never holds a module shut. zsh answers 0 to all three of the first questions and has `echoti`, which is the one word of the row that differs. `echoti`'s own output goes to /dev/null and its diagnostic does not: zsh has the builtin, so the row would otherwise record a real switch to the alternate screen into the golden file",
+	},
 	// The length of a one-element array, which is where `${#functions}` with
 	// one function defined lands and where this implementation was wrong.
 	{

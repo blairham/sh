@@ -672,11 +672,32 @@ func colorIndex(arg string) (int, bool) {
 		return colorNamed(arg)
 	}
 	n, ok := decimalAtTheFront(arg)
-	if !ok || n < 0 || n > 255 {
+	if !ok || n < 0 || n >= TerminalColors {
 		return 0, false
 	}
 	return n, true
 }
+
+// TerminalColors is how many colors this shell's own color codes can name:
+// the indices 0 to 255, which colorIndex above accepts and colorSequence
+// paints.
+//
+// Exported because it is the answer to a question a script can ask directly.
+// `$terminfo[colors]` and `$termcap[Co]` are that question — a prompt reads
+// one of them and picks a palette by it — and the count they report has to be
+// the count this shell will actually paint, or a theme takes the 256-color
+// branch on a shell whose `%F{200}` draws the default. One constant, read by
+// the renderer and by the capability alike, rather than a second `256`
+// somewhere that agrees today.
+//
+// It is deliberately **not** the terminal's own count, and the note above
+// colorSequence is where that choice is recorded: measured, real zsh answers
+// 8 under `TERM=xterm` and nothing at all under `TERM=dumb`, because it reads
+// terminfo. This shell paints the 256-color sequences under every TERM
+// including `dumb`, so 256 is what it has to report — the number is a fact
+// about this shell, arrived at honestly, rather than a claim about the
+// screen.
+const TerminalColors = 256
 
 // colorNamed matches a run of letters against the eight names by prefix, the
 // first in the terminal's own numbering winning an ambiguous one.

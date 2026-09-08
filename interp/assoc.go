@@ -159,8 +159,16 @@ func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 		// an empty indexed array gives.
 		return a.values()
 	}
-	if v, ok := a[r.assocKey(e.Subscript())]; ok {
+	key := r.assocKey(e.Subscript())
+	if v, ok := a[key]; ok {
 		return []string{v}
+	}
+	if r.refuseAbsentElement(e, key) {
+		// A produced association that answers only some of the keys its name
+		// is asked for, asked for one of the others. Refused by name here
+		// rather than at either word path, because this is where the key is
+		// known — see absentparam.go.
+		return nil
 	}
 	// nil says the element was not there, exactly as the indexed path does: a
 	// value of "" is set and `${m[k]:-d}` has to tell the two apart.

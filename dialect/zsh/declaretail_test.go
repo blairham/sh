@@ -171,7 +171,7 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // The bare `export` and `readonly` drop the command word, which their own
 // `-p` does not — and this shell's `readonly -p` is not even `readonly`.
 //
-// **Seven produced parameters are in both readonly listings and carry no
+// **Ten produced parameters are in both readonly listings and carry no
 // value in either**, which is measured rather than an artifact: each is a
 // readonly parameter this shell *produces*, and each is readonly in zsh too —
 // `set` there writes the bare name and `typeset -r` writes the bare name,
@@ -197,16 +197,28 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // or float attribute here to show. Recorded rather than pinned: it is a
 // letter in a listing of a hidden name, and the alternative is an attribute
 // seam nothing else wants.
+//
+// Two more are `$terminfo` and `$termcap` (#1388), readonly in zsh —
+// measured, `terminfo[colors]=9` there is `read-only variable: terminfo` and
+// `typeset -p terminfo` is `typeset -Ar terminfo`. **When** zsh marks them is
+// the one thing that differs and it is recorded rather than matched: there
+// they are autoloaded, so `${+terminfo}` is 1 from the start and the readonly
+// association only exists after `zmodload zsh/terminfo`, where here the view
+// is registered when the dialect is built. That is the same call
+// `zsh/datetime`'s three and `zsh/sched`'s one above already make, so this
+// listing carries all ten where a fresh real zsh carries none of them and a
+// fully loaded one carries every one.
 func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
 		`export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
 	want := "V='a b'\nEPOCHREALTIME\nEPOCHSECONDS\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
-		"zsh_scheduled_events\n" +
+		"termcap\nterminfo\nzsh_scheduled_events\n" +
 		"export V='a b'\n" +
 		"typeset -r EPOCHREALTIME\ntypeset -r EPOCHSECONDS\ntypeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
 		"typeset -r dis_patchars\ntypeset -r dis_reswords\ntypeset -r epochtime\n" +
+		"typeset -Ar termcap\ntypeset -Ar terminfo\n" +
 		"typeset -r zsh_scheduled_events\n"
 	if st != 0 || out != want {
 		t.Errorf("got %q status %d, want %q at 0", out, st, want)

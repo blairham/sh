@@ -224,6 +224,23 @@ type ParamExpr struct {
 	// what a reading should use.
 	IndexFlags *SubscriptFlags
 
+	// Leading holds the subscripts written *before* Index, in written order,
+	// where the grammar lets several be chained: `${m[k][2]}` carries `k`
+	// here and `2` in Index.
+	//
+	// Index is the last one and not the first, which looks backwards and is
+	// the whole point. Every question anything asks about a subscripted
+	// expansion — whether it is the whole array, whether it is a range, how
+	// many fields it makes, whether `${#…}` is a count or a width — is a
+	// question about the *final* subscript, because that is the one whose
+	// result the expansion is. The leading ones only say what it is read
+	// against. Keeping the final one where a single subscript has always
+	// lived means every one of those readings answers a chain correctly
+	// without being told chains exist; putting the first one there would
+	// have needed each of them found and changed, and the one that was
+	// missed would have answered a plausible value.
+	Leading []LeadingIndex
+
 	// TildeFlags is how many `~` characters were written between the `${`
 	// and the rest of the expansion — `${~x}` carries 1 and `${~~x}` carries
 	// 2. Zero is the ordinary expansion.
@@ -461,20 +478,41 @@ scan:
 	// says the grammar cannot read what the grammar plainly can.
 	if p.dialect.ArraySubscript && strings.HasPrefix(s, "[") &&
 		(e.Inner != nil || p.subscriptableName(e.Name)) {
-		if i := closingBracket(s); i > 0 {
+		// A loop rather than one read, because a grammar with
+		// ChainedSubscript writes several: `${m[k][2]}` is the value under
+		// `k` and then the second character of it. Without the flag the loop
+		// runs once and the second bracket is left unconsumed, which is what
+		// makes the whole expansion a bad substitution in the four grammars
+		// that call it one.
+		for strings.HasPrefix(s, "[") {
+			i := closingBracket(s)
+			if i <= 0 {
+				break
+			}
 			inner := s[1:i]
-			e.Index = p.wordFrom(inner, start, Unquoted)
+			idx := p.wordFrom(inner, start, Unquoted)
+			var g *SubscriptFlags
 			if p.dialect.ArraySubscriptFlags {
-				if g, rest, isGroup := scanSubscriptFlags(inner); isGroup {
+				if group, rest, isGroup := scanSubscriptFlags(inner); isGroup {
 					// The operand is lexed as a word of its own, so a
 					// substitution inside it is performed exactly as one in
 					// the subscript would be: `${path[(re)${ZPFX}/bin]}` is
 					// the whole of why this construct is worth having.
-					g.Arg = p.wordFrom(rest, start, Unquoted)
-					e.IndexFlags = g
+					group.Arg = p.wordFrom(rest, start, Unquoted)
+					g = group
 				}
 			}
+			if e.Index != nil {
+				// The one already read is not the last after all — see
+				// Leading, which is where every subscript but the final one
+				// goes.
+				e.Leading = append(e.Leading, LeadingIndex{Index: e.Index, Flags: e.IndexFlags})
+			}
+			e.Index, e.IndexFlags = idx, g
 			s = s[i+1:]
+			if !p.dialect.ChainedSubscript {
+				break
+			}
 		}
 	}
 	if s == "" {

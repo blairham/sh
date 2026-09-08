@@ -502,6 +502,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `subscript/a-flag-group-through-the-assigning-operator` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][x][][z]` | `[x][x][][z]` | `[x][x][][z]` | `[x][x][][z]` | `[V][x][V][z]` |
 | `subscript/a-flag-group-only-where-the-source-wrote-one` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: (r)y: arithmetic syntax error in expression (error token is "y")` *(status 1)* | **2>** `<shell>: line 1: (r)y: arithmetic syntax error in expression (error token is "y")` *(status 1)* | **2>** `<shell>: (r)y: syntax error in expression (error token is "y")` *(status 1)* | **2>** `<shell>: (r)y: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `y'` *(status 1)* |
 | `subscript/a-search-operand-keeps-a-backslash` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: (r)bet\a: arithmetic syntax error: invalid arithmetic operator (error token is "\a")` *(status 1)* | **2>** `<shell>: line 1: (r)bet\a: arithmetic syntax error: invalid arithmetic operator (error token is "\a")` *(status 1)* | **2>** `<shell>: (r)beta: syntax error in expression (error token is "beta")` *(status 1)* | **2>** `<shell>: (r)beta: arithmetic syntax error` *(status 1)* | `[bet\a]` |
+| `subscript/a-second-subscript-counts-characters` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${a[1][2]}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${a[1][2]}: bad substitution` *(status 127)* | `[two]` | `[]` | `[n]` |
+| `subscript/a-second-subscript-on-an-association` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=abc: not found~<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${m[k][2]}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${m[k][2]}: bad substitution` *(status 127)* | `[abc]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[]` | `[b]` |
+| `subscript/a-second-subscript-after-a-range` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${a[2,4][1]}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${a[2,4][1]}: bad substitution` *(status 127)* | `[five]` | `[]` | `[two]` |
+| `subscript/a-range-in-the-second-position` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${a[2,4][1,2]}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${a[2,4][1,2]}: bad substitution` *(status 127)* | `n=1[five]` | `n=0[]` | `n=2[two][three]` |
+| `subscript/a-third-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${a[2,4][2][3]}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${a[2,4][2][3]}: bad substitution` *(status 127)* | `[five]` | `[]` | `[r]` |
+| `subscript/a-length-over-a-chain` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${#a[1,3][1,2]}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${#a[1,3][1,2]}: bad substitution` *(status 127)* | `[0][0]` | `[0][0]` | `[2][3]` |
+| `subscript/a-chain-is-braced-only` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[hello[1][2]]` | `[hello[1][2]]` | `[hello[1][2]]` | `[hello[1][2]]` | `[hello[2]]` |
+| `subscript/a-chain-whose-first-link-names-nothing` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${a[9][1]-none}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${a[9][1]-none}: bad substitution` *(status 127)* | `[none]` | `[none]` | `[none]` |
 | `subst/a-case-inside-a-substitution` | `[yes]` | `[yes]` | `[yes]` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;;'~<shell>: -c: line 0: `x=$(case a in a) echo yes;; esac); echo "[$x]"'` *(status 2)* | `[yes]` | `[yes]` |
 | `subst/a-substitution-inside-an-arm` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` |
 | `glob/matches-are-in-order` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` |
@@ -1548,6 +1556,38 @@ grades it and nothing drift-checks it either, for the same reason.
 - `subscript/a-search-operand-keeps-a-backslash` — the pattern half of the same rule, on the one construct that reaches it: a backslash before a character that needed no escaping is two characters of the pattern in zsh, so the operand finds the element whose value holds a backslash and does not find `beta`. The other five have no flag group in a subscript and read the whole thing as arithmetic, which is a diagnostic rather than an answer
   ```sh
   a=('bet\a' beta); printf '[%s]\n' "${a[(r)bet\a]}"
+  ```
+- `subscript/a-second-subscript-counts-characters` — the base case for a chained subscript: the first names one element and the second counts the characters of it. Five answers to one text — zsh reads both and says `n`, bash 5.3 calls it a bad substitution at 1 and that binary as `sh` calls it one at 127, bash 3.2 reads the first and *ignores* the second and says `two`, ksh93 answers empty at 0, and dash has no arrays to subscript at all. The row divides the panel, which is what makes the construct a grammar's and not the language's
+  ```sh
+  a=(one two three); printf "[%s]\n" "${a[1][2]}"
+  ```
+- `subscript/a-second-subscript-on-an-association` — the same chain where the first subscript is a *key* rather than a position: the key names one value and the second subscript counts its characters, so zsh says `b`. It is the shape a real plugin manager writes ten times to ask whether an ice value begins with `!`, and bash 5.3 calls it a bad substitution where bash 3.2 has no `-A` and answers the whole value
+  ```sh
+  typeset -A m; m[k]=abc; printf "[%s]\n" "${m[k][2]}"
+  ```
+- `subscript/a-second-subscript-after-a-range` — the half that makes it one rule rather than two: a range names *elements*, so the subscript behind it counts elements and answers `two` where the character reading would have answered `t`. Paired with the row above, the two say that a subscript counts what it is handed rather than counting by where it stands
+  ```sh
+  a=(one two three four five); printf "[%s]\n" "${a[2,4][1]}"
+  ```
+- `subscript/a-range-in-the-second-position` — a range behind a range: it ranges over the three elements the first named and keeps two of them, so the result is still a list and the count says so. The fields are printed with it because a count alone cannot tell two elements from one holding a space
+  ```sh
+  a=(one two three four five); set -- ${a[2,4][1,2]}; printf "n=%d" $#; printf "[%s]" "$@"; echo
+  ```
+- `subscript/a-third-subscript` — the chain is not a special case of two: the range names three elements, `[2]` names `three` out of them, and `[3]` counts characters of that and answers `r`. A reading that handled a pair and stopped would answer the second subscript's element here
+  ```sh
+  a=(one two three four five); printf "[%s]\n" "${a[2,4][2][3]}"
+  ```
+- `subscript/a-length-over-a-chain` — a count where the last subscript named elements and a width where it named one value — 2 and 3 in zsh — which is the same split `${#a[1,3]}` and `${#a[2]}` already have, one link further along. It is the shape question asked of the *final* subscript rather than the first, and a reading that asked the first would answer 3 and 3
+  ```sh
+  a=(one two three); printf "[%s][%s]\n" "${#a[1,3][1,2]}" "${#a[1,3][2]}"
+  ```
+- `subscript/a-chain-is-braced-only` — the boundary of the construct, and the reason the grammar reads a chain in the braced spelling alone: written without braces zsh takes *one* subscript and leaves the rest as ordinary text, so the answer is `hello[2]`. The four that answer at all have no bare subscript either and say `hello[1][2]`, which agrees on the trailing brackets and disagrees about the first; dash has no arrays and refuses the line. Quoted so that the leftover brackets are text rather than a pattern with no matches
+  ```sh
+  a=(hello world); printf "[%s]\n" "$a[1][2]"
+  ```
+- `subscript/a-chain-whose-first-link-names-nothing` — a chain is unset when a link before the last named nothing, rather than empty: there is no ninth element, so `-` substitutes. Unanimous in the three that answer at all — zsh reaches the reading, and bash 3.2 and ksh93 arrive at the same word from `${a[9]}` being unset — where bash 5.3 and that binary as `sh` refuse the whole expansion instead
+  ```sh
+  a=(x y); printf "[%s]\n" "${a[9][1]-none}"
   ```
 - `subst/a-case-inside-a-substitution` — where a substitution ends is a question about the grammar and not about how many parentheses have been counted: an arm's `)` closes nothing, so counting stops early and takes half the arm with it. Unanimous, and the shape that made two installed scripts parse into a tree nobody wrote
   ```sh

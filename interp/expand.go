@@ -2333,8 +2333,14 @@ func (r *Runner) paramSubject(e *syntax.ParamExpr) string {
 	}
 	// The subscript as it was *written*, flag group included: a diagnostic
 	// about `${a[(re)x]}` that named `a[x]` would name a subscript the
-	// script does not contain.
-	return e.Name + "[" + r.subscriptText(e.Index) + "]"
+	// script does not contain. Every subscript of a chain, for the same
+	// reason: a refusal about `${m[k][2]}` that named `m[2]` would name a
+	// key the table has never held.
+	sub := e.Name
+	for _, lead := range e.Leading {
+		sub += "[" + r.subscriptText(lead.Index) + "]"
+	}
+	return sub + "[" + r.subscriptText(e.Index) + "]"
 }
 
 // trim removes a matching prefix or suffix.

@@ -46,6 +46,35 @@ func TestABadOperatorIsAParseErrorWhenAsked(t *testing.T) {
 	}
 }
 
+// The grammar that refuses while reading names the character standing where
+// the parameter belonged, and with nothing between the braces that character
+// is the brace that closed them.
+//
+// Measured 2026-09-08: `${}` in ksh93 is `syntax error at line 1: `}'
+// unexpected` and `${%x}` there is `` `%' unexpected ``. The empty case is
+// the one worth a test, because the token is the only part of the report that
+// carries it and an empty one reads as `` `' `` — a diagnostic that names
+// nothing at all, which is what this used to print.
+func TestTheEmptyBracesRefusalNamesTheClosingBrace(t *testing.T) {
+	d := Core()
+	d.BadSubstitutionAtParseTime = true
+	for _, tc := range []struct{ src, token string }{
+		{`echo "${}"`, "}"},
+		{`echo "${%x}"`, "%"},
+		{`echo "${ }"`, " "},
+	} {
+		_, err := Parse(tc.src, d)
+		var pe *Error
+		if !errors.As(err, &pe) {
+			t.Errorf("%s: err = %v, want a refusal", tc.src, err)
+			continue
+		}
+		if pe.Token != tc.token {
+			t.Errorf("%s: token = %q, want %q", tc.src, pe.Token, tc.token)
+		}
+	}
+}
+
 // walkParams visits every ParamExpr span in the file's simple commands, which
 // is all these tests need.
 func walkParams(f *File, visit func(*ParamExpr)) {

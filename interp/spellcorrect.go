@@ -163,6 +163,14 @@ func (r *Runner) correctPath(operand string) string {
 		if part == "" || part == "." || part == ".." {
 			// An empty part is the leading slash or a trailing one; both are
 			// separators rather than names.
+			//
+			// `.` and `..` skip the lookup rather than merely passing it:
+			// they resolve everywhere, so the stat below would let them
+			// through in the ordinary case and this guard changes nothing —
+			// until a policy denies the stat, and then the difference is a
+			// shell that tries to "correct" `..` into whichever two-character
+			// entry it can reach. A name that is not a name has no business
+			// being spell-checked.
 			at = filepath.Join(at, part)
 			continue
 		}
@@ -172,6 +180,19 @@ func (r *Runner) correctPath(operand string) string {
 		}
 		match := r.closestName(at, part)
 		if match == "" {
+			// One component that cannot be fixed ends the whole attempt.
+			//
+			// Mutation testing says this is not observable through `cd`, and
+			// that is worth writing down rather than deleting: a path with an
+			// uncorrectable component cannot resolve, so skipping it and
+			// carrying on produces a path that fails cdCorrected's final stat
+			// anyway. The `cd` route is guarded twice.
+			//
+			// It stops being unobservable the moment the second caller
+			// arrives. A completer asking for a corrected prefix has no final
+			// stat to fall back on — it wants text to put in the line — so
+			// this is the guard that keeps it from being handed a path with a
+			// component nobody could correct.
 			return ""
 		}
 		parts[i] = match

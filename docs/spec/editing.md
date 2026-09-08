@@ -427,13 +427,21 @@ terminal takes the second: the terminal is put back in its own line discipline
 for the length of it, and the mode is not taken away again until the output has
 arrived.
 
-That second clause is #1356 and it was missing. Under a block store a command's
-output goes through a pseudo-terminal whose own discipline is off and a
-goroutine copies it to the real one, so the command returning and its last
-bytes arriving are two events — and raw mode was coming back between them. It
-had bitten twice before on the *hook* paths, which is why the helper exists at
-all; the command's own output was the third and it arrived by the one route the
-restore alone did not cover.
+That second clause is #1356 and it was missing, by two routes. Under a block
+store a command's output goes through a pseudo-terminal whose own discipline is
+off and a goroutine copies it to the real one, so the command returning and its
+last bytes arriving are two events — and raw mode was coming back between them.
+That is the *boundary*, and it is held: the copy is waited for before the mode
+is taken away.
+
+The other route has no boundary to hold, because a **background job** prints
+while a person is typing. There the copy adds the carriage return itself,
+deciding by *reading* the terminal's mode rather than by keeping a second copy
+of it — which is the same rule the rest of this file follows, and the reason
+the test asks the terminal what mode it is in rather than trusting its own
+bookkeeping. Measured, a job started with `&` printing six lines at a prompt:
+six bare line feeds before and none after, against none in bash 5.3.15 either
+way.
 
 ## Measured, and deliberately not a field
 

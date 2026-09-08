@@ -341,6 +341,22 @@ Two more things the inner terminal has to be told, both measured:
   emptying the capture, because the block that records the output is read
   after it — draining and discarding there would have lost every
   command's body from the store.
+- **And the pump adds the return itself where the terminal is not adding
+  it**, which is the half with no boundary to hold. A **background job**
+  prints while a person is typing, so there is no cooked window anywhere
+  to move the write into and no moment to wait for. The pump's writer
+  reads the terminal's mode and translates only when the terminal is not
+  — one source of truth rather than a second switch that has to agree
+  with the first, which is the shape the bug had. One ioctl per read of
+  the inner terminal, so per 32KB and not per byte.
+
+  Measured against bash 5.3.15, a job started with `&` printing six lines
+  at a prompt: six bare line feeds before and none after, against none in
+  bash either way. **Both halves are load-bearing**, over 25 rounds of a
+  real session: the reading writer alone still left 6 rounds with a bare
+  line feed, because the mode is read and then written to and at a
+  boundary those two can straddle the switch; with the drain as well,
+  none.
 
 #### So the default moved, and the setting grew a third answer
 

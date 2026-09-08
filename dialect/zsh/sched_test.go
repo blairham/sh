@@ -166,6 +166,9 @@ func TestSchedRefusesEachMistakeItsOwnWay(t *testing.T) {
 		{"not a time", "sched bogus x", "zsh:sched:1: bad time specifier\n"},
 		{"nearly a time", "sched +5x y", "zsh:sched:1: bad time specifier\n"},
 		{"not a word this builtin has", "sched -x", "zsh:sched:1: bad option: -x\n"},
+		// Three colon-separated fields at most: `sched 1:02:03:04` is refused
+		// rather than read as a day and change, measured.
+		{"a fourth field", "sched 1:02:03:04 x", "zsh:sched:1: bad time specifier\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, st := runSched(t, c.src+"\n")

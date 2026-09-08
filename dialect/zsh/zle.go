@@ -385,7 +385,13 @@ func widgetListing(defined map[string]string, name string, source bool) string {
 // shell invented: the line the widget would edit exists only while the editor
 // is holding one.
 func callWidget(r *interp.Runner, ctx context.Context, name string, args []string) int {
-	if _, active := r.GetVar(zleActive); !active {
+	// Non-empty rather than merely set, and that is the whole of the fix
+	// mutation testing found: unsetWidgetState clears these names by storing
+	// the empty string in them, which GetVar reports as *set*. So after one
+	// widget had run, a plain script could invoke widgets for the rest of the
+	// session — status 0 and the function actually ran — where the shell being
+	// modeled refuses every time.
+	if active, _ := r.GetVar(zleActive); active == "" {
 		r.Diagnosef("widgets can only be called when ZLE is active\n")
 		return 1
 	}
@@ -461,9 +467,14 @@ func RunWidget(r *interp.Runner, ctx context.Context, name string, in repl.Line)
 func openWidgetParameters(r *interp.Runner) {
 	r.SetDynamic("BUFFER", func(rr *interp.Runner) string { return widgetBuffer(rr) })
 	r.SetDynamicWriter("BUFFER", func(rr *interp.Runner, value string) {
+		// The stored cursor is left alone and every *read* of it clamps — see
+		// widgetCursor. Clamping here as well was a second copy of the same
+		// rule, and mutation testing found it: either one could be deleted
+		// with nothing failing, which is two places to fix one behavior and
+		// the shape bindings.go warns about. A line that just got shorter
+		// still reports the cursor at its end, because the reader is where
+		// the length is known.
 		rr.SetVar(zleBuffer, value)
-		// The cursor cannot be past the end of a line that just got shorter.
-		setWidgetCursor(rr, widgetCursor(rr), value)
 	})
 	r.SetDynamic("CURSOR", func(rr *interp.Runner) string {
 		return strconv.Itoa(widgetCursor(rr))
@@ -474,7 +485,7 @@ func openWidgetParameters(r *interp.Runner) {
 		// a non-number assigned to one means is interp's question and not
 		// this file's.
 		if n, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
-			setWidgetCursor(rr, n, widgetBuffer(rr))
+			setWidgetCursor(rr, n)
 		}
 	})
 	r.SetDynamic("LBUFFER", func(rr *interp.Runner) string {
@@ -504,9 +515,14 @@ func openWidgetParameters(r *interp.Runner) {
 		name, _ := rr.GetVar(zleWidget)
 		return name
 	})
-	r.SetDynamicWriter("WIDGET", func(rr *interp.Runner, value string) {
-		rr.SetVar(zleWidget, value)
-	})
+	// Read-only, measured: assigning to it inside a widget answers
+	// `w: read-only variable: WIDGET` and the widget stops there. A writer
+	// that quietly stored the new name would be the silent no-op this file
+	// exists to avoid, and there is nothing a widget could want from writing
+	// to it — the name of the widget that is running is not a widget's to
+	// change. Lifted again by UnsetDynamic when the call ends, so a script
+	// outside one finds an ordinary variable.
+	r.MarkReadonly("WIDGET")
 }
 
 // closeWidgetParameters takes them away again, so a script that is not running
@@ -523,6 +539,17 @@ func widgetBuffer(r *interp.Runner) string {
 	return buf
 }
 
+// widgetCursor is the cursor, clamped into the line it points at.
+//
+// **The clamp is here and nowhere else**, and the reason is that this is the
+// only place that can be right: the line can get *shorter* after the cursor was
+// stored — `BUFFER=ab` on an eight-character line — so a cursor checked when it
+// was written is not a cursor still in range when it is read. Clamping on the
+// way in as well was a second copy of one rule, which mutation testing found by
+// deleting either half with nothing failing.
+//
+// Measured: `CURSOR=999` on a four-character line reads back 4 and `CURSOR=-5`
+// reads back 0, so out of range is brought back rather than refused.
 func widgetCursor(r *interp.Runner) int {
 	raw, _ := r.GetVar(zleCursor)
 	n, err := strconv.Atoi(raw)
@@ -532,15 +559,16 @@ func widgetCursor(r *interp.Runner) int {
 	return min(max(n, 0), len([]rune(widgetBuffer(r))))
 }
 
-// setWidgetCursor clamps rather than refusing, measured: 999 on a
-// four-character line reads back 4 and -5 reads back 0.
-func setWidgetCursor(r *interp.Runner, n int, buffer string) {
-	r.SetVar(zleCursor, strconv.Itoa(min(max(n, 0), len([]rune(buffer)))))
+// setWidgetCursor stores what it was given and clamps nothing, because
+// widgetCursor clamps every read — see there for why that is the one place it
+// can be done and not merely the one place it is done.
+func setWidgetCursor(r *interp.Runner, n int) {
+	r.SetVar(zleCursor, strconv.Itoa(n))
 }
 
 func setWidgetLine(r *interp.Runner, in repl.Line) {
 	r.SetVar(zleBuffer, in.Buffer)
-	setWidgetCursor(r, in.Cursor, in.Buffer)
+	setWidgetCursor(r, in.Cursor)
 }
 
 func widgetLine(r *interp.Runner) repl.Line {

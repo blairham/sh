@@ -428,6 +428,90 @@ func TestTheParametersAreGoneHoweverTheCallEnded(t *testing.T) {
 	}
 }
 
+// TestAScriptCannotCallAWidgetAfterOneHasRun is the bug mutation testing
+// found, and the reason the guard reads a *value* rather than asking whether
+// the name is set.
+//
+// The state a call leaves behind is cleared by storing the empty string, which
+// GetVar reports as set — so the first widget to run left every later script
+// able to invoke widgets, at status 0 and with the function actually running,
+// where the shell being modeled refuses every time. Nothing in the suite
+// noticed, because every other test asked a *fresh* runner.
+func TestAScriptCannotCallAWidgetAfterOneHasRun(t *testing.T) {
+	r, out := zleRunner(t, "w() { print -r -- ran; }\nzle -N w\n")
+	if _, ok, _ := runWidget(t, r, out, "w", repl.Line{Buffer: "x", Cursor: 1}); !ok {
+		t.Fatal("the widget did not run, so this is not the path under test")
+	}
+	out.Reset()
+	zle, ok := r.Builtin("zle")
+	if !ok {
+		t.Fatal("no zle builtin")
+	}
+	if st := zle(r, context.Background(), []string{"w"}); st != 1 {
+		t.Errorf("`zle w` from a script = status %d, want 1", st)
+	}
+	want := "zsh:1: widgets can only be called when ZLE is active\n"
+	if out.String() != want {
+		t.Errorf("output = %q, want %q — and above all not the widget having run", out.String(), want)
+	}
+}
+
+// `$WIDGET` is read-only while a widget runs, measured: assigning to it answers
+// `read-only variable: WIDGET` and the widget stops there. A writer that
+// quietly stored the new name would be the silent no-op this builtin exists to
+// avoid.
+func TestTheWidgetNameIsReadOnly(t *testing.T) {
+	r, out := zleRunner(t, "w() { WIDGET=changed; print -r -- \"unreached=[$WIDGET]\"; }\nzle -N w\n")
+	if _, ok, _ := runWidget(t, r, out, "w", repl.Line{}); !ok {
+		t.Fatal("the widget did not run")
+	}
+	if !strings.Contains(out.String(), "read-only variable: WIDGET") {
+		t.Errorf("output = %q, want the assignment refused by name", out.String())
+	}
+	if strings.Contains(out.String(), "unreached") {
+		t.Errorf("output = %q, want the widget to have stopped at the refusal", out.String())
+	}
+}
+
+// And the read-only mark is lifted with the rest of the call, so a script
+// outside a widget finds an ordinary variable rather than a name that refuses
+// every assignment for the rest of the session. There is no other way to lift
+// it, which is why UnsetDynamic does — see the note there.
+func TestTheWidgetNameIsAnOrdinaryVariableAfterTheCall(t *testing.T) {
+	r, out := zleRunner(t, "w() { :; }\nzle -N w\n")
+	if _, ok, _ := runWidget(t, r, out, "w", repl.Line{}); !ok {
+		t.Fatal("the widget did not run")
+	}
+	res, _ := runZshVars(t, r, "WIDGET=fine; print -r -- \"after=[$WIDGET]\"")
+	if want := "after=[fine]\n"; res != want {
+		t.Errorf("after the call: %q, want %q", res, want)
+	}
+}
+
+// `zle -N` on a name that is already a widget replaces the function rather than
+// adding a second entry — measured, `zle -N w f; zle -N w g` leaves one widget
+// backed by `g`.
+func TestRedefiningAWidgetReplacesIt(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(),
+		"f() { :; }; g() { :; }; zle -N w f; zle -N w g\nzle -l\nzle -l -L\n")
+	if want := "w (g)\nzle -N w g\n"; out != want {
+		t.Errorf("output = %q, want %q — one widget, the later function", out, want)
+	}
+}
+
+// Under `-L`, one of the editor's own actions is still its own name: there is
+// no function behind it and no `zle -N` that would define it. Measured —
+// `zle -la -L` in the real shell writes `accept-line`, not `zle -N accept-line`.
+func TestTheSourceListingLeavesTheEditorsOwnActionsAlone(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), "zle -la -L\n")
+	if !strings.Contains(out, "end-of-line\n") {
+		t.Errorf("output = %q, want the action's bare name in it", out)
+	}
+	if strings.Contains(out, "zle -N end-of-line") {
+		t.Errorf("output = %q, want no definition written for an action nothing defined", out)
+	}
+}
+
 // TestAKeyBoundToADefinedWidgetReachesTheFrontEndAsOne is the contract between
 // this builtin and the front end, and the half no output can show: what
 // reaches repl for a key bound to a widget somebody defined is the *name*, not
@@ -460,4 +544,24 @@ func TestZleIsABuiltinTheShellWillOwnUpTo(t *testing.T) {
 	if want := "zle is a shell builtin\nzle: builtin\n"; out != want {
 		t.Errorf("output = %q, want %q", out, want)
 	}
+}
+
+// runZshVars runs more source on a Runner a widget has already been through,
+// which is what the tests about what a *later* script sees need.
+func runZshVars(t *testing.T, r *interp.Runner, src string) (string, int) {
+	t.Helper()
+	f, err := syntax.Parse(src, zsh.Dialect())
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	var out bytes.Buffer
+	saved := r.Stdout
+	savedErr := r.Stderr
+	r.Stdout, r.Stderr = &out, &out
+	st, rerr := r.Run(context.Background(), f)
+	r.Stdout, r.Stderr = saved, savedErr
+	if rerr != nil {
+		t.Fatalf("run %q: %v", src, rerr)
+	}
+	return out.String(), st
 }

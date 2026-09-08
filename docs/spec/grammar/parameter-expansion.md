@@ -2041,6 +2041,198 @@ read.
   but does not then match — which the tilde flag's section already records
   for its own half.
 
+## A caret at the front: `${^spec}` — zsh only
+
+A `^` written between the `${` and the parameter makes the expansion
+**distributive**: the word it stands in is produced once per element, with the
+text around it on each, rather than once with the elements laid into it.
+zsh alone has it. The other four call the whole expansion unreadable, in the
+same three-way split every unreadable expansion follows: bash 5.3, bash 3.2,
+bash-as-sh and dash say `bad substitution` when the expansion is reached,
+ksh93 refuses it while reading (`` `^' unexpected ``) — which
+`BadSubstitutionAtParseTime` already records.
+
+It is the per-expansion spelling of the `RC_EXPAND_PARAM` option, the same
+way `${~spec}` is `GLOB_SUBST`'s and `${=spec}` is `SH_WORD_SPLIT`'s, and it
+shares their slot.
+
+Found in the wild, and this is why the construct is here rather than on a
+list: `~/.zi/bin/zi.zsh` builds the argv of every non-zsh plugin with it —
+
+    ${(s: :):-${${:-${(@s: :):--o}" "${(s: :)^ICE[opts]}}:#-o }}
+
+— which turns an `opts` ice of `a b` into `-o a -o b`. Refused, the load of
+any plugin carrying that ice stops with `bad substitution`.
+
+All measurements below are of zsh 5.9.2 (Homebrew, arm64), taken 2026-09-08.
+
+### What it does, measured
+
+With `a=(1 2)` and a function reporting `$#` and each field:
+
+| written | fields |
+| --- | --- |
+| `x${a}y` | 2: `x1`, `2y` — the elements laid into one word |
+| `x${^a}y` | 2: `x1y`, `x2y` — the word laid onto each element |
+| `x${^a}` | 2: `x1`, `x2` |
+| `${^a}y` | 2: `1y`, `2y` |
+| `${^a}` | 2: `1`, `2` — with no text around it there is nothing to distribute |
+| `x${^a[2,3]}y` | the elements the subscript named, each in its own word |
+| `x${^#a}y` | 1: `x2` — a length is a number, which is one value |
+
+**The field count is the same in the first two rows**, which is the whole
+difficulty of asserting this construct: an implementation that ignored the
+flag entirely would answer `2` as well. Only the values say which reading
+ran, and every row of the corpus and of the interpreter's tests prints them.
+
+### Two of them in one word are a cross product
+
+This is what says the subject is the *word* and not the field:
+
+    a=(1 2)
+    ${^a}z${^a}         →  1z1  1z2  2z1  2z2
+    a=(1 2); b=(A B); c=(p q)
+    ${^a}${^b}${^c}     →  1Ap 1Aq 1Bp 1Bq 2Ap 2Aq 2Bp 2Bq
+
+The open fields are the outer loop and the later expansion varies fastest.
+An implementation that spread each expansion over whatever stood in front of
+it would produce four words for the first line too, and the wrong four.
+
+Mixed with an ordinary expansion, each keeps its own rule — the distribution
+multiplies the open fields, and the ordinary one closes them and opens a
+single new field of its own:
+
+    a=(1 2); b=(A B);  x${^a}-${b}y   →  x1-A  x2-A  By
+    a=(1 2);           x${^a}y${a}z   →  x1y1  x2y1  2z
+
+### No elements is no word
+
+The word is produced once per element, so an empty list produces it no times
+— and a field already finished stands, because it is no longer open:
+
+| written | fields |
+| --- | --- |
+| `a=(); x${^a}y` | none at all |
+| `a=(); x${a}y` | 1: `xy` — the same array without the flag |
+| `unset u; x${^u}y` | 1: `xy` — a name that was never a list is one empty value |
+| `set --; x${^@}y` | none |
+| `a=(1 2); b=(); x${a}z${^b}q` | 1: `x1` — the finished field survives |
+
+The third row is what makes this a fact about the *list* and not about
+emptiness, and it is the one an implementation is likely to get wrong: an
+empty array and an unset name are the same empty string under every other
+reading, and here they are one field apart.
+
+### Quoting is not a question it asks
+
+It looks at first as though quoting suppresses it, the way it suppresses
+`${~spec}`. It does not — the quotes joined the list before the flag saw it,
+and the spellings that keep their fields through quotes distribute over them.
+With `a=(1 2)`, and with `set -- 1 2` for the rows written on the positionals:
+
+| written | fields |
+| --- | --- |
+| `"x${^a}y"` | 1: `x1 2y` — the quotes joined the list |
+| `"x${^a[*]}y"`, `"x${^*}y"` | 1: the join again, written out |
+| `"x${^a[@]}y"`, `"x${^@}y"` | 2: `x1y`, `x2y` — `[@]` keeps its fields |
+| `"x${(@)^a}y"` | 2 — and so does the `(@)` flag |
+| `x"${^a}"y` | 1: `x1 2y` — the quoting of the *expansion* |
+| `"x"${^a}"y"` | 2: `x1y`, `x2y` — and not of the word |
+| `set --; "x${^@}y"` | none, where `"x${@}y"` is the one field the quotes guarantee |
+
+So the rule is "the fields the span produced", and a guard on the quoting
+would answer the first row right and the four after it wrong.
+
+### It runs on what the span came to
+
+Everything the expansion does happens first, and the distribution spreads the
+fields that came out. That is where it parts company with `${=spec}`, which
+is a step *inside* the flag group:
+
+    a=(c a b);  x${(o)^a}y     →  xay xby xcy   the sort ran first
+    a=(c a b);  x${(oj:-:)^a}y →  xc-a-by       the join left one field
+    v=a,b;      x${(s.,.)^v}y  →  xay xby       and the split left two
+    a=(p1 p2);  x${^a#p}y      →  x1y x2y       the operator ran first
+    a=();       x${^a:-p q}y   →  xp qy         so did the default
+    v="a b"; setopt shwordsplit; x${^v}y → xay xby
+
+### The count is parity, and it overrides the option
+
+`RC_EXPAND_PARAM` is the option that makes *every* expansion distributive.
+The written `^` characters do not toggle it — they decide the answer outright,
+on the parity of how many were written, measured under the option both ways
+with `a=(1 2)`:
+
+| written | `unsetopt rcexpandparam` | `setopt rcexpandparam` |
+| --- | --- | --- |
+| `x${a}y` | `x1`, `2y` | `x1y`, `x2y` |
+| `x${^a}y` | `x1y`, `x2y` | `x1y`, `x2y` |
+| `x${^^a}y` | `x1`, `2y` | `x1`, `2y` |
+| `x${^^^a}y` | `x1y`, `x2y` | `x1y`, `x2y` |
+| `x${^^^^a}y` | `x1`, `2y` | `x1`, `2y` |
+
+So one `^` is "yes" and two are "no" from either starting point, and only a
+`spec` with no `^` at all consults the option.
+
+### Where the `^` may be written
+
+The slot `${~spec}` and `${=spec}` use, and all three are interchangeable
+within it. Measured:
+
+| written | zsh |
+| --- | --- |
+| `${(U)^a}` | flags then `^`: read, uppercased, distributed |
+| `${^(U)a}` | `bad substitution` — the group may not follow the run |
+| `${^#a}` | the *length*, so the run precedes `#` as well |
+| `${#^a}` | `bad substitution` — nothing behind the `#` is a flag |
+| `${^=a}`, `${=^a}` | the same expansion: both flags, in either order |
+| `${^~a}`, `${~^a}` | likewise |
+| `${^+a}` | the set test, which stands behind the run |
+| `${+^a}` | `bad substitution` — and not in front of it |
+| `${^}` | the empty string, no error — as `${~}` and `${=}` are |
+
+### Grammar
+
+The `^` run is read only when the dialect's `ParamRcExpandFlag` is on;
+elsewhere a leading `^` is not a name and the expansion follows the
+bad-substitution split above. The parsed node carries `RcExpandFlags`, the
+number written, so parity is the interpreter's to take and the printer keeps
+writing the span back raw — the construct round-trips as source text.
+
+It cannot collide with bash's case-conversion `^`: that one follows the name
+— `${x^}` — and this one precedes it. Nor with the `^` of `EXTENDED_GLOB`'s
+pattern negation, which is not inside a `${`.
+
+### Where the distribution lives
+
+Not on the value, which is what makes it different from both of its
+slot-mates: they change what one expansion *comes to*, and this one changes
+how what it came to is laid into the word. So it is one rule about the set of
+fields a word still has open, applied where the fields of a word are
+assembled, and a second distributive expansion in the same word finds several
+open where an ordinary word has one.
+
+A context that produces a single value has no word to produce more than once,
+and is not distributed: `v=x${^a}y` is the elements joined, and so are a
+`case` subject and a `[[ ]]` operand. An array literal and a `for` list are
+words each, so there it does distribute.
+
+### What the corpus pins
+
+`param/the-rc-expand-flag-is-one-dialects` (the three-way split, with the
+unflagged reading beside it because the two field counts agree),
+`-crosses-two-expansions`, `-doubled-turns-it-off`,
+`-spreads-the-fields-it-was-given` and `-over-no-elements-is-no-word`.
+
+### What this implementation does not match
+
+- `RC_EXPAND_PARAM` is recorded-and-inert, so `setopt rcexpandparam` does not
+  make an unflagged expansion distributive — the same gap `GLOB_SUBST` has
+  behind `${~spec}`, and the flag is what the wild code writes.
+- A redirection target is one target here. zsh's `MULTIOS` opens one file per
+  field, so `: > p_${^a}` creates a file per element there; this shell has no
+  `MULTIOS`, and the divergence is that option's rather than this flag's.
+
 ## A third assignment operator: `${name::=word}` — zsh only
 
     ${name=word}     assign when the parameter is unset

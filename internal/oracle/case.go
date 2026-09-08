@@ -6661,6 +6661,31 @@ echo "st=$?"`,
 		Why:     "the flag decides the *option's* question and not the context's, so a context that never splits is not overridden: an assignment's value and a `case` subject are the value unchanged, spaces and all. The two halves in one row because an implementation that forced the split everywhere would still print the right thing for one of them",
 	},
 	{
+		ID: "param/the-rc-expand-flag-is-one-dialects", Category: "parameter expansion",
+		Snippet: `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; set -- 1 2; f x${@}y; f x${^@}y; echo`,
+		Why:     "a `^` between the `${` and the parameter distributes the *word* over the elements — one word per element, with the text around it on each — where the ordinary reading lays the elements into one word: zsh answers `[x1][2y]` then `[x1y][x2y]` where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading with the `^` named, the same three-way split every unreadable expansion follows. Both readings in one row and both printed in full, because the two have the *same field count* here — an implementation that ignored the flag would answer `2:` twice and only the values say which reading ran. `~/.zi/bin/zi.zsh` builds the argv of every non-zsh plugin with `${(s: :)^ICE[opts]}`, so a refusal stops the load of any plugin carrying an `opts` ice",
+	},
+	{
+		ID: "param/the-rc-expand-flag-crosses-two-expansions", Category: "parameter expansion",
+		Snippet: `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; set -- 1 2; f ${^@}z${^@}; echo`,
+		Why:     "two distributive expansions in one word are a cross product, which is what says the subject is the word and not the field: four words, the later expansion varying fastest. An implementation that spread each expansion over what stood in front of it would also answer `4:` — the order and the pairings are the whole of the row",
+	},
+	{
+		ID: "param/the-rc-expand-flag-doubled-turns-it-off", Category: "parameter expansion",
+		Snippet: `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; set -- 1 2; f x${^@}y; f x${^^@}y; f x${^^^@}y; echo`,
+		Why:     "the count is parity and not a toggle of the option: one `^` distributes, two do not, three do again, and measured under RC_EXPAND_PARAM both ways the answer is the same — `${^^name}` is how a nested use says \"not here\". All three field counts are 2, so the row is the values or it is nothing",
+	},
+	{
+		ID: "param/the-rc-expand-flag-spreads-the-fields-it-was-given", Category: "parameter expansion",
+		Snippet: `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; set -- 1 2; f "x${^@}y"; f "x${^*}y"; echo`,
+		Why:     "quoting is not a question this flag asks, which is where it parts company with its slot-mate `${~spec}`: the quoted `@` keeps its fields and the distribution spreads them, while `*` is the join and leaves one word. So the rule is \"the fields the span produced\" and not \"unquoted only\" — an implementation that carried the tilde flag's quoting rule across would answer one field for both",
+	},
+	{
+		ID: "param/the-rc-expand-flag-over-no-elements-is-no-word", Category: "parameter expansion",
+		Snippet: `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; set --; f x${^@}y; f x${@}y; f x${^u}y; echo`,
+		Why:     "the word is produced once per element and there are none, so it is produced no times — where the same spelling without the flag leaves the surrounding text behind as one field. The third reading is the half that says it is a fact about the *list* and not about emptiness: a name that was never a list is one empty value, and `x${^u}y` is `xy`",
+	},
+	{
 		ID: "param/the-set-test-flag-is-one-dialects", Category: "parameter expansion",
 		Snippet: `v=1; e=; printf "[%s]" ${+v} ${+e} ${+NOPE}; echo`,
 		Why:     "a `+` between the `${` and the parameter asks whether it is set and answers 1 or 0 without ever failing: zsh counts where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading with the `+` named. The empty-but-set name is in the row because set-ness is not emptiness — an implementation that answered like `${v:+1}` would get two of the three right",

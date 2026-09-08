@@ -192,6 +192,16 @@ func Dialect() syntax.Dialect {
 	// and `${=2:-$ZSH_VERSION}` on lines 27 and 28 — refused, both version
 	// arrays are empty and the comparison answers true for every version.
 	d.ParamSplitFlag = true
+	// A `^` in the same slot, which distributes the word the expansion stands
+	// in over the elements it came to whatever RC_EXPAND_PARAM says: with
+	// `a=(1 2)`, `x${^a}y` is the two words `x1y` and `x2y` where `x${a}y` is
+	// `x1` and `2y`. This shell alone: measured 2026-09-08, bash 5.3, bash
+	// 3.2, bash-as-sh and dash all answer `bad substitution` when the
+	// expansion is reached and ksh93 refuses it while reading with the `^`
+	// named. `~/.zi/bin/zi.zsh` builds the argv of every non-zsh plugin with
+	// it — `${(s: :)^ICE[opts]}` — so a refusal stops the load of any plugin
+	// carrying an `opts` ice.
+	d.ParamRcExpandFlag = true
 	d.ParamSetTestFlag = true
 	// A subscript's own parenthesized flag group: `${a[(re)value]}`, the
 	// first element equal to the operand. This shell alone — measured

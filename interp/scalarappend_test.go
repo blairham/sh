@@ -6,6 +6,9 @@ package interp_test
 import (
 	"strings"
 	"testing"
+
+	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // `a+=(x)` over a name holding a scalar keeps that value as the first element
@@ -105,5 +108,21 @@ func TestAppendingALiteralToAnArrayIsUnchanged(t *testing.T) {
 	out, _ := runArray(t, `a=(1 2); a+=(3); printf "[%s]" "${a[@]}"; echo " keys=${!a[@]} n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "[1][2][3] keys=0 1 2 n=3" {
 		t.Errorf("got %q, want the append unchanged over an array", got)
+	}
+}
+
+// A value the name reads back from the *inherited environment* is kept too:
+// the question is what `$a` answers, not what this runner happens to have
+// stored under the name.
+//
+// Measured in every column — `a=1 sh -c 'a+=(2); typeset -p a'` keeps both —
+// and it is the row that says so: a promotion reading only `Runner.Vars`
+// passes every other test here and drops the value a script was started with.
+func TestAppendingALiteralToAnInheritedScalarKeepsIt(t *testing.T) {
+	out, _ := runGrammar(t, `a+=(2); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		func(d *syntax.Dialect) { d.ParamIndirection = true },
+		func(r *Runner) { r.Env = append(r.Env, "a=1") })
+	if got := strings.TrimSpace(out); got != "[1][2] n=2" {
+		t.Errorf("got %q, want the inherited value kept as the first element", got)
 	}
 }

@@ -414,6 +414,13 @@ func TestASubscriptOnANestedListNamesEveryElementItSelects(t *testing.T) {
 		// One element is still the list's reading and not the string's: a
 		// character count would answer 5 here.
 		{"one element counts as one", `a=(hello); printf "n=%s" ${#${a[@]}[@]}`, "n=1"},
+		// A range that selected one element is still the *list's* reading,
+		// which is where the count says which reading ran: measured,
+		// `${#${a[@]}[1,1]}` on `(hello world)` is 1 and not 5.
+		{"a one-element range counts as one", `a=(hello world); printf "n=%s" ${#${a[@]}[1,1]}`, "n=1"},
+		// And the same range over a *string* is the string's reading, which
+		// is the other side of that line: three characters, not one field.
+		{"a range over a string counts characters", `s=hello; printf "n=%s" ${#${s}[2,4]}`, "n=3"},
 		// A subscript naming *one* element is that element, unchanged — the
 		// reading this file's other tests are about.
 		{"one element is still one element", `a=(x y z); printf "[%s]" "${${a[@]}[2]}"`, "[y]"},

@@ -37,13 +37,18 @@ func TestExitBuiltin(t *testing.T) {
 	}
 }
 
-// TestExitArgumentIsAnOrdering is the second axis that is not a side: the
+// TestStatusArgumentIsAnOrdering is the second axis that is not a side: the
 // strict policy refuses both a negative and a non-number, the numeric one
-// refuses only the non-number, and the lenient one takes either.
-func TestExitArgumentIsAnOrdering(t *testing.T) {
-	exitSem := func(p ExitArgumentPolicy) Semantics {
+// refuses only the non-number, and the two lenient readings refuse neither —
+// the leading-digit one taking the number a word begins with, and the
+// arithmetic one evaluating the whole word.
+//
+// Asked here of `exit`. The same axis reads `return`'s operand, and
+// returnoperand_test.go asks it there and asks that the two agree.
+func TestStatusArgumentIsAnOrdering(t *testing.T) {
+	exitSem := func(p StatusArgumentPolicy) Semantics {
 		s := permissive()
-		s.ExitArgument = p
+		s.StatusArgument = p
 		return s
 	}
 	for _, tc := range []struct {
@@ -51,9 +56,14 @@ func TestExitArgumentIsAnOrdering(t *testing.T) {
 		sem           Semantics
 		negSt, textSt int
 	}{
-		{"strict", exitSem(ExitArgStrict), 2, 2},
-		{"numeric", exitSem(ExitArgNumeric), 255, 2},
-		{"lenient", exitSem(ExitArgLenient), 255, 0},
+		{"strict", exitSem(StatusArgStrict), 2, 2},
+		{"numeric", exitSem(StatusArgNumeric), 255, 2},
+		{"leading digits", exitSem(StatusArgLeadingDigits), 255, 0},
+		// `abc` has no digits to read, so arithmetic makes it an unset name
+		// and an unset name is 0 — the same answer the leading-digit reader
+		// reaches by the other route, which is why `3abc` is the row that
+		// tells the two apart and lives with `return`'s cases.
+		{"arithmetic", exitSem(StatusArgArithmetic), 255, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, st := run(t, `exit -1`, withSem(tc.sem)); st != tc.negSt {

@@ -407,7 +407,7 @@ func Semantics() interp.Semantics {
 	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
-	s.ExitArgument = interp.ExitArgNumeric
+	s.StatusArgument = interp.StatusArgNumeric
 	s.TraceAssignmentsSeparately = interp.Yes
 	// bash reports success if it signaled anything at all, where the others
 	// count failures one way or another.

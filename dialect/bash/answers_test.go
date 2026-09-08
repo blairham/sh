@@ -119,8 +119,8 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.BackgroundJobInput, interp.BackgroundJobInputEmpty; got != want {
 		t.Errorf("BackgroundJobInput = %v, want %v", got, want)
 	}
-	if got, want := s.ExitArgument, interp.ExitArgNumeric; got != want {
-		t.Errorf("ExitArgument = %v, want %v", got, want)
+	if got, want := s.StatusArgument, interp.StatusArgNumeric; got != want {
+		t.Errorf("StatusArgument = %v, want %v", got, want)
 	}
 	if got, want := s.SubshellJobTable, interp.SubshellJobsKeptOutsideACompound; got != want {
 		t.Errorf("SubshellJobTable = %v, want %v", got, want)

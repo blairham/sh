@@ -3488,6 +3488,56 @@ echo "st=$?"`,
 		Why:     "the other side of the same question, and unanimous: a sourced file is something to return *from*, so all four obey it and it becomes the source's status. Recorded next to the case above because together they say the disagreement is about having nothing to return from rather than about `return` itself",
 	},
 	{
+		ID: "return/a-bare-name-as-the-operand", Category: "builtins",
+		Snippet: `f(){ r=3; return r; }; f; echo "st=$?"`,
+		Why:     "`return`'s operand is an arithmetic *expression* in zsh, where the rest of the panel reads it as a number or refuses it: 3 there, 0 in ksh93, which reads the leading digits and finds none, and a refusal in dash and both bashes. `return $r` — with the `$` — is right in every shell, which is what hid this. Ours discarded the operand and handed back `$?` in every dialect (#1485)",
+	},
+	{
+		ID: "return/a-bare-name-after-a-failed-command", Category: "builtins",
+		Snippet: `f(){ r=3; false; return r; }; f; echo "st=$?"`,
+		Why:     "the same operand with something failing in front of it, and the row that gives the mechanism away: no shell in the panel returns the *previous* command's status here, so a 1 is not a mis-evaluated operand but a discarded one. The row above alone cannot see that — a shell that ignored the operand would answer 0 there and look merely wrong rather than wrong for a reason",
+	},
+	{
+		ID: "return/an-expression-as-the-operand", Category: "builtins",
+		Snippet: `f(){ r=2; return r+1; }; f; echo "st=$?"`,
+		Why:     "the operand as a whole expression rather than a bare name, which is what separates arithmetic from a variable lookup: zsh answers 3 and ksh93 still 0. A shell that expanded the name and stopped would pass the two rows above and fail here",
+	},
+	{
+		ID: "return/an-expression-with-parentheses-as-the-operand", Category: "builtins",
+		Snippet: `f(){ r=2; return "(r+1)*2"; }; f; echo "st=$?"`,
+		Why:     "the far end of the same claim: 6 in zsh, so the operand gets the whole arithmetic reader rather than a hand-rolled sum. Recorded because a fix that special-cased `name` and `name+1` would satisfy both rows above and leave the third wrong",
+	},
+	{
+		ID: "return/digits-followed-by-text-as-the-operand", Category: "builtins",
+		Snippet: `f(){ return 3abc; }; f; echo "st=$?"`,
+		Why:     "the row that parts ksh93 from zsh, which the bare name cannot: ksh93 answers 3, reading the digits the word starts with and ignoring the rest, where zsh calls it a bad math expression. Without it the two look like one lenient reading, and `return 010` — 10 in ksh93 where `$((010))` is 8 — says the same thing from the other side",
+	},
+	{
+		ID: "return/a-status-over-two-hundred-and-fifty-five", Category: "builtins",
+		Snippet: `f(){ return 300; }; f; echo "st=$?"`,
+		Why:     "whether the operand is masked to eight bits, and the only place it can be seen: bash and ksh93 answer 44 where dash and zsh hand back 300 whole. `exit 300` is 44 in all six however the shell read it, because a process carries eight bits — so a shell that masked everywhere would look right until a function returned a count",
+	},
+	{
+		ID: "return/a-negative-status", Category: "builtins",
+		Snippet: `f(){ return -1; }; f; echo "st=$?"`,
+		Why:     "the other side of the mask and a third answer to the same question: 255 in bash and ksh93, a literal -1 in zsh, and a refusal in dash, which takes digits and no sign at all. Three behaviors on one line is why the axis is a policy rather than a bool",
+	},
+	{
+		ID: "return/no-operand-after-a-failed-command", Category: "builtins",
+		Snippet: `f(){ false; return; }; f; echo "st=$?"`,
+		Why:     "the unanimous control: with nothing after it `return` hands back `$?`, so all six answer 1. It is what makes the rows above evidence rather than noise — the bug they record returned exactly this in every case, and without a row pinning when `$?` is the *right* answer a fix could take it away and nothing would notice",
+	},
+	{
+		ID: "return/a-bare-name-as-the-operand-in-a-sourced-file", Category: "builtins",
+		Snippet: "printf 'r=3\\nreturn r\\n' > s.sh\n. ./s.sh\necho \"st=$?\"\n",
+		Why:     "the second route to `return` — a sourced file rather than a function body — reading the operand the same way, which is the check that a fix landed in the builtin and not on the function path alone. zsh answers 3 here as it does inside a function, and this tree has been bitten seven times by a second caller that missed what the first one learned",
+	},
+	{
+		ID: "exit/a-bare-name-as-the-operand", Category: "builtins",
+		Snippet: `r=3; exit r`,
+		Why:     "the same operand on the other builtin that takes one, and the reason the two share a single axis: zsh answers 3 for `exit r` exactly as it does for `return r`, ksh93 0 for both, dash and bash refuse both. Recorded so that a reading fixed for one cannot quietly stay broken for the other — which is what it was, with `exit r` at 0 under zsh while `return r` was being taught arithmetic",
+	},
+	{
 		ID: "set/a-name-only-one-shell-has", Category: "builtins",
 		Snippet: `set +o posix; echo "st=$?"`,
 		Why:     "which long option names a shell has is not one list: fourteen are unanimous and the rest belong to one, two or three of the panel. `posix` belongs to one, and the other three refuse it — each in its own words and with its own status. Turning it *off* is the direction that matters, because it is what the thirteenth line of Homebrew's own script does and what a shell without a posix mode can honestly grant",

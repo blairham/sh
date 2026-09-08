@@ -140,8 +140,10 @@ func TestWhichMinusIsTheQuotingModifier(t *testing.T) {
 		// the sort flag is not carried and a group is refused for what is
 		// in it rather than for what that would have come to on this value —
 		// the same rule `(A)` is refused under.
-		{"a sort flag in front of it is still refused", `v="a b"; printf "[%s]" "${(-q-)v}"`,
-			"sh: ${(-q-)v}: the (-) expansion flag is not implemented\n"},
+		{
+			"a sort flag in front of it is still refused", `v="a b"; printf "[%s]" "${(-q-)v}"`,
+			"sh: ${(-q-)v}: the (-) expansion flag is not implemented\n",
+		},
 		{
 			"before the q it is the other flag", `v="a b"; printf "[%s]" "${(-q)v}"`,
 			"sh: ${(-q)v}: the (-) expansion flag is not implemented\n",

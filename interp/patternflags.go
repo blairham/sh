@@ -433,6 +433,11 @@ func readCount(s string, empty int) (int, bool) {
 // needs the closure to stop one character early. A repetition always consumes
 // at least one unit, which is what makes the recursion terminate for an item
 // that can match nothing.
+//
+// The splits tried stop where the item's own reach does — patternReach says
+// why that is sound, and #1575 is what it cost not to. One repetition of a
+// single space cannot cover half a megabyte, and asking whether it does, at
+// every split, for every prefix a trim tries, is the whole of that bug.
 func matchRepeat(item string, ip, lo, hi int, after string, ap int, s string, at int, o patternOpts) bool {
 	return repeatFrom(item, ip, 0, lo, hi, after, ap, s, at, o)
 }
@@ -446,7 +451,8 @@ func repeatFrom(item string, ip, k, lo, hi int, after string, ap int, s string, 
 	if hi != unboundedRepeat && k >= hi {
 		return false
 	}
-	for i := 0; i < len(s); {
+	ceiling := splitCeiling(item, s, &o)
+	for i := 0; i < ceiling; {
 		i += o.unitWidth(s[i:])
 		mark := o.where.caps.mark()
 		if !matchHere(item, s[:i], ip, at, o) {

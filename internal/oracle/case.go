@@ -5126,7 +5126,7 @@ echo "st=$?"`,
 	{
 		ID: "subscript/a-second-subscript-counts-characters", Category: "expansion",
 		Snippet: `a=(one two three); printf "[%s]\n" "${a[1][2]}"`,
-		Why:     "the base case for a chained subscript: the first names one element and the second counts the characters of it. Five answers to one text — zsh reads both and says `n`, bash 5.3 and that binary as `sh` call it a bad substitution at 1, bash 3.2 reads the first and *ignores* the second and says `two`, ksh93 answers empty at 0, and dash has no arrays to subscript at all. The row divides the panel, which is what makes the construct a grammar's and not the language's",
+		Why:     "the base case for a chained subscript: the first names one element and the second counts the characters of it. Five answers to one text — zsh reads both and says `n`, bash 5.3 calls it a bad substitution at 1 and that binary as `sh` calls it one at 127, bash 3.2 reads the first and *ignores* the second and says `two`, ksh93 answers empty at 0, and dash has no arrays to subscript at all. The row divides the panel, which is what makes the construct a grammar's and not the language's",
 	},
 	{
 		ID: "subscript/a-second-subscript-on-an-association", Category: "expansion",
@@ -5156,12 +5156,12 @@ echo "st=$?"`,
 	{
 		ID: "subscript/a-chain-is-braced-only", Category: "expansion",
 		Snippet: `a=(hello world); printf "[%s]\n" "$a[1][2]"`,
-		Why:     "the boundary of the construct, and the reason the grammar reads a chain in the braced spelling alone: written without braces zsh takes *one* subscript and leaves the rest as ordinary text, so the answer is `hello[2]`. The other five have no bare subscript either and answer `hello[1][2]`, which agrees on the trailing brackets and disagrees about the first. Quoted so that the leftover brackets are text rather than a pattern with no matches",
+		Why:     "the boundary of the construct, and the reason the grammar reads a chain in the braced spelling alone: written without braces zsh takes *one* subscript and leaves the rest as ordinary text, so the answer is `hello[2]`. The four that answer at all have no bare subscript either and say `hello[1][2]`, which agrees on the trailing brackets and disagrees about the first; dash has no arrays and refuses the line. Quoted so that the leftover brackets are text rather than a pattern with no matches",
 	},
 	{
 		ID: "subscript/a-chain-whose-first-link-names-nothing", Category: "expansion",
 		Snippet: `a=(x y); printf "[%s]\n" "${a[9][1]-none}"`,
-		Why:     "a chain is unset when a link before the last named nothing, rather than empty: there is no ninth element, so `-` substitutes. Unanimous in the four that answer at all — zsh reaches the reading and the two bash builds and ksh93 arrive from `${a[9]}` being unset — which is what makes it a claim about the chain in the one shell that has it",
+		Why:     "a chain is unset when a link before the last named nothing, rather than empty: there is no ninth element, so `-` substitutes. Unanimous in the three that answer at all — zsh reaches the reading, and bash 3.2 and ksh93 arrive at the same word from `${a[9]}` being unset — where bash 5.3 and that binary as `sh` refuse the whole expansion instead",
 	},
 	{
 		ID: "pattern/an-escape-before-an-ordinary-character", Category: "patterns",

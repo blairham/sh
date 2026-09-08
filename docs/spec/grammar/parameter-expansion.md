@@ -2835,11 +2835,11 @@ Measured 2026-09-08 on zsh 5.9.2, with `a=(one two three four five)`:
 | `${s[2,4][2]}` on `s=abcdef` | `c` — a range over a string is a substring, which is one value |
 
 The rest of the panel divides five ways on `${a[1][2]}`, which is what
-makes this a grammar's construct and not the language's: bash 5.3.15 and
-that binary as `sh` both answer `${a[1][2]}: bad substitution` at 1,
-bash 3.2.57 reads the first subscript and **ignores** the second and
-answers `two`, ksh93 answers empty at 0, and dash has no arrays to
-subscript at all.
+makes this a grammar's construct and not the language's: bash 5.3.15 answers
+`${a[1][2]}: bad substitution` at 1 and that binary as `sh` answers the
+same words at 127, bash 3.2.57 reads the first subscript and **ignores**
+the second and answers `two`, ksh93 answers empty at 0, and dash has no
+arrays to subscript at all.
 
 ### The shape is the *last* subscript's
 
@@ -2872,7 +2872,8 @@ join, so `"${a[2,4][1]}"` is `two` — the same answer it gives unquoted.
 
 Written without braces this shell reads **one** subscript and leaves the
 rest as ordinary text: with `a=(hello world)`, `"$a[1][2]"` is
-`hello[2]`, where the other five columns answer `hello[1][2]`. So the
+`hello[2]`, where the four columns that answer at all say
+`hello[1][2]`. So the
 bare form is not a shorter way to write a chain, and
 `array/a-subscript-without-braces-is-read-once` above already pinned
 that half.

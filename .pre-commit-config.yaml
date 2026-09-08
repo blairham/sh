@@ -15,25 +15,23 @@ repos:
     hooks:
       - id: go-mod-tidy-repo
 
-  # `golangci-lint-fmt` applies every formatter configured in .golangci.yml —
-  # gofumpt and goimports both.
+  # golangci-lint is NOT run here. It type-checks the whole module on every
+  # commit -- measured on this repository, ~3GB resident and 300% CPU per run,
+  # and with several worktrees committing at once it took an 18-core machine to
+  # a load average of 89 and made the editor unusable. Capping it to 4 workers
+  # helped (240MB, 115%) but a linter has no business costing that at `git
+  # commit` time.
   #
-  # `golangci-lint` and not `golangci-lint-full`: this runs on every commit and
-  # should report what you just wrote, not the repository's whole backlog. The
-  # choice costs nothing either way — `pass_filenames` is false, so golangci
-  # type-checks the whole module regardless and `--new-from-rev` only filters
-  # what it prints. It is about the signal, not the second.
+  # AGENTS.md already said so -- "it runs in CI, not pre-commit -- it's too slow
+  # for every commit" -- and this file disagreed with it.
   #
-  # `--new-from-rev HEAD` is useless on a runner, where the checkout is clean
-  # and the hook therefore reports nothing at all. CI skips this hook and the
-  # Lint job diffs from the base commit instead.
+  # The formatters it used to apply are covered: gofumpt and goimports both run
+  # through go-fumpt-repo above.
   #
-  # Keep `rev` in lockstep with go.mod's tool pin.
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v2.13.2
-    hooks:
-      - id: golangci-lint-fmt
-      - id: golangci-lint
+  # CI runs it instead, in the Lint job, diffing from the merge base. That is
+  # also the only place it can say anything useful: `--new-from-rev HEAD` on a
+  # clean checkout reports nothing at all, so the hook that used to run here was
+  # silent on a runner while being expensive on a laptop.
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0

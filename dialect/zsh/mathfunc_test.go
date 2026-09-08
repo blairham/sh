@@ -136,6 +136,15 @@ func TestAMathFunctionSeesItsArgumentsEvaluatedAndAsStrings(t *testing.T) {
 	if !strings.Contains(out, "g: command not found: nosuchcmd_xyz") {
 		t.Errorf("output = %q, want the implementation named", out)
 	}
+	// The trace says the implementation too, and it is a separate record
+	// from the frame the diagnostic used: `+g:0>` and not `+mf:0>`. Without
+	// this, setting the trace's name to the registered one changed nothing
+	// any test could see.
+	out, _ = runZsh(t, t.TempDir(),
+		"g(){ echo hi; }\nfunctions -M mf 1 1 g\nset -x\n: $(( mf(5) ))\n")
+	if !strings.Contains(out, "+g:0> echo hi") {
+		t.Errorf("output = %q, want the trace to name the implementation", out)
+	}
 }
 
 // TestAMathFunctionRecursesAndCallsAnother — the seam re-enters itself.
@@ -284,13 +293,26 @@ func TestTheListingSaysRegistrationsBackInTheFormThatWouldMakeThem(t *testing.T)
 	if out != "functions -M cc 1 1 g\nfunctions -M bb 1 1 g\nfunctions -M aa 1 1 g\n" {
 		t.Errorf("listing = %q, want the most recent first", out)
 	}
-	// A second registration of one name replaces it and keeps its place
-	// rather than adding a second row.
+	// A second registration of one name replaces it rather than adding a
+	// second row — and moves it to the front, which is what says the order
+	// is arrival and not first-seen.
 	out, _ = runZsh(t, t.TempDir(),
 		"g(){ return 1; }\nh(){ return 2; }\nfunctions -M mf 1 1 g\nfunctions -M mf 1 1 h\n"+
 			"functions -M\necho $(( mf(0) ))\n")
 	if out != "functions -M mf 1 1 h\n2\n" {
 		t.Errorf("output = %q, want one row and the later implementation", out)
+	}
+	out, _ = runZsh(t, t.TempDir(),
+		"g(){ :; }\nfunctions -M a 1 1 g\nfunctions -M b 1 1 g\nfunctions -M a 2 2 g\nfunctions -M\n")
+	if out != "functions -M a 2 2 g\nfunctions -M b 1 1 g\n" {
+		t.Errorf("listing = %q, want the re-registered name back at the front", out)
+	}
+	// And a name removed and registered again is at the front too, which is
+	// the same rule reached through the removal.
+	out, _ = runZsh(t, t.TempDir(),
+		"g(){ :; }\nfunctions -M a 1 1 g\nfunctions -M b 1 1 g\nfunctions +M a\nfunctions -M a 1 1 g\nfunctions -M\n")
+	if out != "functions -M a 1 1 g\nfunctions -M b 1 1 g\n" {
+		t.Errorf("listing = %q, want the re-registered name back at the front", out)
 	}
 }
 

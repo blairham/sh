@@ -121,16 +121,31 @@ type mathFunc struct {
 // -1 because that is the value the shell takes and prints back.
 const mathFuncUnbounded = -1
 
-// registerMathFunc records a registration, replacing any under the same name
-// and remembering when it arrived so the listing can be walked back.
+// registerMathFunc records a registration, replacing any under the same name.
+//
+// A re-registration moves the name to the *front* of the listing rather than
+// keeping the place the first one gave it. Measured: registering `a`, then
+// `b`, then `a` again lists `a` first, where a table that kept the original
+// position would list `b` first — which is what this did until a mutation run
+// found nothing checking it.
 func (r *Runner) registerMathFunc(name string, fn mathFunc) {
 	if r.mathFuncs == nil {
 		r.mathFuncs = map[string]mathFunc{}
 	}
-	if _, had := r.mathFuncs[name]; !had {
-		r.mathOrder = append(r.mathOrder, name)
-	}
+	r.forgetMathOrder(name)
+	r.mathOrder = append(r.mathOrder, name)
 	r.mathFuncs[name] = fn
+}
+
+// forgetMathOrder drops a name from the arrival order, for a removal and for
+// the re-registration that is about to put it back at the front.
+func (r *Runner) forgetMathOrder(name string) {
+	for i, n := range r.mathOrder {
+		if n == name {
+			r.mathOrder = append(r.mathOrder[:i:i], r.mathOrder[i+1:]...)
+			return
+		}
+	}
 }
 
 // removeMathFunc is `functions +M name`. A name that was never registered is
@@ -140,12 +155,7 @@ func (r *Runner) removeMathFunc(name string) {
 		return
 	}
 	delete(r.mathFuncs, name)
-	for i, n := range r.mathOrder {
-		if n == name {
-			r.mathOrder = append(r.mathOrder[:i:i], r.mathOrder[i+1:]...)
-			break
-		}
-	}
+	r.forgetMathOrder(name)
 }
 
 // mathFuncListing is every registration, most recently registered first, in

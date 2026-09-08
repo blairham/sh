@@ -3210,6 +3210,11 @@ echo "st=$?"`,
 		Why:     "the other spelling of the row above, and the other answer: ksh93 takes the array's name from among the operands, fills it, and only then refuses the one after it — so arr holds the line and the refusal still lands. `b` keeps what it had in both spellings, because the clearing `-A` does to the operands after its array stops at the bad name like every other filling. zsh has the letter and refuses this shape for a reason of its own about arrays, which is why the row is worth having in its words rather than assumed from ksh93's",
 	},
 	{
+		ID: "read/an-array-and-a-bad-name-the-first-operand-hides", Category: "builtins",
+		Snippet: `printf 'X Y Z\n' | { read -a arr good 1bad; echo "st=$? arr=[${arr[@]}] good=[$good]"; }`,
+		Why:     "the two rows above with the bad name behind a good one, which is where the check in front of the read cannot reach it — so this is the operands themselves being judged or not. bash ignores every operand after its `-a`: 0, the array filled, and not a word said about `1bad`, which is the same silence `b=keep; read -a arr b` shows by leaving b alone. ksh93 judges them and refuses. Without this row the pair above records only the shape where bash refuses for the *other* reason, and an implementation that walked all of them would pass it while refusing a line bash accepts",
+	},
+	{
 		ID: "help/a-builtin-answers-the-help-option", Category: "builtins",
 		Snippet: `h=$(alias --help 2>/dev/null); echo "st=$?"; printf '%s\n' "$h" | head -n 1`,
 		Why:     "one shell answers `--help` and the rest refuse it as an option nobody has, and the answer goes to standard *output* while every refusal goes to standard error — which is the whole reason a script can tell the two apart. Written as a first line and a status rather than as the block itself: bash's answer carries a paragraph of its own documentation after the synopsis, and this tree reproduces the behavior rather than another project's prose (CLEANROOM.md). It matters far past its size — one platform ships fifteen /usr/bin commands as a stub around `builtin`, so `/usr/bin/alias --help` is this exact call, and every disagreement the real-script run sweep found was this (#825, #815)",

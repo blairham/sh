@@ -2142,18 +2142,23 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// names after its argument exactly as they were — both measured with
 	// `x=keep`.
 	clearRest := strings.Contains(opts, "A")
-	// Whether the array is still filled once an operand behind it turns out
-	// not to be a name. It rides the letter rather than an axis, because the
-	// letters differ and no shell has both: bash's `-a` takes the array's
-	// name in the option's argument and leaves the array untouched —
-	// `read -a arr 1bad` reports the operand and `${arr[@]}` is empty — while
-	// ksh93's `-A` takes it from among the operands and fills it before
-	// refusing the next one, `read -A arr 1bad` leaving arr holding the line.
-	// Both measured 2026-09-07.
-	fillsTheArray := true
+	// Which operands are judged at all, which rides the array letter rather
+	// than an axis because the letters differ and no shell has both.
+	//
+	// bash's `-a` takes the array's name in the option's argument and then
+	// **ignores the operands after it entirely**: measured 2026-09-07,
+	// `read -a arr good 1bad` answers 0 with the array filled and no word
+	// said about `1bad`, and `b=keep; read -a arr b` leaves b as keep. Only
+	// the first operand is still judged, by the check in front of the read —
+	// `read -a arr 1bad` is `not a valid identifier` there. ksh93's `-A`
+	// takes its name from among the operands and judges the rest: the same
+	// line spelled `-A` refuses `1bad` with the array filled behind it.
+	//
+	// So a walk over the operands here would refuse a line bash accepts.
+	judgesTheOperands := array == "" || clearRest
 	fill, badName, bad := len(args), "", false
 	for i, name := range args {
-		if r.isReadName(name) {
+		if !judgesTheOperands || r.isReadName(name) {
 			continue
 		}
 		if r.unspecified {
@@ -2182,7 +2187,6 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			break
 		}
 		fill, badName, bad = i, name, true
-		fillsTheArray = clearRest
 		break
 	}
 	if exact {
@@ -2190,9 +2194,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// five characters in x and nothing in y, measured in both shells
 		// with the letter.
 		if array != "" {
-			if fillsTheArray {
-				r.setArray(array, exactElems(text))
-			}
+			r.setArray(array, exactElems(text))
 			if clearRest {
 				for _, name := range args[:fill] {
 					r.setVar(name, "")
@@ -2235,9 +2237,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
-		if fillsTheArray {
-			r.setArray(array, fields)
-		}
+		r.setArray(array, fields)
 		if clearRest {
 			for _, name := range args[:fill] {
 				r.setVar(name, "")

@@ -203,6 +203,18 @@ func Dialect() syntax.Dialect {
 	// sixty-four of them, six of which stand between the plugin manager and
 	// its first definition.
 	d.ArraySubscriptFlags = true
+	// An assignment whose name is a number, which writes the positional
+	// parameter that number names: `1=abc`. Measured 2026-09-07 with `set --
+	// x; 1=abc; echo $1` — bash 5.3.15, that binary as `sh`, bash 3.2.57,
+	// dash and ksh93 all read the word as a command name and answer
+	// `1=abc: command not found` at 127, and this shell prints `abc`. So it
+	// is set here and nowhere else.
+	//
+	// The plugin manager in `~/.zi` writes it twice, in
+	// `.zi-any-to-user-plugin` and `.zi-formatter-pid`, and both run once per
+	// plugin — twelve `no such file or directory: 1=username/reponame` lines
+	// on a real startup, and no prompt (#1438).
+	d.PositionalAssignment = true
 	d.ParamElementSelection = true
 	// The length may carry an operator here, and it measures what the
 	// operator *leaves*: `v=abc; echo ${#v#a}` is 2. bash, bash 3.2, bash as

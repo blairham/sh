@@ -12498,6 +12498,23 @@ grades it and nothing drift-checks it either, for the same reason.
 | `terminfo/asking-whether-a-capability-is-there` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: set=${+terminfo[cnorm]} colon=[${terminfo[cnorm]:-none}] dash=[${terminfo[cnorm]-none}] plus=[${terminfo[cnorm]+yes}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: set=${+terminfo[cnorm]} colon=[${terminfo[cnorm]:-none}] dash=[${terminfo[cnorm]-none}] plus=[${terminfo[cnorm]+yes}]: bad substitution` *(status 127)* | **2>** `<shell>: set=${+terminfo[cnorm]} colon=[${terminfo[cnorm]:-none}] dash=[${terminfo[cnorm]-none}] plus=[${terminfo[cnorm]+yes}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `+' unexpected` *(status 3)* | `set=0 colon=[none] dash=[none] plus=[]~after=0` |
 | `terminfo/both-parameters-are-readonly` | `unreached=127` **2>** `<shell>: 1: terminfo[colors]=9: not found` | `unreached=0` | `unreached=0` | `unreached=0` | `unreached=0` | **2>** `<shell>:1: read-only variable: terminfo` *(status 1)* |
 | `terminfo/the-two-modules-load` | `ti=127~tc=127~<shell>: 1: echoti: not found~echoti=127` **2>** `<shell>: 1: zmodload: not found~<shell>: 1: zmodload: not found` | `ti=127~tc=127~<shell>: line 1: echoti: command not found~echoti=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: zmodload: command not found` | `ti=127~tc=127~<shell>: line 1: echoti: command not found~echoti=127` **2>** `<shell>: line 1: zmodload: command not found~<shell>: line 1: zmodload: command not found` | `ti=127~tc=127~<shell>: echoti: command not found~echoti=127` **2>** `<shell>: zmodload: command not found~<shell>: zmodload: command not found` | `ti=127~tc=127~<shell>: echoti: not found~echoti=127` **2>** `<shell>: zmodload: not found~<shell>: zmodload: not found` | `ti=0~tc=0~echoti=0` |
+| `posassign/a-number-where-the-name-belongs` | `st=127 [x]` **2>** `<shell>: 1: 1=abc: not found` | `st=127 [x]` **2>** `<shell>: line 1: 1=abc: command not found` | `st=127 [x]` **2>** `<shell>: line 1: 1=abc: command not found` | `st=127 [x]` **2>** `<shell>: 1=abc: command not found` | `st=127 [x]` **2>** `<shell>: 1=abc: not found` | `st=0 [abc]` |
+| `posassign/the-value-is-not-split` | `n=1 [x]` **2>** `<shell>: 1: 1=a: not found` | `n=1 [x]` **2>** `<shell>: line 1: 1=a: command not found` | `n=1 [x]` **2>** `<shell>: line 1: 1=a: command not found` | `n=1 [x]` **2>** `<shell>: 1=a: command not found` | `n=1 [x]` **2>** `<shell>: 1=a: not found` | `n=1 [a b]` |
+| `posassign/the-value-is-not-globbed` | `[x]` **2>** `<shell>: 1: 1=*: not found` | `[x]` **2>** `<shell>: line 1: 1=*: command not found` | `[x]` **2>** `<shell>: line 1: 1=*: command not found` | `[x]` **2>** `<shell>: 1=*: command not found` | `[x]` **2>** `<shell>: 1=*: not found` | `[*]` |
+| `posassign/with-no-parameters-at-all` | `n=0 []` **2>** `<shell>: 1: 1=abc: not found` | `n=0 []` **2>** `<shell>: line 1: 1=abc: command not found` | `n=0 []` **2>** `<shell>: line 1: 1=abc: command not found` | `n=0 []` **2>** `<shell>: 1=abc: command not found` | `n=0 []` **2>** `<shell>: 1=abc: not found` | `n=1 [abc]` |
+| `posassign/an-index-past-the-end-extends-the-list` | `n=2 [a b]` **2>** `<shell>: 1: 9=nine: not found` | `n=2 [a b]` **2>** `<shell>: line 1: 9=nine: command not found` | `n=2 [a b]` **2>** `<shell>: line 1: 9=nine: command not found` | `n=2 [a b]` **2>** `<shell>: 9=nine: command not found` | `n=2 [a b]` **2>** `<shell>: 9=nine: not found` | `n=9 [a b       nine]` |
+| `posassign/appending-to-one` | `st=127 [abc]` **2>** `<shell>: 1: 1+=x: not found` | `st=127 [abc]` **2>** `<shell>: line 1: 1+=x: command not found` | `st=127 [abc]` **2>** `<shell>: line 1: 1+=x: command not found` | `st=127 [abc]` **2>** `<shell>: 1+=x: command not found` | `st=127 [abc]` **2>** `<shell>: 1+=x: not found` | `st=0 [abcx]` |
+| `posassign/a-list-replaces-the-one-it-names` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `a'~<shell>: -c: line 1: `set -- z y w; 1=(a b); echo "[$*] n=$#"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `a'~<shell>: -c: line 1: `set -- z y w; 1=(a b); echo "[$*] n=$#"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `a'~<shell>: -c: line 0: `set -- z y w; 1=(a b); echo "[$*] n=$#"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `[a b y w] n=4` |
+| `posassign/an-empty-list-removes-it` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `set -- a b c; 2=(); echo "[$*] n=$#"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `set -- a b c; 2=(); echo "[$*] n=$#"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `set -- a b c; 2=(); echo "[$*] n=$#"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | `[a c] n=2` |
+| `posassign/appending-a-list-follows-it` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `z'~<shell>: -c: line 1: `set -- a b; 1+=(z); echo "[$*] n=$#"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `z'~<shell>: -c: line 1: `set -- a b; 1+=(z); echo "[$*] n=$#"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `z'~<shell>: -c: line 0: `set -- a b; 1+=(z); echo "[$*] n=$#"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `[a z b] n=3` |
+| `posassign/zero-is-the-shells-own-name` | `unchanged~n=2` **2>** `<shell>: 1: 0=abc: not found` | `unchanged~n=2` **2>** `<shell>: line 1: 0=abc: command not found` | `unchanged~n=2` **2>** `<shell>: line 1: 0=abc: command not found` | `unchanged~n=2` **2>** `<shell>: 0=abc: command not found` | `unchanged~n=2` **2>** `<shell>: 0=abc: not found` | `changed~n=2` |
+| `posassign/a-declaration-still-refuses-the-digits` | `st=127 [a]` **2>** `<shell>: 1: typeset: not found` | `st=1 [a]` **2>** `<shell>: line 1: typeset: `1=abc': not a valid identifier` | `st=1 [a]` **2>** `<shell>: line 1: typeset: `1=abc': not a valid identifier` | `st=1 [a]` **2>** `<shell>: line 0: typeset: `1=abc': not a valid identifier` | **2>** `<shell>: typeset: 1=abc: invalid variable name` *(status 1)* | **2>** `<shell>:typeset:1: not an identifier: 1` *(status 1)* |
+| `posassign/a-subscript-on-the-number-is-not-one` | `st=127` **2>** `<shell>: 1: 1[0]=v: not found` | `st=127` **2>** `<shell>: line 1: 1[0]=v: command not found` | `st=127` **2>** `<shell>: line 1: 1[0]=v: command not found` | `st=127` **2>** `<shell>: 1[0]=v: command not found` | `st=127` **2>** `<shell>: 1[0]=v: not found` | **2>** `<shell>:1: no matches found: 1[0]=v` *(status 1)* |
+| `posassign/in-front-of-a-builtin-it-stays` | `[a b]` **2>** `<shell>: 1: 1=X: not found` | `[a b]` **2>** `<shell>: line 1: 1=X: command not found` | `[a b]` **2>** `<shell>: line 1: 1=X: command not found` | `[a b]` **2>** `<shell>: 1=X: command not found` | `[a b]` **2>** `<shell>: 1=X: not found` | `[b]` |
+| `posassign/in-front-of-a-function-the-caller-keeps-it` | `out [a b]` **2>** `<shell>: 1: 1=X: not found` | `out [a b]` **2>** `<shell>: line 1: 1=X: command not found` | `out [a b]` **2>** `<shell>: line 1: 1=X: command not found` | `out [a b]` **2>** `<shell>: 1=X: command not found` | `out [a b]` **2>** `<shell>: 1=X: not found` | `in [y]~out [X b]` |
+| `posassign/in-front-of-an-external-command-it-does-not` | `[a b]` **2>** `<shell>: 1: 1=X: not found` | `[a b]` **2>** `<shell>: line 1: 1=X: command not found` | `[a b]` **2>** `<shell>: line 1: 1=X: command not found` | `[a b]` **2>** `<shell>: 1=X: command not found` | `[a b]` **2>** `<shell>: 1=X: not found` | `hi~[a b]` |
+| `posassign/leading-zeros-are-read-as-a-number` | `[a] n=1` **2>** `<shell>: 1: 01=z: not found` | `[a] n=1` **2>** `<shell>: line 1: 01=z: command not found` | `[a] n=1` **2>** `<shell>: line 1: 01=z: command not found` | `[a] n=1` **2>** `<shell>: 01=z: command not found` | `[a] n=1` **2>** `<shell>: 01=z: not found` | `[z] n=1` |
+| `posassign/a-digit-with-a-letter-is-not-a-name` | `st=127` **2>** `<shell>: 1: 1a=z: not found` | `st=127` **2>** `<shell>: line 1: 1a=z: command not found` | `st=127` **2>** `<shell>: line 1: 1a=z: command not found` | `st=127` **2>** `<shell>: 1a=z: command not found` | `st=127` **2>** `<shell>: 1a=z: not found` | `st=127` **2>** `<shell>:1: command not found: 1a=z` |
 
 - `parameter/functions-is-a-view-of-the-function-table` — three reads around two mutations, which is the shape a snapshot cannot satisfy at any instant: absent, then the body with its leading tab and a count of one, then absent again. A parameter filled in once and never updated answers the first pair three times and looks perfectly reasonable doing it. Nobody else has the module
   ```sh
@@ -12570,6 +12587,74 @@ grades it and nothing drift-checks it either, for the same reason.
 - `terminfo/the-two-modules-load` — the module rule in zmodload.go opening by itself: each module names one builtin and one parameter, the parameters arrived, and nothing in the loader changed. The builtin is still missing and that is the rule rather than an inconsistency — `command not found: echoti` on the line that ran it is loud, names itself, and is where a person would look anyway, so it never holds a module shut. zsh answers 0 to all three of the first questions and has `echoti`, which is the one word of the row that differs. `echoti`'s own output goes to /dev/null and its diagnostic does not: zsh has the builtin, so the row would otherwise record a real switch to the alternate screen into the golden file
   ```sh
   zmodload zsh/terminfo; echo "ti=$?"; zmodload zsh/termcap; echo "tc=$?"; echoti smcup 2>&1 >/dev/null; echo "echoti=$?"
+  ```
+- `posassign/a-number-where-the-name-belongs` — whether a run of digits may be an assignment's *name*. zsh writes the first positional parameter; bash 5.3, that binary as `sh`, bash 3.2, dash and ksh93 all take the word as a command name and answer `command not found` at 127. Five refusals and one reading, and the row the plugin manager in `~/.zi` needs: two of its own functions assign their positionals, so a real startup printed twelve `1=username/reponame` lines and never reached a prompt
+  ```sh
+  set -- x; 1=abc; echo "st=$? [$1]"
+  ```
+- `posassign/the-value-is-not-split` — the probe that says the difference is in the **parse** rather than in what is done afterwards, which is what makes this a grammar flag and not an axis. An assignment's value is not split, so zsh keeps one parameter holding `a b`; the shells that read a command name split the same word and complain about `1=a`. `posassign/the-value-is-not-globbed` is the other half of the same statement
+  ```sh
+  v="a b"; set -- x; 1=$v; echo "n=$# [$1]"
+  ```
+- `posassign/the-value-is-not-globbed` — the second half of the parse probe, and the sharper one. An assignment's value is not a pattern, so `$1` holds a literal `*`; the five that read a command name subject the whole word to filename generation, and it is the *neighboring* row that shows they did — `posassign/a-subscript-on-the-number-is-not-one` is the same shape with the flag off in every column, and the shell that calls an unmatched pattern an error refuses the line there while the other five run it. Here that shell is the one taking the assignment, so all five refusals look alike and the reading has to be pinned from the pair
+  ```sh
+  set -- x; 1=*; echo "[$1]"
+  ```
+- `posassign/with-no-parameters-at-all` — the list is created rather than only written into: with nothing set beforehand the assignment leaves `$#` at 1. A reading that required the parameter to exist would answer 0 here and be indistinguishable on every other row
+  ```sh
+  1=abc; echo "n=$# [$1]"
+  ```
+- `posassign/an-index-past-the-end-extends-the-list` — how far past the end it reaches, and what fills the gap: `$#` becomes 9 and the six parameters between are empty rather than absent. The count is the load-bearing half — a shell that stored the value under the name `9` and left `$#` at 2 would print nearly the same `$*`
+  ```sh
+  set -- a b; 9=nine; echo "n=$# [$*]"
+  ```
+- `posassign/appending-to-one` — the append spelling on the same name, which is two grammar flags meeting: dash has no `+=` at all and the four with it still have no digit name, so all five answer with the whole word as a command. The one shell that has both joins the value to what the parameter held
+  ```sh
+  set -- abc; 1+=x; echo "st=$? [$1]"
+  ```
+- `posassign/a-list-replaces-the-one-it-names` — the array spelling, which splices rather than writes: the two words replace the one parameter and `$#` goes to 4. It is `argv[1]=(a b)` under another spelling — measured identical — and the count is what says so, since a shell that stored `a b` in the first parameter would print the same characters at `$#` 3
+  ```sh
+  set -- z y w; 1=(a b); echo "[$*] n=$#"
+  ```
+- `posassign/an-empty-list-removes-it` — the splice with nothing in it, which is the only spelling that makes the list *shorter*. `$#` goes to 2 and the parameter it named is gone rather than empty — the reading that blanked it in place would leave three
+  ```sh
+  set -- a b c; 2=(); echo "[$*] n=$#"
+  ```
+- `posassign/appending-a-list-follows-it` — the two flags meeting again on the list form, and the row that pins where an appended word *goes*: after the parameter named and not after the last one, so `a b` becomes `a z b`. `a+=(z)` on an ordinary array does the opposite, which is what makes this worth recording rather than deriving
+  ```sh
+  set -- a b; 1+=(z); echo "[$*] n=$#"
+  ```
+- `posassign/zero-is-the-shells-own-name` — `0` is admitted by the same grammar and does not land in the list: `$0` becomes the assigned word and `$#` stays 2. Written as a case rather than by printing `$0`, because what the other five print there is a path this record must not depend on
+  ```sh
+  set -- a b; 0=abc; case $0 in abc) echo changed;; *) echo unchanged;; esac; echo "n=$#"
+  ```
+- `posassign/a-declaration-still-refuses-the-digits` — the boundary, and the one a probe written with `local` or `typeset` would have mistaken for agreement: the shell that takes `1=abc` on its own refuses the same text as a declaration's operand — `not an identifier: 1` — so the grammar admits the digits where a *name* would stand and the utility refuses them where an *identifier* must. Both halves have to be recorded or the flag reads as wider than it is. dash has no `typeset` at all and answers with a missing command, which is that column's control rather than an opinion about the name
+  ```sh
+  set -- a; typeset 1=abc; echo "st=$? [$1]"
+  ```
+- `posassign/a-subscript-on-the-number-is-not-one` — the other boundary: a subscript after the digits is not this construct anywhere, so `1[0]=v` is a command name in the shell that has the flag too — and a *pattern* there, which is why the shell that calls an unmatched glob an error refuses the line instead of running it. The assignment head insists on a name in front of the bracket in every column
+  ```sh
+  set -- a b c; 1[0]=v; echo "st=$?"
+  ```
+- `posassign/in-front-of-a-builtin-it-stays` — a prefix to a builtin is applied and not taken back, which an ordinary name's prefix is: the parameter becomes `X`, `shift` then drops it, and `b` is what is left. The five without the grammar run `shift` with the word as its command name and leave `a b`, so the row grades the whole shape rather than only the store
+  ```sh
+  set -- a b; 1=X shift; echo "[$*]"
+  ```
+- `posassign/in-front-of-a-function-the-caller-keeps-it` — the same prefix on a function, where two things have to be true at once: the body gets its own parameters — `y` — and the write lands on the caller's, which the line after the call shows. A prefix made visible to the body instead would print `in [X]` and is the plausible wrong reading
+  ```sh
+  set -- a b; f() { echo "in [$*]"; }; 1=X f y; echo "out [$*]"
+  ```
+- `posassign/in-front-of-an-external-command-it-does-not` — the one place the construct does nothing at all: the parameters are unchanged after an external command, so a prefix that is a number is neither applied nor exported. It is the counterpart to the builtin row, and the two together say the assignment goes to *this* shell or nowhere
+  ```sh
+  set -- a b; 1=X /bin/echo hi; echo "[$*]"
+  ```
+- `posassign/leading-zeros-are-read-as-a-number` — the digits are read as a number rather than matched against a canonical spelling, so `01` is the first parameter. A rule written as a comparison against the decimal text would refuse this and look right on every other row
+  ```sh
+  set -- a; 01=z; echo "[$1] n=$#"
+  ```
+- `posassign/a-digit-with-a-letter-is-not-a-name` — the control the whole group needs: a name that merely *starts* with a digit is not admitted anywhere, so all six columns answer `command not found` at 127. Without it a flag that let any word beginning with a digit be an assignment would pass every other row here
+  ```sh
+  set -- a; 1a=z; echo "st=$?"
   ```
 
 ## harness invocation

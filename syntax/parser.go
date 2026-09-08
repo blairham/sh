@@ -1354,10 +1354,34 @@ func (p *Parser) isAssign(t Token) (assignHead, bool) {
 		h.append = true
 	}
 	if !isName(name) {
-		return h, false
+		// A run of digits names a positional parameter where the dialect has
+		// the construct. Behind isName rather than inside it, because every
+		// other caller of that function is asking about an identifier — a
+		// `for` variable, a function's name, a declaration's operand — and
+		// none of them takes a digit in any shell on the panel.
+		if !p.dialect.PositionalAssignment || !isDigitRun(name) {
+			return h, false
+		}
 	}
 	h.name = name
 	return h, true
+}
+
+// isDigitRun reports whether s is one or more decimal digits and nothing else.
+//
+// Leading zeros included: `01=z` writes the first positional parameter in the
+// shell with the construct, measured 2026-09-07, so the digits are read as a
+// number rather than matched against a canonical spelling.
+func isDigitRun(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // subscriptedAssign reads the `name[subscript]=` shape, whose subscript may

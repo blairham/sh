@@ -85,6 +85,30 @@ type Lexer struct {
 	// Exactly the shape inPattern has, for exactly the same reason.
 	inArgument bool
 
+	// inOperand is set while the tokens being read are an expansion's
+	// operand — the pattern of `${v#pat}`, the word of `${v:-word}`, the
+	// replacement of `${v/pat/repl}` — rather than a command.
+	//
+	// It suspends the arithmetic command for the reason inCondition and
+	// inCaseArm do: no command may begin there, so `((` is not one, and
+	// scanArithCommand keeps the *expression* as its token text rather than
+	// the source it read. That is not a lossless reading to fall back on —
+	// it strips the two opening parens and up to two closing ones — so an
+	// operand read as one comes back shorter than it was written. Measured
+	// 2026-09-07, and the panel is unanimous, which is what makes this the
+	// core's answer rather than a dialect's:
+	//
+	//	u=; x=${u:-((a))}; echo "[$x]"      [((a))] in all six
+	//
+	// where this lexer answered `[a]` — the arithmetic expression `a`, read
+	// as a variable name and found unset. `"${u:-((a))}"` was unaffected and
+	// is not the narrower case: a double-quoted *word* operand is read by
+	// quotedWordFrom, which scans double-quoted content and never a command,
+	// so only the unquoted routes reach here. Every pattern operand is one
+	// of those whatever it is written inside, which is how the same fault
+	// reached `${v#((#s)a)}` as `bad pattern: #s)a` (#1408).
+	inOperand bool
+
 	// inCaseParenList is set while the token being read stands inside a
 	// `case` arm's parenthesized pattern list — between the paren the arm
 	// carries and the one that closes it. One dialect reads a newline there
@@ -373,10 +397,13 @@ func (l *Lexer) Next() Token {
 	// A `case` arm suspends it for the same reason a condition does: no
 	// command may begin where a pattern belongs, so there is no arithmetic
 	// command to be had and `((` is the arm's paren in front of a group.
+	// An expansion's operand suspends it for that same reason and is the
+	// third such position; see inOperand for what reading one as arithmetic
+	// cost (#1408).
 	// Measured on zsh 5.9.2: `case x in ((a|b))`, `case x in ((a))` and
 	// `case x in ((1))` are all accepted there and were all `parse error
 	// near 'arithmetic command'` here (#1161).
-	if l.dialect.ArithCommand && !l.inCondition && !l.inCaseArm &&
+	if l.dialect.ArithCommand && !l.inCondition && !l.inCaseArm && !l.inOperand &&
 		l.peek() == '(' && l.peekAt(1) == '(' {
 		return l.scanArithCommand(start)
 	}

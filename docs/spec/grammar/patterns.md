@@ -893,6 +893,41 @@ Precedence, each measured rather than read off a manual:
   an escaped character, a `?`, a numeric range or one ordinary character —
   `(ab)#`, `[ab]#` and `?#` all match — and a `*` is **not** one: `*#` is
   `bad pattern`, as is a third `#` (`ab###`).
+- **The item is the *whole* bracket expression**, `[:class:]` and all. A
+  class's own `]` does not end the bracket, so `[[:space:]]##` is
+  one-or-more whitespace characters and not one whitespace character
+  followed by a repeated `#`. Measured on the trims, where the extent of a
+  single match is visible: with `v="  x  "`, `${v##[[:space:]]##}` is
+  `x  ` and `${v%%[[:space:]]##}` is `  x`, and with `v=abX`,
+  `${v##[[:alpha:]]##}` and `${v##[[:alpha:]]#}` are both empty and
+  `${v##[[:alpha:]](#c2)}` is `X`. A range or an enumeration has no inner
+  `]` and was never in doubt: `[a-z]##`, `[ab]##` and `?##` quantify the
+  same way (#1409).
+
+  **Two spellings cannot see this and must not be used to check it.** A
+  global substitution re-applies its pattern until nothing matches, so
+  matching one character at a time still removes the whole run —
+  `v="  x"; ${v//[[:space:]]##/}` is `x` either way. And the *shortest*
+  match of one-or-more is one character, which is the same answer a
+  closure that quantified nothing gives: `v=12ab; ${v#[[:digit:]]##}` is
+  `2ab` either way. Only `##`, `%%`, `(M)` and a single anchored
+  replacement observe the length of one match.
+
+  A `[:` with no `:]` **after** it is not a class, and neither is one whose
+  only colon is its own: `[[:space]` is the ordinary bracket holding `[`,
+  `:`, `s`, `p`, `a`, `c` and `e`, so `v="cape[X"; ${v##[[:space]##}` is
+  `X`; and `[[:]` is the bracket holding `[` and `:`, which is why
+  `[[ ":" == [[:] ]]` matches and `[[ x == [[:] ]]` does not in bash 5.3.15
+  and zsh 5.9.2 alike. Reading the closing `:]` from the `[` rather than
+  from after the `[:` lets one colon do both jobs, which gave the class a
+  name running from offset 3 to offset 2 and panicked this shell on every
+  surface that matches a pattern.
+
+  `+([[:alpha:]])` is a **different operator** — a quantified group, in
+  bash and ksh93 — and is read elsewhere in the matcher. `v=abX;
+  ${v##+([[:alpha:]])}` under `shopt -s extglob` is empty in bash 5.3,
+  bash 3.2 and ksh93; it has nothing to say about the postfix closure and
+  answering it correctly is no evidence about one.
 - **A `~` with nothing on one side of it is the character itself**:
   `[[ 'a~' == a~ ]]` matches and `[[ ab == a~ ]]` does not.
 - **A `#` with nothing in front of it is the character itself**:

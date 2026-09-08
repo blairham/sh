@@ -45,6 +45,42 @@ So the AST cannot store it as a string. It is a nested word, which is why
 `substitutions.md` keeps the inner text raw rather than flattening it:
 whatever parses `${ }` has to parse a word inside it.
 
+### But it is not a command, so no `((` in one is arithmetic
+
+An operand stands where an operand stands, not where a command may begin,
+so the two parentheses that open an arithmetic command are ordinary
+characters in one. Measured 2026-09-07, **unanimous** across bash 5.3.15,
+bash 3.2.57, that build invoked as `sh`, dash, ksh93u+ and zsh 5.9.2:
+
+| probe | result |
+| --- | --- |
+| `u=; x=${u:-((a))}; echo "[$x]"` | `[((a))]` |
+| `u=; y=${u:-$((1+2))}; echo "[$y]"` | `[3]` |
+
+The second row is the control: `$((` in the same position still evaluates,
+so the rule is about where a *command* may begin and not about arithmetic
+being unavailable in an operand.
+
+This is one of the three positions that suspend the arithmetic command,
+and the other two are in `conditions.md` and `commands.md`: inside `[[ ]]`
+and at the start of a `case` arm, `((` is two grouping parentheses for the
+same reason. All three are the same sentence — no command begins there.
+
+It matters more than a curiosity because reading `((` as an arithmetic
+command is **lossy**: what such a reading keeps is the expression, so the
+operand comes back with the two opening parentheses and up to two closing
+ones removed. This implementation read one that way and answered `[a]` for
+the first row — the expression `a`, taken as a variable name and found
+unset — and the same fault reached every *pattern* operand, where a
+leading group is ordinary: `${v#((#s)a)}` was refused as
+`bad pattern: #s)a`, both outer parens gone (#1408).
+
+A double-quoted word operand never showed it, and that is not a smaller
+case but a different route: see the section below — such a body is read as
+double-quoted content, which has no command position in it at all. A
+pattern operand is read as an unquoted word however it is written, so
+`"${v#((a))}"` is affected where `"${u:-((a))}"` is not.
+
 ### And it is a word in the quoting the expansion stands in
 
 A `${ }` written inside double quotes has a body that is double-quoted

@@ -977,6 +977,11 @@ func (p *Parser) wordFrom(text string, at Pos, q Quoting) *Word {
 	}
 
 	sub := NewLexer(text, p.operandDialect())
+	// An operand is not a command, so no arithmetic command begins in one.
+	// See Lexer.inOperand: the `((` reading is also a *lossy* one, so an
+	// operand that reached it came back with its parentheses missing
+	// (#1408).
+	sub.inOperand = true
 	w := &Word{Start: at, Stop: at}
 	// Whatever the lexer stepped over between two tokens is text here, not a
 	// separator: `${u:-a b}` is the two words `a b` and not `ab`. A lexer

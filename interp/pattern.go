@@ -887,14 +887,22 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 		first = false
 
 		// A character class, [[:digit:]] and friends.
+		//
+		// The `:]` is looked for **after** the opening `[:`, so the colon
+		// that opens one cannot also be the colon that closes it. Searching
+		// from the `[` instead made `[[:]` a class whose name ran from
+		// offset 3 to offset 2 and panicked the shell — reachable from
+		// every surface, `[[ ":" == [[:] ]]` included. It is not a class at
+		// all: measured 2026-09-07, `[[ ":" == [[:] ]]` matches and
+		// `[[ x == [[:] ]]` does not, in bash 5.3.15 and zsh 5.9.2 alike,
+		// so the four characters are a bracket holding `[` and `:`.
 		if strings.HasPrefix(p[i:], "[:") {
-			end := strings.Index(p[i:], ":]")
-			if end >= 0 {
-				if inClass(p[i+2:i+end], c) ||
-					(o.fold && inClass(p[i+2:i+end], swapUnitCase(c))) {
+			if end := strings.Index(p[i+2:], ":]"); end >= 0 {
+				name := p[i+2 : i+2+end]
+				if inClass(name, c) || (o.fold && inClass(name, swapUnitCase(c))) {
 					matched = true
 				}
-				i += end + 2
+				i += 2 + end + 2
 				continue
 			}
 		}

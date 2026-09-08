@@ -5166,7 +5166,7 @@ EOF
 		ID: "unterminated/a-quote-is-blamed-where-it-opened-or-where-input-ran-out", Category: "syntax errors", SyntaxError: true,
 		Script:  true,
 		Snippet: "echo one\nx='never closed\necho two\necho three\necho four\n",
-		Why:     "the plainest unterminated quote, written across enough lines that the opener and the end of input are different places — which is the whole question, and the panel splits on it. bash 5.3, the same bash called `sh`, bash 3.2 and ksh93 blame **line 2**, where the quote opened; dash and zsh blame the last line, where the input ran out. So there is no single right location and a dialect that borrowed the other one is wrong for a reader trying to find the cause. This row exists because #1397's user-visible symptom was a location 214 lines from the fault, and it was worth pinning that the location rule itself is sound and only the misparse moved the blame: a fix to the parse that let this drift would put the confusing half of that bug back. `echo one` runs first in every column, which is what says the shells read and refuse rather than refusing before they start. Ours: the four that word it agree with their shells; our ksh dialect accepts the file silently and runs to `one` with a status of 0, which is a separate pre-existing defect and not this one — it does the same on `main`",
+		Why:     "the plainest unterminated quote, written across enough lines that the opener and the end of input are different places — which is the whole question, and the panel splits on it. bash 5.3, the same bash called `sh`, bash 3.2 and ksh93 blame **line 2**, where the quote opened; dash and zsh blame the last line, where the input ran out. So there is no single right location and a dialect that borrowed the other one is wrong for a reader trying to find the cause. This row exists because #1397's user-visible symptom was a location 214 lines from the fault, and it was worth pinning that the location rule itself is sound and only the misparse moved the blame: a fix to the parse that let this drift would put the confusing half of that bug back. `echo one` runs first in every column, which is what says the shells read and refuse rather than refusing before they start. Ours: all four agree with their shells. Our ksh accepted this file silently and ran to `one` with a status of 0 when this row was written — a separate defect, and #1424 is where it was fixed",
 	},
 	{
 		ID: "heredoc/a-delimiter-that-never-matches", Category: "redirection",
@@ -9100,15 +9100,15 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 	{
 		ID: "token/an-unterminated-quote-in-a-script-file", SyntaxError: true, Category: "command language",
 		Script:  true,
-		Snippet: "echo one\necho \"abc\necho three",
-		Why:     "the same quote as `token/an-unterminated-quote-at-end-of-input`, from a *file* instead of -c, and ksh93 changes its answer: it refuses here — `\"' unmatched`, status 3 — where it closed the quote and ran the command under -c. So the leniency is a property of how the program arrived and not of the shell, exactly as ExpandAliases is, and a boolean on the dialect gets it wrong on the route a script uses. `echo one` first because every shell in the panel runs what stood before the quote (#1424)",
+		Snippet: "echo \"abc",
+		Why:     "the same text as `token/an-unterminated-quote-at-end-of-input`, from a *file* instead of -c, and ksh93 changes its answer: it refuses here — `\"' unmatched`, status 3 — where it closed the quote and printed abc under -c. So the leniency is a property of how the program arrived rather than of the shell, exactly as ExpandAliases is, and the boolean that stood here was measured on the one route that is lenient and applied to the four that are not (#1424)",
 	},
 	{
 		ID: "token/an-unterminated-quote-on-standard-input", SyntaxError: true, Category: "command language",
 		Args:    []string{"--"},
 		Stdin:   ArgSnippet + "\n",
-		Snippet: "echo one\necho \"abc\necho three",
-		Why:     "the third route, which completes the table and makes the pair above a rule rather than a curiosity: ksh93 refuses a program on the descriptor the way it refuses a file, so `-c` is alone. `--` is what says the program is not on the argv",
+		Snippet: "echo \"abc",
+		Why:     "the third route with the same text again, which completes the table and makes the pair above a rule rather than a curiosity: ksh93 refuses a program on the descriptor the way it refuses a file, so `-c` is alone. `--` is what says the program is not on the argv",
 	},
 	{
 		ID: "token/an-unterminated-quote-inside-eval", Category: "command language",

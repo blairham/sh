@@ -2629,8 +2629,13 @@ element, and each is one the shell declines or answers some other way:
   there. The letters mean something else over keys, and the read side
   refuses them for the same reason.
 - a **scalar**: `s=abc; s[(r)b]=Z` is `aZc` there — the search names a
-  character position and the assignment replaces the character, which is
-  a construct of its own. Refused here, as the read side refuses it.
+  character position and the assignment replaces the character. The read
+  side answers the search now; this side still refuses, because the
+  subscript it would hand on is not answered: `s=hello; s[3]=Q` is
+  `heQlo` there and two spaces and a `Q` here, the string read as the
+  array of one it otherwise is with a third element written past it
+  (#1532). Returning the index the search found would turn a refusal by
+  name into that value.
 - `(R)` **missing**: `assignment to invalid subscript range` there.
 - `(I)` **missing**: puts the value at the *front* there — `b[(I)nomatch]=W`
   on `(x y z)` gives `W x y z` with four elements — which is neither the
@@ -2644,7 +2649,12 @@ word ends at the parenthesis — so neither writes.
 
 `unset 'b[(r)y]'` is the one direction still unread: the subscript arrives
 as a *runtime string* rather than as a parsed word, so the group has
-nowhere to hang its operand. Filed rather than guessed.
+nowhere to hang its operand. Filed rather than guessed (#1275).
+
+A flag group inside a **range endpoint** — `${s[(r)l,(r)o]}`, which is
+`${s[3,5]}` there — is read as part of the first group's operand and
+answers empty. Filed as #1533; a negative `(b:expr:)` start past the first
+element of an *array* answers the wrong miss, filed as #1534.
 
 ### Grammar
 
@@ -2680,7 +2690,7 @@ the *scan*, and `Assign.IndexFlags` carries it exactly as
 ### What this implementation carries, and what it refuses by name
 
 `r R i I e n b` are carried, for an ordinary array, for an associative
-array and for the positional parameters.
+array, for the positional parameters and for a scalar.
 
 `w f p k K s` are read by the grammar and **refused by name** when the
 subscript is reached — `${a[(w)x]}: the (w) subscript flag is not
@@ -2688,11 +2698,60 @@ implemented` — for the reason the expansion flags are: a subscript flag
 answered wrong returns a plausible element at status 0, which is the one
 failure this repository exists to avoid.
 
-One refusal is about the *target* rather than the letter, and it replaces
-a silent wrong answer: on a **scalar** a search is a search for a
-substring and what comes back is a character position —
-`s="one two three"; ${s[(r)two]}` is `t` and `s=hello; ${s[(i)l]}` is
-`3`, which is no element of anything.
+#### A search over a scalar
+
+The third target, and the same four letters again: over a plain string
+the search counts through the string's **characters**. Measured on zsh
+5.9.2 with `s="hello world"`:
+
+| written | zsh 5.9.2 | what it selected |
+| --- | --- | --- |
+| `${s[(i)l]}` | `3` | the position of the first match |
+| `${s[(I)l]}` | `10` | and of the last |
+| `${s[(r)l]}` | `l` | which position `r` reads the character at |
+| `${s[(R)[hd]]}` | `d` | so `r` and `R` part where the characters do |
+| `${s[(i)wor]}` | `7` | the operand matches a **substring** |
+| `${s[(r)wor]}` | `w` | and `r` still answers one character |
+
+So it is not the array's search over the one-element list a scalar is
+otherwise read as — that would make `${s[(r)wor]}` the whole string —
+and not a match against each character on its own either, which would
+make every multi-character operand a miss. It is the array's walk with a
+**prefix** match at each position.
+
+`r` and `R` are the index that walk found read as an *ordinary*
+subscript, which is the whole of what they add: the misses are the
+array's two out-of-range indices — `${s[(i)zz]}` is `12` and
+`${s[(I)zz]}` is `0` — and `${s[(r)zz]}` and `${s[(R)zz]}` are empty
+because `${s[12]}` and `${s[0]}` are each no character.
+
+`(e)`, `(n:expr:)` and `(b:expr:)` are read here as they are over an
+array: `${s[(ie)lo]}` is 4, `${s[(in:2:)l]}` is 4, `${s[(ib:5:)l]}` is
+10. And the character is the locale's rather than a byte, the same unit
+`${s[2]}` counts: `s="héllo"; ${s[(i)l]}` is 3 under a UTF-8 locale and
+4 under `LC_ALL=C`.
+
+Two edges are measured rather than derived. **One position past the last
+character is searched**, which the walk over elements has no equivalent
+of because only an empty match can land there: `${s[(I)*]}` is 12 where
+`${s[(I)?]}` is 11. `(b:expr:)` does not reach that position —
+`${s[(Ib:12:)*]}` is 0 — so a start named explicitly is one of the
+characters or nowhere at all. And an **empty string** answers `0` for
+both letters, which is neither out-of-range index: `e=; ${e[(i)x]}`,
+`${e[(I)x]}` and `${e[(i)*]}` are all 0, where one past the last
+character would be 1. A name holding *nothing* is a third answer again —
+empty, and still unset, so `${nos[(i)x]-none}` is `none`.
+
+This is the shape a plugin manager reaches three times before it has
+loaded anything, on a name that holds a string rather than the array it
+reads as: `opts="-X -w"; ${opts[(r)-X]}` is `-` and `${opts[(r)-C]}` is
+empty, which is exactly the present-or-absent test the caller writes.
+
+The reading is not asked of the dialect. A subscript on a string is a
+character in one grammar and the one element in another
+(`ScalarSubscriptIsACharacter`), but the group that makes these
+characters a search at all is the first grammar's, and it answers that
+question one way — so there is no disagreement here to put an axis on.
 
 #### A search over an associative array
 

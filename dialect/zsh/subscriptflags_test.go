@@ -26,6 +26,10 @@ func TestASubscriptFlagGroupIsThisDialects(t *testing.T) {
 		{`printf "[%s]" "${a[(I)zz]}"`, `[0]`},
 		{`printf "[%s]" "${a[(re)be*]}"`, `[]`},
 		{`printf "[%s]" "${a[(re)beta]}"`, `[beta]`},
+		// The whole element, not a prefix of it — the line the search over a
+		// string sits on the other side of, since that one matches at the
+		// start of what it is handed.
+		{`printf "[%s]" "${a[(r)be]}" "${a[(i)be]}"`, `[][6]`},
 		{`printf "[%s]" "${a[(rn:2:)*a]}"`, `[beta]`},
 		{`printf "[%s]" "${a[(rb:3:)*a]}"`, `[gamma]`},
 		// The brace-less spelling, which is a lexer question in this dialect
@@ -67,11 +71,96 @@ func TestASubscriptFlagThisDialectReadsAndDoesNotCarry(t *testing.T) {
 	for _, tc := range []struct{ src, names string }{
 		{`a=(x y); printf "[%s]" "${a[(w)y]}"`, "(w)"},
 		{`a=(x y); printf "[%s]" "${a[(k)y]}"`, "(k)"},
-		{`s=xy; printf "[%s]" "${s[(r)y]}"`, "(r)"},
 	} {
 		out, st := runZsh(t, t.TempDir(), tc.src)
 		if !strings.Contains(out, tc.names+" subscript flag is not implemented") || st == 0 {
 			t.Errorf("%s = %q (status %d), want a refusal naming %s", tc.src, out, st, tc.names)
+		}
+	}
+	// The one target still refused: a search on the *left* of `=` over a
+	// plain string names a character position, and this dialect writes a
+	// character there — `s=hello; s[3]=Q` is `heQlo` in the shell — which is
+	// not built, so the index the search found has nowhere to go. The value
+	// is asserted with the refusal because an assignment refused this way
+	// leaves the status at 0, so nothing else says the write did not land.
+	out, _ := runZsh(t, t.TempDir(), `s=hello; s[(r)l]=Q; printf "[%s]" "$s"`)
+	if !strings.Contains(out, "(r) subscript flag is not implemented for a scalar") ||
+		!strings.Contains(out, "[hello]") {
+		t.Errorf(`s[(r)l]=Q = %q, want the flag refused and hello kept`, out)
+	}
+}
+
+// A search over a plain string is this dialect's too, and it is the ordered
+// array's search counting through *characters*: the operand matches a
+// substring, the answer is where that substring starts, and `(r)` reads that
+// position as an ordinary subscript.
+//
+// Measured 2026-09-08 on zsh 5.9.2 with `s="hello world"`, and against the
+// other four, which read every row as arithmetic and fail there. It is here
+// as well as in the substrate because the *preset* is what makes a subscript
+// on a string a character at all, and because the shape at the bottom is the
+// one the plugin manager on this machine reaches three times before it has
+// loaded anything.
+func TestASearchOverAScalarIsThisDialects(t *testing.T) {
+	const s = `s="hello world"` + "\n"
+	for _, tc := range []struct{ src, want string }{
+		{`printf "[%s]" "${s[(i)l]}"`, `[3]`},
+		{`printf "[%s]" "${s[(I)l]}"`, `[10]`},
+		{`printf "[%s]" "${s[(r)[hd]]}"`, `[h]`},
+		{`printf "[%s]" "${s[(R)[hd]]}"`, `[d]`},
+		// A multi-character operand matches, and `r` still answers with one
+		// character rather than with the text that matched.
+		{`printf "[%s]" "${s[(i)wor]}" "${s[(r)wor]}"`, `[7][w]`},
+		// Both misses read as subscripts, and neither names a character.
+		{`printf "[%s]" "${s[(i)zz]}" "${s[(I)zz]}"`, `[12][0]`},
+		{`printf "[%s]" "${s[(r)zz]}" "${s[(R)zz]}"`, `[][]`},
+		// One position past the last character, where only an empty match
+		// lands.
+		{`printf "[%s]" "${s[(I)*]}" "${s[(I)?]}"`, `[12][11]`},
+		{`printf "[%s]" "${s[(ie)lo]}" "${s[(in:2:)l]}" "${s[(ib:5:)l]}"`, `[4][4][10]`},
+		// A start outside the string searches nothing in either direction,
+		// and `(b:expr:)` cannot name the position past the last character
+		// even though the backward walk begins there on its own.
+		{`printf "[%s]" "${s[(ib:99:)l]}" "${s[(Ib:99:)l]}" "${s[(Ib:12:)*]}"`, `[12][0][0]`},
+		// An empty string answers neither end, which the rule above does not
+		// predict.
+		{`e=; printf "[%s]" "${e[(i)x]}" "${e[(I)x]}"`, `[0][0]`},
+		// The brace-less spelling reaches the same reading.
+		{`printf "[%s]" "$s[(r)l]"`, `[l]`},
+	} {
+		out, st := runZsh(t, t.TempDir(), s+tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// A character is the locale's rather than a byte, which only a dialect test
+// can show: the substrate answers the encoding question from an axis, and
+// this preset is the one that answers it yes.
+func TestASearchOverAScalarCountsCharacters(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`LC_ALL=en_US.UTF-8; s="héllo"; printf "[%s]" "${s[(i)l]}" "${s[(i)é]}" "${s[(r)é]}"`, `[3][2][é]`},
+		{`LC_ALL=C; s="héllo"; printf "[%s]" "${s[(i)l]}"`, `[4]`},
+	} {
+		out, st := runZsh(t, t.TempDir(), tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// The shape the plugin manager on this machine reaches three times before it
+// has loaded anything: a search used as a present-or-absent test, landing on
+// a name that holds a *string* rather than the array it reads as.
+func TestTheOptionTestAPluginManagerReachesOverAString(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`opts="-X -w"; [[ -n ${opts[(r)-X]} ]] && printf found || printf missing`, "found"},
+		{`opts="-X -w"; [[ -n ${opts[(r)-C]} ]] && printf found || printf missing`, "missing"},
+	} {
+		out, st := runZsh(t, t.TempDir(), tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
 		}
 	}
 }

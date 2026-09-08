@@ -55,7 +55,7 @@ func TestAppendingALiteralToAnUnsetNameAddsNothingInFront(t *testing.T) {
 	}
 	// And a name `unset` took away is that same nothing, rather than the
 	// value it was holding a moment ago -- which is the shape where reading
-	// the name back has to honour the removal instead of the store.
+	// the name back has to honor the removal instead of the store.
 	out, _ = runArray(t, `a=1; unset a; a+=(2); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "[2] n=1" {
 		t.Errorf("after unset: got %q, want the appended element alone", got)

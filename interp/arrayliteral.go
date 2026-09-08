@@ -134,6 +134,16 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 // append operator and not to "an array store finding a scalar", which is why
 // this is a helper called from one place rather than a rule inside
 // storeArray. See setArrayOperands.
+// getVar rather than the two tables under it, and that choice is deliberate
+// beyond the environment: a *produced* parameter is holding a value too, and
+// bash promotes it — `RANDOM+=(2)` lists as `declare -ai RANDOM=([0]="19721"
+// [1]="2")`, two elements. No corpus row records it, because the value is a
+// new random number every run and there is nothing stable to record; a
+// mutation run reading `Vars` plus `inheritedValue` instead therefore survives
+// every test in the package, and it is left surviving rather than pinned with
+// a test that would have to know what the generator said. Everything else that
+// mutant changes is already covered: `unset` reaches the environment through
+// inheritedEnv, so the two spellings agree there.
 func (r *Runner) appendedOverAScalar(name string) (Array, int) {
 	v, held := r.getVar(name)
 	if !held {

@@ -518,13 +518,17 @@ func (l *Lexer) skipBlanksAndComments() {
 
 // skipComment consumes a `#` and the rest of its line, leaving the newline.
 //
-// The one implementation of the rule. It has two callers, and the reason it
-// is a function rather than two loops is #1397: the second caller did not
-// exist, so a process substitution's body was scanned with no comment rule at
-// all, and an apostrophe in `# it's fine` opened a quote that ran to the end
-// of the file. Writing the loop again in the second place is how that would
-// come back — the same shape has bitten this repo four times — so both go
-// through here.
+// The one implementation of the rule, and the reason it is a function rather
+// than a loop written out three times is #1397: two of its three callers did
+// not exist, so the bodies of `<( )`, `>( )` and `${ cmd;}` were scanned with
+// no comment rule at all, and an apostrophe in `# it's fine` opened a quote
+// that ran to the end of the file. Writing the loop again in each new place
+// is how that comes back — a second helper omitting a fix the first one
+// carries has bitten this repo four times — so all three go through here.
+//
+// Where a `#` is a comment at all is the callers' question, not this one's:
+// between tokens skipBlanksAndComments only runs where a word could begin,
+// and the two raw scans ask commentCouldStart.
 func (l *Lexer) skipComment() {
 	for !l.eof() && l.peek() != '\n' {
 		l.advance()

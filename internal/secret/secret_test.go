@@ -193,3 +193,44 @@ func TestTheZeroScannerIsEmptyRatherThanPermissive(t *testing.T) {
 		t.Errorf("an empty scanner redacted %q (%d)", got, n)
 	}
 }
+
+// The default table is one compiled copy however often it is asked for.
+//
+// It is a prompt's redactor, and a prompt runs it over every line typed and
+// every line of output drawn, so a Default that recompiled a dozen regular
+// expressions per call would be paying for this feature at the keystroke. The
+// doc comment has claimed that since the package was written and nothing
+// checked it, which is how the property survived being made lazy for #1403
+// only by luck: `sync.OnceValue` keeps it, and a plain `newScanner(defaultRules)`
+// in the same place would read identically, pass every other test here, and
+// quietly put the cost back.
+//
+// Pointer identity rather than behavior, because behavior is exactly what
+// cannot tell the two apart — two separately compiled copies of the same
+// table answer every question the same way.
+func TestTheDefaultTableIsOneSharedCopy(t *testing.T) {
+	t.Parallel()
+	first, second := secret.Default(), secret.Default()
+	if first != second {
+		t.Error("Default() compiled a second copy of the table; a prompt asks for it on every line it draws")
+	}
+	if first == nil {
+		t.Fatal("Default() answered nil")
+	}
+}
+
+// And it is still the working table, not an empty one.
+//
+// Compiling on first use puts a `nil` between the program starting and the
+// first ask, and a Default that handed that out would redact nothing while
+// looking entirely healthy — the zero scanner finds no credentials, which
+// TestTheZeroScannerIsEmptyRatherThanPermissive establishes is a real and
+// reachable state. So the laziness is checked by using it, on the first call
+// rather than after a warm-up.
+func TestTheDefaultTableWorksOnItsFirstUse(t *testing.T) {
+	t.Parallel()
+	line := "export AWS_SECRET_ACCESS_KEY=" + strings.Repeat("a", 40)
+	if name, found := secret.Default().Match(line); !found {
+		t.Errorf("the default table found no credential in a line holding one; got name %q", name)
+	}
+}

@@ -163,3 +163,134 @@ func TestThePercentFlagWithNoTableTransformsNothing(t *testing.T) {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
 	}
 }
+
+// The question is not asked until the escape is drawn, which is the whole of
+// #1403's zsh column.
+//
+// Whoever is allowed to ask the system who the user is may find that
+// expensive — measured at 0.83-1.10 ms for one such answer — and a shell
+// running `-c` never draws a prompt at all. So the runner is handed a
+// *question* rather than an answer, and this is the assertion that keeps it
+// one: an implementation that called the function while installing it, or from
+// anywhere on the way to running a command, would pass every other test in
+// this file and put the cost straight back.
+//
+// A counter rather than a flag, because "asked once" and "asked at all" are
+// different failures and the next test needs the count anyway.
+func TestThePromptUserIsNotAskedUntilTheEscapeIsDrawn(t *testing.T) {
+	var asked int
+	// A whole command runs, and nothing in it mentions the escape.
+	out, _ := runGrammar(t, `echo reached`, promptFlagged, func(r *Runner) {
+		r.SetPromptStyle(promptEscapeTable())
+		r.SetPromptUserFunc(func() string {
+			asked++
+			return "someone"
+		})
+	})
+	if out != "reached\n" {
+		t.Fatalf("got %q, want %q", out, "reached\n")
+	}
+	if asked != 0 {
+		t.Errorf("the login name was asked for %d times by a script that never drew %%n; want 0 — installing the question must not ask it", asked)
+	}
+}
+
+// And it is asked once however many times it is drawn.
+//
+// A prompt is redrawn on every keystroke that redraws the line, so a question
+// asked per draw would move the cost from startup to typing rather than
+// removing it. Three draws in one word, so a per-word memo would pass and a
+// per-escape one would not.
+func TestThePromptUserIsAskedOnlyOnce(t *testing.T) {
+	var asked int
+	out, _ := runGrammar(t, `echo "[${(%):-%n@%n}]"; echo "[${(%):-%n}]"`, promptFlagged, func(r *Runner) {
+		r.SetPromptStyle(promptEscapeTable())
+		r.SetPromptUserFunc(func() string {
+			asked++
+			return "someone"
+		})
+	})
+	if want := "[someone@someone]\n[someone]\n"; out != want {
+		t.Fatalf("got %q, want %q", out, want)
+	}
+	if asked != 1 {
+		t.Errorf("the login name was asked for %d times across three draws; want 1", asked)
+	}
+}
+
+// A question that answers nothing is refused exactly as being told nothing is.
+//
+// The two are different facts — asked and empty, against never asked — and
+// neither is drawable, so they have to produce the same refusal. Getting this
+// wrong is how a lazily-asked name that failed to resolve would draw an empty
+// user at status 0, which is the wrong answer wearing a success that the
+// refusal above exists to prevent.
+func TestAPromptUserQuestionThatAnswersNothingIsRefused(t *testing.T) {
+	const src = `echo "[${(%):-%n}]"; echo reached`
+	out, st := runGrammar(t, src, promptFlagged, func(r *Runner) {
+		r.SetPromptStyle(promptEscapeTable())
+		r.SetPromptUserFunc(func() string { return "" })
+	})
+	want := "sh: ${(%):-%n}: the %n prompt escape is not implemented\n"
+	if out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+	if st == 0 {
+		t.Errorf("status = 0, want a failure")
+	}
+}
+
+// The lazy form and the eager one answer identically, including the shortening
+// `%m` does and the full name `%M` keeps.
+//
+// Asserted together rather than in two tests, because what is being claimed is
+// that the pair is one behavior reached two ways — and a claim about a pair
+// that is checked one half at a time is how the host escapes came to have an
+// eager half and a lazy one.
+func TestTheLazyPromptIdentityAnswersLikeTheEagerOne(t *testing.T) {
+	const src = `echo "[${(%):-%n|%m|%M}]"`
+	const want = "[someone|machine|machine.example]\n"
+	// A table with all three rows, since the two shared ones each carry
+	// half of what this asserts about and the claim is about the pair.
+	table := func() PromptStyle {
+		return PromptStyle{
+			Escape: '%',
+			Codes:  map[rune]PromptField{'n': FieldUser, 'm': FieldHost, 'M': FieldHostFull},
+		}
+	}
+	eager, _ := runGrammar(t, src, promptFlagged, func(r *Runner) {
+		r.SetPromptStyle(table())
+		r.SetPromptUser("someone")
+		r.SetPromptHost("machine.example")
+	})
+	lazy, _ := runGrammar(t, src, promptFlagged, func(r *Runner) {
+		r.SetPromptStyle(table())
+		r.SetPromptUserFunc(func() string { return "someone" })
+		r.SetPromptHostFunc(func() string { return "machine.example" })
+	})
+	if eager != want {
+		t.Errorf("told: got %q, want %q", eager, want)
+	}
+	if lazy != eager {
+		t.Errorf("asked: got %q, but being told gave %q — the two forms must be one behavior", lazy, eager)
+	}
+}
+
+// The machine's name is asked on the same terms, and this is the test that
+// says so rather than assuming the pair moved together.
+func TestThePromptHostIsNotAskedUntilTheEscapeIsDrawn(t *testing.T) {
+	var asked int
+	out, _ := runGrammar(t, `echo reached`, promptFlagged, func(r *Runner) {
+		r.SetPromptStyle(promptHostTable())
+		r.SetPromptHostFunc(func() string {
+			asked++
+			return "machine.example"
+		})
+	})
+	if out != "reached\n" {
+		t.Fatalf("got %q, want %q", out, "reached\n")
+	}
+	if asked != 0 {
+		t.Errorf("the host name was asked for %d times by a script that never drew %%m; want 0", asked)
+	}
+}

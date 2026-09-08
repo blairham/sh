@@ -710,8 +710,8 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 			e.FlagsErrPos = i + 3
 			return ""
 		}
-		switch {
-		case c == '+' || c == '-':
+		switch c {
+		case '+', '-':
 			switch {
 			case prev == 'q' && qSeen == 1:
 				// The modifier. It is kept off Flags so that every `-` left
@@ -729,7 +729,7 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 				return ""
 			}
 			// Anywhere else a `-` is the signed-numeric sort flag.
-		case c == 'q':
+		case 'q':
 			if minusTaken {
 				e.FlagsErrPos = i + 3
 				return ""

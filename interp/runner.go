@@ -813,6 +813,16 @@ type Runner struct {
 	// and a table that stored the option's own bit would have granted it by
 	// storing a `true` that meant "on".
 	emptyCommandWordOffersNothing bool
+	// cdCorrectsSpelling is permission for `cd` to correct a misspelled
+	// operand rather than refuse it — bash's `cdspell`, and the only shell in
+	// the panel with a name for it. The correction itself is in
+	// spellcorrect.go, where the completer's `dirspell` will reach the same
+	// one rather than growing a second.
+	//
+	// Interactive only, like the two names beside it, and measured that way:
+	// `bash -c 'shopt -s cdspell; cd subdri'` refuses exactly as a shell
+	// without the option does.
+	cdCorrectsSpelling bool
 	// editingMode is which of the two `set -o` editing modes is selected,
 	// and it is one field because the two names are one state: `set -o vi`
 	// in bash 5.3 and in ksh93 turns `emacs` off in the same breath.

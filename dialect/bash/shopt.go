@@ -65,6 +65,14 @@ var shoptModes = map[string]interp.MatchOption{
 //     shadow the `echo` builtin, and `nosuchdir` is still `command not
 //     found`. See interp.Runner.autoCdInstead, which is where all three of
 //     those conditions live.
+//   - cdspell. An interactive `cd` corrects a misspelled operand instead of
+//     refusing it. Measured: bash corrects one edit per component — a
+//     transposition, a dropped letter, an extra one or a wrong one — prints
+//     the corrected operand on **stdout** and then moves, and refuses two
+//     edits even in a nine-character name, so the threshold is flat rather
+//     than scaled by length. See interp.Runner.correctPath, which is written
+//     once so that `dirspell` reaches the same corrector rather than growing
+//     a second.
 //   - no_empty_cmd_completion. The one most likely to be misread, because the
 //     name is a negative and the honest answer used to look like the lazy
 //     one. It asks that completion on an empty command word *not* search
@@ -89,6 +97,10 @@ var shoptSwitches = map[string]struct {
 	"autocd": {
 		get: (*interp.Runner).AutoCd,
 		set: (*interp.Runner).SetAutoCd,
+	},
+	"cdspell": {
+		get: (*interp.Runner).CorrectsCdSpelling,
+		set: (*interp.Runner).SetCorrectsCdSpelling,
 	},
 	// The inverted one, and the only entry in this file that is not a
 	// straight pair. bash names the *suppression*, so the option being on is
@@ -139,48 +151,43 @@ var shoptSwitches = map[string]struct {
 // history file, to split a construct into a line each, or to join one with
 // semicolons.
 //
-// Three of the names #1445 collected are still refused, and each is refused
+// Two of the names #1445 collected are still refused, and each is refused
 // for the only reason a refusal is allowed here: nothing implements the
 // behavior. Each is written down because a bare `false` in the table below
 // reads like a TODO and the wrong repair for a TODO is to flip it into a lie.
 // Every one of these is the state this shell is genuinely in, so the refusal
 // is the correct answer and not a gap left in the table:
 //
-//   - cdspell asks that an interactive `cd` correct a minor misspelling of
-//     the operand. interp's `biCd` goes from a failed CDPATH search straight
-//     to `filepath.Join` and then to the diagnostic; nothing retries a
-//     component, so there is no place a correction could be reported from and
-//     no correction to report. Measured for what would have to be matched:
-//     bash 5.3.15 at a prompt corrects a transposition (`subdri`), a dropped
-//     letter (`subdi`), an extra one (`ssubdir`, `subdirx`) and a wrong one
-//     (`subdur`), prints the corrected operand — `subdir/deeper` for
-//     `subdri/deper`, so it corrects component by component — and leaves
-//     `zzzz` alone at status 1. That is a search over four edits per
-//     component against every entry of a directory, which is a change to
-//     `cd`, not a table entry.
-//   - dirspell asks the same of completion, and completion here has no retry
-//     either: repl's path completer is a strict prefix match over one
-//     directory's entries, and a `ReadDir` that fails yields no entries
-//     rather than a second question. bash 3.2 does not have the name at all —
+//   - dirspell asks for the same correction during *completion*, and it is
+//     refused on a stronger ground than "not built": **it could not be
+//     reproduced in the reference shell**. Driven through a pseudo-terminal
+//     against bash 5.3.15 on 2026-09-08, with the option set at the prompt
+//     and again from an rc file so readline saw it at initialization,
+//     `ls documnets/tar<TAB>`, `ls documnets/<TAB>`, `cd documnets/<TAB>` and
+//     `cd documnet<TAB>` all left the line exactly as typed, against a
+//     directory really called `documents`. The same session's `cdspell`
+//     corrected the same word at execution, so the shell and the tree were
+//     right and only this name did nothing. Implementing it would mean
+//     guessing at a behavior the binary would not show, which is worse than
+//     refusing it. bash 3.2 does not have the name at all —
 //     `shopt -s dirspell` there is `invalid shell option name` at status 1 —
-//     which it shares with `checkjobs`, so two of these three refusals are not
-//     even a question in every column of the panel.
+//     which it shares with `checkjobs`, so two of these refusals are not even
+//     a question in every column of the panel.
 //   - checkjobs asks that exiting warn about *running* jobs, not only stopped
 //     ones. The stopped-job hold exists — interp's `HoldsExitForStoppedJobs`,
 //     which repl consults on end-of-file — and nothing counts the running
 //     ones, so this shell would have to learn a second question before it
 //     could answer this one.
 //
-// Two of the three are interactive-only in bash as well, so a `-c` probe
-// cannot tell an implementation from an absence — it shows both shells doing
-// nothing. They were measured through a terminal, which is the only place the
-// question is askable, and #1445 stays open naming exactly these three.
+// Both are interactive-only in bash as well, so a `-c` probe cannot tell an
+// implementation from an absence — it shows both shells doing nothing. They
+// were measured through a terminal, which is the only place the question is
+// askable, and #1445 stays open naming exactly these two.
 var shoptStates = map[string]bool{
 	"array_expand_once":    false,
 	"assoc_expand_once":    false,
 	"bash_source_fullpath": false,
 	"cdable_vars":          false,
-	"cdspell":              false,
 	"checkhash":            false,
 	"checkjobs":            false,
 	"cmdhist":              true,

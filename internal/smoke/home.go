@@ -50,6 +50,14 @@ const (
 // to move into.
 const autoCdTarget = "projects"
 
+// cdSpellTarget is the directory the `cdspell` row misspells, and
+// cdSpellTyped is the misspelling: one transposition, which is the cheapest
+// mistake a person makes and the one bash corrects.
+const (
+	cdSpellTarget = "documents"
+	cdSpellTyped  = "documnets"
+)
+
 // completionTarget is the file Tab is asked to complete, and completionPrefix
 // is what is typed before pressing it.
 //
@@ -77,6 +85,11 @@ func home(root string, d Dialect) (string, error) {
 	// directory is also what the `autocd` row moves into, which is why it is
 	// named something a person would have rather than something a test would.
 	if err := os.MkdirAll(filepath.Join(dir, autoCdTarget), 0o700); err != nil {
+		return "", err
+	}
+	// And one more, whose name is worth misspelling: the `cdspell` row types
+	// it with two letters swapped.
+	if err := os.MkdirAll(filepath.Join(dir, cdSpellTarget), 0o700); err != nil {
 		return "", err
 	}
 	for _, name := range []string{completionTarget, "notes.txt", "other-file.txt"} {
@@ -128,8 +141,10 @@ PS2='%s'
 %s
 %s
 %s
+%s
 `, rcPromptPrefix, d.CwdEscape, promptFieldSep, d.UserEscape, promptAnchor, continuationPrompt,
-		d.PromptHook, d.AutoCdOption, strings.Join(d.RebindKeyInViMode, "\n"), d.RebindKey)
+		d.PromptHook, d.AutoCdOption, d.CdSpellOption,
+		strings.Join(d.RebindKeyInViMode, "\n"), d.RebindKey)
 }
 
 // The foreground job the suspend checks use.

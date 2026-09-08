@@ -116,6 +116,13 @@ var (
 	// projects` before moving and zsh writes nothing, so the sentence is not
 	// a mark two shells could share.
 	autoCdProbe = probe{`printf 'moved=%s\n' "${PWD##*/}"`, "moved=projects"}
+	// Where a misspelled `cd` left the shell. One line for both answers,
+	// because the two shells answer it differently on purpose: the one with
+	// the option corrects and lands in `documents`, the one without it
+	// refuses and stays in its own home, whose basename is the dialect's
+	// name. So the mark is per dialect and the *line* is shared — see
+	// cdSpellProbe.
+	cdSpellLine = `printf 'spell=%s\n' "${PWD##*/}"`
 	// The two rebinding rows. Each line is typed in two pieces with the
 	// rebound key between them, so the mark appears only if the key moved the
 	// cursor back to the start — the tail is typed first and the head after
@@ -173,7 +180,20 @@ func probes() []probe {
 		undoProbe, escapeProbe, multiLineProbe,
 		rebindProbe, rebindViProbe,
 		windowSizeProbe, autoCdProbe,
+		cdSpellProbe(Bash()), cdSpellProbe(Zsh()),
 	}
+}
+
+// cdSpellProbe is what this dialect should say after a misspelled `cd`.
+//
+// A shell with the option lands in the corrected directory; a shell without
+// one never left home. Both are that shell's own answer, so the row grades
+// each against itself rather than grading zsh against bash's feature list.
+func cdSpellProbe(d Dialect) probe {
+	if d.CdSpellOption == "" {
+		return probe{cdSpellLine, "spell=" + d.Name}
+	}
+	return probe{cdSpellLine, "spell=" + cdSpellTarget}
 }
 
 func checks() []check {
@@ -333,6 +353,29 @@ func checks() []check {
 					return Fail, quote(autoCdTarget) + " did not move the shell: " + err.Error()
 				}
 				return Pass, "typing " + quote(autoCdTarget) + " moved the shell into it"
+			},
+		},
+		{
+			name:   "a misspelled cd",
+			proves: "the shell corrects a one-letter slip where it has an option for that, and refuses where it has none",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				if err := s.typeLine("cd " + cdSpellTyped); err != nil {
+					return Fail, err.Error()
+				}
+				err := s.runProbe(cdSpellProbe(s.dialect))
+				// Home again whatever happened, because every row after this
+				// one is written against the scratch home.
+				if cdErr := s.typeLine("cd"); cdErr != nil && err == nil {
+					return Fail, "the shell would not go home again: " + cdErr.Error()
+				}
+				if err != nil {
+					return Fail, quote("cd "+cdSpellTyped) + " did not leave the shell where " +
+						s.dialect.Name + " leaves it: " + err.Error()
+				}
+				if s.dialect.CdSpellOption == "" {
+					return Pass, "refused the misspelling, which is this shell's own answer"
+				}
+				return Pass, "corrected " + quote(cdSpellTyped) + " to " + quote(cdSpellTarget)
 			},
 		},
 		{

@@ -504,7 +504,7 @@ func (p *printer) command(c Command) {
 		if x.NameWord != nil {
 			p.word(x.NameWord)
 		} else {
-			p.str(x.Name)
+			p.str(printedFuncName(x.Name))
 		}
 		if x.Keyword {
 			p.str(" ")
@@ -519,6 +519,38 @@ func (p *printer) command(c Command) {
 		}
 		p.command(x.Cmd)
 	}
+}
+
+// printedFuncName writes a name so that reading it back names the same
+// function.
+//
+// Most names go bare, and the ones that cannot are the ones one grammar reads
+// and the printer would otherwise change the meaning of — see
+// [Dialect.FunctionKeywordNameIsAnyWord], under which the word after the
+// keyword is the name whatever is in it. Written bare:
+//
+//	the empty name    `function  { … }` is the *anonymous* function, which
+//	                  runs its body where the definition defines something
+//	`a b`             two name words, which is a different construct again
+//	`a;b`, `a|b`      the name ends at the operator and the rest is a command
+//	`a$b`             an expansion, so the name is whatever it comes to
+//	`a*b`             matched against the filesystem
+//
+// Every one of those is a program that *parses*, which is what makes this
+// worth a line rather than an assertion: a printer that dropped the quoting
+// handed back a different program at status 0.
+//
+// The test is isFuncName with punctuation allowed, which is the widest reading
+// any dialect gives a bare name — so a name goes bare exactly when some
+// grammar here reads it bare, and the printer and the parser cannot come
+// apart. That is a narrower bare set than the shell's own listing uses, and
+// deliberately: `${(q)…}`-shaped answers are the interpreter's, and this is
+// about what re-parses. See interp.listedFunctionName.
+func printedFuncName(name string) string {
+	if isFuncName(name, true) {
+		return name
+	}
+	return "'" + strings.ReplaceAll(name, "'", `'\''`) + "'"
 }
 
 // cond writes the inside of a `[[ … ]]`.

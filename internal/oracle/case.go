@@ -6148,6 +6148,46 @@ echo "st=$?"`,
 		Why:     "the same name in the keyword form, which is a separate production and had to be measured separately; dash has no keyword at all, so its refusal here is a different sentence from the one it gives the parens",
 	},
 	{
+		ID: "cmd/function-keyword-with-an-empty-name", Category: "command language",
+		Snippet: `function '' { echo b; }; echo after`,
+		Why:     "the empty string as a function name, which one shell takes and the rest refuse — and the row is worth having for *when* they refuse rather than only whether. Four of the six parse the line and complain about the name where it runs: two of those carry on and reach `after` at status 0, one is fatal, one stops the script. dash has no keyword at all, so its refusal is about the brace and is a different sentence. Only the one that accepts it defines a function callable as `''`, which is how a plugin manager's `eval` of a name that came out empty reaches a definition rather than a diagnostic",
+	},
+	{
+		ID: "cmd/function-keyword-with-an-empty-name-is-callable", Category: "command language",
+		Snippet: `function '' { echo b; }; ''; echo st=$?`,
+		Why:     "the half the definition row cannot show: a name that was accepted is a name that calls. The shell that took the definition runs the body here; the four that refused the name reach a command whose name is the empty string, and what each of them says about *that* is a second measurement rather than the same one. Separate from the definition because a reading that stored the source text `''` as the name would pass the row above and fail this one",
+	},
+	{
+		ID: "cmd/function-keyword-with-a-name-holding-a-space", Category: "command language",
+		Snippet: `function 'a b' { echo b; }; 'a b'; echo st=$?`,
+		Why:     "the empty name is not a special case of anything — after the keyword, one shell reads a word and the word is the name. A space is the character that says so loudest, because two words after the keyword are a different construct entirely there (`function a b { … }` defines both) and the quoting is the whole difference. Reached in the wild: a plugin manager quotes a name with `${(q)…}` and hands `eval` `-Uz\\ handler` when the option words it meant to strip are still in `$@`",
+	},
+	{
+		ID: "cmd/function-keyword-with-a-name-holding-an-operator", Category: "command language",
+		Snippet: `function 'a;b' { echo one; }; function 'a|b' { echo two; }; 'a;b'; 'a|b'`,
+		Why:     "the characters that end a word when they are bare, and are ordinary text when they are not. This is the row that separates *any word is a name* from *a wider set of name characters*: no character class that could be written down would contain a semicolon and a pipe, because a grammar reading them unquoted would have stopped the word before them",
+	},
+	{
+		ID: "cmd/function-keyword-with-a-name-holding-a-dollar", Category: "command language",
+		Snippet: `w=zz; function 'a$b' { echo lit; }; 'a$b'; echo n=${#functions}`,
+		Why:     "a dollar in the name, quoted, which the one shell that reads any word takes literally — the function is `a$b` and nothing was expanded. The count is on the line because that is what says so: a reading that expanded the name would have defined `a` and left the table one entry short of nothing, and `[a$b]` printed back cannot tell a literal name from an expansion of an unset parameter",
+	},
+	{
+		ID: "cmd/function-keyword-with-a-name-of-punctuation", Category: "command language",
+		Snippet: `function '@#%' { echo p; }; '@#%'; echo st=$?`,
+		Why:     "a name of nothing but punctuation, every character of which is already in the set every keyword shell parses *bare* — and the answers are not the bare answers, which is the point. Two of the six take it and four refuse it, exactly as they refuse a name holding a space, so what those four object to is not the characters. `cmd/function-keyword-with-a-quoted-ordinary-name` is the row that finishes the thought",
+	},
+	{
+		ID: "cmd/function-keyword-with-a-quoted-ordinary-name", Category: "command language",
+		Snippet: `function 'f' { echo p; }; f; echo st=$?`,
+		Why:     "the sharpest control in this group, and the row that says what the quoting is doing. The name is `f` — a name nobody could object to — and the *quotes* are all that is unusual. zsh and ksh93 remove them before reading the name and define `f`; bash 5.3, bash 3.2 and bash-as-sh take the whole word including the quotes and answer `` `'f'': not a valid identifier ``, so the name they refused was never a punctuated one at all. That splits the panel two against three where the punctuated rows split it one against four, which is what says the two questions are different — and it says the quoted-name rows measure the quoting rather than a wider set of name characters, since no set of characters can contain `f`. This implementation removes the quotes in every dialect and defines `f` in all of them, which is right for two columns and wrong for three (#1566)",
+	},
+	{
+		ID: "cmd/function-keyword-with-a-quoted-pattern-in-the-name", Category: "command language",
+		Snippet: `function 'a*b' { echo q; }; 'a*b'; echo st=$?`,
+		Why:     "a pattern character in the name, quoted, where it is ordinary text: the shell that reads any word after the keyword defines `a*b` and calls it. It is the spelling wild code actually produces, `${(q)…}` quoting whatever a value came to. Bare it is the one group of names that shell does *not* define — `function a*b { :; }` is `no matches found: a*b`, `a?b` the same and `a[b` a `bad pattern`, the word being matched against the filesystem — and that half cannot be a row here, because the grammar that reads every case would have to read a name this implementation refuses on purpose. It is measured in syntax.Dialect.FunctionKeywordNameIsAnyWord and pinned in syntax/emptyfuncname_test.go instead",
+	},
+	{
 		ID: "cmd/function-posix-form", Category: "command language",
 		Snippet: `f() { echo posix; }; f`,
 		Why:     "the universal definition form",
@@ -7020,6 +7060,26 @@ echo "st=$?"`,
 		ID: "param/the-quoting-flags-read-a-tilde-by-position", Category: "parameter expansion",
 		Snippet: `x="a~b"; y="~x"; v="PATH=/x"; w="=x"; printf "[%s]" "${(q)x}" "${(q)y}" "${(q-)v}" "${(q-)w}"; echo`,
 		Why:     "a tilde and an equals sign are special where a word starts and ordinary anywhere else, so `a~b` and `PATH=/x` come back bare while `~x` and `=x` are quoted. Both spellings read back as the same value, which is why a table that escaped them everywhere went unnoticed here for as long as it did — the answer was longer than the shell's rather than wrong, and only the comparison says so. The row uses both flags because the table is shared, and the `:q` modifier reads it too",
+	},
+	{
+		ID: "param/the-quoting-flag-and-a-branch-that-substituted-nothing", Category: "parameter expansion",
+		Snippet: `y=""; printf "[%s]" "${(q)y}" "${(q)y:-}" "${(q)y:-$y}" "${(q)y:-$nope x}"; echo`,
+		Why:     "the one shell with the flag keeps a word branch that came to nothing apart from a value that is merely empty, and `q` is the only thing that can say so: an empty value has to be written `''` because backslashes cannot spell one, and a branch that substituted nothing is written as nothing. The four columns on one line are what separate the readings — the first is an ordinary empty value, the second ran the branch with no word written behind it, the third ran it with a word that came to nothing, and the fourth ran it with a word that came to one space, which is not nothing. A flag that stopped quoting empty values passes the third and fails the first two",
+	},
+	{
+		ID: "param/a-branch-that-substituted-nothing-is-still-a-field", Category: "parameter expansion",
+		Snippet: `y=""; set -- "${(q)y:-$y}"; echo "n=$# len=${#1}"; v="${(q)y:-$y}"; w=${(q)y:-$y}; echo "quoted=${#v} bare=${#w}"`,
+		Why:     "the two questions a printed `[]` cannot answer, because one empty field and no field at all print the same. The field is there — `$#` is 1 and its length 0 — so this is a fact about the text and not about how many words the expansion made. And it is only visible inside double quotes: the same expansion written bare on the right of an assignment stores the two characters an ordinary empty value gives, which is the row that stops the answer being applied everywhere",
+	},
+	{
+		ID: "param/only-the-backslash-style-sees-a-branch-that-substituted-nothing", Category: "parameter expansion",
+		Snippet: `y=""; printf "[%s]" "${(q)y:-$y}" "${(qq)y:-$y}" "${(qqq)y:-$y}" "${(qqqq)y:-$y}" "${(q-)y:-$y}" "${(q+)y:-$y}"; echo`,
+		Why:     "which member of the family can see it, and the answer is one: the other five all write their own empty wrapper for the same expansion, so the value reaching them is empty rather than absent and only the backslash style has a reason to treat it differently. The row is what places the answer in the style rather than in the flag group — a fix written one level up, where the group is read, would blank all six. Both modifier styles are here because they are one `q` each and would take the single-`q` answer if the modifier were read as composing with the count rather than beating it",
+	},
+	{
+		ID: "param/the-operators-that-substitute-a-word-and-the-ones-that-do-not", Category: "parameter expansion",
+		Snippet: `y=""; z="a"; printf "[%s]" "${(q)nope-$nope}" "${(q)z:+$nope}" "${(q)y:+$nope}" "${(q)nope:=$nope}"; echo`,
+		Why:     "which operators reach the state and on which side. It is the two that substitute a *word* — the default and the alternate, with or without the colon — and only on the side that substitutes it: the alternate over an empty value never runs its word and gives an ordinary `''`. The assigning form is on the same line because it looks like the others and is not one: it substitutes what it stored in the parameter, so its answer is a value",
 	},
 	{
 		ID: "param/expansion-flags-split-at-newlines", Category: "parameter expansion",

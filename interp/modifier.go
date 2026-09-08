@@ -388,7 +388,7 @@ func (r *Runner) applyModifier(value string, letter byte, e *syntax.ParamExpr) (
 		if value == "" {
 			return "", true
 		}
-		return quoteWithBackslashes(value), true
+		return quoteWithBackslashes(value, false), true
 	case 'Q':
 		return r.unquoteFlagged(value), true
 	}

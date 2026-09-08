@@ -1890,6 +1890,77 @@ and that is all the grammar claims. Grammar flag:
 what a shell that parsed the name then does with it is the
 interpreter's question, not this one.
 
+**After the `function` keyword, one shell reads a word and the word is
+the name** — whatever is in it. `function '' { … }`, `function 'a b'
+{ … }`, `function 'a;b' { … }`, `function 'a$b' { … }` are all
+definitions there, callable by those names. The panel splits by *stage*
+again, and further than the punctuation above: zsh defines them; bash
+5.3 and bash 3.2 parse the line, refuse the name where it runs — the
+quoted word is `not a valid identifier` — and **carry on**, reaching
+the next command at status 0; bash-as-sh says the same sentence and is
+fatal at 2; ksh93 stops the script at 1 with `: invalid function name`;
+dash has no keyword at all and blames the brace (measured:
+`cmd/function-keyword-with-an-empty-name`,
+`-with-an-empty-name-is-callable`, `-with-a-name-holding-a-space`,
+`-with-a-name-holding-an-operator`, `-with-a-name-holding-a-dollar`,
+`-with-a-name-of-punctuation`). Grammar flag:
+`FunctionKeywordNameIsAnyWord`, zsh alone. There is no definition-time
+name check in this parser, so the four that refuse the name keep
+refusing it while parsing, at their own wording — the flag says only
+whether the word is a name.
+
+**The rule is that there is no rule**, which is why this is a flag of
+its own and not a wider `FunctionNamePunctuation`. Measured over the
+thirty-two printable ASCII punctuation marks in `function a<c>b { :; }`:
+quoted, every one of them defines. Bare, the ones that define are
+`! # $ % + , - . / : < = > @ ] ^ _ \ { } ~`, and the rest fail for
+reasons that are not about names — `& ( ) ; |` are operators, so the
+word ended before them, and the two quote characters and a backquote
+open quoting that never closes. No character class could hold a
+semicolon and a pipe, so the quoting is what this is about and not the
+characters.
+
+**The one group the flag does not carry** is the names that shell
+matches against the **filesystem**: bare `a*b` is `no matches found:
+a*b`, `a?b` the same, `a[b` is `bad pattern: a[b`, so nothing is
+defined there either. This parser refuses those while reading rather
+than defining a function literally called `a*b` at status 0 — a refusal
+is visible and a plausible wrong definition is not. The wording is the
+keyword's own rather than that shell's, which is a diagnostics gap and
+not a semantic one. Quoted, the same characters are ordinary text and
+are taken (`cmd/function-keyword-with-a-quoted-pattern-in-the-name`).
+
+Three neighboring readings say this is a *name* rather than a hole in a
+check, all measured on zsh 5.9.2. `function "" { … }` is the same
+definition as `function '' { … }`. `n=''; function "$n" { … }` defines
+it too, the expansion being one word whose text is empty. And `n='';
+function $n { … }` defines **nothing at all**, silently, at status 0: an
+unquoted empty expansion is no word, so the keyword is left with an
+empty name *list* — a third thing again, and neither this flag nor
+`AnonymousFunction`, the keyword written with no name word at all.
+
+A name that cannot be written bare is **printed** quoted, because
+printing it bare is a different program that parses: `function  { … }`
+is the anonymous form and `function a b { … }` is two names. The
+interpreter's listing quotes on a different and narrower set — its own,
+measured — and the two are deliberately not folded; see
+`interp.listedFunctionName`.
+
+The quotes themselves are a third question, and the control row for
+this one: `function 'f' { … }` names `f` in zsh and in ksh93, both of
+which remove the quotes before reading the name, and is
+`` `'f'': not a valid identifier `` in every bash, which takes the word
+as its source text. So the panel splits two against three there where
+the punctuated names split it one against four, and no set of name
+characters can be what bash objected to — `f` is in every set. This
+parser removes the quotes in all of its dialects, which is right for
+zsh and ksh and wrong for bash and sh; that is #1566, measured as
+`cmd/function-keyword-with-a-quoted-ordinary-name`.
+
+A quoted name in the POSIX form — `''() { … }`, `'q'() { … }` — is read
+as a definition by zsh *and ksh93* and is refused at the parenthesis
+here; that is a second site with its own panel, #1561.
+
 ### When the definition is committed to
 
 Some shells decide they are reading a function definition as soon as a

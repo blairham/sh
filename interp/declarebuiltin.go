@@ -838,7 +838,58 @@ func (r *Runner) declareFunctions(names []string, namesOnly bool) int {
 // Measured 2026-09-08 on bash 5.3.15, bash 3.2.57, zsh 5.9.2 and ksh93u+.
 func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
 	return Wording(r.diag().FunctionListingHeader, "%[1]s () \n%[2]s",
-		name, syntax.PrintWith(fn.Body, r.functionLayout))
+		listedFunctionName(name), syntax.PrintWith(fn.Body, r.functionLayout))
+}
+
+// listedFunctionName is the name half of that header, written so the listing
+// reads back as the definition it describes.
+//
+// Only one dialect can hold a name that needs anything done to it — see
+// syntax.Dialect.FunctionKeywordNameIsAnyWord, under which the word after the
+// keyword is the name whatever is in it — and that dialect quotes such a name
+// when it writes one back. Measured 2026-09-08 on zsh 5.9.2 by defining
+// `function "$n" { :; }` for each name and reading the first line of
+// `functions`:
+//
+//	a-b   a.b   a!b   x1   1x   _x        bare
+//	''    'a b'   'a;b'   'a|b'   'a$b'   quoted
+//	'@#%'   'a*b'   'a{b'   'a}b'   'a=b'   'a~b'   'a]b'   'a^b'
+//	'a'\''b'                                a quote inside the quotes
+//
+// So the bare set is the characters a name may hold and still read back as one
+// ordinary command word: letters, digits, `_`, and `! % + , - . / : @`, in any
+// position — a leading digit and a trailing `-` are both bare. It is measured
+// over all thirty-two printable ASCII punctuation marks and is **not**
+// syntax.Dialect.FunctionNamePunctuation, which is a different question with a
+// different answer: `#`, `]` and `^` are names to the parser and are quoted
+// here.
+//
+// Nor is it interp/minimalquote.go's table, though it looks like it. That one
+// answers `${(q-)…}`, where `~` and `=` are special only at a word's start, so
+// `a~b` and `PATH=/x` come back bare; here they are quoted wherever they sit,
+// a command word being read differently from a value. Two tables because the
+// measurements differ, said here so the next reader does not fold them.
+func listedFunctionName(name string) string {
+	if name != "" && !strings.ContainsFunc(name, functionNameNeedsQuotes) {
+		return name
+	}
+	return "'" + strings.ReplaceAll(name, "'", `'\''`) + "'"
+}
+
+// functionNameNeedsQuotes is the bare set above, read one rune at a time.
+func functionNameNeedsQuotes(c rune) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return false
+	case c == '_':
+		return false
+	case strings.ContainsRune("!%+,-./:@", c):
+		return false
+	}
+	// Every byte above ASCII goes bare too, which is the same reading
+	// syntax.Dialect.FunctionNamePunctuation takes of a name written in
+	// another script. Measured: `function ä { :; }; functions` is `ä () {`.
+	return c < 0x80
 }
 
 // markReadonly freezes a name.

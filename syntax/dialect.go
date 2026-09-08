@@ -600,6 +600,81 @@ type Dialect struct {
 	// grammar of names.
 	FunctionNamePunctuation bool
 
+	// FunctionKeywordNameIsAnyWord makes the word after the `function`
+	// keyword a name whatever its text is: `function '' { … }`,
+	// `function 'a b' { … }`, `function 'a;b' { … }`, `function '@#%' { … }`
+	// are all definitions, callable by those names, listed by `functions`
+	// and `typeset -f` and removed by `unfunction`.
+	//
+	// One shell in the panel does this and no other, and the split is not
+	// only over whether it works — it is over *when* they say so, which is
+	// why the answer is here rather than in Diagnostics. Measured 2026-09-08,
+	// `sh -c "function '' { echo b; }; echo done"`, and the same six answers
+	// come back for every name below:
+	//
+	//	zsh 5.9.2   done, status 0, nothing on stderr, and `functions`
+	//	            lists the definition under that name
+	//	bash 5.3    `not a valid identifier` on stderr naming the quoted
+	//	            word, then `done` — refused where it runs, and the
+	//	            script carries on at status 0
+	//	bash 3.2    the same two lines
+	//	bash-as-sh  the same diagnostic, then nothing: fatal, status 2
+	//	ksh93       `: invalid function name`, status 1, nothing after
+	//	dash        `Syntax error: "}" unexpected` — no `function` keyword
+	//	            at all, so the refusal is about the brace
+	//
+	// So four of the six parse the construct and refuse the *name*, and only
+	// dash refuses to parse it. This parser has no separate definition-time
+	// name check, and building one for a construct four shells refuse and one
+	// accepts would be a lot of machinery to arrive at the same diagnostic
+	// those four already print. The flag says whether the word is a name; the
+	// four that refuse it keep refusing it here, at their own wording, which
+	// is where they refused it before this flag existed.
+	//
+	// The rule is that there is no rule, which is what makes this a flag
+	// rather than a wider [Dialect.FunctionNamePunctuation]: the shell reads
+	// a word and the word is the name. Measured over the thirty-two printable
+	// ASCII punctuation marks in `function a<c>b { :; }`, both quoted and
+	// bare — quoted, every one of them defines; bare, the ones that define
+	// are `! # $ % + , - . / : < = > @ ] ^ _ \ { } ~`, and the rest fail for
+	// reasons that are not about names at all. `& ( ) ; |` are operators, so
+	// the word ended before them; `"`, `'` and a backquote open quoting that
+	// never closes; and `* ? [` are **matched against the filesystem** —
+	// `no matches found: a*b`, `no matches found: a?b`, `bad pattern: a[b`.
+	//
+	// That last group is the one exception this parser keeps. A name whose
+	// unquoted literal text holds `*`, `?` or `[` is still refused, because
+	// matching a function name against the filesystem is not implemented and
+	// a definition of a function literally called `a*b` would be a plausible
+	// wrong answer where a refusal is a visible one. The wording is the
+	// keyword's own rather than that shell's, which is a diagnostics gap and
+	// not a semantic one. Quoted, the same characters are ordinary text and
+	// are taken: `function 'a*b' { :; }` defines it and `functions` writes it
+	// back as `'a*b'`.
+	//
+	// The neighboring readings, all measured on zsh 5.9.2, because they are
+	// what says this is a *name* rather than a hole in a check:
+	//
+	//	function "" { echo b; }   the same definition, either spelling
+	//	function '' () { … }      the hybrid form takes it too
+	//	n=''; function "$n" { … } an expanded empty name defines it too
+	//	n=''; function $n { … }   defines nothing at all, silently, at
+	//	                          status 0 — an unquoted empty expansion is
+	//	                          no word, and a keyword with no name words
+	//	                          left defines no functions
+	//	e=(a b); function $e {…}  defines `a` and `b`, both with that body
+	//
+	// The last two are why this is about the name and not about the *word
+	// list* being empty: `function` with no name words at all is
+	// [Dialect.AnonymousFunction], and a name list that expands to nothing is
+	// a third thing again, which this parser does not read.
+	//
+	// The keyword form only. The POSIX `name()` form refuses a quoted word
+	// before any name test is reached, and its panel is a different one —
+	// ksh93 reads `'q'() { … }` as a definition too and then refuses the
+	// empty name where zsh takes it (#1561).
+	FunctionKeywordNameIsAnyWord bool
+
 	// TimeKeyword makes `time` a reserved word at the start of a pipeline,
 	// timing the whole pipeline — `time true | wc -l` measures both elements
 	// — with the report going to the shell's own standard error. Absent from

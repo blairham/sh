@@ -229,10 +229,18 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// Rule 7: the operator, applied to the value at this level. Measured:
 	// the flags apply to what the operator leaves — `${(U)x:-def}` is DEF,
 	// `${(U)u:=def}` assigns def and substitutes DEF.
-	words, isList, ok = r.applyFlagOp(e, words, set, isList)
+	words, isList, ok, nothing := r.applyFlagOp(e, words, set, isList)
 	if !ok {
 		return nil, false, false, false
 	}
+	// The state substitutedNothing names, narrowed to where the shell being
+	// modeled can see it. Outside double quotes it cannot: measured on zsh
+	// 5.9.2, `v=${(q)y:-$y}` with `y=""` stores `''`, the same two characters
+	// an ordinary empty value gives, and only `v="${(q)y:-$y}"` stores
+	// nothing. The field itself survives either way — `set -- "${(q)y:-$y}"`
+	// leaves `$#` at 1 — so this is a fact about the *text*, and neither the
+	// number of fields nor whether one exists.
+	nothing = nothing && quoted
 
 	// Rule 9: length — the element count for a list and the value's own
 	// length for a scalar, unless `c`, `w` or `W` said to count something
@@ -296,7 +304,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	}
 	if n := strings.Count(e.Flags, "q"); n > 0 {
 		for i, w := range words {
-			words[i] = quoteFlagged(w, n, e.QuoteModifier)
+			words[i] = quoteFlagged(w, n, e.QuoteModifier, nothing)
 		}
 	}
 	// Rule 14's other half: `Q` takes one level of quoting *off*. The manual
@@ -772,10 +780,78 @@ func (r *Runner) assocSubscriptKey(e *syntax.ParamExpr, elems []string) (string,
 	return r.assocKey(e.Subscript()), true
 }
 
+// substitutedNothing reports whether the operator substituted a written word
+// that came to nothing — a state one shell in the panel keeps apart from a
+// value that is merely empty, and which exactly one flag can see.
+//
+// The two are the same length and the same text. What tells them apart is
+// `(q)`, whose backslash style has to write `”` for an empty value because
+// backslashes cannot spell one, and which writes nothing at all for this.
+// Measured 2026-09-08 on zsh 5.9.2, `y=""` throughout, inside double quotes:
+//
+//	${(q)y}          ''      an empty value
+//	${(q)y:-}        ''      the branch ran with no word to substitute
+//	${(q)y:-$y}      nothing the branch ran and the word came to nothing
+//	${(q)y:-$nope x}  \      the word came to " ", which is not nothing
+//	${(q)nope-$nope} nothing the same, through the operator without a colon
+//	${(q)y:+$nope}   nothing y is "a": the alternate ran and came to nothing
+//	${(q)y:+}        ''      y is "": the alternate did not run
+//	${(q)nope:=$nope} ''     the assigning form substitutes what it stored
+//	${(q)y#*}        ''      trimmed to empty is an empty value
+//
+// So the state belongs to the two operators that substitute a *word* — `-`
+// and `+`, with or without the colon — and only on the side that substitutes
+// it. The assigning forms are excluded by measurement rather than by
+// oversight: they substitute the value they put in the parameter.
+//
+// The word has to be written. `${(q)y:-}` is `”` and `${(q)y:-$y}` is
+// nothing, which is the whole distinction, and e.Arg is nil for exactly the
+// first of the two — the parser builds no operand word when there is no text
+// behind the operator.
+//
+// Only the flag group can see this, and only inside double quotes; see
+// flaggedWords, where both of those gates are applied.
+func substitutedNothing(e *syntax.ParamExpr, words []string, fired bool) bool {
+	if e.Arg == nil {
+		return false
+	}
+	switch e.Op {
+	case syntax.ParamDefault:
+		if !fired {
+			return false
+		}
+	case syntax.ParamAlternate:
+		if fired {
+			return false
+		}
+	default:
+		// Doubled on purpose, and a mutation that lets the assigning forms
+		// through here changes no answer: applyFlagOp reaches those through
+		// assignThroughFlags and never asks this at all. The guard that
+		// holds today is the call site; this one is what holds if a later
+		// caller is added, and it is the readable statement of which
+		// operators the state belongs to.
+		return false
+	}
+	// The text test is likewise doubled: quoteWithBackslashes acts on this
+	// only where the value it was handed is empty, so a mutation dropping it
+	// survives, and a test written to catch that would be asserting nothing.
+	// It stays because the name of this function is a claim about the value,
+	// and a reader who moved the consumer would have nothing else to go on.
+	return len(words) == 1 && words[0] == ""
+}
+
 // applyFlagOp runs the expansion's operator over the flagged value — the
 // same operators expandParam applies, elementwise where the value is a list.
 // ok is false when the expansion was fatal.
-func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bool) ([]string, bool, bool) {
+//
+// nothing is the fourth result and is substitutedNothing's answer: whether
+// the operator substituted a written word that came to nothing. It is decided
+// here, in the branch that chooses between the operator's two sides, because
+// that is the only place that knows which side ran — a caller asking again
+// from the outside would have to re-derive `fires`, and a second reading of
+// which side ran is how the two come apart.
+func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bool) ([]string, bool, bool, bool) {
 	fires := !set
 	if e.Colon {
 		fires = !set || strings.Join(words, "") == ""
@@ -784,27 +860,31 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 	case syntax.ParamNone:
 	case syntax.ParamDefault:
 		if fires {
-			return []string{r.joinWord(e.Arg)}, false, true
+			sub := []string{r.joinWord(e.Arg)}
+			return sub, false, true, substitutedNothing(e, sub, fires)
 		}
 	case syntax.ParamAssign:
 		if fires {
-			return r.assignThroughFlags(e)
+			w, l, ok := r.assignThroughFlags(e)
+			return w, l, ok, false
 		}
 	case syntax.ParamAssignAlways:
 		// No test, so the assignment is the only branch there is. The flags
 		// still apply to what is substituted and not to what is stored:
 		// measured, `${(U)v::=abc}` is `ABC` and leaves `abc` behind.
-		return r.assignThroughFlags(e)
+		w, l, ok := r.assignThroughFlags(e)
+		return w, l, ok, false
 	case syntax.ParamAlternate:
 		if fires {
-			return []string{""}, false, true
+			return []string{""}, false, true, false
 		}
-		return []string{r.joinWord(e.Arg)}, false, true
+		sub := []string{r.joinWord(e.Arg)}
+		return sub, false, true, substitutedNothing(e, sub, fires)
 	case syntax.ParamError:
 		if fires {
 			r.fatalParamError("%s\n", Wording(r.diag().ParamErrorMessage, "%[1]s: %[2]s",
 				e.Name, r.paramErrorWord(e, set)))
-			return nil, false, false
+			return nil, false, false, false
 		}
 	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong,
 		syntax.ParamTrimSuffix, syntax.ParamTrimSuffixLong:
@@ -828,12 +908,12 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 		}
 	case syntax.ParamSubstring:
 		if isList {
-			return sliceElems(words, r.numOf(e.Arg, e, e.Arg2), e, r), true, true
+			return sliceElems(words, r.numOf(e.Arg, e, e.Arg2), e, r), true, true, false
 		}
 		words[0] = r.substringRange(words[0], e)
 	case syntax.ParamExclude, syntax.ParamSetDifference, syntax.ParamSetIntersection:
 		if isList {
-			return r.selectElements(e, words), true, true
+			return r.selectElements(e, words), true, true, false
 		}
 		// Not a list: `${(U)v:#p}` asks the same question of one value, and
 		// the answer is that value or nothing. It stays a scalar rather than
@@ -846,7 +926,7 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 			words[i] = r.changeCase(w, e)
 		}
 	}
-	return words, isList, true
+	return words, isList, true, false
 }
 
 // convertCase is the `U` and `L` flags: every letter, under the same locale
@@ -964,7 +1044,13 @@ func (r *Runner) promptUnitName() string {
 // mod is the character the group's `q` ate, and 0 when it ate none. It beats
 // the count rather than composing with it: `${(q-)v}` and `${(q+)v}` each
 // have one `q` and neither writes the single-`q` style.
-func quoteFlagged(v string, count int, mod byte) string {
+//
+// nothing is substitutedNothing's answer, and reaches only the single-`q`
+// style below — which is measured rather than convenient: `"${(q)y:-$y}"`
+// with `y=""` is nothing in the shell being modeled, and `(qq)`, `(qqq)`,
+// `(qqqq)`, `(q-)` and `(q+)` all write their own empty wrapper for the same
+// expansion.
+func quoteFlagged(v string, count int, mod byte, nothing bool) string {
 	switch mod {
 	case '-':
 		return quoteMinimal(v)
@@ -973,7 +1059,7 @@ func quoteFlagged(v string, count int, mod byte) string {
 	}
 	switch count {
 	case 1:
-		return quoteWithBackslashes(v)
+		return quoteWithBackslashes(v, nothing)
 	case 2:
 		return "'" + strings.ReplaceAll(v, "'", `'\''`) + "'"
 	case 3:
@@ -1018,8 +1104,20 @@ func quoteFlagged(v string, count int, mod byte) string {
 // the question all three ask is the same one and a second copy of the answer
 // is how two of them come to disagree. The table is where the two start-only
 // specials live: measured, `${(q)…}` on `a~b` is `a~b` and on `~x` is `\~x`.
-func quoteWithBackslashes(v string) string {
+func quoteWithBackslashes(v string, nothing bool) string {
 	if v == "" {
+		// `''` is what an empty *value* has to be written as, backslashes
+		// having no way to spell one. A word branch that substituted nothing
+		// is not that, and is written as nothing — see substitutedNothing for
+		// the measurement, and note that this is the only style it reaches.
+		// The wrapping styles below write their own empty wrapper for it,
+		// measured on zsh 5.9.2 with `y=""`: `"${(qq)y:-$y}"` is `''`,
+		// `"${(qqq)y:-$y}"` is `""`, `"${(qqqq)y:-$y}"` is `$''` and the
+		// minimal `"${(q-)y:-$y}"` is `''` — every one of them the same
+		// answer it gives an ordinary empty value.
+		if nothing {
+			return ""
+		}
 		return "''"
 	}
 	var b strings.Builder

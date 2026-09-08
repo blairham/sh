@@ -70,6 +70,12 @@ func TestBothJobCheckNamesReadBack(t *testing.T) {
 		{``, "checkrunningjobs", true},
 		{`unsetopt checkjobs`, "checkjobs", false},
 		{`unsetopt checkrunningjobs`, "checkrunningjobs", false},
+		// The discriminating pair: the narrower name turned off leaves the
+		// master reading `on`, because it is the master's own half it reads
+		// back and not the switch the two of them share. A getter wired to
+		// that shared switch reports `checkjobs` off here, which is a shell
+		// describing a state it is not in.
+		{`unsetopt checkrunningjobs`, "checkjobs", true},
 		// The narrower name is remembered across the master moving, which is
 		// the state a core switch alone cannot hold.
 		{`unsetopt checkrunningjobs; unsetopt checkjobs`, "checkrunningjobs", false},

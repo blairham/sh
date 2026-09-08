@@ -532,3 +532,47 @@ func TestTheJobTableUnderTheHeldExit(t *testing.T) {
 		})
 	}
 }
+
+// A job that has finished is not one the table under the warning lists.
+//
+// It is in the runner's job list until something asks for its notice, so the
+// listing has to skip it rather than assume the list holds only live jobs —
+// and the reason it must is the sentence itself: the warning is about jobs
+// that would be *abandoned*, and one that has already ended abandons nothing.
+func TestTheJobTableUnderTheHeldExitSkipsAFinishedJob(t *testing.T) {
+	// A `&` job whose process ends: the goroutine waiting on it finishes the
+	// job where it stands, with nothing reaping and nothing reporting, so the
+	// job is in the table and done at the same time. That is the state the
+	// skip is for, and it is reachable in a real session because a background
+	// job can end at any moment — including between the `exit` being typed
+	// and the table being built.
+	f := &fakeJobs{}
+	_, _, r := jobSession(t, f, echoCmd+" &", true, func(s *Semantics, d *Diagnostics) {
+		s.HeldExitListsTheJobs = Yes
+		d.StoppedJobsAtExit = "there are stopped jobs"
+	})
+	r.SetChecksRunningJobsAtExit(true)
+	// Synchronized on the job rather than on a duration: the wait this
+	// returns from is the one that finished it, so nothing here depends on
+	// what else the machine is doing.
+	for _, j := range r.Jobs() {
+		j.Wait()
+	}
+	// And now one that stops, which is what holds the exit at all.
+	f.waits = append(f.waits, stopped)
+	jobRun2(t, r, echoCmd)
+	jobs := r.Jobs()
+	if len(jobs) != 2 || !jobs[0].Finished() || !jobs[1].Stopped {
+		t.Fatalf("jobs = %+v, want one finished and one still stopped", jobs)
+	}
+	out, _, _ := jobRun2(t, r, "exit")
+	if !strings.Contains(out, "there are stopped jobs") {
+		t.Fatalf("said %q, want the warning", out)
+	}
+	if n := strings.Count(out, "Stopped"); n != 1 {
+		t.Errorf("listed %d rows, want only the live job: %q", n, out)
+	}
+	if strings.Contains(out, "Done") {
+		t.Errorf("listed the job that had already finished: %q", out)
+	}
+}

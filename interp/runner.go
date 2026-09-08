@@ -3409,6 +3409,76 @@ func (r *Runner) attributeFolded(name, value string) (string, bool) {
 	return value, true
 }
 
+// appendedValue is what `+=` puts together: the value a name already holds
+// and the text on the right of the operator.
+//
+// One spelling over two operations, and the *name* says which it is. A plain
+// name joins the characters — `a=1; b=2; a+=b` is `1b` — while a name
+// carrying the integer or the float attribute **adds**, because what it holds
+// is a number and what is written on the right is an expression rather than
+// text. Measured 2026-09-08: `typeset -i a=1; a+=2` is `3` in bash 5.3.15,
+// bash 3.2.57, ksh93 and zsh 5.9.2 alike, and `typeset -F 3 a=1.5; a+=2.25`
+// is `3.750` in the two that spell the float letter. Four columns with one
+// answer is the core's answer and not a dialect's, so no axis is asked here —
+// an axis with nothing to disagree about would be a question this shell can
+// never be asked.
+//
+// The two sides are evaluated **apart** and never joined into one expression
+// first. That is not a nicety: joining first is exactly the bug this
+// replaced, where `typeset -i a=1 b=2; a+=b` built the text `1b` and only
+// then tried to read it as a number, and the plain `a+=2` built `12` and
+// stored a wrong number at status 0 with nothing said. The shells' own
+// diagnostics say they do not join either — `typeset -i a=1; a+=2+` blames
+// `2+` in all four and never mentions the `1` standing in front of it.
+//
+// The base is learned from the right-hand side, exactly as a plain
+// assignment's value teaches it: measured in zsh 5.9.2, `typeset -i a=1;
+// a+=0x10` is `16#11`, and a later plain `a=5` then reads back `16#5`, so
+// what the append taught was the name's base and not that one value's.
+//
+// The second result is false where an evaluation failed and has already said
+// so, in which case nothing is stored — attributeFolded's convention, and for
+// the same reason: the failure ends the script and a half-written name would
+// outlive it.
+func (r *Runner) appendedValue(name, old, add string) (string, bool) {
+	prec, isFloat := r.floatPrecision[name]
+	switch {
+	case isFloat:
+		// Ahead of the integer branch for attributeFolded's reason: the two
+		// attributes cannot both stand, and reaching this first is what makes
+		// that a statement rather than a hope.
+		lhs, ok := r.floatValue(old)
+		if !ok {
+			return "", false
+		}
+		rhs, ok := r.floatValue(add)
+		if !ok {
+			return "", false
+		}
+		return strconv.FormatFloat(lhs+rhs, 'f', floatPlaces(prec), 64), true
+	case r.integer[name]:
+		r.learnIntegerBase(name, add)
+		if r.unspecified {
+			return "", false
+		}
+		lhs, ok := r.integerNumber(old)
+		if !ok {
+			return "", false
+		}
+		rhs, ok := r.integerNumber(add)
+		if !ok {
+			return "", false
+		}
+		// Decimal, and deliberately not written out in the name's base here:
+		// the store this is on its way to folds what it is handed through
+		// attributeFolded like any other value, which renders it — so a
+		// render at this end would be a second copy of that one, and the
+		// second copy is what goes stale.
+		return itoa(lhs + rhs), true
+	}
+	return old + add, true
+}
+
 // readonlyRefusalNamesBuiltin reports whether the running builtin puts its own
 // name in this refusal. A plus form refused the attribute it wanted to remove
 // asks a different table, because one shell answers the two shapes
@@ -3829,8 +3899,14 @@ func (r *Runner) assign(a *syntax.Assign) {
 		if a.Append {
 			// `m[k]+=v` joins the element it names, the same operation the
 			// indexed form performs on a subscript — an unset key leaves
-			// nothing in front of the value.
-			value = r.AssocArrays[a.Name][key] + value
+			// nothing in front of the value. Joined through appendedValue
+			// because the name's attribute decides what "joins" means:
+			// `typeset -iA m; m[k]=1; m[k]+=2` is `3` in bash and ksh93.
+			v, ok := r.appendedValue(a.Name, r.AssocArrays[a.Name][key], value)
+			if !ok {
+				return
+			}
+			value = v
 		}
 		r.setAssocElem(a.Name, key, value)
 	case a.Index != nil && a.IndexFlags != nil:
@@ -3893,14 +3969,25 @@ func (r *Runner) assign(a *syntax.Assign) {
 			// shell replaces the table instead, which no script can watch
 			// for without also depending on the scalar axis itself.
 			if a.Append {
-				value = r.AssocArrays[a.Name]["0"] + value
+				v, ok := r.appendedValue(a.Name, r.AssocArrays[a.Name]["0"], value)
+				if !ok {
+					return
+				}
+				value = v
 			}
 			r.setAssocElem(a.Name, "0", value)
 			return
 		}
 		if a.Append {
 			old, _ := r.getVar(a.Name)
-			value = old + value
+			// The operator is not the whole of what `+=` means — see
+			// appendedValue. An attributed name adds here, and the string
+			// join is what is left when the name carries no attribute.
+			v, ok := r.appendedValue(a.Name, old, value)
+			if !ok {
+				return
+			}
+			value = v
 		}
 		r.setVarAs(a.Name, value, assignedAlone)
 		if r.allexport {

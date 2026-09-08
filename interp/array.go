@@ -272,7 +272,16 @@ func insertAtTheFront(a Array, value string) Array {
 // error and not an empty string joined to anything.
 func (r *Runner) appendArrayElem(name string, idx int, sub, value string) {
 	if pos, ok := r.elemPos(r.Arrays[name], idx); ok {
-		value = r.Arrays[name][pos] + value
+		// Joined through appendedValue rather than with `+`, because the
+		// name's attribute decides which of the two joins this is:
+		// `typeset -ia a=(1 2); a[1]+=5` is `7` in bash and ksh93, not `25`.
+		// An element the array does not have yet has nothing to join, and
+		// setArrayElem's own fold evaluates the value on its way in.
+		v, ok := r.appendedValue(name, r.Arrays[name][pos], value)
+		if !ok {
+			return
+		}
+		value = v
 	}
 	r.setArrayElem(name, idx, sub, value)
 }

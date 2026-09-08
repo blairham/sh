@@ -10977,6 +10977,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/integer-attribute-evaluates-a-later-assignment` | `[5+2]` **2>** `<shell>: 1: typeset: not found` | `[7]` | `[7]` | `[7]` | `[7]` | `[7]` |
 | `declare/integer-attribute-on-the-declaration` | `[]` **2>** `<shell>: 1: typeset: not found` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` |
 | `declare/integer-attribute-removed` | `[5+2]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` |
+| `declare/integer-attribute-makes-append-add` | `1[]~2[]~3[1]~4[1]~5[]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: a+=2: not found~<shell>: 2: typeset: not found~<shell>: 2: c+=d: not found~<shell>: 3: e+=f: not found~<shell>: 4: g+=2: not found~<shell>: 5: typeset: not found~<shell>: 5: h+=2: not found~<shell>: 5: typeset: not found~<shell>: 5: h+=3: not found` | `1[3]~2[3]~3[1f]~4[12]~5[33]` | `1[3]~2[3]~3[1f]~4[12]~5[33]` | `1[3]~2[3]~3[1f]~4[12]~5[33]` | `1[3]~2[3]~3[1f]~4[12]~5[33]` | `1[3]~2[3]~3[1f]~4[12]~5[33]` |
+| `declare/integer-append-evaluates-the-right-side` | `1[]~2[]~3[]~4[]~5[]~6[]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: a+=b+1: not found~<shell>: 2: typeset: not found~<shell>: 2: c+= 2 : not found~<shell>: 3: typeset: not found~<shell>: 3: d+=2+3: not found~<shell>: 4: typeset: not found~<shell>: 4: e+=nosuch: not found~<shell>: 5: typeset: not found~<shell>: 5: f+=: not found~<shell>: 6: typeset: not found~<shell>: 6: g+=2: not found` | `1[4]~2[3]~3[6]~4[1]~5[1]~6[2]` | `1[4]~2[3]~3[6]~4[1]~5[1]~6[2]` | `1[4]~2[3]~3[6]~4[1]~5[1]~6[2]` | `1[4]~2[3]~3[6]~4[1]~5[1]~6[2]` | `1[4]~2[3]~3[6]~4[1]~5[1]~6[2]` |
+| `declare/integer-append-and-the-output-base` | `1[]~2[]~3[5]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: a+=1: not found~<shell>: 2: typeset: not found~<shell>: 2: b+=0x10: not found` | `1[1]~2[17]~3[5]` **2>** `<shell>: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `1[1]~2[17]~3[5]` **2>** `<shell>: line 1: typeset: -1: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `1[1]~2[17]~3[5]` **2>** `<shell>: line 0: typeset: -1: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1[16#100]~2[17]~3[5]` | `1[16#100]~2[16#11]~3[16#5]` |
+| `declare/integer-append-to-an-element` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: a[0]=1: not found~<shell>: 1: a[0]+=2: not found~<shell>: 1: Bad substitution` *(status 2)* | `1[3]` | `1[3]` | `1[3]` | `1[3]` | **2>** `<shell>:1: a: assignment to invalid subscript range` *(status 1)* |
+| `declare/float-attribute-makes-append-add` | `1[]~2[]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: a+=2.25: not found~<shell>: 2: typeset: not found~<shell>: 2: b+=: not found` | `1[2.25]~2[]` **2>** `<shell>: line 1: typeset: cannot use `-f' to make functions~<shell>: line 2: typeset: cannot use `-f' to make functions` | `1[2.25]~2[]` **2>** `<shell>: line 1: typeset: `3': not a valid identifier~<shell>: line 1: typeset: cannot use `-f' to make functions~<shell>: line 2: typeset: `3': not a valid identifier~<shell>: line 2: typeset: cannot use `-f' to make functions` | `1[2.25]~2[]` **2>** `<shell>: line 0: typeset: cannot use `-f' to make functions~<shell>: line 1: typeset: cannot use `-f' to make functions` | `1[3.750]~2[1.000]` | `1[3.750]~2[1.000]` |
+| `declare/integer-append-that-will-not-parse` | `unreached[]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: a+=2+: not found` | **2>** `<shell>: line 1: 2+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 2+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 2+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 2+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `declare/unset-takes-the-integer-attribute-away` | `[3+4]` **2>** `<shell>: 1: typeset: not found` | `[3+4]` | `[3+4]` | `[3+4]` | `[3+4]` | `[3+4]` |
 | `declare/unset-takes-the-case-attributes-away` | `u[def]~l[GHI]` **2>** `<shell>: 1: typeset: not found~<shell>: 5: typeset: not found` | `u[def]~l[GHI]` | `u[def]~l[GHI]` | `u[def]~l[GHI]` **2>** `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: line 4: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `u[def]~l[GHI]` | `u[def]~l[GHI]` |
 | `declare/unset-takes-the-export-attribute-away` | `(gone)` **2>** `<shell>: 1: typeset: not found` | `(gone)` | `(gone)` | `(gone)` | `(gone)` | `(gone)` |
@@ -11326,6 +11332,41 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/integer-attribute-removed` — `+i` takes the attribute away, which is the one place a shell spells an option with a plus
   ```sh
   typeset -i n=1; typeset +i n; n=5+2; echo "[$n]"
+  ```
+- `declare/integer-attribute-makes-append-add` — `+=` is one spelling over two operations, and the *name* says which: an integer name **adds** — `3` and `3` — where a plain one joins the characters, `1f` and `12`. The last line is the pair that shows the attribute is what decides and not the operator, since taking it off with `+i` turns the very next `+=` back into a join: `33`. Unanimous in all four columns that spell the letter, so this is the core's answer and not an axis. It was `12` here at status 0 with nothing said, and the name form was worse — we joined first, made the text `1d`, and then failed to read it as a number, which is what broke a real plugin manager's return-value accounting (#1482)
+  ```sh
+  typeset -i a=1; a+=2; echo "1[$a]"
+  typeset -i c=1 d=2; c+=d; echo "2[$c]"
+  e=1; f=2; e+=f; echo "3[$e]"
+  g=1; g+=2; echo "4[$g]"
+  typeset -i h=1; h+=2; typeset +i h; h+=3; echo "5[$h]"
+  ```
+- `declare/integer-append-evaluates-the-right-side` — the right-hand side of an integer `+=` is a whole expression rather than a number: `4`, `3` through the spaces, `6` for `2+3`, and `1` where the word is an unset name — which is zero and not an error, the same reading a plain assignment gives it. An empty right side is zero too, so `+=` with nothing after it leaves the value alone at `1`. The last line has no value to add to and the attribute still holds: `2`, not the empty string joined to anything
+  ```sh
+  typeset -i a=1 b=2; a+=b+1; echo "1[$a]"
+  typeset -i c=1; c+=" 2 "; echo "2[$c]"
+  typeset -i d=1; d+="2+3"; echo "3[$d]"
+  typeset -i e=1; e+=nosuch; echo "4[$e]"
+  typeset -i f=1; f+=; echo "5[$f]"
+  typeset -i g; g+=2; echo "6[$g]"
+  ```
+- `declare/integer-append-and-the-output-base` — the sum is written back out in the name's base rather than in decimal — `16#100` — and the base a `+=` is *told* sticks to the name exactly as a plain assignment's does: after `b+=0x10` zsh reads `16#11`, and the plain `b=5` after it reads `16#5`. bash has no base option at all and answers the first line with usage, which leaves the append to a name that never got the letter
+  ```sh
+  typeset -i16 a=255; a+=1; echo "1[$a]"
+  typeset -i b=1; b+=0x10; echo "2[$b]"; b=5; echo "3[$b]"
+  ```
+- `declare/integer-append-to-an-element` — the attribute belongs to the name, so an *element* of it adds too: `3` in bash and ksh93. zsh has no subscripted assignment through a scalar declaration and refuses the line by name, which is why the row stops there. Kept apart from the scalar row because the element reaches a different store — an append that was fixed only in the scalar path would still read `12` here
+  ```sh
+  typeset -i a; a[0]=1; a[0]+=2; echo "1[${a[0]}]"
+  ```
+- `declare/float-attribute-makes-append-add` — the same rule under the other numeric letter, and the reason `+=` asks about the *value* a name holds rather than about the integer letter alone: `3.750` in the two shells that spell `-F`, written in the name's precision. An empty right side is zero here too, so the second line keeps `1.000`. bash has no float letter and joins the characters of a name that was never declared
+  ```sh
+  typeset -F 3 a=1.5; a+=2.25; echo "1[$a]"
+  typeset -F 3 b=1; b+=; echo "2[$b]"
+  ```
+- `declare/integer-append-that-will-not-parse` — what a failed append says and where it stops: every column blames `2+` alone and none of them mentions the `1` standing in front of it, which is the evidence that the two sides are evaluated apart and never joined into one expression first. Fatal at status 1 with nothing stored, the same as a plain integer assignment that will not parse. We used to blame `12+`, and that wording was the tell for the whole bug
+  ```sh
+  typeset -i a=1; a+=2+; echo "unreached[$a]"
   ```
 - `declare/unset-takes-the-integer-attribute-away` — `unset` removes the name *and* what it was declared to be, so a name assigned afterwards is a plain new name: `3+4` and not 7. Unanimous across every column that has the letter, which is what makes it a rule rather than an axis — and it is the ground the other attribute rows stand on, because a shell whose attribute maps are keyed by name and are never deleted from gives the *old* attribute to the *new* value, silently and at status 0. `unset PATH; PATH=a:a:b` is the shape that made it visible (#1047)
   ```sh

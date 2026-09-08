@@ -802,6 +802,13 @@ func Semantics() interp.Semantics {
 	// `unset ?` is not, `unset 12` is quiet and `export 12` is not.
 	s.BadNameToDeclarationFatal = interp.Yes
 	s.BadNameToUnsetFatal = interp.Yes
+	// And fatal to `read` as well, which no other member of the panel is:
+	// `read 1bad; echo after` prints the refusal and stops, in a function and
+	// in a subshell alike. It is a field of its own because `read` is not a
+	// special builtin anywhere, so this is not the special-builtin rule
+	// reaching it — the two shells whose special builtins are fatal both
+	// carry on past this one.
+	s.BadNameToReadFatal = interp.Yes
 	// Fatal here too, and unlike bash's this does not move: `emulate sh`,
 	// `emulate ksh` and `emulate zsh` all stop. It is the axis that keeps
 	// this question apart from RedirectErrorOnSpecialBuiltinFatal, which zsh
@@ -809,6 +816,21 @@ func Semantics() interp.Semantics {
 	s.UnsetReadonlyFatal = interp.Yes
 	s.DeclarationNameOperands = interp.NamesAndSpecialParameters
 	s.UnsetNameOperands = interp.NamesAndPositionals
+	// A third set for a third builtin: `read 1` fills `$1` here, where
+	// `export 1` is refused — and `read ?` is taken too, though for the
+	// other reason below rather than as a name. `read 1bad`, `read a-b`,
+	// `read "a b"` and `read -- -x` are each `not an identifier`.
+	s.ReadNameOperands = interp.NamesAndPositionals
+	// The prompt operand, taken from ksh93 and made kinder: `read "?Press
+	// enter"` prompts and reads into REPLY where ksh93 refuses the empty
+	// name. That is why `read ?` is quiet here — the word is a prompt, not a
+	// name.
+	s.ReadPromptOperand = interp.ReadPromptAloneNamesTheDefault
+	// The line is read before the operand is judged, so the refusal has eaten
+	// it: `printf 'AAA\nBBB\n' | { (read 1bad); cat; }` prints only BBB. In
+	// a subshell because the refusal is fatal here, which is the only way to
+	// have a reader left to ask.
+	s.ReadRefusesABadNameBeforeReading = interp.No
 	// `export a[1]=v` sets the element and reports success here, measured
 	// 2026-09-07 — and so does `readonly a[1]=v` as far as the *name* check
 	// goes, which then refuses it for a reason about elements rather than
@@ -1201,7 +1223,9 @@ func Diagnostics() interp.Diagnostics {
 		LocalElementRefusal:    "%[1]s[%[2]s]: can't create local array elements",
 		// `set -A 1v q` does not name the builtin in its location where
 		// `unset 1x` and `typeset 1w` from this same shell do.
-		BadNameRefusalHidesTheBuiltin: map[string]bool{"set": true},
+		// `read` joins `set` in it: `zsh:1: not an identifier: 1bad` has no
+		// `read:` in the location where `zsh:export:1:` has the builtin.
+		BadNameRefusalHidesTheBuiltin: map[string]bool{"set": true, "read": true},
 		UnimplementedOptionLetters: map[string]string{
 			// zsh gives a single letter to far more of its options than the
 			// rest of the panel does: measured 2026-09-05, it refuses only
@@ -1411,6 +1435,12 @@ func Diagnostics() interp.Diagnostics {
 			// rename. Measured: `integer 1x` is
 			// `zsh:integer:1: not an identifier: 1x`.
 			"integer": "not valid in this context: %[2]s",
+			// `read` gets the leading-digit wording for every bad operand,
+			// not just a numeric one: `read a-b` is `not an identifier: a-b`
+			// where `export a-b` is `not valid in this context`. So there is
+			// no BuiltinBadNameNumeric entry beside this — the two are the
+			// same sentence here.
+			"read": "not an identifier: %[2]s",
 		},
 		// An operand that starts with a digit is a different complaint, for
 		// the two that have one. `unset` says the same to both.

@@ -3150,6 +3150,41 @@ echo "st=$?"`,
 		Why:     "the complaint about a bundle names the letter the walk stopped on, never the word it rode in on: `-x` in all four, including the dialect recorded as whole-word naming from `export -Q`, where the letter and the word are the same thing. Four wordings, zsh reporting 1 to everyone else's 2, and all four carry on — `read` is not a special builtin, so nobody's fatality rule reaches it",
 	},
 	{
+		ID: "read/a-word-that-is-not-a-name", Category: "builtins",
+		Snippet: `printf 'X Y Z\n' | { read 1bad; echo "st=$?"; }`,
+		Why:     "the bug this row was written for (#1440): a word that is not an identifier was taken as a variable name in silence, at status 0, where every shell in the panel refuses it by name. Six columns, four wordings and two statuses — dash's 2 against everyone else's 1 — and the status alone is why the silence was worth a P1: `read` answers 1 for the ordinary end of input too, so a quiet 1 is indistinguishable from `the stream ended`, which is the answer a caller is most likely to be checking for. It is not about any one word. `read -r line -u $1` is invalid everywhere, and the `-u` landing here is the shape a person writes by accident, because the option is real and only its position is wrong. The line supplies its own input rather than reading whatever the harness left on the descriptor",
+	},
+	{
+		ID: "read/a-bad-name-and-the-line-it-did-or-did-not-eat", Category: "builtins",
+		Snippet: `printf 'AAA\nBBB\n' | { (read 1bad); read next; echo "next=[$next]"; }`,
+		Why:     "whether the refusal comes before the read or after it, which nothing but the input can witness: bash 5.3 and ksh93 leave the line for the next reader, and dash, bash 3.2 and zsh have eaten it. Three against three, so it is an axis rather than a majority — and the two bash columns disagreeing makes it a change within bash rather than a difference between shells. The subshell is what makes the row askable at all: zsh ends the script on this refusal, so without one there is no second reader left to answer",
+	},
+	{
+		ID: "read/the-names-in-front-of-a-bad-one", Category: "builtins",
+		Snippet: `printf 'X Y Z\n' | { c=keep; read a 1bad c; echo "st=$? a=[$a] c=[$c]"; }`,
+		Why:     "a bad name stops the filling at itself: the names in front of it are set, the ones behind it keep what they had, and the line is read even in the two shells that would not have read it had the bad name come first. `a=[X]` and not `a=[X Y Z]` is the part a plausible implementation gets wrong — the last name takes the remainder of the line only when the line held more fields than there are *names*, and that count is the one the script wrote rather than the one the refusal truncated it to. Unanimous in the five that carry on; zsh's column is the refusal alone, which is the same answer with the script ended under it",
+	},
+	{
+		ID: "read/a-positional-where-a-name-is-wanted", Category: "builtins",
+		Snippet: `printf 'X Y Z\n' | { read 1; echo "st=$? one=[$1]"; }`,
+		Why:     "how far the set of names reaches past a plain name, which is the only part of the refusal above that splits the panel. zsh fills `$1` from it and the other five refuse. A third answer for a third builtin in that shell rather than one it already had — `export 1` is refused there and `unset 12` is not — so it is a field of its own and not either of the two beside it",
+	},
+	{
+		ID: "read/a-prompt-in-the-first-operand", Category: "builtins",
+		Snippet: `printf 'X Y Z\n' | { read "v?p"; echo "st=$? v=[$v]"; }`,
+		Why:     "ksh93's spelling of `read -p`, which zsh took: a `?` in the *first* operand splits it into the name and a prompt, and the prompt is written only where there is a terminal to write it to — so on a pipe this is a plain read into v. The other four have no such form and refuse the whole word as a name. It rides with the name check rather than beside it, because the word a shell judges is the part in front of the `?`: a check that did not know the form would refuse the idiom in the two shells that spell it",
+	},
+	{
+		ID: "read/a-prompt-with-no-name-in-front-of-it", Category: "builtins",
+		Snippet: `printf 'X Y Z\n' | { read "?p"; echo "st=$? R=[$REPLY]"; }`,
+		Why:     "and where the two that have the form part company. zsh reads into the default name — which is how the idiom is usually written, a prompt and nothing else — and ksh93 refuses the empty name the split left it, naming that empty word in the complaint. So the form is one question with three answers rather than a flag: no such form, the form with a name required, and the form with a default",
+	},
+	{
+		ID: "read/a-bad-name-and-what-it-costs-the-script", Category: "builtins",
+		Snippet: `read 1bad; echo after`,
+		Why:     "zsh alone ends the script here; the other five report it and carry on. `read` is not a special builtin in any shell, so this is not a fatality rule reaching it from elsewhere — dash and ksh93 stop for `export 1x` and go on past this, which is the same shell answering the same kind of failure two ways depending on the builtin. No input on purpose: with the descriptor closed every column still refuses the operand rather than reporting an end of input, which is the half of the bug a status could never have shown",
+	},
+	{
 		ID: "help/a-builtin-answers-the-help-option", Category: "builtins",
 		Snippet: `h=$(alias --help 2>/dev/null); echo "st=$?"; printf '%s\n' "$h" | head -n 1`,
 		Why:     "one shell answers `--help` and the rest refuse it as an option nobody has, and the answer goes to standard *output* while every refusal goes to standard error — which is the whole reason a script can tell the two apart. Written as a first line and a status rather than as the block itself: bash's answer carries a paragraph of its own documentation after the synopsis, and this tree reproduces the behavior rather than another project's prose (CLEANROOM.md). It matters far past its size — one platform ships fifteen /usr/bin commands as a stub around `builtin`, so `/usr/bin/alias --help` is this exact call, and every disagreement the real-script run sweep found was this (#825, #815)",

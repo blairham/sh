@@ -512,6 +512,9 @@ func Semantics() interp.Semantics {
 	// are, and carries on with a status of 1.
 	s.BadNameToDeclarationFatal = interp.No
 	s.BadNameToUnsetFatal = interp.No
+	// `read` is not a special builtin anywhere, so its bad name is not fatal
+	// here either — `read 1bad; echo after` prints both lines.
+	s.BadNameToReadFatal = interp.No
 	// The refusal to unset a readonly name is reported and not fatal — and
 	// this is the one of bash's `unset` answers that POSIX mode moves, which
 	// is why it is not BadNameToUnsetFatal read twice. `set -o posix` makes
@@ -523,6 +526,18 @@ func Semantics() interp.Semantics {
 	// `unset -- -` are all quiet — while `unset -v 1x` refuses. bash 3.2
 	// refused all of them, so the panel's two bash columns differ here.
 	s.UnsetNameOperands = interp.AnythingIsAName
+	// `read` sits back on the strict answer whatever `unset` does: `read 1`,
+	// `read "a b"` and `read -- -x` are each `not a valid identifier` in
+	// bash 5.3 and in the 3.2 that macOS ships.
+	s.ReadNameOperands = interp.PlainNamesOnly
+	// And bash has no prompt operand — `read "v?p"` is the bad name `v?p`,
+	// quoted back whole. The prompt is `-p` here and only `-p`.
+	s.ReadPromptOperand = interp.ReadOperandIsAllName
+	// bash 5.3 judges the first operand before it goes to the stream:
+	// `printf 'AAA\nBBB\n' | { read 1bad; cat; }` prints both lines. bash
+	// 3.2 reads first and prints only BBB, so the panel's two bash columns
+	// differ here as they do on UnsetNameOperands; this preset is bash 5's.
+	s.ReadRefusesABadNameBeforeReading = interp.Yes
 	s.DeclarationTakesASubscript = interp.No
 	// And a *declaration* takes one where `export` does not, which is this
 	// shell alone splitting the two: `export a[1]=v` is `not a valid
@@ -1079,6 +1094,10 @@ func Diagnostics() interp.Diagnostics {
 			// answer for every builtin that asks it.
 			"typeset": "%[1]s: `%[2]s': not a valid identifier",
 			"declare": "%[1]s: `%[2]s': not a valid identifier",
+			// `read 1bad` says the same, and quotes the word back whole:
+			// `read "v?p"` is `` `v?p' `` here, because bash has no prompt
+			// operand to split it at.
+			"read": "%[1]s: `%[2]s': not a valid identifier",
 		},
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,

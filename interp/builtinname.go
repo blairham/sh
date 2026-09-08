@@ -328,3 +328,50 @@ func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int
 	}
 	return status
 }
+
+// isReadName reports whether an operand can stand where `read` wants a name.
+//
+// A fourth caller of isBuiltinName rather than a second identifier check.
+// `read` was the one builtin in this shell that took a word which is not a
+// name and assigned to it in silence — status 0, no diagnostic, and the
+// variable a caller went on to read left empty (#1440) — where every shell in
+// the panel refuses it by name. The rule was already a function precisely so
+// that a new caller would not have to restate it, and restating it here is
+// how the same bug comes back in a fifth place.
+//
+// A subscripted operand is not judged here. `read a[0]` fills the element in
+// bash, bash 3.2 and ksh93, so refusing it as a bad name would answer three of
+// the six wrongly; what this shell does with it is a separate question and
+// this leaves it exactly where it was.
+func (r *Runner) isReadName(name string) bool {
+	if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) {
+		return true
+	}
+	return r.isBuiltinName(name, r.sem().ReadNameOperands)
+}
+
+// badReadName reports it, through the same wording table and the same
+// fatality gate as every other bad name.
+//
+// The operand and the name are the same word: `read` takes no `=`, and where
+// the first operand carried a prompt the part in front of the `?` is both what
+// was judged and what every shell that splits there quotes back.
+func (r *Runner) badReadName(name string) int {
+	return r.badBuiltinName("read", name, name, r.sem().BadNameToReadFatal)
+}
+
+// readAfterABadName raises the refusal the assignment pass held back.
+//
+// Held back rather than raised where it was found, because the panel is
+// unanimous that the names in front of a bad one are still filled:
+// `printf 'X Y Z\n' | { c=keep; read a 1bad c; }` leaves a as X and c as keep
+// in all six shells. So the refusal is what the builtin returns and not what
+// stops it, and the status it carries wins over the read's own — a `read` that
+// reached the end of its input answers 1, and so does this, which is the whole
+// reason the silence was worth a P1: the two were indistinguishable.
+func (r *Runner) readAfterABadName(status int, name string, bad bool) int {
+	if !bad {
+		return status
+	}
+	return r.badReadName(name)
+}

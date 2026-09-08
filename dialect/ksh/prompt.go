@@ -24,6 +24,20 @@ func PromptStyle() interp.PromptStyle {
 		// left empty so the dialect describes itself.
 		Default:          "$ ",
 		DefaultContinued: "> ",
+		// Not AssignsWithNobodyToPrompt, and the reason is measured rather
+		// than a simplification: ksh93 with nobody to prompt leaves PS1
+		// *unset* and has PS2 set to `> `. That is a split between the two
+		// parameters, which this table has no way to say — it assigns them
+		// together — so the answer taken is the one PS1 gives, because PS1
+		// is what a startup file guards on. The standing difference is
+		// ksh93's non-interactive PS2, recorded in docs/spec/prompt.md.
+		//
+		// And the one column that assigns PS1 late. Measured through a pty
+		// with `$ENV` naming a file that prints `${PS1+set}`: ksh93 has PS2
+		// and PS4 in hand while that file runs and PS1 *unset*, and reads
+		// `$ ` by the time a prompt is drawn. The other five have PS1 before
+		// the file. See interp.PromptStyle.DefaultsFollowTheStartupFiles.
+		DefaultsFollowTheStartupFiles: true,
 		// ksh93 has an escape character and nothing behind it: `\u` drew `u`,
 		// `\h` drew `h`, `\w` drew `w`. The backslash goes and the letter
 		// stands, which is what DropEscape says and why the table is empty.

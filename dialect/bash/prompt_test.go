@@ -102,6 +102,31 @@ func TestPromptVersionMatchesTheOneClaimed(t *testing.T) {
 	}
 }
 
+// The default prompts are *parameters* and not only a fallback the drawer
+// reaches for, and this dialect has them in hand before its run-commands file
+// runs.
+//
+// Measured through a pty with no rc at all and PS1 unset in the parent: bash
+// 5.3.15, bash 3.2.57 and bash under argv[0] `sh` all show
+// `PS1=\s-\v\$ ` and `PS2=> ` from inside the rc file. That is what makes
+// the most common first line of a real `~/.bashrc` —
+// `[ -z "$PS1" ] && return` — mean what it was written to mean. With PS1
+// empty the guard fires at a prompt and the whole file is skipped, at status
+// 0 with nothing said (#1421).
+//
+// The pre-expansion value is the assertion, because the *drawn* prompt is
+// `bash-5.3$ ` — machine- and version-specific, and the same eight characters
+// whatever they say, which is why a length check on it sees nothing.
+func TestTheStartupFileSeesTheDefaultPrompts(t *testing.T) {
+	st := bash.PromptStyle()
+	if st.DefaultContinued != "> " {
+		t.Errorf("continuation default = %q, want %q", st.DefaultContinued, "> ")
+	}
+	if st.DefaultsFollowTheStartupFiles {
+		t.Error("bash assigns PS1 before its startup files, not after; ksh93 is the column that waits")
+	}
+}
+
 // A bare `!` is a bare `!` here: measured, only ksh93 reads it.
 func TestNoHistoryCharacter(t *testing.T) {
 	if got := bash.PromptStyle().History; got != 0 {

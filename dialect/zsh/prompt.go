@@ -152,5 +152,12 @@ func PromptStyle() interp.PromptStyle {
 		},
 		Default:          "%m%# ",
 		DefaultContinued: "%_> ",
+		// Set and *empty* in a shell with nobody to prompt, which is a third
+		// answer rather than either of the other two: measured on `-c` and on
+		// a script file alike with nothing inherited, `${PS1+set}` is `set`
+		// and `${#PS1}` is 0 — where the three bash members and ksh93 leave
+		// the name unset and dash assigns its `$ `. So the values below stay
+		// empty on purpose; the flag is what says they were written.
+		AssignsWithNobodyToPrompt: true,
 	}
 }

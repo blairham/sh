@@ -12175,6 +12175,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `env/the-interactive-file-sees-the-invocations-parameters` | `[name] n=1 [A]~main` **2>** `name: 0: can't access tty; job control turned off` | `[name] n=1 [A]~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `[name] n=1 [A]~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `[sh] n=0 []~main` **2>** `<shell>: no job control in this shell` | `[name] n=1 [A]~main` | `[name] n=1 [A]~main` |
 | `env/the-interactive-file-can-end-the-shell` | `in-file` **2>** `<shell>: 0: can't access tty; job control turned off` *(status 3)* | `in-file` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` *(status 3)* | `in-file` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` *(status 3)* | `in-file` **2>** `<shell>: no job control in this shell` *(status 3)* | `in-file` *(status 3)* | `in-file` *(status 3)* |
 | `env/the-interactive-file-that-is-not-there` | `main` **2>** `<shell>: 0: can't access tty; job control turned off` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: no job control in this shell` | `main` | `main` |
+| `prompt/the-default-prompt-is-a-parameter-at-a-prompt` | `[set][nonempty]` **2>** `<shell>: 0: can't access tty; job control turned off` | `[set][nonempty]` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `[set][nonempty]` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `[set][nonempty]` **2>** `<shell>: no job control in this shell` | `[set][nonempty]` | `[set][nonempty]` |
+| `prompt/the-default-prompt-is-not-a-parameter-without-one` | `[set][$ ]` | `[][unset]` | `[][unset]` | `[][unset]` | `[][unset]` | `[set][]` |
+| `prompt/the-startup-file-sees-the-default-prompt` | `RC[set][nonempty]~main` **2>** `<shell>: 0: can't access tty; job control turned off` | `RC[set][nonempty]~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `RC[set][nonempty]~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `RC[set][nonempty]~main` **2>** `<shell>: no job control in this shell` | `RC[][]~main` | `RC[set][nonempty]~main` |
 
 - `set/posix-mode-makes-a-failed-redirection-fatal` — the same binary, both answers: bash 5.3 and bash 3.2 print `after` without this line and stop at 1 with it, which is the bash-as-`sh` column reached at run time. The other three have no such name and refuse the `set` instead, each in its own words
   ```sh
@@ -12474,6 +12477,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `env/the-interactive-file-that-is-not-there` — not a failure in any of them. Every shell starts for the first time without one, and a complaint would be the first thing anybody saw — the same answer the non-interactive file gives, recorded separately because they are read on different routes
   ```sh
   echo main
+  ```
+- `prompt/the-default-prompt-is-a-parameter-at-a-prompt` — unanimous, and the whole of #1421: an interactive shell has PS1 set to something non-empty before it runs anything. Drawing a prompt is not the same fact — the drawer falls back to the dialect's default when nothing was assigned, so a shell whose PS1 is empty still shows `bash-5.3$ ` and looks right. `[ -z "$PS1" ] && return` at the top of a real `~/.bashrc` reads the parameter and not the screen, and with an empty one it fires at a prompt and skips the whole file
+  ```sh
+  echo "[${PS1+set}][${PS1:+nonempty}]"
+  ```
+- `prompt/the-default-prompt-is-not-a-parameter-without-one` — the other side of the same guard, and the direction it is easy to break by getting the value right: three answers here where the row above is unanimous. bash 5.3.15, bash 3.2.57, bash under argv[0] `sh` and ksh93 leave PS1 *unset* with nobody to prompt — which is exactly what the guard detects — dash assigns the same `$ ` it prompts with, and zsh assigns the empty string. Set-and-empty is a third answer rather than a spelling of unset, which is why the row prints both `+` and `-`
+  ```sh
+  echo "[${PS1+set}][${PS1-unset}]"
+  ```
+- `prompt/the-startup-file-sees-the-default-prompt` — the daily-driver shape: what a person's run-commands file finds when it runs. Five of the six columns have the default in hand before the file, which is what makes the guard mean what it was written to mean. ksh93 is the one that waits — PS1 is unset while `$ENV` runs and reads `$ ` by the time a prompt is drawn, while its PS2 and PS4 are already set — so the disagreement is about the moment and not the value, and it is a row of the prompt table rather than an axis
+  ```sh
+  echo "RC[${PS1+set}][${PS1:+nonempty}]"
   ```
 
 ## variables

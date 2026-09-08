@@ -260,3 +260,90 @@ for the expansion, so nothing on this list can be reached by accident.
 Three shells, three answers, which is why it is asked rather than assumed:
 bash drew `\q` for `\q`, ksh93 drew `q`, and zsh drew nothing at all for
 `%q`.
+
+## The default is a parameter, not only a fallback
+
+**Measured** 2026-09-07 through a pseudo-terminal — no `-c`, no `-i`, `$-`
+recorded in the same run to prove the session was interactive — with `PS1`
+unset in the parent, `HISTFILE` on a scratch path, and the platform's global
+rc files suppressed where there are any (`zsh --no-globalrcs`; macOS
+`/etc/zshrc` sets `PROMPT` and masks zsh's own default with `%n@%m %1~ %# `).
+
+Every column has a default and no two of them have the same one:
+
+| shell | `PS1` | `PS2` | `PS4` |
+|---|---|---|---|
+| bash 5.3.15 | `\s-\v\$ ` | `> ` | `+ ` |
+| bash-as-sh | `\s-\v\$ ` | `> ` | `+ ` |
+| bash32 3.2.57 | `\s-\v\$ ` | `> ` | `+ ` |
+| dash | `$ ` | `> ` | `+ ` |
+| ksh93 | `$ ` | `> ` | `+ ` |
+| zsh 5.9.2 | `%m%# ` | `%_> ` | `+%N:%i> ` |
+
+Five values for one question, none of them empty, so this is a **table of
+values** rather than an axis: nothing disagrees about *whether* there is a
+default. The values live in `PromptStyle.Default` and `DefaultContinued`,
+and each dialect's own tests assert its strings whole.
+
+What was missing until #1421 is that these are **parameters**. The drawer had
+always fallen back to them when nothing was assigned, so the screen said
+`bash-5.3$ ` while `$PS1` was empty — and the most common first line of a real
+`~/.bashrc`,
+
+```sh
+[ -z "$PS1" ] && return
+```
+
+reads the parameter, not the screen. With an empty `PS1` that guard fires in
+an interactive session and the whole file is skipped: no aliases, no
+functions, no prompt, at status 0 with nothing said.
+
+Three rules go with the value, each measured:
+
+- **Interactive only, in most of the panel.** With nobody to prompt, bash
+  5.3.15, bash 3.2.57, bash under argv[0] `sh` and ksh93 all leave `PS1`
+  *unset* — on `-c` and on a script file alike — which is exactly what the
+  guard detects. dash assigns the same `$ ` it prompts with, and zsh assigns
+  the **empty string**: set-and-empty is a third answer rather than a spelling
+  of unset, and `${PS1+set}` tells them apart. `PromptStyle`
+  says whether separately from what for that reason.
+- **Only when the name is not already set.** `PS1='INH> ' bash` reaches the rc
+  as `INH> `, and an inherited *empty* `PS1=` reaches it empty rather than as
+  the default — a prompt of nothing somebody asked for.
+- **Not exported.** With nothing inherited, bash's `export -p` names no `PS1`
+  and a child's environment has none. An inherited exported one keeps its
+  export attribute.
+
+`--norc`, `--noprofile` and `-f` do not suppress any of this: with no startup
+file read at all, every column still has its default in hand.
+
+### When, relative to the startup files
+
+Five of the six have `PS1` before the run-commands file runs. **ksh93 is the
+exception**: measured through a pty with `$ENV` naming a file that prints
+`${PS1+set}`, ksh93 has `PS2` and `PS4` in hand there and `PS1` *unset*, and
+reads `$ ` by the time a prompt is drawn. The value is the same either way and
+only the moment differs, which is why it is `PromptStyle.
+DefaultsFollowTheStartupFiles` and not a `Semantics` axis.
+
+### What is recorded, and what is not
+
+The corpus records the **shape** — `${PS1+set}` and `${PS1:+nonempty}` — and
+not the drawn text. A default prompt holds `\s` and `\v`, so what reaches the
+screen is the shell's own name and version and a row holding it would rot on
+the next release. The shape is what a startup file's guard actually reads and
+is the same on every machine. See `prompt/the-default-prompt-is-a-parameter-at-a-prompt`,
+`prompt/the-default-prompt-is-not-a-parameter-without-one` and
+`prompt/the-startup-file-sees-the-default-prompt`.
+
+### Standing differences
+
+- **ksh93's non-interactive `PS2`.** ksh93 with nobody to prompt leaves `PS1`
+  unset and has `PS2` set to `> `. The table assigns the two together, so the
+  answer taken is the one `PS1` gives — `PS2` is left unset there. Recorded
+  here rather than fixed, because splitting the entry per parameter would be a
+  knob for one column.
+- **`PS4` and `PS3`.** Every column sets `PS4` on every route, interactive or
+  not, and ksh93 and zsh set `PS3` (`#? ` and `?# `). Neither is assigned here
+  and neither is read: xtrace writes a fixed `+`, and `select` writes its own
+  prompt. Measured and recorded; not implemented.

@@ -189,7 +189,60 @@ type PromptStyle struct {
 	// Empty means the dialect has not said, and the substrate's own `$ ` and
 	// `> ` stand. It does not mean a prompt of nothing — that is a thing only
 	// an assignment can ask for.
+	//
+	// A dialect that names them also *assigns* them, into PS1 and PS2, in an
+	// interactive shell — see [PromptStyle.DefaultsFollowTheStartupFiles] for
+	// when. That is what makes `[ -z "$PS1" ] && return` at the top of a
+	// person's run-commands file mean what they wrote it to mean: measured
+	// through a pty with no rc at all, five of the six panel columns have
+	// PS1 set before the file runs and the sixth has it by the time a prompt
+	// is drawn, and none of them leaves it empty. A shell that draws a
+	// prompt from a value nobody can read has the shape right and the
+	// parameter wrong, which is invisible to every probe that watches the
+	// screen.
 	Default, DefaultContinued string
+
+	// DefaultsFollowTheStartupFiles says this dialect assigns Default and
+	// DefaultContinued *after* its startup files rather than before them.
+	//
+	// The value is the same either way and only the moment differs, which is
+	// why it is a row of this table rather than an axis of Semantics: there
+	// is no disagreement about whether there is a default.
+	//
+	// Measured through a pty, `$ENV` pointing at a file that prints
+	// `${PS1+set}`, with PS1 unset in the parent. bash 5.3.15, bash 3.2.57,
+	// bash under argv[0] `sh`, dash and zsh 5.9.2 all have PS1 in hand while
+	// the file runs — `\s-\v\$ `, `$ ` and `%m%# ` respectively. ksh93
+	// alone has it *unset* there and reads `$ ` by the time a prompt is
+	// drawn, while its PS2 and PS4 are already set. So the one column that
+	// waits waits only for PS1, and an rc guarding on PS1 in that shell sees
+	// nothing to guard on.
+	DefaultsFollowTheStartupFiles bool
+
+	// AssignsWithNobodyToPrompt says this dialect puts PS1 and PS2 in a
+	// *non*-interactive shell too, and DefaultWithNobodyToPrompt and
+	// DefaultContinuedWithNobodyToPrompt are what it puts there. The two
+	// values are read only when the flag is on, which is what lets a dialect
+	// assign the empty string — a set-but-empty PS1 and an unset one are
+	// different answers, and the guard at the top of a person's rc file is
+	// written to tell them apart.
+	//
+	// The panel gives three answers on `-c` and on a script file alike, with
+	// nothing inherited:
+	//
+	//	bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93   PS1 unset
+	//	dash                                            PS1 `$ `, PS2 `> `
+	//	zsh 5.9.2                                       PS1 and PS2 set, empty
+	//
+	// The first row is why this is a flag rather than the default. `[ -z
+	// "$PS1" ] && return` is how a real `~/.bashrc` detects that there is
+	// nobody to prompt; a shell that assigned a prompt to every script would
+	// have the value right and would stop the guard ever firing, which is the
+	// same bug as an empty PS1 seen from the other side.
+	AssignsWithNobodyToPrompt bool
+
+	// The values for that case. See AssignsWithNobodyToPrompt.
+	DefaultWithNobodyToPrompt, DefaultContinuedWithNobodyToPrompt string
 }
 
 // OpenWord is what a dialect calls one thing the parser is inside.

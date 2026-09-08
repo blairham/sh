@@ -64,6 +64,12 @@ type startupFlags struct {
 // time with none of these, and a complaint about it would be the first thing
 // anyone saw.
 func (sh Shell) startup(r *interp.Runner, in source) int {
+	// The prompt parameters, before the first file can read them — and
+	// before the escape hatch below, because suppressing the files does not
+	// suppress these: measured, `--norc`, `--noprofile` and `-f` all leave
+	// the dialect's default sitting in PS1. See promptDefaults.
+	sh.promptDefaults(r, in, false)
+	defer sh.promptDefaults(r, in, true)
 	if in.startup.none {
 		// The escape hatch, and it is first because it is the whole answer:
 		// a person whose only startup file will not run has to be able to get

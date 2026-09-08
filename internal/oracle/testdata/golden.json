@@ -76550,6 +76550,138 @@
         "TimedOut": false
       }
     },
+    "prompt/the-default-prompt-is-a-parameter-at-a-prompt": {
+      "bash": {
+        "Stdout": "[set][nonempty]",
+        "Stderr": "\u003cshell\u003e: cannot set terminal process group (N): Inappropriate ioctl for device~\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[set][nonempty]",
+        "Stderr": "\u003cshell\u003e: cannot set terminal process group (N): Inappropriate ioctl for device~\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[set][nonempty]",
+        "Stderr": "\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[set][nonempty]",
+        "Stderr": "\u003cshell\u003e: 0: can't access tty; job control turned off",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[set][nonempty]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[set][nonempty]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "prompt/the-default-prompt-is-not-a-parameter-without-one": {
+      "bash": {
+        "Stdout": "[][unset]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[][unset]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[][unset]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[set][$ ]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[][unset]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[set][]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "prompt/the-startup-file-sees-the-default-prompt": {
+      "bash": {
+        "Stdout": "RC[set][nonempty]~main",
+        "Stderr": "\u003cshell\u003e: cannot set terminal process group (N): Inappropriate ioctl for device~\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "RC[set][nonempty]~main",
+        "Stderr": "\u003cshell\u003e: cannot set terminal process group (N): Inappropriate ioctl for device~\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "RC[set][nonempty]~main",
+        "Stderr": "\u003cshell\u003e: no job control in this shell",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "RC[set][nonempty]~main",
+        "Stderr": "\u003cshell\u003e: 0: can't access tty; job control turned off",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "RC[][]~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "RC[set][nonempty]~main",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "read/a-backslash-escapes-and-is-removed": {
       "bash": {
         "Stdout": "[atb]",

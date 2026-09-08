@@ -170,3 +170,24 @@ func TestPromptOpenWords(t *testing.T) {
 		t.Error("`do` has an entry, and zsh draws nothing for it")
 	}
 }
+
+// zsh is the third answer to the same question, and the one that shows why the
+// table says *whether* separately from *what*: with nobody to prompt, zsh
+// 5.9.2 leaves PS1 and PS2 **set and empty** — `${PS1+set}` is `set` and
+// `${#PS1}` is 0 — where the three bash members and ksh93 leave the name
+// unset and dash assigns its `$ `. Measured on `-c` and on a script file
+// alike with nothing inherited.
+//
+// Set-and-empty is not a spelling of unset. `[ -z "$PS1" ] && return` fires
+// on both, but `${PS1+set}` tells them apart, and a dialect that collapsed
+// them would be answering a question the panel has three answers to (#1421).
+func TestAScriptGetsAnEmptyPromptRatherThanNone(t *testing.T) {
+	st := zsh.PromptStyle()
+	if !st.AssignsWithNobodyToPrompt {
+		t.Error("zsh sets PS1 and PS2 in a non-interactive shell, to the empty string")
+	}
+	if st.DefaultWithNobodyToPrompt != "" || st.DefaultContinuedWithNobodyToPrompt != "" {
+		t.Errorf("non-interactive prompts = %q/%q, want both empty",
+			st.DefaultWithNobodyToPrompt, st.DefaultContinuedWithNobodyToPrompt)
+	}
+}

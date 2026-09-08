@@ -491,6 +491,17 @@ func fail(w io.Writer, err error) int {
 // same value each cmd/<shell> binary is built from, so this cannot answer
 // differently from them.
 //
+// The prompt table travels with them, and that is a repair rather than
+// decoration (#1421). A dialect's default prompts are values it holds — and,
+// now that they are assigned into PS1 and PS2 where a person's run-commands
+// file reads them, values a *script* can observe. Left out here,
+// `sh -dialect bash` was a bash whose PS1 was unset where `./bash`'s was
+// `\s-\v\$ `, and the conformance harness grades exactly that binary: the
+// corpus would have scored the core driver down for a difference the dialect
+// binary does not have. The editing, history and key-binding tables are
+// deliberately still absent, because nothing a script can see depends on
+// them.
+//
 // `core` is built the same way on both sides. The grammar refuses constructs
 // not every shell has; the semantics refuses *behaviors* not every shell
 // shares. A script that runs under it depends on nothing the panel disagrees
@@ -515,25 +526,25 @@ func pickDialect(name string) (driver.Shell, error) {
 		return driver.Shell{
 			Dialect: bash.Dialect(), Semantics: bash.Semantics(),
 			Diagnostics: bash.Diagnostics(), Register: bash.Apply,
-			Prelude: bash.Prelude(),
+			Prelude: bash.Prelude(), PromptStyle: bash.PromptStyle(),
 		}, nil
 	case "zsh":
 		return driver.Shell{
 			Dialect: zsh.Dialect(), Semantics: zsh.Semantics(),
 			Diagnostics: zsh.Diagnostics(), Register: zsh.Apply,
-			Prelude: zsh.Prelude(),
+			Prelude: zsh.Prelude(), PromptStyle: zsh.PromptStyle(),
 		}, nil
 	case "ksh":
 		return driver.Shell{
 			Dialect: ksh.Dialect(), Semantics: ksh.Semantics(),
 			Diagnostics: ksh.Diagnostics(), Register: ksh.Apply,
-			Prelude: ksh.Prelude(),
+			Prelude: ksh.Prelude(), PromptStyle: ksh.PromptStyle(),
 		}, nil
 	case "dash":
 		return driver.Shell{
 			Dialect: dash.Dialect(), Semantics: dash.Semantics(),
 			Diagnostics: dash.Diagnostics(), Register: dash.Apply,
-			Prelude: dash.Prelude(),
+			Prelude: dash.Prelude(), PromptStyle: dash.PromptStyle(),
 		}, nil
 	}
 	return driver.Shell{},

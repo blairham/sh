@@ -12642,6 +12642,42 @@ echo "read=[$l]"`,
 		Why:     "not a failure in any of them. Every shell starts for the first time without one, and a complaint would be the first thing anybody saw — the same answer the non-interactive file gives, recorded separately because they are read on different routes",
 	},
 
+	// --- the prompt parameters a shell starts with (#1421) ------------
+	//
+	// Every column sets a default PS1 and no two of them set the same one:
+	// `\s-\v\$ ` in the three bash members, `$ ` in dash and ksh93,
+	// `%m%# ` in zsh. That is a table of values rather than an axis — there
+	// is no disagreement about whether there *is* a default — and the values
+	// themselves are pinned in each dialect's own tests, where a string can
+	// be asserted whole.
+	//
+	// What is recorded here is the *shape*, deliberately. A default prompt
+	// holds `\s` and `\v`, so the drawn text is the shell's own name and
+	// version — machine- and build-specific, and a row holding it would rot
+	// on the next release. `${PS1+set}` and `${PS1:+nonempty}` are the two
+	// facts a startup file's guard actually reads, and they are the same on
+	// every machine.
+	{
+		ID: "prompt/the-default-prompt-is-a-parameter-at-a-prompt", Category: "invocation",
+		Args:    []string{"-i", "-c", ArgSnippet},
+		Snippet: `echo "[${PS1+set}][${PS1:+nonempty}]"`,
+		Why:     "unanimous, and the whole of #1421: an interactive shell has PS1 set to something non-empty before it runs anything. Drawing a prompt is not the same fact — the drawer falls back to the dialect's default when nothing was assigned, so a shell whose PS1 is empty still shows `bash-5.3$ ` and looks right. `[ -z \"$PS1\" ] && return` at the top of a real `~/.bashrc` reads the parameter and not the screen, and with an empty one it fires at a prompt and skips the whole file",
+	},
+	{
+		ID: "prompt/the-default-prompt-is-not-a-parameter-without-one", Category: "invocation",
+		Args:    []string{"-c", ArgSnippet},
+		Snippet: `echo "[${PS1+set}][${PS1-unset}]"`,
+		Why:     "the other side of the same guard, and the direction it is easy to break by getting the value right: three answers here where the row above is unanimous. bash 5.3.15, bash 3.2.57, bash under argv[0] `sh` and ksh93 leave PS1 *unset* with nobody to prompt — which is exactly what the guard detects — dash assigns the same `$ ` it prompts with, and zsh assigns the empty string. Set-and-empty is a third answer rather than a spelling of unset, which is why the row prints both `+` and `-`",
+	},
+	{
+		ID: "prompt/the-startup-file-sees-the-default-prompt", Category: "invocation",
+		Argv0:   "sh",
+		Env:     []string{"ENV=" + ArgScript},
+		Args:    []string{"-i", "-c", "echo main"},
+		Snippet: `echo "RC[${PS1+set}][${PS1:+nonempty}]"`,
+		Why:     "the daily-driver shape: what a person's run-commands file finds when it runs. Five of the six columns have the default in hand before the file, which is what makes the guard mean what it was written to mean. ksh93 is the one that waits — PS1 is unset while `$ENV` runs and reads `$ ` by the time a prompt is drawn, while its PS2 and PS4 are already set — so the disagreement is about the moment and not the value, and it is a row of the prompt table rather than an axis",
+	},
+
 	// --- the shapes an automated caller writes (#499) ------------------
 	//
 	// A coding-agent harness, an editor's terminal and a CI wrapper each

@@ -24,6 +24,15 @@ func PromptStyle() interp.PromptStyle {
 		// left empty so the dialect describes itself.
 		Default:          "$ ",
 		DefaultContinued: "> ",
+		// And dash assigns them to a script as well, which is one of the
+		// three answers the panel gives. Measured on `-c` and on a script
+		// file alike with nothing inherited: dash reports PS1 `$ ` and PS2
+		// `> ` where the three bash members and ksh93 leave PS1 unset and
+		// zsh sets it to the empty string. See
+		// interp.PromptStyle.AssignsWithNobodyToPrompt.
+		AssignsWithNobodyToPrompt:          true,
+		DefaultWithNobodyToPrompt:          "$ ",
+		DefaultContinuedWithNobodyToPrompt: "> ",
 		// dash has no escape language. `\u` draws `\u`, and a `\$` drawing a
 		// bare dollar is expansion's doing rather than the prompt's.
 	}

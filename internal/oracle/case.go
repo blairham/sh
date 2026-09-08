@@ -4342,6 +4342,36 @@ echo "st=$?"`,
 		Why:     "`a` is the sort *key* and not a sort: the element's own position, so ascending is the order it was written in and `O` reverses it. The third answer is the row that earns the case — `(oa)` on this data is `c a b`, so the index wins over the lexical comparison rather than joining it, and a reading where the two composed would give `a b c` there and pass the first two",
 	},
 	{
+		ID: "param/a-flag-group-over-a-range-sees-the-elements", Category: "parameter expansion",
+		Snippet: `a=(x y z); printf "[%s]" "${(j:-:)a[1,3]}" "${#a[1,3]}"; set -- "${(@)a[1,3]}"; printf "[n=%s]" "$#"; echo`,
+		Why:     "the two readings of one subscript, written side by side because they had drifted apart inside this implementation: the length already answered 3, the element count, while the flag group was handed a single word with the elements joined — and joined with a hard space at that, so `(j:-:)` put its separator nowhere and `(@)` left one parameter instead of three. Every flag that acts per element acted on the join. The other five columns have neither the group nor the range and say so at three wordings",
+	},
+	{
+		ID: "param/a-flag-group-over-a-range-and-over-one-element", Category: "parameter expansion",
+		Snippet: `a=(x y z); printf "[%s]" "${(U)a[2]}" "${#a[2]}"; s=abcdef; printf "[%s]" "${(j:-:)s[2,4]}" "${#s[2,4]}"; set -- "${(@)s[2,4]}"; printf "[n=%s]" "$#"; echo`,
+		Why:     "the boundary the row above must not cross, which is why the join it replaces was load-bearing: a subscript naming *one* element is a scalar, so `${#a[2]}` is a width and not 1, and a range over a **scalar** is a substring — one value however many characters it holds, three characters long and one field under `(@)`. A reading that made every range a list would answer `n=3` to the last field",
+	},
+	{
+		ID: "param/the-ordering-flags-over-a-range-run-after-the-join", Category: "parameter expansion",
+		Snippet: `a=(c a b); printf "[%s]" "${(o)a[1,3]}"; printf "[%s]" "${(@o)a[1,3]}"; set -- ${(o)a[1,3]}; printf "[n=%s][%s]" "$#" "$*"; echo`,
+		Why:     "the sharpest evidence that the group receives a list even where the list is invisible in the answer: quoted, the join at rule 5 has already made one word by the time the sort runs, so `${(o)a[1,3]}` comes back in the order it was written — the same no-op `${(o)a}` on a bare name is — while `(@)` skips that join and the unquoted spelling never reaches it, and both sort. A row that pinned only the quoted spelling would pass against an implementation that joined the range before the group ever saw it",
+	},
+	{
+		ID: "param/a-flag-group-over-a-chained-range", Category: "parameter expansion",
+		Snippet: `a=(x y z); printf "[%s]" "${(j:-:)a[1,3][1,2]}" "${#a[1,3][1,2]}" "${(j:-:)a[1,3][2]}" "${(j:-:)a[1][1,2]}"; echo`,
+		Why:     "the same construct one spelling wider, and the reason the list question cannot be answered from the subscript's own text: whether `[1,2]` names elements or characters is the *previous* link's answer, so it is two elements after a range and the two leading characters of one element after an index. The fourth field is the discriminating one — an implementation that read every chained range as a list would answer `x-y` there instead of `x`",
+	},
+	{
+		ID: "param/a-flag-group-over-a-range-that-names-nothing", Category: "parameter expansion",
+		Snippet: `a=(x y z); set -- "${(@)a[3,1]}"; printf "[n=%s]" "$#"; printf "[%s]" "${(j:-:)a[3,1]}" "${a[3,1]-D}"; echo`,
+		Why:     "an empty range is *set*, which is what keeps `-D` from firing, and it keeps no field at all under `(@)` — against the quoted spelling beside it, which is still one empty field because that is what quoting guarantees. The set-ness is the half that would go unnoticed: a reading that took an empty range for an unset name would substitute `D` and pass every other row here",
+	},
+	{
+		ID: "array/an-operator-over-a-range-joins-in-quotes-and-distributes-outside", Category: "expansion",
+		Snippet: `a=(xa xb xc); printf "[%s]" "${a[1,3]#x}"; printf "[%s]" "${a[*]#x}"; printf "[%s]" "${a[@]#x}"; set -- ${a[1,3]#x}; printf "[n=%s][%s]" "$#" "$*"; echo`,
+		Why:     "the same join rule on the route with no flag group, which is where the identical drift had left a second copy: a quoted range hands the operator the joined string and one `x` comes off the front, exactly as `[*]` does and unlike `[@]`, while unquoted it distributes and leaves three fields. Ours read the range as neither — it distributed in quotes, where the shell trims once, and made one field outside them, where the shell makes three. `[*]` is the column that separates the grammars: two of them trim each element and join what is left",
+	},
+	{
 		ID: "param/the-length-flags-count-characters-and-words", Category: "parameter expansion",
 		Snippet: `a=(abc de f); printf "[%s]" "${#a}" "${(c)#a}" "${(w)#a}"; v="a b  c"; printf "[%s]" "${(w)#v}" "${(W)#v}"; echo`,
 		Why:     "three flags that change what a length counts, against the plain answer beside them: the elements are 3, their characters *joined* are 8 rather than 6 because the separators count, and the words in each element added up are 3 again. The scalar separates the last two — `w` is 3 words where `W` is 4 fields, the extra one being the empty field between the two spaces — which is the only shape that tells them apart",

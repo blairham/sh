@@ -843,8 +843,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			for i, el := range elems {
 				mapped[i] = apply(el)
 			}
-			if (r.joinedArrayIndex(e) || r.assocSearchSubscript(e)) &&
-				s.Quoting != syntax.Unquoted {
+			if r.subscriptJoinsElements(e) && s.Quoting != syntax.Unquoted {
 				// `"${a[*]#p}"` splits the panel: two shells trim each
 				// element and join what is left, the third joins first
 				// and trims the joined string once. Asked only when the
@@ -861,6 +860,19 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 				// quoted reading, and in the one dialect that answers no
 				// it came back as a single field holding `oxo y`: the trim
 				// silently applied to a boundary instead of to an element.
+				//
+				// *Which* subscripts join in quotes is
+				// subscriptJoinsElements' question, and the branch above
+				// already asks it that way. This spelled out `[*]` and a
+				// search instead, which is that predicate with its range
+				// clause struck off, so a quoted range trimmed each element
+				// where the shell trims the joined string once: measured on
+				// `a=(xa xb xc)`, `"${a[1,3]#x}"` and `"${a[1,3]/x/Y}"` are
+				// `a xb xc` and `Ya xb xc` there, exactly what `[*]` gives,
+				// against `a b c` and `Ya Yb Yc` from the reading that
+				// distributed. The axis is only ever reached in the one
+				// grammar that reads a comma as a range, which is the same
+				// grammar `[*]` already asks it in.
 				sep := ifsFirst(ifs, set)
 				perElement := strings.Join(mapped, sep)
 				joinedFirst := apply(strings.Join(elems, sep))
@@ -1970,6 +1982,14 @@ func (r *Runner) listShapedOp(e *syntax.ParamExpr) bool {
 // `${${a[@]}#x}`, `${${a[@]}:1}`, `${${a[@]}:#y}` and `${${a[@]}//y/Q}` all
 // distribute — where a subscript naming one element must not: `${a[0]:1}` is
 // a substring of that element and slicing the list there would drop it.
+//
+// *Which* subscripts name several is subscriptYieldsAList's question, asked
+// here rather than re-derived. This spelled out `[@]` and a search inline,
+// which is that predicate with its range clause struck off, so an operator
+// over a range ran on one word made of the elements: measured on
+// `a=(xa xb xc)`, `set -- ${a[1,3]#x}` leaves three parameters and
+// `set -- ${a[1,3]:#xb}` two, where this reading left one apiece. The
+// quoted spellings hid it, because a quoted range joins anyway.
 func (r *Runner) listBase(e *syntax.ParamExpr) ([]string, bool) {
 	if e.Length {
 		// `${#…}` is a number, and which number it is — the element count or
@@ -1993,7 +2013,7 @@ func (r *Runner) listBase(e *syntax.ParamExpr) ([]string, bool) {
 	}
 	switch {
 	case e.Op == syntax.ParamNone:
-	case r.listShapedOp(e) && (r.wholeArrayIndex(e) || r.assocSearchSubscript(e)):
+	case r.listShapedOp(e) && r.subscriptYieldsAList(e):
 	default:
 		return nil, false
 	}

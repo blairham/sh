@@ -626,9 +626,7 @@ func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool
 					// back one field per value, half the list, at status 0.
 					return r.namedBase(e.Name, e.Flags)
 				}
-				return list, list != nil, true
-			}
-			if key, kok := r.assocSubscriptKey(e, list); kok {
+			} else if key, kok := r.assocSubscriptKey(e, list); kok {
 				// `${(k)m[key]}` substitutes the *key* rather than what it
 				// holds — measured, `${(k)m[b]}` is `b` where `${m[b]}` is
 				// `2` — and only `k` on its own does: `${(kv)m[b]}` and
@@ -637,25 +635,49 @@ func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool
 				// all under either spelling and never reaches here.
 				return []string{key}, true, false
 			}
-			if r.assocSearchSubscript(e) {
-				// A search over an association hands the group a *list*, so
-				// `${(on)m[(I)pat]}` sorts the matches rather than sorting
-				// one word made of all of them. And it is set even with no
-				// match — measured, `${m[(I)zz]-none}` is empty where
-				// `${m[zz]-none}` is `none`, so a search always answers.
-				//
-				// The `true` says that outright rather than reading it off
-				// the slice. It is the same value `list != nil` has here,
-				// because the only thing that reaches this branch is
-				// assocSearchWords and its result comes from `make`, which
-				// never yields nil — the two cases, no matches and some, are
-				// the whole of it. Written this way because the set-ness is a
-				// fact about the *construct* and would survive somebody
-				// changing what an empty search returns, and the non-nil
-				// slice is separately load-bearing next door: paramSource
-				// reads `elems != nil` for the same question on the route
-				// with no flag group.
-				return list, true, true
+			// Whether the subscript named several elements is
+			// subscriptYieldsAList's question and nobody else's. This asked
+			// `wholeArrayIndex` instead, which is that predicate with its
+			// range clause missing, so a group in front of a range was
+			// handed one word with the elements joined — and joined with a
+			// hard space at that, where rule 5 next door joins with the
+			// group's own `j` separator. Measured on `a=(x y z)`:
+			// `"${(j:-:)a[1,3]}"` is `x-y-z` and `set -- "${(@)a[1,3]}"`
+			// leaves three parameters, where this reading gave `x y z` and
+			// one. The length question was already right — `${#a[1,3]}` is
+			// 3 — because it consults subscriptYieldsAList, so the two
+			// readings of one subscript disagreed inside this
+			// implementation; there is one of them now.
+			//
+			// The join below is what remains: a subscript naming a single
+			// element, and a range over a *scalar*, which is a substring and
+			// one value however many characters it holds. Both arrive as one
+			// element already, and so does everything else that gets here —
+			// an association's key, and a search over an *indexed* array,
+			// which names one element in the shell however its operand
+			// looks.
+			//
+			// **A surviving mutant lives on that join, deliberately.**
+			// Changing its separator — a space to an empty string, or to
+			// anything else — passes the whole suite, because nothing ever
+			// reaches it with two elements to put a separator between. A
+			// test pinning the space would be a test asserting that this
+			// branch can see a list, which is the bug this line was on the
+			// wrong side of. What keeps it honest is the predicate above,
+			// not the separator here; if a construct ever does arrive here
+			// as a list, rule 5 next door is what should join it, with the
+			// group's own `j` separator or IFS.
+			//
+			// `list != nil` is the set-ness for all three constructs this
+			// covers, measured rather than assumed. A range over a live
+			// array is set even when it names nothing — `${(U)a[3,1]-D}` and
+			// `${(U)a[5,6]-D}` are both empty, not `D` — and over an unset
+			// name it is unset; a search always answers, `${(U)m[(I)zz]-D}`
+			// being empty where `${(U)m[zz]-D}` is `D`. The two are the same
+			// fact here: what a live name yields comes from `make` and is
+			// never nil, and only an unset name yields nil at all.
+			if r.subscriptYieldsAList(e) {
+				return list, list != nil, true
 			}
 			return []string{strings.Join(list, " ")}, list != nil, false
 		}

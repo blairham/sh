@@ -6128,6 +6128,36 @@ echo "st=$?"`,
 		Why:     "the quieter half of the row above, and the one no parse test can see: a group read as raw text parses perfectly and then hands the matcher the quotes, so `(\"b\")` asks whether `b` is three characters and answers no at status 1 with nothing said. The `*` pair is the discriminator — a quoted star matches a star and not `x` — and the `|` is there because an escaped bar is not an arm boundary, which is a fact about the matcher rather than the scanner",
 	},
 	{
+		ID: "cond/a-groups-expansion-is-its-value", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `L=wait; [[ wait == ($L) ]] && echo bare || echo no; [[ wait == (${L}) ]] && echo braced || echo no; [[ '$L' == ($L) ]] && echo text || echo value; [[ wait == ($(echo wait)) ]] && echo cmd || echo no; M=it; [[ wait == (wa$M) ]] && echo join || echo no`,
+		Why:     "an expansion inside a group is read as one, and its **value** is the pattern text. The third arm is the whole row: with the source text as the pattern it matches the two characters `$L` and prints `text`, and every shell that has the construct prints `value`. Nothing said so before — status 1 and a pattern that quietly did not contain what the script wrote, which is the failure mode this corpus exists to catch. It is the single reason a real plugin manager loaded nothing at all: `.zi-ice`, the parser every one of its commands goes through, is one match of this shape, so no ice was ever recognized (#1331)",
+	},
+	{
+		ID: "cond/a-groups-expansion-globs-only-where-the-flag-says", Category: "[[ ]] and (( ))", SyntaxError: true,
+		Snippet: `L='a|b'; [[ a == ($L) ]] && echo alt || echo lit; [[ a == (${~L}) ]] && echo flag || echo no; [[ 'a|b' == ($L) ]] && echo whole || echo no`,
+		Why:     "and the axis the value then meets, which is not a second question: whether the metacharacters in an expansion's result are live is what GlobExpansionResults already answers everywhere else, so a group asks it in the same place rather than deciding for itself. The shell with bare groups says no by default and yes behind the `${~ }` flag, and the third arm proves the first was literal rather than merely unmatched — `a|b` matches itself. The alternation the flag lets through is exactly the one `.zi-ice` builds its ice list from (#1331)",
+	},
+	{
+		ID: "pat/a-backreference-group-holds-an-expansions-value", Category: "pattern matching", SyntaxError: true,
+		Snippet: `setopt extendedglob; L='lucid|wait'; b='wait!0'; [[ $b == (#b)(--|)(${~L})(*) ]] && print -r -- "[${match[1]}][${match[2]}][${match[3]}]" || echo no`,
+		Why:     "the construct itself, with the groups numbered: a backreference group whose alternation arrived from a variable, which is what a plugin manager's ice parser is and what it fills its table from. The match is asserted as *text* rather than as a status, because a row that asks only whether something matched passes whichever alternative won — `[][wait][!0]` says the empty prefix, the ice name and the remainder each landed in the group that was written for it (#1331)",
+	},
+	{
+		ID: "pat/a-groups-expansion-reaches-case-and-a-substitution", Category: "pattern matching", SyntaxError: true,
+		Snippet: `L=wait; case xwait in x($L)) echo grp;; *) echo no;; esac; case 'x$L' in x($L)) echo text;; *) echo value;; esac; v=xwaity; echo "[${v#*($L)}][${v%%($L)*}]"`,
+		Why:     "the same answer on the two routes that do not go through a condition, asserted rather than assumed — #1217 was filed after a fix that reached only the route it had been measured on. The two `case` arms are one probe: the first says the group matched and the second says it matched the *value*, a pattern built from the source text matching the subject `x$L` instead. The trims are the shortest and the longest so the *boundary* is visible — `[y][x]` can only come from a group that matched `wait`, where a count of matches or a global `//` would have passed on a pattern of any length, a global replacement re-applying until nothing matches (#1331)",
+	},
+	{
+		ID: "glob/a-groups-expansion-is-its-value", Category: "pattern matching", SyntaxError: true,
+		Snippet: `mkdir -p pgv && cd pgv && : > ice.zsh && : > other.zsh && : > 'ice|other.zsh' && L='ice|other' && echo ($L).zsh && L=ice && echo ($L).zsh`,
+		Why:     "the same reading on the filesystem, where the old answer said it out loud: `no matches found: (${L}).zsh` named a pattern nobody had written. The two names are the discriminator and they pull in opposite directions — a value holding a `|` matches the file *called* `ice|other.zsh` and does not divide into two alternatives, so the row fails if the `|` is read and fails if the expansion is not. `ice.zsh` on its own then says the group is still a group (#1331)",
+	},
+	{
+		ID: "pat/an-extended-groups-expansion-is-its-value", Category: "pattern matching",
+		Snippet: `shopt -s extglob; L=wait; [[ wait == @($L) ]] && echo value || echo no; [[ '$L' == @($L) ]] && echo text || echo not-text; M='a|b'; [[ a == @($M) ]] && echo alt || echo lit`,
+		Why:     "the nearest equivalent in the shells with no bare groups, which is the row that says this is one rule and not one shell's. bash and ksh93 read the value exactly as the shell with bare groups does — `not-text` in all three — and then part company on the third arm, where they glob an expansion's result and it does not: `alt` against `lit`, the GlobExpansionResults axis seen through a group. The `@(` is `@` followed by a group in the shell that takes bare ones, so its first arm is `no` rather than a refusal; bash 3.2 refuses the line, the option not being in force while the same line is parsed; dash has neither construct (#1331)",
+	},
+	{
 		ID: "pat/quoted-text-in-an-extended-pattern-group", Category: "pattern matching",
 		Snippet: `shopt -s extglob; [[ b == @("b") ]] && echo dq || echo no; [[ 'a;b' == @("a;b") ]] && echo semi || echo no; [[ 'a*b' == @(a"*"b) ]] && echo star || echo no; [[ axb == @(a"*"b) ]] && echo wild || echo no`,
 		Why:     "the same question as `a-quoted-operator-in-a-group-reaches-every-route`, asked of the group behind a quantifier rather than the bare one — and the answer diverged here without any parse failure to notice it, because a group read as raw text hands the matcher the quotes and `@(\"b\")` then asks whether `b` is three characters. The last two arms are the discriminator: a quoted star matches a star and not `x`, so `did it match` cannot stand in for `was it literal`. bash 3.2 is the other half of the row and refuses the line outright — the option is not in force while the same line is being parsed there (#1248)",

@@ -268,6 +268,72 @@ What it is never, anywhere, is the text *inside* the substitution. That
 reading made `case x in <(x))` match and `${v#<(x)}` trim a bare `x`,
 neither of which any column does, and both silently (#902).
 
+### A group is not a second language
+
+An expansion written **inside** a parenthesised group is the same expansion
+it is anywhere else in a word, and its *value* is the pattern text.
+Measured 2026-09-08 on zsh 5.9.2, the only panel shell with bare groups,
+and on bash 5.3.15 and ksh93 through the quantified spelling:
+
+    L=wait; [[ wait == ($L) ]]        matches
+    L=wait; [[ '$L' == ($L) ]]        does not          ← the discriminator
+    L=wait; [[ wait == (${L}) ]]      matches
+    L=wait; [[ wait == ($(echo wait)) ]]   matches
+    L=wait; [[ wait == @($L) ]]       matches in bash and ksh93
+    L=wait; [[ '$L' == @($L) ]]       does not, in either
+
+The second row is the whole of it. A group handed to the matcher as its
+own source text matches the two characters `$L`, which is a legal answer:
+status 1, nothing said, and a pattern that did not contain what the script
+wrote. That was this implementation's answer until #1331, and it is the
+single reason a real plugin manager loaded nothing at all — the parser
+every one of its commands goes through is one match of this shape, so no
+option was ever recognized and every one of them was passed on as a
+command name.
+
+The cause was a *copy*. The group scanner grew out of the word scanner and
+kept its own list of the constructs a word may hold, with the quoting forms
+in it and none of the expansions — so `("b")` was read (#1248) and `($L)`
+was not. There is one list now and both scanners read it; see
+`Lexer.substitutionSpans`.
+
+Process substitution is the one form the list leaves out, because `<(` and
+`>(` are the only members whose first byte is also one of the four
+operators that end a word inside a group, and there the operator wins:
+
+    [[ x == (a<(echo x)b) ]]     process substitution … cannot be used here
+    print -r -- (a<(echo x)b)    number expected
+
+Whether the metacharacters in the value are then *live* is not a second
+question. It is `GlobExpansionResults`, asked where every other
+expansion's is:
+
+    L='a|b'; [[ a == ($L) ]]      no match in zsh
+    L='a|b'; [[ 'a|b' == ($L) ]]  matches in zsh — the `|` was a character
+    L='a|b'; [[ a == (${~L}) ]]   matches: the flag overrides the axis
+    L='a|b'; [[ a == @($L) ]]     matches in bash and ksh93, which glob it
+
+The `|` needed one addition to make that true. It is the one
+metacharacter a *group* introduces, so a value can only carry a live one
+where a group came from somewhere else — which nothing could reach while
+an expansion inside a group was still text. Measured in a directory
+holding `ice.zsh`, `other.zsh` and one file named `ice|other.zsh`:
+
+    L='ice|other'; print -r -- ($L).zsh      →  ice|other.zsh
+    L='ice|other'; print -r -- (${~L}).zsh   →  ice.zsh other.zsh
+
+**One divergence is recorded and not implemented.** ksh93 globs a `*` out
+of a value and refuses to read an extended group out of one, where bash
+reads both:
+
+    L='ice|other'; echo @($L).zsh      ksh93: @(ice|other).zsh   bash: ice.zsh other.zsh
+    L='@(ice|other)'; echo $L.zsh      ksh93: @(ice|other).zsh   bash: ice.zsh other.zsh
+
+So `GlobExpansionResults` has a third value there — yes for the ordinary
+metacharacters, no for the extended constructs — and this implementation
+gives bash's answer in ksh93's dialect on both rows. The second of them
+answered that way before #1331 and the first now joins it.
+
 ## Extended patterns are not core
 
     ?(…)  *(…)  +(…)  @(…)  !(…)

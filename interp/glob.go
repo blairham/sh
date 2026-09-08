@@ -27,10 +27,28 @@ import (
 // `*(.)` without globbing at all, where the same text written literally is
 // an alternation and a qualifier list. Quoting says the same from the other
 // side — `echo "( x )"` is five characters.
+//
+// **So is the `|`, and the discriminating case needs a group the value did
+// not bring.** The rows above cannot see it: with the `(` already marked
+// there is no alternation for a `|` to divide, so a value carrying both
+// answers the same either way. The case that tells them apart is a group
+// written *literally* around an expansion — which nothing could reach until
+// an expansion inside a group was read as one at all (#1331). Measured on
+// zsh 5.9.2, 2026-09-08, in a directory holding `ice.zsh`, `other.zsh` and
+// one file literally named `ice|x.zsh`:
+//
+//	L="ice|other"; print -r -- ($L).zsh   no matches found: (ice|other).zsh
+//	L="ice|x";     print -r -- ($L).zsh   ice|x.zsh
+//	L="ice|other"; print -r -- (${~L}).zsh   ice.zsh other.zsh
+//
+// The middle row is the one that says it: the `|` is a character the name
+// has to contain. The third is the same value with the flag that asks for
+// the other reading, which is where an alternation from a value does come
+// from.
 func globEscape(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
-		if strings.IndexByte(`*?[\<()`+extendedPatternMeta, s[i]) >= 0 {
+		if strings.IndexByte(`*?[\<()|`+extendedPatternMeta, s[i]) >= 0 {
 			b.WriteByte('\\')
 		}
 		b.WriteByte(s[i])
@@ -173,6 +191,21 @@ func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, ext
 			continue
 		}
 		if s[i] == '*' || s[i] == '?' {
+			return true
+		}
+	}
+	return false
+}
+
+// hasUnescapedByte reports whether c stands in s outside an escape, for the
+// caller that has a character in mind rather than a whole alphabet.
+func hasUnescapedByte(s string, c byte) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' {
+			i++
+			continue
+		}
+		if s[i] == c {
 			return true
 		}
 	}

@@ -6,6 +6,7 @@ package interp_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -141,5 +142,148 @@ func TestQuotingDecidesWhetherAFieldIsAPattern(t *testing.T) {
 	// this where zsh does not, which semantics.md records as an axis.
 	if got := runIn(t, dir, `p="*.b"; printf "[%s]" $p`); got != `[a.b]` {
 		t.Errorf(`an unquoted expansion did not glob: %s`, got)
+	}
+}
+
+// TestADotComponentIsJoinedNotMatched is #1480: a `.` or `..` component made
+// the whole pattern match nothing, so `./*` listed no files at all — and in
+// the dialect where an unmatched pattern is fatal, ended the script.
+//
+// Two things have to hold, and the second is the one a partial fix loses. The
+// component has to be *joined* rather than matched, because no listing
+// reports `.` or `..`; and the match has to come back spelled the way the
+// pattern spelled it, because the panel answers `./sub/f` where a cleaning
+// join answers `sub/f`. So every row here asserts the whole string rather
+// than a count: a count is satisfied by the wrong paths.
+func TestADotComponentIsJoinedNotMatched(t *testing.T) {
+	dir := globDir(t)
+	for _, tc := range []struct{ name, src, want string }{
+		// A leading `./`, which is the everyday spelling.
+		{"leading dot", `printf "[%s]" ./*`, `[./a.b][./sub][./vis]`},
+		{"leading dot, two components", `printf "[%s]" ./sub/*`, `[./sub/f]`},
+		// The same component away from the front, and `..` — which is
+		// where the spelling has to be carried rather than recomputed,
+		// since `sub/..` resolves back to the directory it started in.
+		{"dot in the middle", `printf "[%s]" sub/./*`, `[sub/./f]`},
+		{"dot dot in the middle", `printf "[%s]" sub/../*`, `[sub/../a.b][sub/../sub][sub/../vis]`},
+		// With nothing behind it, where only a directory survives: `a.b`
+		// is a file and `a.b/.` is nothing.
+		{"dot is the last component", `printf "[%s]" */.`, `[sub/.]`},
+		{"dot dot is the last component", `printf "[%s]" */..`, `[sub/..]`},
+		// Quoting a component does not change what it names.
+		{"a quoted dot component", `printf "[%s]" "."/sub/*`, `[./sub/f]`},
+		{"an escaped dot component", `printf "[%s]" \./sub/*`, `[./sub/f]`},
+		// A `.` under a file names nothing, and the miss is reported as any
+		// other miss is. Joining without asking what is being joined to
+		// would answer this one with a listing of the working directory.
+		{"a dot component under a file", `printf "[%s]" a.b/./*`, `[a.b/./*]`},
+		{"a dot dot component under a file", `printf "[%s]" a.b/../*`, `[a.b/../*]`},
+		{"a dot component over nothing", `printf "[%s]" ./nomatch/*`, `[./nomatch/*]`},
+		{"a miss behind a dot component", `printf "[%s]" ./nomatch*`, `[./nomatch*]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := runIn(t, dir, tc.src); got != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestADotComponentDoesNotLiftTheLeadingPeriodRule keeps two different rules
+// about a period apart, because conflating them would be the serious
+// regression here rather than the visible one.
+//
+// A `.` *component* names a directory. A leading period in a *name* is hidden
+// from a pattern that does not write one. So a pattern that begins with a
+// period still does not see `.hidden`, and one that writes the period still
+// does — measured that way in all six columns.
+func TestADotComponentDoesNotLiftTheLeadingPeriodRule(t *testing.T) {
+	dir := globDir(t)
+	for _, tc := range []struct{ name, src, want string }{
+		{"a dot component does not reveal a hidden name", `printf "[%s]" ./*`, `[./a.b][./sub][./vis]`},
+		{"a written period still finds one", `printf "[%s]" ./.hi*`, `[./.hidden]`},
+		{"and neither does a dot dot component", `printf "[%s]" sub/../*`, `[sub/../a.b][sub/../sub][sub/../vis]`},
+		{"which still finds one when written", `printf "[%s]" sub/../.hi*`, `[sub/../.hidden]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := runIn(t, dir, tc.src); got != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAnAbsolutePatternKeepsItsDotComponent is the other branch of the
+// render: an absolute pattern strips no prefix, so the spelling survives for
+// a different reason and the two need separate evidence.
+func TestAnAbsolutePatternKeepsItsDotComponent(t *testing.T) {
+	dir := globDir(t)
+	for _, tc := range []struct{ name, pattern, want string }{
+		{"a dot component", `/./su*`, `[<dir>/./sub]`},
+		{"a dot dot component", `/sub/../vi*`, `[<dir>/sub/../vis]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `printf "[%s]" ` + dir + tc.pattern
+			want := strings.ReplaceAll(tc.want, "<dir>", dir)
+			if got := runIn(t, dir, src); got != want {
+				t.Errorf("%s = %s, want %s", src, got, want)
+			}
+		})
+	}
+}
+
+// TestABaseWrittenWithATrailingSeparator is the branch a working directory of
+// `/` takes, and it is not a hypothetical: `cd /` sets exactly that, and the
+// walk then has a base that already ends in a separator.
+//
+// Two places have to agree about it — the join, which would otherwise build
+// `//vis`, and the prefix the render strips, which would otherwise be a
+// prefix nothing starts with and leave every match absolute. Measured against
+// the panel at the real root: `cd /; printf "[%s]" ./bi*` is `[./bin]` in all
+// six, not `[/./bin]`. Pinned in a temporary directory rather than at `/`,
+// because what is under the real root is not a fact about this shell.
+func TestABaseWrittenWithATrailingSeparator(t *testing.T) {
+	dir := globDir(t)
+	for _, tc := range []struct{ name, src, want string }{
+		{"a plain pattern", `printf "[%s]" v*`, `[vis]`},
+		{"a dot component", `printf "[%s]" ./v*`, `[./vis]`},
+		{"a dot dot component", `printf "[%s]" sub/../v*`, `[sub/../vis]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := runIn(t, dir+"/", tc.src); got != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestADotComponentSurvivesAStarStarDescent is the sibling call site, and it
+// is the one a fix to the component walk alone does not reach.
+//
+// Two helpers build a path: the one that matches a component against a
+// listing, and the one that walks everything beneath a directory for `**`.
+// A `.` or `..` in front of a `**` is carried by the first and would be
+// cleaned away again by the second, so `./**/f` would answer `d/f` where zsh
+// answers `./d/f` — the fix present in one helper and missing from its
+// neighbor. Mutating only appendDescendants back to a cleaning join survived
+// every other test here, which is why this one exists.
+func TestADotComponentSurvivesAStarStarDescent(t *testing.T) {
+	dir := treeDir(t)
+	for _, tc := range []struct{ name, src, want string }{
+		{"a leading dot", `echo ./**/f`, "./d/e/f ./d/f ./f"},
+		{"a dot in the middle", `echo d/./**/f`, "d/./e/f d/./f"},
+		{"a dot dot in the middle", `echo d/../**/f`, "d/../d/e/f d/../d/f d/../f"},
+		// The control: without a component to carry, the descent answers
+		// what it always answered.
+		{"nothing to carry", `echo **/f`, "d/e/f d/f f"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opt := withOption(StarStarCrossesDirectories, true,
+				withOption(StarStarAloneCrossesDirectories, false, inDir(dir)))
+			out, _ := run(t, tc.src, opt)
+			if got := strings.TrimSpace(out); got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+			}
+		})
 	}
 }

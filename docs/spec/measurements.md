@@ -501,6 +501,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `glob/a-trailing-slash-without-the-slash` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` | `[ax][ax_dir][cx][sym][symf]` |
 | `glob/a-trailing-slash-under-a-literal-component` | `[cx/dx/]` | `[cx/dx/]` | `[cx/dx/]` | `[cx/dx/]` | `[cx/dx/]` | `[cx/dx/]` |
 | `glob/a-trailing-slash-on-a-pattern-matching-nothing` | `[zz*/]` | `[zz*/]` | `[zz*/]` | `[zz*/]` | `[zz*/]` | **2>** `<shell>:1: no matches found: zz*/` *(status 1)* |
+| `glob/a-leading-dot-component` | `[./ax][./ax_dir][./cx]~[./cx/ax][./cx/dx]` | `[./ax][./ax_dir][./cx]~[./cx/ax][./cx/dx]` | `[./ax][./ax_dir][./cx]~[./cx/ax][./cx/dx]` | `[./ax][./ax_dir][./cx]~[./cx/ax][./cx/dx]` | `[./ax][./ax_dir][./cx]~[./cx/ax][./cx/dx]` | `[./ax][./ax_dir][./cx]~[./cx/ax][./cx/dx]` |
+| `glob/a-dot-and-a-dot-dot-component-in-the-middle` | `[cx/./ax][cx/./dx]~[cx/../ax][cx/../ax_dir][cx/../cx]` | `[cx/./ax][cx/./dx]~[cx/../ax][cx/../ax_dir][cx/../cx]` | `[cx/./ax][cx/./dx]~[cx/../ax][cx/../ax_dir][cx/../cx]` | `[cx/./ax][cx/./dx]~[cx/../ax][cx/../ax_dir][cx/../cx]` | `[cx/./ax][cx/./dx]~[cx/../ax][cx/../ax_dir][cx/../cx]` | `[cx/./ax][cx/./dx]~[cx/../ax][cx/../ax_dir][cx/../cx]` |
+| `glob/a-dot-component-is-the-last-one` | `[cx/dx/.]~[ax_dir/../ax][ax_dir/../ax_dir][ax_dir/../cx]` | `[cx/dx/.]~[ax_dir/../ax][ax_dir/../ax_dir][ax_dir/../cx]` | `[cx/dx/.]~[ax_dir/../ax][ax_dir/../ax_dir][ax_dir/../cx]` | `[cx/dx/.]~[ax_dir/../ax][ax_dir/../ax_dir][ax_dir/../cx]` | `[cx/dx/.]~[ax_dir/../ax][ax_dir/../ax_dir][ax_dir/../cx]` | `[cx/dx/.]~[ax_dir/../ax][ax_dir/../ax_dir][ax_dir/../cx]` |
+| `glob/a-dot-component-under-a-file` | `[ax/./*]\|st=0~after` | `[ax/./*]\|st=0~after` | `[ax/./*]\|st=0~after` | `[ax/./*]\|st=0~after` | `[ax/./*]\|st=0~after` | **2>** `<script>:1: no matches found: ax/./*` *(status 1)* |
+| `glob/a-quoted-dot-component` | `[./cx/ax]~[./cx/ax]` | `[./cx/ax]~[./cx/ax]` | `[./cx/ax]~[./cx/ax]` | `[./cx/ax]~[./cx/ax]` | `[./cx/ax]~[./cx/ax]` | `[./cx/ax]~[./cx/ax]` |
+| `glob/a-dot-component-and-the-leading-period-rule` | `[./ax][./cx]~[./.hid]` | `[./ax][./cx]~[./.hid]` | `[./ax][./cx]~[./.hid]` | `[./ax][./cx]~[./.hid]` | `[./ax][./cx]~[./.hid]` | `[./ax][./cx]~[./.hid]` |
 | `length/of-a-one-element-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `one=5~two=5~none=0` | `one=5~two=5~none=0` | `one=5~two=5~none=0` | `one=5~two=5~none=3` | `one=1~two=2~none=0` |
 | `length/of-an-array-holding-one-empty-string` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a x=([0]="")~one=0~two=0` | `declare -a x=([0]="")~one=0~two=0` | `declare -a x='([0]="")'~one=0~two=0` | `typeset -a x=('')~one=0~two=0` | `typeset -a x=( '' )~one=1~two=2` |
 | `length/a-hash-in-the-name-position-of-an-operator` | `[2][2][w][w][2]` | `[2][2][w][w][2]` | `[2][2][w][w][2]` | `[2][2][w][w][2]` | `[2][2][w][w][2]` | `[2][2][w][w][2]` |
@@ -1530,6 +1536,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `glob/a-trailing-slash-on-a-pattern-matching-nothing` — the miss keeps the word whole, slash and all, in the five columns that pass an unmatched pattern through; zsh reports `no matches found: zz*/` and names the slash too. So the slash is part of the word rather than a thing the walk consumed, on both sides of that axis
   ```sh
   mkdir -p g/cx/dx && cd g && : > ax && : > cx/ax && : > cx/dx/ax && mkdir -p ax_dir && ln -s cx sym && ln -s ax symf; printf "[%s]" zz*/; echo
+  ```
+- `glob/a-leading-dot-component` — `./` is the everyday spelling — it is what a script writes to keep a name starting with `-` out of an option position — and all six join the component and report the match the way the pattern spelled it. Neither half is free: `.` is in no directory listing, so matching this component against one answers nothing, and joining it with a cleaning join would still answer `cx/ax` where every column answers `./cx/ax`
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && mkdir ax_dir && : > cx/ax && : > cx/dx/ax && printf "[%s]" ./* && echo && printf "[%s]" ./cx/* && echo
+  ```
+- `glob/a-dot-and-a-dot-dot-component-in-the-middle` — the same component away from the front, and `..` is the half that shows the spelling is carried rather than recomputed: all six answer `cx/../ax`, so the walk climbs back to the directory it started in and still reports the route it took
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && mkdir ax_dir && : > cx/ax && printf "[%s]" cx/./* && echo && printf "[%s]" cx/../* && echo
+  ```
+- `glob/a-dot-component-is-the-last-one` — a `.` with nothing behind it, and a `..` behind a component that was matched. The first is also where only a directory survives — `cx/ax` is a file and `cx/ax/.` is nothing, so `cx/dx/.` is the whole answer in all six
+  ```sh
+  mkdir -p g/cx/dx && cd g && : > ax && mkdir ax_dir && : > cx/ax && printf "[%s]" cx/*/. && echo && printf "[%s]" *_dir/../* && echo
+  ```
+- `glob/a-dot-component-under-a-file` — `ax` is a file, so `ax/.` names nothing and the pattern is a miss — which is the ordinary no-match behavior in five columns and fatal in zsh, where the script ends before `after`. Recorded because a walk that joins a `.` component without asking what it is joining to would answer this one with a listing of the working directory
+  ```sh
+  mkdir -p g/cx && cd g && : > ax && : > cx/ax && printf "[%s]" ax/./* && echo "|st=$?" && echo after
+  ```
+- `glob/a-quoted-dot-component` — quoting a component does not change what it names: all six list `./cx/ax` through both spellings. The pattern text a walk tests has quoting marked in it, so the literal behind the marks is what has to decide
+  ```sh
+  mkdir -p g/cx && cd g && : > ax && : > cx/ax && printf "[%s]" "."/cx/* && echo && printf "[%s]" \./cx/* && echo
+  ```
+- `glob/a-dot-component-and-the-leading-period-rule` — two different rules about a period, and this says they stay apart. A `.` *component* names a directory; a leading period in a *name* is hidden from a pattern that does not write one — so `./*` leaves `.hid` out in all six even though the pattern begins with a period, and `./.h*` finds it
+  ```sh
+  mkdir -p g/cx && cd g && : > ax && : > .hid && : > cx/ax && printf "[%s]" ./* && echo && printf "[%s]" ./.h* && echo
   ```
 - `length/of-a-one-element-array` — the shells split on what `${#a}` of an array means — one counts the elements and the others measure the scalar a bare name yields — and the split is visible at *one* element as much as at two: 1 against 5 for `a=(hello)`. A reading that skipped the question at one element on the grounds that such an array is its own element is true of the value and false of its length, and answers a plausible number at status 0
   ```sh

@@ -55,6 +55,15 @@ func corpusDialect() syntax.Dialect {
 	// the corpus records both answers, so the grammar that has to *read* every
 	// case is the one that takes them.
 	d.HeredocEndsAtClosingParen = true
+	// `${ echo hi;}` — the body that runs in the current shell. Two of the
+	// six have it, one of them only since 5.3, and the other four call it a
+	// bad substitution; the corpus records both. Same argument as the flags
+	// above — the grammar that has to *read* every case is the one that
+	// takes the construct — and here it is load-bearing rather than tidy: a
+	// `#` is a comment in that body and the strip operator in `${x#a}`, so
+	// without the flag a case with a comment in one is lexed as an ordinary
+	// expansion and the apostrophe in `# it's fine` runs off the end (#1397).
+	d.CurrentShellSubstitution = true
 	// `a |& b` — the pipe-of-both-streams cases. Four of the six columns
 	// take the operator and the corpus records what the other two say about
 	// it, so the grammar that reads every case has to have it.

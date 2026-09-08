@@ -51,6 +51,45 @@ import (
 // what a read finds first. `builtins` is readonly here because it is readonly
 // in zsh, and `commands` refuses a write by name because this shell has no
 // command hash to put an entry in.
+//
+// **`unset "name[key]"` is a write, and it is not the same write as an
+// assignment.** Each of the four below settles it separately, because what an
+// unset *means* differs per table and a single rule for all of them was wrong
+// in both directions (#1527):
+//
+//   - `functions` and `aliases` undefine, which is the assignment run
+//     backwards and needs nothing said.
+//   - `options` **turns the option off** — measured, not guessed: `setopt
+//     noclobber; unset "options[noclobber]"` lets the next `>` truncate, and
+//     an option that is *on by default* goes to `off` rather than back to its
+//     default. An unknown name is silent where the assignment's is `no such
+//     option`, and a fixed option is `can't change option` through either.
+//   - the ten empty ones are **silent**. The assignment refuses because a
+//     caller that believes it arranged a global alias would be told nothing
+//     at either end; an unset asks for absence, and absence is what the table
+//     already has, so there is nothing left to warn about and the read
+//     afterwards agrees with zsh's.
+//   - `commands` still refuses, and that is the case that shows the other
+//     three are not one rule. There the read afterwards does *not* agree:
+//     zsh's `unset "commands[ls]"` drops a cached entry and `${commands[ls]}`
+//     is empty until the next search, where this shell searches every time and
+//     would still answer `/bin/ls`. Silence would hand a script testing
+//     `[[ -z $commands[ls] ]]` the opposite answer with nothing said.
+//
+// #1527 was filed the other way round — that `unset "functions[m]"` should
+// *refuse*, because zsh 5.9.2 answers `functions: assignment to invalid
+// subscript range` and leaves the function standing. It does, and the reason
+// is not about `unset` on this table at all: in a shell where nothing has
+// touched `$functions` yet, the name is still zsh's autoload stub for the
+// module and its value is the string `zsh/parameter`, so the subscript is read
+// as *arithmetic against a scalar* — `functions[1]` shortens that string to
+// `sh/parameter` and the next read of the parameter fails to load a module by
+// that name. Every other access materialises the parameter first and an
+// `unset` is the one that does not. With the module loaded — which is the
+// state every script that reads `$functions` is in, and which the plugin
+// manager this was found in guarantees on its own line 232 — real zsh removes
+// the function at status 0, exactly as here. Modelling the refusal would have
+// meant reproducing a zsh bug against a state this shell cannot be in.
 
 // registerParameterModule installs all thirty-three: five as views, ten as
 // empty views, and eighteen as refusals.
@@ -159,8 +198,20 @@ func registerEmptyParameters(r *interp.Runner) {
 // Silence would be worse than a wall — a caller that believes it has arranged
 // for a global alias and reads the table back empty is told nothing at either
 // end.
+//
+// **An unset is not that caller**, and used to get the same sentence (#1527).
+// `unset "galiases[x]"` asks for the key to be absent, the table it is asked
+// of is empty and stays empty, and the read afterwards is the empty string in
+// this shell and in zsh alike — so there is no answer left for the caller to
+// be misled by and nothing the refusal could still be protecting. Measured:
+// zsh is silent at status 0 for `unset "galiases[f]"` and for
+// `unset "nameddirs[x]"`. `commands` is the table where this reasoning does
+// *not* carry, and the note at the top of this file says why.
 func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, string, string, bool) {
-	return func(r *interp.Runner, key, _ string, _ bool) {
+	return func(r *interp.Runner, key, _ string, set bool) {
+		if !set {
+			return
+		}
 		r.Diagnosef("%s[%s]: %s is not implemented yet\n", name, key, waitsFor)
 	}
 }
@@ -304,11 +355,30 @@ func onOrOff(on bool) string {
 // at 0 — the assignment says what went wrong and the shell carries on:
 // `options[nosuchopt]=on` is `no such option: nosuchopt`, and
 // `options[extendedglob]=maybe` is `invalid value: maybe` with the option
-// unmoved. An unset of an element is neither on nor off and has nothing to
-// mean, so it is refused by the second of those.
+// unmoved.
+//
+// **`unset "options[name]"` turns the option off.** That was written here as a
+// refusal — "an unset of an element is neither on nor off and has nothing to
+// mean" — and the measurement says otherwise (#1527): zsh moves the option,
+// and moves it *off* rather than back to its default, which two probes tell
+// apart. `setopt noclobber; unset "options[noclobber]"` lets the next `>`
+// truncate the file, so it is the option and not just the view; and `equals`
+// and `banghist`, both on in a fresh shell, read `off` afterwards. The refusal
+// meanwhile said `invalid value: ` with nothing after the colon and left the
+// option standing at status 0, which is a script being told it has turned
+// `xtrace` off while the trace goes on.
+//
+// The one thing an unset does not share with `unsetopt` is what it says about
+// a name nobody has: measured silent, where `options[nosuchopt]=on` is `no
+// such option`. So the lookup is asked here for that alone — which spelling
+// exists — and the move, the fold of the compat spellings and both remaining
+// sentences stay setOption's, unduplicated.
 func writeZshOption(r *interp.Runner, name, value string, set bool) {
 	if !set {
-		r.Diagnosef("invalid value: %s\n", "")
+		if _, _, known := resolveOptionName(normalizeOption(name)); !known {
+			return
+		}
+		setOption(r, name, false)
 		return
 	}
 	switch value {
@@ -342,16 +412,29 @@ func zshCommandsView(r *interp.Runner) interp.AssocArray {
 	return out
 }
 
-// refuseZshCommandsWrite is `commands[c]=/path`, which in zsh puts an entry in
-// the command hash.
+// refuseZshCommandsWrite is `commands[c]=/path` and `unset "commands[c]"`,
+// which in zsh put an entry in the command hash and take one out.
 //
-// Refused by name, because this shell has no command hash for it to go in: a
-// lookup here is the PATH search every time, so there is nothing an entry
-// could change. Accepting the assignment and dropping it would leave a caller
-// holding a name it believes it has arranged for, which is the failure this
-// whole file is arranged to avoid.
-func refuseZshCommandsWrite(r *interp.Runner, name, _ string, _ bool) {
-	r.Diagnosef("commands[%s]: assigning to the command hash is not implemented yet\n", name)
+// Refused by name, because this shell has no command hash for either to reach:
+// a lookup here is the PATH search every time, so there is nothing an entry
+// could change and nothing a removal could drop. Accepting and dropping the
+// request would leave a caller holding a name it believes it has arranged for,
+// which is the failure this whole file is arranged to avoid.
+//
+// The unset is refused where the empty tables' is not, and the difference is
+// what the *next read* says rather than a preference. Measured: zsh's
+// `unset "commands[ls]"` is silent at status 0 and `${commands[ls]}` is empty
+// afterwards until something searches again — where this view searches every
+// time and would answer `/bin/ls`. A script guarding on `[[ -z
+// $commands[ls] ]]` would take the opposite branch here with nothing said.
+// Which verb is named follows the request, so the sentence is about what the
+// caller asked for and not about the other one.
+func refuseZshCommandsWrite(r *interp.Runner, name, _ string, set bool) {
+	verb := "removing an entry from"
+	if set {
+		verb = "assigning to"
+	}
+	r.Diagnosef("commands[%s]: %s the command hash is not implemented yet\n", name, verb)
 }
 
 // zshBuiltinsView is `$builtins`: every builtin this shell has, to `defined`.

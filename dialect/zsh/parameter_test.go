@@ -4,6 +4,8 @@
 package zsh_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -573,6 +575,188 @@ func TestTheThreeRostersAccountForTheModuleExactlyOnce(t *testing.T) {
 	}
 	if got, want := len(moduleParams()), 33; got != want {
 		t.Errorf("zsh/parameter names %d parameters here, want %d — measured against zsh 5.9.2 with `zmodload -lF zsh/parameter`", got, want)
+	}
+}
+
+// `unset "options[name]"` turns the option off. Not a guess and not a
+// refusal — this was written as one, saying an unset "has nothing to mean",
+// and #1527's measurements say otherwise.
+//
+// Three probes rather than one, because a status and a view agree between the
+// three answers that were on the table. "The option moved" and "the key was
+// dropped and the view reports off for a missing key" both read `off`, so the
+// first probe is a *behaviour*: `noclobber` on, then unset, then a `>` that
+// would have been refused. And "moved off" and "put back to its default" both
+// read `off` for an option that starts off, so the second probe uses `equals`,
+// which is **on** in a fresh shell — it goes off, so it is off and not the
+// default.
+func TestUnsettingAnOptionsElementTurnsTheOptionOff(t *testing.T) {
+	dir := t.TempDir()
+	out, st := runZsh(t, dir, `setopt noclobber
+: > f
+echo one > f 2>&1
+echo "refused=$?"
+unset "options[noclobber]"
+echo "st=$? view=[$options[clobber]]"
+echo two > f
+read line < f
+echo "wrote=[$line]"
+echo "equals-before=[$options[equals]]"
+unset "options[equals]"
+echo "equals-after=[$options[equals]]"`)
+	want := "zsh:3: file exists: f\nrefused=1\nst=0 view=[on]\nwrote=[two]\n" +
+		"equals-before=[on]\nequals-after=[off]\n"
+	if out != want || st != 0 {
+		t.Errorf("unsetting an $options element = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A name nobody has is the one thing the unset does not share with the
+// assignment: silent here, `no such option` there. Measured both ways in the
+// same shell, so a single rule for the two spellings fails this test.
+func TestUnsettingAnUnknownOptionsElementIsSilent(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `unset "options[nosuchopt]" 2>&1
+echo "unset=$?"
+options[nosuchopt]=on 2>&1
+echo "assign=$?"`)
+	want := "unset=0\nzsh:3: no such option: nosuchopt\nassign=0\n"
+	if out != want || st != 0 {
+		t.Errorf("an unknown $options key = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A compat spelling is folded and negated through the unset as it is through
+// the assignment — `unset "options[hashall]"` is `hashcmds` off — which is
+// what shows the lookup was not written a second time here.
+func TestUnsettingACompatSpellingGoesThroughTheCanonicalOption(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `setopt hashall
+echo "a=[$options[hashall]] [$options[hashcmds]]"
+unset "options[HASH_ALL]"
+echo "b=[$options[hashall]] [$options[hashcmds]]"`)
+	want := "a=[on] [on]\nb=[off] [off]\n"
+	if out != want || st != 0 {
+		t.Errorf("unsetting a compat spelling = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// An element of one of the ten empty tables is *silent* on an unset where the
+// assignment refuses by name. The assignment's caller believes it has arranged
+// a global alias and would be told nothing at either end; an unset's caller
+// asked for absence and has it, and reads the same empty string here that zsh
+// reads. Both halves in one shell, because the point is that they differ.
+func TestUnsettingAnEmptyParametersElementIsSilent(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `unset "galiases[f]" 2>&1
+echo "unset=$? n=${#galiases} v=[${galiases[f]}]"
+unset "nameddirs[x]" 2>&1
+echo "nameddirs=$?"
+galiases[f]=ls 2>&1
+echo "assign=$?"`)
+	want := "unset=0 n=0 v=[]\nnameddirs=0\n" +
+		"zsh:5: galiases[f]: alias -g is not implemented yet\nassign=0\n"
+	if out != want || st != 0 {
+		t.Errorf("unsetting an empty table's element = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `$commands` is the table where the silence above would be wrong, and the
+// read afterwards is what says so: zsh drops a cached entry and answers empty
+// until something searches again, and this view searches every time. So the
+// unset refuses, and it refuses in the verb the caller used.
+func TestUnsettingACommandsElementRefusesByName(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "toolx"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runZsh(t, dir, `unset "commands[toolx]" 2>&1
+echo "st=$? still=[${commands[toolx]:+found}]"
+commands[toolx]=/bin/x 2>&1
+echo "assign=$?"`)
+	want := "zsh:unset:1: commands[toolx]: removing an entry from the command hash is not implemented yet\n" +
+		"st=0 still=[found]\n" +
+		"zsh:3: commands[toolx]: assigning to the command hash is not implemented yet\nassign=0\n"
+	if out != want || st != 0 {
+		t.Errorf("unsetting a $commands element = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// An element of a parameter this shell has not got refuses by name, in the
+// sentence a *read* of it gives — one table, one sentence.
+//
+// The two keys are the pair that used to split: `parameters[PATH]` complained
+// `invalid number:` and then the whole of PATH, because the brackets of a name
+// holding nothing are read as arithmetic and PATH's value is not a number; and
+// `parameters[nope]` evaluated to 0 and was silent at status 0, which is the
+// answer this mechanism exists to stop.
+func TestUnsettingAnAbsentParametersElementRefusesByName(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `unset "parameters[PATH]" 2>&1
+echo "known=$?"
+unset "parameters[nope]" 2>&1
+echo "unknown=$?"
+unset "jobtexts[1]" 2>&1
+echo "other=$?"`)
+	want := "zsh:unset:1: parameters: parameter not implemented yet\nknown=1\n" +
+		"zsh:unset:3: parameters: parameter not implemented yet\nunknown=1\n" +
+		"zsh:unset:5: jobtexts: parameter not implemented yet\nother=1\n"
+	if out != want || st != 0 {
+		t.Errorf("unsetting an absent parameter's element = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And a name the script gave a value of its own is the script's, on the unset
+// as on the read: the refusal is about reading something absent, not about
+// owning a spelling.
+func TestUnsettingAnAbsentNameTheScriptOwnsIsTheScriptsArray(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `parameters=(a b c)
+unset "parameters[2]" 2>&1
+echo "st=$? v=[${parameters[*]}]"`)
+	want := "st=0 v=[a  c]\n"
+	if out != want || st != 0 {
+		t.Errorf("unsetting an owned name's element = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The line #1527 was filed about, kept as it is written in the wild: the whole
+// body of one plugin manager's `.zi-set-m-func` is `noglob unset functions[m]`
+// and it means to undefine `m`.
+//
+// The issue reported this as removing the function where zsh refuses, and the
+// refusal is real but is not about `unset` on this table — see the note in
+// parameter.go on the autoload stub. With the parameter materialised, which is
+// the state of every shell that has read `$functions` at all, zsh removes the
+// function at status 0 and so does this. The unquoted control is the row that
+// makes the pair readable rather than a decoration: without it a fixed glob
+// and a fixed `unset` are the same measurement. It never reaches `unset` at
+// all — the pathname match finds nothing and ends the script, which is why the
+// line after it is marked unreached and the status is 1.
+func TestUnsettingFunctionsThroughNoglobUndefinesTheFunction(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `m(){ echo hi; }
+noglob unset functions[m]
+echo "st=$? left=${#functions}"
+m 2>&1
+echo "call=$?"
+n(){ echo hi; }
+unset functions[n] 2>&1
+echo "unreached kept=${#functions}"`)
+	want := "st=0 left=0\nzsh:4: command not found: m\ncall=127\n" +
+		"zsh:7: no matches found: functions[n]\n"
+	if out != want || st != 1 {
+		t.Errorf("the line in the wild = %q (status %d), want %q at 1", out, st, want)
+	}
+}
+
+// The other subscript forms on `$functions` are a no-op at status 0, which is
+// zsh's own answer with the parameter materialised — a key nobody has, an
+// index, a range and a second subscript alike. Held here because the fix above
+// could have been written as "any subscript removes something".
+func TestOtherSubscriptFormsOnFunctionsRemoveNothing(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `m(){ echo hi; }
+for s in nope 1 1,2 '(r)m'; do
+  unset "functions[$s]" 2>&1
+  echo "$s=$? n=${#functions}"
+done`)
+	want := "nope=0 n=1\n1=0 n=1\n1,2=0 n=1\n(r)m=0 n=1\n"
+	if out != want || st != 0 {
+		t.Errorf("other subscripts on $functions = %q (status %d), want %q", out, st, want)
 	}
 }
 

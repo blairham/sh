@@ -12414,6 +12414,41 @@ echo "read=[$l]"`,
 		Why:     "the association is written *through* to the function table in both directions: the assignment defines a function that then runs, and unsetting the element undefines it. A write that landed in an ordinary stored table would define nothing and — worse — would shadow the view from that moment, since a stored table is what a read finds first",
 	},
 	{
+		ID: "parameter/unsetting-a-functions-element-through-noglob", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; m(){ echo hi; }; noglob unset functions[m]; echo "st=$? n=${#functions}"; m; echo "call=$?"`,
+		Why:     "the line a real plugin manager runs — the whole body of one of its functions is this — and it undefines the function at status 0. Filed the other way round (#1527), because zsh with nothing having touched `$functions` yet answers `functions: assignment to invalid subscript range` and leaves it standing: the name is still the autoload stub for the module and its *value* is the string `zsh/parameter`, so the brackets are read as arithmetic against a scalar. Every other access materialises the parameter and an `unset` is the one that does not, which is why the `zmodload` line at the front of this row is load-bearing rather than boilerplate. Pair it with the control below",
+	},
+	{
+		ID: "parameter/unsetting-a-functions-element-unquoted-is-a-pathname-match", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; m(){ echo hi; }; unset functions[m]; echo "st=$? n=${#functions}"`,
+		Why:     "the control for the row above, and the reason that row can be read at all: unquoted, the word is a pattern first and never reaches `unset`, so `no matches found` ends the script with the function standing. Without this row a fixed glob and a fixed `unset` are the same measurement — one row cannot tell which half of the pair moved",
+	},
+	{
+		ID: "parameter/other-subscripts-on-functions-remove-nothing", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; m(){ echo hi; }; for s in nope 1 1,2; do unset "functions[$s]"; echo "$s=$? n=${#functions}"; done`,
+		Why:     "a key nobody has, an index and a range are each a silent no-op at status 0 with the table unmoved — which is what stops the row above being read as `any subscript removes something`. The count after each is the assertion; the status alone is 0 for the removal and for the no-op alike and cannot tell them apart",
+	},
+	{
+		ID: "parameter/unsetting-an-options-element-turns-the-option-off", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; setopt noclobber; echo "a=[$options[clobber]] [$options[equals]]"; unset "options[noclobber]"; unset "options[equals]"; echo "b=$? [$options[clobber]] [$options[equals]]"`,
+		Why:     "an unset of an element *moves the option*, and moves it off rather than back to its default — which needs two keys to say. `equals` is on in a fresh shell and reads off afterwards, so it is not the default; and `noclobber` is not a key at all, it is `clobber` inverted, so unsetting it turns `clobber` on and the fold is shown in the same breath. Read as having nothing to mean here until #1527, which said `invalid value:` with nothing after the colon and left the option standing at status 0",
+	},
+	{
+		ID: "parameter/unsetting-an-unknown-options-key-is-silent", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; unset "options[nosuchopt]"; echo "unset=$?"; options[nosuchopt]=on; echo "assign=$?"`,
+		Why:     "the one thing the unset does not share with the assignment: a name nobody has is silent through the brackets and `no such option` through the equals sign, both at status 0. Both halves in one row because a single rule for the two spellings fails it",
+	},
+	{
+		ID: "parameter/unsetting-a-compat-option-spelling-folds-to-the-canonical-one", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; setopt hashall; echo "a=[$options[hashall]] [$options[hashcmds]]"; unset "options[HASH_ALL]"; echo "b=[$options[hashall]] [$options[hashcmds]]"`,
+		Why:     "the compat spelling, the underscores and the capitals all fold on the way through an unset exactly as they do through `setopt` — one lookup, not a second one written beside it. Both keys are printed because a fold that moved only the name it was given would still read right on one of them",
+	},
+	{
+		ID: "parameter/unsetting-an-element-of-an-empty-table-is-silent", Category: "variables",
+		Snippet: `zmodload zsh/parameter 2>/dev/null; unset "galiases[f]"; echo "g=$? n=${#galiases}"; unset "nameddirs[x]"; echo "d=$?"`,
+		Why:     "two of the module's tables that are empty in a fresh shell, and an unset of a key in either is silent at status 0 with the table unmoved. It is the assignment to one of these that has something to complain about — a caller that believes it arranged a global alias — where an unset asks for absence and already has it",
+	},
+	{
 		ID: "parameter/options-is-a-view-of-the-option-namespace", Category: "variables",
 		Snippet: `zmodload zsh/parameter 2>/dev/null; echo "n=${#options} a=$options[extendedglob]"; setopt extendedglob; echo "b=$options[extendedglob]"; unsetopt extendedglob; echo "c=$options[extendedglob]"`,
 		Why:     "197 names, and the state of one of them read on either side of a `setopt` and an `unsetopt`. The count is the part worth pinning beside the movement: it is the whole option namespace and not the couple of dozen names `set +o` writes, which is the same table under another name",

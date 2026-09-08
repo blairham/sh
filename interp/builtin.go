@@ -1105,6 +1105,16 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 			continue
 		}
 		if subscripted {
+			// A parameter this shell has not got refuses by name, ahead of
+			// every reading of the brackets — the subscript of a name that
+			// holds nothing is read as arithmetic, and the complaint that
+			// came back was about the *key's* value rather than about the
+			// table. See refuseAbsentParameterUnset.
+			if reason, absent := r.refuseAbsentParameterUnset(base); absent {
+				r.diagf("%s: %s\n", base, reason)
+				status = 1
+				continue
+			}
 			// `unset a[1]` is about one element and not about the array.
 			// The subscript was read as part of the name, so the whole thing
 			// was deleted from a table it was never in and nothing happened

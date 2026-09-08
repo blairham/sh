@@ -68630,6 +68630,50 @@
         "TimedOut": false
       }
     },
+    "parameter/other-subscripts-on-functions-remove-nothing": {
+      "bash": {
+        "Stdout": "nope=0 n=0~1=0 n=0~1,2=0 n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "nope=0 n=0~1=0 n=0~1,2=0 n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "nope=0 n=0~1=0 n=0~1,2=0 n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: functions[nope]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "nope=0 n=0~1=0 n=0~1,2=0 n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "nope=0 n=1~1=0 n=1~1,2=0 n=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "parameter/the-compat-option-spellings-are-keys-of-their-own": {
       "bash": {
         "Stdout": "[[log]] [[histnofunctions]]~[[log]] [[histnofunctions]]",
@@ -68669,6 +68713,270 @@
       "zsh": {
         "Stdout": "[on] [off]~[off] [on]",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/unsetting-a-compat-option-spelling-folds-to-the-canonical-one": {
+      "bash": {
+        "Stdout": "a=[[hashall]] [[hashcmds]]~b=[[hashall]] [[hashcmds]]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=[[hashall]] [[hashcmds]]~b=[[hashall]] [[hashcmds]]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=[[hashall]] [[hashcmds]]~b=[[hashall]] [[hashcmds]]",
+        "Stderr": "\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a=[[hashall]] [[hashcmds]]",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: unset: options[HASH_ALL]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=[[hashall]] [[hashcmds]]~b=[[hashall]] [[hashcmds]]",
+        "Stderr": "\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=[on] [on]~b=[off] [off]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/unsetting-a-functions-element-through-noglob": {
+      "bash": {
+        "Stdout": "st=127 n=0~hi~call=0",
+        "Stderr": "\u003cshell\u003e: line 1: noglob: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127 n=0~hi~call=0",
+        "Stderr": "\u003cshell\u003e: line 1: noglob: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127 n=0~hi~call=0",
+        "Stderr": "\u003cshell\u003e: noglob: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127 n=0~hi~call=0",
+        "Stderr": "\u003cshell\u003e: 1: noglob: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127 n=0~hi~call=0",
+        "Stderr": "\u003cshell\u003e: noglob: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 n=0~call=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: m",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/unsetting-a-functions-element-unquoted-is-a-pathname-match": {
+      "bash": {
+        "Stdout": "st=0 n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0 n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: functions[m]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 n=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: no matches found: functions[m]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/unsetting-an-element-of-an-empty-table-is-silent": {
+      "bash": {
+        "Stdout": "g=0 n=0~d=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "g=0 n=0~d=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "g=0 n=0~d=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: galiases[f]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "g=0 n=0~d=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "g=0 n=0~d=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/unsetting-an-options-element-turns-the-option-off": {
+      "bash": {
+        "Stdout": "a=[[clobber]] [[equals]]~b=0 [[clobber]] [[equals]]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=[[clobber]] [[equals]]~b=0 [[clobber]] [[equals]]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=[[clobber]] [[equals]]~b=0 [[clobber]] [[equals]]",
+        "Stderr": "\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a=[[clobber]] [[equals]]",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: unset: options[noclobber]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=[[clobber]] [[equals]]~b=0 [[clobber]] [[equals]]",
+        "Stderr": "\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=[off] [on]~b=0 [on] [off]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "parameter/unsetting-an-unknown-options-key-is-silent": {
+      "bash": {
+        "Stdout": "unset=0~assign=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "unset=0~assign=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "unset=0~assign=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: unset: options[nosuchopt]: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "unset=0~assign=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "unset=0~assign=0",
+        "Stderr": "\u003cshell\u003e:1: no such option: nosuchopt",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

@@ -36,6 +36,27 @@ func TestTheShellSplitFlagReadsItsOptionLetters(t *testing.T) {
 		{`echo ${(Z+n+U)v}`, "ZU", "n"},
 		{`echo ${(UZ+n+)v}`, "UZ", "n"},
 		{`echo ${(Z+n+s.:.)v}`, "Zs", "n"},
+
+		// The argumentless spelling. It takes no delimited argument at all —
+		// `${(z::)v}` is an error in the flags, asserted below — so what it
+		// carries here is the *clearing* of whatever stands in front of it,
+		// and a `Z` behind it adds to a set that starts empty again.
+		{`echo ${(z)v}`, "z", ""},
+		{`echo ${(zz)v}`, "zz", ""},
+		{`echo ${(zU)v}`, "zU", ""},
+		{`echo ${(zZ+n+)v}`, "zZ", "n"},
+		{`echo ${(Z+n+z)v}`, "Zz", ""},
+		{`echo ${(Z+C+zZ+n+)v}`, "ZzZ", "n"},
+		{`echo ${(Z+C+Z+n+z)v}`, "ZZz", ""},
+		{`echo ${(zZ::)v}`, "zZ", ""},
+
+		// Two arguments union rather than the later one replacing the
+		// earlier: `${(Z+C+Z+n+)v}` drops the comment *and* takes the
+		// newline as a blank, which the last argument alone cannot say.
+		{`echo ${(Z+C+Z+n+)v}`, "ZZ", "Cn"},
+		{`echo ${(Z+n+Z+C+)v}`, "ZZ", "nC"},
+		{`echo ${(Z+n+Z::)v}`, "ZZ", "n"},
+		{`echo ${(Z::Z+n+)v}`, "ZZ", "n"},
 	} {
 		t.Run(tc.src, func(t *testing.T) {
 			e := flagged(t, tc.src)
@@ -74,6 +95,12 @@ func TestTheShellSplitFlagRefusesAnOptionLetterByPosition(t *testing.T) {
 		{`echo ${(Z)v}`, 5},
 		{`echo ${(Zn)v}`, 5},
 		{`echo ${(Z+n)v}`, 5},
+		// And the argumentless spelling is the mirror of it: `z` takes no
+		// delimited argument, so a delimiter behind it is a character the
+		// group cannot carry, at the delimiter. Measured on the shell that
+		// has the flag, both spellings error at position 5.
+		{`echo ${(z:x:)v}`, 5},
+		{`echo ${(z::)v}`, 5},
 	} {
 		t.Run(tc.src, func(t *testing.T) {
 			e := flagged(t, tc.src)

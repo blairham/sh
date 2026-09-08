@@ -102,12 +102,11 @@ func TestTheUnbuiltFlagsAreStillRefusedByName(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{"e", `v=x; printf "[%s]" "${(e)v}"`, "sh: ${(e)v}: the (e) expansion flag is not implemented\n"},
 		{"t", `v=x; printf "[%s]" "${(t)v}"`, "sh: ${(t)v}: the (t) expansion flag is not implemented\n"},
-		{"z", `v=x; printf "[%s]" "${(z)v}"`, "sh: ${(z)v}: the (z) expansion flag is not implemented\n"},
 		{"D", `v=x; printf "[%s]" "${(D)v}"`, "sh: ${(D)v}: the (D) expansion flag is not implemented\n"},
 		// One built letter beside an unbuilt one still names the unbuilt
 		// one, which is the half that would rot as the set grows.
-		{"beside a built one", `a=(b a); printf "[%s]" "${(Uz)a}"`, "sh: ${(Uz)a}: the (z) expansion flag is not implemented\n"},
-		{"and the built one may be written second", `a=(b a); printf "[%s]" "${(zU)a}"`, "sh: ${(zU)a}: the (z) expansion flag is not implemented\n"},
+		{"beside a built one", `a=(b a); printf "[%s]" "${(Ue)a}"`, "sh: ${(Ue)a}: the (e) expansion flag is not implemented\n"},
+		{"and the built one may be written second", `a=(b a); printf "[%s]" "${(eU)a}"`, "sh: ${(eU)a}: the (e) expansion flag is not implemented\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runGrammar(t, tc.src, selectingWithFlags, nil)

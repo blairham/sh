@@ -457,6 +457,21 @@ func TestAnUnreadableInnerIsNotAReference(t *testing.T) {
 // `${${(P)h}[(w)y]}` with `h=a` reads the subscript against `a`, so a refusal
 // naming its subject would say `a[(w)y]` — a construct the file does not
 // contain, and one a reader cannot search for.
+// A search's operand is not a range, however it happens to be written.
+//
+// `(r)1,2` reads like one and is an operand, so what the search named is one
+// value and its length is a width. The search and the ordinary subscript go
+// through one dispatch now — the same one a chain's links use — and a fold
+// that let the range reading see a search operand would make this a count of
+// matches instead. zsh answers neither: it finds no match at all there, which
+// belongs to the search operand rather than to the shape.
+func TestASearchOperandThatLooksLikeARangeIsStillOneValue(t *testing.T) {
+	out, st := runNestedSubscript(t, `a=("1,2" x y); printf "[%s]" "${#${a[@]}[(r)1,2]}"`)
+	if want := "[3]"; out != want || st != 0 {
+		t.Errorf("gave %q at %d, want %q at 0 — a width and not a count", out, st, want)
+	}
+}
+
 func TestARefusalThroughAReferenceNamesTheWrittenText(t *testing.T) {
 	out, st := runNestedSubscript(t, `a=(x y); h=a; printf "[%s]" "${${(P)h}[(w)y]}"`)
 	if !strings.Contains(out, "${${(P)h}[(w)y]}: the (w) subscript flag is not implemented") {

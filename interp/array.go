@@ -1037,6 +1037,17 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if e.Index == nil {
 		return nil, false
 	}
+	if len(e.Leading) > 0 {
+		// A chain reads what the subscript before it named rather than what
+		// the name holds, so none of the name's readings below apply: an
+		// association's key is one link back, and this link is handed the
+		// value that key found.
+		src, ok := r.chainedSubscriptSource(e)
+		if !ok {
+			return nil, true
+		}
+		return r.subscriptAgainst(e, src)
+	}
 	if e.IndexFlags != nil {
 		// Before the associative reading and before the target is chosen: a
 		// flag group decides how the subscript is *read*, so a name whose
@@ -1620,6 +1631,26 @@ func (r *Runner) subscriptYieldsAList(e *syntax.ParamExpr) bool {
 	}
 	if !r.subscriptIsARange(e) {
 		return false
+	}
+	// Only a range asks what it ranged *over*; the three answers above are
+	// the subscript's own and need no source at all, which is why the source
+	// is read here rather than at the top.
+	return r.subscriptSourceIsAList(e)
+}
+
+// subscriptSourceIsAList reports whether what a subscript reads is a list of
+// elements rather than one string, which is the question a range's shape
+// turns on.
+//
+// A name supplies it from what it holds. A chain supplies it from the
+// subscript before it — `${a[1,3][1,2]}` ranges over the three elements the
+// first range named, where `${a[1][1,2]}` ranges over the characters of the
+// one element it named — and that is the *same* question asked of the
+// previous link, so this recurses into subscriptYieldsAList rather than
+// keeping a second reading of the rule beside it.
+func (r *Runner) subscriptSourceIsAList(e *syntax.ParamExpr) bool {
+	if n := len(e.Leading); n > 0 {
+		return r.subscriptYieldsAList(r.chainLink(e, n-1))
 	}
 	_, scalar, ok := r.subscriptTarget(e)
 	return ok && !scalar

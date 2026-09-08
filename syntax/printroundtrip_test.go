@@ -46,7 +46,11 @@ import (
 // would leave the property untested in silence. It is asserted against the
 // cases that *round trip* now rather than the ones skipped, so it can only be
 // satisfied by exercising them.
-const keywordFunctionsInTheCorpus = 11
+//
+// Twelve since #1487, whose listing case declares a keyword function on
+// purpose: the round trip a `functions` listing has to survive is the same
+// property this counts, asked of the builtin instead of the printer.
+const keywordFunctionsInTheCorpus = 12
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 	// The arrangement a formatter asks for, alongside the zero value that a

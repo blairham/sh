@@ -11030,6 +11030,20 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/integer-with-an-output-base` | `1[]~2[]` **2>** `<shell>: 1: integer: not found~<shell>: 1: typeset: not found` | `1[]~2[]` **2>** `<shell>: line 1: integer: command not found~<shell>: line 1: typeset: -2: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `1[]~2[]` **2>** `<shell>: line 1: integer: command not found~<shell>: line 1: typeset: -2: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `1[]~2[]` **2>** `<shell>: integer: command not found~<shell>: line 0: typeset: -2: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1[16#ff]~2[2#101]` | `1[16#FF]~2[2#101]` |
 | `declare/integer-refuses-a-letter-its-own-declaration-takes` | `st=127` **2>** `<shell>: 1: integer: not found` | `st=127` **2>** `<shell>: line 1: integer: command not found` | `st=127` **2>** `<shell>: line 1: integer: command not found` | `st=127` **2>** `<shell>: integer: command not found` | `st=0` | `st=1` **2>** `<shell>:integer:1: bad option: -A` |
 | `declare/integer-the-lines-a-hook-installer-opens-with` | `[UNSET][UNSET][UNSET]` **2>** `<script>: 2: integer: not found` | `[UNSET][UNSET][UNSET]` **2>** `<script>: line 2: integer: command not found` | `[UNSET][UNSET][UNSET]` **2>** `<script>: line 2: integer: command not found` | `[UNSET][UNSET][UNSET]` **2>** `<script>: line 2: integer: command not found` | `[UNSET][UNSET][UNSET]` | `[0][0][0]` |
+| `functions/functions-is-the-fourth-name` | `st=127` **2>** `<shell>: 1: functions: not found` | `st=127` **2>** `<shell>: line 1: functions: command not found` | `st=127` **2>** `<shell>: line 1: functions: command not found` | `st=127` **2>** `<shell>: functions: command not found` | `f() { echo hi; };st=0` | `f () {~	echo hi~}~st=0` |
+| `functions/functions-names-nothing-it-holds` | `st=127` **2>** `<shell>: 1: functions: not found` | `st=127` **2>** `<shell>: line 1: functions: command not found` | `st=127` **2>** `<shell>: line 1: functions: command not found` | `st=127` **2>** `<shell>: functions: command not found` | `st=1` | `st=1` |
+| `functions/functions-with-a-name-it-holds-and-one-it-does-not` | `st=127` **2>** `<shell>: 1: functions: not found` | `st=127` **2>** `<shell>: line 1: functions: command not found` | `st=127` **2>** `<shell>: line 1: functions: command not found` | `st=127` **2>** `<shell>: functions: command not found` | `f() { :; };st=1` | `f () {~	:~}~st=1` |
+| `functions/functions-refuses-a-letter-its-own-declaration-takes` | `st=127` **2>** `<shell>: 1: functions: not found` | `st=127` **2>** `<shell>: line 1: functions: command not found` | `st=127` **2>** `<shell>: line 1: functions: command not found` | `st=127` **2>** `<shell>: functions: command not found` | `f() { :; };st=0` | `st=1` **2>** `<shell>:functions:1: bad option: -f` |
+| `functions/functions-refuses-a-letter-it-does-not-have-at-all` | `st=127` **2>** `<shell>: 1: functions: not found` | `st=127` **2>** `<shell>: line 1: functions: command not found` | `st=127` **2>** `<shell>: line 1: functions: command not found` | `st=127` **2>** `<shell>: functions: command not found` | **2>** `<shell>: typeset: -q: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `st=1` **2>** `<shell>:functions:1: bad option: -q` |
+| `functions/a-listing-said-back-keeps-the-locals-local` | **2>** `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | `[OUT]` **2>** `<script>: line 3: functions: command not found~<script>: line 6: f: command not found` | `[OUT]` **2>** `<script>: line 3: functions: command not found~<script>: line 6: f: command not found` | `[OUT]` **2>** `<script>: line 3: functions: command not found~<script>: line 6: f: command not found` | `[OUT]` | `[OUT]` |
+| `functions/unfunction-is-the-second-name-for-unset-f` | `st=127~c=0` **2>** `<shell>: 1: unfunction: not found` | `st=127~c=0` **2>** `<shell>: line 1: unfunction: command not found` | `st=127~c=0` **2>** `<shell>: line 1: unfunction: command not found` | `st=127~c=0` **2>** `<shell>: unfunction: command not found` | `st=127~c=0` **2>** `<shell>: unfunction: not found` | `st=0~c=127` **2>** `<shell>:1: command not found: f` |
+| `functions/unfunction-a-name-nobody-defined` | `st=127` **2>** `<shell>: 1: unfunction: not found` | `st=127` **2>** `<shell>: line 1: unfunction: command not found` | `st=127` **2>** `<shell>: line 1: unfunction: command not found` | `st=127` **2>** `<shell>: unfunction: command not found` | `st=127` **2>** `<shell>: unfunction: not found` | `st=1` **2>** `<shell>:unfunction:1: no such hash table element: nosuch` |
+| `functions/nothing-to-unset-however-it-is-spelled` | `1=0~2=0~3=0` | `1=0~2=0~3=0` | `1=0~2=0~3=0` | `1=0~2=0~3=0` | **2>** `Usage: unset [-nfv] name...` *(status 2)* | `1=1~2=1~3=1` **2>** `<script>:unset:1: not enough arguments~<script>:unset:2: not enough arguments~<script>:unset:3: not enough arguments` |
+| `functions/a-pattern-picks-the-namespace-by-f` | **2>** `<script>: 3: unset: Illegal option -m` *(status 2)* | `st=2~[keep]~mine~c=0` **2>** `<script>: line 3: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` | **2>** `<script>: line 3: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `st=2~[keep]~mine~c=0` **2>** `<script>: line 3: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]` | **2>** `<script>[3]: unset: -m: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `st=0~[keep]~c=127` **2>** `<script>:6: command not found: fa` |
+| `functions/a-pattern-that-matches-nothing` | **2>** `<script>: 2: unset: Illegal option -m` *(status 2)* | `1=2~2=2~3=127~4=127` **2>** `<script>: line 2: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]~<script>: line 3: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]~<script>: line 4: unfunction: command not found~<script>: line 5: functions: command not found` | **2>** `<script>: line 2: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `1=2~2=2~3=127~4=127` **2>** `<script>: line 2: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]~<script>: line 3: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]~<script>: line 4: unfunction: command not found~<script>: line 5: functions: command not found` | **2>** `<script>[2]: unset: -m: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `1=1~2=1~3=1~4=0` |
+| `functions/a-pattern-among-patterns` | `st=127` **2>** `<script>: 3: unfunction: not found~<script>: 4: functions: not found` *(status 127)* | `st=127` **2>** `<script>: line 3: unfunction: command not found~<script>: line 4: functions: command not found` *(status 127)* | `st=127` **2>** `<script>: line 3: unfunction: command not found~<script>: line 4: functions: command not found` *(status 127)* | `st=127` **2>** `<script>: line 3: unfunction: command not found~<script>: line 4: functions: command not found` *(status 127)* | `st=127~fa() { :; }~gb() { :; }` **2>** `<script>: line 3: unfunction: not found` | `st=0~gb () {~	:~}` |
+| `functions/the-math-function-facility` | `st=127` **2>** `<shell>: 1: functions: not found~<shell>: 1: arithmetic expression: expecting EOF: " mf(5) "` *(status 2)* | `st=127` **2>** `<shell>: line 1: functions: command not found~<shell>: line 1: mf(5) : arithmetic syntax error in expression (error token is "(5) ")` *(status 1)* | `st=127` **2>** `<shell>: line 1: functions: command not found~<shell>: line 1: mf(5) : arithmetic syntax error in expression (error token is "(5) ")` *(status 127)* | `st=127` **2>** `<shell>: functions: command not found~<shell>: mf(5) : syntax error in expression (error token is "(5) ")` *(status 1)* | **2>** `Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `st=0~[105]` |
+| `functions/a-math-function-that-sets-no-reply` | **2>** `<shell>: 1: functions: not found~<shell>: 1: arithmetic expression: expecting EOF: " mf(5) "` *(status 2)* | **2>** `<shell>: line 1: functions: command not found~<shell>: line 1: mf(5) : arithmetic syntax error in expression (error token is "(5) ")` *(status 1)* | **2>** `<shell>: line 1: functions: command not found~<shell>: line 1: mf(5) : arithmetic syntax error in expression (error token is "(5) ")` *(status 127)* | **2>** `<shell>: functions: command not found~<shell>: mf(5) : syntax error in expression (error token is "(5) ")` *(status 1)* | **2>** `Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `[123]` |
 | `declare/local-in-a-posix-function` | `[outer]` **2>** `<script>: 2: typeset: not found` | `[outer]` | `[outer]` | `[outer]` | `[inner]` | `[outer]` |
 | `declare/local-in-a-keyword-function` | **2>** `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | `[outer]` | `[outer]` | `[outer]` | `[outer]` | `[outer]` |
 | `declare/valueless-local` | `[UNSET]` | `[UNSET]` | `[UNSET]` | `[]` | `[UNSET]` **2>** `<script>: line 1: local: not found` | `[]` |
@@ -11285,6 +11299,83 @@ grades it and nothing drift-checks it either, for the same reason.
     echo "[${del-UNSET}][${list-UNSET}][${help-UNSET}]"
   }
   f
+  ```
+- `functions/functions-is-the-fourth-name` — `functions` is `typeset -f` under a fourth name, and it is zsh's and ksh93's where `declare` is bash's and zsh's — so the family's naming is a dialect's answer a fourth time rather than an axis. Both shells with the word write the body back at 0 and the other three report a command they cannot find, which is what they really do with it. The two do not agree on the *shape*: zsh writes the paren header and an indented body, ksh93 writes it compactly on one line with a trailing `; ` and no newline (#1494)
+  ```sh
+  f() { echo hi; }; functions f; echo "st=$?"
+  ```
+- `functions/functions-names-nothing-it-holds` — silence at 1 in both shells that have the word — the same answer `typeset -f nosuch` gives, which is what makes the second name a rename rather than a second implementation. Nothing is said, so the status is the only way to tell
+  ```sh
+  functions nosuch; echo "st=$?"
+  ```
+- `functions/functions-with-a-name-it-holds-and-one-it-does-not` — the operands are answered one at a time and the 1 stands however many printed — the body of `f` comes out and the status is still 1. A builtin that stopped at the first miss, or that let the last operand decide, would pass a case with one operand and fail this
+  ```sh
+  f() { :; }; functions f nosuch; echo "st=$?"
+  ```
+- `functions/functions-refuses-a-letter-its-own-declaration-takes` — the fourth name's letter set is not the declaration's either, and it is narrowed the other way from `integer`'s: `-f` is a bad option to zsh's `functions` though it is the very option the name stands for, and so are `-p` and `-F`. ksh93 goes the opposite way and hands `functions` the whole `typeset -f` grammar, taking `-f` and printing. So the letters are a field of their own — a shell that reused the declaration's set would answer a listing where zsh refuses
+  ```sh
+  f() { :; }; functions -f; echo "st=$?"
+  ```
+- `functions/functions-refuses-a-letter-it-does-not-have-at-all` — the other half of the row above, and the reason a refusal has to distinguish two cases: `-q` is a letter *neither* shell has, so both call it bad. A letter zsh really has and an engine does not — `-M`, `-u`, `-W` — must be told apart from this one, or a script cannot tell a shell that lacks a facility from a typo
+  ```sh
+  f() { :; }; functions -q f; echo "st=$?"
+  ```
+- `functions/a-listing-said-back-keeps-the-locals-local` — the round trip that matters, and the one #1406 found broken one layer down: a keyword-declared function's `typeset` is a *local* in ksh93 and a global in a POSIX-form one, so a listing that dropped the keyword would hand back a program whose variables leak. zsh writes the paren form back for either spelling and may, because `typeset` is local in both bodies there — `[OUT]`. ksh93 keeps the keyword and so also answers `[OUT]`; a ksh listing that wrote the paren form would answer `[1]` and nothing else in the row would look different. **Only those two columns discriminate**: the three shells without the word answer `[OUT]` because `src` came back empty and `f` was never defined, which is the same cell for the opposite reason, so a run that read this row as unanimous would have learned nothing
+  ```sh
+  x=OUT
+  function f { typeset x=1; }
+  src=$(functions f)
+  unset -f f
+  eval "$src"
+  f
+  echo "[$x]"
+  ```
+- `functions/unfunction-is-the-second-name-for-unset-f` — zsh's alone — ksh93 has `functions` and no `unfunction`, which is the pairing that makes each word its own dialect answer rather than one. The removal is silent at 0 and the name is a command that cannot be found afterwards, exactly what `unset -f` leaves
+  ```sh
+  f() { :; }; unfunction f; echo "st=$?"; f; echo "c=$?"
+  ```
+- `functions/unfunction-a-name-nobody-defined` — the complaint is the same sentence zsh's `unset -f nosuch` writes — `no such hash table element` at 1 — with the *invoked* name in the location: `unfunction` rather than `unset`. That is what running one implementation under two names gets, and a second wording would be the thing that drifts
+  ```sh
+  unfunction nosuch; echo "st=$?"
+  ```
+- `functions/nothing-to-unset-however-it-is-spelled` — one answer per shell rather than one per spelling: zsh writes `not enough arguments` at 1 for all three, bash 5.3, bash 3.2 and dash are silent at 0 for all three, and ksh93 answers its usage line and — `unset` being one of its special builtins — ends the script at the first one, so the other two lines never run. That last column is why the wording cannot be the whole answer
+  ```sh
+  unset; echo "1=$?"
+  unset -v; echo "2=$?"
+  unset -f; echo "3=$?"
+  ```
+- `functions/a-pattern-picks-the-namespace-by-f` — zsh's `-m` reads its operands as patterns, and `-f` decides *which table* they are matched in. With the letter the functions go and the parameters stay — `[keep]` and a command that cannot be found — where `unset -m 'f*'` alone does the opposite. Reading `-m` before the namespace made a shell that removed the variables and left every function standing, in silence at 0. The other five have no `-m` and refuse the option
+  ```sh
+  fa() { echo mine; }
+  fa=keep
+  unset -f -m 'f*'
+  echo "st=$?"
+  echo "[${fa-gone}]"
+  fa
+  echo "c=$?"
+  ```
+- `functions/a-pattern-that-matches-nothing` — the status the letter leaves when it matched nothing, and the two words disagree on purpose: every *removal* spelling is 1 and the *listing* is 0. A listing that found nothing has answered the question and a removal that removed nothing has not. All four are silent, so the status is the only thing that carries it, and reporting 0 for the removals is a shell that cannot tell an empty namespace from a typo
+  ```sh
+  fa() { :; }
+  unset -m 'zz*'; echo "1=$?"
+  unset -f -m 'zz*'; echo "2=$?"
+  unfunction -m 'zz*'; echo "3=$?"
+  functions -m 'zz*'; echo "4=$?"
+  ```
+- `functions/a-pattern-among-patterns` — one pattern matching is enough: the status is 0 though the second matched nothing, so it is the whole command that is judged rather than each operand. The listing after it shows `gb` alone survived, which is what separates this from a command that gave up at the first empty pattern
+  ```sh
+  fa() { :; }
+  gb() { :; }
+  unfunction -m 'f*' 'zz*'; echo "st=$?"
+  functions
+  ```
+- `functions/the-math-function-facility` — the one thing under this word that is not a rename: `-M` registers a shell function as a *math* function, so arithmetic can call back into the interpreter. zsh alone, and `105`. ksh93 spells `-M` as a character mapping and answers `unknown mapping name`, which is why the letter cannot be shared. Left refused by name rather than guessed at — see #1493, and the row below for what it really returns
+  ```sh
+  g() { REPLY=$(($1+100)); }; functions -M -- mf 1 1 g; echo "st=$?"; echo "[$(( mf(5) ))]"
+  ```
+- `functions/a-math-function-that-sets-no-reply` — the row that says the documented contract is not the implemented one, and the reason `-M` is refused rather than approximated. The function sets no `REPLY` at all and zsh answers `123` — the last arithmetic value evaluated anywhere during the call. With the `: $((123))` removed it answers `5`, the last argument. An engine that read `REPLY` would agree with zsh on every idiomatic caller and disagree here, and the plugin manager this facility exists for is exactly the caller that sets no `REPLY`: its math function ends in `return 1` or `return idx`, whose arithmetic is what comes back (#1493)
+  ```sh
+  g() { : $((123)); }; functions -M -- mf 1 1 g; echo "[$(( mf(5) ))]"
   ```
 - `declare/local-in-a-posix-function` — ksh93 gives a local scope only to a function defined with the `function` word, so here its assignment reaches the caller and bash's and zsh's do not
   ```sh

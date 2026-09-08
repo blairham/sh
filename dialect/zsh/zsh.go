@@ -1029,6 +1029,19 @@ func Semantics() interp.Semantics {
 	// floats — as does `declare -F f` over a function, which declares a
 	// float called `f` here and says nothing.
 	s.DeclareOptionsTakingANumber = "F"
+	// `functions` takes none of the letters this engine acts on. Its own
+	// set — -c -k -m -s -t -u -x -z -M -T -U -W, measured 2026-09-08 by
+	// sweeping the alphabet in both cases — is autoloading, tracing, the
+	// math-function facility and the `zsh/parameter` spellings, none of
+	// which this engine has; they ride in UnimplementedOptionLetters so a
+	// script is told they are missing rather than unknown. `-m` is the
+	// exception and is implemented: it is a listing narrowed by pattern,
+	// which is the same walk the bare listing already does.
+	s.FunctionsOptions = "m"
+	// `unfunction`'s whole set, and it really is one letter: every other
+	// letter of the alphabet is a bad option there in both cases, the `-f`
+	// this name stands for included.
+	s.UnfunctionOptions = "m"
 	s.LocalOptions = "aAHilpruUTx"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
@@ -1304,6 +1317,14 @@ func Diagnostics() interp.Diagnostics {
 			// neither field, while `-h`, `-t`, `-L`, `-R` and `-Z` are
 			// letters this shell's `integer` really takes.
 			"integer": "LRZht",
+			// `functions`' own letters, none of which is `typeset`'s: -u
+			// and -U mark a name for autoloading, -k and -z pick which
+			// shell the autoloaded file is read as, -t and -T trace, -x
+			// sets the listing's indent, -c makes one function another's
+			// copy, -W is the `zsh/parameter` writability flag and -M is
+			// the math-function facility (#1493). -m is implemented, in
+			// FunctionsOptions above.
+			"functions": "ckstuxzMTUW",
 		},
 		// The builtin's name is stripped to the location prefix as ever:
 		// `zsh:read:1: -p: no coprocess`, measured with no coprocess to
@@ -1426,7 +1447,7 @@ func Diagnostics() interp.Diagnostics {
 		UnaliasNotFound:        "no such hash table element: %[2]s",
 		UnaliasAllWithOperands: "-a: too many arguments",
 		UnaliasUsage:           "not enough arguments",
-		UnsetPatternUsage:      "%[1]s: not enough arguments",
+		UnsetNoOperands:        "%[1]s: not enough arguments",
 		UnaliasNoOperandStatus: 1,
 		// The builtin's name comes from the location here, as everywhere in
 		// zsh, so it is not in the wording.
@@ -1747,6 +1768,20 @@ func Apply(r *interp.Runner) {
 	// And the assignment rule follows the name the way it follows `declare`:
 	// `integer n=5+2` is a declaration's operand and not a word to split.
 	r.SetDeclaring("integer")
+	// `functions` is `typeset -f` under this shell's own name and
+	// `unfunction` is `unset -f` under its own — the same registration
+	// `integer` gets and for the same reason, so that the listing and the
+	// removal have one implementation between two words each. See
+	// interp/functionsbuiltin.go.
+	//
+	// The plugin manager on the rc file this shell has to run is why they
+	// exist: `unfunction` is on 47 lines of it, nine of them consecutive in
+	// the path out of every plugin load, and a `command not found` there
+	// leaves that loader's temporary stubs standing over `compdef`,
+	// `autoload`, `source`, `bindkey`, `zstyle`, `alias` and `zle` for the
+	// rest of the session (#1487).
+	r.Register("functions", interp.FunctionsBuiltin())
+	r.Register("unfunction", interp.UnfunctionBuiltin())
 	if typeset, ok := r.Builtin("typeset"); ok {
 		r.Register("declare", typeset)
 		// And the assignment rule follows the name: `declare x=*` stores the

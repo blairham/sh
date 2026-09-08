@@ -422,10 +422,23 @@ type Diagnostics struct {
 	// Empty means it prints nothing, which is dash.
 	UnaliasUsage string
 
-	// UnsetPatternUsage is what `unset -m` prints when given no pattern to
-	// match. One verb, the builtin's name. Only one dialect has the letter,
-	// so only one dialect can reach this.
-	UnsetPatternUsage string
+	// UnsetNoOperands is what `unset` prints when it has nothing to unset:
+	// no operand at all, no name after `-v` or `-f`, and no pattern after
+	// `-m`. One verb, the builtin's name — which is `unfunction` where the
+	// dialect renames the `-f` half, since the complaint follows the invoked
+	// word.
+	//
+	// One field rather than one per spelling because the panel answers it
+	// once: measured 2026-09-08, zsh 5.9.2 writes the same `not enough
+	// arguments` for all four, and bash 5.3, bash 3.2 and dash are silent at
+	// 0 for every one they have. Empty is therefore a real answer and not a
+	// gap — the dialect says nothing and the builtin succeeds.
+	//
+	// ksh93 is the one member this does not cover: it answers with its usage
+	// line and ends the script, `unset` being one of its special builtins.
+	// That is the usage-line shape and not this sentence, so it is recorded
+	// in the corpus rather than approximated here.
+	UnsetNoOperands string
 
 	// UnaliasUsageUnprefixed writes that without the shell and line in front.
 	UnaliasUsageUnprefixed bool

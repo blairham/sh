@@ -183,7 +183,8 @@ func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, ext
 // the caller that needs to know one is there rather than what it means.
 // splitNumericRange is the reading of it; this is only the shape.
 func numericRangeWidth(s string) (int, bool) {
-	_, _, rest, ok := splitNumericRange(s, patternOpts{numericRange: true})
+	o := patternOpts{numericRange: true}
+	_, _, rest, ok := splitNumericRange(s, &o)
 	if !ok {
 		return 0, false
 	}

@@ -115,7 +115,7 @@ func (a patternAnchor) holds(at int, o patternOpts) bool {
 //
 // The two sides are not interchangeable — `(#l)` asks about the *pattern's*
 // letter — which is why this takes them named rather than as a pair.
-func (o patternOpts) eqPatternByte(pat, sub byte) bool {
+func (o *patternOpts) eqPatternByte(pat, sub byte) bool {
 	if eqByte(pat, sub, o.fold) {
 		return true
 	}
@@ -183,7 +183,7 @@ func applyPatternFlags(body string, o patternOpts) (patternOpts, byte) {
 // matches and `[[ ab == a~ ]]` does not, so a trailing tilde is the character
 // itself. The same is true of one with nothing in front of it, which is what
 // keeps a `~` that survived tilde expansion from turning the word inside out.
-func splitExclusion(p string, o patternOpts) (left string, rights []string, ok bool) {
+func splitExclusion(p string, o *patternOpts) (left string, rights []string, ok bool) {
 	if !o.extended {
 		return "", nil, false
 	}
@@ -240,7 +240,7 @@ func splitExclusion(p string, o patternOpts) (left string, rights []string, ok b
 // *looser* than `/` — `**/x~*bar*` takes `bar/x` out by matching the whole
 // path — where every other operator here is read inside one component.
 func hasTopLevelExclusion(field string, o patternOpts) bool {
-	_, _, ok := splitExclusion(field, o)
+	_, _, ok := splitExclusion(field, &o)
 	return ok
 }
 
@@ -275,7 +275,7 @@ func bracketEnd(p string, i int) (int, bool) {
 // makes the guard below dead in both callers, since each answers a `*` before
 // it asks. It is kept because it is what the sentence above says, and
 // mutation testing is what established that nothing can kill it.
-func splitClosableItem(p string, o patternOpts) (item, rest string, ok bool) {
+func splitClosableItem(p string, o *patternOpts) (item, rest string, ok bool) {
 	if p == "" || p[0] == '*' {
 		return "", "", false
 	}
@@ -308,7 +308,7 @@ const unboundedRepeat = -1
 // and `(#c2,4)` is a count with either side optional — `(#c3)` is exactly
 // three, `(#c2,)` is two or more, `(#c,3)` is at most three, and `(#c,)` is
 // the same as `#`.
-func closureBounds(p string, o patternOpts) (lo, hi int, rest string, ok bool) {
+func closureBounds(p string, o *patternOpts) (lo, hi int, rest string, ok bool) {
 	// Dead, like the star guard above: every caller is already inside a
 	// branch the option opened. Kept so the function answers for itself.
 	if !o.extended {
@@ -482,7 +482,7 @@ func classifyPatternFlags(body string) (patternFault, bool) {
 // scanExtendedPattern reads a pattern the way the matcher will and reports
 // the first construct that would not be answered.
 func scanExtendedPattern(p string, o patternOpts) (patternFault, bool) {
-	if left, rights, ok := splitExclusion(p, o); ok {
+	if left, rights, ok := splitExclusion(p, &o); ok {
 		for _, part := range append([]string{left}, rights...) {
 			if f, found := scanExtendedPattern(part, o); found {
 				return f, true
@@ -539,11 +539,11 @@ func scanExtendedPattern(p string, o patternOpts) (patternFault, bool) {
 			p, closable = p[1:], false
 			continue
 		}
-		item, rest, ok := splitClosableItem(p, o)
+		item, rest, ok := splitClosableItem(p, &o)
 		if !ok {
 			break
 		}
-		if body, _, _, isGroup := splitGroup(item, o); isGroup {
+		if body, _, _, isGroup := splitGroup(item, &o); isGroup {
 			for _, arm := range alternatives(body) {
 				if f, found := scanExtendedPattern(arm, o); found {
 					return f, true

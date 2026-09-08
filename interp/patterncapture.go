@@ -87,6 +87,155 @@ type matchWhere struct {
 	// caps is where the groups of the trial now running report themselves,
 	// and is replaced for each trial.
 	caps *captures
+	// asked counts the questions put to matchHere against the pattern and
+	// subject below, and dead is the ones that came back false. See
+	// memoThreshold for why the count exists at all.
+	asked int
+	dead  map[uint64]struct{}
+	// deadWide is the same memo for a pattern or subject too large to pack
+	// into one integer. Two maps rather than one, and the reason is
+	// measured: Go specializes a map whose key is a single 64-bit integer
+	// and that specialization is the whole of the win here — 1.14s to 0.78s
+	// on the #1383 configuration. Narrowing the struct's fields to uint32
+	// instead, which is the obvious cheaper change, bought nothing at all
+	// (1.13s), because what costs is hashing a struct rather than the
+	// number of bytes in it.
+	//
+	// The fallback exists rather than a size limit because the alternative
+	// to a memo is not slowness, it is the startup that never finished. A
+	// 64KB subject in a substitution is an ordinary thing for a script to
+	// produce, and it must not quietly become unbounded work — nor may the
+	// packing silently alias two questions into one, which is what a
+	// fixed-width field does when the value overflows it.
+	deadWide map[matchKey]struct{}
+	// packable is whether this pattern and subject fit the packed key, asked
+	// once per match rather than per question.
+	packable bool
+	// pattern and subject are what dead's answers are *about*, and what
+	// says when they have to be thrown away.
+	//
+	// Not per trial, which is the whole point and was worth a measurement to
+	// learn. A trim tries every prefix of one subject and each prefix is a
+	// trial, so a memo dropped per trial is rebuilt from nothing several
+	// hundred times over — 509 times, in the configuration #1383 came from,
+	// which is why that startup still did not finish once the constructs in
+	// front of it stopped refusing and the string reached its full length.
+	//
+	// Sharing them is sound because a key indexes the **subject**, not the
+	// piece: matchHere's `at` is an absolute offset into the subject and `s`
+	// is always a slice of it, so two trials asking (pp, plen, at, slen) are
+	// asking about literally the same two substrings and must get the same
+	// answer. `(#e)` is the case that could have broken it and does not —
+	// it compares a position against total, which is len(subject) and so is
+	// the same in every trial, which is exactly why total is the subject's
+	// length rather than the piece's.
+	//
+	// They are compared rather than assumed equal because one options value
+	// is reused across *different* subjects too: pathname expansion matches
+	// every name in a directory with one of them. That is the direction that
+	// gives wrong answers rather than slow ones, so the check is the guard,
+	// not an optimisation of it.
+	pattern string
+	subject string
+	// ready distinguishes "no pattern and no subject seen yet" from "the
+	// empty pattern against the empty subject", which are the same two
+	// strings and not the same state. Without it a matchWhere's zero value
+	// *is* a legitimate pair, so the first match of `""` against `""` skips
+	// the setup below it and runs with packable false — harmless there, and
+	// exactly the kind of accident that stops being harmless when someone
+	// adds a third field to this block.
+	ready bool
+}
+
+// matchKey names one question put to matchHere, exactly.
+//
+// A question is "does the pattern from pp, for plen bytes, match the subject
+// from at, for slen bytes, folding literals this way" — and those five
+// numbers are the whole of it, which is a fact about the matcher that had to
+// be established rather than assumed:
+//
+//   - Every non-empty string matchHere is handed is a *substring* of the
+//     pattern or of the subject, never a fresh one, so a (offset, length)
+//     pair names it. Measured: instrumented against the whole of interp's
+//     and every dialect's tests, and against the configuration in #1383,
+//     not one string of either kind fell outside its root.
+//   - pp and at are those offsets and not approximations of them. Same
+//     instrumentation, comparing each against the offset recovered from the
+//     string's own data pointer: zero disagreements in 172,647 pattern and
+//     189,208 subject checks on the #1383 pattern alone. They are exact
+//     because the backreference numbering already depends on it — a `(#b)`
+//     group's number is where its `(` stands in the pattern text.
+//   - litFold is the only field of patternOpts a recursion can change.
+//     applyPatternFlags writes that and nothing else; `b`, `B`, `m` and `M`
+//     are read by planCaptures rather than by the matcher, and every other
+//     field is the dialect's answer, fixed before the match began.
+//
+// litFold is in the key **defensively**, and that is worth stating plainly
+// rather than leaving as an implied claim. Removing it survives every test
+// here, and the search for a case where it matters came back empty: one key
+// is reached under two different foldings often enough — 9,686 times over
+// this package's own patterns — but never at a position where the answer
+// could depend on it, and 400,000 randomly generated patterns of flags,
+// alternation and closures over case-varying subjects produced no
+// disagreement. That fits what the code says: the folding in force at a
+// pattern position is decided by the flags textually in front of it inside
+// the enclosing arm, and matchGroup hands the tail after a group the *outer*
+// options, so a flag never leaks out of the arm that set it and the folding
+// at a position is path-independent.
+//
+// It stays because it costs nothing — the key is compared as a unit either
+// way — and because the property keeping it unnecessary is a subtle one
+// nothing enforces. If flag scoping ever changes, a key without this field
+// answers with the wrong folding and reports no error at all.
+//
+// The subject and pattern themselves are not in the key because a trial is
+// against one of each, and the memo is reset when the trial is.
+type matchKey struct {
+	pp, plen, at, slen int
+	fold               caseFolding
+}
+
+// packBase is the largest pattern or subject length the packed key admits.
+//
+// Four fields at 15 bits each and the folding in two leaves the product below
+// 2^62, so the arithmetic below is exact rather than nearly exact — every
+// distinct question gets a distinct number, which is the only property a memo
+// key needs and the one a bit-shift silently loses on overflow.
+const packBase = 1 << 15
+
+// known reports whether this question has already been answered false.
+func (w *matchWhere) known(pp, plen, at, slen int, f caseFolding) bool {
+	if w.packable {
+		_, dead := w.dead[packKey(pp, plen, at, slen, f)]
+		return dead
+	}
+	_, dead := w.deadWide[matchKey{pp: pp, plen: plen, at: at, slen: slen, fold: f}]
+	return dead
+}
+
+// remember writes down that this question came back false.
+func (w *matchWhere) remember(pp, plen, at, slen int, f caseFolding) {
+	if w.packable {
+		if w.dead == nil {
+			w.dead = make(map[uint64]struct{})
+		}
+		w.dead[packKey(pp, plen, at, slen, f)] = struct{}{}
+		return
+	}
+	if w.deadWide == nil {
+		w.deadWide = make(map[matchKey]struct{})
+	}
+	w.deadWide[matchKey{pp: pp, plen: plen, at: at, slen: slen, fold: f}] = struct{}{}
+}
+
+// packKey folds the five numbers into one, and is only ever called where
+// packable said they fit.
+func packKey(pp, plen, at, slen int, f caseFolding) uint64 {
+	n := uint64(pp)
+	n = n*packBase + uint64(plen)
+	n = n*packBase + uint64(at)
+	n = n*packBase + uint64(slen)
+	return n*4 + uint64(f)
 }
 
 // captures is where a match reports itself, and is shared by pointer because
@@ -181,7 +330,7 @@ func planCaptures(pattern string, o patternOpts) capturePlan {
 // which is what the *top level* of a pattern is asked for and what a nested
 // group's answer is deliberately thrown away.
 func planWalk(p string, base int, capturing, whole bool, o patternOpts, pl *capturePlan) bool {
-	if left, rights, ok := splitExclusion(p, o); ok {
+	if left, rights, ok := splitExclusion(p, &o); ok {
 		planWalk(left, base, capturing, whole, o, pl)
 		at := base + len(left)
 		for _, x := range rights {
@@ -207,11 +356,11 @@ func planWalk(p string, base int, capturing, whole bool, o patternOpts, pl *capt
 			p, base = p[1:], base+1
 			continue
 		}
-		item, rest, ok := splitClosableItem(p, o)
+		item, rest, ok := splitClosableItem(p, &o)
 		if !ok {
 			break
 		}
-		if body, quant, after, isGroup := splitGroup(item, o); isGroup && after == "" {
+		if body, quant, after, isGroup := splitGroup(item, &o); isGroup && after == "" {
 			bp := base + 1
 			if quant != 0 {
 				bp = base + 2

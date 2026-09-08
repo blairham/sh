@@ -9360,6 +9360,12 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the sharpest consequence of a flag that reports: the replacement text is expanded **once per match** and reads what that match wrote, so the shell with the flags prints `a<b-c>d` and `a<b:2><c:3>d`. A replacement joined once before the scan cannot say either, and would print the same `<->` twice",
 	},
 	{
+		ID: "pat/nested-alternation-over-closures-is-answered", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; x='{error}Error{ehi}:{rst} Unknown{a}'; ` +
+			`print -r -- "${x//(#b)(([\\]|(%F))([\{]([^\}]##)[\}])|([\{]([^\}]##)[\}])([^\%\{\\]#))/<$match[1]>}"`,
+		Why: "the pattern a prompt theme is made of, and the one that made this shell unusable as a daily driver (#1383): alternation nested two deep, each arm holding a `##` closure over a negated bracket, substituted across a string most of which does not match. The shell with the flags prints `<{error}Error><{ehi}:><{rst} Unknown><{a}>`. It is here for the *answer* — the cost is what #1383 was about, and the cost was never a wrong answer, which is exactly why nothing in this corpus could see it: 96% of a 7.8s startup went into this shape while every case in this file still passed. What a row here buys is that the fix for the cost cannot quietly change the reply, since a matcher that abandons a search early answers this one `miss`",
+	},
+	{
 		ID: "pat/the-walk-reports-no-match", Category: "pattern matching", SyntaxError: true,
 		Snippet: "setopt extendedglob 2>/dev/null\ntouch ax\nmatch=(zz)\n" +
 			"print -rl -- (#b)(a)* 2>&1\nprint -r -- \"[$match[1]]\"\n",

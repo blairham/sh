@@ -130,6 +130,13 @@ type declaration struct {
 	// of them decodes the value: see exportSpelledDeclaration and
 	// bareAssignmentDeclaration.
 	base int
+	// float is `typeset -F`, the float attribute, whose letter this writes
+	// and whose *precision* it does not: measured 2026-09-07, zsh lists
+	// `typeset -F 3 x=3.14159` back as `typeset -F x=3.142` — the places are
+	// in the value and the number is not written again. ksh93 writes it as a
+	// word of its own, `typeset -F 3 x=3.142`, and does not have the
+	// attribute here — see #1461.
+	float bool
 }
 
 // declarationOf gathers what the runner knows about a name. The second result
@@ -147,9 +154,10 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		unique:   r.unique[name],
 		base:     r.integerBase[name],
 	}
+	_, d.float = r.floatPrecision[name]
 	d.tied, d.hasTie = r.tieOf(name)
-	attributed := d.integer || d.readonly || d.exported || d.lower || d.upper ||
-		d.hidden || d.unique
+	attributed := d.integer || d.float || d.readonly || d.exported || d.lower ||
+		d.upper || d.hidden || d.unique
 	if r.removed[name] {
 		// `unset` took the value away; only a surviving attribute keeps the
 		// name listable.
@@ -206,6 +214,9 @@ func (r *Runner) declarableNames() []string {
 	for name := range r.integer {
 		seen[name] = true
 	}
+	for name := range r.floatPrecision {
+		seen[name] = true
+	}
 	for name := range r.lowered {
 		seen[name] = true
 	}
@@ -227,7 +238,8 @@ func (r *Runner) declarableNames() []string {
 		}
 	}
 	for name := range seen {
-		if r.removed[name] && !r.readonly[name] && !r.integer[name] &&
+		_, isFloat := r.floatPrecision[name]
+		if r.removed[name] && !r.readonly[name] && !r.integer[name] && !isFloat &&
 			!r.exported[name] && !r.lowered[name] && !r.uppered[name] &&
 			!r.hidden[name] && !r.unique[name] {
 			delete(seen, name)
@@ -418,7 +430,10 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	// measured from the same state in both. `U` comes after export and `T`
 	// after that, measured: `typeset -arxU`, `export -iU`, `typeset -lU`,
 	// `export -UT`, `typeset -aUT`, `typeset -arT`.
-	flags := d.letters("aAilurxUT")
+	// `F` sits where `i` does, which the two attributes being exclusive
+	// makes unambiguous, and before the letters measured after it: zsh lists
+	// `typeset -Fr x=1.500`, `typeset -FU x=1.500` and `export -F x=1.500`.
+	flags := d.letters("aAiFlurxUT")
 	if d.base != 0 {
 		// The base rides on the letter here — `typeset -i16 h=255` — where
 		// the other listed form writes it as a word of its own. Measured in
@@ -616,6 +631,8 @@ func (d declaration) letters(order string) string {
 			on = d.isAssoc
 		case 'i':
 			on = d.integer
+		case 'F':
+			on = d.float
 		case 'r':
 			on = d.readonly
 		case 'x':

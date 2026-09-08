@@ -86,6 +86,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.readonly = maps.Clone(r.readonly)
 	c.integer = maps.Clone(r.integer)
 	c.integerBase = maps.Clone(r.integerBase)
+	c.floatPrecision = maps.Clone(r.floatPrecision)
 	c.lowered = maps.Clone(r.lowered)
 	c.uppered = maps.Clone(r.uppered)
 	c.hidden = maps.Clone(r.hidden)

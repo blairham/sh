@@ -230,18 +230,84 @@ func integerBaseOfLiteral(text string) int {
 	return 0
 }
 
-// hasAttachedIntegerBase is `-i16`: the integer letter with a base riding on
-// it. The letter has to be one the dialect spells, or the word is somebody
-// else's bad option and not a base at all.
-func hasAttachedIntegerBase(word, known string) bool {
-	if !strings.ContainsRune(known, 'i') {
-		return false
+// declareOptionMayTakeANumber is the *syntactic* half of whether a letter's
+// argument is a number: whether it is a letter of that shape at all, asked
+// before any number has been seen.
+//
+// Split from the answer so that no dialect question is put where a script
+// wrote none — `typeset -i n` names no base and must not meet
+// Semantics.IntegerAttributeTakesABase, which is unanswered in a dialect that
+// has never been asked and refuses when it is. Taking the letters as a plain
+// string argument rather than off the runner is what keeps that guarantee
+// checkable by reading this line.
+func declareOptionMayTakeANumber(c byte, takingANumber string) bool {
+	return c == 'i' || strings.IndexByte(takingANumber, c) >= 0
+}
+
+// declareOptionTakesANumber is the answer, and the one place that decides it
+// for every letter — asked only once digits are in hand.
+//
+// `-i` reads its own axis rather than Semantics.DeclareOptionsTakingANumber
+// because that axis decides a second thing besides the parse, whether the
+// base is *recorded*, and the `integer` builtin asks it too. Two fields both
+// claiming the integer letter takes a number could disagree; one helper with
+// two sources cannot.
+func (r *Runner) declareOptionTakesANumber(c byte) bool {
+	if c == 'i' {
+		return r.takesIntegerBase()
 	}
-	at := strings.IndexByte(word[1:], 'i')
-	if at < 0 {
-		return false
+	return strings.IndexByte(r.sem().DeclareOptionsTakingANumber, c) >= 0
+}
+
+// attachedOptionNumber is `-i16` and `-F3`: a number riding on the letter
+// that takes one, rather than arriving as the word after it.
+//
+// The number is the trailing run of digits and its letter is the character
+// in front of it, which is the only reading either spelling has — a letter
+// after the digits would put them in the middle of the word, and no shell
+// spells one there. The letter has to be one the dialect claims, or the word
+// is somebody else's bad option and not a number at all.
+func (r *Runner) attachedOptionNumber(word, known string) (letter byte, digits string, ok bool) {
+	at := -1
+	for i := 1; i < len(word); i++ {
+		if word[i] >= '0' && word[i] <= '9' {
+			at = i
+			break
+		}
 	}
-	return isAllDigits(word[at+2:])
+	if at < 2 || !isAllDigits(word[at:]) {
+		return 0, "", false
+	}
+	letter = word[at-1]
+	if strings.IndexByte(known, letter) < 0 || !r.declareOptionTakesANumber(letter) {
+		return 0, "", false
+	}
+	// The answer and not the *may* half, which is what every caller wants
+	// with digits already in hand — and asking the dialect is right here for
+	// the same reason: `-i16` names a base, so a dialect with no answer for
+	// whether the letter reads one has been asked something the script did
+	// write down.
+	return letter, word[at:], true
+}
+
+// readOptionNumber takes the number an option letter named, under either
+// spelling, and reports whether the declaration goes on.
+func (r *Runner) readOptionNumber(builtin string, f *declareFlags, letter byte, written string) bool {
+	if letter == 'i' {
+		return r.readIntegerBase(builtin, f, written)
+	}
+	n, err := strconv.Atoi(written)
+	if err != nil {
+		// Not a number at all, so not this letter's argument — the callers
+		// only offer digits, so this is belt and braces rather than the
+		// check that does the work.
+		return true
+	}
+	// The letter itself is not set here. Both spellings that reach this have
+	// already written it — the detached one in the word before, the attached
+	// one in what is left of this word after the number comes off.
+	f.precision, f.precisionNamed = n, true
+	return true
 }
 
 // isAllDigits is a non-empty run of decimal digits, which is what an output

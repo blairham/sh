@@ -997,12 +997,24 @@ func Semantics() interp.Semantics {
 	// builtin's worth of thing and stays refused by name there.
 	s.DeclareOptions = "aAfFgHilpruUTx"
 	// `-F` is a float's precision here rather than bash's function listing,
-	// and this engine has no float attribute to record it in. Taken in
-	// silence at 0, which is what real zsh answers to every shape of it —
-	// measured, not one byte on either stream — rather than refused, which
-	// is what a caller enumerating functions with `declare -F` used to get
-	// from a shell that has nothing to say to it (#1037).
-	s.DeclareOptionsWithoutEffect = "F"
+	// and the number behind it is the letter's argument and not a name:
+	// `typeset -F 3 x=1.5` declares one name at three places and reads back
+	// `1.500`. Reading the `3` as a second name made a plugin loader's
+	// `typeset -F 3 SECONDS=0` complain once per plugin (#1453).
+	//
+	// It was taken in *silence* before there was a float attribute to record
+	// the precision in (#1037) — right about the letter's status and stream,
+	// wrong about the value, since `typeset -F v=1.5` left `1.5` where this
+	// shell writes `1.5000000000`. Both halves are now modeled, so the
+	// letter is an attribute here rather than an entry in
+	// DeclareOptionsWithoutEffect.
+	//
+	// Nothing about the shape #1037 measured changes: a bare `declare -F` is
+	// a filtered listing of the *float* names in this shell, not a function
+	// listing, and it answers 0 with not one byte from a shell that has no
+	// floats — as does `declare -F f` over a function, which declares a
+	// float called `f` here and says nothing.
+	s.DeclareOptionsTakingANumber = "F"
 	s.LocalOptions = "aAHilpruUTx"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
@@ -1676,6 +1688,19 @@ func Apply(r *interp.Runner) {
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
+		// Whole seconds unless the parameter carries the float attribute,
+		// which is how a script asks this one to count in fractions:
+		// `typeset -F 3 SECONDS=0` is what a plugin loader opens with and
+		// what it reads back to time itself (#1453). Measured 2026-09-07 —
+		// three places after `-F 3`, ten after a bare `-F`, and whole
+		// seconds with neither.
+		//
+		// The producer asks rather than the attribute reaching it, because a
+		// counted value never passes through the fold every stored name
+		// does: there is nothing to fold until the moment of the read.
+		if places, ok := rr.FloatPlacesOf("SECONDS"); ok {
+			return strconv.FormatFloat(rr.SecondsFrom(), 'f', places, 64)
+		}
 		return strconv.Itoa(int(rr.SecondsFrom()))
 	})
 	// A NUL as well as the three whitespace characters, which is zsh's alone.

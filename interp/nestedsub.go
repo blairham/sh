@@ -42,7 +42,7 @@ import (
 // nestedWords reports, so a missing element is *unset* — measured,
 // `a=(x y); ${${a}[9]-none}` is `none` rather than empty — and an element
 // holding the empty string is set.
-func (r *Runner) nestedSubscript(e *syntax.ParamExpr) (words []string, set bool) {
+func (r *Runner) nestedSubscript(e *syntax.ParamExpr) (words []string, set, isList bool) {
 	span := e.Inner.Spans[0]
 	if name, isRef := r.nestedParamReference(span); isRef {
 		// The subscript, the flag group and the written text, on the name
@@ -53,46 +53,54 @@ func (r *Runner) nestedSubscript(e *syntax.ParamExpr) (words []string, set bool)
 			Name: name, Index: e.Index, IndexFlags: e.IndexFlags, Src: e.Src,
 		}
 		elems, _ := r.arraySubscript(ref)
-		return r.nestedSubscriptResult(e, elems)
+		// The reference *is* that parameter, so the subscript's shape is the
+		// one it would have on the name itself.
+		return r.nestedSubscriptResult(e, elems, r.subscriptYieldsAList(ref))
 	}
 	src, ok := r.nestedSubscriptSource(e, span)
 	if !ok {
-		return []string{""}, false
+		return []string{""}, false, false
 	}
 	if e.IndexFlags != nil {
 		search, sok := r.subscriptSearch(e)
 		if !sok {
 			// A letter the group does not carry, refused by name inside.
-			return []string{""}, false
+			return []string{""}, false, false
 		}
 		if search != 0 {
 			elems, _ := r.searchSubscript(e, search, src)
-			return r.nestedSubscriptResult(e, elems)
+			return r.nestedSubscriptResult(e, elems, false)
 		}
 	}
 	elems, _ := r.subscriptOver(e, src)
-	return r.nestedSubscriptResult(e, elems)
+	return r.nestedSubscriptResult(e, elems, !src.scalar && r.subscriptSelectsElements(e))
+}
+
+// subscriptSelectsElements reports whether this subscript names several of
+// the values it reads rather than one of them — `[@]`, `[*]` and a range.
+//
+// The list half of subscriptYieldsAList, asked without the name that one
+// consults: a subscript on a nested expansion has no name to ask about, and
+// whether what it reads is a list of elements or one string read as
+// characters is the caller's own `scalar` flag.
+func (r *Runner) subscriptSelectsElements(e *syntax.ParamExpr) bool {
+	return r.wholeArrayIndex(e) || r.subscriptIsARange(e)
 }
 
 // nestedSubscriptResult is what the subscript came to, as the value and the
 // set-ness of the expansion around it.
-func (r *Runner) nestedSubscriptResult(e *syntax.ParamExpr, elems []string) ([]string, bool) {
+func (r *Runner) nestedSubscriptResult(e *syntax.ParamExpr, elems []string, list bool) ([]string, bool, bool) {
 	if len(elems) == 0 {
 		// The subscript named nothing. One empty field and *unset*, which is
 		// what lets the outer `-` and `:-` substitute their word.
-		return []string{""}, false
+		return []string{""}, false, false
 	}
-	if len(elems) > 1 {
-		// `${${a}[@]}` and `${${a}[1,2]}` are a list in the shell with the
-		// grammar, and a list standing where a nested expansion's value goes
-		// is the other shape this surface has not built — refused by its own
-		// name, next door, and refused here in the same words rather than
-		// joined into one plausible field.
-		r.diagf("${%s}: a nested expansion of a list is not implemented\n", e.Src)
-		r.expandErr = true
-		return []string{""}, false
-	}
-	return elems, true
+	// `${${a}[@]}` and `${${a}[1,2]}` are a list, exactly as the same
+	// subscripts on a name are: measured, `${${a[@]}[@]}` is one field per
+	// element and `"${${a[@]}[1,2]}"` is one field holding the two joined.
+	// More than one element says so outright; the shape says so at one,
+	// which is what `${#${a[@]}[@]}` on a single-element array reads.
+	return elems, true, list || len(elems) > 1
 }
 
 // nestedParamReference reports the name a `${(P)…}` inner resolves to.

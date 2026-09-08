@@ -91,6 +91,20 @@ func TestAnExpansionStandsWhereANameWould(t *testing.T) {
 			}
 		})
 	}
+	// The element boundary is the thing a join destroys and no later
+	// splitting puts back, so it is asserted with a separator *inside* an
+	// element rather than with a count — and with the splitting axis pinned,
+	// because a dialect that splits an unquoted expansion takes that boundary
+	// apart again for reasons of its own. The shell with this grammar does
+	// not split.
+	unsplit := func(r *Runner) {
+		sem := *r.Semantics
+		sem.SplitParamExpansion = No
+		r.Semantics = &sem
+	}
+	if out, st := runGrammar(t, `a=("one two" three); printf "[%s]" ${${a[@]}}`, nesting, unsplit); out != "[one two][three]" || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, "[one two][three]")
+	}
 }
 
 // The inner expansion is the whole of the name position.
@@ -114,24 +128,53 @@ func TestTextBesideANestedExpansionIsNotAName(t *testing.T) {
 	}
 }
 
-// One shape is read and not implemented, and it says which.
+// An inner that comes to a **list** keeps every one of its elements, and the
+// outer half applies to all of them.
 //
-// This is the half that keeps the gap findable: an inner that comes to a list
-// keeps its fields in the shell with the grammar and the outer operator then
-// applies to each of them. Joining them would answer with one plausible field
-// and say nothing, which is how the *last* gap on this surface stayed hidden.
+// This shape was refused by name, and one spelling slipped past the refusal:
+// an inner that had already lost its elements is a list of *one*, which joins
+// to a plausible field at status 0 and says nothing (#1509). So every
+// assertion here is on the elements themselves — a one-element list and a
+// two-element list differ in the count and in the status too, and only the
+// elements say which of the two this is.
 //
-// The subscript that was refused beside it is built — see
-// interp/nestedsub_test.go, which carries the shapes *it* does not reach and
-// the same rule about naming them.
-func TestTheNestedShapesNotBuiltSayWhichTheyAre(t *testing.T) {
-	const src = `a=(one two); printf "[%s]" "${${a[@]}}"`
-	out, st := runGrammar(t, src, nesting, nil)
-	if want := "sh: ${${a[@]}}: a nested expansion of a list is not implemented\n"; out != want {
-		t.Errorf("output = %q, want %q", out, want)
-	}
-	if st == 0 {
-		t.Errorf("status 0, want the unbuilt shape refused")
+// Measured on zsh 5.9.2, the one panel shell with the grammar. The elements
+// survive quoting as a *join*, which is the reading a nesting with no
+// subscript of its own has: `"${${a[@]}}"` is one field holding both, where
+// `"${${a[@]}[@]}"` — the subscript said outright — is one field each. See
+// nestedsub_test.go for that half.
+func TestANestedInnerThatIsAListKeepsItsElements(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"unquoted, one field per element", `a=(one two); printf "[%s]" ${${a[@]}}`, "[one][two]"},
+		{"quoted, one field with them joined", `a=(one two); printf "[%s]" "${${a[@]}}"`, "[one two]"},
+		// The element boundary is the thing a join destroys and no later
+		// splitting puts back, so it is asserted with a space inside an
+		// element rather than with a count.
+		{"the operator applies to each element", `a=(one two); printf "[%s]" ${${a[@]}#o}`, "[ne][two]"},
+		{"and the quoted spelling joins what it made", `a=(one two); printf "[%s]" "${${a[@]}#o}"`, "[ne two]"},
+		{"a substring slices the list", `a=(one two three); printf "[%s]" ${${a[@]}:1}`, "[two][three]"},
+		{"an exclusion drops an element", `a=(one two); printf "[%s]" ${${a[@]}:#two}`, "[one]"},
+		{"a length counts the elements", `a=(one two); printf "n=%s" ${#${a[@]}}`, "n=2"},
+		// The count is where one element is not the same question as one
+		// string: `${#${v}}` on the same five characters is 5.
+		{"one element is counted, not measured", `a=(hello); printf "n=%s" ${#${a[@]}}`, "n=1"},
+		// And an inner that produced no field at all is not a list of one
+		// empty field: measured, `a=(); ${#${a[@]}}` is 0 where a list
+		// holding one empty element would answer 1.
+		{"an empty inner counts as none", `a=(); printf "n=%s" ${#${a[@]}}`, "n=0"},
+		{"a further nesting keeps them", `a=(one two); printf "[%s]" ${${${a[@]}}}`, "[one][two]"},
+		{"and joins them when the outermost is quoted", `a=(one two); printf "[%s]" "${${${a[@]}}}"`, "[one two]"},
+		// An empty inner is not a list, and the colon test still fires on it.
+		{"an empty inner still takes its default", `a=(); printf "[%s]" ${${a[@]}:-d}`, "[d]"},
+		{"a set list does not", `a=(one two); printf "[%s]" ${${a[@]}:-d}`, "[one][two]"},
+		{"an alternate over a list is its own word", `a=(one two); printf "[%s]" ${${a[@]}:+y}`, "[y]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runGrammar(t, tc.src, nesting, nil)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
 	}
 }
 
@@ -211,38 +254,30 @@ func TestANestedValueCarriesNoGlobMarks(t *testing.T) {
 	}
 }
 
-// TestANestedBareArrayNameRefusesLikeTheSubscriptedOne — the bare spelling
-// reaches the same unbuilt shape, now that a bare array name is the list where
+// TestANestedBareArrayNameIsTheListLikeTheSubscriptedOne — the bare spelling
+// reaches the same construct, now that a bare array name is the list where
 // the dialect says so (#929).
 //
 // `${${a}}` and `${${a[@]}}` are one construct in the shell that has the
 // grammar — measured, both are `[one][two]` there — so they must not be one
-// refusal and one plausible answer here. Before #929 the bare inner joined to
-// a single field and this expansion returned `one two` at status 0, which is
-// the silent half of exactly the gap the diagnostic above exists to keep
-// findable.
-//
-// **Unquoted**, both of them, and that is the whole of what is left unbuilt:
-// quoted, the inner joins before the outer operator sees it — `"${${a}#o}"`
-// is `ne two` — which is a value rather than a list and is answered. See
-// nestedInnerSpan.
-func TestANestedBareArrayNameRefusesLikeTheSubscriptedOne(t *testing.T) {
+// answer and one refusal here, nor one answer and one *plausible* answer.
+// Before #929 the bare inner joined to a single field and this expansion
+// returned `one two` at status 0, which is the silent shape of the same gap.
+func TestANestedBareArrayNameIsTheListLikeTheSubscriptedOne(t *testing.T) {
 	listly := func(r *Runner) {
 		sem := *r.Semantics
 		sem.ArrayScalarIsTheWholeArray = Yes
 		sem.ArrayNameWithoutSubscriptIsTheList = Yes
 		r.Semantics = &sem
 	}
-	for _, src := range []string{
-		`a=(one two); printf "[%s]" ${${a}}`,
-		`a=(one two); printf "[%s]" ${${a}#o}`,
+	for _, tc := range []struct{ src, want string }{
+		{`a=(one two); printf "[%s]" ${${a}}`, "[one][two]"},
+		{`a=(one two); printf "[%s]" ${${a}#o}`, "[ne][two]"},
+		{`a=(one two); printf "n=%s" ${#${a}}`, "n=2"},
 	} {
-		out, st := runGrammar(t, src, nesting, listly)
-		if !strings.Contains(out, "a nested expansion of a list is not implemented") {
-			t.Errorf("%s: got %q, want the list shape refused by name", src, out)
-		}
-		if st == 0 {
-			t.Errorf("%s: status 0, want the unbuilt shape refused", src)
+		out, st := runGrammar(t, tc.src, nesting, listly)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s: got %q (status %d), want %q at 0", tc.src, out, st, tc.want)
 		}
 	}
 	// Quoted, the same characters are a joined value and the operator applies

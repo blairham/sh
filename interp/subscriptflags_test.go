@@ -631,3 +631,48 @@ func TestTheSubscriptFlagsStillUnbuiltOverAnAssociation(t *testing.T) {
 		}
 	}
 }
+
+// `(k)` and `(v)` reach an association through a **subscript** too, and the
+// subscript decides only which pairs are selected — never which half of each
+// is substituted.
+//
+// This path had an answer of its own and it was the values, whatever the
+// letters said: `${(kv)m[@]}` came back one field per value, half the list,
+// at status 0. The construct is not a corner — a plugin manager serializes an
+// ice spec with `${(j: :)${(qkv)ICE[@]}}` and reads its own options back with
+// `${(kv)OPTS[@]}` — and half a list is exactly the shape that reads as a
+// legitimate one.
+//
+// Measured on zsh 5.9.2 with `typeset -A m=(a 1 b 2)`. The single-key row is
+// the one that is not symmetric: `${(k)m[b]}` is the key, while `${(kv)m[b]}`
+// and `${(v)m[b]}` are both the value, so `v` beside `k` puts the pair's
+// other half back rather than adding to it.
+func TestTheKeyAndValueLettersReachASubscriptedAssociation(t *testing.T) {
+	const m = `typeset -A m=(a 1 b 2); `
+	for _, tc := range []struct{ name, src, want string }{
+		{"kv over the whole table", `printf "[%s]" ${(kv)m[@]}`, "[a][1][b][2]"},
+		{"k over the whole table", `printf "[%s]" ${(k)m[@]}`, "[a][b]"},
+		{"v over the whole table", `printf "[%s]" ${(v)m[@]}`, "[1][2]"},
+		{"no letter is the values", `printf "[%s]" ${m[@]}`, "[1][2]"},
+		{"the joining spelling selects the same pairs", `printf "[%s]" ${(k)m[*]}`, "[a][b]"},
+		{"quoted, the fields survive", `printf "[%s]" "${(kv)m[@]}"`, "[a][1][b][2]"},
+		{"a value holding a space stays one field", `typeset -A n=(a "1 2"); printf "[%s]" ${(kv)n[@]}`, "[a][1 2]"},
+		{"k on one key is that key", `printf "[%s]" ${(k)m[b]}`, "[b]"},
+		{"kv on one key is its value", `printf "[%s]" ${(kv)m[b]}`, "[2]"},
+		{"v on one key is its value", `printf "[%s]" ${(v)m[b]}`, "[2]"},
+		{"an absent key is nothing, not the key asked for", `printf "[%s]" ${(k)m[zz]}`, "[]"},
+		{"a sort orders the keys it was given", `printf "[%s]" ${(Ok)m[@]}`, "[b][a]"},
+		{"a search still says which half it wants", `printf "[%s]" ${(kv)m[(I)a*]}`, "[a][1]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := tc.src
+			if !strings.Contains(src, "typeset") {
+				src = m + src
+			}
+			out, status := runAssoc(t, src)
+			if out != tc.want || status != 0 {
+				t.Errorf("%s: got %q (status %d), want %q at 0", src, out, status, tc.want)
+			}
+		})
+	}
+}

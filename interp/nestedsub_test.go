@@ -366,18 +366,6 @@ bb"; printf "[%s]" "${${(f)v}[2]}"`, "[bb]"},
 func TestTheNestedSubscriptShapesNotBuiltSayWhichTheyAre(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{
-			// The result is a list, which is the other unbuilt shape on this
-			// surface and is refused in its own words next door.
-			"a subscript that comes to a list",
-			`a=(x y z); printf "[%s]" "${${a[@]}[@]}"`,
-			"a nested expansion of a list is not implemented",
-		},
-		{
-			"a range that comes to a list",
-			`a=(x y z); printf "[%s]" "${${a[@]}[1,2]}"`,
-			"a nested expansion of a list is not implemented",
-		},
-		{
 			// A command substitution is a list in that position even when it
 			// comes to one word, and this tree does not field-split an
 			// unquoted one in the name position yet (#976) — so the fields a
@@ -399,6 +387,48 @@ func TestTheNestedSubscriptShapesNotBuiltSayWhichTheyAre(t *testing.T) {
 			}
 			if st == 0 {
 				t.Errorf("status 0, want the unbuilt shape refused")
+			}
+		})
+	}
+}
+
+// A subscript that names several of the inner's elements answers with all of
+// them, and quoting decides whether they stay separate exactly as it does on
+// a name.
+//
+// The `[@]` of the *outer* is what keeps the fields here — measured on zsh
+// 5.9.2, `"${${a[@]}[@]}"` is one field per element where `"${${a[@]}}"` with
+// no subscript is one field holding the join, and a range joins like every
+// spelling that is not `@`. Both were refused by name until #1509; the
+// assertions are on the elements because a list of one and a list of three
+// differ in a count as well, and a count alone passes against either.
+func TestASubscriptOnANestedListNamesEveryElementItSelects(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"quoted, one field each", `a=(x y z); printf "[%s]" "${${a[@]}[@]}"`, "[x][y][z]"},
+		{"and the space inside one survives", `a=("p q" z); printf "[%s]" "${${a[@]}[@]}"`, "[p q][z]"},
+		{"unquoted, one field each", `a=(x y z); printf "[%s]" ${${a[@]}[@]}`, "[x][y][z]"},
+		{"the joining spelling joins", `a=(x y z); printf "[%s]" "${${a[@]}[*]}"`, "[x y z]"},
+		{"a range keeps what it selected", `a=(x y z); printf "[%s]" ${${a[@]}[1,2]}`, "[x][y]"},
+		{"and joins it in quotes", `a=(x y z); printf "[%s]" "${${a[@]}[1,2]}"`, "[x y]"},
+		{"a length counts what was selected", `a=(x y z); printf "n=%s" ${#${a[@]}[@]}`, "n=3"},
+		// One element is still the list's reading and not the string's: a
+		// character count would answer 5 here.
+		{"one element counts as one", `a=(hello); printf "n=%s" ${#${a[@]}[@]}`, "n=1"},
+		// A range that selected one element is still the *list's* reading,
+		// which is where the count says which reading ran: measured,
+		// `${#${a[@]}[1,1]}` on `(hello world)` is 1 and not 5.
+		{"a one-element range counts as one", `a=(hello world); printf "n=%s" ${#${a[@]}[1,1]}`, "n=1"},
+		// And the same range over a *string* is the string's reading, which
+		// is the other side of that line: three characters, not one field.
+		{"a range over a string counts characters", `s=hello; printf "n=%s" ${#${s}[2,4]}`, "n=3"},
+		// A subscript naming *one* element is that element, unchanged — the
+		// reading this file's other tests are about.
+		{"one element is still one element", `a=(x y z); printf "[%s]" "${${a[@]}[2]}"`, "[y]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runNestedSubscript(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
 			}
 		})
 	}

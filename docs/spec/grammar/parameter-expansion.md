@@ -1121,6 +1121,36 @@ coin flip as evidence; the sorted order this implementation yields is
 stated above and asserted in its own unit test rather than against the
 panel.
 
+### `(k)` and `(v)` read through a subscript
+
+**The subscript selects which pairs; the letters say which half of each
+is substituted.** They are two independent questions, and a plugin
+manager depends on it: it writes `${(kv)OPTS[@]}` rather than
+`${(kv)OPTS}`. Measured on zsh 5.9.2 with `typeset -A m=(a 1 b 2)`:
+
+    ${(kv)m[@]}   →  a 1 b 2   the whole table, both halves
+    ${(k)m[@]}    →  a b       the keys
+    ${(v)m[@]}    →  1 2       the values, which is also `${m[@]}`
+    ${(k)m[*]}    →  a b       the joining spelling selects the same pairs
+    ${(kv)m[(I)a*]} → a 1      a search still says which half it wants
+
+Reading the subscript alone and ignoring the letters answers with the
+**values** whatever was written — half a list, at status 0, and
+indistinguishable from a whole one (#1509).
+
+A subscript naming **one key** is not symmetric with the whole-table
+form, which is measured rather than tidy:
+
+    ${(k)m[b]}    →  b         the key
+    ${(kv)m[b]}   →  2         the value: `v` puts the other half back
+    ${(v)m[b]}    →  2         the value
+    ${(k)m[zz]}   →  ``        an absent key is nothing at all
+
+An **ordinary** array reads the same letter as its *index* —
+`${(k)x[2]}` is `2` there and `${(k)x[-1]}` is the subscript counted
+forward — which is a different question with a different source and is
+not built. It is recorded in #1515 rather than guessed at.
+
 ### The `(A)` flag is two halves
 
 `(A)` is the one flag whose whole job is a **side effect**. Measured on
@@ -2684,25 +2714,55 @@ is a list still has fields to count. Measured with `a=(p q r)`:
 That is one predicate — `@`, an `[@]` subscript, `(@)` — and it is the same
 one the rest of the expansion machinery follows for `"$@"` against `"$*"`.
 The last line is the same rule without a subscript: a quoted inner that
-joins is a *value*, so the operator applies to it once, which is why only
-the **unquoted** list shape is refused below.
+joins is a *value*, so the operator applies to it once.
+
+### An inner that comes to a list
+
+**Every element survives, and the outer half applies to all of them.**
+A nested expansion whose inner is a list is a list, and the whole of the
+expansion machinery treats it as one — which is the same statement as
+saying it goes down the same path `${a[@]}` does. Measured with
+`a=(x y z)`:
+
+    ${${a[@]}}          →  [x][y][z]   one field per element
+    "${${a[@]}}"        →  [x y z]     quoted, joined on IFS
+    ${${a[@]}#x}        →  [y][z]      the operator applies to each …
+    "${${a[@]}#x}"      →  [ y z]      … and the quotes join what it made
+    ${${a[@]}:1}        →  [y][z]      a slice slices the *list*
+    ${${a[@]}:#y}       →  [x][z]      a filter drops an element
+    ${#${a[@]}}         →  3           and a length counts them
+    ${${${a[@]}}}       →  [x][y][z]   through a further nesting
+    ${(j:-:)${a[@]}}    →  [x-y-z]     a flag group joins all of them
+
+**Quoting joins where the outer wears no subscript, and the outer's own
+subscript decides it where it does** — the inner's `[@]` is what made the
+result a list, not a statement about the fields the outer keeps:
+
+    "${${a[@]}}"        →  [x y z]
+    "${${a[@]}[@]}"     →  [x][y][z]
+    "${${a[@]}[*]}"     →  [x y z]
+    "${${a[@]}[1,2]}"   →  [x y]
+
+**A length counts elements rather than characters**, which is where a
+list of one is not the same thing as a string: `a=(hello); ${#${a[@]}}`
+is 1 where `s=hello; ${#${s}}` is 5. The list-ness is the inner
+expansion's shape, asked with the same predicate the subscript reading
+above uses.
+
+The headline use is a plugin manager serializing an associative array:
+`${(j: :)${(qkv)ICE[@]}}` is one field per key *and* per value, joined.
+An implementation that lost half of the inner still had a list, so the
+join produced a plausible answer at status 0 and nothing said it was half
+the spec (#1509).
 
 ### What is read and not implemented
 
-Three shapes are recognized and refused **by name**, because answering
-them approximately is the failure this document exists to prevent:
+One shape is recognized and refused **by name**, because answering it
+approximately is the failure this document exists to prevent:
 
-    ${${a[@]}}          an unquoted inner that comes to a list
-    ${${a[@]}[@]}       a subscript that comes to one
     ${$(cmd)[2]}        a subscript on a command substitution
 
-In zsh the first keeps its fields and the outer operator applies to each
-of them — `${${a}#o}` on `(one two)` is `ne` and `two` — and the second
-is a list for the same reason. Joining either would answer with one
-plausible field and say nothing, so both say `a nested expansion of a
-list is not implemented`.
-
-The third is refused for a reason that is recorded rather than guessed
+It is refused for a reason that is recorded rather than guessed
 at. An unquoted command substitution is a **list** in that position even
 when it comes to one word — `${$(echo abc)[2]}` is empty where a string
 would have answered `b`, and `${$((6*7))[1]}` is `42` where a string
@@ -2710,6 +2770,9 @@ would have answered `4` — and this tree does not field-split an unquoted
 substitution in the name position yet (#976), so the fields a subscript
 would count are not the shell's. Its quoted spelling is refused with it,
 since the same gap decides what `${"$(cmd)"[2]}` came to.
+
+An arithmetic substitution is refused in the same words and for the same
+reason: `${$((6*7))[1]}`.
 
 ## Dialect flags
 

@@ -46007,6 +46007,50 @@
         "TimedOut": false
       }
     },
+    "functions/a-math-function-registered-twice": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: functions: command not found~\u003cscript\u003e: line 3: functions: command not found~\u003cscript\u003e: line 4: functions: command not found~\u003cscript\u003e: line 5: functions: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: functions: command not found~\u003cscript\u003e: line 3: functions: command not found~\u003cscript\u003e: line 4: functions: command not found~\u003cscript\u003e: line 5: functions: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: functions: command not found~\u003cscript\u003e: line 3: functions: command not found~\u003cscript\u003e: line 4: functions: command not found~\u003cscript\u003e: line 5: functions: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: functions: not found~\u003cscript\u003e: 3: functions: not found~\u003cscript\u003e: 4: functions: not found~\u003cscript\u003e: 5: functions: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[2]: typeset: a: unknown mapping name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "functions -M a 2 2 g~functions -M b 1 1 g",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "functions/a-math-function-that-evaluates-nothing": {
       "bash": {
         "Stdout": "",

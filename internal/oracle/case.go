@@ -8367,6 +8367,12 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "`functions -M` with no operands lists, most recently registered first, in the form that would make each one — and the form elides what a re-registration would default to, so `mm 2 2` says itself back as `functions -M mm 2` while `mf 1 1 g` keeps both counts because the implementation operand is positional. `+M` is the removal spelling; `unfunction -M` is a bad option. With operands, `-M` always *registers* and never filters the listing, which is why the whole facility has exactly one listing form",
 	},
 	{
+		ID: "functions/a-math-function-registered-twice", Category: "declarations",
+		Script:  true,
+		Snippet: "g() { :; }\nfunctions -M a 1 1 g\nfunctions -M b 1 1 g\nfunctions -M a 2 2 g\nfunctions -M\n",
+		Why:     "a second registration of a name replaces the first and moves it to the *front* of the listing rather than keeping the place the first one gave it — `a 2 2` then `b`, where a table keyed on first sight would say `b` then `a`. The order is arrival and nothing else, which is also what says the listing is not sorted: registering three names alphabetically lists them backwards",
+	},
+	{
 		ID: "functions/the-name-a-math-function-runs-under", Category: "declarations",
 		Script:  true,
 		Snippet: "g() { echo \"0=$0 #=$# *=$*\"; }\nfunctions -M -- mf 0 3 g\n: $(( mf(1+1,2*3) ))\n",

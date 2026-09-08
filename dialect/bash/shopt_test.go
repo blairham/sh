@@ -5,6 +5,7 @@ package bash_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/dialecttest"
 )
 
 // What `shopt` does here is what bash 5.3 was measured doing: the listing
@@ -279,14 +281,13 @@ func TestShoptHistoryNamesAreOnAndTheRestStayRefused(t *testing.T) {
 			t.Errorf("shopt -u %s = %q status %d, want a refusal", name, out, st)
 		}
 	}
-	// Refused, because nothing here implements them. checkwinsize is in this
-	// list rather than the one above on the measurement: the name promises
-	// LINES and COLUMNS move with the window and this shell never assigns
-	// either, so granting it would be exactly the quiet lie #1352 named.
-	for _, name := range []string{
-		"checkwinsize", "cdspell", "dirspell",
-		"no_empty_cmd_completion", "autocd", "checkjobs",
-	} {
+	// Refused, because nothing here implements them. The list is three names
+	// shorter than it was: #1445 built `checkwinsize`, `autocd` and
+	// `no_empty_cmd_completion`, and each of those is asserted by behavior
+	// below rather than by its bit. What is left is refused for the reason
+	// this test exists — granting one would be exactly the quiet lie #1352
+	// named.
+	for _, name := range []string{"cdspell", "dirspell", "checkjobs"} {
 		out, st := runBash(t, t.TempDir(), "shopt -s "+name)
 		if st != 1 || !strings.Contains(out, "shopt: "+name+": not implemented") {
 			t.Errorf("shopt -s %s = %q status %d, want a refusal by name", name, out, st)
@@ -519,5 +520,145 @@ func TestShoptListsEveryNameExactlyOnce(t *testing.T) {
 	driver.MainArgs(bashShell(&out, &errs), []string{"bash", "-c", "shopt -p expand_aliases"})
 	if got, want := out.String(), "shopt -u expand_aliases\n"; got != want {
 		t.Errorf("shopt -p expand_aliases = %q, want %q", got, want)
+	}
+}
+
+// `shopt -s checkwinsize` is a real switch now, and the assertion is not that
+// the bit moved.
+//
+// A table that stored any value at all would pass a `shopt -s name; shopt -q
+// name` round trip, which is why this reads the state through the seam the
+// front end reads it through: interp.Runner.TracksWindowSize is what repl
+// consults before it assigns $LINES and $COLUMNS, so a name wired to nothing
+// would show here as a switch that never moved.
+//
+// The default is on, which is bash 5.3.15's own — `shopt checkwinsize` there
+// answers `on` with nothing in a startup file — and is the one place this
+// dialect is deliberately not bash 3.2.57's, which answers `off`.
+func TestCheckwinsizeMovesTheShellsWindowTracking(t *testing.T) {
+	r := preset.Runner(dialecttest.Base{Dir: t.TempDir()})
+	if !r.TracksWindowSize() {
+		t.Error("a fresh bash does not track the window size, but `shopt checkwinsize` is on in bash 5.3.15")
+	}
+	out, st := runBash(t, t.TempDir(), `shopt checkwinsize`)
+	if want := "checkwinsize        \ton\n"; out != want || st != 0 {
+		t.Errorf("shopt checkwinsize = %q status %d, want %q status 0", out, st, want)
+	}
+	// And it moves in both directions, through the same seam.
+	for _, tc := range []struct {
+		src  string
+		want bool
+	}{
+		{`shopt -u checkwinsize`, false},
+		{`shopt -u checkwinsize; shopt -s checkwinsize`, true},
+	} {
+		r := preset.Runner(dialecttest.Base{Dir: t.TempDir()})
+		f := preset.Parse(t, tc.src)
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatalf("%s: %v", tc.src, err)
+		}
+		if got := r.TracksWindowSize(); got != tc.want {
+			t.Errorf("%s: TracksWindowSize() = %v, want %v", tc.src, got, tc.want)
+		}
+	}
+}
+
+// `shopt -s autocd` reads a bare directory name as a `cd`, and the test is the
+// directory the shell ends up in rather than the bit.
+//
+// Three claims, and the middle one is the reason a corpus row could not carry
+// this: the name is interactive-only in bash as well, so the same snippet has
+// to move an interactive shell and *not* move a script.
+func TestAutocdReadsADirectoryNameAsACd(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	interactive := dialecttest.Base{Dir: dir, Vars: map[string]string{"PATH": dir}, Interactive: true}
+	out, st, err := preset.Combined(t, interactive, `shopt -s autocd; sub; pwd`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The `cd -- sub` bash writes before it moves, then where it moved to.
+	if want := "cd -- sub\n" + filepath.Join(dir, "sub") + "\n"; out != want || st != 0 {
+		t.Errorf("out %q status %d, want %q status 0", out, st, want)
+	}
+	// Off, the same word is a command that is not there — which is also what
+	// the shell said before this option existed.
+	out, st, err = preset.Combined(t, interactive, `sub; pwd`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "sub: command not found") || !strings.HasSuffix(out, dir+"\n") || st != 0 {
+		t.Errorf("without the option: out %q status %d, want a command-not-found and no move", out, st)
+	}
+	// And a script does not get it even with the option on, which is
+	// measured: `bash -c 'shopt -s autocd; sub'` is `command not found` at
+	// 127 in bash 5.3.15.
+	script := dialecttest.Base{Dir: dir, Vars: map[string]string{"PATH": dir}}
+	out, st, err = preset.Combined(t, script, `shopt -s autocd; sub; pwd`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "sub: command not found") || !strings.HasSuffix(out, dir+"\n") || st != 0 {
+		t.Errorf("in a script: out %q status %d, want a command-not-found and no move", out, st)
+	}
+}
+
+// A directory does not shadow a command, which is the condition that keeps
+// `autocd` a fallback rather than a lookup order.
+//
+// Measured: with a *directory* named `echo` in the working directory and the
+// option on, bash 5.3.15 still prints with the builtin.
+func TestAutocdDoesNotShadowACommand(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "echo"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, st, err := preset.Combined(t,
+		dialecttest.Base{Dir: dir, Vars: map[string]string{"PATH": dir}, Interactive: true},
+		`shopt -s autocd; echo hi; pwd`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "hi\n" + dir + "\n"; out != want || st != 0 {
+		t.Errorf("out %q status %d, want %q status 0", out, st, want)
+	}
+}
+
+// `shopt -s no_empty_cmd_completion` turns the completer's empty-word answer
+// *off*, which is the one entry in this dialect's table whose sense is
+// inverted — so the round trip is asserted against the capability rather than
+// against the name.
+//
+// The capability starts on here: this shell answers an empty command word with
+// everything that could run, so the shell is in the option's off state and
+// `shopt -s` is a request to change behavior. A table that stored the option's
+// own bit would have granted it by writing a `true` that meant "on".
+func TestNoEmptyCmdCompletionInvertsTheCapability(t *testing.T) {
+	for _, tc := range []struct {
+		src           string
+		wantOption    string
+		wantCompletes bool
+	}{
+		{`shopt no_empty_cmd_completion`, "off", true},
+		{`shopt -s no_empty_cmd_completion; shopt no_empty_cmd_completion`, "on", false},
+		{`shopt -s no_empty_cmd_completion; shopt -u no_empty_cmd_completion; shopt no_empty_cmd_completion`, "off", true},
+	} {
+		var buf strings.Builder
+		base := dialecttest.Base{Dir: t.TempDir(), Stdout: &buf, Stderr: &buf}
+		r := preset.Runner(base)
+		if _, err := r.Run(context.Background(), preset.Parse(t, tc.src)); err != nil {
+			t.Fatalf("%s: %v", tc.src, err)
+		}
+		// The name is longer than the listing width, so it is written whole
+		// and the tab follows it — which is what bash does with it too.
+		want := "no_empty_cmd_completion\t" + tc.wantOption + "\n"
+		if buf.String() != want {
+			t.Errorf("%s printed %q, want %q", tc.src, buf.String(), want)
+		}
+		if got := r.CompletesEmptyCommandWord(); got != tc.wantCompletes {
+			t.Errorf("%s: CompletesEmptyCommandWord() = %v, want %v", tc.src, got, tc.wantCompletes)
+		}
 	}
 }

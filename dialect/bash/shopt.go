@@ -33,7 +33,7 @@ var shoptModes = map[string]interp.MatchOption{
 }
 
 // shoptSwitches are the names wired to a switch the core holds rather than to
-// the matcher — the second kind of "really implemented", and today one name.
+// the matcher — the second kind of "really implemented".
 //
 // `expand_aliases` is the option a bash script has to set before an alias
 // means anything, which is why an alias case could not be written for bash at
@@ -41,6 +41,38 @@ var shoptModes = map[string]interp.MatchOption{
 // the alias is expanded afterwards and not expanded before, and `shopt -u`
 // mid-script stops it again — measured in bash 5.3 and bash 3.2 alike, on all
 // three non-interactive routes.
+//
+// The three below were in shoptStates until #1445, refused there for the only
+// reason a refusal is allowed here: nothing implemented them. Each names a
+// capability the core now holds, and in every case the *capability* is in
+// interp or repl and only the *spelling* is here — `autocd` is zsh's name for
+// the same behavior as well, and the two dialects wire one switch rather than
+// each carrying a copy.
+//
+// Two of them are interactive-only in bash too, so none of this was askable on
+// the `-c` route; the observables below were measured through a
+// pseudo-terminal against bash 5.3.15 on 2026-09-08.
+//
+//   - checkwinsize. $LINES and $COLUMNS follow the window. Measured: bash
+//     reports `COLUMNS=80 LINES=24` at its first prompt on an 80x24 terminal
+//     and `132`/`40` at the next prompt after a resize; ours reported both
+//     unset throughout, which is what #1429 refused it on. repl asks the
+//     terminal once per prompt and assigns them — see repl.Shell's
+//     trackWindowSize. Not exported, which is measured too.
+//   - autocd. A bare directory name is a `cd`. Measured: `subdir` moves
+//     there and writes `cd -- subdir`, a *directory* named `echo` does not
+//     shadow the `echo` builtin, and `nosuchdir` is still `command not
+//     found`. See interp.Runner.autoCdInstead, which is where all three of
+//     those conditions live.
+//   - no_empty_cmd_completion. The one most likely to be misread, because the
+//     name is a negative and the honest answer used to look like the lazy
+//     one. It asks that completion on an empty command word *not* search
+//     PATH. This shell searched it, so the shell sat in the option's off
+//     state and `shopt -s` was a request to change behavior rather than to
+//     confirm it — which is why it could not be granted by writing `true`
+//     into a table. The core switch is positive
+//     (interp.Runner.CompletesEmptyCommandWord) and the inversion happens
+//     here, in the one place the name's sense is decided.
 var shoptSwitches = map[string]struct {
 	get func(*interp.Runner) bool
 	set func(*interp.Runner, bool)
@@ -48,6 +80,23 @@ var shoptSwitches = map[string]struct {
 	"expand_aliases": {
 		get: (*interp.Runner).AliasExpansion,
 		set: (*interp.Runner).SetAliasExpansion,
+	},
+	"checkwinsize": {
+		get: (*interp.Runner).TracksWindowSize,
+		set: (*interp.Runner).SetTracksWindowSize,
+	},
+	"autocd": {
+		get: (*interp.Runner).AutoCd,
+		set: (*interp.Runner).SetAutoCd,
+	},
+	// The inverted one, and the only entry in this file that is not a
+	// straight pair. bash names the *suppression*, so the option being on is
+	// the capability being off; writing it the other way round would have
+	// `shopt -s no_empty_cmd_completion` ask for more completion rather than
+	// less.
+	"no_empty_cmd_completion": {
+		get: func(r *interp.Runner) bool { return !r.CompletesEmptyCommandWord() },
+		set: func(r *interp.Runner, on bool) { r.SetCompletesEmptyCommandWord(!on) },
 	},
 }
 
@@ -89,95 +138,92 @@ var shoptSwitches = map[string]struct {
 // history file, to split a construct into a line each, or to join one with
 // semicolons.
 //
-// checkwinsize is the one the issue that prompted this expected to be true
-// and it is not, which is why it is measured here and not reasoned about.
-// The name asks for LINES and COLUMNS to be updated, and this shell never
-// assigns either: under a terminal resized from 80x24 to 132x40, bash moves
-// `$COLUMNS` and `$LINES` with it and ours reports both unset throughout.
-// The editor's own width is always current — repl/winsize_unix.go asks the
-// terminal on every draw — but that is not the variable the name promises,
-// and granting it would tell a startup file that `$COLUMNS` tracks the
-// window when nothing here makes it.
+// Three of the names #1445 collected are still refused, and each is refused
+// for the only reason a refusal is allowed here: nothing implements the
+// behavior. Each is written down because a bare `false` in the table below
+// reads like a TODO and the wrong repair for a TODO is to flip it into a lie.
+// Every one of these is the state this shell is genuinely in, so the refusal
+// is the correct answer and not a gap left in the table:
 //
-// The other five refusals are refusals for the same reason, and each is
-// written down because a bare `false` in the table below reads like a TODO
-// and the wrong repair for a TODO is to flip it. Every one of these is the
-// state this shell is genuinely in, so the refusal is the correct answer and
-// not a gap left in the table:
-//
-//   - no_empty_cmd_completion is the one most likely to be misread, because
-//     the name is a negative and the honest answer looks like the lazy one.
-//     It asks that completion on an *empty* line not search PATH. Ours
-//     searches it — repl's completer answers an empty command word with every
-//     builtin, function, reserved word and executable it can reach — so this
-//     shell is in the option's *off* state and `shopt -s` is a request to
-//     change behavior, not to confirm it. Flipping this to true would claim a
-//     quieter completion than this shell has.
-//   - cdspell and dirspell ask for a misspelled path to be corrected, in `cd`
-//     and in completion. Neither retries: `cd` goes from a failed stat
-//     straight to the diagnostic, and the completer matches an exact prefix.
-//   - autocd asks that a bare directory name be a `cd`. Command lookup ends
-//     at "is a directory", which is the opposite of a fallback.
+//   - cdspell asks that an interactive `cd` correct a minor misspelling of
+//     the operand. interp's `biCd` goes from a failed CDPATH search straight
+//     to `filepath.Join` and then to the diagnostic; nothing retries a
+//     component, so there is no place a correction could be reported from and
+//     no correction to report. Measured for what would have to be matched:
+//     bash 5.3.15 at a prompt corrects a transposition (`subdri`), a dropped
+//     letter (`subdi`), an extra one (`ssubdir`, `subdirx`) and a wrong one
+//     (`subdur`), prints the corrected operand — `subdir/deeper` for
+//     `subdri/deper`, so it corrects component by component — and leaves
+//     `zzzz` alone at status 1. That is a search over four edits per
+//     component against every entry of a directory, which is a change to
+//     `cd`, not a table entry.
+//   - dirspell asks the same of completion, and completion here has no retry
+//     either: repl's path completer is a strict prefix match over one
+//     directory's entries, and a `ReadDir` that fails yields no entries
+//     rather than a second question. bash 3.2 does not have the name at all —
+//     `shopt -s dirspell` there is `invalid shell option name` at status 1 —
+//     which it shares with `checkjobs`, so two of these three refusals are not
+//     even a question in every column of the panel.
 //   - checkjobs asks that exiting warn about *running* jobs, not only stopped
-//     ones. The stopped-job hold exists; nothing counts the running ones.
+//     ones. The stopped-job hold exists — interp's `HoldsExitForStoppedJobs`,
+//     which repl consults on end-of-file — and nothing counts the running
+//     ones, so this shell would have to learn a second question before it
+//     could answer this one.
 //
-// Four of those five are interactive-only in bash as well, so a `-c` probe
+// Two of the three are interactive-only in bash as well, so a `-c` probe
 // cannot tell an implementation from an absence — it shows both shells doing
 // nothing. They were measured through a terminal, which is the only place the
-// question is askable. #1445 carries what each of the six would need.
+// question is askable, and #1445 stays open naming exactly these three.
 var shoptStates = map[string]bool{
-	"array_expand_once":       false,
-	"assoc_expand_once":       false,
-	"autocd":                  false,
-	"bash_source_fullpath":    false,
-	"cdable_vars":             false,
-	"cdspell":                 false,
-	"checkhash":               false,
-	"checkjobs":               false,
-	"checkwinsize":            false,
-	"cmdhist":                 true,
-	"compat31":                false,
-	"compat32":                false,
-	"compat40":                false,
-	"compat41":                false,
-	"compat42":                false,
-	"compat43":                false,
-	"compat44":                false,
-	"complete_fullquote":      false,
-	"direxpand":               false,
-	"dirspell":                false,
-	"execfail":                false,
-	"extdebug":                false,
-	"extquote":                true,
-	"failglob":                false,
-	"force_fignore":           false,
-	"globasciiranges":         true,
-	"globskipdots":            true,
-	"gnu_errfmt":              false,
-	"histappend":              true,
-	"histreedit":              false,
-	"histverify":              false,
-	"hostcomplete":            false,
-	"huponexit":               false,
-	"inherit_errexit":         false,
-	"interactive_comments":    true,
-	"lastpipe":                false,
-	"lithist":                 true,
-	"localvar_inherit":        false,
-	"localvar_unset":          false,
-	"login_shell":             false,
-	"mailwarn":                false,
-	"no_empty_cmd_completion": false,
-	"noexpand_translation":    false,
-	"patsub_replacement":      false,
-	"progcomp":                false,
-	"progcomp_alias":          false,
-	"promptvars":              true,
-	"restricted_shell":        false,
-	"shift_verbose":           false,
-	"sourcepath":              true,
-	"varredir_close":          false,
-	"xpg_echo":                false,
+	"array_expand_once":    false,
+	"assoc_expand_once":    false,
+	"bash_source_fullpath": false,
+	"cdable_vars":          false,
+	"cdspell":              false,
+	"checkhash":            false,
+	"checkjobs":            false,
+	"cmdhist":              true,
+	"compat31":             false,
+	"compat32":             false,
+	"compat40":             false,
+	"compat41":             false,
+	"compat42":             false,
+	"compat43":             false,
+	"compat44":             false,
+	"complete_fullquote":   false,
+	"direxpand":            false,
+	"dirspell":             false,
+	"execfail":             false,
+	"extdebug":             false,
+	"extquote":             true,
+	"failglob":             false,
+	"force_fignore":        false,
+	"globasciiranges":      true,
+	"globskipdots":         true,
+	"gnu_errfmt":           false,
+	"histappend":           true,
+	"histreedit":           false,
+	"histverify":           false,
+	"hostcomplete":         false,
+	"huponexit":            false,
+	"inherit_errexit":      false,
+	"interactive_comments": true,
+	"lastpipe":             false,
+	"lithist":              true,
+	"localvar_inherit":     false,
+	"localvar_unset":       false,
+	"login_shell":          false,
+	"mailwarn":             false,
+	"noexpand_translation": false,
+	"patsub_replacement":   false,
+	"progcomp":             false,
+	"progcomp_alias":       false,
+	"promptvars":           true,
+	"restricted_shell":     false,
+	"shift_verbose":        false,
+	"sourcepath":           true,
+	"varredir_close":       false,
+	"xpg_echo":             false,
 }
 
 const shoptUsage = "shopt: usage: shopt [-pqsu] [-o] [optname ...]"

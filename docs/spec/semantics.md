@@ -2847,7 +2847,8 @@ first is unanimous across the table.** Every name is one of five kinds:
 | axis- or matcher-backed | 7 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`) |
 | fixed | 18 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted |
 | store-backed, read by the front end | 1 | `histignorespace`: kept where a recorded name is kept, and read by the line editor before it records a line |
-| **recorded** | 148 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| switch-backed | 1 | `autocd`: moves a capability the substrate holds under no option name of its own — a bare directory name really is read as a `cd` |
+| **recorded** | 147 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -2858,10 +2859,15 @@ abbreviates it — and was a switch whose state nothing consulted; it is now
 consulted too. Both decide what a session writes to its history file, so
 neither is recorded any more. `extendedglob` left the same way when the
 pattern operators it gates were built (#1244), which is the third name to
-move and the reason the matcher-backed row now reads 7. Nothing else about
-the split moved: 148 of 185 is still most of the table, and the count above
-is the one produced by counting the constructors in
-`dialect/zsh/setopt.go`.
+move and the reason the matcher-backed row now reads 7. `autocd` is the
+fourth, and it left for the same reason with one difference worth naming:
+bash spells the identical capability `autocd` too, so a dialect that
+implemented it for itself would have implemented it *instead* of the other
+one (#1445). It is the sixth row above — one capability in the substrate,
+two shells' names over it, and only whether the substitution is announced
+told apart, by an axis. Nothing else about the split moved: 147 of 185 is
+still most of the table, and the count above is the one produced by counting
+the constructors in `dialect/zsh/setopt.go`.
 
 The recorded kind is the change of position, and it is deliberate. A real
 `~/.zshrc` opens with a dozen `setopt` lines about completion, correction,
@@ -2928,7 +2934,7 @@ call back into the table it was called from.
 
 Two consequences worth stating, because both are divergences rather than
 wins. Recording is unchanged: a listing 185 rows long still says nothing
-about whether a name is acted on, and 148 of them are remembered and not
+about whether a name is acted on, and 147 of them are remembered and not
 acted on exactly as before — the table is longer in the listing because zsh
 lists that many, not because more of it is implemented. And a `set -o` name
 this shell has and will not move now answers `can't change option` at 1,
@@ -4359,7 +4365,7 @@ than missing:
   the chain rather than the last; `-x` sets the tab width of a printed body.
   Each is refused as not implemented rather than as unknown, the same
   distinction `compgen` draws between an action a shell lacks and a typo.
-- zsh `setopt` names of the **recorded** kind: 148 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 147 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150; neither was the count
   the table produces. It is now counted from the constructors.)
@@ -6722,6 +6728,23 @@ no OLDPWD.
 
 Prints where CDPATH sent a `cd`, when the winning entry was not a plain
 dot — three of the four; zsh moves in silence.
+
+**`AutoCdAnnouncesTheSubstitution`** — bash yes · dash unspecified ·
+ksh93 unspecified · zsh no
+
+Writes the `cd` that a bare directory name was read as, before moving.
+Only two of the panel have the option that turns the behavior on, and
+both spell it `autocd`, so the capability is the substrate's and this is
+the one thing the two shells do differently with it: bash writes
+`cd -- subdir` and zsh writes nothing. Measured 2026-09-08 through a
+pseudo-terminal, which is the only route either shell has for it —
+`bash -c 'shopt -s autocd; subdir'` and `zsh -c 'setopt autocd; subdir'`
+both say `command not found`, so a `-c` probe cannot see the behavior at
+all, let alone the sentence.
+
+Unanswered in the base rather than given the quieter default, because
+dash and ksh93 have no way to reach it: with no option to turn the
+capability on, nothing in those shells ever asks.
 
 **`CommandNotFoundStatusIsNotFound`** — bash no · dash yes · ksh93 no · zsh no
 

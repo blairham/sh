@@ -776,6 +776,42 @@ type Runner struct {
 	// file. So the state was kept truthfully here before anything read it,
 	// and is now read.
 	histIgnoreDups bool
+	// tracksWindowSize is permission to keep $LINES and $COLUMNS abreast of
+	// the terminal. bash spells it `checkwinsize` and zsh has no name for it
+	// at all because it never stops doing it; the *capability* is neither
+	// shell's, which is why the switch is here and the spelling is not.
+	//
+	// A script cannot see it — a script has no window — so like
+	// histIgnoreDups the state is kept here and read by the front end, which
+	// is the only thing holding a terminal to ask. Off by default because the
+	// panel is split: bash 3.2 starts with it off, dash never assigns either
+	// variable, and a core that assigned them anyway would be answering a
+	// question three of the six columns do not ask. Each dialect turns it on
+	// in Apply where its shell does.
+	tracksWindowSize bool
+	// autoCd is permission to read a bare directory name as a `cd`. bash
+	// spells it `autocd` and zsh spells it `autocd` too — the same name in
+	// two option namespaces, which is exactly why the behavior cannot live in
+	// either dialect: two copies of it would be two chances to fix one and
+	// not the other.
+	//
+	// It is consulted only where command lookup has already failed and only
+	// in an interactive shell, both measured — a directory named `echo` does
+	// not shadow the builtin in bash 5.3 with the option on, and
+	// `bash -c 'shopt -s autocd; subdir'` says `command not found`.
+	autoCd bool
+	// emptyCommandWordOffersNothing is the deviation behind bash's
+	// `no_empty_cmd_completion`, and it is stored as the deviation on
+	// purpose: this shell completes an empty command word against everything
+	// that could run, so the zero value is what it already does and the field
+	// records only a session that has asked it to stop.
+	//
+	// The name in the table is a negative and the switch here is not, which
+	// is the whole reason the two are separate: `shopt -s
+	// no_empty_cmd_completion` is a request to turn this capability *off*,
+	// and a table that stored the option's own bit would have granted it by
+	// storing a `true` that meant "on".
+	emptyCommandWordOffersNothing bool
 	// editingMode is which of the two `set -o` editing modes is selected,
 	// and it is one field because the two names are one state: `set -o vi`
 	// in bash 5.3 and in ksh93 turns `emacs` off in the same breath.
@@ -2657,6 +2693,16 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	// distinction is the whole bug and not a detail.
 	path, lookErr := r.lookPath(argv[0])
 	if lookErr != nil {
+		// A word nothing would run may still be somewhere to go — see
+		// autoCdInstead, which answers false in every shell that has not
+		// asked for it. Before the exec gate rather than after, because a
+		// word that turned out to be a `cd` is not an execution: nothing is
+		// started, and the directory it moves to went past the file-system
+		// gate on the way in.
+		if st, took := r.autoCdInstead(ctx, argv); took {
+			r.status = st
+			return nil
+		}
 		path = argv[0]
 	}
 	action := r.act(Action{Kind: ActionExec, Path: path, Args: argv})

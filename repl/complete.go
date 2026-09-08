@@ -187,6 +187,18 @@ type shellCompleter struct {
 	// with one. See EditorStyle.CompletionMatchesHiddenFiles.
 	hidden bool
 
+	// emptyWordOffersNothing withholds the command list from a command word
+	// that is empty — bash's `no_empty_cmd_completion`, read from the shell
+	// rather than settled once, because the option is one a person turns on
+	// at the prompt.
+	//
+	// The deviation and not the state, so the zero value of this struct is
+	// the completer this package has always had: Tab on an empty line offers
+	// every builtin, function, reserved word and executable on PATH, which is
+	// what the option's *off* state means and what makes turning it on a
+	// change in behavior rather than a confirmation of one.
+	emptyWordOffersNothing bool
+
 	// passwd is where account names are read from; empty is /etc/passwd. A
 	// field so a test can ask about names that are not on the machine.
 	passwd string
@@ -286,6 +298,20 @@ func (s shellCompleter) files(word string) []string { return s.paths(word, nil) 
 // each deciding for itself.
 func (s shellCompleter) Complete(c Completion) []string {
 	if c.Command {
+		if c.Word == "" && s.emptyWordOffersNothing {
+			// Nothing, which is the whole of the option: with it on, bash
+			// 5.3.15 through a pseudo-terminal answers two Tabs on an empty
+			// line with no listing and no bell-and-list, and answers the same
+			// after `true; ` — so it is the empty *word* in command position
+			// that is withheld, not only a line with nothing on it. With it
+			// off the same two Tabs offer 2102 names.
+			//
+			// Only the empty word. A word with a letter in it is completed
+			// exactly as before, which is what keeps this an option about
+			// listing everything rather than an option that turns command
+			// completion off.
+			return nil
+		}
 		return s.commands(c.Word)
 	}
 	return s.files(c.Word)

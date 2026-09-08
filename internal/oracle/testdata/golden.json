@@ -88518,6 +88518,94 @@
         "TimedOut": false
       }
     },
+    "shopt/autocd-is-accepted-and-still-not-a-script-feature": {
+      "bash": {
+        "Stdout": "st=0~st2=127~stayed",
+        "Stderr": "\u003cshell\u003e: line 1: sub: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~st2=127~stayed",
+        "Stderr": "\u003cshell\u003e: line 1: sub: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~st2=127~stayed",
+        "Stderr": "\u003cshell\u003e: line 0: shopt: autocd: invalid shell option name~\u003cshell\u003e: sub: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~st2=127~stayed",
+        "Stderr": "\u003cshell\u003e: 1: shopt: not found~\u003cshell\u003e: 1: sub: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~st2=127~stayed",
+        "Stderr": "\u003cshell\u003e: shopt: not found~\u003cshell\u003e: sub: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127~st2=127~stayed",
+        "Stderr": "\u003cshell\u003e:1: command not found: shopt~\u003cshell\u003e:1: command not found: sub",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "shopt/checkwinsize-is-on-before-anything-asks": {
+      "bash": {
+        "Stdout": "checkwinsize        \ton~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "checkwinsize        \ton~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "checkwinsize   \toff~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: shopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: shopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: shopt",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "shopt/checkwinsize-names-two-variables": {
       "bash": {
         "Stdout": "st=0 COLUMNS=[unset]",
@@ -89086,6 +89174,50 @@
         "Stdout": "",
         "Stderr": "",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "shopt/no-empty-cmd-completion-round-trips": {
+      "bash": {
+        "Stdout": "no_empty_cmd_completion\toff~no_empty_cmd_completion\ton~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "no_empty_cmd_completion\toff~no_empty_cmd_completion\ton~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "no_empty_cmd_completion\toff~no_empty_cmd_completion\ton~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: shopt: not found~\u003cshell\u003e: 1: shopt: not found~\u003cshell\u003e: 1: shopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: shopt: not found~\u003cshell\u003e: shopt: not found~\u003cshell\u003e: shopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: shopt~\u003cshell\u003e:1: command not found: shopt~\u003cshell\u003e:1: command not found: shopt",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -693,6 +694,11 @@ func (s Shell) runEach(ctx context.Context, stmts []*syntax.File) bool {
 // re-ran a command substitution in it.
 func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending *strings.Builder) drawnPrompt {
 	continuing := pending.Len() > 0
+	// Before anything is drawn, because the prompt itself may be written
+	// against $COLUMNS — a right-aligned segment is the usual reason a
+	// startup file asks for this at all — and a prompt drawn from last
+	// window's width is the one visible symptom the option exists to stop.
+	s.trackWindowSize()
 	s.reportFinishedJobs(continuing)
 	// After the notices and before the prompt is expanded, which is the
 	// order measured — see hooks.go. In the terminal's own line discipline,
@@ -715,6 +721,44 @@ func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending 
 		return drawPrompt(s.contributed(true) + s.prompt("PS2", or(s.Style.DefaultContinued, "> ")))
 	}
 	return drawPrompt(s.contributed(false) + s.prompt("PS1", or(s.Style.Default, "$ ")))
+}
+
+// trackWindowSize puts the terminal's size in $LINES and $COLUMNS, where the
+// shell has said it wants that.
+//
+// bash's `checkwinsize`, and only the naming of it is bash's: the shell holds
+// the permission (interp.Runner.TracksWindowSize) and this holds the ioctl,
+// because a Runner has no terminal and a script has no window. zsh reaches the
+// same behavior with no option name at all, which is the other reason the
+// switch is not in either dialect.
+//
+// Once per prompt, which is what the option promises — the size is checked
+// after each command — and it is also what makes the *first* prompt right:
+// bash 5.3.15 driven through a pseudo-terminal reports `COLUMNS=80 LINES=24`
+// before anything has been typed, so a session that only updated on a change
+// would start with both unset and a startup file reading `$COLUMNS` would read
+// nothing.
+//
+// Nothing is written for a size the terminal will not give: a pipe, a closed
+// terminal or a kernel that declines all answer zero, and assigning `0` would
+// be worse than assigning nothing — a prompt that divides by it, or wraps at
+// it, is broken in a way an unset variable is not. Measured the same way:
+// bash with `-i` on a pipe leaves both unset.
+//
+// Set rather than exported. bash does not export either name — `export -p`
+// shows no COLUMNS in a session where `$COLUMNS` is 80 — so a child gets the
+// terminal's size from the terminal, exactly as this shell does.
+func (s Shell) trackWindowSize() {
+	if s.Runner == nil || !s.Runner.TracksWindowSize() {
+		return
+	}
+	rows, cols := terminalSize(s.inFile())
+	if cols > 0 {
+		s.Runner.SetVar("COLUMNS", strconv.Itoa(cols))
+	}
+	if rows > 0 {
+		s.Runner.SetVar("LINES", strconv.Itoa(rows))
+	}
 }
 
 // contributed is what this session's prompt providers add, in order.
@@ -1071,7 +1115,12 @@ func (c runnerCompleter) shell() shellCompleter {
 	return shellCompleter{
 		names: c.names(), path: path, dir: c.r.Dir,
 		home: home, hidden: c.hidden,
-		bound: c.bound, ctx: c.ctx,
+		// Asked per keystroke rather than settled with hidden, because this
+		// one moves during a session: `shopt -s no_empty_cmd_completion` is a
+		// line a person types, and a completer built once at startup would
+		// take effect on the next shell.
+		emptyWordOffersNothing: !c.r.CompletesEmptyCommandWord(),
+		bound:                  c.bound, ctx: c.ctx,
 	}
 }
 

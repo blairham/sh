@@ -10175,7 +10175,22 @@ echo "st=$? alive"`,
 	{
 		ID: "shopt/checkwinsize-names-two-variables", Category: "shell options",
 		Snippet: `shopt -s checkwinsize; echo "st=$? COLUMNS=[${COLUMNS-unset}]"`,
-		Why:     "the name #1429 expected to be already true here and which measurement said was not: what it promises is that `$LINES` and `$COLUMNS` follow the window, so the option and the variable are recorded together — under `-c` neither shell has a terminal and both report the variable unset, which is exactly why the option's own answer is the part worth pinning",
+		Why:     "the name #1429 refused and #1445 built: what it promises is that `$LINES` and `$COLUMNS` follow the window, so the option and the variable are recorded together — under `-c` neither shell has a terminal and both report the variable unset, which is exactly why the option's own answer is the part worth pinning, and the moving half is a pseudo-terminal's question rather than a row's",
+	},
+	{
+		ID: "shopt/checkwinsize-is-on-before-anything-asks", Category: "shell options",
+		Snippet: `shopt checkwinsize; echo st=$?`,
+		Why:     "the default, which is the half a `shopt -s` row cannot see: 5.3 keeps this on with nothing in a startup file and 3.2 keeps it off, so the same query is `on` at 0 in one column and `off` at 1 in the other — and the two columns pad to different widths while they disagree, which is the cheapest place in the corpus to see that the listing width is a version's and not the builtin's",
+	},
+	{
+		ID: "shopt/autocd-is-accepted-and-still-not-a-script-feature", Category: "shell options",
+		Snippet: `mkdir sub; shopt -s autocd; echo "st=$?"; sub; echo "st2=$?"; case $PWD in */sub) echo moved ;; *) echo stayed ;; esac`,
+		Why:     "the name is 5.3's alone — 3.2 answers `invalid shell option name` — and the rest of the row is the part a shell is most likely to get *too* right: with the option on and accepted, a script still says `command not found` and stays where it is, because reading a bare directory name as a `cd` is something both shells that have the option keep for a person. The moving half needs a pseudo-terminal and is graded in the smoke suite instead",
+	},
+	{
+		ID: "shopt/no-empty-cmd-completion-round-trips", Category: "shell options",
+		Snippet: `shopt no_empty_cmd_completion; shopt -s no_empty_cmd_completion; shopt no_empty_cmd_completion; echo st=$?`,
+		Why:     "a name whose sense is inverted, so the query before the set is the load-bearing half: both bash columns start it `off`, which is the state in which completion on an empty line *does* search PATH, and a shell that stored the option's own bit rather than the capability would have to report it `on` to mean the same thing. What the option then does to a Tab is a pseudo-terminal's question",
 	},
 	{
 		ID: "shopt/dash-o-reads-one-set-option", Category: "shell options",

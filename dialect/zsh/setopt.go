@@ -164,7 +164,12 @@ var zshOptions = []zshOption{
 	recorded("alwaystoend", false),
 	recorded("appendcreate", false),
 	recorded("appendhistory", true),
-	recorded("autocd", false),
+	// Implemented rather than recorded since #1445: the same core switch
+	// bash's `shopt -s autocd` moves, because it is the same name for the
+	// same behavior in two option namespaces. What differs between the two
+	// shells is only whether the substitution is announced, and that is an
+	// axis this dialect answers `No` — see zsh.go.
+	switchBacked("autocd", false, (*interp.Runner).AutoCd, (*interp.Runner).SetAutoCd),
 	recorded("autocontinue", false),
 	recorded("autolist", true),
 	recorded("automenu", true),
@@ -470,6 +475,21 @@ func matchBacked(base string, def bool, opt interp.MatchOption, inv bool) zshOpt
 		base: base, def: def,
 		get: func(r *interp.Runner) bool { return r.MatchOption(opt) != inv },
 		set: func(r *interp.Runner, on bool) int { r.SetMatchOption(opt, on != inv); return 0 },
+	}
+}
+
+// switchBacked binds a zsh name to a capability the core holds under no
+// option name of its own — the shape matchBacked has, for a switch that is
+// not one of the pattern matcher's.
+//
+// The distinction recorded draws is the point of having this at all: a name
+// that has stopped being remembered-and-ignored has to stop saying it is, or
+// the listings and `emulate` go on describing a shell that no longer exists.
+func switchBacked(base string, def bool, get func(*interp.Runner) bool, set func(*interp.Runner, bool)) zshOption {
+	return zshOption{
+		base: base, def: def,
+		get: get,
+		set: func(r *interp.Runner, on bool) int { set(r, on); return 0 },
 	}
 }
 

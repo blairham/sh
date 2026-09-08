@@ -98,13 +98,13 @@ type autoloadOpts struct {
 	plus bool
 }
 
-func autoloadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
+func autoloadBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	opts, rest, code := autoloadOptions(r, args)
 	if code != 0 {
 		return code
 	}
 	if opts.now {
-		return autoloadResolveNow(r, opts, rest)
+		return autoloadResolveNow(r, ctx, opts, rest)
 	}
 	if len(rest) == 0 {
 		return autoloadListing(r)
@@ -195,7 +195,7 @@ func autoloadOptions(r *interp.Runner, args []string) (opts autoloadOpts, rest [
 // it is given, and `-X` with no name resolves the function it is running
 // inside — which is what the stub uses, and which is `bad autoload` at the
 // top level where there is no function to be inside of.
-func autoloadResolveNow(r *interp.Runner, opts autoloadOpts, names []string) int {
+func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts, names []string) int {
 	if !opts.plus {
 		// `-X` names no function: it acts on the one it is running inside,
 		// and an operand is `bad autoload` rather than a name to resolve —
@@ -208,7 +208,10 @@ func autoloadResolveNow(r *interp.Runner, opts autoloadOpts, names []string) int
 		if !ok {
 			return autoloadBad(r)
 		}
-		return autoloadResolve(r, name)
+		if code := autoloadResolve(r, name); code != 0 {
+			return code
+		}
+		return autoloadRunResolved(r, ctx, name)
 	}
 	// `+X` with nothing to resolve is silence and 0 — measured, and not the
 	// same answer as the minus sign with nothing, which is the tell that the
@@ -234,6 +237,64 @@ func autoloadResolveNow(r *interp.Runner, opts autoloadOpts, names []string) int
 		}
 	}
 	return status
+}
+
+// autoloadRunResolved is the second half of `-X`: run what the resolution
+// just defined, here, with the arguments the function it replaced was called
+// with.
+//
+// Resolving alone is not what `-X` does, and the difference is a *silent* one
+// — which is why it stood. Measured on zsh 5.9 with a file holding
+// `print -r -- "BODY args=<$*>"; return 7` and the stub zsh's own plugin
+// loaders write,
+//
+//	myf() { local -a fpath; fpath=( DIR ); builtin autoload -X -Uz; print "AFTER $?" }
+//	myf a b
+//
+// zsh prints `BODY args=<a b>` and then `AFTER 7`, where this shell printed
+// `AFTER 0` and nothing else: the name was redefined and the body never ran,
+// so every function loaded this way was a no-op that reported success. That
+// is what a real startup runs into — `~/.zi/bin/zi.zsh` substitutes its own
+// `autoload` and writes exactly this stub for every function a plugin
+// autoloads (`ZI[NEW_AUTOLOAD]=1`, taken on every zsh since 5.1), so the
+// annexes' hooks, the meta-plugin expander among them, all returned 0 having
+// done nothing. The loader then read "the annex declined" and went looking
+// for a plugin named after each ice word it had been asked to expand.
+//
+// Three things the same measurement settles:
+//
+//   - The arguments are the replaced function's own. `$*` inside the loaded
+//     body is `a b`, so this passes r.Params rather than the builtin's
+//     operands, which `-X` refuses to have any of.
+//   - The call is *nested*, not a replacement of the frame: the body sees the
+//     stub's locals — a `local secret=hidden` set before the `-X` is readable
+//     from the file's text — and `${#funcstack}` counts three where the stub
+//     is one. So this is an ordinary call from inside the builtin and not an
+//     unwinding of the caller.
+//   - The stub carries on afterwards, with `$?` holding what the body
+//     returned. `AFTER 7` says both halves of that, so no control flow is
+//     requested here and the status is simply returned.
+//
+// An error from the call is a fatal one — a cancelled context, not a status —
+// and a builtin has an int to answer with and no way to pass it on. It is
+// reported and answered 1 rather than dropped, which at least leaves a
+// failing status where the shell would have stopped.
+func autoloadRunResolved(r *interp.Runner, ctx context.Context, name string) int {
+	// A copy, because the call replaces r.Params for the length of the body
+	// and restores the slice header afterwards.
+	args := append([]string(nil), r.Params...)
+	ran, err := r.CallFunction(ctx, name, args...)
+	if err != nil {
+		r.Diagnosef("%s: %v\n", name, err)
+		return 1
+	}
+	if !ran {
+		// The resolution reported success, so the name is a function. This
+		// is unreachable rather than a case, and it answers 1 rather than 0
+		// so that a future change which makes it reachable is visible.
+		return 1
+	}
+	return r.ExitStatus()
 }
 
 // autoloadBad is `-X` where there is no function for it to be about.

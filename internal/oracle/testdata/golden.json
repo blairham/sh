@@ -27571,6 +27571,50 @@
         "TimedOut": false
       }
     },
+    "core/an-operator-over-the-positional-parameters-in-quotes": {
+      "bash": {
+        "Stdout": "[x][bx][cx] | [x bx cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[x][bx][cx] | [x bx cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[x][bx][cx] | [x bx cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[x][bx][cx] | [x bx cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[x][bx][cx] | [x bx cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[x][bx][cx] | [x bx cx]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/an-unbalanced-substitution-inside-those-quotes": {
       "bash": {
         "Stdout": "",
@@ -113012,6 +113056,50 @@
       },
       "zsh": {
         "Stdout": "st=0 arr=[-a|-b] argv=[c]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zsh/an-element-filter-over-the-positional-parameters": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: @: #--: arithmetic syntax error: operand expected (error token is \"#--\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: @: #--: arithmetic syntax error: operand expected (error token is \"#--\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: @: #--: syntax error: operand expected (error token is \"#--\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[a][b] n=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[a][b] n=3",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

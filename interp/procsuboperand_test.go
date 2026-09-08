@@ -4,7 +4,6 @@
 package interp_test
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -70,8 +69,12 @@ func TestAProcessSubstitutionInAParamOperandIsPerformedWhereTheGrammarHasOne(t *
 	// `${u:-<(:)}` rather than a pattern operand, because the *value* is
 	// what a path is visible in — a pattern operand's path simply fails to
 	// match, which is true of the literal reading too.
+	var r *Runner
 	out, st := runGrammar(t, `printf "[%s]" ${nosuch:-<(:)}`, procsubOperand,
-		func(r *Runner) { r.Env = append(withoutTMPDIR(r.Env), "TMPDIR="+tmp) })
+		func(rr *Runner) {
+			r = rr
+			rr.Env = append(withoutTMPDIR(rr.Env), "TMPDIR="+tmp)
+		})
 	if st != 0 {
 		t.Fatalf("status %d, want 0", st)
 	}
@@ -81,13 +84,9 @@ func TestAProcessSubstitutionInAParamOperandIsPerformedWhereTheGrammarHasOne(t *
 	if !strings.Contains(out, tmp) {
 		t.Errorf("got %q, want a path under the scratch directory %q", out, tmp)
 	}
-	made, err := filepath.Glob(filepath.Join(tmp, "sh-procsub*"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(made) == 0 {
-		t.Error("no process substitution ran")
-	}
+	// Named rather than globbed for: the shell removes the directory on its
+	// way out now (#1284), and the name outlives it. See pipeDirMade.
+	gone(t, pipeDirMade(t, r, tmp))
 }
 
 // And without it, the same operand is the five characters it was written as —
@@ -110,32 +109,31 @@ func TestAProcessSubstitutionInAParamOperandIsTextWithoutTheGrammar(t *testing.T
 func TestAProcessSubstitutionInAConditionIsAnAxis(t *testing.T) {
 	t.Run("performed where the axis says so", func(t *testing.T) {
 		tmp := t.TempDir()
+		var r *Runner
 		out, st := runGrammar(t, `[[ x == <(:) ]] && printf "[hit]" || printf "[miss]"`,
-			procsubPlain, func(r *Runner) {
+			procsubPlain, func(rr *Runner) {
+				r = rr
 				sem := testSemantics()
 				sem.ProcessSubstitutionInCondition = Yes
-				r.Semantics = &sem
-				r.Env = append(withoutTMPDIR(r.Env), "TMPDIR="+tmp)
+				rr.Semantics = &sem
+				rr.Env = append(withoutTMPDIR(rr.Env), "TMPDIR="+tmp)
 			})
 		if want := "[miss]"; out != want || st != 0 {
 			t.Errorf("got %q (status %d), want %q at 0", out, st, want)
 		}
-		made, _ := filepath.Glob(filepath.Join(tmp, "sh-procsub*"))
-		if len(made) == 0 {
-			t.Error("no process substitution ran")
-		}
+		gone(t, pipeDirMade(t, r, tmp))
 	})
 
 	t.Run("refused where it does not, and the command never runs", func(t *testing.T) {
-		tmp := t.TempDir()
+		var r *Runner
 		out, st := runGrammar(t, `[[ x == <(:) ]] && printf "[hit]" || printf "[miss]"; printf "[after]"`,
-			procsubPlain, func(r *Runner) {
+			procsubPlain, func(rr *Runner) {
+				r = rr
 				sem := testSemantics()
 				sem.ProcessSubstitutionInCondition = No
 				sem.FatalErrorStatusIsOne = No
 				d := Diagnostics{ProcessSubstitutionNotInCondition: "no substitution here: %[1]s"}
-				r.Semantics, r.Diagnostics = &sem, &d
-				r.Env = append(withoutTMPDIR(r.Env), "TMPDIR="+tmp)
+				rr.Semantics, rr.Diagnostics = &sem, &d
 			})
 		// The whole line is abandoned: neither arm of the `||` runs and
 		// neither does what came after it. Measured — the shell that refuses
@@ -146,9 +144,14 @@ func TestAProcessSubstitutionInAConditionIsAnAxis(t *testing.T) {
 		if st != 2 {
 			t.Errorf("status %d, want 2", st)
 		}
-		made, _ := filepath.Glob(filepath.Join(tmp, "sh-procsub*"))
-		if len(made) != 0 {
-			t.Errorf("the command ran before the refusal: %v", made)
+		// The half that needed rewriting most. This used to glob the shell's
+		// TMPDIR and want it empty, and a shell that cleans up after itself
+		// leaves it empty whether or not it ran the substitution — so the
+		// assertion would have gone on passing against exactly the shell it
+		// is here to forbid. What the shell made is remembered rather than
+		// looked for, and a shell that made nothing has nothing to remember.
+		if dir := r.PipeDirForTest(); dir != "" {
+			t.Errorf("the command ran before the refusal: pipes went to %s", dir)
 		}
 	})
 

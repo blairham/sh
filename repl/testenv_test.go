@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/internal/childguard"
+	"github.com/blairham/sh/internal/treeguard"
 )
 
 // This file is the suite's environment, and it is here for the reason #890
@@ -70,7 +71,14 @@ const touchHomeVar = "SH_TEST_TOUCH_HOME"
 // first noticed is the one #860 and #890 landed on: correcting the sites that
 // were leaking on the day does not stop the next one.
 func TestMain(m *testing.M) {
-	os.Exit(runIsolated(childguard.Wrap(m, childguard.PipeMarker)))
+	// And a temporary directory of its own, guarded. This package starts
+	// shells as programs, which is where the leak in #1284 lived: a process
+	// substitution's directory was removed by nothing, so every invocation
+	// left one in /tmp for good. interp's own tests could not have caught
+	// it — each hands its Runner a TMPDIR the framework takes away again —
+	// and treeguard.Run could not either, since what is left is an *empty*
+	// directory and Run counts files. treeguard.Temp is that case.
+	os.Exit(runIsolated(treeguard.Temp(childguard.Wrap(m, childguard.PipeMarker))))
 }
 
 // runIsolated assembles the environment, runs the suite in it, and then checks

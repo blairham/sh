@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/blairham/sh/internal/childguard"
+	"github.com/blairham/sh/syntax"
 
 	. "github.com/blairham/sh/interp"
 )
@@ -178,8 +180,8 @@ func TestProcessSubstitutionRemovesItsPipe(t *testing.T) {
 	}
 }
 
-// CleanUp takes the directory as well. A library caller running many scripts
-// on one Runner has nothing else that would.
+// A shell that ends takes the directory with it. Nothing else ever would: it
+// is under the machine's temporary directory, where a leak is permanent.
 func TestProcessSubstitutionCleanUpRemovesTheDirectory(t *testing.T) {
 	// The directory is made under the shell's temporary one, so pointing
 	// that at a fresh directory is what makes it findable from here — and
@@ -197,12 +199,13 @@ func TestProcessSubstitutionCleanUpRemovesTheDirectory(t *testing.T) {
 	}); st != 0 {
 		t.Fatalf("status %d", st)
 	}
-	if n := len(subdirs(t, dir)); n != 1 {
-		t.Fatalf("%d directories under TMPDIR, want the one the shell made", n)
-	}
-	r.CleanUp()
+	// One directory, and it is gone — asserted in that order and about the
+	// same path, because only the pair says anything. That the shell made
+	// one is what would make leaving it a leak, and naming it is what lets
+	// the second half mean "this one" rather than "the TMPDIR looks tidy".
+	gone(t, pipeDirMade(t, r, dir))
 	if n := len(subdirs(t, dir)); n != 0 {
-		t.Errorf("%d directories left after CleanUp, want none", n)
+		t.Errorf("%d directories left under TMPDIR, want none", n)
 	}
 	// And nothing is still reading what was in it. Removing a directory says
 	// nothing about that on a Unix — a process holding a pipe open does not
@@ -273,12 +276,11 @@ func TestProcessSubstitutionIgnoresTheProcessTMPDIR(t *testing.T) {
 	if st != 0 || out != "hi\n" {
 		t.Fatalf("out = %q status %d, want the substitution to work", out, st)
 	}
-	t.Cleanup(r.CleanUp)
+	// Where the shell put them, which it remembers after taking them away
+	// again — the directory itself is gone by now, since the shell ended.
+	pipeDirMade(t, r, mine)
 	if n := len(subdirs(t, decoy)); n != 0 {
 		t.Errorf("%d directories under the process's TMPDIR, want none — the Runner's was handed in", n)
-	}
-	if n := len(subdirs(t, mine)); n != 1 {
-		t.Errorf("%d directories under the Runner's TMPDIR, want the one its shell made", n)
 	}
 }
 
@@ -302,10 +304,7 @@ func TestProcessSubstitutionHonorsAnAssignedTMPDIR(t *testing.T) {
 	if st != 0 || out != "hi\n" {
 		t.Fatalf("out = %q status %d, want the substitution to work", out, st)
 	}
-	t.Cleanup(r.CleanUp)
-	if n := len(subdirs(t, assigned)); n != 1 {
-		t.Errorf("%d directories under the assigned TMPDIR, want the one the shell made", n)
-	}
+	pipeDirMade(t, r, assigned)
 	if n := len(subdirs(t, handedIn)); n != 0 {
 		t.Errorf("%d directories under the inherited TMPDIR, want none — the assignment shadows it", n)
 	}
@@ -329,20 +328,24 @@ func TestProcessSubstitutionWithoutATMPDIR(t *testing.T) {
 	}
 }
 
-// TestASubstitutionsDirectoryIsTakenAwayAgain, which is what the shared helper
-// is for and the thing no individual test would ever notice.
+// TestASubstitutionsDirectoryIsTakenAwayAgain, which is the whole of #1284.
 //
 // A substitution makes a directory under the shell's TMPDIR for its pipes. The
 // pipes themselves go as soon as the command that named them is done — that is
 // removeProcSubs, and it is why a long session does not fill its directory —
-// but the directory outlives them and only CleanUp removes it. A test has no
-// reason to call CleanUp, so the suite left one behind per substituting Runner,
-// in /tmp, since a Runner with no TMPDIR falls back to it. They had reached
-// four figures on this machine.
+// but the directory outlives them, and for a long time the only thing that
+// removed it was a CleanUp nobody called. Every invocation of every dialect
+// binary that used `<(…)` therefore left one in /tmp, permanently: 10,585 in
+// one working session, and 4,188 more in the two days after they were swept.
 //
-// Asserted in both directions, because only the pair says anything: that the
-// directory is there afterwards is what makes leaving it a leak, and that it is
-// gone after CleanUp is what makes registering CleanUp the fix.
+// Finish removes it now, so a shell that ends has already done this and the
+// binaries get it without any of them being wired up — which was the actual
+// failure, since CleanUp existed and was tested the whole time.
+//
+// Asserted in both directions about the *same path*, because only the pair
+// says anything: that the shell made one is what would make leaving it a leak,
+// and naming it is what keeps the second half from passing against a shell
+// that never made one at all.
 func TestASubstitutionsDirectoryIsTakenAwayAgain(t *testing.T) {
 	tmp := t.TempDir()
 	var r *Runner
@@ -353,41 +356,105 @@ func TestASubstitutionsDirectoryIsTakenAwayAgain(t *testing.T) {
 	if st != 0 || out != "hi\n" {
 		t.Fatalf("out = %q status %d, want the substitution to work", out, st)
 	}
-	if n := len(subdirs(t, tmp)); n != 1 {
-		t.Fatalf("%d directories under TMPDIR after the run, want the one the shell made", n)
-	}
-	r.CleanUp()
+	gone(t, pipeDirMade(t, r, tmp))
 	if n := len(subdirs(t, tmp)); n != 0 {
-		t.Errorf("%d directories under TMPDIR after CleanUp, want none", n)
+		t.Errorf("%d directories under TMPDIR after the run, want none", n)
 	}
 }
 
+// TestASubshellsDirectoryIsTheParentsToRemove: the one route that still leaked
+// after Finish learned to clean up, and the reason clone asks for the box.
+//
+// `( cat <(echo hi) )` makes its pipe inside a subshell. The directory is one
+// per shell *tree* — a clone shares the parent's rather than making a second —
+// but a clone taken before the parent had ever needed one copied a nil pointer
+// and the subshell then made a box of its own. The parent finished knowing
+// nothing about the directory in it, and a subshell may not clean up for
+// itself: it shares the box, so a copy removing it would take the original's
+// pipes away mid-command.
+//
+// Both halves are here because either alone passes wrongly. That the parent
+// knows the path is what makes the removal possible; that a later substitution
+// in the *parent* still works is what says the sharing did not turn into the
+// subshell tidying up behind a shell that was still running.
+func TestASubshellsDirectoryIsTheParentsToRemove(t *testing.T) {
+	tmp := t.TempDir()
+	var r *Runner
+	out, st := run(t, `( cat <(echo one) ); cat <(echo two)`, func(rr *Runner) {
+		r = rr
+		rr.Env = append(testPATH(), "TMPDIR="+tmp)
+	})
+	if want := "one\ntwo\n"; st != 0 || out != want {
+		t.Fatalf("out = %q status %d, want %q at 0 — the parent's substitution "+
+			"has to survive the subshell's", out, st, want)
+	}
+	gone(t, pipeDirMade(t, r, tmp))
+	if n := len(subdirs(t, tmp)); n != 0 {
+		t.Errorf("%d directories under TMPDIR, want none — a subshell's is the "+
+			"parent's to remove, and one per tree is the whole claim", n)
+	}
+}
+
+// And the two halves of a pipeline are clones of one parent running at once,
+// so they number their pipes in a directory they share.
+//
+// The regression: sharing the directory without sharing the counter had both
+// clones ask for `sub1`, and the second mkfifo failed with "file exists". One
+// counter in the box the directory is in is what keeps the names distinct,
+// and it is atomic because these two are goroutines.
+func TestPipelineHalvesNumberTheirPipesApart(t *testing.T) {
+	tmp := t.TempDir()
+	var r *Runner
+	out, st := run(t, `cat <(echo a) | ( cat <(echo b) )`, func(rr *Runner) {
+		r = rr
+		rr.Env = append(testPATH(), "TMPDIR="+tmp)
+	})
+	if want := "b\n"; st != 0 || out != want {
+		t.Fatalf("out = %q status %d, want %q at 0", out, st, want)
+	}
+	gone(t, pipeDirMade(t, r, tmp))
+}
+
 // TestTheHelperRegistersTheCleanUpSoNoTestHasTo: the same property, asked of
-// the helper rather than of CleanUp — and the one that pins the fix, since a
-// test calling CleanUp itself proves nothing about the 191 that do not.
+// the helper rather than of Finish — and still worth having, because a Runner
+// driven with RunPart never reaches Finish and a test that does that is the
+// one shape the shell cannot clean up after.
+//
+// RunPart rather than Run, deliberately. Run ends with Finish, which removes
+// the directory itself, so a test written that way would pass with the helper
+// registering nothing at all — the non-discriminating probe this whole file
+// has just been rewritten to get rid of. Leaving the shell open is what makes
+// the registration the only thing that can remove the directory.
 //
 // The registration runs when the test that made the Runner ends, so a test
 // cannot watch its own. It can watch an inner one: a subtest's cleanups have
 // all run by the time t.Run returns, so the directory is either gone by then
-// or it was never going to be. That is the whole leak, reproduced and
-// observed, in the shape the suite actually has.
-//
-// The TMPDIR is this test's rather than the inner one's for the same reason —
-// a directory the framework is about to remove anyway could not tell us who
-// removed it.
+// or it was never going to be. The TMPDIR is this test's rather than the inner
+// one's for the same reason — a directory the framework is about to remove
+// anyway could not tell us who removed it.
 func TestTheHelperRegistersTheCleanUpSoNoTestHasTo(t *testing.T) {
 	tmp := t.TempDir()
-	t.Run("a runner that substitutes and never cleans up after itself", func(t *testing.T) {
-		out, st := run(t, `cat <(echo hi)`, func(rr *Runner) {
-			rr.Env = append(testPATH(), "TMPDIR="+tmp)
-		})
-		if st != 0 || out != "hi\n" {
-			t.Fatalf("out = %q status %d, want the substitution to work", out, st)
+	var dir string
+	t.Run("a runner left open, which nothing else cleans up after", func(t *testing.T) {
+		f, err := syntax.Parse(`cat <(echo hi) >/dev/null`, syntax.Core())
+		if err != nil {
+			t.Fatal(err)
 		}
-		if n := len(subdirs(t, tmp)); n != 1 {
-			t.Fatalf("%d directories during the run, want the one the shell made", n)
+		sem := testSemantics()
+		r := newTestRunner(t, &Runner{
+			Stdout: &strings.Builder{}, Stderr: &strings.Builder{},
+			Semantics: &sem,
+			Env:       append(testPATH(), "TMPDIR="+tmp),
+		})
+		if err := r.RunPart(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		dir = pipeDirMade(t, r, tmp)
+		if _, err := os.Stat(dir); err != nil {
+			t.Fatalf("%s: %v — the shell is still open, so its directory has to be", dir, err)
 		}
 	})
+	gone(t, dir)
 	if n := len(subdirs(t, tmp)); n != 0 {
 		t.Errorf("%d directories left once the test that made them ended, want none — "+
 			"the helper has to register CleanUp, because no test is going to", n)
@@ -419,5 +486,38 @@ func waitForFile(t *testing.T, path string) string {
 			return strings.TrimSpace(string(b))
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// pipeDirMade reports the directory a shell made for its substitution pipes,
+// having asserted that it made one and that it is under want.
+//
+// The shared spelling of the probe four tests across three files need: they
+// run a substitution nothing opens, so no command starts, no Action is gated
+// and no Event is emitted — the directory is the only thing that happened.
+// Globbing for it afterwards is what they used to do, and Finish removing it
+// (#1284) is what ended that. Naming it does not depend on it still being
+// there, which is the property that makes the same probe answer both "one was
+// performed" and "it was taken away again".
+func pipeDirMade(t *testing.T, r *Runner, want string) string {
+	t.Helper()
+	dir := r.PipeDirForTest()
+	if dir == "" {
+		t.Fatal("no process substitution ran: the shell never made a directory for a pipe")
+	}
+	if filepath.Dir(dir) != want {
+		t.Fatalf("pipes went to %q, want a directory under %q", dir, want)
+	}
+	return dir
+}
+
+// gone asserts that a path is not there, which after a run is the whole of
+// what #1284 asked for.
+func gone(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err == nil {
+		t.Errorf("%s is still there, want it removed", path)
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("%s: %v", path, err)
 	}
 }

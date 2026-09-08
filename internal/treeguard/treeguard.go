@@ -123,3 +123,110 @@ func addedPaths(before, after map[string]bool) []string {
 	sort.Strings(added)
 	return added
 }
+
+// Temp gives a run a temporary directory of its own and fails it if anything
+// is left there. A package guards itself with
+//
+//	func TestMain(m *testing.M) { os.Exit(treeguard.Temp(m).Run()) }
+//
+// and composes it with the other wrappers the way childguard.Wrap composes.
+//
+// # Why this is not Run with a different directory
+//
+// Run counts *files*, and says so: a directory a test makes and empties again
+// has left nothing behind, and reporting it would make the guard cry wolf in
+// a source tree where git does not record an empty directory anyway.
+//
+// The leak this is for is an empty directory and nothing else. A process
+// substitution makes one under the shell's TMPDIR to hold its named pipes;
+// the pipes go as soon as the command that named them ends, and for a long
+// time nothing removed what was left. 10,585 accumulated in /tmp in one
+// working session and 4,188 more in the two days after they were swept by
+// hand (#1284). Run, pointed at TMPDIR, would have reported none of them —
+// which is the point worth writing down: the guard that was already here
+// could not have caught this, so the answer was to teach it the case rather
+// than to leave a second guard somewhere else that knows one thing this one
+// does not.
+//
+// So an entry of any kind counts here, and a directory is named rather than
+// descended into: what is inside a stray is the writer's business, and the
+// report wants one line per thing left behind.
+//
+// # What it covers
+//
+// A whole run, not a test. It cannot say which test leaked — the run is over
+// by the time it looks — but a package that starts shells is a small enough
+// haystack, and turning a silent success into a failed package is the whole
+// point. The suites that start shells are where a leak reaches a *binary*:
+// interp's own tests each hand their Runner a TMPDIR the framework takes away
+// again, so a leak there is invisible, and a leak in a shipped shell is
+// permanent.
+//
+// A run killed by a signal leaves the scratch directory behind, and a
+// SIGKILLed one cannot do otherwise. That is the same hole every cleanup has
+// and it is not worth pretending about.
+func Temp(m interface{ Run() int }) interface{ Run() int } { return tempGuard{m} }
+
+type tempGuard struct{ inner interface{ Run() int } }
+
+func (g tempGuard) Run() int {
+	dir, err := os.MkdirTemp("", "sh-tempguard-")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "treeguard: no scratch temporary directory: %v — not guarding\n", err)
+		return g.inner.Run()
+	}
+	// Restored rather than left pointing at a directory that is about to be
+	// removed: a wrapper outside this one goes on running afterwards.
+	was, had := os.LookupEnv("TMPDIR")
+	if err := os.Setenv("TMPDIR", dir); err != nil {
+		fmt.Fprintf(os.Stderr, "treeguard: %v — not guarding\n", err)
+		_ = os.RemoveAll(dir)
+		return g.inner.Run()
+	}
+
+	code := g.inner.Run()
+
+	if had {
+		_ = os.Setenv("TMPDIR", was)
+	} else {
+		_ = os.Unsetenv("TMPDIR")
+	}
+	// Read before the removal, and the removal happens either way: a leaked
+	// scratch directory is a worse second failure than the first one.
+	left := strays(dir)
+	if err := os.RemoveAll(dir); err != nil {
+		fmt.Fprintf(os.Stderr, "treeguard: scratch temporary directory not removed: %v\n", err)
+	}
+	if len(left) == 0 {
+		return code
+	}
+	fmt.Fprintf(os.Stderr, "\ntreeguard: the tests left %d entr(ies) in their temporary directory:\n", len(left))
+	for _, p := range left {
+		fmt.Fprintf(os.Stderr, "\t%s\n", p)
+	}
+	fmt.Fprint(os.Stderr, "A shell that ends removes what it made for itself — the directory a "+
+		"process substitution holds its pipes in, above all. One left here is one left in "+
+		"/tmp on a real machine, where nothing ever removes it.\n")
+	if code == 0 {
+		return 1
+	}
+	return code
+}
+
+// strays names what is left at the top of dir, sorted so the report reads the
+// same twice.
+//
+// Directories are named and not descended into, and an empty one counts: that
+// is the whole difference from snapshot, and it is the case this exists for.
+func strays(dir string) []string {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return []string{fmt.Sprintf("(unreadable: %v)", err)}
+	}
+	names := make([]string, 0, len(ents))
+	for _, e := range ents {
+		names = append(names, filepath.Join(dir, e.Name()))
+	}
+	sort.Strings(names)
+	return names
+}

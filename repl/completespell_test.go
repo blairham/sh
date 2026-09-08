@@ -163,6 +163,14 @@ func TestTheCorrectionFollowsTheRunner(t *testing.T) {
 // A corrected directory goes into the line as a word, so what is in its name
 // carries a backslash. Measured: bash escapes a `$` and a space in the path it
 // writes back.
+//
+// The typed dollar is escaped, and since #1574 that is load-bearing rather
+// than incidental: a bare `$q` in the directory portion is a *parameter* now
+// and an unset one expands to nothing, which would leave the corrector looking
+// at `od d` for a directory called `od d$r` and finding it too far away. The
+// backslash is how somebody says they meant the character, and it is what
+// keeps this row about the escaping of the answer rather than about the
+// expansion of the question. See repl.hasLiteralDollar.
 func TestACorrectedDirectoryIsEscapedForTheLine(t *testing.T) {
 	dir := t.TempDir()
 	odd := filepath.Join(dir, "od d$r")
@@ -173,7 +181,7 @@ func TestACorrectedDirectoryIsEscapedForTheLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	c, _ := spellCompleter(dir, true, true)
-	got := completeWord(c, "od d$q/ins")
+	got := completeWord(c, `od d\$q/ins`)
 	if len(got) != 1 {
 		t.Fatalf("offered %q, want one match", got)
 	}

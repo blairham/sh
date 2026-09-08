@@ -1128,7 +1128,11 @@ func (c runnerCompleter) shell() shellCompleter {
 		// the switch is consulted at the keystroke and in one place.
 		correctDir:       c.r.CorrectedDirectory,
 		expandsDirectory: c.r.ExpandsCompletedDirectory(),
-		bound:            c.bound, ctx: c.ctx,
+		// Handed over as a method value for the same reason the corrector is:
+		// what a parameter expands to is the shell's own state, and it moves
+		// between keystrokes.
+		expandParams: c.r.ExpandParametersOnly,
+		bound:        c.bound, ctx: c.ctx,
 	}
 }
 

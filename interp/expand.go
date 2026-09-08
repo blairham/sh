@@ -1855,6 +1855,17 @@ func (r *Runner) assignAlways(e *syntax.ParamExpr, subscript bool) string {
 // and `not an identifier: @` in zsh, and `${1:=abc}` is refused by five and
 // *assigns* in zsh. Four wordings, two statuses and a positional axis — #1541
 // rather than guessed at here.
+//
+// **A surviving mutant lives on that line, deliberately.** Widening the
+// conditional operator to the same rule as the unconditional one — dropping
+// the `op !=` half so both ask about every name — passes the whole suite.
+// Nothing kills it because nothing may: the wide rule is *closer* to zsh,
+// which would say `not an identifier: @`, and *further* from bash, dash and
+// ksh93, which each refuse in their own words at their own status. Either
+// answer is wrong somewhere, and a test pinning this narrow one would be a
+// test asserting a bug. The question is #1541's to settle with the four
+// wordings in hand; until then the line is the one that changes nothing
+// outside the name #1529 introduced.
 func (r *Runner) assignableTarget(op syntax.ParamOp, name string) bool {
 	if op != syntax.ParamAssignAlways && name != "" {
 		return true

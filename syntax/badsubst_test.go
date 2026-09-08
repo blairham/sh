@@ -51,9 +51,9 @@ func TestABadOperatorIsAParseErrorWhenAsked(t *testing.T) {
 // is the brace that closed them.
 //
 // Measured 2026-09-08: `${}` in ksh93 is `syntax error at line 1: `}'
-// unexpected` and `${%x}` there is `` `%' unexpected ``. The empty case is
+// unexpected` and `${%x}` there is “ `%' unexpected “. The empty case is
 // the one worth a test, because the token is the only part of the report that
-// carries it and an empty one reads as `` `' `` — a diagnostic that names
+// carries it and an empty one reads as “ `' “ — a diagnostic that names
 // nothing at all, which is what this used to print.
 func TestTheEmptyBracesRefusalNamesTheClosingBrace(t *testing.T) {
 	d := Core()

@@ -4,7 +4,9 @@
 package interp
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -304,4 +306,78 @@ func (r *Runner) lookPathAll(name string) []string {
 		}
 	}
 	return hits
+}
+
+// autoCdInstead reads a command word that named a directory as a `cd`, and
+// reports whether it did.
+//
+// The capability two shells in the panel call `autocd`, and it is one function
+// because it is one behavior: bash's `shopt -s autocd` and zsh's `setopt
+// auto_cd` ask for the same thing, and a copy in each dialect would be two
+// places to fix the next time this is wrong. See Runner.autoCd.
+//
+// Four conditions, and each of them is measured rather than assumed —
+// bash 5.3.15 through a pseudo-terminal, 2026-09-08, since none of this is
+// askable on the `-c` route:
+//
+//   - The option is on. `shopt -u autocd` then `subdir` is `command not
+//     found` at 127, which is what this shell already says.
+//   - The shell is interactive. `bash -c 'shopt -s autocd; subdir'` is
+//     `command not found` at 127 as well, with the option on: the name is
+//     interactive-only in bash and granting it to a script would be this
+//     shell doing something bash does not.
+//   - Command lookup has already failed. This is called from exec, after the
+//     builtins, the functions and PATH have all had their turn — measured
+//     with a *directory* named `echo` in the working directory, where
+//     `echo hello` still prints `hello`. So a directory never shadows a
+//     command; it only catches a word nothing else would run.
+//   - The word names a directory. `nosuchdir` is `command not found` at 127
+//     with the option on, so this is a fallback for directories and not a
+//     general one.
+//
+// What it then runs is `cd -- <every word>`, arguments and all, which is
+// bash's own substitution rather than a simplification of it: with the option
+// on, `subdir deeper` in bash 5.3.15 reports `cd: too many arguments` at
+// status 2 — the operands reach `cd`, which is the only way that message
+// could exist. This shell's `cd` ignores an operand after the first, which is
+// a difference in `cd` and not in this, and is why the words are handed on
+// whole rather than trimmed to one here.
+//
+// Whether the substitution is *announced* is where the two shells that have
+// this part company, so it is an axis and not a default with an exception:
+// bash writes `cd -- subdir` before moving and zsh writes nothing. See
+// Semantics.AutoCdAnnouncesTheSubstitution.
+//
+// The line goes to this shell's error stream, which is where bash puts it —
+// captured by `exec 2>file` and *not* suppressed by a redirection on the word
+// itself, since bash rewrites the command before it opens one. Ours is
+// written after the redirection is in place, so `subdir 2>/dev/null` hides
+// here what it shows there; that is a difference of one stream on one line,
+// and the alternative is threading an unredirected stream through exec for
+// it.
+func (r *Runner) autoCdInstead(ctx context.Context, argv []string) (status int, took bool) {
+	if !r.autoCd || !r.Interactive || len(argv) == 0 {
+		return 0, false
+	}
+	cd, ok := r.lookupBuiltin("cd")
+	if !ok {
+		// A shell whose `cd` was taken away with `enable -n` has nothing to
+		// substitute, so the word goes back to being a command that was not
+		// found.
+		return 0, false
+	}
+	// Through the runner's own stat, so the probe passes the gate for the
+	// reason runnable's does: this is the shell looking at the disk on a
+	// script's behalf, and a policy that hides a directory must hide it here
+	// too. A denied or missing candidate is simply not a directory, which is
+	// the answer that leaves the word a command.
+	info, err := r.stat(r.atDir(argv[0]))
+	if err != nil || !info.IsDir() {
+		return 0, false
+	}
+	operands := append([]string{"--"}, argv...)
+	if r.ask(r.sem().AutoCdAnnouncesTheSubstitution, "`autocd` writing the `cd` it read a directory name as") {
+		_, _ = fmt.Fprintln(r.stderr(), "cd "+strings.Join(operands, " "))
+	}
+	return cd(r, ctx, operands), true
 }

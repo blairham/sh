@@ -299,6 +299,12 @@ func Semantics() interp.Semantics {
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.
 	s.StoppedJobsHoldTheExit = interp.Yes
+	// `autocd` says what it did before doing it: with the option on, a bare
+	// `subdir` writes `cd -- subdir` and then moves. Measured 2026-09-08
+	// through a pseudo-terminal against bash 5.3.15, which is the only route
+	// the name works on at all — zsh, the other shell with the option, moves
+	// in silence.
+	s.AutoCdAnnouncesTheSubstitution = interp.Yes
 	s.TildePlusMinusExpands = interp.Yes
 	s.UnderscoreTracksTheLastArgument = interp.Yes
 	// Alone in the panel, bash writes `$_` before the first command runs,
@@ -1238,6 +1244,19 @@ func Apply(r *interp.Runner) {
 	// per *character typed*.
 	r.SetPromptUserFunc(interp.LoginName)
 	r.SetPromptHostFunc(interp.MachineName)
+	// $LINES and $COLUMNS follow the window, which this shell does by
+	// default: `shopt checkwinsize` in bash 5.3.15 is `on`, and a session
+	// there reports `COLUMNS=80 LINES=24` at its first prompt with nothing in
+	// a startup file asking for it. bash 3.2.57 answers `off` to the same
+	// question and is the one column of the panel this default is not right
+	// for; one bash dialect answers for both, and it answers with the
+	// version people are running.
+	//
+	// The default is here rather than in the option table because it is a
+	// fact about *this shell*, in the same way the option names above are:
+	// the capability itself belongs to the core, where zsh reaches it under
+	// no name at all. See interp.Runner.TracksWindowSize.
+	r.SetTracksWindowSize(true)
 	// Where the script is, which is a stack rather than a value — see
 	// callstack.go for why it cannot be stored.
 	registerCallStack(r)

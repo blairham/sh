@@ -46,6 +46,10 @@ const (
 	promptFieldSep = "|"
 )
 
+// autoCdTarget is the directory in the scratch home that a bare name is asked
+// to move into.
+const autoCdTarget = "projects"
+
 // completionTarget is the file Tab is asked to complete, and completionPrefix
 // is what is typed before pressing it.
 //
@@ -69,8 +73,10 @@ func home(root string, d Dialect) (string, error) {
 		return "", err
 	}
 	// A directory and some files, so completion has something realistic to
-	// answer and so the target is not the only name in the room.
-	if err := os.MkdirAll(filepath.Join(dir, "projects"), 0o700); err != nil {
+	// answer and so the target is not the only name in the room. The
+	// directory is also what the `autocd` row moves into, which is why it is
+	// named something a person would have rather than something a test would.
+	if err := os.MkdirAll(filepath.Join(dir, autoCdTarget), 0o700); err != nil {
 		return "", err
 	}
 	for _, name := range []string{completionTarget, "notes.txt", "other-file.txt"} {
@@ -92,6 +98,11 @@ func home(root string, d Dialect) (string, error) {
 // runs before every prompt, and two key rebindings — the plain one and the one
 // written for the editing mode the file selects, which is the shape of the
 // file that opened #1352.
+//
+// The `autocd` line is a real rc line rather than something typed later, which
+// is where a person puts it and is also the only way the row means anything:
+// an option set at the prompt would be graded in the same session that turned
+// it on, and a startup file is the thing that has to work.
 //
 // The order of the last two lines is load-bearing rather than tidy. The mode
 // comes first and the plain binding after it, so that both bindings are
@@ -116,8 +127,9 @@ PS2='%s'
 %s
 %s
 %s
+%s
 `, rcPromptPrefix, d.CwdEscape, promptFieldSep, d.UserEscape, promptAnchor, continuationPrompt,
-		d.PromptHook, strings.Join(d.RebindKeyInViMode, "\n"), d.RebindKey)
+		d.PromptHook, d.AutoCdOption, strings.Join(d.RebindKeyInViMode, "\n"), d.RebindKey)
 }
 
 // The foreground job the suspend checks use.

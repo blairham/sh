@@ -598,6 +598,10 @@ func Semantics() interp.Semantics {
 	s.StoppedJobsHoldTheExit = interp.Yes
 	// CDPATH moves in silence here.
 	s.CdpathAnnouncesTheDirectory = interp.No
+	// And so does `autocd`: `setopt autocd` then `subdir` at a prompt moves
+	// and writes nothing, where bash writes `cd -- subdir` first. Measured
+	// 2026-09-08 through a pseudo-terminal against zsh 5.9.2 started `-f`.
+	s.AutoCdAnnouncesTheSubstitution = interp.No
 	s.LinenoCountsFromTheFunction = interp.Yes
 	// A substring range is this shell's history-modifier syntax as well, and
 	// a segment beginning with an unquoted letter is read as a modifier
@@ -1558,6 +1562,18 @@ func Apply(r *interp.Runner) {
 	// which is the name that would move it, remains recorded rather than
 	// acted on (see setopt.go).
 	r.SetMatchOption(interp.StarStarCrossesDirectories, true)
+	// $LINES and $COLUMNS follow the window here too, and — like `**/` above
+	// — with no option name to ask for it: this shell simply does it, so
+	// there is nothing in setopt.go for a script to turn off. Measured
+	// 2026-09-08 through a pseudo-terminal against zsh 5.9.2 started with
+	// `-f`, which reports `COLUMNS=80 LINES=24` at its first prompt and
+	// `132`/`40` at the next prompt after a resize — the same two numbers
+	// bash answers with `checkwinsize` on.
+	//
+	// The same core switch bash's `checkwinsize` moves. One capability with
+	// two shells' worth of naming above it is exactly the shape a second copy
+	// gets written into, so there is one: interp.Runner.TracksWindowSize.
+	r.SetTracksWindowSize(true)
 	registerEmulate(r)
 	// This shell's own question about a name, under two names: `whence` and
 	// `where`. Not ksh93's builtin under the same spelling — the stream, the

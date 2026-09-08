@@ -103,6 +103,19 @@ var (
 	// carry a mark — `for i in 1 2`, `do` and `done` print nothing, and a
 	// wait on any of them would be answered by the echo of the keystrokes.
 	multiLineProbe = probe{"echo loop-$((6 * 7))-ok", "loop-42-ok"}
+	// The window's size as the shell reports it, which is the whole of what
+	// `checkwinsize` promises and is not askable anywhere but here: a session
+	// with no terminal has no window, so a `-c` probe shows every shell
+	// reporting both variables unset and cannot tell an implementation from
+	// an absence (#1445). The session's terminal is opened 24x80, so the mark
+	// is the only pair of numbers that can be right.
+	windowSizeProbe = probe{`printf 'win=%sx%s\n' "${COLUMNS-unset}" "${LINES-unset}"`, "win=80x24"}
+	// Where a bare directory name left the shell. Typed after the name
+	// itself, so what is graded is the directory the *next* line runs in
+	// rather than anything the substitution printed — bash writes `cd --
+	// projects` before moving and zsh writes nothing, so the sentence is not
+	// a mark two shells could share.
+	autoCdProbe = probe{`printf 'moved=%s\n' "${PWD##*/}"`, "moved=projects"}
 	// The two rebinding rows. Each line is typed in two pieces with the
 	// rebound key between them, so the mark appears only if the key moved the
 	// cursor back to the start — the tail is typed first and the head after
@@ -159,6 +172,7 @@ func probes() []probe {
 		recallProbe, searchProbe, chaffProbe, tickProbe, completionProbe,
 		undoProbe, escapeProbe, multiLineProbe,
 		rebindProbe, rebindViProbe,
+		windowSizeProbe, autoCdProbe,
 	}
 }
 
@@ -288,6 +302,37 @@ func checks() []check {
 						s.startupDrawn()
 				}
 				return Fail, s.dialect.UserEscape + " was not rendered as " + quote(u.Username) + ": " + s.startupDrawn()
+			},
+		},
+		{
+			name:   "the window's size reaches $COLUMNS and $LINES",
+			proves: "the shell keeps the two variables a startup file reads abreast of the terminal",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				if err := s.runProbe(windowSizeProbe); err != nil {
+					return Fail, "the terminal is 80x24 and the shell does not say so: " + err.Error()
+				}
+				return Pass, "$COLUMNS and $LINES are the terminal's"
+			},
+		},
+		{
+			name:   "a bare directory name is a cd",
+			proves: "the option the rc file set is read by command lookup, not merely remembered",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				if err := s.typeLine(autoCdTarget); err != nil {
+					return Fail, err.Error()
+				}
+				err := s.runProbe(autoCdProbe)
+				// Back where the session started whatever happened, because
+				// every row after this one is written against the scratch
+				// home: a check that moved the shell and left it there would
+				// fail the next completion row for this row's reason.
+				if cdErr := s.typeLine("cd"); cdErr != nil && err == nil {
+					return Fail, "the shell would not go home again: " + cdErr.Error()
+				}
+				if err != nil {
+					return Fail, quote(autoCdTarget) + " did not move the shell: " + err.Error()
+				}
+				return Pass, "typing " + quote(autoCdTarget) + " moved the shell into it"
 			},
 		},
 		{

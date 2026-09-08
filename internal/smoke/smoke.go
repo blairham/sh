@@ -106,6 +106,18 @@ type Dialect struct {
 	// the same session the rest of the suite runs in.
 	PromptHook string
 
+	// AutoCdOption is the rc-file line that turns on reading a bare directory
+	// name as a `cd`, in this shell's own spelling: `shopt -s autocd` in one
+	// and `setopt autocd` in the other. The two shells share the option's
+	// *name* and not the builtin that sets it, which is why this is a line
+	// and not a name.
+	//
+	// The row that uses it is one of the two this suite exists for: the
+	// behavior is interactive-only in bash and in zsh both, so nothing on the
+	// `-c` route can tell it working from missing — a corpus row can grade
+	// only that a script still does *not* get it (#1445).
+	AutoCdOption string
+
 	// JobRunning and JobStopped are the words this shell lists a job's state
 	// with. They differ, and the difference is the point of having a column
 	// per dialect: bash writes `Running` and `Stopped`, zsh writes `running`
@@ -128,8 +140,9 @@ func Bash() Dialect {
 			"set -o vi",
 			`bind -m vi-insert '"\C-o": beginning-of-line'`,
 		},
-		PromptHook: `PROMPT_COMMAND='SMOKE_HOOK=$((SMOKE_HOOK + 1))'`,
-		JobRunning: "Running", JobStopped: "Stopped",
+		PromptHook:   `PROMPT_COMMAND='SMOKE_HOOK=$((SMOKE_HOOK + 1))'`,
+		AutoCdOption: "shopt -s autocd",
+		JobRunning:   "Running", JobStopped: "Stopped",
 	}
 }
 
@@ -147,8 +160,9 @@ func Zsh() Dialect {
 			"bindkey -v",
 			"bindkey -M viins '^O' beginning-of-line",
 		},
-		PromptHook: "precmd() { SMOKE_HOOK=$((SMOKE_HOOK + 1)); }",
-		JobRunning: "running", JobStopped: "suspended",
+		PromptHook:   "precmd() { SMOKE_HOOK=$((SMOKE_HOOK + 1)); }",
+		AutoCdOption: "setopt autocd",
+		JobRunning:   "running", JobStopped: "suspended",
 	}
 }
 

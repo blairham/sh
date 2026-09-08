@@ -3255,6 +3255,25 @@ type Semantics struct {
 	// in silence.
 	CdpathAnnouncesTheDirectory Answer
 
+	// AutoCdAnnouncesTheSubstitution writes the `cd` that a bare directory
+	// name was read as, before moving — bash; zsh moves in silence.
+	//
+	// Only the two shells that have the option at all reach this, which is
+	// why it is unanswered in the base rather than given the quieter default:
+	// dash and ksh93 have no `autocd`, so nothing can turn the capability on
+	// in them and nothing can ask. See Runner.autoCdInstead.
+	//
+	// Measured 2026-09-08 through a pseudo-terminal, since the name is
+	// interactive-only in both: bash 5.3.15 with `shopt -s autocd` writes
+	// `cd -- subdir` and then moves, and the line survives a `2>/dev/null` on
+	// the word itself while `exec 2>file` captures it. zsh 5.9.2 with `setopt
+	// autocd` writes nothing at all and moves.
+	//
+	// An axis rather than a bash-shaped default with a zsh exception,
+	// because the two answers are a conflict and not a subset: there is no
+	// ordering of the shells in which one derives the other's silence.
+	AutoCdAnnouncesTheSubstitution Answer
+
 	// FcEmptyHistoryIsAnError has `fc` report the event it cannot find —
 	// zsh; bash and dash answer a script with silence at 0.
 	FcEmptyHistoryIsAnError Answer

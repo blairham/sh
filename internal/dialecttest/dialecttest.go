@@ -72,6 +72,17 @@ type Base struct {
 	Dir  string
 	Vars map[string]string
 	Env  []string
+	// Interactive makes the runner one, for the behaviors a shell keeps for
+	// a person. `autocd` is the case this was added for: with the option on,
+	// bash 5.3.15 reads a bare directory name as a `cd` at a prompt and says
+	// `command not found` for the same word under `-c`, so a test that could
+	// only build a non-interactive runner could not tell the option working
+	// from the option missing.
+	//
+	// False is the default because it is the route nearly every case here
+	// takes, and because a runner that claimed to be interactive without one
+	// would answer `$-` with an `i` no terminal backs.
+	Interactive bool
 }
 
 // Runner returns a runner wired to all four of the preset's vectors, with
@@ -93,6 +104,7 @@ func (p Preset) Runner(b Base) *interp.Runner {
 		Semantics: &sem, Diagnostics: &diag,
 		Dialect: &d,
 		Name:    name, Dir: b.Dir, Vars: b.Vars, Env: b.Env,
+		Interactive: b.Interactive,
 	}
 	p.Apply(r)
 	return r

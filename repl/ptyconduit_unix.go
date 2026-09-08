@@ -14,7 +14,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-	"unsafe"
 
 	"github.com/blairham/sh/internal/pty"
 )
@@ -376,19 +375,4 @@ func rawOutput(f *os.File) error {
 	}
 	t.Oflag &^= syscall.OPOST
 	return ioctl(fd, tcSets, &t)
-}
-
-// terminalSize is the terminal's rows and columns, or zeroes if it will not
-// say.
-func terminalSize(f *os.File) (rows, cols int) {
-	if f == nil {
-		return 0, 0
-	}
-	var ws winsize
-	_, _, errno := syscall.Syscall6(syscall.SYS_IOCTL, f.Fd(),
-		syscall.TIOCGWINSZ, uintptr(unsafe.Pointer(&ws)), 0, 0, 0)
-	if errno != 0 {
-		return 0, 0
-	}
-	return int(ws.rows), int(ws.cols)
 }

@@ -4,6 +4,7 @@
 package driver_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -121,5 +122,32 @@ func TestASessionsInputIsACommandString(t *testing.T) {
 	}
 	if status := s2.Run(t.Context(), `echo "abc`); status == 0 {
 		t.Errorf("status 0 and output %q, want a refusal", out.String())
+	}
+}
+
+// TestAGrammarChangeMidProgramKeepsTheRoute.
+//
+// A run-time option can replace the runner's dialect, and the front end hands
+// the replacement to the parser for the lines after it. A replacement is a
+// *language* and carries no route, so taking it as written turned the route's
+// answer off half way down a program — the first line lenient and the rest
+// strict, in one file, for no reason a reader could see.
+//
+// Driven from a command string, which is the direction that discriminates: on
+// every other route both answers refuse and the bug is invisible.
+func TestAGrammarChangeMidProgramKeepsTheRoute(t *testing.T) {
+	sh := quoteRouteShell()
+	sh.Register = func(r *interp.Runner) {
+		r.Register("groups-on", func(r *interp.Runner, _ context.Context, _ []string) int {
+			r.SetMatchOption(interp.QuantifiedGroupsEverywhere, true)
+			return 0
+		})
+	}
+	out, errs, code := runArgs(t, sh, "testsh", "-c", "groups-on\necho \"abc\n")
+	if code != 0 || errs != "" {
+		t.Errorf("status %d stderr %q, want the quote still closed after the toggle", code, errs)
+	}
+	if out != "abc\n\n" {
+		t.Errorf("output %q, want abc and the newline the quote swallowed", out)
 	}
 }

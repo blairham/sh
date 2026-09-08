@@ -6,7 +6,6 @@ package repl
 import (
 	"context"
 	"os"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -98,6 +97,39 @@ func waitUntil(t *testing.T, what string, cond func() bool) {
 	t.Fatalf("timed out waiting for %s", what)
 }
 
+// settled waits until the handler has stopped being offered the descriptor,
+// which is how a test knows the editor has left the loop in watchfd.go and is
+// back in a plain read with the terminal in raw mode.
+//
+// It is needed by exactly the test that arms a descriptor nothing ever drains
+// and a handler that never removes itself, which is the spin descriptorProbe's
+// own drain field exists to keep every other test out of. Disarming stops that
+// spin, but not at the instant disarm returns: a handler already running
+// finishes first, and a handler runs with the terminal handed back to its own
+// line discipline. **A keystroke that lands in one of those windows is not the
+// byte that was typed.** Measured on Linux, a `^D` typed while the terminal is
+// in its own line discipline is stored by the line discipline as a NUL and the
+// `\x04` never arrives, so a session told to stop is not told anything — which
+// is #1448, a test racing a spin it set up on purpose rather than an editor
+// that could not see a key. macOS hands the `\x04` back, which is why it only
+// ever failed on one of the two.
+//
+// So: quiet for long enough that the handler which was running when disarm
+// landed has returned and put raw mode back, and only then the keystroke.
+func settled(t *testing.T, p *descriptorProbe) {
+	t.Helper()
+	was := -1
+	waitUntil(t, "the editor to leave the descriptor loop", func() bool {
+		now := len(p.called())
+		quiet := now == was
+		was = now
+		return quiet
+	})
+	// One more quiet turn than the condition needed, because the count is
+	// taken at the *start* of a handler and raw mode goes back at its end.
+	time.Sleep(50 * time.Millisecond)
+}
+
 // probeSession is a terminal session with a descriptor probe wired into it.
 func probeSession(t *testing.T, p *descriptorProbe) *session {
 	t.Helper()
@@ -179,19 +211,6 @@ func TestADescriptorThatBecomesReadableCallsTheShell(t *testing.T) {
 // An editor that served descriptors before looking at the terminal would sit
 // in that loop for ever and never see a key.
 func TestAKeystrokeGetsPastAPermanentlyReadableDescriptor(t *testing.T) {
-	if runtime.GOOS == "linux" {
-		t.Skip("#1448: fails on Linux, where it passes on macOS in ~1.2s. " +
-			"This is very likely REAL starvation rather than a test defect: " +
-			"with a permanently readable descriptor armed and a handler that " +
-			"neither drains nor disarms, serveDescriptors calls that handler " +
-			"about 150,000 times a second — measured — and each call hands " +
-			"the terminal back to its own line discipline and takes it away " +
-			"again. Linux turns a ^D typed inside that window into a NUL, so " +
-			"the session never ends and the test waits out its deadline. " +
-			"Quarantined only to unblock the merge queue. Do not delete it, " +
-			"do not lengthen the timeout, and do not close #1448 on the " +
-			"strength of this skip.")
-	}
 	read, write, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -215,10 +234,17 @@ func TestAKeystrokeGetsPastAPermanentlyReadableDescriptor(t *testing.T) {
 		t.Fatal(werr)
 	}
 	waitFor(t, s.ran, "through", "a command typed past a descriptor at end of input")
-	if len(p.called()) == 0 {
-		t.Error("the callback never ran at all, so this proved nothing about getting past it")
-	}
+	// And the descriptor really was being served the whole time, which is
+	// what makes the line above a claim about getting *past* one. Waited for
+	// rather than read once: the command runs while the editor is nowhere
+	// near the descriptor loop, so the first turn of that loop is after the
+	// output, not before it.
+	waitUntil(t, "the callback", func() bool { return len(p.called()) > 0 })
 	p.disarm()
+	// The spin this test arms on purpose has to have stopped before the
+	// session is told to stop, or the keystroke that tells it lands in the
+	// middle of a handler. See settled.
+	settled(t, p)
 	s.end()
 }
 

@@ -1007,7 +1007,10 @@ Details, each measured:
   taken the slot. `${(qU-)v}` quotes with backslashes, so the adjacency is
   literal, and `${(qq-)v}` and `${(q-q)v}` are errors in the flags, so
   only a lone `q` takes it. The modifier may be the later of two:
-  `${(-q-)v}` is minimal quoting with a sort flag in front of it.
+  `${(-q-)v}` is minimal quoting there, the leading `-` doing nothing to a
+  scalar — refused here all the same, because a group is refused for what
+  is written in it rather than for what that would have come to on this
+  value, which is the rule `(A)` is refused under.
 - **`(Q)` removes quoting and expands nothing**, and that pair is the
   whole flag. `v='"$x"'` with `x` set is `$x`, two characters, where a
   reading that handed the value to the parser would answer `hi`;
@@ -1453,8 +1456,8 @@ than hidden; nothing in the flag's own surface reaches it.
 Flags zsh has and this slice does not — `(e)` (expand the result again),
 `(z)` (split by shell parsing with no options — the capital `(Z:opts:)` is
 built), `(t)`, `(D)`, padding, and the rest of the
-alphabet, plus `(q+)`, the signed-numeric sort flag `(-)` — which is every
-`-` that a `q` did not eat — and
+alphabet, plus `(q+)` (#1530), the signed-numeric sort flag `(-)` — which
+is every `-` that a `q` did not eat, #1531 — and
 `(qqq…)` beyond four — are refused at run time naming the flag, with the
 same fatal shape as an unrecognized one. Refusing loudly is the honest
 answer where imitating would answer wrong, and the refusal is asserted

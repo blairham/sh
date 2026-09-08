@@ -352,12 +352,17 @@ holds all of it, along with the measurement of what a widget can read and write
 and what the four line parameters do to each other. bash's `bind -x` is the
 same capability under a different name and is not built — #1352.
 
-Two spellings that would need more than this seam are refused by name rather
-than half-built, which is the rule the tree keeps for a gap:
+**A callback on a descriptor** — zsh's `zle -F`, and how a plugin in that shell
+does asynchrony — needed this read loop to wait on more than the terminal, and
+it has that now: `repl.Shell.WatchedDescriptors` is asked before every wait and
+`repl.Shell.DescriptorReady` is called for whichever of them woke. The waiting
+is all this package contributes. What a descriptor *means*, which function is
+called for it and what the shell calls the command that armed one are the
+dialect's, in `dialect/zsh/zlewatch.go`.
 
-- **A callback on a descriptor** — zsh's `zle -F`, and how a plugin in that
-  shell does asynchrony. It needs this read loop to wait on more than the
-  terminal.
+One spelling that would need more than this seam is still refused by name
+rather than half-built, which is the rule the tree keeps for a gap:
+
 - **An action of the shell's asking the editor to perform one of the
   editor's** — `zle end-of-line` from inside a widget. The editor's actions
   read the terminal and redraw, so running one from inside a call is
@@ -442,6 +447,27 @@ the test asks the terminal what mode it is in rather than trusting its own
 bookkeeping. Measured, a job started with `&` printing six lines at a prompt:
 six bare line feeds before and none after, against none in bash 5.3.15 either
 way.
+
+**A descriptor handler is a third route, and it takes the terminal back only if
+it writes.** A handler is offered its descriptor while the editor waits for a
+key, and a descriptor at the end of its input is readable for ever — so one
+that never removes itself is called tens of thousands of times a second, which
+is what the shell being modeled does with the same arrangement. Restoring for
+each of those calls left the terminal in its *own* line discipline for **52%**
+of an idle prompt with the streams going straight to it, and **96%** under a
+block store where the restore also waits for the copy; that shell never hands
+it back for a handler at all, because its editor's raw mode keeps `OPOST` and
+`ONLCR` and drops only `ICANON` and `ECHO`. The window is not cosmetic: a `^D`
+typed into one is read back as a NUL on Linux and a `^C` becomes a signal
+rather than the byte the editor reads, which is a control key at an idle prompt
+being closer to a coin toss than to a race (#1463, #1448).
+
+So the restore happens at the handler's **first byte** and not before, and
+under a block store not at all — there the copy is already adding the carriage
+returns by reading the terminal's mode, which is the paragraph above. Matching
+that shell's raw mode instead would end the flap for every handler at once and
+is the larger change: the same mode keeps `ISIG`, which turns the `^C` this
+editor reads as a byte into a signal.
 
 ## Measured, and deliberately not a field
 

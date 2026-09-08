@@ -189,8 +189,8 @@ var shoptSwitches = map[string]struct {
 //     here without it would be correcting where bash does not. The corrector
 //     itself is already written and already shared:
 //     interp.Runner.correctPath, which `cdspell` reaches. What is missing is
-//     the completer asking it, and `direxpand` beside it. See the follow-up
-//     issue, which carries the table above.
+//     the completer asking it, and `direxpand` beside it. See #1562, which
+//     carries the table above and what each half would take.
 //
 // It is interactive-only in bash as well, so a `-c` probe cannot tell an
 // implementation from an absence — it shows both shells doing nothing. It was

@@ -60,8 +60,18 @@ build:
 # manufactures false kills in a mutation run.
 TESTFLAGS ?= -p 4
 
+# Two runs, because one test does not want the race detector and everything
+# else does. TestNoDialectCombinationPanics is a recover()-based panic sweep
+# over pure parsing: instrumentation cannot make it find a panic it was not
+# already finding, and it costs 4.7x — measured on a CI runner, 89s against
+# 19s for the same 32 vectors, which was ~80% of everything CI spent testing
+# this module. So the instrumented pass runs a probe of it and this
+# second pass runs the sweep itself, over every vector and the whole corpus.
+# Dropping the second line does not make `make test` faster; it makes it stop
+# proving the thing that file exists to prove.
 test:
 	go test -race $(TESTFLAGS) ./...
+	go test $(TESTFLAGS) ./syntax -run TestNoDialectCombinationPanics
 
 test-cover:
 	go test -race $(TESTFLAGS) -coverprofile=coverage.out ./...

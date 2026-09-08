@@ -168,26 +168,41 @@ jobs:
       if: needs.changes.outputs.code == 'true'
     - run: go test -race ./...
       if: needs.changes.outputs.code == 'true'
-    # TEMPORARY (#1552) — removed in the next commit on this branch. The whole
-    # point of #1552 is a number measured on a runner rather than on an
-    # 18-core laptop, and this is that measurement: the same 32 vectors of
-    # TestNoDialectCombinationPanics, run once with the race detector and once
-    # without, on the machine whose clock CI is actually gated by. Both
-    # binaries are built first so the build is not inside either timing.
-    - name: TEMPORARY (#1552) what does -race cost this one test on a runner?
-      if: needs.changes.outputs.code == 'true' && matrix.os == 'ubuntu-latest'
-      run: |
-        set -euo pipefail
-        sel='TestNoDialectCombinationPanics/(every-flag|no-flag|mixture-.)$'
-        go test -c -o /tmp/nr.test ./syntax
-        go test -race -c -o /tmp/r.test ./syntax
-        sum() { awk '/--- PASS: TestNoDialectCombinationPanics\// {gsub(/[()s]/,"",$NF); t+=$NF; n++} END {printf "%d vectors, %.2fs of subtest time\n", n, t}'; }
-        s=$SECONDS; /tmp/nr.test -test.run "$sel" -test.v >/tmp/nr.out; nr=$((SECONDS-s))
-        s=$SECONDS; /tmp/r.test  -test.run "$sel" -test.v >/tmp/r.out;  ra=$((SECONDS-s))
-        echo "nproc: $(nproc)"
-        echo "no -race: ${nr}s wall — $(sum </tmp/nr.out)"
-        echo "   -race: ${ra}s wall — $(sum </tmp/r.out)"
-        awk -v n="$nr" -v r="$ra" 'BEGIN{printf "wall multiplier: %.2fx\n", r/n}'
+    # And the one test that does not want the race detector, run without it.
+    #
+    # TestNoDialectCombinationPanics was 525s of the 649s the step above spent
+    # testing the whole module, and 99.8% of the CPU its own package used. It
+    # is a recover()-based panic sweep over pure parsing, so instrumentation
+    # cannot make it catch a panic it was not already catching; measured on
+    # this runner it just costs 4.7x — 89s against 19s for the same 32
+    # vectors. The step above still runs it as a concurrency probe — every
+    # vector, a window of the corpus — and this step is the sweep itself, over
+    # the whole corpus, which is what proves no dialect combination can crash
+    # the parser.
+    #
+    # Sharded across the two operating systems this job already runs on, half
+    # the vectors each. The answer is a property of the parser rather than of
+    # the platform, so running the whole sweep twice bought nothing while one
+    # leg waited for the other.
+    #
+    # Half each, rather than all of it on whichever leg looks idle, because
+    # which leg that is does not hold still. Measured across runs: the Linux
+    # leg is steady, 90s of interp and 206s of instrumented tests twice within
+    # a second of each other, while macOS moved 1.5x in an hour, 110s of interp
+    # against 167s. Handing macOS the whole sweep was tried on this branch and
+    # timed: it took 59s off the Linux leg and landed on a macOS runner having
+    # a slow day, which cost more than the split had saved.
+    #
+    # An expression and not a second matrix dimension on purpose: the required
+    # checks are named `Build and test (ubuntu-latest)` and `(macos-latest)`,
+    # and another matrix key renames both — a required check reporting under a
+    # name protection is not waiting for is pending forever, which is the trap
+    # `changes` exists to avoid.
+    - name: The dialect-combination sweep, without the race detector
+      if: needs.changes.outputs.code == 'true'
+      env:
+        SH_DIALECTCOMBO_SHARD: ${{ matrix.os == 'ubuntu-latest' && '0/2' || '1/2' }}
+      run: go test ./syntax -run TestNoDialectCombinationPanics
     # Deliberately a step of an already-required job rather than a job of its
     # own. A new job would have to be added to branch protection to gate
     # anything, and until every open branch carried this workflow the new

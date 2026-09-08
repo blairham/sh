@@ -135,3 +135,16 @@ func scanSubscriptFlags(text string) (g *SubscriptFlags, rest string, ok bool) {
 	}
 	return nil, text, false
 }
+
+// LeadingIndex is one subscript of a chain: everything ParamExpr.Index and
+// ParamExpr.IndexFlags hold for the last one, for one of the ones before it.
+//
+// A pair rather than a bare word, because a subscript is the two together —
+// `${a[(r)x][1]}` opens with a flag group, and a link that carried only the
+// text would search nothing and read `(r)x` as arithmetic.
+type LeadingIndex struct {
+	// Index is the subscript as written, flag group included.
+	Index *Word
+	// Flags is the group it opened with, nil when there was none.
+	Flags *SubscriptFlags
+}

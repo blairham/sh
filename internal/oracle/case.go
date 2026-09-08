@@ -5124,6 +5124,46 @@ echo "st=$?"`,
 		Why:     "the pattern half of the same rule, on the one construct that reaches it: a backslash before a character that needed no escaping is two characters of the pattern in zsh, so the operand finds the element whose value holds a backslash and does not find `beta`. The other five have no flag group in a subscript and read the whole thing as arithmetic, which is a diagnostic rather than an answer",
 	},
 	{
+		ID: "subscript/a-second-subscript-counts-characters", Category: "expansion",
+		Snippet: `a=(one two three); printf "[%s]\n" "${a[1][2]}"`,
+		Why:     "the base case for a chained subscript: the first names one element and the second counts the characters of it. Five answers to one text — zsh reads both and says `n`, bash 5.3 and that binary as `sh` call it a bad substitution at 1, bash 3.2 reads the first and *ignores* the second and says `two`, ksh93 answers empty at 0, and dash has no arrays to subscript at all. The row divides the panel, which is what makes the construct a grammar's and not the language's",
+	},
+	{
+		ID: "subscript/a-second-subscript-on-an-association", Category: "expansion",
+		Snippet: `typeset -A m; m[k]=abc; printf "[%s]\n" "${m[k][2]}"`,
+		Why:     "the same chain where the first subscript is a *key* rather than a position: the key names one value and the second subscript counts its characters, so zsh says `b`. It is the shape a real plugin manager writes ten times to ask whether an ice value begins with `!`, and bash 5.3 calls it a bad substitution where bash 3.2 has no `-A` and answers the whole value",
+	},
+	{
+		ID: "subscript/a-second-subscript-after-a-range", Category: "expansion",
+		Snippet: `a=(one two three four five); printf "[%s]\n" "${a[2,4][1]}"`,
+		Why:     "the half that makes it one rule rather than two: a range names *elements*, so the subscript behind it counts elements and answers `two` where the character reading would have answered `t`. Paired with the row above, the two say that a subscript counts what it is handed rather than counting by where it stands",
+	},
+	{
+		ID: "subscript/a-range-in-the-second-position", Category: "expansion",
+		Snippet: `a=(one two three four five); set -- ${a[2,4][1,2]}; printf "n=%d" $#; printf "[%s]" "$@"; echo`,
+		Why:     "a range behind a range: it ranges over the three elements the first named and keeps two of them, so the result is still a list and the count says so. The fields are printed with it because a count alone cannot tell two elements from one holding a space",
+	},
+	{
+		ID: "subscript/a-third-subscript", Category: "expansion",
+		Snippet: `a=(one two three four five); printf "[%s]\n" "${a[2,4][2][3]}"`,
+		Why:     "the chain is not a special case of two: the range names three elements, `[2]` names `three` out of them, and `[3]` counts characters of that and answers `r`. A reading that handled a pair and stopped would answer the second subscript's element here",
+	},
+	{
+		ID: "subscript/a-length-over-a-chain", Category: "expansion",
+		Snippet: `a=(one two three); printf "[%s][%s]\n" "${#a[1,3][1,2]}" "${#a[1,3][2]}"`,
+		Why:     "a count where the last subscript named elements and a width where it named one value — 2 and 3 in zsh — which is the same split `${#a[1,3]}` and `${#a[2]}` already have, one link further along. It is the shape question asked of the *final* subscript rather than the first, and a reading that asked the first would answer 3 and 3",
+	},
+	{
+		ID: "subscript/a-chain-is-braced-only", Category: "expansion",
+		Snippet: `a=(hello world); printf "[%s]\n" "$a[1][2]"`,
+		Why:     "the boundary of the construct, and the reason the grammar reads a chain in the braced spelling alone: written without braces zsh takes *one* subscript and leaves the rest as ordinary text, so the answer is `hello[2]`. The other five have no bare subscript either and answer `hello[1][2]`, which agrees on the trailing brackets and disagrees about the first. Quoted so that the leftover brackets are text rather than a pattern with no matches",
+	},
+	{
+		ID: "subscript/a-chain-whose-first-link-names-nothing", Category: "expansion",
+		Snippet: `a=(x y); printf "[%s]\n" "${a[9][1]-none}"`,
+		Why:     "a chain is unset when a link before the last named nothing, rather than empty: there is no ninth element, so `-` substitutes. Unanimous in the four that answer at all — zsh reaches the reading and the two bash builds and ksh93 arrive from `${a[9]}` being unset — which is what makes it a claim about the chain in the one shell that has it",
+	},
+	{
 		ID: "pattern/an-escape-before-an-ordinary-character", Category: "patterns",
 		Snippet: `setopt globsubst 2>/dev/null; p='bet\a'; case beta in $p) echo strips;; *) echo keeps;; esac; case 'bet\a' in $p) echo literal;; *) echo no;; esac`,
 		Why:     "the pattern language's own answer, asked the only way it can be: quote removal spends an escape written in the source before the matcher sees it, so a `case` pattern spelled `bet\\a` is `beta` in all six and says nothing. A *substituted* pattern asks it — five shells match the result of an expansion as a pattern, and the sixth does under the option this line sets. A backslash before a character that needed no escaping is spent in five and kept in zsh, where the pattern is five characters",

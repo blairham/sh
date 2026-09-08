@@ -258,6 +258,17 @@ func Dialect() syntax.Dialect {
 	// `3`, where bash 3.2, bash 5.3 and dash print `x[1]` and `0a`. This
 	// shell alone, which is why it is set here and nowhere else.
 	d.BareSubscript = true
+	// A braced expansion carries more than one subscript here, each reading
+	// what the one before it named. Measured 2026-09-08 on zsh 5.9.2 with
+	// `a=(one two three); echo ${a[1][2]}`: this shell prints `n`, bash 5.3
+	// and that binary as `sh` both answer `bad substitution`, ksh93 prints
+	// nothing, dash has no arrays, and bash 3.2 prints `two` — the second
+	// subscript ignored rather than read. Five different answers to one text,
+	// and this is the shell the flag describes.
+	//
+	// `~/.zi/bin/zi.zsh` writes `${ICE[atload][1]}` ten times, in the
+	// function that sources a plugin (#1516).
+	d.ChainedSubscript = true
 	// And a parameter that is not a name carries one too: `${@[1]}` is the
 	// first positional parameter here and `${1[2]}` the second character of
 	// the first. Measured 2026-09-05 on zsh 5.9.2 against the rest of the

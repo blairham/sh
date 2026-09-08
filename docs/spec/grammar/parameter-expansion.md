@@ -2810,6 +2810,108 @@ here and not worked around here.
 `-unknown-flag-is-arithmetic`, `-operand-is-text-as-written`,
 `-that-selects-nothing` and `-counts-matches-and-moves-the-start`.
 
+## More than one subscript — zsh only
+
+A braced expansion may carry **several** subscripts, each reading what
+the one before it named:
+
+    ${m[k][2]}      the second character of the value under `k`
+    ${a[2,4][1]}    the first of the three elements the range named
+
+There is one rule behind both and it is a rule the language already has:
+a subscript counts **elements** when it is handed a list and
+**characters** when it is handed one string. A chain only changes where
+the thing it is handed comes from.
+
+Measured 2026-09-08 on zsh 5.9.2, with `a=(one two three four five)`:
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `${a[1][2]}` | `n` — one element, so characters |
+| `${a[2,4][1]}` | `two` — three elements, so elements |
+| `${a[@][2]}` | `two` |
+| `${a[2,4][1,2]}` | `two three`, and two fields unquoted |
+| `${a[2,4][2][3]}` | `r` — the rule again, as deep as it is written |
+| `${s[2,4][2]}` on `s=abcdef` | `c` — a range over a string is a substring, which is one value |
+
+The rest of the panel divides five ways on `${a[1][2]}`, which is what
+makes this a grammar's construct and not the language's: bash 5.3.15 and
+that binary as `sh` both answer `${a[1][2]}: bad substitution` at 1,
+bash 3.2.57 reads the first subscript and **ignores** the second and
+answers `two`, ksh93 answers empty at 0, and dash has no arrays to
+subscript at all.
+
+### The shape is the *last* subscript's
+
+How many fields the whole expansion makes, and whether `${#…}` is a
+count or a width, are questions about the final subscript rather than
+the first. Measured with `a=(one two three)`:
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `set -- ${a[1,3][1,2]}; echo $#` | `2` |
+| `set -- ${a[1,3][2]}; echo $#` | `1` |
+| `${#a[1,3][1,2]}` | `2`, a count |
+| `${#a[1,3][2]}` | `3`, a width |
+| `${#a[@][2]}` | `3`, a width |
+
+A link before the last that named nothing leaves the whole expansion
+**unset**, which is what the conditionals test: with `a=(x y)`,
+`${a[9][1]-none}` is `none`.
+
+### It is not the nested spelling with the braces left out
+
+`${${a[2,4]}[1]}` and `${a[2,4][1]}` are different expansions, and
+quoting is what separates them. The nested spelling has an inner
+expansion, and quoting joins what that came to before the subscript is
+read: `"${${a[2,4]}[1]}"` is `t`, the first character of
+`two three four`. The chain has no inner expansion for the quotes to
+join, so `"${a[2,4][1]}"` is `two` — the same answer it gives unquoted.
+
+### The chain is the braced spelling's
+
+Written without braces this shell reads **one** subscript and leaves the
+rest as ordinary text: with `a=(hello world)`, `"$a[1][2]"` is
+`hello[2]`, where the other five columns answer `hello[1][2]`. So the
+bare form is not a shorter way to write a chain, and
+`array/a-subscript-without-braces-is-read-once` above already pinned
+that half.
+
+### Grammar
+
+Grammar flag `ChainedSubscript`, consumed by the **parser**, which reads
+the brackets in a loop rather than once. Without it the second bracket
+is not consumed and the leftover text makes the expansion unreadable,
+which is exactly how the grammars without the chain answer
+`${a[1][2]}`.
+
+The parsed shape keeps the **last** subscript where a single one has
+always lived, in `ParamExpr.Index`, and the earlier ones in
+`ParamExpr.Leading`. That is deliberate and it is why nothing that reads
+a subscripted node had to be taught that chains exist: every question
+anything asks of one — whether it is the whole array, whether it is a
+range, how many fields it makes, whether its length is a count or a
+width — is a question about the final subscript, and the leading ones
+only say what that final one is read against.
+
+### What this implementation refuses by name
+
+A chain on a **nested** expansion — `${${a}[1][2]}`, which zsh answers
+`e`. That is the two constructs at once, and the second link would have
+to read what the first named through the inner expansion's shape rather
+than through a name's. It is refused by name —
+`a chain of subscripts on a nested expansion is not implemented` —
+rather than answered with the last subscript alone, which would be a
+plausible value at status 0.
+
+### What the corpus pins
+
+`subscript/a-second-subscript-counts-characters` (the five-way split),
+`-on-an-association`, `-after-a-range`,
+`subscript/a-range-in-the-second-position`, `subscript/a-third-subscript`,
+`subscript/a-length-over-a-chain`, `subscript/a-chain-is-braced-only` and
+`subscript/a-chain-whose-first-link-names-nothing`.
+
 ## Choosing elements: `:#`, `:|` and `:*` — zsh only
 
 Three operators that change **which elements** a value has, where the
@@ -3108,6 +3210,8 @@ reason: `${$((6*7))[1]}`.
     BareSubscript          $a[1] and $#a, written without braces — zsh only
     ArraySubscriptFlags    ${a[(re)v]}, a flag group inside the brackets
                            — zsh only
+    ChainedSubscript       ${m[k][2]}, a second subscript reading what the
+                           first named — zsh only
     SpecialParamSubscript  ${@[1]}, ${1[2]}, ${?[1]} — a subscript on a
                            parameter that is not a name — zsh only
     ProcessSubstitutionInParamOperand
@@ -3127,7 +3231,9 @@ those characters that way and three read them as text.
 stronger still: every other member of the panel refuses the expansion
 outright. `ArraySubscriptFlags` is false for both on evidence stronger
 again: the four shells that lack it read `${a[(r)v]}` as arithmetic, and
-so does the shell that has it whenever the group is not one it knows. `NestedParamExpansion` is false for both on the same evidence:
+so does the shell that has it whenever the group is not one it knows. `ChainedSubscript` is false for both because the same text
+has five readings across the panel: two shells refuse it, one ignores
+the second subscript, one answers empty, and one has no arrays. `NestedParamExpansion` is false for both on the same evidence:
 the other five columns refuse it, in three different wordings.
 
 ## What this does not cover

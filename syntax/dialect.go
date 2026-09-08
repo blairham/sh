@@ -1580,6 +1580,32 @@ type Dialect struct {
 	// them.
 	BareSubscript bool
 
+	// ChainedSubscript lets a braced expansion carry more than one subscript,
+	// each reading what the one before it named: `${m[k][2]}` is the second
+	// *character* of the value under `k`, and `${a[2,4][1]}` the first
+	// *element* of the three the range named. Which of the two a subscript
+	// counts is decided by what it is handed rather than by where it stands,
+	// so a chain is the same rule applied twice and not a new one.
+	//
+	// One shell in the panel, measured 2026-09-08 on zsh 5.9.2 with
+	// `a=(one two three); ${a[1][2]}`: this shell answers `n`, bash 5.3.15
+	// and that binary as `sh` both answer `${a[1][2]}: bad substitution`,
+	// dash has no arrays to subscript, ksh93 answers empty, and bash 3.2.57
+	// answers `two` — the first subscript read and the second ignored, which
+	// is the reading none of the others has and is not the one this enables.
+	// So the text divides the panel, and this is the grammar that has it.
+	//
+	// Braced only. Measured on the same binary: `$m[k][2]` unbraced is one
+	// subscript and the rest is a pattern — `no matches found: abc[2]` — so
+	// the bare spelling keeps its single bracket, which is what
+	// Lexer.bareSubscript already reads.
+	//
+	// It rides on ArraySubscript, which is what makes the first bracket a
+	// subscript at all. `~/.zi/bin/zi.zsh` writes `${ICE[atload][1]}` ten
+	// times, in the function that decides whether an `atload'!…'` ice needs
+	// tracking (#1516).
+	ChainedSubscript bool
+
 	// ArithCharacterCode enables `#name` and `##c` inside an arithmetic
 	// expression: the code of the first character of a parameter's value, and
 	// the code of a character written out.

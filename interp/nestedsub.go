@@ -57,22 +57,26 @@ func (r *Runner) nestedSubscript(e *syntax.ParamExpr) (words []string, set, isLi
 		// one it would have on the name itself.
 		return r.nestedSubscriptResult(e, elems, r.subscriptYieldsAList(ref))
 	}
+	if len(e.Leading) > 0 {
+		// A chain on a nested expansion — `${${a}[1][2]}` — is the two
+		// constructs at once, and the second link would have to read what
+		// the first named through the *inner* expansion's shape rather than
+		// a name's. Refused by name rather than answered with the last
+		// subscript alone, which would be a plausible element at status 0.
+		// Nothing in `~/.zi` writes it; `${ICE[atload][1]}` is the shape
+		// that does, and it is a chain on a name.
+		r.diagf("${%s}: a chain of subscripts on a nested expansion is not implemented\n", e.Src)
+		r.expandErr = true
+		return []string{""}, false, false
+	}
 	src, ok := r.nestedSubscriptSource(e, span)
 	if !ok {
 		return []string{""}, false, false
 	}
-	if e.IndexFlags != nil {
-		search, sok := r.subscriptSearch(e)
-		if !sok {
-			// A letter the group does not carry, refused by name inside.
-			return []string{""}, false, false
-		}
-		if search != 0 {
-			elems, _ := r.searchSubscript(e, search, src)
-			return r.nestedSubscriptResult(e, elems, false)
-		}
-	}
-	elems, _ := r.subscriptOver(e, src)
+	// The search a flag group asks for and the ordinary reading are the same
+	// pair a chain's links read, so both go through the one dispatch in
+	// interp/chainedsub.go rather than each keeping its own copy of it.
+	elems, _ := r.subscriptAgainst(e, src)
 	return r.nestedSubscriptResult(e, elems, !src.scalar && r.subscriptSelectsElements(e))
 }
 
@@ -84,6 +88,13 @@ func (r *Runner) nestedSubscript(e *syntax.ParamExpr) (words []string, set, isLi
 // whether what it reads is a list of elements or one string read as
 // characters is the caller's own `scalar` flag.
 func (r *Runner) subscriptSelectsElements(e *syntax.ParamExpr) bool {
+	if e.IndexFlags != nil && lastOf(e.IndexFlags.Flags, searchSubscriptFlags) != 0 {
+		// A search over values in hand names *one* of them, whatever its
+		// operand happens to look like. Said here rather than left to the
+		// two readings below, which would answer a search whose operand is
+		// written `1,2` as a range.
+		return false
+	}
 	return r.wholeArrayIndex(e) || r.subscriptIsARange(e)
 }
 

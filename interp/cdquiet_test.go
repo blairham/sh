@@ -23,19 +23,26 @@ import (
 // binary under argv[0] `sh`, bash 3.2.57, dash and ksh93 every one refuse the
 // letter by name and stay where they were.
 func TestCdQuietIsAnOptionInTheOneShellThatHasIt(t *testing.T) {
+	// resolved says whether `-P` was in the line, and it is asserted rather
+	// than left alone because the quiet letter is the sort of thing that is
+	// easy to grant by borrowing the neighbouring case: a `q` that also set
+	// the physical flag, or that marked `-P` as seen, would move to the right
+	// directory under every check that only asks where it landed. It would
+	// land there by the *other* name.
 	for _, c := range []struct {
-		name string
-		cmd  string
+		name     string
+		cmd      string
+		resolved bool
 	}{
-		{"alone", "cd -q link/sub"},
-		{"twice", "cd -q -q link/sub"},
-		{"before -P", "cd -q -P link/sub"},
-		{"after -P", "cd -P -q link/sub"},
-		{"bundled, q first", "cd -qP link/sub"},
-		{"bundled, q second", "cd -Pq link/sub"},
+		{"alone", "cd -q link/sub", false},
+		{"twice", "cd -q -q link/sub", false},
+		{"before -P", "cd -q -P link/sub", true},
+		{"after -P", "cd -P -q link/sub", true},
+		{"bundled, q first", "cd -qP link/sub", true},
+		{"bundled, q second", "cd -Pq link/sub", true},
 		// The letter must not eat what follows it: a `-q` that consumed a
 		// word would take `link/sub` for its argument and land in HOME.
-		{"with -L, which keeps the name", "cd -q -L link/sub"},
+		{"with -L, which keeps the name", "cd -q -L link/sub", false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			dir, _ := cdTree(t)
@@ -62,8 +69,12 @@ func TestCdQuietIsAnOptionInTheOneShellThatHasIt(t *testing.T) {
 			// refused quietly and stayed put would pass a check for an empty
 			// stderr, which is how the operand-eating shape hid in the first
 			// place.
-			if got := strings.TrimSpace(out.String()); !strings.HasSuffix(got, "sub") {
+			got := strings.TrimSpace(out.String())
+			if !strings.HasSuffix(got, "sub") {
 				t.Errorf("%s left %q, want it in sub", c.cmd, got)
+			}
+			if isResolved := !strings.Contains(got, "link"); isResolved != c.resolved {
+				t.Errorf("%s left %q; resolved = %v, want %v", c.cmd, got, isResolved, c.resolved)
 			}
 		})
 	}

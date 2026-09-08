@@ -209,6 +209,7 @@ func Semantics() interp.Semantics {
 	// four spellings and on an empty array, which counts as no value.
 	s.TransformLetterCheckedOnlyWhenValued = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.Yes
+	s.TestAndArithmeticUpdatePipelineStatus = interp.Yes
 	s.UnsetEndsTheProducedPipelineStatus = interp.No
 	s.SelectLayout = interp.SelectMenuVerticalThenColumns
 	s.SelectPromptNeedsTerminal = interp.No

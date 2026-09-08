@@ -2749,8 +2749,33 @@ type Semantics struct {
 	// AssignmentUpdatesPipelineStatus counts a bare assignment as a command
 	// for the pipeline-status record. bash says yes, so `false | true; x=1`
 	// replaces the two elements with one holding 0; zsh says no and leaves
-	// them. Every other shape of command updates it in both.
+	// them.
+	//
+	// A bare assignment is one with no command name *and no redirection*:
+	// `false | true; x=1 >/dev/null` replaces the elements in zsh too,
+	// because the redirection is what makes it a job. Negation does the
+	// same, and for the same reason — see recordSingleStatus.
 	AssignmentUpdatesPipelineStatus Answer
+	// TestAndArithmeticUpdatePipelineStatus counts `[[ … ]]` and `(( … ))`
+	// as commands for the pipeline-status record. bash says yes; zsh says no
+	// and leaves the elements the last pipeline left, which is what makes
+	// the shape real code uses work:
+	//
+	//	cmd | filter
+	//	if (( pipestatus[1] == 141 )); then …
+	//	elif (( pipestatus[1] )); then print "failed ($pipestatus[1])"
+	//	fi
+	//
+	// With yes, the first `(( … ))` overwrites the array it just read, the
+	// `elif` reads that instead, and the message reports the status of the
+	// test rather than of the pipeline — a genuine failure printed as 0.
+	//
+	// One axis for the two constructs because no shell separates them: every
+	// panel member that has the record answers both the same way. The two
+	// are grouped with the bare assignment above by what they are not — zsh
+	// runs all three without making a job, and a job is what writes the
+	// record.
+	TestAndArithmeticUpdatePipelineStatus Answer
 	// UnsetEndsTheProducedPipelineStatus makes `unset` permanent. zsh says
 	// yes and the name never fills again; in bash the producer outlives it.
 	// It is the opposite of what a produced *scalar* does, where unset ends

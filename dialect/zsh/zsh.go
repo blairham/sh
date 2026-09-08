@@ -405,6 +405,7 @@ func Semantics() interp.Semantics {
 	s.ArrayScalarIsTheWholeArray = interp.Yes
 	s.ArrayNameWithoutSubscriptIsTheList = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.No
+	s.TestAndArithmeticUpdatePipelineStatus = interp.No
 	s.UnsetEndsTheProducedPipelineStatus = interp.Yes
 	s.SelectLayout = interp.SelectMenuColumns
 	s.SelectPromptNeedsTerminal = interp.No

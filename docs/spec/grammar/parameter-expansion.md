@@ -816,6 +816,7 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(j:sep:)` | join with sep | `a=(x y z); ${(j.,.)a}` | `x,y,z` |
 | `(@)` | keep array fields in `"…"` | `a=(x "y z" ""); "${(@)a}"` | 3 fields, empty kept |
 | `(P)` | value is a further name | `y=hello; x=y; ${(P)x}` | `hello` |
+| `(~)` | mark the arguments of the flags behind it | `a=(? x); [[ '?' = (${(~j.|.)a}) ]]` | true |
 | `(k)` | keys of an associative array | `typeset -A m=(k1 v1); ${(k)m}` | `k1` |
 | `(v)` | with `(k)`: key and value pairs | `${(kv)m}` | `k1 v1` interleaved |
 | `(%)` | expand prompt `%` escapes | `${(%):-%x}` | see below |
@@ -1245,6 +1246,99 @@ measurements are here so the next change starts from them:
   Whether "a `#` begins a comment" becomes a `syntax.Dialect` value, and
   whether a runtime option rather than a dialect is what varies it, is
   the question standing in front of the flag.
+
+### `(~)` is a modifier too, and it is not `${~name}`
+
+`(~)` inside the parentheses looks like the flag-group spelling of the
+tilde in `${~name}` and is not one. The written tilde makes the **whole
+substituted string** a pattern; `(~)` marks the **string arguments of the
+flags written behind it in the same group**, so what goes live is the
+separator the group *inserts* and not the value it stands between. The
+vendor manual (`zshexpn(1)`, Parameter Expansion Flags) says exactly that,
+and the measurements below are what fixed the reading here.
+
+Measured 2026-09-08 on zsh 5.9.2 with `a=('?' 'x')`:
+
+| probe | result | says |
+| --- | --- | --- |
+| `[[ '?' = (${(~j.|.)a}) ]]` | true | the inserted `\|` is an alternation |
+| `[[ q = (${(~j.|.)a}) ]]` | false | and the element's `?` is one character |
+| `[[ '?\|x' = (${(j.|.)a}) ]]` | true | unmarked, the join is text |
+| `b=('a*' 'x'); [[ abc = (${(~j.|.)b}) ]]` | false | an element stays literal |
+| `p='a\|b'; [[ a = (${(~)p}) ]]` | false | with nothing behind it, nothing |
+| `p='a\|b'; [[ a = (${~p}) ]]` | true | which is what the *written* one does |
+| `t='~/zz'; ${(~)t}` | `~/zz` | and it has no tilde half either |
+
+The order inside the group is load-bearing and the count is parity, which
+is the same reading `${~~name}` has:
+
+| group | marked | group | marked |
+| --- | --- | --- | --- |
+| `(~j.\|.)` | yes | `(~~j.\|.)` | no |
+| `(U~j.\|.)` | yes | `(~~~j.\|.)` | yes |
+| `(j.\|.~)` | no | `(~j.\|.~)` | yes |
+
+Two more, both of which separate it from the written tilde again:
+
+* **Quoting does not suppress it.** `[[ '?' = ("${(~j.|.)a}") ]]` is true,
+  where `"${~g}"` has no answer of its own at all.
+* **The mark is per expansion and does not travel in a value.**
+  `x=${(~j.|.)a}; [[ '?' = $x ]]` is false — the variable holds the three
+  characters `?|x`.
+
+zsh joins at rule 10 and marks the separator, so every later step steps
+over it. That mark is what this implementation has no way to carry, so it
+holds the **join** back past those steps instead — which is the same
+answer wherever a step rewrites text one character at a time, and a
+different one where it does not:
+
+| probe | result | held-back join |
+| --- | --- | --- |
+| `d=('a b' 'c'); ${(~qj.\|.)d}` | `a\ b\|c` | agrees — `(q)` is per character |
+| `${(~Uj.\|.)d}` | `A B\|C` | agrees |
+| `c=(x a); ${(~oj.\|.)c}` | `x\|a` | agrees — the sort has one word |
+| `e=(p p q); ${(~uj.\|.)e}` | `p\|p\|q` | agrees, for the same reason |
+| `${(~qqj.\|.)d}` | `'a b\|c'` | **differs** — `'a b'\|'c'` |
+| `k=("'a" "b'"); ${(~Qj.\|.)k}` | `a\|b` | **differs** |
+
+So the join is performed in front of the ordering step, and the three
+flags whose step is not a per-character rewrite are refused rather than
+held back through. `${(oj.|.)c}` and `${(uj.|.)e}` without the tilde are
+`x|a` and `p|p|q` too — the sort and the dedup have one word either way.
+
+**What this implementation does not carry.** The marked separator is
+refused by name in the compositions where a step between the join and the
+escape would have to read the joined text back:
+
+* `${(~j.|.)a:-z}` — `the (~) expansion flag is not implemented beside an
+  operator`. Every operator, because the operator runs in front of the
+  three steps the join is held back past.
+* `${(~fj.|.)a}`, `${(~j.|.)=a}` — `… beside a split`, which takes the
+  separator out again.
+* `${(~qqj.|.)d}`, `${(~Qj.|.)k}`, `${(~%j.|.)m}` — `… beside the (qq)
+  flag`, and the same for `(Q)` and `(%)`. These are the steps the table
+  above says a held-back join cannot reproduce: one pair of quotes round
+  the join is not one pair round each word, and one level taken off the
+  join is not one level off each word. A single `(q)` is a per-character
+  rewrite and is carried.
+* `${(~s.-.)v}` — `… for the (s) separator`. A marked split separator does
+  not split on a pattern; it stops matching at all as soon as it holds a
+  character the shell marks, and which characters those are is neither the
+  metacharacters nor the tokens — `<` splits where `>`, `-` and `~` do
+  not. That is one implementation's internal marking rather than a
+  behavior, and no script in reach writes it.
+
+`(~f)` is carried and does nothing, which is correct rather than a stub:
+`(f)`'s separator is a newline and a newline has no metacharacters to
+mark.
+
+Every probe above puts the expansion inside a `( … )`, and that is not
+decoration. A live `|` **outside** a group is an alternation in zsh too
+and is matched as a character here — #1497, which the written `${~name}`
+and `setopt globsubst` reach by the same route and which #1331 left open
+when it fixed the group. So `[[ '?' = ${(~j.|.)a} ]]` is still false here
+where the grouped spelling is true. The twenty-five sites in `~/.zi/bin`
+that write this flag all write the group.
 
 ### Grammar
 

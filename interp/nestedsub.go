@@ -132,7 +132,7 @@ func (r *Runner) nestedParamReference(span syntax.Span) (string, bool) {
 	}
 	ref := *e
 	ref.Flags = strings.ReplaceAll(e.Flags, "P", "")
-	words, _, ok := r.flaggedWords(&ref, splitNever, false)
+	words, _, _, ok := r.flaggedWords(&ref, splitNever, false, nil)
 	if !ok {
 		// The group failed, and it has said so.
 		return "", false

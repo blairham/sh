@@ -379,6 +379,40 @@ type Dialect struct {
 	// replacing. Absent from dash, where `x+=b` is a command called `x+=b`.
 	AppendAssign bool
 
+	// PositionalAssignment lets an assignment's *name* half be a run of
+	// decimal digits, so `1=abc` writes the first positional parameter.
+	//
+	// A grammar flag rather than an axis, because the difference is in what
+	// the word *is* and not in what is then done with it. Measured
+	// 2026-09-07 with `set -- x; 1=abc; echo $1`: bash 5.3.15, that binary
+	// as `sh`, bash 3.2.57, dash and ksh93 all take the word as a command
+	// name and answer `1=abc: command not found` at 127, and zsh 5.9.2
+	// prints `abc`. The two readings are told apart by what the word is
+	// *subjected to*, which is the discriminating probe: `set -- x; 1=*`
+	// leaves `$1` holding a literal `*` in zsh — an assignment's value is
+	// neither globbed nor split — where bash globs the whole word and
+	// complains about `1=*`, and `v="a b"; 1=$v` leaves one parameter
+	// holding `a b` in zsh where bash splits and complains about `1=a`. A
+	// word that is expanded one way in one shell and another way in another
+	// is a difference in the parse, so it belongs here.
+	//
+	// Only a bare run of digits. A subscript on one is not this construct:
+	// `1[0]=v` is a command name in zsh too, and globs as one. And the
+	// grammar is where it ends — a *declaration* still refuses the digits it
+	// admits, because `local 1=abc`, `typeset 1=(a b)`, `export 1=x` and
+	// `readonly 1` are each `not an identifier: 1` in the same shell. So the
+	// declaration path reads the operand and the utility refuses the name,
+	// which is where that complaint is already worded.
+	//
+	// Off, `1=abc` is a command name exactly as it was, which is what keeps
+	// the five refusing columns byte-identical.
+	//
+	// The plugin manager in `~/.zi` writes it: `.zi-any-to-user-plugin` and
+	// `.zi-formatter-pid` both assign their own positionals, so a startup
+	// that reads them printed twelve `no such file or directory:
+	// 1=username/reponame` lines and never reached a prompt (#1438).
+	PositionalAssignment bool
+
 	// CurrentShellSubstitution reads `${ cmd;}` as a command substitution
 	// that runs in the current shell. bash 5.3 and ksh93 have it; dash and
 	// zsh call it a bad substitution.

@@ -1058,6 +1058,38 @@ Details, each measured:
   `(qqq)` wraps in double quotes escaping `\`, `` ` ``, `"`, `$`.
   `(qqqq)` wraps in `$'…'` escaping `'`, `\`, `!` and control bytes as in
   `(q)`. Multibyte UTF-8 passes through every form.
+- **A word branch that substituted nothing is not an empty value**, and
+  `(q)` is the only thing in the family that can tell them apart. An empty
+  value has to be written `''` because backslashes cannot spell one; a
+  `${name:-word}`, `${name-word}`, `${name:+word}` or `${name+word}` whose
+  branch ran and whose word came to nothing is written as **nothing**.
+  Measured on zsh 5.9.2 with `y=""`, inside double quotes:
+
+      "${(q)y}"          ''       an empty value
+      "${(q)y:-}"        ''       the branch ran with no word written
+      "${(q)y:-$y}"      nothing  the branch ran and the word came to nothing
+      "${(q)y:-$nope x}" \        the word came to " ", which is not nothing
+      "${(q)nope-$nope}" nothing  the same, without the colon
+      "${(q)y:+$nope}"   nothing  y is "a": the alternate ran, and came to nothing
+      "${(q)y:+}"        ''       y is "": the alternate did not run
+      "${(q)nope:=$nope}" ''      the assigning form substitutes what it stored
+      "${(q)y#*}"        ''       trimmed to empty is an empty value
+
+  Two gates narrow it. Only the backslash style sees it — `(qq)`, `(qqq)`,
+  `(qqqq)` and `(q-)` all write their own empty wrapper for the same
+  expansion — so the answer belongs to that style rather than to the flag
+  group. And only inside double quotes: written bare on the right of an
+  assignment, `v=${(q)y:-$y}` stores the same two characters an ordinary
+  empty value gives. The field itself survives either way —
+  `set -- "${(q)y:-$y}"` leaves `$#` at 1 and `${#1}` at 0 — so this is a
+  fact about the text, and neither about how many fields the expansion made
+  nor about whether one exists. Measured: `param/the-quoting-flag-and-a-
+  branch-that-substituted-nothing` and the three rows beside it.
+
+  The nesting the gap was reported under is not part of it. `${(q)${x}:-$y}`
+  and `${(q)y:-$y}` are the same disagreement, and `${(q)${y:-$y}}` — the
+  branch inside the nested expansion rather than beside it — is `''`,
+  because what the enclosing flag reads is a value (#1549).
 - **`(q-)` is minimal quoting**, and `-` is a modifier the `q` in front of
   it eats rather than a flag of its own. The value is cut at each `'`; each
   run between the cuts is wrapped in single quotes if any byte in it needs

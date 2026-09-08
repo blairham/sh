@@ -539,7 +539,7 @@ type source struct {
 func (s source) loginShell() bool { return s.login || s.startup.login }
 
 // invocationRoute is which of the three routes the program came by, for the
-// runner. The same three cases aliasRoute splits on and the same reason: a
+// runner. The same three cases programRoute splits on and the same reason: a
 // fact about the invocation rather than about the language.
 //
 // A prompt is not among them, and not because it has no route — it is the
@@ -577,21 +577,22 @@ func (s source) invocationRoute() interp.Route {
 	return interp.RouteCommandString
 }
 
-// aliasRoute is which of the three non-interactive routes this program
-// arrived by, for the one grammar question that differs between them.
+// programRoute is which of the three non-interactive routes this program
+// arrived by, for the grammar questions that differ between them.
 //
 // It lives here because only the front end knows: `syntax` asks whether a
-// dialect expands an alias on this route, and the route is what reading an
+// dialect expands an alias on this route, and whether it closes an
+// unterminated quote at the end of one, and the route is what reading an
 // invocation produced. The same three cases `$0` already splits on, and the
 // same reason — a fact about the invocation rather than about the language.
-func (s source) aliasRoute() syntax.AliasRoutes {
+func (s source) programRoute() syntax.ProgramRoutes {
 	switch {
 	case s.onStdin:
-		return syntax.AliasOnStandardInput
+		return syntax.RouteOnStandardInput
 	case s.file != "":
-		return syntax.AliasFromScriptFile
+		return syntax.RouteFromScriptFile
 	}
-	return syntax.AliasFromCommandString
+	return syntax.RouteFromCommandString
 }
 
 // optionSpec is one run of set options the invocation asked for: the letters
@@ -1213,7 +1214,7 @@ func (sh Shell) runInput(in source) int {
 	// the rest run each line as they reach it. Parsing everything up front is
 	// how that is done: the failure is then reported before anything has run.
 	if in.wholeFirst {
-		p := syntax.NewParser(src, sh.Dialect)
+		p := syntax.NewParser(src, sh.Dialect.On(in.programRoute()))
 		p.Parse()
 		if err := p.Err(); err != nil {
 			// Input that ends unfinished is a syntax error rather than a
@@ -1280,7 +1281,10 @@ func (sh Shell) runInput(in source) int {
 		r.SetInteractiveJobNotices()
 	}
 	r.SetScriptFile(in.file)
-	pr := wholeProgram(src, sh.Dialect)
+	// On the route the program arrived by, because one grammar answer
+	// depends on it: the shell that ends an unterminated quote at the end of
+	// a command string refuses the same text in a file.
+	pr := wholeProgram(src, sh.Dialect.On(in.programRoute()))
 	if in.onStdin {
 		// The program is on the descriptor rather than in hand, so it is read
 		// as it runs. How much at a time is the dialect's answer, and it is
@@ -1304,7 +1308,7 @@ func (sh Shell) runInput(in source) int {
 	// the runner instead, because the switch has to be movable from inside
 	// the script: `shopt -s expand_aliases` and POSIX mode both turn it on
 	// partway through. See Runner.ExpandingAlias.
-	r.SetAliasExpansionBase(sh.Dialect.ExpandAliases.Has(in.aliasRoute()) || in.interactive)
+	r.SetAliasExpansionBase(sh.Dialect.ExpandAliases.Has(in.programRoute()) || in.interactive)
 	pr.aliases = r.ExpandingAlias
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
@@ -1508,7 +1512,11 @@ func (sh Shell) executeLines(
 	for {
 		if r.Dialect != dialect && r.Dialect != nil {
 			dialect = r.Dialect
-			pr.setDialect(*dialect)
+			// Still this program, so still this route. The replacement is
+			// a *language*, which does not carry how the text got here, and
+			// taking it as written would have turned the route's answer off
+			// half way down a file the moment a builtin changed the grammar.
+			pr.setDialect(dialect.On(in.programRoute()))
 		}
 		line, ok := pr.nextLine()
 		if !ok {

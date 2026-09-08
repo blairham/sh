@@ -3,35 +3,53 @@
 
 package syntax
 
-// AliasRoutes is a set of the ways a non-interactive program reaches a shell,
-// for the one grammar question whose answer depends on which of them it was.
+// ProgramRoutes is a set of the ways a non-interactive program reaches a
+// shell, for the grammar questions whose answer depends on which of them it
+// was.
 //
 // The routes are the front end's — a command string, a file, standard input —
-// and this package names them anyway, because [Dialect.ExpandAliases] is the
-// question and a question has to be askable where it is answered. The parser
-// never reads the set; whoever knows how the program arrived does, and passes
-// the table of aliases in or leaves it nil.
-type AliasRoutes uint8
+// and this package names them anyway, because the questions have to be
+// askable where they are answered. Two ask it:
+//
+//	[Dialect.ExpandAliases]      read by the front end, which passes the
+//	                             table of aliases in or leaves it nil.
+//	[Dialect.CloseQuotesAtEOF]   read by the lexer, which is told the route
+//	                             through [Dialect.ProgramRoute].
+//
+// `eval` is a command string. It is not an invocation route at all, but it is
+// a program handed over as a *string* rather than read from a file or a
+// descriptor, and that is the distinction ksh93 draws — measured 2026-09-07,
+// `eval "echo 'abc"` inside a script file prints abc there where the same
+// text as the script itself is refused.
+type ProgramRoutes uint8
 
 const (
-	// AliasFromCommandString is a program given as an argument: `-c`.
-	AliasFromCommandString AliasRoutes = 1 << iota
-	// AliasFromScriptFile is a program read from a path named as an operand.
-	AliasFromScriptFile
-	// AliasFromStandardInput is a program read from the descriptor, whether
+	// RouteFromCommandString is a program given as an argument: `-c`. Also
+	// a string handed to `eval`, which is the same kind of program by the
+	// one measurement that separates the kinds.
+	RouteFromCommandString ProgramRoutes = 1 << iota
+	// RouteFromScriptFile is a program read from a path named as an operand.
+	// Also a file read by `.`, and a startup file.
+	RouteFromScriptFile
+	// RouteOnStandardInput is a program read from the descriptor, whether
 	// by `-s` or by there being no operand and no terminal.
-	AliasOnStandardInput
-	// AliasOnEveryRoute is what a shell that does not distinguish them
+	RouteOnStandardInput
+	// RouteOnEveryRoute is what a shell that does not distinguish them
 	// answers, which is two of the four.
-	AliasOnEveryRoute = AliasFromCommandString | AliasFromScriptFile | AliasOnStandardInput
-	// AliasOnNoRoute is the empty set, spelled so a dialect can say it
+	RouteOnEveryRoute = RouteFromCommandString | RouteFromScriptFile | RouteOnStandardInput
+	// RouteOnNoRoute is the empty set, spelled so a dialect can say it
 	// deliberately rather than by leaving a field out.
-	AliasOnNoRoute AliasRoutes = 0
+	RouteOnNoRoute ProgramRoutes = 0
 )
 
 // Has reports whether route is in the set. A caller asks with exactly one
 // route, which is what it knows.
-func (a AliasRoutes) Has(route AliasRoutes) bool { return a&route != 0 }
+//
+// The empty route is in no set, which is what makes the strict answer the
+// default: a parse that was never told how its program arrived — a function
+// body being re-read, a prelude, a tree dump — gets the grammar every shell
+// agrees on rather than one shell's leniency.
+func (a ProgramRoutes) Has(route ProgramRoutes) bool { return a&route != 0 }
 
 // SeparatorSkip is how far a dialect will step over a `;` written where the
 // grammar wants a command. See [Dialect.SeparatorWhereACommandBelongs].
@@ -786,7 +804,7 @@ type Dialect struct {
 	// Whether a word *is* expanded, and into what, is not a dialect question:
 	// every shell that expands agrees on the whole algorithm, so that is the
 	// core's behavior and lives in alias.go.
-	ExpandAliases AliasRoutes
+	ExpandAliases ProgramRoutes
 
 	// AliasBodyCountsLines counts the newlines inside a substituted alias
 	// body as lines of the input, so that every later line shifts by one per
@@ -1657,11 +1675,50 @@ type Dialect struct {
 	// the arithmetic, so no answer here is everyone's.
 	FdVariableSubscript bool
 
-	// CloseQuotesAtEOF ends an unterminated `'`, `"` or backquote at the
-	// end of input as if the closing mark were there, instead of refusing
-	// to parse: `echo "abc` prints abc in the one shell that answers this
-	// way. `$(` and `${` are not quotes and still refuse.
-	CloseQuotesAtEOF bool
+	// CloseQuotesAtEOF is the set of routes on which an unterminated `'`,
+	// `"` or backquote ends at the end of input as if the closing mark were
+	// there, instead of the parse being refused: `echo "abc` prints abc.
+	// `$(` and `${` are not quotes and still refuse on every route.
+	//
+	// A set rather than a boolean because the one shell that answers yes
+	// does not answer it for the whole shell. Measured 2026-09-07, ksh93u+
+	// 2012-08-01, the same five lines by every route, `echo one` first so
+	// that what ran before the quote is visible:
+	//
+	//	route                     ksh93                 other five
+	//	-c string                 runs, status 0        refuse
+	//	eval string               runs, status 0        refuse
+	//	script file operand       `'' unmatched`, 3     refuse
+	//	`.` on a file             `'' unmatched`, 1     refuse
+	//	standard input, or a pipe `'' unmatched`, 3     refuse
+	//
+	// So a boolean gets one of ksh93's routes right and four wrong, and the
+	// four it gets wrong are the ones a script arrives by. A truncated file
+	// then ran under our ksh and was refused by the real one, silently and
+	// with status 0, and everything after the opening quote was discarded
+	// without a word (#1424).
+	//
+	// It is not the trailing newline telling the routes apart, which is the
+	// reading a `-c` string invites: measured the same day, `-c` closes the
+	// quote whether or not the string ends in one, and a file refuses
+	// whether or not it does. The route is the whole of it.
+	//
+	// A quote left open at a *prompt* is neither: every shell in the panel,
+	// this one included, asks for more input with PS2 rather than closing
+	// or refusing. The lexer marks the input incomplete before it asks this
+	// at all, which is what leaves that answer to the front end.
+	CloseQuotesAtEOF ProgramRoutes
+
+	// ProgramRoute is which of those ways the program *now being parsed*
+	// arrived, for the rules above that ask.
+	//
+	// Not a grammar rule and the only field here that is not: a dialect is
+	// a shell's language and this is one program's provenance. It lives on
+	// the dialect because the lexer is where the question is answered and
+	// the dialect is the only thing the lexer is handed. The front end sets
+	// it — see [Dialect.On] — and the zero value is no route at all, so a
+	// parse that never said gets the strict answer.
+	ProgramRoute ProgramRoutes
 
 	// UnmatchedBlamesTheOutermost names the *enclosing* construct when the
 	// input runs out inside nested ones, where the default names the
@@ -1739,6 +1796,18 @@ type Dialect struct {
 	// `coproc MY cat` runs `MY cat` in both shells, and both leave whatever
 	// the reader asks for afterwards unset.
 	CoprocName bool
+}
+
+// On returns this dialect set to parse a program that arrived by route.
+//
+// A copy, so that the shell's own dialect keeps saying what the *language*
+// is and each parse says how its text got here. One expression at the call
+// site is the whole point: the route has to be attached at every place a
+// program is read, and a step that is easy to leave out is one that gets
+// left out.
+func (d Dialect) On(route ProgramRoutes) Dialect {
+	d.ProgramRoute = route
+	return d
 }
 
 // Core is the common denominator of real shells: what dash, bash, ksh93 and

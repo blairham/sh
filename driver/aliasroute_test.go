@@ -26,7 +26,7 @@ const aliasProgram = "alias hi='echo aliased'\nhi\n"
 // aliasShell is a shell whose dialect expands aliases on exactly the routes
 // given, with the one axis `alias` itself asks answered so the test is about
 // the route and nothing else.
-func aliasShell(routes syntax.AliasRoutes) driver.Shell {
+func aliasShell(routes syntax.ProgramRoutes) driver.Shell {
 	sh := shell()
 	d := syntax.Core()
 	d.ExpandAliases = routes
@@ -56,21 +56,21 @@ func runStdinArgs(t *testing.T, sh driver.Shell, src string) string {
 func TestAliasExpansionFollowsTheInvocationRoute(t *testing.T) {
 	for _, c := range []struct {
 		name   string
-		routes syntax.AliasRoutes
+		routes syntax.ProgramRoutes
 		// want[route] says whether the alias expanded on that route.
 		wantCommandString, wantScriptFile, wantStandardInput bool
 	}{
-		{"no route", syntax.AliasOnNoRoute, false, false, false},
-		{"every route", syntax.AliasOnEveryRoute, true, true, true},
+		{"no route", syntax.RouteOnNoRoute, false, false, false},
+		{"every route", syntax.RouteOnEveryRoute, true, true, true},
 		// The shape one shell in the panel actually has, and the one a
 		// boolean cannot hold: the two routes a real script uses, and not
 		// the argument.
 		{
 			"a file and standard input but not a command string",
-			syntax.AliasFromScriptFile | syntax.AliasOnStandardInput,
+			syntax.RouteFromScriptFile | syntax.RouteOnStandardInput,
 			false, true, true,
 		},
-		{"a command string alone", syntax.AliasFromCommandString, true, false, false},
+		{"a command string alone", syntax.RouteFromCommandString, true, false, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			sh := aliasShell(c.routes)
@@ -102,7 +102,7 @@ func TestAliasExpansionFollowsTheInvocationRoute(t *testing.T) {
 func TestABodyNewlineShiftsLaterLinesOnStandardInputToo(t *testing.T) {
 	const src = "alias two='echo one\necho body'\ntwo\necho \"LINENO=$LINENO\"\n"
 
-	sh := aliasShell(syntax.AliasOnEveryRoute)
+	sh := aliasShell(syntax.RouteOnEveryRoute)
 	d := sh.Dialect
 	d.AliasBodyCountsLines = true
 	sh.Dialect = d

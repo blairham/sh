@@ -26,7 +26,7 @@ func parses(t *testing.T, src string) bool {
 
 func TestGrammar(t *testing.T) {
 	// Expands aliases in a script, with no option to turn on.
-	if got, want := ksh.Dialect().ExpandAliases, syntax.AliasOnEveryRoute; got != want {
+	if got, want := ksh.Dialect().ExpandAliases, syntax.RouteOnEveryRoute; got != want {
 		t.Errorf("ExpandAliases = %v, want %v", got, want)
 	}
 	// And a body's newlines are lines of the program: $LINENO after a

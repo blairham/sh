@@ -71,7 +71,8 @@ func TestUnmatchedDelimitersCarryTheirState(t *testing.T) {
 // closing mark were there; the substitutions still refuse.
 func TestTheEndOfInputMayCloseAQuote(t *testing.T) {
 	d := Core()
-	d.CloseQuotesAtEOF = true
+	d.CloseQuotesAtEOF = RouteFromCommandString
+	d = d.On(RouteFromCommandString)
 	for _, src := range []string{`echo "abc`, `echo 'abc`, "echo `echo"} {
 		f, err := Parse(src, d)
 		if err != nil {
@@ -86,5 +87,53 @@ func TestTheEndOfInputMayCloseAQuote(t *testing.T) {
 		if _, err := Parse(src, d); err == nil {
 			t.Errorf("%q parsed, want a refusal — a substitution is not a quote", src)
 		}
+	}
+}
+
+// The same dialect on a route it did not name refuses every one of those
+// quotes, which is the whole of #1424: the leniency is one shell's answer for
+// a command string and not its answer for a shell.
+//
+// Every route is asked by name rather than only the file one, because the
+// defect was a flag applied where it had not been measured and a test that
+// asks about one route reintroduces exactly that.
+func TestAQuoteIsClosedOnlyOnTheRouteTheDialectNames(t *testing.T) {
+	quotes := []string{`echo "abc`, `echo 'abc`, "echo `echo"}
+	for _, route := range []ProgramRoutes{RouteOnNoRoute, RouteFromScriptFile, RouteOnStandardInput} {
+		d := Core()
+		d.CloseQuotesAtEOF = RouteFromCommandString
+		d = d.On(route)
+		for _, src := range quotes {
+			if _, err := Parse(src, d); err == nil {
+				t.Errorf("route %d: %q parsed, want a refusal", route, src)
+			}
+		}
+	}
+	// And a dialect that names no route at all refuses on the route the one
+	// that does would have allowed — the flag is the dialect's answer, not
+	// the route's.
+	d := Core()
+	d = d.On(RouteFromCommandString)
+	for _, src := range quotes {
+		if _, err := Parse(src, d); err == nil {
+			t.Errorf("no dialect route: %q parsed, want a refusal", src)
+		}
+	}
+}
+
+// On leaves the language alone and answers only about this program, which is
+// what lets one shell's dialect be shared by every route it is read on.
+func TestOnChangesTheRouteAndNothingElse(t *testing.T) {
+	d := Core()
+	d.CloseQuotesAtEOF = RouteFromCommandString
+	got := d.On(RouteFromScriptFile)
+	if got.ProgramRoute != RouteFromScriptFile {
+		t.Errorf("route %d, want %d", got.ProgramRoute, RouteFromScriptFile)
+	}
+	if got.CloseQuotesAtEOF != RouteFromCommandString {
+		t.Errorf("On changed the language: CloseQuotesAtEOF %d", got.CloseQuotesAtEOF)
+	}
+	if d.ProgramRoute != RouteOnNoRoute {
+		t.Errorf("On wrote through to the receiver: %d", d.ProgramRoute)
 	}
 }

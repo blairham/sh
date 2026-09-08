@@ -15,7 +15,7 @@ func Dialect() syntax.Dialect {
 	d := syntax.POSIX()
 	// dash expands aliases in a script, with no option to turn on, and by
 	// every route: `-c`, a file and standard input all expand.
-	d.ExpandAliases = syntax.AliasOnEveryRoute
+	d.ExpandAliases = syntax.RouteOnEveryRoute
 	// And it splices the body's text, so a newline in one is a line of the
 	// program: everything after an expansion shifts down by one per newline.
 	// Set here rather than inherited because this dialect starts from the

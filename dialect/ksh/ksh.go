@@ -17,7 +17,7 @@ import (
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	// ksh93 expands them in a script too.
-	d.ExpandAliases = syntax.AliasOnEveryRoute
+	d.ExpandAliases = syntax.RouteOnEveryRoute
 	// And a body's newlines are lines of the program: `$LINENO` after a
 	// two-line body reads one more than the physical line.
 	d.AliasBodyCountsLines = true
@@ -118,9 +118,17 @@ func Dialect() syntax.Dialect {
 	// `time -p`, the POSIX report format, which bash also reads and zsh
 	// does not.
 	d.TimePosixFlag = true
-	// The end of input closes a quote here: `echo "abc` prints abc, and the
-	// old backquote form behaves the same way. The substitutions do not.
-	d.CloseQuotesAtEOF = true
+	// The end of a *command string* closes a quote here: `ksh -c 'echo "abc'`
+	// prints abc, and so does `eval "echo \"abc"`. The old backquote form
+	// behaves the same way and the substitutions do not.
+	//
+	// The command string and nothing else. A script file, a file read by
+	// `.`, and a program on standard input are all refused — ``syntax error
+	// at line N: `"' unmatched`` — which is what the other five shells say
+	// on every route including this one. Answering the whole shell yes let a
+	// truncated script run under our ksh with status 0 and no diagnostic
+	// (#1424).
+	d.CloseQuotesAtEOF = syntax.RouteFromCommandString
 	// `exec {a[1]}>&-`: the name inside the braces may be a subscripted one.
 	// Measured — this shell closes the descriptor the element holds, as bash
 	// does and zsh does not.

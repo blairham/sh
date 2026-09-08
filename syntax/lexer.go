@@ -279,6 +279,24 @@ func (l *Lexer) failUnmatched(open Pos, opener, closer, msg string) {
 	}
 }
 
+// closesQuotesAtEOF reports whether an unterminated `'`, `"` or backquote
+// ends here as if its closing mark were written, instead of the parse being
+// refused.
+//
+// One function for all four places that ask — the two quotes, the backquote
+// scanner and the backquote *skipper* — because they are one rule and a rule
+// spread over four `if`s is a rule three of them can be left out of. It was:
+// the route the answer depends on had to be added in exactly these four
+// places, and the skipper is the one nothing would have failed without.
+//
+// It is a route question and not only a dialect one, which is
+// [Dialect.CloseQuotesAtEOF]. The route is the empty set unless a front end
+// said otherwise, so anything parsing text without saying where it came from
+// gets the answer every shell in the panel agrees on.
+func (l *Lexer) closesQuotesAtEOF() bool {
+	return l.dialect.CloseQuotesAtEOF.Has(l.dialect.ProgramRoute)
+}
+
 // replacesUnmatched reports whether a construct noticing that the input ran
 // out should take the complaint from one *inside* it that noticed first.
 //
@@ -1444,7 +1462,7 @@ func (l *Lexer) scanSingle() (Span, bool) {
 	for {
 		if l.eof() {
 			l.ranOut("'")
-			if l.dialect.CloseQuotesAtEOF {
+			if l.closesQuotesAtEOF() {
 				// The end of input is as good as the closing mark here;
 				// what was read is the string. ranOut still marks the
 				// input incomplete, so a prompt continues the line.
@@ -1586,7 +1604,7 @@ func (l *Lexer) scanDoubleBody(open Pos, closing bool) []Span {
 				return out
 			}
 			l.ranOut("\"")
-			if !l.dialect.CloseQuotesAtEOF {
+			if !l.closesQuotesAtEOF() {
 				l.failUnmatched(open, "\"", "\"", "unterminated double quote")
 			}
 			flush()
@@ -2226,7 +2244,7 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 	for {
 		if l.eof() {
 			l.ranOut("`")
-			if !l.dialect.CloseQuotesAtEOF {
+			if !l.closesQuotesAtEOF() {
 				l.failUnmatched(open, "`", "`", "unterminated backquote substitution")
 			}
 			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:l.off]), Quoting: q, Pos: open}
@@ -2441,7 +2459,7 @@ func (l *Lexer) skipBackticks() {
 	// Ran out rather than finding the closing mark. The dialect that ends an
 	// unterminated quote at end of input and runs is asked here for the same
 	// reason scanBackticks asks it: there is nothing unfinished there.
-	if !l.dialect.CloseQuotesAtEOF {
+	if !l.closesQuotesAtEOF() {
 		l.failUnmatched(open, "`", "`", "unterminated backquote substitution")
 	}
 }

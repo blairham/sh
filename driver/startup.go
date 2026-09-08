@@ -289,7 +289,10 @@ func (sh Shell) sourceFoundFile(r *interp.Runner, path string) (status int, foun
 // sourceText is sourceFile once the bytes are in hand and a guard is around
 // it.
 func (sh Shell) sourceText(r *interp.Runner, path, text string) int {
-	f, perr := syntax.Parse(text, sh.Dialect)
+	// A startup file is a file, which is the route the one route-dependent
+	// grammar answer needs: `ksh -c` ends an unterminated quote at the end
+	// of its string, and no file it reads gets that.
+	f, perr := syntax.Parse(text, sh.Dialect.On(syntax.RouteFromScriptFile))
 	if perr != nil {
 		sh.errf("%s", sh.Diagnostics.ParseDiagnostic(path, text, perr, text))
 		return sh.Diagnostics.StatusForParseError(perr)

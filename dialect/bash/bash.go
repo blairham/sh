@@ -24,7 +24,7 @@ func Dialect() syntax.Dialect {
 	// bash expands them interactively and needs `shopt -s expand_aliases`
 	// otherwise, which is not modeled yet — so no route, rather than a route
 	// this shell only takes with an option set. Measured on all three.
-	d.ExpandAliases = syntax.AliasOnNoRoute
+	d.ExpandAliases = syntax.RouteOnNoRoute
 	// And a body's newlines do not count: bash alone leaves the whole of an
 	// expanded body on the line the alias word was written on.
 	d.AliasBodyCountsLines = false

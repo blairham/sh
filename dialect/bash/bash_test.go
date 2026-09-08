@@ -29,7 +29,7 @@ func TestGrammar(t *testing.T) {
 	// Expands on no route at all without `shopt -s expand_aliases`, which
 	// is not modeled: measured on all three. The prompt is a different
 	// question and the front end answers it.
-	if got, want := bash.Dialect().ExpandAliases, syntax.AliasOnNoRoute; got != want {
+	if got, want := bash.Dialect().ExpandAliases, syntax.RouteOnNoRoute; got != want {
 		t.Errorf("ExpandAliases = %v, want %v", got, want)
 	}
 	// And a body's newlines are *not* lines of the program: this shell

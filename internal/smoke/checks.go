@@ -161,6 +161,14 @@ func multiLineLoop() []string {
 const (
 	completionOpens  = "[ -f "
 	completionCloses = " ] && echo completed-$((6 * 7))"
+	// The same shape for the misspelled directory, and it names *both*
+	// outcomes rather than one. A row that waited only for the correction
+	// would have to prove the absence of it by waiting out a budget, which
+	// takes a shell that has no such option and reports it as a shell that
+	// stopped answering. Two marks, one line, and neither is a substring of
+	// the other — a wait on `spelled-42` would be answered by `unspelled-42`.
+	dirSpellCloses = " ] && echo dirspell-$((6 * 7))-corrected" +
+		" || echo dirspell-$((6 * 7))-astyped"
 	// The line `M-.` reaches back for, and the mark the line after it prints.
 	//
 	// Not a probe, because the two halves belong to different lines: this one
@@ -181,6 +189,7 @@ func probes() []probe {
 		rebindProbe, rebindViProbe,
 		windowSizeProbe, autoCdProbe,
 		cdSpellProbe(Bash()), cdSpellProbe(Zsh()),
+		dirSpellProbe(Bash()), dirSpellProbe(Zsh()),
 	}
 }
 
@@ -194,6 +203,32 @@ func cdSpellProbe(d Dialect) probe {
 		return probe{cdSpellLine, "spell=" + d.Name}
 	}
 	return probe{cdSpellLine, "spell=" + cdSpellTarget}
+}
+
+// dirSpellProbe is what this dialect should say after a misspelled directory
+// was offered to Tab.
+//
+// Per dialect for cdSpellProbe's reason, one key to the left: the shell with
+// the options completes the corrected path and the test on it is true, and the
+// shell with no such name leaves the word as typed and the test is false. Both
+// are that shell's own answer, and both are positive marks — see
+// dirSpellCloses.
+//
+// The line each carries is the one a person would have had to type without a
+// Tab, which is the *corrected* spelling for the shell that corrects and the
+// typed one for the shell that does not. It is never run; it is here so the
+// invariant test can hold the mark against it.
+func dirSpellProbe(d Dialect) probe {
+	if len(d.DirSpellOption) == 0 {
+		return probe{
+			completionOpens + cdSpellTyped + "/" + dirSpellFile + dirSpellCloses,
+			"dirspell-42-astyped",
+		}
+	}
+	return probe{
+		completionOpens + cdSpellTarget + "/" + dirSpellFile + dirSpellCloses,
+		"dirspell-42-corrected",
+	}
 }
 
 func checks() []check {
@@ -465,6 +500,33 @@ func checks() []check {
 						quote(completionTarget) + ": " + err.Error()
 				}
 				return Pass, "completed " + quote(completionPrefix) + " to a real file"
+			},
+		},
+		{
+			name: "Tab corrects a misspelled directory",
+			proves: "the completer retries a directory that is not there where this shell has the names for it, " +
+				"and leaves the word alone where it has none",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				if err := s.atPrompt(); err != nil {
+					return Fail, err.Error()
+				}
+				typed := cdSpellTyped + "/" + dirSpellPrefix
+				for _, keys := range []string{
+					completionOpens + typed, "\t", dirSpellCloses + "\r",
+				} {
+					if err := s.send(keys); err != nil {
+						return Fail, err.Error()
+					}
+				}
+				p := dirSpellProbe(s.dialect)
+				if err := s.screen.Await(p.mark, budget); err != nil {
+					return Fail, "Tab on " + quote(typed) + " did not leave the line where " +
+						s.dialect.Name + " leaves it: " + err.Error()
+				}
+				if len(s.dialect.DirSpellOption) == 0 {
+					return Pass, "left " + quote(typed) + " alone, which is this shell's own answer"
+				}
+				return Pass, "corrected " + quote(typed) + " to a real file under " + quote(cdSpellTarget)
 			},
 		},
 		{

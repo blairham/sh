@@ -58,6 +58,18 @@ const (
 	cdSpellTyped  = "documnets"
 )
 
+// dirSpellFile is the file inside that misspelled directory the completion
+// row reaches for, and dirSpellPrefix is what is typed before Tab.
+//
+// Inside cdSpellTarget rather than in a directory of its own, because the two
+// rows are the same misspelling asked of two different keys and sharing the
+// name is what makes that legible. The prefix is unique in there, so a Tab
+// that works has one answer rather than a list.
+const (
+	dirSpellFile   = "dirspell-target.txt"
+	dirSpellPrefix = "dirspell-ta"
+)
+
 // completionTarget is the file Tab is asked to complete, and completionPrefix
 // is what is typed before pressing it.
 //
@@ -90,6 +102,13 @@ func home(root string, d Dialect) (string, error) {
 	// And one more, whose name is worth misspelling: the `cdspell` row types
 	// it with two letters swapped.
 	if err := os.MkdirAll(filepath.Join(dir, cdSpellTarget), 0o700); err != nil {
+		return "", err
+	}
+	// And something inside it, so that the misspelling is worth Tab as well
+	// as worth `cd`: a directory with nothing in it completes to nothing
+	// whether or not the spelling was corrected, which is a row that passes
+	// for the wrong reason.
+	if err := os.WriteFile(filepath.Join(dir, cdSpellTarget, dirSpellFile), []byte("scratch\n"), 0o600); err != nil {
 		return "", err
 	}
 	for _, name := range []string{completionTarget, "notes.txt", "other-file.txt"} {
@@ -143,9 +162,10 @@ PS2='%s'
 %s
 %s
 %s
+%s
 `, rcPromptPrefix, d.CwdEscape, promptFieldSep, d.UserEscape, promptAnchor, continuationPrompt,
-		d.PromptHook, d.AutoCdOption, d.CdSpellOption, d.CheckJobsOption,
-		strings.Join(d.RebindKeyInViMode, "\n"), d.RebindKey)
+		d.PromptHook, d.AutoCdOption, d.CdSpellOption, strings.Join(d.DirSpellOption, "\n"),
+		d.CheckJobsOption, strings.Join(d.RebindKeyInViMode, "\n"), d.RebindKey)
 }
 
 // The foreground job the suspend checks use.

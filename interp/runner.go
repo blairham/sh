@@ -827,6 +827,26 @@ type Runner struct {
 	// `bash -c 'shopt -s cdspell; cd subdri'` refuses exactly as a shell
 	// without the option does.
 	cdCorrectsSpelling bool
+	// completionCorrectsSpelling is the same permission for the *completer*
+	// — bash's `dirspell` — and it is a second field rather than a second
+	// reader of cdCorrectsSpelling because bash has two names and a session
+	// may hold either one alone.
+	//
+	// The correction it reaches is the one in spellcorrect.go, and what it
+	// asks for is spelled differently there: `cd` shows a person the operand
+	// in the shape it was typed, and the completer puts an absolute path in
+	// the line. See Runner.CorrectedDirectory.
+	completionCorrectsSpelling bool
+	// completionExpandsDirectory is permission for the completer to write the
+	// directory it actually *read* back into the line, rather than the text
+	// that was typed — bash's `direxpand`.
+	//
+	// It is the other half of the pair, and the pair is not a convention:
+	// measured through a pseudo-terminal against bash 5.3.15, `dirspell`
+	// alone rings the bell and leaves the line as typed, because a correction
+	// nothing may write back is a correction nobody sees. See
+	// shellCompleter.paths, which is the only reader.
+	completionExpandsDirectory bool
 	// checksRunningJobsAtExit is permission to hold the exit for a job that
 	// is still running, and to follow the sentence with the job table. Both
 	// shells that hold an exit call it `checkjobs`; see

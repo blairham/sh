@@ -225,3 +225,81 @@ func TestCdDoesNotCorrectOntoAFile(t *testing.T) {
 		t.Errorf("stderr = %q, want the refusal to name what was typed", errOut.String())
 	}
 }
+
+// The completer's entry to the same corrector, which is the half bash calls
+// `dirspell`. Asserted here rather than only in repl because the *shape* of
+// the answer is this package's decision and it is not `cd`'s: a completion
+// puts an absolute, cleaned path into somebody's line where `cd` prints the
+// operand as it was typed.
+func TestCorrectedDirectoryAnswersAbsolutelyAndOnlyWhenAsked(t *testing.T) {
+	dir := t.TempDir()
+	for _, sub := range []string{"documents", "alpha/beta"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name string
+		on   bool
+		ask  string
+		want string
+	}{
+		{"off, so there is nothing to correct with", false, filepath.Join(dir, "documnets"), ""},
+		{"on, and the answer is absolute", true, filepath.Join(dir, "documnets"), filepath.Join(dir, "documents")},
+		{"a component further in", true, filepath.Join(dir, "alpha/bteta"), filepath.Join(dir, "alpha/beta")},
+		// Cleaned, which is bash's answer: `documents/../documnets/`
+		// completes to the same path `documnets/` does.
+		{"a `..` on the way", true, filepath.Join(dir, "documents/../documnets"), filepath.Join(dir, "documents")},
+		// A file is not a directory to read, and a completer handed one
+		// would rewrite the line and then find nothing there.
+		{"one edit from a file", true, filepath.Join(dir, "notes.tx"), ""},
+		{"nothing within one edit", true, filepath.Join(dir, "nowhere"), ""},
+		{"nothing asked", true, "", ""},
+		// The two shapes the completer never sends, because it resolves and
+		// cleans before it asks — and this is exported, so somebody else
+		// will. Written with a concatenation rather than filepath.Join,
+		// which would clean the operand before the method ever saw it and
+		// leave the branch below untested: mutation testing found exactly
+		// that, and both lines survived being deleted.
+		{"a relative operand", true, "documnets", filepath.Join(dir, "documents")},
+		{"an operand nobody cleaned", true, dir + "/documents/../documnets", filepath.Join(dir, "documents")},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := newTestRunner(t, &Runner{Dir: dir})
+			r.SetCorrectsCompletionSpelling(c.on)
+			if got := r.CorrectedDirectory(c.ask); got != c.want {
+				t.Errorf("CorrectedDirectory(%q) = %q, want %q", c.ask, got, c.want)
+			}
+		})
+	}
+}
+
+// The two names are two switches over one corrector, and neither moves the
+// other: a shell told to correct a typed `cd` has not been told to correct a
+// Tab, and the other way about.
+func TestTheTwoSpellingSwitchesAreIndependent(t *testing.T) {
+	r := newTestRunner(t, &Runner{})
+	r.SetCorrectsCdSpelling(true)
+	if r.CorrectsCompletionSpelling() {
+		t.Error("`cdspell` turned `dirspell` on as well")
+	}
+	r.SetCorrectsCdSpelling(false)
+	r.SetCorrectsCompletionSpelling(true)
+	if r.CorrectsCdSpelling() {
+		t.Error("`dirspell` turned `cdspell` on as well")
+	}
+	if !r.CorrectsCompletionSpelling() {
+		t.Error("`dirspell` did not stay on")
+	}
+	// And the writing half is a third switch, off until it is asked for.
+	if r.ExpandsCompletedDirectory() {
+		t.Error("`direxpand` was on before anything set it")
+	}
+	r.SetExpandsCompletedDirectory(true)
+	if !r.ExpandsCompletedDirectory() || !r.CorrectsCompletionSpelling() {
+		t.Error("`direxpand` did not settle beside `dirspell`")
+	}
+}

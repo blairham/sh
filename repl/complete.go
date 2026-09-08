@@ -199,6 +199,26 @@ type shellCompleter struct {
 	// change in behavior rather than a confirmation of one.
 	emptyWordOffersNothing bool
 
+	// correctDir retries a directory that would not read against the closest
+	// name that would — bash's `dirspell`. Nil where nothing has asked for
+	// the correction, which is what the zero value of this struct is and what
+	// a session that has not set the option is.
+	//
+	// A function rather than a bool because the correction is the core's:
+	// interp.Runner.CorrectedDirectory is the same corrector `cdspell`
+	// reaches, and a completer that walked the directory itself would be the
+	// second copy this repository has paid for before. It reads the option
+	// itself, so it answers empty while the option is off.
+	correctDir func(string) string
+
+	// expandsDirectory writes the directory that was *read* back into the
+	// line rather than the text that was typed — bash's `direxpand`. Read
+	// from the shell per keystroke, for the reason emptyWordOffersNothing is.
+	//
+	// It is the half that makes a correction visible; see
+	// shellCompleter.corrected for the measured pair.
+	expandsDirectory bool
+
 	// passwd is where account names are read from; empty is /etc/passwd. A
 	// field so a test can ask about names that are not on the machine.
 	passwd string

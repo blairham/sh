@@ -78,12 +78,20 @@ import (
 //     `zle some-widget` from inside one is status 0, so this is not the
 //     script case — which is why the plain path marks the editor active
 //     without publishing the parameters.
-//   - **A descriptor at the end of its input is readable for ever.** Watching
-//     a pipe whose writer had exited, zsh called the handler hundreds of
-//     times in two seconds and never removed it: removing itself is the
-//     handler's job, and the plugins that use this do exactly that. Nothing
-//     here tries to be cleverer, but repl lets a keystroke past such a
-//     descriptor so a prompt stays usable — see watchfd.go.
+//   - **A descriptor at the end of its input is readable for ever, and this
+//     shell spins on one.** Watching a pipe whose writer had exited — and
+//     `/dev/null`, which answers the same — zsh calls the handler and never
+//     removes it: removing itself is the handler's job, and the plugins that
+//     use this do exactly that. Re-measured 2026-09-08 with a handler that
+//     only counts, that is **250,000 to 270,000 calls a second** and a whole
+//     core held for as long as the descriptor stays armed. "Hundreds of times
+//     in two seconds" was written here first and is wrong by three orders of
+//     magnitude: it was taken with a handler that printed into a
+//     pseudo-terminal nobody was reading, where the shell blocks on the write
+//     and spends 0.00s of CPU in two seconds. Nothing here tries to be
+//     cleverer, but repl lets a keystroke past such a descriptor so a prompt
+//     stays usable — see watchfd.go, which carries what that costs *us*
+//     rather than this shell.
 //
 // What is *not* here is a way to make one fire outside the read loop, and that
 // is measured too rather than left as a limit of this shell: with a six-second

@@ -44,19 +44,55 @@ import (
 //     carriage returns and all, which raw mode with OPOST off would not give.
 //     So a handler runs where a hook and a scheduled command run, through
 //     inLineDiscipline, and for the same reason.
+//
+//     Re-measured 2026-09-08, and the reason is not the one that reading the
+//     output had suggested: that shell does not hand the line discipline back
+//     for a handler at all. Its editor's raw mode *keeps* OPOST and ONLCR —
+//     asked from the far end of a pseudo-terminal, an idle prompt there is
+//     `ECHOE ISIG IEXTEN`, `OPOST ONLCR`, `BRKINT INLCR ICRNL IXON`, with
+//     only ICANON and ECHO dropped — so the kernel translates a handler's
+//     newline with nothing restored first. Ours drops OPOST too, which is
+//     what leaves this package no way to reach column 0 except to restore.
+//     What that costs is two bullets down.
 //   - **Nothing is redrawn afterwards.** A line half-typed when a handler
 //     fired is left sitting behind the handler's output. That is why the
 //     answer from the seam decides the redraw rather than the redraw being
 //     unconditional the way runShellWidget's is: the shell's *plain* callback
 //     draws nothing, and only the spelling that asks for the line back
 //     redraws.
-//   - **A descriptor at the end of its input is readable for ever.** Watching
-//     the read end of a pipe whose writer had exited, zsh called the handler
-//     hundreds of times in two seconds and never removed it — removing itself
-//     is the handler's job. So this loop must let a keystroke through a
-//     descriptor that is always ready, which is what fdset.Wait answering
-//     about the terminal separately is for. A shell doing that to itself is
-//     the shell's business; a prompt that stopped taking input would be ours.
+//   - **A descriptor at the end of its input is readable for ever, and the
+//     shell being modeled spins on one.** Watching the read end of a pipe
+//     whose writer had exited, zsh calls the handler and never removes it —
+//     removing itself is the handler's job. So this loop must let a keystroke
+//     through a descriptor that is always ready, which is what fdset.Wait
+//     answering about the terminal separately is for. A shell doing that to
+//     itself is the shell's business; a prompt that stopped taking input
+//     would be ours.
+//
+//     *How fast* it spins was written here as "hundreds of times in two
+//     seconds", and that is wrong by three orders of magnitude. Re-measured
+//     2026-09-08 with a handler that only counts its calls, differencing a
+//     two-second idle against a six-second one so that the typing either side
+//     falls out: **250,000 to 270,000 calls a second**, and a whole core held
+//     for as long as the descriptor is armed — 1.00 core sustained against
+//     0.00 with nothing armed. The old figure came from a handler that
+//     *printed* into a pseudo-terminal nobody was reading: in that
+//     arrangement the shell spends 0.00s of CPU in two seconds, blocked on
+//     the write, and what was being counted was the pipe filling rather than
+//     the loop running. The instrument, not the shell.
+//
+//   - **What is ours is the line discipline underneath that spin, not the
+//     spin.** Sampling the terminal's attributes from the far end of the
+//     pseudo-terminal while a watcher of that shape is armed: that shell is
+//     in raw mode 100% of the time — ICANON set in 0 of 6.9 million samples —
+//     and this editor is in the terminal's *own* discipline 80% of an idle
+//     prompt, because the handler runs inside the window inLineDiscipline
+//     opens and the offers come tens of thousands of times a second. With
+//     nothing armed both are 0%, so the watcher is the whole of it. That is
+//     what makes a control key typed at such a prompt a coin toss rather than
+//     a narrow race, and closing it means either matching that raw mode or
+//     restoring only when a handler actually writes. Neither is a rate, and
+//     both change measured behavior elsewhere — see #1463.
 
 // descriptorHandlers is how a session answers a descriptor that has become
 // readable, with this session's context and terminal closed over.

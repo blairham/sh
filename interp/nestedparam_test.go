@@ -158,6 +158,10 @@ func TestANestedInnerThatIsAListKeepsItsElements(t *testing.T) {
 		// The count is where one element is not the same question as one
 		// string: `${#${v}}` on the same five characters is 5.
 		{"one element is counted, not measured", `a=(hello); printf "n=%s" ${#${a[@]}}`, "n=1"},
+		// And an inner that produced no field at all is not a list of one
+		// empty field: measured, `a=(); ${#${a[@]}}` is 0 where a list
+		// holding one empty element would answer 1.
+		{"an empty inner counts as none", `a=(); printf "n=%s" ${#${a[@]}}`, "n=0"},
 		{"a further nesting keeps them", `a=(one two); printf "[%s]" ${${${a[@]}}}`, "[one][two]"},
 		{"and joins them when the outermost is quoted", `a=(one two); printf "[%s]" "${${${a[@]}}}"`, "[one two]"},
 		// An empty inner is not a list, and the colon test still fires on it.

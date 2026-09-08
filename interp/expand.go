@@ -3509,6 +3509,14 @@ func (r *Runner) nestedInnerIsAList(e *syntax.ParamExpr, words []string) bool {
 // nestedHold is one nested expansion's fields, kept between the two halves of
 // a single span's expansion.
 //
+// The node key and the clearing at the top of expandAt are the invariant
+// rather than the cheapest test that passes, and mutation says so: neither is
+// observable on its own today, because every route that fills a hold falls
+// through to the scalar path in the very next call and empties it. They are
+// written down anyway for the reason expandingQuoting keeps its own pair —
+// what they prevent is a value from the wrong pass of a loop, which is
+// exactly the silent kind of wrong.
+//
 // expandAtList asks whether a nested expansion came to a list, which it can
 // only answer by expanding the inner; where the answer is no, the span falls
 // through to the scalar path, which wants the very same fields. The inner

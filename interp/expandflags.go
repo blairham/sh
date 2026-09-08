@@ -120,11 +120,17 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		r.expandErr = true
 		return nil, false, false, false
 	}
+	// Whether the group asks for minimal quoting is answered by the same pass
+	// that refuses what this slice does not carry, rather than by a second
+	// walk further down: a `-` is the minimal-quoting modifier or it is the
+	// sort flag, and one reading has to decide both questions or they can
+	// come apart.
+	minimal := false
 	for i, c := range e.Flags {
 		if c == '-' && minimalQuoteModifier(e.Flags, i) {
-			// The `-` a `q` in front of it ate, which is the minimal-quoting
-			// modifier and not the sort flag spelled the same way. See
-			// interp/minimalquote.go for how the two are told apart.
+			// The `-` a `q` in front of it ate. See interp/minimalquote.go
+			// for how it is told apart from the sort flag spelled the same.
+			minimal = true
 			continue
 		}
 		if !r.paramFlagCarried(c) {
@@ -286,7 +292,6 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		}
 	}
 	if n := strings.Count(e.Flags, "q"); n > 0 {
-		minimal := minimalQuoteFlag(e.Flags)
 		for i, w := range words {
 			words[i] = quoteFlagged(w, n, minimal)
 		}

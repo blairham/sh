@@ -111,15 +111,3 @@ func writeMinimalRun(b *strings.Builder, run string, at int) {
 func minimalQuoteModifier(flags string, i int) bool {
 	return i > 0 && flags[i-1] == 'q' && strings.Count(flags, "q") == 1
 }
-
-// minimalQuoteFlag reports whether a flag group asks for minimal quoting.
-// Every `-` is asked, not just the first: `(-q-)` is minimal quoting with a
-// sort flag in front of it.
-func minimalQuoteFlag(flags string) bool {
-	for i := range len(flags) {
-		if flags[i] == '-' && minimalQuoteModifier(flags, i) {
-			return true
-		}
-	}
-	return false
-}

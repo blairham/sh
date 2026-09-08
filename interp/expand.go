@@ -1211,15 +1211,43 @@ func (r *Runner) escapeResult(v string, glob Answer) string {
 	// Checked by enumeration over four hundred thousand random strings on
 	// the metacharacter alphabet, in all four flag combinations.
 	esc := escapeValueBackslashes(v)
-	if hasUnescapedMeta(esc, r.dialect().NumericRangePattern, r.dialect().PatternAlternation,
-		r.dialect().ExtendedPattern, r.MatchOption(ExtendedPatternOperators)) &&
-		!r.ask(glob, "globbing the result of an expansion") {
+	if r.resultReadsAsPattern(esc) && !r.ask(glob, "globbing the result of an expansion") {
 		// zsh does not treat the result of an expansion as a pattern. The
 		// same rule decides `[[ abc == $p ]]`, which is one behavior
 		// observed twice rather than two quirks.
 		return globEscape(v)
 	}
 	return esc
+}
+
+// resultReadsAsPattern reports whether leaving this result live would let
+// something downstream read it as a pattern.
+//
+// It is not the same question as hasUnescapedMeta, and #1386 is the gap
+// between them. An unterminated `[` is deliberately *not* a metacharacter —
+// `[ a = a ]` runs the test builtin because of that — but the dialect that
+// calls one a bad pattern refuses the field in glob before anything asks
+// whether it is a pattern at all. So a value holding `a[1m` had no
+// metacharacter to protect, went to the filesystem live, and was rejected
+// there; and since `ESC [` opens every ANSI escape sequence, that made any
+// unquoted expansion of a value carrying color fatal.
+//
+// Asking it here rather than relaxing the refusal in glob is what keeps the
+// two provenances apart. A literal `print -r -- a[1m` is fatal in that
+// dialect and is measured correct, and by the time glob has the field the
+// escaping is the only thing that still says where the bracket came from —
+// so a fix in glob could only have been one that lost the literal case.
+func (r *Runner) resultReadsAsPattern(esc string) bool {
+	if hasUnescapedMeta(esc, r.dialect().NumericRangePattern, r.dialect().PatternAlternation,
+		r.dialect().ExtendedPattern, r.MatchOption(ExtendedPatternOperators)) {
+		return true
+	}
+	// Composed with the axis rather than short-circuiting it: a dialect that
+	// both globs expansion results and calls an unterminated bracket a bad
+	// pattern would be right to refuse this field, since there the result
+	// really is a pattern. Only the dialect that answers No to the axis
+	// reaches the escape below.
+	return r.sem().UnterminatedBracket == BracketBadPattern && hasUnterminatedBracket(esc)
 }
 
 func containsAnyOf(s, chars string) bool {

@@ -9141,6 +9141,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pat/star-matches-slash-in-case` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` |
 | `pat/unterminated-bracket` | `miss` | `hit` | `hit` | `hit` | `hit` | **2>** `<shell>:1: bad pattern: [` |
 | `pat/unterminated-bracket-globs` | `[~[a` | `[~[a` | `[~[a` | `[~[a` | `[~[a` | `[` **2>** `<shell>:1: bad pattern: [a` *(status 1)* |
+| `pat/unterminated-bracket-from-a-value` | `[a[1m][a[1m]~a[1m~after` | `[a[1m][a[1m]~a[1m~after` | `[a[1m][a[1m]~a[1m~after` | `[a[1m][a[1m]~a[1m~after` | `[a[1m][a[1m]~a[1m~after` | `[a[1m][a[1m]` **2>** `<shell>:1: bad pattern: a[1m` *(status 1)* |
+| `pat/unterminated-bracket-from-a-substitution` | `[a[1m][a[1m][a[1m]` | `[a[1m][a[1m][a[1m]` | `[a[1m][a[1m][a[1m]` | `[a[1m][a[1m][a[1m]` | `[a[1m][a[1m][a[1m]` | `[a[1m][a[1m][a[1m]` |
+| `pat/unterminated-bracket-from-a-value-holding-an-escape` | `[1m` | `[1m` | `[1m` | `[1m` | `[1m` | `[1m` |
+| `pat/bracket-from-a-value-is-never-a-pattern-in-zsh` | `[a[b]][zzfile]` | `[a[b]][zzfile]` | `[a[b]][zzfile]` | `[a[b]][zzfile]` | `[a[b]][zzfile]` | `[a[b]][zz*]` |
 | `pat/star-stops-at-slash-in-glob` | `[*f]` | `[*f]` | `[*f]` | `[*f]` | `[*f]` | **2>** `<shell>:1: no matches found: *f` *(status 1)* |
 | `pat/only-a-leading-period-is-special` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` |
 | `pat/bracket-set-and-range` | `set range` | `set range` | `set range` | `set range` | `set range` | `set range` |
@@ -9313,6 +9317,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pat/unterminated-bracket-globs` — the same question against the filesystem, where all four agree a lone `[` is literal and only zsh rejects `[a`
   ```sh
   echo [ ; echo [a
+  ```
+- `pat/unterminated-bracket-from-a-value` — provenance decides it, and quoting does not: the value goes through unquoted and quoted alike in every shell, and only the bracket *written* in the source is a bad pattern that stops the script — so the shell that refuses one prints the two fields and then nothing. Reading an expansion's result as a pattern here made every unquoted use of the value fatal, and `ESC [` opens every ANSI escape sequence (#1386)
+  ```sh
+  m="a[1m"; printf "[%s]" $m "$m"; echo; printf "%s\n" a[1m; echo after
+  ```
+- `pat/unterminated-bracket-from-a-substitution` — the same value arriving three other ways — a command substitution, `read`, a positional parameter — because a fix that escaped only the scalar variable path would leave these three fatal in the shell that rejects the pattern
+  ```sh
+  c=$(printf "a[1m"); printf "[%s]" $c; printf "a[1m\n" | { read rv; printf "[%s]" $rv; }; set -- "a[1m"; printf "[%s]" $1; echo
+  ```
+- `pat/unterminated-bracket-from-a-value-holding-an-escape` — the reduction this matters for: a terminal escape sequence is an `ESC` and then `[`, so a shell that reads an unquoted expansion's brackets as a pattern cannot hold a color in a variable. The `tr` removes the escape byte so the row records the printable remainder rather than a control character
+  ```sh
+  e=$(printf "\033[1m"); printf "%s" $e | tr -d "\033"; echo
+  ```
+- `pat/bracket-from-a-value-is-never-a-pattern-in-zsh` — a *terminated* bracket from a value, beside the star that says why: both are legal patterns, and the shell that does not glob an expansion's result passes both through where the others expand the star. That is the axis the row above must not disturb — a fix that stopped refusing the unterminated bracket by making expansion results non-patterns everywhere would move this row too
+  ```sh
+  touch zzfile; t="a[b]"; s="zz*"; printf "[%s]" $t $s; echo
   ```
 - `pat/star-stops-at-slash-in-glob` — in pathname expansion it cannot cross a directory boundary; an unmatched pattern is passed through, except in zsh
   ```sh

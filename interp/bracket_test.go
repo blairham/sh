@@ -105,3 +105,72 @@ func TestEqualsExpansionRunsBeforeGlobbing(t *testing.T) {
 		t.Errorf("got %q", out)
 	}
 }
+
+// TestABracketFromAValueIsNotAPatternWhereExpansionsAreNotGlobbed is #1386,
+// and it needs both axes named because the bug lives where they meet.
+//
+// The bracket axis alone says an unterminated `[` is a bad pattern. The other
+// axis says whether the result of an expansion is a pattern at all. Where it
+// says no, a value carrying `a[1m` is text and every shell prints it — but
+// the refusal fired first, before anything asked, so the unquoted spelling
+// abandoned the script. `ESC [` opens every ANSI escape sequence, which is
+// what makes this the difference between a shell that can hold a color in a
+// variable and one that cannot.
+func TestABracketFromAValueIsNotAPatternWhereExpansionsAreNotGlobbed(t *testing.T) {
+	sem := bracketSem(BracketBadPattern)
+	sem.GlobExpansionResults = No
+
+	// The value arriving five ways. All five were fatal, and a fix that
+	// escaped only the scalar variable would leave the last three.
+	for _, src := range []string{
+		`m="a[1m"; echo $m`,
+		`m="a[1m"; echo ${m}`,
+		`m="a[1m"; x=$m; echo $x`,
+		`c=$(printf 'a[1m'); echo $c`,
+		`set -- "a[1m"; echo $1`,
+	} {
+		out, st := run(t, src, withSem(sem))
+		if out != "a[1m\n" || st != 0 {
+			t.Errorf("%s: got %q status %d, want %q status 0", src, out, st, "a[1m\n")
+		}
+	}
+	// Two of them in one field, because the field the matcher sees is the
+	// join and an escape applied per span has to survive it.
+	if out, st := run(t, `m="a[1m"; echo $m$m`, withSem(sem)); out != "a[1ma[1m\n" || st != 0 {
+		t.Errorf("joined: got %q status %d", out, st)
+	}
+	// Quoted, which was already right and is the axis held fixed.
+	if out, _ := run(t, `m="a[1m"; echo "$m"`, withSem(sem)); out != "a[1m\n" {
+		t.Errorf("quoted: got %q", out)
+	}
+
+	// The control that must keep failing. A bracket *written in the source*
+	// is a pattern whatever this axis says, so it is still refused — and by
+	// the time the field reaches the matcher the escaping is the only thing
+	// that says which of the two it was. A fix in glob could only have been
+	// one that lost this.
+	out, st := run(t, `echo a[1m`, withSem(sem))
+	if !strings.Contains(out, "bad pattern") || st != 1 {
+		t.Errorf("a literal bracket must still be refused: got %q status %d", out, st)
+	}
+
+	// And the composition, from the other side: where the dialect *does*
+	// glob the result of an expansion, the value really is a pattern and
+	// refusing it is right. This is the row that fails if the fix stops
+	// asking the axis and escapes unconditionally.
+	globbed := bracketSem(BracketBadPattern)
+	globbed.GlobExpansionResults = Yes
+	out, st = run(t, `m="a[1m"; echo $m`, withSem(globbed))
+	if !strings.Contains(out, "bad pattern") || st != 1 {
+		t.Errorf("with expansion results globbed the refusal is correct: got %q status %d", out, st)
+	}
+
+	// A *terminated* bracket from a value is a legal pattern that matches
+	// nothing, so it is passed through rather than refused. It is the row a
+	// looser fix would have moved, and it moves under neither axis.
+	for _, s := range []Semantics{sem, globbed} {
+		if out, st := run(t, `t="a[b]"; echo $t`, withSem(s)); out != "a[b]\n" || st != 0 {
+			t.Errorf("a terminated bracket from a value: got %q status %d", out, st)
+		}
+	}
+}

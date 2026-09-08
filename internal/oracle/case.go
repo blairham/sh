@@ -6664,6 +6664,26 @@ echo unreachable`,
 		Why:     "the same question against the filesystem, where all four agree a lone `[` is literal and only zsh rejects `[a`",
 	},
 	{
+		ID: "pat/unterminated-bracket-from-a-value", Category: "pattern matching",
+		Snippet: `m="a[1m"; printf "[%s]" $m "$m"; echo; printf "%s\n" a[1m; echo after`,
+		Why:     "provenance decides it, and quoting does not: the value goes through unquoted and quoted alike in every shell, and only the bracket *written* in the source is a bad pattern that stops the script — so the shell that refuses one prints the two fields and then nothing. Reading an expansion's result as a pattern here made every unquoted use of the value fatal, and `ESC [` opens every ANSI escape sequence (#1386)",
+	},
+	{
+		ID: "pat/unterminated-bracket-from-a-substitution", Category: "pattern matching",
+		Snippet: `c=$(printf "a[1m"); printf "[%s]" $c; printf "a[1m\n" | { read rv; printf "[%s]" $rv; }; set -- "a[1m"; printf "[%s]" $1; echo`,
+		Why:     "the same value arriving three other ways — a command substitution, `read`, a positional parameter — because a fix that escaped only the scalar variable path would leave these three fatal in the shell that rejects the pattern",
+	},
+	{
+		ID: "pat/unterminated-bracket-from-a-value-holding-an-escape", Category: "pattern matching",
+		Snippet: `e=$(printf "\033[1m"); printf "%s" $e | tr -d "\033"; echo`,
+		Why:     "the reduction this matters for: a terminal escape sequence is an `ESC` and then `[`, so a shell that reads an unquoted expansion's brackets as a pattern cannot hold a color in a variable. The `tr` removes the escape byte so the row records the printable remainder rather than a control character",
+	},
+	{
+		ID: "pat/bracket-from-a-value-is-never-a-pattern-in-zsh", Category: "pattern matching",
+		Snippet: `touch zzfile; t="a[b]"; s="zz*"; printf "[%s]" $t $s; echo`,
+		Why:     "a *terminated* bracket from a value, beside the star that says why: both are legal patterns, and the shell that does not glob an expansion's result passes both through where the others expand the star. That is the axis the row above must not disturb — a fix that stopped refusing the unterminated bracket by making expansion results non-patterns everywhere would move this row too",
+	},
+	{
 		ID: "pat/star-stops-at-slash-in-glob", Category: "pattern matching",
 		Snippet: `mkdir s; touch s/f; printf "[%s]" *f`,
 		Why:     "in pathname expansion it cannot cross a directory boundary; an unmatched pattern is passed through, except in zsh",

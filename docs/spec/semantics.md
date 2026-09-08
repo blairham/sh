@@ -7716,6 +7716,22 @@ panel assigns the names in front of a bad one and then refuses:
 keep in all six, and the line is consumed in all six — including the two
 that would not have read it had `1bad` come first.
 
+**`ReadCountJudgesTheNamesAfterTheFirst`** — bash yes · dash unanswered · ksh93 no · zsh unanswered
+
+Keeps judging `read`'s operands as names when `-n` or `-N` gave it a
+count.
+
+bash does; ksh93 stops at the first. `printf 'XYZW\n' | { b=keep; read
+-n 3 a 1bad b; }` refuses `1bad` in bash and says nothing in ksh93, where
+`read a 1bad` is refused in both — so it is the count that moves it and
+not the operand. The filling stops at the bad name in each, b keeping
+what it had, so what a count releases is the complaint and not the list.
+
+Left unanswered in the two that cannot reach it: dash has no count
+letter at all, and zsh's `-n` is a flag rather than a count while its
+`-k` reads from the terminal. An answer there would be a claim nothing
+measured.
+
 **`ReadPromptOperand`** — bash ReadOperandIsAllName · dash ReadOperandIsAllName · ksh93 ReadPromptNeedsANameBeforeIt · zsh ReadPromptAloneNamesTheDefault
 
 Says whether `read`'s first operand may carry a prompt after a `?`, and

@@ -314,6 +314,9 @@ func Semantics() interp.Semantics {
 	// dash reads the line first and refuses afterwards, so the line is gone:
 	// `printf 'AAA\nBBB\n' | { read 1bad; cat; }` prints only BBB.
 	s.ReadRefusesABadNameBeforeReading = interp.No
+	// ReadCountJudgesTheNamesAfterTheFirst is left unanswered: dash's
+	// `read` has no count letter — `-n` and `-N` are both `Illegal option`
+	// — so nothing here can ask it.
 	s.DeclarationTakesASubscript = interp.No
 	// No arrays at all, so no subscripted operand is a name to any
 	// declaration here either.

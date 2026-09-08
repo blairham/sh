@@ -3,7 +3,10 @@
 
 package syntax
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // An expansion inside a pattern group is a span of its own kind, not bytes of
 // the group's literal text (#1331).
@@ -128,27 +131,37 @@ func TestASubstitutionsParenthesesAreNotTheGroups(t *testing.T) {
 // different one again.
 func TestAPatternGroupsExpansionPrintsBackAsItWasWritten(t *testing.T) {
 	on := patGroup()
-	for _, src := range []string{
-		`echo ($L)`,
-		`echo (${L})`,
-		`echo (a${L}b)*`,
-		`echo ($(id))`,
-		`echo a($L|b)c`,
-		`[[ $k == ($L) ]]`,
+	for _, tc := range []struct{ src, group string }{
+		{`echo ($L)`, `($L)`},
+		// The braces come off where nothing needs them, which is what the
+		// printer does with `${L}` anywhere else in a word — the group
+		// changes nothing about it.
+		{`echo (${L})`, `($L)`},
+		{`echo (a${L}b)*`, `(a${L}b)*`},
+		{`echo ($(id))`, `($(id))`},
+		{`echo a($L|b)c`, `a($L|b)c`},
+		{`[[ $k == ($L) ]]`, `($L)`},
 	} {
-		f, err := Parse(src, on)
+		f, err := Parse(tc.src, on)
 		if err != nil {
-			t.Errorf("%s: %v", src, err)
+			t.Errorf("%s: %v", tc.src, err)
 			continue
 		}
 		printed := Print(f)
+		// The word itself, not only a stable round trip. Reprinting
+		// `\(L\)` for `($L)` is stable and is a different pattern, and
+		// escaping the `$` is a different one again — so the text is what
+		// is asserted and the round trip below is the second half of it.
+		if !strings.Contains(printed, tc.group) {
+			t.Errorf("%s: printed %q, which does not hold %q", tc.src, printed, tc.group)
+		}
 		g, err := Parse(printed, on)
 		if err != nil {
-			t.Errorf("%s: printed as %q, which does not parse: %v", src, printed, err)
+			t.Errorf("%s: printed as %q, which does not parse: %v", tc.src, printed, err)
 			continue
 		}
 		if again := Print(g); again != printed {
-			t.Errorf("%s: printed %q, reprinted %q", src, printed, again)
+			t.Errorf("%s: printed %q, reprinted %q", tc.src, printed, again)
 		}
 	}
 }

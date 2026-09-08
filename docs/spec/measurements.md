@@ -9301,7 +9301,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   c=$(printf "a[1m"); printf "[%s]" $c; printf "a[1m\n" | { read rv; printf "[%s]" $rv; }; set -- "a[1m"; printf "[%s]" $1; echo
   ```
-- `pat/unterminated-bracket-from-a-value-holding-an-escape` — the reduction this matters for: a terminal escape sequence is an `ESC` and then `[`, so a shell that reads an unquoted expansion's brackets as a pattern cannot hold a colour in a variable. The `tr` removes the escape byte so the row records the printable remainder rather than a control character
+- `pat/unterminated-bracket-from-a-value-holding-an-escape` — the reduction this matters for: a terminal escape sequence is an `ESC` and then `[`, so a shell that reads an unquoted expansion's brackets as a pattern cannot hold a color in a variable. The `tr` removes the escape byte so the row records the printable remainder rather than a control character
   ```sh
   e=$(printf "\033[1m"); printf "%s" $e | tr -d "\033"; echo
   ```

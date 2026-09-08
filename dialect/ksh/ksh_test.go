@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/ksh"
+	"github.com/blairham/sh/internal/dialecttest"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -726,5 +727,79 @@ func TestTheJobSpecThatNamesNothing(t *testing.T) {
 	}
 	if got := ksh.Diagnostics().NoSuchJobStatus; got != 0 {
 		t.Errorf("NoSuchJobStatus = %d, want 0 — the shared 1", got)
+	}
+}
+
+// TestAQuoteEndsAtTheEndOfACommandStringAndNowhereElse is #1424.
+//
+// This shell closes an unterminated quote at the end of a program handed to
+// it as a *string* and refuses one at the end of a program it read. Measured
+// 2026-09-07, ksh93u+ 2012-08-01, one line by every route:
+//
+//	ksh -c 'echo "abc'       abc, status 0
+//	ksh script.sh            script.sh: syntax error at line 1: `"' unmatched, 3
+//	ksh < script.sh          the same sentence, 3
+//
+// The flag was measured on the first of those and applied to all of them, so
+// a truncated script ran under our ksh, discarded everything after the quote
+// and reported success. Every route is asserted rather than the file one
+// alone, because a test that asks about one route is how the defect got in.
+func TestAQuoteEndsAtTheEndOfACommandStringAndNowhereElse(t *testing.T) {
+	if got, want := ksh.Dialect().CloseQuotesAtEOF, syntax.RouteFromCommandString; got != want {
+		t.Errorf("CloseQuotesAtEOF = %v, want %v", got, want)
+	}
+	quotes := []string{`echo "abc`, `echo 'abc`, "echo `echo hi"}
+	for _, src := range quotes {
+		if _, err := syntax.Parse(src, ksh.Dialect().On(syntax.RouteFromCommandString)); err != nil {
+			t.Errorf("-c %q: %v, want the quote closed and the command kept", src, err)
+		}
+		for _, route := range []syntax.ProgramRoutes{
+			syntax.RouteFromScriptFile,
+			syntax.RouteOnStandardInput,
+			syntax.RouteOnNoRoute,
+		} {
+			if _, err := syntax.Parse(src, ksh.Dialect().On(route)); err == nil {
+				t.Errorf("route %v: %q parsed, want a refusal", route, src)
+			}
+		}
+	}
+	// A substitution is not a quote, on the lenient route either: `(' unmatched
+	// is what this shell says to `ksh -c 'echo $(echo hi'`.
+	if _, err := syntax.Parse(`echo $(echo hi`, ksh.Dialect().On(syntax.RouteFromCommandString)); err == nil {
+		t.Error("`echo $(echo hi` parsed under a command string, want a refusal")
+	}
+}
+
+// TestEvalClosesAQuoteWhereASourcedFileDoesNot is the same rule reached
+// through the two builtins that run borrowed text.
+//
+// Measured the same day, both from inside a *script file* so that neither
+// answer can be the invocation's:
+//
+//	eval "echo 'abc"    prints abc, status 0
+//	. ./q.sh            q.sh: syntax error at line 1: `"' unmatched
+//
+// A string handed over is a command string wherever it was handed over from,
+// and a file is a file.
+func TestEvalClosesAQuoteWhereASourcedFileDoesNot(t *testing.T) {
+	out, st := answersRun(t, "eval \"echo 'abc\"\necho st=$?")
+	if !strings.Contains(out, "abc") || !strings.Contains(out, "st=0") {
+		t.Errorf("eval = %q status %d, want abc and st=0", out, st)
+	}
+	dir := t.TempDir()
+	got, _, err := preset.Combined(t, dialecttest.Base{
+		Name: "sh", Dir: dir, Env: []string{"PATH=/usr/bin:/bin"},
+	}, "printf 'echo \"abc\\n' > q.sh\n. ./q.sh\necho after")
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if strings.Contains(got, "abc\n") && !strings.Contains(got, "unmatched") {
+		t.Errorf("a sourced file = %q, want the quote refused rather than closed", got)
+	}
+	if !strings.Contains(got, "unmatched") {
+		t.Errorf("a sourced file = %q, want `\"' unmatched", got)
+	}
+	if !strings.Contains(got, "after") {
+		t.Errorf("a sourced file = %q, want the script to carry on afterwards", got)
 	}
 }

@@ -34,8 +34,8 @@ const (
 	// RouteOnStandardInput is a program read from the descriptor, whether
 	// by `-s` or by there being no operand and no terminal.
 	RouteOnStandardInput
-	// RouteOnEveryRoute is what a shell that does not distinguish them
-	// answers, which is two of the four.
+	// RouteOnEveryRoute is what a dialect that does not distinguish them
+	// answers.
 	RouteOnEveryRoute = RouteFromCommandString | RouteFromScriptFile | RouteOnStandardInput
 	// RouteOnNoRoute is the empty set, spelled so a dialect can say it
 	// deliberately rather than by leaving a field out.
@@ -1689,7 +1689,7 @@ type Dialect struct {
 	//	-c string                 runs, status 0        refuse
 	//	eval string               runs, status 0        refuse
 	//	script file operand       `'' unmatched`, 3     refuse
-	//	`.` on a file             `'' unmatched`, 1     refuse
+	//	`.` on a file             `'' unmatched`, 3     refuse
 	//	standard input, or a pipe `'' unmatched`, 3     refuse
 	//
 	// So a boolean gets one of ksh93's routes right and four wrong, and the

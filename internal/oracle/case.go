@@ -6633,6 +6633,11 @@ echo unreachable`,
 		Why:     "the standard way to expand a possibly-empty array under `set -u`, and where the wild sweep found that a subscript was ending at the *last* `]` in the word rather than its own — so the inner expansion's bracket closed the outer's subscript and the operator after it was unreadable. The simple `${a[@]+x}` always worked, which is why a real script had to find it",
 	},
 	{
+		ID: "param/an-operand-is-not-a-command-position", Category: "parameter expansion",
+		Snippet: `u=; x=${u:-((a))}; y=${u:-$((1+2))}; echo "[$x][$y]"`,
+		Why:     "**unanimous**, which is what makes it the core's answer rather than a dialect's: an operand beginning `((` is those characters and not an arithmetic command, so all six print `[((a))][3]`. The second field is the control — `$((` in the same position still evaluates — so a grammar that answered this by refusing arithmetic in an operand would fail it. Ours printed `[a]`, the expression `a` read as a variable name and found unset: the operand's lexer stood where a command may begin, reached the `((` rule and kept only the *expression*, which is a lossy reading. `\"${u:-((a))}\"` cannot see it — a double-quoted word operand is read as quoted content and never as a command — but every *pattern* operand takes the unquoted route whatever it is written inside, which is how the same fault reached `${v#((#s)pat)}` as `bad pattern` (#1408)",
+	},
+	{
 		ID: "param/array-indices", Category: "parameter expansion",
 		Snippet: `a=(p q r); for i in "${!a[@]}"; do printf "%s=%s " "$i" "${a[$i]}"; done`,
 		Why:     "`${!a[@]}` is the array's subscripts, not its elements — written as the loop that uses it, since iterating an array by index is the only reason the form exists and answering with the elements made that loop silently iterate the wrong thing",
@@ -9347,6 +9352,31 @@ printf "[%s]" .@(hid); echo`,
 		ID: "pat/an-anchor-in-a-replacement", Category: "pattern matching",
 		Snippet: `setopt extendedglob 2>/dev/null; v=XbXcX; echo "[${v//(#s)X/-}]"; echo "[${v//X(#e)/-}]"; echo "[${v//X(#s)/-}]"; w=abc; echo "[${w//(#e)/-}]"`,
 		Why:     "a replacement scans every span of its value, so the anchors are the only thing that can hold one to an end — and an empty match is a position like any other. The shell with the flags prints `[-bXcX]`, `[XbXc-]`, `[XbXcX]` and `[abc-]`; a matcher without a position would replace all three X in the first two rows",
+	},
+	{
+		ID: "pat/a-group-opening-a-pattern-operand", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; v=aXb; echo "[${v#((a))}]"; echo "[${v#((#s)a)}]"; echo "[${v//((#s)a|b)/}]"`,
+		Why:     "a pattern operand that *begins* with a group, which is where the operand lexer's command position did its damage: the shell with bare groups prints `[Xb]`, `[Xb]` and `[X]`, and the bash column prints the value back three times because `((a))` is five ordinary characters there. Ours trimmed in the bash column too — `[Xb]` — having matched the pattern `a`, and answered the anchored ones `bad pattern: #s)a`, both parens gone; see param/an-operand-is-not-a-command-position for the cause and the unanimous row (#1408). ksh93 refuses a leading `(` in an operand outright and takes the script with it, so that column is one syntax error, and dash reaches the third row before it meets a `/` it does not have",
+	},
+	{
+		ID: "pat/a-closure-over-a-character-class", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; v="  x  "; echo "[${v##[[:space:]]##}]" "[${v%%[[:space:]]##}]" "[${v//[[:space:]]##/}]"`,
+		Why:     "the closure's item is the **whole** bracket expression, and a `[:class:]` inside one has a `]` of its own that does not end it. The shell with closures prints `[x  ]`, `[  x]` and `[x]`; the rest leave the value alone three times. Ours printed `[ x  ]` and `[  x ]` — one space short at each end — because the item ended at the class's `]`, so the bracket matched exactly one character and the `##` behind it repeated a literal `#` (#1409). **The third field is the trap and is here to be looked at rather than trusted**: `//` re-applies its pattern until nothing matches, so matching one character at a time still removes the whole run and that field agreed with real zsh throughout. A row written with `//` alone would have recorded agreement and pinned the bug in place",
+	},
+	{
+		ID: "pat/the-other-spellings-of-a-closure-over-a-class", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; v=abX; echo "[${v##[[:alpha:]](#c2)}]" "[${v##[[:alpha:]]#}]" "[${v#[[:alpha:]]##}]" "[${v##[a-z]##}]"`,
+		Why:     "the same fault reached by three more routes, which is what says it was in the *item* and not in how `#` was read. The shell with them prints `[X]`, `[]`, `[bX]` and `[X]`: `(#c2)` is a count and never touches the `#` scan at all, a single `#` is zero-or-more, and `[a-z]##` is the control that always worked — a range has no inner `]`. Ours printed `[abX]`, `[abX]`, `[bX]` and `[X]`, so the two class spellings failed to match anything while the range matched correctly. The third field is a **second** non-discriminating form worth recording beside the `//` one: the *shortest* match of one-or-more is one character, which is exactly what the bug produced, so `#` and `%` are as blind to this as `//` is",
+	},
+	{
+		ID: "pat/a-bash-closure-over-a-class-is-a-different-operator", Category: "pattern matching",
+		Snippet: `shopt -s extglob 2>/dev/null; v=abX; echo "[${v##+([[:alpha:]])}]"`,
+		Why:     "the row that keeps the two families apart. `+(…)` is a quantified *group* and not a postfix closure, so it is read by a different part of the matcher and was already right: bash 5.3, bash 3.2, bash-as-sh and ksh93 all print `[]` and so did ours throughout #1409, where `[[:alpha:]]##` was one character short. zsh and dash print the value back — zsh has no `+(` and dash has neither. Folding this into the closure rows would have made a broken matcher look half-covered",
+	},
+	{
+		ID: "pat/an-anchored-closure-over-a-class-in-a-replacement", Category: "pattern matching",
+		Snippet: `setopt extendedglob 2>/dev/null; v="  a  "; echo "[${v//((#s)[[:space:]]##|[[:space:]]##(#e))/}]"; echo "[${(M)v##(#s)[[:space:]]##}]"`,
+		Why:     "both faults in the one expression, and it is not contrived — it is how a plugin manager installed on this machine trims a message and then measures what it trimmed. The shell with the constructs prints `[a]` and `[  ]`; ours refused the first with `bad pattern: #s)[[:space:]]##|[[:space:]]##(#e` (#1408), and that refusal is fatal, so the second field never printed at all — measured on its own it was `[ ]`, one space (#1409). `(M)` is the field that cannot be faked: it yields the *match* rather than the remainder, so the extent of one match is visible exactly once and a matcher stopping early has nowhere to hide. The other columns are the two grammars' absence — a bad substitution for the flag group in bash, a syntax error in ksh93, and dash short of both",
 	},
 	{
 		ID: "pat/an-anchor-binds-to-one-path-component", Category: "pattern matching", SyntaxError: true,

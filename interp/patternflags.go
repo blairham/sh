@@ -246,6 +246,37 @@ func hasTopLevelExclusion(field string, o patternOpts) bool {
 
 // bracketEnd is the offset of the `]` that closes the bracket expression
 // starting at i, so a scan over a pattern can step over one whole.
+//
+// A `[:class:]` inside is stepped over whole, because its own `]` does not
+// end the expression. That is what a closure over a class needs and is where
+// this was wrong: `[[:space:]]##` ended the item at the class's `]`, leaving
+// `[[:space:]` as the thing to repeat and `]##` behind it — so nothing read
+// the closure at all, the bracket matched exactly one character, and the
+// trailing `#` became a literal. Measured on zsh 5.9.2, 2026-09-07, with
+// `extendedglob` on:
+//
+//	v="  x";  ${v##[[:space:]]##}    x     ours was " x"
+//	v="  x  "; ${v%%[[:space:]]##}   "  x" ours was "  x "
+//	v=abX;    ${v##[[:alpha:]]##}    ""    ours was "bX"
+//	v=abX;    ${v##[[:alpha:]]#}     ""    ours was "abX" — a literal `#`
+//	v=abX;    ${v##[[:alpha:]](#c2)} X     ours was "abX" — the count too
+//
+// A range and an enumeration were unaffected, which is what said the fault
+// was here rather than in the closure: `[a-z]##` and `[ab]##` and `?##` all
+// quantified correctly, because none of them has an inner `]` (#1409).
+//
+// **A global substitution cannot see any of this**, and that is worth the
+// line it costs: `//` re-applies its pattern until nothing matches, so
+// matching one character at a time still removes the whole run.
+// `v="  x"; ${v//[[:space:]]##/}` was `x` — agreeing with real zsh — with
+// the bug fully present. The rows above are the longest-match operators and
+// an anchored replacement, where the extent of one match is observable
+// exactly once.
+//
+// Only `[:class:]` is stepped over. `[=a=]` and `[.a.]` are not, because
+// that shell does not read them either: measured, `v=aab; ${v##[[=a=]]##}`
+// is `aab` there, which is the bracket ending at the first `]` and the rest
+// standing as text — the same answer this scan already gives.
 func bracketEnd(p string, i int) (int, bool) {
 	j := i + 1
 	if j < len(p) && (p[j] == '!' || p[j] == '^') {
@@ -255,11 +286,34 @@ func bracketEnd(p string, i int) (int, bool) {
 		j++
 	}
 	for ; j < len(p); j++ {
+		if end, ok := classEnd(p, j); ok {
+			// Past the whole `[:class:]`; the loop's own increment then
+			// carries on from the character after it.
+			j = end
+			continue
+		}
 		if p[j] == ']' {
 			return j, true
 		}
 	}
 	return 0, false
+}
+
+// classEnd is the offset of the last byte of the `[:class:]` standing at j,
+// and reports false where no complete one does.
+//
+// A `[:` with no `:]` after it is not a class and is left to be read as the
+// ordinary characters it is, which is the same choice matchBracket makes at
+// the same text.
+func classEnd(p string, j int) (int, bool) {
+	if !strings.HasPrefix(p[j:], "[:") {
+		return 0, false
+	}
+	k := strings.Index(p[j:], ":]")
+	if k < 0 {
+		return 0, false
+	}
+	return j + k + 1, true
 }
 
 // splitClosableItem peels the one item a closure could repeat.

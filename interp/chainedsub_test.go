@@ -154,6 +154,12 @@ func TestAChainWhoseLinkNamedNothingIsUnset(t *testing.T) {
 		{"no such element", `a=(x y); printf "[%s]" "${a[9][1]-none}"`, "[none]"},
 		{"no such key", `typeset -A m; m[k]=abc; printf "[%s]" "${m[zz][1]-none}"`, "[none]"},
 		{"no such element of a range", `a=(one two three); printf "[%s]" "${a[1,3][9][1]-none}"`, "[none]"},
+		// The link that named nothing is what makes this unset, and a search
+		// behind it must reach that answer rather than the refusal a search
+		// over a *string* carries: with the miss read as an empty value, the
+		// group would be searching one.
+		{"no such element, then a search", `a=(x y); printf "[%s]" "${a[9][(i)q]-none}"`, "[none]"},
+		{"a range that fell off the end still answers", `a=(x y); printf "[%s]" "${a[9,10][@]-none}"`, "[]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runChainedSubscript(t, tc.src)

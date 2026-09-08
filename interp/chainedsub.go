@@ -64,10 +64,18 @@ func (r *Runner) chainLink(e *syntax.ParamExpr, i int) *syntax.ParamExpr {
 // whole expansion unset — measured, `a=(x y); ${a[9][1]-none}` is `none`
 // where `${a[1][2]-none}` is empty, because the element is there and only the
 // character is missing.
+//
+// Nothing named is `nil` and not an empty slice, which is the same
+// distinction the route without a chain already reads: a range that fell off
+// the end *answered*, with no elements — `${a[9,10]-none}` is empty rather
+// than `none` — and a link that answered that way is a source the next
+// subscript reads, not a miss. Testing the length instead lost that, and lost
+// it silently: every ordinary reading of an empty source comes to nothing
+// either way, and only a search over one tells them apart.
 func (r *Runner) chainedSubscriptSource(e *syntax.ParamExpr) (subscriptSource, bool) {
 	prev := r.chainLink(e, len(e.Leading)-1)
 	elems, ok := r.arraySubscript(prev)
-	if !ok || len(elems) == 0 {
+	if !ok || elems == nil {
 		return subscriptSource{}, false
 	}
 	if r.subscriptYieldsAList(prev) {

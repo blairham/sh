@@ -142,6 +142,24 @@ type Shell struct {
 	// command and the next is a boundary only the session knows about.
 	RunScheduled func(*interp.Runner, context.Context)
 
+	// WatchedDescriptors is which descriptors this dialect wants the line
+	// editor to wait on beside the terminal, and DescriptorReady is what it
+	// does when one of them becomes readable. Nil is a dialect with no way to
+	// arm one, which is three of the four.
+	//
+	// From the Runner for the reason KeyBindings and RunWidget are: the table
+	// is a builtin's state, armed by a command a startup file runs and
+	// changed by one a handler runs. And they are two fields rather than one
+	// because they are asked at different moments — the list before every
+	// wait, the answer only when something woke.
+	WatchedDescriptors func(*interp.Runner) []int
+
+	// DescriptorReady runs what this dialect installed for a descriptor that
+	// is now readable, and answers with the line as the callback left it.
+	// false leaves the line alone and draws nothing, which is what the
+	// ordinary spelling of such a callback does — see dialect/zsh.
+	DescriptorReady func(*interp.Runner, context.Context, int, repl.Line) (repl.Line, bool)
+
 	// Stdin is where the shell reads from: the lines a person types, and the
 	// program itself where the invocation named nothing to run. It is handed
 	// to the Runner, so what the front end has not read of a program on it is

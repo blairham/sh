@@ -28,6 +28,10 @@ import (
 // that an unknown widget name is stored in silence, which is right, and left
 // the name permanently unknown.
 //
+// `-F`, the callback on a descriptor, was refused by name here for exactly as
+// long as the read loop could only wait on the terminal. It no longer is: see
+// zlewatch.go, which is that operation and the measurements behind it.
+//
 // **The capability is repl's and only the naming is here.** repl gained one
 // seam for this — repl.Shell.RunWidget, a round trip that hands out the line
 // and takes it back — and everything a shell says about it is in this file:
@@ -108,16 +112,10 @@ import (
 // A `zle` that accepted everything would be worse than the `command not
 // found` it replaces, because a plugin would then believe its widget existed.
 // So the letters this shell has not got are refused with the wording `whence`
-// and `bindkey` use for the same case — `-F is not implemented yet` — which a
-// script can tell apart from a typo, and the two spellings of *invoking* that
-// need a seam repl has not got are refused by name too:
+// and `bindkey` use for the same case — `-M is not implemented yet` — which a
+// script can tell apart from a typo, and the spellings of *invoking* that need
+// a seam repl has not got are refused by name too:
 //
-//   - **`zle -F fd [handler]`**, the callback on a descriptor. This is how a
-//     plugin in this shell does asynchrony and it is the reason the issue
-//     behind this file is not cosmetic; it needs the read loop to wait on more
-//     than the terminal, which is a change to how a key is read rather than an
-//     addition beside it. Its own change, and named here rather than
-//     half-built.
 //   - **`zle -R`, `zle -M` and `zle reset-prompt`**, redisplay. These write to
 //     the screen in the middle of a widget rather than changing the line, so
 //     they belong with the question of who owns the prompt while a widget is
@@ -163,7 +161,7 @@ func registerZle(r *interp.Runner) {
 // is not built yet says so — the distinction whence.go documents.
 const (
 	zleLetters            = "acfglmrwACDFGIKLMNRTU"
-	zleLettersImplemented = "aADLNl"
+	zleLettersImplemented = "aADFLNlw"
 )
 
 // zleOpts is what the letters asked for.
@@ -172,8 +170,10 @@ type zleOpts struct {
 	delete bool // -D
 	alias  bool // -A
 	list   bool // -l
+	watch  bool // -F
 	all    bool // -a
 	source bool // -L
+	widget bool // -w
 }
 
 func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
@@ -182,6 +182,16 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") && rest[0] != "-" {
 		if rest[0] == "--" {
 			rest = rest[1:]
+			break
+		}
+		if rest[0][1] >= '0' && rest[0][1] <= '9' {
+			// A word beginning `-` and then a digit is an operand and not
+			// options, measured: `zle -0` is an attempt to *call* a widget
+			// called `-0` and says `widgets can only be called when ZLE is
+			// active`, and `zle -F -3` gets as far as complaining about the
+			// descriptor number rather than about an option `-3`. Which is
+			// also the whole reason `zle -F -0` appears to remove a watcher:
+			// it is the number nought reaching the descriptor parser.
 			break
 		}
 		for _, letter := range rest[0][1:] {
@@ -208,6 +218,8 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return aliasWidget(r, rest)
 	case opts.list:
 		return listWidgets(r, opts, rest)
+	case opts.watch:
+		return watchDescriptor(r, opts, rest)
 	case len(rest) == 0:
 		// `zle` with nothing at all: status 1 and not a word, measured.
 		return 1
@@ -225,6 +237,14 @@ func setZleLetter(opts *zleOpts, letter rune) {
 		opts.alias = true
 	case 'l':
 		opts.list = true
+	case 'F':
+		opts.watch = true
+	case 'w':
+		// A modifier and not an operation: measured, `zle -w` alone is the
+		// bare `zle` — status 1 and not a word — and `zle -N -w a f` defines
+		// `a` at status 0 with the letter making no difference. It changes
+		// only what `-F` arms.
+		opts.widget = true
 	case 'a':
 		opts.all = true
 	case 'L':
@@ -385,13 +405,7 @@ func widgetListing(defined map[string]string, name string, source bool) string {
 // shell invented: the line the widget would edit exists only while the editor
 // is holding one.
 func callWidget(r *interp.Runner, ctx context.Context, name string, args []string) int {
-	// Non-empty rather than merely set, and that is the whole of the fix
-	// mutation testing found: unsetWidgetState clears these names by storing
-	// the empty string in them, which GetVar reports as *set*. So after one
-	// widget had run, a plain script could invoke widgets for the rest of the
-	// session — status 0 and the function actually ran — where the shell being
-	// modeled refuses every time.
-	if active, _ := r.GetVar(zleActive); active == "" {
+	if !editorRunning(r) {
 		r.Diagnosef("widgets can only be called when ZLE is active\n")
 		return 1
 	}
@@ -431,6 +445,22 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 // the session, which is what `${(t)BUFFER}` reporting them `local` means from
 // the outside: a script that is not running a widget must find them unset.
 func RunWidget(r *interp.Runner, ctx context.Context, name string, in repl.Line) (repl.Line, bool) {
+	// The name the key was bound to is what the function is called with,
+	// which is the one thing a descriptor callback differs in — there the
+	// argument is the descriptor. See zlewatch.go.
+	return runWidgetFunction(r, ctx, name, in, name)
+}
+
+// runWidgetFunction is the round trip itself, with what the function is called
+// with left to the caller.
+//
+// One copy for the two callers rather than one each, because everything either
+// of them needs is the same: the widget table, the five parameters, the status
+// discipline and the deferred close. The second caller arrived with `zle -F -w`
+// and would have been written without the defer.
+func runWidgetFunction(
+	r *interp.Runner, ctx context.Context, name string, in repl.Line, arg string,
+) (repl.Line, bool) {
 	fn, defined := widgetFunction(r, name)
 	if !defined || !r.HasFunction(fn) {
 		return in, false
@@ -453,7 +483,7 @@ func RunWidget(r *interp.Runner, ctx context.Context, name string, in repl.Line)
 	// what the last command left, and what the function leaves is not what the
 	// next command reads.
 	status := r.ExitStatus()
-	_, err := r.CallFunction(ctx, fn, name)
+	_, err := r.CallFunction(ctx, fn, arg)
 	r.SetExitStatus(status)
 	if err != nil {
 		return in, false
@@ -573,6 +603,25 @@ func setWidgetLine(r *interp.Runner, in repl.Line) {
 
 func widgetLine(r *interp.Runner) repl.Line {
 	return repl.Line{Buffer: widgetBuffer(r), Cursor: widgetCursor(r)}
+}
+
+// editorRunning reports whether the editor is holding a line for something to
+// edit, which is what tells a widget apart from a script.
+//
+// Non-empty rather than merely set, and that is a fix mutation testing found
+// rather than a style: unsetWidgetState clears these names by storing the
+// empty string in them, which GetVar reports as *set*. So after one widget had
+// run, a plain script could invoke widgets for the rest of the session —
+// status 0 and the function actually ran — where the shell being modeled
+// refuses every time. Nothing in the suite noticed, because every other test
+// asked a *fresh* runner.
+//
+// One predicate for the two callers, because the descriptor callbacks in
+// zlewatch.go ask the same question, and a second copy of it written from the
+// same understanding is how this bug would have come back.
+func editorRunning(r *interp.Runner) bool {
+	active, _ := r.GetVar(zleActive)
+	return active != ""
 }
 
 // unsetWidgetState clears what the call left behind, so nothing about one

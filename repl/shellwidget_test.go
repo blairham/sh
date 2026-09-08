@@ -33,7 +33,7 @@ func typedThroughShell(t *testing.T, run func(Line) (Line, bool), keys string) s
 			return run(in)
 		}
 	}
-	e := s.newEditor(t.Context())
+	e := s.newEditor(t.Context(), nil)
 	e.in, e.out = strings.NewReader(keys), &out
 	line, err := e.readLine(drawPrompt("$ "))
 	if err != nil {
@@ -122,7 +122,7 @@ func TestAPanickingActionDoesNotEndTheLine(t *testing.T) {
 			panic("in a widget")
 		},
 	}
-	e := s.newEditor(t.Context())
+	e := s.newEditor(t.Context(), nil)
 	e.in, e.out = strings.NewReader("abc\aZ\n"), &out
 	line, err := e.readLine(drawPrompt("$ "))
 	if err != nil {

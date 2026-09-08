@@ -284,7 +284,7 @@ func TestTheEditorIsBuiltWithTheDirectoryAndTheCompleters(t *testing.T) {
 	r := newTestRunner(nil)
 	r.Dir = "/carried/across"
 	mine := &recordingCompleter{answer: []string{"mine"}}
-	e := Shell{Runner: r, Completers: []Completer{mine}}.newEditor(t.Context())
+	e := Shell{Runner: r, Completers: []Completer{mine}}.newEditor(t.Context(), nil)
 
 	if got := e.dir(); got != "/carried/across" {
 		t.Errorf("the editor reports the directory %q, want %q", got, "/carried/across")

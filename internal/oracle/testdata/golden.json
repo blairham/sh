@@ -98938,6 +98938,138 @@
         "TimedOut": false
       }
     },
+    "zle/a-descriptor-callback-is-armed-and-said-back": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~zle -F 3 h",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/a-minus-then-a-digit-is-an-operand": {
+      "bash": {
+        "Stdout": "st=127~two=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~two=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~two=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~two=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~two=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~two=1",
+        "Stderr": "\u003cshell\u003e:zle:1: widgets can only be called when ZLE is active~\u003cshell\u003e:zle:1: widgets can only be called when ZLE is active",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/a-negative-descriptor-is-not-a-removal": {
+      "bash": {
+        "Stdout": "neg=127~junk=127~many=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "neg=127~junk=127~many=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "neg=127~junk=127~many=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "neg=127~junk=127~many=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "neg=127~junk=127~many=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "neg=1~junk=1~zle -F 7 h~many=1",
+        "Stderr": "\u003cshell\u003e:zle:1: Bad file descriptor number for -F: -3~\u003cshell\u003e:zle:1: Bad file descriptor number for -F: 3x~\u003cshell\u003e:zle:1: too many arguments for -F",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "zle/a-widget-cannot-be-called-from-a-script": {
       "bash": {
         "Stdout": "st=127~bare=127",
@@ -99026,6 +99158,50 @@
         "TimedOut": false
       }
     },
+    "zle/arming-a-callback-needs-nothing-to-be-there-yet": {
+      "bash": {
+        "Stdout": "fn=127~fd=127~big=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "fn=127~fd=127~big=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "fn=127~fd=127~big=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "fn=127~fd=127~big=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "fn=127~fd=127~big=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "fn=0~fd=0~big=0~zle -F 3 nosuchfn~zle -F 55 h~zle -F 99999 h",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "zle/listing-by-name-is-a-question": {
       "bash": {
         "Stdout": "yes=127~no=127~mixed=127",
@@ -99065,6 +99241,94 @@
       "zsh": {
         "Stdout": "yes=0~no=1~mixed=1",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/minus-w-is-a-modifier-and-not-an-operation": {
+      "bash": {
+        "Stdout": "bare=127~def=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "bare=127~def=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "bare=127~def=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "bare=127~def=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "bare=127~def=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "bare=1~def=0~zle -N a f~zle -F -w 3 h",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/omitting-the-handler-removes-the-watcher": {
+      "bash": {
+        "Stdout": "gone=127~--~again=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "gone=127~--~again=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "gone=127~--~again=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "gone=127~--~again=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "gone=127~--~again=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "gone=0~--~again=1",
+        "Stderr": "\u003cshell\u003e:zle:1: No handler installed for fd 3",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -99152,6 +99416,50 @@
       },
       "zsh": {
         "Stdout": "[UNSET][UNSET][UNSET][UNSET]~[hi]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/the-watcher-listing-is-in-arming-order": {
+      "bash": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "zle -F 5 h~zle -F 2 g~zle -F 9 h~--~zle -F 5 g~zle -F 2 g~zle -F 9 h",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

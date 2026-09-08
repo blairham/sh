@@ -129,6 +129,15 @@ type editor struct {
 	// runShellWidget.
 	runFunc func(name string, in Line) (Line, bool)
 
+	// watch is which descriptors the shell wants waited on beside the
+	// terminal, descriptorReady is how one that woke is answered, and inFd is
+	// the descriptor a key arrives on — negative where the session's input is
+	// not one. Nil watch or nil descriptorReady is a session that waits on
+	// the terminal alone. See watchfd.go.
+	watch           func() []int
+	descriptorReady func(fd int, in Line) (Line, bool)
+	inFd            func() int
+
 	// width is how many columns the terminal has, asked each time it is
 	// needed; nil, or an answer of 0, means it will not say. row is which
 	// screen row the last draw left the cursor on, counted from the row the
@@ -157,6 +166,16 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 
 	var buf [1]byte
 	for {
+		// Whatever the shell asked to be told about goes first, because this
+		// is where a session waits and there is nowhere else to notice from.
+		// Here rather than inside nextByte, and that is the load-bearing
+		// half: nextByte is also how the *rest* of a key sequence arrives —
+		// see readByte — and a handler that printed between ESC and the byte
+		// after it would print into the middle of a keystroke. Only the wait
+		// for a key's *first* byte is an idle moment. It costs nothing in a
+		// session with no descriptor armed, which is every session that has
+		// not asked; see watchfd.go.
+		e.serveDescriptors(prompt)
 		n, err := e.nextByte(buf[:])
 		if err != nil {
 			return "", err

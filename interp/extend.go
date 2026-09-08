@@ -473,6 +473,55 @@ func (r *Runner) WriterForFd(fd int) (io.Writer, bool) {
 	return nil, false
 }
 
+// SystemDescriptor is the *operating system's* descriptor for one of this
+// shell's, and whether the thing open at that number really is one.
+//
+// The two numbers are not the same number, and that is the whole reason this
+// exists. A shell models its own descriptor table — `exec {FD}< file` picks a
+// number out of the shell's table and puts an open file at it, and the file's
+// own descriptor is whatever the kernel happened to give it. Everything inside
+// this package reaches through the table by the shell's number and never needs
+// the other one; a front end that has to *wait* on a descriptor does, because
+// only the kernel can be asked whether one is readable.
+//
+// It is a question and not a handle: the number is what the caller may pass to
+// a system call, and the file behind it stays this shell's to close. A number
+// nothing is open at, and one held by something that is not a descriptor at
+// all — a here-document's text, an embedder's in-memory buffer — is not one,
+// which is the honest answer rather than a guess, and a caller that gets false
+// has learned that waiting on it is not possible.
+//
+// The named three answer for themselves, because a shell can be asked to watch
+// its own standard input and in a session that is the terminal.
+func (r *Runner) SystemDescriptor(fd int) (int, bool) {
+	var held any
+	switch fd {
+	case 0:
+		held = r.stdin()
+	case 1:
+		held = r.stdout()
+	case 2:
+		held = r.stderr()
+	default:
+		var open bool
+		if held, open = r.fds[fd]; !open {
+			return 0, false
+		}
+	}
+	f, ok := held.(interface{ Fd() uintptr })
+	if !ok {
+		return 0, false
+	}
+	// An *os.File that has been closed reports ^uintptr(0), which as a signed
+	// number is -1: the file object is still there and the descriptor behind
+	// it is not.
+	n := int(f.Fd())
+	if n < 0 {
+		return 0, false
+	}
+	return n, true
+}
+
 // NamedOption reads one `set -o` name's current state, for a registered
 // builtin that presents the same state under its own names — a listing has to
 // read the live answer, and the fields it lives in are the runner's own.

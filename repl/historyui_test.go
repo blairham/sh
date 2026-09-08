@@ -340,7 +340,7 @@ func TestTheDialectsSearchReachesTheEditor(t *testing.T) {
 			SearchBelowTheLine: true,
 		},
 	}
-	ed := s.newEditor(t.Context())
+	ed := s.newEditor(t.Context(), nil)
 	if ed.searchPrompt != "<search %s>" || ed.searchFailed != "<failed %s>" {
 		t.Errorf("wording is %q and %q, want it carried across", ed.searchPrompt, ed.searchFailed)
 	}

@@ -43,11 +43,28 @@ all: build
 build:
 	go build ./...
 
+# -p bounds how many packages `go test` builds and runs at once. Without it
+# Go uses GOMAXPROCS, which on an 18-core machine means one `make check` can
+# have eighteen race-instrumented packages resident at once -- and several
+# agents run their gates concurrently, so the real figure is that times the
+# number of them. Measured with eleven concurrent runs: load average 64 on 18
+# cores, two `syntax.test` processes alone at 242% and 176%, and everything
+# else on the machine waiting.
+#
+# Four is the same bound `.golangci.yml` uses and for the same reason: it
+# keeps the realistic worst case near the core count instead of far past it.
+# One run in isolation is a little slower; several together are faster,
+# because the machine stops thrashing. It also makes the timing-sensitive
+# tests here -- pty sessions, job control, the descriptor loop -- less
+# load-dependent, which is the direction that matters when a flaky test
+# manufactures false kills in a mutation run.
+TESTFLAGS ?= -p 4
+
 test:
-	go test -race ./...
+	go test -race $(TESTFLAGS) ./...
 
 test-cover:
-	go test -race -coverprofile=coverage.out ./...
+	go test -race $(TESTFLAGS) -coverprofile=coverage.out ./...
 
 fmt:
 	go tool gofumpt -l -w .

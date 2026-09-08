@@ -2072,33 +2072,69 @@ type Semantics struct {
 	// ends a script under `set -e`; a letter accepted here changes what a
 	// value looks like when it is printed back and nothing else.
 	//
-	// `-F` in zsh is the letter this exists for, and it is a *float's*
-	// precision there rather than bash's function listing. Measured
-	// 2026-09-06: real zsh answers a bare `declare -F` with 0 and not one
-	// byte, on standard output or standard error, with or without an
-	// operand and whether the operand names a function or nothing at all.
-	// We refused it at 2, which is the dangerous half of the shape #1033
-	// measured: `declare -F` is how a state capture asks what functions
-	// exist, so a caller that trusted the status recorded a shell with no
-	// functions — and a caller that read the stream got a complaint from a
-	// shell that real zsh has nothing to say to.
-	//
-	// What it costs is written down rather than hidden: `typeset -F x=1.5`
-	// leaves `1.5` here where that shell prints `1.5000000000` back, since
-	// the precision is the whole of what the letter does and this engine
-	// has no float attribute to record it in. Strictly better than the
-	// refusal it replaces, which set the name to nothing at all.
-	//
-	// zsh's `-E` — the same float family, spelled for scientific notation —
-	// is deliberately *not* here and still refuses. Nothing measured asks
-	// for it, and the case for silence rests on `-F` being the letter a
-	// function listing is spelled with somewhere else, which is what makes
-	// refusing it a wrong answer to a question callers really ask.
+	// zsh's `-F` is the letter this was written for and no dialect sets it
+	// today: the letter is a *float's* precision there rather than bash's
+	// function listing, and silence was the smaller lie only for as long as
+	// there was no float attribute to record the precision in. There is one
+	// now — see DeclareOptionsTakingANumber — so `-F` graduated out of here
+	// and the field stands for the next letter of that shape rather than
+	// being deleted with its one user.
 	//
 	// A letter listed here that is not in DeclareOptions does nothing: the
 	// dialect has to have the letter before this can decide what it means,
 	// which keeps the two fields from disagreeing about whether it exists.
 	DeclareOptionsWithoutEffect string
+
+	// DeclareOptionsTakingANumber names letters out of DeclareOptions whose
+	// *argument* is a number rather than the first operand: `typeset -F 3 x`
+	// declares one name with three digits of precision, and the `3` was
+	// never a name. Both spellings, measured 2026-09-07 in zsh 5.9.2 and
+	// ksh93 alike: the detached `-F 3 x` and the attached `-F3 x`.
+	//
+	// Empty is bash's answer and the substrate's: measured, bash reads the
+	// same line as two operands and says `8: not a valid identifier` for
+	// `typeset -i 8 n=64`, so the word after the letter is a name there and
+	// nothing is consumed. dash has neither builtin.
+	//
+	// Three rules come with the letters, each measured rather than assumed:
+	//
+	//   - Only a run of decimal digits is the argument. `typeset -F abc x=1`
+	//     declares *both* `abc` and `x` as floats in zsh and ksh93 alike, so
+	//     a word that is not a number was never the letter's argument.
+	//   - One number, not a list. `typeset -F 3 4 x` is `not an identifier:
+	//     4` in zsh and `4: invalid variable name` in ksh93: the letter is
+	//     satisfied by the first number and the second is an operand again.
+	//   - The number belongs to the *first* number-taking letter of its
+	//     option word, wherever in the word that letter stands, and taking
+	//     it discards whatever else that word carried. `typeset -ix 16
+	//     n=255` reads 16 as a base and leaves `n` unexported, `-gF 3` and
+	//     `-Fg 3` both read 3 as a precision, and the two letters written
+	//     together settle it the same way — `-Fi 3 x=1.5` lists back as
+	//     `typeset -F x=1.500` and `-iF 3 x=1.5` as `typeset -i3 x=1`.
+	//     Only when a number is really taken, which is the half a rule
+	//     spelled "the letter ends its word" gets wrong: `typeset -ix
+	//     n=255` with no number behind it exports like any other word. See
+	//     declarebuiltin.go's numberEndsTheWord, which is where that lives.
+	//
+	// This is zsh's arrangement throughout. ksh93 has the same letters and
+	// spells their number *attached only* — `-F[n]` in its own usage — so
+	// `typeset -Fx 3 a=1.5` is `3: is not an identifier` there where zsh
+	// reads the precision. The field has no per-spelling half because only
+	// zsh sets it; #1461 is where that would be needed.
+	//
+	// `-i` is not named here and is not an omission: whether it takes a base
+	// is IntegerAttributeTakesABase, which the `integer` builtin asks too and
+	// which also decides whether the base is *recorded*. Two fields both
+	// claiming `-i` takes a number could disagree, so the parse asks one
+	// helper — declareOptionTakesANumber — and that helper reads the axis for
+	// `i` and this list for every other letter.
+	//
+	// Only letters this engine both spells and acts on belong here. zsh's
+	// `-E`, `-L`, `-R` and `-Z` take a number in the real shell and are
+	// refused by name before it is ever read, so an entry for them would be
+	// consulted by nothing — see Diagnostics.UnimplementedOptionLetters, and
+	// #1461 for implementing them.
+	DeclareOptionsTakingANumber string
 
 	// TypesetBadOptionFatal ends the script over an option `typeset` does
 	// not have. ksh93 counts `typeset` among its special builtins and stops

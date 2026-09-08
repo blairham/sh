@@ -80,3 +80,52 @@ func TestNoLetterIsBothImplementedAndNot(t *testing.T) {
 		})
 	}
 }
+
+// A letter whose *argument* is a number has to be a letter the dialect
+// claims: Semantics.DeclareOptionsTakingANumber decides how a word is parsed,
+// and DeclareOptions decides whether the letter exists at all, so a letter in
+// the first and not the second describes a parse nothing can reach.
+//
+// The reachable half matters more than it looks. `-E`, `-L`, `-R` and `-Z`
+// take a number in the real shells and are refused by name here, and the
+// refusal fires in the letter loop before any number is read — so listing one
+// of them would be a claim that the argument is handled when the letter never
+// gets that far. #1461 is where they are implemented; this is what makes the
+// table and the refusals disagree out loud when one moves without the other.
+func TestEveryNumberTakingLetterIsALetterTheDialectHas(t *testing.T) {
+	for _, d := range []struct {
+		name string
+		sem  interp.Semantics
+		diag interp.Diagnostics
+	}{
+		{"bash", bash.Semantics(), bash.Diagnostics()},
+		{"dash", dash.Semantics(), dash.Diagnostics()},
+		{"ksh", ksh.Semantics(), ksh.Diagnostics()},
+		{"zsh", zsh.Semantics(), zsh.Diagnostics()},
+	} {
+		t.Run(d.name, func(t *testing.T) {
+			taking := d.sem.DeclareOptionsTakingANumber
+			for i := 0; i < len(taking); i++ {
+				if strings.IndexByte(d.sem.DeclareOptions, taking[i]) < 0 {
+					t.Errorf("-%c takes a number in DeclareOptionsTakingANumber %q but is not "+
+						"in DeclareOptions %q, so no word can reach the parse that reads it",
+						taking[i], taking, d.sem.DeclareOptions)
+				}
+				for _, b := range []string{"typeset", "declare"} {
+					if strings.IndexByte(d.diag.UnimplementedOptionLetters[b], taking[i]) >= 0 {
+						t.Errorf("%s: -%c takes a number and is also refused as unimplemented; "+
+							"the refusal runs first, so the number is never read", b, taking[i])
+					}
+				}
+			}
+			// And the integer letter is deliberately absent: it reads its
+			// base through Semantics.IntegerAttributeTakesABase, which
+			// decides a second thing besides the parse. Two fields both
+			// claiming it takes a number could disagree.
+			if strings.IndexByte(taking, 'i') >= 0 {
+				t.Errorf("DeclareOptionsTakingANumber = %q names the integer letter, which "+
+					"IntegerAttributeTakesABase already answers for", taking)
+			}
+		})
+	}
+}

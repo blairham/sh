@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1267,6 +1268,15 @@ type Runner struct {
 	// by the declaration that named it. Absent, or 10, or a base the dialect
 	// has no digits for, all mean plain decimal.
 	integerBase map[string]int
+	// floatPrecision is how many decimal places a float name renders in —
+	// `typeset -F 3 x=1.5` makes it read back as `1.500`. Presence is the
+	// attribute itself, the way the table is for an associative array: a
+	// name in here is a float and a name that is not is not, so there is no
+	// second map saying which. The value is the precision the letter named,
+	// and zero is the letter with no number after it — which is ten, the
+	// default both shells with the attribute print, rather than no places at
+	// all. Measured 2026-09-07: `typeset -F x=1.5` is `1.5000000000`.
+	floatPrecision map[string]int
 	// lowered and uppered are the case attributes — `declare -l` and `-u` —
 	// which fold what is assigned to the name, the same shape integer has:
 	// a property of the name that changes what a later assignment means.
@@ -3290,7 +3300,24 @@ func (f assignForm) declaresRatherThanAssigns() bool {
 // declareEmpty — and that is not an assignment, so it must not meet the
 // readonly refusal or anything else setVarAs does around it.
 func (r *Runner) attributeFolded(name, value string) (string, bool) {
-	if r.integer[name] {
+	if prec, ok := r.floatPrecision[name]; ok {
+		// The name was declared float, so what is assigned to it is an
+		// expression too — `typeset -F 3 x=1+2` is `3.000` — and the places
+		// it is written in are the name's rather than the value's.
+		//
+		// Ahead of the integer branch and not beside it: the two attributes
+		// cannot both stand, so applyAttributes takes one off when the other
+		// arrives and only one of these can run. Reaching this first is what
+		// makes that a statement rather than a hope.
+		v, ok := r.floatValue(value)
+		if !ok {
+			return "", false
+		}
+		// The rendered text is what is *stored*, exactly as an integer
+		// name's base is: `${#x}` counts the five characters of `1.500`, a
+		// child is told `x=1.500`, and arithmetic reads them back.
+		value = strconv.FormatFloat(v, 'f', floatPlaces(prec), 64)
+	} else if r.integer[name] {
 		// The name was declared integer, so what is assigned to it is an
 		// expression rather than text.
 		//

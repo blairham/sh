@@ -986,6 +986,7 @@ func (r *Runner) unsetName(name string) {
 // table is what takes the attribute off.
 func (r *Runner) clearAttributes(name string) {
 	delete(r.integer, name)
+	delete(r.floatPrecision, name)
 	delete(r.lowered, name)
 	delete(r.uppered, name)
 	delete(r.hidden, name)

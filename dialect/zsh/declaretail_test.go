@@ -22,9 +22,12 @@ typeset -f f`)
 	}
 }
 
-// `-F` is a float's precision here, not bash's function listing, and this
-// engine has no float attribute to record it in — so it is taken in silence
-// at 0, which is what the real shell answers to every shape of it (#1037).
+// `-F` is a float's precision here, not bash's function listing, so every
+// shape a *function* listing would be written in answers 0 and says nothing
+// — which is what the real shell does (#1037) and what it keeps doing now
+// that the letter is an attribute rather than a silent no-op (#1453). A bare
+// one is a filtered listing of the float names, of which a fresh shell has
+// none; a named one declares that name a float and reports it to nobody.
 //
 // The assertions are on **both streams by byte**, not on the status. A check
 // that only read the status would pass against a shell that said something
@@ -73,15 +76,175 @@ func TestTypesetCapitalFIsNotTheBareWord(t *testing.T) {
 	}
 }
 
-// What the silence costs, written down as a test so it cannot drift into a
-// claim nobody checks: the precision is the whole of what the letter does in
-// that shell, and a value declared with it reads back unformatted here. The
-// refusal it replaced set the name to nothing at all, so this is the better
-// of two wrong answers rather than a right one.
-func TestTypesetCapitalFDoesNotFormatTheValue(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `typeset -F v=1.5; echo "[$v]"`)
-	if out != "[1.5]\n" || st != 0 {
-		t.Errorf("got %q (status %d), want the value assigned and unformatted", out, st)
+// The precision is the whole of what the letter does in that shell, and it
+// used to cost nothing here because there was no float attribute to record
+// it in — `typeset -F v=1.5` read back as `1.5` where the real shell writes
+// ten places (#1037). There is one now, so the letter formats (#1453).
+//
+// The number after the letter is its *argument* and not a second name, under
+// both spellings: reading the `3` of `typeset -F 3 SECONDS=0` as a name is
+// what made a plugin loader complain once per plugin.
+func TestTypesetCapitalFFormatsTheValueAtItsPrecision(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"the bare letter, at its default of ten places",
+			`typeset -F v=1.5; echo "[$v]"`, "[1.5000000000]\n",
+		},
+		{
+			"a precision as a word of its own",
+			`typeset -F 3 v=1.5; echo "[$v]"`, "[1.500]\n",
+		},
+		{
+			"the same precision attached to the letter",
+			`typeset -F3 v=1.5; echo "[$v]"`, "[1.500]\n",
+		},
+		{
+			"the line a plugin loader opens with",
+			`typeset -F 3 SECONDS=0; echo "st=$? [$SECONDS]"`, "st=0 [0.000]\n",
+		},
+		{
+			"a word that is not a number, which is a second name after all",
+			`typeset -F abc v=1; echo "[$v][$abc]"`, "[1.0000000000][0.0000000000]\n",
+		},
+		{
+			"one number and not a list, the second being an operand that ends the script",
+			`typeset -F 3 4 v=1.5 2>&1; echo "st=$?"`,
+			"zsh:typeset:1: not an identifier: 4\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := runZsh(t, t.TempDir(), c.src)
+			if out != c.want {
+				t.Errorf("got %q, want %q", out, c.want)
+			}
+		})
+	}
+}
+
+// The value is rendered at the precision rather than printed at it: what the
+// name *holds* is the formatted text, which is the shape the integer letter's
+// output base has and the one every read has to agree with. A test that only
+// echoed the parameter could not tell the two apart.
+func TestAFloatNameHoldsTheRenderedText(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{"its length is of the digits written", `typeset -F 3 v=1.5; echo "${#v}"`, "5\n"},
+		{
+			"a listing writes the letter and not the number again",
+			`typeset -F 3 v=3.14159; typeset -p v`, "typeset -F v=3.142\n",
+		},
+		{
+			"an assignment after the declaration folds too",
+			`typeset -F 3 v; v=7; echo "[$v]"`, "[7.000]\n",
+		},
+		{
+			"the value is an expression, as an integer name's is",
+			`typeset -F 3 v=1+2; echo "[$v]"`, "[3.000]\n",
+		},
+		{
+			"a precision arriving over a value re-renders what is standing there",
+			`v=1.5; typeset -F 3 v; echo "[$v]"`, "[1.500]\n",
+		},
+		{
+			"and a new precision re-renders it again",
+			`typeset -F 3 v=1.5; typeset -F 6 v; echo "[$v]"`, "[1.500000]\n",
+		},
+		{
+			"the bare letter over a name that has one keeps it",
+			`typeset -F 3 v=1.5; typeset -F v; echo "[$v]"`, "[1.500]\n",
+		},
+		{
+			"the plus form takes the attribute off and leaves the text",
+			`typeset -F 3 v=1.5; typeset +F v; echo "[$v]"; typeset -p v`,
+			"[1.500]\ntypeset v=1.500\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), c.src)
+			if out != c.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q", out, st, c.want)
+			}
+		})
+	}
+}
+
+// The number belongs to the first number-taking letter of its word and ends
+// that word: what follows the letter there is the letter's own argument, so
+// those letters are lost. Only when a number really is taken — the same
+// spellings with no number behind them are ordinary options, which is the
+// half a rule written as "the letter ends its word" would get wrong.
+func TestANumberTakingLetterEndsItsWordOnlyWhenItTakesOne(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"the letters behind it are lost when a number follows",
+			`typeset -Fx 3 v=1.5; typeset -p v`, "typeset -F v=1.500\n",
+		},
+		{
+			"and are ordinary options when none does",
+			`typeset -Fx v=1.5; typeset -p v`, "export -F v=1.5000000000\n",
+		},
+		{
+			"the letters in front of it are kept either way",
+			`typeset -rF 3 v=1.5; typeset -p v`, "typeset -Fr v=1.500\n",
+		},
+		{
+			"a letter standing before it takes the number instead",
+			`typeset -iF 3 v=1.5; typeset -p v`, "typeset -i3 v=1\n",
+		},
+		{
+			"and standing after it does not",
+			`typeset -Fi 3 v=1.5; typeset -p v`, "typeset -F v=1.500\n",
+		},
+		{
+			"the integer letter reads its base the same way",
+			`typeset -ix 16 n=255; typeset -p n`, "typeset -i16 n=255\n",
+		},
+		{
+			"and keeps the letter behind it with no base to read",
+			`typeset -ix n=255; typeset -p n`, "export -i n=255\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), c.src)
+			if out != c.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q", out, st, c.want)
+			}
+		})
+	}
+}
+
+// `SECONDS` is *counted* on each read rather than stored, so it never meets
+// the fold a declared name's value goes through — its producer has to ask for
+// the attribute itself. Without that, the line a plugin loader opens with
+// declares a float and then reads whole seconds back out of it.
+func TestTheFloatAttributeReachesACountedParameter(t *testing.T) {
+	for _, c := range []struct {
+		name, src string
+		places    int
+	}{
+		{"the precision a plugin loader names", `typeset -F 3 SECONDS=0; echo "[$SECONDS]"`, 3},
+		{
+			"the letter's default, over a counter that was never assigned",
+			`typeset -F SECONDS; echo "[$SECONDS]"`, 10,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), c.src)
+			// The digits past the decimal point are a clock, so only their
+			// *number* is asserted; the leading `0.` is what says the count
+			// is still near its start rather than a whole second away.
+			line := strings.TrimSuffix(out, "\n")
+			got := strings.TrimSuffix(strings.TrimPrefix(line, "[0."), "]")
+			if st != 0 || !strings.HasPrefix(line, "[0.") || len(got) != c.places {
+				t.Errorf("got %q (status %d), want a `0.` and %d decimal places",
+					out, st, c.places)
+			}
+		})
+	}
+	// The control: with no float attribute the same counter reads in whole
+	// seconds, so the rows above are about the attribute rather than about a
+	// producer that always wrote a fraction.
+	if out, st := runZsh(t, t.TempDir(), `SECONDS=0; echo "[$SECONDS]"`); out != "[0]\n" || st != 0 {
+		t.Errorf("without the letter: got %q (status %d), want [0]", out, st)
 	}
 }
 

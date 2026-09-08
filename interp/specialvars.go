@@ -405,6 +405,22 @@ func (r *Runner) Uptime() time.Duration {
 	return time.Since(r.started)
 }
 
+// FloatPlacesOf is how many decimal places a name's float attribute writes it
+// in, and whether the name has one at all — `typeset -F 3 SECONDS=0`.
+//
+// Exported because a *produced* parameter cannot see the attribute tables:
+// its value is counted on each read by a function the dialect registered, so
+// the attribute that decides how that value is written back is the one thing
+// the producer has to come here for. Every stored name meets the attribute in
+// attributeFolded instead and needs nothing from this.
+func (r *Runner) FloatPlacesOf(name string) (int, bool) {
+	prec, ok := r.floatPrecision[name]
+	if !ok {
+		return 0, false
+	}
+	return floatPlaces(prec), true
+}
+
 // SecondsFrom is `SECONDS`: the time since the runner started, counted from
 // whatever a script last assigned to it.
 func (r *Runner) SecondsFrom() float64 {

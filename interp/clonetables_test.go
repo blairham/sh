@@ -65,6 +65,7 @@ func seedTables(r *Runner) {
 	r.inheritedIgnored = map[string]bool{"seed": true}
 	r.integer = map[string]bool{"seed": true}
 	r.integerBase = map[string]int{"seed": 16}
+	r.floatPrecision = map[string]int{"seed": 3}
 	r.lowered = map[string]bool{"seed": true}
 	r.preludeFuncs = map[string]*syntax.FuncDecl{"seed": nil}
 	r.readonly = map[string]bool{"seed": true}

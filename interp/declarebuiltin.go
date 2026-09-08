@@ -36,20 +36,29 @@ type declareFlags struct {
 	// plain, so the two cannot be one field.
 	base      int
 	baseNamed bool
-	readonly  bool
-	export    bool
-	assoc     bool
-	array     bool
-	lower     bool
-	upper     bool
-	global    bool
-	hidden    bool
-	unique    bool
-	tie       bool
-	function  bool
-	funcNames bool
-	remove    bool
-	print     bool
+	// float is `-F` where that letter is a float's precision rather than
+	// bash's function listing, and precision is the number written after it
+	// — `typeset -F 3 x` — with precisionNamed saying one was written at
+	// all. Three digits and no digits are different declarations and zero is
+	// a number a script may write, so the two cannot be one field, the same
+	// way base and baseNamed cannot.
+	float          bool
+	precision      int
+	precisionNamed bool
+	readonly       bool
+	export         bool
+	assoc          bool
+	array          bool
+	lower          bool
+	upper          bool
+	global         bool
+	hidden         bool
+	unique         bool
+	tie            bool
+	function       bool
+	funcNames      bool
+	remove         bool
+	print          bool
 	// integerForced records that the *name* the command was called by is
 	// what asked for the integer attribute, so a plus form on the same line
 	// cannot take it off again. It is `integer` in ksh93, where the word
@@ -101,10 +110,14 @@ const declareOptionLetters = "aAiprx"
 // unknown, in the dialect's words.
 func (r *Runner) parseDeclareFlags(name string, args []string, known string) (rest []string, f declareFlags, code int) {
 	i := 0
-	// pendingBase is set by an option word that ends in the integer letter,
-	// because the base may arrive as the next word — `typeset -i 16 n=255`
-	// — where it is indistinguishable from a name until this says otherwise.
-	pendingBase := false
+	// pending is the letter an option word left waiting for a number,
+	// because the number may arrive as the next word — `typeset -i 16 n=255`
+	// and `typeset -F 3 x=1.5` — where it is indistinguishable from a name
+	// until this says otherwise. Zero is no letter waiting, which is what a
+	// number-taking letter having been satisfied means as much as one never
+	// having been written: `typeset -F 3 4 x` is `not an identifier: 4` in
+	// both shells with the attribute, so one number ends the wait.
+	var pending byte
 	for ; i < len(args); i++ {
 		a := args[i]
 		if a == "--" {
@@ -112,14 +125,17 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			break
 		}
 		if len(a) < 2 || (a[0] != '-' && a[0] != '+') {
-			if pendingBase && isAllDigits(a) && r.takesIntegerBase() {
-				// The detached spelling: the word after the letter is the
-				// base and not the first name. Consumed here, which is also
-				// what keeps it away from the operand name check — a `9`
-				// that is a base was never an operand.
-				if !r.readIntegerBase(name, &f, a) {
+			if pending != 0 && isAllDigits(a) {
+				// The detached spelling: the word after the letter is its
+				// number and not the first name. Consumed here, which is
+				// also what keeps it away from the operand name check — a
+				// `3` that is a precision was never an operand, and reading
+				// it as one is what made a plugin loader's `typeset -F 3
+				// SECONDS=0` complain once per plugin (#1453).
+				if !r.readOptionNumber(name, &f, pending, a) {
 					return nil, f, r.status
 				}
+				pending = 0
 				continue
 			}
 			if r.unspecified {
@@ -127,26 +143,25 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			}
 			break
 		}
-		if hasAttachedIntegerBase(a, known) && r.takesIntegerBase() {
-			// `-i16`, where the base rides on the letter. Read here rather
-			// than in the letter loop, which would otherwise reach the `1`
-			// and call it an unknown option — a true statement about a
-			// letter the script never wrote.
-			at := strings.IndexByte(a[1:], 'i')
-			if !r.readIntegerBase(name, &f, a[at+2:]) {
+		attached := false
+		if letter, digits, ok := r.attachedOptionNumber(a, known); ok {
+			// `-i16` and `-F3`, where the number rides on the letter. Read
+			// here rather than in the letter loop, which would otherwise
+			// reach the `1` and call it an unknown option — a true statement
+			// about a letter the script never wrote.
+			if !r.readOptionNumber(name, &f, letter, digits) {
 				return nil, f, r.status
 			}
-			a = a[:at+2]
+			a, attached = a[:len(a)-len(digits)], true
 		}
 		if r.unspecified {
 			return nil, f, r.status
 		}
-		pendingBase = a[0] == '-' && strings.HasSuffix(a, "i") &&
-			strings.ContainsRune(known, 'i')
+		pending = 0
 		// `+i` removes the attribute where `-i` adds it, which is the one
 		// place a shell spells an option with a plus.
 		f.remove = a[0] == '+'
-		for _, c := range a[1:] {
+		for at, c := range a[1:] {
 			if !strings.ContainsRune(known, c) {
 				return nil, f, r.refuseOption(name, a, known)
 			}
@@ -208,6 +223,26 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			case 'f':
 				f.function = true
 			case 'F':
+				if r.declareOptionTakesANumber('F') {
+					// The letter is a float's precision in this dialect
+					// rather than bash's function listing, and taking a
+					// number is that fact rather than a second one: the
+					// function listing takes none anywhere it is spelled.
+					// See Semantics.DeclareOptionsTakingANumber.
+					//
+					// The two attributes cannot both stand and the first
+					// letter written wins: `typeset -Fi 3` and `-iF 3` are
+					// settled by the word ending at the first of them, and
+					// `typeset -i -F 3` — two words, where both letters are
+					// really read — by this. There is no guard on the
+					// integer letter to match, because applyAttributes lets
+					// the float branch speak last and one there would decide
+					// nothing; a mutant removing it changed no answer.
+					if !f.integer {
+						f.float = true
+					}
+					break
+				}
 				f.funcNames = true
 			case 'p':
 				// Print rather than declare. `+p` prints too — measured in
@@ -225,9 +260,61 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// into the first and is refused on the second (#1330).
 				f.array = true
 			}
+			if attached || f.remove ||
+				!r.numberEndsTheWord(byte(c), a[at+2:], args[i+1:]) {
+				continue
+			}
+			// The next word is this letter's number, so the word ends here
+			// and whatever else was written in it is the letter's argument
+			// rather than more options — see numberEndsTheWord.
+			//
+			// A word that already carried its number attached is not this
+			// shape and takes no second one: `typeset -F3 4 x=1.5` is `not
+			// an identifier: 4` in that shell, so the `4` stays an operand.
+			// Neither is a plus word: `typeset +F 3 v=1.5` declares two
+			// names there, the letter taking nothing back.
+			pending = byte(c)
+			break
 		}
 	}
 	return args[i:], f, 0
+}
+
+// numberEndsTheWord reports whether a letter just read is about to take the
+// next word as its number, and so is the last letter its own word can carry.
+//
+// A number-taking letter does *not* end its word on its own: measured
+// 2026-09-07 in zsh 5.9.2, `typeset -ix n=255` exports and `typeset -ir n=255`
+// freezes, so the letters behind it are ordinary options when no number
+// follows. What discards them is a number actually being taken — `typeset -ix
+// 16 n=255` leaves `n` unexported and based 16, `typeset -Fx 3 v=1.5` leaves
+// `v` unexported at three places, and `-iH n=5` keeps the hiding that `-iH 5
+// n` would lose. So the lookahead is the whole rule: a following word of
+// digits is what turns the rest of this word into the letter's own argument.
+//
+// That is also what keeps the dialect from being asked where a script asked
+// nothing. Semantics.IntegerAttributeTakesABase refuses when it has not been
+// answered, and a plain `typeset -i n` or `typeset -irx v=1` must meet no
+// question at all — neither has a number in it to have a question about.
+//
+// A malformed attached number keeps its word: `-F3g` and `-i16x` reach here
+// with a rest that begins in a digit, which attachedOptionNumber has already
+// declined, and the letter loop goes on to refuse the digit as an option. zsh
+// refuses those two as well and says `bad precision value: 3g` where this
+// says the digit is a bad option, so the shapes agree on the refusal and
+// disagree on the sentence — recorded rather than modeled, since no script
+// writes either.
+func (r *Runner) numberEndsTheWord(c byte, rest string, later []string) bool {
+	if !declareOptionMayTakeANumber(c, r.sem().DeclareOptionsTakingANumber) {
+		return false
+	}
+	if rest != "" && rest[0] >= '0' && rest[0] <= '9' {
+		return false
+	}
+	if len(later) == 0 || !isAllDigits(later[0]) {
+		return false
+	}
+	return r.declareOptionTakesANumber(c)
 }
 
 func biDeclare(r *Runner, _ context.Context, args []string) int {
@@ -490,6 +577,9 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			delete(r.integerBase, name)
 		} else {
 			r.integer[name] = true
+			// See the float branch below: the later declaration speaks, and
+			// `typeset -F 3 x=1.5; typeset -i x` reads `1`.
+			delete(r.floatPrecision, name)
 			switch {
 			case f.baseNamed && f.base == 10 && r.integerBaseTenIsNone():
 				// Ten written down where ten is the letter's default
@@ -524,6 +614,46 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 				delete(r.integerBase, name)
 				r.rerenderInTheNewBase(name)
 			}
+		}
+	}
+	if f.float {
+		if f.remove {
+			// `typeset +F x` takes the attribute off and leaves the text the
+			// name is holding alone: measured, `typeset -F 3 x=1.5; typeset
+			// +F x` reads `1.500` still and lists as a plain `typeset
+			// x=1.500`. What the plus form takes off is the rendering of
+			// what comes next, the same as `+i`.
+			delete(r.floatPrecision, name)
+		} else {
+			if r.floatPrecision == nil {
+				r.floatPrecision = map[string]int{}
+			}
+			// A bare `-F` over a name that already has a precision keeps it
+			// — measured, `typeset -F 3 x=1.5; typeset -F x` is `1.500` —
+			// so only a number written down replaces one. ksh93 is the other
+			// way and resets to the default, `1.5000000000`; this follows
+			// zsh, which is the only dialect given the attribute, and the
+			// disagreement is in the corpus rather than in an axis nothing
+			// else could answer — see #1461.
+			if f.precisionNamed || r.floatPrecision[name] == 0 {
+				r.floatPrecision[name] = f.precision
+			}
+			// The two attributes cannot both stand and the later
+			// *declaration* speaks: measured, `typeset -i x=5; typeset -F 3
+			// x` reads `5.000` and the reverse reads `1`. Within one word it
+			// is the earlier letter, which the parse settled.
+			delete(r.integer, name)
+			delete(r.integerBase, name)
+			// The precision applies to what the name already holds and not
+			// only to what is written next — `v=1.5; typeset -F 3 v` is
+			// `1.500` and `typeset -i16 v=255; typeset -F 3 v` is `255.000`
+			// — but nothing is written back here. That is
+			// rereadStandingValue's job, which declareEmpty reaches once
+			// these attributes are recorded, and going through it rather
+			// than around it is what makes the re-read meet
+			// AttributeRereadsTheValueItFinds and evaluate through the
+			// arithmetic. A re-render of its own read the standing text with
+			// strconv, which left `16#FF` exactly where it was.
 		}
 	}
 	if f.export {
@@ -791,6 +921,54 @@ func (r *Runner) integerValue(text string) (string, bool) {
 		return "", false
 	}
 	return itoa(v), true
+}
+
+// defaultFloatPlaces is how many decimal places `-F` writes with no number
+// after it. Ten in both shells with the attribute — measured 2026-09-07,
+// `typeset -F x=1.5` is `1.5000000000` in zsh 5.9.2 and ksh93 alike — so it
+// is a constant and not a table: a dialect field with one value in every
+// dialect records an agreement as though it were a choice.
+const defaultFloatPlaces = 10
+
+// floatPlaces is the precision a float name renders in, which is the number
+// its letter named or the default where it named none.
+//
+// Zero is the absence of a number rather than a request for no decimal
+// places at all: `typeset -F 0 x=3.9` is `3.9000000000` in zsh, the same as
+// the bare letter. ksh93 disagrees and this follows zsh, which is the only
+// dialect the attribute is given to — see #1461.
+func floatPlaces(prec int) int {
+	if prec <= 0 {
+		return defaultFloatPlaces
+	}
+	return prec
+}
+
+// floatValue evaluates text as an arithmetic expression and answers the
+// float it comes to, which is what a float name stores rather than the
+// characters written: `typeset -F 3 x=1+2` is `3.000`.
+//
+// integerValue's sibling and deliberately not a flag on it: the two differ
+// only in which half of an arithNum they keep, and a shared function with a
+// bool would put that choice at every call site instead of in the one place
+// the attribute is read.
+func (r *Runner) floatValue(text string) (float64, bool) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return 0, true
+	}
+	p := syntax.NewParser("", r.dialect())
+	e := p.ParseArithFor(text, syntax.Pos{})
+	if err := p.Err(); err != nil {
+		r.fatal("%s\n", r.diag().ParseFailure(err))
+		return 0, false
+	}
+	v, err := r.evalNum(e)
+	if err != nil {
+		r.fatal("%v\n", err)
+		return 0, false
+	}
+	return v.asFloat(), true
 }
 
 // declareEmpty is what declaring a name without a value does.
@@ -1203,6 +1381,19 @@ func (r *Runner) rereadStandingValue(name string) (startedOver bool) {
 // `bar`, an empty string — reads differently under the two shells whether it
 // evaluates or not.
 func (r *Runner) attributeWouldChange(name, value string) bool {
+	if prec, ok := r.floatPrecision[name]; ok {
+		// The cheap half, the same shape the integer letter's is: a value
+		// already written at the name's precision is one the fold would
+		// return unchanged, and anything else — a plain `5`, a based
+		// `16#FF`, a word that is no number at all — is not. Deliberately
+		// not floatValue, which would run the arithmetic reader for a
+		// question that only asks whether to bother, and which complains
+		// where this must only answer.
+		v, err := strconv.ParseFloat(value, 64)
+		if err != nil || strconv.FormatFloat(v, 'f', floatPlaces(prec), 64) != value {
+			return true
+		}
+	}
 	if r.integer[name] {
 		n, err := strconv.Atoi(value)
 		if err != nil || itoa(n) != value {

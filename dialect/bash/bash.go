@@ -873,7 +873,9 @@ func Diagnostics() interp.Diagnostics {
 		DigitTooGreatForBase:     "value too great for base",
 		ArithErrorNamesThePrefix: true,
 		// set -o pads to fifteen and tabs; kill -l numbers five to a row.
-		OptionListingWidth:  15,
+		// The width is named rather than written, because `shopt -o -s`
+		// writes this listing narrowed and has to pad it the same way.
+		OptionListingWidth:  setOptionListingWidth,
 		OptionListingTabbed: true,
 		KillListing:         interp.KillListingNumbered,
 		TraceQuoting:        interp.QuoteShell,

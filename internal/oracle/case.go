@@ -10058,6 +10058,46 @@ echo "st=$? alive"`,
 		Why:     "the letter itself is an axis: POSIX names `f` and three of the four report it, while zsh reports the capital — `-F` being its own short spelling of noglob, the same split `set -f` measures from the writing side",
 	},
 	{
+		ID: "shopt/histappend-is-accepted", Category: "shell options",
+		Snippet: `shopt -s histappend; echo st=$?`,
+		Why:     "the first line of an ordinary `~/.bashrc` and the first of the nine `shopt` names #1429 collected: the builtin belongs to one shell, so the other three record its absence, and the two bash columns accept the name because appending to the history file is what each of them already does",
+	},
+	{
+		ID: "shopt/cmdhist-and-lithist-read-as-on", Category: "shell options",
+		Snippet: `shopt cmdhist; shopt lithist; echo st=$?`,
+		Why:     "the two names that describe a multi-line command's place in the history, and the reason the state has to be readable rather than merely settable: bash keeps `cmdhist` on and `lithist` off by default, so a shell claiming both is claiming its own answer and not bash's — which is what a query is for",
+	},
+	{
+		ID: "shopt/turning-off-a-held-history-name", Category: "shell options",
+		Snippet: `shopt -u cmdhist; echo st=$?; shopt cmdhist`,
+		Why:     "the direction that separates a recorded bit from an implemented one: bash really can split a construct into a line each and says so quietly, and a shell that cannot has to refuse out loud instead of accepting and changing nothing",
+	},
+	{
+		ID: "shopt/checkwinsize-names-two-variables", Category: "shell options",
+		Snippet: `shopt -s checkwinsize; echo "st=$? COLUMNS=[${COLUMNS-unset}]"`,
+		Why:     "the name #1429 expected to be already true here and which measurement said was not: what it promises is that `$LINES` and `$COLUMNS` follow the window, so the option and the variable are recorded together — under `-c` neither shell has a terminal and both report the variable unset, which is exactly why the option's own answer is the part worth pinning",
+	},
+	{
+		ID: "shopt/dash-o-reads-one-set-option", Category: "shell options",
+		Snippet: `shopt -o vi; echo st=$?`,
+		Why:     "`-o` reads the `set -o` namespace through `shopt`'s interface, which is how a script tests one option without parsing `$SHELLOPTS`; the row pins the two-column form and the status, since the status is the whole answer when `-q` is used instead",
+	},
+	{
+		ID: "shopt/dash-o-writes-then-reads-back", Category: "shell options",
+		Snippet: `shopt -o -s vi; shopt -o vi; shopt -o -p vi`,
+		Why:     "the round trip through the one interface: `-o -s` moves a `set -o` option, the query reports the move, and `-p` writes it back as a `set` command rather than a `shopt` one — a shell whose reading and writing halves reached different tables would pass the first line and fail the second",
+	},
+	{
+		ID: "shopt/dash-o-listing-is-the-set-o-listing", Category: "shell options",
+		Snippet: `shopt -o > a; set -o > b; cmp -s a b && echo same || echo differs`,
+		Why:     "measured byte for byte in bash 5.3.15, and it is the reason `shopt -o` has no format of its own: the listing already belongs to `set`, so a second copy of it would be a second thing to keep in step",
+	},
+	{
+		ID: "shopt/dash-o-rejects-a-shopt-name", Category: "shell options",
+		Snippet: `shopt -o cdspell; echo st=$?`,
+		Why:     "the two namespaces are not one: `cdspell` is a perfectly good `shopt` name and not a `set -o` option, and bash's wording for the refusal is a word shorter here — `invalid option name` against the `invalid shell option name` its own names get",
+	},
+	{
 		ID: "arith/an-array-element-in-an-expression", Category: "arithmetic",
 		Snippet: `a=(3 4 5); echo $(( a[1] ))`,
 		Why:     "written without a `$`, so it is read as part of the expression rather than substituted into it — and it counts from the dialect's own base, which is why the same text is 4 in two shells and 3 in the third",

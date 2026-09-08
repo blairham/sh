@@ -1644,6 +1644,16 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 		}
 	}
 
+	// Where `cd` was *asked* to go, kept before CDPATH can redirect it and
+	// before the operand is joined against the working directory, because
+	// that is the name every shell in the panel puts in a failure. For an
+	// operand it is the word as typed; for a bare `cd` it is HOME's value;
+	// for `cd -` it is OLDPWD's. One name for the three, rather than one
+	// per form: the old code reached back for `args[0]` at the failure
+	// instead, which named `-` for `cd -` and, with no operand at all,
+	// indexed an empty slice and took the shell down (#1483).
+	subject := dir
+
 	old := r.workDir()
 	announced := false
 	if !filepath.IsAbs(dir) && !dash {
@@ -1701,7 +1711,7 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 		// "no such directory" for both was a sentence no shell prints and an
 		// answer one of them can tell is wrong.
 		r.diagf("%s\n", Wording(r.diag().CdCannotChange, "cd: %[1]s: %[2]s",
-			args[0], r.diag().reasonText(reason(err))))
+			subject, r.diag().reasonText(reason(err))))
 		return orDefault(r.diag().CdStatus, 1)
 	}
 	// Only the runner's own directory moves. Calling os.Chdir would move the

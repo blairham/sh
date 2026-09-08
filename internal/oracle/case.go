@@ -11030,6 +11030,27 @@ cat pf`,
 		Why:     "bash and zsh refuse before reading the operand — there is no job control under -c and they say so first; dash and ksh93 read the operand and complain about that instead",
 	},
 	{
+		ID: "cd/a-bare-cd-names-home-when-home-is-not-there", Category: "cd",
+		Snippet: `cd; echo "st=$?"`,
+		Env:     []string{"HOME=/no-such-home-1483"},
+		Why:     "what a failing `cd` puts in its diagnostic when there was no operand to put there. Every shell in the panel names the **value of HOME** and none of them names nothing or names the word `cd`, so the subject is the place `cd` was asked for rather than the word it was asked with. This shell reached back for the first operand instead and, with no operand at all, indexed an empty slice: all four dialects took the whole shell down with an internal error rather than reporting anything a script could act on (#1483). The home is an invented absolute path that exists on no machine — pointing it at anything real would make the row depend on whose disk produced it, and pointing it at the scratch directory would make the `cd` succeed and ask nothing",
+	},
+	{
+		ID: "cd/a-bare-cd-names-home-when-home-is-not-a-directory", Category: "cd",
+		Snippet: `cd; echo "st=$?"`,
+		Env:     []string{"HOME=" + ArgScript},
+		Why:     "the same subject through the other failure, which is what separates a fix from a special case for one errno: a home that is *there* and is a file still has no operand to name, and the panel still names HOME's value — with the reason the operating system gave, which two of them distinguish from a missing path. The script file is used as the non-directory because the harness already makes one and its path normalizes, so the row needs no file of its own",
+	},
+	{
+		ID: "cd/a-relative-home-is-still-searched-through-cdpath", Category: "cd",
+		Snippet: `mkdir -p pool/hh
+CDPATH=./pool HOME=hh
+cd >/dev/null 2>&1; st=$?
+case $(pwd) in */pool/hh) echo where=in-pool;; *) echo where=stayed;; esac
+echo "st=$st"`,
+		Why: "the other half of the same operand: CDPATH is searched for what `cd` was asked for whenever that is relative, and HOME's value is what it was asked for when there was no word. bash 5.3, dash, ksh93 and zsh all land in `pool/hh`; bash 3.2 does not search for a bare `cd` at all and stays put with 1. The row exists because the obvious way to keep a bare `cd` away from CDPATH — skipping the search whenever there is no operand — is wrong for five of the six columns, and nothing else in the corpus would have said so. Both of the `cd`'s streams are closed rather than shown: the winning entry's announcement is an absolute path in the scratch directory, so where the shell ended up is asked of `pwd` in the two words a run can repeat",
+	},
+	{
 		ID: "cd/cdpath-may-announce-the-move", Category: "cd",
 		Snippet: `mkdir -p pool/sub
 out=$(CDPATH=./pool cd sub)

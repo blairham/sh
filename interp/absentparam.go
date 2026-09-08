@@ -123,7 +123,7 @@ func (r *Runner) refuseAbsentParameter(e *syntax.ParamExpr) bool {
 // incoherent between themselves — `read-only variable: nope` for
 // `$parameters`, `job not found: x` for `$jobtexts`, silence for `$reswords`,
 // and `$funcstack` and `$historywords` take the shell down with SIGSEGV — so
-// the panel gives no behaviour to match and the rule this file already states
+// the panel gives no behavior to match and the rule this file already states
 // is the answer: name it, refuse it, let nothing depend on it. The sentence is
 // the read's, from the same table, so there is one of it.
 //

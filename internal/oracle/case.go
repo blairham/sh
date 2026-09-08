@@ -12416,7 +12416,7 @@ echo "read=[$l]"`,
 	{
 		ID: "parameter/unsetting-a-functions-element-through-noglob", Category: "variables",
 		Snippet: `zmodload zsh/parameter 2>/dev/null; m(){ echo hi; }; noglob unset functions[m]; echo "st=$? n=${#functions}"; m; echo "call=$?"`,
-		Why:     "the line a real plugin manager runs — the whole body of one of its functions is this — and it undefines the function at status 0. Filed the other way round (#1527), because zsh with nothing having touched `$functions` yet answers `functions: assignment to invalid subscript range` and leaves it standing: the name is still the autoload stub for the module and its *value* is the string `zsh/parameter`, so the brackets are read as arithmetic against a scalar. Every other access materialises the parameter and an `unset` is the one that does not, which is why the `zmodload` line at the front of this row is load-bearing rather than boilerplate. Pair it with the control below",
+		Why:     "the line a real plugin manager runs — the whole body of one of its functions is this — and it undefines the function at status 0. Filed the other way round (#1527), because zsh with nothing having touched `$functions` yet answers `functions: assignment to invalid subscript range` and leaves it standing: the name is still the autoload stub for the module and its *value* is the string `zsh/parameter`, so the brackets are read as arithmetic against a scalar. Every other access materializes the parameter and an `unset` is the one that does not, which is why the `zmodload` line at the front of this row is load-bearing rather than boilerplate. Pair it with the control below",
 	},
 	{
 		ID: "parameter/unsetting-a-functions-element-unquoted-is-a-pathname-match", Category: "variables",

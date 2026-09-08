@@ -585,7 +585,7 @@ func TestTheThreeRostersAccountForTheModuleExactlyOnce(t *testing.T) {
 // Three probes rather than one, because a status and a view agree between the
 // three answers that were on the table. "The option moved" and "the key was
 // dropped and the view reports off for a missing key" both read `off`, so the
-// first probe is a *behaviour*: `noclobber` on, then unset, then a `>` that
+// first probe is a *behavior*: `noclobber` on, then unset, then a `>` that
 // would have been refused. And "moved off" and "put back to its default" both
 // read `off` for an option that starts off, so the second probe uses `equals`,
 // which is **on** in a fresh shell — it goes off, so it is off and not the
@@ -721,7 +721,7 @@ echo "st=$? v=[${parameters[*]}]"`)
 //
 // The issue reported this as removing the function where zsh refuses, and the
 // refusal is real but is not about `unset` on this table — see the note in
-// parameter.go on the autoload stub. With the parameter materialised, which is
+// parameter.go on the autoload stub. With the parameter materialized, which is
 // the state of every shell that has read `$functions` at all, zsh removes the
 // function at status 0 and so does this. The unquoted control is the row that
 // makes the pair readable rather than a decoration: without it a fixed glob
@@ -745,7 +745,7 @@ echo "unreached kept=${#functions}"`)
 }
 
 // The other subscript forms on `$functions` are a no-op at status 0, which is
-// zsh's own answer with the parameter materialised — a key nobody has, an
+// zsh's own answer with the parameter materialized — a key nobody has, an
 // index, a range and a second subscript alike. Held here because the fix above
 // could have been written as "any subscript removes something".
 func TestOtherSubscriptFormsOnFunctionsRemoveNothing(t *testing.T) {

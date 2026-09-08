@@ -84,11 +84,11 @@ import (
 // module and its value is the string `zsh/parameter`, so the subscript is read
 // as *arithmetic against a scalar* — `functions[1]` shortens that string to
 // `sh/parameter` and the next read of the parameter fails to load a module by
-// that name. Every other access materialises the parameter first and an
+// that name. Every other access materializes the parameter first and an
 // `unset` is the one that does not. With the module loaded — which is the
 // state every script that reads `$functions` is in, and which the plugin
 // manager this was found in guarantees on its own line 232 — real zsh removes
-// the function at status 0, exactly as here. Modelling the refusal would have
+// the function at status 0, exactly as here. Modeling the refusal would have
 // meant reproducing a zsh bug against a state this shell cannot be in.
 
 // registerParameterModule installs all thirty-three: five as views, ten as

@@ -2927,11 +2927,12 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			return r.status
 		}
 		r.shadowedExport(name, wasExported)
-		if f.assoc && !f.remove {
-			// After the shadow, the same order `typeset -A` keeps: the
-			// caller's absence comes back when the function returns.
-			r.markAssoc(name)
-		}
+		// After the shadow, the same order `typeset -A` keeps: the caller's
+		// absence comes back when the function returns. Through the shared
+		// mark rather than an `if` of its own, because the copy that stood
+		// here had the table's half and not the array's — see
+		// markDeclaredCompound and #1535.
+		r.markDeclaredCompound(name, f)
 		if f.readonly && f.readonlyOff {
 			// `local +r y` after this same call's `local -r y=1`, which is
 			// the one shape that reaches this with a freeze still standing:

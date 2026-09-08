@@ -485,25 +485,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			}
 			r.shadowedExport(name, wasExported)
 		}
-		if f.array && !f.remove {
-			// Before the table's, and exclusive with it: `-a` and `-A` name
-			// two kinds of array and a name is one kind at a time, so a line
-			// carrying both letters is the table — which is the order the
-			// stores themselves enforce, since markIndexed leaves a declared
-			// table alone.
-			r.markIndexed(name)
-		}
-		if f.assoc && !f.remove {
-			// After the shadow, so that `typeset -A` inside a function
-			// declares a local table and the caller's absence comes back
-			// when it returns — and, under `-g`, after the shadow that was
-			// deliberately *not* taken, which is what leaves the table on
-			// the global cell where the function's return cannot reach it.
-			// `+A` does nothing rather than removing: two of the three
-			// shells with the attribute refuse to take it off a name, the
-			// same shape `+r` already has.
-			r.markAssoc(name)
-		}
+		r.markDeclaredCompound(name, f)
 		if f.readonly && f.readonlyOff {
 			if code := r.removeReadonly(name, hasValue); code != 0 {
 				return code
@@ -560,6 +542,47 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	// not end the script over it: bash reports each bad name, declares the
 	// well-formed ones beside them and exits 1.
 	return status
+}
+
+// markDeclaredCompound gives a name the array attribute its declaration named,
+// and it is one function because there are three declaration loops and they
+// disagreed about it.
+//
+// `-a` and `-A` name two kinds of array and a name is one kind at a time, so
+// the indexed mark goes first and a line carrying both letters is the table —
+// which is the order the stores themselves enforce, since markIndexed leaves a
+// declared table alone. `+a` and `+A` do nothing rather than removing: two of
+// the three shells with the attribute refuse to take it off a name, the same
+// shape `+r` already has.
+//
+// Called *after* the shadow, which is what makes `typeset -A m` inside a
+// function declare a local table and the caller's absence come back when it
+// returns — and, under `-g`, after the shadow that was deliberately not taken,
+// which is what leaves the table on the global cell where the function's
+// return cannot reach it.
+//
+// **`local` had the table's half of this and not the array's** (#1535), and
+// that is why it is a function now rather than two `if`s copied into each
+// loop. A valueless declaration that never marked the name went on to
+// declareEmpty, which sets a *scalar* empty — so `local -a opts` left `opts`
+// holding the empty string where `typeset -a opts` on the very next line left
+// an array. Nothing said so: `${#opts}` is 0 either way and `${opts[@]}` is
+// one empty element against none, so the name a script had declared as an
+// array was a string for the rest of the function and every later read of it
+// was a plausible answer to the wrong question. The panel is unanimous that
+// it is not — `f() { local -a a; echo ${#a[@]}; }` is 0 in bash 5.3.15,
+// bash 3.2.57 and zsh 5.9.2, and the ksh93 spelling `typeset -a a` is 0 too,
+// where a one-element scalar answers 1.
+func (r *Runner) markDeclaredCompound(name string, f declareFlags) {
+	if f.remove {
+		return
+	}
+	if f.array {
+		r.markIndexed(name)
+	}
+	if f.assoc {
+		r.markAssoc(name)
+	}
 }
 
 // applyAttributes records what a name has been declared to be.

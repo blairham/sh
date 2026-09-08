@@ -46,10 +46,45 @@ jobs:
         check-latest: true
         cache: true # go-mod-tidy-repo resolves the whole graph; an uncached run is slow and flaky # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
     - name: Run pre-commit hooks
-      # Nothing is skipped: pre-commit is the linter. `golangci-lint` reports
-      # what the change introduced, which is the whole point of running it
-      # here rather than in a job of its own.
+      # golangci-lint is no longer among these hooks -- see
+      # .pre-commit-config.yaml for why, and the Lint job below for where it
+      # went. Everything else here still runs on every commit.
       uses: blairham/go-pre-commit@v4.6.6
+
+  # golangci-lint, in a job of its own, because it does not belong at `git
+  # commit` time: it type-checks the whole module and cost ~3GB and 300% CPU
+  # per run on a developer's machine.
+  #
+  # `--new-from-merge-base` and not `--new-from-rev HEAD`. On a runner the
+  # checkout is clean, so `HEAD` diffs against nothing and the linter reports
+  # nothing at all -- which is exactly what it had been doing here, silently,
+  # while being expensive locally. The merge base is the commit this branch
+  # actually departed from, so what it prints is what this change introduced.
+  #
+  # fetch-depth: 0 because a merge base cannot be computed from a shallow
+  # clone. Without it the base resolves to nothing and the linter exits 0
+  # having examined nothing -- a green check that means the opposite of green.
+  lint:
+    name: Lint
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    - name: What did this change introduce?
+      run: |
+        set -euo pipefail
+        base=$(git merge-base origin/${{ github.base_ref || 'main' }} HEAD)
+        echo "merge base: $base"
+        test -n "$base"
+        go tool golangci-lint run --new-from-rev "$base"
 
   # Gating happens inside the jobs, never with a workflow-level `paths:`
   # filter: a required check that never runs reports as *pending forever*

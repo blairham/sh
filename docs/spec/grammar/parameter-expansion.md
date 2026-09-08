@@ -853,6 +853,7 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(qq)` | quote in single quotes | `x="a b"; ${(qq)x}` | `'a b'` |
 | `(qqq)` | quote in double quotes | `x="a b"; ${(qqq)x}` | `"a b"` |
 | `(qqqq)` | quote as `$'…'` | `x="a b"; ${(qqqq)x}` | `$'a b'` |
+| `(q-)` | quote only where it is needed | `x="a b"; y=p; ${(q-)x}` / `${(q-)y}` | `'a b'` / `p` |
 | `(f)` | split at newlines | `x=$'a\nb'; ${(f)x}` | two words `a`, `b` |
 | `(s:sep:)` | split at sep | `x=a:b:c; ${(s.:.)x}` | `a`, `b`, `c` |
 | `(j:sep:)` | join with sep | `a=(x y z); ${(j.,.)a}` | `x,y,z` |
@@ -967,7 +968,11 @@ Details, each measured:
   `{}`, `<>`; the separator may be several characters.
 - **`(q)` in detail.** Backslash-escapes space and `` ` ``, `$`, `"`, `'`,
   `\`, `*`, `?`, `[`, `]`, `(`, `)`, `{`, `}`, `<`, `>`, `|`, `;`, `&`,
-  `~`, `#`, `^`, `=`; leaves `!`, `%`, `:`, `,`, `.`, `/`, `@`, `-`, `_`,
+  `#`, `^` anywhere, and `~` and `=` **only as the value's first byte**,
+  where one opens a tilde expansion and the other an equals one:
+  measured, `${(q)x}` on `a~b` is `a~b` and on `~x` is `\~x`, and on
+  `PATH=/x` is `PATH=/x` where `=x` is `\=x`. It leaves `!`, `%`, `:`,
+  `,`, `.`, `/`, `@`, `-`, `_`,
   `+` and alphanumerics alone; renders each control or non-UTF-8 byte as
   its own `$'…'` segment — `$'\n'`, `$'\t'`, `$'\a'`, `$'\b'`, `$'\f'`,
   `$'\r'`, `$'\v'` by name, anything else as three-digit octal like
@@ -976,6 +981,33 @@ Details, each measured:
   `(qqq)` wraps in double quotes escaping `\`, `` ` ``, `"`, `$`.
   `(qqqq)` wraps in `$'…'` escaping `'`, `\`, `!` and control bytes as in
   `(q)`. Multibyte UTF-8 passes through every form.
+- **`(q-)` is minimal quoting**, and `-` is a modifier the `q` in front of
+  it eats rather than a flag of its own. The value is cut at each `'`; each
+  run between the cuts is wrapped in single quotes if any byte in it needs
+  quoting and written bare if none does; each `'` becomes `\'` outside any
+  quoting. The bytes that ask for quotes are the same table `(q)` escapes,
+  including the positional `~` and `=` — the position being the *value's*
+  start and not each run's, so `'~x` is `\'~x` and `~'a` is `'~'\'a`. Tab
+  and newline ask for quotes and then go inside them as themselves rather
+  than as `$'\t'`; **every other control byte, and every byte above
+  `0x7f`, asks for nothing** and is written raw — `$'a\001b'` is
+  `a\001b`, where `${(q+)…}` would render it. An empty value is `''`,
+  which is the one value with nothing to quote that still cannot be
+  written bare. The property the flag exists for is the round trip:
+  `eval "r=${(q-)v}"` leaves `r` equal to `v` for every value measured.
+  Composition is the ordinary rule-14 one — per element of a list, after
+  the join a quoted expansion asks for, after the case flags and after any
+  split.
+- **Which `-` is that modifier** is decided by adjacency and by count, and
+  a `-` anywhere else is zsh's signed-numeric sort flag, `(-)`, which this
+  implementation does not carry. Measured over `b=(-1 -10 -3 2 10)`:
+  `${(o)b}` and `${(oq-)b}` sort lexically, so the `q` ate the `-`;
+  `${(o-)b}` and `${(oq--)b}` sort signed, so a lone `-` and a second one
+  are the sort flag; `${(oq+-)b}` sorts signed too, a `q+` having already
+  taken the slot. `${(qU-)v}` quotes with backslashes, so the adjacency is
+  literal, and `${(qq-)v}` and `${(q-q)v}` are errors in the flags, so
+  only a lone `q` takes it. The modifier may be the later of two:
+  `${(-q-)v}` is minimal quoting with a sort flag in front of it.
 - **`(Q)` removes quoting and expands nothing**, and that pair is the
   whole flag. `v='"$x"'` with `x` set is `$x`, two characters, where a
   reading that handed the value to the parser would answer `hi`;
@@ -1115,6 +1147,19 @@ The flags that order, count and unquote have rows of their own:
 rows for where the steps sit —
 `param/a-length-is-taken-before-the-joining-and-the-split` and
 `param/where-the-unquoting-and-ordering-steps-sit`.
+
+Minimal quoting has four of its own, and each is a pair of values rather
+than one, because a single value cannot tell "quote only what needs it"
+from "always quote" or from "never quote":
+`param/minimal-quoting-quotes-only-what-needs-it` (`q` beside `q-`, on a
+value that needs quoting and one that does not),
+`param/minimal-quoting-writes-a-quote-with-a-backslash` (the character
+single quotes cannot hold, and the empty value),
+`param/minimal-quoting-leaves-a-control-byte-bare` (which unprintable
+bytes are a reason to quote, which is almost none of them), and
+`param/the-quoting-flags-read-a-tilde-by-position` (the two bytes that
+are special only where a word starts, asked of `(q)` and `(q-)` together
+because the table is shared and the `:q` modifier reads it too).
 
 `(k)` is pinned with a **single** pair. zsh yields hash order for more
 than one and does not promise it, so a row with two keys would record a
@@ -1408,7 +1453,8 @@ than hidden; nothing in the flag's own surface reaches it.
 Flags zsh has and this slice does not — `(e)` (expand the result again),
 `(z)` (split by shell parsing with no options — the capital `(Z:opts:)` is
 built), `(t)`, `(D)`, padding, and the rest of the
-alphabet, plus the `q-`/`q+` variants and
+alphabet, plus `(q+)`, the signed-numeric sort flag `(-)` — which is every
+`-` that a `q` did not eat — and
 `(qqq…)` beyond four — are refused at run time naming the flag, with the
 same fatal shape as an unrecognized one. Refusing loudly is the honest
 answer where imitating would answer wrong, and the refusal is asserted

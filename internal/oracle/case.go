@@ -6742,6 +6742,26 @@ echo "st=$?"`,
 		Why:     "the q family is one flag repeated, and each repetition is a different quoting: backslashes, single quotes, double quotes, then $'…'. Repetition is what selects it, which is exactly what bash's @ family refuses",
 	},
 	{
+		ID: "param/minimal-quoting-quotes-only-what-needs-it", Category: "parameter expansion",
+		Snippet: `x="a b"; y=plain; printf "[%s]" "${(q)x}" "${(q-)x}" "${(q)y}" "${(q-)y}"; echo`,
+		Why:     "`q-` is the `q` family's modifier rather than a fifth repetition, and the pair of values is what says so: the value that needs quoting comes back in single quotes where plain `q` writes a backslash, and the value that needs none comes back as itself where every other member of the family quotes it anyway. One value alone cannot separate the two readings — a flag that always quoted passes the first column and a flag that never did passes the second",
+	},
+	{
+		ID: "param/minimal-quoting-writes-a-quote-with-a-backslash", Category: "parameter expansion",
+		Snippet: `x="a'b c"; y="a'b'c"; z=""; printf "[%s]" "${(q-)x}" "${(q-)y}" "${(q-)z}"; echo`,
+		Why:     "the one character single quotes cannot hold, and what the flag does about it: the value is cut at each `'`, the quote is written as a backslash pair outside any quoting, and each run between them is quoted only if that run needs it — so `a'b c` is three pieces and `a'b'c` is none at all. The empty value is on the same line because it is the one value with nothing to quote that still cannot be written bare, and a reading that returned it unchanged would vanish a field",
+	},
+	{
+		ID: "param/minimal-quoting-leaves-a-control-byte-bare", Category: "parameter expansion",
+		Snippet: `x=$'a\001b'; y=$'a\001 b'; printf "%s|%s" "${(q-)x}" "${(q-)y}" | od -An -c | tr -s " "; z=$'a\tb'; printf "%s|%s" "${(q)z}" "${(q-)z}" | od -An -c | tr -s " "`,
+		Why:     "which unprintable bytes are a reason to quote, and the answer is that almost none are: a `\\001` in a value is written as itself and only the space beside it in the second value asks for quotes. The tab is the exception and is on the same line as plain `q` for the contrast — `q` spells it `$'\\t'` and `q-` puts the byte itself inside quotes, so the flag is choosing the shorter spelling rather than a different escape. `q+` is the flag that renders unprintable bytes, and this row is what separates the two: a reading of `q-` that spelled a control byte out would be answering for the wrong modifier",
+	},
+	{
+		ID: "param/the-quoting-flags-read-a-tilde-by-position", Category: "parameter expansion",
+		Snippet: `x="a~b"; y="~x"; v="PATH=/x"; w="=x"; printf "[%s]" "${(q)x}" "${(q)y}" "${(q-)v}" "${(q-)w}"; echo`,
+		Why:     "a tilde and an equals sign are special where a word starts and ordinary anywhere else, so `a~b` and `PATH=/x` come back bare while `~x` and `=x` are quoted. Both spellings read back as the same value, which is why a table that escaped them everywhere went unnoticed here for as long as it did — the answer was longer than the shell's rather than wrong, and only the comparison says so. The row uses both flags because the table is shared, and the `:q` modifier reads it too",
+	},
+	{
 		ID: "param/expansion-flags-split-at-newlines", Category: "parameter expansion",
 		Snippet: `x=$'a\nb'; printf "[%s]" ${(f)x}; echo`,
 		Why:     "(f) is the line-splitting flag — the read-a-command's-output-into-an-array idiom, and the one split that does not consult IFS",

@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -44,6 +45,14 @@ func TestASubshellOwnsTheFunctionTable(t *testing.T) {
 				t.Errorf("%s\ngot  %q\nwant %q", tc.src, got, tc.want)
 			}
 		})
+	}
+	// readonly's own control, which needs its diagnostic rather than only a
+	// value: a subshell inherits the attribute, so the assignment in it is
+	// refused and the parent's value is the one that survives. Written apart
+	// from the table because the assertion is on both halves at once.
+	out, _ := run(t, `readonly x=1; (x=2); echo "[$x]"`, nil)
+	if !strings.Contains(out, "readonly") || !strings.Contains(out, "[1]") {
+		t.Errorf("a subshell must inherit the attribute and leave the parent alone: %q", out)
 	}
 }
 
@@ -89,6 +98,49 @@ func TestASubshellOwnsTheDisabledBuiltinTable(t *testing.T) {
 		{"switched off in one", "enable -n :\n(enable -n printf)\nenable -n", "enable -n :\n"},
 		{"switched on in one", "enable -n :\n(enable :)\nenable -n", "enable -n :\n"},
 		{"seen from inside one", "enable -n :\n(enable -n)", "enable -n :\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, _ := run(t, tc.src, nil); got != tc.want {
+				t.Errorf("%s\ngot  %q\nwant %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestASubshellOwnsTheAttributeTables is the same rule for what the shell
+// knows about a *variable* name besides its value, and it is #1384.
+//
+// clone copied twelve tables by hand and left twenty-two shared, so an
+// attribute a subshell declared was the parent's afterwards: `x=1;
+// (readonly x); x=2` refused the assignment where every shell in the panel
+// assigns 2. That is the half a script can see. The half it cannot is that a
+// process substitution is a subshell running on a *goroutine*, so the same
+// sharing is a data race that ends the process with a runtime fatal error no
+// recover can catch — which is why the fix is a rule about the struct rather
+// than about the tables anybody had thought of.
+//
+// A process substitution is here for that reason and not for symmetry: it is
+// the boundary where sharing stops being a leak and starts being a crash.
+func TestASubshellOwnsTheAttributeTables(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// readonly, which is the one that showed. The control beside it is
+		// the row below: the subshell must still *see* the parent's
+		// attribute, or this would pass by having copied nothing at all.
+		{"readonly declared in one", `x=1; (readonly x); x=2; echo "$x"`, "2\n"},
+		// The attribute tables behind `typeset`, on the same terms. The
+		// second row is the control for the first: a subshell has to still
+		// *see* the parent's attribute, or the row above would pass by
+		// having copied nothing at all.
+		{"integer declared in one", `n=5; (typeset -i n); n=1+1; echo "$n"`, "1+1\n"},
+		{"integer read from the parent", `typeset -i n; n=1+1; (echo "$n")`, "2\n"},
+		// And a name a subshell took away. `unset` records the removal in a
+		// table of its own, which is the table the crash was on.
+		{"unset in one", `x=1; (unset x); echo "$x"`, "1\n"},
+		{"unset and gone in one", `x=1; ( unset x; echo "[$x]" )`, "[]\n"},
+		// The goroutine boundary. Same tables, and now two writers with no
+		// schedule between them.
+		{"readonly in a substitution", `x=1; cat <(readonly x) >/dev/null; x=2; echo "$x"`, "2\n"},
+		{"unset in a substitution", `x=1; cat <(unset x) >/dev/null; echo "$x"`, "1\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got, _ := run(t, tc.src, nil); got != tc.want {

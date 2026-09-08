@@ -10595,6 +10595,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/an-option-typeset-does-not-have` | `st=127` **2>** `<shell>: 1: typeset: not found` | `st=2` **2>** `<shell>: line 1: typeset: -q: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `st=2` **2>** `<shell>: line 1: typeset: -q: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `st=2` **2>** `<shell>: line 0: typeset: -q: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: typeset: -q: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `st=1` **2>** `<shell>:typeset:1: bad option: -q` |
 | `declare/an-option-written-with-a-plus` | `st=127` **2>** `<shell>: 1: typeset: not found` | `st=2` **2>** `<shell>: line 1: typeset: +q: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `st=2` **2>** `<shell>: line 1: typeset: +q: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]` | `st=2` **2>** `<shell>: line 0: typeset: +q: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: typeset: +q: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `st=1` **2>** `<shell>:typeset:1: bad option: +q` |
 | `declare/an-option-local-does-not-have` | **2>** `<shell>: 1: local: -q: bad variable name` *(status 2)* | `in~st=0` **2>** `<shell>: line 1: local: -q: invalid option~local: usage: local [option] name[=value] ...` | `in~st=0` **2>** `<shell>: line 1: local: -q: invalid option~local: usage: local [option] name[=value] ...` | `in~st=0` **2>** `<shell>: line 0: local: -q: invalid option~local: usage: local name[=value] ...` | `in~st=0` **2>** `<shell>: local: not found` | `in~st=0` **2>** `f:local: bad option: -q` |
+| `declare/readonly-does-not-leave-a-subshell` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
+| `declare/an-attribute-does-not-leave-a-subshell` | `[1+1][def]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `[1+1][def]` | `[1+1][def]` | `[1+1][def]` **2>** `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[1+1][DEF]` | `[1+1][def]` |
+| `declare/readonly-does-not-leave-a-process-substitution` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
   ```sh
@@ -11351,6 +11354,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/an-option-local-does-not-have` — the same question of `local`, where the shell with no letters reads `-q` as a name and dies on it, and the one with no `local` at all never reaches the question
   ```sh
   f() { local -q x; echo "in"; }; f; echo "st=$?"
+  ```
+- `declare/readonly-does-not-leave-a-subshell` — a subshell owns what it declares. Every shell in the panel assigns 2, and ours refused the assignment because the readonly table was one map the subshell and its parent both wrote — the visible half of #1384, whose other half is that a process substitution is such a subshell running on a goroutine
+  ```sh
+  x=1; (readonly x); x=2; printf "[%s]\n" "$x"
+  ```
+- `declare/an-attribute-does-not-leave-a-subshell` — the same question of the attributes rather than of readonly, and it is the row that varies: the integer attribute stays behind in nobody, and the case-folding one stays behind in ksh93 alone — so a fix that gave every subshell its own tables must move the first cell and not the second
+  ```sh
+  n=5; (typeset -i n); n=1+1; printf "[%s]" "$n"; x=abc; (typeset -u x); x=def; printf "[%s]\n" "$x"
+  ```
+- `declare/readonly-does-not-leave-a-process-substitution` — the boundary that matters for #1384, because this one is a subshell the shell runs *beside* itself: the same tables, and now two writers with no schedule between them. The shell without the construct never reaches the question, which is what makes this a different row from the one above rather than a restatement
+  ```sh
+  x=1; cat <(readonly x; echo sub) >/dev/null; x=2; printf "[%s]\n" "$x"
   ```
 
 ## select

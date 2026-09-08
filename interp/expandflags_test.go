@@ -227,8 +227,8 @@ func TestExpansionFlagErrors(t *testing.T) {
 // A flag the grammar accepts and this interpreter does not carry is refused
 // by name, because a quiet wrong answer is the one thing worse.
 func TestAnUnimplementedExpansionFlagIsRefusedByName(t *testing.T) {
-	out, errs, st := flagsRun(t, `x=b; echo "${(z)x}"; echo after`)
-	if !strings.Contains(errs, "the (z) expansion flag is not implemented") {
+	out, errs, st := flagsRun(t, `x=b; echo "${(e)x}"; echo after`)
+	if !strings.Contains(errs, "the (e) expansion flag is not implemented") {
 		t.Errorf("stderr = %q, want the flag named", errs)
 	}
 	if strings.Contains(out, "after") || st != 1 {

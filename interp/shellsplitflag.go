@@ -9,8 +9,9 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
-// The `${(Z:opts:)v}` expansion flag: split a value the way the shell would
-// split a command line, with option letters between a pair of delimiters.
+// The `${(z)v}` and `${(Z:opts:)v}` expansion flags: split a value the way the
+// shell would split a command line, the second with option letters between a
+// pair of delimiters and the first with none.
 //
 // Measured on zsh 5.9.2, the only shell in the panel whose grammar has the
 // flag at all. The other five read `${(Z…)v}` as a bad substitution or refuse
@@ -27,15 +28,34 @@ import (
 // `a"b c"d`, `$(f x)`, `a#b` and every other place a word boundary is not a
 // blank.
 
-// shellSplitOpts is the `Z` flag's argument, and whether the flag does
-// anything at all.
+// shellSplitOpts is the option letters the shell-word split runs with, and
+// whether it runs at all.
 //
-// An empty option list turns the flag *off* rather than splitting with no
-// options set, which is measured and is the opposite of the reading a name
-// like "the same split, with options" invites: on `a  b`, `${(Z::)v}` is the
-// value unchanged with both spaces, where `${(z)v}` is `a b`. So the letter
-// being present is not the question — the argument being non-empty is.
+// Two spellings, one split. `(z)` takes no argument and splits with no
+// options set; `(Z:opts:)` takes one and splits with the letters in it. They
+// are the same flag and this is the one place that says so — a `z` answered
+// beside the `Z` path rather than through it would be a second word splitter,
+// and it would have had to re-derive where in the pipeline the split stands,
+// that a quoted result is still a list, and that an empty result is one empty
+// field. The option letters are the only difference between them, so the
+// letters are what varies.
+//
+// The two spellings disagree about *one* thing, and it is not the split: an
+// empty option list turns `(Z)` off rather than splitting with no options
+// set. Measured on `a  b`, `${(Z::)v}` is the value unchanged with both
+// spaces where `${(z)v}` is `a b`. So a `Z` runs when its argument is
+// non-empty, a `z` runs always, and a group with both runs — `${(zZ::)v}` is
+// `a b`, the `Z::` neither turning off what the `z` turned on nor adding a
+// letter to it.
+//
+// Which letters a group with both comes to is settled while the flags are
+// read, because it depends on the order they were written in and Flags has
+// dropped the arguments by the time this sees it. See syntax.ParamExpr's
+// ShellSplitOpts.
 func shellSplitOpts(e *syntax.ParamExpr) (string, bool) {
+	if strings.ContainsRune(e.Flags, 'z') {
+		return e.ShellSplitOpts, true
+	}
 	if !strings.ContainsRune(e.Flags, 'Z') {
 		return "", false
 	}
@@ -50,9 +70,11 @@ func shellSplitActive(e *syntax.ParamExpr) bool {
 	return ok
 }
 
-// splitShellWords is one word's worth of the `Z` split.
+// splitShellWords is one word's worth of the split.
 //
-// The option letters, measured one at a time and in combination:
+// The option letters, measured one at a time and in combination. The first
+// row is `${(z)v}` exactly — the argumentless spelling is the no-letters case
+// and nothing else, which is the measurement the two flags are folded on:
 //
 //	         `a # hi<LF>b`   what the letters do
 //	(none)   a  #  hi  ;  b  no comments at all, and a newline is its own word

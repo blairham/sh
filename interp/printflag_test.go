@@ -152,7 +152,7 @@ func TestTheUnbuiltArgumentFlagsAreStillRefused(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{"left padding", `v=ab; printf "[%s]" "${(pl:5::-:)v}"`, "the (l) expansion flag is not implemented"},
 		{"right padding", `v=ab; printf "[%s]" "${(pr:5::-:)v}"`, "the (r) expansion flag is not implemented"},
-		{"the word split", `v=ab; printf "[%s]" "${(pz)v}"`, "the (z) expansion flag is not implemented"},
+		{"the glob-quoting flag", `v=ab; printf "[%s]" "${(pg:o:)v}"`, "the (g) expansion flag is not implemented"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runGrammar(t, tc.src, escapingFlags, withTestEscapes)

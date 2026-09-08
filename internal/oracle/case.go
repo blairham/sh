@@ -7012,6 +7012,36 @@ echo "st=$?"`,
 		Why:     "the empty field belongs to the whole expansion rather than to any one word in it: an element with no shell words in it contributes none, so the array `('' x)` is one field and not two, while an array with nothing in it at all is one empty field — which the same array without the split flag is not. The three counts are on one line because each is defensible alone and only the set of them says which rule is running",
 	},
 	{
+		ID: "param/the-argumentless-shell-split-flag", Category: "parameter expansion",
+		Snippet: `v="a 'b c' d  e"; printf "[%s]" ${(z)v}; echo`,
+		Why:     "`(z)` is the same split as `(Z)` with no option letters, written without an argument, and this is the row that says it is the *same* one rather than a second splitter that agrees on blanks: the quotes stay on `'b c'` and the run of blanks makes no empty field. A plugin manager reaches this four times per extension hook at startup, which is why it is the spelling that matters",
+	},
+	{
+		ID: "param/the-argumentless-shell-split-flag-beside-the-fields-flag", Category: "parameter expansion",
+		Snippet: `v="a b"; set -- "${(z@)v}"; echo "za=$#"; set -- "${(@z)v}"; echo "az=$#"; set -- "${(z)v}"; echo "z=$#"; set -- ${(@z)v}; echo "bare=$#"`,
+		Why:     "both written orders of the split and the fields flag, quoted and not — the two spellings a plugin manager's startup actually uses, `${(z@)…}` and `${(@z)…}`. All four are two fields, which is the point: the split makes a list whatever the quoting says, so `@` beside it changes nothing and neither does the order. Four counts on one line because each is defensible alone and only the set says the letters are not being read positionally",
+	},
+	{
+		ID: "param/the-argumentless-shell-split-flag-over-an-association-default", Category: "parameter expansion",
+		Snippet: `typeset -A m m2; m2=(k "p q"); printf "[%s]" ${(z@)m[k]:-$m2[k]}; m=(k "a b"); printf "<%s>" ${(z@)m[k]:-$m2[k]}; echo`,
+		Why:     "the startup's own spelling, whole: an association element behind a `:-` default, split into words. The operator runs first and the split runs on whatever it left, so the row is written both ways round — key absent and key present — because a split that ran before the operator would answer the first with the default unsplit and only the pair says which order ran",
+	},
+	{
+		ID: "param/the-two-shell-split-spellings-accumulate-their-options", Category: "parameter expansion",
+		Snippet: "v=$'a # h\nb'; printf \"[%s]\" ${(Z+C+Z+n+)v}; printf \"<%s>\" ${(zZ+n+)v}; printf \"{%s}\" ${(Z+n+z)v}; echo",
+		Why:     "the two spellings are one flag, and a group may write both: two `Z` arguments union their letters, a `Z` behind a `z` still counts, and a `z` behind a `Z` clears what stands in front of it. Reading only the last argument answered the first with the dropped comment lost, at status 0 — the plausible wrong answer this row exists to catch",
+	},
+	{
+		ID: "param/the-argumentless-shell-split-flag-takes-no-argument", Category: "parameter expansion",
+		Snippet: `v="a b"; printf "[%s]" ${(z::)v}; echo "st=$?"`,
+		Why:     "the mirror of the argument spelling's refusal: `z` takes no delimited argument, so a delimiter behind it is an error *in the flags* at the delimiter rather than an empty option list. It matters because `${(Z::)v}` — the same characters one letter apart — is a clean read that turns the flag off, so the two spellings fail and succeed at opposite ends of the same shape",
+	},
+	{
+		ID: "param/the-argumentless-shell-split-flag-splits-what-a-subscript-selected", Category: "parameter expansion",
+		Snippet: `a=(aa bb cc); printf "[%s]" ${(z)a[2]}; v="a b c"; printf "<%s>" ${(z)v[1,3]}; echo`,
+		Why:     "the subscript is taken before the split, on an array element and on a scalar's characters alike — so the split reads what the subscript selected rather than the whole value, and the flag group standing in front of a subscript does not consume it. Both kinds on one line because an array element and a character range reach the subscript by different routes",
+	},
+	{
 		ID: "param/the-shell-split-flag-refuses-an-option-by-position", Category: "parameter expansion",
 		Snippet: `v="a b"; printf "[%s]" ${(Z:x:)v}; echo "st=$?"`,
 		Why:     "an option letter the flag does not have is an error *in the flags*, at the letter's own position, rather than the by-name refusal an unbuilt flag letter gets — two different complaints, and a reader has to be able to tell which one they got. Only `c`, `C` and `n` exist, established by trying the whole alphabet one letter at a time",

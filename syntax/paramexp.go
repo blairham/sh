@@ -226,15 +226,34 @@ type ParamExpr struct {
 	// no `s` at all.
 	SplitSep string
 	JoinSep  string
-	// ShellSplitOpts is the argument of the `Z` flag: the option letters
-	// written between its delimiters, `${(Z+Cn+)v}` carrying "Cn".
+	// ShellSplitOpts is the option letters the shell-word split runs with:
+	// what the `Z` flag's delimited arguments came to, `${(Z+Cn+)v}`
+	// carrying "Cn".
 	//
-	// Empty is meaningful and is not the same as no `Z` at all. Measured on
-	// zsh 5.9.2, the one shell with the flag: `${(Z::)v}` on `a  b` is the
-	// value unchanged, double space and all, where `${(z)v}` is `a b` — so
-	// an empty option list turns the whole flag off rather than splitting
-	// with no options set. Flags carrying a `Z` is what says the flag was
-	// written; this is what says whether it does anything.
+	// It is the *accumulated* set rather than one argument's text, because
+	// the group may write the flag more than once and may write its
+	// argumentless spelling, `z`, in among them. Measured on zsh 5.9.2, the
+	// one shell with the flag, on `$'a # h\nb'`:
+	//
+	//	${(Z+C+Z+n+)v}   a  b          two `Z` arguments union
+	//	${(Z+n+Z+C+)v}   a  b          in either order
+	//	${(zZ+n+)v}      a # h  b      a `Z` behind a `z` still counts
+	//	${(Z+n+z)v}      a # h ; b     but a `z` behind it clears the set
+	//	${(Z+C+zZ+n+)v}  a # h  b      clearing what stands before it only
+	//	${(Z+n+Z::)v}    a # h  b      and an empty argument adds nothing
+	//
+	// So `z` is not "the `Z` flag with no letters" written once and for all:
+	// it is a reset, and the reset happens where it is written. Reading the
+	// last argument alone — which is what one assignment per `Z` came to —
+	// answers the first two rows with `n` only and loses the dropped
+	// comment.
+	//
+	// Empty is meaningful and is not the same as no split at all. `${(Z::)v}`
+	// on `a  b` is the value unchanged, double space and all, where
+	// `${(z)v}` is `a b` — so an empty option list leaves the flag doing
+	// nothing, while `z` splits with no options set. Which of the two a
+	// group means is Flags' question: a `z` in it splits, a `Z` in it splits
+	// when this is non-empty.
 	ShellSplitOpts string
 	// FlagsErrPos is the 1-based position, counted from the `$`, of the
 	// first character the flag group could not read, and 0 when it read
@@ -738,6 +757,14 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 		}
 		e.Flags += string(c)
 		prev, prevAt = c, i
+		if c == 'z' {
+			// The argumentless spelling of the shell-word split *clears* the
+			// option letters written in front of it, which is measured and is
+			// the whole reason this stands in the letter loop rather than
+			// being read off Flags later: only here is the written order of a
+			// `z` and a `Z` argument still known. See ShellSplitOpts.
+			e.ShellSplitOpts = ""
+		}
 		i++
 		argMax := paramFlagArgs[c]
 		var open byte
@@ -780,7 +807,9 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 					e.FlagsErrPos = i + 1 + k + 3
 					return ""
 				}
-				e.ShellSplitOpts = arg
+				// Unioned rather than assigned: a second `Z` adds its
+				// letters to the first one's. See ShellSplitOpts.
+				e.ShellSplitOpts += arg
 			}
 			i += j + 2
 		}

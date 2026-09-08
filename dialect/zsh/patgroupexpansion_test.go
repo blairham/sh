@@ -55,6 +55,17 @@ func TestAnExpansionInsideAPatternGroupIsItsValue(t *testing.T) {
 		{`[[ 'a$b' == (a$b) ]] && echo Y || echo N`, "N"},
 		{`[[ ab == (a$b'b') ]] && echo Y || echo N`, "Y"},
 		{`[[ a == (a$b) ]] && echo Y || echo N`, "Y"},
+		// Process substitution is the one form a group does not take: `<(`
+		// and `>(` are the only spellings whose first byte is also one of
+		// the four operators that end a word inside a group, and there the
+		// operator wins. zsh 5.9.2 refuses both spellings — `process
+		// substitution … cannot be used here` and `number expected` — so
+		// reading them here would make two constructs work that the shell
+		// does not have. Asked through an `eval`, where a refusal is a
+		// status rather than a failure to read the test's own source.
+		{`eval '[[ x == (a<(echo x)b) ]]' 2>/dev/null; echo st=$?`, "st=1"},
+		{`eval 'print -r -- (a<(echo x)b)' 2>/dev/null; echo st=$?`, "st=1"},
+		{`eval '[[ x == (a>(echo x)b) ]]' 2>/dev/null; echo st=$?`, "st=1"},
 		// A substitution balances its own parentheses, so the group closes
 		// at the last `)` rather than at the one inside the command.
 		{`[[ 'a)b' == (a$(printf ')')b) ]] && echo Y || echo N`, "Y"},

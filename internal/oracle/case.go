@@ -6095,7 +6095,7 @@ echo "st=$?"`,
 	{
 		ID: "pat/a-groups-expansion-reaches-case-and-a-substitution", Category: "pattern matching", SyntaxError: true,
 		Snippet: `L=wait; case xwait in x($L)) echo grp;; *) echo no;; esac; case 'x$L' in x($L)) echo text;; *) echo value;; esac; v=xwaity; echo "[${v#*($L)}][${v%%($L)*}]"`,
-		Why:     "the same answer on the two routes that do not go through a condition, asserted rather than assumed — #1217 was filed after a fix that reached only the route it had been measured on. The `case` arms are a pair for the reason the row above gives, and the trims are written as the shortest and the longest so the *boundary* is visible: `[y][x]` can only come from a group that matched `wait`, where a count of matches or a single `//` would have passed on a pattern of any length (#1331)",
+		Why:     "the same answer on the two routes that do not go through a condition, asserted rather than assumed — #1217 was filed after a fix that reached only the route it had been measured on. The two `case` arms are one probe: the first says the group matched and the second says it matched the *value*, a pattern built from the source text matching the subject `x$L` instead. The trims are the shortest and the longest so the *boundary* is visible — `[y][x]` can only come from a group that matched `wait`, where a count of matches or a global `//` would have passed on a pattern of any length, a global replacement re-applying until nothing matches (#1331)",
 	},
 	{
 		ID: "glob/a-groups-expansion-is-its-value", Category: "pattern matching", SyntaxError: true,

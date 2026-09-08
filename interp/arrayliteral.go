@@ -69,17 +69,87 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 	a := Array{}
 	next := 0
 	if appendTo {
-		if old, ok := r.Arrays[name]; ok {
+		switch old, ok := r.Arrays[name]; {
+		case ok:
 			a = old
 			// After the highest subscript rather than after the count:
 			// appending to `a[0]=x a[5]=y` puts the next element at 6, which
 			// is where the end is.
 			next = old.pastTheEnd()
+		default:
+			a, next = r.appendedOverAScalar(name)
 		}
 	}
 	if a, ok := r.literalInto(name, a, next, parsed); ok {
 		r.storeArray(name, a)
 	}
+}
+
+// appendedOverAScalar is what `name+=(…)` starts from where the name is not
+// holding an array: the value it *is* holding becomes the first element, and
+// the literal's words go after it.
+//
+// Core rather than an axis, and it is one of the few places the whole panel
+// agrees on something this implementation was getting wrong. Measured
+// 2026-09-08 with `a=1; a+=(2); typeset -p a`:
+//
+//	bash 5.3.15          declare -a a=([0]="1" [1]="2")
+//	bash 5.3.15 as sh    declare -a a=([0]="1" [1]="2")
+//	bash 3.2.57          declare -a a=([0]="1" [1]="2")
+//	ksh93                typeset -a a=(1 2)
+//	zsh 5.9.2            typeset -a a=( 1 2 )
+//
+// dash has no arrays at all and reports the parenthesis as a syntax error,
+// which is the absence rather than a sixth answer. We built the array from
+// the literal's words alone and answered `2`, at status 0 with a plausible
+// array standing where the script's own value had been.
+//
+// The value lands at the *base* — the first element, whichever number that
+// dialect calls it — which is what the store's positions already mean and
+// what the panel says: `a=1; a+=(2); echo "[${a[0]}][${a[1]}]"` is `[1][2]`
+// in bash and ksh93 and `[][1]` in zsh, and `${a[1]}` is `2` in the first
+// two and `1` in the third. One rule, two spellings of it, and nothing here
+// has to ask which.
+//
+// An empty scalar counts as a value and an unset name does not, which is the
+// distinction the store already draws for us: `a=; a+=(2)` is two elements
+// with an empty one in front, `unset a; a+=(2)` is the one element. The
+// inherited environment counts too — `a=1 sh -c 'a+=(2)'` is `1 2` in every
+// column — so the question asked is what the name *reads back as*, which is
+// getVar, and not what this runner happens to have stored.
+//
+// Deliberately not at storeArray and not on assignForm. #1390 is the converse
+// fault — a scalar written over an array leaving the array standing — and its
+// fix belongs on the caller's intent, because the callers of the scalar store
+// genuinely differ about whether they mean to replace the name. Here they do
+// not: every route to an array-literal append wants the value kept, and what
+// is being decided is what the *operator* means over a scalar. Putting this
+// at the store would also promote the whole-array form `a=(2)`, which
+// replaces and is already right. The two issues are converse faults on one
+// pair of stores and they take their fixes at different layers.
+//
+// `set -A name value` is not this, though it also writes an array over a
+// scalar: measured, `a=1; set -A a Q` and `a=1; set +A a Q` are both `(Q)` in
+// ksh93 and zsh, the two shells with the letter. The promotion belongs to the
+// append operator and not to "an array store finding a scalar", which is why
+// this is a helper called from one place rather than a rule inside
+// storeArray. See setArrayOperands.
+// getVar rather than the two tables under it, and that choice is deliberate
+// beyond the environment: a *produced* parameter is holding a value too, and
+// bash promotes it — `RANDOM+=(2)` lists as `declare -ai RANDOM=([0]="19721"
+// [1]="2")`, two elements. No corpus row records it, because the value is a
+// new random number every run and there is nothing stable to record; a
+// mutation run reading `Vars` plus `inheritedValue` instead therefore survives
+// every test in the package, and it is left surviving rather than pinned with
+// a test that would have to know what the generator said. Everything else that
+// mutant changes is already covered: `unset` reaches the environment through
+// inheritedEnv, so the two spellings agree there.
+func (r *Runner) appendedOverAScalar(name string) (Array, int) {
+	v, held := r.getVar(name)
+	if !held {
+		return Array{}, 0
+	}
+	return Array{0: v}, 1
 }
 
 // literalInto places a literal's elements into an array, starting at next.

@@ -4284,6 +4284,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `special/assigning-random-seeds-it` | `none` | `produced` | `produced` | `produced` | `produced` | `produced` |
 | `core/append-assignment` | `[a]` **2>** `<shell>: 1: x+=b: not found` | `[ab]` | `[ab]` | `[ab]` | `[ab]` | `[ab]` |
 | `core/append-to-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` |
+| `core/appending-an-array-literal-to-a-scalar` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `[1 2] n=2 [1][2]` | `[1 2] n=2 [1][2]` | `[1 2] n=2 [1][2]` | `[1 2] n=2 [1][2]` | `[1 2] n=2 [][1]` |
+| `core/appending-an-array-literal-to-an-empty-scalar` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `[ 2] n=2` | `[ 2] n=2` | `[ 2] n=2` | `[ 2] n=2` | `[ 2] n=2` |
+| `core/appending-an-array-literal-to-an-unset-name` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `[2] n=1` | `[2] n=1` | `[2] n=1` | `[2] n=1` | `[2] n=1` |
+| `core/appending-an-array-literal-to-a-scalar-holding-a-space` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `[x y][2] n=2` | `[x y][2] n=2` | `[x y][2] n=2` | `[x y][2] n=2` | `[x y][2] n=2` |
+| `core/appending-an-empty-array-literal-to-a-scalar` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `[1] n=1` | `[1] n=1` | `[1] n=1` | `[(~	.=1~)] n=1` | `[1] n=1` |
 | `core/array-star-joins` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` |
 | `unset/takes-away-an-environment-name` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` |
 | `unset/the-m-option-unsets-by-pattern` | **2>** `<shell>: 1: unset: Illegal option -m` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` | **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 0: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]` | **2>** `<shell>: unset: -m: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `st=0 [gone][gone][3]` |
@@ -4350,6 +4355,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/append-to-an-array` — appending to an array adds to its end rather than to its first element, which is the same spelling doing a different thing
   ```sh
   a=(one two); a+=(three); echo "[${a[*]}] ${#a[@]}"
+  ```
+- `core/appending-an-array-literal-to-a-scalar` — an array-literal append over a name holding a *scalar* keeps that value as the first element rather than starting a fresh array from the words. Unanimous across all five shells with arrays, so it is the core being wrong rather than an axis, and the failure was silent: status 0 and a plausible one-element array where the script's own value had been. The two subscripts are what say *where* the kept value landed, and they are the array base rather than a second rule -- `[1][2]` where the first element is 0 and `[][1]` where it is 1, which is the same answer written twice. A row printing only the joined elements would pass with the value placed anywhere at all
+  ```sh
+  a=1; a+=(2); echo "[${a[*]}] n=${#a[@]} [${a[0]}][${a[1]}]"
+  ```
+- `core/appending-an-array-literal-to-an-empty-scalar` — the empty string is a value like any other and is kept, so the array is two elements with an empty one in front. Recorded apart from the unset row because those are the two states a single count cannot tell apart from the outside, and an implementation that promoted only a *non-empty* scalar would answer this one exactly as it answers that one
+  ```sh
+  a=; a+=(2); echo "[${a[*]}] n=${#a[@]}"
+  ```
+- `core/appending-an-array-literal-to-an-unset-name` — the other half of the pair: a name holding nothing has nothing to keep, so the literal's words are the whole array and the count is one. It is the row a fix is likeliest to break, because the natural way to keep a scalar reads the name and puts whatever came back in front of the words -- and for an unset name that is an empty string nobody asked for
+  ```sh
+  unset a; a+=(2); echo "[${a[*]}] n=${#a[@]}"
+  ```
+- `core/appending-an-array-literal-to-a-scalar-holding-a-space` — the kept value is one element however many words it looks like -- `[x y][2]`, not `[x][y][2]`. The elements are printed one to a bracket rather than joined, because the joined form is `x y 2` under either reading and would record nothing. It is the specific wrong turn a fix takes by handing the old value back through the same field splitting the literal's own words go through
+  ```sh
+  a="x y"; a+=(2); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `core/appending-an-empty-array-literal-to-a-scalar` — an append with no words still promotes: bash 5.3.15, bash 3.2.57, bash as sh and zsh 5.9.2 all leave the one element the name was already holding. ksh93 is the divergence and it is about the empty parentheses rather than about the scalar -- it reads `()` as a compound-variable literal and lists `typeset -C a=()` for an unset name too, so it says nothing either way about what a scalar on the left is worth. Recorded because it is the shape where a promotion that happened only when there were words to add would be invisible
+  ```sh
+  a=1; a+=(); echo "[${a[*]}] n=${#a[@]}"
   ```
 - `core/array-star-joins` — `[*]` is one field with the elements joined by the first character of IFS where `[@]` is one field each — the same difference `$*` has from `$@`
   ```sh

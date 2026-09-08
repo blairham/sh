@@ -120,7 +120,19 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		r.expandErr = true
 		return nil, false, false, false
 	}
-	for _, c := range e.Flags {
+	// Whether the group asks for minimal quoting is answered by the same pass
+	// that refuses what this slice does not carry, rather than by a second
+	// walk further down: a `-` is the minimal-quoting modifier or it is the
+	// sort flag, and one reading has to decide both questions or they can
+	// come apart.
+	minimal := false
+	for i, c := range e.Flags {
+		if c == '-' && minimalQuoteModifier(e.Flags, i) {
+			// The `-` a `q` in front of it ate. See interp/minimalquote.go
+			// for how it is told apart from the sort flag spelled the same.
+			minimal = true
+			continue
+		}
 		if !r.paramFlagCarried(c) {
 			r.diagf("${%s}: the (%c) expansion flag is not implemented\n", e.Src, c)
 			r.expandErr = true
@@ -132,7 +144,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// The compositions it cannot are named rather than carried — see
 	// interp/tildeflaggroup.go for the measurement behind each.
 	markJoin := tildeMarksJoinSep(e)
-	if why, refuse := tildeMarkRefusal(e, markJoin, splitFlagInGroup(e, sp)); refuse {
+	if why, refuse := tildeMarkRefusal(e, markJoin, splitFlagInGroup(e, sp), minimal); refuse {
 		r.diagf("${%s}: the (~) expansion flag is not implemented %s\n", e.Src, why)
 		r.expandErr = true
 		return nil, false, false, false
@@ -281,7 +293,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	}
 	if n := strings.Count(e.Flags, "q"); n > 0 {
 		for i, w := range words {
-			words[i] = quoteFlagged(w, n)
+			words[i] = quoteFlagged(w, n, minimal)
 		}
 	}
 	// Rule 14's other half: `Q` takes one level of quoting *off*. The manual
@@ -918,8 +930,14 @@ func (r *Runner) promptUnitName() string {
 }
 
 // quoteFlagged is the `q` family, one style per count — all measured:
-// backslashes, then single quotes, double quotes, and `$'…'`.
-func quoteFlagged(v string, count int) string {
+// backslashes, then single quotes, double quotes, and `$'…'` — with the
+// minimal style of `q-` reached through the same door rather than beside it,
+// so that a caller cannot pick the count and forget the modifier. See
+// interp/minimalquote.go.
+func quoteFlagged(v string, count int, minimal bool) string {
+	if minimal {
+		return quoteMinimal(v)
+	}
 	switch count {
 	case 1:
 		return quoteWithBackslashes(v)
@@ -939,7 +957,7 @@ func quoteFlagged(v string, count int) string {
 	default:
 		var b strings.Builder
 		b.WriteString("$'")
-		eachQuotableByte(v, func(c byte) {
+		eachQuotableByte(v, func(_ int, c byte) {
 			switch {
 			case c == '\'':
 				b.WriteString(`\'`)
@@ -952,7 +970,7 @@ func quoteFlagged(v string, count int) string {
 			default:
 				b.WriteByte(c)
 			}
-		}, func(raw string) { b.WriteString(raw) })
+		}, func(_ int, raw string) { b.WriteString(raw) })
 		b.WriteString("'")
 		return b.String()
 	}
@@ -961,25 +979,32 @@ func quoteFlagged(v string, count int) string {
 // quoteWithBackslashes is the single-`q` style: the characters the shell
 // gives meaning to are escaped, each control or non-UTF-8 byte becomes its
 // own `$'…'` segment, and an empty value is `”` — every detail measured.
+//
+// Which characters those are is the table in interp/minimalquote.go, shared
+// with `q-` and reached by the `:q` modifier through this function, because
+// the question all three ask is the same one and a second copy of the answer
+// is how two of them come to disagree. The table is where the two start-only
+// specials live: measured, `${(q)…}` on `a~b` is `a~b` and on `~x` is `\~x`.
 func quoteWithBackslashes(v string) string {
 	if v == "" {
 		return "''"
 	}
-	const specials = " `$\"'\\*?[](){}<>|;&~#^="
 	var b strings.Builder
-	eachQuotableByte(v, func(c byte) {
+	eachQuotableByte(v, func(i int, c byte) {
 		switch {
 		case c < 0x20 || c >= 0x7f:
 			// Control bytes and bytes that are not UTF-8 alike — measured,
-			// `$'\177'` and `$'\377'`.
+			// `$'\177'` and `$'\377'`. Ahead of the table on purpose: a tab
+			// and a newline are in it, and here they are `$'\t'` and `$'\n'`
+			// rather than a backslash and a raw byte.
 			b.WriteString("$'" + controlEscape(c) + "'")
-		case strings.IndexByte(specials, c) >= 0:
+		case quotableByte(i, c):
 			b.WriteByte('\\')
 			b.WriteByte(c)
 		default:
 			b.WriteByte(c)
 		}
-	}, func(raw string) { b.WriteString(raw) })
+	}, func(_ int, raw string) { b.WriteString(raw) })
 	return b.String()
 }
 
@@ -987,20 +1012,23 @@ func quoteWithBackslashes(v string) string {
 // that is not part of a valid multibyte rune — to one function and whole
 // multibyte runes to the other, because quoting escapes bytes while UTF-8
 // passes through untouched.
-func eachQuotableByte(v string, one func(byte), run func(string)) {
+//
+// Both are given the offset the piece starts at, because two of the bytes
+// that need quoting need it only at offset 0.
+func eachQuotableByte(v string, one func(i int, c byte), run func(i int, s string)) {
 	for i := 0; i < len(v); {
 		if v[i] < utf8.RuneSelf {
-			one(v[i])
+			one(i, v[i])
 			i++
 			continue
 		}
 		c, size := utf8.DecodeRuneInString(v[i:])
 		if c == utf8.RuneError && size == 1 {
-			one(v[i])
+			one(i, v[i])
 			i++
 			continue
 		}
-		run(v[i : i+size])
+		run(i, v[i:i+size])
 		i += size
 	}
 }

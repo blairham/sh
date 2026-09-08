@@ -142,6 +142,17 @@ func TestADescriptorThatBecomesReadableCallsTheShell(t *testing.T) {
 	if got := p.sawLine(); got.Buffer != "x" || got.Cursor != 1 {
 		t.Errorf("line = %#v, want the half-typed x with the cursor after it", got)
 	}
+	// And **nothing was drawn**. Measured: a callback that does not ask for
+	// the line back leaves the screen exactly as it was, with a half-typed
+	// line sitting behind whatever the callback printed for itself. A shell
+	// that redrew here would put the prompt and the line underneath its own
+	// output every time a descriptor woke, which on a chatty one is a prompt
+	// scrolling up the screen on its own.
+	before := s.screen.String()
+	time.Sleep(150 * time.Millisecond)
+	if after := s.screen.String(); after != before {
+		t.Errorf("the screen gained %q after a callback that changed nothing", after[len(before):])
+	}
 	p.disarm()
 	// And the session is still a session: the half-typed line is killed and a
 	// command typed in its place runs. Typed directly rather than through
@@ -280,14 +291,22 @@ func TestAHandlerThatDisarmsItselfIsCalledOnce(t *testing.T) {
 // question is asked, or a plugin's second watcher silently stops working
 // because its first one's descriptor was closed.
 func TestOneDeadDescriptorDoesNotCostTheLiveOneItsTurn(t *testing.T) {
-	// The live pipe first and the dead one after it, so that closing the dead
-	// one frees a number the live one is not sitting on: a test in which the
-	// two are the same descriptor proves nothing.
 	read, write, perr := os.Pipe()
 	if perr != nil {
 		t.Fatal(perr)
 	}
 	t.Cleanup(func() { _ = read.Close(); _ = write.Close() })
+
+	p := &descriptorProbe{drain: read}
+	s := probeSession(t, p)
+	s.prompt++
+	waitFor(t, s.screen, "[1]", "the first prompt")
+
+	// The dead descriptor is made *last*, after everything else this test
+	// opens — the session's terminal above all. A number freed earlier is the
+	// next number handed out, so a pipe closed before the pty was opened
+	// leaves this watching the pty and proving nothing; that is how this test
+	// passed against a shell with no liveness filter at all.
 	dead, deadWrite, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -295,17 +314,12 @@ func TestOneDeadDescriptorDoesNotCostTheLiveOneItsTurn(t *testing.T) {
 	deadFd := int(dead.Fd())
 	_ = dead.Close()
 	_ = deadWrite.Close()
-	if live := int(read.Fd()); deadFd == live {
+	live := int(read.Fd())
+	if deadFd == live {
 		t.Fatalf("the dead and the live descriptor are both %d", live)
 	}
-
-	p := &descriptorProbe{drain: read}
-	s := probeSession(t, p)
-	s.prompt++
-	waitFor(t, s.screen, "[1]", "the first prompt")
 	// The dead one first, so it is the one the kernel would complain about.
 	p.arm(deadFd)
-	live := int(read.Fd())
 	p.arm(live)
 	if _, werr := s.control.WriteString("y"); werr != nil {
 		t.Fatal(werr)

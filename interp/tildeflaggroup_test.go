@@ -247,6 +247,17 @@ func TestTheTildeGroupFlagIsRefusedWhereItCannotBeCarried(t *testing.T) {
 			"testsh: ${(~qqj.|.)d}: the (~) expansion flag is not implemented beside the (qq) flag\n",
 		},
 		{
+			// Minimal quoting wraps a whole word, so it is in that family
+			// despite being spelled with a single `q` — measured,
+			// `${(~q-j.|.)d}` is `'a b|c'`, one pair of quotes round the
+			// join, where quoting each word on its own gives `'a b'|c`. The
+			// row exists because the count is what names the others, and a
+			// count of one is exactly what this group has.
+			"and so does the minimal quoting, on one q",
+			`d=('a b' c); printf "[%s]" "${(~q-j.|.)d}"`,
+			"testsh: ${(~q-j.|.)d}: the (~) expansion flag is not implemented beside the (q-) flag\n",
+		},
+		{
 			"and the unquoting takes a level off the join",
 			`k=("'a" "b'"); printf "[%s]" "${(~Qj.|.)k}"`,
 			"testsh: ${(~Qj.|.)k}: the (~) expansion flag is not implemented beside the (Q) flag\n",

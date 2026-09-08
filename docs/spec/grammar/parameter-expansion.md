@@ -1544,11 +1544,15 @@ different one where it does not:
 | `c=(x a); ${(~oj.\|.)c}` | `x\|a` | agrees — the sort has one word |
 | `e=(p p q); ${(~uj.\|.)e}` | `p\|p\|q` | agrees, for the same reason |
 | `${(~qqj.\|.)d}` | `'a b\|c'` | **differs** — `'a b'\|'c'` |
+| `${(~q-j.\|.)d}` | `'a b\|c'` | **differs** — `'a b'\|c` |
 | `k=("'a" "b'"); ${(~Qj.\|.)k}` | `a\|b` | **differs** |
 
-So the join is performed in front of the ordering step, and the three
-flags whose step is not a per-character rewrite are refused rather than
-held back through. `${(oj.|.)c}` and `${(uj.|.)e}` without the tilde are
+So the join is performed in front of the ordering step, and the flags
+whose step is not a per-character rewrite are refused rather than held
+back through. `(q-)` is one of them and is the one the count does not
+catch: it is spelled with a single `q`, like the `(q)` two rows above that
+*is* carried, and it wraps a whole word where that one rewrites
+characters. `${(oj.|.)c}` and `${(uj.|.)e}` without the tilde are
 `x|a` and `p|p|q` too — the sort and the dedup have one word either way.
 
 **What this implementation does not carry.** The marked separator is
@@ -1557,15 +1561,18 @@ escape would have to read the joined text back:
 
 * `${(~j.|.)a:-z}` — `the (~) expansion flag is not implemented beside an
   operator`. Every operator, because the operator runs in front of the
-  three steps the join is held back past.
+  steps the join is held back past.
 * `${(~fj.|.)a}`, `${(~j.|.)=a}` — `… beside a split`, which takes the
   separator out again.
-* `${(~qqj.|.)d}`, `${(~Qj.|.)k}`, `${(~%j.|.)m}` — `… beside the (qq)
-  flag`, and the same for `(Q)` and `(%)`. These are the steps the table
-  above says a held-back join cannot reproduce: one pair of quotes round
-  the join is not one pair round each word, and one level taken off the
-  join is not one level off each word. A single `(q)` is a per-character
-  rewrite and is carried.
+* `${(~qqj.|.)d}`, `${(~q-j.|.)d}`, `${(~Qj.|.)k}`, `${(~%j.|.)m}` — `…
+  beside the (qq) flag`, and the same for `(q-)`, `(Q)` and `(%)`. These
+  are the steps the table above says a held-back join cannot reproduce:
+  one pair of quotes round the join is not one pair round each word, and
+  one level taken off the join is not one level off each word. A single
+  `(q)` is a per-character rewrite and is carried — which is why `(q-)`
+  has to be named separately rather than left to the count of `q`
+  characters, being the one member of the family that has a single `q` and
+  is not per-character.
 * `${(~s.-.)v}` — `… for the (s) separator`. A marked split separator does
   not split on a pattern; it stops matching at all as soon as it holds a
   character the shell marks, and which characters those are is neither the

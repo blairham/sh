@@ -46,6 +46,10 @@ func TestTheMinimalQuotingFlag(t *testing.T) {
 		// be written bare, since bare it is no word at all.
 		{"an empty value is a pair of quotes", `v=""; printf "[%s]" "${(q-)v}"`, "['']"},
 		{"and an empty element of an array is too", `a=(x "" y); printf "[%s]" "${(@q-)a}"`, "[x][''][y]"},
+		// The join runs first and the quoting wraps what it produced, which
+		// is the contrast the `(~)` refusal is about: one pair of quotes
+		// round the whole join and not one pair per element.
+		{"a join is quoted once, not per element", `d=('a b' c); printf "[%s]" "${(q-j.|.)d}"`, "['a b|c']"},
 		// Whitespace: a tab and a newline go inside the quotes as themselves,
 		// where `q` spells them `$'\t'` and `$'\n'`.
 		{"a tab is quoted, not escaped", "v=$'a\\tb'; printf \"[%s][%s]\" \"${(q)v}\" \"${(q-)v}\"", "[a$'\\t'b]['a\tb']"},

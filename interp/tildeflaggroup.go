@@ -205,14 +205,18 @@ func (r *Runner) markedSeparatorPattern(s syntax.Span) (text string, live, ok bo
 //     past: `${(~j.|.)a#p}` would have to trim a pattern out of text that has
 //     not been joined yet, and where the expansion is quoted, out of text
 //     that has.
-//   - `(qq)` and up, `(Q)` and `(%)` — the three steps that are not a
-//     per-character rewrite. A single `(q)` is one, and is carried.
+//   - `(qq)` and up, `(q-)`, `(Q)` and `(%)` — the steps that are not a
+//     per-character rewrite. A single `(q)` is one, and is carried; `(q-)`
+//     is not one despite being spelled with a single `q`, because it wraps
+//     a whole word rather than rewriting its characters. Measured with the
+//     same `d`, `${(~q-j.|.)d}` is `'a b|c'` — one pair of quotes round the
+//     join — where quoting each word on its own gives `'a b'|c`.
 //
 // Named rather than answered wrongly at status 0, which is this file's whole
 // convention: a `(~)` read as a no-op turns a plugin manager's alternation
 // into one long literal, and that is a name sent to the wrong loader rather
 // than a line that fails.
-func tildeMarkRefusal(e *syntax.ParamExpr, markJoin, ifsSplit bool) (string, bool) {
+func tildeMarkRefusal(e *syntax.ParamExpr, markJoin, ifsSplit, minimal bool) (string, bool) {
 	if tildeMarksSplitSep(e) {
 		return "for the (s) separator", true
 	}
@@ -224,6 +228,11 @@ func tildeMarkRefusal(e *syntax.ParamExpr, markJoin, ifsSplit bool) (string, boo
 	}
 	if e.Op != syntax.ParamNone {
 		return "beside an operator", true
+	}
+	if minimal {
+		// Ahead of the count, because a group spelling minimal quoting has
+		// exactly one `q` and would otherwise fall through to being carried.
+		return "beside the (q-) flag", true
 	}
 	if n := strings.Count(e.Flags, "q"); n > 1 {
 		return "beside the (" + strings.Repeat("q", n) + ") flag", true

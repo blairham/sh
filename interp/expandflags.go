@@ -144,7 +144,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// The compositions it cannot are named rather than carried — see
 	// interp/tildeflaggroup.go for the measurement behind each.
 	markJoin := tildeMarksJoinSep(e)
-	if why, refuse := tildeMarkRefusal(e, markJoin, splitFlagInGroup(e, sp)); refuse {
+	if why, refuse := tildeMarkRefusal(e, markJoin, splitFlagInGroup(e, sp), minimal); refuse {
 		r.diagf("${%s}: the (~) expansion flag is not implemented %s\n", e.Src, why)
 		r.expandErr = true
 		return nil, false, false, false

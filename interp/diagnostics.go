@@ -1603,6 +1603,23 @@ type Diagnostics struct {
 	// bare name and ".: cannot open path: …" for a path, where bash, ksh93 and
 	// zsh use one message for both. Empty means "the same as DotCannotOpen".
 	DotNotFound string
+	// DotIsADirectory is what `.` says when the operand names a **directory**,
+	// for a dialect that answers DotDirectoryOperandIsAnError yes and does not
+	// reuse DotCannotOpen for it.
+	//
+	// Three verbs rather than two, because bash names the builtin here and
+	// names it nowhere else on this builtin: measured 2026-09-08, `. ./` is
+	// `.: ./: is a directory` and `source ./` is `source: ./: is a directory`,
+	// where the same bash reports a path that is not there as plain
+	// `./nope.sh: No such file or directory` through DotCannotOpen for both
+	// spellings. So %[1]s is the operand as written, %[2]s the reason, and
+	// %[3]s the builtin as it was invoked.
+	//
+	// Empty means "the same as DotCannotOpen", which is what ksh93 wants: it
+	// says `.: ./: cannot open [Is a directory]`, the one sentence it uses for
+	// every failure, with the reason filling the bracket. The two shells that
+	// call a directory no error at all never reach this.
+	DotIsADirectory string
 	// DotCannotOpenStatus is the status that carries when the failure is not
 	// fatal: bash says 1 and zsh says 127. dash and ksh93 end the script
 	// instead, so this never speaks for them.

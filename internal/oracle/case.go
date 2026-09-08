@@ -5217,6 +5217,40 @@ echo "st=$?"`,
 		Snippet: `a=(1 2 3); a[2,3/0]=(x y); echo "st=$?"; echo "n=${#a[@]}"`,
 		Why:     "an end that fails to evaluate is blamed as arithmetic and ends the script — the same complaint the identical text inside `$(( ))` makes, and the same one a single bad subscript makes. It matters that the range reading does not swallow it: a pair resolved half-way and spliced anyway would write somewhere plausible at status 0, which is the shape every other row here exists to rule out",
 	},
+	// --- what a failed expansion costs an array literal ----------------
+	//
+	// The element list is a *heading*: it is expanded before the assignment
+	// decides what to store, so a failure in it costs the store rather than
+	// one element of it. Every row here is inside `eval`, because the shell
+	// that calls an unmatched pattern an error ends the script over one — and
+	// a script that has stopped cannot be asked what its variable is holding.
+	// The `eval` is what makes the aftermath observable without changing the
+	// rule being measured; `after` on the end says which shells came back.
+	{
+		ID: "array/an-unmatched-pattern-abandons-the-whole-assignment", Category: "expansion",
+		Snippet: `reply=(keep); eval "reply=(zzznomatch*)"; echo "st=$? [${reply[*]}] n=${#reply[@]}"; echo after`,
+		Why:     "the shell that calls an unmatched pattern an error abandons the assignment with it: zsh reports `no matches found` and `reply` is still `[keep]`, where the three that pass a pattern through store the pattern and say nothing. We reported the miss **and then made the assignment anyway**, leaving the unexpanded `zzznomatch*` standing where the words should have been — a report-then-do-it-anyway that `~/.zi/bin/zi.zsh` then handed to `.` four times in one real startup (#1568). Both readings print one element, so the row is graded on *which* element: `[keep]` against `[zzznomatch*]`, at the same count",
+	},
+	{
+		ID: "array/an-unmatched-pattern-creates-no-name", Category: "expansion",
+		Snippet: `eval "reply=(zzznomatch*)"; echo "st=$? n=${#reply[@]}"; echo after`,
+		Why:     "the same rule from the other starting state, and the half a fix reaches by keeping the old value: a name that had none stays unset, so zsh answers `n=0` and `typeset -p reply` there is `no such variable`. A fix that abandoned the *store* but had already created the name would answer this row `n=0` too if it created it empty and `n=1` if it created it from the pattern, which is why the row above is written with a value to keep and this one without",
+	},
+	{
+		ID: "array/one-unmatched-element-abandons-them-all", Category: "expansion",
+		Snippet: `: > m1.sh; reply=(keep); eval "reply=(m1.sh zzznomatch* m1.sh)"; echo "st=$? [${reply[*]}] n=${#reply[@]}"; echo after`,
+		Why:     "the distinguishing question, and the one a printed value alone cannot answer: is the *whole* assignment abandoned or only the failing element? zsh leaves `[keep]` at one element, so it is the whole of it — the two elements that expanded perfectly well are dropped along with the one that did not. Ours kept the elements up to the failure and dropped the rest, which is a third answer no column gives",
+	},
+	{
+		ID: "array/a-division-by-zero-abandons-the-assignment", Category: "expansion",
+		Snippet: `reply=(keep); eval 'reply=(a $((1/0)) b)'; echo "st=$? [${reply[*]}] n=${#reply[@]}"; echo after`,
+		Why:     "the same rule reached without a pattern, which is what says it belongs to the store rather than to the matcher: bash, ksh93 and zsh all report the division and all three leave `reply` holding `[keep]` at status 1. We stored `[a b]` — the words that *did* expand — and reported **status 0**, so the shell answered with a value it had just said it could not compute and called it success. It is the sharper row of the pair, because the status is wrong as well as the value",
+	},
+	{
+		ID: "array/an-unset-name-under-nounset-abandons-the-assignment", Category: "expansion",
+		Snippet: `set -u; reply=(keep); eval 'reply=(a $NOPEVAR b)'; echo "st=$? [${reply[*]}] n=${#reply[@]}"; echo after`,
+		Why:     "the third route into the same store, recorded because one of the three not abandoning would say the check sits at the wrong level rather than being missing once. ksh93 and zsh report the parameter and keep `[keep]`; the three bashes end the shell over it and never reach the `echo`, which is the ordinary `set -u` split and not a disagreement about the assignment",
+	},
 	{
 		ID: "assoc/unsetting-at-is-a-key-and-not-every-element", Category: "expansion",
 		Snippet: `typeset -A m; m[k]=v; m[j]=w; unset "m[@]"; echo "n=${#m[@]}"`,
@@ -8113,6 +8147,26 @@ echo unreachable`,
 		Why:     "the other half of the POSIX fatal rule, and the panel splits differently than for eval: dash and ksh93 end the script, bash reports 1 and zsh 127",
 	},
 	{
+		ID: "dot/a-directory-operand-diverges", Category: "eval and dot",
+		Snippet: `. ./ ; echo REACHED st=$?`,
+		Why:     "three answers to a directory where the file goes, and none of them was ours. zsh and dash open it, read no commands out of it and report success in silence; the three bashes say `.: ./: is a directory` at 1 and carry on; ksh93 says `.: ./: cannot open [Is a directory]` and ends the script. We said `no such file or directory: ./` at **127** in every dialect — a fourth answer, and 127 is the tell, because it is the status that says the path was never opened at all for a path that plainly exists (#1577). Whether a directory is an error is the axis; how far the error reaches is the one `dot/missing-file-diverges` already records",
+	},
+	{
+		ID: "dot/a-directory-operand-that-is-no-error-runs-nothing", Category: "eval and dot",
+		Snippet: `false; . ./ ; echo st=$?`,
+		Why:     "the two shells that call this success report **0** rather than the status that was already there, which is the empty-file rule and not a no-op: `dot/empty-file-clears-the-status` is the same answer for a file with nothing in it. Recorded apart from the row above because a fix that returned early without touching the status would pass that one and answer this one `1`",
+	},
+	{
+		ID: "dot/a-directory-operand-under-source", Category: "eval and dot",
+		Snippet: `source ./ ; echo REACHED st=$?`,
+		Why:     "the same operand through the other spelling, and the one place bash names the builtin in this builtin's diagnostics: `source: ./: is a directory` where `. ./` is `.: ./: is a directory`, against a path that is simply not there, which is `./nope.sh: No such file or directory` for both spellings. ksh93 says `.` either way. dash has no `source` at all, so its answer is about the word and not about the operand",
+	},
+	{
+		ID: "dot/a-named-directory-operand", Category: "eval and dot",
+		Snippet: `mkdir -p sdir; . ./sdir; echo REACHED st=$?`,
+		Why:     "the same rule without the trailing slash, so the answer cannot be coming from the spelling of the operand. It is the row that says a directory is recognized by what it *is* rather than by ending in `/`, which is the plausible cheap fix and would answer the row above correctly and this one wrongly",
+	},
+	{
 		ID: "dot/no-operand-diverges", Category: "eval and dot",
 		Snippet: `. ; echo REACHED st=$?`,
 		Why:     "four answers to one degenerate input: dash calls it success and does nothing, bash reports 2 and survives, ksh93 reports 2 and exits, zsh reports 1 and survives",
@@ -9736,6 +9790,11 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		ID: "select/is-not-in-dash", Category: "select", SyntaxError: false,
 		Snippet: `select x in a; do :; done`,
 		Why:     "dash has no `select`, so the word is ordinary and the `do` after it has nothing to open — the grammar flag is what the other three turn on",
+	},
+	{
+		ID: "select/an-unmatched-pattern-in-the-list-draws-no-menu", Category: "select",
+		Snippet: `select x in zzznomatch*; do :; done </dev/null; echo "st=$? after"`,
+		Why:     "the menu loop's list is a heading like the `for` list beside it, and a word the shell has refused costs the whole construct: zsh reports `no matches found` and ends the script without drawing anything. We printed the same sentence and then drew a numbered menu offering the unmatched pattern as a choice, so a script reading the answer back got the literal `zzznomatch*` as though it were a filename (#1176). The `for` spelling already abandoned, which is what made this the reader's caller rather than the reader",
 	},
 	{
 		ID: "set/o-at-the-end-of-a-bundle", Category: "pipeline status",

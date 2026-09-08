@@ -3305,23 +3305,46 @@ func (r *Runner) beginHeading() {
 // failedHeading reports whether expanding a compound command's heading
 // failed, having ended what the dialect says such a failure ends.
 //
-// The heading is the `for` word list, the `select` menu, the `case` subject
-// and the parts of an arithmetic `for` — everything expanded *before* the
-// construct decides what to run. It is a separate call from the simple
-// command's because it guards a different thing: there, a failure means the
-// command does not run; here it means the loop must not iterate and the
-// `case` must not choose an arm.
+// The heading is the `for` word list, the `select` menu, the `case` subject,
+// a `case` pattern, the parts of an arithmetic `for` and an array literal's
+// element list — everything expanded *before* the construct decides what to
+// run or what to store. It is a separate call from the simple command's
+// because it guards a different thing: there, a failure means the command
+// does not run; here it means the loop must not iterate, the `case` must not
+// choose an arm and the assignment must not be made.
 //
 // Not choosing is the half that matters most. A subject that failed expands
 // to empty, and empty *matches* — measured, `case "$((1/0))" in "") echo E;;
 // *) echo A;; esac` reported the division and then ran the `""` arm, so the
 // shell picked a branch from a value it had just said it could not compute,
 // and exited 0 (#1215).
+//
+// Three questions, and the third of them used to be written outside this
+// function at each site that remembered it. A heading can fail three ways: an
+// axis no dialect answered, an expansion that reported through the flags, and
+// an expansion that raised a **fatal error of its own** — an unmatched
+// pattern where the dialect calls that an error — which reports through r.ctl
+// and sets neither flag. The `case` subject and the `case` pattern each
+// carried their own `|| r.ctl != controlNone` beside the call; the `select`
+// menu and the array literal did not, and each was a report-then-do-it-anyway
+// bug of its own: the menu was drawn from a word list the shell had refused
+// (#1176) and the assignment was made from it (#1568). One clause, inside,
+// rather than a fourth and fifth copy of it outside.
+//
+// The order is what keeps a failure from being reported twice. r.ctl is
+// consulted before r.expandErr, so a heading that has already unwound is not
+// sent through failedExpansion a second time to have its status rewritten.
 func (r *Runner) failedHeading() bool {
 	if r.unspecified {
 		// An axis no dialect answered, already reported where it was asked.
 		// The construct does not run, and the status is the one ask left.
 		r.status = 2
+		return true
+	}
+	if r.ctl != controlNone {
+		// The heading raised a fatal error of its own, or the script is
+		// being abandoned for a reason of its own. Either way the construct
+		// does not run and the status it set stands.
 		return true
 	}
 	if !r.expandErr {

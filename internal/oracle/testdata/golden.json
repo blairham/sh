@@ -4866,6 +4866,50 @@
         "TimedOut": false
       }
     },
+    "array/a-division-by-zero-abandons-the-assignment": {
+      "bash": {
+        "Stdout": "st=1 [keep] n=1~after",
+        "Stderr": "\u003cshell\u003e: line 1: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1/0: division by 0 (error token is \"0\")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 [keep] n=1~after",
+        "Stderr": "\u003cshell\u003e: 1/0: division by 0 (error token is \"0\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 [keep] n=1~after",
+        "Stderr": "\u003cshell\u003e: eval: line 1: 1/0: divide by zero",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 [keep] n=1~after",
+        "Stderr": "(eval):1: division by zero",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/a-length-through-a-subscript-that-will-not-evaluate": {
       "bash": {
         "Stdout": "",
@@ -8518,6 +8562,94 @@
         "TimedOut": false
       }
     },
+    "array/an-unmatched-pattern-abandons-the-whole-assignment": {
+      "bash": {
+        "Stdout": "st=0 [zzznomatch*] n=1~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 [zzznomatch*] n=1~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0 [zzznomatch*] n=1~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 [zzznomatch*] n=1~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 [keep] n=1~after",
+        "Stderr": "(eval):1: no matches found: zzznomatch*",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/an-unmatched-pattern-creates-no-name": {
+      "bash": {
+        "Stdout": "st=0 n=1~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 n=1~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0 n=1~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: eval: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 n=1~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 n=0~after",
+        "Stderr": "(eval):1: no matches found: zzznomatch*",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/an-unquoted-gap-is-no-field": {
       "bash": {
         "Stdout": "n=2",
@@ -8601,6 +8733,50 @@
       "zsh": {
         "Stdout": "[]",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/an-unset-name-under-nounset-abandons-the-assignment": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: NOPEVAR: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: NOPEVAR: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: NOPEVAR: unbound variable",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 [keep] n=1~after",
+        "Stderr": "\u003cshell\u003e: eval: line 1: NOPEVAR: parameter not set",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 [keep] n=1~after",
+        "Stderr": "(eval):1: NOPEVAR: parameter not set",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -9217,6 +9393,50 @@
       "zsh": {
         "Stdout": "[y]~[x][y] n=2",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/one-unmatched-element-abandons-them-all": {
+      "bash": {
+        "Stdout": "st=0 [m1.sh zzznomatch* m1.sh] n=3~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 [m1.sh zzznomatch* m1.sh] n=3~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0 [m1.sh zzznomatch* m1.sh] n=3~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 [m1.sh zzznomatch* m1.sh] n=3~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 [keep] n=1~after",
+        "Stderr": "(eval):1: no matches found: zzznomatch*",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -37735,6 +37955,138 @@
         "TimedOut": false
       }
     },
+    "dot/a-directory-operand-diverges": {
+      "bash": {
+        "Stdout": "REACHED st=1",
+        "Stderr": "\u003cshell\u003e: line 1: .: ./: is a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "REACHED st=1",
+        "Stderr": "\u003cshell\u003e: line 1: .: ./: is a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "REACHED st=1",
+        "Stderr": "\u003cshell\u003e: line 0: .: ./: is a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "REACHED st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: .: ./: cannot open [Is a directory]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "REACHED st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dot/a-directory-operand-that-is-no-error-runs-nothing": {
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: .: ./: is a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 1: .: ./: is a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 0: .: ./: is a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: .: ./: cannot open [Is a directory]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dot/a-directory-operand-under-source": {
+      "bash": {
+        "Stdout": "REACHED st=1",
+        "Stderr": "\u003cshell\u003e: line 1: source: ./: is a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "REACHED st=1",
+        "Stderr": "\u003cshell\u003e: line 1: source: ./: is a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "REACHED st=1",
+        "Stderr": "\u003cshell\u003e: line 0: source: ./: is a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "REACHED st=127",
+        "Stderr": "\u003cshell\u003e: 1: source: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "REACHED st=1",
+        "Stderr": "\u003cshell\u003e: .: ./: cannot open [Is a directory]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "REACHED st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "dot/a-given-up-statement-takes-the-rest-of-its-line": {
       "bash": {
         "Stdout": "IN-BEFORE~NEXT-LINE~OUT-AFTER st=0",
@@ -37774,6 +38126,50 @@
       "zsh": {
         "Stdout": "IN-BEFORE~OUT-AFTER st=126",
         "Stderr": "./p.sh:3: read-only variable: rr",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "dot/a-named-directory-operand": {
+      "bash": {
+        "Stdout": "REACHED st=1",
+        "Stderr": "\u003cshell\u003e: line 1: .: ./sdir: is a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "REACHED st=1",
+        "Stderr": "\u003cshell\u003e: line 1: .: ./sdir: is a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "REACHED st=1",
+        "Stderr": "\u003cshell\u003e: line 0: .: ./sdir: is a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "REACHED st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: .: ./sdir: cannot open [Is a directory]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "REACHED st=0",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -93398,6 +93794,50 @@
         "Stdout": "n=2~1=echo early~2=echo late",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "select/an-unmatched-pattern-in-the-list-draws-no-menu": {
+      "bash": {
+        "Stdout": "~st=1 after",
+        "Stderr": "1) zzznomatch*~#? ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "~st=1 after",
+        "Stderr": "1) zzznomatch*~#? ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "~st=1 after",
+        "Stderr": "1) zzznomatch*~#? ",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 after",
+        "Stderr": "1) zzznomatch*",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: no matches found: zzznomatch*",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

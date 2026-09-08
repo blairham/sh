@@ -444,15 +444,15 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 		// silently, status 0.
 		r.beginHeading()
 		subject := strings.Join(r.expandWordNoSplit(c.Word), "")
-		if r.failedHeading() || r.ctl != controlNone {
+		if r.failedHeading() {
 			// Before any arm is tested, because a subject that failed is
 			// empty and empty *matches*: the `""` arm fired and the shell
 			// chose a branch from a value it could not compute (#1215).
 			//
-			// And before `r.status = 0`, which is what the second half of
-			// the condition is for: a subject that raised a fatal error of
-			// its own reports through r.ctl rather than through the flags
-			// failedHeading reads, so `set -u; case ${NOPEV} in …` fell
+			// And before `r.status = 0`, which is what the r.ctl clause
+			// inside failedHeading is for: a subject that raised a fatal
+			// error of its own reports through r.ctl rather than through the
+			// flags it reads, so `set -u; case ${NOPEV} in …` fell
 			// through to the zeroing below and reported **success** for a
 			// script that had stopped — where bash, ksh93 and zsh report 1
 			// and dash 2. The same `${NOPEV}` in a simple command or an
@@ -552,12 +552,10 @@ func (r *Runner) caseItemMatched(item *syntax.CaseItem, subject string) (matched
 	// refused pattern.
 	r.beginHeading()
 	matched = r.caseItemMatches(item, subject)
-	if r.ctl != controlNone {
-		// A pattern the dialect rejects outright, or one whose failure was
-		// fatal on its own. Testing the later items would report it again,
-		// once per item.
-		return matched, false
-	}
+	// A pattern the dialect rejects outright, or one whose failure was fatal
+	// on its own, stops the arms here rather than being reported once per
+	// remaining item. That is the r.ctl clause inside failedHeading, which
+	// used to be written out beside this call and beside the subject's.
 	return matched, !r.failedHeading()
 }
 

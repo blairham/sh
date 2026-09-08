@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -356,6 +357,9 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 		return r.dotFailed(args[0], errRefused)
 	}
 	if err != nil {
+		if code, isDir := r.dotDirectoryOperand(ctx, args[0], path, action, err); isDir {
+			return code
+		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		return r.dotFailed(args[0], err)
 	}
@@ -411,6 +415,64 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	return r.status
 }
 
+// dotDirectoryOperand answers a read that failed because the operand names a
+// directory, and reports whether it was that.
+//
+// The panel splits down the middle here, which is why it is a question rather
+// than an errno: zsh and dash open the directory, read no commands out of it
+// and call that a script that did nothing, while bash and ksh93 call it an
+// error — see Semantics.DotDirectoryOperandIsAnError. We reported `no such
+// file or directory` at 127, an answer no shell gives, and 127 is the tell:
+// it is the status that says the path was never opened, for a path that
+// exists (#1577).
+//
+// Three conditions, and the third is the one that took a measurement to find.
+// The read has to have failed, the path has to be a directory, and the
+// failure must not be the kernel withholding it — because a directory with no
+// read permission is a *permission* failure in every column, not a directory
+// one. Measured 2026-09-08 on a mode-000 directory, `. ./noread/`:
+//
+//	zsh 5.9.2   `permission denied: ./noread/`, status 127
+//	dash        `.: cannot open ./noread/: Permission denied`, and it ends
+//	bash 5.3.15 `./noread/: Permission denied`, status 1
+//	ksh93u+     `.: ./noread/: cannot open [Permission denied]`, and it ends
+//
+// — no column calls that one a directory, including the two that call a
+// readable directory success. Deciding on the stat alone made both of them
+// report success for a directory they could not open at all.
+//
+// After the read rather than before it, so that the gate sees the open the
+// shell actually attempted and the event stream records it once.
+func (r *Runner) dotDirectoryOperand(ctx context.Context, name, path string,
+	action Action, err error,
+) (int, bool) {
+	if errors.Is(err, fs.ErrPermission) {
+		return 0, false
+	}
+	st, serr := r.stat(path)
+	if serr != nil || !st.IsDir() {
+		return 0, false
+	}
+	isError := r.ask(r.sem().DotDirectoryOperandIsAnError,
+		"a directory operand to `.` being an error")
+	switch {
+	case r.unspecified:
+		// Refused by name, before the operand is either sourced or complained
+		// about — the two readings differ in the status and in whether
+		// anything is said at all, so there is no version of carrying on that
+		// is not a guess.
+		return 2, true
+	case !isError:
+		// Opened and read to its end, which yielded no commands. That is an
+		// empty script: status 0 and nothing said. Measured, `false; . ./;
+		// echo $?` is `0` in zsh and dash — the same answer an empty *file*
+		// gets in all six columns — and `. ./ && echo ok` prints `ok` in both.
+		r.emit(ctx, Event{Kind: EventAccess, Action: action})
+		return 0, true
+	}
+	return r.dotFailed(name, errIsADirectory), true
+}
+
 // dotFailed reports a file `.` could not read.
 //
 // A bare name PATH did not have and a path that would not open are the same
@@ -419,10 +481,15 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 // chosen by which it was.
 func (r *Runner) dotFailed(name string, err error) int {
 	format := r.diag().DotCannotOpen
-	if errors.Is(err, errNotOnPath) && r.diag().DotNotFound != "" {
+	switch {
+	case errors.Is(err, errIsADirectory) && r.diag().DotIsADirectory != "":
+		// The one failure bash gives a sentence of its own, and the one it
+		// names the builtin in. See Diagnostics.DotIsADirectory.
+		format = r.diag().DotIsADirectory
+	case errors.Is(err, errNotOnPath) && r.diag().DotNotFound != "":
 		format = r.diag().DotNotFound
 	}
-	r.diagf("%s\n", Wording(format, ".: %[1]s: %[2]s", name, reason(err)))
+	r.diagf("%s\n", Wording(format, ".: %[1]s: %[2]s", name, reason(err), r.inBuiltin))
 	// dash and ksh93 end the script here; bash and zsh report it and go on.
 	if r.ask(r.sem().DotMissingFileFatal, "`.` failing to open a file being fatal") {
 		r.fatalQuiet()
@@ -453,6 +520,13 @@ func reason(err error) string {
 // errNotOnPath is what resolveDotPath returns when no candidate existed. It
 // carries no path because there is no one file to name.
 var errNotOnPath = errors.New("no such file or directory")
+
+// errIsADirectory is a directory operand, in the dialects that call one an
+// error. Written here rather than taken from the read because a read of a
+// directory does not fail with the same errno everywhere one is, and because
+// the wording ksh93 wants — `cannot open [Is a directory]` — is this sentence
+// with reason's capital on it.
+var errIsADirectory = errors.New("is a directory")
 
 // resolveDotPath finds the file `.` should read.
 //

@@ -2137,6 +2137,20 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// fields than there are *names*, and that count is the one the script
 	// wrote — `printf 'X Y Z\n' | { read a 1bad c; }` gives a=X in all six
 	// shells, not the whole line.
+	// Only the -A spelling touches the operands after the array: it took its
+	// name from among them and clears the rest, where bash's -a leaves the
+	// names after its argument exactly as they were — both measured with
+	// `x=keep`.
+	clearRest := strings.Contains(opts, "A")
+	// Whether the array is still filled once an operand behind it turns out
+	// not to be a name. It rides the letter rather than an axis, because the
+	// letters differ and no shell has both: bash's `-a` takes the array's
+	// name in the option's argument and leaves the array untouched —
+	// `read -a arr 1bad` reports the operand and `${arr[@]}` is empty — while
+	// ksh93's `-A` takes it from among the operands and fills it before
+	// refusing the next one, `read -A arr 1bad` leaving arr holding the line.
+	// Both measured 2026-09-07.
+	fillsTheArray := true
 	fill, badName, bad := len(args), "", false
 	for i, name := range args {
 		if r.isReadName(name) {
@@ -2150,7 +2164,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// so that it is asked only when there is a bad name past the first
 		// for it to decide about — the two dialects that have no count that
 		// reaches this leave it unanswered.
-		if i > 0 && count >= 0 && !r.ask(r.sem().ReadCountJudgesTheNamesAfterTheFirst,
+		// `i > 0 || array != ""` rather than `i > 0`: with an array the
+		// first name filled is the array's, so every operand beside it is
+		// already past the first. Measured — `read -A -N 3 arr 1bad b` is
+		// quiet in the shell a count releases, where `read -A arr 1bad b`
+		// is not.
+		if (i > 0 || array != "") && count >= 0 && !r.ask(r.sem().ReadCountJudgesTheNamesAfterTheFirst,
 			"`read` with a count judging the names after the first") {
 			if r.unspecified {
 				return 2
@@ -2163,19 +2182,17 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			break
 		}
 		fill, badName, bad = i, name, true
+		fillsTheArray = clearRest
 		break
 	}
-	// Only the -A spelling touches the operands after the array: it took its
-	// name from among them and clears the rest, where bash's -a leaves the
-	// names after its argument exactly as they were — both measured with
-	// `x=keep`.
-	clearRest := strings.Contains(opts, "A")
 	if exact {
 		// -N hands the text over whole: `read -N 5 x y` on `a b c` puts all
 		// five characters in x and nothing in y, measured in both shells
 		// with the letter.
 		if array != "" {
-			r.setArray(array, exactElems(text))
+			if fillsTheArray {
+				r.setArray(array, exactElems(text))
+			}
 			if clearRest {
 				for _, name := range args[:fill] {
 					r.setVar(name, "")
@@ -2218,7 +2235,9 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
-		r.setArray(array, fields)
+		if fillsTheArray {
+			r.setArray(array, fields)
+		}
 		if clearRest {
 			for _, name := range args[:fill] {
 				r.setVar(name, "")

@@ -363,10 +363,21 @@ func TestAReadOperandWithASubscriptIsNotJudgedAsAName(t *testing.T) {
 
 // Only the first bad name is reported, and the walk stops there. A shell that
 // reported the last would name a word the filling never reached.
+//
+// Both routes to the refusal, because they are different code: the first
+// operand is judged before the read and the rest are judged as they are
+// filled, so `read 1bad 2bad` never reaches the walk at all and
+// `read good 1bad 2bad` is the row that does. Measured — every column that
+// reports names `1bad`, and no column names `2bad`.
 func TestOnlyTheFirstBadReadNameIsReported(t *testing.T) {
-	out, _ := readRun(t, nil, Diagnostics{}, `printf 'X Y\n' | { read 1bad 2bad; echo "st=$?"; }`)
-	if !strings.Contains(out, "`1bad'") || strings.Contains(out, "2bad") {
-		t.Errorf("said %q, want the first bad name alone", out)
+	for _, src := range []string{
+		`printf 'X Y\n' | { read 1bad 2bad; echo "st=$?"; }`,
+		`printf 'X Y Z\n' | { read good 1bad 2bad; echo "st=$? good=[$good]"; }`,
+	} {
+		out, _ := readRun(t, nil, Diagnostics{}, src)
+		if !strings.Contains(out, "`1bad'") || strings.Contains(out, "2bad") {
+			t.Errorf("%s: said %q, want the first bad name alone", src, out)
+		}
 	}
 }
 
@@ -424,5 +435,71 @@ func TestTheReadPromptOperandIsNotWrittenToAPipe(t *testing.T) {
 	}
 	if !strings.Contains(out, "st=0 v=[text]") {
 		t.Errorf("said %q, want the read to have happened all the same", out)
+	}
+}
+
+// The exact count hands the text to the first name and clears the rest, and
+// the clearing stops at a bad name like every other filling: `b=keep;
+// read -N 3 a 1bad b` leaves b as keep in bash and in ksh93 alike, which is
+// the two answers of the count axis agreeing about the *list* while they
+// disagree about the complaint.
+func TestAnExactCountStopsFillingAtABadReadName(t *testing.T) {
+	for _, judges := range []Answer{Yes, No} {
+		out, _ := readRun(t, func(s *Semantics) {
+			s.ReadCountJudgesTheNamesAfterTheFirst = judges
+			s.ReadOptions = "rn:N:"
+		}, Diagnostics{}, `printf 'XYZW\n' | { b=keep; read -N 3 a 1bad b; echo "a=[$a] b=[$b]"; }`)
+		if !strings.Contains(out, "a=[XYZ] b=[keep]") {
+			t.Errorf("judges=%v: said %q, want a=[XYZ] b=[keep]", judges, out)
+		}
+	}
+}
+
+// Whether the array is still filled once an operand behind it is not a name
+// rides the letter rather than an axis, because the letters differ and no
+// shell has both. Measured 2026-09-07 with `b=keep` on the end of each:
+//
+//	bash    read -a arr 1bad b   `1bad' refused, ${arr[@]} empty, b keep
+//	ksh93   read -A arr 1bad b   1bad refused, arr holds the line, b keep
+//
+// The clearing `-A` does to the operands after its array stops at the bad
+// name too, which is what leaves b alone in the second row.
+func TestWhetherAReadArrayIsFilledBehindABadNameRidesTheLetter(t *testing.T) {
+	for _, c := range []struct{ name, letters, src, want string }{
+		{
+			"the option's argument names it",
+			"ra:",
+			`printf 'X Y Z\n' | { b=keep; read -a arr 1bad b; echo "st=$? arr=[${arr[@]}] b=[$b]"; }`,
+			"st=1 arr=[] b=[keep]",
+		},
+		{
+			"an operand names it",
+			"rA",
+			`printf 'X Y Z\n' | { b=keep; read -A arr 1bad b; echo "st=$? arr=[${arr[@]}] b=[$b]"; }`,
+			"st=1 arr=[X Y Z] b=[keep]",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := readRun(t, func(s *Semantics) { s.ReadOptions = c.letters }, Diagnostics{}, c.src)
+			if !strings.Contains(out, c.want) {
+				t.Errorf("said %q, want %q", out, c.want)
+			}
+		})
+	}
+	// An array with no bad operand behind it is filled either way, so the
+	// rule above is about the refusal rather than about the letter alone.
+	out, _ := readRun(t, func(s *Semantics) { s.ReadOptions = "ra:" }, Diagnostics{},
+		`printf 'X Y Z\n' | { read -a arr; echo "st=$? arr=[${arr[@]}]"; }`)
+	if !strings.Contains(out, "st=0 arr=[X Y Z]") {
+		t.Errorf("said %q, want a clean array read to fill it", out)
+	}
+	// And the exact spelling clears past its array the same way, stopping at
+	// the bad name: `read -A -N 3 arr 1bad b` leaves b alone.
+	out, _ = readRun(t, func(s *Semantics) {
+		s.ReadOptions = "rAN:"
+		s.ReadCountJudgesTheNamesAfterTheFirst = No
+	}, Diagnostics{}, `printf 'XYZW\n' | { b=keep; read -A -N 3 arr 1bad b; echo "st=$? arr=[${arr[@]}] b=[$b]"; }`)
+	if !strings.Contains(out, "st=0 arr=[XYZ] b=[keep]") {
+		t.Errorf("said %q, want st=0 arr=[XYZ] b=[keep]", out)
 	}
 }

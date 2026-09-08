@@ -27791,6 +27791,94 @@
         "TimedOut": false
       }
     },
+    "core/dollar-single-caret-and-meta": {
+      "bash": {
+        "Stdout": " [ \\ C - A ] [ \\ C A ] [ \\ C - 1~ ] [ \\ C - ? ] [ \\ M - x ] [ \\ M~ - \\ C - ? ] [ 001 ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " [ \\ C - A ] [ \\ C A ] [ \\ C - 1~ ] [ \\ C - ? ] [ \\ M - x ] [ \\ M~ - \\ C - ? ] [ 001 ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " [ \\ C - A ] [ \\ C A ] [ \\ C - 1~ ] [ \\ C - ? ] [ \\ M - x ] [ \\ M~ - \\ C - ? ] [ 001 ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " [ $ \\ C - A ] [ $ \\ C A ] [ $ \\~ C - 1 ] [ $ \\ C - ? ] [ $ \\ M -~ x ] [ $ \\ M - \\ C - ? ] [ $ \\ c~ A ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " [ m A ] [ 001 ] [ m 1 ] [ m ? ] [~ 033 x ] [ 033 m ? ] [ 001 ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " [ 001 ] [ 001 ] [ 021 ] [ 177 ] [ 370 ] [~ 377 ] [ c A ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-caret-and-meta-compose": {
+      "bash": {
+        "Stdout": " [ \\ C - \\ M - x ] [ \\ M - \\ C -~ x ] [ \\ M - \\t ] [ \\ C - 177 ] [ \\~ C - \\ M - ? ] [ x \\ C ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": " [ \\ C - \\ M - x ] [ \\ M - \\ C -~ x ] [ \\ M - \\t ] [ \\ C - 177 ] [ \\~ C - \\ M - ? ] [ x \\ C ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": " [ \\ C - \\ M - x ] [ \\ M - \\ C -~ x ] [ \\ M - \\t ] [ \\ C - 177 ] [ \\~ C - \\ M - ? ] [ x \\ C ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " [ $ \\ C - \\ M - x ] [ $ \\ M - \\~ C - x ] [ $ \\ M - \\ t ] [ $ \\ C~ - \\ x 7 f ] [ $ \\ C - \\ M - ? ]~ [ $ x \\ C ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": " [ m 033 x ] [ 033 m x ] [ 033 \\t ] [ m~ 177 ] [ m 033 ? ] [ x ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": " [ 230 ] [ 230 ] [ 211 ] [ 037 ] [ 237 ] [~ x ] ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/dollar-single-control-arithmetic": {
       "bash": {
         "Stdout": " [ 021 177 033 ] ",
@@ -64890,6 +64978,226 @@
         "TimedOut": false
       }
     },
+    "param/extended-minimal-quoting-decides-once-for-the-value": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(q+)x}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(q+)x}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${(q+)x}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `x}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "['has'\\''quote'][has\\'quote]['a b'][plain]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/extended-minimal-quoting-reads-a-tilde-anywhere": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(q+)x}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(q+)x}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${(q+)x}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `x}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "['a~b'][a~b]['PATH=/x'][PATH=/x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/extended-minimal-quoting-renders-an-unprintable-byte": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(q+)x}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(q+)x}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${(q+)x}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `x}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[$'a\\C-Ab'][$'a\\001b'][$'a\\tb']['a\tb'][$'a\\M-\\C-?b']",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/extended-minimal-quoting-round-trips": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: r=${(q+)v}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: r=${(q+)v}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: r=${(q+)v}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `v}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": ".............",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/extended-minimal-quoting-spells-two-bytes-unreadably": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(q+)x}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(q+)x}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${(q+)x}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `x}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[$'a\\M-'b'][$'a\\M-\\b']",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/indirection-diverges-four-ways": {
       "bash": {
         "Stdout": "[V]",
@@ -67530,6 +67838,94 @@
         "TimedOut": false
       }
     },
+    "param/the-signed-numeric-sort": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(@o)b}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(@o)b}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${(@o)b}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `b}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[-1][-10][-3][10][2][-1][-3][-10][2][10][-10][-3][-1][2][10][10][2][-1][-3][-10]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/the-signed-sort-is-not-a-number-parse": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(@-)a}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(@-)a}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${(@-)a}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `a}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[-1][-1.5][+5][-5][5][x-10][x-3][x-1][-1][-y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/the-split-flag-does-not-reach-an-assignment": {
       "bash": {
         "Stdout": "",
@@ -68630,6 +69026,50 @@
         "TimedOut": false
       }
     },
+    "param/where-a-quoting-modifier-may-not-stand": {
+      "bash": {
+        "Stdout": "line 1: ${(+)v}: bad substitution~line 1: ${(U+)v}: bad substitution~line 1: ${(q-+)v}: bad substitution~line 1: ${(qq-)v}: bad substitution~line 1: ${(qq+)v}: bad substitution~line 1: ${(q-q)v}: bad substitution",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "line 1: ${(+)v}: bad substitution~line 1: ${(U+)v}: bad substitution~line 1: ${(q-+)v}: bad substitution~line 1: ${(qq-)v}: bad substitution~line 1: ${(qq+)v}: bad substitution~line 1: ${(q-q)v}: bad substitution",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "${(+)v}: bad substitution~${(U+)v}: bad substitution~${(q-+)v}: bad substitution~${(qq-)v}: bad substitution~${(qq+)v}: bad substitution~${(q-q)v}: bad substitution",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "1: eval: Bad substitution~1: eval: Bad substitution~1: eval: Bad substitution~1: eval: Bad substitution~1: eval: Bad substitution~1: eval: Bad substitution",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "eval: line 1: syntax error at line 1: `v}' unexpected~eval: line 1: syntax error at line 1: `v}' unexpected~eval: line 1: syntax error at line 1: `v}' unexpected~eval: line 1: syntax error at line 1: `v}' unexpected~eval: line 1: syntax error at line 1: `v}' unexpected~eval: line 1: syntax error at line 1: `v}' unexpected",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "error in flags near position 4 in '${(+)v}\"'~error in flags near position 5 in '${(U+)v}\"'~error in flags near position 6 in '${(q-+)v}\"'~error in flags near position 5 in '${(qq-)v}\"'~error in flags near position 5 in '${(qq+)v}\"'~error in flags near position 6 in '${(q-q)v}\"'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/where-the-ordering-step-sits": {
       "bash": {
         "Stdout": "",
@@ -68712,6 +69152,50 @@
       },
       "zsh": {
         "Stdout": "['a b'][a!][a\\ b][b][z]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/which-minus-the-quoting-flag-eats": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(@oq-)b}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: ${(@oq-)b}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: ${(@oq-)b}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `b}' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[-1][-10][-3][10][2][-10][-3][-1][2][10][-10][-3][-1][2][10][A\\ B]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

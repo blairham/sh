@@ -929,6 +929,7 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(qqq)` | quote in double quotes | `x="a b"; ${(qqq)x}` | `"a b"` |
 | `(qqqq)` | quote as `$'…'` | `x="a b"; ${(qqqq)x}` | `$'a b'` |
 | `(q-)` | quote only where it is needed | `x="a b"; y=p; ${(q-)x}` / `${(q-)y}` | `'a b'` / `p` |
+| `(q+)` | the same, extended | `x=$'a\001b'; ${(q+)x}` | `$'a\C-Ab'` |
 | `(f)` | split at newlines | `x=$'a\nb'; ${(f)x}` | two words `a`, `b` |
 | `(s:sep:)` | split at sep | `x=a:b:c; ${(s.:.)x}` | `a`, `b`, `c` |
 | `(j:sep:)` | join with sep | `a=(x y z); ${(j.,.)a}` | `x,y,z` |
@@ -942,6 +943,7 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(o)` / `(O)` | sort a list up / down | `a=(c a b); ${(@o)a}` | `a b c` |
 | `(n)` | sort by the numbers in the words | `a=(10 9 1); ${(@n)a}` | `1 9 10` |
 | `(i)` | sort with case folded away | `a=(B a); ${(@i)a}` | `a B` |
+| `(-)` | as `n`, with a leading minus a sign | `b=(-1 -10); ${(@-)b}` | `-10 -1` |
 | `(u)` | keep the first of each repeat | `a=(b a b); ${(@u)a}` | `b a` |
 | `(a)` | order by the index, not the text | `a=(c a b); ${(@a)a}` | `c a b` |
 | `(Q)` | remove one level of quoting | `v="'a b'"; ${(Q)v}` | `a b` |
@@ -1066,26 +1068,82 @@ Details, each measured:
   and newline ask for quotes and then go inside them as themselves rather
   than as `$'\t'`; **every other control byte, and every byte above
   `0x7f`, asks for nothing** and is written raw — `$'a\001b'` is
-  `a\001b`, where `${(q+)…}` would render it. An empty value is `''`,
+  `a\001b`, where `${(q+)…}` renders it. An empty value is `''`,
   which is the one value with nothing to quote that still cannot be
   written bare. The property the flag exists for is the round trip:
   `eval "r=${(q-)v}"` leaves `r` equal to `v` for every value measured.
   Composition is the ordinary rule-14 one — per element of a list, after
   the join a quoted expansion asks for, after the case flags and after any
   split.
-- **Which `-` is that modifier** is decided by adjacency and by count, and
-  a `-` anywhere else is zsh's signed-numeric sort flag, `(-)`, which this
-  implementation does not carry. Measured over `b=(-1 -10 -3 2 10)`:
-  `${(o)b}` and `${(oq-)b}` sort lexically, so the `q` ate the `-`;
-  `${(o-)b}` and `${(oq--)b}` sort signed, so a lone `-` and a second one
-  are the sort flag; `${(oq+-)b}` sorts signed too, a `q+` having already
-  taken the slot. `${(qU-)v}` quotes with backslashes, so the adjacency is
-  literal, and `${(qq-)v}` and `${(q-q)v}` are errors in the flags, so
-  only a lone `q` takes it. The modifier may be the later of two:
-  `${(-q-)v}` is minimal quoting there, the leading `-` doing nothing to a
-  scalar — refused here all the same, because a group is refused for what
-  is written in it rather than for what that would have come to on this
-  value, which is the rule `(A)` is refused under.
+- **`(q+)` is the extended form** of that, and `+` is the same modifier
+  slot. It is the same walk with three differences, all measured:
+  1. **The quoting decision is over the whole value**, not run by run, so
+     `has'quote` is `'has'\''quote'` where `q-` gives `has\'quote` —
+     neither run needs quotes on its own and both get them. An empty run
+     is still written as nothing, so `x'` is `'x'\'`.
+  2. **The two start-only specials are special wherever they stand**, so
+     `a~b` is `'a~b'` and `PATH=/x` is `'PATH=/x'` where `q-` leaves both
+     bare. That is the same table asked with the position pinned to zero.
+  3. **One byte that cannot be written as itself moves the whole value
+     into `$'…'`**: `$'a\tb'` and `$'a\C-Ab'`, where `q-` puts the tab
+     inside ordinary quotes and leaves the control byte raw. The
+     vocabulary is the caret notation and not `(qqqq)`'s octal — `\t` and
+     `\n` are the only names, every other byte below `0x20` and `0x7f`
+     are `\C-X` with bit 6 flipped, and a byte above `0x7f` is `\M-`
+     followed by its low seven bits spelled the same way. `'` and `\`
+     are escaped inside; `!` is not, where `(qqqq)` writes `\!`. A byte
+     above `0x7f` counts as unrenderable only under a UTF-8 locale; under
+     `LC_ALL=C` the same shell writes it as itself, which is the same
+     locale question `(q)` and `(qqqq)` answer and is answered the same
+     way here.
+
+  The round trip is the property, as it is for `q-`, and it is a stronger
+  claim: reading `${(q+)v}` back needs the `\C-` and `\M-` escapes of
+  `$'…'`, so the writer and the reader are graded against each other.
+  **Two byte values do not satisfy it in zsh either**: 0xa7 is written
+  `$'\M-''` and 0xdc `$'\M-\'`, each ending the quoting early. Both are
+  reproduced rather than corrected.
+- **Which `-` is that modifier** is settled by the parser, which keeps the
+  eaten character out of the flag list, so every `-` that reaches the
+  interpreter is zsh's signed-numeric sort flag `(-)`. Measured over
+  `b=(-1 -10 -3 2 10)`: `${(o)b}` and `${(oq-)b}` sort lexically, so the
+  `q` ate the `-`; `${(o-)b}` and `${(oq--)b}` sort signed, so a lone `-`
+  and a second one are the sort flag; `${(oq+-)b}` sorts signed too, a
+  `q+` having already taken the slot. `${(qU-)v}` quotes with
+  backslashes, so the adjacency is literal. The modifier may be the later
+  of two: `${(-q-)v}` is minimal quoting with a sort flag in front of it,
+  which does nothing to a scalar.
+- **Where a modifier may not stand.** `+` is no flag on its own and none
+  anywhere but directly behind the group's first `q`; `-` behind any
+  later `q` is not a modifier either; and a group that has taken a `q-`
+  takes no further `q`. Each is an error in the flags rather than an
+  unimplemented flag, deferred to when the branch is reached, and the
+  position is measured — for a doubled `q` it is that `q`'s and not the
+  modifier's:
+
+  | group | answer |
+  | --- | --- |
+  | `${(+)v}` | error in flags near position 4 |
+  | `${(U+)v}` | error in flags near position 5 |
+  | `${(q-+)v}` | error in flags near position 6 |
+  | `${(qq-)v}` / `${(qq+)v}` | error in flags near position 5 |
+  | `${(qoq-)v}` | error in flags near position 6 |
+  | `${(q-q)v}` | error in flags near position 6 |
+  | `${(q-Uq)v}` | error in flags near position 7 |
+  | `${(q+q)v}` / `${(q+Uq)v}` | **read** by zsh, and answered
+    `'has'quote'` on `has'quote` — a spelling that does not read back, so
+    it is refused by name here |
+- **`(-)` is the signed-numeric sort**: `n` with a `-` in front of a digit
+  run read as that run's sign rather than as text. It implies `n` rather
+  than modifying one — `${(@-)b}` and `${(@n-)b}` agree — and `(a)` still
+  beats it. It is not a number parse: a decimal point is not part of the
+  number, so `(-1 -1.5)` stays in that order; a leading `+` is not a sign
+  and is compared as the byte it is; and the sign need not stand at the
+  word's start, so `(x-1 x-10 x-3)` comes back `x-10 x-3 x-1`. A `-` in
+  one word only is no sign, which keeps `-1` ahead of `-y`. Numerically
+  equal words fall back to byte order, the same fallback `n` has. The flag
+  is invisible outside a pair of negatives, every digit sorting above the
+  `-` at `0x2d`.
 - **`(Q)` removes quoting and expands nothing**, and that pair is the
   whole flag. `v='"$x"'` with `x` set is `$x`, two characters, where a
   reading that handed the value to the parser would answer `hi`;

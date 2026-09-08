@@ -194,7 +194,32 @@ type ParamExpr struct {
 	HasFlags bool
 	// Flags is the group's letters, in written order, with any separator
 	// arguments stripped: `${(Uq)x}` carries "Uq" and `${(s.:.)x}` "s".
+	//
+	// The `+` or `-` a `q` ate is stripped too, into QuoteModifier, so that
+	// every `-` left in here is the sort flag and nothing has to ask which
+	// reading a given one had.
 	Flags string
+	// QuoteModifier is the `+` or `-` the group's `q` ate — `q-` for minimal
+	// quoting and `q+` for the extended form — and 0 when the group has
+	// neither. It is not in Flags, because the same two characters name a
+	// flag apiece there: `-` is the signed-numeric sort, and `+` is nothing
+	// at all.
+	//
+	// Which of the two readings a written `-` had is settled here, once, by
+	// scanParamFlags. Measured on zsh 5.9.2, 2026-09-08, with
+	// `b=(-1 -10 -3 2 10)`:
+	//
+	//	${(o-)b}     -10 -3 -1 2 10   signed, so a lone `-` is a sort flag
+	//	${(oq-)b}    -1 -10 -3 10 2   lexical: the `q` ate the `-`
+	//	${(oq--)b}   -10 -3 -1 2 10   signed: the *second* `-` is the flag
+	//	${(oq+-)b}   -10 -3 -1 2 10   signed: a `q+` had already taken it
+	//	${(qU-)v}    A\ B             adjacency is literal, not associative
+	//
+	// The character is always the one directly behind the group's first `q`;
+	// the scan refuses it anywhere else. So a reading that needs its
+	// position has it as one past that `q` rather than as a second copy of
+	// this rule.
+	QuoteModifier byte
 	// SplitSep and JoinSep are the arguments of the `s` and `j` flags. An
 	// empty SplitSep with an `s` in Flags is meaningful — it splits into
 	// characters — which HasFlags plus the letter already distinguish from
@@ -644,6 +669,38 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 	e.HasFlags = true
 	e.Src = src
 	i := 1
+	// The state the `q` modifier's grammar needs, carried as the group is
+	// read: the last flag character and where it stood, how many `q` have
+	// been seen, and whether a `q-` has been taken.
+	//
+	// Measured on zsh 5.9.2, 2026-09-08, every row of it — the accepted
+	// spellings and the refused ones alike, since a grammar is only pinned
+	// by what it turns away:
+	//
+	//	${(q-)v}    minimal      the modifier is the character behind the `q`
+	//	${(q+)v}    extended
+	//	${(oq-)b}   minimal      and the `q` need not open the group
+	//	${(-q-)v}   minimal      a `-` in front of it is the sort flag
+	//	${(qU-)v}   plain `q`    adjacency is literal, not associative
+	//	${(q--)v}   minimal      the second `-` is the sort flag
+	//	${(q+-)w}   extended     and so is the one behind a `q+`
+	//	${(+)v}     error at 4   a `+` on its own is no flag at all
+	//	${(U+)v}    error at 5   nor is one behind any other letter
+	//	${(q-+)v}   error at 6   nor one behind the modifier
+	//	${(qq-)v}   error at 5   only the group's *first* `q` takes one,
+	//	${(qq+)v}   error at 5   and the position reported is that `q`'s
+	//	${(qoq-)v}  error at 6   wherever in the group it stands
+	//	${(q-q)v}   error at 6   a `q-` group takes no further `q`,
+	//	${(q-Uq)v}  error at 7   adjacent or not
+	//	${(q+q)v}   read         where a `q+` group does — which is the one
+	//	${(q+Uq)v}  read         asymmetry, and it is measured, not derived
+	//
+	// The two `q+` rows the scan lets through are answered by that shell
+	// with a spelling that does not read back — `${(q+q)u}` on `has'quote`
+	// is `'has'quote'` — so the interpreter refuses them by name rather
+	// than reproducing them. This scan's job is the grammar; what a legal
+	// group means is not its question.
+	prev, prevAt, qSeen, minusTaken := byte(0), 0, 0, false
 	for i < len(src) {
 		c := src[i]
 		if c == ')' {
@@ -653,7 +710,34 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 			e.FlagsErrPos = i + 3
 			return ""
 		}
+		switch {
+		case c == '+' || c == '-':
+			switch {
+			case prev == 'q' && qSeen == 1:
+				// The modifier. It is kept off Flags so that every `-` left
+				// there is the sort flag and no later reading has to ask.
+				e.QuoteModifier = c
+				minusTaken = minusTaken || c == '-'
+				prev, prevAt = c, i
+				i++
+				continue
+			case prev == 'q':
+				e.FlagsErrPos = prevAt + 3
+				return ""
+			case c == '+':
+				e.FlagsErrPos = i + 3
+				return ""
+			}
+			// Anywhere else a `-` is the signed-numeric sort flag.
+		case c == 'q':
+			if minusTaken {
+				e.FlagsErrPos = i + 3
+				return ""
+			}
+			qSeen++
+		}
 		e.Flags += string(c)
+		prev, prevAt = c, i
 		i++
 		argMax := paramFlagArgs[c]
 		var open byte

@@ -22,7 +22,11 @@ import (
 // else the grammar accepted is refused *by name* when the expansion is
 // reached, because the only thing worse than refusing a flag is answering it
 // wrong with status 0.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwWA~Z"
+// The `-` in here is the signed-numeric sort flag and only ever that: the
+// `-` a `q` ate is not in Flags at all, the parser having taken it out into
+// QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
+// the parser refuses every `+` a `q` could not take.
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwWA~Z-"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -120,31 +124,30 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		r.expandErr = true
 		return nil, false, false, false
 	}
-	// Whether the group asks for minimal quoting is answered by the same pass
-	// that refuses what this slice does not carry, rather than by a second
-	// walk further down: a `-` is the minimal-quoting modifier or it is the
-	// sort flag, and one reading has to decide both questions or they can
-	// come apart.
-	minimal := false
-	for i, c := range e.Flags {
-		if c == '-' && minimalQuoteModifier(e.Flags, i) {
-			// The `-` a `q` in front of it ate. See interp/minimalquote.go
-			// for how it is told apart from the sort flag spelled the same.
-			minimal = true
-			continue
-		}
+	// Which of the two readings the group's `+` or `-` had was settled by
+	// the parser, which keeps the eaten one out of Flags — so this pass has
+	// one question to ask of each character and not two, and a `-` reaching
+	// it is the sort flag by construction.
+	for _, c := range e.Flags {
 		if !r.paramFlagCarried(c) {
 			r.diagf("${%s}: the (%c) expansion flag is not implemented\n", e.Src, c)
 			r.expandErr = true
 			return nil, false, false, false
 		}
 	}
+	if extendedQuoteRefusal(e) {
+		// The one legal `q+` group this slice does not carry. See
+		// interp/minimalquote.go for what that shell answers instead.
+		r.diagf("${%s}: the (q+) expansion flag is not implemented beside a further (q)\n", e.Src)
+		r.expandErr = true
+		return nil, false, false, false
+	}
 	// `(~)` marks the string argument of a flag written behind it, and the
 	// only argument this interpreter can hold marked is the join separator.
 	// The compositions it cannot are named rather than carried — see
 	// interp/tildeflaggroup.go for the measurement behind each.
 	markJoin := tildeMarksJoinSep(e)
-	if why, refuse := tildeMarkRefusal(e, markJoin, splitFlagInGroup(e, sp), minimal); refuse {
+	if why, refuse := tildeMarkRefusal(e, markJoin, splitFlagInGroup(e, sp)); refuse {
 		r.diagf("${%s}: the (~) expansion flag is not implemented %s\n", e.Src, why)
 		r.expandErr = true
 		return nil, false, false, false
@@ -293,7 +296,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	}
 	if n := strings.Count(e.Flags, "q"); n > 0 {
 		for i, w := range words {
-			words[i] = quoteFlagged(w, n, minimal)
+			words[i] = quoteFlagged(w, n, e.QuoteModifier)
 		}
 	}
 	// Rule 14's other half: `Q` takes one level of quoting *off*. The manual
@@ -953,13 +956,20 @@ func (r *Runner) promptUnitName() string {
 }
 
 // quoteFlagged is the `q` family, one style per count — all measured:
-// backslashes, then single quotes, double quotes, and `$'…'` — with the
-// minimal style of `q-` reached through the same door rather than beside it,
-// so that a caller cannot pick the count and forget the modifier. See
-// interp/minimalquote.go.
-func quoteFlagged(v string, count int, minimal bool) string {
-	if minimal {
+// backslashes, then single quotes, double quotes, and `$'…'` — with the two
+// modifier styles, `q-` and `q+`, reached through the same door rather than
+// beside it, so that a caller cannot pick the count and forget the modifier.
+// See interp/minimalquote.go.
+//
+// mod is the character the group's `q` ate, and 0 when it ate none. It beats
+// the count rather than composing with it: `${(q-)v}` and `${(q+)v}` each
+// have one `q` and neither writes the single-`q` style.
+func quoteFlagged(v string, count int, mod byte) string {
+	switch mod {
+	case '-':
 		return quoteMinimal(v)
+	case '+':
+		return quoteExtended(v)
 	}
 	switch count {
 	case 1:

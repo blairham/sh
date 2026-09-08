@@ -275,6 +275,33 @@ type Semantics struct {
 	// actually yields a zero byte — `\0`, an octal or hex escape that comes
 	// to zero, and `\c@`, which is the same zero by another road.
 	DollarSingleNulTruncates Answer
+	// DollarSingleCaretMeta reads `\C-X` inside `$'…'` as a control
+	// character and `\M-X` as the same byte with the high bit set. The
+	// separating `-` is optional in both, so `\CA` and `\C-A` are one byte
+	// apiece, and either may take the other as its argument.
+	//
+	// Yes in zsh alone. Measured 2026-09-08 from `$'\C-A'`, `$'\M-x'`,
+	// `$'\M-\C-?'` and `$'\cA'` in each shell:
+	//
+	//	bash 5.3, bash 3.2, bash as sh   \C-A and \M-x kept as written,
+	//	                                 and `\cA` is the control escape
+	//	dash                             no `$'…'` at all
+	//	ksh93                            `\C` is a control escape of its own,
+	//	                                 spelled without the dash, so
+	//	                                 `$'\C-A'` is control-`-` then `A`,
+	//	                                 and `\M-x` is ESC then `x`
+	//	zsh                              01, f8, ff, and `\c` is nothing
+	//
+	// So it is No in bash and unspecified in ksh93, whose two escapes are a
+	// different reading rather than this one turned off — and refusing it
+	// there is the point: `$'\C-A'` answered as `C-A` would be off by a
+	// byte and silent about it.
+	//
+	// Asked only for a `$'…'` that has a `\C` or an `\M` in it. This is the
+	// reading side of what the `q+` expansion flag writes, and the two are
+	// the same table seen from its two ends: a `q+` whose spelling the shell
+	// cannot read back is not a quoting flag at all.
+	DollarSingleCaretMeta Answer
 
 	// ReadOptions is the set of letters `read` takes, a `:` after a letter
 	// marking one whose argument follows it — the getopts convention, the

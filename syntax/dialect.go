@@ -1576,6 +1576,24 @@ type Dialect struct {
 	// the code of the `1`, where the count is `$(( $#a ))`.
 	ArithCharacterCode bool
 
+	// ArithFunctionCall enables `name(args)` inside an arithmetic expression:
+	// a call to a *math function*, which is a shell function registered under
+	// that name with `functions -M`. See [ArithCall].
+	//
+	// One shell in the panel has it. Measured 2026-09-08 on zsh 5.9.2 and on
+	// zsh 5.9, where `g(){ REPLY=$(($1+100)); }; functions -M mf 1 1 g;
+	// echo $(( mf(5) ))` prints 105 — against bash 5.3, bash 3.2, bash as
+	// `sh`, ksh93 and dash, none of which has the registration and all of
+	// which read `mf(5)` as a name followed by a leftover `(`. So the five
+	// columns without it record the grammar's absence rather than a different
+	// meaning for the same text, which is what makes this additive.
+	//
+	// The `(` has to touch the name. A space between them is not a call in
+	// the shell that has one either — `$(( mf ( 5 ) ))` is
+	// `operator expected` there — so turning this on does not change what
+	// `$(( a (b) ))` means anywhere.
+	ArithFunctionCall bool
+
 	// DoubleBracket enables `[[ ... ]]`.
 	//
 	// Consumed by the *parser*, not the lexer, and the reason is worth

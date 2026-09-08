@@ -129,31 +129,28 @@ func TestTheLettersAreNarrowerThanTheBuiltinRenamed(t *testing.T) {
 	}
 }
 
-// TestTheMathFunctionFacilityIsRefusedByName. `functions -M` is the one thing
-// under this word that is not a rename: it registers a shell function as a
-// math function callable from arithmetic, which needs the evaluator to call
-// back into the interpreter. It is refused as *missing* rather than as
-// unknown, so a script can tell a shell that lacks the facility from a typo —
-// and it must never be taken in silence, because the plugin manager that
-// needs it writes `functions -M ... 2>/dev/null` and would then read a
-// registration that never happened.
-func TestTheMathFunctionFacilityIsRefusedByName(t *testing.T) {
-	out, _ := runZsh(t, t.TempDir(),
-		"g(){ REPLY=$(($1+100)); }\nfunctions -M -- mf 1 1 g\necho st=$?\n")
-	if !strings.Contains(out, "-M is not implemented yet") {
-		t.Errorf("output = %q, want the letter refused by name", out)
-	}
-	if strings.Contains(out, "st=0\n") {
-		t.Errorf("output = %q, want a failing status", out)
-	}
-	// Every other letter this shell spells and this engine does not is the
-	// same refusal rather than "bad option", which is a different and worse
-	// answer about a letter zsh really has.
+// TestEveryFunctionsLetterThisEngineLacksIsRefusedByName, which is every
+// letter this shell spells under the word except the two that are
+// implemented: `-m`, a listing narrowed by pattern, and `-M`, the
+// math-function facility (#1493, and dialect/zsh/mathfunc_test.go).
+//
+// Refused as *missing* rather than as unknown, so a script can tell a shell
+// that lacks the facility from a typo — which is what `-M` was until the seam
+// existed, and never silence: the plugin manager that needs `-M` writes it
+// with `2>/dev/null` and would otherwise read a registration that never
+// happened.
+func TestEveryFunctionsLetterThisEngineLacksIsRefusedByName(t *testing.T) {
 	for _, letter := range []string{"-u", "-U", "-k", "-z", "-t", "-T", "-W", "-c"} {
 		out, _ := runZsh(t, t.TempDir(), "f(){ :; }\nfunctions "+letter+" f\n")
 		if !strings.Contains(out, letter+" is not implemented yet") {
 			t.Errorf("functions %s: output = %q, want it named as missing", letter, out)
 		}
+	}
+	// And `-M` is no longer among them: it registers.
+	out, _ := runZsh(t, t.TempDir(),
+		"g(){ REPLY=$(($1+100)); }\nfunctions -M -- mf 1 1 g\necho st=$?\necho $(( mf(5) ))\n")
+	if !strings.Contains(out, "st=0\n") || !strings.Contains(out, "105\n") {
+		t.Errorf("output = %q, want the registration taken and 105 back", out)
 	}
 }
 

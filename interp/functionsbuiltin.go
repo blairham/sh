@@ -45,15 +45,15 @@ import (
 //     and `unfunction` takes `-m` and nothing else — not even the `-f` that
 //     is its whole meaning. So the letter sets are their own fields and the
 //     renamed builtin's are not reused.
-//   - **`functions -M` is the one thing here that is not a rename**, and it
-//     is refused by name. It registers a shell function as a *math* function
-//     callable from arithmetic, which needs the evaluator to call back into
-//     the interpreter — a seam this engine does not have. Refusing it is
-//     [Diagnostics.UnimplementedOptionLetters] doing the job it already does,
-//     so a script can tell a shell that lacks the facility from a typo. See
-//     #1493 for what was measured about how it returns its value, which is
-//     not what its documentation says and not what a reimplementation would
-//     have guessed.
+//   - **`functions -M` is the one thing here that is not a rename.** It
+//     registers a shell function as a *math* function callable from
+//     arithmetic, which needs the evaluator to call back into the
+//     interpreter. That seam is interp/mathfunc.go, which is also where the
+//     measurement lives: the value a math function returns is the last
+//     arithmetic evaluated during the call and is *not* `REPLY`, whatever the
+//     documentation says. Nothing about it is decided here — this file only
+//     separates the letter from the operands and hands them over, and whether
+//     the dialect has the letter at all is [Semantics.FunctionsOptions].
 
 // FunctionsBuiltin is the `functions` builtin, for a dialect that has the
 // word to register.
@@ -77,6 +77,22 @@ func biFunctions(r *Runner, _ context.Context, args []string) int {
 	// parseDeclareFlags would add a letter to a parser shared with `typeset`,
 	// `declare`, `local` and `integer` for the sake of one caller.
 	matching := hasOption(args, 'm')
+	// `-M` and `+M` are read before the flags for the same reason `-m` is,
+	// and one more: they take *operands*, not names to declare, so the
+	// declaration's parser has nothing to do with them. The letter being in
+	// FunctionsOptions is what says this dialect has the facility at all —
+	// where it is not, `-M` falls through to the option parser and is
+	// refused as a letter this engine does not spell, which is what a shell
+	// with the word and without the facility should say.
+	if strings.ContainsRune(r.sem().FunctionsOptions, 'M') {
+		switch remove, operands, verdict := mathFunctionLetter(args); verdict {
+		case mathLetterAlone:
+			return r.mathFunctionsBuiltin(name, remove, operands)
+		case mathLetterWithMatching:
+			// Measured: the two letters together do nothing at all, quietly.
+			return 0
+		}
+	}
 	args, f, code := r.parseDeclareFlags(name, args, r.sem().FunctionsOptions)
 	if code != 0 {
 		// The same fatality `typeset` has and for the same reason: ksh93

@@ -392,7 +392,7 @@ func (r *Runner) paramSource(e *syntax.ParamExpr) (value string, set, subscript 
 		// here because this is the scalar view; the list view is
 		// nestedFields, and both go through nestedWords so the two cannot
 		// come to different values.
-		words, iset := r.nestedWords(e)
+		words, iset, _ := r.nestedWords(e)
 		return strings.Join(words, ifsFirst(r.ifs())), iset, false
 	}
 	if e.Index != nil {
@@ -570,6 +570,12 @@ func (r *Runner) expandColonTildes(w *syntax.Word) {
 // through tildeFlagElements: only the first of them can be denied a head, the
 // rest are fields of their own.
 func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, bool) {
+	// The hold belongs to one span and is consumed by the scalar path this
+	// function falls through to. Cleared here so that a span nothing fell
+	// through for cannot leave one behind for a later expansion of the same
+	// node — a `for` loop expands one node many times, and a value from the
+	// wrong pass is exactly the silent kind of wrong.
+	r.nestedHeld = nestedHold{}
 	if parts, ok := r.expandAtList(s, sp, head); ok {
 		return r.splitFlagFields(s, sp, parts), true
 	}
@@ -671,177 +677,178 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// Only for `[@]` and `[*]`, though. `${a[0]:1}` names one element and is
 	// a substring of it — slicing there is a one-element list with its first
 	// element dropped, which is no field at all. The corpus caught that.
-	if e.Index != nil && e.Inner == nil && !e.Length &&
-		(e.Op == syntax.ParamNone ||
-			(r.listShapedOp(e) && (r.wholeArrayIndex(e) || r.assocSearchSubscript(e)))) {
-		if elems, ok := r.arraySubscript(e); ok {
-			if e.Indirect {
-				// `${!a[@]}` is the array's *subscripts*, not its elements —
-				// and the indirection was being ignored, so it answered with
-				// the elements and a script iterating `for i in "${!a[@]}"`
-				// silently looped over the wrong thing.
-				//
-				// The subscripts assigned, which is not `0..n-1`: an array
-				// with a gap in it has subscripts the count never reaches.
-				elems = r.subscriptsOf(e.Name, len(elems))
+	// A nested expansion whose inner came to a list arrives here too, and by
+	// the same route: what it stands for is a list of values, so everything
+	// below — the slice, the element filter, the per-element operators, the
+	// join and the splitting — is the same question it is for an array. See
+	// listBase, which is the one place the two sources meet.
+	if elems, ok := r.listBase(e); ok {
+		if e.Indirect {
+			// `${!a[@]}` is the array's *subscripts*, not its elements —
+			// and the indirection was being ignored, so it answered with
+			// the elements and a script iterating `for i in "${!a[@]}"`
+			// silently looped over the wrong thing.
+			//
+			// The subscripts assigned, which is not `0..n-1`: an array
+			// with a gap in it has subscripts the count never reaches.
+			elems = r.subscriptsOf(e.Name, len(elems))
+		}
+		if e.Op == syntax.ParamSubstring {
+			elems = sliceElems(elems, r.numOf(e.Arg, e, e.Arg2), e, r)
+		}
+		if selectsElements(e.Op) {
+			// Which elements there are, rather than what each one
+			// becomes — so this is here beside the slice and not with
+			// the elementOp mapping further down, whose whole shape is
+			// one output per input.
+			//
+			// Quoting decides what the operator is even looking at, and
+			// this distributed regardless. The rule, measured: quotes
+			// join first and `[*]` joins last. A quoted `"${a[*]:#p}"`
+			// hands the operator the *joined string* and tests that one
+			// value, so on `(foo bar baz)` with `ba*` nothing is dropped
+			// and the whole array comes back — where filtering leaves
+			// `foo`. That was the silent direction: a filter that ran
+			// where the shell would have left the array alone, with no
+			// diagnostic and status 0.
+			//
+			// A dropped value is one *empty* field rather than no field,
+			// which is what quoting guarantees and what selectScalar
+			// returning "" gives: `"${a[*]:*nope}"` is `n=1` in the shell
+			// that has the operator, against `n=0` for the unquoted
+			// spelling and for `[@]`.
+			if s.Quoting != syntax.Unquoted && r.subscriptJoinsElements(e) {
+				elems = []string{r.selectScalar(e, strings.Join(elems, ifsFirst(r.ifs())))}
+			} else {
+				elems = r.selectElements(e, elems)
 			}
-			if e.Op == syntax.ParamSubstring {
-				elems = sliceElems(elems, r.numOf(e.Arg, e, e.Arg2), e, r)
+		}
+		if e.Op == syntax.ParamTransform {
+			// `"${a[@]@Q}"` is one transformed word per element — the
+			// transformation distributes, measured, and the `[*]` join
+			// below then applies to what came out rather than to what
+			// went in.
+			elems = r.transformElems(e, elems)
+		}
+		ifs, set := r.ifs()
+		if elementOp(e.Op) {
+			apply := r.elementOpApplier(e)
+			mapped := make([]string, len(elems))
+			for i, el := range elems {
+				mapped[i] = apply(el)
 			}
-			if selectsElements(e.Op) {
-				// Which elements there are, rather than what each one
-				// becomes — so this is here beside the slice and not with
-				// the elementOp mapping further down, whose whole shape is
-				// one output per input.
+			if (r.joinedArrayIndex(e) || r.assocSearchSubscript(e)) &&
+				s.Quoting != syntax.Unquoted {
+				// `"${a[*]#p}"` splits the panel: two shells trim each
+				// element and join what is left, the third joins first
+				// and trims the joined string once. Asked only when the
+				// two readings actually differ — `${a[*]%b}` on `(aa ab)`
+				// is `aa a` either way, and needs no answer.
 				//
-				// Quoting decides what the operator is even looking at, and
-				// this distributed regardless. The rule, measured: quotes
-				// join first and `[*]` joins last. A quoted `"${a[*]:#p}"`
-				// hands the operator the *joined string* and tests that one
-				// value, so on `(foo bar baz)` with `ba*` nothing is dropped
-				// and the whole array comes back — where filtering leaves
-				// `foo`. That was the silent direction: a filter that ran
-				// where the shell would have left the array alone, with no
-				// diagnostic and status 0.
-				//
-				// A dropped value is one *empty* field rather than no field,
-				// which is what quoting guarantees and what selectScalar
-				// returning "" gives: `"${a[*]:*nope}"` is `n=1` in the shell
-				// that has the operator, against `n=0` for the unquoted
-				// spelling and for `[@]`.
-				if s.Quoting != syntax.Unquoted && r.subscriptJoinsElements(e) {
-					elems = []string{r.selectScalar(e, strings.Join(elems, ifsFirst(r.ifs())))}
+				// And asked only when it is *quoted*, which is the other
+				// half of the same rule. The axis is a question about the
+				// quoted form; the unquoted one has an answer nobody has
+				// to be asked for — `a=(oxo yo); printf "[%s]" ${a[*]%o}`
+				// is `[ox][y]` in bash, bash 3.2, ksh93 and zsh alike, so
+				// the operator distributes and the elements go on to the
+				// join below. Asking here gave the unquoted spelling the
+				// quoted reading, and in the one dialect that answers no
+				// it came back as a single field holding `oxo y`: the trim
+				// silently applied to a boundary instead of to an element.
+				sep := ifsFirst(ifs, set)
+				perElement := strings.Join(mapped, sep)
+				joinedFirst := apply(strings.Join(elems, sep))
+				if perElement == joinedFirst ||
+					r.ask(r.sem().OperatorDistributesOverStarSubscript,
+						"an operator on `${a[*]}` applying to each element") {
+					elems = []string{perElement}
 				} else {
-					elems = r.selectElements(e, elems)
+					elems = []string{joinedFirst}
 				}
+			} else {
+				elems = mapped
 			}
-			if e.Op == syntax.ParamTransform {
-				// `"${a[@]@Q}"` is one transformed word per element — the
-				// transformation distributes, measured, and the `[*]` join
-				// below then applies to what came out rather than to what
-				// went in.
-				elems = r.transformElems(e, elems)
-			}
-			ifs, set := r.ifs()
-			if elementOp(e.Op) {
-				apply := r.elementOpApplier(e)
-				mapped := make([]string, len(elems))
-				for i, el := range elems {
-					mapped[i] = apply(el)
-				}
-				if (r.joinedArrayIndex(e) || r.assocSearchSubscript(e)) &&
-					s.Quoting != syntax.Unquoted {
-					// `"${a[*]#p}"` splits the panel: two shells trim each
-					// element and join what is left, the third joins first
-					// and trims the joined string once. Asked only when the
-					// two readings actually differ — `${a[*]%b}` on `(aa ab)`
-					// is `aa a` either way, and needs no answer.
-					//
-					// And asked only when it is *quoted*, which is the other
-					// half of the same rule. The axis is a question about the
-					// quoted form; the unquoted one has an answer nobody has
-					// to be asked for — `a=(oxo yo); printf "[%s]" ${a[*]%o}`
-					// is `[ox][y]` in bash, bash 3.2, ksh93 and zsh alike, so
-					// the operator distributes and the elements go on to the
-					// join below. Asking here gave the unquoted spelling the
-					// quoted reading, and in the one dialect that answers no
-					// it came back as a single field holding `oxo y`: the trim
-					// silently applied to a boundary instead of to an element.
-					sep := ifsFirst(ifs, set)
-					perElement := strings.Join(mapped, sep)
-					joinedFirst := apply(strings.Join(elems, sep))
-					if perElement == joinedFirst ||
-						r.ask(r.sem().OperatorDistributesOverStarSubscript,
-							"an operator on `${a[*]}` applying to each element") {
-						elems = []string{perElement}
-					} else {
-						elems = []string{joinedFirst}
-					}
-				} else {
-					elems = mapped
-				}
-			}
-			if r.subscriptJoinsElements(e) {
-				// `[*]` is *one* field with the elements joined, where `[@]`
-				// is one field each — the same difference `"$*"` has from
-				// `"$@"`, and the reason both spellings exist. Taking the
-				// `[@]` path for it produced no field at all inside a larger
-				// word, so `echo "[${a[*]}]"` printed `[]`.
-				//
-				// A range joins on the same side of that line as the *name*
-				// it was written on: measured, `"${a[1,2]}"` is one field
-				// holding `x-y` under `IFS=-` exactly as `"$a"` is, and
-				// `"${*[1,2]}"` is one field too — while `"${@[1,2]}"` is
-				// one field per parameter, because `@` keeps its fields
-				// however it is subscripted.
-				if s.Quoting != syntax.Unquoted {
-					return []string{globEscape(strings.Join(elems, ifsFirst(ifs, set)))}, true
-				}
-				// Unquoted, the join is a dialect's answer rather than the
-				// spelling's, and it is the same answer `[@]` asks — measured,
-				// an unquoted `[*]` and an unquoted `[@]` are the same fields
-				// in every shell in the panel. So this hands the elements to
-				// the list path instead of joining them here: bash joins them
-				// there and zsh, ksh93 and dash do not.
-				//
-				// The join here was unconditional, which is bash's answer
-				// given to all four. zsh does not join an unquoted `[*]` at
-				// all — `a=("x y" z); printf "[%s]" ${a[*]}` is `[x y][z]`
-				// there, which no arrangement of the splitting answer reaches,
-				// since the element boundary the join destroys cannot be put
-				// back by any later stage.
-				//
-				// It also picks up the two stages `[@]` already asks about:
-				// this path never glob-escaped, so `a=("zz*" other)` matched
-				// the directory in the zsh dialect, where the shell leaves the
-				// star alone.
-				return r.tildeFlagElements(s, head, r.elementFields(elems, sp, r.globSubstAnswer(s))), true
-			}
+		}
+		if r.subscriptJoinsElements(e) {
+			// `[*]` is *one* field with the elements joined, where `[@]`
+			// is one field each — the same difference `"$*"` has from
+			// `"$@"`, and the reason both spellings exist. Taking the
+			// `[@]` path for it produced no field at all inside a larger
+			// word, so `echo "[${a[*]}]"` printed `[]`.
+			//
+			// A range joins on the same side of that line as the *name*
+			// it was written on: measured, `"${a[1,2]}"` is one field
+			// holding `x-y` under `IFS=-` exactly as `"$a"` is, and
+			// `"${*[1,2]}"` is one field too — while `"${@[1,2]}"` is
+			// one field per parameter, because `@` keeps its fields
+			// however it is subscripted.
 			if s.Quoting != syntax.Unquoted {
-				if len(elems) == 0 && e.Op == syntax.ParamNone {
-					if !r.wholeArrayIndex(e) {
-						// A subscript naming *one* element is one field
-						// whatever the element turned out to be, exactly as
-						// `"$unset"` is one empty field. Quoting is the whole
-						// guarantee, and it does not depend on the element
-						// being there.
-						//
-						// This asked the empty-array axis instead, so a gap
-						// produced no field at all and every argument after
-						// it moved up one — `set -- "${a[0]}" "${a[1]}"
-						// "${a[5]}"` on a sparse array gave `$#` of 2, and a
-						// script reading `$3` afterwards read what it thought
-						// was `$4`. Two different questions: how many fields
-						// an *empty list* makes, and how many a quoted
-						// expansion of *one* element makes. Only the first is
-						// a dialect's.
-						return []string{""}, true
-					}
-					if r.subscriptNameIsAbsent(e) &&
-						r.ask(r.sem().UnsetNameAtIsOneEmptyField,
-							`a quoted "${a[@]}" on a name that holds nothing`) {
-						// One dialect reads a name that is not a declared
-						// array as a scalar, so a quoted whole-array
-						// subscript on one nothing ever gave a value to is
-						// the empty field `"$a"` would give.
-						//
-						// Guarded by the name being absent, which is the
-						// only half that splits the panel. An array that
-						// *exists* and has no elements is no field in every
-						// column measured, so it falls through to the empty
-						// slice below and asks nobody. The axis was asked
-						// without that guard, which gave a declared empty
-						// array the unset answer — and, in the dialect that
-						// said yes, gave a spurious empty argument to every
-						// `f "${a[@]}"` and `set -- "${a[@]}"` written
-						// before anything filled the array, at status 0.
-						return []string{""}, true
-					}
-				}
-				return escapeAll(elems), true
+				return []string{globEscape(strings.Join(elems, ifsFirst(ifs, set)))}, true
 			}
+			// Unquoted, the join is a dialect's answer rather than the
+			// spelling's, and it is the same answer `[@]` asks — measured,
+			// an unquoted `[*]` and an unquoted `[@]` are the same fields
+			// in every shell in the panel. So this hands the elements to
+			// the list path instead of joining them here: bash joins them
+			// there and zsh, ksh93 and dash do not.
+			//
+			// The join here was unconditional, which is bash's answer
+			// given to all four. zsh does not join an unquoted `[*]` at
+			// all — `a=("x y" z); printf "[%s]" ${a[*]}` is `[x y][z]`
+			// there, which no arrangement of the splitting answer reaches,
+			// since the element boundary the join destroys cannot be put
+			// back by any later stage.
+			//
+			// It also picks up the two stages `[@]` already asks about:
+			// this path never glob-escaped, so `a=("zz*" other)` matched
+			// the directory in the zsh dialect, where the shell leaves the
+			// star alone.
 			return r.tildeFlagElements(s, head, r.elementFields(elems, sp, r.globSubstAnswer(s))), true
 		}
+		if s.Quoting != syntax.Unquoted {
+			if len(elems) == 0 && e.Op == syntax.ParamNone {
+				if !r.wholeArrayIndex(e) {
+					// A subscript naming *one* element is one field
+					// whatever the element turned out to be, exactly as
+					// `"$unset"` is one empty field. Quoting is the whole
+					// guarantee, and it does not depend on the element
+					// being there.
+					//
+					// This asked the empty-array axis instead, so a gap
+					// produced no field at all and every argument after
+					// it moved up one — `set -- "${a[0]}" "${a[1]}"
+					// "${a[5]}"` on a sparse array gave `$#` of 2, and a
+					// script reading `$3` afterwards read what it thought
+					// was `$4`. Two different questions: how many fields
+					// an *empty list* makes, and how many a quoted
+					// expansion of *one* element makes. Only the first is
+					// a dialect's.
+					return []string{""}, true
+				}
+				if r.subscriptNameIsAbsent(e) &&
+					r.ask(r.sem().UnsetNameAtIsOneEmptyField,
+						`a quoted "${a[@]}" on a name that holds nothing`) {
+					// One dialect reads a name that is not a declared
+					// array as a scalar, so a quoted whole-array
+					// subscript on one nothing ever gave a value to is
+					// the empty field `"$a"` would give.
+					//
+					// Guarded by the name being absent, which is the
+					// only half that splits the panel. An array that
+					// *exists* and has no elements is no field in every
+					// column measured, so it falls through to the empty
+					// slice below and asks nobody. The axis was asked
+					// without that guard, which gave a declared empty
+					// array the unset answer — and, in the dialect that
+					// said yes, gave a spurious empty argument to every
+					// `f "${a[@]}"` and `set -- "${a[@]}"` written
+					// before anything filled the array, at status 0.
+					return []string{""}, true
+				}
+			}
+			return escapeAll(elems), true
+		}
+		return r.tildeFlagElements(s, head, r.elementFields(elems, sp, r.globSubstAnswer(s))), true
 	}
 	// `${@@Q}` and `${*@Q}`: a transformation distributes over the positional
 	// parameters exactly as it does over a whole array — one word per
@@ -1487,6 +1494,20 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		}
 		return itoa(n)
 	}
+	// `${#${a[@]}}` is the number of fields the inner came to, not the length
+	// of the text they join to — measured, `a=(hello); ${#${a[@]}}` is 1
+	// where `s=hello; ${#${s}}` is 5, so one field is not the answer either.
+	// The list-ness is the inner's shape, which nestedWords already reports,
+	// and the count is taken here rather than after paramSource because that
+	// function expands the inner: asking twice would run a command
+	// substitution in there twice.
+	if e.Length && e.Inner != nil {
+		words, _, isList := r.nestedWords(e)
+		if isList {
+			return itoa(len(words))
+		}
+		return itoa(r.stringLength(strings.Join(words, "")))
+	}
 	// An array subscript supplies a value too, and the operators apply to it
 	// exactly as they do to a variable. That is what the comment said before
 	// this function returned here instead: every operator was skipped, so
@@ -1784,6 +1805,56 @@ func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
 func (r *Runner) listShapedOp(e *syntax.ParamExpr) bool {
 	return e.Op == syntax.ParamSubstring || e.Op == syntax.ParamTransform ||
 		selectsElements(e.Op) || elementOp(e.Op) || r.yieldsTheArray(e)
+}
+
+// listBase is the values an expansion stands for where it stands for several
+// of them, and whether it does.
+//
+// Two sources reach it and the pipeline above cannot tell them apart, which
+// is the point. A subscript on a *name* supplies elements; a nested
+// expansion whose inner came to a list supplies fields. Everything the
+// pipeline then does — the slice, the element filter, the per-element
+// operators, the `[*]` join, the glob-escaping and the splitting — is the
+// same question for both, and asking it in one place is what keeps the
+// nested spelling from acquiring a second, thinner answer of its own. The
+// nested half arrived with none at all: it was refused by name, and the one
+// shape that slipped past the refusal — an inner that lost its elements
+// before it was counted — was joined into a single plausible field at status
+// 0 (#1509).
+//
+// The operator guard is the array's alone. A nested list takes every
+// operator elementwise in the shell with the grammar — measured,
+// `${${a[@]}#x}`, `${${a[@]}:1}`, `${${a[@]}:#y}` and `${${a[@]}//y/Q}` all
+// distribute — where a subscript naming one element must not: `${a[0]:1}` is
+// a substring of that element and slicing the list there would drop it.
+func (r *Runner) listBase(e *syntax.ParamExpr) ([]string, bool) {
+	if e.Length {
+		// `${#…}` is a number, and which number it is — the element count or
+		// the length of a string — is answered where the length is taken.
+		return nil, false
+	}
+	if e.Inner != nil {
+		words, set, isList := r.nestedWords(e)
+		if !isList {
+			// Not a list, so the scalar path answers it — and that path
+			// expands the inner too. The fields are handed over rather than
+			// recomputed: `${${v}#a}` with a command substitution inside
+			// runs it once, and asking twice ran it twice. See holdNested.
+			r.holdNested(e, words, set)
+			return nil, false
+		}
+		return words, true
+	}
+	if e.Index == nil {
+		return nil, false
+	}
+	switch {
+	case e.Op == syntax.ParamNone:
+	case r.listShapedOp(e) && (r.wholeArrayIndex(e) || r.assocSearchSubscript(e)):
+	default:
+		return nil, false
+	}
+	return r.arraySubscript(e)
 }
 
 // bareArrayAsList gives a bare array name the `[@]` subscript one dialect
@@ -3371,9 +3442,15 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 // `:-` and its family test. An inner naming nothing produces none, so
 // `${${u}:-d}` substitutes and `${${v}:-d}` on an empty value does too — the
 // colon's own rule, unchanged.
-func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set bool) {
+func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set, isList bool) {
+	if words, set, ok := r.takeNested(e); ok {
+		// Already expanded for this span, by the list path that then found
+		// this was not a list. Only a *non*-list is ever held, so the third
+		// answer is settled.
+		return words, set, false
+	}
 	if e.Inner == nil || len(e.Inner.Spans) == 0 {
-		return []string{""}, false
+		return []string{""}, false, false
 	}
 	if e.Index != nil {
 		// `${${v}[2]}` subscripts what the inner came to, which is a second
@@ -3393,21 +3470,78 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set bool) {
 		// what the inner came to and an empty list has no element to count:
 		// `a=(); ${${a[@]}[(i)x]}` is 1, the position an append would take,
 		// where a list holding one empty field would answer 2.
-		return []string{""}, true
+		//
+		// Not a list: an empty inner leaves the outer `:-` to fire on the
+		// scalar path, which is where `a=(); ${${a[@]}:-d}` already answers
+		// `d`.
+		return []string{""}, true, false
 	}
-	if len(words) > 1 {
-		// An inner expansion that came to a *list* keeps its fields in the
-		// shell that has this grammar — `${${a[@]}}` is one field per
-		// element there — and the outer operator then applies to each. That
-		// is a second shape rather than a longer value, and it is refused by
-		// name rather than joined: a join would answer with one plausible
-		// field and say nothing, which is the failure this diagnostic
-		// exists to avoid.
-		r.diagf("${%s}: a nested expansion of a list is not implemented\n", e.Src)
-		r.expandErr = true
-		return []string{""}, false
+	// An inner that came to a *list* keeps its fields, and the outer half
+	// then applies to each — `${${a[@]}}` is one field per element,
+	// `${${a[@]}#x}` trims every one and `${(j: :)${(qkv)m[@]}}` joins them
+	// all. The list-ness is a question about the inner's *shape* and not
+	// about how many fields it happened to produce: measured,
+	// `a=(hello); ${#${a[@]}}` is 1, the element count, where `${#${s}}` on
+	// the same five characters is 5. nestedResultIsAList is that question,
+	// and it is the one a subscript on the same inner already asks.
+	return words, true, r.nestedInnerIsAList(e, words)
+}
+
+// nestedInnerIsAList reports whether the fields the inner came to stand for a
+// list, asked of the inner as it will have been expanded — its own span,
+// carrying any quoting inherited from the expansion around it.
+//
+// One place, because the answer decides two different things about the same
+// expansion — whether a quoted outer joins, and whether `${#…}` counts
+// elements or characters — and a second copy is how those two would come to
+// disagree.
+func (r *Runner) nestedInnerIsAList(e *syntax.ParamExpr, words []string) bool {
+	inner, _ := r.nestedInnerSpan(e)
+	if inner.Kind != syntax.ParamExp || inner.Param == nil {
+		// A command substitution or an arithmetic one in the name position.
+		// Neither is field-split here yet (#976), so the shape has to be read
+		// off what came out rather than off the node.
+		return len(words) > 1
 	}
-	return words, true
+	return r.nestedResultIsAList(inner.Param, words, inner.Quoting != syntax.Unquoted)
+}
+
+// nestedHold is one nested expansion's fields, kept between the two halves of
+// a single span's expansion.
+//
+// expandAtList asks whether a nested expansion came to a list, which it can
+// only answer by expanding the inner; where the answer is no, the span falls
+// through to the scalar path, which wants the very same fields. The inner
+// must run once — `${${(f)$(cmd)}}` runs its command a single time in the
+// shell with the grammar, and the fields it produced are not recoverable from
+// anything else — so the first half hands them to the second rather than
+// asking again.
+//
+// Keyed on the node, so a hold left by one expansion cannot be read by
+// another, and cleared both when it is read and at the top of every expandAt.
+type nestedHold struct {
+	node  *syntax.ParamExpr
+	words []string
+	set   bool
+	held  bool
+}
+
+// holdNested keeps a nested expansion's fields for the scalar path that is
+// about to ask for them again.
+func (r *Runner) holdNested(e *syntax.ParamExpr, words []string, set bool) {
+	r.nestedHeld = nestedHold{node: e, words: words, set: set, held: true}
+}
+
+// takeNested is the held fields for this node, once. Reading empties the
+// hold: the handoff is from one half of a span to the other, and a second
+// reader would be a different expansion.
+func (r *Runner) takeNested(e *syntax.ParamExpr) ([]string, bool, bool) {
+	if !r.nestedHeld.held || r.nestedHeld.node != e {
+		return nil, false, false
+	}
+	words, set := r.nestedHeld.words, r.nestedHeld.set
+	r.nestedHeld = nestedHold{}
+	return words, set, true
 }
 
 // expandingQuoting is how *this* expansion was written, where it stands in a

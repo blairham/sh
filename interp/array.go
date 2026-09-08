@@ -1640,6 +1640,20 @@ func (r *Runner) subscriptJoinsElements(e *syntax.ParamExpr) bool {
 		// range, so it already falls through to one field each.
 		return false
 	}
+	if e.Inner != nil && e.Index == nil {
+		// A nested expansion with no subscript of its own joins for the same
+		// reason: `@` is a spelling, and this one does not wear it. Measured
+		// on zsh 5.9.2 with `a=("a b" c)` — `"${${a[@]}}"` is one field
+		// holding `a b c`, `${${a[@]}}` unquoted is two, and the subscripted
+		// spellings split the same way the name's do: `"${${a[@]}[@]}"` is
+		// one field each and `"${${a[@]}[*]}"` is one joined.
+		//
+		// The `[@]` of the *inner* does not reach out here. It is what made
+		// the inner a list; whether the outer keeps those fields in quotes is
+		// the outer's own spelling, and reading the inner's would make
+		// `"${${a[@]}}"` three fields where the shell gives one.
+		return true
+	}
 	// A search over an association joins for the same reason a range does:
 	// it is not `@`. Measured with two keys holding spaces —
 	// `set -- "${m[(I)*]}"` is one field holding both, `set -- ${m[(I)*]}`

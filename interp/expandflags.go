@@ -560,13 +560,39 @@ func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool
 		// An expansion standing where a name would. The flags then apply to
 		// what it came to, which is the same rule they follow for a name —
 		// `${(U)${v}}` and `${${(U)v}}` are both `ABC`, measured.
-		words, set = r.nestedWords(e)
-		return words, set, false
+		//
+		// And they apply to a *list* the same way, which is the whole of
+		// `${(j: :)${(qkv)m[@]}}`: the inner is one field per key and per
+		// value, and the join then runs over all of them. Reporting a list
+		// as a scalar joined it here, before the group ever saw it, so the
+		// separator went in once around a value that already held them all.
+		words, set, isList = r.nestedWords(e)
+		return words, set, isList
 	}
 	if e.Index != nil {
 		if list, lok := r.arraySubscript(e); lok {
 			if r.wholeArrayIndex(e) {
+				if _, isAssoc := r.assocFor(e.Name); isAssoc {
+					// `${(kv)m[@]}` is `${(kv)m}`: a whole-array subscript
+					// on an association selects every pair, and `k` and `v`
+					// then say which half of each pair is substituted.
+					// namedBase is where that is decided, and reaching it is
+					// what keeps the subscripted spelling from having a
+					// second answer of its own — this path took the *values*
+					// whatever the letters said, so `${(qkv)ICE[@]}` came
+					// back one field per value, half the list, at status 0.
+					return r.namedBase(e.Name, e.Flags)
+				}
 				return list, list != nil, true
+			}
+			if key, kok := r.assocSubscriptKey(e, list); kok {
+				// `${(k)m[key]}` substitutes the *key* rather than what it
+				// holds — measured, `${(k)m[b]}` is `b` where `${m[b]}` is
+				// `2` — and only `k` on its own does: `${(kv)m[b]}` and
+				// `${(v)m[b]}` are both the value, so `v` beside `k` puts
+				// the pair's other half back. An absent key is nothing at
+				// all under either spelling and never reaches here.
+				return []string{key}, true, false
 			}
 			if r.assocSearchSubscript(e) {
 				// A search over an association hands the group a *list*, so
@@ -637,6 +663,45 @@ func (r *Runner) namedBase(name, flags string) (words []string, set, isList bool
 	}
 	v, vok := r.getVar(name)
 	return []string{v}, vok, false
+}
+
+// assocSubscriptKey is the key a `${(k)m[key]}` substitutes in place of the
+// value the same subscript would have read, and whether that is what this
+// expansion asked for.
+//
+// Three conditions, each measured on zsh 5.9.2 with `typeset -A m=(a 1 b 2)`:
+//
+//	${(k)m[b]}   b   the key, on an association and with `k` alone
+//	${(kv)m[b]}  2   `v` beside it puts the value back
+//	${(v)m[b]}   2   and `v` on its own changes nothing
+//	${(k)m[zz]}      an absent key is nothing, not the key that was asked for
+//
+// The last is why the elements are passed in rather than looked up again:
+// nil is how assocSubscript says the element was not there, and a key
+// substituted for a missing element would answer `zz` where the shell
+// answers with no field at all.
+//
+// An ordinary array reads the same letter as its *index* — `${(k)x[2]}` is
+// `2` there, and `${(k)x[-1]}` is the subscript counted forward — which is a
+// different question with a different source, and this answers false for it
+// rather than guessing. See #1515.
+func (r *Runner) assocSubscriptKey(e *syntax.ParamExpr, elems []string) (string, bool) {
+	if elems == nil || !e.HasFlags {
+		return "", false
+	}
+	if !strings.ContainsRune(e.Flags, 'k') || strings.ContainsRune(e.Flags, 'v') {
+		return "", false
+	}
+	if _, isAssoc := r.assocFor(e.Name); !isAssoc {
+		return "", false
+	}
+	if e.IndexFlags != nil {
+		// A flag group selects by matching rather than by naming, and which
+		// half of each match it substitutes is assocSearchWords' question —
+		// already answered there, for the same two letters.
+		return "", false
+	}
+	return r.assocKey(e.Subscript()), true
 }
 
 // applyFlagOp runs the expansion's operator over the flagged value — the

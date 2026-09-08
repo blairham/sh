@@ -723,6 +723,10 @@ type Runner struct {
 	// expansion was reached from something that is not a word.
 	expandingWord *syntax.Word
 	expandingSpan int
+	// nestedHeld is one nested expansion's fields, handed from the list half
+	// of a span's expansion to the scalar half so the inner runs once. See
+	// nestedHold.
+	nestedHeld nestedHold
 	// unspecified records that a script depended on an axis no dialect had
 	// answered, so a caller can tell that from an ordinary failure.
 	unspecified bool

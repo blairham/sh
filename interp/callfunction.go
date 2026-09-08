@@ -12,10 +12,18 @@ import "context"
 // function in its own text and the interpreter finds it on the way past, but a
 // prompt loop has to run a function whose name it read out of a variable, with
 // arguments it computed, at a moment no shell text mentions. That is what a
-// hook is — see repl's hooks.go, which is this method's only caller — and
-// without it the only way to reach a function from outside was to build the
-// text of a call and parse it, which would quote the arguments back through
-// the grammar and get `preexec` an argument that was never typed.
+// hook is — see repl's hooks.go — and without it the only way to reach a
+// function from outside was to build the text of a call and parse it, which
+// would quote the arguments back through the grammar and get `preexec` an
+// argument that was never typed.
+//
+// A *builtin* needs it for the same reason, which is the second caller: zsh's
+// `autoload -X` resolves the function it is running inside and then runs what
+// it resolved, from inside the builtin, with the positional parameters of the
+// call it replaced. See dialect/zsh's autoloadRunResolved. The two callers
+// want the same three things — a name that must be a function, arguments that
+// are not shell text, and the function's own status left in `$?` — which is
+// why this is one method rather than a hook-shaped one.
 //
 // **The name has to be a function.** A builtin, an alias or a command on the
 // path by that name is not one, and this answers `false` for all three rather

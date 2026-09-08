@@ -132,16 +132,67 @@ print -r -- "4 plus-missing st=$?"`)
 }
 
 // `-X` acts on the function it is running inside, which is what the stub
-// uses and what makes it work from a hand-written function too.
-func TestMinusXResolvesTheFunctionItIsInside(t *testing.T) {
+// uses and what makes it work from a hand-written function too — and it
+// **runs** what it loaded, on the same call.
+//
+// Both halves, because for a long time only the first one happened: the name
+// was redefined and the body never ran, so `LOADED` was missing and the
+// builtin still answered 0. That is the whole of #1580. The stub every
+// plugin loader writes is `builtin autoload -X` and nothing else, so a `-X`
+// that only redefines makes every function loaded through one a no-op that
+// reports success — and the loader above it reads the silence as a refusal.
+//
+// The line after it still runs, with `$?` holding what the body returned.
+// So `-X` is not a return: it is a load, a call, and a status.
+func TestMinusXResolvesTheFunctionItIsInsideAndRunsIt(t *testing.T) {
 	fp := fpathDir(t, map[string]string{"inner": `print -r -- LOADED`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 inner() { builtin autoload -X; print -r -- "after st=$?"; }
 inner
 typeset -f inner`)
-	want := "after st=0\ninner () {\n\tprint -r -- LOADED\n}\n"
+	want := "LOADED\nafter st=0\ninner () {\n\tprint -r -- LOADED\n}\n"
 	if out != want || st != 0 {
 		t.Errorf("-X inside a function = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The loaded body is called with the *replaced* function's arguments, and
+// its status is what the builtin answers.
+//
+// The arguments are the half a plausible fix drops: `-X` takes no operands of
+// its own, so there is nothing in the builtin's own words to pass on and the
+// positional parameters have to come from the call being replaced. A body run
+// with no arguments looks right in every test that does not print `$*`.
+func TestMinusXRunsTheBodyWithTheCallsArgumentsAndStatus(t *testing.T) {
+	fp := fpathDir(t, map[string]string{
+		"inner": "print -r -- \"BODY [$*] n=$#\"\nreturn 7\n",
+	})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+inner() { builtin autoload -X; print -r -- "after st=$?"; }
+inner a "b c"
+print -r -- "call st=$?"`)
+	want := "BODY [a b c] n=2\nafter st=7\ncall st=0\n"
+	if out != want || st != 0 {
+		t.Errorf("-X arguments = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The call is nested inside the function it replaced rather than a rewinding
+// of it, which is visible in the scope: a `local` the stub set before the
+// `-X` is readable from the loaded body.
+//
+// Measured on zsh 5.9.2, and it is the difference between calling the new
+// definition from where the builtin stands and unwinding to the caller first.
+// A fix that did the second answers everything above identically and this one
+// with an empty value.
+func TestMinusXRunsTheBodyInsideTheStubsScope(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"inner": `print -r -- "sees [$secret]"`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+inner() { local secret=hidden; builtin autoload -X; }
+inner`)
+	want := "sees [hidden]\n"
+	if out != want || st != 0 {
+		t.Errorf("-X scope = %q (status %d), want %q", out, st, want)
 	}
 }
 
@@ -171,12 +222,9 @@ print -r -- "call st=$?"`)
 // the generated stub uses `+X NAME` and never comes through that path, so
 // only a hand-written `-X` reaches it.
 //
-// zsh prints `INNER` here as well: its `-X` replaces the function *and the
-// shell re-enters it*, so the loaded body runs on the same call. This one
-// replaces and returns, which is why the generated stub says `&& NAME "$@"`
-// — the re-entry is interpreter machinery and the stub is how a body says
-// the same thing. A hand-written `-X` gets the replacement without the
-// re-entry, and that is the whole of the difference.
+// `INNER` is printed because the replacement is followed by a call — see
+// TestMinusXResolvesTheFunctionItIsInsideAndRunsIt — so this row says which
+// function was replaced *and* that the right one ran.
 func TestMinusXResolvesTheInnermostFunction(t *testing.T) {
 	fp := fpathDir(t, map[string]string{"inner": `print -r -- INNER`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
@@ -185,7 +233,7 @@ outer() { inner; }
 outer
 typeset -f inner
 typeset -f outer`)
-	want := "after st=0\n" +
+	want := "INNER\nafter st=0\n" +
 		"inner () {\n\tprint -r -- INNER\n}\n" +
 		"outer () {\n\tinner\n}\n"
 	if out != want || st != 0 {

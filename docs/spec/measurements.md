@@ -11290,7 +11290,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   f() { :; }; functions -q f; echo "st=$?"
   ```
-- `functions/a-listing-said-back-keeps-the-locals-local` — the round trip that matters, and the one #1406 found broken one layer down: a keyword-declared function's `typeset` is a *local* in ksh93 and a global in a POSIX-form one, so a listing that dropped the keyword would hand back a program whose variables leak. zsh writes the paren form back for either spelling and may, because `typeset` is local in both bodies there — `[OUT]`. ksh93 keeps the keyword and so also answers `[OUT]`; a ksh listing that wrote the paren form would answer `[1]` and nothing else in the row would look different
+- `functions/a-listing-said-back-keeps-the-locals-local` — the round trip that matters, and the one #1406 found broken one layer down: a keyword-declared function's `typeset` is a *local* in ksh93 and a global in a POSIX-form one, so a listing that dropped the keyword would hand back a program whose variables leak. zsh writes the paren form back for either spelling and may, because `typeset` is local in both bodies there — `[OUT]`. ksh93 keeps the keyword and so also answers `[OUT]`; a ksh listing that wrote the paren form would answer `[1]` and nothing else in the row would look different. **Only those two columns discriminate**: the three shells without the word answer `[OUT]` because `src` came back empty and `f` was never defined, which is the same cell for the opposite reason, so a run that read this row as unanimous would have learned nothing
   ```sh
   x=OUT
   function f { typeset x=1; }

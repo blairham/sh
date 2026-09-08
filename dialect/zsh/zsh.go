@@ -707,7 +707,17 @@ func Semantics() interp.Semantics {
 	s.UnterminatedBracket = interp.BracketBadPattern
 	s.ExitTrapIsFunctionLocal = interp.Yes
 	s.SignalHandlerSeesEarlierStatus = interp.Yes
-	s.ExitArgument = interp.ExitArgLenient
+	// The operand of `exit` and of `return` is an arithmetic expression here,
+	// and alone in the panel: `return r` is the value of `r` and `return r+1`
+	// is one more, where ksh93 reads the leading digits and gets 0, and dash
+	// and bash refuse the word outright. It also declines to mask, so
+	// `return 300` leaves 300 rather than 44.
+	//
+	// `~/.zi/bin/zi.zsh` counts the ice-mods it consumed into an integer and
+	// ends `.zi-ice` with `return retval`; reading that as anything but
+	// arithmetic hands back the previous command's status instead of the count,
+	// and the plugin manager shifts its own command line by the wrong number.
+	s.StatusArgument = interp.StatusArgArithmetic
 	// A status that carries a count rather than a verdict: two dead targets
 	// is 2.
 	s.ExitTrapRunsOnSignalDeath = interp.No

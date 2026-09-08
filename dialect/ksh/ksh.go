@@ -401,7 +401,11 @@ func Semantics() interp.Semantics {
 	// that moment: it reads the word and refuses it at the run.
 	s.ProcessSubstitutionInCondition = interp.No
 	s.UnterminatedBracket = interp.BracketLiteral
-	s.ExitArgument = interp.ExitArgLenient
+	// Leading digits and no further: `return 3abc` is 3 and `return r` is 0
+	// whatever `r` holds. Not arithmetic, which the leading zero settles —
+	// `return 010` is 10 here while `$((010))` is 8, so the operand is plainly
+	// not going through the arithmetic reader that zsh's does.
+	s.StatusArgument = interp.StatusArgLeadingDigits
 	s.UnsetPositionalIsAllowed = interp.Yes
 	s.TraceShowsItsOwnDisabling = interp.No
 	s.TraceAssignmentsSeparately = interp.Yes

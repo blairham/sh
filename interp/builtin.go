@@ -31,15 +31,14 @@ var builtins = map[string]Builtin{
 	"pwd":      biPwd,
 	"read":     biRead,
 	"wait":     biWait,
-	"exit":     biExit,
 	"trap":     biTrap,
 	"break":    biBreak,
 	"continue": biContinue,
-	"return":   biReturn,
 	// `eval` and `.` are added in source.go's init rather than here — they
 	// run arbitrary shell, so they reach the dispatcher that reads this map,
 	// and Go calls a literal that closes that loop an initialization cycle.
-	// `unset` joined them, for the reason its init below gives.
+	// `unset`, `exit` and `return` joined them, for the reason the init
+	// below gives.
 }
 
 // `unset a[i+1]` evaluates its subscript, and evaluating an expression
@@ -47,8 +46,16 @@ var builtins = map[string]Builtin{
 // the dispatcher that reads the map above, exactly as `eval` does. That is a
 // real capability rather than an accident of layering: the subscript is an
 // arithmetic expression, and every way of writing one is open to it.
+//
+// `exit` and `return` are here for exactly that reason and no other: their
+// status operand is an arithmetic expression in zsh, so `return $(( ))` — or
+// `return "$(f)"`, or any subscript inside the expression — reaches the same
+// dispatcher. They were in the literal above while the operand was read with
+// atoi and could reach nothing.
 func init() {
 	builtins["unset"] = biUnset
+	builtins["exit"] = biExit
+	builtins["return"] = biReturn
 }
 
 // biBreak and biContinue transfer control out of a loop. They are recorded on
@@ -86,11 +93,166 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 	r.returnSeenStatus = r.status
 	r.ctl = controlReturn
 	if len(args) > 0 {
-		if n, ok := atoi(args[0]); ok {
+		switch n, ok := r.statusOperand("return", args[0]); {
+		case ok:
 			return n
+		case r.unspecified:
+			return 2
+		default:
+			return r.refusedReturnOperand(args[0])
 		}
 	}
 	return r.status
+}
+
+// refusedReturnOperand reports a status operand `return` will not take.
+//
+// The function returns anyway — bash skips the rest of the body and leaves 2
+// behind for the caller — so this is not badStatusArg with a different word
+// in it: that one is for a shell on its way out and sets controlExit, which
+// here would end the script in the shell that carries on.
+//
+// Where a special builtin's failure is fatal the script does end, and that is
+// the same axis `unalias` with nothing to remove already asks rather than a
+// second one about operands: dash ends the script at status 2, and so does
+// bash called as `sh`, which is bash's own posix mode reaching the POSIX rule.
+// Plain bash reports it and runs the next command. ksh93 and zsh never arrive
+// here at all, because neither refuses any word — so the fatality is left to
+// the axis the two shells that *can* answer it agree with.
+func (r *Runner) refusedReturnOperand(arg string) int {
+	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", "return", arg))
+	// No `r.status = 2` to go with the 2 below, unlike badStatusArg: a
+	// builtin's *return value* is what becomes the status here, and on the
+	// fatal path setFatalStatus chooses it. The assignment was dead both
+	// ways, which a mutation run showed by changing it to 1 with nothing
+	// noticing.
+	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's usage error ending the script") {
+		// fatalQuiet sets controlExit over the controlReturn above, which is
+		// the order that matters: the script ends rather than the function.
+		r.fatalQuiet()
+	}
+	return 2
+}
+
+// statusOperand reads the status operand `exit` and `return` share.
+//
+// One reading for two builtins, because the panel reads the two identically —
+// every row of Semantics.StatusArgument was measured on both and they never
+// parted, down to zsh answering 3 for `exit r` and for `return r` with r=3.
+// Two readings is the shape that has cost this tree seven bugs: the second
+// copy omits what the first one learned.
+//
+// ok is false when the dialect refuses the word, and what a refusal *costs*
+// stays with the caller — that is the one place the two builtins do differ,
+// since `exit` is leaving and `return` is handing a status back to a caller
+// that carries on.
+//
+// The eight-bit mask rides on the policy rather than being an axis of its
+// own: each of the four either masks or does not, and the four answers line
+// up one-to-one with the four readings. What comes back is the *shell's*
+// reading — `return 300` is 300 under dash and zsh and 44 under bash and
+// ksh93 — and `exit` truncates it again on its way out, because a process
+// carries eight bits whatever the shell decided. So `exit 300` is 44 in all
+// six and only `return 300` can tell the two groups apart.
+func (r *Runner) statusOperand(builtin, arg string) (int, bool) {
+	arg = strings.TrimSpace(arg)
+	// A plain number that already fits is unanimous and never reaches the
+	// axis, which is what lets the strict core run `return 3` at all. The
+	// bound is 255 rather than "any run of digits" because 256 is where the
+	// panel parts: two of them mask there and two hand the number back whole.
+	// Leading zeros belong on this side too — `return 010` is 10 in all four,
+	// including the two that read `$((010))` as 8.
+	if n, err := strconv.Atoi(arg); err == nil && n >= 0 && n <= 255 {
+		return n, true
+	}
+	switch r.statusArgument(builtin) {
+	case StatusArgStrict:
+		// Digits and nothing else, and no mask: dash keeps `return 300` at
+		// 300 and refuses `return -1` outright.
+		if n, err := strconv.Atoi(arg); err == nil && n >= 0 {
+			return n, true
+		}
+		return 0, false
+	case StatusArgNumeric:
+		n, err := strconv.Atoi(arg)
+		if err != nil {
+			return 0, false
+		}
+		return mask8(n), true
+	case StatusArgLeadingDigits:
+		return mask8(leadingDecimal(arg)), true
+	case StatusArgArithmetic:
+		return r.arithmeticStatusOperand(arg)
+	}
+	// No dialect answered. statusArgument has already reported it and set
+	// r.unspecified, which is what the callers read to tell this apart from
+	// a refusal.
+	return 0, false
+}
+
+// arithmeticStatusOperand evaluates the operand as an arithmetic expression,
+// which is what zsh does with it — `return r` is r's value and `return r+1`
+// is one more.
+//
+// It goes through arithTree and evalArith rather than a reader of its own, so
+// that the operand gets the same arithmetic `let` and `$(( … ))` get. That is
+// what makes `return 0x10` 16 and `return "(r+1)*2"` six without any of it
+// being written twice.
+// An empty operand needs no special case: `return ""` is 0 in zsh, and an
+// empty expression already evaluates to 0 through this same reader, which is
+// what `$(( ))` is. One was written here anyway, and a mutation run showed it
+// was dead — disabling it changed nothing.
+func (r *Runner) arithmeticStatusOperand(expr string) (int, bool) {
+	tree, perr := r.arithTree(nil, expr)
+	if perr != nil {
+		r.diagf("%s\n", r.diag().ParseFailure(perr))
+		// Reported as a math error rather than as a refused operand, and 0
+		// is what the shell exits with after one: `exit 3abc` complains and
+		// leaves 0. Returning ok here keeps the numeric-argument wording —
+		// which this dialect never uses — off the back of a math complaint.
+		return 0, true
+	}
+	v, err := r.evalArith(tree)
+	if r.unspecified {
+		// An axis inside the *expression* went unanswered — `ask` has
+		// reported it already. Handing the value back as if it were fine
+		// would be a status invented out of a question the shell refused to
+		// answer, so this leaves through the same door an unanswered
+		// StatusArgument does. `let` guards its own evaluation the same way.
+		return 0, false
+	}
+	if err != nil {
+		r.diagf("%v\n", err)
+		return 0, true
+	}
+	return v, true
+}
+
+// mask8 is the eight bits a status can carry.
+func mask8(n int) int { return ((n % 256) + 256) % 256 }
+
+// leadingDecimal reads the decimal number an operand starts with and ignores
+// whatever follows it, which is how ksh93 reads a status: `3abc` is 3, `abc`
+// is 0, and ` -5x` is -5 before the mask makes it 251.
+//
+// Not atoi, which takes digits only and refuses the rest of a word outright,
+// and not atoiSigned, which takes a sign but still refuses trailing text. The
+// difference is the whole of the ksh93 column, so it is a third reader rather
+// than a flag on either of those two.
+func leadingDecimal(s string) int {
+	i, neg := 0, false
+	if i < len(s) && (s[i] == '-' || s[i] == '+') {
+		neg = s[i] == '-'
+		i++
+	}
+	n := 0
+	for ; i < len(s) && s[i] >= '0' && s[i] <= '9'; i++ {
+		n = n*10 + int(s[i]-'0')
+	}
+	if neg {
+		return -n
+	}
+	return n
 }
 
 func loopDepth(args []string) int {
@@ -2801,35 +2963,23 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 		return r.diag().StoppedJobsAtExitStatus
 	}
 	if len(args) > 0 {
-		// strconv rather than the local atoi, which is for file descriptors
-		// and rejects a sign — `exit -1` has to parse before it can be
-		// judged.
-		// strconv rather than the local atoi, which is for file descriptors
-		// and rejects a sign — `exit -1` has to parse before it can be
-		// judged.
-		n, err := strconv.Atoi(strings.TrimSpace(args[0]))
-		switch {
-		case err == nil && n >= 0:
-			r.status = n % 256
+		switch n, ok := r.statusOperand("exit", args[0]); {
+		case ok:
+			// Masked here and not in the reading, because the eight bits are
+			// the *process's* limit rather than a decision any shell made:
+			// `exit 300` is 44 in all six, including the two that leave a
+			// `return 300` at 300. That difference is only ever visible
+			// through `return`, since a shell that has exited has no `$?`
+			// left to read.
+			r.status = mask8(n)
+		case r.unspecified:
+			// No dialect answered; statusArgument has already said so, and
+			// the script stops rather than exiting with a status it just
+			// refused to choose.
+			r.ctl = controlExit
+			return r.status
 		default:
-			switch r.exitArgument() {
-			case ExitArgStrict:
-				return r.badExitArg(args[0])
-			case ExitArgNumeric:
-				if err != nil {
-					return r.badExitArg(args[0])
-				}
-				r.status = ((n % 256) + 256) % 256
-			case ExitArgLenient:
-				// Text reads as zero there, which is what `exit abc` gives.
-				r.status = ((n % 256) + 256) % 256
-			default:
-				// No dialect answered; exitArgument has already said so,
-				// and the script stops rather than exiting with a status it
-				// just refused to choose.
-				r.ctl = controlExit
-				return r.status
-			}
+			return r.badStatusArg("exit", args[0])
 		}
 	}
 	if len(args) == 0 && r.inExitTrap &&
@@ -2955,13 +3105,17 @@ func singleQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// badExitArg reports an argument `exit` will not take.
+// badStatusArg reports a status operand `exit` will not take.
 //
 // The status is 2 in both shells that refuse, and it is not the fatal-error
 // status: bash exits 1 for a fatal error and 2 for this. A usage error is its
 // own thing, which is why it is written here rather than routed through fatal.
-func (r *Runner) badExitArg(arg string) int {
-	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", "exit", arg))
+//
+// `return` refuses the same words in the same shells and words the complaint
+// from the same template, but what the refusal costs is different enough to
+// be its own door — the shell is not leaving, so see refusedReturnOperand.
+func (r *Runner) badStatusArg(builtin, arg string) int {
+	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", builtin, arg))
 	r.status = 2
 	r.ctl = controlExit
 	return r.status

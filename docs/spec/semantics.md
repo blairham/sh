@@ -882,19 +882,56 @@ overrides everything here.
 
 ## A second axis that is an ordering
 
-`exit` is not equally fussy about what it is given:
+A *status operand* — the word after `exit`, and the word after `return` —
+is not read the same way twice:
 
-    exit -1     dash → error 2   bash → 255   ksh93, zsh → 255
-    exit abc    dash → error 2   bash → 2     ksh93, zsh → 0
+                         dash   bash 5.3   ksh93   zsh
+    exit -1 / return -1  error  255        255     -1
+    exit abc             error  error      0       0
+    return r    (r=3)    error  error      0       3
+    return r+1  (r=2)    error  error      0       3
+    return 3abc          error  error      3       math error
+    return 300           300    44         44      300
 
-dash refuses both, bash refuses only the one that is not a number, and
-ksh93 and zsh take either. Three behaviors on a line rather than two
-sides, so `ExitArgument` is a policy with three values — the shape
-`UnterminatedBracket` established, used a second time without argument.
+dash takes digits and nothing else. bash takes a sign as well but refuses
+text. ksh93 refuses nothing: it reads the number the word begins with and
+ignores the rest, which is how `3abc` is 3 and `r` is 0 whatever `r`
+holds. zsh refuses nothing either, but for the opposite reason — the
+operand is an **arithmetic expression** there, so `return r` is the value
+of `r` and `return r+1` is one more.
 
-The status those two refusals carry is *not* the fatal-error axis. bash
-exits 1 for a fatal error and 2 for this, and dash exits 2 for both; a
-usage error is its own thing, and unanimous where it happens at all.
+Four behaviors on a line rather than two sides, so `StatusArgument` is a
+policy with four values — the shape `UnterminatedBracket` established,
+used a second time without argument.
+
+**One axis for two builtins.** Every row above was measured on `exit` and
+on `return`, and the two never parted: zsh answers 3 for `exit r` exactly
+as it does for `return r`. A second field for `return` would have been the
+failure this tree has met seven times — a copy that omits what the
+original learned — and here it nearly happened, with `exit r` sitting at 0
+under zsh while `return r` was being taught arithmetic.
+
+The eight-bit mask rides on the policy rather than being an axis of its
+own, because each of the four either masks or does not and the four
+answers line up one-to-one with the four readings. It is only ever visible
+through `return`: a process carries eight bits whatever the shell decided,
+so `exit 300` is 44 in all six however the operand was read, and only
+`return 300` tells dash and zsh's 300 apart from bash and ksh93's 44.
+
+The status those refusals carry is *not* the fatal-error axis. bash exits
+1 for a fatal error and 2 for this, and dash exits 2 for both; a usage
+error is its own thing, and unanimous where it happens at all. Whether a
+refusal ends the *script* is the same question `BadOptionToSpecialBuiltinFatal`
+already asks — dash ends it, plain bash carries on, and the same bash
+called as `sh` ends it, which is the POSIX special-builtin rule rather
+than a second reading of the operand. The two lenient shells cannot answer
+it, because neither refuses any word.
+
+zsh's `return r` was found in `~/.zi/bin/zi.zsh`, whose `.zi-ice` counts
+the ice-mods it consumed into an integer and ends `return retval`. Reading
+that as anything but arithmetic hands back the previous command's status
+in place of the count, and the plugin manager shifts its own command line
+by the wrong number of words.
 
 ## A third axis that is an ordering, and the boundary it is asked at
 
@@ -6570,7 +6607,7 @@ handful of questions no boolean can answer for it — the rule stated under
 **Multi-valued axes name a policy type** rather than yes-or-no, and the
 type's own values are documented beside it in `interp/semantics.go`:
 `ListingQuotingStyle`, `PrintfQuoteStyle`, `NameOperands`,
-`ExitArgumentPolicy`, `TrapBodyLineStyle`, `SelectMenuLayout`,
+`StatusArgumentPolicy`, `TrapBodyLineStyle`, `SelectMenuLayout`,
 `DeclarationListingForm`, `KillStatusStyle`, `BracketPolicy`,
 `DollarSingleControlPolicy`, `DollarSingleUnknownPolicy`,
 `UnsetArraySpanPolicy`. Where an entry below says "see X", X is one of

@@ -770,17 +770,34 @@ type Semantics struct {
 	// rather than something the `kill` builtin does on its way past.
 	HangupIsAnOrderlyExit Answer
 
-	// ExitArgument is how strict `exit` is about what it is given, and it is
-	// an ordering rather than a side:
+	// StatusArgument is how a *status operand* is read — the word after
+	// `exit` and the word after `return` — and it is an ordering rather
+	// than a side:
 	//
-	//	exit -1     dash → error 2   bash → 255   ksh93, zsh → 255
-	//	exit abc    dash → error 2   bash → 2     ksh93, zsh → 0
+	//	                    dash   bash 5.3   ksh93   zsh
+	//	exit -1 / return -1 error  255        255     -1
+	//	exit abc            error  error      0       0
+	//	return r  (r=3)     error  error      0       3
+	//	return r+1  (r=2)   error  error      0       3
+	//	return 3abc         error  error      3       math error
+	//	return 300          300    44         44      300
 	//
-	// dash rejects both, bash rejects only the one that is not a number, and
-	// ksh93 and zsh take anything. Three behaviors on a line, so a policy
-	// rather than a bool — the same shape as UnterminatedBracket, and for
-	// the same reason.
-	ExitArgument ExitArgumentPolicy
+	// One axis for two builtins because the panel reads the two operands
+	// identically — every row above was measured on `exit` and on `return`
+	// and the two never parted. A second field for `return` is the shape
+	// that has cost this tree seven bugs: the copy omits what the original
+	// learned, and here it would have left `exit r` in zsh at 0 while
+	// `return r` answered 3.
+	//
+	// Four readings, so a policy rather than a bool — the same shape as
+	// UnterminatedBracket, and for the same reason. What each value carries
+	// is a bundle rather than three axes, because the four questions were
+	// measured together and never crossed: a shell that refuses text is a
+	// shell that refuses a sign or does not, masks to eight bits or does
+	// not, and ends the script over the refusal or does not. Two of the four
+	// refuse nothing at all, so splitting the refusal out would have needed
+	// an answer from columns that cannot reach the question.
+	StatusArgument StatusArgumentPolicy
 	// BracketCaretNegates reads `[^abc]` as a negated class. dash alone
 	// treats `^` as an ordinary character, so `[^abc]` matches a caret there
 	// and everything-but there elsewhere: the two answers are both matches,
@@ -4790,7 +4807,7 @@ func PosixSemantics() Semantics {
 		UnsetPositionalIsAllowed:       No,
 		TraceShowsItsOwnDisabling:      Yes,
 		TraceAssignmentsSeparately:     No,
-		ExitArgument:                   ExitArgStrict,
+		StatusArgument:                 StatusArgStrict,
 		EqualsExpansion:                No,
 		// POSIX gives `test` one spelling of string equality, so `==` is not
 		// an operator; the three shells that accept it added it.
@@ -5262,40 +5279,68 @@ func (b BackgroundJobInputPolicy) String() string {
 	return "unspecified"
 }
 
-// ExitArgumentPolicy is how strict `exit` is about its argument.
-type ExitArgumentPolicy int
+// StatusArgumentPolicy is how the status operand of `exit` and `return` is
+// read. See Semantics.StatusArgument for the measurements behind the four.
+type StatusArgumentPolicy int
 
 const (
-	// ExitArgUnspecified is no answer, and is refused like any other.
-	ExitArgUnspecified ExitArgumentPolicy = iota
-	// ExitArgStrict refuses anything that is not a non-negative number:
-	// dash.
-	ExitArgStrict
-	// ExitArgNumeric refuses text but wraps a negative: bash.
-	ExitArgNumeric
-	// ExitArgLenient takes anything, reading text as zero: ksh93 and zsh.
-	ExitArgLenient
+	// StatusArgUnspecified is no answer, and is refused like any other.
+	StatusArgUnspecified StatusArgumentPolicy = iota
+	// StatusArgStrict takes decimal digits and refuses everything else —
+	// no sign and no text — and the refusal ends the script, because a
+	// special builtin's failure is fatal there: dash. It does not mask, so
+	// `return 300` leaves 300 behind rather than 44.
+	StatusArgStrict
+	// StatusArgNumeric refuses text but takes a sign, and masks to eight
+	// bits: bash. `return -1` is 255 and `return 300` is 44. The refusal is
+	// reported and the function still returns, leaving 2; the script carries
+	// on. Called as `sh` the same binary ends the script instead, which is
+	// the POSIX rule rather than a second reading of the operand.
+	StatusArgNumeric
+	// StatusArgLeadingDigits reads the number the operand begins with and
+	// ignores whatever follows, masking to eight bits: ksh93. `return 3abc`
+	// is 3, `return r` is 0 whatever `r` holds, `return " -5x"` is 251, and
+	// nothing is ever refused. Not arithmetic: `return 010` is 10 there
+	// while `$((010))` is 8, so the operand is not going through the
+	// arithmetic reader.
+	StatusArgLeadingDigits
+	// StatusArgArithmetic evaluates the operand as an arithmetic expression
+	// and does not mask: zsh. `return r` is the value of `r`, `return r+1`
+	// is one more, `return "(r+1)*2"` is six for r=2, `return 0x10` is 16,
+	// and `return 300` leaves 300 behind. Nothing is refused either, but an
+	// expression that will not parse is a math error rather than a status.
+	//
+	// This is the one that made `return r` a silent wrong answer: the
+	// operand was discarded and `$?` handed back in its place, so a function
+	// meaning to return 3 returned whatever ran last.
+	StatusArgArithmetic
 )
 
-func (e ExitArgumentPolicy) String() string {
+func (e StatusArgumentPolicy) String() string {
 	switch e {
-	case ExitArgStrict:
+	case StatusArgStrict:
 		return "strict"
-	case ExitArgNumeric:
+	case StatusArgNumeric:
 		return "numeric"
-	case ExitArgLenient:
-		return "lenient"
+	case StatusArgLeadingDigits:
+		return "leading digits"
+	case StatusArgArithmetic:
+		return "arithmetic"
 	}
 	return "unspecified"
 }
 
-// exitArgument resolves the axis, and only for an argument that is actually
-// questionable — `exit 3` needs no answer from anyone.
-func (r *Runner) exitArgument() ExitArgumentPolicy {
-	p := r.sem().ExitArgument
-	if p == ExitArgUnspecified {
+// statusArgument resolves the axis, and only for an operand that is actually
+// questionable — `exit 3` and `return 3` need no answer from anyone.
+//
+// The builtin is named rather than assumed, because the axis now answers for
+// two of them and a complaint that always said `exit` would send a reader
+// looking at the wrong line.
+func (r *Runner) statusArgument(builtin string) StatusArgumentPolicy {
+	p := r.sem().StatusArgument
+	if p == StatusArgUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			r.unanswered("exit: this argument")))
+			r.unanswered(builtin+": this argument")))
 		r.status = 2
 		r.unspecified = true
 	}

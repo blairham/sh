@@ -2263,6 +2263,16 @@ grades it and nothing drift-checks it either, for the same reason.
 | `name/unset-v-validates-the-lone-dash` | **2>** `<shell>: 1: unset: -: bad variable name` *(status 2)* | `st=1` **2>** `<shell>: line 1: unset: `-': not a valid identifier` | **2>** `<shell>: line 1: unset: `-': not a valid identifier` *(status 1)* | `st=1` **2>** `<shell>: line 0: unset: `-': not a valid identifier` | `st=1` **2>** `<shell>: unset: -: invalid variable name` | `st=1` **2>** `<shell>:unset:1: not enough arguments` |
 | `return/with-nothing-to-return-from` | `before` *(status 7)* | `before~after st=2` **2>** `<shell>: line 1: return: can only `return' from a function or sourced script` | `before` **2>** `<shell>: line 1: return: can only `return' from a function or sourced script` *(status 2)* | `before~after st=1` **2>** `<shell>: line 0: return: can only `return' from a function or sourced script` | `before` *(status 7)* | `before` *(status 7)* |
 | `return/inside-a-sourced-file` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` |
+| `return/a-bare-name-as-the-operand` | **2>** `<shell>: 1: return: Illegal number: r` *(status 2)* | `st=2` **2>** `<shell>: line 1: return: r: numeric argument required` | **2>** `<shell>: line 1: return: r: numeric argument required` *(status 2)* | `st=255` **2>** `<shell>: line 0: return: r: numeric argument required` | `st=0` | `st=3` |
+| `return/a-bare-name-after-a-failed-command` | **2>** `<shell>: 1: return: Illegal number: r` *(status 2)* | `st=2` **2>** `<shell>: line 1: return: r: numeric argument required` | **2>** `<shell>: line 1: return: r: numeric argument required` *(status 2)* | `st=255` **2>** `<shell>: line 0: return: r: numeric argument required` | `st=0` | `st=3` |
+| `return/an-expression-as-the-operand` | **2>** `<shell>: 1: return: Illegal number: r+1` *(status 2)* | `st=2` **2>** `<shell>: line 1: return: r+1: numeric argument required` | **2>** `<shell>: line 1: return: r+1: numeric argument required` *(status 2)* | `st=255` **2>** `<shell>: line 0: return: r+1: numeric argument required` | `st=0` | `st=3` |
+| `return/an-expression-with-parentheses-as-the-operand` | **2>** `<shell>: 1: return: Illegal number: (r+1)*2` *(status 2)* | `st=2` **2>** `<shell>: line 1: return: (r+1)*2: numeric argument required` | **2>** `<shell>: line 1: return: (r+1)*2: numeric argument required` *(status 2)* | `st=255` **2>** `<shell>: line 0: return: (r+1)*2: numeric argument required` | `st=0` | `st=6` |
+| `return/digits-followed-by-text-as-the-operand` | **2>** `<shell>: 1: return: Illegal number: 3abc` *(status 2)* | `st=2` **2>** `<shell>: line 1: return: 3abc: numeric argument required` | **2>** `<shell>: line 1: return: 3abc: numeric argument required` *(status 2)* | `st=255` **2>** `<shell>: line 0: return: 3abc: numeric argument required` | `st=3` | **2>** `f: bad math expression: operator expected at `abc'` |
+| `return/a-status-over-two-hundred-and-fifty-five` | `st=300` | `st=44` | `st=44` | `st=44` | `st=44` | `st=300` |
+| `return/a-negative-status` | **2>** `<shell>: 1: return: Illegal number: -1` *(status 2)* | `st=255` | `st=255` | `st=255` | `st=255` | `st=-1` |
+| `return/no-operand-after-a-failed-command` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `return/a-bare-name-as-the-operand-in-a-sourced-file` | **2>** `<shell>: 2: return: Illegal number: r` *(status 2)* | `st=2` **2>** `./s.sh: line 2: return: r: numeric argument required` | **2>** `./s.sh: line 2: return: r: numeric argument required` *(status 2)* | `st=255` **2>** `./s.sh: line 2: return: r: numeric argument required` | `st=0` | `st=3` |
+| `exit/a-bare-name-as-the-operand` | **2>** `<shell>: 1: exit: Illegal number: r` *(status 2)* | **2>** `<shell>: line 1: exit: r: numeric argument required` *(status 2)* | **2>** `<shell>: line 1: exit: r: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: exit: r: numeric argument required` *(status 255)* | *(no output, status 0)* | *(no output, status 3)* |
 | `set/a-name-only-one-shell-has` | **2>** `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `st=0` | `st=0` | `st=0` | **2>** `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: posix` *(status 1)* |
 | `set/allexport-marks-what-follows` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` |
 | `cd/keeps-or-resolves-the-name-it-was-given` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` |
@@ -2928,6 +2938,48 @@ grades it and nothing drift-checks it either, for the same reason.
   printf 'return 7\n' > s.sh
   . ./s.sh
   echo "st=$?"
+  ```
+- `return/a-bare-name-as-the-operand` — `return`'s operand is an arithmetic *expression* in zsh, where the rest of the panel reads it as a number or refuses it: 3 there, 0 in ksh93, which reads the leading digits and finds none, and a refusal in dash and both bashes. `return $r` — with the `$` — is right in every shell, which is what hid this. Ours discarded the operand and handed back `$?` in every dialect (#1485)
+  ```sh
+  f(){ r=3; return r; }; f; echo "st=$?"
+  ```
+- `return/a-bare-name-after-a-failed-command` — the same operand with something failing in front of it, and the row that gives the mechanism away: no shell in the panel returns the *previous* command's status here, so a 1 is not a mis-evaluated operand but a discarded one. The row above alone cannot see that — a shell that ignored the operand would answer 0 there and look merely wrong rather than wrong for a reason
+  ```sh
+  f(){ r=3; false; return r; }; f; echo "st=$?"
+  ```
+- `return/an-expression-as-the-operand` — the operand as a whole expression rather than a bare name, which is what separates arithmetic from a variable lookup: zsh answers 3 and ksh93 still 0. A shell that expanded the name and stopped would pass the two rows above and fail here
+  ```sh
+  f(){ r=2; return r+1; }; f; echo "st=$?"
+  ```
+- `return/an-expression-with-parentheses-as-the-operand` — the far end of the same claim: 6 in zsh, so the operand gets the whole arithmetic reader rather than a hand-rolled sum. Recorded because a fix that special-cased `name` and `name+1` would satisfy both rows above and leave the third wrong
+  ```sh
+  f(){ r=2; return "(r+1)*2"; }; f; echo "st=$?"
+  ```
+- `return/digits-followed-by-text-as-the-operand` — the row that parts ksh93 from zsh, which the bare name cannot: ksh93 answers 3, reading the digits the word starts with and ignoring the rest, where zsh calls it a bad math expression. Without it the two look like one lenient reading, and `return 010` — 10 in ksh93 where `$((010))` is 8 — says the same thing from the other side
+  ```sh
+  f(){ return 3abc; }; f; echo "st=$?"
+  ```
+- `return/a-status-over-two-hundred-and-fifty-five` — whether the operand is masked to eight bits, and the only place it can be seen: bash and ksh93 answer 44 where dash and zsh hand back 300 whole. `exit 300` is 44 in all six however the shell read it, because a process carries eight bits — so a shell that masked everywhere would look right until a function returned a count
+  ```sh
+  f(){ return 300; }; f; echo "st=$?"
+  ```
+- `return/a-negative-status` — the other side of the mask and a third answer to the same question: 255 in bash and ksh93, a literal -1 in zsh, and a refusal in dash, which takes digits and no sign at all. Three behaviors on one line is why the axis is a policy rather than a bool
+  ```sh
+  f(){ return -1; }; f; echo "st=$?"
+  ```
+- `return/no-operand-after-a-failed-command` — the unanimous control: with nothing after it `return` hands back `$?`, so all six answer 1. It is what makes the rows above evidence rather than noise — the bug they record returned exactly this in every case, and without a row pinning when `$?` is the *right* answer a fix could take it away and nothing would notice
+  ```sh
+  f(){ false; return; }; f; echo "st=$?"
+  ```
+- `return/a-bare-name-as-the-operand-in-a-sourced-file` — the second route to `return` — a sourced file rather than a function body — reading the operand the same way, which is the check that a fix landed in the builtin and not on the function path alone. zsh answers 3 here as it does inside a function, and this tree has been bitten seven times by a second caller that missed what the first one learned
+  ```sh
+  printf 'r=3\nreturn r\n' > s.sh
+  . ./s.sh
+  echo "st=$?"
+  ```
+- `exit/a-bare-name-as-the-operand` — the same operand on the other builtin that takes one, and the reason the two share a single axis: zsh answers 3 for `exit r` exactly as it does for `return r`, ksh93 0 for both, dash and bash refuse both. Recorded so that a reading fixed for one cannot quietly stay broken for the other — which is what it was, with `exit r` at 0 under zsh while `return r` was being taught arithmetic
+  ```sh
+  r=3; exit r
   ```
 - `set/a-name-only-one-shell-has` — which long option names a shell has is not one list: fourteen are unanimous and the rest belong to one, two or three of the panel. `posix` belongs to one, and the other three refuse it — each in its own words and with its own status. Turning it *off* is the direction that matters, because it is what the thirteenth line of Homebrew's own script does and what a shell without a posix mode can honestly grant
   ```sh

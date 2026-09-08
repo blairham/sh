@@ -110,8 +110,8 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.BackgroundJobInput, interp.BackgroundJobInputIsTheShells; got != want {
 		t.Errorf("BackgroundJobInput = %v, want %v", got, want)
 	}
-	if got, want := s.ExitArgument, interp.ExitArgLenient; got != want {
-		t.Errorf("ExitArgument = %v, want %v", got, want)
+	if got, want := s.StatusArgument, interp.StatusArgArithmetic; got != want {
+		t.Errorf("StatusArgument = %v, want %v", got, want)
 	}
 	if got, want := s.SubshellJobTable, interp.SubshellJobsCleared; got != want {
 		t.Errorf("SubshellJobTable = %v, want %v", got, want)

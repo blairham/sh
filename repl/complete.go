@@ -219,6 +219,21 @@ type shellCompleter struct {
 	// shellCompleter.corrected for the measured pair.
 	expandsDirectory bool
 
+	// expandParams expands the parameters in a directory portion before it is
+	// read — `$HOME/docum` is a word under somebody's home directory and not
+	// one under a directory called `$HOME`. Nil where nothing has supplied
+	// one, which is what the zero value of this struct is and what a completer
+	// built for a test without a shell behind it is: the directory is then
+	// read as typed, which is what this package did everywhere before #1574.
+	//
+	// A function rather than a bool for the reason correctDir is one, and the
+	// second return is the part that makes it safe to hold: it is false for a
+	// word whose expansion would have to *run* something, and a completer
+	// cannot run a command on a keystroke. See
+	// interp.Runner.ExpandParametersOnly, which carries that argument and
+	// enforces it structurally.
+	expandParams func(string) (string, bool)
+
 	// passwd is where account names are read from; empty is /etc/passwd. A
 	// field so a test can ask about names that are not on the machine.
 	passwd string

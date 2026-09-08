@@ -33,8 +33,11 @@ func (s shellCompleter) paths(word string, keep func(dir string, e os.DirEntry) 
 	prefix := wordPrefix(word)
 	base := strings.TrimPrefix(dequote(word), dequote(prefix))
 	typed := dequote(prefix)
-	dir := s.readable(typed)
 	quote := wordQuote(word)
+	dir, ok := s.readable(typed, prefix)
+	if !ok {
+		return nil
+	}
 	// Through the boundary, not through os: the directory being listed is one
 	// the person at the prompt typed, which is the definition of inside. A
 	// refusal comes back as an error and is answered here the way a directory
@@ -42,7 +45,7 @@ func (s shellCompleter) paths(word string, keep func(dir string, e os.DirEntry) 
 	// boundary.Boundary.ReadDir, which carries the argument.
 	entries, err := s.bound.ReadDir(s.context(), dir)
 	if err != nil {
-		fixed, ok := s.corrected(typed, quote)
+		fixed, ok := s.corrected(typed, prefix, quote)
 		if !ok {
 			return nil
 		}
@@ -121,11 +124,15 @@ type correctedDir struct{ dir, prefix string }
 // comes first. The test is on the text as *typed*, which is the only place it
 // can be: `./documnets` and `documents/../documnets` resolve to the same
 // directory and bash answers them differently.
-func (s shellCompleter) corrected(typed string, quote rune) (correctedDir, bool) {
+func (s shellCompleter) corrected(typed, raw string, quote rune) (correctedDir, bool) {
 	if s.correctDir == nil || !correctableTyped(typed) {
 		return correctedDir{}, false
 	}
-	fixed := s.correctDir(s.readable(typed))
+	read, ok := s.readable(typed, raw)
+	if !ok {
+		return correctedDir{}, false
+	}
+	fixed := s.correctDir(read)
 	if fixed == "" || !s.expandsDirectory {
 		return correctedDir{}, false
 	}
@@ -179,12 +186,52 @@ func (s shellCompleter) runnable(dir string, e os.DirEntry) bool {
 	return err == nil && info.Mode()&0o111 != 0
 }
 
-// readable turns the directory part of a typed word into a path to read.
-func (s shellCompleter) readable(dir string) string {
+// readable turns the directory part of a typed word into a path to read, and
+// says whether it could be turned into one at all.
+//
+// The parameters in it are expanded, because a directory portion is text a
+// person typed at a prompt: `$HOME/docum` names a directory under their home
+// and not one called `$HOME`, and reading it literally is why this shell
+// offered nothing for a word with a parameter in it while every other column
+// completed it. Only the reading is expanded — what goes back into the line is
+// still the text as typed, which is bash's `direxpand`-off state and zsh's
+// only state. See shellCompleter.paths, which keeps the prefix.
+//
+// The expansion is deliberately not interp.Runner.Expand. That one runs
+// command substitutions, and a completer that reached for it would run
+// somebody's command on a keystroke; bash draws the line in the same place and
+// it is measured, `echo $HOME/docum<Tab>` completing where
+// `echo $(echo documents)/tar<Tab>` rings the bell. So the refusal is the
+// answer rather than a gap in one, and false here is the bell: no entries, and
+// Tab offers nothing.
+//
+// raw is the directory portion as it was *typed*, before dequote took the
+// quotes and the backslashes off, and it is there to answer one question the
+// dequoted text can no longer be asked: was the dollar a dollar? `\$HOME` and
+// `'$HOME'` both name a directory really called `$HOME`, and both arrive here
+// as `$HOME` with the mark that said so removed. A word carrying one is left
+// unexpanded entirely — the whole word and not the one dollar, because a
+// completer that expanded around a literal would be guessing at a shape this
+// issue never measured, and leaving it is this package's own previous
+// behavior rather than a new answer.
+//
+// The tilde is resolved first. A `~` means a home only where somebody wrote
+// one, so a parameter whose *value* begins with a tilde is a filename in every
+// shell in the panel, and expanding into the tilde stage rather than before it
+// would make this the one that disagreed.
+func (s shellCompleter) readable(dir, raw string) (string, bool) {
+	dir = s.expandTilde(dir)
+	if s.expandParams != nil && !hasLiteralDollar(raw) {
+		expanded, ok := s.expandParams(dir)
+		if !ok {
+			return "", false
+		}
+		dir = expanded
+	}
 	if dir == "" {
 		dir = "."
 	}
-	return s.resolve(s.expandTilde(dir))
+	return s.resolve(dir), true
 }
 
 // isUserWord reports whether a word names an account rather than a file.
@@ -273,4 +320,46 @@ func (s shellCompleter) userHomes() map[string]string {
 		homes[fields[0]] = fields[5]
 	}
 	return homes
+}
+
+// hasLiteralDollar reports whether the directory portion, as typed, marked a
+// dollar as meaning itself — `\$` anywhere outside single quotes, or any `$`
+// inside them.
+//
+// It reads the text before dequote rather than after, because that is the only
+// place the mark still exists: dequote's whole job is to take it off, and by
+// the time a path is a path a `$HOME` somebody escaped is indistinguishable
+// from one they meant. See shellCompleter.readable, which carries what is done
+// with the answer.
+func hasLiteralDollar(raw string) bool {
+	quote := byte(0)
+	for i := 0; i < len(raw); i++ {
+		switch c := raw[i]; {
+		case quote == '\'':
+			switch c {
+			case '\'':
+				quote = 0
+			case '$':
+				return true
+			}
+		case c == '\\':
+			// The escaped character, whatever it is, is skipped: only a
+			// dollar answers yes, and a `\\` must not let the next byte be
+			// read as an escape of its own.
+			if i+1 < len(raw) && raw[i+1] == '$' {
+				return true
+			}
+			i++
+		case c == '\'' && quote == 0:
+			quote = '\''
+		case c == '"':
+			switch quote {
+			case '"':
+				quote = 0
+			case 0:
+				quote = '"'
+			}
+		}
+	}
+	return false
 }

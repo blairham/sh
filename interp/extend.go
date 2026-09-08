@@ -534,6 +534,23 @@ func (r *Runner) NamedOption(name string) (on, known bool) {
 	return o.state(r), true
 }
 
+// ListedOptions is every row a `set -o` listing would write, in the order it
+// writes them: the dialect's own table where it installed one with
+// [Runner.SetOptionTable], and the substrate's names with their live states
+// otherwise.
+//
+// The read half of SetOptionTable, and the plural of [Runner.NamedOption].
+// Exported for a registered builtin that presents the same rows under its own
+// spelling and has to *narrow* them — bash's `shopt -o -s`, which writes the
+// options that are on and no others. A builtin cannot ask `set` for that: the
+// listing arrives already formatted, so filtering it would mean parsing text
+// this package just printed.
+//
+// It returns the same rows [Runner.listOptions] iterates, rather than
+// rebuilding them, so a caller and `set -o` itself can never disagree about
+// which names exist or what they say.
+func (r *Runner) ListedOptions() []ListedOption { return r.listedOptions() }
+
 // SetPromptUser names the user the `%n` prompt escape reports.
 //
 // Carried in rather than read here, for the rule the package comment states:

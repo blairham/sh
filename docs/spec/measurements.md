@@ -6766,6 +6766,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/dollar-dash-shows-a-letter-the-script-set` | `has-e` | `has-e` | `has-e` | `has-e` | `has-e` | `has-e` |
 | `opt/dollar-dash-drops-a-letter-turned-back-off` | `no-e` | `no-e` | `no-e` | `no-e` | `no-e` | `no-e` |
 | `opt/dollar-dash-noglob-letter-diverges` | `lower` | `lower` | `lower` | `lower` | `lower` | `upper` |
+| `shopt/histappend-is-accepted` | `st=127` **2>** `<shell>: 1: shopt: not found` | `st=0` | `st=0` | `st=0` | `st=127` **2>** `<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt` |
+| `shopt/cmdhist-and-lithist-read-as-on` | `st=127` **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` | `cmdhist             	on~lithist             	off~st=1` | `cmdhist             	on~lithist             	off~st=1` | `cmdhist        	on~lithist        	off~st=1` | `st=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` |
+| `shopt/turning-off-a-held-history-name` | `st=127` **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` *(status 127)* | `st=0~cmdhist             	off` *(status 1)* | `st=0~cmdhist             	off` *(status 1)* | `st=0~cmdhist        	off` *(status 1)* | `st=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found` *(status 127)* | `st=127` **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` *(status 127)* |
+| `shopt/checkwinsize-names-two-variables` | `st=127 COLUMNS=[unset]` **2>** `<shell>: 1: shopt: not found` | `st=0 COLUMNS=[unset]` | `st=0 COLUMNS=[unset]` | `st=0 COLUMNS=[unset]` | `st=127 COLUMNS=[unset]` **2>** `<shell>: shopt: not found` | `st=127 COLUMNS=[0]` **2>** `<shell>:1: command not found: shopt` |
+| `shopt/dash-o-reads-one-set-option` | `st=127` **2>** `<shell>: 1: shopt: not found` | `vi                  	off~st=1` | `vi                  	off~st=1` | `vi             	off~st=1` | `st=127` **2>** `<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt` |
+| `shopt/dash-o-writes-then-reads-back` | **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` *(status 127)* | `vi                  	on~set -o vi` | `vi                  	on~set -o vi` | `vi             	on~set -o vi` | **2>** `<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found` *(status 127)* | **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` *(status 127)* |
+| `shopt/dash-o-listing-is-the-set-o-listing` | `differs` **2>** `<shell>: 1: shopt: not found` | `same` | `same` | `same` | `differs` **2>** `<shell>: shopt: not found` | `differs` **2>** `<shell>:1: command not found: shopt` |
+| `shopt/dash-o-rejects-a-shopt-name` | `st=127` **2>** `<shell>: 1: shopt: not found` | `st=1` **2>** `<shell>: line 1: shopt: cdspell: invalid option name` | `st=1` **2>** `<shell>: line 1: shopt: cdspell: invalid option name` | `st=1` **2>** `<shell>: line 0: shopt: cdspell: invalid option name` | `st=127` **2>** `<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt` |
 
 - `xtrace/traces-each-command` — the structure is unanimous: every simple command goes to stderr, expanded, before it runs
   ```sh
@@ -7114,6 +7122,38 @@ grades it and nothing drift-checks it either, for the same reason.
 - `opt/dollar-dash-noglob-letter-diverges` — the letter itself is an axis: POSIX names `f` and three of the four report it, while zsh reports the capital — `-F` being its own short spelling of noglob, the same split `set -f` measures from the writing side
   ```sh
   set -o noglob; case $- in *f*) echo lower;; *F*) echo upper;; *) echo neither;; esac
+  ```
+- `shopt/histappend-is-accepted` — the first line of an ordinary `~/.bashrc` and the first of the nine `shopt` names #1429 collected: the builtin belongs to one shell, so the other three record its absence, and the two bash columns accept the name because appending to the history file is what each of them already does
+  ```sh
+  shopt -s histappend; echo st=$?
+  ```
+- `shopt/cmdhist-and-lithist-read-as-on` — the two names that describe a multi-line command's place in the history, and the reason the state has to be readable rather than merely settable: bash keeps `cmdhist` on and `lithist` off by default, so a shell claiming both is claiming its own answer and not bash's — which is what a query is for
+  ```sh
+  shopt cmdhist; shopt lithist; echo st=$?
+  ```
+- `shopt/turning-off-a-held-history-name` — the direction that separates a recorded bit from an implemented one: bash really can split a construct into a line each and says so quietly, and a shell that cannot has to refuse out loud instead of accepting and changing nothing
+  ```sh
+  shopt -u cmdhist; echo st=$?; shopt cmdhist
+  ```
+- `shopt/checkwinsize-names-two-variables` — the name #1429 expected to be already true here and which measurement said was not: what it promises is that `$LINES` and `$COLUMNS` follow the window, so the option and the variable are recorded together — under `-c` neither shell has a terminal and both report the variable unset, which is exactly why the option's own answer is the part worth pinning
+  ```sh
+  shopt -s checkwinsize; echo "st=$? COLUMNS=[${COLUMNS-unset}]"
+  ```
+- `shopt/dash-o-reads-one-set-option` — `-o` reads the `set -o` namespace through `shopt`'s interface, which is how a script tests one option without parsing `$SHELLOPTS`; the row pins the two-column form and the status, since the status is the whole answer when `-q` is used instead
+  ```sh
+  shopt -o vi; echo st=$?
+  ```
+- `shopt/dash-o-writes-then-reads-back` — the round trip through the one interface: `-o -s` moves a `set -o` option, the query reports the move, and `-p` writes it back as a `set` command rather than a `shopt` one — a shell whose reading and writing halves reached different tables would pass the first line and fail the second
+  ```sh
+  shopt -o -s vi; shopt -o vi; shopt -o -p vi
+  ```
+- `shopt/dash-o-listing-is-the-set-o-listing` — measured byte for byte in bash 5.3.15, and it is the reason `shopt -o` has no format of its own: the listing already belongs to `set`, so a second copy of it would be a second thing to keep in step
+  ```sh
+  shopt -o > a; set -o > b; cmp -s a b && echo same || echo differs
+  ```
+- `shopt/dash-o-rejects-a-shopt-name` — the two namespaces are not one: `cdspell` is a perfectly good `shopt` name and not a `set -o` option, and bash's wording for the refusal is a word shorter here — `invalid option name` against the `invalid shell option name` its own names get
+  ```sh
+  shopt -o cdspell; echo st=$?
   ```
 
 ## parameter expansion

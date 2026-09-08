@@ -5,6 +5,7 @@ package bash_test
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,9 +138,164 @@ func TestShoptDashOReachesTheSetOptions(t *testing.T) {
 	if st != 0 || !strings.Contains(out, "ps=1") {
 		t.Errorf("shopt -so pipefail gave %q status %d, want the pipe failing", out, st)
 	}
+	// `shopt -o` alone is `set -o`'s own listing, which is what bash writes
+	// there byte for byte. Asserted against `set -o` in the same shell
+	// rather than against a copy of the format, since a copy is the thing
+	// that drifts.
 	out, st = runBash(t, t.TempDir(), `shopt -o`)
-	if st != 2 || !strings.Contains(out, "not implemented") {
-		t.Errorf("shopt -o alone gave %q status %d, want a refusal", out, st)
+	ref, refSt := runBash(t, t.TempDir(), `set -o`)
+	if st != 0 || refSt != 0 || out != ref {
+		t.Errorf("shopt -o gave %q status %d, want set -o's %q status %d", out, st, ref, refSt)
+	}
+	out, st = runBash(t, t.TempDir(), `shopt -o -p`)
+	ref, refSt = runBash(t, t.TempDir(), `set +o`)
+	if st != 0 || refSt != 0 || out != ref {
+		t.Errorf("shopt -o -p gave %q status %d, want set +o's %q status %d", out, st, ref, refSt)
+	}
+}
+
+// `shopt -o name` reads the `set -o` namespace through this builtin's own
+// interface, which is the spelling a script uses to test one option without
+// parsing `$SHELLOPTS`. It was refused outright before #1429.
+//
+// Every case pins the *text* as well as the status. A test that only asked
+// `shopt -o -s vi; shopt -o -q vi` would pass against a table that stored
+// anything at all, which is the failure mode an option table invites: the
+// listing and the status together are what separate a working option from a
+// bit-bucket.
+func TestShoptDashOReadsOneName(t *testing.T) {
+	for _, tc := range []struct {
+		src    string
+		want   string
+		status int
+	}{
+		// A named row is padded to *shopt's* width, not `set -o`'s — the
+		// two listings really are two widths, and both are measured.
+		{`shopt -o vi`, "vi                  \toff\n", 1},
+		{`shopt -o -s vi; shopt -o vi`, "vi                  \ton\n", 0},
+		// -p writes a `set` line rather than a `shopt` one, because
+		// `shopt -s vi` would not put it back.
+		{`shopt -o -p vi`, "set +o vi\n", 1},
+		{`shopt -o -s vi; shopt -o -p vi`, "set -o vi\n", 0},
+		// -q is the status alone.
+		{`shopt -o -q vi`, "", 1},
+		{`shopt -o -s vi; shopt -o -q vi`, "", 0},
+		{`shopt -o -q`, "", 0},
+		// Every name asked for must be on for success, and each is printed.
+		{
+			`shopt -o -s vi; shopt -o vi xtrace`,
+			"vi                  \ton\nxtrace              \toff\n", 1,
+		},
+	} {
+		out, st := runBash(t, t.TempDir(), tc.src)
+		if out != tc.want || st != tc.status {
+			t.Errorf("%s = %q status %d, want %q status %d",
+				tc.src, out, st, tc.want, tc.status)
+		}
+	}
+	// The `-o` namespace is not this builtin's own, and neither is its
+	// wording: `cdspell` is a fine `shopt` name and not an option name. `-q`
+	// silences the *listing* and not the complaint, measured.
+	out, st := runBash(t, t.TempDir(), `shopt -o -q cdspell`)
+	if st != 1 || !strings.Contains(out, "shopt: cdspell: invalid option name") {
+		t.Errorf("shopt -o -q cdspell gave %q status %d", out, st)
+	}
+	// A name the `set -o` table does not have is refused by that name, and
+	// the sentence is a word shorter than the one a bad `shopt` name gets.
+	out, st = runBash(t, t.TempDir(), `shopt -o nosuchopt`)
+	if st != 1 || !strings.Contains(out, "shopt: nosuchopt: invalid option name") ||
+		strings.Contains(out, "invalid shell option name") {
+		t.Errorf("shopt -o nosuchopt gave %q status %d", out, st)
+	}
+	// It carries on past one, printing the names it does have.
+	out, st = runBash(t, t.TempDir(), `shopt -o -s vi; shopt -o vi nosuchopt`)
+	if st != 1 || !strings.Contains(out, "vi                  \ton\n") ||
+		!strings.Contains(out, "nosuchopt") {
+		t.Errorf("a mixed shopt -o gave %q status %d", out, st)
+	}
+}
+
+// `shopt -o -s` and `-o -u` with nothing named narrow `set -o`'s listing to
+// the rows that are on or off. The width is `set -o`'s there, not shopt's,
+// because the listing is `set -o`'s — measured, and the reason interp
+// exposes the rows rather than only the printed listing.
+func TestShoptDashOListsNarrowed(t *testing.T) {
+	out, st := runBash(t, t.TempDir(), `shopt -o -s vi; shopt -o -s`)
+	if st != 0 || !strings.Contains(out, "vi             \ton\n") ||
+		strings.Contains(out, "xtrace") {
+		t.Errorf("shopt -o -s listed %q status %d", out, st)
+	}
+	out, st = runBash(t, t.TempDir(), `shopt -o -u`)
+	if st != 0 || !strings.Contains(out, "xtrace         \toff\n") ||
+		strings.Contains(out, "braceexpand") {
+		t.Errorf("shopt -o -u listed %q status %d", out, st)
+	}
+	// Every row `set -o` writes is in one of the two halves and in neither
+	// twice, which is what makes the narrowing a partition rather than a
+	// filter that happens to look right.
+	n := func(src string) int {
+		out, _ := runBash(t, t.TempDir(), src)
+		return strings.Count(out, "\n")
+	}
+	on, off, all := n(`shopt -o -s`), n(`shopt -o -u`), n(`shopt -o`)
+	if all == 0 || on+off != all {
+		t.Errorf("shopt -o -s (%d) + -o -u (%d) != shopt -o (%d)", on, off, all)
+	}
+}
+
+// The three history names #1429 asked about, and the six it left refused.
+//
+// This is the whole point of the issue: a `shopt` that accepted everything
+// would put a startup file in the position of believing a setting took
+// effect. So the granted names and the refused ones are asserted together —
+// the split is the fix, not the count.
+func TestShoptHistoryNamesAreOnAndTheRestStayRefused(t *testing.T) {
+	// Granted, because this shell already does what each name asks for: the
+	// history writer appends rather than rewriting, a construct typed over
+	// several lines is one entry, and that entry keeps its newlines rather
+	// than being joined with semicolons.
+	for _, name := range []string{"histappend", "cmdhist", "lithist"} {
+		if out, st := runBash(t, t.TempDir(), "shopt -s "+name); st != 0 || out != "" {
+			t.Errorf("shopt -s %s = %q status %d, want a quiet success", name, out, st)
+		}
+		// Readable as on, in all three spellings, or the grant is a lie.
+		out, st := runBash(t, t.TempDir(), "shopt "+name)
+		want := fmt.Sprintf("%-20s\ton\n", name)
+		if st != 0 || out != want {
+			t.Errorf("shopt %s = %q status %d, want %q status 0", name, out, st, want)
+		}
+		if out, st := runBash(t, t.TempDir(), "shopt -p "+name); st != 0 || out != "shopt -s "+name+"\n" {
+			t.Errorf("shopt -p %s = %q status %d", name, out, st)
+		}
+		// And it must be in the *on* half of the listing, which is the
+		// assertion a bit-bucket cannot satisfy.
+		out, _ = runBash(t, t.TempDir(), "shopt -s")
+		if !strings.Contains(out, want) {
+			t.Errorf("shopt -s listing lacks %q: %q", want, out)
+		}
+		// Turning one off is a promise this shell cannot keep.
+		out, st = runBash(t, t.TempDir(), "shopt -u "+name)
+		if st != 1 || !strings.Contains(out, "shopt: "+name+": not implemented") {
+			t.Errorf("shopt -u %s = %q status %d, want a refusal", name, out, st)
+		}
+	}
+	// Refused, because nothing here implements them. checkwinsize is in this
+	// list rather than the one above on the measurement: the name promises
+	// LINES and COLUMNS move with the window and this shell never assigns
+	// either, so granting it would be exactly the quiet lie #1352 named.
+	for _, name := range []string{
+		"checkwinsize", "cdspell", "dirspell",
+		"no_empty_cmd_completion", "autocd", "checkjobs",
+	} {
+		out, st := runBash(t, t.TempDir(), "shopt -s "+name)
+		if st != 1 || !strings.Contains(out, "shopt: "+name+": not implemented") {
+			t.Errorf("shopt -s %s = %q status %d, want a refusal by name", name, out, st)
+		}
+		// Refused, and still readable as off rather than as absent.
+		want := fmt.Sprintf("%-20s\toff\n", name)
+		if out, st := runBash(t, t.TempDir(), "shopt "+name); st != 1 || out != want {
+			t.Errorf("shopt %s = %q status %d, want %q status 1", name, out, st, want)
+		}
 	}
 }
 

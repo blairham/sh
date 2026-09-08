@@ -827,6 +827,21 @@ type Runner struct {
 	// `bash -c 'shopt -s cdspell; cd subdri'` refuses exactly as a shell
 	// without the option does.
 	cdCorrectsSpelling bool
+	// checksRunningJobsAtExit is permission to hold the exit for a job that
+	// is still running, and to follow the sentence with the job table. Both
+	// shells that hold an exit call it `checkjobs`; see
+	// Runner.ChecksRunningJobsAtExit for the measurements and for why one
+	// bit carries both halves.
+	//
+	// Off by default because bash starts it off, and turned on by the zsh
+	// dialect in Apply, where that shell starts it on.
+	checksRunningJobsAtExit bool
+	// stoppedJobExitCheckOff is the deviation behind the *stopped* half of
+	// the same question, stored as the deviation for the reason
+	// emptyCommandWordOffersNothing is: the zero value has to be the shell
+	// Semantics.StoppedJobsHoldTheExit already describes, and only a session
+	// that has said `unsetopt checkjobs` is departing from it.
+	stoppedJobExitCheckOff bool
 	// editingMode is which of the two `set -o` editing modes is selected,
 	// and it is one field because the two names are one state: `set -o vi`
 	// in bash 5.3 and in ksh93 turns `emacs` off in the same breath.
@@ -914,10 +929,10 @@ type Runner struct {
 	// number can carry.
 	lastJobPID    int
 	lastJobPIDSet bool
-	// toldOfStoppedJobs says the chunk *before* this one showed the person
-	// the jobs that are stopped, so the shell will not hold its exit for them
-	// again; tellingOfStoppedJobs is this chunk saying so, and becomes the
-	// other at the next one.
+	// toldOfJobsAtExit says the chunk *before* this one showed the person the
+	// jobs that would be abandoned, so the shell will not hold its exit for
+	// them again; tellingOfJobsAtExit is this chunk saying so, and becomes
+	// the other at the next one.
 	//
 	// Two fields because what suppresses the warning is the thing immediately
 	// before it and not anything that has ever happened. Measured through a
@@ -926,8 +941,8 @@ type Runner struct {
 	// the same thing on purpose; and ^Z, `jobs`, any other command, `exit`
 	// warns again. One sticky flag gets the first three right and the fourth
 	// wrong.
-	toldOfStoppedJobs    bool
-	tellingOfStoppedJobs bool
+	toldOfJobsAtExit    bool
+	tellingOfJobsAtExit bool
 	// bg is set on the runner *inside* a background job, so the process it
 	// starts can be recorded against the job.
 	bg *Job
@@ -1751,7 +1766,7 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	// A chunk is a typed line, and whether the shell has just shown the person
 	// its stopped jobs is a fact about the line before this one — see the two
 	// fields for what that buys over remembering it forever.
-	r.toldOfStoppedJobs, r.tellingOfStoppedJobs = r.tellingOfStoppedJobs, false
+	r.toldOfJobsAtExit, r.tellingOfJobsAtExit = r.tellingOfJobsAtExit, false
 	r.ensurePWD()
 	r.ensureSpecials()
 	r.ensureImportedFunctions()

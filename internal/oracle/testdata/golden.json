@@ -96130,6 +96130,94 @@
         "TimedOut": false
       }
     },
+    "shopt/checkjobs-is-accepted-and-still-not-a-script-feature": {
+      "bash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 0: shopt: checkjobs: invalid shell option name",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: shopt: not found",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: shopt: not found",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: shopt",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "shopt/checkjobs-round-trips-from-off": {
+      "bash": {
+        "Stdout": "checkjobs           \toff~checkjobs           \ton~checkjobs           \toff~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "checkjobs           \toff~checkjobs           \ton~checkjobs           \toff~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 0: shopt: checkjobs: invalid shell option name~\u003cshell\u003e: line 0: shopt: checkjobs: invalid shell option name~\u003cshell\u003e: line 0: shopt: checkjobs: invalid shell option name~\u003cshell\u003e: line 0: shopt: checkjobs: invalid shell option name~\u003cshell\u003e: line 0: shopt: checkjobs: invalid shell option name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: shopt: not found~\u003cshell\u003e: 1: shopt: not found~\u003cshell\u003e: 1: shopt: not found~\u003cshell\u003e: 1: shopt: not found~\u003cshell\u003e: 1: shopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: shopt: not found~\u003cshell\u003e: shopt: not found~\u003cshell\u003e: shopt: not found~\u003cshell\u003e: shopt: not found~\u003cshell\u003e: shopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e:1: command not found: shopt~\u003cshell\u003e:1: command not found: shopt~\u003cshell\u003e:1: command not found: shopt~\u003cshell\u003e:1: command not found: shopt~\u003cshell\u003e:1: command not found: shopt",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "shopt/checkwinsize-is-on-before-anything-asks": {
       "bash": {
         "Stdout": "checkwinsize        \ton~st=0",

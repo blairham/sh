@@ -577,7 +577,7 @@ func (s Shell) interrupted(sig *interrupts) bool {
 // reason: this is the shell speaking to the person rather than drawing a line.
 func (s Shell) heldForStoppedJobs(state *terminalState) bool {
 	var held bool
-	s.inLineDiscipline(state, func() { held = s.Runner.HoldsExitForStoppedJobs() })
+	s.inLineDiscipline(state, func() { held = s.Runner.HoldsExitForJobs() })
 	return held
 }
 
@@ -867,7 +867,7 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *outpu
 			// End of input ends the session, exactly as ^D does at a
 			// terminal. A final line without a newline is still a line,
 			// which is why this asks about the text and not only the error.
-			if s.Runner.HoldsExitForStoppedJobs() {
+			if s.Runner.HoldsExitForJobs() {
 				// And it is held back for a stopped job exactly as ^D is —
 				// the same call in both loops, so they cannot disagree about
 				// it. Once: the hold records that it said so, so the next

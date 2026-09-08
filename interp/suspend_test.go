@@ -378,22 +378,157 @@ func TestWhetherTheLastCommandWasInterrupted(t *testing.T) {
 	}
 }
 
-// A stopped job that is still running is not one to hold an exit for: `bg`
-// resumed it, nothing about it is waiting to be told to go on, and a shell
-// that stayed for it would refuse to leave for as long as any job existed.
-func TestARunningJobDoesNotHoldTheExit(t *testing.T) {
+// A job that is running again is not one the *stopped* warning is about:
+// `bg` resumed it, nothing about it is waiting to be told to go on, and a
+// shell that gave the stopped-job sentence for it would be naming the wrong
+// state.
+//
+// It is also the option's off state, which is where both shells that have the
+// name start bash: with `checkjobs` unasked for, a running job does not hold
+// the exit at all. The on state is the test below.
+func TestARunningJobDoesNotHoldTheExitWithTheOptionOff(t *testing.T) {
 	f := &fakeJobs{waits: []Wait{stopped}}
 	_, _, r := jobSession(t, f, echoCmd+"\nbg", true, func(_ *Semantics, d *Diagnostics) {
 		d.StoppedJobsAtExit = "there are stopped jobs"
+		d.RunningJobsAtExit = "there are running jobs"
 	})
 	if jobs := r.Jobs(); len(jobs) != 1 || jobs[0].Stopped {
 		t.Fatalf("jobs = %+v, want the one job resumed", jobs)
+	}
+	if r.ChecksRunningJobsAtExit() {
+		t.Error("a runner nobody asked starts with the running-job check on")
 	}
 	out, _, _ := jobRun2(t, r, "exit")
 	if !r.Exited() {
 		t.Error("the shell stayed for a running job, want it to leave")
 	}
+	if strings.Contains(out, "jobs") {
+		t.Errorf("said %q, want nothing", out)
+	}
+}
+
+// With the option on — bash's `shopt -s checkjobs`, zsh's `setopt checkjobs`,
+// which is on there to begin with — a running job holds the exit in its own
+// words, and the same told-once rules apply as for a stopped one.
+//
+// Measured through a pseudo-terminal against bash 5.3.15 and zsh 5.9.2 on
+// 2026-09-08: `sleep 40 &` then `exit` says `There are running jobs.` /
+// `you have running jobs.` and draws another prompt; a second `exit` leaves;
+// a `jobs` listing before the `exit` counts as having been told; and any
+// other command in between does not.
+func TestAnExitIsHeldBackForARunningJob(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		lines []string
+		want  bool
+	}{
+		{"straight after the job started", []string{"exit"}, true},
+		{"a second time, after the warning", []string{"exit", "exit"}, false},
+		{"after any other command", []string{"true", "exit"}, true},
+		{"after a listing", []string{"jobs", "exit"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeJobs{waits: []Wait{stopped}}
+			_, _, r := jobSession(t, f, echoCmd+"\nbg", true, func(_ *Semantics, d *Diagnostics) {
+				d.StoppedJobsAtExit = "there are stopped jobs"
+				d.RunningJobsAtExit = "there are running jobs"
+			})
+			r.SetChecksRunningJobsAtExit(true)
+			var out string
+			for _, line := range tc.lines {
+				out, _, _ = jobRun2(t, r, line)
+			}
+			if held := !r.Exited(); held != tc.want {
+				t.Errorf("held = %v, want %v", held, tc.want)
+			}
+			if tc.want && !strings.Contains(out, "there are running jobs") {
+				t.Errorf("said %q, want the running-job wording", out)
+			}
+		})
+	}
+}
+
+// One of each: the stopped one wins the sentence.
+//
+// Measured, and in both shells — a session holding a suspended job and a
+// `sleep 40 &` is told `There are stopped jobs.` / `you have suspended jobs.`
+// and never hears about the running one, even though bash's listing under the
+// sentence shows both rows.
+func TestAStoppedJobWinsTheSentenceOverARunningOne(t *testing.T) {
+	f := &fakeJobs{waits: []Wait{stopped, stopped}}
+	_, _, r := jobSession(t, f, echoCmd+"\nbg\n"+echoCmd, true, func(_ *Semantics, d *Diagnostics) {
+		d.StoppedJobsAtExit = "there are stopped jobs"
+		d.RunningJobsAtExit = "there are running jobs"
+	})
+	r.SetChecksRunningJobsAtExit(true)
+	jobs := r.Jobs()
+	if len(jobs) != 2 || jobs[0].Stopped || !jobs[1].Stopped {
+		t.Fatalf("jobs = %+v, want one resumed and one stopped", jobs)
+	}
+	out, _, _ := jobRun2(t, r, "exit")
+	if !r.Exited() && !strings.Contains(out, "there are stopped jobs") {
+		t.Errorf("said %q, want the stopped-job wording to win", out)
+	}
+	if strings.Contains(out, "there are running jobs") {
+		t.Errorf("said %q, want the running one not mentioned", out)
+	}
+}
+
+// The stopped half can be switched off as well, and only one shell lets a
+// session do it: measured, `unsetopt checkjobs` in zsh 5.9.2 leaves at the
+// first `exit` with a job suspended, where `shopt -u checkjobs` in bash
+// 5.3.15 still says `There are stopped jobs.` and stays. The switch is here
+// and which dialect moves it is the dialect's business.
+func TestTheStoppedJobCheckCanBeTurnedOff(t *testing.T) {
+	f := &fakeJobs{waits: []Wait{stopped}}
+	_, _, r := jobSession(t, f, echoCmd, true, func(_ *Semantics, d *Diagnostics) {
+		d.StoppedJobsAtExit = "there are stopped jobs"
+	})
+	if !r.ChecksStoppedJobsAtExit() {
+		t.Error("a runner nobody asked starts with the stopped-job check off")
+	}
+	r.SetChecksStoppedJobsAtExit(false)
+	out, _, _ := jobRun2(t, r, "exit")
+	if !r.Exited() {
+		t.Error("the shell stayed with the check turned off, want it to leave")
+	}
 	if strings.Contains(out, "stopped jobs") {
 		t.Errorf("said %q, want nothing", out)
+	}
+}
+
+// The job table under the sentence: one shell writes it and the other never
+// does, and the one that writes it only does so while the option is on.
+//
+// Both halves are asserted, because the absence is as much a fact as the
+// presence — a shell that printed the table where zsh does not would be
+// adding output to somebody's terminal on the way out.
+func TestTheJobTableUnderTheHeldExit(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		lists   Answer
+		checks  bool
+		wantRow bool
+	}{
+		{"the shell that lists, with the option on", Yes, true, true},
+		{"the shell that lists, with the option off", Yes, false, false},
+		{"the shell that never lists", No, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeJobs{waits: []Wait{stopped}}
+			_, _, r := jobSession(t, f, echoCmd, true, func(s *Semantics, d *Diagnostics) {
+				s.HeldExitListsTheJobs = tc.lists
+				d.StoppedJobsAtExit = "there are stopped jobs"
+			})
+			r.SetChecksRunningJobsAtExit(tc.checks)
+			out, _, _ := jobRun2(t, r, "exit")
+			if !strings.Contains(out, "there are stopped jobs") {
+				t.Fatalf("said %q, want the warning", out)
+			}
+			// The row's own word, which the sentence above does not carry.
+			if got := strings.Contains(out, "Stopped"); got != tc.wantRow {
+				t.Errorf("listed = %v, want %v (said %q)", got, tc.wantRow, out)
+			}
+		})
 	}
 }

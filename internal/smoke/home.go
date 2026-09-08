@@ -142,8 +142,9 @@ PS2='%s'
 %s
 %s
 %s
+%s
 `, rcPromptPrefix, d.CwdEscape, promptFieldSep, d.UserEscape, promptAnchor, continuationPrompt,
-		d.PromptHook, d.AutoCdOption, d.CdSpellOption,
+		d.PromptHook, d.AutoCdOption, d.CdSpellOption, d.CheckJobsOption,
 		strings.Join(d.RebindKeyInViMode, "\n"), d.RebindKey)
 }
 

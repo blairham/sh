@@ -300,6 +300,11 @@ func Semantics() interp.Semantics {
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.
 	s.StoppedJobsHoldTheExit = interp.Yes
+	// And writes the job table under the sentence while `checkjobs` is on —
+	// measured, `[1]+  Stopped ./ticker` and `[2]-  Running sleep 40 &`
+	// below `There are stopped jobs.`, and nothing below it with the option
+	// off.
+	s.HeldExitListsTheJobs = interp.Yes
 	// `autocd` says what it did before doing it: with the option on, a bare
 	// `subdir` writes `cd -- subdir` and then moves. Measured 2026-09-08
 	// through a pseudo-terminal against bash 5.3.15, which is the only route
@@ -850,6 +855,7 @@ func Diagnostics() interp.Diagnostics {
 		// refusal says 1, where the ^D that was refused leaves the status
 		// alone.
 		StoppedJobsAtExit:       "There are stopped jobs.",
+		RunningJobsAtExit:       "There are running jobs.",
 		StoppedJobsAtExitStatus: 1,
 		// No verb at all: the name, then the OS string. Same either way —
 		// bash does not distinguish opening from creating.

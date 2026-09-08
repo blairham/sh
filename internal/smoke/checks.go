@@ -691,6 +691,74 @@ func checks() []check {
 			},
 		},
 		{
+			name:   "a running job holds the exit",
+			proves: "the option a startup file sets is read, and leaving is refused once while a job is still going",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				if !haveExternal("sleep") {
+					return Blocked, "no sleep on PATH to leave running"
+				}
+				// The table has to be clear of *stopped* jobs first, because
+				// a stopped one wins the sentence in both shells — measured —
+				// and a leftover from the suspend rows would have this graded
+				// against the wrong wording. `jobs` is also what clears the
+				// warning's told-once flag, so it has to come before the
+				// command that starts the job rather than after it.
+				if err := s.typeLine("jobs"); err != nil {
+					return Fail, err.Error()
+				}
+				if err := s.atPrompt(); err != nil {
+					return Fail, "the shell did not come back after jobs: " + err.Error()
+				}
+				if strings.Contains(s.drawn(), s.dialect.JobStopped) {
+					return Blocked, "a job left " + s.dialect.JobStopped +
+						" by an earlier row would be the one reported: " + s.drawn()
+				}
+				if err := s.typeLine("sleep 30 &"); err != nil {
+					return Fail, err.Error()
+				}
+				if err := s.atPrompt(); err != nil {
+					return Fail, "the shell did not come back after starting a background job: " +
+						err.Error()
+				}
+				// Typed, not run through runLine: `exit` is the one line in
+				// this suite whose success is the shell *not* doing what it
+				// was told.
+				if err := s.typeLine("exit"); err != nil {
+					return Fail, err.Error()
+				}
+				if err := s.screen.Await(s.dialect.RunningJobsAtExit, budget); err != nil {
+					return Fail, "the shell did not say " + quote(s.dialect.RunningJobsAtExit) +
+						" when told to leave with a job still running: " + err.Error()
+				}
+				// It said so and it is still here, which is the half that
+				// makes the sentence mean anything: a shell that printed the
+				// warning and left anyway would pass on the wording alone.
+				if err := s.atPrompt(); err != nil {
+					return Fail, "the shell said so and then left anyway: " + err.Error()
+				}
+				// Only what was drawn *after* the sentence counts as the
+				// listing, and that is not fussiness: zsh's sentence is
+				// `you have running jobs.`, so a search of the whole screen
+				// for the word this shell lists a running job with finds it
+				// inside the warning and reports a table that is not there.
+				held := s.screen.Text()
+				after := held[strings.LastIndex(held, s.dialect.RunningJobsAtExit)+
+					len(s.dialect.RunningJobsAtExit):]
+				listed := strings.Contains(after, s.dialect.JobRunning)
+				if listed != s.dialect.ListsJobsAtExit {
+					return Fail, fmt.Sprintf(
+						"the job table under the warning: listed=%v, want %v: %s",
+						listed, s.dialect.ListsJobsAtExit, quote(Readable(after)))
+				}
+				// Put down before the next row, and with a command rather
+				// than a second `exit` — which is the thing that would work.
+				if err := s.typeLine("kill %1"); err != nil {
+					return Fail, err.Error()
+				}
+				return Pass, "the exit was held and the shell said " + quote(s.dialect.RunningJobsAtExit)
+			},
+		},
+		{
 			name: "every newline reached the terminal whole",
 			proves: "the next prompt starts at column 0, because nothing was written " +
 				"while the terminal had its newline translation off",

@@ -196,8 +196,24 @@ var zshOptions = []zshOption{
 	recorded("cdsilent", false),
 	recorded("chasedots", false),
 	fixedOptBacked("chaselinks", false, "physical", false),
-	recorded("checkjobs", true),
-	recorded("checkrunningjobs", true),
+	// The two names zsh checks its job table with, and they are one question
+	// asked twice: `checkjobs` is the master and `checkrunningjobs` narrows
+	// what the master looks at. Measured through a pseudo-terminal against
+	// zsh 5.9.2 on 2026-09-08, with the job started and then `exit` typed:
+	//
+	//   - both on (the defaults): a `sleep 40 &` is `you have running jobs.`
+	//     and a ^Z'd job is `you have suspended jobs.`;
+	//   - `unsetopt checkrunningjobs`: the running one leaves at once, the
+	//     suspended one still holds;
+	//   - `unsetopt checkjobs`: *both* leave at once, which is where this
+	//     shell differs from bash — `shopt -u checkjobs` there still holds
+	//     for a suspended job.
+	//
+	// So the master moves both core switches and the narrower name moves
+	// only one, and each has to recompute the running switch from both bits
+	// rather than from its own. See checkJobsOption.
+	checkJobsOption(),
+	checkRunningJobsOption(),
 	setOptBacked("clobber", true, "noclobber", true),
 	recorded("clobberempty", false),
 	recorded("combiningchars", false),
@@ -491,6 +507,50 @@ func switchBacked(base string, def bool, get func(*interp.Runner) bool, set func
 		get: get,
 		set: func(r *interp.Runner, on bool) int { set(r, on); return 0 },
 	}
+}
+
+// checkJobsOption is zsh's `checkjobs`: the master over both halves of
+// looking at the job table before leaving.
+//
+// It reads back the *stopped* switch, because that is the one it alone
+// governs — the running switch is shared with `checkrunningjobs`, and reading
+// it here would report `checkjobs` as off in a session that had only turned
+// the narrower name off.
+func checkJobsOption() zshOption {
+	return zshOption{
+		base: "checkjobs", def: true,
+		get: (*interp.Runner).ChecksStoppedJobsAtExit,
+		set: func(r *interp.Runner, on bool) int {
+			r.SetChecksStoppedJobsAtExit(on)
+			r.SetChecksRunningJobsAtExit(on && checkRunningJobsBit(r))
+			return 0
+		},
+	}
+}
+
+// checkRunningJobsOption is zsh's `checkrunningjobs`, which decides whether
+// the master looks at running jobs as well as suspended ones.
+//
+// Its own bit lives in the recorded store rather than in the core switch,
+// which is the only arrangement that survives the master being turned off and
+// on again: the core switch is false throughout that, so a shell reading it
+// back would forget that this name had been left on. It is not `recorded` —
+// something reads it, which is the distinction storeBacked exists to draw.
+func checkRunningJobsOption() zshOption {
+	o := storeBacked("checkrunningjobs", true)
+	store := o.set
+	o.set = func(r *interp.Runner, on bool) int {
+		code := store(r, on)
+		r.SetChecksRunningJobsAtExit(on && r.ChecksStoppedJobsAtExit())
+		return code
+	}
+	return o
+}
+
+// checkRunningJobsBit reads that stored bit without going through the table,
+// for the master's setter.
+func checkRunningJobsBit(r *interp.Runner) bool {
+	return !recordedDeviates(r, "checkrunningjobs")
 }
 
 // recorded is a name this shell remembers and does not act on. See the four

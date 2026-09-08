@@ -42,17 +42,18 @@ var shoptModes = map[string]interp.MatchOption{
 // mid-script stops it again — measured in bash 5.3 and bash 3.2 alike, on all
 // three non-interactive routes.
 //
-// The three below were in shoptStates until #1445, refused there for the only
+// The five below were in shoptStates until #1445, refused there for the only
 // reason a refusal is allowed here: nothing implemented them. Each names a
 // capability the core now holds, and in every case the *capability* is in
-// interp or repl and only the *spelling* is here — `autocd` is zsh's name for
-// the same behavior as well, and the two dialects wire one switch rather than
-// each carrying a copy.
+// interp or repl and only the *spelling* is here — `autocd` and `checkjobs`
+// are zsh's names for two of the same behaviors as well, and the two dialects
+// wire one switch apiece rather than each carrying a copy.
 //
-// All three are interactive-only in bash too — one needs a window, one needs a
-// prompt loop and one needs a Tab — so none of this was askable on the `-c`
-// route; the observables below were measured through a pseudo-terminal against
-// bash 5.3.15 on 2026-09-08.
+// All five are interactive-only in bash too — one needs a window, one needs a
+// prompt loop, one needs a Tab, one needs a `cd` somebody typed and one needs
+// an `exit` there is somebody to refuse — so none of this was askable on the
+// `-c` route; the observables below were measured through a pseudo-terminal
+// against bash 5.3.15 on 2026-09-08.
 //
 //   - checkwinsize. $LINES and $COLUMNS follow the window. Measured: bash
 //     reports `COLUMNS=80 LINES=24` at its first prompt on an 80x24 terminal
@@ -73,6 +74,16 @@ var shoptModes = map[string]interp.MatchOption{
 //     than scaled by length. See interp.Runner.correctPath, which is written
 //     once so that `dirspell` reaches the same corrector rather than growing
 //     a second.
+//   - checkjobs. Exiting warns about jobs that are still *running*, and
+//     follows the sentence with the job table. Measured through a
+//     pseudo-terminal: with the option on, `sleep 40 &` then `exit` writes
+//     `There are running jobs.`, then `[1]+  Running   sleep 40 &`, then a
+//     fresh prompt, and a second `exit` leaves; with it off the first `exit`
+//     leaves. The stopped-job warning this shell already gave is *not* the
+//     option's — `shopt -u checkjobs` still says `There are stopped jobs.` —
+//     and a job of each kind is reported as stopped. See
+//     interp.Runner.ChecksRunningJobsAtExit, which zsh reaches under the same
+//     name from the other option namespace.
 //   - no_empty_cmd_completion. The one most likely to be misread, because the
 //     name is a negative and the honest answer used to look like the lazy
 //     one. It asks that completion on an empty command word *not* search
@@ -101,6 +112,10 @@ var shoptSwitches = map[string]struct {
 	"cdspell": {
 		get: (*interp.Runner).CorrectsCdSpelling,
 		set: (*interp.Runner).SetCorrectsCdSpelling,
+	},
+	"checkjobs": {
+		get: (*interp.Runner).ChecksRunningJobsAtExit,
+		set: (*interp.Runner).SetChecksRunningJobsAtExit,
 	},
 	// The inverted one, and the only entry in this file that is not a
 	// straight pair. bash names the *suppression*, so the option being on is
@@ -151,45 +166,42 @@ var shoptSwitches = map[string]struct {
 // history file, to split a construct into a line each, or to join one with
 // semicolons.
 //
-// Two of the names #1445 collected are still refused, and each is refused
-// for the only reason a refusal is allowed here: nothing implements the
-// behavior. Each is written down because a bare `false` in the table below
-// reads like a TODO and the wrong repair for a TODO is to flip it into a lie.
-// Every one of these is the state this shell is genuinely in, so the refusal
-// is the correct answer and not a gap left in the table:
+// One of the names #1445 collected is still refused, and it is refused for
+// the only reason a refusal is allowed here: nothing implements the behavior.
+// It is written down because a bare `false` in the table below reads like a
+// TODO and the wrong repair for a TODO is to flip it into a lie.
 //
-//   - dirspell asks for the same correction during *completion*, and it is
-//     refused on a stronger ground than "not built": **it could not be
-//     reproduced in the reference shell**. Driven through a pseudo-terminal
-//     against bash 5.3.15 on 2026-09-08, with the option set at the prompt
-//     and again from an rc file so readline saw it at initialization,
-//     `ls documnets/tar<TAB>`, `ls documnets/<TAB>`, `cd documnets/<TAB>` and
-//     `cd documnet<TAB>` all left the line exactly as typed, against a
-//     directory really called `documents`. The same session's `cdspell`
-//     corrected the same word at execution, so the shell and the tree were
-//     right and only this name did nothing. Implementing it would mean
-//     guessing at a behavior the binary would not show, which is worse than
-//     refusing it. bash 3.2 does not have the name at all —
-//     `shopt -s dirspell` there is `invalid shell option name` at status 1 —
-//     which it shares with `checkjobs`, so two of these refusals are not even
-//     a question in every column of the panel.
-//   - checkjobs asks that exiting warn about *running* jobs, not only stopped
-//     ones. The stopped-job hold exists — interp's `HoldsExitForStoppedJobs`,
-//     which repl consults on end-of-file — and nothing counts the running
-//     ones, so this shell would have to learn a second question before it
-//     could answer this one.
+//   - dirspell asks for `cdspell`'s correction during *completion*, and the
+//     measurement that matters is what it takes to see it happen at all.
+//     Driven through a pseudo-terminal against bash 5.3.15 on 2026-09-08,
+//     against a directory really called `documents`: with `dirspell` alone,
+//     `ls documnets/tar<TAB>` rings the bell and leaves the line as typed,
+//     and so do `ls documnets/<TAB>` and `cd documnets/<TAB>`. With
+//     `direxpand` alone, the same three do nothing. With **both** on, the
+//     same keystrokes rewrite the line to the completed
+//     `…/documents/target-file.txt`. The control is in every one of those
+//     sessions: `ls documents/tar<TAB>` completes correctly, so the tree and
+//     the completer were right and only the correction was missing.
 //
-// Both are interactive-only in bash as well, so a `-c` probe cannot tell an
-// implementation from an absence — it shows both shells doing nothing. They
-// were measured through a terminal, which is the only place the question is
-// askable, and #1445 stays open naming exactly these two.
+//     So this name cannot be granted on its own — it is visible only beside
+//     `direxpand`, which this shell does not do either, and which is a
+//     second behavior rather than a second spelling of this one. Correcting
+//     here without it would be correcting where bash does not. The corrector
+//     itself is already written and already shared:
+//     interp.Runner.correctPath, which `cdspell` reaches. What is missing is
+//     the completer asking it, and `direxpand` beside it. See the follow-up
+//     issue, which carries the table above.
+//
+// It is interactive-only in bash as well, so a `-c` probe cannot tell an
+// implementation from an absence — it shows both shells doing nothing. It was
+// measured through a terminal, which is the only place the question is
+// askable.
 var shoptStates = map[string]bool{
 	"array_expand_once":    false,
 	"assoc_expand_once":    false,
 	"bash_source_fullpath": false,
 	"cdable_vars":          false,
 	"checkhash":            false,
-	"checkjobs":            false,
 	"cmdhist":              true,
 	"compat31":             false,
 	"compat32":             false,

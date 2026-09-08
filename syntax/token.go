@@ -259,6 +259,34 @@ type Span struct {
 	// script rather than printing it.
 	Bracketed bool
 
+	// PatternGroup says this literal span is the text of a parenthesised
+	// group that belongs to the word — `(a|b)` in `echo (a|b)`, `@(a|b)`
+	// or a `case` arm's pattern — so its `(`, `|` and `)` are the
+	// pattern's rather than the shell's.
+	//
+	// The note has to be in the tree because a character cannot be read
+	// off the value: an unquoted `(` in a word is a group's where the
+	// group grammar accepted one and a literal parenthesis where a
+	// backslash or a quote put it there, and both arrive as the same byte.
+	// Nothing that *runs* a pattern needs this — the matcher reads the
+	// group out of the text, as it reads a bracket expression — and
+	// anything writing the word back does: printing `\(a\|b\)` for
+	// `(a|b)` leaves the tree identical and turns a group into three
+	// literal characters, which is a different program at exit 0 (#1221).
+	//
+	// Set on the unquoted spans of a group and on those alone. A quoted
+	// span inside one carries its own quoting and is written back with it,
+	// which is what says the protection was the script's rather than the
+	// printer's.
+	//
+	// Setting it on the quoted spans as well is an equivalent mutant, and
+	// is recorded here so the next reader does not go looking for the row
+	// that would kill it: the printer is the only thing that reads this
+	// field, and it reads it in the arm it takes for unquoted text alone —
+	// a quoted span is written from its quoting before the question is
+	// asked.
+	PatternGroup bool
+
 	// Pos is where the span starts, including its opening delimiter.
 	Pos Pos
 }

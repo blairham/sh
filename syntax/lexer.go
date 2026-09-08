@@ -1026,7 +1026,21 @@ func (l *Lexer) scanGroupSpans() []Span {
 	litPos := l.pos()
 	flush := func() {
 		if lit.Len() > 0 {
-			spans = append(spans, Span{Kind: Literal, Value: lit.String(), Quoting: Unquoted, Pos: litPos})
+			// PatternGroup marks the run as the group's own text. This scan
+			// is the only place that knows: by the time a word is a list of
+			// spans an unquoted `(` is a byte like any other, and a printer
+			// reading the byte has to guess — escaping a group into three
+			// literal characters, or writing a backslashed parenthesis back
+			// live. It escaped, so `echo (v5|v6)` printed as
+			// `echo \(v5\|v6\)`, which parses, runs, exits 0 and echoes
+			// its own pattern (#1221).
+			spans = append(spans, Span{
+				Kind:         Literal,
+				Value:        lit.String(),
+				Quoting:      Unquoted,
+				PatternGroup: true,
+				Pos:          litPos,
+			})
 			lit.Reset()
 		}
 	}

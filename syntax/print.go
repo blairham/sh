@@ -1181,7 +1181,12 @@ func (p *printer) literal(s Span) {
 		// something need protecting.
 		p.str(escapeIn(s.Value, "\"\\$`"))
 	default:
-		if p.raw {
+		// A pattern group's text goes back as it came, for the reason
+		// `rawWord` above gives for a condition's operands: its `(`, `|`
+		// and `)` are the pattern's, and protecting them leaves the tree
+		// identical and the meaning gone. The span says so — the byte
+		// cannot (#1221).
+		if p.raw || s.PatternGroup {
 			p.str(s.Value)
 			return
 		}

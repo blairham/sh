@@ -52,6 +52,11 @@ func TestAnExpansionWithNoNameAtAll(t *testing.T) {
 		// One empty field rather than no field, which the count is the only
 		// way to ask.
 		{"an empty result is still a word", `set -- "${:-}" "${}"; printf "[%s]" "$#"`, "[2]"},
+		// A named target through the same flag-group route still assigns,
+		// which is what says the refusal above is about the *name* and not
+		// about the route: the word is stored as written and the flags apply
+		// only to what is substituted.
+		{"a named assignment behind a flag group still assigns", `unset u; printf "[%s][%s]" "${(U)u:=def}" "$u"`, "[DEF][def]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runGrammar(t, tc.src, nameless, nil)
@@ -106,6 +111,12 @@ func TestTheNameThatIsNotThereCannotBeAssignedToOrBeSet(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{"the conditional assignment", `echo "[${:=abc}]"`, "not an identifier: "},
 		{"the unconditional one", `echo "[${::=abc}]"`, "not an identifier: "},
+		// The same two through the flag group, which is a second route into
+		// the assignment and used to be a second answer: `${(U):=abc}` came
+		// to `ABC` at status 0 while `${:=abc}` beside it refused, because
+		// the name check had been written into one route and not the other.
+		{"the conditional assignment behind a flag group", `echo "[${(U):=abc}]"`, "not an identifier: "},
+		{"the unconditional one behind a flag group", `echo "[${(U)::=abc}]"`, "not an identifier: "},
 		{"the report", `echo "[${:?abc}]"`, ": abc"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

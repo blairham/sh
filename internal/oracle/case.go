@@ -4486,6 +4486,12 @@ echo "st=$?"`,
 		Why:             "the nameless expansion's one operator that cannot work: `:-` substitutes a word and needs no parameter, while `:=` has to *store* it and there is no parameter to store it in. The shell with the grammar says `not an identifier: ` with the name left blank and ends the script, so `after` is never reached — the same refusal its unconditional `${::=word}` gives, through the same door. An implementation that let the assignment through answers `abc` at status 0 and carries on, which is a plausible value where the shell stopped",
 	},
 	{
+		ID: "param/a-flag-group-is-not-a-second-answer-for-the-assignment", Category: "parameter expansion",
+		GradedOnRefusal: true,
+		Snippet:         `echo "[${(U):=abc}]"; echo after`,
+		Why:     "the same refusal one flag group further in, and it is a row because it was a second answer here: `${:=abc}` refused while `${(U):=abc}` beside it came to `ABC` at status 0, because the assignment has two routes through the expander and the name check had been written into one of them. The flag group decides how the result is rendered and never whether there is a parameter to store it in — `${(U)u:=def}` still assigns `def` and substitutes `DEF`, which is the row above this one's positive half. Graded on the refusal because the five shells without the grammar decline the same characters in their own words",
+	},
+	{
 		ID: "param/a-nameless-expansion-is-never-set", Category: "parameter expansion",
 		GradedOnRefusal: true,
 		Snippet:         `echo "[${:?abc}]"; echo after`,

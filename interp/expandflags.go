@@ -378,15 +378,16 @@ func (r *Runner) assignThroughFlags(e *syntax.ParamExpr) ([]string, bool, bool) 
 	switch {
 	case e.Index != nil && !r.wholeArrayIndex(e):
 		r.assignSubscript(e, v)
-	case e.Op == syntax.ParamAssignAlways:
-		// The name check belongs to the operator that always assigns, for
-		// the reason it does on the path without a flag group: a `${(U)#::=w}`
-		// that answered `W` would be an assignment to nothing at status 0.
-		if !r.assignableParamName(e.Name) {
+	default:
+		// The name check, through the same door the route without a flag
+		// group uses: a `${(U)#::=w}` that answered `W`, or a `${(U):=w}`
+		// that answered `W`, would each be an assignment to nothing at
+		// status 0. Which names it refuses is the operator's question and
+		// assignableTarget's to answer, not this switch's — asking it here
+		// is what let the two operators drift apart before.
+		if !r.assignableTarget(e.Op, e.Name) {
 			return nil, false, false
 		}
-		r.setVar(e.Name, v)
-	case e.Name != "":
 		r.setVar(e.Name, v)
 	}
 	return []string{v}, false, true

@@ -702,4 +702,26 @@ func TestCdspellCorrectsAnInteractiveCd(t *testing.T) {
 	if !strings.Contains(out, "cd: documnets:") || !strings.HasSuffix(out, dir+"\n") {
 		t.Errorf("in a script: out %q, want a refusal and no move", out)
 	}
+	// Turned off again, the correction stops — which is the direction a
+	// setter stuck in one position passes without.
+	out, st, err = preset.Combined(t, interactive, `shopt -s cdspell; shopt -u cdspell; cd documnets; pwd`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "cd: documnets:") || !strings.HasSuffix(out, dir+"\n") || st != 0 {
+		t.Errorf("after shopt -u: out %q status %d, want a refusal and no move", out, st)
+	}
+	// And the state is readable in both directions, through the same table a
+	// startup file reads. bash 5.3.15 starts this `off`; a getter that
+	// answered `on` regardless would still correct correctly and lie here.
+	for _, tc := range []struct{ src, want string }{
+		{`shopt cdspell`, "off"},
+		{`shopt -s cdspell; shopt cdspell`, "on"},
+		{`shopt -s cdspell; shopt -u cdspell; shopt cdspell`, "off"},
+	} {
+		out, _ := runBash(t, t.TempDir(), tc.src)
+		if want := fmt.Sprintf("%-20s\t%s\n", "cdspell", tc.want); out != want {
+			t.Errorf("%s = %q, want %q", tc.src, out, want)
+		}
+	}
 }

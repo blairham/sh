@@ -187,3 +187,41 @@ func TestCdWithNoOperandNamesHomeRatherThanCrashing(t *testing.T) {
 		t.Errorf("status %d, want a failure", r.ExitStatus())
 	}
 }
+
+// A correction that lands on a *file* is not a correction.
+//
+// The mistake it guards against is not hypothetical: the second attempt sets
+// the directory and clears the error, and the "is this a directory" check the
+// first attempt made has already happened by then — so a correction handed
+// back without one of its own would put the shell inside a regular file. The
+// name typed here is one edit from a file and from nothing else, so a shell
+// that took it would take it silently.
+func TestCdDoesNotCorrectOntoAFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "notes"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, errOut := &strings.Builder{}, &strings.Builder{}
+	sem := PosixSemantics()
+	r := newTestRunner(t, &Runner{
+		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
+		Stdout: out, Stderr: errOut, Interactive: true,
+	})
+	r.SetCorrectsCdSpelling(true)
+	f, err := syntax.Parse("cd notse\n", syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if r.Dir != dir {
+		t.Errorf("Dir = %q, want the shell where it started", r.Dir)
+	}
+	if out.String() != "" {
+		t.Errorf("stdout = %q, want nothing announced", out.String())
+	}
+	if !strings.Contains(errOut.String(), "notse") {
+		t.Errorf("stderr = %q, want the refusal to name what was typed", errOut.String())
+	}
+}

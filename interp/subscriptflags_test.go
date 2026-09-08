@@ -288,29 +288,112 @@ func TestASubscriptFlagThisImplementationDoesNotCarryIsRefusedByName(t *testing.
 	}
 }
 
-// A search over a target this does not carry is refused the same way, and the
-// refusal replaces a *silent* wrong answer: a scalar answered out of the
-// one-element list it is read as, and a character position is not an element.
-func TestASubscriptSearchOverATargetThisDoesNotCarryIsRefused(t *testing.T) {
-	for _, tc := range []struct{ name, src, why string }{
-		{
-			"a scalar",
-			`s="one two"; printf "[%s]" "${s[(r)two]}"`,
-			"for a scalar",
-		},
-		{
-			"and a scalar searched for an index",
-			`s=hello; printf "[%s]" "${s[(i)l]}"`,
-			"for a scalar",
-		},
+// A search over a plain string counts through its *characters*, which is the
+// third target the construct is written on and the one a plugin manager
+// reaches three times before it has loaded anything.
+//
+// Every row asserts the value. `${s[(i)l]}` answering an empty string instead
+// of 3 leaves the status at 0 and reads as "not found" to the caller, so a
+// row that checked only for the absence of a refusal would pass for an
+// implementation that had stopped refusing and not started answering.
+func TestASubscriptSearchOverAScalarIsACharacterPosition(t *testing.T) {
+	const s = `s=hello; `
+	for _, tc := range []struct{ name, src, want string }{
+		{"the first position", `printf "[%s]" "${s[(i)l]}"`, "[3]"},
+		{"and the last", `printf "[%s]" "${s[(I)l]}"`, "[4]"},
+		{"the character the first names", `printf "[%s]" "${s[(r)l]}"`, "[l]"},
+		// A class rather than a letter, so `r` and `R` are two different
+		// characters and a row cannot pass by ignoring the case of the flag.
+		{"and the two ends part", `printf "[%s]" "${s[(r)[lo]]}" "${s[(R)[lo]]}"`, "[l][o]"},
+		// A two-character operand matches at all, which says the subject is a
+		// substring; and `r` still answers one character, which says the
+		// answer is the position and not the text that matched.
+		{"the operand matches a substring", `printf "[%s]" "${s[(i)el]}" "${s[(r)el]}"`, "[2][e]"},
+		{"a miss is one past the last", `printf "[%s]" "${s[(i)zz]}"`, "[6]"},
+		{"and one before the first", `printf "[%s]" "${s[(I)zz]}"`, "[0]"},
+		// Both misses read as ordinary subscripts, and neither of those two
+		// indices is a character — so an implementation answering the whole
+		// string for one of them is visible here.
+		{"which name no character", `printf "[%s]" "${s[(r)zz]}" "${s[(R)zz]}"`, "[][]"},
+		// The one position the walk over elements has no equivalent of.
+		{"an empty match lands past the end", `printf "[%s]" "${s[(I)*]}" "${s[(I)?]}"`, "[6][5]"},
+		{"the modifiers are read here too", `printf "[%s]" "${s[(ie)lo]}" "${s[(ie)[lo]]}"`, "[4][6]"},
+		{"including which match and where from", `printf "[%s]" "${s[(in:2:)l]}" "${s[(ib:4:)l]}" "${s[(Ib:3:)l]}"`, "[4][4][3]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, status := runSub(t, s+tc.src)
+			if out != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+			}
+			if status != 0 {
+				t.Errorf("status %d, want 0", status)
+			}
+		})
+	}
+}
+
+// An empty string is the one answer the rule above does not predict, and a
+// name holding nothing at all is a third answer again.
+func TestASubscriptSearchOverAnEmptyScalar(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// One past the last character would be 1 here, and it is not.
+		{"neither end", `e=; printf "[%s]" "${e[(i)x]}" "${e[(I)x]}"`, "[0][0]"},
+		// Nor is it the search failing: a pattern that matches the empty
+		// string answers the same 0.
+		{"whatever the operand", `e=; printf "[%s]" "${e[(i)*]}"`, "[0]"},
+		{"and no character either way", `e=; printf "[%s]" "${e[(r)x]}" "${e[(R)x]}"`, "[][]"},
+		// The name that holds nothing is answered before the search is
+		// reached, which is why it is empty rather than a number.
+		{"a name holding nothing is not searched", `printf "[%s]" "${nos[(i)x]}"`, "[]"},
+		{"and is still unset", `printf "[%s]" "${nos[(i)x]-none}"`, "[none]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, status := runSub(t, tc.src)
+			if out != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+			}
+			if status != 0 {
+				t.Errorf("status %d, want 0", status)
+			}
+		})
+	}
+}
+
+// A search over a target this does not carry is refused by name, and the
+// refusal replaces a *silent* wrong answer.
+//
+// The one target left is the assignment's: a search on the left of `=` over a
+// string names a character position there, and the character assignment that
+// position would need is not built either — so returning the index would turn
+// a refusal into two spaces and a `Q`.
+func TestASubscriptSearchOverATargetThisDoesNotCarryIsRefused(t *testing.T) {
+	// The value is asserted as well as the refusal: a refusal that still
+	// wrote somewhere would leave the name changed, and the whole reason to
+	// refuse is that the write would land on a plausible wrong character.
+	for _, tc := range []struct{ name, src, why, kept string }{
+		{
+			"a scalar assigned through a search",
+			`s=hello; s[(r)l]=Q; printf "[%s]" "$s"`,
+			"for a scalar", "[hello]",
+		},
+		{
+			"and through an index search",
+			`s=hello; s[(i)l]=Q; printf "[%s]" "$s"`,
+			"for a scalar", "[hello]",
+		},
+		{
+			"an association assigned through one",
+			`typeset -A h; h[k1]=v1; h[(r)v1]=Q; printf "[%s]" "${h[k1]}"`,
+			"for an associative array", "[v1]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := runSub(t, tc.src)
 			if !strings.Contains(out, "subscript flag is not implemented "+tc.why) {
 				t.Errorf("output %q does not refuse %s", out, tc.why)
 			}
-			if status == 0 {
-				t.Error("status 0, want a failure")
+			if !strings.Contains(out, tc.kept) {
+				t.Errorf("output %q does not keep %s", out, tc.kept)
 			}
 		})
 	}

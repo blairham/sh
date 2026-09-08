@@ -4164,7 +4164,42 @@ echo "st=$?"`,
 	{
 		ID: "array/a-subscript-search-over-a-scalar-is-a-character-position", Category: "expansion",
 		Snippet: `s=hello; printf "[%s]" "${s[(i)l]}" "${s[(I)l]}" "${s[(r)l]}"; echo`,
-		Why:     "the third target a search can be written on, and the one this implementation still refuses by name: over a plain string the search is for a *substring* and what comes back is a character position rather than an element, so `(i)` and `(I)` are the first and last position of the letter. Recorded so the refusal has the measurement it would need to become an answer",
+		Why:     "the third target a search can be written on: over a plain string the search is for a *substring* and what comes back is a character position rather than an element, so `(i)` and `(I)` are the first and last position of the letter. A plugin manager reaches this three times before it has loaded anything",
+	},
+	{
+		ID: "array/a-subscript-search-over-a-scalar-matches-a-substring", Category: "expansion",
+		Snippet: `s=hello; printf "[%s]" "${s[(i)el]}" "${s[(r)el]}" "${s[(i)lo]}" "${s[(r)lo]}"; echo`,
+		Why:     "what the operand is matched against, which the single-letter row cannot tell apart from three other readings: a *two-character* operand matches, so the subject is a substring starting at each position and not one character on its own; the position is where the match starts; and `r` still answers with the one character that position names rather than with the text that matched. An implementation reading the string as the array of one it is otherwise read as would answer the whole string here, and one matching character by character would answer nothing",
+	},
+	{
+		ID: "array/a-subscript-search-over-a-scalar-searches-both-ways", Category: "expansion",
+		Snippet: `s=hello; printf "[%s]" "${s[(r)[lo]]}" "${s[(R)[lo]]}" "${s[(i)[lo]]}" "${s[(I)[lo]]}"; echo`,
+		Why:     "the capital letters are the same search from the other end, and the operand is a *pattern* — `[lo]` matches two different characters, so the four fields are four different answers. Written with a class rather than a letter on purpose: a repeated letter would make `r` and `R` the same character and the row would pass for an implementation that ignored the case of the flag",
+	},
+	{
+		ID: "array/a-subscript-search-over-a-scalar-with-no-match", Category: "expansion",
+		Snippet: `s=hello; printf "[%s]" "${s[(i)zz]}" "${s[(I)zz]}" "${s[(r)zz]}" "${s[(R)zz]}"; echo`,
+		Why:     "the two misses are the ordered array's — one *past* the last character for `i` and one *before* the first for `I` — and `r` and `R` are those same two indices read as ordinary subscripts, which is why both are empty rather than one of them being the first character or the whole string. Four fields because an implementation answering empty for all of them passes any row that pins only `r`",
+	},
+	{
+		ID: "array/a-subscript-search-over-a-scalar-reaches-past-the-last-character", Category: "expansion",
+		Snippet: `s=hello; printf "[%s]" "${s[(I)*]}" "${s[(I)?]}" "${s[(i)*]}"; echo`,
+		Why:     "the one position the walk over characters has that the walk over elements does not: an empty match lands one past the last character, so a backward search for `*` answers 6 on five characters where the same search for `?` answers 5. The third field is the same pattern forwards, which stops at the first position instead — so the row pins both ends of a range that would otherwise be invisible",
+	},
+	{
+		ID: "array/a-subscript-search-over-an-empty-scalar-is-neither-end", Category: "expansion",
+		Snippet: `e=; printf "[%s]" "${e[(i)x]}" "${e[(I)x]}" "${e[(i)*]}" "${u[(i)x]}" "${u[(i)x]-none}"; echo`,
+		Why:     "an empty string answers 0 for *both* letters, which is neither of the two out-of-range indices the rule for a miss predicts — one past the last character would be 1 — and it answers 0 for a pattern that matches it too, so this is the string's emptiness rather than the search's failure. The last two fields are the third case: a name holding nothing at all answers empty and is *unset*, so the `-` alternative fires for it where it does not fire for the empty string",
+	},
+	{
+		ID: "array/a-subscript-search-over-a-scalar-reads-the-modifiers", Category: "expansion",
+		Snippet: `s=hello; printf "[%s]" "${s[(ie)lo]}" "${s[(ie)[lo]]}" "${s[(in:2:)l]}" "${s[(ib:4:)l]}" "${s[(Ib:3:)l]}"; echo`,
+		Why:     "the three modifiers an ordered array's search reads are read over a string too, and each field is the one that would change if it were not: `(e)` finds the literal two characters and then fails to find a literal `[lo]` that the pattern reading would have found at once, `(n:2:)` takes the second of the two `l`s, and `(b:expr:)` moves the start forwards and backwards. An association ignores two of the three, so a shared implementation that ignored them everywhere would still pass the association's rows",
+	},
+	{
+		ID: "array/a-subscript-search-over-a-scalar-as-an-option-test", Category: "expansion",
+		Snippet: `opts="-X -w"; printf "[%s]" "${opts[(r)-X]}" "${opts[(r)-C]}" "${opts[(i)-w]}"; echo`,
+		Why:     "the shape a plugin manager writes — a search used as a present-or-absent test — landing on a *string* rather than the array it reads as. The answer for a hit is one character and not the option, which is enough for the `-n` test the caller writes and is not what an implementation guessing at the array reading would produce; the miss is empty, which is the half that has to be right for the test to mean anything",
 	},
 	{
 		ID: "array/a-subscript-flag-group-unknown-flag-is-arithmetic", Category: "expansion",

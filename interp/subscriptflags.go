@@ -97,13 +97,7 @@ func (r *Runner) searchSubscript(e *syntax.ParamExpr, search byte, src subscript
 	g := e.IndexFlags
 	elems, scalar := src.elems, src.scalar
 	if scalar {
-		// A search over a plain string is a search for a *substring*, and
-		// what comes back is a character position rather than an element:
-		// measured, `s=hello; ${s[(i)l]}` is 3 and `${s[(I)l]}` is 4.
-		// Refused by name rather than answered out of the one-element list a
-		// scalar is otherwise read as, which is a plausible wrong element.
-		r.refuseSubscriptFlag(e, string(search), " for a scalar")
-		return nil, true
+		return r.searchScalar(g, search, elems[0]), true
 	}
 	at, found := r.searchElements(g, search, elems)
 	// The index is the base plus the element's *position*, which is the same
@@ -137,7 +131,7 @@ func (r *Runner) searchSubscript(e *syntax.ParamExpr, search byte, src subscript
 // searchElements walks the elements the way the group asks and returns the
 // position of the match it wanted, 0-based.
 func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []string) (at int, found bool) {
-	matches := r.subscriptMatcher(g)
+	matches := r.subscriptMatcher(g, false)
 	back := search == 'R' || search == 'I'
 	from, within := r.searchStart(g, len(elems), back)
 	if !within {
@@ -162,8 +156,125 @@ func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []s
 	return 0, false
 }
 
+// searchScalar answers a search subscript over a plain string, where what the
+// four letters count through is the string's *characters*.
+//
+// Measured on zsh 5.9.2, the one shell with the construct, with
+// `s="hello world"`:
+//
+//	${s[(i)l]}     3    the position of the first match
+//	${s[(I)l]}     10   and of the last
+//	${s[(r)l]}     l    which position `r` reads the character at
+//	${s[(R)[hd]]}  d    so `r` and `R` part where the characters do
+//	${s[(i)wor]}   7    the operand matches a *substring*, not one character
+//	${s[(r)wor]}   w    and what `r` answers is still one character
+//
+// So it is not the array's search over the one-element list a scalar is
+// otherwise read as — that would make `${s[(r)wor]}` the whole string — and
+// not a search over each character on its own either, which would make every
+// multi-character operand a miss. It is the array's walk with a *prefix*
+// match at each position, and `r` and `R` are the index that walk found read
+// as an ordinary subscript: `${s[(r)z]}` and `${s[(R)z]}` are both empty
+// because the misses are `${s[12]}` and `${s[0]}`, and neither of those is a
+// character either.
+//
+// The miss indices are therefore the array's, one past the last and one
+// before the first, and `(e)`, `(n:expr:)` and `(b:expr:)` are read here as
+// they are there: measured, `${s[(ie)lo]}` is 4, `${s[(in:2:)l]}` is 4 and
+// `${s[(ib:5:)l]}` is 10.
+//
+// The character is the locale's rather than a byte, because r.units is:
+// measured under a UTF-8 locale `s="héllo"; ${s[(i)l]}` is 3 there and
+// under `LC_ALL=C` it is 4.
+func (r *Runner) searchScalar(g *syntax.SubscriptFlags, search byte, v string) []string {
+	chars := r.units(v)
+	at := r.scalarSearchIndex(g, search, chars, v)
+	if search == 'i' || search == 'I' {
+		return []string{itoa(at)}
+	}
+	pos := at - r.arrayBase()
+	if pos < 0 || pos >= len(chars) {
+		return nil
+	}
+	return []string{chars[pos]}
+}
+
+// scalarSearchIndex is the character position the search names, counted from
+// the dialect's base, whether or not anything matched.
+//
+// One position past the last character is walked, which the walk over an
+// array's elements has no equivalent of because only an empty match can land
+// there: measured, `${s[(I)*]}` on eleven characters is 12 where
+// `${s[(I)?]}` is 11.
+//
+// An *empty* string is the exception to all of it, and is measured rather
+// than derived: `e=; ${e[(i)x]}`, `${e[(I)x]}` and `${e[(i)*]}` are every one
+// of them 0, where the rule above makes the first and the third 1. A name
+// holding nothing at all is a different answer again — empty rather than a
+// number — and flaggedSubscript answers that one before this is reached.
+func (r *Runner) scalarSearchIndex(g *syntax.SubscriptFlags, search byte, chars []string, v string) int {
+	base, n := r.arrayBase(), len(chars)
+	if n == 0 {
+		return base - 1
+	}
+	back := search == 'R' || search == 'I'
+	miss := base + n
+	if back {
+		miss = base - 1
+	}
+	from, within := r.scalarSearchStart(g, n, back)
+	if !within {
+		return miss
+	}
+	// Byte offsets rather than a join per position, so the remainder handed to
+	// the matcher is a slice of the value itself: one match call per position
+	// and nothing copied.
+	offs := make([]int, n+1)
+	for i, c := range chars {
+		offs[i+1] = offs[i] + len(c)
+	}
+	matches := r.subscriptMatcher(g, true)
+	want := r.searchNth(g)
+	step := 1
+	if back {
+		step = -1
+	}
+	for i := from; i >= 0 && i <= n; i += step {
+		if !matches(v[offs[i]:]) {
+			continue
+		}
+		if want--; want == 0 {
+			return base + i
+		}
+	}
+	return miss
+}
+
+// scalarSearchStart is searchStart with the one difference a walk over
+// characters has: a backward search that was not told where to begin begins
+// one *past* the last character, where an empty match can still land.
+//
+// Measured, `${s[(I)*]}` on eleven characters is 12. `(b:expr:)` does not
+// reach that position — `${s[(Ib:12:)*]}` is 0 — so a start named explicitly
+// is one of the characters or nowhere at all, which is what searchStart
+// already says.
+func (r *Runner) scalarSearchStart(g *syntax.SubscriptFlags, n int, back bool) (from int, within bool) {
+	if g.Begin == "" && back {
+		return n, true
+	}
+	return r.searchStart(g, n, back)
+}
+
 // subscriptMatcher is the test one element has to pass, built once for the
 // whole walk.
+//
+// prefix asks the other question the same operand answers: whether it matches
+// at the *start* of what it is handed rather than the whole of it, which is
+// the question a search over a string's characters asks — see searchScalar.
+// One function rather than two because everything below this line is the
+// operand's rule and not the subject's, and a second copy of it is how the
+// quoting rule the next paragraph describes would come to hold in one search
+// and not the other.
 //
 // The operand is a pattern unless `(e)` says otherwise, and in either case it
 // is the subscript's text *as written* with its substitutions performed —
@@ -179,10 +290,22 @@ func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []s
 // ${a[(r)$g]}` finds `beta` in the shell that has the construct while
 // `${(@)a:#$g}` in the same shell removes nothing, and the difference is that
 // only one of the two is a quoting context.
-func (r *Runner) subscriptMatcher(g *syntax.SubscriptFlags) func(string) bool {
+func (r *Runner) subscriptMatcher(g *syntax.SubscriptFlags, prefix bool) func(string) bool {
 	operand := r.searchOperand(g.Arg)
 	if strings.ContainsRune(g.Flags, 'e') {
+		if prefix {
+			return func(el string) bool { return strings.HasPrefix(el, operand) }
+		}
 		return func(el string) bool { return el == operand }
+	}
+	if prefix {
+		// A pattern matching a prefix of `s` is that pattern with a `*` after
+		// it matching the whole of `s`, which is one match call per position
+		// rather than one per position and length. Measured to be the same
+		// reading: `${s[(i)l*]}` is 3 and `${s[(I)l*]}` is 10 on
+		// `hello world`, which is where `l` itself is found rather than where
+		// a longest match would end.
+		operand += "*"
 	}
 	return func(el string) bool { return r.matchPatternR(operand, el, false) }
 }
@@ -334,7 +457,7 @@ func (r *Runner) searchNth(g *syntax.SubscriptFlags) int {
 // sequence. AssocArray.keys() says why a deterministic order is worth having
 // where the shells promise none.
 func (r *Runner) searchAssoc(e *syntax.ParamExpr, a AssocArray, g *syntax.SubscriptFlags, search byte) []string {
-	matches := r.subscriptMatcher(g)
+	matches := r.subscriptMatcher(g, false)
 	byKey := search == 'i' || search == 'I'
 	every := search == 'I' || search == 'R'
 	found := make([]string, 0, len(a))
@@ -477,9 +600,16 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 	}
 	elems, scalar, held := r.subscriptTarget(e)
 	if scalar && held {
-		// A search over a plain string names a *character* position there and
-		// the assignment replaces that character. Refused by name here, as
-		// the read side refuses it, rather than writing to an element.
+		// A search over a plain string names a *character* position, which
+		// the read side answers — see searchScalar — and this side still
+		// refuses, because the subscript it would hand on is not answered
+		// either: `s=hello; s[3]=Q` is `heQlo` in the shell with the
+		// construct and two spaces and a `Q` here — the string read as an
+		// array of one, with a third element written past it and the whole
+		// joined. Returning the index the search
+		// found would turn a refusal by name into that value, which is the
+		// one outcome worse than the refusal. See the issue the spec entry
+		// names.
 		r.refuseSubscriptFlag(e, string(search), " for a scalar")
 		return 0, false
 	}

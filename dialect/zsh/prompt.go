@@ -34,6 +34,9 @@ func PromptStyle() interp.PromptStyle {
 		Expand: false,
 		// Measured, one code per prompt, through a pty against zsh 5.9.2.
 		Escape: '%',
+		// A count in front of a code — `%2~` is the last two components. See
+		// interp.PromptStyle.NumericArgument and #1592.
+		NumericArgument: true,
 		Codes: map[rune]interp.PromptField{
 			'n': interp.FieldUser,
 			'm': interp.FieldHost,

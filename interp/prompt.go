@@ -131,6 +131,22 @@ type PromptStyle struct {
 	// A value above 255 is taken low byte first — `\400` drew a NUL.
 	Octal bool
 
+	// NumericArgument says a run of digits between the escape and the code is
+	// an argument to that code rather than a code of its own.
+	//
+	// One dialect spells its prompt fields with `%` and takes a count in front
+	// of the ones that have components to count; the other spells them `\w`
+	// and has no such shape, so this is asked rather than assumed. Without it
+	// the walker reads the first digit as the code, finds no field for `2`,
+	// and refuses `%2~` by name.
+	//
+	// The digits are handed to the resolver as the argument, unbraced. Nothing
+	// takes both a number and a `{…}` group — the codes that take a group are
+	// the colors and the clock, and none of them counts anything — so the two
+	// share one parameter rather than widening the resolver for a case that
+	// does not arise.
+	NumericArgument bool
+
 	// TrailingEscapeIsDropped says an escape character with nothing after it
 	// is removed rather than drawn.
 	//
@@ -469,14 +485,35 @@ func ExpandPromptStyle(st PromptStyle, text string, field PromptResolver) (strin
 			}
 			break
 		}
+		// The digits in front of the code, where the dialect takes them. A
+		// run that reaches the end of the text has no code to be an argument
+		// to, and draws nothing: measured, a bare `%2` is the empty string in
+		// zsh 5.9.2, which is neither the digits nor a refusal (#1592).
+		num := ""
+		if st.NumericArgument {
+			j := i + 1
+			for j < len(runes) && runes[j] >= '0' && runes[j] <= '9' {
+				j++
+			}
+			if j > i+1 {
+				num = string(runes[i+1 : j])
+				if j >= len(runes) {
+					break
+				}
+				i = j - 1
+			}
+		}
 		code := runes[i+1]
 		i++
 		if fld, ok := st.Codes[code]; ok {
-			arg, braced := "", false
+			arg, braced := num, false
 			if st.Formats[code] {
 				var next int
-				arg, next, braced = promptArgument(runes, i+1)
+				group, next, hasGroup := promptArgument(runes, i+1)
 				i = next
+				if hasGroup {
+					arg, braced = group, true
+				}
 			}
 			v, answered := field(fld, arg, braced)
 			if !answered {
@@ -906,9 +943,9 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		full := r.askPromptHost()
 		return full, full != ""
 	case FieldCwd:
-		return abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME")), true
+		return trailingComponents(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME")), arg), true
 	case FieldCwdFull:
-		return r.promptVar("PWD"), true
+		return trailingComponents(r.promptVar("PWD"), arg), true
 	case FieldCwdBase:
 		return lastPathComponent(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME"))), true
 	case FieldCwdBaseFull:
@@ -1061,4 +1098,59 @@ func abbreviateHome(dir, home string) string {
 		return "~" + dir[len(home):]
 	}
 	return dir
+}
+
+// trailingComponents keeps the last n components of a path, where n is the
+// numeric argument a prompt code was written with.
+//
+// Measured on zsh 5.9.2, 2026-09-09, in a ten-segment directory. Three rules,
+// and the second is the one worth writing down because it is not what
+// "keep the last n" alone would do:
+//
+//   - `n` counts components from the right: `%2~` of `…/a/b/c/d` is `c/d`.
+//   - **`n` at or past the count is the whole path, with its leading marker
+//     back.** `%9d` of a ten-segment path is nine segments and no leading
+//     `/`; `%10d` of the same path is all ten *with* it. A shell that only
+//     joined the last n would answer the tenth case without the slash, which
+//     is a plausible path to the wrong place rather than a visible failure.
+//     The tilde is one of the units on the abbreviated side, so `%9~` of a
+//     six-unit path is the whole thing, tilde included.
+//   - `0`, and no argument at all, mean no limit.
+//
+// An argument that is not a number is no limit either. The walker only ever
+// passes digits, so that is a guard on a case this package cannot reach rather
+// than a reading of anything.
+func trailingComponents(path, arg string) string {
+	if arg == "" || path == "" {
+		return path
+	}
+	n, err := strconv.Atoi(arg)
+	if err != nil || n <= 0 {
+		return path
+	}
+	// The leading marker is not a component to be counted from the right, but
+	// it is one of the units that decides whether the whole path is asked
+	// for: `/` and `~` each stand for a level above the segments after them.
+	lead := ""
+	rest := path
+	switch {
+	case strings.HasPrefix(path, "~"):
+		lead, rest = "~", strings.TrimPrefix(path[1:], "/")
+	case strings.HasPrefix(path, "/"):
+		lead, rest = "/", path[1:]
+	}
+	if rest == "" {
+		return path
+	}
+	parts := strings.Split(rest, "/")
+	if lead == "~" {
+		// The tilde is a unit of its own, so a path of five segments under a
+		// home is six things and `%6~` is all of it.
+		if n > len(parts) {
+			return path
+		}
+	} else if n >= len(parts) {
+		return path
+	}
+	return strings.Join(parts[len(parts)-n:], "/")
 }

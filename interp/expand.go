@@ -745,6 +745,11 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	if listed, ok := r.bareArrayAsList(e, s, sp); ok {
 		e = listed
 	}
+	// `$@` and `$*` under an operator are the *parameters*, one at a time,
+	// and the same rewrite is what says so. See positionalsAsList.
+	if listed, ok := r.positionalsAsList(e); ok {
+		e = listed
+	}
 	// `${!prefix@}` and `${!prefix*}` yield the *names* that begin with the
 	// prefix, and the two spellings differ exactly as `$@` and `$*` do.
 	if e.Prefix != 0 {
@@ -2018,6 +2023,73 @@ func (r *Runner) listBase(e *syntax.ParamExpr) ([]string, bool) {
 		return nil, false
 	}
 	return r.arraySubscript(e)
+}
+
+// positionalsAsList gives `$@` and `$*` under an operator the subscript that
+// makes the array path answer them, and reports whether it did.
+//
+// The operators that take a whole array elementwise take the *positional
+// parameters* the same way, and that is unanimous rather than a dialect's
+// reading: on `set -- ax bx cx`, `${@#a}` is `x bx cx` as three fields in
+// bash 5.3, bash 3.2, dash, ksh93 and zsh alike, and so are `${*#a}`,
+// `${@//x/Y}` and `${@:-d}`. Without this the node fell through to the
+// scalar path, where `$@` is the parameters *joined*, so every one of those
+// came back as a single field with the operator applied once to the join —
+// `${@#a}` as `x bx cx` in one word, at status 0. Nothing distinguishes the
+// two readings by field count when the operator happens to be a no-op on the
+// join, which is why `${@%x}` looked right (`ax bx c`, matching dash) while
+// `${@#a}` was wrong in the same run.
+//
+// A rewrite for the same reason bareArrayAsList is one: `${@[@]#a}` already
+// answers this correctly, through the branch that distributes an operator
+// over the elements, asks the `[*]` join axis where the readings differ, and
+// glob-escapes each field. Giving the bare spelling that node is what keeps
+// the two from drifting, rather than growing a second, thinner copy of the
+// same pipeline beside it.
+//
+// The subscript is the name's own: `@` takes `[@]` and `*` takes `[*]`, which
+// is what preserves the difference between them — measured, `"${*#a}"` is one
+// joined field where `"${@#a}"` is three, exactly as `"${a[*]}"` and
+// `"${a[@]}"` differ. Quoting is not consulted here at all, because the array
+// path below already reads it off the span.
+//
+// Two operators stay off this path deliberately:
+//
+//   - ParamNone, which the `$@` and `$*` branches further down already
+//     answer, quoting, escaping and all.
+//   - ParamTransform, which has its own measured branch below for exactly
+//     these two names.
+//   - ParamSubstring, because the offset does not mean the same thing.
+//     `${@:1}` counts from `$1` — measured, it is all three parameters in
+//     bash, ksh93 and zsh on a list of three — where an array subscript
+//     counts from the first element and `${a[@]:1}` drops one. Routing the
+//     slice here would answer it with the array's reading, which is wrong in
+//     a new way rather than right; `${@[@]:1}` has the same gap today and
+//     the pair belongs in an issue of its own (#1576).
+func (r *Runner) positionalsAsList(e *syntax.ParamExpr) (*syntax.ParamExpr, bool) {
+	if e.Name != "@" && e.Name != "*" {
+		return nil, false
+	}
+	// The same shapes bareArrayAsList declines, and for the same reasons: a
+	// subscript is already the question this answers, and the length, the
+	// indirection and the `${!prefix@}` prefix are all read before an
+	// operator is.
+	if e.Index != nil || e.Length || e.Indirect || e.Prefix != 0 {
+		return nil, false
+	}
+	switch e.Op {
+	case syntax.ParamNone, syntax.ParamTransform, syntax.ParamSubstring:
+		return nil, false
+	}
+	if !r.listShapedOp(e) {
+		// An operator the array branch answers with one joined value is
+		// already right on the scalar path, and rewriting the node would ask
+		// the array axes for an answer nothing then uses.
+		return nil, false
+	}
+	listed := *e
+	listed.Index = &syntax.Word{Spans: []syntax.Span{{Kind: syntax.Literal, Value: e.Name}}}
+	return &listed, true
 }
 
 // bareArrayAsList gives a bare array name the `[@]` subscript one dialect

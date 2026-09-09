@@ -1134,7 +1134,30 @@ func Semantics() interp.Semantics {
 	// letter of the alphabet is a bad option there in both cases, the `-f`
 	// this name stands for included.
 	s.UnfunctionOptions = "m"
-	s.LocalOptions = "aAHilpruUTx"
+	// `local`'s own set, measured a letter at a time against all fifty-two on
+	// zsh 5.9.2, 2026-09-09: it takes `aAEFhHilLprRtTuUx` and calls every
+	// other letter a bad option. Two things follow, and they pull opposite
+	// ways.
+	//
+	// It is *narrower* than DeclareOptions where the letter names something a
+	// local cannot be — `-f` is a function and `-g` is a global, and a local
+	// that is either is a contradiction, so zsh refuses both here and this
+	// set leaves them out.
+	//
+	// And it is *wider* than this set used to be: `-F` is a float, which is
+	// exactly as declarable in a function as at the top level, and it was
+	// missing for no reason but that the two sets were written apart. The
+	// attribute itself was already built — `typeset -F x=2` was
+	// `2.0000000000` and `typeset -F 3 x=1.5` was `1.500`, both matching zsh
+	// — so `local -F` refused a letter this shell could already answer.
+	// `_zsh_highlight_bind_widgets` opens with one, which is where a real
+	// startup lost syntax highlighting (#1594).
+	//
+	// `E`, `L`, `R` and `t` stay out, and that is the honest half: zsh takes
+	// them and this shell has not built them, `typeset -E` being `-E is not
+	// implemented yet` in the same run. Claiming them here would move the
+	// refusal from the letter to nowhere at all.
+	s.LocalOptions = "aAFHilpruUTx"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
 	// `integer` here is `typeset` with the letter prepended rather than a
@@ -1403,7 +1426,12 @@ func Diagnostics() interp.Diagnostics {
 			// title rather than about the job table.
 			"jobs":    "dzZ",
 			"declare": "bcEhkLmnRtZ",
-			"local":   "bcEFhkLmnRtZ",
+			// The same list as `typeset` and `declare`, which is the point:
+			// `-F` is one attribute and the three names declare it alike.
+			// It was here and in neither of theirs, which is the same split
+			// LocalOptions had — the letter refused under one name and
+			// answered under the other (#1594).
+			"local": "bcEhkLmnRtZ",
 			// `integer`'s own short list, and it is not typeset's: the
 			// letters typeset is missing that `integer` refuses outright —
 			// b, c, E and m — are bad options under this name and belong in

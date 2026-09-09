@@ -235,6 +235,10 @@ unit: a command and its output, recorded.
 [design/plugins.md](design/plugins.md) is a builtin whose implementation
 is another process: the same seams, remoted, so a command can be written
 in a language other than Go — and what launching one costs at the gate.
+[design/formatter.md](design/formatter.md) is the one consumer that
+reads rather than runs: why `cmd/shfmt` emits every token from the
+source extent it was read from instead of printing the tree, and why a
+shell's *layout* became the fourth vector beside the other three.
 
 ## The process model is decided now
 

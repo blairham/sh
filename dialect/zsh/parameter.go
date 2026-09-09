@@ -91,8 +91,8 @@ import (
 // the function at status 0, exactly as here. Modeling the refusal would have
 // meant reproducing a zsh bug against a state this shell cannot be in.
 
-// registerParameterModule installs all thirty-three: six as views, ten as
-// empty views, and seventeen as refusals.
+// registerParameterModule installs all thirty-three: seven as views, ten as
+// empty views, and sixteen as refusals.
 func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssoc("functions", zshFunctionsView)
 	r.SetDynamicAssocWriter("functions", writeZshFunction)
@@ -115,6 +115,14 @@ func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssoc("aliases", zshAliasesView)
 	r.SetDynamicAssocWriter("aliases", writeZshAlias)
 	r.SetDynamicArray("funcstack", funcstackNames)
+	r.SetDynamicAssoc("parameters", zshParametersView)
+	// Readonly and hidden together, the pair `builtins` needs and for the same
+	// two reasons: zsh answers `parameters[x]=y` with `read-only variable:
+	// parameters`, and a produced table with neither would take the assignment
+	// into a stored table that then shadows the producer. See MarkHidden's
+	// note above — an attribute puts the name in the tables a listing walks.
+	r.MarkReadonly("parameters")
+	r.MarkHidden("parameters")
 	registerEmptyParameters(r)
 	registerAbsentParameters(r)
 }
@@ -241,7 +249,7 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 var zshAbsentParams = []string{
 	"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
 	"functions_source", "functrace", "history", "historywords",
-	"jobdirs", "jobstates", "jobtexts", "modules", "parameters",
+	"jobdirs", "jobstates", "jobtexts", "modules",
 	"patchars", "reswords", "userdirs", "usergroups",
 }
 

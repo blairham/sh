@@ -688,14 +688,18 @@ echo "assign=$?"`)
 // `parameters[nope]` evaluated to 0 and was silent at status 0, which is the
 // answer this mechanism exists to stop.
 func TestUnsettingAnAbsentParametersElementRefusesByName(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `unset "parameters[PATH]" 2>&1
+	// `jobstates` rather than `parameters`, which this used to ask about:
+	// that one is a live table now (#1599), so it is no longer an example of
+	// the thing being tested. The mechanism is unchanged and so is the
+	// wording — only the parameter standing in for "absent" moved.
+	out, st := runZsh(t, t.TempDir(), `unset "jobstates[PATH]" 2>&1
 echo "known=$?"
-unset "parameters[nope]" 2>&1
+unset "jobstates[nope]" 2>&1
 echo "unknown=$?"
 unset "jobtexts[1]" 2>&1
 echo "other=$?"`)
-	want := "zsh:unset:1: parameters: parameter not implemented yet\nknown=1\n" +
-		"zsh:unset:3: parameters: parameter not implemented yet\nunknown=1\n" +
+	want := "zsh:unset:1: jobstates: parameter not implemented yet\nknown=1\n" +
+		"zsh:unset:3: jobstates: parameter not implemented yet\nunknown=1\n" +
 		"zsh:unset:5: jobtexts: parameter not implemented yet\nother=1\n"
 	if out != want || st != 0 {
 		t.Errorf("unsetting an absent parameter's element = %q (status %d), want %q", out, st, want)
@@ -705,10 +709,18 @@ echo "other=$?"`)
 // And a name the script gave a value of its own is the script's, on the unset
 // as on the read: the refusal is about reading something absent, not about
 // owning a spelling.
+//
+// `jobstates` rather than `parameters`, which this used to use: that one is a
+// live read-only table now (#1599) and a script cannot own it here any more
+// than in zsh. The name that stands in for it can still be owned here and
+// cannot in zsh, which refuses every one of the module's names as read-only
+// whether the module is loaded or not — #1604, filed rather than folded in,
+// because the refusal it needs has to be ordered against the one #1152 gives
+// an unimplemented parameter.
 func TestUnsettingAnAbsentNameTheScriptOwnsIsTheScriptsArray(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `parameters=(a b c)
-unset "parameters[2]" 2>&1
-echo "st=$? v=[${parameters[*]}]"`)
+	out, st := runZsh(t, t.TempDir(), `jobstates=(a b c)
+unset "jobstates[2]" 2>&1
+echo "st=$? v=[${jobstates[*]}]"`)
 	want := "st=0 v=[a  c]\n"
 	if out != want || st != 0 {
 		t.Errorf("unsetting an owned name's element = %q (status %d), want %q", out, st, want)
@@ -780,11 +792,12 @@ func moduleParams() []string {
 // which the completion system touches on its fourth line (#1598).
 func implementedModuleParams() []string {
 	return []string{
-		"aliases", "builtins", "commands", "funcstack", "functions", "options",
+		"aliases", "builtins", "commands", "funcstack", "functions",
+		"options", "parameters",
 	}
 }
 
-// absentModuleParams is the seventeen this shell has not got, each registered
+// absentModuleParams is the sixteen this shell has not got, each registered
 // with [interp.Runner.SetAbsentParameter] so that reading one is refused at
 // the expansion that asked (#1152).
 //
@@ -796,7 +809,7 @@ func absentModuleParams() []string {
 	return []string{
 		"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
 		"functions_source", "functrace", "history", "historywords",
-		"jobdirs", "jobstates", "jobtexts", "modules", "parameters",
+		"jobdirs", "jobstates", "jobtexts", "modules",
 		"patchars", "reswords", "userdirs", "usergroups",
 	}
 }

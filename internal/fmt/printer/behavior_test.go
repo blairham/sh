@@ -65,3 +65,41 @@ func run(t *testing.T, shell, script string) (stdout, stderr string, status int)
 	}
 	return so.String(), se.String(), status
 }
+
+// TestEverySampleIsDeterministic runs each sample twice *unformatted* and
+// requires the two runs to agree.
+//
+// The tier above compares an unformatted run with a formatted one and blames
+// the formatter for any difference. That inference only holds if the sample
+// itself says the same thing twice — and one did not: `(cd /tmp && ls)`
+// listed a directory the rest of the machine writes to, so the tier failed
+// roughly one run in four, naming the formatter for someone else's file.
+//
+// A flake is bad; a flake that accuses the wrong component is worse, because
+// the next person to see it goes looking in the printer. This test fails
+// first and says which sample is at fault, so the diagnosis is one line
+// instead of an afternoon.
+func TestEverySampleIsDeterministic(t *testing.T) {
+	for _, s := range samples {
+		shell := "bash"
+		if s.zsh {
+			shell = "zsh"
+		}
+		t.Run(s.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := exec.LookPath(shell); err != nil {
+				t.Skipf("%s not installed", shell)
+			}
+			firstOut, firstErr, firstStatus := run(t, shell, s.src)
+			againOut, againErr, againStatus := run(t, shell, s.src)
+			if s.loose {
+				firstErr, againErr = "", ""
+			}
+			if firstOut != againOut || firstErr != againErr || firstStatus != againStatus {
+				t.Errorf("this sample does not say the same thing twice, so it cannot grade the formatter\n"+
+					"source:\n%s\nstdout %q -> %q\nstderr %q -> %q\nstatus %d -> %d",
+					s.src, firstOut, againOut, firstErr, againErr, firstStatus, againStatus)
+			}
+		})
+	}
+}

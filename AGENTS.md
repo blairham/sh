@@ -68,19 +68,23 @@ refuses what every real shell accepts is a core nobody can write against.
     syntax/           lexer, grammar, AST — public
     interp/           execution, the semantics vector, the extension points
     driver/           the front end: -c, a script file, argv[0], exit status
-    dialect/bash/     one package per shell: Dialect, Semantics, Diagnostics
+    dialect/bash/     one package per shell: Dialect, Semantics, Diagnostics, Style
     dialect/zsh/      …
     dialect/ksh/      …
     dialect/dash/     …
     cmd/sh            the substrate's driver, with -dialect
     cmd/bash cmd/zsh  dialect binaries, as proof the library goal holds
     cmd/dash cmd/ksh  …
+    cmd/shfmt         the formatter: the first thing that consumes the
+                      parser as a product rather than as test scaffolding
     internal/cmd/     the instruments: not shipped, and under internal/
                       so nothing outside the module can import them
       oracle          records what real shells do
       smoke           drives a session through a terminal, per-feature
       wild            parses the shell scripts installed on this machine
       corpusguard     fails when the corpus has lost a case
+      fmtwild         lays out every script on the machine and checks
+                      that nothing but the layout changed
 
 **The core does not know its successors.** `syntax` and `interp` define the
 questions — a grammar flag, a semantics axis, a diagnostic value — and each
@@ -109,9 +113,14 @@ stays internal because it is test infrastructure rather than product.
 This is a library others import and extend — a dialect is built *on* the
 core, not forked from it — and there are exactly three ways to do that:
 
-1. **Choose the vectors.** `syntax.Dialect`, `interp.Semantics` and
-   `interp.Diagnostics` are values. "Which shell am I" is data, not a branch
-   in the code — see any package under `dialect/` for the whole of one.
+1. **Choose the vectors.** `syntax.Dialect`, `interp.Semantics`,
+   `interp.Diagnostics` and `syntax.Style` are values. "Which shell am I" is
+   data, not a branch in the code — see any package under `dialect/` for the
+   whole of one. `Style` is the fourth and the thinnest: it answers what a
+   *formatter* needs and a parser never asks, and it earns its place on one
+   question — zsh's brace-spelled bodies parse to the tree the keyword
+   spelling parses to, so only a stated preference can say which spelling is
+   written back. `docs/spec/style.md` holds the measurements.
 2. **Register a builtin.** Only for what shell cannot express: `cd` must
    change the runner's directory, `read` must set a variable in the calling
    shell. Reach for Go when shell genuinely cannot say the thing.
@@ -329,7 +338,7 @@ Work is checked in three places, and each does something the others
 cannot.
 
 **Local, on every commit.** The hooks in `.pre-commit-config.yaml`:
-hygiene, secrets, licence headers, `go mod tidy`, the toolchain-pin
+hygiene, secrets, license headers, `go mod tidy`, the toolchain-pin
 invariant, and golangci-lint in two forms — `golangci-lint-fmt` applies
 every formatter the config names, and `golangci-lint` lints *what changed
 since HEAD*. Seconds, not minutes, and it is the only feedback that
@@ -339,7 +348,7 @@ arrives before the code leaves the machine.
 
 `Pre-commit` runs first and runs *always*, draft or not, and everything
 else waits on it. It is the only job that looks at every file rather than
-at Go — trailing whitespace, licence headers, secrets, the toolchain pin —
+at Go — trailing whitespace, license headers, secrets, the toolchain pin —
 none of which is worth detecting changes for, and a secret committed to a
 draft is committed. A hook can be skipped and a contributor may never have
 installed one, which is why it runs here as well as there.
@@ -395,7 +404,7 @@ its required checks go green.
 
 **Build, test and lint only do work when Go changed.** A pull request
 touching only `docs/` runs them as no-ops. Pre-commit always runs in full,
-because what it checks — whitespace, YAML, secrets, licence headers —
+because what it checks — whitespace, YAML, secrets, license headers —
 applies to every file.
 
 The gating is inside the jobs, not a `paths:` filter on the workflow, and

@@ -32,6 +32,7 @@ A spec entry with no citation is a guess and does not belong here.
     hooks.md          what a session runs between one command and the next
     editing.md        what the keys do while a line is being typed
     completion.md     what Tab does to the word under the cursor
+    style.md          how source is laid back out, and what each dialect says
     grammar/          per-construct specs
       tokenization.md   input to tokens, and where quoting is recorded
       commands.md       tokens to commands: precedence and structure
@@ -42,6 +43,7 @@ A spec entry with no citation is a guess and does not belong here.
       conditions.md     what the operators inside [[ ]] mean
       expansion.md      the expansion pipeline and its ordering
       word-splitting.md field splitting and IFS
+      comments.md       where a comment begins and ends
 
 ## The two kinds of difference
 

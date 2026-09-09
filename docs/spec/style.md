@@ -78,9 +78,59 @@ the answer:
   is the point of this section: a later measurement can overturn three
   of these rows and none of the first two.
 
-The tree-wide `.editorconfig` says the same thing for shell, which is
-what makes 2 the default rather than a coin toss between the two live
-candidates.
+**This page previously claimed the tree's `.editorconfig` agreed, and
+it does not.** Its universal block says `indent_size = 2`, but the
+shell-specific block overrides exactly that:
+
+    [*.{sh,bash}]
+    indent_style = space
+    indent_size = 4
+
+The claim was written from the first block without reading the second,
+which is the ordinary way to misread an `.editorconfig` — later
+sections win, and the shell section is the one that governs shell. So
+the corpus and the Google guide say two, this tree's own configuration
+says four, and there is a real disagreement here rather than the
+consensus this paragraph used to assert.
+
+**The resolution, decided 2026-09-09: `.editorconfig` wins where one
+exists, and two spaces is the fallback where none does.** It is the
+community's standard mechanism for this exact question, it is what the
+incumbent reads, and a formatter that overrode a project's stated
+configuration with its own measurement would be wrong about which of
+the two is evidence. The measurement decides what to do in the absence
+of an instruction; it does not outrank one.
+
+Two consequences worth stating plainly, and the first is narrower than
+it first appears. `[*.{sh,bash}]` is a *glob*, so it covers `.sh` and
+`.bash` and nothing else — on this tree a `.zsh` file, a `.ksh` file, a
+`_name` completion function and an extensionless script with a
+`#!/usr/bin/env bash` line all fall through to the universal `[*]`
+block and its two spaces:
+
+| file | matches the shell block | effective indent |
+|---|---|---|
+| `deploy.sh`, `lib.bash` | yes | 4 |
+| `plugin.zsh`, `f.ksh` | no | 2 |
+| `_mycompletion`, `deploy` | no | 2 |
+
+So the reader will split this tree's shell files between two widths by
+extension, which is very likely not what anybody intended when that
+block was written. Whether the fix is to widen the glob or to drop the
+block is a question for whoever owns the file, not for this page.
+
+The second consequence is structural: `Style.Indent` stops being a
+per-dialect answer and becomes a per-*file* one, because
+`.editorconfig` is matched by path while a dialect is chosen by
+shebang, extension or flag. The two can disagree about one file — a
+`#!/bin/bash` script named `deploy` is bash to the dialect and `[*]` to
+the configuration — and the configuration wins. The dialect supplies
+the default that a project is free to overrule.
+
+**Not implemented yet.** `cmd/shfmt` reads no configuration file today
+and uses the two-space default everywhere. This paragraph records a
+decision, not behavior, and should be rewritten as description when
+the reader lands.
 
 Google's one exception — tab-indented `<<-` here-document bodies —
 needs no rule here: bodies are verbatim, so a `<<-` body keeps the tabs
@@ -217,7 +267,9 @@ and keeping it is the job.
 
 Sources consulted, all spec-level and clean-room safe: the Google Shell
 Style Guide, POSIX XCU 2.3 for token recognition, the vendor manuals
-for what each dialect spells, and this tree's `.editorconfig`.
+for what each dialect spells, and this tree's `.editorconfig` — which
+disagrees with the first of those about shell, as the Indentation
+section now records.
 
 - **Indent two spaces**, per the table above.
 - **`; then` / `; do` on the header's line**, per the table above.

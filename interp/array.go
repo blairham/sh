@@ -978,10 +978,48 @@ func (r *Runner) arrayBareName(a Array) (string, bool) {
 	if assigned && len(a) == 1 {
 		return base, true
 	}
+	return r.bareArrayReading(r.readArray(a), base, assigned)
+}
+
+// producedBareName is the same reading for an array that is generated rather
+// than stored — `$FUNCNAME`, `$funcstack` — which had no reading at all
+// before #1600 and answered as though the name were unset.
+//
+// It goes through bareArrayReading rather than repeating the axis, because
+// the question is not a different one for a produced array: what a bare name
+// gives is the dialect's answer about arrays, and where the producer's
+// elements came from is not part of it.
+func (r *Runner) producedBareName(elems []string) (string, bool) {
+	// The same agreement the stored reading takes its shortcut on.
+	if len(elems) == 1 {
+		return elems[0], true
+	}
+	base, assigned := "", len(elems) > 0
+	if assigned {
+		base = elems[0]
+	}
+	return r.bareArrayReading(elems, base, assigned)
+}
+
+// bareArrayReading is the axis itself, asked once for both kinds of array.
+//
+// It answers set-ness as well as the value, and the two travel together
+// because the shells disagree about both at once and in the same direction.
+// Measured with no elements to read: zsh answers `${+funcstack}` 1 and
+// `${funcstack+SET}` SET at a top level where `$#funcstack` is 0, and bash
+// answers `${FUNCNAME+SET}` empty and `[[ -v FUNCNAME ]]` false outside a
+// call. The shell that reads the whole list has a value — the empty join —
+// so the name is set; the shell that reads the base element has no element
+// zero, so it is not.
+//
+// A second function computing set-ness beside this one is the thing to avoid
+// here: it would be the one place a produced array could come to a different
+// answer from a stored one, which is exactly the defect being fixed.
+func (r *Runner) bareArrayReading(elems []string, base string, assigned bool) (string, bool) {
 	if r.ask(r.sem().ArrayScalarIsTheWholeArray, "a plain `$a` giving the whole array") {
 		// Joined with the first character of IFS, exactly as `$*` is: an
 		// empty array joins to the empty string, and the name is set.
-		return strings.Join(r.readArray(a), ifsFirst(r.ifs())), true
+		return strings.Join(elems, ifsFirst(r.ifs())), true
 	}
 	return base, assigned
 }
@@ -1661,6 +1699,13 @@ func (r *Runner) subscriptIndex(text string) (int, bool) {
 func (r *Runner) arrayElementCount(name string) (int, bool) {
 	if a, ok := r.Arrays[name]; ok {
 		return len(r.readArray(a)), true
+	}
+	if produce, ok := r.DynamicArrays[name]; ok {
+		// The second half of #1600. This is what decides whether a bare name
+		// is an array at all, so without it a produced one was not: `${#a}`
+		// counted nothing, and the rewrite that turns a bare name into
+		// `${a[@]}` or `${a[*]}` declined before it began.
+		return len(produce(r)), true
 	}
 	if m, ok := r.assocFor(name); ok {
 		return len(m), true

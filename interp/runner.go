@@ -3878,6 +3878,34 @@ func (r *Runner) getVar(name string) (string, bool) {
 		// are read off it rather than off the copy.
 		return r.arrayBareName(a)
 	}
+	if produce, ok := r.DynamicArrays[name]; ok {
+		// A produced array read without a subscript, which is the same
+		// question the stored one above answers and had no answer here at
+		// all: `$FUNCNAME` was empty where bash reads `g`, `${BASH_SOURCE}`
+		// was empty where bash names the shell, and `[[ -v FUNCNAME ]]` was
+		// false for a parameter this runner had registered — set-ness comes
+		// through paramSource and paramSource comes through here (#1600).
+		//
+		// producedBareName rather than a reading of its own, because which
+		// of the two a bare name gives is ArrayScalarIsTheWholeArray's
+		// question and a produced array is not a different kind of array:
+		// zsh reads `$funcstack` as `g f` and bash reads `$FUNCNAME` as `g`,
+		// which is the axis and not two rules. It answers set-ness off the
+		// same axis, which is what keeps `[[ -v FUNCNAME ]]` false outside a
+		// call in the shell where an empty array has no base element.
+		//
+		// After the stored table, matching arrayElems — the two have to
+		// agree about which wins, or `$a` and `${a[@]}` would read different
+		// sources for one name. It is deliberately *not* guarded on
+		// r.removed for the same reason: arrayElems does not guard it, and
+		// making the scalar view alone honor an `unset` would let the two
+		// views disagree. What `unset` should do to a produced array is a
+		// question per parameter and per shell — measured, zsh refuses
+		// `unset funcstack` as a read-only variable, bash allows
+		// `unset FUNCNAME` and refuses `unset BASH_SOURCE` — so it belongs
+		// to whichever dialect registers the name, not here.
+		return r.producedBareName(produce(r))
+	}
 	if a, ok := r.assocFor(name); ok && !r.removed[name] {
 		// The associative table answers alone rather than falling through:
 		// Vars may hold a scalar the name had before it was declared, and no

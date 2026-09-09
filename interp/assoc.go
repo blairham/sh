@@ -225,9 +225,14 @@ func (r *Runner) expandKeyQuoted(w *syntax.Word) string {
 // an order and an associative array has none. Measured: with `m[a]=1` alone,
 // `$m` is empty in the two and `1` in the one.
 func (r *Runner) assocScalar(a AssocArray) (string, bool) {
-	if len(a) == 0 {
-		return "", false
-	}
+	// No early return for an empty table. Which of the two readings a bare
+	// name takes decides set-ness as well as the value, and the two shells
+	// disagree about an empty one in the same direction they disagree about
+	// an empty array: measured, zsh answers `typeset -A h; ${+h}` with 1 and
+	// `${h+SET}` with SET, where bash's `declare -A h; [[ -v h ]]` is false.
+	// Short-circuiting here answered bash's way for both, and did it before
+	// the axis was reached — so no dialect could say otherwise. See
+	// bareArrayReading, which is the same shape for an array.
 	if v, ok := a["0"]; ok && len(a) == 1 {
 		// The two answers agree, so nothing is asked — the join of one value
 		// is that value.

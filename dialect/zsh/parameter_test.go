@@ -775,13 +775,16 @@ func moduleParams() []string {
 	}
 }
 
-// implementedModuleParams is the five that are live views (#1060) — the five
-// a real plugin manager reads, and the only five it reads.
+// implementedModuleParams is the six that are live views: the five a real
+// plugin manager reads and the only five it reads (#1060), and `funcstack`,
+// which the completion system touches on its fourth line (#1598).
 func implementedModuleParams() []string {
-	return []string{"aliases", "builtins", "commands", "functions", "options"}
+	return []string{
+		"aliases", "builtins", "commands", "funcstack", "functions", "options",
+	}
 }
 
-// absentModuleParams is the eighteen this shell has not got, each registered
+// absentModuleParams is the seventeen this shell has not got, each registered
 // with [interp.Runner.SetAbsentParameter] so that reading one is refused at
 // the expansion that asked (#1152).
 //
@@ -792,7 +795,7 @@ func implementedModuleParams() []string {
 func absentModuleParams() []string {
 	return []string{
 		"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
-		"funcstack", "functions_source", "functrace", "history", "historywords",
+		"functions_source", "functrace", "history", "historywords",
 		"jobdirs", "jobstates", "jobtexts", "modules", "parameters",
 		"patchars", "reswords", "userdirs", "usergroups",
 	}

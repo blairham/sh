@@ -91,8 +91,8 @@ import (
 // the function at status 0, exactly as here. Modeling the refusal would have
 // meant reproducing a zsh bug against a state this shell cannot be in.
 
-// registerParameterModule installs all thirty-three: five as views, ten as
-// empty views, and eighteen as refusals.
+// registerParameterModule installs all thirty-three: six as views, ten as
+// empty views, and seventeen as refusals.
 func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssoc("functions", zshFunctionsView)
 	r.SetDynamicAssocWriter("functions", writeZshFunction)
@@ -114,6 +114,7 @@ func registerParameterModule(r *interp.Runner) {
 	r.MarkHidden("builtins")
 	r.SetDynamicAssoc("aliases", zshAliasesView)
 	r.SetDynamicAssocWriter("aliases", writeZshAlias)
+	r.SetDynamicArray("funcstack", funcstackNames)
 	registerEmptyParameters(r)
 	registerAbsentParameters(r)
 }
@@ -239,7 +240,7 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 // tell "no users looked up yet" from "this shell cannot look one up".
 var zshAbsentParams = []string{
 	"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
-	"funcstack", "functions_source", "functrace", "history", "historywords",
+	"functions_source", "functrace", "history", "historywords",
 	"jobdirs", "jobstates", "jobtexts", "modules", "parameters",
 	"patchars", "reswords", "userdirs", "usergroups",
 }

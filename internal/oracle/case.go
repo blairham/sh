@@ -1283,6 +1283,16 @@ var Corpus = []Case{
 		Why:     "appending to an array adds to its end rather than to its first element, which is the same spelling doing a different thing",
 	},
 	{
+		ID: "core/an-operator-over-the-positional-parameters-in-quotes", Category: "parameters",
+		Snippet: `set -- ax bx cx; printf "[%s]" "${@#a}"; printf " | "; printf "[%s]" "${*#a}"; echo`,
+		Why:     "an operator over `$@` applies to each positional parameter and over `$*` to their join, which is the same division the two spellings keep without one. Unanimous across all six columns. **In quotes** because the unquoted spelling records nothing: a shell that joins the parameters first and trims the join once answers `x bx cx`, which the field splitting then cuts into the same three words a distributing shell produced -- so only the quoted form can tell the readings apart, and this shell read them the second way at status 0 until #1588. The prefix trim rather than the suffix one, because `${@%x}` on these parameters is unchanged either way and would record nothing at all",
+	},
+	{
+		ID: "zsh/an-element-filter-over-the-positional-parameters", Category: "parameters",
+		Snippet: `set -- a -- b; printf "[%s]" ${@:#--}; echo " n=$#"`,
+		Why:     "`${@:#pat}` drops the parameters the pattern matches and keeps the rest. Two columns answer it and they agree -- zsh, whose operator it is, and ksh93, which reaches the same three fields by its own reading of the same characters -- where the three bash columns call it an arithmetic error and dash a bad substitution, the usual three-way split of an expansion a grammar cannot read. It is how `~/.zi/bin/zi.zsh` strips the `--` separator out of `$@` after `zparseopts` -- `builtin set -- ${@:#--}` -- so a reading that joined first made a declaration of several autoloadable functions into a single function whose name held all of them, and every one of them was then `command not found`. The count is printed as well as the fields because the parameters are left untouched by the filter, which is what says the expansion was read and `set` was not",
+	},
+	{
 		ID: "core/appending-an-array-literal-to-a-scalar", Category: "parameters",
 		Snippet: `a=1; a+=(2); echo "[${a[*]}] n=${#a[@]} [${a[0]}][${a[1]}]"`,
 		Why:     "an array-literal append over a name holding a *scalar* keeps that value as the first element rather than starting a fresh array from the words. Unanimous across all five shells with arrays, so it is the core being wrong rather than an axis, and the failure was silent: status 0 and a plausible one-element array where the script's own value had been. The two subscripts are what say *where* the kept value landed, and they are the array base rather than a second rule -- `[1][2]` where the first element is 0 and `[][1]` where it is 1, which is the same answer written twice. A row printing only the joined elements would pass with the value placed anywhere at all",

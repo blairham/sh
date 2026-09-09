@@ -17,6 +17,14 @@ import "testing"
 // 0 in zsh 5.9.2, where bash 5.3.15 answers `syntax error in conditional
 // expression: unexpected token `('` for the pair. This shell gave bash's answer
 // under every dialect, which is what stopped powerlevel10k parsing.
+//
+// The measurement lives here rather than in the corpus, and that is forced
+// rather than chosen: the corpus is read by one grammar wide enough for every
+// case in it, and this construct needs PatternAlternation, which that grammar
+// does not have. Turning it on there made three `pat/` cases — the `(#m)` and
+// `(#b)` flag rows — parse, and those are in the corpus precisely because the
+// reference shells reject them, so widening to admit this row would have
+// falsified theirs. A test can set the one flag it means; corpusDialect cannot.
 func TestAParenAfterEqualsIsAGroupInAConditionAndALiteralOutsideOne(t *testing.T) {
 	d := Core()
 	d.PatternAlternation = true

@@ -36,7 +36,7 @@ PREFIX ?= /usr/local
 SHELLDIR ?= $(PREFIX)/libexec/sh
 SHELLS := sh bash zsh ksh dash
 
-.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects wild wild-run wild-run-contained smoke startup perfgate install uninstall
+.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-gated conformance-dialects wild wild-run wild-run-contained fmt-wild smoke startup perfgate install uninstall
 
 all: build
 
@@ -140,6 +140,9 @@ conformance-gated: ## Run the corpus twice — plain and under a sandbox policy 
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/sh-under-test ./cmd/sh
 	@go run ./internal/cmd/oracle -bin $(BINDIR)/sh-under-test -binargs "-dialect bash" -gated $(ARGS)
+
+fmt-wild: ## Lay out every shell script installed on this machine and check nothing changed but the layout
+	@go run ./internal/cmd/fmtwild $(ARGS)
 
 wild: ## Parse the shell scripts installed on this machine and report what fails (SH_WILD_DIRS adds framework trees)
 	@go run ./internal/cmd/wild $(ARGS)

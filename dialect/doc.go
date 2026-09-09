@@ -8,11 +8,18 @@
 // diagnostic value — and each shell answers them in its own package. Adding a
 // shell adds a directory; it does not touch the core.
 //
-// Each package exports the same three functions, one per vector:
+// Each package exports the same four functions, one per vector:
 //
 //	Dialect()     what parses
 //	Semantics()   what it means where the shells conflict
 //	Diagnostics() how failure is reported
+//	Style()       how a formatter lays it back out
+//
+// Style is the newest and the thinnest, because most of what a formatter
+// decides is not a shell's to decide. It earns its place on one question:
+// zsh's brace-spelled bodies parse to the tree the keyword spelling parses
+// to, so nothing but a dialect's stated preference can say which spelling a
+// formatter writes back. docs/spec/style.md holds the measurements.
 //
 // No shell is defined in terms of another. Every preset starts from
 // syntax.POSIX or interp.PosixSemantics — the standard, which is not a shell

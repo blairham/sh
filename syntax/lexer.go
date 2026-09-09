@@ -1071,7 +1071,20 @@ func (l *Lexer) opensPatternGroup() bool {
 	// And a `(` straight after `=` opens an array literal, never a group —
 	// measured, because it is the same shell: `a=(b|c)` is a parse error
 	// there rather than a pattern, so the assignment always wins.
-	if l.off > 0 && l.src[l.off-1] == '=' {
+	//
+	// Outside a condition. Inside one there is no assignment for it to win
+	// against: `[[ ]]` cannot contain one, so an `=` there is an ordinary
+	// character of the pattern and the `(` after it is the group it looks
+	// like. Measured, `[[ a=b == a=(b) ]]` and `[[ a=b == a=(b|c) ]]` are
+	// both 0 in zsh 5.9.2 — the alternation reads too — where bash 5.3.15
+	// answers `unexpected token `('` for the pair. Both columns still count
+	// `a=(x y)` as two, which is the case this guard was written for and the
+	// one it keeps.
+	//
+	// It is what stopped powerlevel10k parsing, and so what left a real
+	// startup with no prompt: its `prompt[$' \t']#=([^$'\n']#)` matches the
+	// `=` of a `prompt = value` line and captures what follows (#1585).
+	if l.off > 0 && l.src[l.off-1] == '=' && !l.inCondition {
 		return false
 	}
 	if l.dialect.PatternAlternation {
@@ -2301,8 +2314,59 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				continue
 			}
 			l.advance()
+		case '$':
+			// `${` nests and a bare `{` does not, so the nesting is counted
+			// on the *pair* rather than on the brace. Counting the brace
+			// alone made an escaped dollar open a level nothing could close:
+			// `\$` is consumed as an escape pair just above, which left its
+			// `{` to be read as a nested expansion, and the `"` around the
+			// whole thing was then eaten looking for the `}` that would
+			// balance it. Measured on the pair, unanimous in both columns
+			// that have the construct — `a=x; echo "${a/x/\${y}"` is `${y}`
+			// in zsh 5.9.2 and bash 5.3.15 where this shell answered
+			// `unmatched "` (#1586).
+			//
+			// The substitution check stays in front of it: `$(` is a
+			// construct of its own and is stepped over whole, exactly as the
+			// default branch does it for a backquote.
+			if l.skipSubstitution() {
+				continue
+			}
+			l.advance() // $
+			if !l.eof() && l.peek() == '{' {
+				depth++
+				l.advance()
+			}
 		case '{':
-			depth++
+			// A bare `{` inside a *double-quoted* expansion is an ordinary
+			// character and closes nothing, so the brace that opens a level
+			// there is only ever the one a `$` brought with it. Unquoted it
+			// is a brace-expansion group and has to balance, because the
+			// group is what says how far the operand reaches.
+			//
+			// The quoting is the whole of the difference and it is measured.
+			// `printf "[%s]" ${u:-{a,q}.z}` is `[a.z][q.z]` in zsh 5.9.2 —
+			// two fields, so the operand ran to `.z` and the group was
+			// expanded — and the same line in quotes is the single field
+			// `[{a,q.z}]`, which is the operand stopping at the first `}`.
+			// `"${a/x/{y}"` is `{y` for the same reason.
+			//
+			// `${a/x/{y}}` is deliberately not the case this rests on: it
+			// is `{y}` whether the brace nests or not — closing early leaves
+			// the second `}` as literal text and closing late puts it inside
+			// the replacement — so it cannot tell the two readings apart.
+			//
+			// bash nests neither way: the unquoted line is `[{a,q.z}]` there
+			// too. That column is left as it was rather than corrected here,
+			// because it is a separate divergence this change did not
+			// introduce and does not need (#1587).
+			//
+			// The command form keeps its own rule. Its body is a program and
+			// its braces are that program's, so a `{ … }` block written in
+			// one has to balance for the same reason its quotes do.
+			if brace || q != DoubleQuoted {
+				depth++
+			}
 			l.advance()
 		case '}':
 			depth--

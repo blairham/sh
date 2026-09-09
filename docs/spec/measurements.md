@@ -4392,6 +4392,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `unset/the-m-option-unsets-by-pattern` | **2>** `<shell>: 1: unset: Illegal option -m` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` | **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 0: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]` | **2>** `<shell>: unset: -m: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `st=0 [gone][gone][3]` |
 | `unset/the-n-option-splits-the-panel` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=0` | `st=0` | `st=2` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=0` | `st=1` **2>** `<shell>:unset:1: bad option: -n` |
 | `special/lineno-in-a-function-diverges` | `2` | `2` | `2` | `2` | `2` | `1` |
+| `core/a-bare-brace-inside-a-quoted-expansion` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[{y][xr}]` | `[{y][xr}]` | `[{y][xr}]` | `[{y}; printf [%s] x; echo]` | `[{y][xr}]` |
 
 - `name/zsh-argzero-under-a-moved-dollar-zero` — zsh alone carries the value `$0` had before anything moved it, which is the only way a sourced file can tell what the shell itself was called. It is what the `${${0:#$ZSH_ARGZERO}:-…}` idiom in a plugin manager on this machine tests against; the other five have no such name and no moved `$0` for it to record
   ```sh
@@ -4504,6 +4505,10 @@ grades it and nothing drift-checks it either, for the same reason.
   echo $LINENO
   }
   f
+  ```
+- `core/a-bare-brace-inside-a-quoted-expansion` — a `{` with no `$` in front of it does not open a level, so the expansion ends at the first `}` and what follows is ordinary text. Unanimous in the columns that have the operators — `{y` and then `p{qr}`, the second being the tell, since a shell that nested would answer `p{q}r` as one piece and leave nothing behind. Written in quotes because unquoted the same brace is a *brace-expansion group* and does have to balance, which is a different question and a different answer. Counting every brace instead made an escaped dollar open a level nothing could close, since `\$` is consumed as an escape pair and left its `{` to be read as a nested expansion — the double quote around the whole word was then eaten looking for the `}` that would balance it, which is why the failure read as an unterminated string (#1586)
+  ```sh
+  a=x; printf "[%s]" "${a/x/{y}"; printf "[%s]" "${a:-p{q}r}"; echo
   ```
 
 ## diagnostics

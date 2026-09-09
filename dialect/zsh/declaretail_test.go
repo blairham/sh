@@ -369,19 +369,25 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // association only exists after `zmodload zsh/terminfo`, where here the view
 // is registered when the dialect is built. That is the same call
 // `zsh/datetime`'s three and `zsh/sched`'s one above already make, so this
-// listing carries all ten where a fresh real zsh carries none of them and a
-// fully loaded one carries every one.
+// listing carries all eleven where a fresh real zsh carries none of them and
+// a fully loaded one carries every one.
+//
+// The eleventh is `$parameters` (#1599), which joins for exactly the reasons
+// `builtins` did: zsh answers `parameters[x]=y` with `read-only variable:
+// parameters`, and a produced table without the attribute would take an
+// assignment into a stored table that then stands in front of the view. It
+// lists as `typeset -Ar parameters` there too.
 func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
 		`export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
 	want := "V='a b'\nEPOCHREALTIME\nEPOCHSECONDS\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
-		"termcap\nterminfo\nzsh_scheduled_events\n" +
+		"parameters\ntermcap\nterminfo\nzsh_scheduled_events\n" +
 		"export V='a b'\n" +
 		"typeset -r EPOCHREALTIME\ntypeset -r EPOCHSECONDS\ntypeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
 		"typeset -r dis_patchars\ntypeset -r dis_reswords\ntypeset -r epochtime\n" +
-		"typeset -Ar termcap\ntypeset -Ar terminfo\n" +
+		"typeset -Ar parameters\ntypeset -Ar termcap\ntypeset -Ar terminfo\n" +
 		"typeset -r zsh_scheduled_events\n"
 	if st != 0 || out != want {
 		t.Errorf("got %q status %d, want %q at 0", out, st, want)

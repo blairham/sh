@@ -4392,6 +4392,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `unset/the-m-option-unsets-by-pattern` | **2>** `<shell>: 1: unset: Illegal option -m` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` | **2>** `<shell>: line 1: unset: -m: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `st=2 [1][2][3]` **2>** `<shell>: line 0: unset: -m: invalid option~unset: usage: unset [-f] [-v] [name ...]` | **2>** `<shell>: unset: -m: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `st=0 [gone][gone][3]` |
 | `unset/the-n-option-splits-the-panel` | **2>** `<shell>: 1: unset: Illegal option -n` *(status 2)* | `st=0` | `st=0` | `st=2` **2>** `<shell>: line 0: unset: -n: invalid option~unset: usage: unset [-f] [-v] [name ...]` | `st=0` | `st=1` **2>** `<shell>:unset:1: bad option: -n` |
 | `special/lineno-in-a-function-diverges` | `2` | `2` | `2` | `2` | `2` | `1` |
+| `core/a-bare-brace-inside-a-quoted-expansion` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[{y][xr}]` | `[{y][xr}]` | `[{y][xr}]` | `[{y}; printf [%s] x; echo]` | `[{y][xr}]` |
 
 - `name/zsh-argzero-under-a-moved-dollar-zero` — zsh alone carries the value `$0` had before anything moved it, which is the only way a sourced file can tell what the shell itself was called. It is what the `${${0:#$ZSH_ARGZERO}:-…}` idiom in a plugin manager on this machine tests against; the other five have no such name and no moved `$0` for it to record
   ```sh
@@ -4504,6 +4505,10 @@ grades it and nothing drift-checks it either, for the same reason.
   echo $LINENO
   }
   f
+  ```
+- `core/a-bare-brace-inside-a-quoted-expansion` — a `{` with no `$` in front of it does not open a level, so the expansion ends at the first `}` and what follows is ordinary text. Unanimous in the columns that have the operators — `{y` and then `p{qr}`, the second being the tell, since a shell that nested would answer `p{q}r` as one piece and leave nothing behind. Written in quotes because unquoted the same brace is a *brace-expansion group* and does have to balance, which is a different question and a different answer. Counting every brace instead made an escaped dollar open a level nothing could close, since `\$` is consumed as an escape pair and left its `{` to be read as a nested expansion — the double quote around the whole word was then eaten looking for the `}` that would balance it, which is why the failure read as an unterminated string (#1586)
+  ```sh
+  a=x; printf "[%s]" "${a/x/{y}"; printf "[%s]" "${a:-p{q}r}"; echo
   ```
 
 ## diagnostics
@@ -6421,7 +6426,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `trap/reset-restores-the-default` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
 | `trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `~child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` |
 | `trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `~child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` |
-| `trap/an-elements-pipe-handler-runs-inside-the-elements-redirections` | `e=[<shell>: 1: echo: echo: I/O error~child]` | `e=[<shell>: line 1: echo: write error: Broken pipe~child]` | `e=[sh: line 1: echo: write error: Broken pipe~child]` | `e=[<shell>: line 0: echo: write error: Broken pipe~~child]` | `e=[child]` | `e=[child~child~<shell>:echo:1: write error: broken pipe~<shell>:1: write error: broken pipe~child]` |
+| `trap/an-elements-pipe-handler-runs-inside-the-elements-redirections` | `e=[<shell>: 1: echo: echo: I/O error~child]` | `e=[<shell>: line 1: echo: write error: Broken pipe~child]` | `e=[sh: line 1: echo: write error: Broken pipe~child]` | `e=[<shell>: line 0: echo: write error: Broken pipe~~child]` | `e=[]` **2>** `cat: e: No such file or directory` | `e=[child~child~<shell>:echo:1: write error: broken pipe~<shell>:1: write error: broken pipe~child]` |
 | `signal-death/status-encodes-the-signal` | `st=141~after` | `st=141~after` | `st=141~after` | `st=141~after` | `st=269~after` | `st=141~after` |
 | `signal-death/the-shell-dies-by-the-signal-rather-than-exiting` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
 | `signal-death/an-uncatchable-signal-ends-it-outright` | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* |
@@ -9855,10 +9860,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `pattern/an-escape-before-an-ordinary-character` | `strips~no` | `strips~no` | `strips~no` | `strips~no` | `strips~no` | `keeps~literal` |
+| `core/a-paren-after-equals-in-a-condition` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 1: syntax error near `a=(b'~<shell>: -c: line 1: `[[ a=b == a=(b) ]]; echo "grp=$?"; [[ a=b == a=(b\|c) ]]; echo "alt=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 1: syntax error near `a=(b'~<shell>: -c: line 1: `[[ a=b == a=(b) ]]; echo "grp=$?"; [[ a=b == a=(b\|c) ]]; echo "alt=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 0: syntax error near `a=(b'~<shell>: -c: line 0: `[[ a=b == a=(b) ]]; echo "grp=$?"; [[ a=b == a=(b\|c) ]]; echo "alt=$?"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `grp=0~alt=0` |
 
 - `pattern/an-escape-before-an-ordinary-character` — the pattern language's own answer, asked the only way it can be: quote removal spends an escape written in the source before the matcher sees it, so a `case` pattern spelled `bet\a` is `beta` in all six and says nothing. A *substituted* pattern asks it — five shells match the result of an expansion as a pattern, and the sixth does under the option this line sets. A backslash before a character that needed no escaping is spent in five and kept in zsh, where the pattern is five characters
   ```sh
   setopt globsubst 2>/dev/null; p='bet\a'; case beta in $p) echo strips;; *) echo keeps;; esac; case 'bet\a' in $p) echo literal;; *) echo no;; esac
+  ```
+- `core/a-paren-after-equals-in-a-condition` — where the array-literal rule stops. A `(` straight after `=` is an array literal wherever an assignment can stand, and inside `[[ ]]` no assignment can — so zsh reads the `=` as an ordinary character of the pattern and the `(` as the group it looks like, alternation included, while the three bashes refuse the pair with `unexpected token `('` and dash has no `[[` to ask. The row is two conditions rather than one because a shell could plausibly take the group and refuse the alternation; both are 0 in the column that reads them. It is what stopped powerlevel10k parsing: its config reader matches a `prompt = value` line with `prompt[$' \t']#=([^$'\n']#)`, and the `=(` there is the operator and the capture, not a literal (#1585)
+  ```sh
+  [[ a=b == a=(b) ]]; echo "grp=$?"; [[ a=b == a=(b|c) ]]; echo "alt=$?"
   ```
 
 ## syntax errors

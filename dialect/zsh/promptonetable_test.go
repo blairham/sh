@@ -103,7 +103,25 @@ func TestPrintPAndThePercentFlagAgree(t *testing.T) {
 		// flag spelling beside it on the same line so the two are asked of
 		// one runner in one moment. The marker is computed by the shell and
 		// cannot appear in either answer.
-		src := "a=$(print -rP " + shquote(text) + "); b=\"${(%)" + ":-" + text + "}\"; " +
+		//
+		// The text goes through a *parameter* rather than through a `:-`
+		// operand written into the source, and that is not a style choice:
+		// half of these cases contain a `}`, and a `}` in the operand ends
+		// the expansion. Measured on zsh 5.9.2, 2026-09-08 — every
+		// brace-carrying row disagrees when written as `"${(%):-%F{red}x%f}"`,
+		// and it is the *flag* side that is short, `$'\033'[31mx%f}` against
+		// `$'\033'[31mx$'\033'[39m`, because the operand stopped at the first
+		// brace and `x%f}` arrived as ordinary text after it. The same seven
+		// rows agree through a parameter, in zsh and here alike.
+		//
+		// This test read as though it pinned the brace cases and pinned the
+		// opposite: it passed only while this shell balanced a bare `{` inside
+		// a double-quoted expansion, which zsh does not do, so the row that
+		// looked like coverage of `%F{red}` was really a record of #1586's
+		// bug. Writing it through a parameter asks the question the claim is
+		// about — that the two spellings are one expansion — and leaves where
+		// an operand *ends* to the tests that are about that.
+		src := "v=" + shquote(text) + "; a=$(print -rP -- \"$v\"); b=\"${(%)v}\"; " +
 			`[[ "$a" == "$b" ]] && print -r -- "AGREE" || printf 'print=%q flag=%q\n' "$a" "$b"`
 		out, st := runZsh(t, dir, src)
 		if out != "AGREE\n" || st != 0 {
@@ -190,3 +208,34 @@ func shquote(s string) string {
 // of it. A year is the largest part a test can name and still be right the
 // next time it runs.
 func timeNow() time.Time { return time.Now() }
+
+// A `}` written into a `${(%):-…}` operand ends the expansion, so the prompt
+// escape that carries one cannot be spelled that way at all.
+//
+// It is the prompt-side face of #1586 and it is measured rather than reasoned:
+// on zsh 5.9.2, 2026-09-08, `"${(%):-%F{red}x%f}"` is `$'\033'[31mx%f}` — the
+// operand stopped at the first brace, `%F{red` was prompt-expanded to the red
+// escape, and `x%f}` came out as the ordinary text that followed the closing
+// brace. `print -rP '%F{red}x%f'` answers `$'\033'[31mx$'\033'[39m` instead,
+// which is the whole escape.
+//
+// This is here because the disagreement looks exactly like a broken prompt
+// table and is not one: the two spellings *are* one expansion, and what
+// differs is where the shell decided the operand stopped. A previous version
+// of TestPrintPAndThePercentFlagAgree asserted these agreed, and passed only
+// while this shell nested a bare `{` inside double quotes — so the row that
+// looked like the strongest coverage in the file was a record of a lexer bug.
+func TestABraceInTheFlagOperandEndsIt(t *testing.T) {
+	dir := t.TempDir()
+	// Asked as the tail of the answer and as the disagreement, rather than
+	// byte for byte: the escape itself is a color this test is not about, and
+	// `printf %q` renders it differently here than zsh does, which would make
+	// this a test of the quoter.
+	out, st := runZsh(t, dir, `b="${(%):-%F{red}x%f}"; a=$(print -rP -- '%F{red}x%f')
+[[ $b == *'x%f}' ]] && print -r -- "STOPPED-AT-BRACE"
+[[ $a == $b ]] || print -r -- "AND-DIFFERS-FROM-PRINT-P"`)
+	const want = "STOPPED-AT-BRACE\nAND-DIFFERS-FROM-PRINT-P\n"
+	if out != want || st != 0 {
+		t.Errorf("the flag operand with a brace = %q (status %d), want %q", out, st, want)
+	}
+}

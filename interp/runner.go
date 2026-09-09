@@ -723,6 +723,25 @@ type Runner struct {
 	// expansion was reached from something that is not a word.
 	expandingWord *syntax.Word
 	expandingSpan int
+
+	// expandingNestedInner marks the expansion of the *inner* of a nested
+	// `${${…}}`, whose fields are read by the operator around them rather
+	// than by the command line.
+	//
+	// It decides one thing: whether an empty field survives. On the command
+	// line an unquoted empty element is no field at all, which is unanimous
+	// and has nothing to do with splitting — `a=(one "" two); printf "[%s]"
+	// ${a[@]}` is `[one][two]` in every column. As the inner of a nesting it
+	// is a value the outer operator is about to read, and it survives:
+	// measured on zsh 5.9.2, 2026-09-09, `${(j:,:)${(@)${a[@]}}}` on the same
+	// array is `one,,two`, and the spelling without `(@)` is `one  two` —
+	// the inner joined on IFS with the empty still between two separators.
+	// Either way the element is there.
+	//
+	// Dropping it made an *alternation pattern* one alternative short and
+	// still a valid pattern, so nothing failed and it matched the wrong
+	// things (#1596).
+	expandingNestedInner bool
 	// nestedHeld is one nested expansion's fields, handed from the list half
 	// of a span's expansion to the scalar half so the inner runs once. See
 	// nestedHold.

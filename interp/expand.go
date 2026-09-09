@@ -1178,6 +1178,13 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) [
 	split := sp.answer(r.sem().SplitParamExpansion)
 	var out []string
 	for _, el := range elems {
+		if el == "" && r.expandingNestedInner {
+			// Unless the fields are an inner's, where the element is a value
+			// the operator around it is about to read rather than a word the
+			// command line is about to lose. See Runner.expandingNestedInner.
+			out = append(out, r.escapeResult(el, glob))
+			continue
+		}
 		if el == "" {
 			// An unquoted empty element is no field *in this reading*, which
 			// under a whitespace IFS is unanimous and has nothing to do with
@@ -3996,6 +4003,12 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 	span, sp := r.nestedInnerSpan(e)
 	defer r.inWord(e.Inner)()
 	r.expandingSpan = 0
+	// What follows is read by the operator around it and not by the command
+	// line, which is the whole of what expandingNestedInner decides — see the
+	// field, which carries the measurement.
+	prevInner := r.expandingNestedInner
+	r.expandingNestedInner = true
+	defer func() { r.expandingNestedInner = prevInner }()
 	if parts, ok := r.expandAt(span, sp, true); ok {
 		words = parts
 	} else {

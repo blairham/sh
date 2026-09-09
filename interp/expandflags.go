@@ -87,7 +87,13 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 	// are kept whole in quotes: measured, `v=' a '; "${(U)=v}"` is three
 	// fields, the outer two empty. That is the same rule `(@)` asks for,
 	// reached by a different flag.
-	keepEmpty := quoted && (r.flagKeepsFields(e) || splitFlagInGroup(e, sp))
+	// Or when the fields are an inner's: the operator around them is about to
+	// read them, so an empty one is a value rather than a word the command
+	// line loses. See Runner.expandingNestedInner, which carries the
+	// measurement — `${(j:,:)${(@)${a[@]}}}` keeps its hole where the same
+	// expansion written as a word does not.
+	keepEmpty := (quoted || r.expandingNestedInner) &&
+		(r.flagKeepsFields(e) || splitFlagInGroup(e, sp))
 	// And a quoted `(f)` or `(s)` keeps the empty field at each *edge* while
 	// still dropping the interior ones, which is the same rule `${=spec}`
 	// already follows for an IFS split and was measured separately for these

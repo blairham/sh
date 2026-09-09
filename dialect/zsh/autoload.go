@@ -64,8 +64,8 @@ const autoloadStubBody = "builtin autoload +X %s && %s \"$@\""
 //
 // zsh's set, measured a letter at a time against all fifty-two: it has
 // `d k m r R t T U w W X z` and refuses every other one as `bad option`. So
-// the split here is between the three that say something this engine can
-// answer and the nine that do not:
+// the split here is between the five that say something this engine can
+// answer and the seven that do not:
 //
 //   - `-U` suppresses alias expansion while the file is read and `-z` picks
 //     zsh-style parsing. Both are accepted and neither changes anything: an
@@ -74,14 +74,16 @@ const autoloadStubBody = "builtin autoload +X %s && %s \"$@\""
 //     than refused because every real script writes `-Uz` and refusing it
 //     would fail the line for a distinction with no effect here.
 //   - `-X` and `+X` resolve now rather than at the call.
+//   - `-r` and `-R` fix the *path* now rather than at the call. See
+//     autoloadFixPath for what the two of them are measured to do and how
+//     they differ from each other.
 //   - `-t`/`-T` (trace this function), `-d`/`-k`/`-m` (ksh-style and pattern
-//     forms), `-r`/`-R` (resolve the path now, `-R` fatally), `-w`/`-W`
-//     (read a compiled `.zwc` file) are named as missing. Each is a thing
-//     this shell does not do, and a builtin that took the letter and dropped
-//     it would read as one that did.
+//     forms), `-w`/`-W` (read a compiled `.zwc` file) are named as missing.
+//     Each is a thing this shell does not do, and a builtin that took the
+//     letter and dropped it would read as one that did.
 const (
-	autoloadLetters       = "UzX"
-	autoloadUnimplemented = "dkmrRtTwW"
+	autoloadLetters       = "UzXrR"
+	autoloadUnimplemented = "dkmtTwW"
 )
 
 func registerAutoload(r *interp.Runner) {
@@ -96,6 +98,12 @@ type autoloadOpts struct {
 	// different things: `+X NAME` resolves the name given, and `-X` with no
 	// name resolves the function it is running inside.
 	plus bool
+	// fixPath is `-r` or `-R`: search `$fpath` at the declaration and record
+	// the path the name resolved to, rather than searching at the call.
+	fixPath bool
+	// strict is the `R` of the pair, which reports a name it cannot find at
+	// once where `-r` says nothing and leaves the search for the call.
+	strict bool
 }
 
 func autoloadBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
@@ -109,6 +117,7 @@ func autoloadBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if len(rest) == 0 {
 		return autoloadListing(r)
 	}
+	status := 0
 	for _, name := range rest {
 		if autoloadDefined(r, name) {
 			// Already a function, so there is nothing to mark: measured,
@@ -132,8 +141,23 @@ func autoloadBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 			return 1
 		}
 		autoloadRecord(r, name)
+		if !opts.fixPath {
+			// A plain declaration says "search at the call", and a name
+			// declared with `-r` once and plainly afterwards must not keep
+			// answering from the first declaration's file.
+			autoloadForgetPath(r, name)
+			continue
+		}
+		if code := autoloadFixPath(r, name, opts.strict); code != 0 {
+			// Carried rather than returned, because `autoload -R a b` has
+			// two names to answer for and stopping at the first would leave
+			// the second undeclared. zsh ends the script here instead; that
+			// is the same difference `autoloadBad` records, and for the same
+			// reason.
+			status = code
+		}
 	}
-	return 0
+	return status
 }
 
 // autoloadDefined reports whether a name is already a function this builtin
@@ -174,6 +198,13 @@ func autoloadOptions(r *interp.Runner, args []string) (opts autoloadOpts, rest [
 			switch {
 			case letter == 'X':
 				opts.now, opts.plus = true, plus
+			case letter == 'r' || letter == 'R':
+				// Both fix the path; only `R` complains about a name it
+				// cannot fix one for, so a word writing both — which no
+				// real script does, but the letters permit — is the
+				// stricter of the two.
+				opts.fixPath = true
+				opts.strict = opts.strict || letter == 'R'
 			case strings.IndexByte(autoloadLetters, letter) >= 0:
 				// `-U` and `-z`, which this shell answers by parsing the way
 				// it already parses.
@@ -356,6 +387,13 @@ func autoloadResolve(r *interp.Runner, name string) int {
 
 // autoloadFile reads the first file named `name` on `$fpath`.
 func autoloadFile(r *interp.Runner, name string) (string, bool) {
+	if path, ok := autoloadFixedPath(r, name); ok {
+		// `-r` or `-R` already chose, and the choice holds: no fresh search
+		// behind it, so a fixed file that has gone is not found rather than
+		// found somewhere else. Measured — see autoloadFixPath.
+		text, err := os.ReadFile(path)
+		return string(text), err == nil
+	}
 	if strings.ContainsRune(name, filepath.Separator) {
 		// A name with a directory in it is looked for where it says and
 		// nowhere else, which is what `autoload /path/to/fn` means.
@@ -372,6 +410,106 @@ func autoloadFile(r *interp.Runner, name string) (string, bool) {
 			continue
 		}
 		return string(text), true
+	}
+	return "", false
+}
+
+// autoloadFixPath is the `-r` and `-R` half of a declaration: resolve the
+// name on `$fpath` *now* and record the file it resolved to, so that the
+// call reads that file rather than searching again.
+//
+// Measured on zsh 5.9 with `A/f` holding `print A` and `B/f` holding
+// `print B`. The declaration is what searches:
+//
+//	fpath=(A); autoload -r f; fpath=(B); f    # A
+//	fpath=(A); autoload    f; fpath=(B); f    # B
+//
+// so this is not a letter to accept and ignore — a plugin manager that
+// rewrites `$fpath` between declaring a name and calling it gets a different
+// file, and the one it asked for is the earlier one.
+//
+// Three more probes say what exactly is kept:
+//
+//   - The *path*, not the contents. Editing `A/f` in place after the
+//     declaration makes the call print the edit, so the file is still read
+//     at the call and only the choice of file is settled here.
+//   - And kept for good. `fpath=(C); autoload -r g; rm C/g; fpath=(B)` with
+//     a perfectly good `B/g` is `g: function definition file not found` —
+//     a fixed path that has gone does not fall back to a fresh search.
+//   - A name it cannot resolve is *not* fixed, and `-r` is silent about it:
+//     `fpath=(); autoload -r f; fpath=(A); f` prints `A`, so the failure
+//     leaves an ordinary deferred autoload behind. `-R` is the same
+//     declaration with the failure reported —
+//     `nosuchfn: function definition file not found`, status 1.
+func autoloadFixPath(r *interp.Runner, name string, strict bool) int {
+	path, ok := autoloadSearch(r, name)
+	if !ok {
+		if strict {
+			// The function's own complaint, not the builtin's, which is what
+			// autoloadResolve says it for the same words at the call.
+			r.DiagnoseAsTheShellf("%s: function definition file not found\n", name)
+			return 1
+		}
+		return 0
+	}
+	paths, _ := r.GetAssoc(autoloadPathStore)
+	if paths == nil {
+		paths = map[string]string{}
+	}
+	paths[name] = path
+	r.SetAssoc(autoloadPathStore, paths)
+	return 0
+}
+
+// autoloadForgetPath drops a name's fixed path, so the next call searches.
+func autoloadForgetPath(r *interp.Runner, name string) {
+	paths, ok := r.GetAssoc(autoloadPathStore)
+	if !ok {
+		return
+	}
+	if _, ok := paths[name]; !ok {
+		return
+	}
+	delete(paths, name)
+	r.SetAssoc(autoloadPathStore, paths)
+}
+
+// autoloadFixedPath is the path a `-r` or `-R` declaration settled on.
+func autoloadFixedPath(r *interp.Runner, name string) (string, bool) {
+	paths, ok := r.GetAssoc(autoloadPathStore)
+	if !ok {
+		return "", false
+	}
+	path, ok := paths[name]
+	return path, ok
+}
+
+// autoloadSearch is autoloadFile's search without the read: the path the
+// name resolves to on `$fpath`, by the same rule that the first *readable*
+// entry wins.
+func autoloadSearch(r *interp.Runner, name string) (string, bool) {
+	if strings.ContainsRune(name, filepath.Separator) {
+		// A name that says where it is resolves to itself, and is still a
+		// resolution that can fail: `-R` on an unreadable path is the same
+		// complaint as `-R` on a name that is nowhere on `$fpath`.
+		if _, err := os.ReadFile(name); err != nil {
+			return "", false
+		}
+		return name, true
+	}
+	dirs, _ := r.GetArray("fpath")
+	for _, dir := range dirs {
+		if dir == "" {
+			dir = "."
+		}
+		path := filepath.Join(dir, name)
+		// Read rather than stat, so that "readable" here means what it means
+		// in autoloadFile — an entry this shell could not open is one the
+		// search goes past rather than one it stops on.
+		if _, err := os.ReadFile(path); err != nil {
+			continue
+		}
+		return path, true
 	}
 	return "", false
 }
@@ -424,3 +562,8 @@ func autoloadPending(r *interp.Runner, name string) bool {
 // own table under a name no script can reach — the way `zstyle` and
 // `zmodload` keep theirs, which is also what gives a subshell its own copy.
 const autoloadStore = ".zsh.autoload"
+
+// autoloadPathStore maps a name declared with `-r` or `-R` to the file that
+// declaration resolved it to. Kept beside autoloadStore and for the same
+// reasons, a subshell's own copy among them.
+const autoloadPathStore = ".zsh.autoload.path"

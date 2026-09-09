@@ -92,7 +92,9 @@ needs no Go at all.
       shell-matrix.md         measured: which constructs exist where
       semantics.md            measured: where shells conflict
       core.md                 the core language boundary
+      style.md                measured: how source is laid back out
       grammar/                per-construct specs
+    cmd/shfmt                 the formatter — every dialect the parser reads
 
 ## Licence
 

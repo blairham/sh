@@ -12,3 +12,10 @@
 # behind, and `git add -A` once swept two of them into a commit.
 /b
 /f
+
+# Bare `go build ./cmd/shfmt` and `./internal/cmd/fmtwild` drop a binary named
+# after the package in the working directory. The large-files hook catches
+# them, which is one commit's delay each time; these two never belong in a
+# commit, so name them here instead.
+/shfmt
+/fmtwild

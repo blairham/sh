@@ -12,7 +12,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -26,12 +25,14 @@ import (
 
 	"github.com/blairham/sh/internal/fmt/comments"
 	"github.com/blairham/sh/internal/fmt/printer"
+	"github.com/blairham/sh/internal/wild"
 )
 
 var (
-	dirs    = flag.String("dirs", "/opt/homebrew/bin:/usr/local/bin:/etc", "colon-separated roots to sweep")
+	dirs = flag.String("dirs", strings.Join(wild.DefaultDirs, ","),
+		"comma-separated roots to sweep; "+wild.DirsVar+" adds the framework trees a shell sources at startup")
 	verbose = flag.Bool("v", false, "list every failing path under its cause")
-	depth   = flag.Int("depth", 6, "how deep to walk")
+	depth   = flag.Int("depth", wild.DefaultDepth, "how far below each root to descend")
 	explain = flag.String("explain", "", "show one script's failure in detail and exit")
 )
 
@@ -102,22 +103,67 @@ func reportFirstDiff(what, a, b string) {
 	}
 }
 
+// everyDialect is the shebang scope: a formatter is answerable for every
+// dialect the parser reads, where the grading sweeps each answer for one.
+var everyDialect = map[string]bool{
+	"sh": true, "bash": true, "zsh": true, "ksh": true, "ksh93": true, "dash": true,
+}
+
 func main() {
 	flag.Parse()
 	if *explain != "" {
 		explainOne(*explain)
 		return
 	}
-	var parsed, skipped int
+	var parsed, unparseable, notAScript, denied int
 	fails := map[string][]string{}
-	seen := map[string]bool{}
-	for _, root := range strings.Split(*dirs, ":") {
-		if root == "" {
+	// wild.Find is the shared collector: it follows the links a package
+	// manager builds a tree out of, counts each script once by its resolved
+	// path, and applies CLEANROOM's denylist. This sweep had its own walk and
+	// its own denied() before, and the second copy was the weaker one — it
+	// matched a handful of path substrings where wild.Denied knows about
+	// package roots, version directories and another project's test data. A
+	// formatter sweep that reads a shell's distribution because its private
+	// list was shorter is the failure that list exists to prevent.
+	scope := wild.Scope{
+		Dirs:   append(strings.Split(*dirs, ","), wild.DirsFrom(os.LookupEnv)...),
+		Shells: everyDialect,
+		Depth:  *depth,
+	}
+	paths, refused := wild.Find(scope)
+	for _, path := range paths {
+		src, dialect, layout, ok := read(path)
+		if !ok {
+			notAScript++
 			continue
 		}
-		walkRoot(root, seen, &parsed, &skipped, fails)
+		f, err := syntax.Parse(src, dialect)
+		if err != nil {
+			unparseable++
+			continue
+		}
+		parsed++
+		if cause := verify(src, f, dialect, layout); cause != "" {
+			fails[cause] = append(fails[cause], path)
+		}
 	}
-	fmt.Printf("parsed and verified: %d\nnot parseable (set aside): %d\n", parsed, skipped)
+	for _, n := range refused {
+		// Counted, never named: a denied path in a report is an invitation to
+		// go and look, which is the one thing that must not happen.
+		denied += n
+	}
+	// Four numbers rather than two, because three different things were not
+	// checked and rolling them together reads as coverage. "0 failures" over a
+	// population that was mostly set aside is the reading this has to make
+	// impossible.
+	fmt.Printf("laid out and verified: %d\n", parsed)
+	fmt.Printf("  this parser could not read: %d\n", unparseable)
+	fmt.Printf("  not a shell script we name:  %d\n", notAScript)
+	fmt.Printf("  refused by CLEANROOM:        %d\n", denied)
+	if parsed == 0 {
+		fmt.Println("nothing was formatted — widen -dirs, or set " + wild.DirsVar)
+		os.Exit(1)
+	}
 	if len(fails) == 0 {
 		fmt.Println("failures: none")
 		return
@@ -136,56 +182,6 @@ func main() {
 		}
 	}
 	os.Exit(1)
-}
-
-func walkRoot(root string, seen map[string]bool, parsed, skipped *int, fails map[string][]string) {
-	base := strings.Count(filepath.Clean(root), string(os.PathSeparator))
-	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if strings.Count(path, string(os.PathSeparator))-base >= *depth {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		resolved, err := filepath.EvalSymlinks(path)
-		if err != nil || seen[resolved] || denied(resolved) {
-			return nil
-		}
-		seen[resolved] = true
-		src, dialect, layout, ok := read(resolved)
-		if !ok {
-			return nil
-		}
-		f, err := syntax.Parse(src, dialect)
-		if err != nil {
-			*skipped++
-			return nil
-		}
-		*parsed++
-		if cause := verify(src, f, dialect, layout); cause != "" {
-			fails[cause] = append(fails[cause], path)
-		}
-		return nil
-	})
-}
-
-// denied skips a shell's own distribution — CLEANROOM.md's red list. The
-// tell is a package root above the shell's name or a version below it;
-// site-functions and third-party completions carry neither and stay in.
-func denied(path string) bool {
-	for _, m := range []string{
-		"/Cellar/zsh/", "/Cellar/bash/", "/Cellar/dash/", "/Cellar/ksh",
-		"/opt/zsh/", "/opt/bash/", "/opt/dash/",
-		"/share/zsh/5", "/usr/share/zsh/",
-	} {
-		if strings.Contains(path, m) {
-			return true
-		}
-	}
-	return false
 }
 
 // read decides whether a file is a shell script and in which dialect, by the

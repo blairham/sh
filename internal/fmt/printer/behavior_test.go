@@ -21,11 +21,16 @@ func TestFormattingPreservesBehavior(t *testing.T) {
 		if s.zsh {
 			shell = "zsh"
 		}
-		if _, err := exec.LookPath(shell); err != nil {
-			t.Skipf("%s not installed", shell)
-		}
 		t.Run(s.name, func(t *testing.T) {
 			t.Parallel()
+			// Inside the subtest, and on the subtest's own t. Skipping on the
+			// parent skips the whole tier from the first sample whose shell
+			// is missing — so a machine with bash and no zsh lost every bash
+			// case too, and reported that as a pass. A tier that can vanish
+			// silently is worse than one that is absent.
+			if _, err := exec.LookPath(shell); err != nil {
+				t.Skipf("%s not installed", shell)
+			}
 			out := format(t, s.src, dialect(s.zsh), style(s.zsh))
 			beforeOut, beforeErr, beforeStatus := run(t, shell, s.src)
 			afterOut, afterErr, afterStatus := run(t, shell, out)

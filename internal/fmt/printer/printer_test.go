@@ -52,7 +52,14 @@ var samples = []struct {
 	{name: "case", src: "case $1 in\na) echo one ;;\nb | c)\n  echo two\n  ;;\n*) : ;;\nesac\n"},
 	{name: "func", src: "greet() {\n  echo hi\n}\n"},
 	{name: "func-keyword", src: "function greet {\n  echo hi\n}\n"},
-	{name: "subshell", src: "(cd /tmp && ls)\n"},
+	// `cd /` and `pwd`, not `cd /tmp` and `ls`. The tier runs a sample twice
+	// and compares, so a sample that reads shared mutable state compares two
+	// different worlds: listing /tmp failed whenever anything else on the
+	// machine wrote a file between the two runs. `/` is a fixed string and
+	// the construct under test — a subshell holding an and-or with a cd — is
+	// exercised exactly as before. TestEverySampleIsDeterministic is the
+	// guard that keeps the next one out.
+	{name: "subshell", src: "(cd / && pwd)\n"},
 	{name: "group", src: "{ echo a; echo b; } >log\n"},
 	{name: "group-multiline", src: "{\n  echo a\n  echo b\n} >log\n"},
 	{name: "assign", src: "x=1 y='a b' cmd\nPATH=/bin:$PATH\n"},

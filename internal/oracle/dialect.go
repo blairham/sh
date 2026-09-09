@@ -17,6 +17,11 @@ func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	// `${!x}` and `${!prefix*}` — the param/ indirection cases.
 	d.ParamIndirection = true
+	// `$+v`, `$=v`, `$~v` and `$^a` — the flag sigils written without the
+	// braces. One of the six columns reads them as expansions and the other
+	// five as text, and the corpus records both answers, so the grammar that
+	// has to *read* every case is the one that takes them.
+	d.BareParamFlags = true
 	// `$[1+2` — the older arithmetic spelling. Two of the six shells have
 	// the construct and refuse it unterminated; the other two run the line
 	// as text, and the corpus records both answers. Same reason as

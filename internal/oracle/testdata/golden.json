@@ -65682,6 +65682,50 @@
         "TimedOut": false
       }
     },
+    "param/an-unbraced-flag-sigil-before-a-name": {
+      "bash": {
+        "Stdout": "[$+v]~[$=v]~[$~v]~[0v]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[$+v]~[$=v]~[$~v]~[0v]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[$+v]~[$=v]~[$~v]~[0v]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[$+v]~[$=v]~[$~v]~[0v]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[$+v]~[$=v]~[$~v]~[0v]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1]~[hello]~[hello]~[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/an-unset-name-stops-at-the-first-too": {
       "bash": {
         "Stdout": "",
@@ -68536,6 +68580,50 @@
       },
       "zsh": {
         "Stdout": "[a][b][a][b][3][3][a b][a b]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/the-existence-sigil-needs-a-name-or-a-digit": {
+      "bash": {
+        "Stdout": "[$+1]~[$+@]~[$++v]~[$+]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[$+1]~[$+@]~[$++v]~[$+]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[$+1]~[$+@]~[$++v]~[$+]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[$+1]~[$+@]~[$++v]~[$+]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[$+1]~[$+@]~[$++v]~[$+]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1]~[$+@]~[$++v]~[$+]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

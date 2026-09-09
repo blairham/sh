@@ -1573,7 +1573,7 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 		flush()
 		return []Span{l.scanBraces(Unquoted)}, true
 
-	case c == '$' && isBareParam(l.peekAt(1)):
+	case c == '$' && l.startsBareParam():
 		flush()
 		return []Span{l.scanBareParam(Unquoted)}, true
 
@@ -1672,7 +1672,7 @@ func (l *Lexer) heredocSpans() []Span {
 			flush()
 			out = append(out, l.scanBraces(DoubleQuoted))
 			litPos = l.pos()
-		case c == '$' && isBareParam(l.peekAt(1)):
+		case c == '$' && l.startsBareParam():
 			flush()
 			out = append(out, l.scanBareParam(DoubleQuoted))
 			litPos = l.pos()
@@ -1782,7 +1782,7 @@ func (l *Lexer) scanDoubleBody(open Pos, closing bool) []Span {
 			flush()
 			out = append(out, l.scanBraces(DoubleQuoted))
 			litPos = l.pos()
-		case c == '$' && isBareParam(l.peekAt(1)):
+		case c == '$' && l.startsBareParam():
 			flush()
 			out = append(out, l.scanBareParam(DoubleQuoted))
 			litPos = l.pos()
@@ -2898,6 +2898,13 @@ func (l *Lexer) scanBareParam(q Quoting) Span {
 		// itself the parameter, and the rest of the word is literal text.
 		l.advance()
 	}
+	if l.dialect.BareParamFlags && bareFlagApplies(l.peek(), l.peekAt(1)) {
+		// A flag character between the `$` and the name, which is the same
+		// flag the braced spelling writes inside the group: `$=v` is `${=v}`
+		// and `$+v` is `${+v}`. The sigil is consumed here so that the
+		// parameter is what follows it, exactly as the `#` above is.
+		l.advance()
+	}
 	switch c := l.peek(); {
 	case c >= '0' && c <= '9':
 		l.advance()
@@ -2916,6 +2923,53 @@ func (l *Lexer) scanBareParam(q Quoting) Span {
 	}
 	l.bareSubscript(l.src[begin:l.off], q)
 	return Span{Kind: ParamExp, Value: l.src[begin:l.off], Quoting: q, Pos: open}
+}
+
+// startsBareParam reports whether the `$` under the cursor begins a bare
+// expansion.
+//
+// isBareParam alone is not the whole question once a dialect has the flag
+// sigils: `#` gets through it by being a special parameter in its own right,
+// which is how `$#name` is reached, and none of `+`, `=`, `~` or `^` is one.
+// So the gate has to ask the dialect as well, and it has to ask *here* rather
+// than inside scanBareParam — a `$` that is not the start of an expansion
+// never reaches that function at all.
+func (l *Lexer) startsBareParam() bool {
+	if isBareParam(l.peekAt(1)) {
+		return true
+	}
+	return l.dialect.BareParamFlags && bareFlagApplies(l.peekAt(1), l.peekAt(2))
+}
+
+// bareFlagApplies reports whether a `$` is followed by one of zsh's unbraced
+// flag sigils and something that sigil can be a flag *on*.
+//
+// The four are `+`, `=`, `~` and `^`, and they split two ways, measured on
+// zsh 5.9.2 with `v=hi; set -- a b`:
+//
+//	           v      1      @        *        ?      nope
+//	`$+`       1      1      `$+@`    `$+*`    `$+?`  0
+//	`$=`       hi     a      a b      a b      0      (empty)
+//	`$~`       hi     a      a b      a b      0      (empty)
+//	`$^`       hi     a      a b      a b      0      (empty)
+//
+// So `$+` takes a name or a digit and nothing else — the specials leave the
+// whole thing as literal text, which is what `$+@` printing itself says —
+// while the other three are flags on any parameter at all and take every
+// target a bare `$` does. `$++v` is literal too: the sigil does not repeat.
+//
+// The other three are consumed with no target at all, because zsh expands a
+// bare `$=` to *nothing* rather than printing it, which is the empty name
+// being flagged. `$+` alone prints `$+`, and that is the difference the
+// second half of this function is for.
+func bareFlagApplies(flag, next byte) bool {
+	switch flag {
+	case '=', '~', '^':
+		return true
+	case '+':
+		return isNameStart(next) || (next >= '0' && next <= '9')
+	}
+	return false
 }
 
 // isBareLengthTarget reports whether c may follow the `#` of `$#name`.
@@ -2943,7 +2997,17 @@ func isBareLengthTarget(c byte) bool {
 // mean an operator at the front of a `${ … }`, and the rest are single-valued
 // parameters no script subscripts.
 func takesBareSubscript(name string) bool {
-	name = strings.TrimPrefix(name, "#")
+	// The sigil the span may open with is not part of the name. `#` is the
+	// length and the other four are zsh's unbraced flags, and every one of
+	// them leaves the parameter underneath free to carry a subscript:
+	// measured, `a=(x y z); $#a[1]` is 1 — the length of the first element —
+	// and `$+a[1]` is 1, where without this the brackets fell out of the
+	// expansion and `$+a[1]` printed `1[1]`.
+	//
+	// Unconditional rather than asked of the dialect, because no name starts
+	// with one of these: a dialect without the flags never produces a span
+	// that this could trim.
+	name = strings.TrimLeft(name, "#+=~^")
 	if name == "@" || name == "*" {
 		return true
 	}

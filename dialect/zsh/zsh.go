@@ -290,6 +290,7 @@ func Dialect() syntax.Dialect {
 	// `3`, where bash 3.2, bash 5.3 and dash print `x[1]` and `0a`. This
 	// shell alone, which is why it is set here and nowhere else.
 	d.BareSubscript = true
+	d.BareParamFlags = true
 	// A braced expansion carries more than one subscript here, each reading
 	// what the one before it named. Measured 2026-09-08 on zsh 5.9.2 with
 	// `a=(one two three); echo ${a[1][2]}`: this shell prints `n`, bash 5.3

@@ -9749,6 +9749,21 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "`compaudit`'s own first line, three letters in three words with the plus form in the middle. It decides whether the completion directories are read as secure, so a refusal here is not a cosmetic one — while the letter was missing the declaration did not run and the function walked the caller's `fpath` instead of a copy of it (#1621)",
 	},
 	{
+		ID: "declare/local-of-half-a-built-in-tie-shadows-the-other-half", Category: "declarations",
+		Snippet: `PATH=/bin:/usr/bin; f() { local PATH=/x; echo "in=[${path[*]}]"; }; f; echo "after=[$PATH][${path[*]}]"`,
+		Why:     "a tie is two names for one value, so a local of one of them has to displace both — zsh answers `in=[/x]` and then hands the caller back `/bin:/usr/bin` *and* `/bin /usr/bin`. The `after` half is what the row is for: saving only the name written left the mirror's write to the array standing after the function returned, so a function-local search path became the caller's for the rest of the script (#1630). The three shells without the tie have no `path` to answer with and print the empty brackets that says so",
+	},
+	{
+		ID: "declare/local-of-a-built-in-ties-array-half-is-a-fresh-array", Category: "declarations",
+		Snippet: `FPATH=/a:/b; f() { local -a -U +h fpath; echo "in n=${#fpath[@]} FPATH=[$FPATH]"; }; f; echo "after n=${#fpath[@]}"`,
+		Why:     "`compaudit`'s own first line, and what the line has to *hold* rather than only that it is taken (#1621 pinned the letter; this pins the value). zsh hands the function a fresh, empty array and an emptied `FPATH` beside it, and gives the caller both back: `in n=0 FPATH=[] / after n=2`. The caller's entries in view mean the function that decides whether the completion directories are secure is auditing the caller's search path instead of a copy of it. The other three refuse the `+h` letter and never declare anything",
+	},
+	{
+		ID: "declare/local-of-half-a-script-tie-is-an-ordinary-local", Category: "declarations",
+		Snippet: `typeset -T TS ts; TS=a:b:c; f() { local TS=zzz; echo "in=[$TS] n=${#ts[@]}"; }; f; echo "after=[$TS]"`,
+		Why:     "the discriminating pair for the row two above it, and the reason the pair-shadow is not a rule about ties. A tie the *script* made is a property of the parameter, and `local` makes a new parameter — so zsh answers `in=[zzz] n=3`, leaving `ts` naming the outer cell with all three fields still in it, where the shell's own `PATH`/`path` would have moved together. An implementation that read #1630 as a rule for every tie answers `n=1` here",
+	},
+	{
 		ID: "declare/global-letter-with-the-table-attribute", Category: "declarations",
 		Snippet: `typeset -gA m; m[k]=v; echo "[${m[k]}] st=$?"`,
 		Why:     "the two letters together, which is not the sum of the rows that have each alone: the global letter says where the declaration lands and the table letter says what it is, and a shell that reads the first and drops the second leaves `m` an *indexed* array, so the very next `m[k]=v` is a non-numeric subscript and is refused. bash and zsh have both letters; ksh93 has no `-g` at all and, because its `typeset` is special, the refusal ends the script",

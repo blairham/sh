@@ -4857,10 +4857,35 @@ shell's `autoload` at another shell's function library, so a pair the
 environment says nothing about starts empty — which is what the same
 shell does for `CDPATH`.
 
+**A `local` of one half of a tie has two answers, and which one it gets
+depends on who made the tie.** The shell's own pairs are *special*
+parameters — the tie belongs to the name — so a `local` of either half
+displaces **both** and stays tied: `f() { local PATH=/x; }` moves `path`
+with it for the duration and hands the caller back both `PATH` and
+`path`. `compaudit` opens with `local -a -U +h fpath` and is handed a
+fresh, empty array and an emptied `FPATH` beside it; the caller's entries
+in view mean the code deciding whether the completion directories are
+secure audits the caller's search path rather than a copy of it.
+Each half is emptied in its own kind, which is why the counts differ by
+one: `local PATH` sets an empty string and the mirror splits it into the
+single field it has, where `local path` sets no elements and the mirror
+joins them into nothing.
+
+A tie a *script* made with `typeset -T` is a property of the parameter,
+and `local` makes a new parameter — so it is an ordinary, untied local
+and the other half goes on naming the outer cell: `typeset -T S s;
+S=a:b:c; f() { local S=zzz; }` leaves `$#s` at 3 inside `f`. The `+h`
+letter does not tie it back, which is what says this is not that
+attribute wearing another name. Only a scope *deeper* than the one a tie
+was made in suspends it, so `typeset -T` inside a function does not turn
+off the tie it is making with its own shadow. `interp/tielocal.go`.
+
 Corpus: `declare/tie-*`,
 `declare/unsetting-half-a-tie-unsets-all-of-it`,
 `declare/a-tie-over-a-standing-value`, `declare/tying-a-name-to-itself`,
-`tie/*`.
+`declare/local-of-half-a-built-in-tie-shadows-the-other-half`,
+`declare/local-of-a-built-in-ties-array-half-is-a-fresh-array`,
+`declare/local-of-half-a-script-tie-is-an-ordinary-local`, `tie/*`.
 
 **An attribute added to a name that already holds a value keeps it, and
 re-reads it.** A separate rule from the one above, and the one that

@@ -1242,6 +1242,12 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry bool)
 		}
 	}
 	if r.ask(r.sem().DeclaredNameWithoutValueIsEmpty, "a declaration without a value setting the name") {
+		// The array half of a tie is set empty in its own kind — no elements,
+		// not an empty string — and the mirror carries that to the scalar. See
+		// tielocal.go.
+		if r.declaredEmptyTieArray(name) {
+			return
+		}
 		// assignedAsTheCompoundView, because this is not a value the script
 		// wrote: it is the empty a declared name holds, and where the letters
 		// just declared an array or a table it is that compound's view. A
@@ -1927,6 +1933,10 @@ func (r *Runner) shadow(name string) (fresh bool) {
 		sc.savedAssoc[name] = old
 		sc.assocExisted[name] = existed
 	}
+	// And the other half of a tie the shell made for itself, which is one
+	// value under two names and so cannot have one of them saved alone. See
+	// tielocal.go.
+	r.shadowTiedHalf(name)
 	return fresh
 }
 

@@ -90,6 +90,14 @@ import (
 // The feature lists are measured, one module at a time, with
 // `zmodload -lF <module>` after loading it in a real zsh. They are the
 // module's contents, not this shell's opinion of them.
+//
+// **`-F` asks the same question of a subset** (#1619). A caller writing
+// `zmodload -F zsh/complete b:compadd` has named the one feature of six it
+// wants, so the other five have no bearing on the answer — and the verdict
+// moves with the question, which is what makes the letter worth having here
+// rather than an unimplementable one. Which features a module is left showing
+// is state, kept beside the loaded set and reported by `-lF`; zmodloadSelect
+// is the whole of the rule and zmodloadFeatureStore the whole of the state.
 
 // zmodloadStore is the set of modules a script has loaded, kept as an
 // indexed array under a name no script can reach — the way `zstyle` and
@@ -210,10 +218,15 @@ func zmodloadHolds(r *interp.Runner, feature string) bool {
 	return true
 }
 
-// zmodloadMissing is the features of a module this shell does not have *and
-// will not load without*, in the order the table names them — which is the
-// order zsh's own `-lF` listing writes, so a refusal reads against that
-// listing.
+// zmodloadMissing is which of the features handed to it this shell does not
+// have *and will not load without*, in the order they were given — which is
+// the order the table names them and therefore the order zsh's own `-lF`
+// listing writes, so a refusal reads against that listing.
+//
+// A list rather than a module name, because `-F` asks the same question of a
+// *subset*: `zmodload -F zsh/complete b:compadd` is a script naming the one
+// feature it wants, and the five it did not name have no bearing on whether
+// it gets it. See zmodloadSelect.
 //
 // A builtin the shell has not got is absent from this list on purpose and is
 // still absent from the shell: `zmodload zsh/zutil` succeeds and
@@ -222,9 +235,9 @@ func zmodloadHolds(r *interp.Runner, feature string) bool {
 // zmodloadHolds. A parameter registered as absent is out of this list for the
 // same reason and by the same test, and `$jobstates` refuses at the expansion
 // that reads it.
-func zmodloadMissing(r *interp.Runner, module string) []string {
+func zmodloadMissing(r *interp.Runner, features []string) []string {
 	var missing []string
-	for _, f := range zmodloadFeatures[module] {
+	for _, f := range features {
 		if zmodloadHolds(r, f) && !zmodloadHasFeature(r, f) {
 			_, name, _ := strings.Cut(f, ":")
 			missing = append(missing, name)
@@ -270,6 +283,111 @@ func zmodloadSetLoaded(r *interp.Runner, module string, loaded bool) {
 	r.SetArray(zmodloadStore, kept)
 }
 
+// zmodloadFeatureStore is which of a module's features are switched on, for
+// the modules `-F` has narrowed. An association from the module's name to its
+// enabled features, joined by spaces, under a name no script can reach — the
+// same idiom as zmodloadStore above and cloned into a subshell for the same
+// reason.
+//
+// **A module absent from this table has all its features on**, which is what
+// a plain `zmodload zsh/zutil` leaves behind and is not the same as an entry
+// holding the empty string. `zmodload -F zsh/zutil` with no features named
+// loads the module with every one of them *off* — measured, and it is the
+// line `_fzf_completion` writes as `zmodload -F zsh/compctl` — so the empty
+// selection has to survive being written, exactly as the emptied module
+// listing does.
+const zmodloadFeatureStore = ".zsh.zmodload.features"
+
+// zmodloadEnabled is the features of a module that are on now.
+//
+// Three answers, and which of them applies is the whole of what makes `-F` a
+// selection in one case and a delta in the other.
+//
+// A module that is **not loaded** has nothing on, so the first `-F` at it
+// starts from silence and turns on only what it names. That answer is also
+// what makes an unload need no cleanup of its own: an entry left in the store
+// for a module nobody has loaded cannot be reached, because every reader is
+// this function. A module **loaded whole** has everything on, so a later `-F`
+// moves only the features it names and leaves the rest — measured, `zmodload
+// zsh/zutil; zmodload -F zsh/zutil -b:zparseopts` leaves the other three
+// standing. A module **`-F` has already narrowed** has whatever it was left
+// with.
+func zmodloadEnabled(r *interp.Runner, module string) []string {
+	if !containsWord(zmodloadLoaded(r), module) {
+		return nil
+	}
+	if selected, ok := r.GetAssoc(zmodloadFeatureStore); ok {
+		if list, narrowed := selected[module]; narrowed {
+			return strings.Fields(list)
+		}
+	}
+	return zmodloadFeatures[module]
+}
+
+// zmodloadNarrow records which of a module's features are on.
+func zmodloadNarrow(r *interp.Runner, module string, features []string) {
+	selected, _ := r.GetAssoc(zmodloadFeatureStore)
+	if selected == nil {
+		selected = map[string]string{}
+	}
+	selected[module] = strings.Join(features, " ")
+	r.SetAssoc(zmodloadFeatureStore, selected)
+}
+
+// zmodloadWiden puts a module back to all-features-on, which is what a plain
+// load leaves behind.
+//
+// Measured: `zmodload -F zsh/zutil +b:zstyle; zmodload zsh/zutil; zmodload -lF
+// zsh/zutil` writes `+` against all four, so a whole load is not a no-op on a
+// module that is already loaded narrowed. An unload does not call this — see
+// zmodloadUnload for why one rule is enough.
+func zmodloadWiden(r *interp.Runner, module string) {
+	selected, ok := r.GetAssoc(zmodloadFeatureStore)
+	if !ok {
+		return
+	}
+	delete(selected, module)
+	r.SetAssoc(zmodloadFeatureStore, selected)
+}
+
+// zmodloadSpec reads one `[+-]feature` operand: the feature it names and
+// whether it is being switched on.
+//
+// A bare name means `+` — measured, `zmodload -F zsh/zutil b:zstyle` is the
+// spelling every real caller uses and it switches the feature on. The sign is
+// stripped before the name is looked up, which is also what puts `-` in the
+// complaint about `zmodload -F zsh/zutil -- b:zstyle`: `--` after the module
+// name is an operand like any other, and what is left of it is one character
+// that names no feature.
+func zmodloadSpec(word string) (feature string, on bool) {
+	switch {
+	case strings.HasPrefix(word, "+"):
+		return word[1:], true
+	case strings.HasPrefix(word, "-"):
+		return word[1:], false
+	}
+	return word, true
+}
+
+// zmodloadCheckSpecs reports the first operand that names no feature of the
+// module, having stripped its sign.
+//
+// **Every operand is checked before any is applied**, which is measured and
+// is the half a first reading would get wrong: `zmodload -F zsh/zutil
+// +b:zstyle +b:nosuch` complains about the second and leaves the module
+// *unloaded*, so the good spec in front of the bad one buys nothing. A shell
+// that applied as it went would load the module and enable `zstyle`.
+func zmodloadCheckSpecs(module string, specs []string) (bad string, ok bool) {
+	features := zmodloadFeatures[module]
+	for _, word := range specs {
+		feature, _ := zmodloadSpec(word)
+		if !containsWord(features, feature) {
+			return feature, false
+		}
+	}
+	return "", true
+}
+
 // zmodloadOpts is what the letters asked for.
 type zmodloadOpts struct {
 	exists   bool // -e: ask rather than load
@@ -309,10 +427,29 @@ func zmodloadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		// Measured: `-l` alone is refused rather than treated as a listing.
 		r.Diagnosef("-l is only allowed with -F\n")
 		return 1
-	case opts.features:
-		return zmodloadFeatureCommand(r, opts, rest)
+	case opts.unload && opts.features:
+		// Measured, and worded as zsh words it: the letters it names are all
+		// letters zsh has, and the sentence is about the combination rather
+		// than about any one of them. The other four reach the refusal for
+		// an unimplemented letter first, so `-u` is the one that gets here.
+		r.Diagnosef("-b, -c, -f, -p and -u cannot be combined with -F\n")
+		return 1
+	case opts.exists && opts.features:
+		// `-eF` is still the question `-e` asks, and it asks it of the module
+		// alone: measured, `zmodload -eF zsh/zutil b:zstyle` is 0 once the
+		// module is loaded, whether or not `zstyle` is one of the features it
+		// was left showing. So the operands after the module are along for
+		// the ride — and the module itself is required, the way it is for
+		// `-lF` and unlike `-LF`.
+		if len(rest) == 0 {
+			r.Diagnosef("-F requires a module name\n")
+			return 1
+		}
+		return zmodloadExists(r, rest[:1])
 	case opts.exists:
 		return zmodloadExists(r, rest)
+	case opts.features:
+		return zmodloadFeatureCommand(r, opts, rest)
 	case opts.unload:
 		return zmodloadUnload(r, rest)
 	case len(rest) == 0:
@@ -386,15 +523,15 @@ func setZmodloadLetter(opts *zmodloadOpts, letter byte) {
 // makes: it is loaded when this shell has every feature the module names, and
 // refused by the names of the ones it does not.
 //
-// A module already loaded is loaded again without a word and without work,
-// measured — and `-i` is therefore about a complaint this shell does not make
-// rather than about the status, which is why the letter is accepted and
-// changes nothing here.
+// A module already loaded is loaded again without a word, measured — and `-i`
+// is therefore about a complaint this shell does not make rather than about
+// the status, which is why the letter is accepted and changes nothing here.
+// It is not *without work*, which is what a first reading had: a whole load
+// puts back every feature `-F` had switched off, so it is the one command
+// that widens a narrowed module. See zmodloadWiden.
 func zmodloadLoad(r *interp.Runner, opts zmodloadOpts, module string) bool {
-	if containsWord(zmodloadLoaded(r), module) {
-		return true
-	}
-	if _, known := zmodloadFeatures[module]; !known {
+	features, known := zmodloadFeatures[module]
+	if !known {
 		// A module this shell has no part of. Not worded as though the
 		// module did not exist — most of the ones that reach here are real
 		// zsh modules — but as what it is here: not implemented.
@@ -403,14 +540,14 @@ func zmodloadLoad(r *interp.Runner, opts zmodloadOpts, module string) bool {
 		}
 		return false
 	}
-	features := zmodloadFeatures[module]
-	if missing := zmodloadMissing(r, module); len(missing) > 0 {
+	if missing := zmodloadMissing(r, features); len(missing) > 0 {
 		if !opts.silent {
 			r.DiagnoseAsTheShellf("failed to load module `%s': %s\n",
 				module, zmodloadShortfall(missing, len(features)))
 		}
 		return false
 	}
+	zmodloadWiden(r, module)
 	zmodloadSetLoaded(r, module, true)
 	return true
 }
@@ -439,6 +576,13 @@ func zmodloadUnload(r *interp.Runner, modules []string) int {
 			continue
 		}
 		zmodloadSetLoaded(r, m, false)
+		// The narrowing is deliberately *not* cleared here. It would be a
+		// second rule saying what zmodloadEnabled's first line already says
+		// — a module that is not loaded has nothing on — and the entry left
+		// behind cannot be read by anything, because every reader goes
+		// through that function. Clearing it as well passed every test with
+		// the clearing removed, which is what a redundant rule looks like:
+		// one notion of whose features these are, not two that can drift.
 	}
 	return status
 }
@@ -469,50 +613,192 @@ func zmodloadListing(r *interp.Runner, commands bool) int {
 	return 0
 }
 
-// zmodloadFeatureCommand is `-F`. Only the `-lF` listing is built: it is the
-// one form that answers a question rather than changing what is loaded, and
-// it is how a script finds out what a module would have brought.
+// zmodloadFeatureCommand is `-F`, and its three forms are three different
+// commands sharing one letter: `-lF` lists a module's features, `-LF` writes
+// the listing as the command that would reproduce it, and `-F` on its own
+// **selects** which of them the module exposes.
+//
+// The third is what a plugin manager writes and what this builtin refused
+// outright until #1619 — `zmodload -F zsh/stat b:zstat || return` and
+// `zmodload -F zsh/parameter p:functions` are lines from two real ones, and
+// `-F without -l is not implemented yet` is not an answer either can act on.
+//
+// **`-F` narrows the question rather than conjuring a feature.** A feature
+// here is a builtin or a parameter this shell either has or has not, and
+// `+zparseopts` cannot make one — which is why the letter looked
+// unimplementable. But that is not what a caller writes it for: `zmodload -F
+// zsh/complete b:compadd` is a script naming the one feature of six that it
+// wants, and the answer to *that* is a question this shell can answer.
+// Narrowing therefore moves the verdict, and moves it in the direction a
+// script needs — `zmodload zsh/complete` is refused here for four conditions
+// nobody can find, and the narrowed form does not have to be.
+//
+// The one thing it does not do is take a feature *away*. A module narrowed to
+// one builtin leaves the other three of `zsh/zutil` callable here, where zsh
+// removes them from its table outright — measured, `zmodload zsh/zutil;
+// zmodload -F zsh/zutil -b:zparseopts; zparseopts` is `command not found` in
+// zsh. Nothing in this shell provides those builtins *through* the module —
+// they are the dialect's, registered before any script runs — so withdrawing
+// one would take away a command the line before `zmodload` could already run.
+// The selection is recorded and reported truthfully by `-lF`, which is what a
+// script reads, and #1635 is the divergence written down where it can be
+// argued with rather than only here.
+func zmodloadFeatureCommand(r *interp.Runner, opts zmodloadOpts, args []string) int {
+	if opts.commands && len(args) == 0 {
+		// `-LF` alone is the whole shell's selection, one line per loaded
+		// module that has features — measured, and the one form of `-F` that
+		// does not want a module name. `-lF` alone is refused, which is the
+		// asymmetry below and is also measured.
+		for _, m := range zmodloadLoaded(r) {
+			if len(zmodloadFeatures[m]) == 0 {
+				continue
+			}
+			zmodloadFeatureListing(r, opts, m, nil)
+		}
+		return 0
+	}
+	if len(args) == 0 {
+		// The operand is required by the letter and not by the builtin: a
+		// bare `zmodload` with no letters at all is a listing and 0. Asked
+		// before everything below so that the missing operand is what a bare
+		// `-F` is told about, which is what zsh says too, and `-lF` and `-eF`
+		// with nothing after them say the same. `-LF` is the exception and
+		// is answered above.
+		r.Diagnosef("-F requires a module name\n")
+		return 1
+	}
+	module, specs := args[0], args[1:]
+	if opts.list || opts.commands {
+		return zmodloadFeatureListing(r, opts, module, specs)
+	}
+	return zmodloadSelect(r, opts, module, specs)
+}
+
+// zmodloadSelect is `-F` without a listing letter: load the module with the
+// features named switched on, and the ones not named left as they were.
+//
+// The starting point is the whole of what makes this a selection rather than
+// a set of deltas, and it depends on one thing — whether the module is loaded
+// already. It is not, so `zmodload -F zsh/zutil b:zstyle` starts from nothing
+// on and finishes with `zstyle` alone; it is, so `zmodload zsh/zutil;
+// zmodload -F zsh/zutil -b:zparseopts` starts from all four and finishes with
+// three. Both measured, and zmodloadEnabled is where the two answers live.
+//
+// Nothing is applied until every operand has been checked, which is measured
+// and is the difference between a refusal and a half-loaded module.
+func zmodloadSelect(r *interp.Runner, opts zmodloadOpts, module string, specs []string) int {
+	features, known := zmodloadFeatures[module]
+	switch {
+	case !known:
+		// The same sentence a plain load gives, because it is the same fact
+		// about the same module: this shell has no part of it. `-s` silences
+		// it there and here.
+		if !opts.silent {
+			r.DiagnoseAsTheShellf("failed to load module `%s': not implemented yet\n", module)
+		}
+		return 1
+	case len(features) == 0:
+		// `zsh/main`, which is loaded and has nothing to select from.
+		// Measured as the shell speaking rather than the builtin, which is
+		// the other way round from the `-lF` listing's identical sentence —
+		// so the two paths keep their own locations.
+		r.DiagnoseAsTheShellf("module `%s' does not support features\n", module)
+		return 1
+	}
+	if bad, ok := zmodloadCheckSpecs(module, specs); !ok {
+		r.DiagnoseAsTheShellf("module `%s' has no such feature: `%s'\n", module, bad)
+		return 1
+	}
+	on := make(map[string]bool, len(features))
+	for _, f := range zmodloadEnabled(r, module) {
+		on[f] = true
+	}
+	for _, word := range specs {
+		feature, enable := zmodloadSpec(word)
+		// Last spec wins: measured, `+b:zstyle -b:zstyle` leaves it off.
+		on[feature] = enable
+	}
+	// In the table's order, which is the order `-lF` writes and the order
+	// `-LF` replays, so a selection reads against the listing it produces.
+	selected := make([]string, 0, len(features))
+	for _, f := range features {
+		if on[f] {
+			selected = append(selected, f)
+		}
+	}
+	if missing := zmodloadMissing(r, selected); len(missing) > 0 {
+		if !opts.silent {
+			r.DiagnoseAsTheShellf("failed to load module `%s': %s\n",
+				module, zmodloadShortfall(missing, len(selected)))
+		}
+		return 1
+	}
+	zmodloadNarrow(r, module, selected)
+	zmodloadSetLoaded(r, module, true)
+	return 0
+}
+
+// zmodloadFeatureListing is `-lF` and `-LF`: what a module exposes now, as a
+// list of features or as the command that would reproduce it.
 //
 // A module that is not loaded has no features to list — measured, `module
 // 'zsh/zutil' is not yet loaded` and 1, with the builtin named in the
 // location, which is where this shell puts it. `zsh/main` reaches that same
 // refusal in zsh for a different stated reason; here it is refused for having
 // no features to list, which is the same answer and one rule.
-func zmodloadFeatureCommand(r *interp.Runner, opts zmodloadOpts, args []string) int {
-	if len(args) == 0 {
-		// The operand is required by the letter and not by the builtin: a
-		// bare `zmodload` with no letters at all is a listing and 0. Asked
-		// before the refusal below so that the missing operand is what a
-		// bare `-F` is told about, which is what zsh says too.
-		r.Diagnosef("-F requires a module name\n")
+//
+// The operands after the module are a filter, and they are compared to the
+// feature names *as written*. So a bare `b:zstyle` narrows the listing to one
+// line and a signed `+b:zstyle` narrows it to none, which is measured and
+// looks like a slip until the two rules are separated: the sign is stripped to
+// decide whether the operand names a feature at all, and is not stripped again
+// to decide which lines it matches.
+func zmodloadFeatureListing(r *interp.Runner, opts zmodloadOpts, module string, filters []string) int {
+	features := zmodloadFeatures[module]
+	switch {
+	case !containsWord(zmodloadLoaded(r), module):
+		r.Diagnosef("module `%s' is not yet loaded\n", module)
+		return 1
+	case len(features) == 0:
+		// Loaded and with nothing to list, which is `zsh/main` and its
+		// own measured sentence rather than the one above.
+		r.Diagnosef("module `%s' does not support features\n", module)
 		return 1
 	}
-	if !opts.list {
-		// Turning a feature on or off one at a time is what this shell has
-		// no way to do: a feature here is a builtin or a parameter the shell
-		// either has or has not, and `+zparseopts` cannot conjure one.
-		r.Diagnosef("-F without -l is not implemented yet\n")
+	if bad, ok := zmodloadCheckSpecs(module, filters); !ok {
+		r.Diagnosef("module `%s' has no such feature: `%s'\n", module, bad)
 		return 1
 	}
-	status := 0
-	for _, m := range args {
-		features := zmodloadFeatures[m]
-		switch {
-		case !containsWord(zmodloadLoaded(r), m):
-			r.Diagnosef("module `%s' is not yet loaded\n", m)
-			status = 1
-		case len(features) == 0:
-			// Loaded and with nothing to list, which is `zsh/main` and its
-			// own measured sentence rather than the one above.
-			r.Diagnosef("module `%s' does not support features\n", m)
-			status = 1
-		default:
-			for _, f := range features {
-				zmodloadPrintf(r, "+%s\n", f)
+	on := make(map[string]bool, len(features))
+	for _, f := range zmodloadEnabled(r, module) {
+		on[f] = true
+	}
+	if opts.commands {
+		line := "zmodload -F " + module
+		for _, f := range features {
+			if on[f] && (len(filters) == 0 || containsWord(filters, f)) {
+				line += " " + f
 			}
 		}
+		// With a newline, which zsh writes only when the last feature in the
+		// module's list happens to be one of the enabled ones — measured
+		// byte for byte, and a line that ends in a space and stops is not a
+		// behavior to reproduce. It is the one place here that answers what
+		// zsh meant rather than what it did.
+		zmodloadPrintf(r, "%s\n", line)
+		return 0
 	}
-	return status
+	for _, f := range features {
+		if len(filters) > 0 && !containsWord(filters, f) {
+			continue
+		}
+		if on[f] {
+			zmodloadPrintf(r, "+%s\n", f)
+			continue
+		}
+		zmodloadPrintf(r, "-%s\n", f)
+	}
+	return 0
 }
 
 func zmodloadPrintf(r *interp.Runner, format string, args ...any) {

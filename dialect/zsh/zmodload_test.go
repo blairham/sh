@@ -266,3 +266,212 @@ print -r -- "out=$?"`)
 		t.Errorf("a subshell's modules = %q (status %d), want %q", out, st, want)
 	}
 }
+
+// `-F` with features named selects which of them the module exposes, and the
+// selection is what `-lF` then reports. Measured byte for byte against zsh
+// 5.9.2 (2026-09-09): a module `-F` loads starts with everything *off* and
+// gains only what is named, so the three features nobody asked for are `-`.
+//
+// The control is the plain load in the same snippet: a shell that accepted
+// `-F` and did nothing would write `+` against all four here and pass a test
+// that only asked for status 0.
+func TestZmodloadDashFSelectsWhichFeaturesAModuleExposes(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/zutil b:zstyle
+print -r -- "select=$?"
+zmodload -lF zsh/zutil
+zmodload -e zsh/zutil
+print -r -- "loaded=$?"
+zmodload zsh/zutil
+zmodload -lF zsh/zutil`)
+	want := "select=0\n" +
+		"-b:zformat\n-b:zparseopts\n-b:zregexparse\n+b:zstyle\n" +
+		"loaded=0\n" +
+		"+b:zformat\n+b:zparseopts\n+b:zregexparse\n+b:zstyle\n"
+	if out != want || st != 0 {
+		t.Errorf("selecting a feature = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The starting point depends on whether the module is loaded already, and
+// that is the whole difference between a selection and a delta. Named
+// features on a module that is not loaded are the only ones that end up on;
+// on one that is, the features nobody named stay exactly as they were.
+func TestZmodloadDashFIsADeltaOnAModuleAlreadyLoaded(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil
+zmodload -F zsh/zutil -b:zparseopts
+print -r -- "narrow=$?"
+zmodload -lF zsh/zutil`)
+	want := "narrow=0\n+b:zformat\n-b:zparseopts\n+b:zregexparse\n+b:zstyle\n"
+	if out != want || st != 0 {
+		t.Errorf("a delta on a loaded module = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A bare feature name means `+`, which is the spelling every real caller
+// uses, and the last operand about a feature wins.
+func TestZmodloadDashFReadsTheSignsOnItsOperands(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/zutil b:zstyle +b:zformat -b:zstyle
+print -r -- "st=$?"
+zmodload -lF zsh/zutil`)
+	want := "st=0\n+b:zformat\n-b:zparseopts\n-b:zregexparse\n-b:zstyle\n"
+	if out != want || st != 0 {
+		t.Errorf("the operand signs = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// **An operand naming no feature of the module leaves the module unloaded**,
+// even when a good operand came first. Measured, and it is what tells a
+// refusal from a half-applied command: a shell that applied as it went would
+// answer `loaded=0` on the second question.
+func TestZmodloadDashFAppliesNothingWhenAnOperandNamesNoFeature(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/zutil +b:zstyle +b:nosuch 2>&1
+print -r -- "st=$?"
+zmodload -e zsh/zutil
+print -r -- "loaded=$?"`)
+	want := "zsh:1: module `zsh/zutil' has no such feature: `b:nosuch'\nst=1\nloaded=1\n"
+	if out != want || st != 0 {
+		t.Errorf("an unknown feature = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// **Narrowing moves the verdict**, which is the reason the letter is worth
+// having in a shell that cannot load a module at all. `zsh/complete` is held
+// shut by its four conditions — the kind with no registry to ask and no call
+// site to refuse at — and a caller naming one of its builtins instead is
+// asking a question this shell can answer yes to.
+//
+// The third line is the control that keeps the first two honest: naming one
+// of the conditions is still refused, and refused by that condition's name
+// alone rather than by all four, so the selection is being read rather than
+// waved through.
+func TestZmodloadDashFNarrowingMovesTheVerdict(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/complete 2>&1
+print -r -- "whole=$?"
+zmodload -F zsh/complete b:compadd 2>&1
+print -r -- "narrowed=$?"
+zmodload -F zsh/complete c:prefix 2>&1
+print -r -- "held=$?"`)
+	want := "zsh:1: failed to load module `zsh/complete': " +
+		"after, between, prefix and suffix are not implemented yet\nwhole=1\n" +
+		"narrowed=0\n" +
+		"zsh:5: failed to load module `zsh/complete': prefix is not implemented yet\nheld=1\n"
+	if out != want || st != 0 {
+		t.Errorf("narrowing = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A module with no features has its own sentence on this path too, and it is
+// the shell speaking rather than the builtin — the other way round from the
+// identical sentence the `-lF` listing gives, which is measured and is why
+// the two paths keep their own locations.
+func TestZmodloadDashFOnAModuleWithNoFeatures(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/main +b:x 2>&1
+print -r -- "select=$?"
+zmodload -lF zsh/main 2>&1
+print -r -- "list=$?"`)
+	want := "zsh:1: module `zsh/main' does not support features\nselect=1\n" +
+		"zsh:zmodload:3: module `zsh/main' does not support features\nlist=1\n"
+	if out != want || st != 0 {
+		t.Errorf("a module with no features = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `-u` and `-F` are refused together, in zsh's own wording — the sentence is
+// about the combination rather than about either letter, and the four other
+// letters it names reach an unimplemented-letter refusal here first.
+func TestZmodloadDashUCannotBeCombinedWithDashF(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -uF zsh/zutil +b:zstyle 2>&1
+print -r -- "st=$?"`)
+	want := "zsh:zmodload:1: -b, -c, -f, -p and -u cannot be combined with -F\nst=1\n"
+	if out != want || st != 0 {
+		t.Errorf("-uF = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The operands after the module are a filter on the listing, compared to the
+// feature names *as written*: a bare name narrows it to one line and a signed
+// one narrows it to none. Measured, and it looks like a slip until the two
+// rules are separated — the sign is stripped to decide whether the operand
+// names a feature at all, and not stripped again to decide what it matches.
+func TestZmodloadListingFiltersOnTheOperandAsWritten(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil
+zmodload -lF zsh/zutil b:zstyle
+print -r -- "bare=$?"
+zmodload -lF zsh/zutil +b:zstyle
+print -r -- "signed=$?"
+zmodload -lF zsh/zutil b:nosuch 2>&1
+print -r -- "unknown=$?"`)
+	want := "+b:zstyle\nbare=0\n" +
+		"signed=0\n" +
+		"zsh:zmodload:6: module `zsh/zutil' has no such feature: `b:nosuch'\nunknown=1\n"
+	if out != want || st != 0 {
+		t.Errorf("the listing filter = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `-LF` writes the selection as the command that would reproduce it, and with
+// no module names it does that for every loaded module that has features.
+// `-lF` with no module is refused instead, which is measured and is the one
+// asymmetry between the two listing letters.
+func TestZmodloadDashLFWritesTheSelectionAsACommand(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/zutil b:zformat b:zstyle
+zmodload -LF zsh/zutil
+print -r -- "one=$?"
+zmodload -LF
+print -r -- "all=$?"
+zmodload -lF 2>&1
+print -r -- "list=$?"`)
+	want := "zmodload -F zsh/zutil b:zformat b:zstyle\none=0\n" +
+		"zmodload -F zsh/zutil b:zformat b:zstyle\nall=0\n" +
+		"zsh:zmodload:6: -F requires a module name\nlist=1\n"
+	if out != want || st != 0 {
+		t.Errorf("-LF = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// **A module that is not loaded has nothing on**, which is the rule the whole
+// selection turns on and the one an unload leans on rather than cleaning up
+// after itself. So a narrowed load *after* an unload starts from silence and
+// not from what the last `-F` left, and a plain one after it starts wide.
+//
+// Both halves in one snippet because either alone is satisfied by the wrong
+// rule: the plain load is widened by zmodloadWiden whatever the unload did,
+// so only the narrowed reload can say that the earlier selection is gone.
+func TestAModuleThatIsNotLoadedHasNothingOn(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/zutil b:zstyle
+zmodload -u zsh/zutil
+zmodload -F zsh/zutil b:zformat
+zmodload -lF zsh/zutil
+zmodload zsh/zutil
+zmodload -lF zsh/zutil`)
+	want := "+b:zformat\n-b:zparseopts\n-b:zregexparse\n-b:zstyle\n" +
+		"+b:zformat\n+b:zparseopts\n+b:zregexparse\n+b:zstyle\n"
+	if out != want || st != 0 {
+		t.Errorf("a reload after an unload = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The narrowing is the subshell's, the same as the loaded set it sits beside
+// — which is what keeping it in the runner's own tables is for.
+func TestZmodloadNarrowingInASubshellLeavesTheParentAlone(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil
+(zmodload -F zsh/zutil -b:zstyle; zmodload -lF zsh/zutil)
+zmodload -lF zsh/zutil`)
+	want := "+b:zformat\n+b:zparseopts\n+b:zregexparse\n-b:zstyle\n" +
+		"+b:zformat\n+b:zparseopts\n+b:zregexparse\n+b:zstyle\n"
+	if out != want || st != 0 {
+		t.Errorf("a subshell's narrowing = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The line the issue was filed on, in the shape a real plugin writes it:
+// `_fzf_completion` asks `zsh/parameter` for the one parameter it reads.
+func TestZmodloadDashFReachesTheLineAPluginWrites(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(),
+		`zmodload -F zsh/parameter p:functions 2>/dev/null || print -r -- "no functions"
+print -r -- "st=$?"`)
+	want := "st=0\n"
+	if out != want || st != 0 {
+		t.Errorf("the plugin's line = %q (status %d), want %q", out, st, want)
+	}
+}

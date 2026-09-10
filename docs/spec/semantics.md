@@ -4045,14 +4045,42 @@ What was built, all through the extension seam — registered builtins in each
   it is one command writing both, so `interp.Runner.DiagnoseAsTheShellf`
   exists for the second kind.
 
+  **`-F` selects which of a module's features it exposes**, measured 2026-09-09
+  against zsh 5.9.2. An operand is `[+-]kind:name` against the module's own
+  feature list; a bare name means `+`, the last operand about a feature wins,
+  and an operand naming no feature of the module is `module 'X' has no such
+  feature: 'Y'` and 1 with *nothing* applied — the module is left unloaded even
+  when a good operand came first. The starting point is what makes it a
+  selection rather than a set of deltas: a module that is not loaded starts
+  with every feature **off**, so `zmodload -F zsh/zutil b:zstyle` finishes with
+  one on and `zmodload -F zsh/zutil` with none; a module already
+  loaded starts with whatever it has, so the same command moves only what it
+  names. A plain `zmodload <module>` puts every feature back, and so does an
+  unload followed by a load. `-lF` reports the selection with `+` and `-`
+  against each feature and `-LF` writes it as the command that would reproduce
+  it. The operands after the module on either listing letter are a filter
+  compared to the feature names *as written*, so `b:zstyle` narrows the listing
+  to one line and `+b:zstyle` narrows it to none. `-lF` with no module is `-F
+  requires a module name`; `-LF` with no module lists every loaded module that
+  has features. `-u` with `-F` is `-b, -c, -f, -p and -u cannot be combined
+  with -F`.
+
+  Narrowing moves the verdict, which is what makes the letter implementable in
+  a shell that cannot load a compiled module: the features a caller names are
+  the ones the module is judged on, so `zmodload zsh/complete` is refused for
+  four conditions nobody can find and `zmodload -F zsh/complete b:compadd` is
+  not.
+  What it does not do is take a feature *away* — zsh removes a deselected
+  builtin from its table outright, and here those builtins are the dialect's,
+  registered before any script runs, so a selection is recorded and reported
+  rather than enforced.
+
   Refused by name: `-a` with `-b`/`-c`/`-f`/`-p` (autoloaded builtins,
   conditions, functions and parameters), `-A` and `-R` (module aliases), `-d`
-  (the dependency table), `-m` (pattern arguments), `-I`, `-P`, and `-F`
-  without `-l` — a feature here is a builtin or a parameter the shell either
-  has or has not, and `+zparseopts` cannot conjure one. The twenty-two
-  letters zsh's `zmodload` does not have at all are `bad option: -q` and 1,
-  which is this builtin's wording and `bindkey`'s, not `zstyle`'s `invalid
-  option`. Corpus: `zmodload/*`.
+  (the dependency table), `-m` (pattern arguments), `-I` and `-P`. The
+  twenty-two letters zsh's `zmodload` does not have at all are `bad option: -q`
+  and 1, which is this builtin's wording and `bindkey`'s, not `zstyle`'s
+  `invalid option`. Corpus: `zmodload/*`.
 - **zsh `zsh/datetime`** (dialect/zsh/datetime.go): the clock, as a script
   reads it — `$EPOCHSECONDS`, `$EPOCHREALTIME`, `$epochtime` and the
   `strftime` builtin. Measured 2026-09-06 against zsh 5.9.2 with a scratch

@@ -246,6 +246,20 @@ func TestTheSplitFlagSplitsInsideTheFlagGroup(t *testing.T) {
 			"and a join asked for stays a join",
 			`a=(x y); f ${(j:-:)=a}`, `1:[x-y]`,
 		},
+		{
+			// `@` in the group turns the join at the head of a *separator*
+			// split off, and this is the row that says it does not turn off
+			// the one here: the two holes in the array survive an
+			// element-by-element split and do not survive the join, so
+			// answering 4 would say the exemption had spread to this split
+			// as well. See #1683 for the separator half.
+			"the fields flag does not turn this join off",
+			`a=(x "" "" y); f "${(@)=a}"`, `2:[x][y]`,
+		},
+		{
+			"where the separator split on the same value keeps them",
+			`a=(x "" "" y); f "${(@s.:.)a}"`, `4:[x][][][y]`,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runSplitFlag(t, count+tc.src)

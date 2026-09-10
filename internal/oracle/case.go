@@ -7135,6 +7135,21 @@ echo "st=$?"`,
 		Why:     "which empty field a quoted `(s)` keeps, put where one snippet separates the two answers: the field at each *edge* survives and the interior ones do not, so `\":\"` is two fields and `\"a::b\"` is two as well — the second of `a::b` being `b` and not the empty one between them. An implementation that drops every empty field passes the middle test and answers 0 for the other two, which is a count rather than a complaint. zsh alone has the flag; the other four read the parenthesis as text or as a bad substitution",
 	},
 	{
+		ID: "param/the-fields-flag-skips-the-join-ahead-of-a-split", Category: "parameter expansion",
+		Snippet: `a=(a b); printf "[%s]" ${(@s.:.)a}; printf "<%s>" ${(s.:.)a}; printf "{%s}" "${(@s.:.)a}"; printf "(%s)" ${(@f)a}; echo`,
+		Why:     "an array is joined on IFS before a separator split, and `@` in the same group is what turns that off — so the same two elements are split one at a time and come back as two fields where the flagless spelling is the single joined field `a b`. The quoted row says the exemption is not the quoted join at all: `@` already skips that one, and without this rule the value would be rejoined a step later and answer `a b` in quotes too. The `(f)` row is there because the newline split is the other letter this reaches and a fix aimed at `(s)` alone would leave it joining. zsh alone has the flags",
+	},
+	{
+		ID: "param/the-fields-flag-skips-that-join-for-the-letter-splits-only", Category: "parameter expansion",
+		Snippet: `a=(a b); printf "[%s]" ${(@j:-:s.:.)a}; printf "<%s>" ${(s.:.)a[@]}; set -- a b; printf "{%s}" ${(@s.:.)@}; printf "(%s)" ${(s.:.)@}; echo`,
+		Why:     "how narrow the exemption is, on the three shapes that look like it and are not. A `j` in the group asks for a separator by name and the join happens anyway, so `${(@j:-:s.:.)a}` is the one field `a-b`; an `[@]` subscript and the name `@` are fields in every other sense and neither exempts anything, so both join and answer `a b` where the `@` *letter* beside them gives two fields. Written as one line because the letter is the only thing that differs across it",
+	},
+	{
+		ID: "param/the-fields-flag-does-not-skip-that-join-for-an-ifs-split", Category: "parameter expansion",
+		Snippet: `a=(a '' '' b); set -- "${(@)=a}"; echo "ifs=$#"; set -- "${(@s.:.)a}"; echo "sep=$#"; b=("x:y" "z:w"); printf "[%s]" ${(@s.:.)b}; printf "<%s>" ${(s.:.)b}; echo`,
+		Why:     "the `=` split is the one `@` does not exempt, and the two holes in the array are what make the difference visible: joined first, the run of blanks collapses and `\"${(@)=a}\"` is two fields, where splitting each element on its own would have kept them and answered four — which is exactly what the separator split on the same array does. The last pair is the plain case with data whose join is visible, so the row carries both the rule and its exception",
+	},
+	{
 		ID: "param/a-split-flag-on-an-empty-value", Category: "parameter expansion",
 		Snippet: `x=""; set -- "${(s::)x}"; echo "chars=$#"; set -- "${(f)x}"; echo "lines=$#"; set -- ${(s::)x}; echo "unquoted=$#"`,
 		Why:     "an empty value split is one empty field in quotes and no field at all without them, and the two separators have to agree: splitting into characters answers the same 1 as splitting at newlines, where a character loop over an empty string naturally produces nothing. The quoted-versus-unquoted pair is on the same line because 1 and 0 are both defensible on their own and only the pair says which is which",

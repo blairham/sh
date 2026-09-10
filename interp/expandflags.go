@@ -276,7 +276,11 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 
 	// An `=` beside the group is this same step with IFS for a separator.
 	ifsSplit := splitFlagInGroup(e, sp)
-	hasSplit := strings.ContainsAny(e.Flags, "fs") || ifsSplit
+	// The two splits are kept apart because rule 10 below treats them
+	// differently: `(@)` exempts a letter split from the join ahead of it and
+	// leaves the `=` one joining. Only rule 11 wants them together.
+	letterSplit := strings.ContainsAny(e.Flags, "fs")
+	hasSplit := letterSplit || ifsSplit
 	// Rule 10: forced joining, ahead of a split — `${(s.:.)a}` on an array
 	// joins its elements with IFS's first character and splits the result.
 	// `Z` is deliberately absent from this condition, and that is measured
@@ -287,7 +291,28 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// splits differ here, and only the *quoted* join at rule 5 reaches `Z`,
 	// which is why `"${(Z+n+)a}"` on that array is one field and
 	// `"${(@Z+n+)a}"`, whose `@` skips that join, is two again.
-	if (strings.ContainsRune(e.Flags, 'j') || hasSplit) && !joined && isList && !markJoin {
+	//
+	// And `(@)` beside `f` or `s` skips it, which is measured and is the
+	// whole of #1683. With `a=(a b)`:
+	//
+	//	${(s.:.)a}    `a b`  joined on IFS, then split on a colon it has not
+	//	${(@s.:.)a}   a b    two fields, each element split on its own
+	//	${(@f)a}      a b    the same for the newline split
+	//	"${(@s.:.)a}" a b    in quotes as well, rule 5 having been skipped
+	//
+	// The exemption is the `@` *letter* and not flagKeepsFields, measured
+	// apart: `${(s.:.)a[@]}` and `${(s.:.)@}` both join, where
+	// `${(@s.:.)a[@]}` and `${(@s.:.)@}` do not. A `j` in the same group
+	// puts the join back — `${(@j:-:s.:.)a}` is the one field `a-b` — since
+	// a separator was asked for by name.
+	//
+	// `=` is not exempted, and that is measured rather than symmetry left
+	// out: `a=(a '' '' b); "${(@)=a}"` is the two fields `a` and `b`, where
+	// splitting each element on its own would keep the two holes the way
+	// `"${(@s.:.)a}"` keeps them.
+	if (strings.ContainsRune(e.Flags, 'j') || ifsSplit ||
+		(letterSplit && !strings.ContainsRune(e.Flags, '@'))) &&
+		!joined && isList && !markJoin {
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
 		isList = false
 	}

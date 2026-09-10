@@ -741,6 +741,9 @@ func Semantics() interp.Semantics {
 	s.BraceRangePadsToEndpointWidth = interp.Yes
 	s.BraceRangeStepSignHonored = interp.No
 	s.BraceRangeNegativeStepReverses = interp.Yes
+	// And the endpoints are read after the expansions in them: `n=3;
+	// echo {1..$n}` is `1 2 3` where bash prints the literal `{1..3}`.
+	s.BraceRangeEndpointsExpanded = interp.Yes
 	s.BracketCaretNegates = interp.Yes
 	s.EqualsExpansion = interp.Yes
 	s.LastPipelineElementInCurrentShell = interp.Yes

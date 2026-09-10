@@ -341,6 +341,9 @@ func Semantics() interp.Semantics {
 	s.BraceRangePadsToEndpointWidth = interp.Yes
 	s.BraceRangeStepSignHonored = interp.No
 	s.BraceRangeNegativeStepReverses = interp.No
+	// Braces finish before parameters begin, so a range cannot be built
+	// from one: `n=3; echo {1..$n}` is the literal `{1..3}`.
+	s.BraceRangeEndpointsExpanded = interp.No
 	s.BracketCaretNegates = interp.Yes
 	s.RegexQuotingMakesLiteral = interp.Yes
 	// A process substitution may stand as a condition's operand here, and is

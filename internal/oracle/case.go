@@ -575,6 +575,21 @@ var Corpus = []Case{
 		Why:     "the corners that separate the three step-sign models: a negative sign agreeing with the endpoints changes nothing in bash and ksh93 but still reverses zsh; and zsh reverses the walk rather than swapping the endpoints — 9 5 1, bash's 1 5 9 backwards, not 10 6 2",
 	},
 	{
+		ID: "expand/brace-range-expanded-endpoint", Category: "expansion",
+		Snippet: `n=3; echo {1..$n}; a=1; b=4; echo {$a..$b}; echo {1..${n}..2}`,
+		Why:     "whether a range's endpoints are read before or after the expansions written in them: zsh and ksh93 expand first and count `1 2 3`, bash keeps the literal `{1..3}` because braces are finished before parameters begin, and dash has no braces at all",
+	},
+	{
+		ID: "expand/brace-range-expanded-endpoint-quoting", Category: "expansion",
+		Snippet: `n=3; echo {1.."$n"}; echo {"1"..3}; echo {1..'3'}`,
+		Why:     "quoting hides an endpoint from the brace scanner and not from the range: the two shells that expand endpoints still count 1 2 3 through double, leading and single quotes",
+	},
+	{
+		ID: "expand/brace-range-expanded-endpoint-refused", Category: "expansion",
+		Snippet: `q=abc; sp='2 3'; printf '[%s]' @{1..$q}@; echo; printf '[%s]' @{1..$sp}@; echo; printf '[%s]' @{1..3,5}@; echo`,
+		Why:     "what a range that does not form leaves behind: the expanded text, once and whole — ksh93 splits `$sp` in a word of its own and leaves this one field — and a top-level comma makes it a list before it is ever a range",
+	},
+	{
 		ID: "expand/brace-range-alpha-stepped", Category: "expansion",
 		Snippet: `echo {a..e..2}`,
 		Why:     "a stride over a letter range: bash and ksh93 expand it, zsh leaves the word alone",

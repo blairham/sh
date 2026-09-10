@@ -352,6 +352,82 @@ func TestLinenoInAFunctionIsAnAxis(t *testing.T) {
 // disagreement: what an endpoint's leading zeros mean, and what a written
 // step's sign means.
 
+// TestBraceRangeEndpointsExpandedIsAnAxis pins the *ordering* one: whether a
+// range's endpoints are read before or after the expansions written in them.
+//
+// The comment this replaced asserted that no shell could do it. Two of the
+// six panel columns do (#1679), and a prompt theme's first statement is
+// written that way.
+func TestBraceRangeEndpointsExpandedIsAnAxis(t *testing.T) {
+	src := `n=3; echo {1..$n}`
+	out, _ := axisRun(t, src, func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceRangeEndpointsExpanded = Yes
+	})
+	if strings.TrimSpace(out) != "1 2 3" {
+		t.Errorf("got %q, want the endpoint expanded before the range is read", out)
+	}
+	out, _ = axisRun(t, src, func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceRangeEndpointsExpanded = No
+	})
+	if strings.TrimSpace(out) != "{1..3}" {
+		t.Errorf("got %q, want the braces finished before the parameter exists", out)
+	}
+	// Unanswered is a refusal, but only where a range is actually written
+	// with something to expand in it.
+	if _, st := axisRun(t, src, func(s *Semantics) { s.BraceExpansion = Yes }); st != 2 {
+		t.Errorf("status %d, want the unanswered axis refused", st)
+	}
+	out, st := axisRun(t, `echo {1..3}`, func(s *Semantics) { s.BraceExpansion = Yes })
+	if st != 0 || strings.TrimSpace(out) != "1 2 3" {
+		t.Errorf("got %q status %d, want a literal range answered without the question", out, st)
+	}
+	// And never where the braces do not expand at all.
+	out, st = axisRun(t, src, func(s *Semantics) { s.BraceExpansion = No })
+	if st != 0 || strings.TrimSpace(out) != "{1..3}" {
+		t.Errorf("got %q status %d, want the literal word without a question", out, st)
+	}
+}
+
+// A range that does not form gives back the text its endpoints came to, once
+// and whole: the expansions in it are not run a second time, and what they
+// produced is neither split nor matched.
+func TestAFailedExpandedRangeKeepsWhatItExpanded(t *testing.T) {
+	yes := func(s *Semantics) {
+		s.BraceExpansion = Yes
+		s.BraceRangeEndpointsExpanded = Yes
+	}
+	// `f` runs once, however the range ends up.
+	out, _ := axisRun(t, `f() { echo ran >&2; echo zz; }; echo {1..$(f)} 2>&1`, yes)
+	if n := strings.Count(out, "ran"); n != 1 {
+		t.Errorf("got %q, want the substitution run once, ran %d times", out, n)
+	}
+	// Unsplit and unglobbed, with splitting turned on so the difference is
+	// visible at all.
+	out, _ = axisRun(t, `sp='2 3'; printf '[%s]' @{1..$sp}@`, func(s *Semantics) {
+		yes(s)
+		s.SplitParamExpansion = Yes
+	})
+	if out != "[@{1..2 3}@]" {
+		t.Errorf("got %q, want the expanded text left whole", out)
+	}
+}
+
+// A comma makes the body a list before it is ever a range, which is what
+// keeps a list's expansions from being run for a range that will not read
+// them.
+func TestACommaBeatsAnExpandedRange(t *testing.T) {
+	out, _ := axisRun(t, `f() { echo ran >&2; echo 3; }; printf '[%s]' {1..$(f),5} 2>&1`,
+		func(s *Semantics) {
+			s.BraceExpansion = Yes
+			s.BraceRangeEndpointsExpanded = Yes
+		})
+	if strings.Count(out, "ran") != 1 || !strings.Contains(out, "[1..3][5]") {
+		t.Errorf("got %q, want the comma read as a list and the substitution run once", out)
+	}
+}
+
 func TestBraceRangePaddingIsAnAxis(t *testing.T) {
 	src := `echo {01..3}`
 	out, _ := axisRun(t, src, func(s *Semantics) {

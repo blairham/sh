@@ -414,6 +414,10 @@ func Semantics() interp.Semantics {
 	s.BraceRangePadsToEndpointWidth = interp.No
 	s.BraceRangeStepSignHonored = interp.Yes
 	s.BraceRangeNegativeStepReverses = interp.No
+	// It agrees with zsh on the one thing bash does not do at all: a
+	// range's endpoints are read after the expansions written in them, so
+	// `n=3; echo {1..$n}` is `1 2 3`.
+	s.BraceRangeEndpointsExpanded = interp.Yes
 	s.BracketCaretNegates = interp.Yes
 	s.LastPipelineElementInCurrentShell = interp.Yes
 	// Nor here. ksh93 refuses `[[ $v == <(cmd) ]]` earlier still — while

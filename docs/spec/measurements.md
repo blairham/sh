@@ -270,6 +270,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expand/brace-range-zero-padded` | `{01..03}~{1..03}~{-03..3..3}` | `01 02 03~01 02 03~-03 000 003` | `01 02 03~01 02 03~-03 000 003` | `1 2 3~1 2 3~{-03..3..3}` | `1 2 3~1 2 3~-3 0 3` | `01 02 03~01 02 03~-03 000 003` |
 | `expand/brace-range-step-sign-and-direction` | `{10..1..3}~{1..10..-3}` | `10 7 4 1~1 4 7 10` | `10 7 4 1~1 4 7 10` | `{10..1..3}~{1..10..-3}` | `10~1` | `10 7 4 1~10 7 4 1` |
 | `expand/brace-range-negative-step-reversal` | `{3..1..-1}~{1..10..-4}` | `3 2 1~1 5 9` | `3 2 1~1 5 9` | `{3..1..-1}~{1..10..-4}` | `3 2 1~1` | `1 2 3~9 5 1` |
+| `expand/brace-range-expanded-endpoint` | `{1..3}~{1..4}~{1..3..2}` | `{1..3}~{1..4}~{1..3..2}` | `{1..3}~{1..4}~{1..3..2}` | `{1..3}~{1..4}~{1..3..2}` | `1 2 3~1 2 3 4~1 3` | `1 2 3~1 2 3 4~1 3` |
+| `expand/brace-range-expanded-endpoint-quoting` | `{1..3}~{1..3}~{1..3}` | `{1..3}~{1..3}~{1..3}` | `{1..3}~{1..3}~{1..3}` | `{1..3}~{1..3}~{1..3}` | `1 2 3~1 2 3~1 2 3` | `1 2 3~1 2 3~1 2 3` |
+| `expand/brace-range-expanded-endpoint-refused` | `[@{1..abc}@]~[@{1..2][3}@]~[@{1..3,5}@]` | `[@{1..abc}@]~[@{1..2][3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2][3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2][3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2 3}@]~[@1..3@][@5@]` | `[@{1..abc}@]~[@{1..2 3}@]~[@1..3@][@5@]` |
 | `expand/brace-range-alpha-stepped` | `{a..e..2}` | `a c e` | `a c e` | `{a..e..2}` | `a c e` | `{a..e..2}` |
 | `expand/brace-nested` | `{a,{b,c}}~x{1,{2,3}}y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` |
 | `expand/brace-before-param` | `{1,2}` | `1 2` | `1 2` | `1 2` | `1 2` | `1 2` |
@@ -641,6 +644,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expand/brace-range-negative-step-reversal` — the corners that separate the three step-sign models: a negative sign agreeing with the endpoints changes nothing in bash and ksh93 but still reverses zsh; and zsh reverses the walk rather than swapping the endpoints — 9 5 1, bash's 1 5 9 backwards, not 10 6 2
   ```sh
   echo {3..1..-1}; echo {1..10..-4}
+  ```
+- `expand/brace-range-expanded-endpoint` — whether a range's endpoints are read before or after the expansions written in them: zsh and ksh93 expand first and count `1 2 3`, bash keeps the literal `{1..3}` because braces are finished before parameters begin, and dash has no braces at all
+  ```sh
+  n=3; echo {1..$n}; a=1; b=4; echo {$a..$b}; echo {1..${n}..2}
+  ```
+- `expand/brace-range-expanded-endpoint-quoting` — quoting hides an endpoint from the brace scanner and not from the range: the two shells that expand endpoints still count 1 2 3 through double, leading and single quotes
+  ```sh
+  n=3; echo {1.."$n"}; echo {"1"..3}; echo {1..'3'}
+  ```
+- `expand/brace-range-expanded-endpoint-refused` — what a range that does not form leaves behind: the expanded text, once and whole — ksh93 splits `$sp` in a word of its own and leaves this one field — and a top-level comma makes it a list before it is ever a range
+  ```sh
+  q=abc; sp='2 3'; printf '[%s]' @{1..$q}@; echo; printf '[%s]' @{1..$sp}@; echo; printf '[%s]' @{1..3,5}@; echo
   ```
 - `expand/brace-range-alpha-stepped` — a stride over a letter range: bash and ksh93 expand it, zsh leaves the word alone
   ```sh

@@ -514,6 +514,24 @@ type Semantics struct {
 	// endpoints and then keeps their order too. Asked only for a written
 	// negative step whose sign was not already honored.
 	BraceRangeNegativeStepReverses Answer
+	// BraceRangeEndpointsExpanded reads a range's endpoints *after* the
+	// expansions written in them, rather than before: with `n=3`,
+	// `echo {1..$n}` is `1 2 3` in zsh and ksh93 and the literal `{1..3}` in
+	// bash, bash 3.2 and bash-as-sh, where brace expansion has finished
+	// before `$n` exists. Quoting hides an endpoint from the brace scanner
+	// and not from the range, so `{1..'3'}` counts the same way.
+	//
+	// This is the ordering axis the vector had no field for, and the comment
+	// in `interp/brace.go` asserted flatly that no shell could do it — a
+	// claim two of the six panel columns disprove (#1679). It is asked only
+	// where a range is written with something to expand in it: a literal
+	// `{1..3}` is unanimous and must not be turned into a question.
+	//
+	// What a failed range leaves is not a second axis. Both shells that
+	// expand endpoints run those expansions once and put the text back
+	// unsplit and unmatched — ksh93 splits `$sp` in a word of its own and
+	// leaves `{1..$sp}` a single field — so the ordering decides that too.
+	BraceRangeEndpointsExpanded Answer
 	// EqualsExpansion replaces an unquoted word beginning with `=` by the
 	// path of the command named after it: `echo =ls` prints /bin/ls. zsh
 	// alone, and silent in the `&>` sense — the other three take the word
@@ -5081,7 +5099,7 @@ func PosixSemantics() Semantics {
 		// not an omission: the standard's interactive file is `$ENV`, and an
 		// empty name is how a dialect says so.
 		LoginStartupFiles: ".profile",
-		// The three brace-range axes are left unanswered: a brace that
+		// The four brace-range axes are left unanswered: a brace that
 		// never expands never asks them.
 		BraceExpansion:                 No,
 		BracketCaretNegates:            No,

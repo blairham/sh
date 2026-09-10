@@ -13088,6 +13088,46 @@ echo "read=[$l]"`,
 		Why:     "options and traps are two questions with two option names — `localoptions` and `localtraps` — and the first does not answer the second: the trap the function set is still installed",
 	},
 	{
+		ID: "setopt/localtraps-restores-on-return", Category: "builtins",
+		Snippet: `trap 'echo outer' USR1; setopt localtraps; f() { trap 'echo inner' USR1; }; f; trap`,
+		Why:     "the trap-side companion to the option above, and its own switch rather than a second name for it: the trap the function set goes away at the return and the caller's comes back. Two handlers printing different words, because one that printed the same word could not tell put-back from left-alone",
+	},
+	{
+		ID: "setopt/without-localtraps-a-trap-leaks", Category: "builtins",
+		Snippet: `trap 'echo outer' USR1; f() { trap 'echo inner' USR1; }; f; trap`,
+		Why:     "the control for the rows around it: with nothing asking for the scoping the function's trap survives the call, so those rows are the option working rather than traps being local anyway",
+	},
+	{
+		ID: "setopt/localtraps-does-not-reach-back-before-its-line", Category: "builtins",
+		Snippet: `trap 'echo outer' USR1; f() { trap 'echo inner' USR1; setopt localtraps; }; f; trap`,
+		Why:     "the save is taken when the trap *moves*, not when the body starts, so a trap set before the line asking for the scoping is left standing. `localoptions` is the other way round — it restores an option moved before its own line — which is the row that says the two cannot share a snapshot",
+	},
+	{
+		ID: "setopt/localtraps-is-asked-at-the-modification", Category: "builtins",
+		Snippet: `trap 'echo outer' USR1; f() { setopt localtraps; trap 'echo inner' USR1; unsetopt localtraps; trap; echo "in=$?"; }; f; trap`,
+		Why:     "and the restore is unconditional at the return: a body that stops asking for the scoping after it has moved a trap still has that trap put back, and lists its own until then. `localoptions` asks at the return instead — the second row where the two options answer oppositely",
+	},
+	{
+		ID: "setopt/localtraps-saves-per-condition", Category: "builtins",
+		Snippet: `trap 'echo o1' USR1; trap 'echo o2' USR2; f() { setopt localtraps; trap 'echo i1' USR1; unsetopt localtraps; trap 'echo i2' USR2; }; f; trap`,
+		Why:     "one body moving two signals under two answers: the save is per condition and taken at each modification, so USR1 goes back and USR2 stays as the function set it. A whole-table snapshot taken at the first modification would put both back",
+	},
+	{
+		ID: "setopt/localtraps-itself-is-not-restored", Category: "builtins",
+		Snippet: `f() { setopt localtraps; trap 'echo inner' USR1; }; f; [[ -o localtraps ]]; echo "lt=$?"; trap; echo "end=$?"`,
+		Why:     "the option is not put back the way `localoptions` puts itself back — it has no reason to be, since it is never read at a return — so a function that turns it on leaves it on and every later call scopes its traps too. The third row where the two answer oppositely",
+	},
+	{
+		ID: "setopt/emulate-l-scopes-traps-too", Category: "builtins",
+		Snippet: `trap 'echo outer' USR1; f() { emulate -L zsh; trap 'echo inner' USR1; }; f; trap`,
+		Why:     "`emulate -L` is several local-scoping options and not just `localoptions`: measured, it leaves `localoptions`, `localtraps` and `localpatterns` on and `localloops` off, so the trap it scopes is this switch working rather than the option table's rule reaching further than it does",
+	},
+	{
+		ID: "setopt/localtraps-restores-the-default-action", Category: "builtins",
+		Snippet: `setopt localtraps; f() { trap 'echo handled' USR1; }; f; echo before; kill -USR1 $$; echo unreached`,
+		Why:     "what comes back is the disposition and not the listing: with nothing displaced the signal goes back to its default action, which for USR1 is death — a shell that had merely forgotten the listing would still have the handler arranged and would print handled",
+	},
+	{
 		ID: "setopt/no-aliases-stops-the-expansion", Category: "builtins",
 		Script:  true,
 		Snippet: "alias hi='echo expanded'\nhi\nsetopt no_aliases\nhi\nsetopt aliases\nhi\n",

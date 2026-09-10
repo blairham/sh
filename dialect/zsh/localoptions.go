@@ -116,7 +116,7 @@ func (s optionState) restore(r *interp.Runner) {
 			continue
 		}
 		switch o.base {
-		case "shwordsplit", "nomatch", "ksharrays":
+		case "shwordsplit", "nomatch", "ksharrays", "localtraps":
 			// The vector restore above has these, and re-setting them would
 			// swap in a fresh copy for nothing.
 			continue

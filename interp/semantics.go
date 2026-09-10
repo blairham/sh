@@ -711,6 +711,18 @@ type Semantics struct {
 	// that function returns, rather than when the script ends. zsh alone; a
 	// trap set at the top level behaves the same everywhere.
 	ExitTrapIsFunctionLocal Answer
+
+	// FunctionLocalTraps is whether a trap a function *sets* is undone when
+	// that function returns — the displaced disposition coming back, and the
+	// signal going back to its default where nothing was displaced. See
+	// TrapLocality for the answers and for why it is a form rather than a
+	// flag.
+	//
+	// EXIT is not this question. It is already function-scoped in the one
+	// shell that has both, by a rule of its own that does not ask any
+	// option — see ExitTrapIsFunctionLocal — and measured, the switch this
+	// axis carries changes nothing about it in either direction.
+	FunctionLocalTraps TrapLocality
 	// SIGPrefixAccepted reads `SIGINT` as a name for the same signal `INT`
 	// names, wherever a signal can be named.
 	//
@@ -5214,6 +5226,7 @@ func PosixSemantics() Semantics {
 		BraceExpansion:                 No,
 		BracketCaretNegates:            No,
 		ExitTrapIsFunctionLocal:        No,
+		FunctionLocalTraps:             TrapsSurviveTheFunction,
 		GetoptsPositionIsFunctionLocal: No,
 		SignalHandlerSeesEarlierStatus: No,
 		// POSIX says a bare `exit` reports the status of the last command,
@@ -5707,6 +5720,54 @@ func (b BackgroundJobInputPolicy) String() string {
 		return "empty unless closed"
 	case BackgroundJobInputIsTheShells:
 		return "the shell's"
+	}
+	return "unspecified"
+}
+
+// TrapLocality is what happens to a trap a function set when that function
+// returns. See Semantics.FunctionLocalTraps.
+//
+// A form rather than a flag, because the shells that scope a function's traps
+// at all do not agree on what *asks* for the scoping. One has an option that
+// turns it on for every call while it is set. The other keys it on the
+// definition style: measured against ksh93 (AT&T 93u+ 2012-08-01), `function
+// g { trap "echo I" USR1; }` puts the caller's trap back at the return and
+// `g() { trap "echo I" USR1; }`, the same body written the other way, leaves
+// the new one installed. That second answer is a third value here rather than
+// a rewrite of a boolean, and it is left for its own issue — the shell that
+// has it does not answer this axis yet.
+type TrapLocality uint8
+
+const (
+	// TrapLocalityUnspecified reads as TrapsSurviveTheFunction rather than
+	// being refused, which is not the usual bargain and is deliberate: there
+	// is no disagreement here to refuse over. Every shell in the panel
+	// leaves a function's trap installed unless something in that function
+	// asked otherwise, so this is a question asked only where a dialect has
+	// raised it, and a vector nobody filled in gets the answer they share.
+	TrapLocalityUnspecified TrapLocality = iota
+	// TrapsSurviveTheFunction leaves the modification standing: the trap the
+	// function set is the trap the caller has afterwards.
+	TrapsSurviveTheFunction
+	// TrapsGoBackAtTheReturn puts the displaced disposition back as the
+	// function returns.
+	//
+	// The save is per condition and it is taken when the trap is *modified*,
+	// not when the body starts: measured, a trap set before the line that
+	// asks for the scoping is not restored. First save wins, so a body that
+	// sets the same condition twice goes back to what it displaced rather
+	// than to what it set first. And the restore is unconditional at the
+	// return — a body that stops asking for the scoping after it has moved a
+	// trap still has that trap put back.
+	TrapsGoBackAtTheReturn
+)
+
+func (t TrapLocality) String() string {
+	switch t {
+	case TrapsSurviveTheFunction:
+		return "traps survive the function"
+	case TrapsGoBackAtTheReturn:
+		return "traps go back at the return"
 	}
 	return "unspecified"
 }

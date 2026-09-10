@@ -3386,6 +3386,15 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 	// dropped rather than shown alongside — see trapsModified.
 	r.trapsModified()
 	for _, tg := range targets {
+		// What this condition holds now, kept where the dialect scopes a
+		// function's traps to the call — taken here, at the modification,
+		// rather than at the call, which is the measured difference between
+		// this and the option table the same shell scopes. See localtraps.go.
+		if tg.pseudo != "" {
+			r.localizeTrap(tg.pseudo, 0)
+		} else if !tg.exit {
+			r.localizeTrap(tg.name, tg.sig)
+		}
 		switch {
 		case tg.pseudo != "":
 			r.setPseudoTrap(tg.pseudo, body)

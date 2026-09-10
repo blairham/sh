@@ -215,7 +215,21 @@ var extraSetOptions = map[string]setOption{
 	"history":    {},
 	"histexpand": {},
 	"keyword":    {},
-	"onecmd":     {},
+	// onecmd is `set -t`: the line it is set on finishes and the shell reads
+	// no more. Implemented rather than recorded because the front end can
+	// honestly stop — see Runner.OneCommand — and because bash takes the
+	// name at 0 where we used to refuse it as not-implemented, which the
+	// panel already records as neither answer
+	// (opt/set-o-a-name-this-shell-has-and-will-not-move).
+	//
+	// zsh reaches `set -o` through its own table and refuses `onecmd` with
+	// `can't change option`, its borrowed spelling for `singlecommand` being
+	// one of the five it will not move. That answer is the dialect's and this
+	// entry does not disturb it.
+	"onecmd": {
+		apply: func(r *Runner, on bool) { r.onecmd = on },
+		get:   func(r *Runner) bool { return r.onecmd },
+	},
 	"physical":   {},
 	"privileged": {},
 }

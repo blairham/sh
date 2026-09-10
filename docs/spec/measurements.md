@@ -11206,9 +11206,9 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   n=5; [[ n -eq 5 ]] && printf name-is-value; [[ n -eq 0 ]] && printf " and-zero" || printf " not-zero"; k=3; [[ k*2 -eq 6 ]] && printf " expression"
   ```
-- `cond/comparison-operand-expands-once` — the word is expanded once and what reaches the arithmetic is text: a second expansion would find x and answer 7. None of the panel does, so the two characters `$x` are an operand the arithmetic cannot use (#1616)
+- `cond/comparison-operand-expands-once` — the word is expanded once and what reaches the arithmetic is text: a second expansion would find x and answer 7. None of the panel does, so the two characters `$x` are an operand the arithmetic cannot use. Written `$q` rather than a bare name on purpose — a bare name puts no `$` in the operand text at all, so it cannot tell one expansion from two (#1616)
   ```sh
-  x=7; v='$x'; [[ v -eq 7 ]] && printf twice || printf once
+  x=7; q='$x'; [[ $q -eq 7 ]] && printf twice || printf once
   ```
 - `cond/an-unreadable-comparison-operand` — what an operand that is not an expression does to the rest of the input. zsh and ksh93 abandon it and bash lets the condition be false and carries on, all three at status 1 — a conflict rather than a wording difference, and the ConditionArithmeticErrorIsFatal axis. From a file, because the trailing text is the measurement and -c muddies where the shell stopped (#1616)
   ```sh

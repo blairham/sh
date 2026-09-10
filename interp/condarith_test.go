@@ -45,14 +45,20 @@ func TestAComparisonOperandIsAnExpression(t *testing.T) {
 
 // The word is expanded once, and what reaches the arithmetic is text.
 //
-// With `v` holding the two characters `$x`, a shell that expanded the operand
-// a second time would answer 7. None does: the expression is read from the
-// text as it stands, so `$x` is an operand the arithmetic cannot use and the
-// comparison fails instead of succeeding. The failing direction is the point
-// — this is the one row where "wrong" and "right" are both quiet.
+// The operand is written `$q`, not `q`, and the difference is the whole test.
+// A bare name puts no `$` in the operand text at all — the `$x` only appears
+// later, when the arithmetic looks the name up — so a second expansion placed
+// here would have nothing to act on and the run would pass either way. `$q`
+// expands to the two characters `$x` *before* the arithmetic sees them, which
+// is the only arrangement that can tell one expansion from two.
+//
+// Measured: no shell in the panel answers 7. All three blame `$x` as an
+// operand the arithmetic cannot use, so the comparison fails rather than
+// succeeding — and the failing direction is the point, because "wrong" and
+// "right" are both quiet here.
 func TestAComparisonOperandIsNotExpandedTwice(t *testing.T) {
 	sem := PosixSemantics()
-	out, _ := run(t, `x=7; v='$x'; [[ v -eq 7 ]]; echo st=$?`, func(r *Runner) { r.Semantics = &sem })
+	out, _ := run(t, `x=7; q='$x'; [[ $q -eq 7 ]]; echo st=$?`, func(r *Runner) { r.Semantics = &sem })
 	if strings.Contains(out, "st=0") {
 		t.Errorf("got %q: the operand was expanded a second time", out)
 	}

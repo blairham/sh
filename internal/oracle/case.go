@@ -7971,8 +7971,8 @@ echo unreachable`,
 	},
 	{
 		ID: "cond/comparison-operand-expands-once", Category: "conditions",
-		Snippet: `x=7; v='$x'; [[ v -eq 7 ]] && printf twice || printf once`,
-		Why:     "the word is expanded once and what reaches the arithmetic is text: a second expansion would find x and answer 7. None of the panel does, so the two characters `$x` are an operand the arithmetic cannot use (#1616)",
+		Snippet: `x=7; q='$x'; [[ $q -eq 7 ]] && printf twice || printf once`,
+		Why:     "the word is expanded once and what reaches the arithmetic is text: a second expansion would find x and answer 7. None of the panel does, so the two characters `$x` are an operand the arithmetic cannot use. Written `$q` rather than a bare name on purpose — a bare name puts no `$` in the operand text at all, so it cannot tell one expansion from two (#1616)",
 	},
 	{
 		ID: "cond/an-unreadable-comparison-operand", Category: "conditions",

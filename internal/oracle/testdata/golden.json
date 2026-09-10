@@ -110457,21 +110457,21 @@
     "system/the-line-a-prompt-worker-starts-with": {
       "bash": {
         "Stdout": "failed~open=2 high=0~read=127 buf=[]",
-        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: return: can only `return' from a function or sourced script~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: sysread: command not found",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: return: can only `return' from a function or sourced script~\u003cshell\u003e: line 1: sysread: command not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "failed",
-        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: return: can only `return' from a function or sourced script",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: return: can only `return' from a function or sourced script",
         "Status": 2,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
         "Stdout": "failed~open=1 high=0~read=127 buf=[]",
-        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: line 0: return: can only `return' from a function or sourced script~\u003cshell\u003e: print: command not found~\u003cshell\u003e: sysread: command not found",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: line 0: return: can only `return' from a function or sourced script~\u003cshell\u003e: sysread: command not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

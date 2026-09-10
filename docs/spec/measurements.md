@@ -9614,6 +9614,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/a-file-read-substitution-reports-a-name-it-cannot-open` | `st=2 v=[]` **2>** `<shell>: 1: cannot open nosuch: No such file` | `st=1 v=[]` **2>** `<shell>: line 1: nosuch: No such file or directory` | `st=1 v=[]` **2>** `<shell>: line 1: nosuch: No such file or directory` | `st=1 v=[]` **2>** `<shell>: nosuch: No such file or directory` | `st=1 v=[]` **2>** `<shell>: nosuch: cannot open [No such file or directory]` | `st=1 v=[]` **2>** `<shell>:1: no such file or directory: nosuch` |
 | `redir/a-file-read-substitution-needs-the-redirection-alone` | `[hi][][]` | `[hi][][]` | `[hi][][]` | `[hi][][hello]` | `[hi][][]` | `[hi][][]` |
 | `redir/a-file-read-substitution-is-not-the-null-command-hook` | `[]` | `[hello]` | `[hello]` | `[hello]` | `[hello]` | `[hello]` |
+| `redir/the-null-command-parameters` | `[][]` | `[][]` | `[][]` | `[][]` | `[][]` | `[cat][more]` |
+| `redir/a-command-that-is-only-a-redirection` | `[st=0]` | `[st=0]` | `[st=0]` | `[st=0]` | `[st=0]` | `HOOK[st=0]` |
+| `redir/the-null-command-writes-where-the-command-would` | `[g=][st=0]` | `[g=][st=0]` | `[g=][st=0]` | `[g=][st=0]` | `[g=][st=0]` | `[g=HOOK][st=0]` |
+| `redir/the-reading-parameter-is-the-lone-input-redirection` | `\|\|\|` | `\|\|\|` | `\|\|\|` | `\|\|\|` | `\|\|\|` | `R\|R\|N\|N` |
+| `redir/a-null-command-with-nothing-in-it-is-refused` | `after[made=y]` | `after[made=y]` | `after[made=y]` | `after[made=y]` | `after[made=y]` | **2>** `<shell>:1: redirection with no command` *(status 1)* |
+| `redir/multios-reads-from-every-source` | `[b]` | `[b]` | `[b]` | `[b]` | `[b]` | `[a~b]` |
 | `heredoc/no-delimiter-and-a-warning` | `body` | `body` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` | `body` | `body` |
 | `heredoc/no-delimiter-and-no-body` | *(no output, status 0)* | **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `heredoc/a-body-that-runs-to-the-end` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` |
@@ -9837,6 +9843,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/a-file-read-substitution-is-not-the-null-command-hook` — the fork this form is most easily mistaken for. zsh runs a redirection with no command through READNULLCMD, so `<f` at a prompt pages the file — but the substitution does not consult it: with the hook pointed somewhere else the file still reads. The five columns with no such hook show the same value for the same reason, which is that the hook was never on the path
   ```sh
   printf 'hello\n' > f; READNULLCMD=printf; printf "[%s]" "$(<f)"
+  ```
+- `redir/the-null-command-parameters` — the two parameters that decide what a command consisting only of redirections runs. One column has them and has them filled in — `cat` and `more`, which is why `<f` at a prompt pages the file and `>g` truncates it with a `cat` that reads nothing — and the other five have no such hook and answer with two unset names. Read rather than exercised on purpose: what `more` prints depends on the machine, and the defaults are a fact about the shell that a row can pin without running either of them
+  ```sh
+  printf "[%s][%s]" "$NULLCMD" "$READNULLCMD"
+  ```
+- `redir/a-command-that-is-only-a-redirection` — a command with no name and one input redirection. Five columns open the file, run nothing and report 0; the sixth runs the command the parameter names, which is measurable only because the parameter is pointed at a marker — left at its default the file itself comes out and the two readings agree on the bytes. This is the hook that `$(<file)` is *not*: the row above pins that the substitution ignores the same parameter
+  ```sh
+  printf 'hello\n' > f; hook(){ printf HOOK; }; READNULLCMD=hook; <f; printf "[st=%s]" "$?"
+  ```
+- `redir/the-null-command-writes-where-the-command-would` — the writing half, and the half a stdout comparison cannot see: the hook runs with its output already redirected, so what it prints lands in the file rather than on the terminal. The file exists in all six — a redirection with no command still opens and truncates — and only one of them has anything in it
+  ```sh
+  hook(){ printf HOOK; }; NULLCMD=hook; >g; printf "[g=%s][st=%s]" "$(cat g)" "$?"
+  ```
+- `redir/the-reading-parameter-is-the-lone-input-redirection` — which of the two parameters answers, spelling by spelling. One input redirection and nothing else takes the reading one whatever descriptor it names, so `<f` and `3<f` agree; anything beside it — here an error redirection, written both after and before — takes the writing one, and prints its marker because only standard error was moved. Two markers rather than one because the defaults both end up printing the file, so a single marker cannot tell the routes apart. The five columns without the hook print nothing at all and separate the three bars
+  ```sh
+  printf 'hello\n' > f; R(){ printf R; }; N(){ printf N; }; READNULLCMD=R; NULLCMD=N; <f; printf "|"; 3<f; printf "|"; <f 2>/dev/null; printf "|"; 2>/dev/null <f
+  ```
+- `redir/a-null-command-with-nothing-in-it-is-refused` — emptying the parameter is not the same as not having it. Five columns have no hook, so the assignment means nothing, the file is made and `after` prints. The sixth refuses the command by name, at 1, *fatally* — nothing after it runs and the file is never made, which says the refusal comes before the redirection rather than after it
+  ```sh
+  NULLCMD=; >g; printf "after"; printf "[made=%s]" "$(test -f g && printf y)"
+  ```
+- `redir/multios-reads-from-every-source` — the other direction of the same option the fan-out row records: a descriptor redirected twice for reading arrives as both files in the order written, where the other five take the last and drop the first silently. One switch over both directions in the shell that has it, which is why it is one axis here — and the reason `$(<f <g)` is not the file-read form: two sources are a different question from one
+  ```sh
+  printf 'a\n' > f; printf 'b\n' > g; printf "[%s]" "$(cat <f <g)"
   ```
 - `heredoc/no-delimiter-and-a-warning` — one shell remarks on a here-document whose delimiter never arrived and three say nothing. The remark is located where the input ran out and names the line the here-document began on, which is two different lines and the reason a parse-time remark carries two positions
   ```sh

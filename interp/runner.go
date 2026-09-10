@@ -2613,6 +2613,34 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		return nil
 	}
 
+	if len(argv) == 0 {
+		// A command that is only redirections runs the dialect's null
+		// command, where the dialect has one. Substituting the word rather
+		// than running it here is the whole of the implementation: the
+		// command then goes through lookup, redirection, tracing and `$_`
+		// exactly as a written one does, which is measured — `set -x; <f`
+		// traces `more`, `$_` becomes `more` afterwards, a name that is not
+		// there is `command not found` at 127, and a file that will not open
+		// stops the command before it runs.
+		name, hooked := r.nullCommand(c)
+		switch {
+		case hooked && name == "":
+			// The hook with nothing in it, which is not the same shell as no
+			// hook: the command is refused by name rather than quietly
+			// opening its files and succeeding, and the refusal abandons the
+			// script rather than leaving a status behind. Measured — `NULLCMD=;
+			// >f; echo after` prints neither `after` nor a file, and the same
+			// line inside `( )` ends the subshell alone. The redirections do
+			// not happen either, which is what says the refusal comes before
+			// them rather than after.
+			r.fatal("%s\n", Wording(r.diag().RedirectionWithNoCommand,
+				"redirection with no command"))
+			return nil
+		case hooked:
+			argv = []string{name}
+		}
+	}
+
 	// `$_` moves to this command's last expanded argument before it runs,
 	// so the command's own expansion saw the previous one's — and a bare
 	// assignment moves it to empty. Tracked unconditionally and cheaply;

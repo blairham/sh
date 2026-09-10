@@ -14,7 +14,7 @@ import (
 
 // A command that redirects one stream twice either fills both files or only
 // the last, and the axis is asked only where there *is* a second one.
-func TestRedirectsWriteToEveryTargetIsAnAxis(t *testing.T) {
+func TestRedirectsUseEveryTargetIsAnAxis(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -26,7 +26,7 @@ func TestRedirectsWriteToEveryTargetIsAnAxis(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			sem := CoreSemantics()
-			sem.RedirectsWriteToEveryTarget = tc.answer
+			sem.RedirectsUseEveryTarget = tc.answer
 			if _, st := run(t, "echo x >a >b", func(r *Runner) {
 				r.Semantics, r.Dir = &sem, dir
 			}); st != 0 {
@@ -47,6 +47,54 @@ func TestRedirectsWriteToEveryTargetIsAnAxis(t *testing.T) {
 	out, _ := run(t, "echo x >a", func(r *Runner) { r.Semantics, r.Dir = &sem, t.TempDir() })
 	if strings.Contains(out, "no dialect was chosen") {
 		t.Errorf("one target: got %q, want no question asked", out)
+	}
+}
+
+// The other direction of the same axis: a descriptor redirected twice for
+// reading is both sources in order, or the last alone.
+//
+// One axis and not two because it is one switch in the shell that has it, so
+// this asserts the *same field* decides both — a second field would be a
+// second place to forget when the option moves.
+func TestRedirectsUseEveryTargetReachesTheReadingSide(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"every source", Yes, "[a\nb]"},
+		{"only the last", No, "[b]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			sem.RedirectsUseEveryTarget = tc.answer
+			out, st := run(t, `printf 'a\n' > f; printf 'b\n' > g; printf "[%s]" "$(cat <f <g)"`,
+				func(r *Runner) { r.Semantics, r.Dir = &sem, t.TempDir() })
+			if st != 0 {
+				t.Fatalf("status %d", st)
+			}
+			if out != tc.want {
+				t.Errorf("out = %q, want %q", out, tc.want)
+			}
+		})
+	}
+
+	// A here-document body is a source like any other, which is measured
+	// rather than assumed: `cat <f <<A` is the file and then the body.
+	sem := CoreSemantics()
+	sem.RedirectsUseEveryTarget = Yes
+	out, _ := run(t, "printf 'a\n' > f\ncat <f <<A\nb\nA\n",
+		func(r *Runner) { r.Semantics, r.Dir = &sem, t.TempDir() })
+	if out != "a\nb\n" {
+		t.Errorf("out = %q, want a here-document body to join the sources", out)
+	}
+
+	// One source needs no answer from anyone.
+	core := CoreSemantics()
+	out, _ = run(t, `printf 'a\n' > f; cat <f`,
+		func(r *Runner) { r.Semantics, r.Dir = &core, t.TempDir() })
+	if strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("one source: got %q, want no question asked", out)
 	}
 }
 

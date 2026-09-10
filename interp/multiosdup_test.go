@@ -28,7 +28,7 @@ func TestADuplicationJoinsTheFanOut(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			sem := CoreSemantics()
-			sem.RedirectsWriteToEveryTarget = tc.answer
+			sem.RedirectsUseEveryTarget = tc.answer
 			out, st := run(t, "echo x >&1 >b", func(r *Runner) {
 				r.Semantics, r.Dir = &sem, dir
 			})
@@ -63,7 +63,7 @@ func TestADuplicationCopiesTheFanOutSoFar(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			sem := CoreSemantics()
-			sem.RedirectsWriteToEveryTarget = tc.answer
+			sem.RedirectsUseEveryTarget = tc.answer
 			if _, st := run(t, "echo x >b >&1", func(r *Runner) {
 				r.Semantics, r.Dir = &sem, dir
 			}); st != 0 {
@@ -91,7 +91,7 @@ func TestATableDescriptorJoinsTheFanOut(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			sem := CoreSemantics()
-			sem.RedirectsWriteToEveryTarget = tc.answer
+			sem.RedirectsUseEveryTarget = tc.answer
 			if _, st := run(t, "echo x 3>c >b >&3", func(r *Runner) {
 				r.Semantics, r.Dir = &sem, dir
 			}); st != 0 {
@@ -114,7 +114,7 @@ func TestACloseEmptiesTheFanOut(t *testing.T) {
 	for _, answer := range []Answer{Yes, No} {
 		dir := t.TempDir()
 		sem := CoreSemantics()
-		sem.RedirectsWriteToEveryTarget = answer
+		sem.RedirectsUseEveryTarget = answer
 		if _, st := run(t, "echo x >b >&- >c", func(r *Runner) {
 			r.Semantics, r.Dir = &sem, dir
 		}); st != 0 {

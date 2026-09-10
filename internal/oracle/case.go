@@ -3521,6 +3521,36 @@ echo "st=$?"`,
 		Why:     "the fork this form is most easily mistaken for. zsh runs a redirection with no command through READNULLCMD, so `<f` at a prompt pages the file — but the substitution does not consult it: with the hook pointed somewhere else the file still reads. The five columns with no such hook show the same value for the same reason, which is that the hook was never on the path",
 	},
 	{
+		ID: "redir/the-null-command-parameters", Category: "redirection",
+		Snippet: `printf "[%s][%s]" "$NULLCMD" "$READNULLCMD"`,
+		Why:     "the two parameters that decide what a command consisting only of redirections runs. One column has them and has them filled in — `cat` and `more`, which is why `<f` at a prompt pages the file and `>g` truncates it with a `cat` that reads nothing — and the other five have no such hook and answer with two unset names. Read rather than exercised on purpose: what `more` prints depends on the machine, and the defaults are a fact about the shell that a row can pin without running either of them",
+	},
+	{
+		ID: "redir/a-command-that-is-only-a-redirection", Category: "redirection",
+		Snippet: `printf 'hello\n' > f; hook(){ printf HOOK; }; READNULLCMD=hook; <f; printf "[st=%s]" "$?"`,
+		Why:     "a command with no name and one input redirection. Five columns open the file, run nothing and report 0; the sixth runs the command the parameter names, which is measurable only because the parameter is pointed at a marker — left at its default the file itself comes out and the two readings agree on the bytes. This is the hook that `$(<file)` is *not*: the row above pins that the substitution ignores the same parameter",
+	},
+	{
+		ID: "redir/the-null-command-writes-where-the-command-would", Category: "redirection",
+		Snippet: `hook(){ printf HOOK; }; NULLCMD=hook; >g; printf "[g=%s][st=%s]" "$(cat g)" "$?"`,
+		Why:     "the writing half, and the half a stdout comparison cannot see: the hook runs with its output already redirected, so what it prints lands in the file rather than on the terminal. The file exists in all six — a redirection with no command still opens and truncates — and only one of them has anything in it",
+	},
+	{
+		ID: "redir/the-reading-parameter-is-the-lone-input-redirection", Category: "redirection",
+		Snippet: `printf 'hello\n' > f; R(){ printf R; }; N(){ printf N; }; READNULLCMD=R; NULLCMD=N; <f; printf "|"; 3<f; printf "|"; <f 2>/dev/null; printf "|"; 2>/dev/null <f`,
+		Why:     "which of the two parameters answers, spelling by spelling. One input redirection and nothing else takes the reading one whatever descriptor it names, so `<f` and `3<f` agree; anything beside it — here an error redirection, written both after and before — takes the writing one, and prints its marker because only standard error was moved. Two markers rather than one because the defaults both end up printing the file, so a single marker cannot tell the routes apart. The five columns without the hook print nothing at all and separate the three bars",
+	},
+	{
+		ID: "redir/a-null-command-with-nothing-in-it-is-refused", Category: "redirection",
+		Snippet: `NULLCMD=; >g; printf "after"; printf "[made=%s]" "$(test -f g && printf y)"`,
+		Why:     "emptying the parameter is not the same as not having it. Five columns have no hook, so the assignment means nothing, the file is made and `after` prints. The sixth refuses the command by name, at 1, *fatally* — nothing after it runs and the file is never made, which says the refusal comes before the redirection rather than after it",
+	},
+	{
+		ID: "redir/multios-reads-from-every-source", Category: "redirection",
+		Snippet: `printf 'a\n' > f; printf 'b\n' > g; printf "[%s]" "$(cat <f <g)"`,
+		Why:     "the other direction of the same option the fan-out row records: a descriptor redirected twice for reading arrives as both files in the order written, where the other five take the last and drop the first silently. One switch over both directions in the shell that has it, which is why it is one axis here — and the reason `$(<f <g)` is not the file-read form: two sources are a different question from one",
+	},
+	{
 		ID: "exec/a-command-is-named-as-it-was-written", Category: "commands",
 		Snippet: `basename --bad 2>&1 | head -1`,
 		Why:     "a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else",

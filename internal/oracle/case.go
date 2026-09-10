@@ -3165,6 +3165,26 @@ echo "st=$?"`,
 		Why:     "the reason the construct exists: two commands compared as though they were files, with no temporary file named anywhere. Two substitutions in one command also have to keep their own pipes, which is exactly what the first attempt got wrong",
 	},
 	{
+		ID: "procsub/a-background-job-outlives-the-body", Category: "redirection",
+		Snippet: `cat <( { printf B; sleep 0.2; printf C; } & )`,
+		Why:     "the pipe belongs to the *process* the shell forked for the substitution, so a job that process backgrounds holds a copy and the reader waits for the job rather than for the body — `BC` in all four shells that have the construct. Ours read `B` and then end-of-file, because a body and a job it backgrounds are two goroutines over one descriptor here and the body's return closed it (#1767)",
+	},
+	{
+		ID: "procsub/a-background-job-after-the-body-execs", Category: "redirection",
+		Snippet: `cat <( { printf B; sleep 0.2; printf C; } & exec true )`,
+		Why:     "the shape a prompt theme's asynchronous worker is written in: the body backgrounds its worker and then replaces itself, so what holds the pipe is unambiguously the job and not the body. Same answer as the row above in all four, which is what says the `exec` is not what makes the difference",
+	},
+	{
+		ID: "procsub/a-background-jobs-output-redirected-away", Category: "redirection",
+		Snippet: `cat <( { sleep 0.2; printf X; } >/dev/null & ); echo done`,
+		Why:     "a job that has pointed its own output somewhere else still holds the substitution's pipe: the reader waits the full two hundred milliseconds in all four and then sees nothing. It is the row that says the lifetime is the job's and not the descriptor's current use — reading the redirection to decide would answer at once here and be wrong",
+	},
+	{
+		ID: "procsub/a-command-started-after-the-body-returned", Category: "redirection",
+		Snippet: `cat <( { sleep 0.2; /bin/echo LATE; } & )`,
+		Why:     "the same lifetime reached through an *external* command rather than a builtin, so what has to still be there when the job starts it is a descriptor to hand the child. A shell that closed the end on the body's return has nothing to give it",
+	},
+	{
 		ID: "procsub/a-redirection-where-a-target-belongs", Category: "redirection",
 		SyntaxError: true,
 		Snippet:     `cat < < x; echo "st=$?"`,

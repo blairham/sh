@@ -3611,6 +3611,9 @@ reason: `${$((6*7))[1]}`.
     ParamSplitFlag         ${=x}, the split-into-words flag — zsh only
     ParamSetTestFlag       ${+x}, the is-it-set count — zsh only
     ParamElementSelection  ${a:#pat} ${a:|b} ${a:*b} — zsh only
+    ParamWholeElementReplace
+                           ${a:/pat/rep}, the same family's fourth
+                           operator — zsh only
     BareSubscript          $a[1] and $#a, written without braces — zsh only
     ArraySubscriptFlags    ${a[(re)v]}, a flag group inside the brackets
                            — zsh only
@@ -3627,8 +3630,8 @@ reason: `${$((6*7))[1]}`.
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
 `ParamTransformations`, `ParamExpansionFlags`, `ParamTildeFlag`,
-`ParamSplitFlag`, `ParamSetTestFlag` and
-`ParamElementSelection` are false for `core`:
+`ParamSplitFlag`, `ParamSetTestFlag`, `ParamElementSelection` and
+`ParamWholeElementReplace` are false for `core`:
 the first and the last two are one shell's, and the `!` family is two
 shells' — neither is a common denominator. `BareSubscript` is false for
 both, and for the same reason as `ParamExpansionFlags`: one shell reads

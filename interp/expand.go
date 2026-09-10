@@ -1632,7 +1632,16 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	// function expands the inner: asking twice would run a command
 	// substitution in there twice.
 	if e.Length && e.Inner != nil {
+		// Measured rather than used, which the inner has to know: a
+		// substitution in the name position is not field-split under a
+		// length. See nestedInnerSplit, and note that the flag has to reach
+		// the inner's *own* inner — `${#${(o)$(cmd)}}` measures a name
+		// position two levels down — which is why it is a runner flag and
+		// not an argument.
+		prev := r.nestedLength
+		r.nestedLength = true
 		words, _, isList := r.nestedWords(e)
+		r.nestedLength = prev
 		if isList {
 			return itoa(len(words))
 		}
@@ -4028,8 +4037,8 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 	if parts, ok := r.expandAt(span, sp, true); ok {
 		words = parts
 	} else {
-		text, _ := r.expandSpan(span, splitNever, true)
-		words = []string{text}
+		text, split := r.expandSpan(span, sp, true)
+		words = r.nestedInnerSplit(text, split)
 	}
 	// The marks come off once, whichever half produced the fields. The inner
 	// is an operand rather than a field of the command line, so a `*` in its
@@ -4037,6 +4046,46 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 	// pattern the shell is about to escape for someone: leaving them on
 	// answered `${${v}}` on `a*b` with a backslash in it.
 	return unescapeAll(words)
+}
+
+// nestedInnerSplit is the field splitting an inner substitution's *text* is
+// subject to, which is the one thing the name position gets from the word
+// around it.
+//
+// The position holds fields — a bare array name in it is the elements, not
+// the join — and a substitution written there without quotes is a
+// substitution like any other, so what it comes to is split on `$IFS` before
+// the outer half ever sees it. Measured 2026-09-10 on zsh 5.9.2, where
+// `printf` is the instrument and `echo` cannot see the difference:
+//
+//	printf "[%s]" ${$(printf "a b")}          [a][b]
+//	printf "[%s]" "${$(printf "a b")}"        [a b]
+//	f(){ print "b b"; print "a a"; print c; }
+//	a=( ${(o)$(f)} ); print $#a               5
+//	a=( ${(oj:-:)$(f)} ); print -r -- $a      b-b-a-a-c
+//
+// so the flags are handed five fields and not one string holding newlines —
+// which is what `(o)` sorts and `(j)` joins. A shell that hands them one
+// field sorts nothing and joins nothing, and every one of those spellings is
+// then the value it started with. That is what left a completion dump's
+// `autoload` line with no names on it (#1697): the line is built from
+// `$^fpath/(${(o~j.|.)$(typeset +fm '_*')})(N:t)`, whose alternation is the
+// join, and one field holding newlines is a pattern that matches no file.
+//
+// The quoted spelling is a different program and is already right: an inner
+// with quotes of its own comes to one field, which is what
+// nestedInnerSpan's splitNever says and what `${(@f)"$(cmd)"}` exists for.
+// So the policy is the one that reached here rather than a fresh decision,
+// and `split` is what expandSpan reports about *this* span — the axis for a
+// command substitution and the axis for a parameter, asked where they
+// differ rather than assumed to agree.
+
+func (r *Runner) nestedInnerSplit(text string, split bool) []string {
+	if !split || r.nestedLength {
+		return []string{text}
+	}
+	ifs, set := r.ifs()
+	return r.splitFieldsAsk(text, ifs, set)
 }
 
 // unescapeAll takes the glob marks off every field, for a caller that wants

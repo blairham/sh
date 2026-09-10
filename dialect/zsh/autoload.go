@@ -41,26 +41,49 @@ import (
 // searching again.
 //
 // The one place this shows its own workings is `functions NAME` on a name
-// that has not been called yet. zsh prints a stub of its own —
-// `builtin autoload -XUz`, where `-X` means "replace the function I am
-// running in" and the shell then re-enters it — and that re-entry is
-// interpreter machinery rather than anything a body can say. The stub here
-// says the same thing in the language it has: load, and then call what was
-// loaded. The *behavior* is the same and the text is not, which is a
-// difference a corpus row records rather than one to paper over.
-
-// autoloadStubBody is what an undefined autoloaded name runs when it is
-// called: resolve it, and then call what the resolution defined.
+// that has not been called yet, and what stands there is **the letters the
+// declaration was given, recorded**. Measured 2026-09-10 on zsh 5.9.2 with a
+// file for `f1` on `$fpath` and the name never called:
 //
-// `+X` replaces this very function, so the call that follows reaches the
-// loaded body rather than this one — a lookup happens per call, not per
-// definition. It cannot recurse: `+X` either replaces the definition or
-// fails, and `&&` stops on the failure. A file that defines nothing leaves
-// an empty body, which is a call that does nothing rather than a loop.
-const autoloadStubBody = "builtin autoload +X %s && %s \"$@\""
+//	autoload -Uz f1     f1 () {\n\t# undefined\n\tbuiltin autoload -XUz\n}
+//	autoload -zU f1     the same — the order is canonical, not the one written
+//	autoload -UU f1     builtin autoload -XU — and the letters are a set
+//	autoload    f1      builtin autoload -X
+//	autoload -r  f1     builtin autoload -X /the/dir/it/resolved/in
+//	autoload -RUz f1    builtin autoload -XUz /the/dir/it/resolved/in
+//
+// so `-X` there is not decoration: it is the same builtin, called with no
+// name, acting on the function it is running inside — which is exactly what
+// autoloadResolveNow already does for a hand-written `-X`, and the directory
+// operand is the `-r` half of that. The stub is therefore the real thing
+// rather than a text arranged to look like it: it runs, it is what a script
+// reads back, and the two cannot drift apart because there is only one of
+// them.
+//
+// It was `builtin autoload +X NAME && NAME "$@"` — a re-exec written out
+// longhand — which behaved correctly and read as something no zsh ever wrote.
+// That is not only cosmetic. A completion dump names every autoloaded
+// completion function, and the thing that reads a stub back is a *script*
+// (#1697).
+//
+// Two more things the same measurement settles, and both are why the text
+// here is not simply printed from the tree:
+//
+//   - `# undefined` is not a comment in the body. A function written by hand
+//     with that line first lists without it, because a listing is printed
+//     from the tree and the tree holds no comments. It is the shell saying
+//     what the function is, which is why it arrives through
+//     interp.Runner.SetUndefinedFunctions rather than through the body.
+//   - `$functions[f1]` is a *third* text: `builtin autoload -XU`, with no
+//     indentation, no `# undefined`, and neither the emulation letter nor the
+//     directory. See zshFunctionsView.
 
-// autoloadLetters are the letters this builtin implements, and
-// autoloadUnimplemented the ones zsh has and this shell does not.
+// autoloadStubPrefix opens every stub: the builtin, and the letter that means
+// "act on the function you are running inside".
+const autoloadStubPrefix = "builtin autoload -X"
+
+// autoloadUnimplemented are the letters zsh has and this shell does not. The
+// ones it does have are the cases of autoloadOptions' switch.
 //
 // zsh's set, measured a letter at a time against all fifty-two: it has
 // `d k m r R t T U w W X z` and refuses every other one as `bad option`. So
@@ -68,11 +91,13 @@ const autoloadStubBody = "builtin autoload +X %s && %s \"$@\""
 // answer and the seven that do not:
 //
 //   - `-U` suppresses alias expansion while the file is read and `-z` picks
-//     zsh-style parsing. Both are accepted and neither changes anything: an
+//     zsh-style parsing. Neither changes what this shell *does*: an
 //     autoloaded file is parsed with this shell's own grammar, which is
 //     zsh's, and aliases are not expanded in it either way. Accepted rather
 //     than refused because every real script writes `-Uz` and refusing it
-//     would fail the line for a distinction with no effect here.
+//     would fail the line for a distinction with no effect here — and
+//     **recorded**, because the stub is the letters and a script reads them
+//     back off it.
 //   - `-X` and `+X` resolve now rather than at the call.
 //   - `-r` and `-R` fix the *path* now rather than at the call. See
 //     autoloadFixPath for what the two of them are measured to do and how
@@ -81,17 +106,32 @@ const autoloadStubBody = "builtin autoload +X %s && %s \"$@\""
 //     forms), `-w`/`-W` (read a compiled `.zwc` file) are named as missing.
 //     Each is a thing this shell does not do, and a builtin that took the
 //     letter and dropped it would read as one that did.
-const (
-	autoloadLetters       = "UzXrR"
-	autoloadUnimplemented = "dkmtTwW"
-)
+const autoloadUnimplemented = "dkmtTwW"
 
 func registerAutoload(r *interp.Runner) {
 	r.Register("autoload", autoloadBuiltin)
+	// A listing is not the body printed back for a name still waiting to be
+	// defined — see the note above autoloadStubPrefix, and
+	// interp.Runner.SetUndefinedFunctions for the seam.
+	r.SetUndefinedFunctions(func(name string) (string, bool) {
+		line, ok := autoloadStubLine(r, name)
+		if !ok {
+			return "", false
+		}
+		indent := FunctionLayout().Indent
+		return "{\n" + indent + "# undefined\n" + indent + line + "\n}", true
+	})
 }
 
 // autoloadOpts is what the letters asked for.
 type autoloadOpts struct {
+	// keepAliases is `-U` and zshParse is `-z`. Neither changes what this
+	// shell does — an autoloaded file is parsed with this grammar and no
+	// alias is expanded in it either way — but both are *recorded*, because
+	// the stub a declaration writes is the letters it was given and a script
+	// reads them back. See autoloadStubPrefix.
+	keepAliases bool
+	zshParse    bool
 	// now is `-X` or `+X`: resolve at once instead of at the call.
 	now bool
 	// plus records which sign `X` was written with, because they name
@@ -134,28 +174,35 @@ func autoloadBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 			// over a real body is not a note about the name, it is losing it.
 			continue
 		}
-		if !r.DefineFunction(name, autoloadStub(name)) {
+		// The path is fixed *before* the stub is written, because a fixed
+		// path is part of the stub: `autoload -r f` lists as
+		// `builtin autoload -X <dir>`, so the search has to have happened
+		// for there to be a directory to write. A plain declaration says
+		// "search at the call" instead, and a name declared with `-r` once
+		// and plainly afterwards must not keep answering from the first
+		// declaration's file.
+		dir := ""
+		if opts.fixPath {
+			code, path := autoloadFixPath(r, name, opts.strict)
+			if code != 0 {
+				// Carried rather than returned, because `autoload -R a b`
+				// has two names to answer for and stopping at the first
+				// would leave the second undeclared. zsh ends the script
+				// here instead; that is the same difference `autoloadBad`
+				// records, and for the same reason.
+				status = code
+			}
+			dir = path
+		} else {
+			autoloadForgetPath(r, name)
+		}
+		if !r.DefineFunction(name, autoloadStub(opts, dir)) {
 			// The stub is this file's own text, so a name it cannot be
 			// written around is a name that is not a name.
 			r.Diagnosef("not valid in this context: %s\n", name)
 			return 1
 		}
 		autoloadRecord(r, name)
-		if !opts.fixPath {
-			// A plain declaration says "search at the call", and a name
-			// declared with `-r` once and plainly afterwards must not keep
-			// answering from the first declaration's file.
-			autoloadForgetPath(r, name)
-			continue
-		}
-		if code := autoloadFixPath(r, name, opts.strict); code != 0 {
-			// Carried rather than returned, because `autoload -R a b` has
-			// two names to answer for and stopping at the first would leave
-			// the second undeclared. zsh ends the script here instead; that
-			// is the same difference `autoloadBad` records, and for the same
-			// reason.
-			status = code
-		}
 	}
 	return status
 }
@@ -164,10 +211,11 @@ func autoloadBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 // must leave alone — one with a body of its own rather than one of the stubs
 // this builtin wrote.
 //
-// The exception is the whole of why this is not `FunctionText(name)`: the
-// generated stub resolves itself with `+X NAME`, and the name it names is a
-// function at that moment — itself. A guard that did not know the difference
-// would refuse every autoload the moment it was called.
+// The exception is the whole of why this is not `FunctionText(name)`: a name
+// waiting to be defined *is* a function already — the stub is the record —
+// so a guard that did not know the difference would refuse every second
+// declaration of the same name, and turn the stub a plugin manager rewrites
+// on every reload into a function nothing can load.
 func autoloadDefined(r *interp.Runner, name string) bool {
 	if _, ok := r.FunctionText(name); !ok {
 		return false
@@ -175,9 +223,92 @@ func autoloadDefined(r *interp.Runner, name string) bool {
 	return !autoloadPending(r, name)
 }
 
-// autoloadStub is the body a name is given until it is called.
-func autoloadStub(name string) string {
-	return strings.ReplaceAll(autoloadStubBody, "%s", name)
+// autoloadStub is the body a name is given until it is called: the letters the
+// declaration was given, in zsh's canonical order, and the directory a `-r`
+// or `-R` settled on.
+//
+// The order is the shell's and not the one written — measured, `-zU` and `-Uz`
+// both list as `-XUz` — and repeated letters collapse, because what is
+// recorded is a set. Only the two letters this builtin implements can reach
+// here; `-t` and the rest are refused as unimplemented before a stub is
+// written, which is why there is no case for them.
+func autoloadStub(opts autoloadOpts, dir string) string {
+	body := autoloadStubPrefix
+	if opts.keepAliases {
+		body += "U"
+	}
+	if opts.zshParse {
+		body += "z"
+	}
+	if dir != "" {
+		body += " " + autoloadStubWord(dir)
+	}
+	return body
+}
+
+// autoloadStubWord is a directory as the stub writes it.
+//
+// zsh writes the recorded string with nothing done to it, and this does the
+// same for every path that survives being read back — which is the whole of
+// what a path on `$fpath` normally is. A path holding something the grammar
+// would take apart is single-quoted instead, and that is a deliberate
+// divergence in a corner the measurement does not reach: the stub is a body
+// this shell runs, so a `$fpath` entry with a space in it must not become two
+// operands and `autoload: -X: too many arguments` at the first call.
+func autoloadStubWord(dir string) string {
+	if dir != "" && strings.IndexFunc(dir, autoloadStubNeedsQuoting) < 0 {
+		return dir
+	}
+	return "'" + strings.ReplaceAll(dir, "'", `'\''`) + "'"
+}
+
+// autoloadStubNeedsQuoting reports whether one character of a path would not
+// survive being read back as a bare word.
+func autoloadStubNeedsQuoting(c rune) bool {
+	switch {
+	case c >= '0' && c <= '9', c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z':
+		return false
+	case c == '/', c == '.', c == '_', c == '-', c == '+', c == ':', c == '@',
+		c == '%', c == ',':
+		return false
+	}
+	return true
+}
+
+// autoloadStubLine is the stub a name currently holds, as one line and with
+// the listing's indentation taken off — the text `# undefined` stands above
+// and the text `$functions` reduces. A name that is not waiting to be defined
+// has no stub.
+func autoloadStubLine(r *interp.Runner, name string) (string, bool) {
+	if !autoloadPending(r, name) {
+		return "", false
+	}
+	body, ok := r.FunctionBodyText(name)
+	if !ok {
+		return "", false
+	}
+	return strings.TrimSpace(body), true
+}
+
+// autoloadBodyValue is what `$functions` holds for a name still waiting to be
+// defined, which is a third text again and measured rather than derived:
+// `autoload -Uz f1` lists as `builtin autoload -XUz` and reads back through
+// the association as `builtin autoload -XU`, with no indentation, no
+// `# undefined`, and no directory however the declaration was written.
+//
+// So the emulation letter and the operand come off, and `-U` stays.
+func autoloadBodyValue(r *interp.Runner, name string) (string, bool) {
+	line, ok := autoloadStubLine(r, name)
+	if !ok {
+		return "", false
+	}
+	fields := strings.Fields(line)
+	if len(fields) < 3 {
+		// `builtin autoload -X` with nothing after it, which is a plain
+		// declaration and already the value.
+		return line, true
+	}
+	return fields[0] + " " + fields[1] + " " + strings.TrimSuffix(fields[2], "z"), true
 }
 
 // autoloadOptions reads the leading option words. The plus sign is an option
@@ -205,9 +336,13 @@ func autoloadOptions(r *interp.Runner, args []string) (opts autoloadOpts, rest [
 				// stricter of the two.
 				opts.fixPath = true
 				opts.strict = opts.strict || letter == 'R'
-			case strings.IndexByte(autoloadLetters, letter) >= 0:
-				// `-U` and `-z`, which this shell answers by parsing the way
-				// it already parses.
+			case letter == 'U':
+				// Accepted and recorded rather than accepted and dropped:
+				// this shell answers `-U` by parsing the way it already
+				// parses, and the stub still has to say it was asked for.
+				opts.keepAliases = true
+			case letter == 'z':
+				opts.zshParse = true
 			case strings.IndexByte(autoloadUnimplemented, letter) >= 0:
 				r.Diagnosef("-%c is not implemented yet\n", letter)
 				return opts, nil, 1
@@ -228,25 +363,39 @@ func autoloadOptions(r *interp.Runner, args []string) (opts autoloadOpts, rest [
 // top level where there is no function to be inside of.
 func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts, names []string) int {
 	if !opts.plus {
-		// `-X` names no function: it acts on the one it is running inside,
-		// and an operand is `bad autoload` rather than a name to resolve —
-		// measured, `autoload -X foo` says it at the top level as much as
-		// `autoload -X` alone does.
-		if len(names) > 0 {
-			return autoloadBad(r)
+		// `-X` names no *function*: it acts on the one it is running inside.
+		// What it may take is a single **directory** to look in, which is
+		// what a `-r` declaration's stub carries — measured on zsh 5.9.2
+		// with `other/gf` and `fns/gf` both readable and `fpath=(fns)`:
+		//
+		//	gf() { builtin autoload -XU other; print "AFTER $?" }
+		//	gf a b        OTHER body a b / AFTER 0
+		//
+		// so the operand wins over `$fpath` outright, and a directory with
+		// no such file there is `gf: function definition file not found`
+		// rather than a search that carries on. Two operands are
+		// `autoload: -X: too many arguments`, and any operand at all at the
+		// top level is `bad autoload` — there is no function for it to be
+		// about, which is the failure that comes first.
+		if len(names) > 1 {
+			r.Diagnosef("-X: too many arguments\n")
+			return 1
 		}
 		name, ok := autoloadEnclosingFunction(r)
 		if !ok {
 			return autoloadBad(r)
 		}
-		if code := autoloadResolve(r, name); code != 0 {
+		if code := autoloadResolveIn(r, name, names); code != 0 {
 			return code
 		}
 		return autoloadRunResolved(r, ctx, name)
 	}
-	// `+X` with nothing to resolve is silence and 0 — measured, and not the
-	// same answer as the minus sign with nothing, which is the tell that the
-	// two signs are two commands rather than one with a flag.
+	if len(names) == 0 {
+		// `+X` with nothing to resolve lists, the same as a bare
+		// declaration — measured, `autoload +X` alone writes every stub out
+		// exactly as `autoload` does.
+		return autoloadListing(r)
+	}
 	status := 0
 	for _, name := range names {
 		if autoloadDefined(r, name) {
@@ -365,6 +514,26 @@ func autoloadEnclosingFunction(r *interp.Runner) (string, bool) {
 // is a search that goes on rather than a failure, which is what makes a
 // stale entry harmless.
 func autoloadResolve(r *interp.Runner, name string) int {
+	return autoloadResolveIn(r, name, nil)
+}
+
+// autoloadResolveIn is that with the directory a `-X` was given, where it was
+// given one: the operand replaces the search rather than joining it, so a
+// name that is not in that one directory is not found however much of
+// `$fpath` would have had it.
+func autoloadResolveIn(r *interp.Runner, name string, dirs []string) int {
+	if len(dirs) == 1 {
+		body, err := os.ReadFile(filepath.Join(dirs[0], name))
+		if err != nil {
+			r.DiagnoseAsTheShellf("%s: function definition file not found\n", name)
+			return 1
+		}
+		if !r.DefineFunction(name, string(body)) {
+			r.DiagnoseAsTheShellf("%s: bad function definition\n", name)
+			return 1
+		}
+		return 0
+	}
 	body, ok := autoloadFile(r, name)
 	if !ok {
 		// Not the builtin speaking: measured, this message never carries
@@ -441,16 +610,16 @@ func autoloadFile(r *interp.Runner, name string) (string, bool) {
 //     leaves an ordinary deferred autoload behind. `-R` is the same
 //     declaration with the failure reported —
 //     `nosuchfn: function definition file not found`, status 1.
-func autoloadFixPath(r *interp.Runner, name string, strict bool) int {
+func autoloadFixPath(r *interp.Runner, name string, strict bool) (int, string) {
 	path, ok := autoloadSearch(r, name)
 	if !ok {
 		if strict {
 			// The function's own complaint, not the builtin's, which is what
 			// autoloadResolve says it for the same words at the call.
 			r.DiagnoseAsTheShellf("%s: function definition file not found\n", name)
-			return 1
+			return 1, ""
 		}
-		return 0
+		return 0, ""
 	}
 	paths, _ := r.GetAssoc(autoloadPathStore)
 	if paths == nil {
@@ -458,7 +627,10 @@ func autoloadFixPath(r *interp.Runner, name string, strict bool) int {
 	}
 	paths[name] = path
 	r.SetAssoc(autoloadPathStore, paths)
-	return 0
+	// The *directory*, which is what the stub carries and what a fixed path
+	// is really about — measured, `autoload -r f` lists as
+	// `builtin autoload -X <dir>` and never as the file.
+	return 0, filepath.Dir(path)
 }
 
 // autoloadForgetPath drops a name's fixed path, so the next call searches.
@@ -549,13 +721,22 @@ func autoloadRecord(r *interp.Runner, name string) {
 
 // autoloadPending reports whether a name is one this builtin marked and
 // nothing has defined since.
+//
+// Both halves are needed and neither is enough. The set alone would still say
+// yes after the file was read, since a name is not taken out of it; the body
+// alone would say yes for a function somebody wrote by hand around a `-X`,
+// which is a spelling real plugin loaders write (see autoloadRunResolved).
 func autoloadPending(r *interp.Runner, name string) bool {
 	names, _ := r.GetArray(autoloadStore)
 	if !containsWord(names, name) {
 		return false
 	}
-	text, ok := r.FunctionText(name)
-	return ok && strings.Contains(text, "builtin autoload +X "+name)
+	body, ok := r.FunctionBodyText(name)
+	if !ok {
+		return false
+	}
+	body = strings.TrimSpace(body)
+	return !strings.ContainsRune(body, '\n') && strings.HasPrefix(body, autoloadStubPrefix)
 }
 
 // autoloadStore is the set of names this builtin has marked, in the Runner's

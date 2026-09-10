@@ -1305,7 +1305,12 @@ func Diagnostics() interp.Diagnostics {
 		SelfName:    "zsh",
 		TypeKeyword: "%[1]s is a reserved word",
 		// The only one that names itself in the line.
-		TypeFunction:           "%[1]s is a shell function from zsh",
+		TypeFunction: "%[1]s is a shell function from zsh",
+		// A name declared with `autoload` and not yet called is not an
+		// ordinary function here and does not say it is: measured,
+		// `whence -v myfn` and `type myfn` both write this line, and the
+		// same name after one call writes TypeFunction instead.
+		TypeUndefinedFunction:  "%[1]s is an autoload shell function",
 		TypeNotFound:           "%[1]s not found",
 		TypeNotFoundUnprefixed: true,
 		// And on standard output, which is the other half of treating it as

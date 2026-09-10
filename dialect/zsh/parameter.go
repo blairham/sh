@@ -285,10 +285,22 @@ func registerAbsentParameters(r *interp.Runner) {
 // The body is the lines a listing puts between the braces: tab-indented, no
 // header, no trailing newline. Measured against `f(){ echo hi }`, whose value
 // is exactly `\techo hi`.
+//
+// Except for a function whose body has not been read yet, whose value is not
+// its listing and not the tree either: `autoload -Uz f1` lists three lines and
+// reads back here as the one string `builtin autoload -XU`, unindented. So
+// this asks autoloadBodyValue first.
 func zshFunctionsView(r *interp.Runner) interp.AssocArray {
 	names := r.ListedFuncNames()
 	out := make(interp.AssocArray, len(names))
 	for _, name := range names {
+		if body, ok := autoloadBodyValue(r, name); ok {
+			// A name still waiting to be defined holds a third text, which
+			// is neither its listing nor the tree printed back — see
+			// autoloadBodyValue for the measurement.
+			out[name] = body
+			continue
+		}
 		body, ok := r.FunctionBodyText(name)
 		if !ok {
 			continue

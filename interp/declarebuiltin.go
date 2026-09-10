@@ -1024,8 +1024,17 @@ func (r *Runner) declareFunctions(names []string, namesOnly bool) int {
 // goes through the printer, so the printer's fix does not reach it.
 // Measured 2026-09-08 on bash 5.3.15, bash 3.2.57, zsh 5.9.2 and ksh93u+.
 func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
+	body := syntax.PrintWith(fn.Body, r.functionLayout)
+	if text, ok := r.undefinedFunction(name); ok {
+		// A function whose body has not been read yet does not print its
+		// tree: what stands between the braces is the shell saying what the
+		// function is, and it is not in the tree to be printed. See
+		// SetUndefinedFunctions. The header is still this listing's, so a
+		// name that needs quoting gets it here and in one place.
+		body = text
+	}
 	return Wording(r.diag().FunctionListingHeader, "%[1]s () \n%[2]s",
-		listedFunctionName(name), syntax.PrintWith(fn.Body, r.functionLayout))
+		listedFunctionName(name), body)
 }
 
 // listedFunctionName is the name half of that header, written so the listing

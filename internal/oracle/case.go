@@ -4595,7 +4595,22 @@ echo "st=$?"`,
 	{
 		ID: "param/a-quoted-substitution-in-the-name-position", Category: "parameter expansion",
 		Snippet: `printf "[%s]" ${(@f)"$(printf "a b\nc")"}; echo`,
-		Why:     "`${(@f)\"$(cmd)\"}` is *the* way to split a command's output into an array by line in the shell with the grammar, and it appears throughout real configuration. The quotes are not decoration: quoted, the inner comes to one field and `(f)` splits that on newlines; the same characters *without* them are a different program — `${(@f)$(printf \"a b\\nc\")}` is three fields there, because an unquoted inner is split on IFS before the flag sees it. That spelling has no row of its own: this shell does not split an unquoted inner yet, which is #883's remaining half and is filed, and a row for it would record that gap rather than this one",
+		Why:     "`${(@f)\"$(cmd)\"}` is *the* way to split a command's output into an array by line in the shell with the grammar, and it appears throughout real configuration. The quotes are not decoration: quoted, the inner comes to one field and `(f)` splits that on newlines; the same characters *without* them are a different program, which the row below now measures",
+	},
+	{
+		ID: "param/an-unquoted-substitution-in-the-name-position", Category: "parameter expansion",
+		Snippet: `printf "[%s]" ${$(printf "a b")}; echo; printf "[%s]" ${(@f)$(printf "a b\nc")}; echo`,
+		Why:     "the same characters without the quotes, and a different program: an unquoted substitution standing where a name belongs is split on IFS *before* the outer expansion sees it, so `${$(printf \"a b\")}` is `[a][b]` and not `[a b]`, and `${(@f)$(printf \"a b\\nc\")}` is `[a][b][c]` and not the `[a b][c]` its quoted spelling gives. `echo` cannot see either — two fields print as one line and one field holding a newline prints as two — which is how the divergence stayed hidden, so `printf \"[%s]\"` is the instrument. It is what a completion dump's `autoload` line is built out of: `$^fpath/(${(o~j.|.)$(typeset +fm '_*')})(N:t)` joins the names with `|` to make an alternation, and one field holding newlines is a pattern that matches no file, so the line came out with no names on it and the dump cached nothing (#1697, #976)",
+	},
+	{
+		ID: "param/a-flag-group-over-an-unquoted-substitution", Category: "parameter expansion",
+		Snippet: `f() { printf "b b\na a\nc\n"; }; a=( ${(oj:-:)$(f)} ); printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the fields are what the group works on, which is the half a shell that hands it one string gets silently wrong: five fields sorted and joined is `[a-a-b-b-c]`, where one field holding two newlines sorts to itself and joins to itself and comes out unchanged. Status 0 either way and no diagnostic — the sort and the join are simply no-ops on a single field, which is what makes it worth a row of its own beside the plain unquoted spelling above",
+	},
+	{
+		ID: "param/a-length-does-not-split-the-name-position", Category: "parameter expansion",
+		Snippet: `f() { printf "b  b\na a\nc\n"; }; echo "o=${#${(o)$(f)}} f=${#${(f)$(f)}} n=${#${$(f)}}"`,
+		Why:     "and the context that does *not* split it: under a length the inner comes to one field, so `(o)` sorts nothing and the answer is the ten characters the command printed — `o=10 n=10` — while `(f)` splits that one field on newlines into three elements and the length counts elements rather than characters, `f=3`. The double space is the discriminator and is deliberate: split-then-join would answer 9, which is what the same nine-character reading gives for a payload with single spaces, so a row written with one space could not tell the two apart",
 	},
 	{
 		ID: "param/a-quoted-non-substitution-is-not-a-name", Category: "parameter expansion",
@@ -12988,7 +13003,22 @@ echo "read=[$l]"`,
 	{
 		ID: "autoload/the-two-signs-of-x", Category: "builtins",
 		Snippet: `autoload +X; echo "plus=$?"; autoload -X; echo "minus=$?"`,
-		Why:     "`+X` and `-X` are two commands rather than one letter with a sign: `+X` with nothing to resolve is silence and 0, and `-X` with nothing is `bad autoload` — it means \"the function I am running inside\", so at the top level there is nothing for it to be about. zsh ends the script there and this shell reports and runs on, which the row records",
+		Why:     "`+X` and `-X` are two commands rather than one letter with a sign: `+X` with no operands is the bare declaration's *listing* — nothing is waiting to be defined here, so it is silence and 0 — and `-X` with nothing is `bad autoload`, because it means \"the function I am running inside\" and at the top level there is nothing for it to be about. zsh ends the script there and this shell reports and runs on, which the row records",
+	},
+	{
+		ID: "autoload/the-stub-is-the-letters-it-was-given", Category: "builtins",
+		Snippet: `mkdir -p fp; printf "%s\n" 'echo hi' > fp/sfn; printf "%s\n" 'echo hi' > fp/tfn; fpath=(fp); autoload -Uz sfn; autoload tfn; functions sfn tfn; echo "st=$?"`,
+		Why:     "what a name that has not been called yet *is*, said back: `# undefined` and then `builtin autoload -X` carrying the letters the declaration was given — `-XUz` for `autoload -Uz` and a bare `-X` for `autoload` alone. It is the same builtin with the same meaning, acting on the function it is running inside, so the listing is the thing rather than a description of it; a shell that wrote a re-exec of its own there — `builtin autoload +X sfn && sfn \"$@\"` — behaved correctly and read as something no zsh ever wrote, and a completion dump that groups its stubs by that text then matched none of them (#1697). `# undefined` is not a comment in the body: a function written by hand with that line first lists without it, because a listing is printed from a tree and a tree holds no comments",
+	},
+	{
+		ID: "autoload/a-stub-reads-back-as-a-value", Category: "builtins",
+		Snippet: `mkdir -p fp; printf "%s\n" 'echo hi' > fp/sfn; fpath=(fp); autoload -Uz sfn; echo "[${functions[sfn]}]"; sfn; echo "[${functions[sfn]}]"`,
+		Why:     "the same stub through the association, which is a *third* text: `builtin autoload -XU` — unindented, without `# undefined`, and without the `z` the listing carries — where an ordinary function's value is its body tab-indented. So the two surfaces are measured separately rather than one derived from the other, and the second half of the row is the same name after one call, whose value is the body the file gave it",
+	},
+	{
+		ID: "autoload/an-undefined-function-says-it-is-one", Category: "builtins",
+		Snippet: `mkdir -p fp; printf "%s\n" 'echo hi' > fp/sfn; fpath=(fp); autoload -Uz sfn; g() { echo g; }; whence -v sfn; whence -v g`,
+		Why:     "and the sentence that goes with it: a name waiting to be defined is `sfn is an autoload shell function` where an ordinary one is `g is a shell function`, so the row carries its own control. Two shells have the notion and neither wording is the other's — ksh93 says `sfn is an undefined function` — so it is a dialect's table rather than anything shared, asked through the same bookkeeping that decides how the stub lists. The same name *after* a call is deliberately not asked here: zsh names the file it was loaded from there, which is a different surface with a gap of its own, and a row for it would record that rather than this",
 	},
 	{
 		ID: "autoload/a-letter-the-builtin-does-not-have", Category: "builtins",

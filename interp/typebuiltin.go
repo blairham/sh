@@ -219,6 +219,21 @@ func (r *Runner) typeBarePath(name string, kind bool) int {
 	return 0
 }
 
+// typeFunctionLine is the sentence `type` and `command -V` write for a name
+// that is a function: the shell's ordinary wording, or its wording for one
+// whose body has not been read yet.
+//
+// One place, because both callers ask the identical question and a second
+// copy is how the two would come to answer it differently — which is the
+// mistake this tree has made often enough to have a rule about. A shell with
+// no such notion has no second wording either, and falls straight through.
+func (r *Runner) typeFunctionLine(dg Diagnostics, name string) string {
+	if _, undefined := r.undefinedFunction(name); undefined && dg.TypeUndefinedFunction != "" {
+		return Wording(dg.TypeUndefinedFunction, "%[1]s is an undefined function", name)
+	}
+	return Wording(dg.TypeFunction, "%[1]s is a function", name)
+}
+
 // typeAll is `-a`: every resolution the name has — the shell's own answer
 // and then every PATH hit, in PATH order, duplicates and all.
 func (r *Runner) typeAll(name string, m typeMode) int {
@@ -233,7 +248,7 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 			if r.unspecified {
 				return 2
 			}
-			r.printf("%s\n", Wording(dg.TypeFunction, "%[1]s is a function", name))
+			r.printf("%s\n", r.typeFunctionLine(dg, name))
 			if shows {
 				r.printf("%s\n", r.listedFunction(name, fn))
 			}
@@ -323,7 +338,7 @@ func (r *Runner) describeName(name string, kind, skipFuncs bool, notFound string
 		if r.unspecified {
 			return 2
 		}
-		r.printf("%s\n", Wording(dg.TypeFunction, "%[1]s is a function", name))
+		r.printf("%s\n", r.typeFunctionLine(dg, name))
 		if shows {
 			// The function itself, laid out rather than quoted: the tree is
 			// what this shell has, and the spelling it was written with is

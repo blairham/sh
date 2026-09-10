@@ -12881,6 +12881,46 @@ echo "read=[$l]"`,
 		Why:     "and it is the *call* that is restored rather than the emulation's own changes: an option set later in the same function goes back too, which is the whole of what the option is for and the half a snapshot taken after the emulation would miss",
 	},
 	{
+		ID: "emulate/dash-l-covers-a-setopt-before-it", Category: "builtins",
+		Snippet: `f() { setopt extendedglob; emulate -L zsh; }; f; [[ -o extendedglob ]]; echo "out=$?"`,
+		Why:     "what is saved is the table as the *body* started, not as the `emulate` line ran, so an option moved before the letter is restored too. The other half of dash-l-covers-a-later-setopt, and the two together say the save is the call's rather than the builtin's",
+	},
+	{
+		ID: "emulate/dash-l-at-the-top-level-leaves-the-option-on", Category: "builtins",
+		Snippet: `emulate -L zsh; [[ -o localoptions ]]; echo "lo=$?"; f() { setopt extendedglob; }; f; [[ -o extendedglob ]]; echo "out=$?"`,
+		Why:     "`-L` is LOCAL_OPTIONS and nothing besides. Outside a function there is no call to return from, so the option is simply left on — and the next function call localizes, though it never mentions the option. That is what says the letter and `setopt localoptions` are one mechanism rather than two",
+	},
+	{
+		ID: "setopt/localoptions-restores-on-return", Category: "builtins",
+		Snippet: `f() { setopt localoptions extendedglob; }; f; [[ -o extendedglob ]]; echo "out=$?"`,
+		Why:     "the option a function changes goes back when it returns, which is what a prompt theme and a plugin manager write at the top of every function they define. extendedglob because it is off by default: an option already on could not tell restored from never moved",
+	},
+	{
+		ID: "setopt/localoptions-covers-an-earlier-setopt", Category: "builtins",
+		Snippet: `f() { setopt extendedglob; setopt localoptions; }; f; [[ -o extendedglob ]]; echo "out=$?"`,
+		Why:     "the table is saved when the body starts rather than when the option is asked for, so a change made *before* that line is restored too. The row that rules out the obvious reading, which is that the option starts a scope where it appears",
+	},
+	{
+		ID: "setopt/localoptions-is-asked-at-the-return", Category: "builtins",
+		Snippet: `setopt localoptions; f() { unsetopt localoptions; setopt extendedglob; }; f; [[ -o extendedglob ]]; echo "kept=$?"; [[ -o localoptions ]]; echo "lo=$?"`,
+		Why:     "whether to restore is decided at the return, not at the entry: a function that turns the option back off keeps everything it moved. Written with the option on *globally*, which is the only arrangement that can tell this from the option never having been on — and it also shows the second half, that `localoptions` itself comes back although nothing else did",
+	},
+	{
+		ID: "setopt/localoptions-restores-at-each-nested-return", Category: "builtins",
+		Snippet: `i() { setopt extendedglob; }; o() { setopt localoptions; i; [[ -o extendedglob ]]; echo "inner=$?"; }; o; [[ -o extendedglob ]]; echo "out=$?"`,
+		Why:     "every call saves a table of its own and asks the same question at its own return, so an inner function that never mentions the option still restores — while the outer one is still running — because the option is on when it returns. Nesting is not a special case, which is the point",
+	},
+	{
+		ID: "setopt/without-localoptions-a-change-leaks", Category: "builtins",
+		Snippet: `i() { setopt extendedglob; }; o() { i; }; o; [[ -o extendedglob ]]; echo "out=$?"`,
+		Why:     "the control for the four rows above: with nothing asking for the scoping the change survives the call, so those rows are the option working rather than functions never leaking anything",
+	},
+	{
+		ID: "setopt/localoptions-does-not-reach-traps", Category: "builtins",
+		Snippet: `f() { setopt localoptions; trap 'echo hit' USR1; }; f; trap`,
+		Why:     "options and traps are two questions with two option names — `localoptions` and `localtraps` — and the first does not answer the second: the trap the function set is still installed",
+	},
+	{
 		ID: "setopt/no-aliases-stops-the-expansion", Category: "builtins",
 		Script:  true,
 		Snippet: "alias hi='echo expanded'\nhi\nsetopt no_aliases\nhi\nsetopt aliases\nhi\n",

@@ -82,7 +82,7 @@ func TestOptionsLeakWithoutLocalOptions(t *testing.T) {
 	}
 }
 
-// `unsetopt` is localised the same way `setopt` is. `nomatch` is on by
+// `unsetopt` is localized the same way `setopt` is. `nomatch` is on by
 // default, so turning it off is the visible direction.
 func TestLocalOptionsRestoresAnUnsetopt(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
@@ -103,7 +103,7 @@ func TestLocalOptionsRestoresOnAnEarlyReturn(t *testing.T) {
 	}
 }
 
-// The names backed by a semantics axis rather than by a flag are localised
+// The names backed by a semantics axis rather than by a flag are localized
 // too — `ksharrays` moves the array base, and it is 1-based again afterwards.
 func TestLocalOptionsRestoresAnAxisBackedOption(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
@@ -157,14 +157,14 @@ func TestEmulateLRestoresAnOptionMovedBeforeIt(t *testing.T) {
 }
 
 // At the top level there is no call to return from, so `emulate -L` leaves
-// the option on — and the *next* function call localises. Measured, and it is
+// the option on — and the *next* function call localizes. Measured, and it is
 // what says the letter is the option and not a scope of its own.
 func TestEmulateLAtTheTopLevelLeavesTheOptionOn(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
 		`emulate -L zsh; [[ -o localoptions ]] && echo lo_on; `+
 			`f() { setopt extendedglob; }; f; [[ -o extendedglob ]] || echo gone`)
 	if st != 0 || out != "lo_on\ngone\n" {
-		t.Errorf("out %q status %d, want the option left on and the next call localised", out, st)
+		t.Errorf("out %q status %d, want the option left on and the next call localized", out, st)
 	}
 }
 
@@ -191,7 +191,7 @@ func TestTheEmulationModeIsRestoredWithTheTable(t *testing.T) {
 
 // Traps are not options and have an option of their own — measured, `setopt
 // localoptions` leaves a trap the function installed in place.
-func TestLocalOptionsDoesNotLocaliseTraps(t *testing.T) {
+func TestLocalOptionsDoesNotLocalizeTraps(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),
 		`f() { setopt localoptions; trap 'echo hit' USR1; }; f; trap`)
 	if st != 0 || out != "trap -- 'echo hit' USR1\n" {

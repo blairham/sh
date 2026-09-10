@@ -42179,6 +42179,50 @@
         "TimedOut": false
       }
     },
+    "emulate/dash-l-at-the-top-level-leaves-the-option-on": {
+      "bash": {
+        "Stdout": "lo=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "lo=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "lo=1~out=1",
+        "Stderr": "\u003cshell\u003e: emulate: command not found~\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "lo=127~out=127",
+        "Stderr": "\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "lo=1~out=1",
+        "Stderr": "\u003cshell\u003e: emulate: not found~\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "lo=0~out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "emulate/dash-l-covers-a-later-setopt": {
       "bash": {
         "Stdout": "in=1~out=1",
@@ -42217,6 +42261,50 @@
       },
       "zsh": {
         "Stdout": "in=0~out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/dash-l-covers-a-setopt-before-it": {
+      "bash": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: emulate: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "out=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "out=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -100574,6 +100662,226 @@
         "TimedOut": false
       }
     },
+    "setopt/localoptions-covers-an-earlier-setopt": {
+      "bash": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "out=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setopt/localoptions-does-not-reach-traps": {
+      "bash": {
+        "Stdout": "trap -- 'echo hit' SIGUSR1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "trap -- 'echo hit' USR1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "trap -- 'echo hit' SIGUSR1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "trap -- 'echo hit' USR1",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "trap -- 'echo hit' USR1",
+        "Stderr": "\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "trap -- 'echo hit' USR1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setopt/localoptions-is-asked-at-the-return": {
+      "bash": {
+        "Stdout": "kept=1~lo=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: unsetopt: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "kept=1~lo=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: unsetopt: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "kept=1~lo=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: unsetopt: command not found~\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "kept=127~lo=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: unsetopt: not found~\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "kept=1~lo=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: unsetopt: not found~\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "kept=0~lo=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setopt/localoptions-restores-at-each-nested-return": {
+      "bash": {
+        "Stdout": "inner=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "inner=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "inner=1~out=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "inner=127~out=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "inner=1~out=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "inner=1~out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setopt/localoptions-restores-on-return": {
+      "bash": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "out=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "out=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "setopt/no-aliases-stops-the-expansion": {
       "bash": {
         "Stdout": "",
@@ -100921,6 +101229,50 @@
       "zsh": {
         "Stdout": "st=1",
         "Stderr": "\u003cshell\u003e:setopt:1: no such option: no_no_glob",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setopt/without-localoptions-a-change-leaks": {
+      "bash": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "out=127",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "out=1",
+        "Stderr": "\u003cshell\u003e: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "out=0",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

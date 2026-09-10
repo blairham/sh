@@ -626,14 +626,12 @@ func setRecordedDeviation(r *interp.Runner, base string, dev bool) {
 	r.SetArray(zshRecordedStore, out)
 }
 
-// recordedOptions is the store itself, for `emulate` to save and put back.
-func recordedOptions(r *interp.Runner) []string {
-	names, _ := r.GetArray(zshRecordedStore)
-	return append([]string(nil), names...)
-}
-
 // setRecordedOptions replaces the store wholesale, which is how an emulation
-// resets every recorded name to its default at once.
+// resets every recorded name to its default at once and how a saved option
+// table puts one back. The read half is not here: setRecordedDeviation builds
+// a fresh slice on every write rather than sorting the one it found, so a
+// saver can hold the store as it stands instead of copying it — see
+// optionState.
 func setRecordedOptions(r *interp.Runner, names []string) {
 	r.SetArray(zshRecordedStore, names)
 }

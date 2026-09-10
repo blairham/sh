@@ -128,7 +128,7 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 			// `-L` is LOCAL_OPTIONS and nothing besides, which is measured
 			// rather than assumed: inside `emulate -L zsh` the option reads
 			// on, and at the top level — where there is no call to return
-			// from — it stays on afterwards and localises the *next*
+			// from — it stays on afterwards and localizes the *next*
 			// function call. So the letter is one `setopt` and the
 			// function-call machinery does the rest; localoptions.go is
 			// where the rest is, and it is the same machinery `setopt
@@ -137,7 +137,7 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 			// After the emulation rather than before it, because a plain
 			// emulation resets every option to that emulation's default and
 			// `localoptions` defaults off — which is exactly why a bare
-			// `emulate sh` in a function does *not* localise, measured.
+			// `emulate sh` in a function does *not* localize, measured.
 			setLocalOptions(r, true)
 		}
 		return e.applyOptions(r)

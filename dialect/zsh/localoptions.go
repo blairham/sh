@@ -32,7 +32,7 @@ import "github.com/blairham/sh/interp"
 //  5. `emulate -L` is this and nothing else. Measured: inside `emulate -L
 //     zsh` the option reads on, and at the top level — where there is no call
 //     to return from — `emulate -L zsh` leaves it on globally, so the *next*
-//     function call localises. See emulate.go, where the letter is now one
+//     function call localizes. See emulate.go, where the letter is now one
 //     line.
 //
 // Rule 5 is why this file exists rather than a second mechanism beside the
@@ -40,7 +40,7 @@ import "github.com/blairham/sh/interp"
 // unconditionally, which is rules 1 and 2 both slightly wrong; folding the
 // two fixed `f() { setopt extendedglob; emulate -L zsh }` on the way past.
 //
-// What is *not* localised: traps and patterns have options of their own —
+// What is *not* localized: traps and patterns have options of their own —
 // `localtraps` and `localpatterns` — and measured, `setopt localoptions`
 // leaves a trap set in the function installed. The emulation mode travels
 // with the table, because a plain `emulate` resets every option and so turns

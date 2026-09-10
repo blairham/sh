@@ -42,6 +42,24 @@ echo "after=[$v]"`
 	}
 }
 
+// The same rule under the other word, which is a separate route through the
+// runner and not a spelling of the first: `local` has its own declaration
+// loop, and a fix applied to one of them leaves the other letting the
+// attribute out. Both ends again, and the letter typing the local is what
+// says the declaration still works.
+func TestALocalsAttributesAreTheLocalsToo(t *testing.T) {
+	src := `w=plain
+f() { local -i w; w=1+1; echo "in=[$w]"; }
+f
+w=3+4
+echo "after=[$w]"`
+	out, errs, st := declRun(t, src, withAttributeLetters, Diagnostics{})
+	const want = "in=[2]\nafter=[3+4]\n"
+	if out != want || errs != "" || st != 0 {
+		t.Errorf("= %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}
+
 // And the other direction: the cell a scope was just taken for carries none
 // of the attributes the outer name carried, so a value written into it is
 // stored as it was written.

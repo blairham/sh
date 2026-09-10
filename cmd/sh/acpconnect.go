@@ -167,6 +167,21 @@ func interpreter(sh driver.Shell) func(context.Context, acp.TerminalCommand, io.
 			run.Dir = cmd.Dir
 		}
 		run.Env = cmd.Env
+		// The one thing a shell binary wants that this route must not have.
+		// The field is negative so that the zero value suits a binary being a
+		// shell — and here the zero value is exactly backwards: an `exec`
+		// inside the agent's line would replace *this* process, which is the
+		// one serving the connection the agent is talking on, and which is
+		// the process that *is* the boundary. Every gate consultation and
+		// every audit record for the session comes from it, so a replaced one
+		// is not a crashed session but a program of the agent's choosing
+		// holding this process's descriptors with nothing left to consult
+		// (#1795).
+		//
+		// The line still gets its `exec`, as a child — which is what every
+		// other embedder of interp gets by default — and the session survives
+		// it.
+		run.KeepProcess = true
 		return driver.RunCommand(run, cmd.Line, nil)
 	}
 }

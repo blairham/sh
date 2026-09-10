@@ -901,6 +901,9 @@ func (l *Lexer) endsWord(c byte) bool {
 	if c == '\n' && l.newlineIsText() {
 		return false
 	}
+	if isBlank(c) && l.blankIsText() {
+		return false
+	}
 	return c != '(' || (!l.opensPatternGroup() && !l.opensSubscriptFlags())
 }
 
@@ -910,10 +913,51 @@ func (l *Lexer) endsWord(c byte) bool {
 // One position only: inside a `case` arm's parenthesized pattern list, where
 // one dialect reads the whole list as a single alternation word. See
 // Dialect.CasePatternListSpansNewlines, which is where it is measured — and
-// note that a *blank* is unaffected either way, so `(a | b)` is still two
-// alternatives there and only the newline changes hands.
+// note that a blank beside one is a separate question, answered by
+// blankIsText below: `(a | b)` is two alternatives either way.
 func (l *Lexer) newlineIsText() bool {
 	return l.inCaseParenList && l.dialect.CasePatternListSpansNewlines
+}
+
+// blankIsText reports whether a blank here is an ordinary character of the
+// word rather than the end of one.
+//
+// The same position newlineIsText answers for and the same shell, with one
+// difference the newline does not have: a blank is text only where the
+// pattern *continues* after it. A run of blanks in front of the `|` that
+// separates two alternatives, or in front of the `)` that closes the list, is
+// still a separator and is dropped, which is why `(a | b)` is two
+// alternatives here as it is everywhere. See
+// Dialect.CasePatternListSpansBlanks.
+//
+// The lookahead is over the whole run rather than one character, because what
+// decides this is what the run leads *to*: `(a b )` and `(a b |z)` both end
+// their pattern at `a b`, and the blanks that do so are two characters away
+// from the one inside it.
+//
+// An operator after the run leaves the blanks a separator too, so `(a >b)`
+// stays the parse error it is in that shell rather than becoming a pattern
+// with a space on the end. A `(` is the exception, being a pattern group:
+// `(a (b) c)` matches `a b c` there.
+func (l *Lexer) blankIsText() bool {
+	if !l.inCaseParenList || !l.dialect.CasePatternListSpansBlanks {
+		return false
+	}
+	i := l.off
+	for i < len(l.src) && isBlank(l.src[i]) {
+		i++
+	}
+	if i >= len(l.src) {
+		return false
+	}
+	switch c := l.src[i]; c {
+	case '\n':
+		return l.newlineIsText()
+	case '(':
+		return true
+	default:
+		return !l.isWordEnd(c)
+	}
 }
 
 // opensPatternGroup reports whether a `(` here belongs to the word.

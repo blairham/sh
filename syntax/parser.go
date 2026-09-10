@@ -1861,8 +1861,12 @@ func (p *Parser) declarationArray(c *SimpleCmd) (a *Assign, consumed bool) {
 
 // looksLikeFuncDef reports whether the current word begins `name()`.
 func (p *Parser) looksLikeFuncDef() bool {
-	// A quoted name is not a definition in any dialect, and quoting is not an
-	// expansion: `'q'() { :; }` is refused here as it was before the flag.
+	if p.dialect.FunctionNameIsAnyWord {
+		return p.anyWordFuncDef()
+	}
+	// A quoted name is not a definition in most dialects, and quoting is not
+	// an expansion: `'q'() { :; }` is refused here as it was before the flag.
+	// The one dialect for which it is a definition is the branch above.
 	if p.tok.IsQuoted() {
 		return false
 	}
@@ -1907,6 +1911,38 @@ func (p *Parser) looksLikeFuncDef() bool {
 		return p.lex.peekIsFuncParens()
 	}
 	if !isFuncName(p.tok.Literal(), p.dialect.FunctionNamePunctuation) {
+		return false
+	}
+	return p.lex.peekIsFuncParens()
+}
+
+// anyWordFuncDef is looksLikeFuncDef where the word before the parentheses is
+// the name whatever is in it — see [Dialect.FunctionNameIsAnyWord].
+//
+// Nothing about the *text* decides this, so the parentheses are the whole
+// announcement and there is no name test to fail. The two exclusions are the
+// readings that are not definitions at all rather than names being refused:
+//
+//	a=()        an empty array, and the `=` has to be bare to make one —
+//	            `'a=b'()` and `a\=b()` are definitions of `a=b` there. The
+//	            same lexical test [Dialect.FunctionNameExpands] makes.
+//	a*b()       matched against the filesystem in the shell this models, so
+//	            it defines nothing there and must not define anything here.
+//	            Quoted the characters are ordinary text and are taken.
+func (p *Parser) anyWordFuncDef() bool {
+	if _, isAssign := p.isAssign(p.tok); isAssign {
+		return false
+	}
+	if holdsBarePatternCharacter(p.tok) {
+		return false
+	}
+	if !p.dialect.FunctionNameExpands && tokenHoldsAnExpansion(p.tok) {
+		// A name that is not text until the shell runs is a *different*
+		// flag's question, and without that flag there is nowhere to keep the
+		// word: [FuncDecl.Name] would take the token's literal spelling, so
+		// `_p_${w}() { … }` would define `_p_w` — a perfectly good name for a
+		// perfectly wrong function, at status 0. The refusal that stood here
+		// before this flag existed stands still.
 		return false
 	}
 	return p.lex.peekIsFuncParens()

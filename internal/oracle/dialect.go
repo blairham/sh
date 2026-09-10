@@ -41,6 +41,11 @@ func Dialect() syntax.Dialect {
 	// has to *read* every case is the one that takes the construct, which is
 	// the same argument as DollarBracketArith above.
 	d.CasePatternListSpansNewlines = true
+	// `case 'a b' in (a b)` — the arm whose parenthesized pattern holds a
+	// blank. Same shape and same argument as the newline above: one of the
+	// six matches it and the other five call the line a syntax error, and
+	// the corpus records both.
+	d.CasePatternListSpansBlanks = true
 	// `function f() { …; }`, both markers at once.
 	d.FunctionKeywordParens = true
 	// `function '' { … }` — the empty string as a name, which one of the six
@@ -55,6 +60,11 @@ func Dialect() syntax.Dialect {
 	// all of those, so the grammar that has to *read* every case is the one
 	// that takes the construct, as above.
 	d.FunctionMultipleNames = true
+	// `'a b'() { … }` — the POSIX form's name read as any word, which one of
+	// the six defines and four refuse where the definition runs rather than
+	// while reading it. Only dash refuses to parse it, so the grammar that
+	// has to *read* every case is the one that takes the construct, as above.
+	d.FunctionNameIsAnyWord = true
 	// `[[ x == @(a|b) ]]` — extended patterns where a condition reads them.
 	d.ExtendedPatternInCondition = true
 	// One case records `f() echo hi` as a syntax error, which only a

@@ -172,6 +172,16 @@ type printer struct {
 	// raw suppresses escaping of an unquoted literal, for the places where
 	// the punctuation belongs to a pattern rather than to the shell.
 	raw bool
+	// caseBlanks keeps a bare blank in an unquoted literal bare, for the one
+	// place a word may hold one: a `case` arm's parenthesized pattern list,
+	// where the blank is a character of the pattern. Escaping it there
+	// re-parses to the same *text* under a different quoting, which is not
+	// the same tree — and the shell being modeled writes it bare too, its
+	// own `functions` listing printing `(a b)` back.
+	//
+	// Set only where the arm's `(` is written with it, which is what makes
+	// the bare form read back: see patternsNeedTheParen.
+	caseBlanks bool
 	// layout is how a block is arranged, when the caller asked for one, and
 	// depth how many blocks deep the writing has reached.
 	layout Layout
@@ -781,12 +791,18 @@ func (p *printer) caseClause(x *CaseClause) {
 	}
 	p.str(" in ")
 	for _, it := range x.Items {
+		saved := p.caseBlanks
+		p.caseBlanks = patternsNeedTheParen(it)
+		if p.caseBlanks {
+			p.str("(")
+		}
 		for i, pat := range it.Patterns {
 			if i > 0 {
 				p.str("|")
 			}
 			p.word(pat)
 		}
+		p.caseBlanks = saved
 		p.str(") ")
 		p.stmts(it.Body)
 		term := it.Term.String()
@@ -810,7 +826,9 @@ func (p *printer) caseArms(x *CaseClause) {
 	p.depth++
 	for _, it := range x.Items {
 		p.str("\n" + p.pad())
-		if p.layout.CasePatternsParenthesised {
+		saved := p.caseBlanks
+		p.caseBlanks = patternsNeedTheParen(it)
+		if p.layout.CasePatternsParenthesised || p.caseBlanks {
 			p.str("(")
 		}
 		for i, pat := range it.Patterns {
@@ -819,6 +837,7 @@ func (p *printer) caseArms(x *CaseClause) {
 			}
 			p.word(pat)
 		}
+		p.caseBlanks = saved
 		p.str(")")
 		term := it.Term.String()
 		if it.Term == 0 {
@@ -838,6 +857,38 @@ func (p *printer) caseArms(x *CaseClause) {
 	p.depth--
 	p.str("\n" + p.pad() + "esac")
 	p.redirs(x.Redirs)
+}
+
+// patternsNeedTheParen reports whether an arm's opening `(` is load-bearing —
+// whether leaving it out would hand back a different program.
+//
+// The arm's paren is ordinarily optional and the printer drops it, which is
+// the normalisation the round trip is written to allow. It stops being
+// optional where a pattern holds a bare blank: that is a grammar one dialect
+// has only *inside* the parentheses — see
+// [Dialect.CasePatternListSpansBlanks] — so `(a b)` printed as `a b)` is a
+// parse error and `((x) y)` printed as `(x) y)` is worse, being a program
+// that parses to something else.
+//
+// Read off the spans rather than off the source, because it is the *printed*
+// text this is about, and that is also why a newline is not here although
+// [Dialect.CasePatternListSpansNewlines] is the same grammar: the word
+// printer already writes a bare newline back **quoted**, so the paren it
+// would need is one the printed text does not. Asking about it made the
+// print unsettled rather than wrong — the paren went in on the first pass and
+// the quoting took it back out on the second.
+func patternsNeedTheParen(it *CaseItem) bool {
+	for _, w := range it.Patterns {
+		for _, sp := range w.Spans {
+			if sp.Kind != Literal || sp.Quoting != Unquoted {
+				continue
+			}
+			if strings.ContainsAny(sp.Value, " \t") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (p *printer) simple(c *SimpleCmd) {
@@ -1272,6 +1323,10 @@ func (p *printer) literal(s Span) {
 			p.str(s.Value)
 			return
 		}
+		if p.caseBlanks {
+			p.str(escapeBareWith(s.Value, bareEscapedKeepingBlanks))
+			return
+		}
 		p.str(escapeBare(s.Value))
 	}
 }
@@ -1318,7 +1373,18 @@ func escapeIn(s, chars string) string {
 // something else —
 // which cannot appear in an unquoted literal span from this parser, and is
 // escaped anyway because a tree does not have to have come from a parser.
-func escapeBare(s string) string {
+func escapeBare(s string) string { return escapeBareWith(s, bareEscaped) }
+
+// bareEscaped is everything that would end an unquoted word or start
+// something else, and bareEscapedKeepingBlanks is the same set without the
+// two blanks — the one place a word may hold one bare. See printer.caseBlanks.
+const (
+	bareEscaped              = " \t\"'\\$`|&;<>()"
+	bareEscapedKeepingBlanks = "\"'\\$`|&;<>()"
+)
+
+// escapeBareWith is escapeBare over a given set of characters to protect.
+func escapeBareWith(s, protect string) string {
 	if s == "" {
 		return "''"
 	}
@@ -1351,7 +1417,7 @@ func escapeBare(s string) string {
 			i++
 			continue
 		}
-		if strings.IndexByte(" \t\"'\\$`|&;<>()", s[i]) >= 0 {
+		if strings.IndexByte(protect, s[i]) >= 0 {
 			b.WriteByte('\\')
 		}
 		b.WriteByte(s[i])

@@ -518,6 +518,54 @@ type Dialect struct {
 	// not end the word at all, which reaches the lexer.
 	CasePatternListSpansNewlines bool
 
+	// CasePatternListSpansBlanks makes a blank inside a `case` arm's
+	// **parenthesized** pattern list an ordinary character of the pattern
+	// rather than the end of a word — so `(a b)` is the three-character
+	// pattern and not two words, one of which nothing can be done with.
+	//
+	// zsh alone, and the line it is needed for is `VCS_INFO_get_data_git`,
+	// which every prompt drawing a git segment autoloads: line 234 of it is
+	// `(''(x|exec) *)`, a group, a blank and more pattern.
+	//
+	// Measured on zsh 5.9.2, 2026-09-10, `-c` under `env -i`, against
+	// bash 5.3.15 (which is also `sh`), bash 3.2.57, ksh93u+ and dash:
+	//
+	//	case 'a b' in (a b) echo hit;; (*) echo no;; esac
+	//
+	//	zsh 5.9.2   `hit`, status 0
+	//	bash 5.3    `` syntax error near unexpected token `b' ``, status 2
+	//	bash 3.2    the same sentence, status 2
+	//	ksh93       `` syntax error at line 1: `b' unexpected ``, status 3
+	//	dash        `Syntax error: word unexpected (expecting ")")`, 2
+	//
+	// The paren is what licenses it, exactly as it licenses the newline
+	// above: `case 'a b' in a b) …` is `` parse error near `b' `` in zsh too,
+	// so this is a rule about the parenthesized form and not about the
+	// position. That control is what separates it from "a word may follow a
+	// pattern".
+	//
+	// The blanks are **taken verbatim**, which four probes say and no fewer
+	// will: `(a b)` misses `a  b` and misses `ab`, `(a  b)` matches `a  b`,
+	// and `(a<tab>b)` misses `a b` while matching `a<tab>b`. So a run is not
+	// collapsed and a tab is not a space — the pattern is the source text.
+	//
+	// And they are text only where the pattern *continues* after them. A run
+	// of blanks in front of the `|` that separates two alternatives, or in
+	// front of the `)` that closes the list, still separates nothing and is
+	// dropped: `( a b )` matches `a b` and misses ` a b ` and `a b `, and
+	// `(a b |z)` matches `a b`. That is why this is not `isBlank` losing its
+	// meaning inside the list — `(a | b)` is still two alternatives, and it
+	// is two in every shell in the panel.
+	//
+	// The two flags compose the way the shell does. Where a newline is text
+	// as well, a blank beside one is text too: `(a` blank newline blank `b)`
+	// matches exactly that subject and misses `a` newline `b`.
+	//
+	// An operator is still an operator. `(a >b)` is `` parse error near `>' ``
+	// in zsh and the blank before it is no part of any pattern, so this
+	// admits the words a pattern can hold and nothing else.
+	CasePatternListSpansBlanks bool
+
 	// FuncDefAtParen commits to a function definition as soon as a name is
 	// followed by `(`, rather than requiring the `()` pair.
 	//
@@ -674,6 +722,62 @@ type Dialect struct {
 	// ksh93 reads `'q'() { … }` as a definition too and then refuses the
 	// empty name where zsh takes it (#1561).
 	FunctionKeywordNameIsAnyWord bool
+
+	// FunctionNameIsAnyWord is that flag for the POSIX `name()` form:
+	// `'a b'() { … }`, `a\ b() { … }`, `''() { … }`, `'a;b'() { … }` are
+	// definitions, callable by those names, listed by `functions` and
+	// `typeset -f` and removed by `unfunction`.
+	//
+	// Separate from the keyword flag because the panel is a different one and
+	// the two came apart in this parser: the keyword form has taken any word
+	// since #1548, and `name()` refused a quoted word before any name test
+	// was reached — so `function a\ b { … }` defined a function here and
+	// `a\ b() { … }`, the same name, was `` parse error near `(' ``. One
+	// shell writing both spellings could not be read.
+	//
+	// Measured 2026-09-10 from a script file under `env -i`, `a\ b() { echo
+	// b; }; echo after`:
+	//
+	//	zsh 5.9.2   `after`, status 0, nothing on stderr, and `typeset -f`
+	//	            lists the body under `'a b'`
+	//	bash 5.3    `` `a\ b': not a valid identifier `` on stderr, then
+	//	            `after` — refused where it runs, script carries on at 0
+	//	bash 3.2    the same two lines
+	//	bash-as-sh  the same diagnostic and nothing after: fatal, status 2
+	//	ksh93       `a b: invalid function name`, status 1, nothing after
+	//	dash        `Syntax error: Bad function name`, status 2 — the only
+	//	            column that refuses to *parse* it
+	//
+	// So five of the six read the definition and four of those refuse the
+	// *name* where it runs. This parser has no definition-time name check and
+	// [Dialect.FunctionKeywordNameIsAnyWord] records why one is not being
+	// built for the sake of a diagnostic those four already print: the flag
+	// says whether the word is a name, and the five that decline it keep
+	// declining it at their own wording, where they declined it before.
+	//
+	// The quoting is the whole of it, which one control says and no character
+	// class could: `'a;b'()` and `'a|b'()` are names here, and bare those
+	// characters would have ended the word before the parenthesis. The
+	// neighboring control is `'q'()` — an ordinary name in quotes — where
+	// the panel splits *two against four* rather than one against five,
+	// because ksh93 removes the quotes and defines `q`. That is what says the
+	// quoted rows measure the quoting rather than a wider set of characters,
+	// and it is the same #1566 gap the keyword form has.
+	//
+	// The one exception the keyword flag keeps, this one keeps for the same
+	// reason: a name whose *unquoted* literal text holds `*`, `?` or `[` is
+	// still refused, because that shell matches such a word against the
+	// filesystem — `a*b() { :; }` defines nothing and is `no matches found:
+	// a*b` — and a function literally called `a*b` would be a plausible wrong
+	// answer where a refusal is a visible one. Quoted, they are ordinary
+	// text: `'a*b'() { :; }` defines it.
+	//
+	// An assignment is still an assignment. `a=()` is an empty array and not
+	// a definition of a function called `a=`, and the reading is lexical, so
+	// the `=` has to be *bare* to make one: `'a=b'()` and `a\=b()` both
+	// define `a=b` there, and `a[$i]=()` empties an element. That is the same
+	// test [Dialect.FunctionNameExpands] already makes and this shares it.
+	FunctionNameIsAnyWord bool
 
 	// FunctionMultipleNames lets the `function` keyword take more than one
 	// name for one body: `function clipcopy clippaste { … }` defines both,

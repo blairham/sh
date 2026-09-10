@@ -521,23 +521,111 @@ func (p *printer) headerText(from, to int) string {
 			header = strings.Replace(header, c.Text, "", 1)
 		}
 	}
-	// A backslash-newline is a continuation and not part of any word, so it
-	// goes with the line break it hides. Leaving it to strings.Fields makes
-	// the backslash a field of its own and joins it to the word after with a
-	// space, which is an *escaped space* when it is read back: a `function`
-	// header split over lines came out as `function man \\ dman`, and the
-	// names that reparsed from it were ` dman` and ` debman` — a formatted
-	// file that defines different functions from the one it was made from,
-	// at status 0.
-	//
-	// Raw text rather than positions, because a name written as literal text
-	// has no node to take an extent from. The line break inside a quoted word
-	// is beyond what that can see either way — strings.Fields below has
-	// always flattened one — so this narrows a corruption rather than
-	// admitting a new kind.
-	header = strings.ReplaceAll(header, "\\\r\n", " ")
-	header = strings.ReplaceAll(header, "\\\n", " ")
-	return strings.Join(strings.Fields(header), " ")
+	return squeezedHeader(header)
+}
+
+// squeezedHeader is a header's text on one line: every run of whitespace that
+// *separates* words becomes one space, and every other byte is kept.
+//
+// The separating half is what strings.Fields used to do here, and the other
+// half is why it cannot do it any more. A name may hold whitespace — see
+// [syntax.Dialect.FunctionNameIsAnyWord] — and Fields cannot see that it is
+// held rather than separating, so it flattened whatever it found:
+//
+//	a\<tab>b() { … }    came back `a\ b() { … }`, an escaped *space*
+//	'a  b'() { … }      came back `'a b'()`, one space where two were
+//
+// Both of those are a formatted file that defines a different function from
+// the one it was made from, silently, at status 0 — and the file that reaches
+// it is any zsh startup, where a plugin quotes a widget's name with
+// `${(q)…}` and the widget's name has blanks in it.
+//
+// Quoting is tracked byte by byte because that is the only thing separating
+// the two readings; there is no node to take an extent from, a name written
+// as literal text having none.
+//
+// A line continuation is *removed* rather than turned into a space. It is not
+// part of any word and it separates nothing: `function man \` newline
+// `<tab>dman { … }` is two names either way, and the blank before the
+// backslash is what parts them. Turning it into a space instead — which is
+// what stood here — made the backslash a word of its own that Fields then
+// joined to the next with a space, so the header came back as `function man
+// \ dman` and the names that reparsed from it were ` dman` and ` debman`.
+func squeezedHeader(s string) string {
+	var b []byte
+	var quote byte
+	sep := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		// Outside single quotes a backslash-newline is a continuation, which
+		// the shell removes before words are formed.
+		if quote != '\'' && c == '\\' {
+			if n := continuationAt(s, i); n > 0 {
+				i += n - 1
+				continue
+			}
+		}
+		if quote == 0 && isHeaderSpace(c) {
+			// Leading whitespace goes; anything else marks a separator that
+			// is written only if a word follows it, which is what leaves no
+			// trailing space either.
+			sep = len(b) > 0
+			continue
+		}
+		if sep {
+			b = append(b, ' ')
+			sep = false
+		}
+		switch {
+		case quote == '\'':
+			// Nothing is special inside single quotes, not even a backslash.
+			b = append(b, c)
+			if c == '\'' {
+				quote = 0
+			}
+		case c == '\\':
+			// The escape and the byte it escapes are one unit, and neither of
+			// them separates anything.
+			b = append(b, c)
+			if i+1 < len(s) {
+				i++
+				b = append(b, s[i])
+			}
+		case quote == '"':
+			b = append(b, c)
+			if c == '"' {
+				quote = 0
+			}
+		case c == '\'' || c == '"':
+			quote = c
+			b = append(b, c)
+		default:
+			b = append(b, c)
+		}
+	}
+	return string(b)
+}
+
+// continuationAt reports the length of the line continuation beginning at the
+// backslash at i, or 0 if what follows is not a line break.
+func continuationAt(s string, i int) int {
+	switch {
+	case i+1 < len(s) && s[i+1] == '\n':
+		return 2
+	case i+2 < len(s) && s[i+1] == '\r' && s[i+2] == '\n':
+		return 3
+	}
+	return 0
+}
+
+// isHeaderSpace is the whitespace strings.Fields treated as separating, which
+// is what this keeps answering for the bytes that really do separate.
+func isHeaderSpace(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', '\v', '\f', '\r':
+		return true
+	}
+	return false
 }
 
 // afterOnly keeps redirections at or past end: the ones a verbatim slice did
@@ -739,6 +827,33 @@ func oneLine(from, to syntax.Pos) bool { return from.Line == to.Line }
 
 // hasNewlineInAPattern reports whether any `case` pattern's own extent spans
 // a line break, which the layout pass cannot reproduce.
+// armNeedsParen reports whether a `case` arm's opening `(` is load-bearing.
+//
+// The paren is ordinarily optional and this printer drops it. It stops being
+// optional where a pattern holds a *bare* blank: that is a grammar one
+// dialect has only inside the parentheses — see
+// [syntax.Dialect.CasePatternListSpansBlanks] — so `(a b)` written back as
+// `a b)` is a parse error, and `((x) y)` written back as `(x) y)` is worse,
+// being a program that parses to a different one. `VCS_INFO_get_data_git` is
+// written with both shapes.
+//
+// Read off the spans rather than off the source text, so that a blank written
+// *quoted* — `("a b")`, which every shell reads without any paren at all —
+// keeps the layout it had.
+func armNeedsParen(it *syntax.CaseItem) bool {
+	for _, w := range it.Patterns {
+		for _, sp := range w.Spans {
+			if sp.Kind != syntax.Literal || sp.Quoting != syntax.Unquoted {
+				continue
+			}
+			if strings.ContainsAny(sp.Value, " \t") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func hasNewlineInAPattern(src string, x *syntax.CaseClause) bool {
 	for _, it := range x.Items {
 		for _, pat := range it.Patterns {
@@ -972,6 +1087,9 @@ func (p *printer) caseClause(x *syntax.CaseClause) {
 		p.b.WriteString(" in")
 		for _, it := range x.Items {
 			p.b.WriteByte(' ')
+			if armNeedsParen(it) {
+				p.b.WriteByte('(')
+			}
 			for i, pat := range it.Patterns {
 				if i > 0 {
 					p.b.WriteString(" | ")
@@ -1004,6 +1122,9 @@ func (p *printer) caseClause(x *syntax.CaseClause) {
 		p.ownLineComments(it.Start.Offset)
 		p.blankGap(it.Start.Line)
 		p.pad()
+		if armNeedsParen(it) {
+			p.b.WriteByte('(')
+		}
 		for i, pat := range it.Patterns {
 			if i > 0 {
 				p.b.WriteString(" | ")

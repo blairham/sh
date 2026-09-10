@@ -104,6 +104,10 @@ func corpusGrammar() syntax.Dialect {
 	d.CaseContinuePipe = true
 	d.ClobberOverrideMarker = true
 	d.CasePatternListSpansNewlines = true
+	// And a blank in the same place. One case is written that way and the
+	// core reads none of it: inside the arm's parentheses the list is one
+	// word, so `(a b)` is a pattern rather than two words.
+	d.CasePatternListSpansBlanks = true
 	d.Coproc = true
 	d.CoprocName = true
 	d.CurrentShellSubstitution = true
@@ -113,6 +117,10 @@ func corpusGrammar() syntax.Dialect {
 	d.FuncDefAtParen = true
 	d.FunctionKeywordParens = true
 	d.FunctionKeywordNameIsAnyWord = true
+	// And the `name()` spelling of the same rule. Four cases name a function
+	// with a space, an operator, nothing at all or quotes, and the core
+	// refuses every one of them at the parenthesis.
+	d.FunctionNameIsAnyWord = true
 	// One body under several names. Four cases, and the core reads none of
 	// them: without it the second name is the *body* and the brace group
 	// after it has nothing to be part of.

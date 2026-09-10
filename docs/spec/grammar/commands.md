@@ -1774,23 +1774,65 @@ included — so this belongs to the parenthesis and not to the position.
 `case a in (|a|` newline `b)` has three alternatives — nothing, `a`, and
 newline-then-`b` — because the emptiness is still read off the separator.
 
-### What this implementation does not match
+### A blank in a parenthesized pattern list
 
 The list is **one word** in zsh, and a newline is not the only thing that
-follows from that. A *blank* inside the parentheses is part of the pattern
-there too, and each alternative has its outer blanks trimmed:
+follows from that. A *blank* inside the parentheses is a character of the
+pattern too:
 
-| probe | zsh |
-| --- | --- |
-| `case "a b" in (a b)` | matches — the pattern is the three characters |
-| `case a in (a b)` | does not |
-| `case a in (a \| ` nl ` b)` | matches; the second alternative is nl-space-`b` |
+    case 'a b' in (a b) echo hit;; (*) echo no;; esac
 
-This implementation reads a blank as ending a pattern, so all three of
-those are parse errors here — loud rather than silently wrong, and the
-first two are parse errors in the other five shells as well. It is a
-larger claim than the newline and is filed on its own rather than
-guessed at.
+zsh 5.9.2 prints `hit` at status 0. bash 5.3.15, that binary as `sh`, bash
+3.2.57 and ksh93u+ all blame the `b` and dash blames "word", in three
+wordings at three statuses. Grammar flag `CasePatternListSpansBlanks`,
+zsh only. Measured 2026-09-10 over a script file under `env -i`.
+
+The blanks are **verbatim**, and only a subject can say so — four
+probes, none of which a reading that merely admitted the line would pass:
+
+| probe | zsh | reading |
+| --- | --- | --- |
+| `case 'a  b' in (a b)` | `no` | a run of blanks is not collapsed |
+| `case 'a  b' in (a  b)` | `hit` | and its own spelling matches it |
+| `case 'a b' in (a` tab `b)` | `no` | a tab is not a space |
+| `case ab in (a b)` | `no` | and the blank is not dropped |
+
+They are text only where the pattern **continues** after them. A run in
+front of the `|` that separates two alternatives, or in front of the `)`
+that closes the list, still separates nothing and is dropped — which is
+what keeps `(a | b)` two alternatives here as it is in every shell:
+
+| probe | zsh | reading |
+| --- | --- | --- |
+| `case 'a b' in (a \| b)` | `no` | the separator still separates |
+| `case 'a ' in (a )` | `no` | trailing blanks are not in the pattern |
+| `case 'a b' in ( a b )` | `hit` | nor are the list's outer ones |
+| `case 'a b' in (a b \|z)` | `hit` | nor the one before a separator |
+
+An operator after them is still an operator: `case x in (a >b)` is
+`` parse error near `>' `` in zsh, so this admits the words a pattern can
+hold and nothing else.
+
+And the arm's **paren** is what opens it, exactly as it opens the
+newline. `case 'a b' in a b) …` is `` parse error near `b' `` in zsh too,
+so this is a rule about the parenthesized form and not about the
+position — which is what separates it from the much larger claim that a
+word may follow a pattern.
+
+The two flags compose the way the shell does: with both on, `case $'a ` nl
+` b' in (a ` nl ` b)` matches, and `case $'a` nl `b'` against the same arm
+does not, so neither the blanks nor the newline is dropped or folded into
+the other.
+
+The line this was found on is `VCS_INFO_get_data_git` line 234,
+`(''(x|exec) *)` — a group, a blank, more pattern — which every prompt
+drawing a git segment autoloads (#1744).
+
+A pattern holding a bare blank is **printed** with the arm's paren, which
+is otherwise dropped as layout: `(a b)` written back as `a b)` is a parse
+error, and `((x) y)` written back as `(x) y)` is worse, being a program
+that parses to a different one. A bare newline needs nothing, the word
+printer already writing one back quoted.
 
 ## `select`
 
@@ -1995,9 +2037,45 @@ parser removes the quotes in all of its dialects, which is right for
 zsh and ksh and wrong for bash and sh; that is #1566, measured as
 `cmd/function-keyword-with-a-quoted-ordinary-name`.
 
-A quoted name in the POSIX form — `''() { … }`, `'q'() { … }` — is read
-as a definition by zsh *and ksh93* and is refused at the parenthesis
-here; that is a second site with its own panel, #1561.
+**The POSIX `name()` form takes any word too**, and it is a second site
+with its own panel. `'a b'() { … }`, `a\ b() { … }`, `''() { … }`,
+`'a;b'() { … }` are definitions in zsh, callable by those names. Measured
+2026-09-10 from a script file under `env -i`, `a\ b() { echo b; }; echo
+after`: zsh reaches `after` at 0 with the function defined; bash 5.3 and
+bash 3.2 read the definition, answer `` `a\ b': not a valid identifier ``
+where it runs and carry on; bash-as-`sh` says the same sentence and is
+fatal at 2; ksh93 stops the script at 1 with `a b: invalid function
+name`; **dash alone refuses to parse it**, `Bad function name` at 2. So
+five of the six read the definition and four of those refuse the name
+where it runs. Grammar flag `FunctionNameIsAnyWord`, zsh only, and the
+same reasoning as the keyword form above: there is no definition-time
+name check here, so the five that decline keep declining while parsing,
+at their own wording.
+
+The two spellings had come apart inside this parser, which is what made
+it an issue: the keyword form took the name and `name()` refused a quoted
+word before any name test was reached, so `function a\ b { … }` defined
+a function and `a\ b() { … }`, the same name, was a parse error (#1743).
+
+The quotes are the control here as they are there, and the panel splits
+differently: `'q'() { … }` is a definition in ksh93 as well as zsh, both
+removing the quotes before reading the name, so it is two against four
+where the space splits it one against five (#1561, still open for the
+wording).
+
+The one group the flag does not carry is the same one: a name whose
+*bare* text holds `*`, `?` or `[` is matched against the filesystem
+there — `a*b() { :; }` is `no matches found: a*b` and defines nothing —
+so it is refused here rather than defining a function literally called
+`a*b`. Quoted, `'a*b'() { … }` defines it.
+
+An assignment still wins at the same parenthesis: `a=()` is an empty
+array and not a definition of a function called `a=`. The reading is
+lexical, so the `=` has to be bare to make one — `'a=b'()` and `a\=b()`
+are both definitions of `a=b` in zsh, and `a[$i]=()` empties an element.
+
+A name that cannot be written bare is **printed** quoted, by the same
+rule and the same function the keyword form's is.
 
 ### One body, several names
 

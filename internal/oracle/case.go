@@ -6427,6 +6427,31 @@ echo "st=$?"`,
 		Why:     "the universal definition form",
 	},
 	{
+		ID: "cmd/function-posix-name-holding-a-space", Category: "command language",
+		Snippet: `a\ b() { echo b; }; 'a b'; echo st=$?`,
+		Why:     "the `name()` spelling of a name that is not an identifier, which is where a real startup meets this: `zsh-autosuggestions` builds a wrapper per completion widget out of `$widgets[$widget]` — `user:_complete_help -C .complete-word _complete_help`, blanks and all — quotes the blanks with backslashes and `eval`s a definition of it, sixty-nine times. The panel splits by *stage* rather than by yes and no: zsh defines it and calls it; bash 5.3 and bash 3.2 read the definition, answer `not a valid identifier` naming the source text and carry on at 0; bash-as-sh says the same sentence and is fatal at 2; ksh93 refuses the name — expanded, not as written — and stops at 1; dash alone refuses to *parse* it. Five of the six read the definition, which is what makes this grammar rather than a name check",
+	},
+	{
+		ID: "cmd/function-posix-name-holding-an-operator", Category: "command language",
+		Snippet: `'a;b'() { echo one; }; 'a|b'() { echo two; }; 'a;b'; 'a|b'`,
+		Why:     "the row that separates *any word is a name* from *a wider set of name characters*, in the form the keyword row already has it: no character class that could be written down holds a semicolon and a pipe, because a grammar reading them unquoted would have stopped the word before them. The quoting is the whole of the rule",
+	},
+	{
+		ID: "cmd/function-posix-name-that-is-empty", Category: "command language",
+		Snippet: `''() { echo b; }; ''; echo st=$?`,
+		Why:     "the empty string as a `name()`, and the half a definition row cannot show — a name that was accepted is a name that calls. zsh defines and runs it; ksh93 parses the parentheses, refuses the empty name and stops; the three bash spellings blame the quoted word; dash blames the grammar. A reading that stored the source text `''` as the name would define something and call nothing",
+	},
+	{
+		ID: "cmd/function-posix-name-in-quotes", Category: "command language",
+		Snippet: `'q'() { echo b; }; q; echo st=$?`,
+		Why:     "the sharpest control this group has and a *different* panel split from the rows above. The name is `q` — one nobody could object to — and the quotes are all that is unusual: zsh **and ksh93** remove them and define `q`, so it splits two against four where a name holding a space splits it one against five. That is what says these rows measure the quoting rather than a wider set of name characters, since no set of characters can exclude `q`. This implementation removes the quotes in every dialect, which is right for two columns and wrong for three (#1561, #1566)",
+	},
+	{
+		ID: "cmd/function-posix-name-with-a-bare-equals", Category: "command language",
+		Snippet: `a=(x y); echo "n=${#a[@]} all=${a[*]}"`,
+		Why:     "the reading that must not be a definition, and the reason a `name()` taking any word still asks about `=`: an array assignment is a parenthesis after a word too, so a grammar that dropped the name test entirely reads `a=()` as defining a function called `a=`. The count and the elements are both on the line, and the elements are asked for with `[*]` rather than by index because the two array bases would part the columns on a question this row is not about — a shell that read the line as a definition leaves `a` unset and prints an empty pair either way",
+	},
+	{
 		ID: "cmd/function-keyword-form", Category: "command language",
 		Snippet: `function f { echo kw; }; f`,
 		Why:     "the ksh keyword form: core, absent from dash",
@@ -6517,6 +6542,26 @@ echo "st=$?"`,
 		ID: "shape/case-leading-paren", Category: "compound shapes",
 		Snippet: `case x in (x) echo paren;; esac`,
 		Why:     "a case pattern may carry a leading open paren",
+	},
+	{
+		ID: "shape/case-pattern-holding-a-blank", Category: "compound shapes",
+		Snippet: `case 'a b' in (a b) echo hit;; (*) echo no;; esac` + "\n" + `case 'a  b' in (a b) echo one;; (a  b) echo two;; (*) echo no;; esac` + "\n" + `case ab in (a b) echo m;; (*) echo unmatched;; esac`,
+		Why:     "a pattern written with a leading `(` may hold whitespace, and the whitespace is **verbatim**. One shell matches all three lines and the other five call the first one a syntax error in three wordings at three statuses — bash 5.3, bash 3.2 and bash-as-sh blame the `b`, ksh93 blames it at 3, dash blames \"word\". All three subjects are in one row because a reading that admitted the line and then dropped or collapsed the blanks would pass a row that asked about parsing alone: line two says a run of blanks is not collapsed and line three says the blank is not dropped. It is the line `VCS_INFO_get_data_git` stops at, so it is the git segment of every prompt drawing one (#1744)",
+	},
+	{
+		ID: "shape/case-pattern-blank-needs-the-paren", Category: "compound shapes", SyntaxError: true,
+		Snippet: `case 'a b' in a b) echo hit;; *) echo no;; esac`,
+		Why:     "the control the row above needs, and the one that keeps it from reading as *a word may follow a pattern*: written without the arm's paren the same line is a syntax error in **all six**, the shell that accepts the parenthesized form included. So the parenthesis is what licenses the blank and the position is not",
+	},
+	{
+		ID: "shape/case-pattern-blank-around-the-separator", Category: "compound shapes",
+		Snippet: `case 'a b' in (a | b) echo hit;; (*) echo no;; esac` + "\n" + `case 'a ' in (a ) echo hit;; (*) echo no;; esac`,
+		Why:     "the other half of the rule, and the half that parses everywhere: blanks are text only where the pattern *continues* after them. A run in front of the `|` that separates two alternatives, or in front of the `)` that closes the list, still separates nothing — so all six shells print `no` for both lines and `(a | b)` stays two alternatives. Without this a fix for the row above would silently make every case arm's spacing part of its patterns",
+	},
+	{
+		ID: "shape/case-pattern-group-then-a-blank", Category: "compound shapes", SyntaxError: true,
+		Snippet: `case 'x y' in ((x) y) echo hit;; (*) echo no;; esac`,
+		Why:     "the failing line's actual shape — a group, a blank, more pattern — which is what `VCS_INFO_get_data_git` line 234 is: `(''(x|exec) *)`. Its own panel, and the reason it is not folded into the row above: the four columns that name a token blame the `(` here and the `b` there, because the arm's paren and the group's arrive at the same character — dash names neither and says `word unexpected` to both. It is marked a syntax error because the corpus's own grammar declines a bare `(` inside a word — that is two further flags, and turning them on here would change how every other snippet reads — so the construct is pinned in syntax/caseblank_test.go and dialect/zsh/caseblank_test.go, and this row is here for the six columns. It is also the row that catches a printer dropping the arm's `(` as layout, since `(x) y)` parses to a different program rather than failing",
 	},
 	{
 		ID: "shape/case-pattern-alternatives", Category: "compound shapes",

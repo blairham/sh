@@ -774,6 +774,17 @@ type Diagnostics struct {
 	TypeFunction string
 	TypeExternal string
 
+	// TypeUndefinedFunction is that line again for a function whose body has
+	// not been read yet, in the two shells that have such a thing. One verb,
+	// the name, and empty in a shell where a function is a function:
+	//
+	//	zsh    myfn is an autoload shell function
+	//	ksh93  myfn is an undefined function
+	//
+	// Which name is one is [Runner.SetUndefinedFunctions], asked in the same
+	// place and by the same rule that decides how it lists.
+	TypeUndefinedFunction string
+
 	// TypeNotFound is a name `type` could not account for. One verb: the
 	// name. Two of the four write it with no shell name or location in
 	// front, which TypeNotFoundUnprefixed says.

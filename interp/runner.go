@@ -366,6 +366,15 @@ type Runner struct {
 	exportedFuncs                      map[string]bool
 	importedFuncs                      bool
 	funcExportPrefix, funcExportSuffix string
+	// nestedLength says a nested expansion is being *measured* rather than
+	// used, which is the one context where a substitution in the name
+	// position is not field-split — see nestedInnerSplit.
+	nestedLength bool
+	// undefinedFunctions is the dialect's answer to "has this function's body
+	// been read yet, and what does a listing write where it has not" — see
+	// SetUndefinedFunctions. Nil in a shell with no such thing, which is two
+	// of the four.
+	undefinedFunctions func(name string) (string, bool)
 
 	// InheritedFiles are the descriptors this shell was *started* with beyond
 	// the three named streams — what `sh 3<&0 script` puts on 3 — laid out

@@ -473,3 +473,156 @@ f`)
 		t.Errorf("a plain declaration after -r = %q (status %d), want %q", out, st, "SECOND\n")
 	}
 }
+
+// The stub is **the letters the declaration was given, recorded** — the same
+// builtin, acting on the function it is running inside — with `# undefined`
+// above it, which is the shell saying what the function is rather than a
+// comment in its body.
+//
+// Measured 2026-09-10 on zsh 5.9.2. Three names in one row because the shape
+// of the wrong answer is a stub that says the same thing whatever it was
+// asked for: a plain declaration is a bare `-X`, `-Uz` is `-XUz`, and the
+// order is zsh's canonical one rather than the one that was written.
+func TestAStubListsAsTheLettersItWasGiven(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"af": `print A`, "bf": `print B`, "cf": `print C`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+autoload af
+autoload -Uz bf
+autoload -zU cf
+functions af bf cf
+print -r -- "st=$?"`)
+	want := "af () {\n\t# undefined\n\tbuiltin autoload -X\n}\n" +
+		"bf () {\n\t# undefined\n\tbuiltin autoload -XUz\n}\n" +
+		"cf () {\n\t# undefined\n\tbuiltin autoload -XUz\n}\n" +
+		"st=0\n"
+	if out != want || st != 0 {
+		t.Errorf("a stub's listing = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And it is not a text arranged to look like one: the line the listing shows
+// is a body this shell runs, so writing it out by hand and calling that
+// function loads the file exactly as the declaration's own stub does.
+//
+// The mutation this catches is the one the trap is about — a listing taught
+// to print zsh's words while the stub still behaves some other way. Here the
+// listing's own words are handed back to the shell.
+func TestTheListedStubIsABodyThatRuns(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"hf": `print -r -- "HF ran [$*]"`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+hf() {
+	builtin autoload -XUz
+}
+hf one two
+print -r -- "st=$?"
+functions hf`)
+	want := "HF ran [one two]\nst=0\nhf () {\n\tprint -r -- \"HF ran [$*]\"\n}\n"
+	if out != want || st != 0 {
+		t.Errorf("a hand-written stub = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `# undefined` is not a comment. A function written by hand with that line
+// first lists without it, because a listing is printed from the tree and the
+// tree holds no comments — so the marker cannot be arranged by giving the
+// stub a cleverer body, and a name that has been called loses it.
+func TestTheUndefinedMarkerIsNotAComment(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"df": `print D`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+ef() {
+	# undefined
+	print E
+}
+functions ef
+autoload -Uz df
+df
+functions df`)
+	want := "ef () {\n\tprint E\n}\n" + "D\n" + "df () {\n\tprint D\n}\n"
+	if out != want || st != 0 {
+		t.Errorf("the marker = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `$functions` holds a *third* text for a stub: the same line without the
+// indentation, without the marker and without the emulation letter. Measured
+// — `autoload -Uz f` lists as `-XUz` and reads back as `-XU`.
+func TestAStubReadsBackThroughTheAssociationWithoutTheEmulationLetter(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"gf": `print G`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+autoload -Uz gf
+print -r -- "[${functions[gf]}]"
+gf
+print -r -- "[${functions[gf]}]"`)
+	want := "[builtin autoload -XU]\nG\n[\tprint G]\n"
+	if out != want || st != 0 {
+		t.Errorf("the association = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A name waiting to be defined is not an ordinary function and does not say
+// it is. The control is in the row, because the wording that matters is the
+// *difference* between the two.
+func TestAnUndefinedFunctionSaysItIsOne(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"jf": `print J`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+autoload -Uz jf
+kf() { print K; }
+whence -v jf
+whence -v kf
+type jf`)
+	want := "jf is an autoload shell function\nkf is a shell function from zsh\n" +
+		"jf is an autoload shell function\n"
+	if out != want || st != 0 {
+		t.Errorf("the sentence = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `-r` records the *directory* into the stub, so the listing carries it and
+// the stub still runs: the operand replaces the search rather than joining
+// it, which is what makes a fixed path fixed.
+func TestAFixedPathIsWrittenIntoTheStub(t *testing.T) {
+	first := fpathDir(t, map[string]string{"lf": `print FIRST`})
+	second := fpathDir(t, map[string]string{"lf": `print SECOND`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+first+`)
+autoload -rUz lf
+functions lf
+fpath=(`+second+`)
+lf`)
+	want := "lf () {\n\t# undefined\n\tbuiltin autoload -XUz " + first + "\n}\nFIRST\n"
+	if out != want || st != 0 {
+		t.Errorf("-r's stub = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The directory `-X` is given wins outright: a name that is not in it is not
+// found, however much of `$fpath` would have had it. And two operands are
+// too many, which is the letter's own complaint rather than `bad autoload`.
+func TestMinusXTakesOneDirectoryAndNoMore(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"mf": `print FROM_FPATH`, "nf": `print N`})
+	other := fpathDir(t, map[string]string{"mf": `print FROM_OPERAND`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+mf() { builtin autoload -XU `+other+`; print -r -- "after=$?" }
+mf
+nf() { builtin autoload -XU `+fp+` `+other+`; print -r -- "after=$?" } 2>&1
+nf 2>&1
+print -r -- "st=$?"`)
+	want := "FROM_OPERAND\nafter=0\nnf:builtin: -X: too many arguments\nafter=1\nst=0\n"
+	if out != want || st != 0 {
+		t.Errorf("-X with a directory = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `+X` with no operands lists, exactly as a bare declaration does — measured,
+// and the opposite of what this builtin's own note claimed until it was
+// asked.
+func TestPlusXWithNoOperandsLists(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"pf": `print P`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+autoload -Uz pf
+autoload +X
+print -r -- "st=$?"`)
+	want := "pf () {\n\t# undefined\n\tbuiltin autoload -XUz\n}\nst=0\n"
+	if out != want || st != 0 {
+		t.Errorf("+X with nothing = %q (status %d), want %q", out, st, want)
+	}
+}

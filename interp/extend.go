@@ -456,6 +456,56 @@ func (r *Runner) FunctionText(name string) (string, bool) {
 	return r.listedFunction(name, fn), true
 }
 
+// SetUndefinedFunctions installs this shell's notion of a function whose body
+// has not been read yet: whether a name is one, and the text a listing writes
+// in its place.
+//
+// Two of the four shells have the notion and each renders it its own way, so
+// it is a dialect's answer rather than something this package could hold.
+// Measured 2026-09-10 against zsh 5.9.2 and ksh93u+, with `myfn` on the
+// search path and never called:
+//
+//	zsh    functions myfn      myfn () {\n\t# undefined\n\tbuiltin autoload -XUz\n}
+//	zsh    whence -v myfn      myfn is an autoload shell function
+//	ksh93  typeset -f myfn     typeset -fu myfn
+//	ksh93  whence -v myfn      myfn is an undefined function
+//
+// zsh keeps the header and the braces and writes two lines between them; ksh93
+// writes a declaration and no body at all. So what is shared is the *question*
+// — is this name still undefined — and neither what stands in the body nor the
+// sentence is, which is why the hook answers with the one and
+// [Diagnostics.TypeUndefinedFunction] with the other.
+//
+// The text is the *block*, braces included, exactly as syntax.PrintWith would
+// have returned it for a real body — so the header, and the quoting a name
+// needs in it, stay in the one place that writes them. ksh93's shape, which
+// has no header and no braces at all, would need more than this; it has no
+// `typeset -f` listing in this implementation to reach here, and the hook is
+// deliberately not widened for a caller that does not exist.
+//
+// The marker is not a comment in the body, which is measured rather than
+// assumed: a function written by hand with `# undefined` as its first line
+// lists *without* it in zsh, because a listing is printed from the tree and
+// the tree has no comments in it. `# undefined` is the shell saying what the
+// function is, and that is why it cannot be arranged by giving the stub a
+// cleverer body.
+//
+// The text is what [Runner.FunctionText], `typeset -f` and `functions` write.
+// It deliberately does not reach the *names-only* forms, which name a name
+// whatever state it is in, nor `$functions`-style body views, which one shell
+// answers with a third text again — see the dialect's own association.
+func (r *Runner) SetUndefinedFunctions(undefined func(name string) (string, bool)) {
+	r.undefinedFunctions = undefined
+}
+
+// undefinedFunction is that hook asked, for a shell that installed one.
+func (r *Runner) undefinedFunction(name string) (string, bool) {
+	if r.undefinedFunctions == nil {
+		return "", false
+	}
+	return r.undefinedFunctions(name)
+}
+
 // WriterForFd is the stream a builtin writing "to descriptor n" needs: the
 // named two by their numbers, anything past them from the shell's own table —
 // the writing half of what `read -u` already reads. A number nothing is open

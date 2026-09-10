@@ -13108,6 +13108,11 @@ echo "read=[$l]"`,
 		Why:     "and the restore is unconditional at the return: a body that stops asking for the scoping after it has moved a trap still has that trap put back, and lists its own until then. `localoptions` asks at the return instead — the second row where the two options answer oppositely",
 	},
 	{
+		ID: "setopt/localtraps-undoes-a-one-word-reset", Category: "builtins",
+		Snippet: `trap 'echo outer' USR1; setopt localtraps; f() { trap USR1; trap; echo "in=$?"; }; f; trap`,
+		Why:     "`trap COND` is this shell's one-word spelling of a reset and it is scoped like the two-word form — a second entry point into the same save, which a fix written at one of them alone would leave out",
+	},
+	{
 		ID: "setopt/localtraps-saves-per-condition", Category: "builtins",
 		Snippet: `trap 'echo o1' USR1; trap 'echo o2' USR2; f() { setopt localtraps; trap 'echo i1' USR1; unsetopt localtraps; trap 'echo i2' USR2; }; f; trap`,
 		Why:     "one body moving two signals under two answers: the save is per condition and taken at each modification, so USR1 goes back and USR2 stays as the function set it. A whole-table snapshot taken at the first modification would put both back",

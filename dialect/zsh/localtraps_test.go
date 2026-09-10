@@ -90,6 +90,18 @@ func TestLocalTrapsSavesPerCondition(t *testing.T) {
 	}
 }
 
+// `trap COND` is this shell's one-word spelling of a reset, and it is
+// localized like the two-word form. A second entry point into the same save,
+// which a fix written at one of them alone would leave uncovered.
+func TestLocalTrapsUndoesAOneWordReset(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(),
+		`trap 'echo outer' USR1; setopt localtraps; g() { trap USR1; trap; echo '(inside)'; }; g; trap`)
+	want := "(inside)\ntrap -- 'echo outer' USR1\n"
+	if st != 0 || out != want {
+		t.Errorf("out %q status %d, want %q", out, st, want)
+	}
+}
+
 // `localtraps` is not itself restored — there is no equivalent of
 // `localoptions` rule 3 here. A function that turns it on leaves it on.
 func TestLocalTrapsItselfIsNotRestored(t *testing.T) {

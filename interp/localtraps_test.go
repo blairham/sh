@@ -103,6 +103,20 @@ func TestFunctionLocalTrapsUndoesAReset(t *testing.T) {
 	}
 }
 
+// And the one-word spelling of a reset is a reset: three of the four shells
+// read `trap COND` as putting that condition back, and it reaches the same
+// save as the two-word form — a second entry point that a fix written at one
+// of them alone would miss.
+func TestFunctionLocalTrapsUndoesAOneWordReset(t *testing.T) {
+	s := localTrapsSem(TrapsGoBackAtTheReturn)
+	s.TrapOneArgumentIsACondition = Yes
+	out, st := run(t, `trap 'echo outer' USR1; f() { trap USR1; trap; echo '(inside)'; }; f; trap`, withSem(s))
+	want := "(inside)\ntrap -- 'echo outer' USR1\n"
+	if out != want || st != 0 {
+		t.Errorf("got %q/%d, want %q", out, st, want)
+	}
+}
+
 // An ignore is a third state and travels as one: `trap ” USR1` displaced by
 // a handler comes back as an ignore rather than as nothing.
 func TestFunctionLocalTrapsRestoresAnIgnore(t *testing.T) {

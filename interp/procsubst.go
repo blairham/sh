@@ -153,6 +153,19 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 			keep.letGo()
 		})
 	} else {
+		// The substituted command keeps the shell's own input here — only
+		// the writing direction replaces it — so the shell and the command
+		// it named may read that stream at the same time. That is the third
+		// stream and it needed the same guard as the other two, for the
+		// reason given for them: os/exec copies from a reader that is not a
+		// file on a goroutine of its own, so `cat <(exec /bin/echo sub)`
+		// with a caller-supplied reader had two of those copying out of one
+		// io.Reader, which the race detector reports inside strings.Reader.
+		// Both sides again, and again because a lock one party takes and the
+		// other does not excludes nothing.
+		sub.Stdin = r.lockedStdin()
+		r.Stdin = sub.Stdin
+
 		// `<(cmd)` writes cmd's output into the pipe, so this end is the
 		// writer — and a writer has to wait for its reader, which is why
 		// this half is on a goroutine and the other half is not. The wait

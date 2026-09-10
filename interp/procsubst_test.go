@@ -74,6 +74,34 @@ func TestProcessSubstitutionSharesTheCallersStreamsSafely(t *testing.T) {
 	}
 }
 
+// The third stream is shared too, and was not guarded.
+//
+// A `<(cmd)` keeps the shell's own input — only the writing direction replaces
+// it — so the shell and the command it named read one io.Reader at the same
+// time. os/exec copies from a reader that is not a file on a goroutine of its
+// own, so two external commands running at once out of one caller-supplied
+// reader are two goroutines inside it: measured, `cat <(exec /bin/echo sub)`
+// with a strings.Reader for input reports a data race in strings.Reader on
+// every run of twenty rounds, with the two copiers traced to the outer
+// command's exec and to the substitution's.
+//
+// The detector is the assertion here, so this case is only as strong as the
+// suite being run with -race — which `make check` and both CI platforms do.
+// What makes it a case rather than a note is that it is the shape a corpus row
+// reached by accident: `procsub/a-background-job-after-the-body-execs` failed
+// this way and nothing else in the corpus had a substitution starting an
+// external command beside one.
+func TestProcessSubstitutionSharesTheCallersInputSafely(t *testing.T) {
+	for range 20 {
+		out, st := run(t, `cat <(exec /bin/echo sub)`, func(r *Runner) {
+			r.Stdin = strings.NewReader("input the shell was handed")
+		})
+		if st != 0 || out != "sub\n" {
+			t.Fatalf("out = %q status %d, want %q", out, st, "sub\n")
+		}
+	}
+}
+
 // overlapWriter is a caller's io.Writer that notices being written to from two
 // places at once. It holds a lock of its own, so the *test* is safe whatever
 // the shell does; what it reports is whether the shell needed it to.

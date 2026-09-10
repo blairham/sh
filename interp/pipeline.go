@@ -165,7 +165,19 @@ func (r *Runner) lockedStdin() io.Reader {
 	if _, ok := in.(closedFd); ok {
 		return in
 	}
-	return &lockedReader{mu: &r.streamLocks().in, r: in}
+	mu := &r.streamLocks().in
+	// A stream already guarded by *this* lock is handed back as it is, which
+	// is lockWriter's rule arriving on the reading side and mattering more
+	// here: a lockedReader wrapped in a second lockedReader over the same
+	// mutex takes it twice on one goroutine, and a sync.Mutex is not
+	// reentrant. It becomes reachable the moment a construct guards both
+	// sides of a shared input rather than only the concurrent one — two
+	// substitutions in one command wrap what the first of them left, and
+	// `cat <(cat) <(cat)` would stop on the first read.
+	if l, ok := in.(*lockedReader); ok && l.mu == mu {
+		return l
+	}
+	return &lockedReader{mu: mu, r: in}
 }
 
 // runPipeline runs several commands with their streams joined.

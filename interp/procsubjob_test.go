@@ -308,7 +308,7 @@ func openDescriptors() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer dir.Close()
+	defer func() { _ = dir.Close() }()
 	names, err := dir.Readdirnames(-1)
 	if err != nil {
 		return 0, err

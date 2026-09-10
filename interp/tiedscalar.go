@@ -86,7 +86,7 @@ func (r *Runner) untie(name string) {
 // assignment can be written and neither knows who called it.
 func (r *Runner) mirrorScalarToArray(name, value string) {
 	t, ok := r.tied[name]
-	if !ok || t.scalar != name || r.mirroring {
+	if !ok || t.scalar != name || r.mirroring || r.tieDetached(t) {
 		return
 	}
 	r.mirroring = true
@@ -98,7 +98,7 @@ func (r *Runner) mirrorScalarToArray(name, value string) {
 // separator become the scalar.
 func (r *Runner) mirrorArrayToScalar(name string, elems []string) {
 	t, ok := r.tied[name]
-	if !ok || t.array != name || r.mirroring {
+	if !ok || t.array != name || r.mirroring || r.tieDetached(t) {
 		return
 	}
 	r.mirroring = true

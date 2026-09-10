@@ -9644,6 +9644,26 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "the spelling scripts actually use: the hiding letter bundled with the table letter, where the element still reads back and only the listing is short of it — `typeset -A m` in zsh against ksh93's `typeset -A -H m=([k]=v)`. bash 3.2 has no `-A` either, so the panel splits three ways over one word",
 	},
 	{
+		ID: "declare/hide-in-scope-plus-form-is-taken", Category: "declarations",
+		Snippet: `f() { local +h v=1; echo "st=$? [$v]"; }; f`,
+		Why:     "the plus form of a letter only zsh has, and the spelling real scripts write: `compaudit` opens with `local -a -U +h fpath`. zsh takes it and reports 0; both bashes answer `local: +h: invalid option` with the usage line and 2, leaving `v` unset; ksh93 has no `local` at all and answers 127; dash reads the word as an operand and calls it a bad variable name. Four answers to one line, which is why the letter is a dialect's to have rather than the core's to assume",
+	},
+	{
+		ID: "declare/hide-in-scope-detaches-a-local-special", Category: "declarations",
+		Snippet: `PATH=/bin:/usr/bin; f() { local -h PATH=/x; echo "st=$? in=[${path[*]}]"; }; f`,
+		Why:     "what the letter *does*, which is the half a status cannot show. In zsh a local of a name that is half of a tie is still the special parameter — writing `PATH` moves `path` with it — and `-h` is what makes the local an ordinary parameter instead, so `path` keeps the caller's entries. The shells without the letter have no `path` to answer with either, so the row is one shell's behavior against three refusals",
+	},
+	{
+		ID: "declare/hide-in-scope-plus-form-is-not-a-no-op", Category: "declarations",
+		Snippet: `PATH=/bin:/usr/bin; typeset -h PATH x=1; f() { local PATH=/x; echo "plain=[${path[*]}]"; }; f; g() { local +h PATH=/x; echo "plus=[${path[*]}]"; }; g`,
+		Why:     "the discriminating pair, and the reason `+h` is more than a letter parsed and dropped: the attribute is on the *name*, so the plain `local` inherits it and is detached, and only the `+h` puts the specialness back. The two lines differ by three characters and zsh answers them differently — a shell that took the letter and ignored it would print the same thing twice. The trailing `x=1` is there for ksh93, whose own `-h` takes a *string* argument: without a second operand it eats `PATH`, finds no name left and prints the whole variable table, whose `PPID`, `RANDOM` and `SECONDS` rows are different on every run and could never be recorded",
+	},
+	{
+		ID: "declare/hide-in-scope-with-the-array-and-unique-letters", Category: "declarations",
+		Snippet: `FPATH=/a:/b; f() { local -a -U +h fpath; echo "st=$?"; }; f`,
+		Why:     "`compaudit`'s own first line, three letters in three words with the plus form in the middle. It decides whether the completion directories are read as secure, so a refusal here is not a cosmetic one — while the letter was missing the declaration did not run and the function walked the caller's `fpath` instead of a copy of it (#1621)",
+	},
+	{
 		ID: "declare/global-letter-with-the-table-attribute", Category: "declarations",
 		Snippet: `typeset -gA m; m[k]=v; echo "[${m[k]}] st=$?"`,
 		Why:     "the two letters together, which is not the sum of the rows that have each alone: the global letter says where the declaration lands and the table letter says what it is, and a shell that reads the first and drops the second leaves `m` an *indexed* array, so the very next `m[k]=v` is a non-numeric subscript and is refused. bash and zsh have both letters; ksh93 has no `-g` at all and, because its `typeset` is special, the refusal ends the script",

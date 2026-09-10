@@ -62,6 +62,7 @@ func seedTables(r *Runner) {
 	r.funcFiles = map[string]string{"seed": "v"}
 	r.funcs = map[string]*syntax.FuncDecl{"seed": nil}
 	r.hidden = map[string]bool{"seed": true}
+	r.hideInScope = map[string]bool{"seed": true}
 	r.inheritedIgnored = map[string]bool{"seed": true}
 	r.integer = map[string]bool{"seed": true}
 	r.integerBase = map[string]int{"seed": 16}

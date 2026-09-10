@@ -1099,12 +1099,23 @@ func Semantics() interp.Semantics {
 	// answering `typeset: -U: unknown option`. Its own `-u` — uppercase —
 	// is a different letter and stays what it was.
 	//
+	// `-h` hides a name *in scope*: a local declaration of a parameter
+	// carrying it is an ordinary parameter rather than the special one it is
+	// spelled like, and `+h` puts the specialness back. It is what
+	// `compaudit` opens with — `local -a -U +h fpath` — and refusing the
+	// letter left that line unrun, so the security check walked the caller's
+	// `fpath` instead of a copy of it (#1621). This shell's letter alone with
+	// that meaning: bash refuses `-h` and `+h` outright under all three
+	// spellings, and ksh93's `-h` is a help string on a type definition,
+	// which detaches nothing. See interp/hideinscope.go for the six rows it
+	// was measured from.
+	//
 	// `-T SCALAR array [sep]` ties a scalar to an array, each reflecting the
 	// other — which is how this shell's own `PATH` and `path` are the same
 	// value. This shell's letter alone with that meaning: bash refuses `-T`
 	// outright, and ksh93's `-T` declares a *type*, which is a different
 	// builtin's worth of thing and stays refused by name there.
-	s.DeclareOptions = "aAfFgHilpruUTx"
+	s.DeclareOptions = "aAfFgHhilpruUTx"
 	// `-F` is a float's precision here rather than bash's function listing,
 	// and the number behind it is the letter's argument and not a name:
 	// `typeset -F 3 x=1.5` declares one name at three places and reads back
@@ -1164,7 +1175,7 @@ func Semantics() interp.Semantics {
 	// them and this shell has not built them, `typeset -E` being `-E is not
 	// implemented yet` in the same run. Claiming them here would move the
 	// refusal from the letter to nowhere at all.
-	s.LocalOptions = "aAFHilpruUTx"
+	s.LocalOptions = "aAFHhilpruUTx"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
 	// `integer` here is `typeset` with the letter prepended rather than a
@@ -1174,7 +1185,7 @@ func Semantics() interp.Semantics {
 	// the set is its own field and not DeclareOptions over again — a shell
 	// that reused them would accept `integer -A m`, which is an associative
 	// array in no shell that has the word.
-	s.IntegerOptions = "gHilprux"
+	s.IntegerOptions = "gHhilprux"
 	// `-i16` and `-i 16` are an output base here — `integer -i 16 b=255` is
 	// `16#FF` — and this engine has no base to keep, so it refuses by name.
 	s.IntegerAttributeTakesABase = interp.Yes
@@ -1424,27 +1435,28 @@ func Diagnostics() interp.Diagnostics {
 			// typeset's letters this engine does not hold: floats (-E -F),
 			// namerefs (-n), padding and alignment (-L -R -Z), and the
 			// rest. The same set under both names, and for `local` too.
-			// `-H`, `-U` and `-T` have left this list — they are
+			// `-H`, `-U`, `-T` and `-h` have left this list — they are
 			// implemented, in DeclareOptions above.
-			"typeset": "bcEhkLmnRtZ",
+			"typeset": "bcEkLmnRtZ",
 			"type":    "mvwsS",
 			// jobs' letters that are zsh's own: -d names the directory the
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.
 			"jobs":    "dzZ",
-			"declare": "bcEhkLmnRtZ",
+			"declare": "bcEkLmnRtZ",
 			// The same list as `typeset` and `declare`, which is the point:
 			// `-F` is one attribute and the three names declare it alike.
 			// It was here and in neither of theirs, which is the same split
 			// LocalOptions had — the letter refused under one name and
 			// answered under the other (#1594).
-			"local": "bcEhkLmnRtZ",
+			"local": "bcEkLmnRtZ",
 			// `integer`'s own short list, and it is not typeset's: the
 			// letters typeset is missing that `integer` refuses outright —
 			// b, c, E and m — are bad options under this name and belong in
-			// neither field, while `-h`, `-t`, `-L`, `-R` and `-Z` are
-			// letters this shell's `integer` really takes.
-			"integer": "LRZht",
+			// neither field, while `-t`, `-L`, `-R` and `-Z` are letters
+			// this shell's `integer` really takes. `-h` was here too and is
+			// implemented now, in IntegerOptions above.
+			"integer": "LRZt",
 			// `functions`' own letters, none of which is `typeset`'s: -u
 			// and -U mark a name for autoloading, -k and -z pick which
 			// shell the autoloaded file is read as, -t and -T trace, -x

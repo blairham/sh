@@ -1406,6 +1406,13 @@ type Runner struct {
 	// refuses it and ksh93 does not have it, so the dialect decides who may
 	// set it — see Semantics.DeclareOptions.
 	unique map[string]bool
+	// hideInScope names the parameters carrying the hide-in-scope attribute
+	// — `typeset -h`, and `typeset +h` to take it off. It is what makes a
+	// local declaration of a name that is half of a tie an ordinary
+	// parameter rather than the special one, and unlike every other
+	// attribute here it decides nothing on its own: it decides only where a
+	// scope has displaced the name. See hideinscope.go.
+	hideInScope map[string]bool
 	// tied holds the ties `typeset -T` made — see tiedscalar.go — under
 	// both of each tie's names, so either half finds it.
 	tied map[string]tie
@@ -3256,6 +3263,13 @@ type scope struct {
 	// So absent and false do not mean the same thing here, though they do in
 	// r.readonly: absent means this scope never shadowed the name at all.
 	savedReadonly map[string]bool
+	// savedHideInScope is the hide-in-scope attribute a shadowed name
+	// carried when the declaration displaced it, saved for the same two
+	// reasons savedReadonly is: the outer name gets its own attribute back,
+	// and one this call added goes away with the call. Absent and false do
+	// not mean the same thing here either — absent means this scope never
+	// shadowed the name. See hideinscope.go.
+	savedHideInScope map[string]bool
 	// savedExported and exportedSpoken are the export attribute a shadowed
 	// name had, for the dialects where a local does not inherit it. Taking
 	// the attribute off is a change to the runner's record and has to be put

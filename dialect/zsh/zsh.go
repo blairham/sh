@@ -1546,8 +1546,8 @@ func Diagnostics() interp.Diagnostics {
 		// redirections and a `NULLCMD` with nothing in it. No verbs, and the
 		// same sentence whether the parameter was unset or emptied.
 		RedirectionWithNoCommand: "redirection with no command",
-		NotABuiltin:                       "no such builtin: %[1]s",
-		CommandStringParsedWhole:          true,
+		NotABuiltin:              "no such builtin: %[1]s",
+		CommandStringParsedWhole: true,
 		// Reading a program from standard input, a line that does not parse
 		// is reported and the next line is read anyway. This shell alone,
 		// and this route alone: the same program in a file stops it.

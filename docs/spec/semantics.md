@@ -1046,7 +1046,18 @@ process replacement, where a concatenation does.
 
 `multios` is this dialect's name for the axis and moves it — it was one of
 the recorded names until #1779 — so `(unsetopt multios; …)` stays inside the
-subshell the way every axis-backed option does. An earlier revision of this paragraph called it deliberately
+subshell the way every axis-backed option does.
+
+**Not implemented, and measured rather than assumed:** the fan-in reaches
+standard input and not a numbered descriptor. `exec 3<f 3<g; cat <&3` reads
+both files in zsh and reads `g` alone here, because a number in the
+descriptor table has to be a real file for a child to inherit — a
+concatenation is not one, and giving the table a stream that is not a file is
+a change to how every external command is started rather than to this
+option. The writing side has the same gap for the same reason: `exec 4>a 4>b`
+writes `b` alone. Both are the numbered-descriptor case, which no startup in
+the wild sweep uses; standard input, standard output and standard error, which
+they all use, are the fan-out and fan-in above. An earlier revision of this paragraph called it deliberately
 unbuilt, and the paragraph outlived the decision: the failure mode this
 file records about the interpreter's comments applies to its own.
 

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -637,5 +638,95 @@ func TestAPolicyRefusesACommandInsideAnAgentsLine(t *testing.T) {
 	}
 	if got := out.String(); !strings.Contains(got, "refused") {
 		t.Errorf("output = %q, want the refusal said out loud", got)
+	}
+}
+
+// An `exec` inside the agent's line must not replace the process serving the
+// connection, which is also the process that *is* the boundary: every gate
+// consultation and every audit record for the session comes from it.
+//
+// An awkward test, because a regression does not produce an assertion
+// failure. The binary is replaced partway through and the package exits with
+// no test output at all — no `--- PASS`, no `--- FAIL`, and nothing from the
+// logging below, which under `-v` always prints. So reaching the end of this
+// function is itself part of what is being asserted.
+func TestAnExecInTheAgentsLineDoesNotReplaceTheShell(t *testing.T) {
+	var out bytes.Buffer
+	code := interpreter(driver.Shell{Name: "sh"})(
+		t.Context(), acp.TerminalCommand{Line: "exec echo replaced"}, &out)
+	if code != 0 {
+		t.Errorf("status = %d, want the exec'd command to have run", code)
+	}
+	if got := strings.TrimSpace(out.String()); got != "replaced" {
+		t.Errorf("output = %q, want %q", got, "replaced")
+	}
+	// Reached only because this process is still here to reach it.
+	t.Log("the shell survived an exec in the agent's line")
+}
+
+// What an agent sends is a *line*, so the thing that runs it has to be a
+// shell and not a command runner. The old behavior ran a lone program name
+// too, so "it ran something" does not tell the two apart — these ask for the
+// parts of a line an argv cannot express.
+func TestAnAgentsLineIsRunAsAShell(t *testing.T) {
+	for _, c := range []struct {
+		name, line, want string
+		status           int
+	}{
+		{name: "more than one command", line: "echo one; echo two", want: "one\ntwo\n"},
+		{name: "a pipeline", line: "echo hi | tr a-z A-Z", want: "HI\n"},
+		{name: "an expansion", line: `x=world; echo "hello $x"`, want: "hello world\n"},
+		// Both streams are one stream, because a terminal is one: an agent
+		// asking for output is asking what a person would have seen.
+		{name: "standard error too", line: "echo out; echo err >&2", want: "out\nerr\n"},
+		{name: "a status", line: "exit 7", status: 7},
+		{name: "a failing command's status", line: "false", status: 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var out bytes.Buffer
+			status := interpreter(driver.Shell{Name: "sh"})(
+				t.Context(), acp.TerminalCommand{Line: c.line}, &out)
+			if got := out.String(); got != c.want {
+				t.Errorf("%s\n  wrote %q\n  want  %q", c.line, got, c.want)
+			}
+			if status != c.status {
+				t.Errorf("%s: status = %d, want %d", c.line, status, c.status)
+			}
+		})
+	}
+}
+
+// The agent says where its command runs, and a create that ignored it would
+// run the right line in the wrong place.
+func TestAnAgentsLineRunsWhereItAsked(t *testing.T) {
+	dir := t.TempDir()
+	var out bytes.Buffer
+	if status := interpreter(driver.Shell{Name: "sh"})(
+		t.Context(), acp.TerminalCommand{Line: "pwd -P", Dir: dir}, &out); status != 0 {
+		t.Fatalf("pwd -P: status = %d, output = %q", status, out.String())
+	}
+	// Resolved on both sides, because a temporary directory here is reached
+	// through a symlink and `pwd -P` answers with what the kernel calls it.
+	want, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatalf("resolving %s: %v", dir, err)
+	}
+	if got := strings.TrimSpace(out.String()); got != want {
+		t.Errorf("the line ran in %q, want %q", got, want)
+	}
+}
+
+// `terminal/create` carries `env` entries the agent set — `CLAUDECODE=1` is
+// the one it actually sends — and running the command it asked for includes
+// the environment it asked for.
+func TestAnAgentsLineTakesTheEnvironmentItWasGiven(t *testing.T) {
+	var out bytes.Buffer
+	env := append(os.Environ(), "FROM_THE_AGENT=yes")
+	if status := interpreter(driver.Shell{Name: "sh"})(
+		t.Context(), acp.TerminalCommand{Line: `echo "[$FROM_THE_AGENT]"`, Env: env}, &out); status != 0 {
+		t.Fatalf("status = %d, output = %q", status, out.String())
+	}
+	if got := strings.TrimSpace(out.String()); got != "[yes]" {
+		t.Errorf("the agent's variable did not reach the line: %q", got)
 	}
 }

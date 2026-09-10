@@ -315,23 +315,53 @@ The environment is inherited and then written over rather than replaced. A
 command started with only the agent's few variables has no `PATH`, so every
 `terminal/create` would fail for a reason nothing on the wire explains.
 
-#### Two of the three agents decline the route, and what is done about it
+#### One of the two measured agents declines the route, and what is done about it
 
-Measured with `terminal: true` and both file methods advertised, each agent
-asked in as many words to run a shell command: **Claude Agent 0.75.1 and Codex
-1.10.0 both ran it in their own process and called no client method at all.**
-Under `-trace-events` the gate saw nothing for either. Gemini CLI is native ACP
-rather than an adapter and is the one most likely to take the route.
+**The earlier measurement here was wrong, and it was our bug that made it
+wrong.** It read: "Claude Agent 0.75.1 and Codex 1.10.0 both ran it in their own
+process and called no client method at all." That was taken while #1777 was
+live — this client answered every permission request with an option id the agent
+had never offered, so the agent was being told its tool call was **rejected**
+and was falling back to doing the work itself. What was written down as an agent
+declining the honest route was an agent being refused and working around it. A
+measurement of a client's own defect, recorded as a fact about somebody else.
 
-**And it reaches further than commands.** Re-measured live through
-`sh -acp-connect` (2026-09-05, Claude Agent 0.75.1):
+Re-measured 2026-09-10 with the fix in, through `sh -acp-connect`, each agent
+asked in the same words, with `terminal: true` and both file methods
+advertised:
 
-| asked | what the agent did | what the gate saw |
+| asked | Claude Code 0.16.2 | Codex 1.11.0 |
 | --- | --- | --- |
-| "run `echo hello-from-acp`" | ran it itself | nothing |
-| "read this file and tell me what it contains" | ran `cat path` | nothing |
-| "use your file-reading tool, not a shell command" | read it with its own file API | nothing |
-| "create a file containing …", under `-deny write /**` | ran `echo … > path`; **the file appeared** | nothing |
+| "run `echo hello-from-acp`" | **asked us**: `terminal/create`, gated and traced | ran it itself; no client method; gate saw nothing |
+| "read this file and tell me what it contains" | read it with its own tool; no client method; gate saw nothing | read it with its own tool; no client method |
+| "use your file-reading tool, not a shell command" | read it with its own tool; no client method; gate saw nothing | *(not asked)* |
+| "create a file containing …", under `-deny write:/**` | wrote it with its own tool; **the file appeared**; gate saw nothing | wrote it itself; **the file appeared**; gate saw nothing; **never asked permission either** |
+
+So the two agents differ, and the difference is the whole question. Claude Code
+takes the `terminal/*` route for **commands** — the one thing the old row said
+no adapter would do. Codex still does not. Neither takes it for **files**: not
+one measured turn, from either agent, called `fs/read_text_file` or
+`fs/write_text_file`, and asking Claude in as many words to use its file-reading
+tool rather than a shell command did not change that.
+
+That last point deserves to be stated on its own, because this document has
+argued the other way round: **the `fs/*` half of this client has never been
+exercised by a real agent.** It is tested, and it is correct as far as its tests
+reach, and no adapter measured here has ever called it. A policy's reach over an
+agent's file access is, today, a reach over something nobody asks for.
+
+The `-deny write:/**` row is the sharpest, and it survives re-measurement with
+permission genuinely granted: the file appeared, the gate recorded nothing, and
+`-trace-events` printed not one line for the whole turn. The only thing that was
+consulted was the *person* — this client answered the agent's
+`session/request_permission` with allow — and a person answering a question is
+not a policy covering an action.
+
+One honest caveat on the Claude command row: it called `terminal/create` four
+times in that turn, not once, because #1782 means every one of them failed and
+it retried with a differently-quoted command each time. The route is what is
+being measured and the route is real; the count is an artifact of a bug of ours
+and must not be read as anything about the agent.
 
 So the earlier wording — that a policy covers the agent's file access and not
 its commands — is true about what an agent *asks for* and misleading about what
@@ -729,6 +759,47 @@ and the registry's agent entries:
 | `session/resume` | supported | `-32000` until authenticated | **`-32601`** |
 | `session/fork` | advertised, answers `-32603` | `-32000` until authenticated | `-32601` |
 
+That table is the **registry's** answer and it is a year of packaging
+drift away from what is on this machine. Measured live on 2026-09-10, by
+speaking the protocol to each agent directly rather than through this
+client, so that nothing here is an artifact of our own end:
+
+| | Claude Code | Codex | Gemini CLI |
+| --- | --- | --- | --- |
+| package | `@zed-industries/claude-code-acp` | `@agentclientprotocol/codex-acp` | `@google/gemini-cli` |
+| version measured | 0.16.2 | 1.11.0 | **not measured** |
+| `agentInfo.title` | `Claude Code` | `Codex` | — |
+| `protocolVersion` | 1 | 1 | — |
+| auth methods offered | `claude-login`, described as "Run `claude /login` in the terminal" | `api-key`, `chat-gpt` | — |
+| `session/new` unauthenticated | succeeds | `-32000` Authentication required | — |
+| `session/list` unauthenticated | succeeds | `-32000` Authentication required | — |
+| session capabilities advertised | `fork`, `list`, `resume`, `loadSession` | those four plus `close`, `delete`, `additionalDirectories`, `subagents` | — |
+
+Two things about that table are worth more than the cells.
+
+**The Claude row is a different package from the one above it.** The
+registry names `@agentclientprotocol/claude-agent-acp` at 0.75.x; what is
+installed here and what every measurement in this document now refers to
+is `@zed-industries/claude-code-acp` at 0.16.2. They are not the same
+artifact on a later version number, and a claim carried over from one to
+the other has not been measured.
+
+**`session/resume` and `session/fork` are not re-measured, deliberately.**
+The obvious probe — open a session, then ask to resume it — answers
+`-32603` from both agents, and both say why in `data.details`: Codex
+reports "no rollout found for thread id …". That is a session which was
+never persisted, so the probe is measuring a condition of its own making
+and cannot tell "this agent does not implement resume" from "there was
+nothing to resume". A probe that would settle it prompts the session,
+lets it persist, and resumes it from a *second* process. Until that is
+run, the registry's rows stand and this document says only that ours did
+not test what it looked like it was testing.
+
+Gemini CLI is still unmeasured and #729 is still the reason: this machine
+has a `~/.gemini` with no credential in it. That is worth stating plainly
+rather than leaving as an old row, because Gemini is the one agent whose
+behaviour the client-side thesis most wants to know.
+
 Four things a client has to be built around, none of which is visible
 from the specification alone:
 
@@ -751,15 +822,21 @@ from the specification alone:
 4. **`-32601` is a fact, not a failure.** Gemini answers it for every
    optional method. A client must treat method-not-found as "this agent
    does not do that" and carry on.
-5. **An agent may decline a capability it was offered**, and two of them
-   do. Measured with `terminal: true` and both file methods advertised,
-   asked in as many words to run a shell command: **Claude Agent 0.75.1
-   and Codex 1.10.0 both ran it in their own process** and called no
-   client method at all. Claude Agent reported it as a `tool_call` of
-   kind `execute` with the command in `rawInput` and its output in
-   `rawOutput`; Codex reported a `tool_call` whose content names a
-   `terminal` — with a `terminalId` of its own minting, not one this
-   client issued.
+5. **An agent may decline a capability it was offered**, and whether it
+   does is per agent and per *kind* of action rather than per agent
+   alone. Re-measured 2026-09-10 with `terminal: true` and both file
+   methods advertised, asked in as many words to run a shell command:
+   **Claude Code 0.16.2 called `terminal/create`; Codex 1.11.0 ran it in
+   its own process** and called no client method at all. For *files*
+   both declined: neither called `fs/read_text_file` or
+   `fs/write_text_file` in any measured turn, and under `-deny
+   write:/**` both wrote the file themselves and it appeared.
+
+   The earlier text here said both agents declined for commands too. It
+   was measured through #1777, with this client answering permission
+   requests in ids the agents had never offered, so an agent that was
+   being *refused* was written down as an agent that had *declined*. See
+   the client-side section for the re-measurement.
 
    This is the sharpest limit on the whole client-side thesis and it is
    not a defect in the implementation: the gate can only see what an
@@ -769,9 +846,15 @@ from the specification alone:
    rather than an adapter and is the one most likely to; measuring that
    needs a credential and is **#729**.
 
-   The consequence for a person is worth stating plainly: against those
-   two adapters today, `-deny` and the audit trail cover what the agent
-   asks *us* to read and write, and do not cover the commands it runs.
+   The consequence for a person is worth stating plainly, and the
+   re-measurement turned it around: against the two adapters measured
+   today, `-deny` and the audit trail cover **the commands Claude Code
+   asks us to run** — and cover neither agent's **files**, because
+   neither has ever asked us to open one. The old wording said the
+   opposite of both halves. It was written from the confounded
+   measurement, and a sentence about what a policy covers is exactly the
+   sentence that must not be inherited from a run where every permission
+   answer was being discarded.
 
 6. **A permission option's id belongs to the agent that offered it, and
    an id it did not offer is not an answer.** Measured 2026-09-10

@@ -352,6 +352,31 @@ holds all of it, along with the measurement of what a widget can read and write
 and what the four line parameters do to each other. bash's `bind -x` is the
 same capability under a different name and is not built — #1352.
 
+**A completion widget** — zsh's `zle -C name completer function` — is the same
+round trip with one thing taken away. It is how that shell's completion system
+installs every widget it owns, so refusing the letter cost a real startup
+fifteen lines and left the shell with none of them; `dialect/zsh/zle.go` holds
+the definition, the two listing spellings, and the closed set of eight builtin
+completion widgets the middle word may name.
+
+What is different at run time was measured through a pseudo-terminal with a key
+bound to one, and it is worth stating because it is the half that *refuses*:
+inside a completion widget the four line parameters are **read-only** —
+`${(t)BUFFER}` reports `scalar-local-readonly-special` where an ordinary widget
+reports `scalar-local-special`, and each of the four assignments answers
+`read-only variable:` and stops the function. A completion widget looks at the
+line and offers candidates; it does not rewrite it. That much is built here.
+
+What is not built is the completion *context* the completer names. zsh gives
+such a widget `compstate`, `words`, `CURRENT`, `PREFIX` and the `compadd`
+builtin, which is the whole of how candidates are produced and displayed, and
+this shell has no completion system for any of it to describe — `zsh/complete`
+and `zsh/computil` are both in the roster of modules it declines to load. So a
+completion widget defined here registers, lists, aliases, deletes and runs its
+function, and the function can read the line; it cannot yet offer a completion.
+The editor's own completion is unaffected, because a key left on its default
+binding never reaches the widget table.
+
 **A callback on a descriptor** — zsh's `zle -F`, and how a plugin in that shell
 does asynchrony — needed this read loop to wait on more than the terminal, and
 it has that now: `repl.Shell.WatchedDescriptors` is asked before every wait and

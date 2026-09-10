@@ -13389,6 +13389,26 @@ echo "read=[$l]"`,
 		Why:     "`-w` alone is the bare `zle` — status 1 and not a word — and makes no difference to `-N`. It changes only what `-F` arms, and the listing writes it back with the letter, because with `-w` the callback is a widget handed the line and without it an ordinary function handed only the descriptor",
 	},
 	{
+		ID: "zle/a-completion-widget-is-defined-and-said-back", Category: "builtins",
+		Snippet: `zle -C w complete-word _main_complete; echo "st=$?"; zle -l; zle -l -L; zle -C x list-choices x; zle -l x; echo "q=$?"; zle -l -L x`,
+		Why:     "the line a completion loader writes on every startup, and the two listings it reads back in: `name -C completer function` plainly and `zle -C name completer function` under `-L`. All three words both ways even when the function is named identically to the widget, which is the case `-N` abbreviates to a bare name — the completer in the middle is not recoverable from a default. Refusing the letter cost a real startup fifteen lines and every completion widget it would have installed",
+	},
+	{
+		ID: "zle/the-completer-is-a-closed-set", Category: "builtins",
+		Snippet: `zle -C a complete-word f; echo "cw=$?"; zle -C b .list-choices f; echo "dot=$?"; zle -C c end-of-line f; echo "ed=$?"; zle -C d menu-select f; echo "ms=$?"; zle -C e _main_complete f; echo "fn=$?"; zle -C g nosuch f; echo "no=$?"; zle -l`,
+		Why:     "the second word of `zle -C` is a closed set — the builtin completion widgets, each under its own name and under the `.` spelling a loader uses — and everything else is `invalid widget`, a different complaint from the `no such widget` that `-D` and `-A` make. `end-of-line` is unarguably a widget and is still refused, and `menu-select` is refused until zsh/complist is loaded, which is why a loader guards that one line with `zle -la menu-select`",
+	},
+	{
+		ID: "zle/a-completion-widget-takes-exactly-three-words", Category: "builtins",
+		Snippet: `zle -C; echo "none=$?"; zle -C a; echo "one=$?"; zle -C a complete-word; echo "two=$?"; zle -C a complete-word c d; echo "four=$?"; zle -C w complete-word nosuchfn; echo "nofn=$?"; zle -l`,
+		Why:     "unlike `-N`, the function may not be left to default to the widget's name: one and two words are both `not enough arguments for -C`. The function still does not have to exist yet — a loader defines every widget it installs against a driver it autoloads afterwards — so a shell that checked it here would fail all of them",
+	},
+	{
+		ID: "zle/a-completion-widget-is-a-widget-everywhere-else", Category: "builtins",
+		Snippet: `zle -C a complete-word af; zle -C b list-choices bf; zle -N c cf; zle -A a y; zle -D b; echo "del=$?"; zle -l; echo --; zle -N a af2; zle -l a`,
+		Why:     "one table and not two: `-A` copies a completion widget completer and all, rather than quietly returning an ordinary one; `-D` removes one out of the middle and leaves the rest; the two kinds sort together into one listing; and redefining across the kinds replaces the whole definition rather than merging it, so `-N` over a `-C` leaves no trace of the completer",
+	},
+	{
 		ID: "zle/a-minus-then-a-digit-is-an-operand", Category: "builtins",
 		Snippet: `zle -0; echo "st=$?"; zle -5 x; echo "two=$?"`,
 		Why:     "where option parsing stops: a word of `-` and then a digit is an operand, so `zle -0` is an attempt to *call* a widget of that name and says `widgets can only be called when ZLE is active` rather than `bad option`. It is the rule underneath `zle -F -3` reaching the descriptor parser at all",

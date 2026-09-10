@@ -112534,6 +112534,138 @@
         "TimedOut": false
       }
     },
+    "zle/a-completion-widget-is-a-widget-everywhere-else": {
+      "bash": {
+        "Stdout": "del=127~--",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "del=127~--",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "del=127~--",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "del=127~--",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "del=127~--",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "del=0~a -C complete-word af~c (cf)~y -C complete-word af~--",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/a-completion-widget-is-defined-and-said-back": {
+      "bash": {
+        "Stdout": "st=127~q=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~q=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~q=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~q=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~q=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~w -C complete-word _main_complete~zle -C w complete-word _main_complete~q=0~zle -C x list-choices x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/a-completion-widget-takes-exactly-three-words": {
+      "bash": {
+        "Stdout": "none=127~one=127~two=127~four=127~nofn=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "none=127~one=127~two=127~four=127~nofn=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "none=127~one=127~two=127~four=127~nofn=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "none=127~one=127~two=127~four=127~nofn=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "none=127~one=127~two=127~four=127~nofn=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "none=1~one=1~two=1~four=1~nofn=0~w -C complete-word nosuchfn",
+        "Stderr": "\u003cshell\u003e:zle:1: not enough arguments for -C~\u003cshell\u003e:zle:1: not enough arguments for -C~\u003cshell\u003e:zle:1: not enough arguments for -C~\u003cshell\u003e:zle:1: too many arguments for -C",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "zle/a-definition-does-not-need-its-function-yet": {
       "bash": {
         "Stdout": "st=127",
@@ -113013,6 +113145,50 @@
       "zsh": {
         "Stdout": "opt=1~short=1~long=1~del=1",
         "Stderr": "\u003cshell\u003e:zle:1: bad option: -Q~\u003cshell\u003e:zle:1: not enough arguments for -N~\u003cshell\u003e:zle:1: too many arguments for -N~\u003cshell\u003e:zle:1: no such widget `nosuch'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zle/the-completer-is-a-closed-set": {
+      "bash": {
+        "Stdout": "cw=127~dot=127~ed=127~ms=127~fn=127~no=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "cw=127~dot=127~ed=127~ms=127~fn=127~no=127",
+        "Stderr": "\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "cw=127~dot=127~ed=127~ms=127~fn=127~no=127",
+        "Stderr": "\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: zle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "cw=127~dot=127~ed=127~ms=127~fn=127~no=127",
+        "Stderr": "\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "cw=127~dot=127~ed=127~ms=127~fn=127~no=127",
+        "Stderr": "\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found~\u003cshell\u003e: zle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "cw=0~dot=0~ed=1~ms=1~fn=1~no=1~a -C complete-word f~b -C .list-choices f",
+        "Stderr": "\u003cshell\u003e:zle:1: invalid widget `end-of-line'~\u003cshell\u003e:zle:1: invalid widget `menu-select'~\u003cshell\u003e:zle:1: invalid widget `_main_complete'~\u003cshell\u003e:zle:1: invalid widget `nosuch'",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

@@ -7371,6 +7371,48 @@ echo "st=$?"`,
 		Why:     "which operators reach the state and on which side. It is the two that substitute a *word* — the default and the alternate, with or without the colon — and only on the side that substitutes it: the alternate over an empty value never runs its word and gives an ordinary `''`. The assigning form is on the same line because it looks like the others and is not one: it substitutes what it stored in the parameter, so its answer is a value",
 	},
 	{
+		ID: "param/the-pattern-quoting-flag-escapes-the-pattern-metacharacters", Category: "parameter expansion",
+		Snippet: `v='a b*c?d[e]'; printf "[%s][%s]" "${(b)v}" "${(q)v}"; w=""; printf "[%s][%s]" "${(b)w}" "${(q)w}"; echo`,
+		Why:     "the two differences between the pattern-quoting flag and the shell-quoting one beside it, on one line. The space is the first and it is what says they are not one function: `(b)` marks the pattern metacharacters and leaves everything a shell would otherwise quote alone, so `a b*c` keeps its space where `(q)` backslashes it. The empty value is the second — empty here and `''` there, since an empty pattern is simply empty while an empty shell word has to be written. A row with only the first value cannot see the second, and a row with no space in it cannot see either",
+	},
+	{
+		ID: "param/what-the-pattern-quoting-flag-escapes", Category: "parameter expansion",
+		Snippet: `for c in '#' '(' ')' '*' '<' '>' '?' '[' '\' ']' '^' '|' '~' ' ' '!' '"' '$' '%' '&' "'" '+' ',' '-' '.' '/' ':' ';' '=' '@' '{' '}' '` + "`" + `'; do v="A${c}Z"; printf "%s" "${(b)v}"; done; echo`,
+		Why:     "the whole table, one character at a time, because which characters are special *is* this flag: a probe on a value holding none of them cannot tell a correct escape from no escape at all, and a probe on `*` alone cannot tell this set from the shell-quoting one, which is twice the size. Thirteen of the thirty-two are marked — `#()*<>?[\\]^|~` — and the nineteen beside them are not. The two that matter most are `!` and `-`, which a bracket expression gives meaning to and which this flag still leaves alone, since whatever would open the bracket is escaped already",
+	},
+	{
+		ID: "param/the-pattern-quoting-flag-reads-a-tilde-by-nothing", Category: "parameter expansion",
+		Snippet: `x="a~b"; y="~x"; printf "[%s][%s][%s][%s]" "${(b)x}" "${(b)y}" "${(q)x}" "${(q)y}"; echo`,
+		Why:     "the one place the two tables disagree about *position* rather than about membership. A shell word's tilde opens an expansion only at its front, so `(q)` writes `a~b` bare and `\\~x` marked; a pattern's tilde is the exclusion operator wherever it stands, so `(b)` marks both. The row is the discriminating one against folding the two flags onto one table, which would have to answer one of these four columns wrong",
+	},
+	{
+		ID:       "param/the-pattern-quoting-flag-round-trips-into-a-pattern",
+		Category: "parameter expansion",
+		Snippet:  `a=('a b*c?d[e]' '#' '^x' '~' '\' 'a\b' '*' '[a-z]' '(a|b)' '<1-9>' '?' 'x#' 'a^b' 'a~b' '**' '###' '' 'a  b' '$x' '"q"' '{a,b}' '%' '!' '/' '\*' '\\' '[' ']' '(' ')' 'a]b[' '*(.)' 'x|y' '#b' '(#i)' '[[:alpha:]]' 'a-b' '@(a)' '?(c)' 'a**b' '\|' '~/x' '>' '<'); for v in "${a[@]}"; do if [[ $v == ${~${(b)v}} ]]; then printf "."; else printf "[%s]" "$v"; fi; done; echo`,
+		Why:      "the property the flag exists for, asserted as a property: whatever the value was, the escape reads back as a pattern matching that value and nothing else. Written as a table rather than a spot check because a value holding no metacharacter passes whether or not the flag does anything at all. The `${~…}` is load-bearing — a value's metacharacters are not live in a pattern until something asks for them, so without it every row here fails, the backslashes being ordinary text to a literal match",
+	},
+	{
+		ID:       "param/the-pattern-quoting-flag-does-not-move-with-the-glob-options",
+		Category: "parameter expansion",
+		Snippet:  `v='a#b^c~d*e'; printf "[%s]" "${(b)v}"; setopt extendedglob 2>/dev/null; printf "[%s]" "${(b)v}"; setopt kshglob 2>/dev/null; unsetopt bareglobqual 2>/dev/null; printf "[%s]" "${(b)v}"; setopt noglob 2>/dev/null; printf "[%s]" "${(b)v}"; echo`,
+		Why:      "`#` and `^` are metacharacters only once `extendedglob` is on, so the obvious guess is that this flag asks. It does not: the same four columns come back identical with the option off, with it on, with `kshglob` beside it and `bareglobqual` off, and with globbing switched off altogether. That is the only answer that can be right for text whose reader's options are not this expansion's to know, and marking a character where nothing reads one costs nothing — an escaped ordinary character is that character",
+	},
+	{
+		ID: "param/where-the-pattern-quoting-step-sits", Category: "parameter expansion",
+		Snippet: `v='a*b'; a=('x*y' 'p'); printf "[%s]" "${(bU)v}" "${(bQ)v}" "${(bl:8:)v}" "${(bj:|:)a}" "${(b)#v}"; g='a\x2ab'; printf "[%s]" "${(bg:e:)g}"; echo`,
+		Why:     "the composition, and every column fixes the step to one slot beside the shell-quoting one. The case conversion and the escape reading have already run when it does; the unquoting runs behind it, so the pair is a round trip; the padding counts the *escaped* text, so a width of eight leaves four spaces and not five; the join has run, so the separator the group inserted is marked along with everything else; and the length is the value's own. The escape-reading column is the discriminating one for that boundary: a step that ran ahead of it would see `a\\x2ab`, mark the backslash and hand `(g)` a doubled one, giving back the text rather than the marked `*`. The prompt escapes share rule 13's slot with `(g)` and are deliberately *not* a column here — what separates the two orders there is a bracket inside a terminal escape sequence, which needs a `TERM` this harness does not set and would make the row an answer about the runner. That measurement is in the spec instead",
+	},
+	{
+		ID: "param/the-pattern-quoting-flag-on-an-array", Category: "parameter expansion",
+		Snippet: `a=("x*y" "p q" "" "z"); printf "[%s]" "${(@b)a}"; printf "[%s]" "${(b)a}"; printf "[%s]" ${(b)a}; echo`,
+		Why:     "which side of the join the escape falls on, asked three ways. Asked for the fields it is elementwise and the space inside an element survives unmarked; asked as one word in quotes the join has already happened and the answer is one field; and bare it is the same join with the empty element gone. The plugin table in the workload is the first spelling — `${(j:|:)${(@b)installed}}` builds an alternation out of names it must not let glob",
+	},
+	{
+		ID: "param/the-pattern-quoting-flag-is-refused-beside-another-quoting-flag", Category: "parameter expansion",
+		Snippet: `v=ab; for f in 'bq' 'qb' 'bb' 'bUq' 'q-b' 'qqqb'; do eval "printf '[%s]' \${($f)v}" 2>&1 | sed "s/^[^ ]*: //"; done; w='a*b'; printf "[%s][%s]" "${(b-)w}" "${(bQ)w}"; echo`,
+		Why:     "`b` and `q` are one family in the group's grammar and a group carries one member of it once. The first six are refused with a position, and the position is the measurement: it is always the *second* member's own character, wherever it stands and whatever is written between the two, so a rule that reported the first would get five of them wrong. The two columns behind them are the near misses, and both are read rather than refused — a `-` behind a `b` is the signed-numeric sort flag and not a modifier, and `Q` is not in the family at all, so the pair with it is a round trip",
+	},
+	{
 		ID: "param/expansion-flags-split-at-newlines", Category: "parameter expansion",
 		Snippet: `x=$'a\nb'; printf "[%s]" ${(f)x}; echo`,
 		Why:     "(f) is the line-splitting flag — the read-a-command's-output-into-an-array idiom, and the one split that does not consult IFS",

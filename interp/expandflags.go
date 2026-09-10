@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwWA~Zze-lr0"
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQbcwWA~Zze-lr0"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -387,6 +387,31 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	if n := strings.Count(e.Flags, "q"); n > 0 {
 		for i, w := range words {
 			words[i] = quoteFlagged(w, n, e.QuoteModifier, nothing)
+		}
+	}
+	// Rule 14's third spelling: `(b)` marks the *pattern* metacharacters and
+	// nothing else. It stands beside `q` rather than before or behind it
+	// because the grammar makes the pair unwritable — the two are one family
+	// and a group carrying both is `error in flags`, so no measurement could
+	// tell an order here from its opposite. What it does compose with is
+	// measured, and every row of it lands on this slot:
+	//
+	//	g='a\x2ab'; ${(bg:e:)g}     a\*b        after the `g` reading
+	//	${(b%):-%B*}, TERM set     ESC\[1m\*   after the prompt escapes
+	//	v='a*b'; ${(bQ)v}          a*b         before the unquoting
+	//	v='a|b'; "${(bZ+n+)v}"     a\|b        before the shell split
+	//	${(bl:8:)v}                4 spaces then `a\*b`, so before the pad
+	//
+	// The first two are the discriminating ones for rule 13. A step that ran
+	// ahead of the `g` reading would mark the value's own backslash and hand
+	// `(g)` a doubled one, giving the text back rather than a marked `*`; and
+	// one that ran ahead of the prompt escapes would leave the `[` the escape
+	// produced unmarked, where it is marked. The fourth is `Z`'s, for the
+	// reason the `q` row beside it carries — a split that ran first would
+	// hand this three words.
+	if patternQuoteFlagApplies(e) {
+		for i, w := range words {
+			words[i] = quotePatternMeta(w)
 		}
 	}
 	// Rule 14's other half: `Q` takes one level of quoting *off*. The manual

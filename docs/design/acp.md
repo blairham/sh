@@ -276,7 +276,7 @@ is and one step further along the same argument:
 
 | inbound | what happens |
 | --- | --- |
-| `terminal/create` | `ActionExec` with the argv, through the gate, then `exec.Cmd` |
+| `terminal/create` | with `args`: `ActionExec` with the argv, through the gate, then `exec.Cmd`. Without: the line is interpreted by this shell — see below |
 | `terminal/output` | what it has written so far, and its exit status if it has one |
 | `terminal/wait_for_exit` | blocks until it ends, or until the request's context does |
 | `terminal/kill` | `ActionSignal` through the gate, then `SIGKILL` |
@@ -285,6 +285,35 @@ is and one step further along the same argument:
 **A refused `terminal/create` is a command that never started**, and the agent
 is told so as an error rather than an empty terminal, because a terminal id
 that names nothing is a thing it would then poll.
+
+**`args` is what picks between two readings of `command`, and both are
+served.** The field is optional in the schema, so an agent that sends one has
+built an argv and wants it exec'd, and an agent that sends only `command` has
+written a line for a shell. Taking the first reading for both is what #1782
+was: `claude-code-acp` 0.16.2 sends `printf "argv0=%s\n" "$0"; ps -o args= -p
+$$` and no `args`, that arrived at `exec.CommandContext` as a program name,
+and nothing ran. Its own workaround — sending `bash -c '…'` — fails the same
+way, because that is one string as well.
+
+For this client the second reading is not a concession, it is the argument of
+this whole document one step further. **A line we interpret ourselves is a
+line whose every `exec`, `open` and `stat` crosses the boundary and lands in
+the audit trail.** Exec'ing it as a filename is the reading that both fails
+and sees least: one gate consultation about a name that never existed.
+
+So `createInterpreted` deliberately takes **no gate consultation of its own**.
+There is no program at that moment to ask about — the line may run none, or
+ten — and what replaces the question is strictly more than it: a policy that
+refuses `/bin/rm` still refuses `rm -rf /` sent as a line, and the record now
+names `rm` rather than a file that was never there.
+
+The two readings run different things behind one terminal id, which is what a
+`vehicle` is for. A child process is ended by signal and reports a wait
+status; an interpreted line has no process to signal, ends through its
+context, and reports a code. `terminal/kill` is gated in both readings — an
+interpreted line names pid 0, which the audit schema already admits — and
+`terminal/release` records a signal only where there was a process to name,
+because a `SIGKILL` against pid 0 would be a fiction.
 
 **Release is recorded and not gated, and kill is gated.** They both end a
 process, so the difference has to be argued rather than assumed. `terminal/kill`
@@ -358,10 +387,12 @@ consulted was the *person* — this client answered the agent's
 not a policy covering an action.
 
 One honest caveat on the Claude command row: it called `terminal/create` four
-times in that turn, not once, because #1782 means every one of them failed and
-it retried with a differently-quoted command each time. The route is what is
-being measured and the route is real; the count is an artifact of a bug of ours
-and must not be read as anything about the agent.
+times in that turn, not once, because #1782 made every one of them fail and it
+retried with a differently-quoted command each time. The route is what is being
+measured and the route is real; the count was an artifact of a bug of ours and
+must not be read as anything about the agent. That bug is fixed — a bare
+`command` is now interpreted rather than exec'd as a filename — so a re-measure
+should see one call, and the retries are the thing to watch to confirm it.
 
 So the earlier wording — that a policy covers the agent's file access and not
 its commands — is true about what an agent *asks for* and misleading about what
@@ -410,7 +441,7 @@ before it is anything else:
 | --- | --- |
 | `fs/read_text_file` | `ActionOpen`, `Write: false` |
 | `fs/write_text_file` | `ActionOpen`, `Write: true` |
-| `terminal/create` | `ActionExec` with the argv |
+| `terminal/create` | `ActionExec` with the argv, or — for a bare command — whatever the interpreted line itself does |
 | `terminal/kill` | `ActionSignal` |
 
 A denial is answered as the protocol allows an error to be answered, and

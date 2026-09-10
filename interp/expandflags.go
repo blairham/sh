@@ -970,15 +970,16 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 			return sliceElems(words, r.numOf(e.Arg, e, e.Arg2), e, r), true, true, false
 		}
 		words[0] = r.substringRange(words[0], e)
-	case syntax.ParamExclude, syntax.ParamSetDifference, syntax.ParamSetIntersection:
+	case syntax.ParamExclude, syntax.ParamSetDifference, syntax.ParamSetIntersection,
+		syntax.ParamElementReplace:
 		if isList {
-			return r.selectElements(e, words), true, true, false
+			return r.reshapeElements(e, words), true, true, false
 		}
 		// Not a list: `${(U)v:#p}` asks the same question of one value, and
 		// the answer is that value or nothing. It stays a scalar rather than
 		// becoming an empty list, so `"${v:#p}"` is one empty field the way
 		// `"${v#p}"` is.
-		words[0] = r.selectScalar(e, words[0])
+		words[0] = r.reshapeScalar(e, words[0])
 	case syntax.ParamUpper, syntax.ParamLower, syntax.ParamToggle,
 		syntax.ParamUpperFirst, syntax.ParamLowerFirst, syntax.ParamToggleFirst:
 		for i, w := range words {

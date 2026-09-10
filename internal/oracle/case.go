@@ -1293,6 +1293,21 @@ var Corpus = []Case{
 		Why:     "`${@:#pat}` drops the parameters the pattern matches and keeps the rest. Two columns answer it and they agree -- zsh, whose operator it is, and ksh93, which reaches the same three fields by its own reading of the same characters -- where the three bash columns call it an arithmetic error and dash a bad substitution, the usual three-way split of an expansion a grammar cannot read. It is how `~/.zi/bin/zi.zsh` strips the `--` separator out of `$@` after `zparseopts` -- `builtin set -- ${@:#--}` -- so a reading that joined first made a declaration of several autoloadable functions into a single function whose name held all of them, and every one of them was then `command not found`. The count is printed as well as the fields because the parameters are left untouched by the filter, which is what says the expansion was read and `set` was not",
 	},
 	{
+		ID: "zsh/replacing-the-elements-a-pattern-matches-whole", Category: "parameters",
+		Snippet: `a=(foo bar); printf "[%s]" "${a[@]:/foo/Z}"; x=foobar; printf " | [%s][%s]" "${x:/foo/Z}" "${x/foo/Z}"; echo`,
+		Why:     "`${a:/pat/repl}` replaces the elements a pattern matches **whole**, and it is the fourth operator of `:#`'s family rather than `${a/pat/repl}` with a colon in front. One column has it; the three bash builds and ksh93 hand the `/foo/Z` to arithmetic and dash cannot read the array literal, the usual split of an expansion a grammar cannot parse. The second half is the whole point and is what a wrong fix gets wrong silently: the same six characters against `foobar` leave it alone where the span replacement answers `Zbar`, so a reading that folded the two would write where the shell reads. `compaudit`, `compdump` and `_p9k_must_init` all reach this operator on a real startup and the arithmetic refusal meant no completion dump and no prompt (#1617)",
+	},
+	{
+		ID: "zsh/an-empty-whole-element-replacement-drops-what-it-matched", Category: "parameters",
+		Snippet: `a=(x . y); set -- "${a[@]:/.}"; printf "[%s]" "$@"; echo " n=$#"`,
+		Why:     "the same operator with no replacement at all: the matched element is **removed** rather than emptied, so this is two fields and not three. Exactly the shape `compaudit:60` and `compdump:26` use to strike `.` out of `fpath` -- `${^~fpath:/.}` -- which is why it is recorded with a literal dot as its pattern. The count is printed as well as the fields because `[x][y]` alone reads the same as `[x][][y]` would once an empty field is printed between brackets, and those are the two answers a fix has to choose between",
+	},
+	{
+		ID: "zsh/a-reporting-pattern-in-a-whole-element-replacement", Category: "parameters",
+		Snippet: `setopt extendedglob 2>/dev/null; a=(foo bar); printf "[%s]" "${a[@]:/(#m)*/<$MATCH>}"; echo`,
+		Why:     "`$MATCH` is live in the replacement, which makes the replacement text something that has to be expanded **again for each element** rather than once for the operator -- the same rule `${x//(#m)pat/repl}` follows, and the reason a single expansion up front is not merely an optimization here. It needs `extendedglob` for the `(#m)` to be a flag group at all, and the option is set with its failure discarded so the five columns without it reach the expansion and record their own refusal rather than stopping on an unknown builtin. `_p9k_must_init:22` is this shape over `$parameters`",
+	},
+	{
 		ID: "core/appending-an-array-literal-to-a-scalar", Category: "parameters",
 		Snippet: `a=1; a+=(2); echo "[${a[*]}] n=${#a[@]} [${a[0]}][${a[1]}]"`,
 		Why:     "an array-literal append over a name holding a *scalar* keeps that value as the first element rather than starting a fresh array from the words. Unanimous across all five shells with arrays, so it is the core being wrong rather than an axis, and the failure was silent: status 0 and a plausible one-element array where the script's own value had been. The two subscripts are what say *where* the kept value landed, and they are the array base rather than a second rule -- `[1][2]` where the first element is 0 and `[][1]` where it is 1, which is the same answer written twice. A row printing only the joined elements would pass with the value placed anywhere at all",

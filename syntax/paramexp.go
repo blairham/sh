@@ -80,6 +80,22 @@ const (
 	// fail in arithmetic — `${v::=rst}` is `operand expected at \`=rst'` in
 	// bash 5.3, bash 3.2 and ksh93, and a bad substitution in dash.
 	ParamAssignAlways
+	// ParamElementReplace is `:/`: the elements a pattern matches **whole**
+	// are replaced by the word after the second slash and the rest are left
+	// exactly as they were.
+	//
+	// The fourth member of ParamExclude's family and the only one that
+	// writes rather than only choosing, so it shares that one's
+	// disambiguation — the single character after the colon — and not
+	// ParamReplace's reading, which substitutes a matching *span* inside a
+	// value. `${x:/foo/Z}` on `foobar` is `foobar` where `${x/foo/Z}` is
+	// `Zbar`.
+	//
+	// The operands are ParamReplace's: Arg is the pattern up to the first
+	// unquoted slash and Arg2 the replacement, which is everything after it
+	// however many slashes that holds. Omitting the slash is the empty
+	// replacement rather than a shape of its own.
+	ParamElementReplace
 )
 
 func (o ParamOp) String() string {
@@ -112,6 +128,8 @@ func (o ParamOp) String() string {
 		return ":|"
 	case ParamSetIntersection:
 		return ":*"
+	case ParamElementReplace:
+		return ":/"
 	case ParamUpperFirst:
 		return "^"
 	case ParamLowerFirst:
@@ -1017,6 +1035,14 @@ func (p *Parser) scanParamOp(s string, e *ParamExpr) (ParamOp, string, bool) {
 	case p.dialect.ParamElementSelection && len(s) >= 2 && s[0] == ':' &&
 		strings.IndexByte("#|*", s[1]) >= 0:
 		return elementSelectOp(s[1]), s[2:], true
+	// `:/` is the same rule again, one flag further along: the whole-element
+	// replacement, whose operands are the replacement's and whose reading is
+	// the element family's. It cannot take input from the substring below,
+	// because no arithmetic expression begins with a division — `${x:3/2}`
+	// is an offset of `3/2` and `${x: /2}` is the error that says so.
+	case p.dialect.ParamWholeElementReplace && len(s) >= 2 && s[0] == ':' &&
+		s[1] == '/':
+		return ParamElementReplace, s[2:], true
 	// The colon before a trim is ignored in one shell, so the operator is
 	// the trim it would have been without it. After the element-selection
 	// case above, which is the other reading of `:#`; no shell sets both,
@@ -1133,7 +1159,7 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 	// this is is the only way to tell them apart.
 	word := q
 	switch e.Op {
-	case ParamReplace:
+	case ParamReplace, ParamElementReplace:
 		// The separator is an unquoted slash, so a slash inside quotes or
 		// after a backslash belongs to the pattern.
 		if i := indexUnquoted(rest, '/'); i >= 0 {

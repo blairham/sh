@@ -1042,6 +1042,31 @@ type Dialect struct {
 	// `${a:-x}` is still a default for the same reason.
 	ParamElementSelection bool
 
+	// ParamWholeElementReplace enables `${a:/pattern/replacement}`, the
+	// fourth operator of that family: the elements the pattern matches
+	// **whole** become the replacement and the rest are left alone, and an
+	// empty replacement drops them the way ParamExclude does.
+	//
+	// A flag of its own rather than a fourth character in the set above,
+	// because it is a different *shape* — two operands split on an unquoted
+	// slash where those three take one — and a dialect may have the family
+	// without it. Set together in the one shell that has either, which is
+	// where the sameness ends.
+	//
+	// The disambiguation is the same one character, and it can be read
+	// before the substring without taking anything from it: no arithmetic
+	// expression begins with a division, so `${x:/p/r}` is unreadable as an
+	// offset in the grammars without the flag — `bad math expression:
+	// operand expected at \`/p/r'` — where `${x:3/2}` keeps its offset of
+	// `3/2` under the flag. Measured on zsh 5.9.2 and bash 5.3.
+	//
+	// It is not ParamReplace with a colon in front. That one substitutes a
+	// matching *span* inside the value; this one tests the whole of it.
+	// `${x:/foo/Z}` on `foobar` is `foobar` where `${x/foo/Z}` is `Zbar`,
+	// so a grammar that folded the two would replace where the shell leaves
+	// the value alone.
+	ParamWholeElementReplace bool
+
 	// ParamColonBeforeTrimIsIgnored reads a colon written before a trim as
 	// nothing at all: `${v:#p}` is `${v#p}`, and so are `${v:##p}`,
 	// `${v:%p}` and `${v:%%p}`. One shell in the panel does this.

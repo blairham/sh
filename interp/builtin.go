@@ -27,7 +27,6 @@ var builtins = map[string]Builtin{
 	"false":    biFalse,
 	"set":      biSet,
 	"echo":     biEcho,
-	"cd":       biCd,
 	"pwd":      biPwd,
 	"wait":     biWait,
 	"trap":     biTrap,
@@ -57,11 +56,17 @@ var builtins = map[string]Builtin{
 // and that route evaluates the subscript — so the builtin now reaches the
 // dispatcher for exactly the reason `unset` does, through the arithmetic and
 // not through anything of `read`'s own.
+//
+// `cd` is the newest, and it is here for the plainest version of the same
+// reason: it *calls a shell function* — the directory-change hook — and a
+// function body is arbitrary shell. It was in the literal above while it could
+// only move the runner and print.
 func init() {
 	builtins["unset"] = biUnset
 	builtins["exit"] = biExit
 	builtins["return"] = biReturn
 	builtins["read"] = biRead
+	builtins["cd"] = biCd
 }
 
 // biBreak and biContinue transfer control out of a loop. They are recorded on
@@ -2006,17 +2011,17 @@ func expandEchoEscapes(s string, hex, esc, capEsc bool) (expanded string, stoppe
 // lets a directory whose name begins with a dash be reached at all: measured,
 // `cd -- -dashdir` moves in every one of them and `cd -dashdir` moves only in
 // zsh, where the word is an operand rather than a bundle of letters.
-func (r *Runner) cdOptions(args []string) (rest []string, physical bool, code int) {
+func (r *Runner) cdOptions(args []string) (rest []string, opts cdFlags, code int) {
 	sawLogical, sawPhysical := false, false
-	done := func(rest []string, code int) ([]string, bool, int) {
+	done := func(rest []string, code int) ([]string, cdFlags, int) {
 		// Which of the two decides is a question only when both were given,
 		// and it is asked only then: with one of them the two rules agree,
 		// and a shell that refused an unambiguous `cd -P` would be refusing
 		// over a disagreement that is not in front of it.
 		if sawLogical && sawPhysical && !r.ask(r.sem().CdLastPathOptionWins, "which of `cd -L` and `cd -P` decides") {
-			return rest, sawPhysical, code
+			opts.physical = sawPhysical
 		}
-		return rest, physical, code
+		return rest, opts, code
 	}
 	for len(args) > 0 {
 		a := args[0]
@@ -2029,9 +2034,9 @@ func (r *Runner) cdOptions(args []string) (rest []string, physical bool, code in
 		for i := 1; i < len(a); i++ {
 			switch a[i] {
 			case 'L':
-				physical, sawLogical = false, true
+				opts.physical, sawLogical = false, true
 			case 'P':
-				physical, sawPhysical = true, true
+				opts.physical, sawPhysical = true, true
 			case 'q':
 				// zsh's quiet `cd`, and the letter that stops a plugin
 				// manager dead: the loader wraps every move in an anonymous
@@ -2040,13 +2045,11 @@ func (r *Runner) cdOptions(args []string) (rest []string, physical bool, code in
 				// and the move never happened. #1558.
 				//
 				// Honored rather than accepted: what `-q` asks is that
-				// `chpwd` and `chpwd_functions` not run, and nothing here
-				// fires them — repl's Hooks.Unfired names `chpwd` and the
-				// session refuses it by name once. When `chpwd` gains a
-				// firing site inside this function it has to read this
-				// letter, and dialect/zsh's
-				// TestChpwdIsUnfiredWhichIsWhatMakesCdQuietHonest fails the
-				// day it does and says so there.
+				// the directory-change hook not run, so the letter is
+				// carried to the site that fires it — see biCd's last act
+				// and Semantics.DirectoryChangeHook. It was free while this
+				// shell had no such site, and dialect/zsh's tripwire test is
+				// what stopped it staying free once the site arrived.
 				//
 				// `continue` rather than `break`, and the two are the same
 				// thing here: this switch is inside the letter loop, so
@@ -2064,9 +2067,10 @@ func (r *Runner) cdOptions(args []string) (rest []string, physical bool, code in
 				// names one too.
 				if a := r.sem().CdHasQuietOption; a != No {
 					if r.ask(a, "`cd -q`") {
+						opts.quiet = true
 						continue
 					}
-					return nil, physical, r.status
+					return nil, opts, r.status
 				}
 				// A shell without the letter answers the word the way it
 				// answers any other letter it does not have, which is the
@@ -2080,7 +2084,7 @@ func (r *Runner) cdOptions(args []string) (rest []string, physical bool, code in
 				if !r.ask(r.sem().CdRefusesUnknownOption, "an option `cd` does not have") {
 					return done(args, 0)
 				}
-				return nil, physical, r.badBuiltinOption("cd", "-"+string(a[i]))
+				return nil, opts, r.badBuiltinOption("cd", "-"+string(a[i]))
 			}
 		}
 		args = args[1:]
@@ -2088,11 +2092,12 @@ func (r *Runner) cdOptions(args []string) (rest []string, physical bool, code in
 	return done(args, 0)
 }
 
-func biCd(r *Runner, _ context.Context, args []string) int {
-	args, physical, code := r.cdOptions(args)
+func biCd(r *Runner, ctx context.Context, args []string) int {
+	args, opts, code := r.cdOptions(args)
 	if code != 0 {
 		return code
 	}
+	physical := opts.physical
 	dir := ""
 	if len(args) > 0 {
 		dir = args[0]
@@ -2228,7 +2233,33 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 		// Asked only for `cd -`, which is the only form any of them prints.
 		r.printf("%s\n", dir)
 	}
+	// Last, after the move and after anything `cd` itself printed, which is
+	// measured: at a prompt `cd -` wrote the directory and *then* the hook's
+	// marker, and a CDPATH move did the same. Only on a `cd` that got
+	// somewhere — every return above this line is a `cd` that did not move,
+	// and none of them fires it.
+	//
+	// `-q` is the one move that stays quiet, which is the whole of what that
+	// letter means; the flag is read here rather than at the option loop
+	// because here is where there is something to suppress.
+	if !opts.quiet {
+		r.FireHook(ctx, nil, r.sem().DirectoryChangeHook)
+	}
 	return 0
+}
+
+// cdFlags is what `cd`'s option letters left behind, and it is a struct for
+// one reason: a second `bool` in a return list is a second thing to thread
+// through the same three places, and the two before it were already returned
+// positionally where a reader has to count. See cdOptions.
+type cdFlags struct {
+	// physical resolves the path rather than keeping the name it was
+	// reached by — `-P` against the default and `-L`.
+	physical bool
+
+	// quiet suppresses the directory-change hook — zsh's `-q`, and nothing
+	// besides. See Semantics.CdHasQuietOption.
+	quiet bool
 }
 
 // searchCdpath walks CDPATH for a relative operand that does not lead with

@@ -1647,17 +1647,76 @@ type Semantics struct {
 	// stayed silent with the letter and without it — so a shell that fires no
 	// `chpwd` has already done everything `-q` asks for.
 	//
-	// This shell is such a shell: `chpwd` has no firing site, and repl's
-	// Hooks.Unfired names it and refuses it by name once per session. So the
-	// letter is honored here rather than swallowed, and it is carried for the
-	// reason it is a *letter* and not an operand — without it `cd -q /tmp`
-	// went looking for a directory called `-q`, which is #1558.
+	// So the letter is carried to that site rather than swallowed at the
+	// option loop: `cd` fires DirectoryChangeHook and `cd -q` does not,
+	// measured for the named function and for a `chpwd_functions` member
+	// alike, and measured again for `pushd -q` and `popd -q`, which move
+	// through `cd` and are quiet for the same reason. It is a *letter* and
+	// not an operand, which is the other half of why it is here — without it
+	// `cd -q /tmp` went looking for a directory called `-q`, which is #1558.
 	//
 	// Asked only when a `q` is actually seen, so the three shells without the
 	// letter never reach the question and answer the word the way they answer
 	// any other letter they do not have — see CdRefusesUnknownOption, which
 	// is the next question when this one says no.
 	CdHasQuietOption Answer
+
+	// HookListSuffix is what a hook's list of *extra* function names is
+	// spelled by: the hook's own name plus this. zsh's is `_functions`, so
+	// `precmd` reads `precmd_functions` as well and `chpwd` reads
+	// `chpwd_functions`. Empty is a shell whose hooks are the named function
+	// and nothing else, which is three of the four — and, since those three
+	// have no hooks at all, is really "no hooks" said once.
+	//
+	// Not decoration: `add-zsh-hook precmd f` defines no function called
+	// `precmd`, it appends `f` to `precmd_functions`, so a shell that read
+	// only the named function would find a correctly registered hook and run
+	// nothing. That was #1281.
+	//
+	// Here rather than on repl.HookStyle, where it began, because the hook
+	// *sites* are on both sides of that line: `precmd` fires in a prompt loop
+	// and `chpwd` fires inside `cd`, which is a builtin and cannot reach up
+	// into a front end. One home for the suffix, one [Runner.HookChain] that
+	// applies it, and no way for the two sites to come to disagree about what
+	// a hook's list is called.
+	HookListSuffix string
+
+	// DirectoryChangeHook names the function this shell runs after `cd` has
+	// moved it — zsh's `chpwd`. Empty is a shell without one, which is three
+	// of the four: measured 2026-09-10, a `chpwd` function defined in bash
+	// 5.3.15, bash 3.2.57, bash-as-sh, dash and ksh93 ran on none of their
+	// `cd`s and none of them said anything about it.
+	//
+	// It is the *last* thing `cd` does, after the directory has moved and
+	// after anything `cd` itself prints. Measured at a zsh prompt: `cd -`
+	// wrote `/usr` and *then* the hook's marker, and a CDPATH move wrote the
+	// directory it found and then the marker. So a hook cannot land in the
+	// middle of `cd`'s own output.
+	//
+	// **On the move, not on the change.** `cd` to the directory the shell is
+	// already in fires it — measured, `cd /usr` twice in a row fired it
+	// twice, with `$PWD` and `$OLDPWD` both `/usr`. A `cd` that *fails* does
+	// not: `cd /nope-nope` reported its error, left `$OLDPWD` alone and ran
+	// nothing.
+	//
+	// `$PWD` is where the shell now is and `$OLDPWD` where it was, both
+	// already set when the hook runs, and the hook is told **no arguments** —
+	// `$#` is 0 in the named function and in every member of the list.
+	//
+	// Everything that moves through `cd` fires it and nothing else does.
+	// `pushd`, `popd` and a bare directory name under `autocd` are `cd` here
+	// and in zsh both, and all three fired it; assigning to `PWD` is not a
+	// move and fired nothing. A `cd` inside a function fires it at the `cd`,
+	// and a `cd` inside a subshell or a command substitution fires it in
+	// there, where the move is.
+	//
+	// A hook that itself calls `cd` fires the hook again, and zsh has no
+	// guard against that beyond its ordinary recursion limit: a pair of
+	// hooks moving back and forth ended with `chpwd: job table full or
+	// recursion limit exceeded`. Nothing special is done here either — the
+	// call goes through [Runner.CallFunction] and meets whatever limit an
+	// ordinary function call meets.
+	DirectoryChangeHook string
 
 	// ChildInterruptEndsTheScript stops the script when a child was ended by
 	// an interrupt, instead of carrying on with the next command. True in

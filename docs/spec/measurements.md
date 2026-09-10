@@ -6528,6 +6528,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cd/no-home-diverges` | `st=0` | `st=1` **2>** `<shell>: line 1: cd: HOME not set` | `st=1` **2>** `<shell>: line 1: cd: HOME not set` | `st=1` **2>** `<shell>: line 0: cd: HOME not set` | `st=1` **2>** `<shell>: cd: bad directory` | `st=0` |
 | `cd/dash-announces-where-it-went` | `printed` | `printed` | `printed` | `printed` | `printed` | `silent` |
 | `cd/cdpath-may-announce-the-move` | `announced` | `announced` | `announced` | `announced` | `announced` | `silent` |
+| `cd/a-directory-change-hook` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `CHPWDMARK~st=0` |
+| `cd/nothing-runs-when-the-cd-failed` | `st=2` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `cd/the-quiet-letter-is-what-suppresses-the-hook` | `st=2~stayed` **2>** `<shell>: 3: cd: Illegal option -q` | `st=2~stayed` **2>** `<shell>: line 3: cd: -q: invalid option~cd: usage: cd [-L\|[-P [-e]]] [-@] [dir]` | `st=2~stayed` **2>** `<shell>: line 3: cd: -q: invalid option~cd: usage: cd [-L\|[-P [-e]]] [-@] [dir]` | `st=1~stayed` **2>** `<shell>: line 2: cd: -q: invalid option~cd: usage: cd [-L\|-P] [dir]` | `st=2~stayed` **2>** `<shell>[3]: cd: -q: unknown option~Usage: cd [-LP] [directory]~   Or: cd [ options ] old new` | `st=0~moved` |
 
 - `cd/missing-directory-diverges` — four shapes and two statuses for one failure, and dash gives no reason at all — the one shell whose message cannot tell you why
   ```sh
@@ -6550,6 +6553,27 @@ grades it and nothing drift-checks it either, for the same reason.
   mkdir -p pool/sub
   out=$(CDPATH=./pool cd sub)
   [ -n "$out" ] && echo announced || echo silent
+  ```
+- `cd/a-directory-change-hook` — zsh runs a function called `chpwd` once the working directory has moved, and it needs no terminal to do it — this is the whole feature in four lines. The other five have no such hook: the function is defined, the `cd` succeeds, and nothing calls it. The marker is a word nothing else in the snippet can print, so the case cannot pass by mistaking `cd`'s own output for the hook's
+  ```sh
+  mkdir -p sub
+  chpwd() { echo CHPWDMARK; }
+  cd sub
+  echo "st=$?"
+  ```
+- `cd/nothing-runs-when-the-cd-failed` — the counter-case to the row above, and the one that makes it mean something: a `cd` that did not move runs no hook, in the shell that has one and in the five that do not, so every column prints the status alone. Without it a shell that called the function on every `cd` would score the first row and be wrong. The diagnostic is discarded because its wording is `cd`'s and is measured elsewhere
+  ```sh
+  chpwd() { echo CHPWDMARK; }
+  cd nosuchdir_zz 2>/dev/null
+  echo "st=$?"
+  ```
+- `cd/the-quiet-letter-is-what-suppresses-the-hook` — `cd -q` in the one shell that has the letter is hook suppression and nothing besides — it moves, and the function that would have run does not. Both halves are in the snippet because a `-q` that suppressed by refusing to move would look identical if only the silence were checked, and reading the letter as the operand is exactly how it failed before (#1558). The five without the letter refuse it and stay put, each in its own words
+  ```sh
+  mkdir -p sub
+  chpwd() { echo CHPWDMARK; }
+  cd -q sub
+  echo "st=$?"
+  case $PWD in */sub) echo moved;; *) echo stayed;; esac
   ```
 
 ## printf

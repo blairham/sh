@@ -190,7 +190,7 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// borrowed text asking `$?` read 0 after a failure — success, reported at
 	// status 0, by the parameter whose whole job is to say otherwise. It is
 	// also what a prompt hook needs, since every one of them is handed the
-	// status of the line before it (repl's fireChain).
+	// status of the line before it (Runner.FireChain).
 	if len(f.Stmts) == 0 {
 		r.status = 0
 	}

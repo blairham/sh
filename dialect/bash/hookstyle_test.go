@@ -39,8 +39,20 @@ func TestThisShellHasNoCommandHook(t *testing.T) {
 	if h.BeforeCommand != "" {
 		t.Errorf("a command hook %q is named, and this shell has none", h.BeforeCommand)
 	}
-	if h.ListSuffix != "" {
-		t.Errorf("a list suffix %q is named, and this shell's hook is not a list of function names", h.ListSuffix)
+	if suffix := bash.Semantics().HookListSuffix; suffix != "" {
+		t.Errorf("a list suffix %q is named, and this shell's hook is not a list of function names", suffix)
+	}
+}
+
+// No hook fires where the working directory changed either.
+//
+// Measured 2026-09-10: a `chpwd` function defined in bash 5.3.15, in 3.2.57
+// and under an argv[0] of `sh` ran on none of their `cd`s and none of them
+// said anything. dash and ksh93 answer the same, and zsh alone does not — see
+// interp.Semantics.DirectoryChangeHook. #1775.
+func TestThisShellHasNoDirectoryChangeHook(t *testing.T) {
+	if name := bash.Semantics().DirectoryChangeHook; name != "" {
+		t.Errorf("a directory-change hook %q is named, and this shell has none", name)
 	}
 }
 

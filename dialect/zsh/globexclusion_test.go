@@ -71,9 +71,16 @@ func TestAGlobExclusionIsMatchedAgainstTheWholeWord(t *testing.T) {
 		// An exclusion inside a group is not a top-level one, and stays the
 		// single component's own question.
 		{`echo d/(*~sub)/*`, "d/gxdir/deep"},
-		// The exclusion is taken out before the qualifiers narrow what is
-		// left, rather than after.
+		// A qualifier list narrows what the exclusion left, and the two
+		// filters commute, so this row says only that they coexist.
 		{`echo d/*~*(~|.zwc)(N/)`, "d/gxdir d/sub"},
+		// The order *is* visible against a modifier, which maps a word to a
+		// new one rather than filtering. `*d/*` matches every word the left
+		// side produced and none of the tails `:t` would leave, so an empty
+		// answer says the exclusion ran first; running `:t` first would keep
+		// all three.
+		{`echo d/p_*~*d/*(N:t)`, ""},
+		{`echo d/p_*~*.zwc(N:t)`, "p_git p_hg~"},
 		// A `~` straight after a `/` leaves the left side's last component
 		// empty, and no file is named nothing. The trailing slash that means
 		// "directories only" is the one at the end of the word.

@@ -790,7 +790,7 @@ func Semantics() interp.Semantics {
 	// `declare +f` takes the function attribute off rather than naming the
 	// functions, which leaves the bare `declare` listing — every variable
 	// and then every function. This engine has no bare listing for this
-	// shell, so the letter goes on writing bodies (#1742). `declare -F` is
+	// shell, so the letter goes on writing bodies (#1754). `declare -F` is
 	// the names-only spelling here and is unaffected: it has its own letter.
 	s.FunctionNamesUnderPlus = interp.No
 	// `-i` takes no output base here, which is what separates this shell

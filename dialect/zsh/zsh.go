@@ -1202,7 +1202,7 @@ func Semantics() interp.Semantics {
 	// is that shell's second name for `autoload` — there `-z` picks the
 	// autoloaded file's syntax and is recorded on the stub, `typeset -fuz n`
 	// listing as `builtin autoload -Xz` exactly as `autoload -z n` does.
-	// This engine's `typeset -fu` does not autoload at all yet (#1741), so
+	// This engine's `typeset -fu` does not autoload at all yet (#1753), so
 	// there is nothing for the letter to be recorded on and inert is the
 	// whole truth for every spelling that works here. `autoload -z` itself
 	// is unaffected: that word has its own table and already keeps the

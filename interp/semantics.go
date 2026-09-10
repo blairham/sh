@@ -2403,7 +2403,7 @@ type Semantics struct {
 	//     `declare`, which writes every variable and then every function.
 	//     That listing is BareDeclarationListing's unanswered row for that
 	//     shell, so `No` here leaves the letter writing bodies: the row is
-	//     as wrong as it was rather than wrong in a new way (#1742).
+	//     as wrong as it was rather than wrong in a new way (#1754).
 	//
 	// ksh93 is a third answer again — `f()` for a function declared with
 	// parentheses and the bare name for one declared with the keyword — and

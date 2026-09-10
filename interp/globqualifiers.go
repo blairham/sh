@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"fmt"
 	"io/fs"
 	"strings"
 )
@@ -122,76 +123,150 @@ func escapedAt(s string, i int) bool {
 // tests that must all hold, plus the two options that are about the *search*
 // rather than about a file.
 type globQualifiers struct {
-	sections  [][]globTypeTest
+	sections  [][]globTest
 	seeHidden bool
 	// allowNoMatch is `N`: a pattern that matched nothing is no error and
 	// the word is deleted, which is `null_glob` for one pattern.
 	allowNoMatch bool
+	// modifiers is the history-style modifier text a `:` in the list opens,
+	// applied to every name the pattern reported. Empty where the list has
+	// no `:` in it, which is every list that is only qualifiers.
+	modifiers string
 }
 
-// globTypeTest is one file-type qualifier and whether a `^` before it turned
-// its sense.
-type globTypeTest struct {
+// globTest is one qualifier that asks something of a file: which question,
+// whether a `^` before it turned the sense, and whether a `-` before it said
+// to ask the question of a symbolic link's *target* rather than of the link.
+//
+// The argument-taking qualifiers keep theirs here, already read: `f` carries
+// the mode conditions its spec came to, and `u` and `g` carry the numeric id
+// a name was resolved to. Both are settled while the list is parsed, which is
+// what makes `zz*(Nu:nosuchuser:)` name the user in a directory where the
+// pattern matches nothing at all.
+type globTest struct {
 	kind    byte
 	negated bool
+	follow  bool
+	// mode is `f`'s conditions, every one of which has to hold.
+	mode modeSpec
+	// id is `u`'s user or `g`'s group, and it is a uint64 because a written
+	// number is not obliged to fit a uid — one that does not fit matches
+	// nothing, which is what a uid no file carries would do anyway.
+	id uint64
 }
 
-// parseGlobQualifiers reads a list. The second result is the character no
-// qualifier claims, for the diagnostic that names it.
-func parseGlobQualifiers(list string) (globQualifiers, byte, bool) {
+// parseGlobQualifiers reads a list. The second result is the diagnostic when
+// the list is bad — the shell's own wording, chosen at the point that knows
+// which of the four complaints applies.
+func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 	var q globQualifiers
-	section := []globTypeTest{}
-	negate := false
-	for i := range len(list) {
-		switch c := list[i]; c {
+	section := []globTest{}
+	negate, follow := false, false
+	for i := 0; i < len(list); {
+		c := list[i]
+		i++
+		switch c {
 		case ',':
 			// A section may be empty — every file passes it — which is what
-			// keeps `(.,)` from being a special case.
+			// keeps `(.,)` from being a special case. It is also where both
+			// prefixes end: `^` and `-` are read again from nothing in the
+			// next section, measured — `*(-@,@)` lists the link that could
+			// not be followed *and* the two that could, so the second
+			// section did not inherit the first's `-`.
 			q.sections = append(q.sections, section)
-			section, negate = []globTypeTest{}, false
+			section, negate, follow = []globTest{}, false, false
 		case '^':
 			// Turns the sense of everything after it in this section, until
 			// another one turns it back.
 			negate = !negate
+		case '-':
+			// Not an attribute: a toggle saying that the qualifiers after it
+			// ask about what a symbolic link points at. A second one turns it
+			// back — measured, `*(--.)` is the plain `.` again — which is why
+			// this is a toggle and not a flag being set.
+			follow = !follow
+		case ':':
+			// Not a qualifier and not the start of one: a `:` opens the
+			// modifier list, and *everything* after it is modifier text —
+			// measured, `*(N:t.)` lists the tails of every name and the `.`
+			// asks nothing, where `*(N.:t)` lists the tails of the regular
+			// files. So the qualifiers end here rather than resuming behind
+			// the modifiers.
+			q.modifiers = list[i:]
+			q.sections = append(q.sections, section)
+			return q, "", true
 		case 'N':
 			q.allowNoMatch = true
 		case 'D':
 			q.seeHidden = true
+		case 'f':
+			spec, n, diag := parseModeSpec(list[i:])
+			if diag != "" {
+				return q, diag, false
+			}
+			i += n
+			section = append(section, globTest{kind: 'f', negated: negate, follow: follow, mode: spec})
+		case 'u', 'g':
+			id, n, diag := parseOwnerArgument(c, list[i:])
+			if diag != "" {
+				return q, diag, false
+			}
+			i += n
+			section = append(section, globTest{kind: c, negated: negate, follow: follow, id: id})
+		case 'U', 'G':
+			// The same two tests with the argument this process already
+			// answers, so they carry no spelling of their own past here:
+			// `U` is `u` with the effective user filled in.
+			kind, id := byte('u'), uint64(uint32(osGeteuid()))
+			if c == 'G' {
+				kind, id = 'g', uint64(uint32(osGetegid()))
+			}
+			section = append(section, globTest{kind: kind, negated: negate, follow: follow, id: id})
 		case '.', '/', '@', 'p', '%',
 			'r', 'w', 'x', 'A', 'I', 'E', 'R', 'W', 'X',
 			's', 'S', 't':
-			section = append(section, globTypeTest{kind: c, negated: negate})
+			section = append(section, globTest{kind: c, negated: negate, follow: follow})
 		default:
-			return q, c, false
+			// Named, because the message is the whole of what a reader has to
+			// go on: the list may be long and only one character in it was
+			// wrong. A space is a character like any other — `echo MY ( x )`
+			// names the space, which is what says the group was read as
+			// qualifiers rather than as anything of the shell's.
+			return q, fmt.Sprintf("unknown file attribute: %c", c), false
 		}
 	}
 	q.sections = append(q.sections, section)
-	return q, 0, true
+	return q, "", true
 }
 
 // keep reports whether one path survives the list: every test in a section
 // has to hold, and any section will do.
-func (q globQualifiers) keep(mode fs.FileMode) bool {
+func (q globQualifiers) keep(f *globFile) bool {
 	for _, section := range q.sections {
-		if sectionKeeps(section, mode) {
+		if sectionKeeps(section, f) {
 			return true
 		}
 	}
 	return false
 }
 
-func sectionKeeps(section []globTypeTest, mode fs.FileMode) bool {
+func sectionKeeps(section []globTest, f *globFile) bool {
 	for _, t := range section {
-		if globTypeMatches(t.kind, mode) == t.negated {
+		info := f.info(t.follow)
+		if info == nil {
+			return false
+		}
+		if globTestMatches(t, info) == t.negated {
 			return false
 		}
 	}
 	return true
 }
 
-// globTypeMatches is what each type qualifier asks of a file's mode, read
-// from an lstat: `@` is a symbolic link by its *own* type, so a link to a
-// regular file is `@` and not `.`.
+// globTestMatches is what each qualifier asks of a file, from the stat the
+// `-` prefix chose: `@` is a symbolic link by its *own* type, so a link to a
+// regular file is `@` and not `.` — until a `-` in front of it says to ask
+// the target instead.
 //
 // A permission letter reads the same mode, and reading it from the lstat is
 // what makes a symbolic link answer for *itself* rather than for what it
@@ -201,8 +276,9 @@ func sectionKeeps(section []globTypeTest, mode fs.FileMode) bool {
 // may execute", which is a property of the file, and it stays true of a file
 // this shell could not execute. zsh has separate letters for the effective
 // user's own access, and they are refused by name; see patterns.md.
-func globTypeMatches(kind byte, mode fs.FileMode) bool {
-	switch kind {
+func globTestMatches(t globTest, info fs.FileInfo) bool {
+	mode := info.Mode()
+	switch t.kind {
 	case '.':
 		return mode.IsRegular()
 	case '/':
@@ -222,11 +298,34 @@ func globTypeMatches(kind byte, mode fs.FileMode) bool {
 		return mode&fs.ModeSetgid != 0
 	case 't':
 		return mode&fs.ModeSticky != 0
+	case 'f':
+		return t.mode.holds(rawMode(mode))
+	case 'u', 'g':
+		id, ok := fileOwner(info, t.kind)
+		return ok && id == t.id
 	}
-	if bit, ok := globPermissionBits[kind]; ok {
+	if bit, ok := globPermissionBits[t.kind]; ok {
 		return mode.Perm()&bit != 0
 	}
 	return false
+}
+
+// rawMode is the twelve bits a mode is written with, which is not how Go
+// spells a mode: fs.FileMode keeps set-user-ID, set-group-ID and the sticky
+// bit outside Perm() in bits of its own, and `f` compares against a number
+// somebody wrote as `4755`.
+func rawMode(mode fs.FileMode) uint32 {
+	raw := uint32(mode.Perm())
+	if mode&fs.ModeSetuid != 0 {
+		raw |= 0o4000
+	}
+	if mode&fs.ModeSetgid != 0 {
+		raw |= 0o2000
+	}
+	if mode&fs.ModeSticky != 0 {
+		raw |= 0o1000
+	}
+	return raw
 }
 
 // globPermissionBits is the nine permission letters, in the three triples the
@@ -281,14 +380,16 @@ func (r *Runner) fieldQualifiers(field string) (pattern string, q globQualifiers
 		}
 		list = after
 	}
-	q, bad, valid := parseGlobQualifiers(list)
+	q, diag, valid := parseGlobQualifiers(list)
 	if !valid {
-		// Named, because the message is the whole of what a reader has to go
-		// on: the list may be long and only one character in it was wrong.
-		// The shell's own wording, and a space is a character like any other
-		// — `echo MY ( x )` names the space, which is what says the group
-		// was read as qualifiers rather than as anything of the shell's.
-		r.fatal("unknown file attribute: %c\n", bad)
+		// The wording is the parser's, because only it knows which of the
+		// four complaints applies — a character no qualifier claims, a mode
+		// spec that would not read, a name argument with no delimiter around
+		// it, or a user or group of that name that does not exist. Each is
+		// the shell's own sentence, and the diagnostic is the whole of what a
+		// reader has to go on: a list may be long and only one character in
+		// it was wrong.
+		r.fatal("%s\n", diag)
 		return "", globQualifiers{}, true, false
 	}
 	return pattern, q, true, true
@@ -304,13 +405,56 @@ func (r *Runner) fieldQualifiers(field string) (pattern string, q globQualifiers
 func (r *Runner) keepQualified(paths []string, q globQualifiers) []string {
 	kept := make([]string, 0, len(paths))
 	for _, p := range paths {
-		info, err := r.lstat(strings.TrimSuffix(p, "/"))
-		if err != nil {
+		f := globFile{r: r, path: strings.TrimSuffix(p, "/")}
+		if f.info(false) == nil {
 			continue
 		}
-		if q.keep(info.Mode()) {
+		if q.keep(&f) {
 			kept = append(kept, p)
 		}
 	}
 	return kept
+}
+
+// globFile is one candidate path, and the two answers a qualifier list may
+// want about it: the link itself, and what it points at.
+//
+// Both are asked at most once and only when something asks. A list with no
+// `-` in it costs the one lstat the walk always paid, which is what keeps the
+// toggle from being a tax on every other pattern.
+type globFile struct {
+	r    *Runner
+	path string
+
+	link, target fs.FileInfo
+	askedLink    bool
+	askedTarget  bool
+}
+
+// info is the stat a test reads, following the link or not.
+//
+// A link whose target cannot be stat'd answers with the link — "treated as a
+// file in its own right", and measured: `*(-@)` lists the dangling link and
+// neither of the two that resolve, because following those two reaches a
+// regular file and a directory while following this one reaches nothing.
+func (f *globFile) info(follow bool) fs.FileInfo {
+	if !f.askedLink {
+		f.askedLink = true
+		if info, err := f.r.lstat(f.path); err == nil {
+			f.link = info
+		}
+	}
+	if !follow || f.link == nil {
+		return f.link
+	}
+	if !f.askedTarget {
+		f.askedTarget = true
+		if info, err := f.r.stat(f.path); err == nil {
+			f.target = info
+		}
+	}
+	if f.target == nil {
+		return f.link
+	}
+	return f.target
 }

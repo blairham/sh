@@ -10583,6 +10583,26 @@ printf "[%s]" .@(hid); echo`,
 		Why:     "the nine permission letters, and the row is written to separate the three triples rather than to show one of them working. `x` is owner-execute, so 0755 passes and 0644 does not, and `^x` answers with the other file. `w` is owner-write and holds of both; `W` is *world*-write and holds of neither, which is the only difference between the two triples the fixture can show — and it makes the miss fatal, so `after` is not reached in the shell that has qualifiers either. The other four refuse `*(` while parsing (#1053)",
 	},
 	{
+		ID: "pat/a-qualifier-list-reads-the-access-rights", Category: "pattern matching", SyntaxError: true,
+		Snippet: `mkdir -p fq; : > fq/rw; : > fq/gw; chmod 644 fq/rw; chmod 664 fq/gw; cd fq; printf "[%s]" *(f:g+w:); echo; printf "[%s]" *(f644); echo; printf "[%s]" *(f+020); echo; printf "[%s]" *(f); echo after`,
+		Why:     "`f` is the access-rights qualifier and it has two spellings that share an evaluator: the chmod-style clause the completion system writes — `compaudit` line 123 is `(N-f:g+w:,-f:o+w:,…)` — and the octal number. Four probes because the number's *width* is part of its meaning and a single row cannot say so: `f644` is an exact comparison over three digits, `f+020` is every bit of that number rather than any of them, and the clause reads the group triple by name. The fourth is the refusal, which is a sentence of its own — `invalid mode specification`, naming nothing — and it is fatal, so `after` is not reached. The other five refuse `*(` while parsing (#1671)",
+	},
+	{
+		ID: "pat/a-qualifier-list-reads-the-owner", Category: "pattern matching", SyntaxError: true,
+		Snippet: `mkdir -p uq; : > uq/f1; cd uq; me=$(id -u); printf "[%s]" *(u$me); echo; printf "[%s]" *(U); echo; printf "[%s]" *(u:no-such-user-here:); echo after`,
+		Why:     "`u` is ownership, and the uid is taken from `id -u` rather than written down so the row means the same thing for a laptop, a runner and a container running as root — `u0` would be every file in the third and none in the first. `U` is the same question with the effective user filled in and needs no argument at all. The third probe is the other half of the argument's grammar: a delimited argument is a *name* and never a number, so a name nobody has is `unknown username` and fatal, and `after` is not reached (#1671)",
+	},
+	{
+		ID: "pat/a-qualifier-list-may-follow-a-link", Category: "pattern matching", SyntaxError: true,
+		Snippet: `mkdir -p lq; : > lq/f1; ln -s f1 lq/la; ln -s nowhere lq/dangle; cd lq; printf "[%s]" *(N.); echo; printf "[%s]" *(N-.); echo; printf "[%s]" *(N-@); echo; printf "[%s]" *(N--.); echo after`,
+		Why:     "`-` is the qualifier that is not an attribute: it toggles whether what follows asks about a symbolic link or about what the link points at. Four probes because no single one shows a toggle. `.` is the regular file, `-.` is that file *and* the link to it, and `--.` is the first answer again — which is what says a second `-` turns it back off rather than setting a flag twice. `-@` is the dangling link alone: following it fails, and a link whose target cannot be stat'd is treated as a file in its own right. Read as an attribute name it was `unknown file attribute: -`, fifteen times per startup (#1671)",
+	},
+	{
+		ID: "pat/a-qualifier-list-may-end-in-modifiers", Category: "pattern matching", SyntaxError: true,
+		Snippet: `mkdir -p mq/sub; : > mq/sub/x.txt; : > mq/sub/y.md; cd mq; printf "[%s]" */*(N:t); echo; printf "[%s]" */*(N:e); echo; printf "[%s]" */*(N:t:r); echo; printf "[%s]" */*(N:z); echo after`,
+		Why:     "a qualifier list may end in the history-style modifiers `${x:t}` takes, and they apply to every name the pattern reported. The second probe is why this is a row rather than a line of prose: `:e` answers `[md][txt]` for names that arrived as `x.txt y.md`, so the sort is taken *after* the modifiers rather than carried through them. The fourth is the surface's own rule — an unrecognized modifier stops the chain and says nothing, where `${x:z}` is refused by name — so `after` is reached and the names are unchanged. This is the spelling zi autoloads a plugin's functions with, `(D-.N:t)` (#1671)",
+	},
+	{
 		ID: "pat/a-bare-qualifier-list-names-the-word", Category: "pattern matching", SyntaxError: true,
 		Snippet: `mkdir -p bq; : > bq/prog; chmod 755 bq/prog; cd bq; printf "[%s]" prog(x); echo; printf "[%s]" (x); echo after`,
 		Why:     "a group standing for the whole word is a list over an *empty* pattern, and an empty pattern matches nothing — so `(x)` names the word and not the letter, where `prog(x)` sends a literal name to the filesystem and finds it. This was filed as the qualifier production winning where that shell reads an alternation, and it is neither: `x` is the owner-execute test, and the only thing wrong was refusing a letter the language has (#1053)",

@@ -576,6 +576,18 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		d += trail
 		out = append(out, d)
 	}
+	if quals.modifiers != "" {
+		// Before the sort, because the shell sorts what the modifiers
+		// produced rather than what they were given: `*/*(N:e)` answers
+		// `md txt` for names that arrived as `b.txt c.md`.
+		for i, w := range out {
+			m, ok := r.applyGlobModifiers(w, quals.modifiers)
+			if !ok {
+				return nil, false
+			}
+			out[i] = m
+		}
+	}
 	sortMatches(out)
 	if crossed {
 		out = compactSorted(out)

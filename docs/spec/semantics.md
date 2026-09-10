@@ -1017,7 +1017,36 @@ Nothing is reported either way, so it is the `&>` shape again. It is
 recorded as `redir/multios-is-zsh-only` and implemented as the
 `RedirectsUseEveryTarget` axis, asked only when one stream is given
 several targets — so no script that redirects the ordinary way pays for
-zsh's feature. An earlier revision of this paragraph called it deliberately
+zsh's feature.
+
+**The same axis reaches the reading side**, which the paragraph above did not
+say and the code did not do until #1779. A descriptor redirected twice for
+*input* arrives as both sources in the order they were written:
+
+    printf 'a\n' >f; printf 'b\n' >g
+    cat <f <g           dash, bash, bash 3.2, ksh93 → b
+                        zsh                         → a then b
+
+One axis and not two, because zsh spells both with one option: `unsetopt
+multios` takes the fan-out and the concatenation together, so two fields
+would be two places to forget one of them when the option moves. A
+here-document body joins the sources exactly as a file does — `cat <f <<A`
+is the file and then the body, measured — and so does a here-string. The
+name is about targets rather than about a direction for the same reason.
+
+Where the shell that has it forks a process to tee or to concatenate, this
+uses one stream built out of several: a fan-out is an `io.MultiWriter` and a
+fan-in an `io.MultiReader`. The observable consequence is the same one zsh
+produces — measured on zsh 5.9.2, a command reading one file sees a regular
+file on its input and a command reading two sees a **pipe** — because a child
+process is handed a pipe for any input stream that is not a file. The
+difference the marker type records is on the writing side only, and it is
+`exec`: a stream over several files has no descriptor number to hand to a
+process replacement, where a concatenation does.
+
+`multios` is this dialect's name for the axis and moves it — it was one of
+the recorded names until #1779 — so `(unsetopt multios; …)` stays inside the
+subshell the way every axis-backed option does. An earlier revision of this paragraph called it deliberately
 unbuilt, and the paragraph outlived the decision: the failure mode this
 file records about the interpreter's comments applies to its own.
 
@@ -1026,6 +1055,108 @@ something else. The two answers differ in *output* and agree on the exit
 status, so the behavioral score counts them as agreeing and every other
 view calls it wording. A shell that writes to the wrong file is not a
 wording difference.
+
+## A command that is only redirections
+
+A command with no command word, no assignment prefix and at least one
+redirection means nothing in five of the six panel columns: the files are
+opened — and truncated, where the operator truncates — nothing runs, nothing
+is written and the status is 0. zsh instead treats the redirections as a
+command's, and runs a command named by a **parameter**:
+
+| written | zsh 5.9.2 | bash 5.3, bash 3.2, bash as `sh`, ksh93, dash |
+| --- | --- | --- |
+| `<f` | the file, through `$READNULLCMD` | nothing |
+| `>g` | `g` truncated by `$NULLCMD` | `g` truncated |
+| `print -r -- $NULLCMD $READNULLCMD` | `cat more` | two unset names |
+
+Measured 2026-09-10 on zsh 5.9.2 from Homebrew. The defaults are why `<f` at
+a prompt *pages* the file and `>g` truncates it with a `cat` that reads
+nothing.
+
+### The probe that separates the routes
+
+Both defaults end up putting the file on standard output, so `<f` printing
+the file is consistent with three different mechanisms and falsifies none of
+them. Every measurement here instead points each parameter at a function that
+prints its own name, and reads which name comes out. That is the same probe
+that settled the `$(<file)` fork in #1747 — a hook the form does not consult
+is a different mechanism — and it is what says these two parameters are two
+routes rather than one:
+
+    R(){ print -r -- R; }; N(){ print -r -- N; }
+    READNULLCMD=R; NULLCMD=N
+
+    <f              →  R          one plain input redirection
+    3<f             →  R          the descriptor number does not matter
+    0<f             →  R
+    <f <g           →  N          a second redirection
+    <f 2>e          →  N          anything beside it
+    2>e             →  N          an output redirection
+    <>f             →  N          a different operator
+    <<<x , <<A      →  N          a body rather than a filename
+    <&0             →  N          a duplication
+
+So the reading parameter is asked for **exactly one** redirection that is a
+plain `<`, and everything else goes to the writing one. The descriptor number
+is where this test parts company with the one the `$(<file)` form applies to a
+body that looks identical: that form is standard input alone, and `$(3<f)` is
+not the form.
+
+### The parameter is read when the command runs
+
+Not word-split, not pattern-matched, and not resolved when the shell starts:
+`READNULLCMD="print -r -- MULTI"` is `command not found: print -r -- MULTI`
+and `NULLCMD="c*t"` is `command not found: c*t` — one word either way, and
+the redirection has already happened when the lookup fails, so `>z` leaves
+the file behind at status 127.
+
+From there the command is an ordinary command. Measured: `set -x; <f` traces
+`more`, `$_` afterwards holds `more`, the command's own status is the shell's
+(`R(){ return 7; }` gives 7), a file that will not open stops it before it
+runs, and `<f | cat` and `if <f; then` both reach it.
+
+That is why the implementation substitutes the *word* rather than running
+anything itself — see `interp/nullcommand.go`. Lookup, redirection, tracing,
+`$_`, `set -e` and the sandbox gate are the ones a written command gets,
+because it is the same path.
+
+### Three shells, not two
+
+An empty parameter is not the absence of the hook, and the difference is
+observable:
+
+| | `<f` | status | `>g` made |
+| --- | --- | --- | --- |
+| no hook (the core, and five columns) | nothing | 0 | yes |
+| the hook, `NULLCMD=cat` | the file | 0 | yes |
+| the hook, `NULLCMD=` or unset | `redirection with no command` | 1, **fatal** | no |
+
+The third row abandons the script — `NULLCMD=; >g; echo after` prints neither
+`after` nor a file, and the same line inside `( )` ends only the subshell — so
+the refusal comes *before* the redirection rather than after it. An emptied
+`READNULLCMD` does not refuse: it falls back to `NULLCMD`, so a script that
+clears the reader gets the writer.
+
+This is modeled as two named parameters on the vector,
+`Semantics.NullCommandVariable` and `Semantics.ReadNullCommandVariable`, plus
+a wording, `Diagnostics.RedirectionWithNoCommand`. Names rather than values,
+because a script reassigns them between two commands; and the empty-name
+refusal is what keeps "no hook" and "a hook with nothing in it" apart, which
+a single boolean could not.
+
+### zsh's two option names for it
+
+`cshnullcmd` refuses the command outright and `shnullcmd` makes it `:`.
+Measured in both orders, `cshnullcmd` wins while it is on, and turning it off
+hands the shell back to `shnullcmd` if that one is still on — so they are one
+question asked twice rather than two switches.
+
+Both are implemented in the dialect by pointing the two fields at private
+parameter names a script cannot write: one that is always empty, which is the
+refusal the vector already has, and one that always holds `:`. No branch in
+the core, and no third state on the axis. They left the recorded set in #1779
+along with `multios`.
 
 ## The clobber-override marker, and the refusal it overrides
 

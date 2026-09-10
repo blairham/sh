@@ -312,8 +312,12 @@ of its own rather than folded into this form:
 - **A pattern in the operand.** bash matches it — `$(<a*b)` reads `aXXb` —
   where zsh, ksh93 and dash report the pattern as the name. That is the
   ordinary redirection-target question asked in this position.
-- **zsh's `NULLCMD` / `READNULLCMD`.** The hook itself, which this
-  implementation does not have: `<f` writes nothing here where zsh writes
+- **zsh's `NULLCMD` / `READNULLCMD`.** The hook itself, which is a
+  mechanism of its own and is now implemented as one — see
+  "A command that is only redirections" in `docs/spec/semantics.md`. The
+  boundary this section draws is what it is built against: the form
+  intercepts the body before any command runs, so a substitution never
+  reaches the hook and pointing `READNULLCMD` somewhere else still reads
   the file.
 
 ## What this does not cover

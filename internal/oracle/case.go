@@ -3537,8 +3537,8 @@ echo "st=$?"`,
 	},
 	{
 		ID: "redir/the-reading-parameter-is-the-lone-input-redirection", Category: "redirection",
-		Snippet: `printf 'hello\n' > f; R(){ printf R; }; N(){ printf N; }; READNULLCMD=R; NULLCMD=N; <f; printf "|"; 3<f; printf "|"; <f 2>/dev/null; printf "|"; >h <f`,
-		Why:     "which of the two parameters answers, spelling by spelling. One input redirection and nothing else takes the reading one whatever descriptor it names, so `<f` and `3<f` agree; anything beside it — here an output redirection, written both after and before — takes the writing one. Two markers rather than one because the defaults both end up printing the file, so a single marker cannot tell the routes apart. The five columns without the hook print nothing at all and separate the three bars",
+		Snippet: `printf 'hello\n' > f; R(){ printf R; }; N(){ printf N; }; READNULLCMD=R; NULLCMD=N; <f; printf "|"; 3<f; printf "|"; <f 2>/dev/null; printf "|"; 2>/dev/null <f`,
+		Why:     "which of the two parameters answers, spelling by spelling. One input redirection and nothing else takes the reading one whatever descriptor it names, so `<f` and `3<f` agree; anything beside it — here an error redirection, written both after and before — takes the writing one, and prints its marker because only standard error was moved. Two markers rather than one because the defaults both end up printing the file, so a single marker cannot tell the routes apart. The five columns without the hook print nothing at all and separate the three bars",
 	},
 	{
 		ID: "redir/a-null-command-with-nothing-in-it-is-refused", Category: "redirection",

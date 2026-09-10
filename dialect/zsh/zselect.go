@@ -223,7 +223,13 @@ func zselectOptions(r *interp.Runner, args []string) (*zselectOpts, int) {
 			// So the word decides nothing and is stepped over.
 			continue
 		}
-		if !strings.HasPrefix(word, "-") || len(word) == 1 {
+		if !strings.HasPrefix(word, "-") || len(word) == 1 || isDigit(word[1]) {
+			// A word that is not an option, and a word whose dash is a minus
+			// sign: `zselect -0 -t 0` watches descriptor 0 and `-1` watches a
+			// descriptor no shell has. Measured both ways — `-0` comes back
+			// as `-r 0` and `-1` comes back with nothing ready — which is
+			// what says the leading dash there is arithmetic rather than an
+			// option this builtin has never heard of.
 			if code := zselectDescriptor(r, opts, word); code != 0 {
 				return opts, code
 			}
@@ -237,14 +243,21 @@ func zselectOptions(r *interp.Runner, args []string) (*zselectOpts, int) {
 }
 
 // zselectLetters reads one option word's letters, which bundle.
+//
+// **A letter for a set takes the rest of its word only when the rest is a
+// number.** `-r0` is `-r 0` and `-rw 0` is `-w 0` — the `w` is a second letter
+// rather than a descriptor named `w` — and `-rt 0` is a read set with a
+// *timeout* of zero. All three measured, and the rule that produces all three
+// is that a digit after the letter ends the word and anything else carries on
+// bundling. A shell that took the rest of the word unconditionally reads
+// `-ra arr` as a descriptor called `a`, which is how this was found.
 func zselectLetters(r *interp.Runner, opts *zselectOpts, word string, rest *[]string) int {
 	for i := 1; i < len(word); i++ {
 		letter := word[i]
 		switch letter {
 		case 'r', 'w', 'e':
 			opts.current = strings.IndexByte(string(zselectSets[:]), letter)
-			if i+1 < len(word) {
-				// A descriptor attached to its letter: `-r0` is `-r 0`.
+			if i+1 < len(word) && isDigit(word[i+1]) {
 				return zselectDescriptor(r, opts, word[i+1:])
 			}
 		case 't', 'a', 'A':
@@ -294,14 +307,25 @@ func zselectValue(r *interp.Runner, opts *zselectOpts, letter byte, value string
 	return 0
 }
 
-// zselectDescriptor reads a bare word as a descriptor for the current set.
+// zselectDescriptor reads one word as a descriptor for the current set.
+//
+// A leading minus is a sign rather than an option marker — see zselectOptions
+// — and what follows it has to be digits and nothing else. The two refusals
+// are measured and they are different sentences: a word with no number in it
+// at all is `expecting file descriptor: extra`, and a word that starts as one
+// and does not finish as one is `garbage after file descriptor: x`, which
+// names only the part that was not a number.
 func zselectDescriptor(r *interp.Runner, opts *zselectOpts, word string) int {
-	digits := 0
-	for digits < len(word) && word[digits] >= '0' && word[digits] <= '9' {
+	at := 0
+	if strings.HasPrefix(word, "-") {
+		at = 1
+	}
+	digits := at
+	for digits < len(word) && isDigit(word[digits]) {
 		digits++
 	}
 	switch {
-	case digits == 0:
+	case digits == at:
 		r.Diagnosef("expecting file descriptor: %s\n", word)
 		return 1
 	case digits < len(word):

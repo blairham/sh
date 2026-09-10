@@ -140,23 +140,28 @@ func TestBothSystemParametersAreReadonlyAndDifferInKind(t *testing.T) {
 	}
 }
 
-// TestTheSystemModuleLoadsWhileThreeOfItsBuiltinsAreMissing is zmodload.go's
-// rule stated as a case rather than left in a comment.
+// TestTheSystemModuleHasAllNineOfItsFeatures is what #1749 was for: the
+// module names nine features and every one of them is here.
 //
-// The module names nine features and this shell has six of them: three
-// builtins were added with #1737 and three are still to come. It loads,
-// because what it has not got are builtins and a builtin refuses by name on
-// the line that calls it — so a script is told where it depended on one, and
-// holding the module shut would stop a file for features it may never call.
-func TestTheSystemModuleLoadsWhileThreeOfItsBuiltinsAreMissing(t *testing.T) {
+// It was six of nine and loading anyway, which zmodload.go's rule allows — a
+// missing builtin refuses by name at the word that runs it, so holding the
+// module shut would stop a file for features it may never call. That rule is
+// still right and there is nothing left here for it to forgive, which is the
+// state a module is supposed to end in rather than the one it passes through.
+//
+// The second half is the part a listing cannot check: `zsystem` runs. A
+// feature table saying `+b:zsystem` over a builtin nobody registered is
+// exactly the accepting-and-inert failure this module has produced twice
+// (#1737, #1668), so the case calls it and reads what came back.
+func TestTheSystemModuleHasAllNineOfItsFeatures(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), "zmodload zsh/system && zmodload -lF zsh/system\n")
 	want := "+b:syserror\n+b:sysopen\n+b:sysread\n+b:sysseek\n+b:syswrite\n" +
 		"+b:zsystem\n+f:systell\n+p:errnos\n+p:sysparams\n"
 	if out != want || st != 0 {
 		t.Errorf("output = %q status %d, want %q and 0", out, st, want)
 	}
-	out, _, errs := runZshSplit(t, t.TempDir(), "zmodload zsh/system\nzsystem\n")
-	if got, want := out+errs, "zsh:2: command not found: zsystem\n"; got != want {
-		t.Errorf("calling a missing builtin = %q, want %q", got, want)
+	out, _, errs := runZshSplit(t, t.TempDir(), "zmodload zsh/system\nzsystem supports flock\nprint -r -- \"flock=$?\"\n")
+	if got, want := out+errs, "flock=0\n"; got != want {
+		t.Errorf("the module's own builtin = %q, want %q", got, want)
 	}
 }

@@ -78,7 +78,11 @@ func errnoText(n int) string {
 // two it is cannot be known before it is read.
 func errnoNumber(text string) (int, bool) {
 	if n, err := strconv.Atoi(text); err == nil {
-		return n, true
+		// A negative is not an error number: `syserror -1` is status 2 with
+		// nothing said, the same answer a word that names nothing gets, and
+		// not the `Unknown error: -1` a shell reading it as a number would
+		// print at status 0.
+		return n, n >= 0
 	}
 	for n, name := range errnoNames {
 		if name != "" && name == text {

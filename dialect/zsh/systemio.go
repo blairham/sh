@@ -22,8 +22,8 @@ import (
 //
 // Measured 2026-09-10 against zsh 5.9.2 (Homebrew, aarch64) with `zsh -f` and
 // no startup files. The module's other three names — `sysseek`, `syserror`
-// and `zsystem` — are not here; see zmodload.go's rule and the note at the
-// foot of this file for what that means to a caller.
+// and `zsystem` — are in systemlock.go and systemseek.go, which are #1749 and
+// were written after this file left them refused by name.
 //
 // # Why these three and why now
 //
@@ -603,14 +603,22 @@ func (o systemOpts) duration(r *interp.Runner, letter byte) (time.Duration, bool
 // systemOptions reads the leading option words of one of these builtins.
 //
 // valued names the letters that take a value and plain the letters that do
-// not, which is the whole of what separates the three grammars. A letter in
+// not, which is the whole of what separates the five grammars. A letter in
 // neither set is `bad option: -x` and a valued letter with nothing after it is
-// `argument expected: -x` — both measured, in all three builtins, and both
+// `argument expected: -x` — both measured, in all five builtins, and both
 // stop the command where they are found rather than being collected.
+//
+// **A dash followed by a digit is not an option word**, which is measured in
+// every one of them and is not universal in the module: `sysseek -u 7 -1`
+// seeks backwards and answers 2, `syswrite -1` writes the two characters,
+// `sysread -1` is `not an identifier: -1`, and `sysopen -1` reaches `file
+// descriptor not specified` — all of which say the word was taken as an
+// operand. `zsystem flock -1` is `unknown option: 1`, so that builtin's own
+// reader (see systemlock.go) does not have this rule and is right not to.
 func systemOptions(r *interp.Runner, args []string, valued, plain string) (systemOpts, []string, int) {
 	opts := systemOpts{flags: map[byte]bool{}, args: map[byte][]string{}}
 	rest := args
-	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") && len(rest[0]) > 1 {
+	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") && len(rest[0]) > 1 && !isDigit(rest[0][1]) {
 		word := rest[0]
 		rest = rest[1:]
 		if word == "--" {
@@ -640,21 +648,16 @@ func systemOptions(r *interp.Runner, args []string, valued, plain string) (syste
 
 // registerSystemIO installs `sysopen`, `sysread` and `syswrite`.
 //
-// The module's other three builtins are deliberately not here.
-//
-// `zsystem` is `flock` and `supports`, and a lock is a promise about what two
-// shells do to one file at once rather than a call to make — it needs its own
-// measurements and its own corpus, and a version of it that took the lock and
-// did not hold it would be the silent success this whole module was filed
-// about. `sysseek` and `syserror` are not written once anywhere in the plugin
-// tree this shell starts with.
-//
-// All three are in zmodload.go's feature list, so nothing about them is
-// hidden: `zmodload -F zsh/system b:zsystem` refuses **by that name**, and a
-// script that calls one gets `command not found` on the line that calls it.
-// That is the same shape `zsh/files` uses for the nine plain names it will not
-// register (#1668), and it is what makes a narrower module honest rather than
-// hollow.
+// The module's other three are registered by their own files, beside the
+// parameters, in system.go. They are here in comment only because this is
+// where they were once *not* registered, and the reason is worth keeping: for
+// as long as that was true they were still in zmodload.go's feature list, so
+// `zmodload -F zsh/system b:zsystem` refused **by that name** and a script
+// calling one got `command not found` on the line that called it. That is the
+// shape `zsh/files` uses for the nine plain names it will not register
+// (#1668), and it is what makes a narrow module honest rather than hollow —
+// the state to be in while a module is half-written, and not the state to
+// leave it in.
 func registerSystemIO(r *interp.Runner) {
 	if !systemIOSupported {
 		// A platform with no descriptors of this shape. Registering the names
@@ -666,6 +669,11 @@ func registerSystemIO(r *interp.Runner) {
 	r.Register("sysread", sysreadBuiltin)
 	r.Register("syswrite", syswriteBuiltin)
 }
+
+// isDigit is the character test every option reader in this module makes: a
+// dash followed by one is a number rather than an option. See systemOptions
+// and, for the same rule reached from the other module, zselectOptions.
+func isDigit(b byte) bool { return b >= '0' && b <= '9' }
 
 // systemLetterValue is the value a letter takes: the rest of its own word
 // where there is one, and the next word otherwise.

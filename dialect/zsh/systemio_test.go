@@ -478,11 +478,15 @@ print -r -- "writeletter=$?"`)
 	})
 }
 
-// **The three names this module does not register refuse by their own names**,
-// which is the difference between a narrow module and a hollow one. See
-// registerSystemIO: `zmodload zsh/system` is 0 because a missing builtin is
-// loud at the line that calls it, and `zmodload -F` naming one is not.
-func TestTheUnimplementedSystemBuiltinsRefuseByName(t *testing.T) {
+// **Every name the module claims answers under `-F`, and a name it does not
+// claim still refuses.**
+//
+// Three of these were 1 until #1749 and are 0 now, and the last line is why
+// the case did not simply lose its assertions when they landed: `-F` has to
+// keep being able to say no. A `zmodload -F` that answered 0 to anything at
+// all would pass every guard a script writes and prove nothing, which is the
+// same accepting-and-inert failure in the loader rather than in the module.
+func TestEveryFeatureOfTheSystemModuleAnswersUnderF(t *testing.T) {
 	out, _, _ := runZshSplit(t, t.TempDir(), `zmodload zsh/system
 print -r -- "plain=$?"
 zmodload -F zsh/system b:sysopen b:sysread b:syswrite
@@ -492,8 +496,10 @@ print -r -- "zsystem=$?"
 zmodload -F zsh/system b:sysseek
 print -r -- "sysseek=$?"
 zmodload -F zsh/system b:syserror
-print -r -- "syserror=$?"`)
-	want := "plain=0\nhave=0\nzsystem=1\nsysseek=1\nsyserror=1\n"
+print -r -- "syserror=$?"
+zmodload -F zsh/system b:nosuchthing
+print -r -- "invented=$?"`)
+	want := "plain=0\nhave=0\nzsystem=0\nsysseek=0\nsyserror=0\ninvented=1\n"
 	if out != want {
 		t.Errorf("feature answers = %q, want %q", out, want)
 	}

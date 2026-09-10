@@ -80,7 +80,7 @@ func TestOneCommandStopsAfterTheLineThatSetIt(t *testing.T) {
 			why:  "the call's line finishes and the line after it is never read",
 		},
 		{
-			name: "cancelled on the same line",
+			name: "canceled on the same line",
 			src:  "set -o onecmd; set +o onecmd; echo B\necho C\n",
 			want: "B\nC\n",
 			why:  "the state is read when the line is over, so turning it back off first leaves nothing to stop — unlike `set -n`, which never comes back",

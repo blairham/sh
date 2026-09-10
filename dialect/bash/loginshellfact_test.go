@@ -53,7 +53,7 @@ func runBashLogin(t *testing.T, src string) (string, int) {
 //     is neither granted nor refused; it is ignored.
 //
 // The second is why this cannot be a shoptStates row even with the right
-// default: that table refuses a write it cannot honour, out loud and at 1, and
+// default: that table refuses a write it cannot honor, out loud and at 1, and
 // bash says nothing and answers 0. A generated shell snapshot writes the row it
 // read back — `shopt -u login_shell` — ahead of every command, so a refusal
 // there is an error on every one of them (#1709).

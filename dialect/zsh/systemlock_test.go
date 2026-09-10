@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -22,84 +21,10 @@ import (
 // `zsystem flock` that opened the file, answered 0 and locked nothing passes
 // every single-process case anybody would think to write: the descriptor is
 // there, `-f` names it, the unlock succeeds. So the cases below run a second
-// program — a child that asks the kernel for the same lock, without going
-// through this shell — and read what it was told. That is the mutation this
-// file exists to kill, and it is the exact shape #1737 was filed for.
-
-// lockProbeMode is how the child process is told which half of the job it is.
-const lockProbeMode = "SH_FLOCK_PROBE"
-
-// lockProbeExcluded is the status the probing child exits with when it could
-// not take the lock. Not 1: a Go test binary exits 1 when a test fails, and a
-// child that failed for its own reasons would otherwise read as evidence.
-const lockProbeExcluded = 7
-
-// TestFlockProbeHelperProcess is **not a test**. It is the second process the
-// cases below need, re-entered through this binary so that the file has no
-// build step and no dependency on what is installed on the runner.
-//
-// Two modes. `probe` asks the kernel for a write lock once and says so in its
-// status; `hold` takes one, tells the shell it has it by creating a file
-// beside the lock, and keeps it for as long as it was told to. Neither goes
-// anywhere near this package's own code, which is what makes them evidence:
-// a child using `zsystem` to check `zsystem` would agree with any mistake it
-// was making.
-func TestFlockProbeHelperProcess(t *testing.T) {
-	mode := os.Getenv(lockProbeMode)
-	if mode == "" {
-		t.Skip("not the helper process")
-	}
-	path := os.Getenv("SH_FLOCK_PATH")
-	f, err := os.OpenFile(path, os.O_WRONLY, 0o600)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "helper: %v\n", err)
-		os.Exit(9)
-	}
-	lock := syscall.Flock_t{Type: syscall.F_WRLCK}
-	if err := syscall.FcntlFlock(f.Fd(), syscall.F_SETLK, &lock); err != nil {
-		os.Exit(lockProbeExcluded)
-	}
-	if mode == "probe" {
-		os.Exit(0)
-	}
-	held, err := strconv.Atoi(os.Getenv("SH_FLOCK_HOLD"))
-	if err != nil {
-		held = 2000
-	}
-	// The shell finds out that the lock is taken by *reading* this, through
-	// a process substitution, rather than by polling for a file: a poll needs
-	// a `sleep` and this snippet's PATH is a scratch directory with two
-	// wrapper scripts on it, and a poll with no sleep in it spins.
-	fmt.Println("held")
-	os.Stdout.Close()
-	time.Sleep(time.Duration(held) * time.Millisecond)
-	os.Exit(0)
-}
-
-// lockHelpers writes the two wrapper scripts a snippet calls the helper by,
-// and returns the directory they are on the PATH of.
-//
-// A wrapper rather than the binary itself, because the snippet has to be
-// readable: `lockprobe $f` is what the case is about and
-// `/very/long/path.test -test.run=… probe` is not.
-func lockHelpers(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	self, err := os.Executable()
-	if err != nil {
-		t.Fatalf("finding this test binary: %v", err)
-	}
-	for _, mode := range []string{"probe", "hold"} {
-		script := "#!/bin/sh\n" +
-			"SH_FLOCK_PATH=\"$1\" SH_FLOCK_HOLD=\"$2\" " + lockProbeMode + "=" + mode +
-			" exec " + strconv.Quote(self) + " -test.run='^TestFlockProbeHelperProcess$'\n"
-		name := filepath.Join(dir, "lock"+mode)
-		if err := os.WriteFile(name, []byte(script), 0o700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return dir
-}
+// program — see modulehelper_test.go — that asks the kernel for the same lock
+// without going through this shell, and read what it was told. That is the
+// mutation this file exists to kill, and it is the exact shape #1737 was filed
+// for.
 
 // **The lock excludes another process, and stops excluding it when unlocked.**
 //
@@ -111,7 +36,7 @@ func lockHelpers(t *testing.T) string {
 // The child is asked twice with nothing between the two but `zsystem flock
 // -u`, so the only thing that can have changed the answer is the unlock.
 func TestFlockExcludesAnotherProcessUntilItIsUnlocked(t *testing.T) {
-	dir := lockHelpers(t)
+	dir := helperScripts(t)
 	path := filepath.Join(dir, "lock")
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -125,7 +50,7 @@ zsystem flock -u $h
 print -r -- "released=$?"
 lockprobe `+path+`
 print -r -- "after=$?"`)
-		want := fmt.Sprintf("took=0\nwhile-held=%d\nreleased=0\nafter=0\n", lockProbeExcluded)
+		want := fmt.Sprintf("took=0\nwhile-held=%d\nreleased=0\nafter=0\n", helperExcluded)
 		if out != want || st != 0 {
 			t.Errorf("flock against a child = %q (status %d), want %q", out, st, want)
 		}
@@ -138,7 +63,7 @@ print -r -- "after=$?"`)
 // accepted and dropped. A shell that took an exclusive lock for `-r` passes
 // every case above.
 func TestAReadLockSharesAndStillExcludesAWriter(t *testing.T) {
-	dir := lockHelpers(t)
+	dir := helperScripts(t)
 	path := filepath.Join(dir, "lock")
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -148,7 +73,7 @@ func TestAReadLockSharesAndStillExcludesAWriter(t *testing.T) {
 print -r -- "took=$?"
 lockprobe `+path+`
 print -r -- "writer=$?"`)
-		want := fmt.Sprintf("took=0\nwriter=%d\n", lockProbeExcluded)
+		want := fmt.Sprintf("took=0\nwriter=%d\n", helperExcluded)
 		if out != want || st != 0 {
 			t.Errorf("read lock = %q (status %d), want %q", out, st, want)
 		}
@@ -168,14 +93,14 @@ print -r -- "second-reader=$?"`)
 //
 //	-t 0     1, and it says so
 //	-t n     2 after n seconds, and says **nothing**
-//	no -t    0, once the holder lets go
+//	-t n     0, when n is long enough for the holder to let go
 //
-// The last of those is the one that proves the wait is a wait. It cannot
-// return before the holder's own deadline, so the elapsed time is read here
-// rather than only the status: a `flock` that answered 0 immediately would
-// have the same status and no lock.
+// The third is the one that proves a timed wait is a wait. Without it the case
+// passes on a shell whose `-t` asks once and gives up, because asking once and
+// waiting in vain both answer 2 — measured as a surviving mutant, which is how
+// the line got here.
 func TestFlockUnderContentionWaitsAndSaysSoThreeWays(t *testing.T) {
-	dir := lockHelpers(t)
+	dir := helperScripts(t)
 	path := filepath.Join(dir, "lock")
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -191,9 +116,9 @@ zsystem flock -t 0 `+path+`
 print -r -- "asked=$?"
 zsystem flock -t 0.2 `+path+`
 print -r -- "waited=$?"
-zsystem flock `+path+`
-print -r -- "blocked=$?"`)
-		want := "holder=0 [held\n]\nasked=1\nwaited=2\nblocked=0\n"
+zsystem flock -t 20 `+path+`
+print -r -- "outlasted=$?"`)
+		want := "holder=0 [held\n]\nasked=1\nwaited=2\noutlasted=0\n"
 		if out != want || st != 0 {
 			t.Errorf("contention = %q (status %d), want %q", out, st, want)
 		}
@@ -203,9 +128,39 @@ print -r -- "blocked=$?"`)
 			t.Errorf("stderr = %q, want exactly one `failed to lock file`", errs)
 		}
 	})
-	// The blocking form cannot have come back before the holder let go. Two
-	// thirds of the hold rather than all of it, because the shell starts the
-	// holder and the clock starts here.
+	// The `-t 20` cannot have come back before the holder let go. Two thirds
+	// of the hold rather than all of it, because the shell starts the holder
+	// and the clock starts here.
+	if waited := time.Since(started); waited < holdFor*2/3 {
+		t.Errorf("the whole run took %v, want at least %v — the timed flock did not wait", waited, holdFor*2/3)
+	}
+}
+
+// **A `zsystem flock` with no `-t` blocks until the holder lets go**, which is
+// its own case because it is its own system call: a timed wait is this shell
+// asking over and over and a plain one is the kernel holding on to the
+// request. The elapsed time is the assertion — the status is 0 either way, and
+// a shell that answered 0 without a lock would answer it instantly.
+func TestFlockWithNoTimeoutBlocksUntilTheHolderLetsGo(t *testing.T) {
+	dir := helperScripts(t)
+	path := filepath.Join(dir, "lock")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const holdFor = 1200 * time.Millisecond
+	started := time.Now()
+	systemDeadline(t, "zsystem flock with no timeout", func() {
+		out, st := runZsh(t, dir, `sysopen -r -u fd <(lockhold `+path+` `+
+			strconv.Itoa(int(holdFor/time.Millisecond))+`)
+sysread -i $fd -t 5 v
+print -r -- "holder=$? [$v]"
+zsystem flock `+path+`
+print -r -- "blocked=$?"`)
+		want := "holder=0 [held\n]\nblocked=0\n"
+		if out != want || st != 0 {
+			t.Errorf("blocking flock = %q (status %d), want %q", out, st, want)
+		}
+	})
 	if waited := time.Since(started); waited < holdFor*2/3 {
 		t.Errorf("the whole run took %v, want at least %v — the blocking flock did not block", waited, holdFor*2/3)
 	}

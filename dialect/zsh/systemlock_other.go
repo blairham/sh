@@ -25,5 +25,3 @@ func systemLockOpen(string, bool) (*os.File, error) { panic("unreachable: flock 
 func systemLockTake(int, bool, bool, time.Duration, time.Duration) (bool, error) {
 	panic("unreachable: flock is unsupported here")
 }
-
-func systemLockRelease(int) {}

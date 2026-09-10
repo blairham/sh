@@ -108,6 +108,14 @@ func TestNulSplitFlagFields(t *testing.T) {
 			`z="$(printf 'a\0\0b')"; printf "[%s]" "${(0w)#z}" "${(0W)#z}"`,
 			"[2][3]",
 		},
+		{
+			// The count reads the same last-written letter the split does,
+			// and only two letters plus data that splits differently under
+			// each of them says so.
+			"a word count reads the last split letter too",
+			`z="$(printf 'a\0b:c:d')"; m=$'a:b:c\nd'; printf "[%s]" "${(0s.:.w)#z}" "${(s.:.0w)#z}" "${(fs.:.w)#m}" "${(s.:.fw)#m}"`,
+			"[3][2][3][2]",
+		},
 		// The letter written last decides, which is what makes this a third
 		// member of the set rather than a special case in front of it.
 		{

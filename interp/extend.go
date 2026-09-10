@@ -659,7 +659,7 @@ func (r *Runner) SetDescriptor(fd int, f *os.File) { r.setFd(fd, f) }
 // closed with `exec {n}>&-` and renumbered like any other, and the one thing
 // that differs is what an external command inherits. See childFiles, which is
 // the only reader, and dropExecOpened beside it, which nils entries for a
-// neighbouring reason.
+// neighboring reason.
 //
 // It has to be a mark this package keeps rather than a flag on the open,
 // because Go opens every file close-on-exec already: the kernel's answer is

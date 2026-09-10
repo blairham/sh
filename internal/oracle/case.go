@@ -13588,12 +13588,12 @@ echo "read=[$l]"`,
 	},
 	{
 		ID: "system/the-five-statuses-of-one-read", Category: "builtins",
-		Snippet: `zmodload zsh/system; sysopen -r -u fd <(sleep 3); sysread -t 0 -i $fd a; echo "waiting=$?"; sysopen -r -u e <(:); sysread -t 5 -i $e b; echo "end=$?"; sysread -i 99 c; echo "nofd=$?"; print -n hi | { sysread -o 99 d; }; echo "copy=$?"; sysread -s x g; echo "usage=$?"`,
-		Why:     "`sysread` says what happened in its status and nowhere else, and all five values are here: a prompt theme's receive loop reads on quietly for the 4 and gives its worker up for anything else, so a shell that collapsed the timeout into the end of input would stop that worker on its first idle turn. Both waits are bounded — a row that waited for something that never came would hang the run rather than fail it",
+		Snippet: `zmodload zsh/system; printf hi > f; sysopen -r -u fd <(sleep 3); sysread -t 0 -i $fd a; echo "waiting=$?"; sysopen -r -u e <(:); sysread -t 5 -i $e b; echo "end=$?"; sysread -i 99 c; echo "nofd=$?"; sysopen -r -u p f; sysread -o 99 -i $p d; echo "copy=$?"; sysread -s x g; echo "usage=$?"`,
+		Why:     "`sysread` says what happened in its status and nowhere else, and all five values are here: a prompt theme's receive loop reads on quietly for the 4 and gives its worker up for anything else, so a shell that collapsed the timeout into the end of input would stop that worker on its first idle turn. Both waits are bounded — a row that waited for something that never came would hang the run rather than fail it. Nothing here is written as a pipeline: the shells that have none of these builtins write a diagnostic on each side of one, and which side reaches standard error first is theirs to decide",
 	},
 	{
 		ID: "system/one-read-rather-than-a-line", Category: "builtins",
-		Snippet: `zmodload zsh/system; printf "one\ntwo\n" > f; sysopen -r -u fd f; sysread -s 3 -c n -i $fd a; echo "first=[$a] n=$n"; sysread -i $fd b; echo "rest=[$b]"; print -n hello | { sysread -c m -o 1 buf; echo "|div=$? m=$m buf=[$buf] REPLY=[$REPLY]"; }`,
+		Snippet: `zmodload zsh/system; printf "one\ntwo\n" > f; sysopen -r -u fd f; sysread -s 3 -c n -i $fd a; echo "first=[$a] n=$n"; sysread -i $fd b; echo "rest=[$b]"; sysopen -r -u g f; sysread -c m -o 1 -i $g buf; echo "|div=$? m=$m buf=[$buf] REPLY=[$REPLY]"`,
 		Why:     "what separates this from `read`: one call, bounded by `-s`, a short read counted as a success, no splitting, and the newline left where it was for the next call to find. The last third is `-o`, which **diverts rather than duplicates** — the bytes go to the descriptor and the parameter is left unset, which is the one thing a reading of the manual gets backwards",
 	},
 	{

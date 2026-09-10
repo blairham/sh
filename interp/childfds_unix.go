@@ -86,7 +86,7 @@ func (r *Runner) childFiles() []*os.File {
 // must be *closed* in the child, and a nil is what says so on both routes out
 // of this table.
 //
-// No axis is asked, which is the difference from its neighbour. `exec 3>f`
+// No axis is asked, which is the difference from its neighbor. `exec 3>f`
 // leaves a shell to decide whether the descriptor is the script's or its own,
 // and the shells disagree; `sysopen -o cloexec` is the script having decided,
 // by name, on that line.

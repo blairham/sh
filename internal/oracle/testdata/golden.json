@@ -110190,6 +110190,446 @@
         "TimedOut": false
       }
     },
+    "system/close-on-exec-and-the-descriptor-beside-it": {
+      "bash": {
+        "Stdout": "cloexec=1~plain=1~kept=[] given=[]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~cat: kept: No such file or directory~cat: given: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "cloexec=1~plain=1~kept=[] given=[]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~cat: kept: No such file or directory~cat: given: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "cloexec=1~plain=1~kept=[] given=[]",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysopen: command not found~cat: kept: No such file or directory~cat: given: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "cloexec=1~plain=1~kept=[] given=[]",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysopen: not found~cat: kept: No such file or directory~cat: given: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "cloexec=1~plain=1~kept=[] given=[]",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysopen: not found~cat: kept: No such file or directory~cat: given: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "cloexec=1~plain=0~kept=[] given=[y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/every-byte-written-and-a-silent-refusal": {
+      "bash": {
+        "Stdout": "wrote=127 n=~file=[]~refused=127~none=127~two=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: syswrite: command not found~\u003cshell\u003e: line 1: fd: ambiguous redirect~cat: f: No such file or directory~\u003cshell\u003e: line 1: syswrite: command not found~\u003cshell\u003e: line 1: syswrite: command not found~\u003cshell\u003e: line 1: syswrite: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "wrote=127 n=",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: syswrite: command not found~\u003cshell\u003e: line 1: fd: ambiguous redirect",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "wrote=127 n=",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: syswrite: command not found~\u003cshell\u003e: line 0: exec: {fd}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "wrote=127 n=",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: syswrite: not found~\u003cshell\u003e: 1: exec: {fd}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "wrote=127 n=~file=[]~refused=127~none=127~two=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: syswrite: not found~cat: f: No such file or directory~\u003cshell\u003e: syswrite: not found~\u003cshell\u003e: syswrite: not found~\u003cshell\u003e: syswrite: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "wrote=0 n=4~file=[a~b]~refused=2~none=1~two=1",
+        "Stderr": "\u003cshell\u003e:syswrite:1: not enough arguments~\u003cshell\u003e:syswrite:1: too many arguments",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/one-read-rather-than-a-line": {
+      "bash": {
+        "Stdout": "first=[] n=~rest=[]~|div=127 m= buf=[] REPLY=[]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "first=[] n=~rest=[]~|div=127 m= buf=[] REPLY=[]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "first=[] n=~rest=[]~|div=127 m= buf=[] REPLY=[]",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysread: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "first=[] n=~rest=[]~|div=127 m= buf=[] REPLY=[]",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysread: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "first=[] n=~rest=[]~|div=127 m= buf=[] REPLY=[]",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysread: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "first=[one] n=3~rest=[~two~]~one~two~|div=0 m=8 buf=[] REPLY=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/the-direction-letters-and-what-they-open": {
+      "bash": {
+        "Stdout": "ro=1 []~wo-read=1~file=[abcdef]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: read: l: invalid file descriptor specification~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: read: l: invalid file descriptor specification~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: ap: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "ro=1 []~wo-read=1",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: read: l: invalid file descriptor specification~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: read: l: invalid file descriptor specification~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: ap: ambiguous redirect",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "ro=1 []~wo-read=1",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: line 0: read: l: invalid file descriptor specification~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: line 0: read: l: invalid file descriptor specification~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: line 0: exec: {ap}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "ro=2 []~wo-read=2",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: read: Illegal option -u~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: read: Illegal option -u~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: exec: {ap}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "ro=2 []~wo-read=2~file=[abcdef]",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: read: -u: numeric fd argument expected~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: read: -u: numeric fd argument expected~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: print: bad file unit number [Bad file descriptor]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ro=1 [abcdef]~wo-read=1~file=[abcdefXY]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/the-exclusive-flag-brings-creation-with-it": {
+      "bash": {
+        "Stdout": "first=127~second=127~unsupported=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "first=127~second=127~unsupported=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "first=127~second=127~unsupported=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "first=127~second=127~unsupported=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysopen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "first=127~second=127~unsupported=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysopen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "first=0~second=1~unsupported=1",
+        "Stderr": "\u003cshell\u003e:sysopen:1: can't open file lock: file exists~\u003cshell\u003e:sysopen:1: unsupported option: bogus",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/the-five-statuses-of-one-read": {
+      "bash": {
+        "Stdout": "waiting=127~end=127~nofd=127~copy=127~usage=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysread: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "waiting=127~end=127~nofd=127~copy=127~usage=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysread: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "waiting=127~end=127~nofd=127~copy=127~usage=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysread: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "waiting=127~end=127~nofd=127~copy=127~usage=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysread: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "waiting=4~end=5~nofd=2~copy=3~usage=1",
+        "Stderr": "\u003cshell\u003e:sysread:1: integer expected: x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/the-line-a-prompt-worker-starts-with": {
+      "bash": {
+        "Stdout": "failed~open=2 high=0~read=127 buf=[]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: return: can only `return' from a function or sourced script~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: sysread: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "failed",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: return: can only `return' from a function or sourced script",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "failed~open=1 high=0~read=127 buf=[]",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: line 0: return: can only `return' from a function or sourced script~\u003cshell\u003e: print: command not found~\u003cshell\u003e: sysread: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "failed",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "open=0 high=1~read=0 buf=[onetwo]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/the-mode-a-created-file-gets": {
+      "bash": {
+        "Stdout": "invalid=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zstat: command not found~\u003cshell\u003e: line 1: zstat: command not found~\u003cshell\u003e: line 1: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "invalid=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zstat: command not found~\u003cshell\u003e: line 1: zstat: command not found~\u003cshell\u003e: line 1: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "invalid=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zstat: command not found~\u003cshell\u003e: zstat: command not found~\u003cshell\u003e: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "invalid=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zstat: not found~\u003cshell\u003e: 1: zstat: not found~\u003cshell\u003e: 1: sysopen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "invalid=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zstat: not found~\u003cshell\u003e: zstat: not found~\u003cshell\u003e: sysopen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "-rw----r--~-rw-r--r--~invalid=1",
+        "Stderr": "\u003cshell\u003e:sysopen:1: invalid mode zz",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/the-three-builtins-this-shell-has-not-got": {
+      "bash": {
+        "Stdout": "plain=127~have=127~zsystem=127~rest=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "plain=127~have=127~zsystem=127~rest=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "plain=127~have=127~zsystem=127~rest=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "plain=127~have=127~zsystem=127~rest=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "plain=127~have=127~zsystem=127~rest=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "plain=0~have=0~zsystem=0~rest=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/what-sysopen-refuses": {
+      "bash": {
+        "Stdout": "none=127~two=127~unnamed=127~missing=127~letter=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "none=127~two=127~unnamed=127~missing=127~letter=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "none=127~two=127~unnamed=127~missing=127~letter=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "none=127~two=127~unnamed=127~missing=127~letter=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysopen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "none=127~two=127~unnamed=127~missing=127~letter=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysopen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "none=1~two=1~unnamed=1~missing=1~letter=1",
+        "Stderr": "\u003cshell\u003e:sysopen:1: not enough arguments~\u003cshell\u003e:sysopen:1: too many arguments~\u003cshell\u003e:sysopen:1: file descriptor not specified~\u003cshell\u003e:sysopen:1: can't open file /no/such: no such file or directory~\u003cshell\u003e:sysopen:1: bad option: -q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "system/where-a-descriptor-is-positioned": {
       "bash": {
         "Stdout": "",
@@ -110228,6 +110668,94 @@
       },
       "zsh": {
         "Stdout": "a=0~b=4 [one] c=-1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/where-the-descriptor-number-is-put": {
+      "bash": {
+        "Stdout": "named=[]~keyed=[]~numbered=[]~badname=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "named=[]~keyed=[]~numbered=[]~badname=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: sysread: command not found~\u003cshell\u003e: line 1: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "named=[]~keyed=[]~numbered=[]~badname=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: sysread: command not found~\u003cshell\u003e: sysopen: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "named=[]~keyed=[]~numbered=[]~badname=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: sysread: not found~\u003cshell\u003e: 1: sysopen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "named=[]~keyed=[]~numbered=[]~badname=127",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysread: not found~\u003cshell\u003e: sysopen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "named=[hello]~keyed=[hello]~numbered=[hello]~badname=1",
+        "Stderr": "\u003cshell\u003e:sysopen:1: not an identifier: bad name",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/writing-does-not-truncate-until-asked": {
+      "bash": {
+        "Stdout": "plain=[abcdef]~trunc=[abcdef]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: a: ambiguous redirect~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: b: ambiguous redirect",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sysopen: command not found~\u003cshell\u003e: line 1: a: ambiguous redirect",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sysopen: command not found~\u003cshell\u003e: line 0: exec: {a}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: sysopen: not found~\u003cshell\u003e: 1: exec: {a}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "plain=[abcdef]~trunc=[abcdef]",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: sysopen: not found~\u003cshell\u003e: sysopen: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "plain=[abcdef]~trunc=[]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

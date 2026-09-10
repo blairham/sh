@@ -167,13 +167,14 @@ func TestZleRefusesEachMistakeItsOwnWay(t *testing.T) {
 // everything would be worse than the `command not found` it replaces, because
 // a plugin would then believe its widget existed.
 //
-// `F` and `w` used to be on this list and are not any more — the callback on a
-// descriptor is built, in zlewatch.go — which is the shape of progress this
-// test is meant to record: a letter leaves the list by being implemented and
-// by nothing else. The three remaining spellings that need a seam repl has not
-// got are named in zle.go's own comment rather than here.
+// `F`, `w` and now `C` used to be on this list and are not any more — the
+// callback on a descriptor is built, in zlewatch.go, and the completion widget
+// is built here — which is the shape of progress this test is meant to record:
+// a letter leaves the list by being implemented and by nothing else. The three
+// remaining spellings that need a seam repl has not got are named in zle.go's
+// own comment rather than here.
 func TestALetterThisShellHasNotGotSaysSo(t *testing.T) {
-	for _, letter := range []string{"R", "M", "U", "C", "I", "K", "T", "c", "f", "g", "m", "r", "G"} {
+	for _, letter := range []string{"R", "M", "U", "I", "K", "T", "c", "f", "g", "m", "r", "G"} {
 		out, st := runZsh(t, t.TempDir(), "zle -"+letter+" x y\n")
 		want := "zsh:zle:1: -" + letter + " is not implemented yet\n"
 		if out != want || st != 1 {
@@ -568,4 +569,264 @@ func runZshVars(t *testing.T, r *interp.Runner, src string) (string, int) {
 		t.Fatalf("run %q: %v", src, rerr)
 	}
 	return out.String(), st
+}
+
+// `zle -C` — the completion widget. Measured against zsh 5.9.2 on 2026-09-09
+// under `-c` for the definition and the two listings, and through a
+// pseudo-terminal with a key bound to one for what only a widget that ran can
+// see. Every want below is what that binary wrote.
+
+// TestACompletionWidgetIsDefinedAndSaidBack is the row the issue rests on: the
+// line a completion loader writes runs to the end, and the widget is there
+// afterwards in both listing spellings.
+func TestACompletionWidgetIsDefinedAndSaidBack(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(),
+		"zle -C mywidget complete-word _main_complete; echo st=$?\nzle -l\nzle -l -L\n")
+	want := "st=0\nmywidget -C complete-word _main_complete\n" +
+		"zle -C mywidget complete-word _main_complete\n"
+	if out != want || st != 0 {
+		t.Errorf("output = %q status %d, want %q at 0", out, st, want)
+	}
+}
+
+// A completion widget writes all three words in both listings even when the
+// function is named identically to the widget — which is exactly the case the
+// `-N` spelling abbreviates to a bare name. Measured: `zle -C w complete-word
+// w` reads back in full both ways, because the completer in the middle is not
+// recoverable from a default.
+func TestACompletionWidgetListingNeverAbbreviates(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), "zle -C w complete-word w\nzle -l\nzle -l -L\n")
+	if want := "w -C complete-word w\nzle -C w complete-word w\n"; out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+}
+
+// The two kinds sort together into one listing, each in its own spelling.
+func TestTheTwoKindsOfWidgetShareOneListing(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(),
+		"zle -N nw nf; zle -C cw complete-word cf\nzle -l\nzle -l -L\n")
+	want := "cw -C complete-word cf\nnw (nf)\n" +
+		"zle -C cw complete-word cf\nzle -N nw nf\n"
+	if out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+}
+
+// TestTheCompleterIsAClosedSetOfCompletionWidgets is what makes the argument
+// worth validating rather than storing. Measured by asking zsh for every one
+// of the 386 names `zle -la` reports: exactly the eight completion widgets and
+// their dotted spellings are accepted, and every other widget — `end-of-line`
+// is one, and it is unarguably a widget — answers `invalid widget`, which is a
+// different complaint from the `no such widget` that `-D` and `-A` make.
+func TestTheCompleterIsAClosedSetOfCompletionWidgets(t *testing.T) {
+	for _, name := range []string{
+		"complete-word", "delete-char-or-list", "expand-or-complete",
+		"expand-or-complete-prefix", "list-choices", "menu-complete",
+		"menu-expand-or-complete", "reverse-menu-complete",
+		".complete-word", ".list-choices", ".reverse-menu-complete",
+	} {
+		out, st := runZsh(t, t.TempDir(), "zle -C w "+name+" f; echo st=$?\n")
+		if want := "st=0\n"; out != want || st != 0 {
+			t.Errorf("%s: output = %q status %d, want %q at 0", name, out, st, want)
+		}
+	}
+	for _, name := range []string{
+		"end-of-line", "self-insert", "accept-line", ".self-insert",
+		"_main_complete", "nosuchwidget",
+	} {
+		out, st := runZsh(t, t.TempDir(), "zle -C w "+name+" f\n")
+		want := "zsh:zle:1: invalid widget `" + name + "'\n"
+		if out != want || st != 1 {
+			t.Errorf("%s: output = %q status %d, want %q at 1", name, out, st, want)
+		}
+	}
+}
+
+// `menu-select` is refused, and that is measured rather than left out: it is a
+// completion widget only once `zsh/complist` is loaded, which this shell will
+// not do, and zsh without that module refuses it here in the same words. The
+// completion loader asks `zle -la menu-select` before it tries, so the two
+// answers have to agree — a shell whose `-la` denies the name and whose `-C`
+// accepts it would be inconsistent with itself.
+func TestMenuSelectIsRefusedAsACompleterAndAbsentFromTheListing(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), "zle -C w menu-select f\n")
+	if want := "zsh:zle:1: invalid widget `menu-select'\n"; out != want || st != 1 {
+		t.Errorf("output = %q status %d, want %q at 1", out, st, want)
+	}
+	out, st = runZsh(t, t.TempDir(), "zle -la menu-select && echo HAS || echo NOPE\n")
+	if want := "NOPE\n"; out != want || st != 0 {
+		t.Errorf("listing: output = %q status %d, want %q at 0", out, st, want)
+	}
+}
+
+// TestTheCompletionLoadersRebindingLoopRuns is the issue's own measurement:
+// the loop that redefines each standard completion widget against the
+// completion driver, which is the largest single class of complaint a real
+// startup produced. All eight lines, no output, and eight widgets afterwards.
+func TestTheCompletionLoadersRebindingLoopRuns(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(),
+		"for w in complete-word delete-char-or-list expand-or-complete "+
+			"expand-or-complete-prefix list-choices menu-complete "+
+			"menu-expand-or-complete reverse-menu-complete; do\n"+
+			"  zle -C $w .$w _main_complete || echo FAIL $w\ndone\n"+
+			"echo st=$?\nprint -r -- \"n=${#${(f)\"$(zle -l)\"}}\"\n")
+	if want := "st=0\nn=8\n"; out != want || st != 0 {
+		t.Errorf("output = %q status %d, want %q at 0", out, st, want)
+	}
+}
+
+// All three words are required, and unlike `-N` the function may not be left
+// to default to the widget's name.
+func TestACompletionWidgetTakesExactlyThreeWords(t *testing.T) {
+	for _, args := range []string{"", " a", " a b"} {
+		out, st := runZsh(t, t.TempDir(), "zle -C"+args+"\n")
+		if want := "zsh:zle:1: not enough arguments for -C\n"; out != want || st != 1 {
+			t.Errorf("`zle -C%s`: output = %q status %d, want %q at 1", args, out, st, want)
+		}
+	}
+	out, st := runZsh(t, t.TempDir(), "zle -C a complete-word c d\n")
+	if want := "zsh:zle:1: too many arguments for -C\n"; out != want || st != 1 {
+		t.Errorf("output = %q status %d, want %q at 1", out, st, want)
+	}
+}
+
+// The function does not have to exist yet, the same as `-N`: the completion
+// loader defines every widget it installs against a driver it autoloads
+// afterwards, so a shell that required the function here would fail all of
+// them.
+func TestACompletionWidgetDoesNotNeedItsFunctionYet(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), "zle -C w complete-word nosuchfn; echo st=$?\nzle -l\n")
+	if want := "st=0\nw -C complete-word nosuchfn\n"; out != want || st != 0 {
+		t.Errorf("output = %q status %d, want %q at 0", out, st, want)
+	}
+}
+
+// A completion widget is a widget everywhere else too: `zle -l name` answers
+// for it, `-D` removes it, and removing one from the middle of a table leaves
+// the rest intact — which is the encoding's own test, since a widget occupies
+// more than one slot of the array it is stored in.
+func TestACompletionWidgetIsAWidgetEverywhereElse(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(),
+		"zle -C a complete-word af; zle -C b list-choices bf; zle -N c cf\n"+
+			"zle -l b; echo q=$?\nzle -D b; echo d=$?\nzle -l\n")
+	if want := "q=0\nd=0\na -C complete-word af\nc (cf)\n"; out != want || st != 0 {
+		t.Errorf("output = %q status %d, want %q at 0", out, st, want)
+	}
+}
+
+// `zle -A` of a completion widget gives a copy that is itself one, completer
+// and all — measured. A copy that kept only the function would be a widget
+// that had quietly become an ordinary one.
+func TestAliasingACompletionWidgetCopiesTheCompleter(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), "zle -C w complete-word f; zle -A w y\nzle -l\n")
+	if want := "w -C complete-word f\ny -C complete-word f\n"; out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+}
+
+// Redefining across the two kinds replaces the whole definition rather than
+// merging it: measured both ways, one widget of the later kind and no trace of
+// the earlier one's completer.
+func TestRedefiningAcrossTheTwoKindsReplacesTheWhole(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), "zle -N w f; zle -C w complete-word g\nzle -l\n")
+	if want := "w -C complete-word g\n"; out != want {
+		t.Errorf("-C over -N: output = %q, want %q", out, want)
+	}
+	out, _ = runZsh(t, t.TempDir(), "zle -C w complete-word g; zle -N w f\nzle -l\n")
+	if want := "w (f)\n"; out != want {
+		t.Errorf("-N over -C: output = %q, want %q", out, want)
+	}
+}
+
+// TestACompletionWidgetRunsItsFunction is the anti-stub: a definition that
+// registered a name and nothing else would pass every listing test above and
+// fail this one. A key bound to a completion widget calls the function, which
+// can see the line and the widget's own name.
+func TestACompletionWidgetRunsItsFunction(t *testing.T) {
+	r, out := zleRunner(t, "cf() { print -r -- \"ran W=$WIDGET B=[$BUFFER] C=$CURSOR L=[$LBUFFER]\"; }\n"+
+		"zle -C cw complete-word cf\n")
+	line, ok, printed := runWidget(t, r, out, "cw", repl.Line{Buffer: "abcdef", Cursor: 2})
+	if !ok {
+		t.Fatal("the completion widget did not run")
+	}
+	if want := "ran W=cw B=[abcdef] C=2 L=[ab]\n"; printed != want {
+		t.Errorf("printed %q, want %q", printed, want)
+	}
+	if want := (repl.Line{Buffer: "abcdef", Cursor: 2}); line != want {
+		t.Errorf("line = %+v, want %+v", line, want)
+	}
+}
+
+// TestTheLineIsReadOnlyInsideACompletionWidget is the one thing about `zle -C`
+// that is visible from inside the call rather than only in a listing, and the
+// reason this is not the `-N` path under another letter. Measured through a
+// pseudo-terminal: `${(t)BUFFER}` in a completion widget is
+// `scalar-local-readonly-special` where the same probe in an ordinary widget
+// says `scalar-local-special`, and each of the four assignments answers
+// `read-only variable:` and stops the function where it stands.
+func TestTheLineIsReadOnlyInsideACompletionWidget(t *testing.T) {
+	for _, name := range zleLineParameterNames {
+		src := "cf() { " + name + "=zz; print -r -- unreached; }\nzle -C cw complete-word cf\n"
+		r, out := zleRunner(t, src)
+		line, ok, printed := runWidget(t, r, out, "cw", repl.Line{Buffer: "abcd", Cursor: 2})
+		if !ok {
+			t.Fatalf("%s: the completion widget did not run", name)
+		}
+		if !strings.Contains(printed, "read-only variable: "+name) {
+			t.Errorf("%s: printed %q, want the assignment refused by name", name, printed)
+		}
+		if strings.Contains(printed, "unreached") {
+			t.Errorf("%s: printed %q, want the widget to have stopped at the refusal", name, printed)
+		}
+		if want := (repl.Line{Buffer: "abcd", Cursor: 2}); line != want {
+			t.Errorf("%s: line = %+v, want %+v — a completion widget does not rewrite it", name, line, want)
+		}
+	}
+}
+
+// zleLineParameterNames is the four a widget reads and writes the line
+// through. Spelled out here rather than reached for across the package
+// boundary: these tests are an external package, the same way the interp ones
+// are, so the names have to be written down on this side.
+var zleLineParameterNames = []string{"BUFFER", "CURSOR", "LBUFFER", "RBUFFER"}
+
+// And an ordinary widget is untouched by any of that: the same four are
+// writable, which is what makes the read-only mark a property of the
+// definition rather than of the shell.
+func TestTheLineStaysWritableInsideAnOrdinaryWidget(t *testing.T) {
+	r, out := zleRunner(t, "nf() { BUFFER=zz; CURSOR=1; print -r -- \"reached B=[$BUFFER] C=$CURSOR\"; }\n"+
+		"zle -N nw nf\n")
+	line, ok, printed := runWidget(t, r, out, "nw", repl.Line{Buffer: "abcd", Cursor: 2})
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	if want := "reached B=[zz] C=1\n"; printed != want {
+		t.Errorf("printed %q, want %q", printed, want)
+	}
+	if want := (repl.Line{Buffer: "zz", Cursor: 1}); line != want {
+		t.Errorf("line = %+v, want %+v", line, want)
+	}
+}
+
+// The read-only mark is lifted with the rest of the call, so an ordinary
+// widget that runs after a completion one still edits the line — and a script
+// at the next prompt finds four ordinary variables. Marking a name read-only
+// with no way to lift it would strand the whole session after one keystroke.
+func TestTheReadOnlyLineIsLiftedWhenTheCompletionWidgetReturns(t *testing.T) {
+	r, out := zleRunner(t, "cf() { :; }\nnf() { BUFFER=edited; }\n"+
+		"zle -C cw complete-word cf\nzle -N nw nf\n")
+	if _, ok, _ := runWidget(t, r, out, "cw", repl.Line{Buffer: "abcd", Cursor: 2}); !ok {
+		t.Fatal("the completion widget did not run")
+	}
+	line, ok, _ := runWidget(t, r, out, "nw", repl.Line{Buffer: "abcd", Cursor: 2})
+	if !ok {
+		t.Fatal("the ordinary widget did not run")
+	}
+	if want := (repl.Line{Buffer: "edited", Cursor: 2}); line != want {
+		t.Errorf("line = %+v, want %+v", line, want)
+	}
+	res, _ := runZshVars(t, r, "BUFFER=fine; print -r -- \"after=[$BUFFER]\"")
+	if want := "after=[fine]\n"; res != want {
+		t.Errorf("after the call: %q, want %q", res, want)
+	}
 }

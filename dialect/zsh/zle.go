@@ -6,6 +6,7 @@ package zsh
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -101,11 +102,64 @@ import (
 //     widget invoked from inside it**: `zle b` from `a` leaves `$WIDGET` as
 //     `a` inside `b`.
 //   - **The wordings.** `bad option: -x`, `not enough arguments for -N`, `too
-//     many arguments for -N`, `no such widget `+"`"+`name'` — this builtin's
+//     many arguments for -N`, "no such widget `name'" — this builtin's
 //     `bad option` is bindkey's and zmodload's and not zstyle's `invalid
 //     option`, and its usage complaints name the letter that was short, which
 //     zstyle's do not. `zle` with no arguments at all is status 1 and no
 //     output whatsoever.
+//
+// ## The completion widget, and what it is here
+//
+// `zle -C name completer function` is the other kind of widget, and it is the
+// one a real startup needs most: zsh's completion system installs every widget
+// it owns through this letter, so refusing it cost fifteen lines of a startup
+// and left the shell with none of them (#1615). Measured 2026-09-09 the same
+// two ways, under `-c` and through a pseudo-terminal.
+//
+//   - **All three words are required**, which is the first thing that differs
+//     from `-N`: one or two is `not enough arguments for -C` and four is `too
+//     many`, so the function may not be left to default to the widget's name.
+//     The function still need not exist yet, for the reason `-N`'s does not.
+//   - **The completer is a closed set and not "any widget".** Measured by
+//     asking for every one of the 386 names `zle -la` reports: exactly the
+//     eight builtin completion widgets and their `.`-prefixed spellings are
+//     accepted, and everything else — `end-of-line`, which is unarguably a
+//     widget — is "invalid widget `name'", a different complaint from the
+//     `no such widget` that `-D` and `-A` make. `menu-select` belongs to
+//     zsh/complist and is refused until that is loaded, which this shell will
+//     not do; the loader guards that one line with `zle -la menu-select`, so
+//     it never asks. See zleCompleters.
+//   - **It has its own pair of listing spellings and abbreviates neither.**
+//     `name -C completer function` plainly and `zle -C name completer
+//     function` under `-L`, all three words even when the function is named
+//     identically to the widget — the case `-N` writes as a bare name. The
+//     completer in the middle is not recoverable from a default.
+//   - **It is a widget everywhere else.** `zle -l name` answers for it, `-la`
+//     has it, `-D` removes it, and `-A` copies it *completer and all* rather
+//     than quietly returning an ordinary widget. Redefining across the two
+//     kinds replaces the whole definition and never merges it. That is why
+//     there is one table with a wider row rather than a second table: every
+//     one of those operations would otherwise need to remember to ask both.
+//   - **The line is read-only for the length of the call.** This is the only
+//     part visible from inside a widget rather than in a listing, and it is
+//     measured rather than inferred: through a pseudo-terminal with a key
+//     bound to one, `${(t)BUFFER}` is `scalar-local-readonly-special` where an
+//     ordinary widget reports `scalar-local-special`, and each of `BUFFER=`,
+//     `CURSOR=`, `LBUFFER=` and `RBUFFER=` answers `read-only variable:` and
+//     stops the function. A completion widget looks at the line and offers
+//     candidates; it does not rewrite it.
+//
+// **What is not here is the completion context**, and it is a long way beyond
+// this letter. zsh gives such a widget `compstate`, `words`, `CURRENT`,
+// `PREFIX` and the `compadd` builtin — the whole of how candidates are
+// produced, filtered and displayed — and this shell has no completion system
+// for any of it to describe; `zsh/complete` and `zsh/computil` are both in
+// zmodload.go's roster of modules it declines. So a completion widget defined
+// here registers, lists, aliases, deletes and runs its function, and the
+// function can read the line; it cannot yet offer a completion. The editor's
+// own completion is untouched, because a key left on its default binding never
+// reaches the widget table at all — see bindkey.go's KeyBindings, which
+// reports only what somebody rebound.
 //
 // ## What refuses by name, and why that is the point
 //
@@ -129,8 +183,9 @@ import (
 // first two are separate features and the third belongs with the completion
 // system, which this shell has not got.
 
-// zleStore is the widget table: a flat array of pairs, widget name then the
-// function behind it.
+// zleStore is the widget table: a flat array of triples, widget name, then
+// the function behind it, then the builtin completion widget a `-C`
+// definition named — empty for the `-N` ones, which have no completer.
 //
 // zleBuffer, zleCursor, zleWidget and zleActive are the state of the call a
 // widget is running inside, and zleActive is what tells a widget apart from a
@@ -147,9 +202,65 @@ const (
 	zleActive = ".zsh.zle.active"
 )
 
-// zleParameters are what a widget function reads the line as, and they exist
-// only while one is running. See the file comment.
-var zleParameters = []string{"BUFFER", "CURSOR", "LBUFFER", "RBUFFER", "WIDGET"}
+// zleLineParameters are the four a widget reads and writes the line through.
+//
+// Separate from the fifth because a *completion* widget gets these four
+// read-only and an ordinary one gets them writable — the one thing about
+// `zle -C` that is visible from inside the call rather than only in a
+// listing. See the file comment.
+var zleLineParameters = []string{"BUFFER", "CURSOR", "LBUFFER", "RBUFFER"}
+
+// zleParameters is those four and the name of the widget that is running:
+// what a call opens and closes. They exist only while one is running — see
+// the file comment.
+var zleParameters = append(slices.Clone(zleLineParameters), "WIDGET")
+
+// zleCompleters is what may be named as the second word of `zle -C`: the
+// builtin completion widgets, each under its own name and under the `.`
+// spelling that reaches the builtin even when something has redefined the
+// plain one — which is the spelling this shell's own completion loader uses.
+//
+// Measured by asking zsh 5.9.2 for `zle -C w $each f` over the whole of
+// `zle -la`, all 386 of them: exactly these eight and their dotted forms are
+// accepted and every other widget answers `invalid widget`. So the argument
+// is a closed set and not "any widget", and getting the set right is what
+// makes the loader's eight-name rebinding loop run to the end.
+//
+// `menu-select` is deliberately absent, and that is measured too rather than
+// an omission: it is a widget only once `zsh/complist` is loaded, which this
+// shell will not do, and zsh without that module refuses it here exactly as
+// this does. The loader guards that one line with `zle -la menu-select`, so
+// it never asks.
+var zleCompleters = completerNames()
+
+func completerNames() map[string]bool {
+	out := map[string]bool{}
+	for _, name := range []string{
+		"complete-word", "delete-char-or-list", "expand-or-complete",
+		"expand-or-complete-prefix", "list-choices", "menu-complete",
+		"menu-expand-or-complete", "reverse-menu-complete",
+	} {
+		out[name] = true
+		out["."+name] = true
+	}
+	return out
+}
+
+// widgetDefinition is what a widget name resolves to.
+//
+// One record for the two kinds rather than a second table for the completion
+// ones: everything that walks the widgets — the two listings, the alias, the
+// removal, the round trip that runs one — has to see both kinds or it has a
+// hole, and a parallel store is how the second half of a pair gets forgotten.
+type widgetDefinition struct {
+	// function is the shell function the widget runs. It need not exist yet.
+	function string
+	// completer is the builtin completion widget named by `zle -C`, and
+	// empty for a widget defined by `zle -N`. Non-empty is what *makes* this
+	// a completion widget: it changes both listings and it makes the line
+	// read-only for the length of the call.
+	completer string
+}
 
 // registerZle installs the builtin.
 func registerZle(r *interp.Runner) {
@@ -161,19 +272,20 @@ func registerZle(r *interp.Runner) {
 // is not built yet says so — the distinction whence.go documents.
 const (
 	zleLetters            = "acfglmrwACDFGIKLMNRTU"
-	zleLettersImplemented = "aADFLNlw"
+	zleLettersImplemented = "aACDFLNlw"
 )
 
 // zleOpts is what the letters asked for.
 type zleOpts struct {
-	define bool // -N
-	delete bool // -D
-	alias  bool // -A
-	list   bool // -l
-	watch  bool // -F
-	all    bool // -a
-	source bool // -L
-	widget bool // -w
+	define   bool // -N
+	complete bool // -C
+	delete   bool // -D
+	alias    bool // -A
+	list     bool // -l
+	watch    bool // -F
+	all      bool // -a
+	source   bool // -L
+	widget   bool // -w
 }
 
 func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
@@ -212,6 +324,8 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	switch {
 	case opts.define:
 		return defineWidget(r, rest)
+	case opts.complete:
+		return defineCompletionWidget(r, rest)
 	case opts.delete:
 		return deleteWidgets(r, rest)
 	case opts.alias:
@@ -231,6 +345,8 @@ func setZleLetter(opts *zleOpts, letter rune) {
 	switch letter {
 	case 'N':
 		opts.define = true
+	case 'C':
+		opts.complete = true
 	case 'D':
 		opts.delete = true
 	case 'A':
@@ -270,7 +386,53 @@ func defineWidget(r *interp.Runner, args []string) int {
 	if len(args) == 2 {
 		fn = args[1]
 	}
-	writeWidget(r, args[0], fn)
+	writeWidget(r, args[0], widgetDefinition{function: fn})
+	return 0
+}
+
+// defineCompletionWidget is `zle -C name completer function`.
+//
+// All three words are required — measured, one or two of them is `not enough
+// arguments for -C` and four is `too many`, so unlike `-N` the function may
+// not be left to default to the name. The completer must be one of the
+// builtin completion widgets and nothing else; see zleCompleters.
+//
+// What this registers is a widget: it is in both listings in the `-C`
+// spelling, `zle -l name` answers for it, `-D` removes it and `-A` copies it
+// completer and all, and a key bound to it runs the function. What it does
+// not carry is the completion *context* the completer names — `compstate`,
+// `compadd` and the rest of the parameters a completion widget reads the
+// candidate list through — because this shell has no completion system for
+// them to describe. So the function runs and can look at the line; it cannot
+// yet offer a completion. The one part of that context this does model is the
+// part that costs nothing to get right and is wrong if guessed: the line is
+// read-only for the length of the call. See openWidgetParameters.
+//
+// The order the letters are checked in is why this sits beside defineWidget
+// rather than inside it: they are two operations that happen to write to one
+// table, and folding them would make the argument counts conditional on a
+// letter, which is the shape the `-N` rules are stated in.
+func defineCompletionWidget(r *interp.Runner, args []string) int {
+	switch {
+	case len(args) < 3:
+		r.Diagnosef("not enough arguments for -C\n")
+		return 1
+	case len(args) > 3:
+		r.Diagnosef("too many arguments for -C\n")
+		return 1
+	}
+	if !zleCompleters[args[1]] {
+		// A different wording from `-D`'s and `-A`'s `no such widget`, and
+		// measured: the complaint is that the name is not a *completion*
+		// widget, which `end-of-line` is not even though it is a widget.
+		r.Diagnosef("invalid widget `%s'\n", args[1])
+		return 1
+	}
+	// The function does not have to exist yet, the same as `-N` and for the
+	// same reason: measured, `zle -C w complete-word nosuchfn` is status 0
+	// and the definition is stored. The completion loader defines every one
+	// of its widgets against `_main_complete` before autoloading it.
+	writeWidget(r, args[0], widgetDefinition{function: args[2], completer: args[1]})
 	return 0
 }
 
@@ -307,8 +469,11 @@ func aliasWidget(r *interp.Runner, args []string) int {
 		r.Diagnosef("too many arguments for -A\n")
 		return 1
 	}
-	if fn, defined := widgetFunction(r, args[0]); defined {
-		writeWidget(r, args[1], fn)
+	if def, defined := widgetDefinitionOf(r, args[0]); defined {
+		// The whole definition and not only the function: measured, `zle -A`
+		// of a completion widget gives a copy that is itself a completion
+		// widget, `y -C complete-word f`, rather than a plain one.
+		writeWidget(r, args[1], def)
 		return 0
 	}
 	if _, editors := bindkeyWidgets[args[0]]; editors {
@@ -347,7 +512,7 @@ func listWidgets(r *interp.Runner, opts zleOpts, names []string) int {
 
 // widgetExists answers `zle -l name`, and `-a` is what widens the question
 // from the widgets somebody defined to every widget this shell has.
-func widgetExists(defined map[string]string, name string, all bool) bool {
+func widgetExists(defined map[string]widgetDefinition, name string, all bool) bool {
 	if _, ok := defined[name]; ok {
 		return true
 	}
@@ -359,7 +524,7 @@ func widgetExists(defined map[string]string, name string, all bool) bool {
 }
 
 // listedWidgets is the names a listing walks, sorted by widget name.
-func listedWidgets(defined map[string]string, all bool) []string {
+func listedWidgets(defined map[string]widgetDefinition, all bool) []string {
 	seen := map[string]bool{}
 	for name := range defined {
 		seen[name] = true
@@ -383,19 +548,30 @@ func listedWidgets(defined map[string]string, all bool) []string {
 // One of the editor's own actions has neither spelling's second half: there is
 // no function behind it and no `zle -N` that would define it, so it is its own
 // name under either flag — which is what zsh writes for the ones it built in.
-func widgetListing(defined map[string]string, name string, source bool) string {
-	fn, user := defined[name]
+//
+// A completion widget is its own pair of spellings and it abbreviates
+// neither: measured, `zle -C w complete-word w` — the function named
+// identically to the widget, which is the case `-N` writes as a bare `w` —
+// still reads back as `w -C complete-word w` and `zle -C w complete-word w`.
+// All three words, always, because the completer in the middle is not
+// recoverable from a default the way the function is.
+func widgetListing(defined map[string]widgetDefinition, name string, source bool) string {
+	def, user := defined[name]
 	switch {
 	case !user:
 		return name + "\n"
-	case source && fn == name:
+	case def.completer != "" && source:
+		return "zle -C " + name + " " + def.completer + " " + def.function + "\n"
+	case def.completer != "":
+		return name + " -C " + def.completer + " " + def.function + "\n"
+	case source && def.function == name:
 		return "zle -N " + name + "\n"
 	case source:
-		return "zle -N " + name + " " + fn + "\n"
-	case fn == name:
+		return "zle -N " + name + " " + def.function + "\n"
+	case def.function == name:
 		return name + "\n"
 	}
-	return name + " (" + fn + ")\n"
+	return name + " (" + def.function + ")\n"
 }
 
 // callWidget is `zle widget-name [args]`: running one widget from inside
@@ -409,7 +585,7 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 		r.Diagnosef("widgets can only be called when ZLE is active\n")
 		return 1
 	}
-	fn, defined := widgetFunction(r, name)
+	def, defined := widgetDefinitionOf(r, name)
 	if !defined {
 		if _, editors := bindkeyWidgets[name]; editors {
 			r.Diagnosef("%s: calling a built-in widget is not implemented yet\n", name)
@@ -419,13 +595,13 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 		// status 1 and not a word, with its own stderr watched to be sure.
 		return 1
 	}
-	if !r.HasFunction(fn) {
+	if !r.HasFunction(def.function) {
 		return 1
 	}
 	// `$WIDGET` is left alone: measured, a widget invoked from inside another
 	// still reports the *outer* one's name.
 	status := r.ExitStatus()
-	ran, err := r.CallFunction(ctx, fn, args...)
+	ran, err := r.CallFunction(ctx, def.function, args...)
 	if err != nil || !ran {
 		r.SetExitStatus(status)
 		return 1
@@ -461,14 +637,16 @@ func RunWidget(r *interp.Runner, ctx context.Context, name string, in repl.Line)
 func runWidgetFunction(
 	r *interp.Runner, ctx context.Context, name string, in repl.Line, arg string,
 ) (repl.Line, bool) {
-	fn, defined := widgetFunction(r, name)
-	if !defined || !r.HasFunction(fn) {
+	def, defined := widgetDefinitionOf(r, name)
+	if !defined || !r.HasFunction(def.function) {
 		return in, false
 	}
 	setWidgetLine(r, in)
 	r.SetVar(zleWidget, name)
 	r.SetVar(zleActive, "1")
-	openWidgetParameters(r)
+	// A completion widget looks at the line and does not rewrite it, which is
+	// the completer's presence and not a second flag — see openWidgetParameters.
+	openWidgetParameters(r, def.completer != "")
 	// Deferred rather than called at the end, because a panic in the widget
 	// function is caught *outside* this call — repl runs it behind the same
 	// guard a typed line runs behind — so a straight-line close would be
@@ -483,7 +661,7 @@ func runWidgetFunction(
 	// what the last command left, and what the function leaves is not what the
 	// next command reads.
 	status := r.ExitStatus()
-	_, err := r.CallFunction(ctx, fn, arg)
+	_, err := r.CallFunction(ctx, def.function, arg)
 	r.SetExitStatus(status)
 	if err != nil {
 		return in, false
@@ -494,7 +672,20 @@ func runWidgetFunction(
 // openWidgetParameters gives the widget its five parameters, produced rather
 // than stored so that each assignment is live in the arithmetic the others
 // answer with — see the file comment for the measurement that requires it.
-func openWidgetParameters(r *interp.Runner) {
+//
+// `completion` is whether this is a widget `zle -C` defined, and it makes the
+// four line parameters read-only for the length of the call. That is measured
+// and it is not an inference from what completion is for: driving zsh 5.9.2
+// through a pseudo-terminal and pressing a key bound to a `zle -C` widget,
+// `${(t)BUFFER}` inside the function is `scalar-local-readonly-special` where
+// the same probe in a `zle -N` widget reports `scalar-local-special`, and all
+// four of `BUFFER=`, `CURSOR=`, `LBUFFER=` and `RBUFFER=` answer `read-only
+// variable:` and stop the function. It is also the whole of what this shell
+// can honestly model about a completion widget's context, and it is worth
+// modeling precisely because it is the half that *refuses* — a completion
+// widget written against a shell that let it rewrite the line is a widget
+// that does not work in zsh.
+func openWidgetParameters(r *interp.Runner, completion bool) {
 	r.SetDynamic("BUFFER", func(rr *interp.Runner) string { return widgetBuffer(rr) })
 	r.SetDynamicWriter("BUFFER", func(rr *interp.Runner, value string) {
 		// The stored cursor is left alone and every *read* of it clamps — see
@@ -553,6 +744,11 @@ func openWidgetParameters(r *interp.Runner) {
 	// change. Lifted again by UnsetDynamic when the call ends, so a script
 	// outside one finds an ordinary variable.
 	r.MarkReadonly("WIDGET")
+	if completion {
+		for _, name := range zleLineParameters {
+			r.MarkReadonly(name)
+		}
+	}
 }
 
 // closeWidgetParameters takes them away again, so a script that is not running
@@ -634,39 +830,47 @@ func unsetWidgetState(r *interp.Runner) {
 
 // The widget table, encoded the way bindkey.go encodes its bindings: a flat
 // indexed array of pairs, so nothing in either half needs escaping.
-func readWidgets(r *interp.Runner) map[string]string {
+func readWidgets(r *interp.Runner) map[string]widgetDefinition {
 	flat, _ := r.GetArray(zleStore)
-	out := make(map[string]string, len(flat)/2)
-	for i := 0; i+2 <= len(flat); i += 2 {
-		out[flat[i]] = flat[i+1]
+	out := make(map[string]widgetDefinition, len(flat)/zleStoreStride)
+	for i := 0; i+zleStoreStride <= len(flat); i += zleStoreStride {
+		out[flat[i]] = widgetDefinition{function: flat[i+1], completer: flat[i+2]}
 	}
 	return out
 }
 
-// widgetFunction is the function behind a widget name, and whether the name is
-// a widget at all.
-func widgetFunction(r *interp.Runner, name string) (string, bool) {
-	fn, ok := readWidgets(r)[name]
-	return fn, ok
+// zleStoreStride is how many array elements one widget occupies: the name, the
+// function, and the completer that is empty unless `-C` named one.
+const zleStoreStride = 3
+
+// widgetDefinitionOf is what a widget name resolves to, and whether the name
+// is a widget at all.
+func widgetDefinitionOf(r *interp.Runner, name string) (widgetDefinition, bool) {
+	def, ok := readWidgets(r)[name]
+	return def, ok
 }
 
-func writeWidget(r *interp.Runner, name, fn string) {
+// writeWidget stores a definition, replacing any earlier one for the same
+// name — measured, `-N` over a `-C` and `-C` over an `-N` both leave one
+// widget of the later kind rather than two entries or a hybrid, which is why
+// the whole record is replaced and never merged field by field.
+func writeWidget(r *interp.Runner, name string, def widgetDefinition) {
 	flat, _ := r.GetArray(zleStore)
-	for i := 0; i+2 <= len(flat); i += 2 {
+	for i := 0; i+zleStoreStride <= len(flat); i += zleStoreStride {
 		if flat[i] == name {
-			flat[i+1] = fn
+			flat[i+1], flat[i+2] = def.function, def.completer
 			r.SetArray(zleStore, flat)
 			return
 		}
 	}
-	r.SetArray(zleStore, append(flat, name, fn))
+	r.SetArray(zleStore, append(flat, name, def.function, def.completer))
 }
 
 func removeWidget(r *interp.Runner, name string) bool {
 	flat, _ := r.GetArray(zleStore)
-	for i := 0; i+2 <= len(flat); i += 2 {
+	for i := 0; i+zleStoreStride <= len(flat); i += zleStoreStride {
 		if flat[i] == name {
-			r.SetArray(zleStore, append(flat[:i:i], flat[i+2:]...))
+			r.SetArray(zleStore, append(flat[:i:i], flat[i+zleStoreStride:]...))
 			return true
 		}
 	}

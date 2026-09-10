@@ -216,7 +216,7 @@ func KeyBindings(r *interp.Runner) map[string]repl.Binding {
 		if def, standard := defaultBindings[seq]; standard && def == widget {
 			continue
 		}
-		if _, defined := widgetFunction(r, widget); defined {
+		if _, defined := widgetDefinitionOf(r, widget); defined {
 			out[seq] = repl.Binding{Function: widget}
 			continue
 		}

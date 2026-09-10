@@ -14882,4 +14882,24 @@ echo "read=[$l]"`,
 		Snippet: `echo noglob nocorrect`,
 		Why:     "neither word is reserved anywhere but in command position, so all six columns print both of them. The control that keeps a rule written for the whole word list from passing the rest of this group",
 	},
+	{
+		ID: "param/argc-counts-the-positional-parameters", Category: "parameters",
+		Snippet: `set -- a b c; printf "[%s]" "$ARGC"`,
+		Why:     "zsh has a name for `$#` that no other member of the panel has, so this is `[3]` in one column and `[]` in five. The one-column answer is the whole point: five shells read an ordinary unset parameter here and say nothing about it",
+	},
+	{
+		ID: "param/argc-decides-a-dispatch", Category: "parameters",
+		Snippet: `f() { if [ 0 -eq "${ARGC:-0}" ]; then printf "[usage]"; else printf "[ran]"; fi; }; f reload`,
+		Why:     "the shape #1682 was filed for, written so every column can run it: a function that takes an empty count as `called with no arguments`. zsh answers `[ran]` and the five without the name answer `[usage]` — which is a prompt theme printing thirteen lines of help onto a startup and not reloading, at status 1, with the word it was given sitting in the list it just printed",
+	},
+	{
+		ID: "param/argc-follows-shift", Category: "parameters",
+		Snippet: `f() { printf "[%s]" "$ARGC"; shift; printf "[%s]" "$ARGC"; }; f a b c`,
+		Why:     "the count is produced at the read rather than fixed when the function was entered: `[3][2]` in the column that has it. A shell that filled the name in once on entry would answer `[3][3]` and pass a test that only checked the first read",
+	},
+	{
+		ID: "param/argc-refuses-assignment", Category: "parameters",
+		Snippet: `set -- a b c; ARGC=9; printf "[%s][%s]" "$ARGC" "$#"`,
+		Why:     "readonly where the name exists — `read-only variable: ARGC` at status 1, and the printf is never reached — and an ordinary variable in the five where it does not, which answer `[9][3]`. The pair `$#` makes the failure visible either way: a shell that accepted the assignment would report a count of nine for three parameters",
+	},
 }

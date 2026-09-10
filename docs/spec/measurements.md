@@ -4603,6 +4603,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/an-unbraced-flag-sigil-before-a-name` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[$+v]~[$=v]~[$~v]~[0v]` | `[1]~[hello]~[hello]~[5]` |
 | `param/the-existence-sigil-needs-a-name-or-a-digit` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[$+1]~[$+@]~[$++v]~[$+]` | `[1]~[$+@]~[$++v]~[$+]` |
 | `core/a-bare-brace-inside-a-quoted-expansion` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[{y][xr}]` | `[{y][xr}]` | `[{y][xr}]` | `[{y}; printf [%s] x; echo]` | `[{y][xr}]` |
+| `param/argc-counts-the-positional-parameters` | `[]` | `[]` | `[]` | `[]` | `[]` | `[3]` |
+| `param/argc-decides-a-dispatch` | `[usage]` | `[usage]` | `[usage]` | `[usage]` | `[usage]` | `[ran]` |
+| `param/argc-follows-shift` | `[][]` | `[][]` | `[][]` | `[][]` | `[][]` | `[3][2]` |
+| `param/argc-refuses-assignment` | `[9][3]` | `[9][3]` | `[9][3]` | `[9][3]` | `[9][3]` | **2>** `<shell>:1: read-only variable: ARGC` *(status 1)* |
 
 - `name/zsh-argzero-under-a-moved-dollar-zero` — zsh alone carries the value `$0` had before anything moved it, which is the only way a sourced file can tell what the shell itself was called. It is what the `${${0:#$ZSH_ARGZERO}:-…}` idiom in a plugin manager on this machine tests against; the other five have no such name and no moved `$0` for it to record
   ```sh
@@ -4739,6 +4743,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/a-bare-brace-inside-a-quoted-expansion` — a `{` with no `$` in front of it does not open a level, so the expansion ends at the first `}` and what follows is ordinary text. Unanimous in the columns that have the operators — `{y` and then `p{qr}`, the second being the tell, since a shell that nested would answer `p{q}r` as one piece and leave nothing behind. Written in quotes because unquoted the same brace is a *brace-expansion group* and does have to balance, which is a different question and a different answer. Counting every brace instead made an escaped dollar open a level nothing could close, since `\$` is consumed as an escape pair and left its `{` to be read as a nested expansion — the double quote around the whole word was then eaten looking for the `}` that would balance it, which is why the failure read as an unterminated string (#1586)
   ```sh
   a=x; printf "[%s]" "${a/x/{y}"; printf "[%s]" "${a:-p{q}r}"; echo
+  ```
+- `param/argc-counts-the-positional-parameters` — zsh has a name for `$#` that no other member of the panel has, so this is `[3]` in one column and `[]` in five. The one-column answer is the whole point: five shells read an ordinary unset parameter here and say nothing about it
+  ```sh
+  set -- a b c; printf "[%s]" "$ARGC"
+  ```
+- `param/argc-decides-a-dispatch` — the shape #1682 was filed for, written so every column can run it: a function that takes an empty count as `called with no arguments`. zsh answers `[ran]` and the five without the name answer `[usage]` — which is a prompt theme printing thirteen lines of help onto a startup and not reloading, at status 1, with the word it was given sitting in the list it just printed
+  ```sh
+  f() { if [ 0 -eq "${ARGC:-0}" ]; then printf "[usage]"; else printf "[ran]"; fi; }; f reload
+  ```
+- `param/argc-follows-shift` — the count is produced at the read rather than fixed when the function was entered: `[3][2]` in the column that has it. A shell that filled the name in once on entry would answer `[3][3]` and pass a test that only checked the first read
+  ```sh
+  f() { printf "[%s]" "$ARGC"; shift; printf "[%s]" "$ARGC"; }; f a b c
+  ```
+- `param/argc-refuses-assignment` — readonly where the name exists — `read-only variable: ARGC` at status 1, and the printf is never reached — and an ordinary variable in the five where it does not, which answer `[9][3]`. The pair `$#` makes the failure visible either way: a shell that accepted the assignment would report a count of nine for three parameters
+  ```sh
+  set -- a b c; ARGC=9; printf "[%s][%s]" "$ARGC" "$#"
   ```
 
 ## diagnostics

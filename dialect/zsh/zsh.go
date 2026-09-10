@@ -1145,6 +1145,11 @@ func Semantics() interp.Semantics {
 	// else: measured, both ran on a plain `cd` and neither on `cd -q`, while
 	// `cd -q -` still printed the directory. #1558.
 	s.CdHasQuietOption = interp.Yes
+	// The hooks. `chpwd` is the one whose site is a builtin rather than the
+	// prompt loop — see repl.HookStyle for the two that are not — and the
+	// suffix is shared by every hook this shell has, wherever it fires.
+	s.HookListSuffix = "_functions"
+	s.DirectoryChangeHook = "chpwd"
 	s.CdLastPathOptionWins = interp.No
 	s.BadSetOptionNameFatal = interp.Yes
 	s.UnknownConditionOptionIsAStatus = interp.Yes

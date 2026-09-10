@@ -86,10 +86,15 @@ import (
 // So the *site* is shared and the mechanism is not, which is why BeforePrompt
 // names a function and BeforePromptVariable names a variable, rather than one
 // field pretending to hold both. What they do share is the *chain* — save the
-// status, run each item behind the panic guard, put the status back before
-// each and after the last, stop at an item that exited — and that is fireChain,
-// written once and called by both. A second loop beside it is how a fix comes
-// to be carried by one caller and not the other.
+// status, run each item, put the status back before each and after the last,
+// stop at an item that exited — and that is interp.Runner.FireChain, written
+// once and called by both. A second loop beside it is how a fix comes to be
+// carried by one caller and not the other.
+//
+// The chain lives in interp rather than here because a third hook fires from
+// there: `chpwd` runs inside `cd`, which is a builtin, and a builtin cannot
+// reach up into a front end. What this package still owns is the panic guard,
+// which interp deliberately does not have.
 type HookStyle struct {
 	// BeforePrompt is the function run before each prompt — zsh's `precmd`.
 	// Empty is a dialect without one.
@@ -145,12 +150,6 @@ type HookStyle struct {
 	// are how a shell writes a tree back rather than what it will run.
 	BeforeCommand string
 
-	// ListSuffix is what a hook's list of *extra* function names is spelled
-	// by: zsh's is the hook's own name plus `_functions`, so `precmd` reads
-	// `precmd_functions` as well. Empty is a dialect whose hooks are the
-	// named function and nothing else.
-	ListSuffix string
-
 	// CommandLayout is how the third argument to BeforeCommand is arranged —
 	// the many-line form of the line about to run. The zero value keeps the
 	// line structure the input had, which is also what the second argument
@@ -168,13 +167,17 @@ type HookStyle struct {
 	// nothing quietly depend on it.
 	//
 	// zsh's siblings on the same *calling convention* are here because they
-	// do not share this *site*: `chpwd` fires where a directory changes,
-	// which is inside `cd` and not in this loop; `periodic` on a timer read
-	// from `$PERIOD`; `zshaddhistory` where a line is saved, with the power
-	// to reject it; `zshexit` on the way out. Measured, each takes the named
+	// do not share this *site*: `periodic` fires on a timer read from
+	// `$PERIOD`; `zshaddhistory` where a line is saved, with the power to
+	// reject it; `zshexit` on the way out. Measured, each takes the named
 	// function and the `_functions` array exactly as `precmd` does, so one
-	// implementation of the *chain* serves all of them — fireHook is written
-	// for any name — and each still needs its own firing site.
+	// implementation of the *chain* serves all of them — interp's FireHook is
+	// written for any name — and each still needs its own firing site.
+	//
+	// `chpwd` was the fourth and is no longer here. Its site is inside `cd`,
+	// which is a builtin, so it is fired from interp against
+	// Semantics.DirectoryChangeHook — a name this loop never sees and could
+	// not have fired without missing every `cd` inside a function. #1775.
 	Unfired []string
 }
 
@@ -225,8 +228,9 @@ func (s Shell) fireEvaluated(ctx context.Context, name string) {
 	// empty list, and a chain of nothing runs nothing. A guard here would be
 	// a condition no test could reach and no behavior could distinguish.
 	text, _ := s.Runner.GetArray(name)
-	s.fireChain(ctx, text, func(cmd string) {
-		_ = s.Runner.EvalVariable(ctx, name, cmd)
+	guard := s.guard()
+	s.Runner.FireChain(ctx, text, func(cmd string) {
+		guard.Do(func() { _ = s.Runner.EvalVariable(ctx, name, cmd) })
 	})
 }
 
@@ -264,70 +268,23 @@ func (s Shell) printed(stmts []*syntax.File, layout syntax.Layout, sep string) s
 // fireHook runs one *function* hook's whole chain: the function of that name,
 // then every function named in its list, in order.
 //
-// Each call is behind the panic guard a typed line already runs behind, and
-// separately rather than all of them together, for the reason a prompt
+// The chain itself is interp's — see interp.Runner.FireHook, which holds every
+// rule about what a hook chain is and how it runs, because the *sites* are on
+// both sides of this package's boundary: `precmd` fires in this loop and
+// `chpwd` fires inside `cd`, which is a builtin and cannot reach up here. What
+// this package adds is the one thing interp may not have, which is the panic
+// guard: nothing under interp/ recovers, and this session already runs a typed
+// line behind one.
+//
+// Guarded per call rather than around the whole chain, for the reason a prompt
 // provider is: one hook with a bug costs its own call and not the rest of the
 // chain — which is also what a hook that merely *fails* does, measured.
-//
-// The status is saved once and put back before every call and after the last,
-// so no hook can see another hook's status and none of them can reach the next
-// command. A hook that called `exit` is the one thing that stops the chain:
-// measured, zsh's session ends there, so the rest of the chain does not run
-// and the status the exit set is left where the loop will find it.
 func (s Shell) fireHook(ctx context.Context, name string, args ...string) {
 	if name == "" || s.Runner == nil {
 		return
 	}
-	s.fireChain(ctx, s.hookChain(name), func(fn string) {
-		_, _ = s.Runner.CallFunction(ctx, fn, args...)
-	})
-}
-
-// fireChain runs one chain of hook items and is the whole of what the two
-// mechanisms share.
-//
-// Both kinds of hook this session has are a *list* run in order under the same
-// four rules — the status is saved and put back around every item, each item
-// runs behind the panic guard, a failing item stops nothing, and an item that
-// exited ends the chain — and only what one item *is* differs: a function to
-// call, or command text to evaluate. So the rules live here once and the
-// difference is the closure.
-//
-// Written this way rather than as a second loop beside the first because a
-// second loop is how a rule comes to be carried by one caller and not the
-// other. Every one of the four above was a bug somewhere before it was a rule.
-func (s Shell) fireChain(ctx context.Context, items []string, run func(item string)) {
-	if s.Runner == nil {
-		return
-	}
-	status := s.Runner.ExitStatus()
 	guard := s.guard()
-	for _, item := range items {
-		s.Runner.SetExitStatus(status)
-		guard.Do(func() { run(item) })
-		if s.Runner.Exited() {
-			return
-		}
-	}
-	s.Runner.SetExitStatus(status)
-}
-
-// hookChain is the names one hook calls, in order: its own, then its list's.
-//
-// Names rather than functions, and every name whether or not anything answers
-// to it, because "is this a function" is interp's question and CallFunction is
-// where it is asked — see the measurement there for why a builtin of the same
-// name is not a hook.
-func (s Shell) hookChain(name string) []string {
-	names := []string{name}
-	if s.Hooks.ListSuffix == "" {
-		return names
-	}
-	list, ok := s.Runner.GetArray(name + s.Hooks.ListSuffix)
-	if !ok {
-		return names
-	}
-	return append(names, list...)
+	s.Runner.FireHook(ctx, func(call func()) { guard.Do(call) }, name, args...)
 }
 
 // reportUnfiredHooks names the hooks this dialect has, this session has been
@@ -361,7 +318,7 @@ func (s Shell) reportUnfiredHooks() {
 // to `chpwd_functions` — so a check for the named function alone would find
 // nothing and say nothing, which is the silence #1281 is about.
 func (s Shell) hookIsDefined(name string) bool {
-	for _, fn := range s.hookChain(name) {
+	for _, fn := range s.Runner.HookChain(name) {
 		if s.Runner.HasFunction(fn) {
 			return true
 		}

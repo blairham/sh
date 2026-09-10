@@ -628,7 +628,7 @@ and offering a bad one is worse than saying so.
 
 A required field left empty declines the whole elicitation, because a form
 returned without what it required is not an answer to it. Declining and
-cancelling are answers too — the agent is owed one either way — and, as with a
+canceling are answers too — the agent is owed one either way — and, as with a
 permission request, the input ending is a decline rather than a hang.
 
 #### Why the agent side still cannot ask

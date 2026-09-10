@@ -116,10 +116,10 @@ func TestAnExecInTheAgentsLineDoesNotReplaceTheShell(t *testing.T) {
 	t.Log("the shell survived an exec in the agent's line")
 }
 
-// Cancelling the run ends the line, which is what release and a dropped
+// Canceling the run ends the line, which is what release and a dropped
 // connection do. There is no process to signal, so the context is the only
 // handle — this is the driver.Shell.Context field earning its place.
-func TestCancellingTheRunEndsTheLine(t *testing.T) {
+func TestCancelingTheRunEndsTheLine(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan int, 1)

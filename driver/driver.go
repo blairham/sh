@@ -286,7 +286,7 @@ type Shell struct {
 	// that command later when the agent releases the terminal or the
 	// connection drops. Without a context reaching the interpreter there is no
 	// handle on a run at all, and the only way to stop one was to have made it
-	// a child process so it could be signalled.
+	// a child process so it could be signaled.
 	//
 	// Nil means `context.Background()`, filled in by withDefaults so every
 	// route has one before anything is built. See interp.Runner.Run, which is

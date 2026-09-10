@@ -28,12 +28,12 @@ type interpreter struct {
 	write  string
 	status int
 	// block, when non-nil, holds the line until the context ends, which is
-	// how a test asks whether cancelling reaches the run.
+	// how a test asks whether canceling reaches the run.
 	block chan struct{}
 	// returned, when non-nil, is closed once run has *returned*. A test that
 	// waited for the line to be recorded instead would be waiting for the
 	// moment before the one it cares about, and would pass whether or not
-	// cancelling reached anything.
+	// canceling reached anything.
 	returned chan struct{}
 }
 
@@ -192,7 +192,7 @@ func TestWithoutAnInterpreterABareCommandIsStillExecd(t *testing.T) {
 }
 
 // Releasing a terminal ends an interpreted line, which is what it does to a
-// child process. There is no process to signal here, so cancelling the run's
+// child process. There is no process to signal here, so canceling the run's
 // context is what has to reach it — and it is why driver.Shell grew a Context.
 func TestReleasingATerminalEndsAnInterpretedLine(t *testing.T) {
 	t.Parallel()
@@ -214,7 +214,7 @@ func TestReleasingATerminalEndsAnInterpretedLine(t *testing.T) {
 	// failure is this message rather than the whole package timing out.
 	case <-time.After(5 * time.Second):
 		t.Fatal("the interpreted line outlived the terminal that was released.\n" +
-			"Releasing has to reach the run, and cancelling its context is the only way " +
+			"Releasing has to reach the run, and canceling its context is the only way " +
 			"in: there is no process here to signal.")
 	}
 }

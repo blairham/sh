@@ -384,7 +384,7 @@ func (c *Client) createInterpreted(ctx context.Context, req CreateTerminalReques
 	// Started before reap so the status is on its way to a reader that exists.
 	go func() {
 		// Released whichever way the line ends, including the ordinary one:
-		// kill cancels too, and cancelling twice is nothing.
+		// kill cancels too, and canceling twice is nothing.
 		defer cancel()
 		l.status <- c.Interpret(runCtx, req.Command, req.Cwd, env, t)
 	}()
@@ -550,7 +550,7 @@ func (p process) pid() int {
 // the reading an agent asks for by sending `command` and no `args`.
 //
 // It ends through its context rather than through a signal, because there is
-// no process to signal: cancelling is what reaches the interpreter, and it is
+// no process to signal: canceling is what reaches the interpreter, and it is
 // why driver.Shell grew a Context field. A status channel rather than a
 // stored int because reap is on another goroutine than the run.
 type line struct {

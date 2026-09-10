@@ -112,7 +112,7 @@ type Client struct {
 	// other way round, so what it takes is the capability and not the thing
 	// that has it.
 	//
-	// The context is the run's lifetime — cancelling it ends the line — and
+	// The context is the run's lifetime — canceling it ends the line — and
 	// the implementation is expected to honor cwd and env the way it would for
 	// any other command.
 	Interpret func(ctx context.Context, line, cwd string, env []string, out io.Writer) int

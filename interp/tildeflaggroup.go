@@ -281,6 +281,24 @@ func tildeMarkRefusal(e *syntax.ParamExpr, markJoin, ifsSplit bool) (string, boo
 	if n := strings.Count(e.Flags, "q"); n > 1 {
 		return "beside the (" + strings.Repeat("q", n) + ") flag", true
 	}
+	if patternQuoteFlagApplies(e) {
+		// `(b)` is the one member of the quoting family the mark does not
+		// survive, and it is measured rather than derived. With
+		// `a=('x*y' 'p')` on zsh 5.9.2, 2026-09-10:
+		//
+		//	${(~qj.|.)a}   x\*y|p    the bar live, which is what the mark is for
+		//	${(~bj.|.)a}   x\*y\|p   the bar escaped, exactly as ${(bj.|.)a}
+		//
+		// So the mark buys nothing here: this flag escapes the separator the
+		// group inserted along with everything else. Holding the join back
+		// past the escape — which is how a marked separator is carried, see
+		// the block this refusal guards — would leave that bar live and give
+		// the opposite answer, so the pair is named rather than carried.
+		// Nothing in reach writes it: the plugin manager and prompt that
+		// between them account for every `(b)` on this machine write the
+		// flag alone or with `(@)`, and no `(~)` site anywhere carries one.
+		return "beside the (b) flag", true
+	}
 	if strings.ContainsRune(e.Flags, 'Q') {
 		return "beside the (Q) flag", true
 	}

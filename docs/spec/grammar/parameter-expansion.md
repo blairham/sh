@@ -930,6 +930,7 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(qqqq)` | quote as `$'…'` | `x="a b"; ${(qqqq)x}` | `$'a b'` |
 | `(q-)` | quote only where it is needed | `x="a b"; y=p; ${(q-)x}` / `${(q-)y}` | `'a b'` / `p` |
 | `(q+)` | the same, extended | `x=$'a\001b'; ${(q+)x}` | `$'a\C-Ab'` |
+| `(b)` | backslash the *pattern* metacharacters | `x='a b*c'; ${(b)x}` | `a b\*c` |
 | `(f)` | split at newlines | `x=$'a\nb'; ${(f)x}` | two words `a`, `b` |
 | `(s:sep:)` | split at sep | `x=a:b:c; ${(s.:.)x}` | `a`, `b`, `c` |
 | `(0)` | split at NUL | `v=$'a\0b'; ${(@0)v}` | two words `a`, `b` |
@@ -1184,6 +1185,70 @@ Details, each measured:
   `(qqq)` wraps in double quotes escaping `\`, `` ` ``, `"`, `$`.
   `(qqqq)` wraps in `$'…'` escaping `'`, `\`, `!` and control bytes as in
   `(q)`. Multibyte UTF-8 passes through every form.
+- **`(b)` in detail.** The third quoting flag, and the one whose question is
+  about *patterns* rather than about shell syntax: it backslashes the
+  characters a pattern gives meaning to and nothing else, so that the result
+  matches the value it came from. Measured byte by byte across 1..127 on zsh
+  5.9.2, 2026-09-10, the set is thirteen characters —
+
+      #  (  )  *  <  >  ?  [  \  ]  ^  |  ~
+
+  — and everything else is written through as itself, including the space,
+  the tab, the newline, `!`, `-`, `{`, `}`, `$`, `` ` ``, `"`, `'`, `%`, `;`,
+  `&`, every other control byte, and every byte above `0x7f`, so multibyte
+  UTF-8 and invalid bytes alike pass through untouched. `!` and `-` would be
+  in the set by symmetry with a bracket expression's own metacharacters and
+  are measured out: whatever would open the bracket is escaped already.
+
+  **It does not move with the glob options.** The same 127-row table comes
+  back identical with `extendedglob` set and unset, with `kshglob` set, with
+  `bareglobqual` unset, with `noglob` set, and under every combination of
+  those — so `#` and `^` are escaped even in the shell state where they are
+  ordinary text. That is the only answer that can be right for text whose
+  reader's options are not the expansion's to know, and it costs nothing: an
+  escaped ordinary character is that character.
+
+  **Nor with position**, which is where it parts company with `(q)`:
+  `${(q)x}` on `a~b` is `a~b` and `${(b)x}` on the same value is `a\~b`, a
+  pattern's `~` being the exclusion operator wherever it stands where a shell
+  word's is a tilde expansion only at the front. The space is the other
+  difference and the plainer one — `${(b)x}` on `a b*c` is `a b\*c` where
+  `${(q)x}` is `a\ b\*c`. And an empty value is **empty** here where `(q)`
+  writes `''`: an empty pattern is simply empty, while an empty shell word
+  has to be spelled.
+
+  The property it exists for is the round trip, and it holds for every value:
+  `[[ $v == ${~${(b)v}} ]]` is true whatever `v` holds. The `${~…}` is part
+  of the statement rather than an aside — a value's metacharacters are not
+  live in a pattern until something asks for them, so without it the match is
+  literal and the backslashes are text.
+
+  It stands beside `(q)` in rule 14, and the compositions say so. Rule 13 has
+  run: `g='a\x2ab'; ${(bg:e:)g}` is `a\*b`, where a step running first would
+  mark the value's own backslash and hand `(g)` a doubled one, and
+  `${(b%):-%B*}` is `ESC\[1m\*`, where one running first would leave the `[`
+  the prompt escape produced unmarked. The second of those needs a `TERM` in
+  the environment — with none, `%B` expands to nothing and both readings
+  answer `\*` — which is why the corpus row uses the first. The unquoting
+  runs behind it, so `${(bQ)v}` is the value back again; the padding counts
+  the *escaped* text, so `${(bl:8:)v}` on `a*b` leaves four spaces and not
+  five; and the join has already happened, so the separator the group
+  inserted is marked along with everything else: `a=('x*y' 'p');
+  ${(bj:|:)a}` is `x\*y\|p`.
+
+  **`b` and `q` are one family in the grammar**, and a group carries one
+  member of it once: `${(bq)v}`, `${(qb)v}`, `${(bb)v}`, `${(bUq)v}`,
+  `${(q-b)v}` and `${(qqqb)v}` are all `error in flags near position N`, and
+  N is always the *second* member's own character — 5, 5, 5, 6, 6 and 7 for
+  those six. `Q` is not in the family, and a `-` behind a `b` is the
+  signed-numeric sort flag exactly as it is anywhere a `q` did not eat it.
+
+  The one composition this implementation refuses by name is a `(~)`-marked
+  join separator beside it. The mark exempts an inserted separator from the
+  escape the rest of the result gets, and this is the member of the family
+  the exemption does not survive: measured, `${(~bj.|.)a}` is `x\*y\|p` with
+  the bar escaped where `${(~qj.|.)a}` is `x\*y|p` with the bar live. Nothing
+  in reach writes the pair.
 - **A word branch that substituted nothing is not an empty value**, and
   `(q)` is the only thing in the family that can tell them apart. An empty
   value has to be written `''` because backslashes cannot spell one; a

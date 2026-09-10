@@ -799,7 +799,7 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 	// is `'has'quote'` — so the interpreter refuses them by name rather
 	// than reproducing them. This scan's job is the grammar; what a legal
 	// group means is not its question.
-	prev, prevAt, qSeen, minusTaken := byte(0), 0, 0, false
+	prev, prevAt, qSeen, minusTaken, bSeen := byte(0), 0, 0, false, false
 	for i < len(src) {
 		c := src[i]
 		if c == ')' {
@@ -829,11 +829,38 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 			}
 			// Anywhere else a `-` is the signed-numeric sort flag.
 		case 'q':
-			if minusTaken {
+			if minusTaken || bSeen {
 				e.FlagsErrPos = i + 3
 				return ""
 			}
 			qSeen++
+		case 'b':
+			// `b` and `q` are one family and a group may write one member of
+			// it once. Measured on zsh 5.9.2, 2026-09-10, and the position
+			// reported is always the *second* member's own:
+			//
+			//	${(bq)v}    error at 5   the `q` behind a `b`
+			//	${(qb)v}    error at 5   the `b` behind a `q`
+			//	${(bb)v}    error at 5   a second `b`
+			//	${(bUq)v}   error at 6   adjacency has nothing to do with it
+			//	${(qUb)v}   error at 6
+			//	${(bUb)v}   error at 6
+			//	${(q-b)v}   error at 6   a modifier does not spend the `q`
+			//	${(q+b)v}   error at 6
+			//	${(qqqb)v}  error at 7   nor does a repeat
+			//	${(j:x:bq)a} error at 9  the count is of source characters
+			//	${(bQ)v}    read         `Q` is not in the family
+			//	${(b-)v}    read         and the `-` behind a `b` is the sort
+			//	                         flag, exactly as it is anywhere else
+			//
+			// Reported here rather than by the interpreter because it is the
+			// grammar that turns it away: the group means nothing, which is
+			// this scan's kind of failure and not a refusal by name.
+			if bSeen || qSeen > 0 {
+				e.FlagsErrPos = i + 3
+				return ""
+			}
+			bSeen = true
 		}
 		e.Flags += string(c)
 		prev, prevAt = c, i

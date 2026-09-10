@@ -83,6 +83,16 @@ type Base struct {
 	// takes, and because a runner that claimed to be interactive without one
 	// would answer `$-` with an `i` no terminal backs.
 	Interactive bool
+	// Terminal gives the runner a terminal, which is a different fact from
+	// Interactive and is the one job control turns on: `set -m` and zsh's
+	// `setopt monitor` are granted with one and refused or declined without,
+	// in every shell in the panel. A test that could only build a runner
+	// without one could not tell the option working from the option missing.
+	//
+	// False is the default because a pipe is what nearly every case here
+	// runs on, and because a runner claiming a terminal it does not have
+	// would grant job control nothing backs.
+	Terminal bool
 }
 
 // Runner returns a runner wired to all four of the preset's vectors, with
@@ -105,6 +115,7 @@ func (p Preset) Runner(b Base) *interp.Runner {
 		Dialect: &d,
 		Name:    name, Dir: b.Dir, Vars: b.Vars, Env: b.Env,
 		Interactive: b.Interactive,
+		Terminal:    b.Terminal,
 	}
 	p.Apply(r)
 	return r

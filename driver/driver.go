@@ -1079,6 +1079,16 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// binary *is* the process, so the read is made once, where it is
 		// visible — the same split as ReplaceProcess below.
 		Env: os.Environ(),
+		// Whether this shell has a terminal, which is the fact `set -m`
+		// turns on and which no route is exempt from: measured on a
+		// pseudo-terminal, every shell in the panel grants `set -m` inside a
+		// plain `-c` string and refuses or declines it on a pipe. Read here
+		// rather than at the two interactive call sites for that reason —
+		// the question is about the process's descriptors and not about
+		// whether anybody is typing, and asking it only where somebody was
+		// gave every script with a terminal the answer for one without
+		// (#1720).
+		Terminal: sh.hasTerminal(),
 		// The shell's own descriptor rather than the process's, for the
 		// reason the other two are the caller's: a front end that reaches
 		// past its Shell is not usable by anything embedding it, and its own
@@ -1270,7 +1280,7 @@ func (sh Shell) runInput(in source) int {
 		// bash and dash do not, though bash announces one at a prompt. So
 		// turning both on here would give bash an announcement no bash
 		// makes.
-		r.SetInteractiveMonitor(sh.hasTerminal())
+		r.SetInteractiveMonitor()
 		// And whether there is anybody to *tell* about a job, which splits
 		// where the monitor does not: measured through a pseudo-terminal on
 		// `-i script.sh`, ksh93 and zsh announce a job starting and ending,

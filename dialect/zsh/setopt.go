@@ -52,12 +52,20 @@ import (
 //     the state it is already in succeeds, the same bargain setoptions.go
 //     strikes for `set +o posix`; asking it to move is refused out loud with
 //     zsh's own wording for an option that will not budge — measured on
-//     `setopt monitor` in a non-interactive zsh: `can't change option`, 1.
-//     Real zsh refuses exactly five of the 185 that way in a `-c` run, and
-//     they are the five about being interactive — `interactive`, `monitor`,
-//     `shinstdin`, `singlecommand` and `zle`. Every other name it takes, in
-//     both directions, which is measured and is what says the rest belong in
-//     one of the other kinds rather than in a refusal;
+//     `setopt monitor` in a zsh with no terminal: `can't change option`, 1.
+//     Real zsh refuses exactly five of the 185 that way in a `-c` run on a
+//     pipe, and they are the five about being interactive — `interactive`,
+//     `monitor`, `shinstdin`, `singlecommand` and `zle`. Every other name it
+//     takes, in both directions, which is measured and is what says the rest
+//     belong in one of the other kinds rather than in a refusal.
+//
+//     `monitor` is not one of them here, because it is not one of them in
+//     zsh either once the shell has a terminal: on a pseudo-terminal it moves
+//     in both directions and at 0, interactively and inside a plain `-c`
+//     alike. It is backed by the substrate's own `set -m`, which was already
+//     running the job control it names — the entry was a constant wired off,
+//     so an interactive shell answered `m` in `$-` and `off` in
+//     `${options[monitor]}` at the same moment (#1720);
 //   - backed by the store a recorded name uses, and read by the front end
 //     rather than by anything in this package: `histignorespace` alone, whose
 //     state the line editor asks for through this namespace before it records
@@ -322,10 +330,15 @@ var zshOptions = []zshOption{
 	recorded("mailwarning", false),
 	recorded("markdirs", false),
 	recorded("menucomplete", false),
-	// The five that refuse to move, all of them about being interactive.
-	// Every one is off here and off in a `-c` zsh, so turning it off is
-	// granted and turning it on is the measured `can't change option`, 1.
-	fixedConstant("monitor", false, false),
+	// The switch job control really is: the same one `set -m` moves, so the
+	// two spellings are one state read and written through one seam. Granted
+	// in both directions where the shell has a terminal and refused with
+	// zsh's own wording where it has none — which is
+	// Semantics.MonitorNeedsATerminal, answered `Yes` by this dialect, and
+	// not a question about being interactive. See setoptions.go for the
+	// panel, and TestSetoptMonitorNeedsATerminalAndNotAPrompt for the
+	// measurement.
+	setOptBacked("monitor", false, "monitor", false),
 	recorded("multibyte", true),
 	recorded("multifuncdef", true),
 	recorded("multios", true),
@@ -380,6 +393,11 @@ var zshOptions = []zshOption{
 	// same, so the listings do not move. The prompt theme this machine loads
 	// reads the name at its third line.
 	fixedConstant("shglob", false, false),
+	// Three of the four that refuse to move — `interactive` is the fourth,
+	// above — and all of them are about being interactive, which is the whole
+	// of what real zsh refuses in a `-c` run on a pipe. Every one is off here
+	// and off in such a zsh, so turning it off is granted and turning it on
+	// is the measured `can't change option`, 1.
 	fixedConstant("shinstdin", false, false),
 	recorded("shnullcmd", false),
 	recorded("shoptionletters", false),

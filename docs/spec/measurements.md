@@ -7713,6 +7713,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/set-o-lists-a-pipefail-row` | *(no output, status 1)* | `pipefail       	off` | `pipefail       	off` | `pipefail       	off` | `pipefail                 off` | `pipefail              off` |
 | `opt/set-m-in-a-script` | `st=0~done` **2>** `<shell>: 1: set: can't access tty; job control turned off` | `st=0~done` | `st=0~done` | `st=0~done` | `st=0~done` | **2>** `<shell>:set:1: can't change option: -m` *(status 1)* |
 | `opt/set-o-monitor-is-the-same-request` | `st=0` **2>** `<shell>: 1: set: can't access tty; job control turned off` | `st=0` | `st=0` | `st=0` | `st=0` | **2>** `<shell>:set:1: can't change option: monitor` *(status 1)* |
+| `opt/setopt-monitor-is-not-fatal-where-set-m-is` | `st=127~done` **2>** `<shell>: 1: setopt: not found` | `st=127~done` **2>** `<shell>: line 1: setopt: command not found` | `st=127~done` **2>** `<shell>: line 1: setopt: command not found` | `st=127~done` **2>** `<shell>: setopt: command not found` | `st=127~done` **2>** `<shell>: setopt: not found` | `st=1~done` **2>** `<shell>:setopt:1: can't change option: monitor` |
 | `opt/set-o-noglob-is-unanimous` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` |
 | `opt/command-tracking-has-two-long-names` | *(no output, status 2)* | `hashall=0~trackall=2` | `hashall=0` *(status 2)* | `hashall=0~trackall=1` | *(no output, status 2)* | `hashall=0~trackall=0` |
 | `opt/an-unknown-long-name-is-refused` | **2>** `<shell>: 1: set: Illegal option -o zzznosuch` *(status 2)* | `on=2~off=2` **2>** `<shell>: line 1: set: zzznosuch: invalid option name~<shell>: line 1: set: zzznosuch: invalid option name` | **2>** `<shell>: line 1: set: zzznosuch: invalid option name` *(status 2)* | `on=1~off=1` **2>** `<shell>: line 0: set: zzznosuch: invalid option name~<shell>: line 0: set: zzznosuch: invalid option name` | **2>** `<shell>: set: zzznosuch: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: zzznosuch` *(status 1)* |
@@ -8096,6 +8097,12 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   set -o monitor
   echo "st=$?"
+  ```
+- `opt/setopt-monitor-is-not-fatal-where-set-m-is` — the same refusal as `set -m` above and not the same ending: zsh writes `can't change option: monitor` at 1 and carries on to both echoes, where `set -m` writes `can't change option: -m` and stops the script dead. The fatality belongs to `set`, which is one of the standard's special builtins, and not to the option — the other three have no `setopt` at all and say so
+  ```sh
+  setopt monitor
+  echo "st=$?"
+  echo done
   ```
 - `opt/set-o-noglob-is-unanimous` — the long name means the same thing in all four, which is what makes it the spelling that needs no dialect — and the pair with the case above is the whole of the axis
   ```sh

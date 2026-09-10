@@ -340,11 +340,14 @@ func TestMonitorWithoutATerminalIsAnAxis(t *testing.T) {
 	if !strings.Contains(out, "st=0") || !strings.Contains(out, "st2=0") {
 		t.Errorf("out=%q, want off granted everywhere", out)
 	}
-	// A front end that gave this runner a person to report jobs to has a
-	// terminal, and the question is never asked.
+	// A front end that said this runner has a terminal makes the question
+	// moot, and it is never asked. Runner.Terminal and not JobControl: having
+	// somebody to announce a job to is a prompt and having a terminal is any
+	// route started from one, and measured on a pseudo-terminal every shell
+	// in the panel grants `set -m` inside a plain `-c` string (#1720).
 	out, st = run(t, `set -m; echo "st=$?"`, func(r *Runner) {
 		remarks(r)
-		r.JobControl = true
+		r.Terminal = true
 	})
 	if st != 0 || !strings.Contains(out, "st=0") || strings.Contains(out, "terminal") {
 		t.Errorf("out=%q st=%d, want the option granted at a terminal", out, st)
@@ -797,4 +800,39 @@ func hasOptionRow(listing, name, state string) bool {
 		}
 	}
 	return false
+}
+
+// TestARefusalThroughTheDialectsSeamDoesNotEndTheScript: the fatality a
+// refused `set` option carries belongs to `set` and not to the option.
+//
+// `set` is one of the special builtins the standard makes fatal on error, and
+// a dialect's own option builtin is an ordinary one. Measured in zsh 5.9.2 on
+// a pipe, which is the preset that ends a script over this at all: `set -m`
+// writes `can't change option: -m` and the next line never runs, while
+// `setopt monitor` — the same option, the same sentence and the same status
+// on the builtin — writes `can't change option: monitor`, reports 1, and the
+// next line does run.
+//
+// Asserted from both sides, because a runner that had simply lost the
+// fatality would pass the first half alone.
+func TestARefusalThroughTheDialectsSeamDoesNotEndTheScript(t *testing.T) {
+	fatal := func(r *Runner) {
+		sem := CoreSemantics()
+		sem.MonitorNeedsATerminal = Yes
+		sem.BadSetOptionNameFatal = Yes
+		sem.FatalErrorStatusIsOne = Yes
+		r.Semantics = &sem
+		r.Diagnostics = &Diagnostics{MonitorDenied: "can't change option: %[1]s", MonitorDeniedStatus: 1}
+		r.Register("askoption", func(r *Runner, _ context.Context, _ []string) int {
+			return r.ApplyNamedOption("monitor", true)
+		})
+	}
+	out, st := run(t, "askoption\necho \"st=$?\"\necho survived\n", fatal)
+	if want := "sh: can't change option: monitor\nst=1\nsurvived\n"; out != want || st != 0 {
+		t.Errorf("through the seam: out %q status %d, want %q at 0", out, st, want)
+	}
+	out, st = run(t, "set -m\necho survived\n", fatal)
+	if want := "sh: can't change option: -m\n"; out != want || st != 1 {
+		t.Errorf("through `set`: out %q status %d, want %q at 1", out, st, want)
+	}
 }

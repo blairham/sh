@@ -3,7 +3,10 @@
 
 package interp
 
-import "maps"
+import (
+	"maps"
+	"slices"
+)
 
 // What a cloned Runner owns, and why the list is checked rather than trusted.
 //
@@ -169,6 +172,37 @@ func (c *Runner) ownTables(r *Runner) {
 	c.dynamicWriters = maps.Clone(r.dynamicWriters)
 	c.custom = maps.Clone(r.custom)
 
+	// The stacks, for the same two reasons as the tables above and a third
+	// that only a slice has.
+	//
+	// A slice header copied by value carries the parent's *backing array*, and
+	// `append` writes that array in place whenever it has the room. Two shells
+	// appending to one stack therefore write one array and then both read back
+	// `[len-1]` and get the same element — not a leaked value but an aliased
+	// slot. `scopes` is the one that ends the process, because the element is a
+	// `*scope` and a scope holds fourteen maps of its own.
+	//
+	// The third reason is why this did not surface with #1384: a nil slice is
+	// safe, because two clones each allocate on first append. Nothing aliases
+	// until the parent has pushed and popped once, and popping keeps the
+	// capacity — `popFrame` is `r.frames = r.frames[:len(r.frames)-1]`. So the
+	// *second* pipeline in a script is the first one that aliases, which is
+	// exactly what was measured for #1783: `f | f` once is clean, and twice is
+	// a data race in `pushFrame`.
+	//
+	// slices.Clone keeps a nil slice nil, so the same seeding trap applies as
+	// for the tables and the test seeds these too.
+	c.frames = slices.Clone(r.frames)
+	c.scopes = cloneScopes(r.scopes)
+	// Appended to in place as well, so each needs an array of its own. Their
+	// *elements* stay shared on purpose: a `*Job` is one job to whoever holds
+	// it, and copying the pointer is what keeps a subshell looking at the
+	// parent's job rather than a snapshot of it.
+	c.redirFds = slices.Clone(r.redirFds)
+	c.jobs = slices.Clone(r.jobs)
+	c.aroundFunctionCalls = slices.Clone(r.aroundFunctionCalls)
+	c.freezeAfter = slices.Clone(r.freezeAfter)
+
 	// traps, inheritedIgnored and selfPending are deliberately not here.
 	// inheritTraps builds all three from scratch immediately after this
 	// runs, because what a subshell starts with is not the parent's table
@@ -185,4 +219,67 @@ func (c *Runner) ownTables(r *Runner) {
 	// how the shell recognizes its own declaration when it sees it again.
 	// sharedTables in the test names it, so the claim is asserted rather
 	// than merely written down here.
+}
+
+// cloneScopes gives a clone its own scope stack, scopes and all.
+//
+// Every scope is copied and not only the slice, because a scope's tables are
+// inside the scope rather than on the Runner: a fresh backing array alone
+// would still hand two shells one `*scope`, and `shadow` writes
+// `sc.saved[name]` on whatever it finds at the top of the stack. That is the
+// `fatal error: concurrent map writes` of #1783 — the runtime's own detector,
+// which is not a Go panic, so panicguard cannot catch it.
+//
+// owner is copied verbatim rather than repointed at the clone. It records
+// which runner *pushed* the scope, and ownScope reads it to stop a `( … )`
+// written in a function body from writing the caller's scope — see
+// localtraps.go, where the measured case is a subshell's `trap` not
+// surviving into the caller. Repointing it would make every inherited scope
+// look like the subshell's own and change what that check answers, which is
+// a behavior question this file does not get to decide. Here only the
+// memory changes hands: what the shell *does* with a scope is unchanged, and
+// the axis that decides whether the last pipeline element runs in the current
+// shell at all still decides it (see pipeline.go).
+func cloneScopes(scopes []*scope) []*scope {
+	if scopes == nil {
+		return nil
+	}
+	out := make([]*scope, len(scopes))
+	for i, sc := range scopes {
+		c := *sc
+		c.saved = maps.Clone(sc.saved)
+		c.existed = maps.Clone(sc.existed)
+		c.arrayExisted = maps.Clone(sc.arrayExisted)
+		c.removedBefore = maps.Clone(sc.removedBefore)
+		c.assocExisted = maps.Clone(sc.assocExisted)
+		c.savedReadonly = maps.Clone(sc.savedReadonly)
+		c.savedHideInScope = maps.Clone(sc.savedHideInScope)
+		c.savedAttrs = maps.Clone(sc.savedAttrs)
+		c.savedExported = maps.Clone(sc.savedExported)
+		c.exportedSpoken = maps.Clone(sc.exportedSpoken)
+		c.exportedShadow = maps.Clone(sc.exportedShadow)
+		c.savedTraps = maps.Clone(sc.savedTraps)
+		// The two that hold a container per name, on the same terms as Arrays
+		// and AssocArrays above: cloning the outer map alone would give the
+		// clone its own name table pointing at the parent's elements.
+		if sc.savedArrays != nil {
+			c.savedArrays = make(map[string]Array, len(sc.savedArrays))
+			for k, v := range sc.savedArrays {
+				c.savedArrays[k] = maps.Clone(v)
+			}
+		}
+		if sc.savedAssoc != nil {
+			c.savedAssoc = make(map[string]AssocArray, len(sc.savedAssoc))
+			for k, v := range sc.savedAssoc {
+				c.savedAssoc[k] = maps.Clone(v)
+			}
+		}
+		// The return hooks are appended to in place too, by AtFunctionReturn
+		// and by getopts. The closures themselves are shared, and they capture
+		// the runner that registered them, so one registered by the parent
+		// still unwinds the parent.
+		c.onReturn = slices.Clone(sc.onReturn)
+		out[i] = &c
+	}
+	return out
 }

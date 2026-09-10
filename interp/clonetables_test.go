@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"os"
 	"reflect"
 	"testing"
 
@@ -19,6 +20,186 @@ import (
 // deliberate act it has to be.
 var sharedTables = map[string]string{
 	"preludeFuncs": "written only while the prelude is sourced and never deleted from, so no subshell can change it",
+}
+
+// sharedStacks names every slice a clone is allowed to share with its parent,
+// on the same terms as sharedTables: a positive claim, asserted in both
+// directions, so a name here without a reason reads as the deliberate act it
+// has to be.
+//
+// A slice is the second half of #1783 and it hides better than a map. The
+// header is copied by value, so the two runners have their own length — and
+// `append` still writes the parent's *backing array* whenever the capacity is
+// there. Nothing aliases while the slice is nil, which is why this survived
+// #1416: a stack has to be pushed and popped once before the array exists,
+// and popping keeps the capacity.
+var sharedStacks = map[string]string{
+	"Env":            "the environment the shell was started with, never appended to after setup",
+	"InheritedFiles": "the files the embedder handed in, never appended to at all",
+	"trapSnapshot":   "only ever replaced wholesale or set to nil, and inheritTraps rebuilds a subshell's traps from scratch",
+	"pipeStatus":     "rebuilt with append([]int(nil), …) on every pipeline, so a write never lands in an array anyone else holds",
+}
+
+// seedStacks gives every slice on a Runner an element and spare capacity.
+//
+// The capacity is the point and not a detail: a slice at its exact length
+// allocates on the next append and cannot alias, so seeding without room to
+// grow would give a clean run for the same reason `f | f` *once* is clean.
+// Popping is what leaves the room in the real thing — `popFrame` shortens the
+// length and keeps the array — so the seed models a stack that has been used.
+//
+// Hand-written and exhaustive for the reason seedTables is: reflection cannot
+// set an unexported field, so the check can only see what this fills in, and
+// the test below fails on any slice it left out.
+func seedStacks(r *Runner) {
+	r.Env = append(make([]string, 0, 4), "SEED=v")
+	r.Params = append(make([]string, 0, 4), "seed")
+	r.procSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
+	r.frames = append(make([]Frame, 0, 4), Frame{})
+	r.InheritedFiles = append(make([]*os.File, 0, 4), nil)
+	r.redirFds = append(make([]int, 0, 4), 0)
+	r.jobs = append(make([]*Job, 0, 4), nil)
+	r.scopes = append(make([]*scope, 0, 4), &scope{
+		saved:            map[string]string{"seed": "v"},
+		existed:          map[string]bool{"seed": true},
+		savedArrays:      map[string]Array{"seed": {0: "v"}},
+		arrayExisted:     map[string]bool{"seed": true},
+		removedBefore:    map[string]bool{"seed": true},
+		savedAssoc:       map[string]AssocArray{"seed": {"k": "v"}},
+		assocExisted:     map[string]bool{"seed": true},
+		savedReadonly:    map[string]bool{"seed": true},
+		savedHideInScope: map[string]bool{"seed": true},
+		savedAttrs:       map[string]nameAttributes{"seed": {}},
+		savedExported:    map[string]bool{"seed": true},
+		exportedSpoken:   map[string]bool{"seed": true},
+		exportedShadow:   map[string]string{"seed": "v"},
+		savedTraps:       map[string]savedTrapState{"seed": {}},
+		onReturn:         append(make([]func(), 0, 4), func() {}),
+	})
+	r.aroundFunctionCalls = append(make([]func(*Runner) func(), 0, 4), nil)
+	r.selfPending = append(make([]string, 0, 4), "seed")
+	r.trapSnapshot = append(make([]savedTrap, 0, 4), savedTrap{})
+	r.trapContexts = append(make([]trapContext, 0, 4), trapContext(0))
+	r.pipeStatus = append(make([]int, 0, 4), 0)
+	r.freezeAfter = append(make([]string, 0, 4), "seed")
+	r.mathOrder = append(make([]string, 0, 4), "seed")
+}
+
+// TestACloneOwnsEveryStack is TestACloneOwnsEveryTable for the slices, and it
+// exists because that test could not see them: it considers a field only when
+// its kind is exactly reflect.Map, so `scopes []*scope` was skipped outright
+// and the fourteen maps inside a scope were not reachable by the guarantee at
+// all. The guarantee was one level deep and read as though it were total.
+//
+// What that cost: a `local` in a function on two sides of one pipe ended the
+// process with `fatal error: concurrent map writes`, because the last element
+// of a zsh pipeline runs on the shell itself while the others run on clones
+// that shared its scope stack — two goroutines appending to one array, both
+// reading back the same `*scope`, both writing its `saved` map (#1783).
+func TestACloneOwnsEveryStack(t *testing.T) {
+	parent := newTestRunner(t, &Runner{})
+	seedStacks(parent)
+
+	pv := reflect.ValueOf(parent).Elem()
+	for i := range pv.NumField() {
+		f := pv.Type().Field(i)
+		if f.Type.Kind() != reflect.Slice {
+			continue
+		}
+		fv := pv.Field(i)
+		if fv.IsNil() {
+			t.Errorf("%s is a slice on Runner that seedStacks does not fill in.\n"+
+				"Seed it with spare capacity, then decide: ownTables must copy it, or "+
+				"sharedStacks must say why a subshell may share it. An unseeded stack "+
+				"cannot be checked, because a nil slice copies as a nil slice and two "+
+				"clones each allocate their own array.", f.Name)
+			continue
+		}
+		if fv.Cap() == fv.Len() {
+			t.Errorf("%s is seeded at its exact capacity, so an append cannot alias and "+
+				"the check would pass for the wrong reason. Give it room to grow.", f.Name)
+		}
+	}
+	if t.Failed() {
+		return
+	}
+
+	child := parent.clone()
+	cv := reflect.ValueOf(child).Elem()
+	for i := range pv.NumField() {
+		f := pv.Type().Field(i)
+		if f.Type.Kind() != reflect.Slice {
+			continue
+		}
+		pp, cp := pv.Field(i).UnsafePointer(), cv.Field(i).UnsafePointer()
+		shared := pp != nil && pp == cp
+		reason, allowed := sharedStacks[f.Name]
+		switch {
+		case shared && !allowed:
+			t.Errorf("%s is one backing array shared by a subshell and its parent.\n"+
+				"Add it to ownTables. Both sides append into the same array while their "+
+				"lengths disagree, so each overwrites what the other pushed and both read "+
+				"back the same element — and where the subshell runs on a goroutine, as a "+
+				"pipeline element and a process substitution both do, that is a data race "+
+				"on whatever the element holds.", f.Name)
+		case !shared && allowed:
+			t.Errorf("%s is named in sharedStacks (%s) but the clone no longer shares it.\n"+
+				"If that is now the intent, take it out of sharedStacks.", f.Name, reason)
+		}
+	}
+}
+
+// TestACloneOwnsEveryScopeTable is the level the two tests above cannot reach:
+// a scope's tables are inside the scope, so giving the clone its own backing
+// array is not enough — the elements are pointers, and a copied array of the
+// same pointers still hands two shells one `*scope` to write.
+//
+// This is the crash of #1783 stated as an invariant rather than as a race:
+// `shadow` writes `sc.saved[name]` on whatever sits at the top of the stack,
+// so if that scope is the parent's scope, two goroutines write one map.
+func TestACloneOwnsEveryScopeTable(t *testing.T) {
+	parent := newTestRunner(t, &Runner{})
+	seedStacks(parent)
+
+	child := parent.clone()
+	if len(child.scopes) != len(parent.scopes) {
+		t.Fatalf("the clone's scope stack is %d deep and its parent's is %d: a clone "+
+			"inherits the stack it was made inside, and only the memory changes hands",
+			len(child.scopes), len(parent.scopes))
+	}
+	ps, cs := parent.scopes[0], child.scopes[0]
+	if ps == cs {
+		t.Fatalf("the clone's innermost scope is its parent's scope. Every table on it " +
+			"is then one table with two shells writing it, which is the concurrent map " +
+			"write of #1783.")
+	}
+	if cs.owner != ps.owner {
+		t.Errorf("the copied scope's owner changed. It records which runner *pushed* the "+
+			"scope and ownScope reads it to keep a subshell from writing the caller's "+
+			"scope; repointing it at the clone would change what that check answers. "+
+			"Got %p, want %p.", cs.owner, ps.owner)
+	}
+
+	sv := reflect.ValueOf(ps).Elem()
+	cvv := reflect.ValueOf(cs).Elem()
+	for i := range sv.NumField() {
+		f := sv.Type().Field(i)
+		switch f.Type.Kind() {
+		case reflect.Map, reflect.Slice:
+		default:
+			continue
+		}
+		if sv.Field(i).IsNil() {
+			t.Errorf("scope.%s is not seeded by seedStacks, so nothing here can say "+
+				"whether the clone shares it.", f.Name)
+			continue
+		}
+		if pp, cp := sv.Field(i).UnsafePointer(), cvv.Field(i).UnsafePointer(); pp == cp {
+			t.Errorf("scope.%s is one table shared by a subshell and its parent. "+
+				"cloneScopes must copy it: `local` writes the innermost scope, and a "+
+				"pipeline runs its elements on goroutines.", f.Name)
+		}
+	}
 }
 
 // seedTables gives every map on a Runner an entry.

@@ -339,6 +339,12 @@ type Runner struct {
 	// waiting to be removed once it is done with them.
 	procSubs    []procSubPipe
 	procSubHome *procSubDirs
+	// pipeEnd is set on the runner that is a process substitution's *body*,
+	// and is the end of that substitution's pipe the shell holds. It is
+	// there so a job the body backgrounds can keep the pipe open past the
+	// body's return, which is what a fork gives a real shell for nothing.
+	// See substEnd.
+	pipeEnd *substEnd
 	// substRan records that a command substitution reported a status during
 	// the expansion just performed — see simple().
 	substRan bool

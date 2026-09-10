@@ -364,6 +364,12 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 
 	sub := r.clone()
 	sub.inheritJobs(jobBoundaryBackground)
+	// A background job outlives the shell that started it, so where that
+	// shell is the body of a process substitution the job keeps the
+	// substitution's end of the pipe open — the copy of the descriptor a
+	// real shell's fork hands it, reconstructed. Released when the job
+	// finishes, however it finished. See substEnd for the measurement.
+	releasePipeEnd := sub.holdPipeEnd()
 	// A background job keeps the parent's trap listing in one shell fewer
 	// than a pipeline element does, so it is its own kind of boundary.
 	sub.retagTrapBoundary(trapContextBackground)
@@ -418,7 +424,13 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 			return
 		}
 		status = sub.status
-	}, func() { job.finish(status) })
+	}, func() {
+		job.finish(status)
+		// After the job is finished rather than before it, so nothing can
+		// observe a pipe that has ended while the job that was writing to
+		// it is still marked as running.
+		releasePipeEnd()
+	})
 
 	// Wait for the PID to be known before returning, so `$!` on the next line
 	// is not racing the goroutine that sets it.

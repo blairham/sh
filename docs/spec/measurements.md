@@ -9567,6 +9567,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | --- | --- | --- | --- | --- | --- | --- |
 | `procsub/reads-a-command-as-a-file` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `procsub/two-of-them-in-one-command` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `same` | `same` | `same` | `same` | `same` |
+| `procsub/a-background-job-outlives-the-body` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `BC` | `BC` | `BC` | `BC` | `BC` |
+| `procsub/a-background-job-after-the-body-execs` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `BC` | `BC` | `BC` | `BC` | `BC` |
+| `procsub/a-background-jobs-output-redirected-away` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `done` | `done` | `done` | `done` | `done` |
+| `procsub/a-command-started-after-the-body-returned` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `LATE` | `LATE` | `LATE` | `LATE` | `LATE` |
 | `procsub/a-redirection-where-a-target-belongs` | **2>** `<shell>: 1: Syntax error: redirection unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `<'~<shell>: -c: line 1: `cat < < x; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `<'~<shell>: -c: line 1: `cat < < x; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `<'~<shell>: -c: line 0: `cat < < x; echo "st=$?"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `<' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `<'` *(status 1)* |
 | `procsub/feeds-a-loop` | **2>** `<shell>: 1: Syntax error: redirection unexpected` *(status 2)* | `[a]~[b]` | `[a]~[b]` | `[a]~[b]` | `[a]~[b]` | `[a]~[b]` |
 | `procsub/a-comment-in-the-body` | **2>** `<script>: 1: Syntax error: redirection unexpected` *(status 2)* | `hi~after` | `hi~after` | `after` **2>** `<script>: line 1: bad substitution: no closing `)' in <(~	# it's a comment~	echo hi~)` | `hi~after` | `hi~after` |
@@ -9704,6 +9708,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `procsub/two-of-them-in-one-command` — the reason the construct exists: two commands compared as though they were files, with no temporary file named anywhere. Two substitutions in one command also have to keep their own pipes, which is exactly what the first attempt got wrong
   ```sh
   diff <(echo a) <(echo a) && echo same
+  ```
+- `procsub/a-background-job-outlives-the-body` — the pipe belongs to the *process* the shell forked for the substitution, so a job that process backgrounds holds a copy and the reader waits for the job rather than for the body — `BC` in all four shells that have the construct. Ours read `B` and then end-of-file, because a body and a job it backgrounds are two goroutines over one descriptor here and the body's return closed it (#1767)
+  ```sh
+  cat <( { printf B; sleep 0.2; printf C; } & )
+  ```
+- `procsub/a-background-job-after-the-body-execs` — the shape a prompt theme's asynchronous worker is written in: the body backgrounds its worker and then replaces itself, so what holds the pipe is unambiguously the job and not the body. Same answer as the row above in all four, which is what says the `exec` is not what makes the difference
+  ```sh
+  cat <( { printf B; sleep 0.2; printf C; } & exec true )
+  ```
+- `procsub/a-background-jobs-output-redirected-away` — a job that has pointed its own output somewhere else still holds the substitution's pipe: the reader waits the full two hundred milliseconds in all four and then sees nothing. It is the row that says the lifetime is the job's and not the descriptor's current use — reading the redirection to decide would answer at once here and be wrong
+  ```sh
+  cat <( { sleep 0.2; printf X; } >/dev/null & ); echo done
+  ```
+- `procsub/a-command-started-after-the-body-returned` — the same lifetime reached through an *external* command rather than a builtin, so what has to still be there when the job starts it is a descriptor to hand the child. A shell that closed the end on the body's return has nothing to give it
+  ```sh
+  cat <( { sleep 0.2; /bin/echo LATE; } & )
   ```
 - `procsub/a-redirection-where-a-target-belongs` — what the three without process substitution make of the second `<`, and the one wording dash does not share: it says `redirection unexpected` where the other three name the token. Reached here because `< <(cmd)` is this text in a dialect that has no such construct
   ```sh

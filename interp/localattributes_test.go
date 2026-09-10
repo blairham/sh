@@ -120,6 +120,30 @@ echo "later=[$up]"`
 	}
 }
 
+// The integer *base*, which travels with the numeric letter and is a second
+// table: a local declared `-i` with no base written is base ten, whatever base
+// the name it shadows renders in, and the caller renders in its own again
+// afterwards.
+func TestTheIntegerBaseDoesNotOutliveTheDeclaration(t *testing.T) {
+	src := `typeset -i16 h=255
+f() { typeset -i h; h=255; echo "in=[$h]"; }
+f
+echo "after=[$h]"`
+	// The base is one shell's reading of the letter and not everyone's — see
+	// Semantics.IntegerAttributeTakesABase — so the row that is about the
+	// *scope* has to say which reading it is asking under.
+	out, errs, st := declRun(t, src, func(sem *Semantics) {
+		withAttributeLetters(sem)
+		sem.IntegerAttributeTakesABase = Yes
+	}, Diagnostics{})
+	// The inner half is the discriminating one: base ten is what a local `-i`
+	// with no base written renders in, and the leaked base makes it `16#FF`.
+	const want = "in=[255]\nafter=[255]\n"
+	if out != want || errs != "" || st != 0 {
+		t.Errorf("= %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}
+
 // The unique letter, whose leak is the quietest of the family: nothing is
 // reported and an array simply loses an element some lines later.
 func TestTheUniqueLetterDoesNotOutliveTheDeclaration(t *testing.T) {

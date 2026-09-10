@@ -1328,6 +1328,11 @@ func (c patternClasses) holds(name, unit string) bool {
 }
 
 // classDeclared reports whether a space-separated roster holds a name.
+//
+// The comparison is exact, and a mutation that folds case here survives: the
+// switch above is the second gate and compares the name exactly too, so
+// `[[:ASCII:]]` is still a miss with either. Recorded rather than tightened —
+// the roster is what bounds the set, and the switch is what reads a name.
 func classDeclared(names, name string) bool {
 	if names == "" || name == "" {
 		return false

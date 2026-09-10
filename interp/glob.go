@@ -591,6 +591,16 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		// is `/tmp/gx/keep_a`, so the list `[1]` counts into has already had
 		// the exclusion taken out of it — the other order would pick `gxdir`
 		// and then throw it away.
+		//
+		// **A mutation that swaps these two blocks survives today**, and is
+		// recorded so the next reader does not go hunting for the row that
+		// would kill it: both are filters, and two filters commute. The
+		// order becomes observable only for a qualifier that *selects* —
+		// `[1]`, `[-1]`, `om` — and none of those is implemented. What is
+		// observable is the order against a **modifier**, which replaces the
+		// word rather than filtering it, and that is pinned:
+		// `d/p_*~*d/*(N:t)` is empty here and in zsh, where running `:t`
+		// first would leave all three.
 		var kept []string
 		for _, d := range dirs {
 			w, ok := render(d)

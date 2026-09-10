@@ -111,9 +111,16 @@ type (
 )
 
 // terminal is one command the client is running for an agent.
+//
+// Two shapes, one type. cmd is set when the agent handed us an argv and we
+// exec'd it; it is nil when the agent handed us a *line* and this shell is
+// interpreting it, where there is no process of our own to hold — the commands
+// inside the line are processes and the interpreter holds those. cancel is how
+// the second shape is ended, because there is nothing to signal.
 type terminal struct {
-	cmd   *exec.Cmd
-	limit int
+	cmd    *exec.Cmd
+	cancel context.CancelFunc
+	limit  int
 
 	mu        sync.Mutex
 	output    []byte
@@ -169,7 +176,13 @@ func (t *terminal) trim() {
 // be started — is answered at create, where there is a request to fail.
 func (t *terminal) reap() {
 	_ = t.cmd.Wait()
-	status := exitStatus(t.cmd)
+	t.finish(exitStatus(t.cmd))
+}
+
+// finish records how the command ended and wakes everything waiting on it.
+// Called once, by whichever goroutine owns the command — the reaper for a
+// process, the interpreting goroutine for a line.
+func (t *terminal) finish(status TerminalExitStatus) {
 	t.mu.Lock()
 	t.exit = &status
 	t.mu.Unlock()
@@ -300,6 +313,24 @@ func (c *Client) createTerminal(ctx context.Context, params json.RawMessage) (an
 	c.mu.Lock()
 	c.asked++
 	c.mu.Unlock()
+	// No args means the agent sent a command *line* rather than an argv, and
+	// interpreting it is both what it asked for and the whole of the
+	// client-side thesis: every exec, open and stat inside the line crosses
+	// this shell's boundary, where an exec of the line as a filename crosses
+	// it once, as a name that does not exist. Measured — Claude Code 0.16.2
+	// sends `printf "%s" "$0"; ps -o args= -p $$` in `command` with no `args`
+	// at all, and every one of them failed as "executable file not found"
+	// until this branch existed (#1782).
+	//
+	// The ambiguous case is a *filename* containing a space, sent with no
+	// args, which a line reads as a command and its argument. The protocol
+	// gives no way to say which was meant; an agent that means an argv can say
+	// so by sending one, and every agent measured that means a line sends no
+	// args. Interpreting is also the reading that fails safe: the gate sees
+	// more, not less.
+	if len(req.Args) == 0 && c.Interpret != nil {
+		return c.interpret(ctx, req)
+	}
 	argv := append([]string{req.Command}, req.Args...)
 	if !c.Boundary.Exec(ctx, req.Command, argv) {
 		// A refused create is a command that never started, and the agent is
@@ -329,6 +360,46 @@ func (c *Client) createTerminal(ctx context.Context, params json.RawMessage) (an
 	}
 	go t.reap()
 	return CreateTerminalResponse{TerminalID: c.addTerminal(t)}, nil
+}
+
+// interpret runs a command line as this shell runs one.
+//
+// The gate is deliberately *not* consulted here on the line, and that is the
+// point rather than an omission: a line is not an exec, and asking the boundary
+// to rule on `echo hi > f` as though it were a path would be inventing an
+// access nothing performs. What the interpreter does instead is cross the
+// boundary for each real exec, open and stat inside it — the same Gate and the
+// same event sink this shell was built with, because Interpret is wired from
+// the same driver.Shell. So a policy reaches *further* on this route than on
+// the exec one, not less far: `-deny exec:/bin/rm` refuses the `rm` inside a
+// pipeline that an argv-level gate would have seen only as `/bin/sh`.
+//
+// The permission question the agent asked has already been put to a person by
+// the time we are here; this is about the policy, which is the half that does
+// not negotiate.
+func (c *Client) interpret(ctx context.Context, req CreateTerminalRequest) (any, error) {
+	t := &terminal{limit: -1, done: make(chan struct{})}
+	if req.OutputByteLimit != nil {
+		t.limit = *req.OutputByteLimit
+	}
+	// Cancellation rather than a signal, because there is no process of ours
+	// to signal. The context is the connection's, so a terminal still dies
+	// with the connection exactly as an exec'd one does.
+	run, cancel := context.WithCancel(ctx)
+	t.cancel = cancel
+	// Inherited and then written over, the same rule the exec route states:
+	// a command started with only the agent's few variables has no PATH.
+	env := os.Environ()
+	for _, e := range req.Env {
+		env = append(env, e.Name+"="+e.Value)
+	}
+	id := c.addTerminal(t)
+	go func() {
+		defer cancel()
+		code := c.Interpret(run, TerminalCommand{Line: req.Command, Dir: req.Cwd, Env: env}, t)
+		t.finish(TerminalExitStatus{ExitCode: &code})
+	}()
+	return CreateTerminalResponse{TerminalID: id}, nil
 }
 
 // terminalOutput is what the command has written so far.
@@ -372,7 +443,7 @@ func (c *Client) killTerminal(ctx context.Context, params json.RawMessage) (any,
 		return nil, err
 	}
 	pid := 0
-	if t.cmd.Process != nil {
+	if t.cmd != nil && t.cmd.Process != nil {
 		pid = t.cmd.Process.Pid
 	}
 	if !c.Boundary.Signal(ctx, pid, syscall.SIGKILL) {
@@ -404,10 +475,16 @@ func (c *Client) releaseTerminal(ctx context.Context, params json.RawMessage) (a
 	if !ok {
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: no terminal %q", MethodReleaseTerminal, req.TerminalID)
 	}
-	if t.cmd.Process != nil {
+	if t.cmd != nil && t.cmd.Process != nil {
 		// Recorded through the boundary rather than beside it, so that the
 		// record carries the run and the action it belongs to exactly as a
 		// gated one does. A trace line with no id is a line nothing joins to.
+		//
+		// Only for a process. Releasing an interpreted line cancels a context
+		// and signals nothing, and writing a SIGKILL to pid 0 into the audit
+		// trail would be recording an access that nobody performed — the
+		// commands inside the line recorded themselves as they ran, which is
+		// the whole reason that route exists.
 		c.Boundary.Record(ctx, interp.Action{
 			Kind: interp.ActionSignal, PID: t.cmd.Process.Pid, Signal: syscall.SIGKILL,
 		})
@@ -418,13 +495,21 @@ func (c *Client) releaseTerminal(ctx context.Context, params json.RawMessage) (a
 
 // kill ends the command if it has not ended already. A process that has been
 // reaped is gone, and Kill on it is an error about nothing.
+//
+// An interpreted line has no process of its own, so cancelling is what stands
+// in for the signal — it reaches the interpreter, which is what is running the
+// commands inside the line and what stops them.
 func (t *terminal) kill() {
 	select {
 	case <-t.done:
 		return
 	default:
 	}
-	if t.cmd.Process != nil {
+	if t.cancel != nil {
+		t.cancel()
+		return
+	}
+	if t.cmd != nil && t.cmd.Process != nil {
 		_ = t.cmd.Process.Kill()
 	}
 }

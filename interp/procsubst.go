@@ -105,6 +105,17 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 		sub.Stdout = r.Stdout
 	}
 
+	// The end this shell keeps is counted rather than closed on the body's
+	// return, and the count starts at one for the body itself. What else can
+	// join it, and why the body is not always the last, is in substEnd.
+	keep := &substEnd{held: 1}
+	if kind != syntax.ProcSubstOut {
+		// Only the writing end delivers an end-of-file by closing, so only
+		// that direction has a nudge to repeat. See nudgeFifoEOF.
+		keep.nudge = path
+	}
+	sub.pipeEnd = keep
+
 	// `>(cmd)` reads the command's input out of the pipe, and the shell can
 	// take that end without waiting for anybody — so it is taken here, on
 	// this goroutine, and a failure is the shell's own and is reported like
@@ -121,6 +132,7 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 			return "", false
 		}
 		sub.Stdin = end
+		keep.opened(end)
 		r.spawn(func() {
 			// Through the clone, which this goroutine owns: the record of
 			// the open that the gate already allowed.
@@ -133,7 +145,12 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 			// end-of-file the substituted command's reader is waiting for,
 			// and skipping it would leave the command that named the path
 			// waiting for one that is never coming.
-			_ = end.Close()
+			//
+			// Through the count rather than straight at the descriptor,
+			// because the body is not always the last to want it: a job the
+			// body backgrounded reads this same end and outlives the return.
+			// See substEnd.
+			keep.letGo()
 		})
 	} else {
 		// `<(cmd)` writes cmd's output into the pipe, so this end is the
@@ -141,10 +158,9 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 		// this half is on a goroutine and the other half is not. The wait
 		// is bounded now rather than endless; openFifoWriteEnd is where
 		// that is done and why.
-		var end *os.File
 		r.spawn(func() {
-			var err error
-			if end, err = openFifoWriteEnd(path); err != nil {
+			end, err := openFifoWriteEnd(path)
+			if err != nil {
 				// Nobody opened the other end — the command did not use the
 				// path it was given, and the pipe went with it. There is
 				// nothing to run and nothing to report: `echo <(true)`
@@ -153,24 +169,23 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 			}
 			sub.emit(ctx, Event{Kind: EventAccess, Action: action})
 			sub.Stdout = end
+			keep.opened(end)
 			if _, err := sub.Run(ctx, f); err != nil {
 				sub.diagf("%v\n", err)
 			}
 		}, func() {
 			// The same close as the other direction, and the same reason:
 			// it is the end-of-file the command that named the path is
-			// reading until. Nil when nobody ever opened the other end, so
-			// there was nothing to close.
-			if end == nil {
-				return
-			}
-			_ = end.Close()
-			// And again, until there is no reader left to tell. The close
-			// above is not reliably heard by a reader whose own open had not
-			// finished when it happened, which is #1079 and is measured in
-			// nudgeFifoEOF. Ends on its first round in the ordinary case,
-			// and cannot outlive the pipe.
-			nudgeFifoEOF(path)
+			// reading until — and the same count in front of it, because a
+			// job the body backgrounded writes through this end after the
+			// body has returned. Nothing happens when nobody ever opened the
+			// other end, so there was nothing to close.
+			//
+			// The nudge is inside letGo for the same reason the close is:
+			// repeating a last-writer close while a writer is still there
+			// delivers nothing, and would spin until the pipe was taken
+			// away. See substEnd.
+			keep.letGo()
 		})
 	}
 
@@ -452,4 +467,120 @@ func (r *Runner) cleanUpAtEnd() {
 		return
 	}
 	r.CleanUp()
+}
+
+// substEnd is the end of a substitution's pipe that this shell holds, and the
+// count of shells still entitled to use it.
+//
+// # Why a count
+//
+// A real shell forks for `<(cmd)`, and the descriptor belongs to the *process*
+// it forked. A job that process backgrounds is another fork, with a copy of
+// the same descriptor, so the pipe stays open until the last of them goes —
+// nobody arranges that and nothing in the shell decides it. Here the
+// substitution's body is a goroutine and a job it backgrounds is another
+// goroutine of the same process, sharing one `*os.File`, so the lifetime that
+// a fork gives for free has to be reconstructed: closing on the body's return
+// takes the descriptor away from a job that is still writing through it.
+//
+// That is #1767, and it is a core behavior rather than a dialect's: measured
+// 2026-09-10,
+//
+//	cat <( { for i in 1 2 3; do printf B; sleep 0.2; done } & )
+//
+// prints `BBB` in zsh 5.9.2, bash 5.3, bash 3.2 and ksh93 alike, in about six
+// hundred milliseconds — the reader waits for the job, not for the body. Here
+// it printed one `B`, and in one dialect a `write error: File already closed`
+// with it, because the second `printf` had a descriptor the body's return had
+// closed underneath it. dash has no process substitution, which is an absence
+// rather than a disagreement, so there is no axis here and no dialect is
+// asked.
+//
+// # What counts as holding it
+//
+// A `&` job and nothing else. Every other clone a body makes — a subshell, a
+// pipeline element, a function, a nested substitution — is joined before the
+// body returns, so the body's own reference already outlives it. A background
+// job is the one that does not, which is why the count is taken in
+// Runner.background and released when that job finishes.
+//
+// A redirection does *not* take it away, and that is measured rather than
+// assumed: `cat <( { sleep 0.6; printf X; } >/dev/null & )` still makes the
+// reader wait the full six hundred milliseconds in all four shells, so a job
+// that has pointed its own output somewhere else is still holding the pipe
+// open. Reading the redirection here would be a refinement onto the wrong
+// side of the measurement.
+//
+// # Why the nudge moved
+//
+// nudgeFifoEOF repeats a last-writer close until no reader is left to tell.
+// With a writer still in the pipe there is nothing for it to deliver, and its
+// give-up condition — ENXIO, no reader — cannot be reached while the command
+// that named the path is still reading, so it would spin at its longest
+// interval until removeProcSubs took the pipe away. It belongs with the close
+// it is repeating, which is the last one.
+type substEnd struct {
+	mu   sync.Mutex
+	held int
+	file *os.File
+	// nudge names the pipe where closing this end is what delivers the
+	// end-of-file — `<(cmd)`, where the shell is the writer. Empty for
+	// `>(cmd)`, whose reader has a placeholder instead. See openFifoReadEnd.
+	nudge string
+}
+
+// opened records the descriptor the count is guarding.
+//
+// Separate from making the substEnd because the two directions learn it at
+// different times: `>(cmd)`'s end is opened on the goroutine that expands the
+// word, and `<(cmd)`'s is opened on the goroutine that runs the body, after a
+// wait that may end in nobody having opened the other side at all. A count
+// that never learns a descriptor closes nothing, which is the right answer
+// for that case.
+func (e *substEnd) opened(f *os.File) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.file = f
+}
+
+// keep adds a shell to the count.
+//
+// Called while the body is still running — a job is backgrounded by the body,
+// so this happens before the body's own letGo — which is what keeps the count
+// from reaching zero and then being raised again.
+func (e *substEnd) keep() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.held++
+}
+
+// letGo takes a shell off the count, and closes the end when the last one
+// goes.
+func (e *substEnd) letGo() {
+	e.mu.Lock()
+	e.held--
+	last := e.held == 0
+	f, nudge := e.file, e.nudge
+	e.mu.Unlock()
+	if !last || f == nil {
+		return
+	}
+	_ = f.Close()
+	if nudge != "" {
+		nudgeFifoEOF(nudge)
+	}
+}
+
+// holdPipeEnd keeps this shell's process-substitution end open for something
+// that outlives the shell, and answers with what releases it.
+//
+// A shell that is not a substitution's body holds no end, and the release is
+// then a no-op rather than a condition every caller has to write out.
+func (r *Runner) holdPipeEnd() func() {
+	if r.pipeEnd == nil {
+		return func() {}
+	}
+	e := r.pipeEnd
+	e.keep()
+	return e.letGo
 }

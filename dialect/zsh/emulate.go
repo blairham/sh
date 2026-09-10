@@ -28,13 +28,14 @@ import (
 // `emulate csh` here records the mode and changes nothing.
 // docs/spec/semantics.md records the boundary.
 //
-// `emulate -L`, the function-local form, is `setopt localoptions` after the
-// emulation and nothing else. It had a save-and-restore of its own once, and
-// that was two mistakes: it saved at its own line rather than at the function
-// entry, so an option moved earlier in the same body leaked, and it restored
-// whether or not the option was still on at the return. Both are measured the
-// other way; localoptions.go carries the rule now, and both spellings reach
-// it.
+// `emulate -L`, the function-local form, is `setopt localoptions localtraps`
+// after the emulation and nothing else — measured, and it is two options
+// rather than one. It had a save-and-restore of its own once, and that was
+// two mistakes: it saved at its own line rather than at the function entry,
+// so an option moved earlier in the same body leaked, and it restored whether
+// or not the option was still on at the return. Both are measured the other
+// way; localoptions.go carries the rule now, localtraps.go carries the other,
+// and every spelling reaches them.
 //
 // Measured shapes: a bare `emulate` prints the current mode and 0; a word
 // that names no emulation — `fish`, or `SH` in the wrong case — is passed
@@ -130,20 +131,29 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if !e.hasCode {
 		applyEmulation(r, e.mode)
 		if e.local {
-			// `-L` is LOCAL_OPTIONS and nothing besides, which is measured
-			// rather than assumed: inside `emulate -L zsh` the option reads
-			// on, and at the top level — where there is no call to return
-			// from — it stays on afterwards and localizes the *next*
-			// function call. So the letter is one `setopt` and the
-			// function-call machinery does the rest; localoptions.go is
-			// where the rest is, and it is the same machinery `setopt
-			// localoptions` reaches.
+			// `-L` is the local-scoping options and nothing besides, which
+			// is measured rather than assumed: inside `emulate -L zsh` they
+			// read on, and at the top level — where there is no call to
+			// return from — they stay on afterwards and localize the *next*
+			// function call. So the letter is a `setopt` and the
+			// function-call machinery does the rest; localoptions.go and
+			// localtraps.go are where the rest is, and it is the same
+			// machinery the two `setopt` names reach.
+			//
+			// Two names and not one. Measured on zsh 5.9.2, `emulate -L zsh`
+			// leaves `localoptions`, `localtraps` and `localpatterns` on and
+			// `localloops` off — so the trap the letter scopes is the
+			// trap-side option working, not the option table's rule reaching
+			// further than it does. `localpatterns` is not modeled here and
+			// nothing sets it, which is the one of the three this letter
+			// still does not carry.
 			//
 			// After the emulation rather than before it, because a plain
 			// emulation resets every option to that emulation's default and
-			// `localoptions` defaults off — which is exactly why a bare
+			// both of these default off — which is exactly why a bare
 			// `emulate sh` in a function does *not* localize, measured.
 			setLocalOptions(r, true)
+			setLocalTraps(r, true)
 		}
 		return e.applyOptions(r)
 	}

@@ -3409,6 +3409,23 @@ type scope struct {
 	// rather than with parentheses. ksh93 gives only those functions a local
 	// scope, so `typeset` needs to know which kind it is standing in.
 	keyword bool
+	// owner is the runner whose call pushed this scope.
+	//
+	// A subshell is a clone that shares the stack, so a scope reached from
+	// one is not necessarily one it may write on — see Runner.ownScope,
+	// where the difference is a trap the parent set being cleared by a
+	// `( … )` written inside the same function.
+	owner *Runner
+
+	// savedTraps is what this call displaced while its dialect was scoping
+	// traps to the function, keyed by the canonical condition. Nil until the
+	// first such modification, so a call that traps nothing carries nothing.
+	//
+	// A map rather than a list because the entry is per condition and the
+	// *first* save is the one that counts: a body that moves the same
+	// condition twice goes back to what it found, not to what it set first.
+	// See localtraps.go.
+	savedTraps map[string]savedTrapState
 
 	// onReturn is what runs when this call unwinds, in reverse order of
 	// registration.

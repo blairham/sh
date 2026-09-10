@@ -327,7 +327,16 @@ var zshOptions = []zshOption{
 	recorded("localloops", false),
 	recorded("localoptions", false),
 	recorded("localpatterns", false),
-	recorded("localtraps", false),
+	// LOCAL_TRAPS: a trap a function sets goes back at its return, which is
+	// an axis rather than a record since #1731. Not the trap-side reading of
+	// `localoptions` above — measured, that one leaves a function's trap
+	// installed — so it moves a switch of its own. The rule is in
+	// localtraps.go here and the store is interp's.
+	{
+		base: "localtraps", def: false,
+		get: localTrapsOn,
+		set: setLocalTraps,
+	},
 	recorded("login", false),
 	recorded("longlistjobs", false),
 	recorded("magicequalsubst", false),

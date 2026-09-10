@@ -276,6 +276,9 @@ func (r *Runner) trapSingleArgument(cond string) int {
 		r.exitTrap = nil
 		return 0
 	}
+	// A reset is localized like a set: measured, `f() { trap - USR1 }` with
+	// the scoping on puts the caller's handler back at the return.
+	r.localizeTrap(name, sig)
 	if slot := r.pseudoTrapSlot(name); slot != nil {
 		*slot = nil
 		r.clearPseudoInherited(name)

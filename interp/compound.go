@@ -723,7 +723,7 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	frameSerial := r.currentFrameSerial()
 	r.depth++
 	// A scope the function's locals unwind into.
-	sc := &scope{saved: map[string]string{}, existed: map[string]bool{}, keyword: fn.Keyword}
+	sc := &scope{saved: map[string]string{}, existed: map[string]bool{}, keyword: fn.Keyword, owner: r}
 	r.scopes = append(r.scopes, sc)
 	// And a `getopts` cursor of its own, where the dialect gives a function
 	// one. A function that parses options is only callable twice if the
@@ -744,6 +744,20 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	outerTrap, outerDepth := r.exitTrap, r.trapDepth
 
 	err := r.command(ctx, fn.Body)
+	// Whatever arrived while the body's *last* command ran, handled before
+	// the call unwinds. stmt drains between commands, which leaves the last
+	// one of a body with nobody to drain after it: the arrival waited for
+	// the caller's next command and the handler then ran outside the
+	// function. Measured, and unanimous across the panel — `g() { local
+	// v=inner; trap 'echo $v' USR1; kill -USR1 $$; }; v=outer; g` prints
+	// inner in bash 3.2, bash 5.3, dash, ksh93 and zsh alike, so it is the
+	// core's answer and not an axis.
+	//
+	// It was invisible until a trap could be *put back* at a return: with
+	// the handler unchanged either side of the boundary, running it late
+	// only moved the output. With a function-local trap it runs the wrong
+	// handler — see localtraps.go.
+	r.runPendingTraps(ctx)
 
 	r.depth--
 	// Put back what `local` displaced, in whatever order it was declared:
@@ -834,6 +848,19 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	for i := len(sc.onReturn) - 1; i >= 0; i-- {
 		sc.onReturn[i]()
 	}
+	// And the traps this call displaced while its dialect was scoping them
+	// to the function — see localtraps.go. Not an onReturn hook, because
+	// the store is the substrate's rather than a dialect's: what a `trap`
+	// command writes lives here, so what puts it back lives here too.
+	//
+	// The position is not load-bearing, and that is the point rather than
+	// an admission: EXIT is deliberately not one of these, so this and the
+	// block below touch different state and neither can overtake the
+	// other. Include EXIT and the order becomes load-bearing at once —
+	// this would put the caller's EXIT trap back before that block could
+	// tell whether the call had installed one of its own, and a function's
+	// EXIT trap would stop firing.
+	r.restoreLocalTraps(sc)
 	r.scopes = r.scopes[:len(r.scopes)-1]
 	// zsh runs an EXIT trap set *inside* a function when the function
 	// returns, and then forgets it; the other three keep it for the end of

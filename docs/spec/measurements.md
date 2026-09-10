@@ -1793,6 +1793,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `axis/array-base` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `y` | `x` |
 | `axis/echo-backslash` | `expanded` | `literal` | `literal` | `literal` | `literal` | `expanded` |
 | `axis/pipeline-last-element` | `[]` | `[]` | `[]` | `[]` | `[x]` | `[x]` |
+| `axis/pipeline-last-element-with-a-local` | `after=[0]` | `after=[0]` | `after=[0]` | `after=[0]` | `after=[]` **2>** `<script>: line 1: local: not found~<script>: line 1: local: not found~<script>: line 1: local: not found` | `after=[2]` |
 | `axis/dollar-zero-in-function` | `<shell>` | `<shell>` | `sh` | `<shell>` | `<shell>` | `f` |
 | `axis/dollar-zero-in-a-sourced-file` | `before=[<script>]~in=[<script>]~after=[<script>]` | `before=[<script>]~in=[<script>]~after=[<script>]` | `before=[<script>]~in=[<script>]~after=[<script>]` | `before=[<script>]~in=[<script>]~after=[<script>]` | `before=[<script>]~in=[<script>]~after=[<script>]` | `before=[<script>]~in=[./inc.sh]~after=[<script>]` |
 | `axis/dollar-zero-in-a-file-read-by-source` | `st=127` **2>** `<script>: 2: source: not found` | `in=[<script>]~st=0` | `in=[<script>]~st=0` | `in=[<script>]~st=0` | `in=[<script>]~st=0` | `in=[./inc.sh]~st=0` |
@@ -1893,6 +1894,11 @@ grades it and nothing drift-checks it either, for the same reason.
 - `axis/pipeline-last-element` — ksh and zsh run the last pipeline element in the current shell; dash and bash use a subshell
   ```sh
   echo x | read v; echo "[$v]"
+  ```
+- `axis/pipeline-last-element-with-a-local` — the axis above asked again where both elements declare the *same* name, which is what says the answer is about which shell the last element runs in and not about the pipe. Each side declares a different value on purpose: a name holding one value on both sides could not tell a shared scope from a copied one. zsh runs the last element on the shell itself and its `local` unwinds into the function, so `after=[2]`; bash 5.3, bash 3.2, bash-as-sh and dash give it a subshell and keep `[0]`; ksh93 has no `local` at all, so nothing was ever assigned and the row is `[]` — a third answer that is the missing builtin rather than a third reading of the axis
+  ```sh
+  g() { local a=0; { local a=1; } | { local a=2; }; echo "after=[$a]"; }
+  g
   ```
 - `axis/dollar-zero-in-function` — zsh reports the function name where the others report the shell
   ```sh
@@ -12780,6 +12786,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/a-readonly-subscripted-operand` | **2>** `<shell>: 1: readonly: a[1]: bad variable name` *(status 2)* | `st=1 []` **2>** `<shell>: line 1: readonly: `a[1]': not a valid identifier` | **2>** `<shell>: line 1: readonly: `a[1]': not a valid identifier` *(status 1)* | `st=1 []` **2>** `<shell>: line 0: readonly: `a[1]': not a valid identifier` | `st=0 [v]` | **2>** `<shell>:readonly:1: a[1]: can't create readonly array elements` *(status 1)* |
 | `declare/an-exported-subscripted-operand` | **2>** `<shell>: 1: export: a[1]: bad variable name` *(status 2)* | `st=1 []` **2>** `<shell>: line 1: export: `a[1]': not a valid identifier` | **2>** `<shell>: line 1: export: `a[1]': not a valid identifier` *(status 1)* | `st=1 []` **2>** `<shell>: line 0: export: `a[1]': not a valid identifier` | `st=0 [v]` | `st=0 [v]` |
 | `local/a-subscripted-operand-to-local` | **2>** `<script>: 1: Bad substitution` *(status 2)* | `in=[v] st=0~out=[]` | `in=[v] st=0~out=[]` | `in=[v] st=0~out=[]` | `in=[] st=127~out=[]` **2>** `<script>: line 1: local: not found` | **2>** `f:local: a[1]: can't create local array elements` *(status 1)* |
+| `local/a-subshells-local-does-not-shadow-in-the-caller` | `[setbyg]` | `[setbyg]` | `[setbyg]` | `[setbyg]` | `[setbyg]` **2>** `<script>: line 1: local: not found` | `[setbyg]` |
+| `local/a-pipeline-elements-local-does-not-shadow-in-the-caller` | `[setbyg]` | `[setbyg]` | `[setbyg]` | `[setbyg]` | `[setbyg]` **2>** `<script>: line 1: local: not found` | `[setbyg]` |
 | `declare/an-attribute-does-not-outlive-the-declaration` | `in=[1+1]~after=[3+4]` **2>** `<script>: 2: typeset: not found` | `in=[2]~after=[3+4]` | `in=[2]~after=[3+4]` | `in=[2]~after=[3+4]` | `in=[2]~after=[7]` | `in=[2]~after=[3+4]` |
 | `declare/a-fresh-local-inherits-no-attribute` | `in=[3+4]~after=[3+4]` **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found` | `in=[3+4]~after=[5]` | `in=[3+4]~after=[5]` | `in=[3+4]~after=[5]` | `in=[7]~after=[7]` | `in=[3+4]~after=[5]` |
 | `declare/a-numeric-letter-does-not-reach-a-later-local-array` | **2>** `<script>: 1: typeset: not found~<script>: 3: Syntax error: "(" unexpected (expecting "}")` *(status 2)* | `in=[/some/dir/file.zsh]` | `in=[/some/dir/file.zsh]` | `in=[/some/dir/file.zsh]` | **2>** `<script>: line 3: /some/dir/file.zsh: arithmetic syntax error` *(status 1)* | `in=[/some/dir/file.zsh]` |
@@ -13075,6 +13083,20 @@ grades it and nothing drift-checks it either, for the same reason.
   f() { local a[1]=v; echo in=[${a[1]}] st=$?; }
   f
   echo out=[${a[1]}]
+  ```
+- `local/a-subshells-local-does-not-shadow-in-the-caller` — whose scope a `local` inside `( … )` writes, asked so that only the *caller's* frame can answer. The name is declared nowhere but the subshell, so a save recorded in the caller's scope has one source — and the assignment after it is what makes the save visible, because the caller's return puts back whatever was saved. Every shell with `local` answers `[setbyg]`, and ksh93 answers it by having no `local` to shadow with, so the panel is unanimous and this is the core's rather than an axis. It is the visible half of #1783: the subshell shared the caller's scope stack, recorded the save there, and the return reverted an assignment made after the subshell had finished
+  ```sh
+  g() { ( local q=sub ); q=setbyg; }
+  q=global
+  g
+  echo "[$q]"
+  ```
+- `local/a-pipeline-elements-local-does-not-shadow-in-the-caller` — the same question where the subshell is a pipeline element, which is a clone running on a goroutine rather than one running in line — and the shape that ended this shell's process rather than only answering wrongly. The element is deliberately not the last one, so the answer does not depend on LastPipelineElementInCurrentShell: every element but the last is a subshell in all six columns, and all six say `[setbyg]`
+  ```sh
+  g() { { local q=elem; } | cat; q=setbyg; }
+  q=global
+  g
+  echo "[$q]"
   ```
 - `declare/an-attribute-does-not-outlive-the-declaration` — a local is a fresh binding, and that is as true of what the name *is* as of what it holds: the letter types the local — `in=[2]` — and the caller's name is plain again on return, so `3+4` stays four characters. Every shell that gives this function a scope agrees, which is what makes it the core's rather than an axis; ksh93's `after=[7]` is the scope axis and not a second answer about attributes, since a parenthesis-defined function has no scope there and the declaration was the *global's* all along. The row exists because the attribute leaked here: `add-zsh-hook` opens with `integer del list help`, a later `local -a list` inherited the letter, and storing a path in it read the path as an expression — `bad math expression: operand expected at …` from a line that wrote no arithmetic (#1673)
   ```sh

@@ -13754,6 +13754,50 @@
         "TimedOut": false
       }
     },
+    "axis/pipeline-last-element-with-a-local": {
+      "bash": {
+        "Stdout": "after=[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after=[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after=[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after=[0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after=[]",
+        "Stderr": "\u003cscript\u003e: line 1: local: not found~\u003cscript\u003e: line 1: local: not found~\u003cscript\u003e: line 1: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after=[2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "axis/readonly-a-subscripted-operand": {
       "bash": {
         "Stdout": "st=1~after",
@@ -63042,6 +63086,50 @@
         "TimedOut": false
       }
     },
+    "local/a-pipeline-elements-local-does-not-shadow-in-the-caller": {
+      "bash": {
+        "Stdout": "[setbyg]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[setbyg]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[setbyg]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[setbyg]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[setbyg]",
+        "Stderr": "\u003cscript\u003e: line 1: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[setbyg]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "local/a-subscripted-operand-to-local": {
       "bash": {
         "Stdout": "in=[v] st=0~out=[]",
@@ -63082,6 +63170,50 @@
         "Stdout": "",
         "Stderr": "f:local: a[1]: can't create local array elements",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "local/a-subshells-local-does-not-shadow-in-the-caller": {
+      "bash": {
+        "Stdout": "[setbyg]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[setbyg]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[setbyg]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[setbyg]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[setbyg]",
+        "Stderr": "\u003cscript\u003e: line 1: local: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[setbyg]",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }

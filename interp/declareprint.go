@@ -214,6 +214,15 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	// keeps a producer with a side effect out of a listing: `RANDOM` carries
 	// no attribute, so no listing reaches it and no listing draws a number
 	// from it that the next read would not repeat.
+	//
+	// The guard has a cost and it is on record rather than overlooked. A
+	// listing that *names* an unattributed producer finds nothing either, so
+	// `typeset -p SECONDS` is `no such variable` here where zsh writes
+	// `typeset -i10 SECONDS=0` — and zsh draws a fresh number for
+	// `typeset -p RANDOM`, so the rule above is ours and not its. Lifting the
+	// guard is a word and does not finish the job: the `-i10` is an integer
+	// attribute and a base that a produced parameter has no way to carry yet.
+	// The two together are #1687.
 	if produce, ok := r.Dynamic[name]; ok && attributed {
 		d.value, d.hasValue = produce(r), true
 		return d, true

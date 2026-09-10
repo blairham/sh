@@ -53,9 +53,12 @@ import (
 // dispatch and not for one branch of it.
 //
 // `$argv`, zsh's other name for the same thing, is deliberately not here: it
-// is an *array* that a script may write through to the positional parameters,
-// which is a different piece of work, and nothing on the startup this was
-// found on reads it. See #1685.
+// is an *array* a script may write *through* to the positional parameters —
+// `argv[1]=zz` moves `$1`, and inside a function the name is that frame's
+// parameters — which is a different piece of work with a different failure
+// mode. It has its own report, #1633, and neither p10k's dispatch nor the
+// plugin manager beside it reads the name: zero uses across both files, against
+// ten reads of `$ARGC` in the dispatch alone.
 func registerARGC(r *interp.Runner) {
 	r.SetDynamic("ARGC", func(rr *interp.Runner) string {
 		return strconv.Itoa(len(rr.Params))

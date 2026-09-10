@@ -3390,9 +3390,16 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 		// function's traps to the call — taken here, at the modification,
 		// rather than at the call, which is the measured difference between
 		// this and the option table the same shell scopes. See localtraps.go.
-		if tg.pseudo != "" {
+		//
+		// EXIT is named rather than skipped here, because whether it is one
+		// of these is that file's rule and not this loop's: a second copy of
+		// the answer beside the first is how the two drift apart.
+		switch {
+		case tg.pseudo != "":
 			r.localizeTrap(tg.pseudo, 0)
-		} else if !tg.exit {
+		case tg.exit:
+			r.localizeTrap("EXIT", 0)
+		default:
 			r.localizeTrap(tg.name, tg.sig)
 		}
 		switch {

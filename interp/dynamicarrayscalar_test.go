@@ -142,6 +142,52 @@ func TestAnEmptyAssociationAnswersSetOnTheSameAxis(t *testing.T) {
 	}
 }
 
+// TestAProducedScalarWithAnAttributeListsItsProducedValue is the scalar half
+// of the rule the produced *array* above already followed, and it was the half
+// still missing.
+//
+// A listing walks the runner's own tables, and a produced name is in none of
+// them — so a producer stays out of every listing by itself, which is right.
+// An **attribute** puts the name in: the readonly record is one of the tables
+// walked. Until this, the name arrived there with nothing beside it and the
+// listing wrote an empty value, so a produced count of three listed as
+// `readonly n=""`. That is not a smaller answer than the real one, it is a
+// different and false one, and it is one a script can source back.
+//
+// Written as a comparison against a stored name holding the same value, for
+// the reason the produced array above is: nothing about producing a value is
+// supposed to change what listing it means.
+func TestAProducedScalarWithAnAttributeListsItsProducedValue(t *testing.T) {
+	produced, _ := runGrammar(t, `readonly -p`, nil, func(r *Runner) {
+		r.SetDynamic("n", func(*Runner) string { return "three" })
+		r.MarkReadonly("n")
+	})
+	stored, _ := runGrammar(t, `n=three; readonly n; readonly -p`, nil, nil)
+	if produced != stored {
+		t.Errorf("produced %q, stored %q — a produced scalar must list as a stored one does",
+			produced, stored)
+	}
+	// And the control, so the comparison cannot pass on two empty listings.
+	if !strings.Contains(stored, "three") {
+		t.Fatalf("the control itself is %q — the comparison proves nothing", stored)
+	}
+}
+
+// The other side of the same rule: **no attribute, no listing**.
+//
+// This is what keeps a producer with a side effect out of the listings — a
+// name whose value is a fresh random number would otherwise be drawn from once
+// per listing and report something no later read repeats — and it is why the
+// branch above is guarded rather than unconditional.
+func TestAProducedScalarWithNoAttributeIsNotListed(t *testing.T) {
+	out, st := runGrammar(t, `readonly -p`, nil, func(r *Runner) {
+		r.SetDynamic("quiet", func(*Runner) string { return "drawn" })
+	})
+	if strings.Contains(out, "quiet") || strings.Contains(out, "drawn") || st != 0 {
+		t.Errorf("got %q status %d, want no mention of an unattributed producer at 0", out, st)
+	}
+}
+
 // setWholeArrayAxis answers what a bare array name gives, on a copy so the
 // preset the runner was built with is left alone.
 func setWholeArrayAxis(r *Runner, whole Answer) {

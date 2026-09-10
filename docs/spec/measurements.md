@@ -9617,7 +9617,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/the-null-command-parameters` | `[][]` | `[][]` | `[][]` | `[][]` | `[][]` | `[cat][more]` |
 | `redir/a-command-that-is-only-a-redirection` | `[st=0]` | `[st=0]` | `[st=0]` | `[st=0]` | `[st=0]` | `HOOK[st=0]` |
 | `redir/the-null-command-writes-where-the-command-would` | `[g=][st=0]` | `[g=][st=0]` | `[g=][st=0]` | `[g=][st=0]` | `[g=][st=0]` | `[g=HOOK][st=0]` |
-| `redir/the-reading-parameter-is-the-lone-input-redirection` | `\|\|\|` | `\|\|\|` | `\|\|\|` | `\|\|\|` | `\|\|\|` | `R\|R\|N\|` |
+| `redir/the-reading-parameter-is-the-lone-input-redirection` | `\|\|\|` | `\|\|\|` | `\|\|\|` | `\|\|\|` | `\|\|\|` | `R\|R\|N\|N` |
 | `redir/a-null-command-with-nothing-in-it-is-refused` | `after[made=y]` | `after[made=y]` | `after[made=y]` | `after[made=y]` | `after[made=y]` | **2>** `<shell>:1: redirection with no command` *(status 1)* |
 | `redir/multios-reads-from-every-source` | `[b]` | `[b]` | `[b]` | `[b]` | `[b]` | `[a~b]` |
 | `heredoc/no-delimiter-and-a-warning` | `body` | `body` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` | `body` | `body` |
@@ -9856,9 +9856,9 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   hook(){ printf HOOK; }; NULLCMD=hook; >g; printf "[g=%s][st=%s]" "$(cat g)" "$?"
   ```
-- `redir/the-reading-parameter-is-the-lone-input-redirection` — which of the two parameters answers, spelling by spelling. One input redirection and nothing else takes the reading one whatever descriptor it names, so `<f` and `3<f` agree; anything beside it — here an output redirection, written both after and before — takes the writing one. Two markers rather than one because the defaults both end up printing the file, so a single marker cannot tell the routes apart. The five columns without the hook print nothing at all and separate the three bars
+- `redir/the-reading-parameter-is-the-lone-input-redirection` — which of the two parameters answers, spelling by spelling. One input redirection and nothing else takes the reading one whatever descriptor it names, so `<f` and `3<f` agree; anything beside it — here an error redirection, written both after and before — takes the writing one, and prints its marker because only standard error was moved. Two markers rather than one because the defaults both end up printing the file, so a single marker cannot tell the routes apart. The five columns without the hook print nothing at all and separate the three bars
   ```sh
-  printf 'hello\n' > f; R(){ printf R; }; N(){ printf N; }; READNULLCMD=R; NULLCMD=N; <f; printf "|"; 3<f; printf "|"; <f 2>/dev/null; printf "|"; >h <f
+  printf 'hello\n' > f; R(){ printf R; }; N(){ printf N; }; READNULLCMD=R; NULLCMD=N; <f; printf "|"; 3<f; printf "|"; <f 2>/dev/null; printf "|"; 2>/dev/null <f
   ```
 - `redir/a-null-command-with-nothing-in-it-is-refused` — emptying the parameter is not the same as not having it. Five columns have no hook, so the assignment means nothing, the file is made and `after` prints. The sixth refuses the command by name, at 1, *fatally* — nothing after it runs and the file is never made, which says the refusal comes before the redirection rather than after it
   ```sh

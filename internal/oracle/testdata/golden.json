@@ -100259,7 +100259,7 @@
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "R|R|N|",
+        "Stdout": "R|R|N|N",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

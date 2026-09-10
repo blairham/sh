@@ -788,6 +788,17 @@ func Semantics() interp.Semantics {
 	s.LocalOptions = "aAgilprux"
 	// A bad `declare` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
+	// A lone `-` or `+` is a *name* here and not an option word, and not one
+	// a script may declare: measured 2026-09-10, ``declare -`` is ``declare:
+	// `-': not a valid identifier`` at 1 where zsh and ksh93 both read it as
+	// an option word and list. See Semantics.SignAloneIsAnOptionWord.
+	s.SignAloneIsAnOptionWord = interp.No
+	// `declare +f` takes the function attribute off rather than naming the
+	// functions, which leaves the bare `declare` listing — every variable
+	// and then every function. This engine has no bare listing for this
+	// shell, so the letter goes on writing bodies (#1754). `declare -F` is
+	// the names-only spelling here and is unaffected: it has its own letter.
+	s.FunctionNamesUnderPlus = interp.No
 	// `-i` takes no output base here, which is what separates this shell
 	// from the two that have `integer`: measured 2026-09-06, `typeset -i2
 	// c=5` is `-2: invalid option` and `typeset -i 16 b=255` calls the `16`

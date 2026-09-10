@@ -109,8 +109,24 @@ func biFunctions(r *Runner, _ context.Context, args []string) int {
 		return r.functionsMatching(args, false)
 	}
 	// The name asked for the function table, so the operands are function
-	// names however the letters were written.
+	// names however the letters were written — and the *sign* the word was
+	// written with says which listing, exactly as the sign of `typeset`'s
+	// `f` letter does. This word spells no `f`, so there is no letter to
+	// carry the sign and the option word carries it: measured 2026-09-10 on
+	// zsh 5.9.2, `functions +` names every function where `functions -`
+	// writes them all out, and `functions + f` names the one (#1576).
+	//
+	// Not the same reading `-m` gets, which is measured too and is the
+	// reason for the guard rather than a bare assignment: `functions +m
+	// 'f*'` writes the body exactly as `functions -m 'f*'` does, so the
+	// pattern letter takes the sign away from the word. `hasOption` above
+	// reads a minus word alone, so a `+m` line arrives here rather than at
+	// functionsMatching and would otherwise carry the word's sign into
+	// declareMatching, where the same field means the other thing.
 	f.function = true
+	if !f.matching {
+		f.functionOff = f.remove
+	}
 	return r.declareNames(name, args, f)
 }
 
@@ -151,7 +167,7 @@ func biUnfunction(r *Runner, _ context.Context, args []string) int {
 // gives.
 func (r *Runner) functionsMatching(patterns []string, namesOnly bool) int {
 	if len(patterns) == 0 {
-		return r.declareFunctions(nil, namesOnly)
+		return r.declareFunctions(nil, namesOnly, false)
 	}
 	for _, pattern := range patterns {
 		o := r.patternOpts(pattern)

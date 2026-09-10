@@ -1204,7 +1204,46 @@ func Semantics() interp.Semantics {
 	// refusing the letter left every interactive startup with no dump
 	// (#1674). ksh93's `-m` is a *rename* and bash has no such letter at
 	// all, so there is no axis here, only a letter one dialect has.
-	s.DeclareOptions = "aAfFgHhilmpruUTx"
+	//
+	// `z` is the newest of them and the first letter this engine takes in
+	// silence rather than acting on — see DeclareOptionsWithoutEffect just
+	// below, and note that it is `typeset` and `declare`'s alone: measured
+	// 2026-09-10, `local -z`, `integer -z`, `float -z`, `export -z` and
+	// `readonly -z` are each `bad option: -z` in zsh 5.9.2, so the letter
+	// belongs to this table and to none of the other four (#1576).
+	s.DeclareOptions = "aAfFgHhilmpruUTxz"
+	// `-z` and `+z` are taken and do nothing here, which is measured on both
+	// signs and on both sides of the builtin: `typeset -z p q` leaves `p`
+	// alone and declares an empty `q` exactly as a bare `typeset q` would,
+	// `typeset +z p` is 0 with `p` unchanged, and `typeset -fz f` over a
+	// defined function is 0 with the function still defined and still
+	// listing as itself.
+	//
+	// The one spelling where the letter is not inert is `typeset -fu`, which
+	// is that shell's second name for `autoload` — there `-z` picks the
+	// autoloaded file's syntax and is recorded on the stub, `typeset -fuz n`
+	// listing as `builtin autoload -Xz` exactly as `autoload -z n` does.
+	// This engine's `typeset -fu` does not autoload at all yet (#1753), so
+	// there is nothing for the letter to be recorded on and inert is the
+	// whole truth for every spelling that works here. `autoload -z` itself
+	// is unaffected: that word has its own table and already keeps the
+	// letter.
+	//
+	// Refusing it was worth 68 diagnostics in one shell snapshot — a
+	// completion loader's functions are named `+zi-log` and the like, so a
+	// word beginning `+z` reaches `typeset` as an option bundle whenever
+	// something feeds it a line it did not mean to (#1576).
+	s.DeclareOptionsWithoutEffect = "z"
+	// A lone `-` or `+` is an option word here rather than a name: `typeset
+	// +` is the whole table's attribute words and names, and `typeset -` is
+	// the bare listing. bash reads the same word as an identifier and
+	// refuses it, which is why this is a field — see
+	// Semantics.SignAloneIsAnOptionWord.
+	s.SignAloneIsAnOptionWord = interp.Yes
+	// `typeset +f` is the function *names*, one bare name a line and no
+	// quoting — the shape a shell snapshot reads to find what to capture.
+	// See Semantics.FunctionNamesUnderPlus for the two other answers.
+	s.FunctionNamesUnderPlus = interp.Yes
 	// `-F` is a float's precision here rather than bash's function listing,
 	// and the number behind it is the letter's argument and not a name:
 	// `typeset -F 3 x=1.5` declares one name at three places and reads back

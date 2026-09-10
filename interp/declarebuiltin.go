@@ -153,6 +153,32 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			i++
 			break
 		}
+		if a == "-" || a == "+" {
+			// A sign on its own is an option word carrying no letters, and
+			// it is a *listing* rather than a declaration: measured
+			// 2026-09-10, `typeset -` writes the whole parameter table with
+			// values and `typeset +` writes the same table's attribute words
+			// and names, which is exactly what the sign means everywhere
+			// else on this builtin. `functions +` is the same word reaching
+			// the function table (#1576).
+			//
+			// Read here rather than in the letter loop because the loop
+			// walks `a[1:]`, which is empty: a word with no letters would
+			// leave the sign unread and fall through to the operands, where
+			// `+` becomes a name nobody may declare. That is bash's answer
+			// and it is bash's for a reason — see
+			// Semantics.SignAloneIsAnOptionWord, which the three shells with
+			// the builtin do not agree on.
+			if !r.ask(r.sem().SignAloneIsAnOptionWord, "a bare sign as an option word") {
+				if r.unspecified {
+					return nil, f, r.status
+				}
+				break
+			}
+			pending = 0
+			f.remove = a == "+"
+			continue
+		}
 		if len(a) < 2 || (a[0] != '-' && a[0] != '+') {
 			if pending != 0 && isAllDigits(a) {
 				// The detached spelling: the word after the letter is its
@@ -410,28 +436,44 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		}
 	}
 	if f.function || f.funcNames {
-		// The function table rather than the variables: `-f` writes the
-		// functions themselves and `-F` only names them. `-p` alongside
-		// changes nothing — the flags already mean print.
-		return r.declareFunctions(args, f.funcNames)
+		// The function table rather than the variables, and the *sign* of
+		// the `f` letter picks the shape: `-f` writes the functions
+		// themselves and `+f` writes only their names. `-F` is a third
+		// spelling of the second, in the one dialect where that letter is
+		// not a float's precision. `-p` alongside changes nothing — the
+		// flags already mean print, and `typeset +fp` is the name (#1576).
+		//
+		// The same reading declareMatching already makes of the same field:
+		// `typeset +fm '_*'` names its matches and `typeset -fm '_*'` writes
+		// their bodies. Asking `f.funcNames` alone here is what left the
+		// plus form printing bodies while the pattern form printed names.
+		namesOnly := f.funcNames
+		if f.functionOff && r.ask(r.sem().FunctionNamesUnderPlus, "`typeset +f` naming its functions") {
+			namesOnly = true
+		}
+		if r.unspecified {
+			return r.status
+		}
+		return r.declareFunctions(args, namesOnly, f.funcNames)
 	}
 
-	if len(args) == 0 && f == (declareFlags{}) {
-		// Bare `typeset` is a listing, and not the one a bare `local` is —
-		// see BareDeclarationListing. Only the truly bare word: `typeset -i`
-		// with no names is a filtered listing in the shells that have it,
-		// which is a different question and not built.
-		return r.bareDeclarationListing()
+	if len(args) == 0 && !f.tie {
+		if code, answered := r.declarationListing(f); answered {
+			return code
+		}
 	}
 
-	if f.tie && !f.remove && len(args) == 0 {
+	if f.tie && len(args) == 0 {
 		// `typeset -T` with nothing to tie lists the ties there are, both
 		// halves of each — measured, and it is the only filtered listing
 		// this builtin has: every other attribute letter with no names is a
 		// filter this engine does not build. This one is built because a
 		// tie is the one attribute whose *listing* is how a script finds the
 		// pairs at all.
-		return r.tieListing()
+		//
+		// The sign picks the shape here as it does everywhere else on this
+		// builtin: `typeset +T` writes the tied names and no values.
+		return r.tieListing(f.remove)
 	}
 	if f.tie && !f.remove && len(args) > 0 {
 		// The operands of `-T` are not a list of names: they are a scalar,
@@ -969,14 +1011,122 @@ func (r *Runner) setGlobalVar(name, value string) {
 	r.setVarAs(name, value, assignedByDeclaration)
 }
 
-// declareFunctions is `declare -f` and `-F`: the functions themselves, or
-// only their names.
+// declarationListing answers a declaration that named nothing to declare,
+// which is a listing in both shells that have the word — and *which* listing
+// is decided by exactly the letters that decide it under `-m`.
+//
+// So this is that ladder over the whole table instead of over a pattern's
+// matches, walked with the same helpers rather than with a second copy of
+// them: see declarationNameListing and declarationFilteredNameListing, which
+// declareMatching reaches through matchedListing and matchedNameListing. The
+// `-m` half was built first (#1696) and the letters were read only there, so
+// every one of these rows wrote nothing at all until now — `typeset +` and
+// `typeset +x` were silent where the same letters with a `*` pattern
+// answered (#1576).
+//
+// Measured 2026-09-10 on zsh 5.9.2, `-f` with no startup files and a scrubbed
+// environment, against a table holding a scalar, an export, an integer, a
+// read-only, an array, an association, a unique array and a case-folded pair:
+//
+//	typeset      every name, its attribute words and its value
+//	typeset -    the same: a sign carrying no letters adds nothing
+//	typeset +    every name and its attribute words, and no value
+//	typeset +x   the exported names alone, and no attribute words
+//	typeset +xi  the exported names *and* the integer ones — either letter
+//	typeset +g   every name and its value again
+//
+// `+g` is the row that says the fallback is the bare listing rather than
+// silence: `-g` says where a declaration lands rather than what a name
+// carries, so there is nothing for it to filter on and the letter drops out.
+// `+gx` writes what `+x` writes, which is the same fact from the other side.
+//
+// The bool is whether this is a shape it answers at all. A line whose letters
+// ask for something else — a tie, a print, a declaration with a minus letter
+// on it — is not a listing and is left to the caller, which is also how the
+// *filtered value* listing those shells write for `typeset -x` stays
+// unanswered rather than being approximated here.
+func (r *Runner) declarationListing(f declareFlags) (int, bool) {
+	if withoutListingLetters(f) != (declareFlags{}) {
+		return 0, false
+	}
+	if withoutMatching(f) == (declareFlags{}) {
+		// Nothing was written but the sign. Under a minus that is the bare
+		// listing — the truly bare word reaches here too, which is the one
+		// row that was already right — and under a plus it is the same walk
+		// with the values left off.
+		if f.remove {
+			return r.declarationNameListing(r.declarableNames()), true
+		}
+		return r.bareDeclarationListing(), true
+	}
+	keep := f.attributeFilter()
+	if keep == nil && !f.inert {
+		// Nothing was written that a name could *carry*: `-g` and `+g` say
+		// where a declaration lands rather than what a name is, so the
+		// letter drops out and the whole table is the answer, values and
+		// all. Measured on both signs, and `+gx` writing what `+x` writes
+		// is the same fact from the other side.
+		return r.bareDeclarationListing(), true
+	}
+	if keep == nil {
+		// A letter this dialect spells and this engine records nothing for
+		// — see Semantics.DeclareOptionsWithoutEffect. It is still an
+		// attribute to select on and no name here carries it, so the
+		// listing is empty rather than whole: measured 2026-09-10, both
+		// `typeset -z` and `typeset +z` are 0 with not one byte, where
+		// `typeset -g` on the same table writes every name.
+		return 0, true
+	}
+	if f.added {
+		// Some letter that names an attribute was written with a *minus*,
+		// which is the filtered listing carrying values — `typeset -x`
+		// writing `q=2`. Not built, and left to the caller rather than
+		// approximated by the names it would have selected.
+		return 0, false
+	}
+	return r.declarationFilteredNameListing(r.declarableNames(), keep), true
+}
+
+// withoutListingLetters is one declaration's letters with every letter a
+// listing knows how to read taken out, so that "this line asks for nothing
+// else" is one comparison rather than a list of fields a new attribute would
+// silently fall off the end of — the reason withoutMatching is written the
+// same way.
+//
+// What is deliberately *not* cleared is the point of it: `T`, `h`, `p` and
+// the function letters stay, so a line carrying one is not a shape this
+// answers and falls through to the branch that does.
+func withoutListingLetters(f declareFlags) declareFlags {
+	f.integer, f.integerOff, f.base, f.baseNamed = false, false, 0, false
+	f.float, f.precision, f.precisionNamed = false, 0, false
+	f.readonly, f.readonlyOff = false, false
+	f.export, f.assoc, f.array = false, false, false
+	f.lower, f.upper, f.unique, f.hidden = false, false, false, false
+	f.global, f.inert = false, false
+	return withoutMatching(f)
+}
+
+// declareFunctions is `declare -f` and `-F` and `typeset +f`: the functions
+// themselves, or only their names.
 //
 // One shell has each of these under `declare` and prints `-F` in its own two
 // shapes — `declare -f name` per function when nothing narrows it, the bare
 // name when an operand asked — so the shapes are written here the way `-t`'s
 // kind words are: there is no second engine to hold a wording for.
-func (r *Runner) declareFunctions(names []string, namesOnly bool) int {
+//
+// asDeclarations is what tells those two shapes apart, and it is the `-F`
+// letter's rather than the listing's: measured 2026-09-10, bash 5.3 writes
+// `declare -f f` for `declare -F` and `f` for `declare -F f`, while zsh 5.9.2
+// writes the bare `f` for `typeset +f` with an operand and without one alike.
+// So the letter carries the shape and the operand count only chooses between
+// bash's two.
+//
+// A name is written **raw**, and that is measured rather than inherited from
+// listedFunctionName: `function "a b" { :; }; typeset +f` writes `a b` with
+// no quotes in zsh 5.9.2, where the same shell's body listing writes
+// `'a b' () {`. A names-only listing is a list of names and not a program
+// that reads back (#1576).
+func (r *Runner) declareFunctions(names []string, namesOnly, asDeclarations bool) int {
 	named := len(names) > 0
 	if !named {
 		// The script's own and not the prelude's: this listing is what a
@@ -997,7 +1147,7 @@ func (r *Runner) declareFunctions(names []string, namesOnly bool) int {
 		switch {
 		case !namesOnly:
 			r.printf("%s\n", r.listedFunction(name, fn))
-		case named:
+		case named || !asDeclarations:
 			r.printf("%s\n", name)
 		default:
 			r.printf("declare -f %s\n", name)

@@ -73,6 +73,13 @@ print -r -- "read=$? buf=[$buf]"`)
 // Both are opened on numbers the script names rather than allocated, so the
 // child can be told which to write to without the case depending on where a
 // shell's allocator starts.
+//
+// **Whether the child failed, not what it said about failing.** A redirection
+// onto a descriptor that is not there is status 1 in the `sh` this machine has
+// and 2 in the one a Linux runner has, and neither number is this shell's to
+// promise — so the case reads it as a boolean and takes its real evidence from
+// the files below, which say the same thing in a form no child's dialect can
+// change.
 func TestSysopenCloexecKeepsADescriptorFromAChild(t *testing.T) {
 	sh, err := exec.LookPath("sh")
 	if err != nil {
@@ -83,9 +90,9 @@ func TestSysopenCloexecKeepsADescriptorFromAChild(t *testing.T) {
 		out, st := runZsh(t, dir, `sysopen -w -o creat,trunc,cloexec -u 7 kept
 sysopen -w -o creat,trunc -u 8 given
 `+sh+` -c 'echo x >&7' 2>/dev/null
-print -r -- "closed-in-child=$?"
+print -r -- "closed-in-child=$(( $? != 0 ))"
 `+sh+` -c 'echo y >&8' 2>/dev/null
-print -r -- "open-in-child=$?"
+print -r -- "open-in-child=$(( $? != 0 ))"
 exec 7>&- 8>&-`)
 		want := "closed-in-child=1\nopen-in-child=0\n"
 		if out != want || st != 0 {

@@ -156,8 +156,12 @@ func TestKeepDescriptorFromChildrenClosesItThereAndLeavesTheRestOpen(t *testing.
 		}
 		return 0
 	})
-	runSeam(t, r, "publish\n"+sh+" -c 'echo x >&6' 2>/dev/null\necho hidden=$?\n"+
-		sh+" -c 'echo y >&7' 2>/dev/null\necho shown=$?\nexec 6>&- 7>&-")
+	// The *fact* of the failure rather than the number: a redirection onto a
+	// descriptor that is not there is 1 in one `sh` and 2 in another, and
+	// neither is this package's to promise. The files below are the evidence
+	// that cannot move.
+	runSeam(t, r, "publish\n"+sh+" -c 'echo x >&6' 2>/dev/null\necho hidden=$(( $? != 0 ))\n"+
+		sh+" -c 'echo y >&7' 2>/dev/null\necho shown=$(( $? != 0 ))\nexec 6>&- 7>&-")
 	if got := out.String(); got != "hidden=1\nshown=0\n" {
 		t.Errorf("statuses = %q, want %q", got, "hidden=1\nshown=0\n")
 	}
@@ -194,7 +198,7 @@ func TestKeepDescriptorFromChildrenIsForgottenWhenTheNumberIsReused(t *testing.T
 		rr.SetDescriptor(6, second)
 		return 0
 	})
-	runSeam(t, r, "publish\n"+sh+" -c 'echo reused >&6' 2>/dev/null\necho st=$?\nexec 6>&-")
+	runSeam(t, r, "publish\n"+sh+" -c 'echo reused >&6' 2>/dev/null\necho st=$(( $? != 0 ))\nexec 6>&-")
 	if got := out.String(); got != "st=0\n" {
 		t.Errorf("status = %q, want %q", got, "st=0\n")
 	}

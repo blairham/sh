@@ -235,7 +235,7 @@ type Shell struct {
 	// to end it on their behalf too — an agent protocol has terminal/kill,
 	// and a request to kill a command that this shell is interpreting has
 	// nothing to signal, because the command is not a process of its own.
-	// Cancelling is what stands in for the signal, and it reaches the same
+	// Canceling is what stands in for the signal, and it reaches the same
 	// place: the Runner is already given a context and already stops when it
 	// is done.
 	Context context.Context

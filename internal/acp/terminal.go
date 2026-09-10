@@ -496,7 +496,7 @@ func (c *Client) releaseTerminal(ctx context.Context, params json.RawMessage) (a
 // kill ends the command if it has not ended already. A process that has been
 // reaped is gone, and Kill on it is an error about nothing.
 //
-// An interpreted line has no process of its own, so cancelling is what stands
+// An interpreted line has no process of its own, so canceling is what stands
 // in for the signal — it reaches the interpreter, which is what is running the
 // commands inside the line and what stops them.
 func (t *terminal) kill() {

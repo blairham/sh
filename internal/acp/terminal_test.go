@@ -540,7 +540,7 @@ func TestKillingAnInterpretedLineCancelsIt(t *testing.T) {
 		t.Fatalf("terminal/wait_for_exit: %v", err)
 	}
 	if exit.ExitCode == nil || *exit.ExitCode != 130 {
-		t.Errorf("exit = %+v, want the status the cancelled interpreter returned", exit)
+		t.Errorf("exit = %+v, want the status the canceled interpreter returned", exit)
 	}
 }
 

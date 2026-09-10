@@ -165,3 +165,88 @@ print -r -- "blocked=$?"`)
 		t.Errorf("the whole run took %v, want at least %v — the blocking flock did not block", waited, holdFor*2/3)
 	}
 }
+
+// **`zsystem supports` has to be true about what this shell actually built**,
+// which is the same rule the feature table follows and the place it is
+// easiest to break: it is a status with nothing printed, so a `supports` that
+// answered 0 to everything looks like a working one from every angle except
+// the one that matters — a script asking before it commits to a lock.
+//
+// Measured: `flock` and `supports` are the whole subcommand vocabulary, and
+// **everything else is 1 including the module's own builtins' names**, so
+// `zsystem supports sysread` is 1 in a shell where `sysread` works perfectly.
+// The name is the subcommand's, not the feature's.
+//
+// The two operand-count refusals are **255**, which is the only status like it
+// in the module — every other refusal here is 1 — so a script writing
+// `zsystem supports` with the name it meant to pass left empty gets an answer
+// no ordinary failure produces.
+func TestZsystemSupportsAnswersForWhatWasBuilt(t *testing.T) {
+	out, st, errs := runZshSplit(t, t.TempDir(), `zsystem supports flock
+print -r -- "flock=$?"
+zsystem supports supports
+print -r -- "supports=$?"
+zsystem supports subshell
+print -r -- "subshell=$?"
+zsystem supports sysread
+print -r -- "sysread=$?"
+zsystem supports zsystem
+print -r -- "zsystem=$?"
+zsystem supports
+print -r -- "none=$?"
+zsystem supports flock extra
+print -r -- "two=$?"`)
+	want := "flock=0\nsupports=0\nsubshell=1\nsysread=1\nzsystem=1\nnone=255\ntwo=255\n"
+	if out != want || st != 0 {
+		t.Errorf("zsystem supports = %q (status %d), want %q", out, st, want)
+	}
+	wantWholeLines(t, errs,
+		"zsh:zsystem:11: supports: not enough arguments",
+		"zsh:zsystem:13: supports: too many arguments",
+	)
+	// The answers that are only a status said **nothing**, which is what lets
+	// `zsystem supports flock || fallback` be written inside a prompt.
+	if got, want := len(splitLines(errs)), 2; got != want {
+		t.Errorf("stderr = %q, want exactly %d complaints", errs, want)
+	}
+}
+
+// **What `zsystem` itself refuses, and the subcommand's name is in most of
+// it.** Measured one line at a time.
+//
+// Two of these carry no subcommand name and that is the measurement rather
+// than an inconsistency: the sentence about a file names the file and what it
+// was to be opened for, which is already more than `flock:` would add.
+func TestWhatZsystemRefuses(t *testing.T) {
+	dir := t.TempDir()
+	out, st, errs := runZshSplit(t, dir, `zsystem
+print -r -- "none=$?"
+zsystem bogus
+print -r -- "subcommand=$?"
+zsystem flock
+print -r -- "nofile=$?"
+zsystem flock /no/such/file
+print -r -- "missing=$?"
+zsystem flock -r /no/such/file
+print -r -- "reading=$?"
+zsystem flock -x /no/such/file
+print -r -- "letter=$?"
+zsystem flock -i bogus /no/such/file
+print -r -- "interval=$?"
+zsystem flock -u 99
+print -r -- "notlocked=$?"`)
+	want := "none=1\nsubcommand=1\nnofile=1\nmissing=1\nreading=1\nletter=1\ninterval=1\nnotlocked=1\n"
+	if out != want || st != 0 {
+		t.Errorf("refusals = %q (status %d), want %q", out, st, want)
+	}
+	wantWholeLines(t, errs,
+		"zsh:zsystem:1: not enough arguments",
+		"zsh:zsystem:3: unknown subcommand: bogus",
+		"zsh:zsystem:5: flock: not enough arguments",
+		"zsh:zsystem:7: failed to open /no/such/file for writing: no such file or directory",
+		"zsh:zsystem:9: failed to open /no/such/file for reading: no such file or directory",
+		"zsh:zsystem:11: flock: unknown option: x",
+		"zsh:zsystem:13: flock: invalid interval value: 'bogus'",
+		"zsh:zsystem:15: flock: file descriptor 99 not in use for locking",
+	)
+}

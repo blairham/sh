@@ -77,6 +77,14 @@ var samples = []struct {
 	{name: "zsh-repeat", src: "repeat 3; do\n  echo hi\ndone\n", zsh: true},
 	{name: "zsh-anon", src: "() {\n  echo hi\n}\n", zsh: true},
 	{name: "zsh-try", src: "{\n  echo t\n} always {\n  echo a\n}\n", zsh: true},
+	{name: "zsh-func-many-names", src: "function a b c {\n  echo \"$0\"\n}\n", zsh: true},
+	// The name list split over lines, which is how the construct is written
+	// in the wild. The header is rebuilt from source text, and a backslash
+	// left standing in it becomes an *escaped space*: this printed
+	// `function man \\ dman \\ debman {`, whose names read back as ` dman`
+	// and ` debman` — a formatted file defining different functions from the
+	// one it was made from, at status 0.
+	{name: "zsh-func-continued-names", src: "function man \\\n  dman \\\n  debman {\n  echo \"$0\"\n}\n", zsh: true},
 	{name: "coproc", src: "coproc cat\n"},
 	// Regressions from the wild sweep, one sample per found bug.
 	{name: "procsub-redirect", src: "while read -r l; do\n\techo \"$l\"\ndone < <(printf '%s\\n' a b)\n"},

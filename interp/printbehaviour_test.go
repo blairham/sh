@@ -84,10 +84,13 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 // FunctionKeywordParens (1 each) — 19 between them, which is what the plain
 // core cannot read. ClobberOverrideMarker is an eighth, and three of its
 // cases are the same kind: `>>|`, `&>>|` and `>>!` after a compound are text
-// the core reads as a pipe or a stray word rather than as a redirection. The
-// rest change what a case *means* rather than whether it parses, and they are
-// here because the printer should be exercised on those meanings rather than
-// on whatever a narrower reading turns them into.
+// the core reads as a pipe or a stray word rather than as a redirection.
+// FunctionMultipleNames is a ninth and the newest: four cases whose `function`
+// keyword gives one body several names, where the core reads the second name
+// as the body and the brace group after it closes nothing. The rest change
+// what a case *means* rather than whether it parses, and they are here
+// because the printer should be exercised on those meanings rather than on
+// whatever a narrower reading turns them into.
 //
 // The unread count above is what keeps the six honest.
 func corpusGrammar() syntax.Dialect {
@@ -110,6 +113,10 @@ func corpusGrammar() syntax.Dialect {
 	d.FuncDefAtParen = true
 	d.FunctionKeywordParens = true
 	d.FunctionKeywordNameIsAnyWord = true
+	// One body under several names. Four cases, and the core reads none of
+	// them: without it the second name is the *body* and the brace group
+	// after it has nothing to be part of.
+	d.FunctionMultipleNames = true
 	d.MultiDigitFdNumber = true
 	d.ParamCaseChange = true
 	d.ParamIndirection = true

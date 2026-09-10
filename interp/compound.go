@@ -585,6 +585,37 @@ func isPlainFuncName(s string) bool {
 }
 
 func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
+	if len(c.AlsoNamed) > 0 {
+		// One body under several names — `function clipcopy clippaste { … }`
+		// — which is one definition per name and not one function with two.
+		// Each entry is its own declaration carrying its own Name, so `$0`
+		// inside the body is the name that was *called*, which is the whole
+		// reason a script writes this instead of two definitions with the
+		// same text.
+		//
+		// The list is dropped from each copy, so this recursion is one level
+		// deep however many names were given.
+		one := *c
+		one.AlsoNamed = nil
+		if err := r.funcDecl(&one); err != nil {
+			return err
+		}
+		for _, name := range c.AlsoNamed {
+			// A name the dialect refuses is fatal at the name that carried
+			// it, so the names after it are not defined either — the same
+			// place the script would have stopped had it written them out.
+			if r.ctl != controlNone {
+				return nil
+			}
+			also := *c
+			also.AlsoNamed = nil
+			also.Name, also.NameWord = name.Name, name.Word
+			if err := r.funcDecl(&also); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	if c.NameWord != nil {
 		// The name was written with an expansion in it, so it is not text
 		// until now. Expanded once, here, at the *definition*: measured on

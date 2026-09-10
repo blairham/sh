@@ -687,12 +687,37 @@ type FuncDecl struct {
 	// and a plausible one. Flattening it was silent — status 0, a function
 	// defined, and the one the script asked for missing.
 	NameWord *Word
+	// AlsoNamed holds the second and later names of a definition that gave
+	// several — `function clipcopy clippaste { … }` — and is empty for the
+	// one-name definition every dialect has. See
+	// [Dialect.FunctionMultipleNames].
+	//
+	// The extra names live only in the declaration and never in the function
+	// table: a defined function has exactly one name, which is why this is a
+	// field beside Name rather than Name becoming a list. The interpreter
+	// makes one definition per name, and each of them answers `$0` with its
+	// own — which is the whole of why a script writes this instead of two
+	// definitions with the same body.
+	AlsoNamed []FuncName
+
 	// Keyword records that the `function` word was used, which is not
 	// universal: dash rejects it, and ksh93 rejects the hybrid form with
 	// parentheses as well.
 	Keyword bool
 	Body    Command
 	Start   Pos
+}
+
+// FuncName is one name in a definition's name list, read the way a first name
+// is read.
+//
+// The two fields are the same split [FuncDecl.Name] and [FuncDecl.NameWord]
+// make, and for the same reason: a name holding an expansion is not text
+// until the shell runs, and its literal spelling is a plausible wrong answer.
+// Word is nil for the ordinary case, where Name is the whole of it.
+type FuncName struct {
+	Name string
+	Word *Word
 }
 
 func (c *FuncDecl) Pos() Pos { return c.Start }

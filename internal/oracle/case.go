@@ -6307,6 +6307,26 @@ echo "st=$?"`,
 		Why:     "a pattern character in the name, quoted, where it is ordinary text: the shell that reads any word after the keyword defines `a*b` and calls it. It is the spelling wild code actually produces, `${(q)…}` quoting whatever a value came to. Bare it is the one group of names that shell does *not* define — `function a*b { :; }` is `no matches found: a*b`, `a?b` the same and `a[b` a `bad pattern`, the word being matched against the filesystem — and that half cannot be a row here, because the grammar that reads every case would have to read a name this implementation refuses on purpose. It is measured in syntax.Dialect.FunctionKeywordNameIsAnyWord and pinned in syntax/emptyfuncname_test.go instead",
 	},
 	{
+		ID: "cmd/function-keyword-with-several-names", Category: "command language",
+		Snippet: `function a b { echo "[$0]"; }; a; b; echo st=$?`,
+		Why:     "one body under several names, which one shell has and the rest read as a different program. zsh defines both and answers each call with its own name; bash 5.3, bash 3.2 and bash-as-sh are a syntax error at the second name; dash has no keyword and blames the brace; ksh93 parses the line and defines only the *first*, leaving `b` not found at 127 — a lenience rather than a construct, and the one column that fails without saying anything about the second name. The `$0` in the body is the whole row: a reading that defined one function and pointed the other name at it would print `[a]` twice",
+	},
+	{
+		ID: "cmd/function-keyword-with-several-names-shares-one-body", Category: "command language",
+		Snippet: `function a b { echo "[$0]"; } > out; a; b; cat out; echo st=$?`,
+		Why:     "the definition's redirection, which says the names share one body rather than each getting a copy of the brace group alone. In the shell that has the construct both calls write to the file and the last one is what `cat` shows; everywhere else this is the same refusal the row above gets, which is why it is a separate case — a grammar that read the names and dropped the redirection would pass that row and fail this one",
+	},
+	{
+		ID: "cmd/function-keyword-with-several-names-over-lines", Category: "command language",
+		Snippet: "function man \\\n  dman \\\n  debman { echo \"[$0]\"; }; man; debman; echo st=$?",
+		Why:     "the spelling an Oh-My-Zsh library is written in, and the reason it is a row of its own: the names are separated by backslash-newlines, so anything reading the header as a line rather than as a word list gets it wrong. It is also the shape that broke the formatter — a header rebuilt from source text left the backslash standing and the names read back as ` dman` and ` debman`",
+	},
+	{
+		ID: "cmd/function-keyword-with-a-repeated-name", Category: "command language",
+		Snippet: `function a a { echo "[$0]"; }; a; echo st=$?`,
+		Why:     "the same name twice, which is one function and not a complaint in the shell that takes the list — the second definition replaces the first and there is nothing to collide with. The row exists because a table keyed by name is the obvious implementation and a *list* keyed by nothing is the other one, and only this input parts them",
+	},
+	{
 		ID: "cmd/function-posix-form", Category: "command language",
 		Snippet: `f() { echo posix; }; f`,
 		Why:     "the universal definition form",

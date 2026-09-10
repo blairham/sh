@@ -48,6 +48,13 @@ func Dialect() syntax.Dialect {
 	// reading it. The grammar that has to *read* every case is the one that
 	// takes the construct, as above.
 	d.FunctionKeywordNameIsAnyWord = true
+	// `function a b { … }` — one body under several names, which one of the
+	// six defines and the other five read as a different program: three are
+	// a syntax error at the second name, dash has no keyword at all, and
+	// ksh93 parses the line and defines only the first. The corpus records
+	// all of those, so the grammar that has to *read* every case is the one
+	// that takes the construct, as above.
+	d.FunctionMultipleNames = true
 	// `[[ x == @(a|b) ]]` — extended patterns where a condition reads them.
 	d.ExtendedPatternInCondition = true
 	// One case records `f() echo hi` as a syntax error, which only a

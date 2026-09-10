@@ -506,6 +506,19 @@ func (p *printer) command(c Command) {
 		} else {
 			p.str(printedFuncName(x.Name))
 		}
+		// And the names after it, where one body was given several. Each is
+		// written the way the first is, which is what makes the print a
+		// program that reads back to this tree: dropping them would hand
+		// back a definition of the first name alone, at status 0, with the
+		// rest of the script calling functions nobody defined.
+		for _, n := range x.AlsoNamed {
+			p.str(" ")
+			if n.Word != nil {
+				p.word(n.Word)
+			} else {
+				p.str(printedFuncName(n.Name))
+			}
+		}
 		if x.Keyword {
 			p.str(" ")
 		} else {

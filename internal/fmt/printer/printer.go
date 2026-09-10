@@ -521,6 +521,22 @@ func (p *printer) headerText(from, to int) string {
 			header = strings.Replace(header, c.Text, "", 1)
 		}
 	}
+	// A backslash-newline is a continuation and not part of any word, so it
+	// goes with the line break it hides. Leaving it to strings.Fields makes
+	// the backslash a field of its own and joins it to the word after with a
+	// space, which is an *escaped space* when it is read back: a `function`
+	// header split over lines came out as `function man \\ dman`, and the
+	// names that reparsed from it were ` dman` and ` debman` — a formatted
+	// file that defines different functions from the one it was made from,
+	// at status 0.
+	//
+	// Raw text rather than positions, because a name written as literal text
+	// has no node to take an extent from. The line break inside a quoted word
+	// is beyond what that can see either way — strings.Fields below has
+	// always flattened one — so this narrows a corruption rather than
+	// admitting a new kind.
+	header = strings.ReplaceAll(header, "\\\r\n", " ")
+	header = strings.ReplaceAll(header, "\\\n", " ")
 	return strings.Join(strings.Fields(header), " ")
 }
 

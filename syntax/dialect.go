@@ -675,6 +675,61 @@ type Dialect struct {
 	// empty name where zsh takes it (#1561).
 	FunctionKeywordNameIsAnyWord bool
 
+	// FunctionMultipleNames lets the `function` keyword take more than one
+	// name for one body: `function clipcopy clippaste { … }` defines both,
+	// and `$0` inside the body is the name that was called, which is what
+	// makes the construct more than two definitions written once. zsh alone
+	// in the panel — measured 2026-09-10, `function f1 f2 f3 { echo "$0"; }`:
+	//
+	//	zsh 5.9.2   all three defined, each `$0` its own name, status 0
+	//	bash 5.3    `syntax error near unexpected token `f2'`, status 2
+	//	bash 3.2    the same sentence, status 2
+	//	bash-as-sh  the same sentence, status 2
+	//	dash        no keyword at all: `function: not found`, then the
+	//	            brace group runs and the closing `}` is unexpected
+	//	ksh93       parses it and defines **only the first** — `f2` and
+	//	            `f3` are `not found`, and `functions f1` says the whole
+	//	            header, names and all, back
+	//
+	// So five of the six part company with zsh and the sixth reads the same
+	// text as a different program. ksh93's reading is not modeled: it defines
+	// a function whose extra names went nowhere, which is a lenience rather
+	// than a construct, and the ksh dialect keeps refusing the line here.
+	//
+	// **Names are taken greedily**, exactly as [Dialect.ForMultipleNames]
+	// takes a loop's: every word after the first is another name until the
+	// body begins at `{` or at the `()` of the hybrid form, and a reserved
+	// word is a name like any other. Measured: `function a while { … }`
+	// defines `a` *and* `while` in zsh, so calling `while` afterwards runs
+	// the body rather than opening a loop. A stop word is not taken —
+	// `function a } { … }` is a parse error on the `}` — and neither is a
+	// compound command: `function a b if true; then …` is a parse error at
+	// `then` there, because `if` and `true` were read as two more names and
+	// the `;` ended a definition with no body at all.
+	//
+	// That last reading is the one this parser does not have. A name list
+	// with no body is an *autoload declaration* there — `function af1` puts
+	// a stub in the table and calling it reads the file off `fpath`, at
+	// status 0 — and it is refused here as a definition whose body never
+	// began; see #1686. What it replaces is a worse answer rather than a
+	// better one: without the list, `function a b` read `b` as the body and
+	// defined `a` alone, silently, at status 0.
+	//
+	// Each name is read by the rule the first one is read by, so
+	// [Dialect.FunctionKeywordNameIsAnyWord] and
+	// [Dialect.FunctionNameExpands] apply to every name in the list:
+	// `function a "b c" d { … }` defines three, the middle one holding a
+	// space. What the names then share is one body — measured, a redirection
+	// on the definition is shared too, `function a b { echo "$0"; } > out`
+	// sending both calls to the file.
+	//
+	// The parenthesis spelling takes a name list too — `clipcopy clippaste()
+	// { … }` defines both there, and so does `echo hi () { … }`, which makes
+	// *any* word list followed by `()` a definition. That is a wider grammar
+	// change than this flag, it appears nowhere in the scripts on this
+	// machine, and it is not read here; see #1685.
+	FunctionMultipleNames bool
+
 	// TimeKeyword makes `time` a reserved word at the start of a pipeline,
 	// timing the whole pipeline — `time true | wc -l` measures both elements
 	// — with the report going to the shell's own standard error. Absent from

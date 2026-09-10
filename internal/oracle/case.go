@@ -13806,9 +13806,63 @@ echo "read=[$l]"`,
 		Why:     "0604 rather than a rounder number on purpose: no ordinary umask produces those bits, so a shell that ignored `-m` and took the default cannot land on it by accident — and the default is here beside it, which is what says the 0666 the umask then trims is the right default rather than a number chosen to look plausible. The umask is set so the row reads the same on every machine",
 	},
 	{
-		ID: "system/the-three-builtins-this-shell-has-not-got", Category: "builtins",
-		Snippet: `zmodload zsh/system; echo "plain=$?"; zmodload -F zsh/system b:sysopen b:sysread b:syswrite; echo "have=$?"; zmodload -F zsh/system b:zsystem; echo "zsystem=$?"; zmodload -F zsh/system b:sysseek b:syserror; echo "rest=$?"`,
-		Why:     "**this row records a difference rather than reproducing it.** `zsystem`, `sysseek` and `syserror` are not implemented here, so the `-F` line naming one refuses by that name where zsh answers 0 — which is the whole of what a narrow module owes a caller, and is the opposite of the failure this module was filed for. The plain load is 0 in both, because nothing in that line said which feature the script wanted. It flips to agreement the day the three land",
+		ID: "system/every-one-of-the-modules-six-builtins", Category: "builtins",
+		Snippet: `zmodload zsh/system; echo "plain=$?"; zmodload -F zsh/system b:sysopen b:sysread b:syswrite; echo "have=$?"; zmodload -F zsh/system b:zsystem; echo "zsystem=$?"; zmodload -F zsh/system b:sysseek b:syserror; echo "rest=$?"; zmodload -F zsh/system b:nosuchthing; echo "invented=$?"`,
+		Why:     "**this row recorded a difference for a month and now records agreement.** `zsystem`, `sysseek` and `syserror` were registered in the feature table and refused *by name*, so a `-F` line naming one was 1 here and 0 in zsh — honest, and not the same as done (#1749). The last line is why the row did not simply lose its assertions when they landed: a `-F` that answered 0 to a feature nobody has would pass every guard a script writes and prove nothing, which is the same accepting-and-inert failure moved into the loader",
+	},
+	// `zsystem`, `sysseek` and `syserror` — the rest of `zsh/system` (#1749).
+	//
+	// **A lock cannot be graded in one process and these rows do not try.**
+	// Two shells cannot be started from inside one snippet in a way that is
+	// the same act in all six columns, so what is here is everything a single
+	// shell can be held to — the vocabulary, the refusals, the descriptor —
+	// and the exclusion itself is proved against a second process in
+	// dialect/zsh/systemlock_test.go, which is where it belongs because it
+	// needs a child that does not go through any shell.
+	{
+		ID: "system/what-this-shells-zsystem-supports", Category: "builtins",
+		Snippet: `zmodload zsh/system; zsystem supports flock; echo "flock=$?"; zsystem supports supports; echo "supports=$?"; zsystem supports subshell; echo "subshell=$?"; zsystem supports sysread; echo "sysread=$?"; zsystem supports; echo "none=$?"; zsystem supports a b; echo "two=$?"`,
+		Why:     "the question a script asks before it commits to a lock, and it is a status with **nothing printed** — so a `supports` that answered 0 to everything looks like a working one from every angle except this. `flock` and `supports` are the whole vocabulary and everything else is 1, *including the module's own builtins' names*: `zsystem supports sysread` is 1 in a shell where `sysread` works. The two operand-count refusals are **255**, which is the only status like it in the module and is what a script writing `zsystem supports` with the name left empty gets",
+	},
+	{
+		ID: "system/a-lock-taken-and-given-back", Category: "builtins",
+		Snippet: `zmodload zsh/system; : > lk; zsystem flock lk; echo "held=$?"; zsystem flock -f fd lk; echo "named=$? high=$(( fd > 2 ))"; zsystem flock -t 0 -f second lk; echo "again=$?"; zsystem flock -u $fd; echo "released=$?"; zsystem flock -u $fd; echo "twice=$?"`,
+		Why:     "a lock file locked three ways and unlocked once. The third line is the discriminating one and it is not about contention at all: **a shell can lock a file it is already holding**, because these are per-process record locks rather than per-descriptor ones — measured, and a shell reaching for flock(2) instead has the second call wait for the first. The double unlock is the pair that says the first one did something, since the second names a descriptor that is no longer one",
+	},
+	{
+		ID: "system/what-zsystem-refuses", Category: "builtins",
+		Snippet: `zmodload zsh/system; zsystem; echo "none=$?"; zsystem bogus; echo "sub=$?"; zsystem flock; echo "nofile=$?"; zsystem flock /no/such/file; echo "missing=$?"; zsystem flock -r /no/such/file; echo "reading=$?"; zsystem flock -x /no/such/file; echo "letter=$?"; zsystem flock -i bogus /no/such/file; echo "interval=$?"; zsystem flock -u 99; echo "notlocked=$?"`,
+		Why:     "eight refusals, and which of them carries the subcommand's name is the measurement: `flock: unknown option: x` does and `failed to open … for writing` does not, because that sentence already names the file and the direction. The direction is in it twice over — `-r` opens for reading and says so — which is what makes `zsystem flock -r` usable on a file nobody may write. `-i bogus` is refused where `-t bogus` is a zero timeout, since both are arithmetic and an interval of zero is not an interval",
+	},
+	{
+		ID: "system/where-a-descriptor-is-reading-from", Category: "builtins",
+		Snippet: `zmodload zsh/system; print -n 'hello world' > f; sysopen -r -u 7 f; sysread -i 7 -s 5 a; sysseek -u 7 0; sysread -i 7 -s 5 b; echo "first=[$a] rewound=[$b]"; sysseek -u 7 -w end -5; sysread -i 7 c; echo "tail=[$c]"; sysseek -u 7 0; sysread -i 7 -s 4 d; sysseek -u 7 -w current 2; sysread -i 7 -s 3 e; echo "onward=[$e]"; sysseek -u 7 -1; echo "before=$?"; sysseek -u 7 -w bogus 0; echo "origin=$?"`,
+		Why:     "every seek is read back **through the descriptor** rather than checked with `systell`, which is the same shell answering a question about its own bookkeeping: a seek that went nowhere answers 0 and so does one that went to the wrong place. The three origins are here because each moves from somewhere else, and the last two are the pair that separates a call failing — a position before the start of a file, which is a **silent 2** — from a command line being wrong, which speaks",
+	},
+	{
+		ID: "system/the-sentence-the-system-has-for-an-error", Category: "builtins",
+		Snippet: `zmodload zsh/system; syserror 2; echo "number=$?"; syserror ENOENT; echo "name=$?"; syserror -p "oops: " EACCES; echo "prefixed=$?"; syserror -e held EACCES; echo "held=[$held] diverted=$?"; syserror bogus; echo "unknown=$?"; syserror enoent; echo "lowercase=$?"`,
+		Why:     "the platform's own wording in the platform's own **capitalization**, which differs from every other diagnostic in this dialect: `No such file or directory` here and `no such file or directory` from `sysopen`, both measured in the same shell. A name and its number give the same sentence, which is what says the lookup went through `$errnos`; the lookup is case-sensitive, so the last line is 2 with nothing said. `-e` **diverts rather than prints**, so that line writes nothing to standard error",
+	},
+	// `zsh/zselect`'s one builtin (#1768). What is graded is the *status
+	// vocabulary*, because that is what the prompt theme's worker is written
+	// against — and the waiting itself is proved with a clock and a second
+	// process in dialect/zsh/zselect_test.go, which a corpus row comparing
+	// text cannot do.
+	{
+		ID: "zselect/the-probe-a-prompt-worker-guards-on", Category: "builtins",
+		Snippet: `zmodload zsh/zselect || { echo "module=failed"; return; }; echo "module=$?"; ! { zselect -t0 || (( $? != 1 )) } || { echo "probe=failed"; return; }; echo "probe=ok"; zmodload -F zsh/zselect b:zselect; echo "named=$?"`,
+		Why:     "three consecutive lines of `internal/worker.zsh`, two of which are `|| return`. The middle one is a *probe*: it asks for a wait of no time on nothing at all and insists the answer is exactly 1, so a shell answering 0 there fails the guard and so does one answering 1 with a diagnostic — the worker stops either way, which is what it did while this module was not in the feature table at all",
+	},
+	{
+		ID: "zselect/which-descriptors-came-back-ready", Category: "builtins",
+		Snippet: `zmodload zsh/zselect; zmodload zsh/system; sysopen -w -o creat,trunc -u 7 a; sysopen -w -o creat,trunc -u 8 b; zselect -w 7 -w 8 -t 0; echo "reply=($reply)"; zselect -a mine -w 8 -t 0; echo "mine=($mine)"; zselect -A keyed -r 7 -w 7 -t 0; echo "keyed=(${(kv)keyed})"; zselect -w 8 7 -t 0; echo "bare=($reply)"; reply=(kept); zselect -r 99 -t 0; echo "nothing=$? reply=($reply)"`,
+		Why:     "the answer's shape, which is what a caller reads rather than the status: a set's letter followed by every descriptor ready in it, the sets in `r`, `w`, `e` order and ascending inside each. A bare number joins the set the **last letter** named, so `-w 8 7` watches both for writing. `-A` keys by the descriptor instead, which is the one shape where a descriptor appears once with two letters. The last line is the half a shell tidying up gets wrong: nothing ready assigns **nothing**, so a caller holding a stale answer is not told it has a fresh one",
+	},
+	{
+		ID: "zselect/what-zselect-refuses", Category: "builtins",
+		Snippet: `zmodload zsh/zselect; zselect -q 3 -t 0; echo "letter=$?"; zselect -t; echo "novalue=$?"; zselect -t bogus; echo "notanumber=$?"; zselect -a "bad name" -t 0; echo "badarray=$?"; zselect -t 0 extra; echo "operand=$?"; zselect -r 0x -t 0; echo "garbage=$?"`,
+		Why:     "an option letter this builtin has not got is **not** `bad option` — it is `expecting file descriptor`, because a dashed word that is none of the six letters is read as one that should have been a descriptor, which is also what a stray operand gets. `-r 0x` is a third sentence again, naming only the part that was not a number. Every refusal is status 1, the same 1 a wait that found nothing answers, so the words are the whole of the difference",
 	},
 	// `zparseopts` and `zformat`, the two of `zsh/zutil`'s other three
 	// builtins that can be learned by running the real one (#1058). What is

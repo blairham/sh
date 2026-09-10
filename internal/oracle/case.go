@@ -11322,6 +11322,11 @@ echo "st=$? alive"`,
 		Why:     "the one route the two shells that have the option disagree about, which is why it is an axis and not a rule: the bash columns read on and write B, and ksh93 stops there and writes nothing. Both stop a script file and both stop standard input. It is also the route that matters in practice — an agent harness snapshots a shell with `set -o | grep on`, which matches the *name* `onecmd` and not the status column, and sources the result ahead of every `-c` it runs (#1709)",
 	},
 	{
+		ID: "opt/set-plus-t-is-granted-where-set-t-is-refused", Category: "shell options",
+		Snippet: `set +t; echo "st=$?"`,
+		Why:     "the letter a shell *has* and will not move still takes a request for the state it is already in, which is the rule its long names follow: zsh answers `set +t` with 0 and says nothing where `set -t` is `can't change option: -t` at 1, fatally — and answers them the other way round in a shell started with `-t`. dash refuses both signs alike, because it has not got the letter at all, which is what says the grant hangs on having the letter rather than on the state. The bash columns and ksh93 simply take it",
+	},
+	{
 		ID: "opt/set-t-at-the-invocation", Category: "shell options",
 		Args:    []string{"-t", ArgScript},
 		Snippet: "echo A\necho B\n",

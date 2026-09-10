@@ -2910,6 +2910,28 @@ Which shells have the letter is a second axis (`Semantics.SetHasTheTLetter`),
 because ksh93 has *only* the letter — `set -o onecmd` there is
 `bad option(s)` — while zsh refuses the letter as it refuses the name.
 
+**zsh's refusal is a third answer and is worded with the letter.** `set -t`
+there is `can't change option: -t` at 1 and fatally — the same sentence,
+status and fatality as `set -o singlecommand`, with the letter echoed back
+rather than the option's own name. That is not "a letter we have not built",
+which is what `Diagnostics.UnimplementedOptionLetters` says, so it has a
+table of its own: `Diagnostics.ImmovableOptionLetters`, read first, and a
+letter in both would be exactly the pairing failure this section is about.
+
+And the refusal is only of a *move*: asking for the state the option is
+already in succeeds, silently, as it does for every long name. Measured
+2026-09-10 — `set +t` in a plain zsh is 0 and says nothing, `set -t` in a zsh
+started with `-t` is 0 and says nothing, and each of them the other way round
+is the refusal. dash refuses both signs alike, because it has not got the
+letter at all, which is what says the grant hangs on the shell *having* the
+letter and not on the state alone.
+
+What is still missing there is the invocation: real zsh takes `-t`,
+`-o onecmd` and `-o singlecommand` on the command line and runs one line of a
+script, refusing only what a running script asks for. That is a route split
+inside one shell rather than a disagreement between two, and it is filed
+rather than built.
+
 ## zsh's option names
 
 zsh 5.9.2 has 185 options and 12 further spellings borrowed from sh and

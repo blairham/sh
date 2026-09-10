@@ -1275,6 +1275,24 @@ type Diagnostics struct {
 	// with the same 1 and stops the script at both.
 	SetImmovableOptionName string
 
+	// ImmovableOptionLetters are, per builtin, the option letters this shell
+	// *has* and will not move — the letter half of SetImmovableOptionName,
+	// and a third answer beside "does not have it" and "has not built it".
+	//
+	// One dialect fills it in, with the same letter its `set -o` table
+	// refuses under a name: measured, `set -t` there is `can't change
+	// option: -t` at 1 and fatally, which is the wording, status and
+	// fatality `set -o singlecommand` gets — and the letter is echoed back
+	// rather than the name it abbreviates, which is why this is a table of
+	// letters rather than a lookup through the name.
+	//
+	// Read before UnimplementedOptionLetters, because the two say different
+	// things and only one of them can be true of a letter: "we have not built
+	// it" is this implementation's confession, and this field is the shell's
+	// own refusal. A letter in both would be the paired-table failure #1709
+	// was.
+	ImmovableOptionLetters map[string]string
+
 	// SetInvalidOptionLetter is an option letter this shell does not have.
 	// Two verbs: the letter as the script spelled it, sign and all, and the
 	// letter on its own.

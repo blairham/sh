@@ -156,6 +156,15 @@ func TestAnUnquotedSubstitutionInTheNamePositionIsFieldSplit(t *testing.T) {
 			"[a b][c]\n",
 		},
 		{
+			// The containment: the program a substitution runs is not the
+			// word being measured, so a name position *inside* it splits
+			// however the word outside is being read. Without it the inner
+			// `a` is one element holding a newline and the length is 5.
+			"a length does not reach inside the program it runs",
+			`zz() { local -a a; a=(${(o)$(printf "bb\naa\n")}); print -rn -- "$a[1]"; }; echo "len=${#${$(zz)}}"`,
+			"len=2\n",
+		},
+		{
 			// The one context that does not split it. The double space is
 			// the discriminator: split-then-join would answer 9 here, which
 			// is what a single-spaced payload answers either way.

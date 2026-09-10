@@ -23,6 +23,11 @@ func hookShell(t *testing.T, style HookStyle) (Shell, *strings.Builder) {
 	var out strings.Builder
 	r := newTestRunner(nil)
 	r.Stdout, r.Stderr = &out, &out
+	// The suffix a hook's list is spelled with is the *shell's*, not the
+	// session's — a hook that fires inside `cd` reads the same list as one
+	// that fires at the prompt — so it is set here on the runner rather than
+	// in the table above. See interp.Semantics.HookListSuffix.
+	r.Semantics.HookListSuffix = "_functions"
 	return Shell{Runner: r, Out: &out, Err: &out, Name: "sh", Hooks: style}, &out
 }
 
@@ -41,14 +46,13 @@ func hooksLikeZsh() HookStyle {
 	return HookStyle{
 		BeforePrompt:  "precmd",
 		BeforeCommand: "preexec",
-		ListSuffix:    "_functions",
 		CommandLayout: syntax.Layout{
 			Indent: "\t", Nested: true, Lines: true,
 			ThenOnItsOwnLine:           true,
 			DoAfterCommandOnItsOwnLine: true,
 			DoAfterWordsOnItsOwnLine:   true,
 		},
-		Unfired: []string{"chpwd", "periodic", "zshaddhistory", "zshexit"},
+		Unfired: []string{"periodic", "zshaddhistory", "zshexit"},
 	}
 }
 
@@ -70,9 +74,10 @@ func TestAHookRunsItsOwnFunctionAndThenItsList(t *testing.T) {
 }
 
 // A hook with no list is the named function and nothing else, which is what a
-// dialect with an empty ListSuffix asks for.
+// shell with an empty HookListSuffix asks for.
 func TestAHookWithoutAListIsTheNamedFunctionAlone(t *testing.T) {
 	s, out := hookShell(t, HookStyle{BeforePrompt: "precmd"})
+	s.Runner.Semantics.HookListSuffix = ""
 	define(t, s.Runner, "precmd", `echo named`)
 	define(t, s.Runner, "one", `echo one`)
 	s.Runner.SetArray("precmd_functions", []string{"one"})
@@ -200,11 +205,11 @@ func TestAnUnfiredHookIsNamedOnce(t *testing.T) {
 		t.Errorf("a session with no such hook said %q, want nothing", got)
 	}
 
-	define(t, s.Runner, "chpwd", `echo moved`)
+	define(t, s.Runner, "zshexit", `echo leaving`)
 	s.reportUnfiredHooks()
 	s.reportUnfiredHooks()
 
-	const want = "sh: chpwd: hook not implemented yet\n"
+	const want = "sh: zshexit: hook not implemented yet\n"
 	if got := out.String(); got != want {
 		t.Errorf("the session said %q, want %q exactly once", got, want)
 	}
@@ -219,13 +224,13 @@ func TestAnUnfiredHookIsNamedOnce(t *testing.T) {
 func TestAHookRegisteredOnlyThroughItsListIsNamed(t *testing.T) {
 	s, out := hookShell(t, hooksLikeZsh())
 	s.hooks = &hookState{reported: map[string]bool{}}
-	define(t, s.Runner, "on_cd", `echo moved`)
-	s.Runner.SetArray("chpwd_functions", []string{"on_cd"})
+	define(t, s.Runner, "on_exit", `echo leaving`)
+	s.Runner.SetArray("zshexit_functions", []string{"on_exit"})
 
 	s.reportUnfiredHooks()
 
-	if got := out.String(); !strings.Contains(got, "chpwd: hook not implemented yet") {
-		t.Errorf("the session said %q, want it to name chpwd", got)
+	if got := out.String(); !strings.Contains(got, "zshexit: hook not implemented yet") {
+		t.Errorf("the session said %q, want it to name zshexit", got)
 	}
 }
 
@@ -337,13 +342,14 @@ func TestTheCommandHookDoesNotFireForALineWithNothingInIt(t *testing.T) {
 func TestASessionNamesTheHooksItWillNotFire(t *testing.T) {
 	s := newSessionWith(t, func(sh *Shell) {
 		sh.Hooks = hooksLikeZsh()
-		define(t, sh.Runner, "on_cd", `echo moved`)
-		sh.Runner.SetArray("chpwd_functions", []string{"on_cd"})
+		sh.Runner.Semantics.HookListSuffix = "_functions"
+		define(t, sh.Runner, "on_exit", `echo leaving`)
+		sh.Runner.SetArray("zshexit_functions", []string{"on_exit"})
 	})
 	s.typeLine("true\n")
 	s.end()
 
-	const want = "sh: chpwd: hook not implemented yet"
+	const want = "sh: zshexit: hook not implemented yet"
 	switch got := strings.Count(s.errs.String(), want); got {
 	case 1:
 	case 0:
@@ -423,7 +429,7 @@ func TestACommandHookThatExitsEndsTheLine(t *testing.T) {
 // the loops set, and must not take the session down over it.
 func TestAHookOnAShellWithoutItsSessionStateDoesNothing(t *testing.T) {
 	s, out := hookShell(t, hooksLikeZsh())
-	define(t, s.Runner, "chpwd", `echo moved`)
+	define(t, s.Runner, "zshexit", `echo leaving`)
 
 	s.reportUnfiredHooks()
 
@@ -753,8 +759,9 @@ func TestAPromptVariableThatExitsDrawsNoPrompt(t *testing.T) {
 // The reason to guard at all is the reason a typed line is guarded: the
 // process *is* the session, and a session open for hours must not end over a
 // hook somebody wrote for decoration. Both chains are asserted because both
-// run through the same fireChain — a guard that covered one of them would be
-// exactly the shape of bug that helper exists to prevent.
+// run through the same interp.Runner.FireChain, and the guard is what this
+// package wraps each item in on the way past — a guard that covered one of
+// them would be exactly the shape of bug that helper exists to prevent.
 func TestABugInOneHookItemCostsThatItemAlone(t *testing.T) {
 	for _, c := range []struct {
 		name  string
@@ -773,6 +780,7 @@ func TestABugInOneHookItemCostsThatItemAlone(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			var out, errs strings.Builder
 			r := newTestRunner(nil)
+			r.Semantics.HookListSuffix = "_functions"
 			r.Register("boom", func(*interp.Runner, context.Context, []string) int {
 				panic("an invariant broke")
 			})

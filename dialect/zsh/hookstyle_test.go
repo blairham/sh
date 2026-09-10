@@ -28,8 +28,20 @@ func TestTheHookNames(t *testing.T) {
 	if h.BeforeCommand != "preexec" {
 		t.Errorf("the command hook is %q, want preexec", h.BeforeCommand)
 	}
-	if h.ListSuffix != "_functions" {
-		t.Errorf("the list suffix is %q, want _functions", h.ListSuffix)
+	if suffix := zsh.Semantics().HookListSuffix; suffix != "_functions" {
+		t.Errorf("the list suffix is %q, want _functions", suffix)
+	}
+}
+
+// The hook whose site is a builtin rather than the prompt loop.
+//
+// It is on the semantics vector and not in the table above because `cd` is
+// where it fires, and `cd` is a builtin: measured, a `cd` inside a function
+// and a `cd` in a `zsh -c` script with no prompt in sight both ran it, and a
+// prompt-loop hook would have caught neither. #1775.
+func TestTheDirectoryChangeHookIsNamed(t *testing.T) {
+	if name := zsh.Semantics().DirectoryChangeHook; name != "chpwd" {
+		t.Errorf("the directory-change hook is %q, want chpwd", name)
 	}
 }
 
@@ -39,10 +51,14 @@ func TestTheHookNames(t *testing.T) {
 //
 // Each is on the same *calling convention* — the named function, then the
 // `_functions` array, measured — and on a firing site this loop does not
-// reach: `chpwd` where the directory changed, `periodic` on a timer,
-// `zshaddhistory` where a line is saved, `zshexit` on the way out.
+// reach: `periodic` on a timer, `zshaddhistory` where a line is saved,
+// `zshexit` on the way out.
+//
+// `chpwd` was the fourth until #1775 gave it its site inside `cd`. A hook that
+// fires must not also be announced as one that does not, which is what the
+// second loop below holds.
 func TestTheHooksThisShellDoesNotFireAreNamed(t *testing.T) {
-	want := map[string]bool{"chpwd": true, "periodic": true, "zshaddhistory": true, "zshexit": true}
+	want := map[string]bool{"periodic": true, "zshaddhistory": true, "zshexit": true}
 	got := map[string]bool{}
 	for _, name := range zsh.HookStyle().Unfired {
 		got[name] = true
@@ -67,25 +83,28 @@ func TestTheHooksThisShellDoesNotFireAreNamed(t *testing.T) {
 // and a CDPATH move stayed silent either way. So `-q` is hook suppression and
 // nothing besides.
 //
-// This shell fires no `chpwd`, which is why interp's cdOptions can grant the
-// letter and be done: what `-q` asks for is already true here. That reasoning
-// is only sound while the two halves stay in step, and this is what keeps
-// them there. If `chpwd` leaves this list — because it gained a firing site
-// inside `cd` — the suppression stops being free and cdOptions has to carry
-// the flag to that site. Failing here rather than silently is the difference
-// between a letter that is honored and one that is swallowed. #1558.
-func TestChpwdIsUnfiredWhichIsWhatMakesCdQuietHonest(t *testing.T) {
+// The letter was free while this shell fired no `chpwd`: what `-q` asks for
+// was already true, so cdOptions could grant it and be done. That stopped
+// being sound the day the hook gained a site (#1775), and the tripwire that
+// stood here — "chpwd is still unfired" — is now the assertion below: the
+// hook exists, and the letter suppresses it.
+//
+// Two halves and both of them named, because a letter that is accepted and
+// does nothing is exactly what #1558 was: the shell has a directory-change
+// hook, and it has the letter that turns it off.
+func TestCdQuietSuppressesTheDirectoryChangeHook(t *testing.T) {
 	if zsh.Semantics().CdHasQuietOption != interp.Yes {
 		t.Fatalf("this shell has `cd -q`; the preset says %v", zsh.Semantics().CdHasQuietOption)
 	}
+	if zsh.Semantics().DirectoryChangeHook == "" {
+		t.Fatal("`cd -q` is hook suppression and this shell names no hook to suppress")
+	}
 	for _, name := range zsh.HookStyle().Unfired {
 		if name == "chpwd" {
-			return
+			t.Error("chpwd fires from inside `cd` now, so a session must not also " +
+				"announce it as a hook it will not run")
 		}
 	}
-	t.Error("chpwd now has a firing site, so `cd -q` has something to suppress: " +
-		"interp/builtin.go's cdOptions grants the letter and does nothing with it, " +
-		"and that is only correct while this is true. Carry the flag to the new site.")
 }
 
 // The command hook's third argument is the line about to run, laid out the way

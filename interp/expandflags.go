@@ -202,8 +202,16 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 
 	// Rule 4: (P) treats the value so far as a further name, before any
 	// operator runs — `${(P)x:-def}` tests the *resolved* value.
+	// The whole group goes through with the name. `k` and `v` are the two
+	// letters a lookup answers, and baseFlags kept them out of the one that
+	// produced this name so that this one has them: measured, `${(kP)n}`
+	// with `n=tab` is the keys of `tab` and `${(kvP)n}` its pairs, where
+	// passing no group at all answered the values for both — silently, the
+	// letters having been accepted and then dropped on the way. Every other
+	// letter in the group acts on the words further down this pipeline,
+	// which is why these two are the whole of what this step can lose.
 	if strings.ContainsRune(e.Flags, 'P') {
-		words, set, isList = r.namedBase(strings.Join(words, " "), "")
+		words, set, isList = r.namedBase(strings.Join(words, " "), e.Flags)
 	}
 
 	// The is-it-set question, asked of whatever the base and `(P)` came to:
@@ -646,7 +654,7 @@ func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool
 					// second answer of its own — this path took the *values*
 					// whatever the letters said, so `${(qkv)ICE[@]}` came
 					// back one field per value, half the list, at status 0.
-					return r.namedBase(e.Name, e.Flags)
+					return r.namedBase(e.Name, baseFlags(e.Flags))
 				}
 			} else if key, kok := r.assocSubscriptKey(e, list); kok {
 				// `${(k)m[key]}` substitutes the *key* rather than what it
@@ -704,13 +712,52 @@ func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool
 			return []string{strings.Join(list, " ")}, list != nil, false
 		}
 	}
-	return r.namedBase(e.Name, e.Flags)
+	return r.namedBase(e.Name, baseFlags(e.Flags))
+}
+
+// baseFlags is the group as the lookup that produces the *base* reads it.
+//
+// `k` and `v` are answered by whichever lookup the substituted value is
+// finally taken from, and a `(P)` moves that lookup one step along: the base
+// is then only the name of the parameter the expansion is really about, and
+// the letters belong to the second lookup rather than the first. So they are
+// taken out here and passed on at the indirection instead.
+//
+// Measured on zsh 5.9.2 with `typeset -A tab=(k1 v1 k2 v2)`, an association
+// whose value is the name of another one, `typeset -A m=(a tab)`, and a
+// scalar `a=A_val` that the keys of `m` would name:
+//
+//	${(kP)m}          k1 k2   the keys of tab, not of m
+//	${(kvP)m}         k1 v1 k2 v2
+//	${(kP)m[a]}       k1 k2   a subscript is a base like any other
+//	${(kP)m[(r)tab]}  k1 k2   and so is a search
+//	${(P)m}           v1 v2   unchanged, values being what P already gave
+//
+// Reading the letters here as well took the keys of `m`, looked up `A_val`,
+// and answered that — a plausible word at status 0, which is the failure
+// this codebase minds most. Three lookups read them and all three ask this,
+// so the rule is stated once: namedBase, assocSubscriptKey and
+// assocSearchWords. See #1608.
+func baseFlags(flags string) string {
+	if !strings.ContainsRune(flags, 'P') {
+		return flags
+	}
+	return strings.Map(func(c rune) rune {
+		if c == 'k' || c == 'v' {
+			return -1
+		}
+		return c
+	}, flags)
 }
 
 // namedBase resolves a name to its words. flags matters for an associative
 // array, where `k` substitutes the keys and `kv` key and value as two
 // consecutive words each; the keys come sorted, the same deterministic order
 // `${m[@]}` already yields where the shells promise none at all.
+//
+// Callers resolving the base of an expansion pass baseFlags rather than the
+// group itself, because a `(P)` in the group means these letters are the
+// *indirection's* to answer.
 func (r *Runner) namedBase(name, flags string) (words []string, set, isList bool) {
 	switch name {
 	case "@", "*":
@@ -776,7 +823,8 @@ func (r *Runner) assocSubscriptKey(e *syntax.ParamExpr, elems []string) (string,
 	if elems == nil || !e.HasFlags {
 		return "", false
 	}
-	if !strings.ContainsRune(e.Flags, 'k') || strings.ContainsRune(e.Flags, 'v') {
+	if flags := baseFlags(e.Flags); !strings.ContainsRune(flags, 'k') ||
+		strings.ContainsRune(flags, 'v') {
 		return "", false
 	}
 	if _, isAssoc := r.assocFor(e.Name); !isAssoc {

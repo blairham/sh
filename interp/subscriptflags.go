@@ -487,8 +487,13 @@ func (r *Runner) searchAssoc(e *syntax.ParamExpr, a AssocArray, g *syntax.Subscr
 // `I`, values for `r` and `R` — which is the rule the four letters carry on
 // their own.
 func assocSearchWords(e *syntax.ParamExpr, a AssocArray, keys []string, byKey bool) []string {
-	hasK := e.HasFlags && strings.ContainsRune(e.Flags, 'k')
-	hasV := e.HasFlags && strings.ContainsRune(e.Flags, 'v')
+	// baseFlags rather than the group itself: a `(P)` makes this search the
+	// *name* the expansion is really about, and the two letters are then the
+	// indirection's to answer. Measured, `${(kP)m[(r)tab]}` is the keys of
+	// `tab` where reading `k` here answered whatever the matched key named.
+	flags := baseFlags(e.Flags)
+	hasK := e.HasFlags && strings.ContainsRune(flags, 'k')
+	hasV := e.HasFlags && strings.ContainsRune(flags, 'v')
 	out := make([]string, 0, 2*len(keys))
 	for _, k := range keys {
 		switch {

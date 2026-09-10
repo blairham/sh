@@ -12721,6 +12721,30 @@ out=$(CDPATH=./pool cd sub)
 		Why: "a winning CDPATH entry that is not `.` makes three of the four print where they went; zsh moves in silence. Captured rather than shown, because the announced path is absolute and no two runs share one",
 	},
 	{
+		ID: "cd/a-directory-change-hook", Category: "cd",
+		Snippet: `mkdir -p sub
+chpwd() { echo CHPWDMARK; }
+cd sub
+echo "st=$?"`,
+		Why: "zsh runs a function called `chpwd` once the working directory has moved, and it needs no terminal to do it — this is the whole feature in four lines. The other five have no such hook: the function is defined, the `cd` succeeds, and nothing calls it. The marker is a word nothing else in the snippet can print, so the case cannot pass by mistaking `cd`'s own output for the hook's",
+	},
+	{
+		ID: "cd/nothing-runs-when-the-cd-failed", Category: "cd",
+		Snippet: `chpwd() { echo CHPWDMARK; }
+cd nosuchdir_zz 2>/dev/null
+echo "st=$?"`,
+		Why: "the counter-case to the row above, and the one that makes it mean something: a `cd` that did not move runs no hook, in the shell that has one and in the five that do not, so every column prints the status alone. Without it a shell that called the function on every `cd` would score the first row and be wrong. The diagnostic is discarded because its wording is `cd`'s and is measured elsewhere",
+	},
+	{
+		ID: "cd/the-quiet-letter-is-what-suppresses-the-hook", Category: "cd",
+		Snippet: `mkdir -p sub
+chpwd() { echo CHPWDMARK; }
+cd -q sub
+echo "st=$?"
+case $PWD in */sub) echo moved;; *) echo stayed;; esac`,
+		Why: "`cd -q` in the one shell that has the letter is hook suppression and nothing besides — it moves, and the function that would have run does not. Both halves are in the snippet because a `-q` that suppressed by refusing to move would look identical if only the silence were checked, and reading the letter as the operand is exactly how it failed before (#1558). The five without the letter refuse it and stay put, each in its own words",
+	},
+	{
 		ID: "commands/coproc-is-one-dialect-s-keyword", Category: "commands",
 		Snippet: `coproc cat; echo hi >&"${COPROC[1]}"; read -r l <&"${COPROC[0]}"; echo "$l"`,
 		Why:     "bash runs cat in the background with the pipe's near ends in COPROC and reads its own line back; the other three have no such keyword — even zsh, whose coprocess speaks `print -p` rather than an array",

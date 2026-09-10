@@ -7019,14 +7019,16 @@ What the letter means there is hook suppression, and nothing else.
 Measured 2026-09-08: a `chpwd` function and a name in `chpwd_functions`
 both ran on a plain `cd` and neither ran on `cd -q`; `cd -q -` still
 wrote the directory at an interactive prompt, and a CDPATH move stayed
-silent with the letter and without it. So a shell that fires no `chpwd`
-has already done everything `-q` asks for, and this shell is such a
-shell — `chpwd` has no firing site and repl's `HookStyle.Unfired` names
-it and refuses it by name once per session. The letter is honored here
-rather than swallowed, and it is carried because it is a *letter*:
-without it `cd -q /tmp` went looking for a directory called `-q`, which
-is the shape a plugin manager that wraps every move in `cd -q` cannot
-survive (#1558).
+silent with the letter and without it. Measured again 2026-09-10 for
+`pushd -q` and `popd -q`, which move through `cd` and are quiet for the
+same reason.
+
+The letter is carried to the site that fires the hook rather than
+swallowed at the option loop: `cd` runs `DirectoryChangeHook` and `cd -q`
+does not. It was free while this shell had no such site, and #1775 gave
+it one. It is carried at all because it is a *letter*: without it
+`cd -q /tmp` went looking for a directory called `-q`, which is the shape
+a plugin manager that wraps every move in `cd -q` cannot survive (#1558).
 
 Asked only when a `q` is actually seen, so the five columns without the
 letter never reach the question and answer the word the way they answer
@@ -7039,6 +7041,36 @@ there while `cd -s real` moves. It is not carried and reaches the
 unknown-letter question, so `cd -s dir` is read as a directory called
 `-s` in our zsh where the real one moves. Filed as #1569 rather than
 guessed at.
+
+**`DirectoryChangeHook`** — bash — · dash — · ksh93 — · zsh `chpwd`
+
+Names the function `cd` calls once it has moved. Empty is a shell without
+one, which is three of the four: measured 2026-09-10, a `chpwd` function
+defined in bash 5.3.15, in that binary under an argv[0] of `sh`, in bash
+3.2.57, in dash and in ksh93 ran on none of their `cd`s and none of them
+said anything about it.
+
+It fires on the *move* rather than on the change — `cd` to the directory
+the shell is already in runs it — and not at all on a `cd` that failed or
+a `cd -q`. It is the last thing `cd` does, after anything `cd` itself
+printed, and it is told no arguments, with `$PWD` and `$OLDPWD` already
+set. `pushd`, `popd` and a bare directory name under `autocd` are `cd`
+here and there both, so one placement answers all of them; assigning to
+`PWD` is not a move and runs nothing. `docs/spec/hooks.md` has the whole
+table and the chain it shares with the prompt hooks. #1775.
+
+**`HookListSuffix`** — bash — · dash — · ksh93 — · zsh `_functions`
+
+What a hook's list of *extra* function names is spelled by: the hook's
+own name plus this. Not decoration — `add-zsh-hook chpwd f` defines no
+function called `chpwd`, it appends `f` to `chpwd_functions`, so a shell
+reading only the named function would find a correctly registered hook
+and run nothing (#1281).
+
+On the semantics vector rather than on `repl.HookStyle`, where it began,
+because the hook *sites* are on both sides of that line: `precmd` fires
+in a prompt loop and `chpwd` fires inside `cd`. One home for the suffix,
+one `Runner.HookChain` that applies it.
 
 **`CdWithoutHomeIsAnError`** — bash yes · dash no · ksh93 yes · zsh no
 

@@ -5,17 +5,25 @@ before every prompt, one after a line has been read and before it runs — and
 what each is told. A hook is a **function** to call in one shell and a
 **variable** of command text to evaluate in another; both are here.
 
-**Governed by:** `repl.HookStyle`, the dialect's answer and not the semantics
-vector's. It is a table of names and one layout, filled in by
-`dialect/zsh.HookStyle()` and `dialect/bash.HookStyle()` and left empty by the
-other two, which is what a dialect with no hooks is.
+**Governed by:** `repl.HookStyle` for the hooks whose site is the prompt loop —
+a table of names and one layout, filled in by `dialect/zsh.HookStyle()` and
+`dialect/bash.HookStyle()` and left empty by the other two — and by
+`interp.Semantics` for the two things a hook needs that a front end cannot
+hold: `HookListSuffix`, which every hook's list is spelled with wherever it
+fires, and `DirectoryChangeHook`, whose site is inside `cd`.
+
+The split is the sites, not the mechanism. The **chain** is one implementation
+in `interp` (`Runner.HookChain`, `Runner.FireChain`, `Runner.FireHook`) because
+`precmd` fires in a prompt loop and `chpwd` fires inside a builtin, and a
+builtin cannot reach up into `repl`. What `repl` still owns is the panic guard,
+which `interp` deliberately does not have — nothing under `interp/` recovers.
 
 Two fields, because there are two mechanisms: `BeforePrompt` names a
 **function** to call and `BeforePromptVariable` names a **variable** whose
 command text is **evaluated**. What they share is the *chain* — save `$?`, run
 each item behind the panic guard, put the status back before each and after the
-last, stop at an item that exited — and that is `repl`'s `fireChain`, written
-once and called by both.
+last, stop at an item that exited — and that is `interp.Runner.FireChain`,
+written once and called by both, and by `cd`.
 
 **Measured:** through a paced pseudo-terminal on macOS 25.5, 2026-09-07 and
 2026-09-08, one keystroke at a time, waiting on the next prompt rather than on
@@ -26,11 +34,19 @@ redirected into it, driven from a startup file that defined every hook and
 printed a marker from each. The line editor redraws a prompt on every
 keystroke, so the reading is always the *first* prompt drawn.
 
-A hook fires **per prompt**, so a non-interactive `-c` run answers zero for
+A *prompt* hook fires per prompt, so a non-interactive `-c` run answers zero for
 every shell and discriminates nothing — measured for `PROMPT_COMMAND` as well,
 in all six columns, with `-c`, with `-i -c`, and from a script file: none of
-them ran it and none of them said anything. Nothing in this entry can be
-measured by the corpus, and none of it is in the corpus.
+them ran it and none of them said anything. None of that half is in the corpus,
+because none of it can be.
+
+`chpwd` is the exception and it is in the corpus: its site is `cd`, so it fires
+with no terminal in sight, and `zsh -c 'chpwd() { echo M; }; cd sub'` prints the
+marker where the other five print nothing. Three rows —
+`cd/a-directory-change-hook`, `cd/nothing-runs-when-the-cd-failed` and
+`cd/the-quiet-letter-is-what-suppresses-the-hook`. The middle one is what makes
+the first mean anything: a shell that called the function on every `cd` would
+score the first row and be wrong.
 
 ## Which shells have them
 
@@ -42,6 +58,7 @@ The six columns, measured 2026-09-07 and 2026-09-08. `bash-as-sh` is the same
 | before every prompt | `precmd` + `precmd_functions` | `PROMPT_COMMAND` | `PROMPT_COMMAND` | `PROMPT_COMMAND` | — | — |
 | an array of them | — (a list of *names*) | each element, in order | each element, in order | element 0 alone | — | — |
 | before every command | `preexec` + `preexec_functions` | — | — | — | — | — |
+| after the directory moved | `chpwd` + `chpwd_functions` | — | — | — | — | — |
 
 Two mechanisms, not one spelling of one. zsh's hooks hold **function names**
 and call them; bash's `PROMPT_COMMAND` holds **command text** and evaluates it,
@@ -81,6 +98,12 @@ Measured, with `precmd` itself defined and
   prompt, the next prompt ran `pcB` alone and said nothing about the other two.
 - A hook that **fails** stops nothing. With the second member of a chain
   returning 3, the third still ran.
+- An **empty** element is passed over like an undefined name.
+- A **scalar** by the list's name is not a list. `chpwd_functions=a` ran
+  nothing, and `precmd_functions=a` ran nothing at the prompt either — the list
+  has to be an array. This shell reads it the same way:
+  `interp.Runner.HookChain` asks for the array of that name rather than for the
+  one-element reading a plain string would give `${x[0]}`.
 
 ## When each fires
 
@@ -220,32 +243,74 @@ a shell writes a tree back rather than what it will run: zsh puts a stray `;`
 after the `do` of a one-line loop, and breaks a subshell over three lines in
 `$3` where this printer keeps it on one.
 
+## The directory-change hook
+
+`chpwd` fires once `cd` has moved the shell. It is the one hook of the family
+whose site is a **builtin** rather than the prompt loop, and that is why it is
+`interp.Semantics.DirectoryChangeHook` and not a field on `repl.HookStyle`: a
+prompt-loop hook would miss a `cd` inside a function, a `cd` in a subshell, and
+every `cd` a `-c` script makes with no prompt in sight. Measured at a prompt,
+typing `cd /tmp` ran `zshaddhistory`, then `chpwd`, then `chpwd_functions`, and
+only then that line's `precmd`.
+
+Same chain as the prompt hooks, measured the same way: the named function
+first, then the array in order, neither deduplicated, a non-function name
+passed over in silence, a failing member stopping nothing, every member told
+the status of the command *before* the `cd`, and `exit` ending it. It is told
+**no arguments** — `$#` is 0 — and `$PWD` and `$OLDPWD` are already set when it
+runs.
+
+Measured 2026-09-10, zsh 5.9.2 with `-c`, against the five that have no such
+hook (bash 5.3.15, bash-as-sh, bash 3.2.57, ksh93, dash: a `chpwd` function ran
+on none of their `cd`s and none of them said anything):
+
+| what happened | runs it |
+| --- | --- |
+| `cd DIR` that moved | yes |
+| `cd` with no operand, to `$HOME` | yes |
+| `cd -` | yes |
+| `cd` to the directory the shell is already in | **yes** — the move, not the change |
+| `cd` that failed | no |
+| `cd -q DIR` | **no** — this is the whole of what that letter means |
+| `pushd` / `popd` | yes, once per move |
+| `pushd -q` / `popd -q` | no |
+| a bare directory name under `autocd` | yes |
+| a `cd` inside a function | yes, at the `cd` |
+| a `cd` inside a subshell or `$(…)` | yes, in there |
+| assigning to `PWD` | no |
+| shell startup | no |
+
+It runs **last**, after anything `cd` itself printed: at a prompt `cd -` wrote
+`/usr` and then the marker, and a CDPATH move wrote the directory it found and
+then the marker. A hook that itself calls `cd` fires the hook again, with no
+guard beyond the ordinary recursion limit — a pair of hooks moving back and
+forth ended with `chpwd: job table full or recursion limit exceeded`.
+
+Everything in that table follows from one placement, which is the reason to
+state it that way: `pushd`, `popd` and `autocd` are `cd` here and in zsh both,
+so putting the hook at the end of `cd` answers all of them at once. #1775.
+
 ## The hooks that are named and not fired
 
-`chpwd`, `periodic`, `zshaddhistory` and `zshexit` take the named function and
-the `_functions` array exactly as `precmd` does — measured, with the same
+`periodic`, `zshaddhistory` and `zshexit` take the named function and the
+`_functions` array exactly as `precmd` does — measured, with the same
 undefined-name-in-the-middle probe for each — so the **chain** is one mechanism
-and one implementation serves all six. Their **firing sites** are four more,
+and one implementation serves all five. Their **firing sites** are three more,
 and none of them is the prompt loop:
 
 | hook | fires | told |
 | --- | --- | --- |
-| `chpwd` | where the working directory changed | nothing |
 | `periodic` | on a timer, `$PERIOD` seconds apart | nothing |
 | `zshaddhistory` | where a line is saved | the raw line, newline included; returning non-zero rejects it |
 | `zshexit` | on the way out | nothing |
 
-Measured for `chpwd`: typing `cd /tmp` ran `zshaddhistory`, then `chpwd`, then
-`chpwd_functions`, and only then that line's `precmd` — so it belongs inside
-`cd` and not at the prompt, where it would also miss a `cd` inside a function.
-
 bash has no such list: every hook it has is `PROMPT_COMMAND` and it runs, so
 `dialect/bash.HookStyle()` names nothing as unfired. What follows is zsh's.
 
-This shell fires none of the four, and **says so by name**, once per name, the
+This shell fires none of the three, and **says so by name**, once per name, the
 first time it sees one defined:
 
-    zsh: chpwd: hook not implemented yet
+    zsh: zshexit: hook not implemented yet
 
 A hook that is registered and never called is the failure #1281 is about; one
 that is registered and never called *quietly* is the same failure one level

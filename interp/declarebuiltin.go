@@ -53,12 +53,20 @@ type declareFlags struct {
 	upper          bool
 	global         bool
 	hidden         bool
-	unique         bool
-	tie            bool
-	function       bool
-	funcNames      bool
-	remove         bool
-	print          bool
+	// hide is the sign of the last `h` letter written and hideNamed says one
+	// was written at all — the hide-in-scope attribute, which is a tri-state
+	// and not a bool: `-h` sets it, `+h` takes it off, and a declaration with
+	// neither inherits whatever the name it shadows already carried. Absent
+	// and off are different declarations, so the two cannot be one field.
+	// See hideinscope.go.
+	hide      bool
+	hideNamed bool
+	unique    bool
+	tie       bool
+	function  bool
+	funcNames bool
+	remove    bool
+	print     bool
 	// integerForced records that the *name* the command was called by is
 	// what asked for the integer attribute, so a plus form on the same line
 	// cannot take it off again. It is `integer` in ksh93, where the word
@@ -211,6 +219,15 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// *name* rather than of this assignment, so it is
 				// recorded and consulted by every later write.
 				f.unique = true
+			case 'h':
+				// Hide *in scope*: a local declaration of a name with this
+				// attribute is an ordinary parameter rather than the special
+				// one it is spelled like, and the tie the name is half of
+				// goes on without it. Recorded with its sign because `+h`
+				// takes off an attribute an outer declaration set, which is
+				// the one spelling that changes an answer — see
+				// hideinscope.go.
+				f.hide, f.hideNamed = !f.remove, true
 			case 'H':
 				// Hide the value from listings. The name is declared, holds
 				// what it holds and reads back exactly as it would without
@@ -485,6 +502,9 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			}
 			r.shadowedExport(name, wasExported)
 		}
+		// After the shadow, which is what lets the scope put back the outer
+		// name's attribute rather than the one this line just gave it.
+		r.setHideInScope(name, f)
 		r.markDeclaredCompound(name, f)
 		if f.readonly && f.readonlyOff {
 			if code := r.removeReadonly(name, hasValue); code != 0 {
@@ -1848,6 +1868,15 @@ func (r *Runner) shadow(name string) (fresh bool) {
 		}
 		sc.savedReadonly[name] = r.readonly[name]
 		delete(r.readonly, name)
+		// And the hide-in-scope attribute, for the same reason and with the
+		// same two jobs: the outer name gets back what it carried, and an
+		// attribute this call added or removed goes away with the call.
+		// Recorded whether or not there was one, so absent means this scope
+		// never shadowed the name — see scope.savedHideInScope.
+		if sc.savedHideInScope == nil {
+			sc.savedHideInScope = map[string]bool{}
+		}
+		sc.savedHideInScope[name] = r.hideInScope[name]
 	}
 	// Arrays live in a table of their own, so a name has to be saved from
 	// both. Saving only the scalar left `f() { local a; a=(x y); }` writing a

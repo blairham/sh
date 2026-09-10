@@ -1261,6 +1261,10 @@ func (r *Runner) clearAttributes(name string) {
 	delete(r.uppered, name)
 	delete(r.hidden, name)
 	delete(r.unique, name)
+	// Measured: `typeset -h PATH; unset PATH; PATH=/y` leaves a later
+	// `local PATH` tied to `path` again, so the letter does not survive the
+	// name it was written about — see hideinscope.go.
+	delete(r.hideInScope, name)
 	// Runner.declaredEmpty is deliberately *not* cleared here. It looked like
 	// one of these and is not: nothing can observe it for a removed name.
 	// hiddenExports is its only reader and it walks the exported set, which
@@ -3062,6 +3066,10 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			return r.status
 		}
 		r.shadowedExport(name, wasExported)
+		// After the shadow, for the reason biDeclare gives: the scope has
+		// just saved the outer name's attribute and this is what may change
+		// it. See hideinscope.go.
+		r.setHideInScope(name, f)
 		// After the shadow, the same order `typeset -A` keeps: the caller's
 		// absence comes back when the function returns. Through the shared
 		// mark rather than an `if` of its own, because the copy that stood

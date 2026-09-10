@@ -91,6 +91,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.uppered = maps.Clone(r.uppered)
 	c.hidden = maps.Clone(r.hidden)
 	c.unique = maps.Clone(r.unique)
+	c.hideInScope = maps.Clone(r.hideInScope)
 	c.tied = maps.Clone(r.tied)
 	// freezing and declaring are the two that are only ever *replaced* as a
 	// whole, which makes sharing them harmless today and makes cloning them

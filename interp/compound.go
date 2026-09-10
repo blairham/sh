@@ -750,6 +750,20 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 			delete(r.readonly, name)
 		}
 	}
+	// And the hide-in-scope attribute, which goes both ways for the reason
+	// the frozen one does: a name the declaration shadowed carries again
+	// whatever it carried, and one this call hid — or un-hid with `+h` — is
+	// back to the outer answer. See hideinscope.go.
+	for name, was := range sc.savedHideInScope {
+		if was {
+			if r.hideInScope == nil {
+				r.hideInScope = map[string]bool{}
+			}
+			r.hideInScope[name] = true
+		} else {
+			delete(r.hideInScope, name)
+		}
+	}
 	// And the export attribute, where the dialect took it off for the local:
 	// the outer name goes back to whatever the shell had recorded about it,
 	// including having recorded nothing.

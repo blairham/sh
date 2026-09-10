@@ -1271,7 +1271,22 @@ func scalarElemAt(v string, n, base int) (string, bool) {
 // would be wrong however short it is.
 func (r *Runner) subscriptTarget(e *syntax.ParamExpr) (elems []string, scalar, ok bool) {
 	if e.Name == "@" || e.Name == "*" {
-		return r.Params, false, true
+		// Copied, because the caller is allowed to write into what it gets
+		// back and this is the runner's own storage. Every other source here
+		// already hands out fresh storage — a named array through readArray,
+		// an association through keys/values, a scalar through a one-element
+		// literal — and the *unsubscripted* positional parameters through
+		// namedBase, which writes this same copy. The subscripted spelling
+		// was the one that aliased.
+		//
+		// A subscript is not a read-only path to the values: a range comes
+		// back as `units[first : last+1]`, a subslice over the same backing
+		// array, and the expansion-flag pass then applies rules 12 to 14 one
+		// element at a time in place. So `${(q)@[1,-1]}` quoted the
+		// parameters *themselves*, and the next read of `$@` quoted what the
+		// previous read had already quoted — a level of backslashes added per
+		// round trip rather than one taken away, which is #1622.
+		return append([]string(nil), r.Params...), false, true
 	}
 	if _, isArray := r.Arrays[e.Name]; isArray {
 		elems, ok = r.arrayElems(e.Name)

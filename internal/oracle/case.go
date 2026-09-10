@@ -7100,6 +7100,21 @@ echo "st=$?"`,
 		Why:     "the q family is one flag repeated, and each repetition is a different quoting: backslashes, single quotes, double quotes, then $'…'. Repetition is what selects it, which is exactly what bash's @ family refuses",
 	},
 	{
+		ID: "param/a-flag-group-on-a-positional-range-does-not-write-back", Category: "parameter expansion",
+		Snippet: `set -- 'a b'; printf "[%s]" "${(q)@[1,-1]}" "${(q)@[1,-1]}"; printf "[%s]" "$1"; echo`,
+		Why:     "reading the positional parameters is a read: the same expansion twice says the same thing, and the parameter behind it is still what `set --` was given. Read once it cannot be graded at all — one added level of quoting and one removed level look alike after a single trip — so the second read is what makes the row discriminating, and the bare `$1` at the end is what says which of the two the shell did",
+	},
+	{
+		ID: "param/a-case-flag-on-a-positional-range-does-not-write-back", Category: "parameter expansion",
+		Snippet: `set -- 'a b'; printf "[%s]" "${(U)@[@]}" "${(U)@[@]}"; printf "[%s]" "$1"; echo`,
+		Why:     "the same question asked with a flag that does not quote, which is what separates a quoting bug from an aliasing one: a case conversion has no round trip to get wrong, so a shell whose second column is `A B` and whose `$1` is `A B` is writing the transformed words back into the parameters rather than mis-counting backslashes. The whole-array subscript is written here and the range in the row above so the two spellings are graded apart",
+	},
+	{
+		ID: "param/quoting-the-positional-parameters-round-trips", Category: "parameter expansion",
+		Snippet: `set -- x 'a b' 'c d'; for i in 1 2 3; do seen="${(j: :)${(q)@[2,-1]}}"; p="${(j: :)${(q)@[2,-1]}}"; set -- head "${(@Q)${(@z)p}}"; done; printf "[%s]" "$@"; echo`,
+		Why:     "the shape a plugin manager writes once per item in a `for` list — quote the rest of the parameters into one string, hand it away, split it back with the shell-word split and the unquoting flag, and `set --` the result. Three trips rather than one, because the failure this pins is a level of quoting added per trip rather than removed, and a fixed point is only visible from the second trip on. `seen` is the second read and is not spare: the `set --` overwrites the parameters whatever the read did to them, so a trip that reads once cannot show a read writing back at all — the manager reads once per registered extension, and one that declines hands nothing back to undo it",
+	},
+	{
 		ID: "param/minimal-quoting-quotes-only-what-needs-it", Category: "parameter expansion",
 		Snippet: `x="a b"; y=plain; printf "[%s]" "${(q)x}" "${(q-)x}" "${(q)y}" "${(q-)y}"; echo`,
 		Why:     "`q-` is the `q` family's modifier rather than a fifth repetition, and the pair of values is what says so: the value that needs quoting comes back in single quotes where plain `q` writes a backslash, and the value that needs none comes back as itself where every other member of the family quotes it anyway. One value alone cannot separate the two readings — a flag that always quoted passes the first column and a flag that never did passes the second",

@@ -75,6 +75,34 @@ echo "after=[$n]"`
 	}
 }
 
+// And the third route: an operand that names an *element*. The attributes are
+// the base array's — that is what the declaration is about — so they belong to
+// the local the same way, and the letter reaching the caller's array is read
+// two assignments later. Its own declaration loop again, so its own row.
+func TestAnElementDeclarationsAttributesAreTheLocalsToo(t *testing.T) {
+	src := `a=(x y)
+f() { typeset -i a[0]=3+4; echo "in=[${a[0]}]"; }
+f
+echo "after=[${a[*]}]"
+a=(1+1 2)
+echo "later=[${a[0]}]"`
+	// The two axes a subscripted operand runs into, on the answers that let
+	// it reach this question at all — the dialect that refuses the operand
+	// never gets here, and the one with no scope to take has nothing to put
+	// back. See Semantics.SubscriptedOperandTakesALocalDeclaration.
+	out, errs, st := declRun(t, src, func(sem *Semantics) {
+		withAttributeLetters(sem)
+		sem.TypesetTakesASubscript = Yes
+		sem.SubscriptedOperandTakesALocalDeclaration = Yes
+		sem.SubscriptedOperandTakesTheIntegerAttribute = Yes
+		sem.CompoundElementsGoThroughTheAttribute = Yes
+	}, Diagnostics{})
+	const want = "in=[7]\nafter=[x y]\nlater=[1+1]\n"
+	if out != want || errs != "" || st != 0 {
+		t.Errorf("= %q (stderr %q, status %d), want %q", out, errs, st, want)
+	}
+}
+
 // The case letters, which are the same rule read through a fold rather than
 // through arithmetic — and the pair that says the *value* was safe too: a
 // leaked `-l` folded what the caller was holding on the way back out.

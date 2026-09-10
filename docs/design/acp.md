@@ -850,16 +850,31 @@ is `@zed-industries/claude-code-acp` at 0.16.2. They are not the same
 artifact on a later version number, and a claim carried over from one to
 the other has not been measured.
 
-**`session/resume` and `session/fork` are not re-measured, deliberately.**
-The obvious probe — open a session, then ask to resume it — answers
-`-32603` from both agents, and both say why in `data.details`: Codex
-reports "no rollout found for thread id …". That is a session which was
-never persisted, so the probe is measuring a condition of its own making
-and cannot tell "this agent does not implement resume" from "there was
-nothing to resume". A probe that would settle it prompts the session,
-lets it persist, and resumes it from a *second* process. Until that is
-run, the registry's rows stand and this document says only that ours did
-not test what it looked like it was testing.
+**`session/resume` and `session/fork` are measured now, and the first
+probe was wrong about both.** Opening a session and immediately asking to
+resume it answers `-32603` from both agents, and both say why in
+`data.details` — Codex reports "no rollout found for thread id …". That
+is a session which was never persisted, so the probe could not tell "this
+agent does not implement resume" from "there was nothing to resume", and
+recording it would have been a fact about the probe.
+
+Run the way it has to be run — open a session, **run a real turn so it
+persists**, close the process, and reach the session from a *second* one:
+
+| method | Claude Code 0.16.2 | Codex 1.11.0 |
+| --- | --- | --- |
+| `session/load` | ok | ok |
+| `session/resume` | ok | ok |
+| `session/fork` | ok | ok |
+| `session/list` | ok | ok |
+
+All four, on both agents. Which retires an example rather than only a
+row: the fourth lesson below tells a client author that "an advertised
+capability is not a working method", and cites Claude advertising
+`sessionFork` and answering `-32603`. That does not reproduce on 0.16.2.
+The lesson is still sound — Gemini's `-32601` for every optional method
+is the same shape — but the Claude half of its evidence is historical and
+is marked as such there.
 
 Gemini CLI is still unmeasured and #729 is still the reason: this machine
 has a `~/.gemini` with no credential in it. That is worth stating plainly
@@ -882,9 +897,19 @@ from the specification alone:
    for an editor it is a whole subsystem: it is the one place where
    being a shell makes us a *better* ACP client than the tools this
    protocol was written for.
-3. **An advertised capability is not a working method.** Claude Agent
-   advertises `sessionFork` and answers `-32603` to it. A client must
+3. **An advertised capability is not a working method.** A client must
    degrade on the *answer*, not only on the advertisement.
+
+   The example this rule was written from is **historical**: Claude Agent
+   0.75.x advertised `sessionFork` and answered `-32603`. Re-measured
+   2026-09-10, `@zed-industries/claude-code-acp` 0.16.2 advertises it and
+   *works*, as do `load`, `resume` and `list`, on both agents. The rule
+   stands on Gemini's `-32601` for every optional method and on the
+   general point; it no longer stands on this. Kept rather than deleted
+   because a client written to trust advertisements would still be wrong
+   the first time an agent regresses — and because a rule whose only
+   example has quietly stopped reproducing is exactly the kind of thing
+   this document is supposed to notice about itself.
 4. **`-32601` is a fact, not a failure.** Gemini answers it for every
    optional method. A client must treat method-not-found as "this agent
    does not do that" and carry on.

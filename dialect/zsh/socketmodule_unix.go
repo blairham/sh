@@ -94,7 +94,7 @@ func zsocketOptions(r *interp.Runner, args []string) (opts zsocketOpts, rest []s
 			case 'v':
 				opts.verbose = true
 			case 'd':
-				value, ok := zsocketLetterValue(word, &rest, i)
+				value, ok := systemLetterValue(word, &rest, i)
 				fd, err := strconv.Atoi(value)
 				if !ok || err != nil || fd <= 0 {
 					// Zero is refused with the rest, measured: `zsocket -l -d
@@ -115,18 +115,6 @@ func zsocketOptions(r *interp.Runner, args []string) (opts zsocketOpts, rest []s
 	return opts, rest, 0
 }
 
-func zsocketLetterValue(word string, rest *[]string, i int) (string, bool) {
-	if i+1 < len(word) {
-		return word[i+1:], true
-	}
-	if len(*rest) == 0 {
-		return "", false
-	}
-	value := (*rest)[0]
-	*rest = (*rest)[1:]
-	return value, true
-}
-
 // zsocketConnect is the plain form: open a connection to a socket somebody
 // else is listening on.
 func zsocketConnect(r *interp.Runner, opts zsocketOpts, path string) int {
@@ -134,7 +122,7 @@ func zsocketConnect(r *interp.Runner, opts zsocketOpts, path string) int {
 		return syscall.Connect(fd, addr)
 	})
 	if err != nil {
-		r.Diagnosef("connection failed: %s\n", zsocketReason(err))
+		r.Diagnosef("connection failed: %s\n", sysErrnoText(err))
 		return 1
 	}
 	return zsocketPublish(r, opts, f, path+" is now on fd")
@@ -156,7 +144,7 @@ func zsocketListen(r *interp.Runner, opts zsocketOpts, path string) int {
 		return syscall.Listen(fd, zsocketBacklog)
 	})
 	if err != nil {
-		r.Diagnosef("could not bind to %s: %s\n", path, zsocketReason(err))
+		r.Diagnosef("could not bind to %s: %s\n", path, sysErrnoText(err))
 		return 1
 	}
 	return zsocketPublish(r, opts, f, path+" listener is on fd")
@@ -196,7 +184,7 @@ func zsocketAccept(r *interp.Runner, opts zsocketOpts, arg string) int {
 		// comes back, so a listener left over from `-l` is the same listener
 		// afterwards and a later `zsocket -a` without `-t` still waits.
 		if err := syscall.SetNonblock(sys, true); err != nil {
-			r.Diagnosef("could not accept connection: %s\n", zsocketReason(err))
+			r.Diagnosef("could not accept connection: %s\n", sysErrnoText(err))
 			return 1
 		}
 		defer func() { _ = syscall.SetNonblock(sys, false) }()
@@ -206,7 +194,7 @@ func zsocketAccept(r *interp.Runner, opts zsocketOpts, arg string) int {
 		if opts.nowait && zsocketWouldBlock(err) {
 			return 1
 		}
-		r.Diagnosef("could not accept connection: %s\n", zsocketReason(err))
+		r.Diagnosef("could not accept connection: %s\n", sysErrnoText(err))
 		return 1
 	}
 	syscall.CloseOnExec(taken)
@@ -293,15 +281,4 @@ func zsocketPublish(r *interp.Runner, opts zsocketOpts, f *os.File, said string)
 		_, _ = fmt.Fprintf(r.Out(), "%s %d\n", said, fd)
 	}
 	return 0
-}
-
-// zsocketReason is the system's own sentence for a failure, without the
-// operation and address the standard library wraps round it — the wording each
-// form uses already says what was being done.
-func zsocketReason(err error) string {
-	var errno syscall.Errno
-	if errors.As(err, &errno) {
-		return errno.Error()
-	}
-	return err.Error()
 }

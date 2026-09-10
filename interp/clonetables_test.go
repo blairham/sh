@@ -54,6 +54,7 @@ func seedTables(r *Runner) {
 	r.declaring = map[string]bool{"seed": true}
 	r.disabledBuiltins = map[string]bool{"seed": true}
 	r.execFds = map[int]bool{7: true}
+	r.cloexecFds = map[int]bool{8: true}
 	r.exported = map[string]bool{"seed": true}
 	r.exportedFuncs = map[string]bool{"seed": true}
 	r.extraOptions = map[string]bool{"seed": true}

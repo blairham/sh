@@ -112,6 +112,9 @@ func (c *Runner) ownTables(r *Runner) {
 	// it travels with fds or it describes the wrong table.
 	c.fds = maps.Clone(r.fds)
 	c.execFds = maps.Clone(r.execFds)
+	// And on the same terms, for the same reason: a subshell's `sysopen -o
+	// cloexec` must not decide what the parent hands to a child.
+	c.cloexecFds = maps.Clone(r.cloexecFds)
 
 	c.completions = maps.Clone(r.completions)
 

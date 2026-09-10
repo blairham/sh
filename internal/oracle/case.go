@@ -13551,6 +13551,71 @@ echo "read=[$l]"`,
 		Snippet: `zmodload zsh/net/socket; zsocket nope; echo "st=$?"; zsocket; echo "none=$?"`,
 		Why:     "the kernel's own sentence for a path with no listener and the builtin's for no argument at all — the two refusals a caller can act on, and the first is the one a prompt segment asking a daemon over its socket gets on every machine the daemon is not installed on. The backlog is deliberately not probed here: a connection to a full one is refused on this operating system and *blocks* on Linux, so a case counting how many a listener holds would hang half the machines the corpus runs on",
 	},
+	// `zsh/system`'s three byte-moving builtins (#1737). What is recorded is
+	// what each call *opened, read or wrote*, never the status on its own:
+	// this is the module whose failure was a `zmodload` answering 0 with
+	// nothing behind it, and every one of these commands can answer 0 while
+	// having done the wrong thing.
+	{
+		ID: "system/the-line-a-prompt-worker-starts-with", Category: "builtins",
+		Snippet: `zmodload zsh/system; sysopen -r -o cloexec -u fd <(print -n one; print -n two) || { echo failed; return; }; echo "open=$? high=$(( fd > 2 ))"; sysread -i $fd buf; echo "read=$? buf=[$buf]"`,
+		Why:     "a process substitution opened for reading on an allocated descriptor and read back, which is `internal/worker.zsh:192` with the bytes checked. The `|| return` is written here because it is written there: it is what turned a missing `sysopen` into a prompt theme whose asynchronous worker never started, and it is why the two halves — the open and the bytes — have to be one case",
+	},
+	{
+		ID: "system/close-on-exec-and-the-descriptor-beside-it", Category: "builtins",
+		Snippet: `zmodload zsh/system; sysopen -w -o creat,trunc,cloexec -u 7 kept; sysopen -w -o creat,trunc -u 8 given; sh -c "echo x >&7" 2>/dev/null; echo "cloexec=$?"; sh -c "echo y >&8" 2>/dev/null; echo "plain=$?"; exec 7>&- 8>&-; echo "kept=[$(cat kept)] given=[$(cat given)]"`,
+		Why:     "the flag and its absence in one case, because either half alone passes on a shell that has the other direction wrong — a descriptor no child can reach looks like a working `cloexec` and like a broken descriptor table at once. Both numbers are named rather than allocated so the child can be told which to write to without the row depending on where a shell's allocator starts, and the files at the end are what a failed child cannot fake",
+	},
+	{
+		ID: "system/the-direction-letters-and-what-they-open", Category: "builtins",
+		Snippet: `zmodload zsh/system; printf abcdef > f; sysopen -u ro f; read -u $ro l; echo "ro=$? [$l]"; sysopen -w -u wo f; read -u $wo l; echo "wo-read=$?"; sysopen -a -u ap f; print -n -u $ap XY; exec {ap}>&-; echo "file=[$(cat f)]"`,
+		Why:     "no letter at all is read-only, `-w` cannot be read from, and `-a` writes at the end — three answers a shell that opened everything read-write would report 0 for. The file at the end is the half that catches an `-a` implemented as a plain write",
+	},
+	{
+		ID: "system/writing-does-not-truncate-until-asked", Category: "builtins",
+		Snippet: `zmodload zsh/system; printf abcdef > f; sysopen -w -u a f; exec {a}>&-; echo "plain=[$(cat f)]"; sysopen -w -o trunc -u b f; exec {b}>&-; echo "trunc=[$(cat f)]"`,
+		Why:     "the one thing a shell reaching for `>` gets wrong, and it is silent both ways: status 0 and the caller's file emptied. `-o trunc` is the flag that empties it, and a prompt theme writes `-o creat,trunc` precisely because `-w` alone does not",
+	},
+	{
+		ID: "system/the-exclusive-flag-brings-creation-with-it", Category: "builtins",
+		Snippet: `zmodload zsh/system; sysopen -w -o excl -u a lock; echo "first=$?"; sysopen -w -o excl -u b lock; echo "second=$?"; sysopen -r -o bogus -u c lock; echo "unsupported=$?"`,
+		Why:     "`-o excl` on its own *creates* the file and then refuses it, which is not what the name says and is what makes it usable as a lock — O_EXCL without O_CREAT is ignored by the system, so a shell passing the one flag through opens the existing file at status 0 and a guard written this way claims a lock somebody holds. The third line is what a name outside the list gets",
+	},
+	{
+		ID: "system/what-sysopen-refuses", Category: "builtins",
+		Snippet: `zmodload zsh/system; sysopen; echo "none=$?"; sysopen f g; echo "two=$?"; printf x > f; sysopen f; echo "unnamed=$?"; sysopen -u v /no/such; echo "missing=$?"; sysopen -q -u v f; echo "letter=$?"`,
+		Why:     "five refusals in the order the builtin reaches them, and the order is the answer: `sysopen -o bogus` with no file is `not enough arguments` rather than `unsupported option`, because a command with nothing to open never got to the flags. `file descriptor not specified` is the one that names neither a letter nor an operand, since neither is wrong",
+	},
+	{
+		ID: "system/the-five-statuses-of-one-read", Category: "builtins",
+		Snippet: `zmodload zsh/system; sysopen -r -u fd <(sleep 3); sysread -t 0 -i $fd a; echo "waiting=$?"; sysopen -r -u e <(:); sysread -t 5 -i $e b; echo "end=$?"; sysread -i 99 c; echo "nofd=$?"; print -n hi | { sysread -o 99 d; }; echo "copy=$?"; sysread -s x g; echo "usage=$?"`,
+		Why:     "`sysread` says what happened in its status and nowhere else, and all five values are here: a prompt theme's receive loop reads on quietly for the 4 and gives its worker up for anything else, so a shell that collapsed the timeout into the end of input would stop that worker on its first idle turn. Both waits are bounded — a row that waited for something that never came would hang the run rather than fail it",
+	},
+	{
+		ID: "system/one-read-rather-than-a-line", Category: "builtins",
+		Snippet: `zmodload zsh/system; printf "one\ntwo\n" > f; sysopen -r -u fd f; sysread -s 3 -c n -i $fd a; echo "first=[$a] n=$n"; sysread -i $fd b; echo "rest=[$b]"; print -n hello | { sysread -c m -o 1 buf; echo "|div=$? m=$m buf=[$buf] REPLY=[$REPLY]"; }`,
+		Why:     "what separates this from `read`: one call, bounded by `-s`, a short read counted as a success, no splitting, and the newline left where it was for the next call to find. The last third is `-o`, which **diverts rather than duplicates** — the bytes go to the descriptor and the parameter is left unset, which is the one thing a reading of the manual gets backwards",
+	},
+	{
+		ID: "system/every-byte-written-and-a-silent-refusal", Category: "builtins",
+		Snippet: `zmodload zsh/system; sysopen -w -o creat,trunc -u fd f; syswrite -c n -o $fd $'a\nb\n'; echo "wrote=$? n=$n"; exec {fd}>&-; echo "file=[$(cat f)]"; syswrite -o 99 gone; echo "refused=$?"; syswrite; echo "none=$?"; syswrite a b; echo "two=$?"`,
+		Why:     "the bytes reach the file and are counted, and a descriptor that refuses is a status with **nothing said** — which is what lets `while syswrite $'\\x05'; do …; done` end quietly when the far side goes instead of printing once per turn. The two usage refusals do speak, so the silence is about the write and not about the builtin",
+	},
+	{
+		ID: "system/where-the-descriptor-number-is-put", Category: "builtins",
+		Snippet: `zmodload zsh/system; printf hello > f; sysopen -r -u named f; sysread -i $named a; echo "named=[$a]"; typeset -A h; sysopen -r -u "h[k]" f; sysread -i $h[k] b; echo "keyed=[$b]"; sysopen -r -u 7 f; sysread -i 7 c; echo "numbered=[$c]"; sysopen -r -u "bad name" f; echo "badname=$?"`,
+		Why:     "`-u` in its three shapes — a name, an association key, a number — each proved by reading the file back through what it left behind rather than by the status. The keyed form is why this resolves the name the way `exec {h[k]}<file` does rather than assigning a variable of its own",
+	},
+	{
+		ID: "system/the-mode-a-created-file-gets", Category: "builtins",
+		Snippet: `zmodload zsh/system; umask 022; sysopen -w -o creat -m 604 -u a odd; sysopen -w -o creat -u b plain; zmodload zsh/stat; zstat -s +mode -- odd; zstat -s +mode -- plain; sysopen -w -o creat -m zz -u c bad; echo "invalid=$?"`,
+		Why:     "0604 rather than a rounder number on purpose: no ordinary umask produces those bits, so a shell that ignored `-m` and took the default cannot land on it by accident — and the default is here beside it, which is what says the 0666 the umask then trims is the right default rather than a number chosen to look plausible. The umask is set so the row reads the same on every machine",
+	},
+	{
+		ID: "system/the-three-builtins-this-shell-has-not-got", Category: "builtins",
+		Snippet: `zmodload zsh/system; echo "plain=$?"; zmodload -F zsh/system b:sysopen b:sysread b:syswrite; echo "have=$?"; zmodload -F zsh/system b:zsystem; echo "zsystem=$?"; zmodload -F zsh/system b:sysseek b:syserror; echo "rest=$?"`,
+		Why:     "**this row records a difference rather than reproducing it.** `zsystem`, `sysseek` and `syserror` are not implemented here, so the `-F` line naming one refuses by that name where zsh answers 0 — which is the whole of what a narrow module owes a caller, and is the opposite of the failure this module was filed for. The plain load is 0 in both, because nothing in that line said which feature the script wanted. It flips to agreement the day the three land",
+	},
 	// `zparseopts` and `zformat`, the two of `zsh/zutil`'s other three
 	// builtins that can be learned by running the real one (#1058). What is
 	// recorded is the part a caller reads by index and the part that decides

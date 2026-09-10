@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"sync"
 
 	"github.com/blairham/sh/syntax"
@@ -524,6 +525,27 @@ func (r *Runner) WriterForFd(fd int) (io.Writer, bool) {
 	return nil, false
 }
 
+// ReaderForFd is the reading half of [Runner.WriterForFd]: the stream a
+// builtin reading "from descriptor n" needs, the named one by its number and
+// anything past the three from the shell's own table.
+//
+// A builtin that took [Runner.SystemDescriptor] and read the number itself
+// would be doing something subtly different and worse. The runtime may hold a
+// pipe or a fifo non-blocking behind its own poller, so a bare read on the
+// number can come back EAGAIN where a read on the stream would have waited —
+// which would turn `sysread` on a process substitution into a builtin that
+// failed at random. The stream knows; the number does not.
+func (r *Runner) ReaderForFd(fd int) (io.Reader, bool) {
+	if fd == 0 {
+		return r.stdin(), true
+	}
+	if v, held := r.fds[fd]; held {
+		in, ok := v.(io.Reader)
+		return in, ok
+	}
+	return nil, false
+}
+
 // SystemDescriptor is the *operating system's* descriptor for one of this
 // shell's, and whether the thing open at that number really is one.
 //
@@ -627,6 +649,47 @@ func (r *Runner) OpenDescriptor(f *os.File) int {
 // SetDescriptor puts a file at one of this shell's descriptor numbers. See
 // [Runner.OpenDescriptor], which chooses the number instead.
 func (r *Runner) SetDescriptor(fd int, f *os.File) { r.setFd(fd, f) }
+
+// KeepDescriptorFromChildren marks a descriptor already in the table as one
+// that must **not** reach what this shell runs, which is what close-on-exec
+// means to a script that asked for it by name.
+//
+// A mark rather than a different kind of table entry, because the descriptor
+// is the script's in every other respect: it is written through, read from,
+// closed with `exec {n}>&-` and renumbered like any other, and the one thing
+// that differs is what an external command inherits. See childFiles, which is
+// the only reader, and dropExecOpened beside it, which nils entries for a
+// neighbouring reason.
+//
+// It has to be a mark this package keeps rather than a flag on the open,
+// because Go opens every file close-on-exec already: the kernel's answer is
+// the same either way and the shell's table is what decides, since childFiles
+// rebuilds the boundary by hand. So a builtin that passed O_CLOEXEC through
+// and stopped there would have registered the letter and changed nothing —
+// the descriptor would still be handed to the child by number.
+//
+// The mark comes off whenever the number is written again, because setFd is
+// the one way a number acquires a new file and a new file was not the one
+// marked. A number that is merely *closed* keeps a stale mark, which decides
+// nothing: childFiles only reads the mark for a number the table still holds
+// an [os.File] at.
+func (r *Runner) KeepDescriptorFromChildren(fd int) {
+	if r.cloexecFds == nil {
+		r.cloexecFds = map[int]bool{}
+	}
+	r.cloexecFds[fd] = true
+}
+
+// SetDescriptorVariable puts a descriptor number in the variable a builtin was
+// given the name of, by the route `exec {fd}<file` already takes.
+//
+// `sysopen -u fd file` and `exec {fd}<file` are the same act spelled twice, so
+// they resolve the name the same way: a plain identifier, an array element, an
+// association key. A builtin doing its own [Runner.SetVar] would answer the
+// first and quietly invent a variable literally named `h[k]` for the third.
+func (r *Runner) SetDescriptorVariable(ref string, fd int) {
+	r.setFdVar(ref, strconv.Itoa(fd))
+}
 
 // NamedOption reads one `set -o` name's current state, for a registered
 // builtin that presents the same state under its own names — a listing has to

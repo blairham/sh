@@ -928,6 +928,10 @@ func (r *Runner) setFd(fd int, v any) {
 		r.fds = map[int]any{}
 	}
 	r.fds[fd] = v
+	// A number written again is a different descriptor, and a close-on-exec
+	// mark is about the one that was there. See
+	// Runner.KeepDescriptorFromChildren, which puts it on after this.
+	delete(r.cloexecFds, fd)
 }
 
 // builtinWriteStatus folds a failed output write into a builtin's status.

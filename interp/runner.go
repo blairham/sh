@@ -973,6 +973,11 @@ type Runner struct {
 	// that command — see ExecOpenedFdReachesACommand, which is the only
 	// reader.
 	execFds map[int]bool
+	// cloexecFds are the numbers in that table a builtin has marked as not
+	// reaching what this shell runs — `sysopen -o cloexec` and nothing else
+	// so far. See Runner.KeepDescriptorFromChildren, which is the only
+	// writer, and childFiles, which is the only reader.
+	cloexecFds map[int]bool
 	// redirFds are the numbers beyond the named streams that the command
 	// being set up has just written, in the order it wrote them. The caller
 	// reads it once, to learn what to mark when a command's redirections

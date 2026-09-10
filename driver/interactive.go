@@ -75,7 +75,7 @@ func (sh Shell) session(argv []string, in source) int {
 	// — and a prompt has one by definition on every route but `-i` with
 	// nothing to read, which is why the question is still asked rather than
 	// assumed. One member of the panel does not need one at all.
-	r.SetInteractiveMonitor(sh.hasTerminal())
+	r.SetInteractiveMonitor()
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code

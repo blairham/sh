@@ -724,11 +724,31 @@ func (r *Runner) setRefusalStatus(why string) bool {
 		r.setRefusalOwed = true
 		return true
 	}
+	r.endOnSetRefusal(status, why)
+	return false
+}
+
+// endOnSetRefusal ends the script where a refused `set` option ends one, and
+// is the whole of where that is decided.
+//
+// Nothing to end where the request did not come from `set`. Measured in
+// zsh 5.9.2, the dialect that ends a script over this at all: on a pipe,
+// `set -m; print st=$?; print DONE` writes `zsh:set:1: can't change option:
+// -m` and neither `print` runs, while `setopt monitor; print st=$?; print
+// DONE` writes `zsh:setopt:1: can't change option: monitor` and then `st=1`
+// and `DONE`, leaving at 0. Same option, same sentence, same status on the
+// builtin — so the difference is which builtin asked, and `set` is one of the
+// special ones the standard makes fatal on error while a dialect's own option
+// builtin is an ordinary one. The environment's list is the third route and
+// is not `set` either; it says so already, in ApplyInheritedShellOptions.
+func (r *Runner) endOnSetRefusal(status int, why string) {
+	if r.outsideSetBuiltin {
+		return
+	}
 	if r.ask(r.sem().BadSetOptionNameFatal, why) {
 		r.status = status
 		r.fatalQuiet()
 	}
-	return false
 }
 
 // reportsEveryBadSetOption is the axis, read only where `set` itself is

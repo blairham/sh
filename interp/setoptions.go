@@ -336,15 +336,16 @@ func (r *Runner) PosixMode() bool { return r.posixMode }
 // off, so a shell that routed one through the other would answer the second
 // with the first's answer.
 //
-// hasTerminal is the front end's to establish: interp is a library and has no
-// standing to ask the process what it was handed. Whether the answer matters
-// is the dialect's — Semantics.InteractiveMonitorNeedsATerminal — and one
-// member of the panel says it does not.
+// Whether a terminal is needed is the dialect's —
+// Semantics.InteractiveMonitorNeedsATerminal — and one member of the panel
+// says it is not; whether there *is* one is Runner.Terminal, which the front
+// end established. Read off the field rather than handed in, so that this and
+// `set -m` cannot be told different things about the same shell.
 //
 // Only ever turns it on. A shell that has decided it is not running a monitor
 // leaves the state where it was, so an inherited `set -m` is not undone by
 // this.
-func (r *Runner) SetInteractiveMonitor(hasTerminal bool) {
+func (r *Runner) SetInteractiveMonitor() {
 	// Read rather than `ask`ed, for the reason InteractiveOptionLetters is
 	// read: this runs once at startup, before the program has done anything,
 	// so an unanswered axis would put "the shells disagree here" on the
@@ -352,7 +353,7 @@ func (r *Runner) SetInteractiveMonitor(hasTerminal bool) {
 	// chosen — including scripts that never mention a job. An unanswered
 	// field therefore reads as the majority and the quiet answer, which is
 	// that a terminal is needed and the monitor stays off.
-	if hasTerminal || r.sem().InteractiveMonitorNeedsATerminal == No {
+	if r.Terminal || r.sem().InteractiveMonitorNeedsATerminal == No {
 		r.monitor = true
 		return
 	}
@@ -414,20 +415,27 @@ func (r *Runner) SetInteractiveJobNotices() {
 
 // setMonitor is `set -m`, the one request in the table a dialect can refuse:
 // two of the panel tie job control to the terminal, and this runner only has
-// one when a front end said so (JobControl).
+// one when a front end said so (Runner.Terminal).
 //
-// Measured with no terminal, which is what a script has: bash and ksh93
-// grant it silently — background jobs already run in process groups of their
-// own here, so there is nothing further to promise — dash remarks `can't
-// access tty; job control turned off` and reports success with the option
-// left off, and zsh refuses at 1, fatally, echoing the spelling that asked.
-// Turning it *off* is granted everywhere.
+// Measured with no terminal, which is what a script on a pipe has: bash and
+// ksh93 grant it silently — background jobs already run in process groups of
+// their own here, so there is nothing further to promise — dash remarks
+// `can't access tty; job control turned off` and reports success with the
+// option left off, and zsh refuses at 1, fatally, echoing the spelling that
+// asked. Turning it *off* is granted everywhere.
+//
+// The terminal and not JobControl, which is what this asked until #1720:
+// having somebody to announce a job to is a prompt, and having a terminal is
+// any route started from one. Measured on a pseudo-terminal, all five of
+// bash 5.3.15, bash 3.2.57, ksh93u+, dash and zsh 5.9.2 grant `set -m` inside
+// a plain `-c` string and put `m` in `$-`; the JobControl reading refused
+// every one of those, because no `-c` has a person to tell.
 func (r *Runner) setMonitor(on bool, spelling string) bool {
 	if !on {
 		r.monitor = false
 		return true
 	}
-	if !r.JobControl && r.ask(r.sem().MonitorNeedsATerminal, "`set -m` in a shell with no terminal") {
+	if !r.Terminal && r.ask(r.sem().MonitorNeedsATerminal, "`set -m` in a shell with no terminal") {
 		d := r.diag()
 		r.diagf("%s\n", Wording(d.MonitorDenied, "set: cannot turn on job control without a terminal", spelling))
 		if d.MonitorDeniedStatus == 0 {
@@ -436,10 +444,7 @@ func (r *Runner) setMonitor(on bool, spelling string) bool {
 			return true
 		}
 		r.setOptionStatus = d.MonitorDeniedStatus
-		if r.ask(r.sem().BadSetOptionNameFatal, "a refused `set -m` ending the script") {
-			r.status = d.MonitorDeniedStatus
-			r.fatalQuiet()
-		}
+		r.endOnSetRefusal(d.MonitorDeniedStatus, "a refused `set -m` ending the script")
 		return false
 	}
 	if r.unspecified {
@@ -500,7 +505,13 @@ func (r *Runner) SetNamedOption(name string, on bool) int {
 // registered builtin presenting the same options under its own names routes
 // through here, where the line a complaint would name is the one being run
 // rather than the zero an invocation reports.
+//
+// And where a refusal is not fatal, whatever the dialect answers for `set`:
+// whoever arrives here is not `set`, which is the special builtin the
+// fatality belongs to. See endOnSetRefusal for the measurement.
 func (r *Runner) ApplyNamedOption(name string, on bool) int {
+	r.outsideSetBuiltin = true
+	defer func() { r.outsideSetBuiltin = false }()
 	return r.namedOptionAnswer(r.setOption(name, on))
 }
 

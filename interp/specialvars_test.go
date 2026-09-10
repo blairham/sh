@@ -449,7 +449,7 @@ func TestTheMonitorLetterComesFromTheMonitorAndNotFromTheVector(t *testing.T) {
 	out, _ = run(t, "set -m\n"+src, func(r *Runner) {
 		r.Semantics = &sem
 		r.Interactive = true
-		r.JobControl = true
+		r.Terminal = true
 	})
 	if want := "has-m\n"; out != want {
 		t.Errorf("with the monitor really on: got %q, want %q", out, want)

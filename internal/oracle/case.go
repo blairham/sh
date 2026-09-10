@@ -11446,6 +11446,11 @@ echo "st=$? alive"`,
 		Why:     "the long spelling gets each shell's same answer, and zsh's refusal echoes the spelling that asked — `monitor` here where the case above says `-m`",
 	},
 	{
+		ID: "opt/setopt-monitor-is-not-fatal-where-set-m-is", Category: "shell options",
+		Snippet: "setopt monitor\necho \"st=$?\"\necho done\n",
+		Why:     "the same refusal as `set -m` above and not the same ending: zsh writes `can't change option: monitor` at 1 and carries on to both echoes, where `set -m` writes `can't change option: -m` and stops the script dead. The fatality belongs to `set`, which is one of the standard's special builtins, and not to the option — the other three have no `setopt` at all and say so",
+	},
+	{
 		ID: "kill/the-listing-has-four-shapes", Category: "builtins",
 		Snippet: `kill -l | head -1`,
 		Why:     "bash numbers five to a row, zsh space-joins one line, ksh93 goes one per line, dash opens with a 0",

@@ -424,6 +424,26 @@ type Runner struct {
 	// monitor on for `-i script.sh`, so the two do not move together.
 	Interactive bool
 
+	// Terminal says this shell has a terminal, which is the fact job control
+	// turns on: the kernel hands SIGINT and SIGTSTP to whatever process group
+	// owns one, so a shell with none has nothing to hand a job and nothing to
+	// take back.
+	//
+	// The front end's to set, and carried *in* for the reason Interactive is:
+	// a library Runner has no standing to ask the process what descriptors it
+	// was handed, and the embedder's terminal is not this shell's.
+	//
+	// Not the same question as JobControl, and the difference is measured
+	// rather than tidy. That one says there is a *person* to announce a job
+	// to, which is a prompt and nothing else; this one is true of any route
+	// started from a terminal, and it is the one `set -m` turns on: on a
+	// pseudo-terminal, `set -m` inside plain `zsh -c` is granted and puts `m`
+	// in `$-`, and the same string on a pipe is `can't change option: -m` at
+	// 1. All five of the panel grant it with a terminal. Asking JobControl
+	// there answered the person question with the terminal's name and refused
+	// every script that had one (#1720).
+	Terminal bool
+
 	// LoginShell says this shell was started as a login shell — a dashed
 	// `argv[0]`, which is what `login` and a terminal emulator's "run as a
 	// login shell" does, or an explicit `-l` / `--login`.
@@ -1068,6 +1088,13 @@ type Runner struct {
 	// nothing standing where `set` would and no usage block — and it is set
 	// for the length of one call in ApplyInheritedShellOptions.
 	fromEnvironment bool
+	// outsideSetBuiltin marks an option request that did not come from
+	// `set`: a dialect's own option builtin, or the environment's list. It
+	// is what keeps a refusal from ending the script in the dialects where a
+	// refused `set` option ends one — the fatality is the special builtin's
+	// and not the option's. Set for the length of one call in
+	// ApplyNamedOption; see endOnSetRefusal for the measurement.
+	outsideSetBuiltin bool
 	// allexport marks every assignment for the environment: `set -a`.
 	allexport bool
 	// extraOptions are the `set -o` names this dialect has beyond the ones

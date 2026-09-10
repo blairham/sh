@@ -7530,14 +7530,33 @@ twice.
 **`MonitorNeedsATerminal`** — bash no · dash yes · ksh93 no · zsh yes
 
 Ties turning `set -m` on to having a terminal. Measured in shells run
-with none, which is what a script has: bash and ksh93 grant the option
-silently; dash remarks `can't access tty; job control turned off` and
-reports success with the option left off; zsh refuses it at 1, fatally.
-The two refusal shapes are the dialect's own wording and status —
-Diagnostics.MonitorDenied and MonitorDeniedStatus. A runner whose front
-end gave it a person to report jobs to (JobControl) has a terminal, so
-the question is asked only without one. Turning the option *off* is
-granted everywhere.
+with none, which is what a script on a pipe has: bash and ksh93 grant the
+option silently; dash remarks `can't access tty; job control turned off`
+and reports success with the option left off; zsh refuses it at 1,
+fatally. The two refusal shapes are the dialect's own wording and status —
+Diagnostics.MonitorDenied and MonitorDeniedStatus. Turning the option
+*off* is granted everywhere.
+
+**The terminal and nothing else**, which is measured on the other side of
+the split and was got wrong here until #1720. On a pseudo-terminal, with
+no prompt and nothing interactive about the invocation, all six columns
+grant `set -m` inside a plain `-c` string and put `m` in `$-`:
+
+| shell | `zsh -c 'set -m'` on a pipe | the same on a pseudo-terminal |
+| --- | --- | --- |
+| bash 5.3.15 | 0, `m` in `$-` | 0, `m` in `$-` |
+| bash 3.2.57 | 0, `m` in `$-` | 0, `m` in `$-` |
+| ksh93u+ | 0, `m` in `$-` | 0, `m` in `$-` |
+| dash | the remark, option off | 0, `m` in `$-` |
+| zsh 5.9.2 | `can't change option: -m`, 1, fatal | 0, `m` in `$-` |
+
+So the fact the question is asked of is `Runner.Terminal` — a descriptor
+fact every route carries — and not `Runner.JobControl`, which says there
+is a *person* to announce a job to and is a prompt and nothing else.
+Reading the second answered the terminal question with the prompt's
+answer and refused every script that had a terminal, which is where a
+prompt theme's `setopt monitor` was refused by a shell that was already
+running a monitor.
 
 **`InteractiveMonitorNeedsATerminal`** — bash yes · dash yes · ksh93 no · zsh yes
 
@@ -7699,6 +7718,25 @@ rather than assumed to be: a bad option *letter* to the same builtin is
 fatal in only two of them, and zsh does not so much as complain about
 `set -Q`. So one shell treats an unknown name as worse than an unknown
 letter, which is why this is a field of its own.
+
+**It is `set`'s fatality and not the option's**, which a dialect with a
+second option builtin makes visible. Measured on a pipe in zsh 5.9.2,
+2026-09-10:
+
+| written | said | status | what runs after |
+| --- | --- | --- | --- |
+| `set -m` | `zsh:set:1: can't change option: -m` | — | nothing; the script ends |
+| `setopt monitor` | `zsh:setopt:1: can't change option: monitor` | 1 | the rest of the script |
+| `set -o nosuch` | `zsh:set:1: no such option: nosuch` | — | nothing; the script ends |
+| `setopt nosuch` | `zsh:setopt:1: no such option: nosuch` | 1 | the rest of the script |
+
+Same option, same sentence, same status on the builtin — so what decides
+is which builtin asked. `set` is one of the standard's special builtins,
+whose failure ends a non-interactive shell; `setopt` is an ordinary
+builtin the dialect added. The axis therefore governs `set` alone, and a
+request arriving through Runner.ApplyNamedOption — the seam a dialect's
+own option builtin uses, and the one the environment's option list uses —
+never ends the script whatever this says.
 
 **`DefaultOptionLetters`** — bash hB · dash  · ksh93 hB · zsh 569X
 

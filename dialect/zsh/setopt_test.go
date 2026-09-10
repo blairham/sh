@@ -97,17 +97,103 @@ func TestBareSetoptListsTheDeviations(t *testing.T) {
 }
 
 // An option that exists and cannot be moved answers with zsh's own wording
-// for exactly that — measured on `setopt monitor` in a non-interactive zsh.
+// for exactly that — measured on `setopt monitor` in a zsh with no terminal.
 func TestSetoptRefusesWhatItCannotChange(t *testing.T) {
 	out, _ := runZsh(t, t.TempDir(), `setopt monitor; echo st=$?`)
 	if !strings.Contains(out, "can't change option: monitor") || !strings.Contains(out, "st=1") {
 		t.Errorf("out %q, want the measured refusal at 1", out)
 	}
 	// Asking for the state it is already in is granted, the same bargain the
-	// substrate's own table strikes for `set +o posix`.
+	// substrate's own option table strikes for `set +o posix`.
 	out, _ = runZsh(t, t.TempDir(), `unsetopt monitor; echo st=$?`)
 	if !strings.Contains(out, "st=0") {
 		t.Errorf("out %q, want the already-off state granted", out)
+	}
+}
+
+// `setopt monitor` is granted where the shell has a terminal, which is what
+// job control needs and the whole of what this option turns on.
+//
+// The measurement, on a pseudo-terminal against zsh 5.9.2 (2026-09-10) — the
+// same three lines in an interactive shell and inside a plain `-c` string,
+// which answer alike, because the axis is the terminal and not the prompt:
+//
+//	setopt monitor      -> 0, ${options[monitor]} is `on`, `m` in `$-`
+//	unsetopt monitor    -> 0, `off`, no `m`
+//	setopt monitor      -> 0, `on` again
+//
+// On a pipe the first of those is `can't change option: monitor` at 1 with
+// the option left off, which is TestSetoptRefusesWhatItCannotChange above.
+//
+// This shell really is running one by then: a background command gets a
+// process group of its own, the terminal is handed to whatever is in front
+// and taken back afterwards, and `fg`, `bg` and `jobs` all speak about the
+// table. The option was a constant wired off here until #1720, so an
+// interactive shell answered `m` in `$-` and `off` in `${options[monitor]}`
+// at the same moment — and a prompt theme asking for the monitor before
+// starting its async worker was refused by a shell that had one.
+//
+// Both directions and from both starting states, because a probe that asks
+// for the state the shell is already in cannot tell a switch that moves from
+// a constant that was already right.
+func TestSetoptMonitorNeedsATerminalAndNotAPrompt(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"on, from off",
+			`unsetopt monitor; setopt monitor; print "st=$? o=${options[monitor]}"`,
+			"st=0 o=on\n",
+		},
+		{
+			"off, from on",
+			`setopt monitor; unsetopt monitor; print "st=$? o=${options[monitor]}"`,
+			"st=0 o=off\n",
+		},
+		{
+			"the letter follows the option",
+			"unsetopt monitor; case $- in *m*) print no ;; *) print gone ;; esac\n" +
+				"setopt monitor; case $- in *m*) print back ;; *) print no ;; esac",
+			"gone\nback\n",
+		},
+		{
+			"and the listing does",
+			"unsetopt monitor; setopt; echo ---; setopt monitor; setopt",
+			"nohashdirs\n---\nnohashdirs\nmonitor\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st, err := preset.Combined(t, dialecttest.Base{
+				Dir: t.TempDir(), Terminal: true,
+			}, tc.src)
+			if err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if out != tc.want || st != 0 {
+				t.Errorf("out %q status %d, want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// A refused `setopt` does not end the script, where a refused `set` does.
+//
+// Measured on a pipe, zsh 5.9.2: `set -m; print st=$?; print DONE` writes
+// `zsh:set:1: can't change option: -m` and neither `print` runs, leaving at
+// 0; `setopt monitor; print st=$?; print DONE` writes
+// `zsh:setopt:1: can't change option: monitor` and then `st=1` and `DONE`.
+// Same option, same sentence, same status on the builtin — so what differs is
+// which builtin asked, and only `set` is one of the special ones the standard
+// makes fatal on error.
+//
+// Asserted from both sides in one test, since the fatality is a single switch
+// and a change that lost it for `set` would pass the second half alone.
+func TestARefusedSetoptDoesNotEndTheScript(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), "setopt monitor\nprint \"st=$?\"\nprint DONE\n")
+	if want := "zsh:setopt:1: can't change option: monitor\nst=1\nDONE\n"; out != want || st != 0 {
+		t.Errorf("setopt: out %q status %d, want %q at 0", out, st, want)
+	}
+	out, st = runZsh(t, t.TempDir(), "set -m\nprint \"st=$?\"\nprint DONE\n")
+	if want := "zsh:set:1: can't change option: -m\n"; out != want || st != 1 {
+		t.Errorf("set: out %q status %d, want %q at 1", out, st, want)
 	}
 }
 

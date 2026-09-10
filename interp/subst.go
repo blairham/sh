@@ -58,7 +58,21 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 	if span.CurrentShell {
 		// Here rather than on a copy, which is the whole of why this
 		// spelling exists: `${ x=1;}` leaves x set where `$(x=1)` does not.
+		//
+		// The `<file` form below is not reached from here, and that is
+		// measured rather than left out: `${ <f ;}` prints the file in ksh93
+		// alone, is empty in bash 5.3 and is `bad substitution` in zsh 5.9.2
+		// and bash 3.2. Four answers for one spelling is not this form.
 		return r.currentShellSubst(ctx, f, span)
+	}
+
+	// `$(<file)` is the file, with nothing run. Asked after the parse because
+	// the body is source until it is expanded, and before the subshell
+	// because there is no command here for a subshell to hold.
+	if r.dialect().ReadFileSubstitution {
+		if rd, ok := readFileSubstitution(f); ok {
+			return r.readFileSubst(ctx, rd, span)
+		}
 	}
 
 	var out bytes.Buffer

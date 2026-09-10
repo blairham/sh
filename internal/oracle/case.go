@@ -3491,6 +3491,36 @@ echo "st=$?"`,
 		Why:     "a here-string's word expands but is never split — one line of input with its space kept, in every shell that has the construct. dash's row is its parser refusing `<<<`, not an opinion about splitting; the word is a body rather than a filename, so the ordinary-word question a target gets never arises here",
 	},
 	{
+		ID: "redir/a-substitution-of-a-lone-input-redirection-is-the-file", Category: "redirection",
+		Snippet: `printf 'hello\n' > f; printf "[%s]" "$(<f)"`,
+		Why:     "`$(<file)` is the file's contents with no command run — the idiom for reading a small file without a process. Five of the six columns have it; dash reads the same text as a redirection with no command name, which opens the file, runs nothing and writes nothing, so its `[]` is the form's absence rather than a different meaning for it",
+	},
+	{
+		ID: "redir/a-file-read-substitution-drops-trailing-newlines", Category: "redirection",
+		Snippet: `printf 'A\n\n\n' > f; printf "[%s]" "$(<f)"`,
+		Why:     "the form is a command substitution, so the same trailing-newline rule applies to it — three newlines at the end of the file and none in the result, which is what makes `x=$(<version)` usable",
+	},
+	{
+		ID: "redir/a-file-read-substitution-keeps-a-file-with-no-final-newline", Category: "redirection",
+		Snippet: `printf 'noeol' > f; printf "[%s]" "$(<f)"`,
+		Why:     "the other side of the trimming rule: nothing is added either, so a file with no final newline substitutes as exactly its bytes",
+	},
+	{
+		ID: "redir/a-file-read-substitution-reports-a-name-it-cannot-open", Category: "redirection",
+		Snippet: `v=$(<nosuch); printf "st=%s v=[%s]" "$?" "$v"`,
+		Why:     "the failure a script can actually see: the name is reported in each shell's own words, the substitution expands to nothing, and its status is the one that shell gives any redirection that would not open. The result is empty either way, so without the diagnostic and the status a missing file is indistinguishable from an empty one",
+	},
+	{
+		ID: "redir/a-file-read-substitution-needs-the-redirection-alone", Category: "redirection",
+		Snippet: `printf 'hello\n' > f; printf "[%s][%s][%s]" "$(<f echo hi)" "$(x=1 <f)" "$(3<f)"`,
+		Why:     "what disqualifies the form, unanimous among the shells that have it: a command word takes the file as its input instead, an assignment prefix leaves an ordinary redirection, and a descriptor other than standard input is not the form. bash 3.2 is the one column that reads the file for `3<f`",
+	},
+	{
+		ID: "redir/a-file-read-substitution-is-not-the-null-command-hook", Category: "redirection",
+		Snippet: `printf 'hello\n' > f; READNULLCMD=printf; printf "[%s]" "$(<f)"`,
+		Why:     "the fork this form is most easily mistaken for. zsh runs a redirection with no command through READNULLCMD, so `<f` at a prompt pages the file — but the substitution does not consult it: with the hook pointed somewhere else the file still reads. The five columns with no such hook show the same value for the same reason, which is that the hook was never on the path",
+	},
+	{
 		ID: "exec/a-command-is-named-as-it-was-written", Category: "commands",
 		Snippet: `basename --bad 2>&1 | head -1`,
 		Why:     "a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else",

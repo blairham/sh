@@ -127,6 +127,41 @@ func TestFunctionLocalTrapsRestoresAnIgnore(t *testing.T) {
 	}
 }
 
+// A pseudo-condition is a condition. ERR, DEBUG and RETURN live in slots of
+// their own rather than in the signal table, and the save reaches them the
+// same way — asked here of ERR, since no dialect in the panel has both a
+// pseudo-condition and this axis, so the corpus cannot ask it.
+func TestFunctionLocalTrapsReachAPseudoCondition(t *testing.T) {
+	s := localTrapsSem(TrapsGoBackAtTheReturn)
+	s.TrapHasErrCondition = Yes
+	s.ErrTrapRunsInsideFunctions = No
+	s.ErrTrapRunsInSubshells = No
+	out, st := run(t, `trap 'echo outer' ERR; f() { trap 'echo inner' ERR; }; f; false`, withSem(s))
+	if out != "outer\n" || st != 1 {
+		t.Errorf("got %q/%d, want the caller's ERR trap back and firing", out, st)
+	}
+}
+
+// And what goes back with it is *where* the trap was set, not only its text.
+// A pseudo-trap fires for the frame that set it and for nobody else, so an
+// action put back under the wrong frame is a handler that is listed and never
+// runs — the quiet half of this restore.
+//
+// The failure is inside the function that set the outer trap, which is the
+// only arrangement that tells the two apart: at the top level the frame is
+// not consulted, and outside the setter both frames are equally wrong.
+func TestFunctionLocalTrapsRestoreWhereAPseudoTrapWasSet(t *testing.T) {
+	s := localTrapsSem(TrapsGoBackAtTheReturn)
+	s.TrapHasErrCondition = Yes
+	s.ErrTrapRunsInsideFunctions = No
+	s.ErrTrapRunsInSubshells = No
+	out, st := run(t, `inner() { trap 'echo inner' ERR; }; `+
+		`outer() { trap 'echo outer' ERR; inner; false; }; outer`, withSem(s))
+	if out != "outer\n" || st != 1 {
+		t.Errorf("got %q/%d, want the outer trap firing in the frame that set it", out, st)
+	}
+}
+
 // Each call answers for its own modifications at its own return, so an inner
 // call restores while the outer one is still running.
 func TestFunctionLocalTrapsRestoresAtEachNestedReturn(t *testing.T) {

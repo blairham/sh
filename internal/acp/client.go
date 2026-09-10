@@ -96,6 +96,27 @@ type Client struct {
 	// accepts that.
 	Terminals bool
 
+	// Interpret runs a shell line for the agent, in this process, writing what
+	// it produces to out and reporting its exit status. Nil is a client that
+	// can only exec an argv.
+	//
+	// It exists because `terminal/create` has two readings and `args` is what
+	// picks between them: an agent that sends one has built an argv, and an
+	// agent that sends only `command` has written a line for a shell. This
+	// client is a shell, so the second reading is the one it can actually
+	// honor — and the one that puts every command *inside* the line through
+	// the gate instead of asking about a filename that never existed (#1782).
+	//
+	// A function field rather than a driver.Shell, for the reason Answer and
+	// Elicit are: this package is reachable from the front end and not the
+	// other way round, so what it takes is the capability and not the thing
+	// that has it.
+	//
+	// The context is the run's lifetime — cancelling it ends the line — and
+	// the implementation is expected to honor cwd and env the way it would for
+	// any other command.
+	Interpret func(ctx context.Context, line, cwd string, env []string, out io.Writer) int
+
 	conn  *jsonrpc.Conn
 	agent InitializeResponse
 

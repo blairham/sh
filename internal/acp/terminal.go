@@ -112,7 +112,10 @@ type (
 
 // terminal is one command the client is running for an agent.
 type terminal struct {
-	cmd   *exec.Cmd
+	// proc is what is actually running behind the id the agent holds: a child
+	// process, or a command line this shell is interpreting itself. See
+	// vehicle.
+	proc  vehicle
 	limit int
 
 	mu        sync.Mutex
@@ -168,8 +171,7 @@ func (t *terminal) trim() {
 // own terms. What is left of an error it could return — the command could not
 // be started — is answered at create, where there is a request to fail.
 func (t *terminal) reap() {
-	_ = t.cmd.Wait()
-	status := exitStatus(t.cmd)
+	status := t.proc.wait()
 	t.mu.Lock()
 	t.exit = &status
 	t.mu.Unlock()
@@ -300,6 +302,37 @@ func (c *Client) createTerminal(ctx context.Context, params json.RawMessage) (an
 	c.mu.Lock()
 	c.asked++
 	c.mu.Unlock()
+	// Inherited and then written over rather than replaced. A command started
+	// with only the agent's few variables has no PATH, so every create would
+	// fail for a reason nothing on the wire explains.
+	env := os.Environ()
+	for _, e := range req.Env {
+		env = append(env, e.Name+"="+e.Value)
+	}
+	// No `args` means the agent wrote a shell line, so interpret it rather
+	// than looking for a program of that name (#1782).
+	//
+	// `args` is optional in the schema and an agent that omits it has said
+	// which reading it meant: `claude-code-acp` 0.16.2 sends
+	// `printf "argv0=%s" "$0"; ps -o args= -p $$` in `command` and nothing in
+	// `args`. Exec'ing that as a filename cannot work, and the agent's own
+	// workaround — sending `bash -c '…'` — cannot either, because that is one
+	// string as well. Measured live: four commands in one turn, all four
+	// failing this way, and the agent concluding that the shell tool in this
+	// environment does not work.
+	//
+	// Interpreting is also the reading that *sees* most, which is the whole
+	// argument of this client. A line we run ourselves is a line whose every
+	// exec, open and stat crosses the boundary and lands in the audit trail;
+	// a filename we exec is one gate consultation about a name that never
+	// existed.
+	//
+	// The fallback is today's behavior rather than a refusal, because an
+	// embedder that serves terminals without supplying an interpreter is
+	// still entitled to the argv reading.
+	if len(req.Args) == 0 && c.Interpret != nil {
+		return c.createInterpreted(ctx, req, env)
+	}
 	argv := append([]string{req.Command}, req.Args...)
 	if !c.Boundary.Exec(ctx, req.Command, argv) {
 		// A refused create is a command that never started, and the agent is
@@ -309,14 +342,8 @@ func (c *Client) createTerminal(ctx context.Context, params json.RawMessage) (an
 	}
 	cmd := exec.CommandContext(ctx, req.Command, req.Args...)
 	cmd.Dir = req.Cwd
-	// Inherited and then written over rather than replaced. A command started
-	// with only the agent's few variables has no PATH, so every create would
-	// fail for a reason nothing on the wire explains.
-	cmd.Env = os.Environ()
-	for _, e := range req.Env {
-		cmd.Env = append(cmd.Env, e.Name+"="+e.Value)
-	}
-	t := &terminal{cmd: cmd, limit: -1, done: make(chan struct{})}
+	cmd.Env = env
+	t := &terminal{proc: process{cmd: cmd}, limit: -1, done: make(chan struct{})}
 	if req.OutputByteLimit != nil {
 		t.limit = *req.OutputByteLimit
 	}
@@ -327,6 +354,40 @@ func (c *Client) createTerminal(ctx context.Context, params json.RawMessage) (an
 		c.failed(ctx, interp.Action{Kind: interp.ActionExec, Path: req.Command, Args: argv}, err)
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: %v", req.Command, err)
 	}
+	go t.reap()
+	return CreateTerminalResponse{TerminalID: c.addTerminal(t)}, nil
+}
+
+// createInterpreted serves a create whose command is a shell line.
+//
+// Deliberately without a gate consultation of its own, and that is the point
+// rather than an omission. There is no program here to ask about — the line
+// may run none, or ten — so the only thing a gate could be shown at this
+// moment is the line as a filename, which is exactly the reading #1782 is
+// about. What replaces it is strictly more: every exec, open and stat the line
+// performs goes through the same gate and the same sink, named as itself. A
+// policy that refuses `/bin/rm` still refuses `rm -rf /` sent this way, and
+// now the record says `rm` rather than a nonexistent file.
+//
+// The route is still counted, above, for the reason given there: the count is
+// about the route and not the outcome.
+func (c *Client) createInterpreted(ctx context.Context, req CreateTerminalRequest, env []string) (any, error) {
+	// Cancellable, because that is what release and disconnect have to reach.
+	// The parent is the connection's context, so an agent that goes away ends
+	// the line the same way it ends a child process.
+	runCtx, cancel := context.WithCancel(ctx)
+	l := &line{cancel: cancel, status: make(chan int, 1)}
+	t := &terminal{proc: l, limit: -1, done: make(chan struct{})}
+	if req.OutputByteLimit != nil {
+		t.limit = *req.OutputByteLimit
+	}
+	// Started before reap so the status is on its way to a reader that exists.
+	go func() {
+		// Released whichever way the line ends, including the ordinary one:
+		// kill cancels too, and cancelling twice is nothing.
+		defer cancel()
+		l.status <- c.Interpret(runCtx, req.Command, req.Cwd, env, t)
+	}()
 	go t.reap()
 	return CreateTerminalResponse{TerminalID: c.addTerminal(t)}, nil
 }
@@ -371,11 +432,11 @@ func (c *Client) killTerminal(ctx context.Context, params json.RawMessage) (any,
 	if err != nil {
 		return nil, err
 	}
-	pid := 0
-	if t.cmd.Process != nil {
-		pid = t.cmd.Process.Pid
-	}
-	if !c.Boundary.Signal(ctx, pid, syscall.SIGKILL) {
+	// Gated in both readings. An interpreted line reports 0, which is a
+	// signal record naming no process rather than a signal that goes
+	// nowhere unrecorded — the agent still reached something it chose to
+	// reach, and a policy that refuses signals still refuses this.
+	if !c.Boundary.Signal(ctx, t.proc.pid(), syscall.SIGKILL) {
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: permission denied", MethodKillTerminal)
 	}
 	t.kill()
@@ -404,12 +465,17 @@ func (c *Client) releaseTerminal(ctx context.Context, params json.RawMessage) (a
 	if !ok {
 		return nil, jsonrpc.Errorf(jsonrpc.CodeInvalidParams, "%s: no terminal %q", MethodReleaseTerminal, req.TerminalID)
 	}
-	if t.cmd.Process != nil {
+	if pid := t.proc.pid(); pid != 0 {
 		// Recorded through the boundary rather than beside it, so that the
 		// record carries the run and the action it belongs to exactly as a
 		// gated one does. A trace line with no id is a line nothing joins to.
+		//
+		// Only where there is a process to name. Releasing an interpreted
+		// line signals nothing, and a SIGKILL record against pid 0 would be
+		// a fiction; what the line did is already in the trail as its own
+		// actions.
 		c.Boundary.Record(ctx, interp.Action{
-			Kind: interp.ActionSignal, PID: t.cmd.Process.Pid, Signal: syscall.SIGKILL,
+			Kind: interp.ActionSignal, PID: pid, Signal: syscall.SIGKILL,
 		})
 	}
 	t.kill()
@@ -424,7 +490,85 @@ func (t *terminal) kill() {
 		return
 	default:
 	}
-	if t.cmd.Process != nil {
-		_ = t.cmd.Process.Kill()
+	t.proc.kill()
+}
+
+// A vehicle is what a terminal is a handle on.
+//
+// Two of them, because `terminal/create` has two readings and the schema
+// leaves the choice to the client: an agent that sends `args` has built an
+// argv and wants it exec'd, and an agent that sends a bare `command` has
+// written a *shell line* and expects it interpreted. See createTerminal for
+// which is chosen when, and #1782 for why exec'ing the line as a filename was
+// the reading that both failed and saw least.
+//
+// The interface is the three things the protocol asks about a running command
+// — wait for it, end it, name its process — and nothing else. Notably not
+// "start it": starting differs enough between the two that sharing it would be
+// a parameter object rather than a step.
+type vehicle interface {
+	// wait blocks until the command has ended and reports how. Called once,
+	// from reap.
+	wait() TerminalExitStatus
+	// kill ends it if it has not ended already.
+	kill()
+	// pid is the process behind it, or 0 where there is none. An interpreted
+	// line is this shell's own run: there is nothing to signal, and 0 is what
+	// the audit schema already says a signal record carries when there is no
+	// process to name.
+	pid() int
+}
+
+// process is a child this client started, which is the reading an agent asks
+// for by sending `args`.
+type process struct{ cmd *exec.Cmd }
+
+// wait does not read Wait's error, for the reason reap's comment gives: a
+// non-zero exit is not a failure of anything here, and the process state says
+// what happened in the protocol's own terms.
+func (p process) wait() TerminalExitStatus {
+	_ = p.cmd.Wait()
+	return exitStatus(p.cmd)
+}
+
+// kill is a no-op on a process that was never started — Kill on it is an
+// error about nothing.
+func (p process) kill() {
+	if p.cmd.Process != nil {
+		_ = p.cmd.Process.Kill()
 	}
 }
+
+func (p process) pid() int {
+	if p.cmd.Process != nil {
+		return p.cmd.Process.Pid
+	}
+	return 0
+}
+
+// line is a command line this shell interprets in its own process, which is
+// the reading an agent asks for by sending `command` and no `args`.
+//
+// It ends through its context rather than through a signal, because there is
+// no process to signal: cancelling is what reaches the interpreter, and it is
+// why driver.Shell grew a Context field. A status channel rather than a
+// stored int because reap is on another goroutine than the run.
+type line struct {
+	cancel context.CancelFunc
+	// status carries the interpreted line's exit status, buffered so the
+	// goroutine running it never blocks on a reader that has gone.
+	status chan int
+}
+
+// wait reports the status as a code, always. An interpreted line has no wait
+// status for a signal to be read out of — what a signal did to a *child* of
+// the line is the line's own business and comes back as its status, which is
+// what a shell would have reported to anyone else too.
+func (l *line) wait() TerminalExitStatus {
+	code := <-l.status
+	return TerminalExitStatus{ExitCode: &code}
+}
+
+func (l *line) kill() { l.cancel() }
+
+func (l *line) pid() int { return 0 }

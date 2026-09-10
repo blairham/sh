@@ -125,6 +125,11 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 		// the capability: an agent is told we can run a terminal login only
 		// where we can.
 		Relaunch: terminalAuth(argv, os.Stdin, os.Stdout),
+		// A `terminal/create` that carries no argv carries a shell line, and
+		// this is a shell: running it here is what puts every command inside
+		// it through the gate above, rather than asking the gate about a
+		// filename the agent never meant (#1782).
+		Interpret: interpretLine(sh),
 	}
 	client.Connect(fromAgent, toAgent)
 	go func() { _ = client.Serve(ctx) }()
@@ -133,6 +138,47 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 	_ = toAgent.Close()
 	_ = agent.Wait()
 	return status
+}
+
+// interpretLine runs one shell line for an agent, in this process.
+//
+// The same shell the person would have got — same dialect, same semantics,
+// same gate and the same sink — with only the things that are the *agent's*
+// replaced: where the line runs, what environment it starts with, and where
+// its output goes.
+//
+// driver.RunCommand rather than a Runner built here, so an agent's line
+// reaches the same `-c` every other caller does. That route is not merely
+// "run this text": the origin is labeled `-c` in a parse failure's location,
+// one dialect parses the whole string before running any of it, and `$0` and
+// the positional parameters are what a `-c` gives. Reaching past it is the
+// mistake RunCommand exists to have stopped.
+func interpretLine(sh driver.Shell) func(context.Context, string, string, []string, io.Writer) int {
+	return func(ctx context.Context, line, cwd string, env []string, out io.Writer) int {
+		run := sh
+		// The terminal's lifetime, so releasing it or losing the connection
+		// ends the line. This is what Shell.Context is for.
+		run.Context = ctx
+		// One stream for both, because a terminal has one: an agent asking
+		// for output is asking what a person would have seen on a screen.
+		run.Stdout, run.Stderr = out, out
+		// Nothing to read. An agent's command is not interactive, and a line
+		// left pointing at this process's standard input would read the
+		// person's answers to the agent's own questions.
+		run.Stdin = strings.NewReader("")
+		if cwd != "" {
+			run.Dir = cwd
+		}
+		if len(env) > 0 {
+			run.Env = env
+		}
+		// The one thing a shell binary wants that this route must not have:
+		// an `exec` inside the agent's line would otherwise replace *this*
+		// process, which is the one serving the connection the agent is
+		// talking on. The line gets a child; the session survives it.
+		run.KeepProcess = true
+		return driver.RunCommand(run, line, nil)
+	}
 }
 
 // runID is what this run of the shell is called in the record.

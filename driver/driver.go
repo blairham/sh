@@ -276,6 +276,36 @@ type Shell struct {
 	// several shells behind one connection — sets it and this leaves it alone.
 	Session string
 
+	// Context is the lifetime of a run, and it is how a caller ends one from
+	// outside.
+	//
+	// A shell binary has nothing to put here: a run ends when the input does,
+	// and the process ends with it. An *embedder* driving a run it does not
+	// own has the opposite problem — the ACP client serves a
+	// `terminal/create`, hands the agent an id for it, and must be able to end
+	// that command later when the agent releases the terminal or the
+	// connection drops. Without a context reaching the interpreter there is no
+	// handle on a run at all, and the only way to stop one was to have made it
+	// a child process so it could be signalled.
+	//
+	// Nil means `context.Background()`, filled in by withDefaults so every
+	// route has one before anything is built. See interp.Runner.Run, which is
+	// where it lands.
+	Context context.Context
+
+	// Env is the environment a run starts with. Nil means this process's own,
+	// which is what a shell binary wants.
+	//
+	// A field for the same reason Context is one: an embedder driving a run it
+	// does not own may have an environment for it that is not this process's.
+	// The ACP client is the case — `terminal/create` carries `env` entries the
+	// agent set, and honoring them is part of running the command the agent
+	// asked for rather than a near miss.
+	//
+	// Filled in by withDefaults, so the read of os.Environ still happens once
+	// and in one place.
+	Env []string
+
 	// KeepProcess stops `exec cmd` from replacing this process, which a
 	// binary being a shell does not want and a test does.
 	//
@@ -437,6 +467,12 @@ func (sh Shell) withDefaults(argv []string) Shell {
 		// session that look joinable and are not, which is worse than two that
 		// do not claim to be.
 		sh.Session = event.NewID(time.Now())
+	}
+	if sh.Context == nil {
+		sh.Context = context.Background()
+	}
+	if sh.Env == nil {
+		sh.Env = os.Environ()
 	}
 	return sh
 }
@@ -1073,12 +1109,13 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// the interpreter, so nothing distinguishes "no operands" from
 		// "operands that were all consumed as the name".
 		Params: params,
-		// The process's environment, read here and not in interp: os.Environ
+		// The environment, read in withDefaults and not in interp: os.Environ
 		// answers for the whole process, and a library Runner must take the
 		// environment it is handed rather than reach for shared state. This
 		// binary *is* the process, so the read is made once, where it is
-		// visible — the same split as ReplaceProcess below.
-		Env: os.Environ(),
+		// visible — the same split as ReplaceProcess below. A caller that has
+		// its own environment for this run has already put it here.
+		Env: sh.Env,
 		// Whether this shell has a terminal, which is the fact `set -m`
 		// turns on and which no route is exempt from: measured on a
 		// pseudo-terminal, every shell in the panel grants `set -m` inside a
@@ -1439,7 +1476,9 @@ func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 // library had it right all along: interp's own Run runs the EXIT trap on the
 // same error, and only this front end disagreed.
 func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
-	ctx := context.Background()
+	// The caller's, where there is one. withDefaults has already put
+	// Background here otherwise, so this does not have to ask.
+	ctx := sh.Context
 	status, how := sh.executeLines(ctx, r, pr, in)
 	switch how {
 	case endingParseFailure, endingRefused:

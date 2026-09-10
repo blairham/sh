@@ -153,6 +153,14 @@ func Semantics() interp.Semantics {
 	s.UnsplitAtListJoinsOnIFS = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// `set -t`, and the letter is the whole of it here: this shell has no
+	// long name for the option at all, so `set -o onecmd` is `bad option(s)`
+	// where the letter is taken. Measured on a script file, on standard input
+	// and at the invocation.
+	s.SetHasTheTLetter = interp.Yes
+	// And it reaches the command string too, which bash's does not: a two-line
+	// `-c` string that turns the option on writes nothing after it.
+	s.OneCommandStopsACommandString = interp.Yes
 	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD
 	// name a` keeps the shell in `$0` and makes both operands parameters.
 	// bash and dash let the command string name them instead.
@@ -1067,14 +1075,17 @@ func Diagnostics() interp.Diagnostics {
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters ksh93 has and this shell does not: -b job
 			// notices, -k assignment-anywhere, -p privileged, -r
-			// restricted, -s sorting the positional parameters, -t one
-			// command, -A assigning an array, and -B -G -H, its brace
-			// expansion, globstar and history-expansion switches. Measured
+			// restricted, -s sorting the positional parameters, and -B -G
+			// -H, its brace expansion, globstar and history-expansion
+			// switches. Measured
 			// 2026-09-05 by asking ksh93 for every letter of the alphabet
 			// in both cases and both signs.
 			// `-A` has left this list: it assigns an array and is
 			// implemented, in Semantics.SetArrayLetter.
-			"set": "bkprstBGH",
+			// `-t` is not here: this shell really does stop after one
+			// command, and the letter is the only spelling it has for the
+			// option — see Semantics.SetHasTheTLetter.
+			"set": "bkprsBGH",
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",

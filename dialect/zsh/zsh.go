@@ -362,6 +362,11 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.No
+	// `set -t` is a letter this shell has and will not move — the same answer
+	// it gives the `onecmd` name it borrowed for `singlecommand` — so it is
+	// refused rather than acted on. See Diagnostics.UnimplementedOptionLetters,
+	// which is where the letter is refused.
+	s.SetHasTheTLetter = interp.No
 	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD
 	// name a` keeps the shell in `$0` and makes both operands parameters.
 	// bash and dash let the command string name them instead.
@@ -1455,6 +1460,19 @@ func Diagnostics() interp.Diagnostics {
 		// `read` joins `set` in it: `zsh:1: not an identifier: 1bad` has no
 		// `read:` in the location where `zsh:export:1:` has the builtin.
 		BadNameRefusalHidesTheBuiltin: map[string]bool{"set": true, "read": true},
+		// `set -t`, the one letter this shell has and refuses to move. It is
+		// `singlecommand` under a borrowed spelling, one of the five options
+		// about being interactive that this shell will not let a script
+		// change — and it answers the letter exactly as it answers the name:
+		// measured 2026-09-10, `set -t` is `can't change option: -t` at 1 and
+		// stops the script, the same sentence, status and fatality as
+		// `set -o singlecommand`, with the letter echoed back rather than the
+		// option's own name.
+		//
+		// Before this it rode UnimplementedOptionLetters and said `-t is not
+		// implemented yet`, which is this implementation confessing to
+		// something the shell itself refuses (#1716).
+		ImmovableOptionLetters: map[string]string{"set": "t"},
 		UnimplementedOptionLetters: map[string]string{
 			// zsh gives a single letter to far more of its options than the
 			// rest of the panel does: measured 2026-09-05, it refuses only
@@ -1464,7 +1482,12 @@ func Diagnostics() interp.Diagnostics {
 			// than told this shell knows better than zsh what zsh has.
 			// `-A` has left this list: it assigns an array and is
 			// implemented, in Semantics.SetArrayLetter.
-			"set": "dgiklprstwyBDEFGHIJKLMNOPQRSTUVWXYZ",
+			//
+			// `-t` has left it for the opposite reason, and that is the
+			// point of the pair: this shell will not move that option at
+			// all, which is a different sentence from a letter we have not
+			// built — see ImmovableOptionLetters below.
+			"set": "dgiklprswyBDEFGHIJKLMNOPQRSTUVWXYZ",
 			// read's letters about a terminal or the line editor — raw -k
 			// keys, -q's one keystroke, -e/-E echoing, -z and the zle pair
 			// -c/-l. The -p coprocess is implemented as its measured

@@ -510,6 +510,42 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			} else {
 				r.functrace = on
 			}
+		case 't':
+			// `set -t`: read and run one more line, then stop. Two of the
+			// panel have the letter and mean this by it, one has it and
+			// refuses to move it, and one has never heard of it — so it is
+			// asked rather than assumed, and a dialect that answers no
+			// reaches its own refusal below.
+			//
+			// The letter and not the name, because the two shells that have
+			// the letter do not both have a long spelling for it: bash lists
+			// `onecmd` and ksh93 lists nothing, so a letter routed through
+			// the name table would be looking up a name one of them has not
+			// got. Both write the same state, which is what keeps `set -t`
+			// and `set -o onecmd` one question with one answer.
+			if !r.ask(r.sem().SetHasTheTLetter, "`set -t` stopping the shell after one command") {
+				if r.unspecified {
+					return false
+				}
+				// A shell that *has* the letter and will not move it still
+				// grants a request for the state it is already in, which is
+				// the rule every long name follows. Measured 2026-09-10 in
+				// the one dialect that refuses it: `set +t` there is silent
+				// at 0 with the option off, and `set -t` is silent at 0 in a
+				// shell started with `-t` — while the move in either
+				// direction is `can't change option`. A shell that has not
+				// got the letter at all refuses both, which is why the grant
+				// hangs on the dialect saying it has the letter rather than
+				// on the state alone.
+				if on == r.onecmd && strings.ContainsRune(r.diag().ImmovableOptionLetters["set"], opt) {
+					continue
+				}
+				if !r.badSetOptionLetter(opt, on) {
+					return false
+				}
+				continue
+			}
+			r.onecmd = on
 		case 'f':
 			// Not universal: one shell spells this option the long way only
 			// and uses `-f` for something else, which does not touch
@@ -575,6 +611,16 @@ func (r *Runner) badSetOptionLetter(opt rune, on bool) bool {
 		sign = "-"
 	}
 	spelled, bare := sign+string(opt), string(opt)
+	if has := d.ImmovableOptionLetters["set"]; strings.ContainsRune(has, opt) {
+		// A letter this shell really has and really will not move, which is
+		// neither of the other two answers. Worded, statused and made fatal
+		// exactly as the same shell's refusal of the *name* is — measured,
+		// they are one sentence with one status — and given the letter's own
+		// spelling, because that is what the shell echoes back.
+		r.saySetRefusal(Wording(d.SetImmovableOptionName, "set: %[1]s: not implemented", spelled),
+			d.SetInvalidOptionNameUsage, true)
+		return r.setRefusalStatus("a `set` option letter this shell will not move ending the script")
+	}
 	msg := Wording(d.SetInvalidOptionLetter, "set: %[1]s: invalid option", spelled, bare)
 	usage := true
 	if has := d.UnimplementedOptionLetters["set"]; strings.ContainsRune(has, opt) {

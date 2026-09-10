@@ -7687,6 +7687,17 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/set-o-takes-a-name-only-this-shell-has` | **2>** `<shell>: 1: set: Illegal option -o autocd` *(status 2)* | `st=2` **2>** `<shell>: line 1: set: autocd: invalid option name` | **2>** `<shell>: line 1: set: autocd: invalid option name` *(status 2)* | `st=1` **2>** `<shell>: line 0: set: autocd: invalid option name` | **2>** `<shell>: set: autocd: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `st=0` |
 | `opt/set-o-and-the-listing-are-one-namespace` | *(no output, status 2)* | `0` *(status 1)* | *(no output, status 2)* | `0` *(status 1)* | *(no output, status 2)* | `1` |
 | `opt/set-o-a-name-this-shell-has-and-will-not-move` | **2>** `<shell>: 1: set: Illegal option -o onecmd` *(status 2)* | `st=0~after` | `st=0~after` | `st=0~after` | **2>** `<shell>: set: onecmd: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: can't change option: onecmd` *(status 1)* |
+| `opt/set-t-stops-after-the-line-that-set-it` | `A` **2>** `<script>: 2: set: Illegal option -t` *(status 2)* | `A` | `A` | `A` | `A` | `A` **2>** `<script>:set:2: can't change option: -t` *(status 1)* |
+| `opt/set-t-lets-its-own-line-finish` | **2>** `<script>: 1: set: Illegal option -t` *(status 2)* | `B` | `B` | `B` | `B` | **2>** `<script>:set:1: can't change option: -t` *(status 1)* |
+| `opt/set-t-can-be-taken-back-on-the-same-line` | **2>** `<script>: 1: set: Illegal option -t` *(status 2)* | `C` | `C` | `C` | `C` | **2>** `<script>:set:1: can't change option: -t` *(status 1)* |
+| `opt/set-t-does-not-stop-a-file-it-sourced` | `S1` **2>** `<script>: 2: set: Illegal option -t` *(status 2)* | `S1~S2` | `S1~S2` | `S1~S2` | `S1~S2` | `S1~AFTER` **2>** `./inner.sh:set:2: can't change option: -t` |
+| `opt/set-t-on-the-command-string-route` | **2>** `<shell>: 1: set: Illegal option -t` *(status 2)* | `B` | `B` | `B` | *(no output, status 0)* | **2>** `<shell>:set:1: can't change option: -t` *(status 1)* |
+| `opt/set-plus-t-is-granted-where-set-t-is-refused` | **2>** `<shell>: 1: set: Illegal option -t` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `opt/set-t-at-the-invocation` | **2>** `<shell>: 0: Illegal option -t` *(status 2)* | `A` | `A` | `A` | `A` | `A` |
+| `opt/set-t-shows-in-dollar-dash` | **2>** `<shell>: 1: set: Illegal option -t` *(status 2)* | `has-t` | `has-t` | `has-t` | `has-t` | **2>** `<shell>:set:1: can't change option: -t` *(status 1)* |
+| `opt/a-set-o-listing-sources-back` | **2>** `<shell>: 1: set: Illegal option -o Current` *(status 2)* | `sourced=0` | `sourced=0` | `sourced=0` | **2>** `<shell>[2]: .[1]: set: Current: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `sourced=126` **2>** `./snap.sh:set:12: can't change option: monitor` |
+| `shopt/an-indicator-takes-a-request-and-does-not-move` | `s=127~q=127` **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` | `s=0~login_shell         	off~q=1` | `s=0~login_shell         	off~q=1` | `s=0~login_shell    	off~q=1` | `s=127~q=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found` | `s=127~q=127` **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` |
+| `shopt/an-indicator-takes-an-unset-too` | `u=127~p=127` **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` | `u=0~shopt -u restricted_shell~p=1` | `u=0~shopt -u restricted_shell~p=1` | `u=0~shopt -u restricted_shell~p=1` | `u=127~p=127` **2>** `<shell>: shopt: not found~<shell>: shopt: not found` | `u=127~p=127` **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` |
 | `opt/set-o-noexec-reads-and-never-runs` | `before` | `before` | `before` | `before` | `before` | `before` |
 | `opt/set-v-echoes-a-here-document-with-its-command` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` | `after` **2>** `cat <<END >&2~body~END~body~echo after` |
 | `opt/set-v-echoes-the-tail-after-the-last-command` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` |
@@ -7941,6 +7952,60 @@ grades it and nothing drift-checks it either, for the same reason.
   set -o onecmd
   echo "st=$?"
   echo after
+  ```
+- `opt/set-t-stops-after-the-line-that-set-it` — `set -t` is the letter behind `onecmd`, and it stops the shell that is *reading*: the bash columns and ksh93 write A and nothing else, at 0, so the option is not "one more command" but "no more input". From a file rather than `-c`, because the route is the whole question — see the command-string case below. zsh has the letter and refuses to move it, and dash has never heard of it
+  ```sh
+  echo A
+  set -t
+  echo B
+  ```
+- `opt/set-t-lets-its-own-line-finish` — where the boundary is: the line that turns the option on runs to its *end* — B is written — and the line after it is never read. So the unit is the input the shell has already taken, not the command, which is what makes a front end able to honor it at all
+  ```sh
+  set -t; echo B
+  echo C
+  ```
+- `opt/set-t-can-be-taken-back-on-the-same-line` — and the corollary: because the option is read after the line rather than when it is set, the same line can cancel it — C is written. Unlike `set -n`, which is one-way in all four, this one is not, and a shell that stopped the moment the option went on would fail exactly here
+  ```sh
+  set -t; set +t
+  echo C
+  ```
+- `opt/set-t-does-not-stop-a-file-it-sourced` — which shell stops. The sourced file runs to its own end — S1 and S2 both — and the shell that was reading when `.` returned is the one that reads no further, so AFTER is missing. That is the difference between an option about reading and an option about running, and it is what says the check belongs to the front end holding the *outer* input rather than to the interpreter
+  ```sh
+  printf 'echo S1\nset -t\necho S2\n' > inner.sh
+  . ./inner.sh
+  echo AFTER
+  ```
+- `opt/set-t-on-the-command-string-route` — the one route the two shells that have the option disagree about, which is why it is an axis and not a rule: the bash columns read on and write B, and ksh93 stops there and writes nothing. Both stop a script file and both stop standard input. It is also the route that matters in practice — an agent harness snapshots a shell with `set -o | grep on`, which matches the *name* `onecmd` and not the status column, and sources the result ahead of every `-c` it runs (#1709)
+  ```sh
+  set -t
+  echo B
+  ```
+- `opt/set-plus-t-is-granted-where-set-t-is-refused` — the letter a shell *has* and will not move still takes a request for the state it is already in, which is the rule its long names follow: zsh answers `set +t` with 0 and says nothing where `set -t` is `can't change option: -t` at 1, fatally — and answers them the other way round in a shell started with `-t`. dash refuses both signs alike, because it has not got the letter at all, which is what says the grant hangs on having the letter rather than on the state. The bash columns and ksh93 simply take it
+  ```sh
+  set +t; echo "st=$?"
+  ```
+- `opt/set-t-at-the-invocation` — the option arriving before anything has been read, which is the shape a script cannot set up for itself: one line of the file runs and the rest is never read. The letter and the name are one question — `-o onecmd` in place of `-t` records the same answer in the shells that have the name
+  ```sh
+  echo A
+  echo B
+  ```
+- `opt/set-t-shows-in-dollar-dash` — the state is visible even on the route that never acts on it: the bash columns say has-t from a `-c` string they go on to finish. Membership rather than the whole string, for the reason every other `$-` case uses it: no two shells order the letters alike
+  ```sh
+  set -t; case $- in *t*) echo has-t;; *) echo no-t;; esac
+  ```
+- `opt/a-set-o-listing-sources-back` — the round trip, written the way an agent harness writes it — `grep on` matches the option *name* as readily as the status column, so the file holds `set -o ` lines for options that are off. The bash columns read their own listing back with nothing on standard error, which is the whole contract: a shell that lists a name and then refuses it cannot be captured and restored. Ours listed `onecmd` and refused it, so every command a harness ran began with our complaint (#1709)
+  ```sh
+  set -o | grep 'on' | awk '{print "set -o " $1}' > snap.sh
+  . ./snap.sh
+  echo sourced=$?
+  ```
+- `shopt/an-indicator-takes-a-request-and-does-not-move` — `login_shell` is one of exactly two of the sixty names bash lists that a `shopt -s` does not move — `restricted_shell` is the other, and every other name really switches. Measured a name at a time in bash 5.3 and bash 3.2: status 0, nothing on standard error, and the name still reads off. A request taken and ignored, which is not the same as a request refused — and it has to be matched, because `shopt -p` in a login shell dumps `shopt -s login_shell` for a harness to source back. The other three shells have no `shopt` at all
+  ```sh
+  shopt -s login_shell; echo "s=$?"; shopt login_shell; echo "q=$?"
+  ```
+- `shopt/an-indicator-takes-an-unset-too` — the second indicator and the other direction, with the reissuable spelling that a capture is made of: `shopt -p` writes the `shopt -u` line and reports 1 because the name is off, and the `-u` that would move it reports 0 and moves nothing
+  ```sh
+  shopt -u restricted_shell; echo "u=$?"; shopt -p restricted_shell; echo "p=$?"
   ```
 - `opt/set-o-noexec-reads-and-never-runs` — the long spelling of `set -n`, and it behaves identically in all four: everything after it is read and never run, and the script still ends at 0 — the same option under its other name, which was refused as unimplemented here while the letter worked
   ```sh

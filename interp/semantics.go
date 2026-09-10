@@ -4075,6 +4075,25 @@ type Semantics struct {
 	// `opt/set-e-carries-the-err-trap`.
 	SetHasTraceLetters Answer
 
+	// SetHasTheTLetter gives `set` the -t letter: the shell reads and runs
+	// one more line and then stops, which is what bash lists as `onecmd` and
+	// what ksh93 spells with the letter alone. Two of the panel have it and
+	// mean this by it; zsh has the letter and refuses to move it, the way it
+	// refuses the `onecmd` name it borrowed for `singlecommand`; dash has
+	// never heard of it and answers `Illegal option -t`. Recorded as
+	// `opt/set-t-stops-after-one-command`.
+	SetHasTheTLetter Answer
+
+	// OneCommandStopsACommandString extends `set -t` to `-c`, and it is the
+	// one route the two shells that have the option disagree about.
+	// Measured: a two-line command string that sets it and then echoes —
+	// bash writes the echo, the option is on and `$-` says so, and the shell
+	// reads the rest of the string anyway — where ksh93 given the same
+	// string writes nothing. Both stop a script file and both stop standard
+	// input, so the question is this route and no other. Asked only where
+	// the option is on; see Runner.OneCommand.
+	OneCommandStopsACommandString Answer
+
 	// SetHasTheHLetter gives `set` the -h letter at all. Three of the four
 	// have it and no two mean quite the same thing by it — which option it
 	// abbreviates is SetHLetterTracksCommands — while dash refuses the
@@ -5400,6 +5419,11 @@ func PosixSemantics() Semantics {
 		// POSIX has no such names; refusal is one shell's own answer.
 		PunctuatedFunctionNameIsRefused: No,
 		SetHasTraceLetters:              No,
+		// The standard's `set` has no -t and neither does its `sh`, so the
+		// preset follows the text; the two shells that grew the letter
+		// override. dash — the closest reading of the standard here — is the
+		// one that refuses it outright, which is the same answer.
+		SetHasTheTLetter: No,
 		// POSIX names -h itself, as command tracking: "locate and remember
 		// utilities invoked by functions as those functions are defined".
 		// dash is the one shell that refuses the letter, and overrides.

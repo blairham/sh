@@ -1933,7 +1933,26 @@ func (r *Runner) Exited() bool { return r.ctl == controlExit }
 // For a front end, because the option's whole effect is on reading: a line is
 // run and then nothing more is read. Asked after each line rather than once,
 // since the option can be set — and unset again — by the line itself.
-func (r *Runner) OneCommand() bool { return r.onecmd }
+//
+// The command-string route is where the two shells that have the option
+// disagree, so it is answered here rather than in the front end: measured, a
+// two-line `-c` string that turns the option on runs to its end under bash and
+// stops after the first line under ksh93. It used to be a route the shared
+// driver excluded outright, which was one shell's answer written where every
+// dialect reads it (#1716).
+//
+// Read rather than `ask`ed, for the reason SetInteractiveMonitor reads its
+// axis: a front end consults this after every line, so an unanswered preset
+// would put "the shells disagree" between every pair of commands rather than
+// once. No preset that leaves it unanswered can have the option on in the
+// first place — the long name is a dialect's to declare with AddSetOptions,
+// and the letter hangs on Semantics.SetHasTheTLetter.
+func (r *Runner) OneCommand() bool {
+	if !r.onecmd {
+		return false
+	}
+	return r.Route != RouteCommandString || r.sem().OneCommandStopsACommandString == Yes
+}
 
 // Finish ends the session and reports the status to exit with.
 //

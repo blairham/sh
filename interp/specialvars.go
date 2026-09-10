@@ -140,6 +140,13 @@ func (r *Runner) optionLetters() string {
 	if r.noexec {
 		b.WriteByte('n')
 	}
+	if r.onecmd {
+		// The state and not its effect: measured, `bash -c 'set -t; echo $-'`
+		// shows `t` on the one route the option never stops, so the letter
+		// reports what was asked for rather than whether it will be acted on.
+		// Unanimous in the two shells that have the option, so no axis.
+		b.WriteByte('t')
+	}
 	if r.monitor {
 		b.WriteByte('m')
 	}

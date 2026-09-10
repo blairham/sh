@@ -85,6 +85,24 @@ var samples = []struct {
 	// and ` debman` — a formatted file defining different functions from the
 	// one it was made from, at status 0.
 	{name: "zsh-func-continued-names", src: "function man \\\n  dman \\\n  debman {\n  echo \"$0\"\n}\n", zsh: true},
+	// A `name()` whose name holds whitespace (#1743). The header is rebuilt
+	// from source text, and the squeeze that puts it on one line used to run
+	// over the quoting: an escaped *tab* came back an escaped space and
+	// `'a  b'` came back `'a b'`, each of them a formatted file defining a
+	// different function from the one it was made from, at status 0.
+	{name: "zsh-func-name-with-a-space", src: "'a b'() {\n  echo hi\n}\n", zsh: true},
+	{name: "zsh-func-name-escaped-space", src: "a\\ b() {\n  echo hi\n}\n", zsh: true},
+	{name: "zsh-func-name-escaped-tab", src: "a\\\tb() {\n  echo hi\n}\n", zsh: true},
+	{name: "zsh-func-name-two-spaces", src: "'a  b'() {\n  echo hi\n}\n", zsh: true},
+	{name: "zsh-func-name-empty", src: "''() {\n  echo hi\n}\n", zsh: true},
+	// A `case` pattern holding a blank (#1744), which is a grammar the arm's
+	// **paren** opens — so the paren this printer otherwise drops is
+	// load-bearing here. Written back without it, `(a b)` is a parse error
+	// and `((x) y)` is a program that parses to a different one.
+	{name: "zsh-case-pattern-blank", src: "case $1 in\n(a b) echo one ;;\nesac\n", zsh: true},
+	{name: "zsh-case-pattern-group-blank", src: "case $1 in\n((x) y) echo one ;;\nesac\n", zsh: true},
+	{name: "zsh-case-pattern-blank-alt", src: "case $1 in\n(a b | z) echo one ;;\nesac\n", zsh: true},
+	{name: "zsh-case-pattern-blank-oneline", src: "case $1 in (a b) echo one ;; esac\n", zsh: true},
 	{name: "coproc", src: "coproc cat\n"},
 	// Regressions from the wild sweep, one sample per found bug.
 	{name: "procsub-redirect", src: "while read -r l; do\n\techo \"$l\"\ndone < <(printf '%s\\n' a b)\n"},

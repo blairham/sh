@@ -153,6 +153,18 @@ func Dialect() syntax.Dialect {
 	// subject `a`, and its second alternative is the two characters newline
 	// and `b`; every other shell in the panel refuses the line.
 	d.CasePatternListSpansNewlines = true
+	// And a blank in the same place is a character of the pattern too, so
+	// `(a b)` is one three-character pattern: `case 'a b' in (a b)` matches
+	// here and is a syntax error in the other five. The paren is what
+	// licenses it — without one this shell refuses the line as well — and the
+	// blanks are verbatim, so `(a b)` misses `a  b`. Only where the pattern
+	// continues, which is what keeps `(a | b)` two alternatives.
+	//
+	// Line 234 of `VCS_INFO_get_data_git` is `(''(x|exec) *)` — a group, a
+	// blank, more pattern — so without this the git segment of every prompt
+	// drawing one fails to autoload (#1744). See
+	// syntax.Dialect.CasePatternListSpansBlanks.
+	d.CasePatternListSpansBlanks = true
 	// `<->` is a number and `<1-9>` a bounded one, where every other panel
 	// shell reads the `<` as a redirection. Measured 2026-09-05 on zsh
 	// 5.9.2: `[[ 1 = <-> ]]` is 0 here and a syntax error in bash 5.3, bash
@@ -188,6 +200,19 @@ func Dialect() syntax.Dialect {
 	// meant to use came to arrives as a quoted word: an empty one (#1548) or
 	// one holding a space (#1560).
 	d.FunctionKeywordNameIsAnyWord = true
+	// And the same of the `name()` spelling, which this parser had refusing a
+	// quoted word while the keyword form took one — so `function a\ b { … }`
+	// defined a function and `a\ b() { … }`, the same name, was a parse
+	// error. Five of the six columns read the definition and four of those
+	// refuse the *name* where it runs; only dash refuses to parse it. See
+	// syntax.Dialect.FunctionNameIsAnyWord.
+	//
+	// Reached in the wild by every completion widget on the machine:
+	// `zsh-autosuggestions` builds a wrapper per widget out of
+	// `$widgets[$widget]`, which for a completion widget is
+	// `user:_complete_help -C .complete-word _complete_help`, quotes the
+	// blanks with backslashes and `eval`s a `name()` definition of it (#1743).
+	d.FunctionNameIsAnyWord = true
 	// A `(` where an argument may stand belongs to the word: `echo MY ( x )`
 	// is two words there and a syntax error in the other four. Measured
 	// 2026-09-06 on zsh 5.9.2 — `unknown file attribute:` names the space

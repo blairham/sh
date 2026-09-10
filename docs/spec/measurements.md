@@ -5448,6 +5448,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/function-keyword-with-several-names-over-lines` | **2>** `<shell>: 3: Syntax error: "}" unexpected` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error near unexpected token `dman'~<shell>: -c: line 2: `  dman \'` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error near unexpected token `dman'~<shell>: -c: line 2: `  dman \'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `dman'~<shell>: -c: line 1: `  dman \'` *(status 2)* | `[man]~st=127` **2>** `<shell>: line 3: debman: not found` | `[man]~[debman]~st=0` |
 | `cmd/function-keyword-with-a-repeated-name` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `a'~<shell>: -c: line 1: `function a a { echo "[$0]"; }; a; echo st=$?'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `a'~<shell>: -c: line 1: `function a a { echo "[$0]"; }; a; echo st=$?'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `a'~<shell>: -c: line 0: `function a a { echo "[$0]"; }; a; echo st=$?'` *(status 2)* | `[a]~st=0` | `[a]~st=0` |
 | `cmd/function-posix-form` | `posix` | `posix` | `posix` | `posix` | `posix` | `posix` |
+| `cmd/function-posix-name-holding-a-space` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `st=127` **2>** `<shell>: line 1: `a\ b': not a valid identifier~<shell>: line 1: a b: command not found` | **2>** `<shell>: line 1: `a\ b': not a valid identifier` *(status 2)* | `st=127` **2>** `<shell>: `a\ b': not a valid identifier~<shell>: a b: command not found` | **2>** `<shell>: a b: invalid function name` *(status 1)* | `b~st=0` |
+| `cmd/function-posix-name-holding-an-operator` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | **2>** `<shell>: line 1: `'a;b'': not a valid identifier~<shell>: line 1: `'a\|b'': not a valid identifier~<shell>: line 1: a;b: command not found~<shell>: line 1: a\|b: command not found` *(status 127)* | **2>** `<shell>: line 1: `'a;b'': not a valid identifier` *(status 2)* | **2>** `<shell>: `'a;b'': not a valid identifier~<shell>: `'a\|b'': not a valid identifier~<shell>: a;b: command not found~<shell>: a\|b: command not found` *(status 127)* | **2>** `<shell>: a;b: invalid function name` *(status 1)* | `one~two` |
+| `cmd/function-posix-name-that-is-empty` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `st=127` **2>** `<shell>: line 1: `''': not a valid identifier~<shell>: line 1: : command not found` | **2>** `<shell>: line 1: `''': not a valid identifier` *(status 2)* | `st=127` **2>** `<shell>: `''': not a valid identifier~<shell>: : command not found` | **2>** `<shell>: : invalid function name` *(status 1)* | `b~st=0` |
+| `cmd/function-posix-name-in-quotes` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `st=127` **2>** `<shell>: line 1: `'q'': not a valid identifier~<shell>: line 1: q: command not found` | **2>** `<shell>: line 1: `'q'': not a valid identifier` *(status 2)* | `st=127` **2>** `<shell>: `'q'': not a valid identifier~<shell>: q: command not found` | `b~st=0` | `b~st=0` |
+| `cmd/function-posix-name-with-a-bare-equals` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2 all=x y` | `n=2 all=x y` | `n=2 all=x y` | `n=2 all=x y` | `n=2 all=x y` |
 | `cmd/function-keyword-form` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `kw` | `kw` | `kw` | `kw` | `kw` |
 | `cmd/function-keyword-and-parens` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `both` | `both` | `both` | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `both` |
 | `cmd/a-subshell-that-opens-with-a-subshell` | `hi~st=0` | `hi~st=0` | `hi~st=0` | `hi~st=0` | `hi~st=0` | `hi~st=0` |
@@ -6080,6 +6085,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cmd/function-posix-form` — the universal definition form
   ```sh
   f() { echo posix; }; f
+  ```
+- `cmd/function-posix-name-holding-a-space` — the `name()` spelling of a name that is not an identifier, which is where a real startup meets this: `zsh-autosuggestions` builds a wrapper per completion widget out of `$widgets[$widget]` — `user:_complete_help -C .complete-word _complete_help`, blanks and all — quotes the blanks with backslashes and `eval`s a definition of it, sixty-nine times. The panel splits by *stage* rather than by yes and no: zsh defines it and calls it; bash 5.3 and bash 3.2 read the definition, answer `not a valid identifier` naming the source text and carry on at 0; bash-as-sh says the same sentence and is fatal at 2; ksh93 refuses the name — expanded, not as written — and stops at 1; dash alone refuses to *parse* it. Five of the six read the definition, which is what makes this grammar rather than a name check
+  ```sh
+  a\ b() { echo b; }; 'a b'; echo st=$?
+  ```
+- `cmd/function-posix-name-holding-an-operator` — the row that separates *any word is a name* from *a wider set of name characters*, in the form the keyword row already has it: no character class that could be written down holds a semicolon and a pipe, because a grammar reading them unquoted would have stopped the word before them. The quoting is the whole of the rule
+  ```sh
+  'a;b'() { echo one; }; 'a|b'() { echo two; }; 'a;b'; 'a|b'
+  ```
+- `cmd/function-posix-name-that-is-empty` — the empty string as a `name()`, and the half a definition row cannot show — a name that was accepted is a name that calls. zsh defines and runs it; ksh93 parses the parentheses, refuses the empty name and stops; the three bash spellings blame the quoted word; dash blames the grammar. A reading that stored the source text `''` as the name would define something and call nothing
+  ```sh
+  ''() { echo b; }; ''; echo st=$?
+  ```
+- `cmd/function-posix-name-in-quotes` — the sharpest control this group has and a *different* panel split from the rows above. The name is `q` — one nobody could object to — and the quotes are all that is unusual: zsh **and ksh93** remove them and define `q`, so it splits two against four where a name holding a space splits it one against five. That is what says these rows measure the quoting rather than a wider set of name characters, since no set of characters can exclude `q`. This implementation removes the quotes in every dialect, which is right for two columns and wrong for three (#1561, #1566)
+  ```sh
+  'q'() { echo b; }; q; echo st=$?
+  ```
+- `cmd/function-posix-name-with-a-bare-equals` — the reading that must not be a definition, and the reason a `name()` taking any word still asks about `=`: an array assignment is a parenthesis after a word too, so a grammar that dropped the name test entirely reads `a=()` as defining a function called `a=`. The count and the elements are both on the line, and the elements are asked for with `[*]` rather than by index because the two array bases would part the columns on a question this row is not about — a shell that read the line as a definition leaves `a` unset and prints an empty pair either way
+  ```sh
+  a=(x y); echo "n=${#a[@]} all=${a[*]}"
   ```
 - `cmd/function-keyword-form` — the ksh keyword form: core, absent from dash
   ```sh
@@ -10612,6 +10637,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shape/for-empty-list-is-no-iterations` | `(none)` | `(none)` | `(none)` | `(none)` | `(none)` | `(none)` |
 | `shape/for-newline-separator` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` |
 | `shape/case-leading-paren` | `paren` | `paren` | `paren` | `paren` | `paren` | `paren` |
+| `shape/case-pattern-holding-a-blank` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `b'~<shell>: -c: line 1: `case 'a b' in (a b) echo hit;; (*) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `b'~<shell>: -c: line 1: `case 'a b' in (a b) echo hit;; (*) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `b'~<shell>: -c: line 0: `case 'a b' in (a b) echo hit;; (*) echo no;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `b' unexpected` *(status 3)* | `hit~two~unmatched` |
+| `shape/case-pattern-blank-needs-the-paren` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `b'~<shell>: -c: line 1: `case 'a b' in a b) echo hit;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `b'~<shell>: -c: line 1: `case 'a b' in a b) echo hit;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `b'~<shell>: -c: line 0: `case 'a b' in a b) echo hit;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `b' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `b'` *(status 1)* |
+| `shape/case-pattern-blank-around-the-separator` | `no~no` | `no~no` | `no~no` | `no~no` | `no~no` | `no~no` |
+| `shape/case-pattern-group-then-a-blank` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case 'x y' in ((x) y) echo hit;; (*) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case 'x y' in ((x) y) echo hit;; (*) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case 'x y' in ((x) y) echo hit;; (*) echo no;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `hit` |
 | `shape/case-pattern-alternatives` | `alt` | `alt` | `alt` | `alt` | `alt` | `alt` |
 | `shape/case-empty-body-and-no-match` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` |
 | `shape/case-pattern-with-an-empty-alternative` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `case "" in (\|https\|git) echo empty-matched;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `\|'~<shell>: -c: line 1: `case "" in (\|https\|git) echo empty-matched;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `\|'~<shell>: -c: line 0: `case "" in (\|https\|git) echo empty-matched;; *) echo no;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `\|' unexpected` *(status 3)* | `empty-matched~named-matched~unmatched` |
@@ -10665,6 +10694,25 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shape/case-leading-paren` — a case pattern may carry a leading open paren
   ```sh
   case x in (x) echo paren;; esac
+  ```
+- `shape/case-pattern-holding-a-blank` — a pattern written with a leading `(` may hold whitespace, and the whitespace is **verbatim**. One shell matches all three lines and the other five call the first one a syntax error in three wordings at three statuses — bash 5.3, bash 3.2 and bash-as-sh blame the `b`, ksh93 blames it at 3, dash blames "word". All three subjects are in one row because a reading that admitted the line and then dropped or collapsed the blanks would pass a row that asked about parsing alone: line two says a run of blanks is not collapsed and line three says the blank is not dropped. It is the line `VCS_INFO_get_data_git` stops at, so it is the git segment of every prompt drawing one (#1744)
+  ```sh
+  case 'a b' in (a b) echo hit;; (*) echo no;; esac
+  case 'a  b' in (a b) echo one;; (a  b) echo two;; (*) echo no;; esac
+  case ab in (a b) echo m;; (*) echo unmatched;; esac
+  ```
+- `shape/case-pattern-blank-needs-the-paren` — the control the row above needs, and the one that keeps it from reading as *a word may follow a pattern*: written without the arm's paren the same line is a syntax error in **all six**, the shell that accepts the parenthesized form included. So the parenthesis is what licenses the blank and the position is not
+  ```sh
+  case 'a b' in a b) echo hit;; *) echo no;; esac
+  ```
+- `shape/case-pattern-blank-around-the-separator` — the other half of the rule, and the half that parses everywhere: blanks are text only where the pattern *continues* after them. A run in front of the `|` that separates two alternatives, or in front of the `)` that closes the list, still separates nothing — so all six shells print `no` for both lines and `(a | b)` stays two alternatives. Without this a fix for the row above would silently make every case arm's spacing part of its patterns
+  ```sh
+  case 'a b' in (a | b) echo hit;; (*) echo no;; esac
+  case 'a ' in (a ) echo hit;; (*) echo no;; esac
+  ```
+- `shape/case-pattern-group-then-a-blank` — the failing line's actual shape — a group, a blank, more pattern — which is what `VCS_INFO_get_data_git` line 234 is: `(''(x|exec) *)`. Its own panel, and the reason it is not folded into the row above: the four columns that name a token blame the `(` here and the `b` there, because the arm's paren and the group's arrive at the same character — dash names neither and says `word unexpected` to both. It is marked a syntax error because the corpus's own grammar declines a bare `(` inside a word — that is two further flags, and turning them on here would change how every other snippet reads — so the construct is pinned in syntax/caseblank_test.go and dialect/zsh/caseblank_test.go, and this row is here for the six columns. It is also the row that catches a printer dropping the arm's `(` as layout, since `(x) y)` parses to a different program rather than failing
+  ```sh
+  case 'x y' in ((x) y) echo hit;; (*) echo no;; esac
   ```
 - `shape/case-pattern-alternatives` — patterns alternate with |
   ```sh

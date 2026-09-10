@@ -255,6 +255,23 @@ type ParamExpr struct {
 	// group means is Flags' question: a `z` in it splits, a `Z` in it splits
 	// when this is non-empty.
 	ShellSplitOpts string
+	// EscapeOpts is the option letters the `g` flag's escape reading runs
+	// with: `o` for octal escapes that need no leading zero, `e` for the
+	// `\M-x` family, and `c` for `^X`. `${(g:oe:)v}` carries "oe" and the
+	// bare `${(g::)v}` carries nothing at all.
+	//
+	// Accumulated rather than assigned, for the reason ShellSplitOpts is:
+	// a group may write the flag twice and the sets union. Measured on zsh
+	// 5.9.2, the one shell with the flag, on `X\EY` and `X\101Y`:
+	//
+	//	${(g::g:e:)v}   the escape character   an empty argument adds none
+	//	${(g:e:g::)v}   the escape character   and takes none away
+	//	${(g:o:g::)w}   A                      so `o` survives the second
+	//
+	// Empty is meaningful and is not the same as no `g` at all: `${(g::)v}`
+	// reads escapes with no option set, where a group with no `g` reads none.
+	// Which of the two it is, is Flags' question.
+	EscapeOpts string
 	// FlagsErrPos is the 1-based position, counted from the `$`, of the
 	// first character the flag group could not read, and 0 when it read
 	// cleanly. The error is the interpreter's to report — reached in a
@@ -795,6 +812,17 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 				e.SplitSep = arg
 			case 'j':
 				e.JoinSep = arg
+			case 'g':
+				if k := strings.IndexFunc(arg, notAnEscapeOpt); k >= 0 {
+					// The same shape the `Z` argument's letters have, and
+					// measured the same way: `${(g:x:)v}` is `error in flags
+					// near position 6`, the position of the `x`, on the one
+					// shell that has the flag.
+					e.FlagsErrPos = i + 1 + k + 3
+					return ""
+				}
+				// Unioned, as `Z`'s letters are. See EscapeOpts.
+				e.EscapeOpts += arg
 			case 'Z':
 				if k := strings.IndexFunc(arg, notAShellSplitOpt); k >= 0 {
 					// An option letter the flag does not have is an error
@@ -827,6 +855,17 @@ const paramShellSplitOpts = "cCn"
 
 func notAShellSplitOpt(r rune) bool {
 	return !strings.ContainsRune(paramShellSplitOpts, r)
+}
+
+// paramEscapeOpts are the option letters the `g` flag's argument may carry,
+// established the way paramShellSplitOpts was — the whole alphabet, one
+// letter at a time, against the shell that has the flag: `o`, `e` and `c`,
+// and nothing else, every other letter being an error in the flags at its own
+// position.
+const paramEscapeOpts = "oec"
+
+func notAnEscapeOpt(r rune) bool {
+	return !strings.ContainsRune(paramEscapeOpts, r)
 }
 
 // matchingFlagDelimiter is the character that closes a flag argument: the

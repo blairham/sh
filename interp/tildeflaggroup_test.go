@@ -278,6 +278,14 @@ func TestTheTildeGroupFlagIsRefusedWhereItCannotBeCarried(t *testing.T) {
 			"testsh: ${(~%j.|.)m}: the (~) expansion flag is not implemented beside the (%) flag\n",
 		},
 		{
+			// Rule 21's re-reading is the furthest of the family from a
+			// per-character rewrite: it reads the joined text as shell
+			// source, where an inserted separator is not a separator at all.
+			"the re-reading reads the join as source",
+			`a=(p q); printf "[%s]" "${(~ej.|.)a}"`,
+			"testsh: ${(~ej.|.)a}: the (~) expansion flag is not implemented beside the (e) flag\n",
+		},
+		{
 			"and the split separator is named for itself",
 			`v=a-b; printf "[%s]" "${(~s.-.)v}"`,
 			"testsh: ${(~s.-.)v}: the (~) expansion flag is not implemented for the (s) separator\n",

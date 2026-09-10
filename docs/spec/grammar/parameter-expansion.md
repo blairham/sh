@@ -952,6 +952,8 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(W)` | with `${#…}`: words, empties too | `v="a b  c"; ${(W)#v}` | `4` |
 | `(p)` | read the next flags' arguments with escapes | `a=(x y); ${(pj:\n:)a}` | `x`, newline, `y` |
 | `(Z:opts:)` | split a value as a command line | `v="a b  c"; ${(Z+n+)v}` | `a`, `b`, `c` |
+| `(g:opts:)` | read the value's backslash escapes | `v='a\tb'; ${(g::)v}` | a real tab |
+| `(e)` | read the result again as shell text | `w=zz; v='$w'; ${(e)v}` | `zz` |
 
 Details, each measured:
 
@@ -1647,10 +1649,194 @@ wrong respectively, trading one wrong answer for another, so the question
 is left where the knowledge is rather than copied. Filed as #1514 rather
 than hidden; nothing in the flag's own surface reaches it.
 
+### `(g:opts:)` — read the value's backslash escapes
+
+The vendor manual gives it in five lines: process escapes like `echo` when
+no option is given, `o` makes octal escapes need no leading zero, `c` reads
+`^X`, `e` reads `\M-t` and its family like `print`, and in none of the
+readings is `\c` interpreted. The letters are additive over a base, and the
+base is *this shell's* `echo` rather than any `echo` — which matters,
+because "like the echo builtin" is a claim about a builtin that differs
+between shells.
+
+Measured 2026-09-09 on zsh 5.9.2:
+
+| value | `${(g::)v}` | `${(g:o:)v}` | `${(g:e:)v}` | `${(g:c:)v}` |
+| --- | --- | --- | --- | --- |
+| `X\tY` | tab | tab | tab | tab |
+| `X\eY` | escape | escape | escape | escape |
+| `X\EY` | `X\EY` | `X\EY` | escape | `X\EY` |
+| `X\x41Y` | `XAY` | `XAY` | `XAY` | `XAY` |
+| `X\u0041Y` | `XAY` | `XAY` | `XAY` | `XAY` |
+| `X\101Y` | `X\101Y` | `XAY` | `X\101Y` | `X\101Y` |
+| `X\0101Y` | `XAY` | backspace `1` | `XAY` | `XAY` |
+| `X\cY` | `X\cY` | `X\cY` | `XcY` | `X\cY` |
+| `X\M-AY` | `X\M-AY` | `X\M-AY` | `0xc1` | `X\M-AY` |
+| `X\C-AY` | `X\C-AY` | `X\C-AY` | `0x01` | `X\C-AY` |
+| `X\qY` | `X\qY` | `X\qY` | `XqY` | `X\qY` |
+| `X^XY` | `X^XY` | `X^XY` | `X^XY` | `0x18` |
+
+**Two rows carry the whole of `o` and they are the two an implementation
+gets wrong.** `\101` is text in three readings and `A` in the fourth, and
+`\0101` is `A` in three and a backspace followed by a `1` in the fourth —
+because `o` does not mean "octal as well", it means the leading zero is not
+part of the escape, so the same three digits are read from a different
+place. A `(g)` written as "process the escapes" answers both rows the base
+way and looks right on the other ten.
+
+`\c` is the row the manual is explicit about and the row a reader would
+otherwise inherit from `print`: it never ends the output here, so under `e`
+it is an escape this shell does not know and loses its backslash exactly as
+`\q` does, and in the other readings it is two characters of text.
+
+The rest of the details, each measured: `\M-` and `\C-` take an optional
+dash and nest (`\M-\C-A` is 0x81, `\MA` is `\M-A`); `\C-?` is delete and
+every other target keeps its low five bits, so `\C-@` is NUL and `\C-a` and
+`\C-A` are both 1; a caret is a target for `\M-` when `c` is given
+(`\M-^A` is 0x81) and *not* for `\C-`, which takes the `^` itself
+(`\C-^A` is 0x1e then an `A`); `\x` takes up to two hex digits and `\u` and
+`\U` up to four and eight, and each with none at all is a NUL; an octal
+value above 255 is truncated to a byte; and a trailing backslash is a
+backslash.
+
+The **argument's letters are the grammar's**, exactly as `(Z)`'s are: a
+letter outside `oec` is `error in flags near position N` at the letter
+rather than a refusal when the expansion is reached, and the flag with no
+argument at all errors at the character that arrived instead. Two `g`
+arguments **union** — `${(g:o:g::)v}` on `X\101Y` is `XAY`, so the empty
+second argument takes nothing away — which is the same rule `(Z)`'s
+arguments follow.
+
+Where the reading runs is rule 13, and the manual gives the half-step too:
+"first any replacements from the `(g)` flag are performed, then any
+prompt-style formatting from the `(%)` family". Measured from both sides,
+because a rule list is a claim to check:
+
+| probe | zsh 5.9.2 | if the reading ran first |
+| --- | --- | --- |
+| `v='A\TB'; ${(Lg::)v}` | a real tab | `a\tb` |
+| `v='a\tb'; ${(Ug::)v}` | `A\TB` | `A<TAB>B` |
+| `v='a\tb'; ${(qg::)v}` | `a$'\t'b` | `a\\tb` |
+
+The first two are the discriminating pair and they are a pair on purpose:
+lowering `A\TB` *makes* an escape the reader can use and raising `a\tb`
+*destroys* one, so a reading placed before the case conversion answers both
+the other way round. Neither order of the letters in the group changes it.
+
+The reading itself is a measurement about one shell, and that shell already
+has it for `echo`, for `print` and for the `(p)` flag's arguments — so the
+substrate asks rather than answers. `interp.Runner.SetExpansionEscapes`
+installs it, `dialect/zsh/print.go` is the one decoder all three readings
+share with a struct of four booleans saying which is which, and a runner
+nobody told refuses `(g)` by name. That refusal matters more than `(p)`'s:
+a `(g)` read as a no-op is *right* for every value with no backslash in it,
+so it would survive the first thing anyone tried and be wrong at status 0
+wherever it mattered.
+
+Found in the wild: powerlevel10k's `_p9k_init_params` reads
+`POWERLEVEL9K_BATTERY_STAGES` with `${(g::)…}`.
+
+### `(e)` — read the result again as shell text
+
+Rule 21: "any `(e)` flag is applied to the value, forcing it to be
+re-examined for new parameter substitutions, but also for command and
+arithmetic substitutions". That sentence leaves two questions open, and
+both were measured on zsh 5.9.2, 2026-09-09.
+
+**How often.** Once. With `inner='$deeper'` and `deeper=bottom`,
+`v='$inner'; ${(e)v}` is `$deeper` and not `bottom`. Looping is the
+plausible reading and it agrees with this one on every value that resolves
+in a single step, which is nearly all of them — so the row is here rather
+than assumed.
+
+**What happens to the text around the substitutions.** Not a word
+expansion. With `d=DD` and `arr=(p q r)`:
+
+| value | `${(e)v}` | says |
+| --- | --- | --- |
+| `~` | `~` | no tilde expansion |
+| `a*` | `a*`, one field | no filename generation |
+| `{x,y}` | `{x,y}` | no brace expansion |
+| `'$d'` | `'DD'` | a quote is text and does not protect |
+| `\$d` | `$d` | a backslash before a `$` does |
+| `\\$d` | `\DD` | and before another backslash is one backslash |
+| `a\tb` | `a\tb` | before anything else it is text, both of it |
+| `a\"b` | `a\"b` | the double quote included |
+| `$` | `$` | a `$` with nothing usable after it is a `$` |
+| `$arr` | `p q r`, three fields | an array reference yields fields |
+| `$(echo a; echo b)` | two fields | a command substitution's result splits |
+
+The backslash rule there is exactly a **here-document body's**: an escape
+only in front of `$`, a backtick, another backslash and a newline. So the
+implementation is the here-document reader with the substitutions marked
+unquoted, rather than a second expander written to the same description.
+
+The two halves were confirmed against the options that move them, which is
+what says they are the ordinary axes rather than rules of this flag's:
+under `SH_WORD_SPLIT` the scalar `sp='a b'` becomes two fields here, and
+under `GLOB_SUBST` an `a*` in the *result* matches — the enclosing
+expansion's question, asked in the ordinary place.
+
+Where it runs is last of the value transformations, later even than the
+ordering:
+
+| probe | zsh 5.9.2 | if the reading ran first |
+| --- | --- | --- |
+| `d=DD; v='$d'; ${(eU)v}` | empty | `DD` |
+| `sp='a b'; v='$sp'; ${(es: :)v}` | one field, `a b` | two fields |
+| `sq=hi; v='$sq'; ${(eq)v}` | `$sq` | `hi` quoted |
+
+The first is the sharpest: the case conversion made `$D`, which names
+nothing, so the answer is empty rather than the value a reader expects.
+
+**Rule 23's rejoin is per word**, which is the half that has to be measured
+rather than read. Where the expansion must come to a single word, the
+fields *one* word produced go back together with IFS's first character and
+the words the pipeline already held stay apart. With `arr=(p q r)`,
+`z='$arr'`, `u='$arr:$arr'` and `v='$arr $arr'`:
+
+| probe | fields |
+| --- | --- |
+| `"${(e)z}"` | 1 — `p q r` |
+| `"${(@e)z}"` | 3 |
+| `${(e)z}` | 3 |
+| `"${(es.:.)u}"` | 2 — `p q r`, `p q r` |
+| `"${(e)=v}"` | 2 — the same |
+| `"${(@es.:.)u}"` | 6 |
+| `IFS=-; "${(e)z}"` | 1 — `p-q-r` |
+| `"${(ej:-:)z}"` | 1 — `p q r` |
+
+Rows four and five are the discriminating ones: a rejoin over the whole
+result answers both with one field, and one that never joined answers the
+first with three. The last row is worth keeping because rule 5's join takes
+the `j` separator and this one does not.
+
+A failure inside the re-read text is a failure of the expansion — an
+expansion the dialect cannot read, and `$((1/0))` a division by zero, both
+abandon the command — which needs no code of its own, the text going through
+the same parser and the same evaluator. **One failure is not raised yet**: an
+expansion left *unterminated*, `v='x${'`, is read as an empty-name expansion
+rather than refused, because `HeredocSpans` does not notice a `${` that runs
+off the end. Filed as #1653; the fix is in the lexer rather than in the flag.
+
+**A value that names its own expansion is bounded here rather than
+followed.** `v='${(e)v}'` re-reads text asking for the same expansion again,
+and the shell does not terminate on it — measured, it spins until it is
+killed. There is no answer to imitate, and the two candidates for what to do
+instead are a hang and a stack overflow; the second is worse than useless in
+a library, where it takes the embedding program down with it. So the depth
+is bounded at the same 32 arithmetic keeps for `x=x` and the refusal says
+`nested too deeply`. A nesting that means something — `l1='$x';
+l2='${(e)l1}'; ${(e)l2}` — is two levels and nowhere near it.
+
+Found in the wild: powerlevel10k's `_p9k_must_init` builds a pattern of
+`$…` references and evaluates it with `${(e)_p9k__param_pat}` to make the
+signature it compares against.
+
 ### What this implementation refuses
 
-Flags zsh has and this slice does not — `(e)` (expand the result again),
-`(t)`, `(D)`, padding, and the rest of the
+Flags zsh has and this slice does not — `(t)`, `(D)`, padding, and the rest
+of the
 alphabet, plus `(q+)` (#1530), the signed-numeric sort flag `(-)` — which
 is every `-` that a `q` did not eat, #1531 — and
 `(qqq…)` beyond four — are refused at run time naming the flag, with the
@@ -1661,18 +1847,15 @@ holds it as each letter is built, because a letter added to the
 implemented set is a letter taken out of the guarantee that let this list
 be enumerated exactly.
 
-Two of them were measured while the rest of #935 was built, and the
-measurements are here so the next change starts from them:
+One of them is measured rather than refused, and the measurement is here so
+the next change starts from it:
 
-- **`(e)`** expands the result again — parameters, command substitutions
-  and arithmetic. `w=zz; v='$w'; ${(e)v}` is `zz` and
-  `v='$(echo hi)'; ${(e)v}` is `hi`; a bare `1+2` is *not* arithmetic and
-  stays `1+2`.
 - **`(A)`** is carried, and the half of it that is carried is the half
   that does nothing. See "The `(A)` flag is two halves" below.
 
-`(z)` was the third and is built (#1547), folded into the capital rather
-than answered beside it — see the split's own section above.
+`(z)` was on this list and is built (#1547), folded into the capital rather
+than answered beside it — see the split's own section above. `(e)` and
+`(g:opts:)` were on it too and are built (#1620); their sections follow.
 
 ### `(~)` is a modifier too, and it is not `${~name}`
 
@@ -1755,6 +1938,12 @@ escape would have to read the joined text back:
   has to be named separately rather than left to the count of `q`
   characters, being the one member of the family that has a single `q` and
   is not per-character.
+* `${(~g::j.|.)a}`, `${(~ej.|.)a}` — `… beside the (g) flag`, and the same
+  for `(e)`. Rule 13's escape reading is the `(%)` case again: it rewrites
+  the joined text and would read the separator along with everything else.
+  Rule 21's re-reading is the furthest of the lot from a per-character
+  rewrite — it reads the joined text as shell source, where a separator is
+  not a separator at all.
 * `${(~s.-.)v}` — `… for the (s) separator`. A marked split separator does
   not split on a pattern; it stops matching at all as soon as it holds a
   character the shell marks, and which characters those are is neither the

@@ -1813,6 +1813,11 @@ func Apply(r *interp.Runner) {
 	// print.go, and interp.Runner.SetFlagArgumentEscapes for why the
 	// substrate asks rather than answers.
 	r.SetFlagArgumentEscapes(expandFlagArgumentEscapes)
+	// And the same set a third time, reached from a third end: the `(g)`
+	// expansion flag reads the escapes in a *value*, with its option letters
+	// naming which parts of the set are live. One decoder for all three, for
+	// the reason above — see print.go, and interp.Runner.SetExpansionEscapes.
+	r.SetExpansionEscapes(expandExpansionFlagEscapes)
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
 	r.Unregister("complete")

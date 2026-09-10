@@ -13,11 +13,11 @@ import (
 // nfdbits is how many descriptors one word of a descriptor set holds.
 const nfdbits = 64
 
-// selectRead is the one call whose shape differs between the systems that
+// selectSets is the one call whose shape differs between the systems that
 // have it: here it also counts the descriptors that came back ready, which
-// the set itself already says.
-func selectRead(nfd int, set *syscall.FdSet, tv *syscall.Timeval) error {
-	_, err := syscall.Select(nfd, set, nil, nil, tv)
+// the sets themselves already say.
+func selectSets(nfd int, read, write, except *syscall.FdSet, tv *syscall.Timeval) error {
+	_, err := syscall.Select(nfd, read, write, except, tv)
 	return err
 }
 

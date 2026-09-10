@@ -21,3 +21,10 @@ func ReadableWithin(int, time.Duration) (ready, asked bool) { return false, fals
 // Wait has nothing to wait on here, and says so rather than answering "nothing
 // is ready" — which a caller would read as an idle moment that had passed.
 func Wait(int, []int) ([]int, bool, error) { return nil, false, ErrUnsupported }
+
+// Ready cannot be asked on a system with no descriptor set, and says so
+// rather than answering "nothing is ready" — which a caller would read as a
+// wait that had happened and found nothing. See the select-backed file.
+func Ready([]int, []int, []int, *time.Duration) (r, w, e []int, err error) {
+	return nil, nil, nil, ErrUnsupported
+}

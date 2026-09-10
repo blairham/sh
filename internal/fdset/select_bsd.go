@@ -13,10 +13,10 @@ import (
 // nfdbits is how many descriptors one word of a descriptor set holds.
 const nfdbits = 32
 
-// selectRead is the one call whose shape differs between the systems that
+// selectSets is the one call whose shape differs between the systems that
 // have it: here it reports only whether it failed.
-func selectRead(nfd int, set *syscall.FdSet, tv *syscall.Timeval) error {
-	return syscall.Select(nfd, set, nil, nil, tv)
+func selectSets(nfd int, read, write, except *syscall.FdSet, tv *syscall.Timeval) error {
+	return syscall.Select(nfd, read, write, except, tv)
 }
 
 // timeval is a duration in the shape this system's select wants it. The two

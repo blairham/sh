@@ -30,7 +30,7 @@ func ReadableNow(fd int) bool {
 	for {
 		set = syscall.FdSet{}
 		add(&set, fd)
-		err := selectRead(fd+1, &set, &tv)
+		err := selectSets(fd+1, &set, nil, nil, &tv)
 		if errors.Is(err, syscall.EINTR) {
 			// A signal arrived while the question was being asked. The
 			// question is unchanged, so it is asked again.
@@ -69,7 +69,7 @@ func ReadableWithin(fd int, d time.Duration) (ready, asked bool) {
 		tv := timeval(left)
 		set = syscall.FdSet{}
 		add(&set, fd)
-		err := selectRead(fd+1, &set, &tv)
+		err := selectSets(fd+1, &set, nil, nil, &tv)
 		if errors.Is(err, syscall.EINTR) {
 			// A signal arrived mid-wait. The deadline is absolute, so the
 			// question is asked again for what is left of it rather than for
@@ -134,7 +134,7 @@ func Wait(terminal int, fds []int) (ready []int, terminalReady bool, err error) 
 	if !waiting {
 		timeout = &syscall.Timeval{Sec: 0, Usec: 0}
 	}
-	if err := selectRead(highest+1, &set, timeout); err != nil {
+	if err := selectSets(highest+1, &set, nil, nil, timeout); err != nil {
 		if errors.Is(err, syscall.EINTR) {
 			// A signal arrived while we waited. Nothing is ready and nothing
 			// is wrong: the caller goes back to reading, which is where it
@@ -168,4 +168,88 @@ func has(set *syscall.FdSet, fd int) bool {
 func live(fd int) bool {
 	_, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(fd), syscall.F_GETFD, 0)
 	return errno == 0
+}
+
+// Ready waits until a descriptor is ready in the way the set it was named in
+// asks about, and answers which ones are, set by set.
+//
+// The general form of the two questions above, and the reason it is here
+// rather than beside its caller: read, write and error are one call to the
+// kernel with three sets in it, and a caller that asked them one at a time
+// would be waiting on the first while the second became ready.
+//
+// timeout is how long to wait, and **nil means forever** — the distinction a
+// builtin whose timeout is optional has to be able to make, since a zero
+// duration already means "look and come back". A wait with nothing in any set
+// and no timeout is a wait that never ends, which is what a caller asking for
+// exactly that has asked for.
+//
+// A descriptor that is not open, or is past what a set can name, is **dropped
+// rather than complained about**, and it is dropped before the call rather
+// than after it. The kernel's answer to a set holding one dead entry is a
+// complaint about the *call*, so every live descriptor beside it would lose
+// its turn — the same reasoning [Wait] gives, and the same bug: a caller's
+// second watcher silently stops working because the first one's descriptor was
+// closed. A caller that wanted to hear about a bad descriptor still does, by
+// the descriptor never being reported ready.
+func Ready(read, write, except []int, timeout *time.Duration) (r, w, e []int, err error) {
+	var probe syscall.FdSet
+	limit := len(probe.Bits) * nfdbits
+	var sets [3]syscall.FdSet
+	given := [3][]int{read, write, except}
+	var watched [3][]int
+	highest := -1
+	for i, fds := range given {
+		for _, fd := range fds {
+			if fd < 0 || fd >= limit || !live(fd) {
+				continue
+			}
+			add(&sets[i], fd)
+			watched[i] = append(watched[i], fd)
+			highest = max(highest, fd)
+		}
+	}
+	deadline := time.Time{}
+	if timeout != nil {
+		deadline = time.Now().Add(*timeout)
+	}
+	for {
+		var tv *syscall.Timeval
+		if timeout != nil {
+			left := time.Until(deadline)
+			if left < 0 {
+				left = 0
+			}
+			v := timeval(left)
+			tv = &v
+		}
+		// A fresh copy each turn: select rewrites the sets it is given, so
+		// the ones built above are the question and these are the answer.
+		asked := sets
+		callErr := selectSets(highest+1, &asked[0], &asked[1], &asked[2], tv)
+		if errors.Is(callErr, syscall.EINTR) {
+			// A signal arrived mid-wait. The deadline is absolute, so what is
+			// left of it is what the question is asked for; a wait with no
+			// deadline is asked again whole, which is what "forever" means.
+			continue
+		}
+		if callErr != nil {
+			return nil, nil, nil, callErr
+		}
+		for i := range watched {
+			for _, fd := range watched[i] {
+				if has(&asked[i], fd) {
+					switch i {
+					case 0:
+						r = append(r, fd)
+					case 1:
+						w = append(w, fd)
+					default:
+						e = append(e, fd)
+					}
+				}
+			}
+		}
+		return r, w, e, nil
+	}
 }

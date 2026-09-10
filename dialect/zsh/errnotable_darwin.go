@@ -5,7 +5,10 @@
 
 package zsh
 
-import "syscall"
+import (
+	"fmt"
+	"syscall"
+)
 
 // errnoNames is this platform's error names, indexed by errno number, with a
 // hole at 0 that `$errnos` drops on its way out.
@@ -83,3 +86,26 @@ const (
 	darwinEQFULL      = syscall.Errno(106)
 	darwinENOTCAPABLE = syscall.Errno(107)
 )
+
+// errnoTextOverrides is the sentence for a number this platform names and
+// Go's table has no wording for. See errnoText.
+//
+// One entry, and it is the same 107 the roster above writes as a literal for
+// the same reason: `ENOTCAPABLE` is newer than the table Go's darwin package
+// was generated from, so no build has either its constant or its sentence.
+// Measured against this platform's own `strerror`.
+var errnoTextOverrides = map[int]string{107: "Capabilities insufficient"}
+
+// errnoUnknownText is what this platform says about a number that names no
+// error: zero, and anything past the end of the table.
+//
+// The colon is this platform's and is not universal — Linux writes `Unknown
+// error 9999` with none — which is why this sentence is per platform rather
+// than shared. Measured against `strerror` here: `Undefined error: 0` for
+// zero, where Linux says `Success`.
+func errnoUnknownText(n int) string {
+	if n == 0 {
+		return "Undefined error: 0"
+	}
+	return fmt.Sprintf("Unknown error: %d", n)
+}

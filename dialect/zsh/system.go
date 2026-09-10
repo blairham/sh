@@ -16,12 +16,16 @@ import (
 // Measured 2026-09-09 against zsh 5.9.2 (Homebrew, aarch64) with a scratch
 // HOME and no startup files. `zmodload -lF zsh/system` names nine features —
 // six builtins, one math function and two parameters — and the six builtins
-// are `sysopen`, `sysread`, `syswrite`, `sysseek`, `syserror` and `zsystem`,
-// none of which is implemented. That is deliberate and it is zmodload.go's
-// rule rather than an omission: a builtin this shell has not got refuses by
-// name on the line that calls it, so it never holds a module shut. The module
-// loads now because its *parameters and its math function* are here, and a
-// script calling `sysopen` finds out where it called it.
+// are `sysopen`, `sysread`, `syswrite`, `sysseek`, `syserror` and `zsystem`.
+//
+// **All nine are implemented, and they arrived in two halves.** This file and
+// systemio.go were #1737, which left `zsystem`, `sysseek` and `syserror`
+// registered in the feature table and refused *by name* — honest, and not the
+// same as done, since `zmodload -F zsh/system b:zsystem` was 1 here and 0 in
+// zsh. systemlock.go and systemseek.go are #1749, which closed that gap. The
+// rule that made the intermediate state legitimate is zmodload.go's and is
+// unchanged: a builtin this shell has not got refuses by name on the line that
+// calls it, so it never holds a module shut.
 //
 // # `$sysparams[pid]` is the key a real startup reads
 //
@@ -100,9 +104,13 @@ func registerSystemModule(r *interp.Runner) {
 	r.MarkReadonly("errnos")
 	r.MarkHidden("errnos")
 	r.RegisterMathFunction("systell", 1, 1, mathSystell)
-	// And the three of the module's six builtins that move bytes. See
-	// systemio.go, where the other three are argued rather than forgotten.
+	// And the module's six builtins: the three that move bytes, the file
+	// lock, and the two that close it. See systemio.go, systemlock.go and
+	// systemseek.go.
 	registerSystemIO(r)
+	r.Register("zsystem", zsystemBuiltin)
+	r.Register("sysseek", sysseekBuiltin)
+	r.Register("syserror", syserrorBuiltin)
 }
 
 // sysparamsView is `$sysparams`, produced at every read.

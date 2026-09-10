@@ -807,7 +807,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		if e.Op == syntax.ParamSubstring {
 			elems = sliceElems(elems, r.numOf(e.Arg, e, e.Arg2), e, r)
 		}
-		if selectsElements(e.Op) {
+		if reshapesElements(e.Op) {
 			// Which elements there are, rather than what each one
 			// becomes — so this is here beside the slice and not with
 			// the elementOp mapping further down, whose whole shape is
@@ -829,9 +829,9 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			// that has the operator, against `n=0` for the unquoted
 			// spelling and for `[@]`.
 			if s.Quoting != syntax.Unquoted && r.subscriptJoinsElements(e) {
-				elems = []string{r.selectScalar(e, strings.Join(elems, ifsFirst(r.ifs())))}
+				elems = []string{r.reshapeScalar(e, strings.Join(elems, ifsFirst(r.ifs())))}
 			} else {
-				elems = r.selectElements(e, elems)
+				elems = r.reshapeElements(e, elems)
 			}
 		}
 		if e.Op == syntax.ParamTransform {
@@ -1797,8 +1797,9 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	case syntax.ParamSubstring:
 		return r.substringRange(value, e)
 
-	case syntax.ParamExclude, syntax.ParamSetDifference, syntax.ParamSetIntersection:
-		return r.selectScalar(e, value)
+	case syntax.ParamExclude, syntax.ParamSetDifference, syntax.ParamSetIntersection,
+		syntax.ParamElementReplace:
+		return r.reshapeScalar(e, value)
 
 	case syntax.ParamUpper, syntax.ParamLower, syntax.ParamToggle,
 		syntax.ParamUpperFirst, syntax.ParamLowerFirst, syntax.ParamToggleFirst:
@@ -1971,7 +1972,7 @@ func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
 // `${a[0]}` is one element and still comes from this path.
 func (r *Runner) listShapedOp(e *syntax.ParamExpr) bool {
 	return e.Op == syntax.ParamSubstring || e.Op == syntax.ParamTransform ||
-		selectsElements(e.Op) || elementOp(e.Op) || r.yieldsTheArray(e)
+		reshapesElements(e.Op) || elementOp(e.Op) || r.yieldsTheArray(e)
 }
 
 // listBase is the values an expansion stands for where it stands for several
@@ -2589,7 +2590,7 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 	// and not a pattern (#1337), and having the two branches read it two
 	// ways is exactly how that fix would come undone in the branch nobody
 	// looks at.
-	if o.where == nil || !o.where.plan.reports() {
+	if !reportsAMatch(o) {
 		with := r.replacementOf(e.Arg2)
 		return replace(value, pattern, e, o, func(matchReport) string { return with })
 	}
@@ -2597,6 +2598,21 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 		r.publishMatch(m)
 		return r.replacementOf(e.Arg2)
 	})
+}
+
+// reportsAMatch is whether a pattern fills `$MATCH` or `$match` when it
+// matches, read off options that were built for it.
+//
+// Named once because two replacements turn on it — the span one above and the
+// whole-element one in elementreplace.go — and it is the whole of what
+// decides that a replacement is read again for each match rather than once.
+func reportsAMatch(o patternOpts) bool {
+	return o.where != nil && o.where.plan.reports()
+}
+
+// patternReports is reportsAMatch for a caller holding only the pattern text.
+func (r *Runner) patternReports(pattern string) bool {
+	return reportsAMatch(r.patternOpts(pattern))
 }
 
 func trim(value, pattern string, op syntax.ParamOp, o patternOpts) (string, matchReport) {

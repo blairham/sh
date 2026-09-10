@@ -3487,6 +3487,91 @@ them are unanimous across the panel:
 empty offset. A grammar that widened the rule by one character would
 break the shapes every shell shares rather than the ones only zsh has.
 
+## Replacing whole elements: `:/` — zsh only
+
+    ${a:/pattern}              drop the elements the pattern matches whole
+    ${a:/pattern/replacement}  replace them with the replacement
+
+The fourth operator of the family above, and the only one of the four
+that *writes* rather than only choosing. It is not `${a/pat/repl}` with
+a colon in front: that one substitutes a matching **span** inside each
+element, and this one tests the **whole** element and replaces all of
+it. Measured on zsh 5.9.2:
+
+    x=foobar; ${x:/foo/Z}    foobar   — `foo` is not the whole value
+    x=foobar; ${x/foo/Z}     Zbar     — the span reading
+    x=foo;    ${x:/foo/Z}    Z
+
+The disambiguation is the same one character the three above use, and
+`/` cannot begin an arithmetic expression, so it cannot take input from
+the offset: `${x:3/2}` is still an offset of `3/2`, and `${x: /2}` — the
+same slash one space later — is still `bad math expression: operand
+expected`. `${x:2:/1}` shows the rule is the *first* colon's alone: the
+length after the second colon stays arithmetic and refuses the slash.
+Grammar flag `ParamWholeElementReplace`, set where
+`ParamElementSelection` is and for the same reason.
+
+### The pattern ends at the first unquoted slash
+
+As in `${x/pat/repl}`: `${x:/foo/a/b}` on `foo` is `a/b`, so the
+replacement holds the rest of the text however many slashes are in it.
+Omitting the second slash is the empty replacement — `${(@)a:/b*}` and
+`${(@)a:/b*/}` answer alike.
+
+### An element replaced by nothing is dropped
+
+Measured with `a=(foo bar baz)`:
+
+    "${(@)a:/b*/Z}"     foo Z Z          three fields
+    "${(@)a:/b*/}"      foo              one — the emptied elements go
+    "${(@)a:/b*}"       foo              the same, spelled without the slash
+
+An element that was *already* empty and does not match is kept:
+`a=(foo "" bar)` under `${(@)a:/x/Y}` is still three fields. So it is
+the replacement being empty that removes an element, not emptiness in
+the result.
+
+A scalar is not a list and keeps its empty value: `x=foo; ${x:/foo}` is
+one empty field, where `${(@)a:/foo}` on `a=(foo)` is no field at all —
+the same split `:#` has.
+
+### No match is silent
+
+The operator leaves a value it does not match completely alone and says
+nothing: `x=/a/b/c; ${x:/b/Z}` is `/a/b/c`, status 0, and an array
+without `(@)` in double quotes joins first and so matches nothing —
+`a=(foo bar); "${a:/foo/Z}"` is `foo bar`. This is the half a fix that
+only handles the matching case gets wrong, and it is the half three real
+startup files depend on.
+
+### Distribution and quoting follow `:#`
+
+    a=(foo bar baz)
+    "${a[@]:/ba*/Z}"    foo Z Z    one field per element
+    ${a[*]:/ba*/Z}      foo Z Z    unquoted `[*]` distributes too
+    "${a[*]:/ba*/Z}"    foo bar baz    quoted `[*]` joins *first*, so the
+                                       pattern is tested against the join
+                                       and matches nothing
+
+### `(#b)` and `(#m)` are live in the replacement
+
+Under `extendedglob`, and by the same rule `${x//pat/repl}` follows: the
+replacement is expanded **once** for the whole operator when the pattern
+reports nothing, and **again for each match** when it reports.
+
+    a=(x y z); i=0; ${(@)a:/*/$((++i))}          1 1 1
+    a=(x y z); i=0; ${(@)a:/(#m)*/$((++i))}      1 2 3
+    a=(foo bar);    ${(@)a:/(#m)*/<$MATCH>}      <foo> <bar>
+    a=(ab cd);      ${(@)a:/(#b)(?)(?)/<$match[2]$match[1]>}   <ba> <dc>
+
+Without `extendedglob` there is no `(#m)` to report: the same line reads
+`(#m)*` as an ordinary pattern, matches nothing, and leaves the array
+alone. The pattern operand is expanded once either way — a command
+substitution in it runs a single time for the whole array.
+
+`${(M@)a:/foo/Z}` is `Z bar`: the `M` flag, which reads `:#` from the
+other side, has nothing to reverse here and is ignored.
+
 ## A process substitution in an operand — bash only
 
     unset u
@@ -3715,6 +3800,9 @@ reason: `${$((6*7))[1]}`.
     ParamSplitFlag         ${=x}, the split-into-words flag — zsh only
     ParamSetTestFlag       ${+x}, the is-it-set count — zsh only
     ParamElementSelection  ${a:#pat} ${a:|b} ${a:*b} — zsh only
+    ParamWholeElementReplace
+                           ${a:/pat/rep}, the same family's fourth
+                           operator — zsh only
     BareSubscript          $a[1] and $#a, written without braces — zsh only
     ArraySubscriptFlags    ${a[(re)v]}, a flag group inside the brackets
                            — zsh only
@@ -3731,8 +3819,8 @@ reason: `${$((6*7))[1]}`.
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
 `ParamTransformations`, `ParamExpansionFlags`, `ParamTildeFlag`,
-`ParamSplitFlag`, `ParamSetTestFlag` and
-`ParamElementSelection` are false for `core`:
+`ParamSplitFlag`, `ParamSetTestFlag`, `ParamElementSelection` and
+`ParamWholeElementReplace` are false for `core`:
 the first and the last two are one shell's, and the `!` family is two
 shells' — neither is a common denominator. `BareSubscript` is false for
 both, and for the same reason as `ParamExpansionFlags`: one shell reads

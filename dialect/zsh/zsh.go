@@ -247,6 +247,13 @@ func Dialect() syntax.Dialect {
 	// on a real startup, and no prompt (#1438).
 	d.PositionalAssignment = true
 	d.ParamElementSelection = true
+	// `${a:/pat/repl}`, the same family's fourth operator: the elements the
+	// pattern matches whole become the replacement. `compaudit` and
+	// `compdump` both build their file list with `${^~fpath:/.}`, which is
+	// this operator dropping `.` out of `fpath`, and p10k's `_p9k_must_init`
+	// uses it over `$parameters` — so without it a real startup writes no
+	// completion dump and draws no prompt (#1617).
+	d.ParamWholeElementReplace = true
 	// The length may carry an operator here, and it measures what the
 	// operator *leaves*: `v=abc; echo ${#v#a}` is 2. bash, bash 3.2, bash as
 	// `sh`, dash and ksh93 all call the same text a bad substitution, so

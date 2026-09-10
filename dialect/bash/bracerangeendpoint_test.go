@@ -28,6 +28,11 @@ func TestABraceRangeKeepsItsLiteralEndpoints(t *testing.T) {
 		{`echo {1..$(echo 3)}`, "{1..3}"},
 		{`n=3; echo {1.."$n"}`, "{1..3}"},
 		{`n=3; echo pre{1..$n}post`, "pre{1..3}post"},
+		// A quoted endpoint is quoted text and not an expansion, and it is
+		// still not read as a range here: only the ordering axis lets a
+		// non-literal body reach one.
+		{`echo {1..'3'}`, "{1..3}"},
+		{`echo {"1"..3}`, "{1..3}"},
 		// The controls: a literal range counts, and so does a list whose
 		// elements are expansions — the ordering is only a disagreement for
 		// the range.

@@ -31,10 +31,18 @@ func TestABraceRangeReadsItsEndpointsAfterExpanding(t *testing.T) {
 // filesystem, and this is the shell that can say so: it globs an expansion's
 // result in an ordinary word, and still leaves `{1..$g}` alone.
 //
-// Measured on ksh93 with `f1` and `f2` present: `printf '[%s]' $g` is
-// `[f1][f2]` and `printf '[%s]' @{1..$g}@` is the single `[@{1..f*}@]`. zsh
-// agrees on the second and cannot testify to the first, since it does not
-// glob an expansion's result at all.
+// The probe needs files the failed text would actually match, which is the
+// discrimination the first attempt at it lacked: with `f1` and `f2` present
+// the text `@{1..f*}@` matches nothing either way, so a glob and a refusal to
+// glob look identical and the mutation that unquoted the span survived.
+// Measured on ksh93 with `{1..a}` and `{1..b}` present and `g='*'`:
+// `printf '[%s]' $g` lists both names and `printf '[%s]' {1..$g}` is the
+// single field `[{1..*}]`.
+//
+// A redirection is the same claim from the other side. Its target is
+// expanded once and then counted, and counting it with the endpoints live
+// would run the substitution again — ksh93 prints `ran` once and creates one
+// file, named `{1..2}`.
 func TestAFailedExpandedRangeIsNotAPattern(t *testing.T) {
 	run := func(src string) string {
 		t.Helper()
@@ -49,11 +57,16 @@ func TestAFailedExpandedRangeIsNotAPattern(t *testing.T) {
 		}
 		return out
 	}
-	const setup = `: > f1; : > f2; g='f*'; `
-	if got := run(setup + `printf '[%s]' $g`); got != "[f1][f2]" {
+	const setup = `: > '{1..a}'; : > '{1..b}'; g='*'; `
+	if got := run(setup + `printf '[%s]' $g`); got != "[{1..a}][{1..b}]" {
 		t.Errorf("got %q, want the value matched in an ordinary word", got)
 	}
-	if got := run(setup + `printf '[%s]' @{1..$g}@`); got != "[@{1..f*}@]" {
-		t.Errorf("got %q, want the failed range left as text", got)
+	if got := run(setup + `printf '[%s]' {1..$g}`); got != "[{1..*}]" {
+		t.Errorf("got %q, want the failed range left as text rather than matched", got)
+	}
+	got := run(`f() { echo ran >&2; echo 2; }; echo hi > {1..$(f)}; echo "st=$?"; ` +
+		`for n in *; do printf '<%s>' "$n"; done`)
+	if got != "ran\nst=0\n<{1..2}>" {
+		t.Errorf("got %q, want the target expanded once and named literally", got)
 	}
 }

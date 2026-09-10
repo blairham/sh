@@ -5,6 +5,7 @@ package interp
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -55,9 +56,22 @@ func (f BareLocalListingForm) String() string {
 	return "BareLocalListingUnspecified"
 }
 
-// attributeWordDeclaration is BareLocalListsEveryParameter's row — see the
-// constant for the word order and where it was measured.
-func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
+// attributeWordHead is the attribute words a listed declaration is preceded
+// by, ready to sit in front of the name — empty where the name carries none,
+// and otherwise the words with one trailing space.
+//
+// Its own function because the words and the value are separable: `typeset
+// +m` writes these words and the name and stops there, where this listing
+// goes on to write the value too. One word list for both, so that an
+// attribute added to one listing cannot go missing from the other.
+//
+// The order is measured rather than chosen, a letter at a time, on zsh 5.9.2
+// with no startup files (2026-09-10): the type word, then the case, then
+// `local`, `readonly` and `exported`, then `unique`, and `tied` last of all.
+// Two combinations pin each seam — `array readonly unique`, `array exported
+// unique`, `array unique tied UT ut`, `array local tied LT lt`, `integer 16
+// readonly`, `array uppercase unique`.
+func (r *Runner) attributeWordHead(d declaration, isLocal bool) string {
 	var words []string
 	switch {
 	case d.isAssoc:
@@ -66,6 +80,21 @@ func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
 		words = append(words, "array")
 	case d.integer:
 		words = append(words, "integer")
+		if d.base != 0 {
+			// The output base is a word of its own behind the type, and
+			// only where a base was actually named: `typeset -i16 h=255`
+			// lists as `integer 16 h` and a plain `typeset -i n=1` as
+			// `integer n`, with no `10` in it.
+			words = append(words, strconv.Itoa(d.base))
+		}
+	case d.float:
+		words = append(words, "float")
+	}
+	if d.upper {
+		words = append(words, "uppercase")
+	}
+	if d.lower {
+		words = append(words, "lowercase")
 	}
 	if isLocal {
 		words = append(words, "local")
@@ -73,13 +102,46 @@ func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
 	if d.readonly {
 		words = append(words, "readonly")
 	}
-	if d.exported {
+	if d.exported && (isLocal || d.isArr || d.isAssoc) {
+		// An exported *scalar* at the top level earns no word, and that is
+		// measured rather than an omission: `export ee=1; typeset` writes
+		// `ee=1` there with no attribute on it, as do `typeset -x xx=1` and
+		// `typeset -rx rx=1` — `readonly rx`, and no more. It is an entry in
+		// the environment and the listing says nothing about it, so writing
+		// the word everywhere put an attribute on most of the environment
+		// (found through `typeset +m`, which writes these words and no
+		// value, #1674).
+		//
+		// The two kinds that cannot *be* an environment entry keep the word:
+		// `typeset -xa xa=(a b)` lists as `array exported xa` and `typeset
+		// -xA` as `association exported`. So does a local, whichever kind it
+		// is — `local -x le=1` is `local exported le` and `local -xa la` is
+		// `array local exported la`.
 		words = append(words, "exported")
 	}
-	head := ""
-	if len(words) > 0 {
-		head = strings.Join(words, " ") + " "
+	if d.unique {
+		words = append(words, "unique")
 	}
+	if d.hasTie {
+		// The tie names the *other* half, which is what makes it readable
+		// from either end: `typeset -T TP tp` lists the array as `array
+		// tied TP tp` and the scalar as `tied tp TP`.
+		other := d.tied.scalar
+		if d.name == other {
+			other = d.tied.array
+		}
+		words = append(words, "tied", other)
+	}
+	if len(words) == 0 {
+		return ""
+	}
+	return strings.Join(words, " ") + " "
+}
+
+// attributeWordDeclaration is BareLocalListsEveryParameter's row — see the
+// constant for the word order and where it was measured.
+func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
+	head := r.attributeWordHead(d, isLocal)
 	if d.hidden {
 		// The attributes speak and the value does not, which is the same
 		// thing `-H` does to the other listings and is measured here too:

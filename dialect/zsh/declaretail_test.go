@@ -325,9 +325,17 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 			t.Errorf("bare local: %q missing from %q", want, out)
 		}
 	}
-	// A global the function never made local carries no `local` word.
-	if !strings.Contains(out, "\nPATH=") && !strings.HasPrefix(out, "PATH=") {
-		t.Errorf("bare local: got %q, want the globals listed with no local word", out)
+	// A global the function never made local carries no `local` word. `PATH`
+	// carries the *tie* word instead, which is measured rather than assumed:
+	// zsh 5.9.2 writes `tied path PATH=/usr/bin:/bin` in this listing, naming
+	// the array half the scalar is joined to.
+	if !strings.Contains(out, "\ntied path PATH=") {
+		t.Errorf("bare local: got %q, want PATH listed with its tie and no local word", out)
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "tied path PATH=") && strings.Contains(line, "local ") {
+			t.Errorf("bare local: %q, want no local word on a global", line)
+		}
 	}
 }
 

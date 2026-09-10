@@ -1136,7 +1136,21 @@ func Semantics() interp.Semantics {
 	// value. This shell's letter alone with that meaning: bash refuses `-T`
 	// outright, and ksh93's `-T` declares a *type*, which is a different
 	// builtin's worth of thing and stays refused by name there.
-	s.DeclareOptions = "aAfFgHhilpruUTx"
+	//
+	// `-m` takes the operands as *patterns* and lets every other letter on
+	// the line decide what matching means — a listing under either sign on
+	// its own, a declaration over the matches when a letter is written with
+	// a minus, and a filtered listing when every letter is written with a
+	// plus. See interp/declarematching.go for the four readings and the
+	// measurements behind them. It is `typeset` and `declare` alone: this
+	// shell's `local`, `export`, `readonly`, `integer` and `float` each say
+	// `bad option: -m` back, which is why the letter is here and not in
+	// LocalOptions. `compdump` is what needed it — `typeset +fm '_*'` is how
+	// the completion system collects the function names it writes out, and
+	// refusing the letter left every interactive startup with no dump
+	// (#1674). ksh93's `-m` is a *rename* and bash has no such letter at
+	// all, so there is no axis here, only a letter one dialect has.
+	s.DeclareOptions = "aAfFgHhilmpruUTx"
 	// `-F` is a float's precision here rather than bash's function listing,
 	// and the number behind it is the letter's argument and not a name:
 	// `typeset -F 3 x=1.5` declares one name at three places and reads back
@@ -1456,21 +1470,27 @@ func Diagnostics() interp.Diagnostics {
 			// typeset's letters this engine does not hold: floats (-E -F),
 			// namerefs (-n), padding and alignment (-L -R -Z), and the
 			// rest. The same set under both names, and for `local` too.
-			// `-H`, `-U`, `-T` and `-h` have left this list — they are
+			// `-H`, `-U`, `-T`, `-h` and `-m` have left this list — they are
 			// implemented, in DeclareOptions above.
-			"typeset": "bcEkLmnRtZ",
+			"typeset": "bcEkLnRtZ",
 			"type":    "mvwsS",
 			// jobs' letters that are zsh's own: -d names the directory the
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.
 			"jobs":    "dzZ",
-			"declare": "bcEkLmnRtZ",
+			"declare": "bcEkLnRtZ",
 			// The same list as `typeset` and `declare`, which is the point:
 			// `-F` is one attribute and the three names declare it alike.
 			// It was here and in neither of theirs, which is the same split
 			// LocalOptions had — the letter refused under one name and
 			// answered under the other (#1594).
-			"local": "bcEkLmnRtZ",
+			// `local`'s list is *not* `typeset`'s, and `m` is why: this
+			// shell's `local` has no `-m` to be missing — `local -m q`
+			// inside a function is `bad option: -m` there — so naming it
+			// unimplemented told a script the letter was on its way when
+			// nothing was coming. `L`, `R` and `Z` are the padding letters
+			// `local` really does spell and this engine does not.
+			"local": "bcEkLnRtZ",
 			// `integer`'s own short list, and it is not typeset's: the
 			// letters typeset is missing that `integer` refuses outright —
 			// b, c, E and m — are bad options under this name and belong in

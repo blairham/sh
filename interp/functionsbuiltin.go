@@ -106,7 +106,7 @@ func biFunctions(r *Runner, _ context.Context, args []string) int {
 		return code
 	}
 	if matching {
-		return r.functionsMatching(args)
+		return r.functionsMatching(args, false)
 	}
 	// The name asked for the function table, so the operands are function
 	// names however the letters were written.
@@ -132,8 +132,8 @@ func biUnfunction(r *Runner, _ context.Context, args []string) int {
 	return r.unsetFunctions(args, strings.ContainsRune(opts, 'm'))
 }
 
-// functionsMatching is `functions -m`: each operand is a pattern and every
-// function whose *name* it matches is written out.
+// functionsMatching is `functions -m` and `typeset -fm`: each operand is a
+// pattern and every function whose *name* it matches is written out.
 //
 // Patterns outside and names inside, which is measured rather than chosen —
 // `functions -m 'f*' fa` writes `fa` twice in zsh 5.9.2, so a name reached by
@@ -142,14 +142,25 @@ func biUnfunction(r *Runner, _ context.Context, args []string) int {
 // nothing has answered the question, and a removal that removed nothing has
 // not. No pattern at all is the whole listing, which is the one place the
 // letter decides nothing.
-func (r *Runner) functionsMatching(patterns []string) int {
+//
+// namesOnly is the sign of the `f` letter the declaration builtin was given —
+// `typeset +fm '_*'` names the matches and `typeset -fm '_*'` writes their
+// bodies. `functions` spells no `f` at all, so it is always the body: measured,
+// `functions +m 'f*'` writes the function out exactly as `functions -m` does.
+// One walk for both names rather than two, for the reason the file comment
+// gives.
+func (r *Runner) functionsMatching(patterns []string, namesOnly bool) int {
 	if len(patterns) == 0 {
-		return r.declareFunctions(nil, false)
+		return r.declareFunctions(nil, namesOnly)
 	}
 	for _, pattern := range patterns {
 		o := r.patternOpts(pattern)
 		for _, name := range r.scriptFuncNames() {
 			if !matchPattern(pattern, name, o) {
+				continue
+			}
+			if namesOnly {
+				r.printf("%s\n", name)
 				continue
 			}
 			r.printf("%s\n", r.listedFunction(name, r.funcs[name]))

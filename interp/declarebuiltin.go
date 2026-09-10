@@ -467,12 +467,6 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			r.assignFailed = true
 			continue
 		}
-		// Attributes first, because `-i` changes what the assignment on the
-		// same line *means* — but readonly last, because it changes whether
-		// that assignment is allowed at all. `declare -r c=1` sets c and then
-		// freezes it; applying both up front made the declaration refuse its
-		// own value and leave the name empty.
-		r.applyAttributes(name, f)
 		// Declaring inside a function declares a local, which is unanimous
 		// among the three shells that have the name — subject to ksh93's
 		// rule about which functions have a scope at all.
@@ -494,6 +488,18 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		fresh := false
 		if !f.global {
 			fresh = r.shadowTypeset(name)
+		}
+		// Attributes after the shadow, and ahead of the value: `-i` changes
+		// what the assignment on the same line *means*, so it cannot wait
+		// until the end the way readonly does — `declare -r c=1` sets c and
+		// then freezes it, and applying both up front made the declaration
+		// refuse its own value and leave the name empty. What the shadow adds
+		// is the other end of the same ordering: it has just taken the outer
+		// name's attributes off, so these are the local's own and the caller
+		// gets its own back on return. Applied before it, they were saved as
+		// the outer name's and outlived the call (#1673).
+		r.applyAttributes(name, f)
+		if !f.global {
 			r.localExportAttribute(name, f.export)
 			if r.unspecified {
 				// See biLocal: an unanswered axis refuses the declaration
@@ -1900,6 +1906,16 @@ func (r *Runner) shadow(name string) (fresh bool) {
 			sc.savedHideInScope = map[string]bool{}
 		}
 		sc.savedHideInScope[name] = r.hideInScope[name]
+		// And the rest of the attributes, taken off for the same reason the
+		// frozen one is: the cell this declaration writes is a fresh binding
+		// and carries nothing the outer name carried. Recorded whether or
+		// not there were any, so the entry can put back "none" as well as
+		// take back one this call added — see localattributes.go.
+		if sc.savedAttrs == nil {
+			sc.savedAttrs = map[string]nameAttributes{}
+		}
+		sc.savedAttrs[name] = r.captureAttributes(name)
+		r.dropNameAttributes(name)
 	}
 	// Arrays live in a table of their own, so a name has to be saved from
 	// both. Saving only the scalar left `f() { local a; a=(x y); }` writing a

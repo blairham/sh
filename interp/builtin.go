@@ -1255,12 +1255,9 @@ func (r *Runner) unsetName(name string) {
 // shell has, and the associative attribute *is* the table, so deleting the
 // table is what takes the attribute off.
 func (r *Runner) clearAttributes(name string) {
-	delete(r.integer, name)
-	delete(r.floatPrecision, name)
-	delete(r.lowered, name)
-	delete(r.uppered, name)
-	delete(r.hidden, name)
-	delete(r.unique, name)
+	// The list itself is shared with the shadow, which takes the same
+	// attributes off for a reason of its own — see localattributes.go.
+	r.dropNameAttributes(name)
 	// Measured: `typeset -h PATH; unset PATH; PATH=/y` leaves a later
 	// `local PATH` tied to `path` again, so the letter does not survive the
 	// name it was written about — see hideinscope.go.
@@ -3054,11 +3051,15 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			r.assignFailed = true
 			continue
 		}
-		r.applyAttributes(name, f)
 		// shadow does nothing when there is no scope to save into, which is
 		// the dialect that took this as a global: there is nothing to put
 		// back, and it becomes a plain assignment.
 		fresh := r.shadow(name)
+		// After the shadow, for the reason biDeclare gives: the cell this
+		// declaration writes is a fresh binding, and an attribute applied
+		// ahead of the shadow was saved as the *outer* name's and came back
+		// on return as its own (#1673).
+		r.applyAttributes(name, f)
 		r.localExportAttribute(name, f.export)
 		if r.unspecified {
 			// The declaration is not made at all: reporting the unanswered

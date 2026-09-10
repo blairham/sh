@@ -31795,6 +31795,50 @@
         "TimedOut": false
       }
     },
+    "declare/a-fresh-local-inherits-no-attribute": {
+      "bash": {
+        "Stdout": "in=[3+4]~after=[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[3+4]~after=[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[3+4]~after=[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=[3+4]~after=[3+4]",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[7]~after=[7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[3+4]~after=[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-global-declaration-over-this-functions-local": {
       "bash": {
         "Stdout": "read=[x]~after=[bar]",
@@ -32405,6 +32449,50 @@
       },
       "zsh": {
         "Stdout": "typeset -F a=1.500~export -F b=1.5000000000~typeset -Fr c=1.500~typeset -i16 d=255~export -i e=255",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-numeric-letter-does-not-reach-a-later-local-array": {
+      "bash": {
+        "Stdout": "in=[/some/dir/file.zsh]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[/some/dir/file.zsh]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[/some/dir/file.zsh]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 3: Syntax error: \"(\" unexpected (expecting \"}\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 3: /some/dir/file.zsh: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[/some/dir/file.zsh]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -33725,6 +33813,50 @@
       },
       "zsh": {
         "Stdout": "[1+1][def]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-attribute-does-not-outlive-the-declaration": {
+      "bash": {
+        "Stdout": "in=[2]~after=[3+4]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[2]~after=[3+4]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[2]~after=[3+4]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=[1+1]~after=[3+4]",
+        "Stderr": "\u003cscript\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[2]~after=[7]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[2]~after=[3+4]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -37157,6 +37289,50 @@
       },
       "zsh": {
         "Stdout": "[2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/the-case-letters-do-not-outlive-the-declaration": {
+      "bash": {
+        "Stdout": "in=[mixed]~after=[ABC]~later=[StillMixed]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=[mixed]~after=[ABC]~later=[StillMixed]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=[MIXED]~after=[MIXED]~later=[StillMixed]",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=[MIXED]~after=[MIXED]~later=[StillMixed]",
+        "Stderr": "\u003cscript\u003e: 2: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=[mixed]~after=[mixed]~later=[stillmixed]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=[mixed]~after=[ABC]~later=[StillMixed]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

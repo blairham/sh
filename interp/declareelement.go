@@ -34,7 +34,6 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 	if r.elementDeclarationRefused(base, sub, f, shadows) {
 		return
 	}
-	r.applyAttributes(base, f)
 	fresh := false
 	if shadows && !f.global {
 		// The array the element belongs to is what becomes local, and it has
@@ -45,6 +44,9 @@ func (r *Runner) declareElement(base, sub, value string, f declareFlags, shadows
 			return
 		}
 	}
+	// After the shadow, for the reason biDeclare gives: these are the local
+	// array's attributes and not the caller's (#1673).
+	r.applyAttributes(base, f)
 	// And the cell that shadow made holds none of the caller's elements, so
 	// the subscript this declaration writes is the only one in it: measured,
 	// `arr=(a b c); f(){ local arr[1]=z; }` lists `([1]="z")` and the same

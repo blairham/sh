@@ -152,13 +152,21 @@ func (f declareFlags) attributeFilter() func(declaration) bool {
 	if len(tests) == 0 {
 		return nil
 	}
+	// Any of them and not all of them, which is measured rather than the
+	// reading a filter invites: `typeset +mxi '[ipq]'` over an exported `q`,
+	// an integer `i` and a plain `p` writes `i` and `q` in zsh 5.9.2 — so a
+	// name carrying *either* attribute is in, and `p` is out for carrying
+	// neither. The same answer without a pattern: `typeset +xr` writes every
+	// exported name and every read-only one. An intersection agrees with it
+	// on one letter and disagrees on every line that writes two, which is
+	// why one letter is not enough to pin it (#1576).
 	return func(d declaration) bool {
 		for _, test := range tests {
-			if !test(d) {
-				return false
+			if test(d) {
+				return true
 			}
 		}
-		return true
+		return false
 	}
 }
 
@@ -247,14 +255,30 @@ func (r *Runner) producedParameter(name string) bool {
 // h=v; typeset -m h` writes `h=v` there, where the bare listing and `+m`
 // write the name with no value at all.
 func (r *Runner) matchedListing(patterns []string, namesOnly bool) int {
-	locals := r.innermostLocalNames()
-	for _, name := range r.matchedNames(patterns) {
+	names := r.matchedNames(patterns)
+	if namesOnly {
+		return r.declarationNameListing(names)
+	}
+	for _, name := range names {
 		d, _ := r.declarationOf(name)
-		if namesOnly {
-			r.printf("%s\n", r.attributeWordHead(d, locals[name])+name)
-			continue
-		}
 		r.printf("%s\n", name+"="+r.listedDeclarationValue(d))
+	}
+	return 0
+}
+
+// declarationNameListing writes each name with its attribute words and no
+// value — `integer n`, `array tied FPATH fpath`.
+//
+// The shape two commands share, which is why it is a function rather than a
+// branch: `typeset +m PAT` names the matches and a bare `typeset +` names the
+// whole table. Those reached the same rows by two routes before, and only one
+// of the routes existed — the plus form with no pattern wrote nothing at all
+// (#1576). Choosing the names is the caller's; writing them is here.
+func (r *Runner) declarationNameListing(names []string) int {
+	locals := r.innermostLocalNames()
+	for _, name := range names {
+		d, _ := r.declarationOf(name)
+		r.printf("%s\n", r.attributeWordHead(d, locals[name])+name)
 	}
 	return 0
 }
@@ -263,7 +287,15 @@ func (r *Runner) matchedListing(patterns []string, namesOnly bool) int {
 // every plus-signed attribute, named and nothing else. No attribute words —
 // the letters already said which attributes these are.
 func (r *Runner) matchedNameListing(patterns []string, keep func(declaration) bool) int {
-	for _, name := range r.matchedNames(patterns) {
+	return r.declarationFilteredNameListing(r.matchedNames(patterns), keep)
+}
+
+// declarationFilteredNameListing is that reading over names already chosen —
+// `typeset +x` with no pattern at all, where the names are the whole table.
+// The same fold declarationNameListing is: the letters decide the test and
+// the caller decides the candidates.
+func (r *Runner) declarationFilteredNameListing(names []string, keep func(declaration) bool) int {
+	for _, name := range names {
 		d, known := r.declarationOf(name)
 		if !known || !keep(d) {
 			continue

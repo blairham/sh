@@ -15309,4 +15309,56 @@ echo "read=[$l]"`,
 		Snippet: `emulate sh; a=(xx yy zz); echo "[$a[1]][${a[1]}][$a][${#a}]"`,
 		Why:     "the same four answers reached the way scripts actually reach them. `emulate sh` and `emulate ksh` turn the option on, so this is not a corner an option name gates: it is every script that emulates, and a wrong answer is a wrong answer for two whole emulation modes at once and silently. Recorded beside the option's own row so that a change moving one and not the other is visible",
 	},
+	{
+		ID: "declare/a-plus-signed-f-names-the-functions", Category: "declarations",
+		Snippet: `f() { echo x; }; g() { :; }; typeset +f | grep -vE '^[A-Z_]'`,
+		Why:     "the names-only shape of the function listing, with no pattern anywhere on the line -- and the row that made this a P1 rather than a cosmetic fault, because the symptom is on *stdout*. A shell snapshot collects a session's functions with `typeset +f | grep -vE '^_[^_]' | while read func; do typeset -f \"$func\"; done`, so bodies coming back where names were asked for make `$func` a *line of a body* and the loop then asks about that. Three answers between the shells: zsh writes the bare name, ksh93 writes `f()`, and bash has no `+f` at all and falls back to listing every variable -- so that column is not a name listing and must not be read as one. The `grep` keeps that column out of the record rather than out of the measurement: bash's fallback listing carries its own `PPID`, which differs every run and would make the row drift against itself forever",
+	},
+	{
+		ID: "declare/a-plus-signed-f-keeps-the-declarations-spelling", Category: "declarations",
+		Script:  true,
+		Snippet: "f() { :; }\nfunction g {\n  :\n}\ntypeset +f | grep -vE '^[A-Z_]'\n",
+		Why:     "and the *rendering* of a name-only listing is the dialect's third answer rather than one wording for all: ksh93 writes `f()` for the parenthesised declaration and the bare `g` for the keyword one, so what it prints is the spelling the function was declared with. zsh writes both names bare. The two spellings in one snippet is what makes that visible -- a row with one declaration form reads as a fixed suffix (#1494). The `grep` is the one in the row above and for the same reason",
+	},
+	{
+		ID: "declare/the-f-letters-sign-decides-without-a-pattern-too", Category: "declarations",
+		Snippet: `f() { echo x; }; typeset -f +f f; echo "--"; typeset +f -f f`,
+		Why:     "the sign that picks the shape is the *last `f` letter's*, and it decides with no `m` on the line as it does with one -- names first and body second, where a reading that took the sign from the last option word would swap them. The pattern spelling of the same pair is `declare/matching-takes-its-sign-from-the-letter-and-not-the-word`, and the two were answered by different code until the letters were read in one place (#1576)",
+	},
+	{
+		ID: "declare/a-plus-signed-f-reports-one-for-a-name-it-does-not-hold", Category: "declarations",
+		Snippet: `f() { :; }; typeset +f f nosuch; echo "st=$?"`,
+		Why:     "a name nobody defined is silent at 1 under this sign exactly as under the other, and the 1 stands however many names printed. The status is the whole of the finding for the missing operand, so it is echoed",
+	},
+	{
+		ID: "functions/functions-takes-its-sign-from-the-word", Category: "declarations",
+		Snippet: `f() { echo x; }; functions +; echo "--"; functions -`,
+		Why:     "this word spells no `f` letter, so there is no letter to carry the sign and the *option word* carries it: both shells with the word name their functions under a plus and write them out under a minus. It needs a lone sign to be an option word at all, which bash refuses for the same builtin under its own name -- see `declare/a-bare-sign-is-an-option-word`. It wrote nothing at all here before, which is the one answer no shell gives (#1576)",
+	},
+	{
+		ID: "declare/a-bare-sign-is-an-option-word", Category: "declarations",
+		Snippet: `qa=1; typeset -i qb=2; typeset + | grep -E '^(integer )?q[ab]$'; echo "--"; typeset - | grep -E '^(integer( 10)? )?q[ab]='`,
+		Why:     "a `-` or `+` written with no letters after it, which zsh and ksh93 read as an option word and bash reads as a *name* -- ``typeset: `+': not a valid identifier`` at 1 there, so the sign is not a word a script may declare. Where it is an option word it means what it means on every letter: the minus adds nothing to the bare listing and the plus is the same table with the values left off. Filtered through `grep` because the unfiltered listing is the whole parameter table and differs by shell, by machine and by run",
+	},
+	{
+		ID: "declare/a-plus-signed-attribute-letter-filters-the-whole-table", Category: "declarations",
+		Snippet: `qa=1; export qb=2; typeset -i qc=3; typeset +x | grep '^q'; echo "--"; typeset +xi | grep '^q'`,
+		Why:     "the filter the `+m` reading is, over the whole table instead of a pattern's matches: the names carrying the attribute, and no attribute words in front of them. Two letters are the discriminating half -- they are a **union** and not an intersection, `+xi` naming the exported name *and* the integer one where an intersection names neither, and one letter answers the same under both readings so a row with one letter is not evidence",
+	},
+	{
+		ID: "declare/the-global-letter-filters-nothing", Category: "declarations",
+		Snippet: `qa=1; export qb=2; typeset +g | grep -E '^q[ab]='; echo "--"; typeset +gx | grep '^q'`,
+		Why:     "the control for the row above, and the reason a letter cannot be read as \"a letter, therefore a filter\": `-g` says where a declaration *lands* rather than what a name carries, so it drops out and the whole table stands with its values. `+gx` writing what `+x` writes is the same fact from the other side",
+	},
+	{
+		ID: "declare/the-z-letter-is-taken-in-silence", Category: "declarations",
+		Snippet: `typeset -z; echo "st=$?"; typeset +z; echo "st=$?"; qa=1; typeset -z qa qb; echo "st=$?"; typeset -p qb`,
+		Why:     "a letter zsh takes on both signs and does nothing observable with: the parameters are untouched and a name written beside it is declared exactly as a bare `typeset qb` would declare it. bash and ksh93 both refuse it, and ksh93 fatally, since `typeset` is one of its special builtins -- so the row records three answers to one letter. Refusing it here was worth 68 diagnostics in one shell snapshot, because a plugin loader's own functions are named `+zi-log` and a body line beginning that way reaches `typeset` as an option bundle (#1576)",
+	},
+	{
+		ID: "declare/the-z-letter-belongs-to-one-declaration-word", Category: "declarations",
+		Script:  true,
+		Snippet: "f() { local -z; echo \"local=$?\"; }\nf\ninteger -z\necho \"integer=$?\"\nexport -z\necho \"export=$?\"\nreadonly -z\necho \"readonly=$?\"\n",
+		Why:     "and the paired-table half of the row above: the letter is `typeset` and `declare`'s alone in the shell that has it, and its `local`, `integer`, `export` and `readonly` each call it a bad option. A set that gave every declaration word the same letters would answer all four wrongly, and the failure is silent -- a letter wrongly accepted declares the name and says nothing",
+	},
 }

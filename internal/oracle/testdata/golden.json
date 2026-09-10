@@ -32015,6 +32015,50 @@
         "TimedOut": false
       }
     },
+    "declare/a-bare-sign-is-an-option-word": {
+      "bash": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: `+': not a valid identifier~\u003cshell\u003e: line 1: typeset: `-': not a valid identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: `+': not a valid identifier~\u003cshell\u003e: line 1: typeset: `-': not a valid identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: `+': not a valid identifier~\u003cshell\u003e: line 0: typeset: `-': not a valid identifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "qa~qb~--~qa=1~qb=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "qa~integer qb~--~qa=1~integer qb=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/a-declaration-without-a-value-exports-nothing": {
       "bash": {
         "Stdout": "(none)~BAR=",
@@ -32933,6 +32977,182 @@
       },
       "zsh": {
         "Stdout": "in=[/some/dir/file.zsh]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-plus-signed-attribute-letter-filters-the-whole-table": {
+      "bash": {
+        "Stdout": "qa=1~qb=2~qc=3~--~qa=1~qb=2~qc=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "qa=1~qb=2~qc=3~--~qa=1~qb=2~qc=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "qa=1~qb=2~qc=3~--~qa=1~qb=2~qc=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "qb~--",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "qb~--~qb~qc",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-plus-signed-f-keeps-the-declarations-spelling": {
+      "bash": {
+        "Stdout": "f () ~{ ~    :~}~g () ~{ ~    :~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "f () ~{ ~    :~}~g () ~{ ~    :~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: function: not found~\u003cscript\u003e: 4: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "f()~g",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "f~g",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-plus-signed-f-names-the-functions": {
+      "bash": {
+        "Stdout": "f () ~{ ~    echo x~}~g () ~{ ~    :~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "f () ~{ ~    echo x~}~g () ~{ ~    :~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "f()~g()",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "f~g",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/a-plus-signed-f-reports-one-for-a-name-it-does-not-hold": {
+      "bash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "f()~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "f~st=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -38483,6 +38703,50 @@
         "TimedOut": false
       }
     },
+    "declare/the-f-letters-sign-decides-without-a-pattern-too": {
+      "bash": {
+        "Stdout": "--",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "--",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "--",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "f() { echo x; };--~f()",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "f~--~f () {~\techo x~}",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "declare/the-float-letter-takes-a-precision": {
       "bash": {
         "Stdout": "1[]~2[]~3[]~4[]~5[]",
@@ -38521,6 +38785,138 @@
       },
       "zsh": {
         "Stdout": "1[3.142]~2[3.142]~3[3.1415900000]~4[3.000]~5[0.000]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/the-global-letter-filters-nothing": {
+      "bash": {
+        "Stdout": "qa=1~qb=2~--~qa=1~qb=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "qa=1~qb=2~--~qa=1~qb=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: +g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: +g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: typeset: +g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]~\u003cshell\u003e: typeset: +g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "qa=1~qb=2~--~qb",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/the-z-letter-belongs-to-one-declaration-word": {
+      "bash": {
+        "Stdout": "local=2~integer=127~export=2~readonly=2",
+        "Stderr": "\u003cscript\u003e: line 1: local: -z: invalid option~local: usage: local [option] name[=value] ...~\u003cscript\u003e: line 3: integer: command not found~\u003cscript\u003e: line 5: export: -z: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]~\u003cscript\u003e: line 7: readonly: -z: invalid option~readonly: usage: readonly [-aAf] [name[=value] ...] or readonly -p",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "local=2~integer=127",
+        "Stderr": "\u003cscript\u003e: line 1: local: -z: invalid option~local: usage: local [option] name[=value] ...~\u003cscript\u003e: line 3: integer: command not found~\u003cscript\u003e: line 5: export: -z: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "local=2~integer=127~export=2~readonly=2",
+        "Stderr": "\u003cscript\u003e: line 1: local: -z: invalid option~local: usage: local name[=value] ...~\u003cscript\u003e: line 3: integer: command not found~\u003cscript\u003e: line 5: export: -z: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p~\u003cscript\u003e: line 7: readonly: -z: invalid option~readonly: usage: readonly [-af] [name[=value] ...] or readonly -p",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: local: -z: bad variable name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "local=127",
+        "Stderr": "\u003cscript\u003e: line 1: local: not found~\u003cscript\u003e[3]: typeset: -z: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "local=1~integer=1~export=1~readonly=1",
+        "Stderr": "f:local: bad option: -z~\u003cscript\u003e:integer:3: bad option: -z~\u003cscript\u003e:export:5: bad option: -z~\u003cscript\u003e:readonly:7: bad option: -z",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/the-z-letter-is-taken-in-silence": {
+      "bash": {
+        "Stdout": "st=2~st=2~st=2",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: -z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: +z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: qb: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~st=2~st=2",
+        "Stderr": "\u003cshell\u003e: line 1: typeset: -z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: +z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: -z: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~\u003cshell\u003e: line 1: typeset: qb: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2~st=2~st=2",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -z: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: +z: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: -z: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cshell\u003e: line 0: typeset: qb: not found",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~st=127~st=127",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: typeset: -z: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~st=0~st=0~typeset qb=''",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -51502,6 +51898,50 @@
       "zsh": {
         "Stdout": "st=1",
         "Stderr": "\u003cshell\u003e:functions:1: bad option: -f",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "functions/functions-takes-its-sign-from-the-word": {
+      "bash": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: line 1: functions: command not found~\u003cshell\u003e: line 1: functions: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: line 1: functions: command not found~\u003cshell\u003e: line 1: functions: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: functions: command not found~\u003cshell\u003e: functions: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: 1: functions: not found~\u003cshell\u003e: 1: functions: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "f()~--~f() { echo x; };",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "f~--~f () {~\techo x~}",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

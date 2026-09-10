@@ -2366,6 +2366,54 @@ type Semantics struct {
 	// refusal has happened, so a shell with no `typeset` never meets it.
 	TypesetBadOptionFatal Answer
 
+	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with
+	// no letters after it as an option word rather than as an operand.
+	//
+	// A real disagreement and not a missing feature, which is why it is a
+	// field: measured 2026-09-10, `typeset +` writes the whole parameter
+	// table's attribute words and names in zsh 5.9.2 and its own name
+	// listing in ksh93, while bash 5.3 answers ``typeset: `+': not a valid
+	// identifier`` at 1 — the sign is a *name* there, and not one a script
+	// may declare. Both readings are complete and neither is a superset of
+	// the other, so the sign cannot simply be swallowed.
+	//
+	// The sign means what it means everywhere else on the builtin once it is
+	// read: a minus adds nothing to the bare listing and a plus turns it
+	// into the names-only shape. `functions +` is the same word reaching the
+	// function table, and is how a shell snapshot asks for a name list
+	// (#1576).
+	//
+	// Asked only where a script really wrote one, so a dialect that never
+	// meets the shape is never asked for an answer.
+	SignAloneIsAnOptionWord Answer
+
+	// FunctionNamesUnderPlus reads the *plus* spelling of the function
+	// letter as a request for the names alone — `typeset +f` against
+	// `typeset -f`.
+	//
+	// The two shells that spell the letter disagree about what the sign
+	// means, which is why this is a field rather than the substrate's
+	// assumption. Measured 2026-09-10:
+	//
+	//   - zsh 5.9.2 writes one bare name a line, with an operand and
+	//     without one alike, and the last `f` letter's sign decides —
+	//     `typeset -f +f f` is the name and `typeset +f -f f` is the body.
+	//   - bash 5.3 has no names-only spelling under this sign at all. Its
+	//     `+f` takes the function attribute *off*, leaving the bare
+	//     `declare`, which writes every variable and then every function.
+	//     That listing is BareDeclarationListing's unanswered row for that
+	//     shell, so `No` here leaves the letter writing bodies: the row is
+	//     as wrong as it was rather than wrong in a new way (#1742).
+	//
+	// ksh93 is a third answer again — `f()` for a function declared with
+	// parentheses and the bare name for one declared with the keyword — and
+	// is not asked, because that dialect refuses the `f` letter outright
+	// while its body listing is a verbatim copy of the source text this
+	// engine does not keep (#1494).
+	//
+	// Asked only where a plus-signed `f` was really written.
+	FunctionNamesUnderPlus Answer
+
 	// IntegerOptions is the set of letters the `integer` builtin takes,
 	// spelled the way DeclareOptions is. It is a separate field rather than
 	// DeclareOptions over again because the two shells that have the word
@@ -5462,6 +5510,12 @@ func PosixSemantics() Semantics {
 		BareDeclarationListing: DeclareListingCommandWord,
 		BareLocalListing:       BareLocalListsNothing,
 		TypesetBadOptionFatal:  No,
+		// POSIX has no `typeset`, so nothing in the standard reads a lone
+		// sign as an option word and an operand is what is left. It is also
+		// the answer that declares nothing behind a script's back.
+		SignAloneIsAnOptionWord: No,
+		// POSIX has neither `typeset` nor `declare`, so it has no `f`
+		// letter to sign and nothing to say about it.
 		// POSIX gives `%string` and `%?string` outright, has `wait` answer
 		// for a job that is not there, and calls a string matching more
 		// than one job unspecified — refusing is the reading that invents

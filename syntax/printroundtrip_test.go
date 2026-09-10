@@ -62,7 +62,12 @@ import (
 // several names. They are the sharpest cases this count has: printing only
 // the first name is a program that parses, reprints identically, runs and
 // exits 0 — with the rest of the script calling functions nobody defined.
-const keywordFunctionsInTheCorpus = 24
+//
+// Twenty-five since #1576, whose case for the names-only function listing
+// declares one function each way in one snippet: ksh93's `typeset +f` writes
+// `f()` for the parenthesised spelling and the bare `g` for the keyword one,
+// so the two forms have to stand side by side for the row to say anything.
+const keywordFunctionsInTheCorpus = 25
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 	// The arrangement a formatter asks for, alongside the zero value that a

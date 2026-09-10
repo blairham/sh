@@ -276,7 +276,7 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 // Sorted by name, which puts each pair's scalar and array apart rather than
 // together: `A`, `CDPATH`, … then `a`, `cdpath`, because the upper-case
 // halves sort first.
-func (r *Runner) tieListing() int {
+func (r *Runner) tieListing(namesOnly bool) int {
 	seen := make(map[string]bool, len(r.tied))
 	for name := range r.tied {
 		seen[name] = true
@@ -284,6 +284,14 @@ func (r *Runner) tieListing() int {
 	for _, name := range sortedNames(seen) {
 		d, ok := r.declarationOf(name)
 		if !ok {
+			continue
+		}
+		if namesOnly {
+			// `typeset +T`, the same walk with the values left off — the
+			// sign means here what it means on every other letter of this
+			// builtin. Measured 2026-09-10 on zsh 5.9.2: both halves of
+			// every tie, one name to a line, sorted, and no attribute words.
+			r.printf("%s\n", name)
 			continue
 		}
 		r.printf("%s=%s\n", name, r.listedDeclarationValue(d))

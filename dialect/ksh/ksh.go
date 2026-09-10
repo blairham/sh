@@ -768,6 +768,14 @@ func Semantics() interp.Semantics {
 	// and the padding letters; `-g` it simply does not have. There is no
 	// `local` (see Register), so LocalOptions stays empty.
 	s.DeclareOptions = "aAilprux"
+	// A lone `-` or `+` is an option word to *this* builtin: measured
+	// 2026-09-10, `typeset +` names every parameter and `typeset -` writes
+	// the same table with values, where bash calls the sign an identifier
+	// and refuses it. It is not this shell's answer everywhere — `export +`
+	// is `+: is not an identifier` here — but `export` does not read its
+	// options through this parser, so the narrower reading is the one that
+	// gets to be true (#1576).
+	s.SignAloneIsAnOptionWord = interp.Yes
 	// typeset is one of this shell's own special builtins, so any of its
 	// failures ends the script — a bad option included.
 	s.TypesetBadOptionFatal = interp.Yes

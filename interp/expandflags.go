@@ -210,8 +210,14 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// letters having been accepted and then dropped on the way. Every other
 	// letter in the group acts on the words further down this pipeline,
 	// which is why these two are the whole of what this step can lose.
+	var indirect *indirectTarget
 	if strings.ContainsRune(e.Flags, 'P') {
-		words, set, isList = r.namedBase(strings.Join(words, " "), e.Flags)
+		// Kept, because an operator that assigns further down this pipeline
+		// writes *this* name and not the one the expansion spelled. See
+		// interp/indirectassign.go — reading the flag on the way out only
+		// left the name holding what the parameter should have.
+		indirect = &indirectTarget{text: strings.Join(words, " "), set: set}
+		words, set, isList = r.indirectBase(indirect.text, e.Flags)
 	}
 
 	// The is-it-set question, asked of whatever the base and `(P)` came to:
@@ -248,7 +254,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// Rule 7: the operator, applied to the value at this level. Measured:
 	// the flags apply to what the operator leaves — `${(U)x:-def}` is DEF,
 	// `${(U)u:=def}` assigns def and substitutes DEF.
-	words, isList, ok, nothing := r.applyFlagOp(e, words, set, isList)
+	words, isList, ok, nothing := r.applyFlagOp(e, words, set, isList, indirect)
 	if !ok {
 		return nil, false, false, false
 	}
@@ -426,9 +432,17 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 // One function for both operators so the two cannot drift: the only
 // difference between them is *whether* this runs, which is the caller's
 // question and not this one's.
-func (r *Runner) assignThroughFlags(e *syntax.ParamExpr) ([]string, bool, bool) {
+func (r *Runner) assignThroughFlags(e *syntax.ParamExpr, indirect *indirectTarget) ([]string, bool, bool) {
 	v := r.joinWord(e.Arg)
 	switch {
+	case indirect != nil:
+		// `(P)` moved the name one step along, and the assignment moves with
+		// it — the base's own subscript belongs to *that* resolution and not
+		// to the target, measured: `arr=(tgt zz); ${(P)arr[1]::=new}` writes
+		// `tgt` and leaves `arr` as it was.
+		if !r.assignIndirect(e.Name, indirect, v) {
+			return nil, false, false
+		}
 	case e.Index != nil && !r.wholeArrayIndex(e):
 		r.assignSubscript(e, v)
 	default:
@@ -940,7 +954,9 @@ func substitutedNothing(e *syntax.ParamExpr, words []string, fired bool) bool {
 // that is the only place that knows which side ran — a caller asking again
 // from the outside would have to re-derive `fires`, and a second reading of
 // which side ran is how the two come apart.
-func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bool) ([]string, bool, bool, bool) {
+func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bool,
+	indirect *indirectTarget,
+) ([]string, bool, bool, bool) {
 	fires := !set
 	if e.Colon {
 		fires = !set || strings.Join(words, "") == ""
@@ -954,14 +970,14 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 		}
 	case syntax.ParamAssign:
 		if fires {
-			w, l, ok := r.assignThroughFlags(e)
+			w, l, ok := r.assignThroughFlags(e, indirect)
 			return w, l, ok, false
 		}
 	case syntax.ParamAssignAlways:
 		// No test, so the assignment is the only branch there is. The flags
 		// still apply to what is substituted and not to what is stored:
 		// measured, `${(U)v::=abc}` is `ABC` and leaves `abc` behind.
-		w, l, ok := r.assignThroughFlags(e)
+		w, l, ok := r.assignThroughFlags(e, indirect)
 		return w, l, ok, false
 	case syntax.ParamAlternate:
 		if fires {

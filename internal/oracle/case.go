@@ -7336,6 +7336,21 @@ echo "st=$?"`,
 		Why:     "*which* lookup the letters belong to, asked where the two answers are different words rather than a missing one. `m` is an association whose single value names another, and its single key names a live scalar — so reading `k` at the first lookup takes the key `a`, resolves it, and substitutes `WRONG`, while reading it at the second takes the keys of `tab`. Each bracket is paired with the same expansion without the `P`, which was already right, so a run that differs only on the odd brackets is a run about the route and not about the letters. The second pair says a subscripted base is a name like any other, which is the third of the three lookups that read these letters",
 	},
 	{
+		ID: "param/expansion-flags-indirection-assigns-through-the-name", Category: "parameter expansion",
+		Snippet: `x=tgt; tgt=old; printf "[%s]" "${(P)x::=new}" "$tgt" "$x"; y=t2; t2=keep; printf "[%s]" "${(P)y:=new}" "$t2"; unset u; printf "[%s]" "${(P)u::=here}" "$u"; echo`,
+		Why:     "`(P)` moves the *assignment* one step along too, and not only the read. Three brackets to a group because each one separates a reading the others cannot: the first group says the value lands on `tgt` and leaves `x` holding the name, which is what an implementation reading the flag on the way out gets backwards — it writes `new` into `x`, answers `new`, and leaves `tgt` alone at status 0. The second says the test is about the resolved parameter, so `:=` does not fire over a `t2` that already holds something. The third is the shape that is *not* the empty name: with nothing to resolve the assignment lands on the name as written, where a set-but-empty base is a refusal. This is the line a plugin manager writes as `${(P)2::=$mtime}` from a function whose `$2` is the name to write, and assigning to the name instead created a parameter called `2` that every later `$2` in the shell then read (#1672)",
+	},
+	{
+		ID: "param/expansion-flags-indirection-assigns-to-an-element", Category: "parameter expansion",
+		Snippet: `typeset -A m 2>/dev/null; m=(k old); n="m[k]"; printf "[%s]" "${(P)n}" "${(P)n::=new}" "${m[k]}"; a=(p q); i="a[2]"; printf "[%s]" "${(P)i::=Z}" "${a[*]}"; echo`,
+		Why:     "the resolved text is a *parameter reference* and not only a name, so a subscript in it reaches one element — which is the half the startup actually needs, its table of times being written as `${(P)$name::=$t}` with `$name` holding `ZI[mtime-side]`. The read is in the row beside the write on purpose: an implementation that assigned to the element while still reading the whole text as a flat name would answer the first bracket empty and then fire a conditional assignment over a key that was already there. The array spelling follows it because the two stores are different code and the same rule",
+	},
+	{
+		ID: "param/expansion-flags-indirection-refuses-what-it-resolved-to", Category: "parameter expansion",
+		Snippet: `x="a b"; printf "[%s]" "${(P)x::=new}"; echo " AFTER st=$?"`,
+		Why:     "the name check is asked of what the indirection *came to* and not of what was written. `x` is a perfectly good identifier, so a shell asking the question one step too early sees nothing wrong and assigns to `x`; asking it one step later names the two words the value holds and ends the script. The row records the wording and that nothing after it runs, which is the second half — a refusal carried as a status would leave the `AFTER` behind",
+	},
+	{
 		ID: "param/the-array-flag-without-an-assignment-changes-nothing", Category: "parameter expansion",
 		Snippet: `v="a|b"; printf "[%s]" "${(@Akons:|:u)v}" "${(@kons:|:u)v}"; w="a b"; printf "[%s]" "${(A)#w}" "${#w}" "${(AA)w}" "${w}"; echo`,
 		Why:     "`(A)` is the one flag whose whole job is a side effect, so where the expansion assigns nothing it does nothing at all — every pair here is the flag beside the same expansion without it, and the two halves of each pair have to agree. Written as pairs rather than as values because a recorded value would pass for an `(A)` that quietly did something, as long as somebody had written down what it did. The first pair is the cluster a plugin manager writes three times",

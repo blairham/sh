@@ -1296,6 +1296,65 @@ Details, each measured:
   way at the first character that is not a flag: `${(Ux}` errors at
   position 5.
 
+### `(P)` beside an operator that assigns
+
+`(P)` moves the whole expansion one step along, and that includes the
+**assignment**: `${(P)x::=w}`, `${(P)x:=w}` and `${(P)x=w}` write the
+parameter the base names, not the base. Measured on zsh 5.9.2, 2026-09-10:
+
+    x=tgt; tgt=old; ${(P)x::=new}   →  new    tgt=new, x=tgt
+    x=tgt; tgt=old; ${(P)x:=new}    →  old    the test is about tgt
+    x=tgt; unset tgt; ${(P)x:=new}  →  new    tgt=new
+    x=tgt; tgt=;    ${(P)x=new}     →  ``     `=` fires on unset alone
+    x=tgt; tgt=old; ${(UP)x::=new}  →  NEW    tgt=new — the other letters
+                                              still act on what is
+                                              substituted, not on what is
+                                              stored
+
+An implementation reading the flag on the way out only answers `new` for
+the first row too, and leaves it in `x` — plausible, at status 0.
+
+**The resolved text is a parameter reference, not only a name.** A
+subscript in it reaches one element, and the base's *own* subscript
+belongs to the resolution rather than to the target:
+
+    typeset -A m=(k old); n='m[k]'
+    ${(P)n}                →  old
+    ${(P)n::=new}          →  new    m[k]=new
+    a=(p q); i='a[2]'; ${(P)i::=Z}   →  Z    a is (p Z)
+    arr=(tgt zz); ${(P)arr[1]::=new} →  new  tgt=new, arr unchanged
+
+**An unset base is not the empty name.** With nothing to resolve the
+assignment lands on the name as written, where a set-but-empty base is a
+refusal:
+
+    unset x; ${(P)x::=new}   →  new    and leaves `typeset x=new`
+    x=;      ${(P)x::=new}   →  not an identifier: ``
+    x='a b'; ${(P)x:=new}    →  not an identifier: a b
+    x='#';   ${(P)x::=new}   →  not an identifier: #
+
+The refusal ends the script at 1, and it is asked of **all three**
+assigning operators here — where the direct spelling asks it of `::=`
+alone (see "What this implementation does not match", and #1541 for why
+that one is narrow).
+
+This is the construct a plugin manager records file times with —
+`.zi-get-mtime-into` is `: ${(P)2::="$(stat …)"}` called as
+`.zi-get-mtime-into "$file" 'ZI[mtime-side]'` — and writing to the base
+instead stored the time in a parameter *called* `2`. Every later `$2` in
+a function called with one argument then read the leftover, a
+"were two components given?" test answered yes, and eighteen autoloaded
+functions were looked for in a directory assembled from the wrong halves
+of a plugin id (#1672).
+
+**What this shell does not carry here.** zsh reads the resolved text as a
+full reference, so a subscript over a *scalar* is a character
+(`s=abc; x='s[2]'; ${(P)x}` is `b`) and a subscript flag is a search
+(`a=(p q); x='a[(r)q]'` is `q`). Neither is read here: a resolved text
+this shell cannot take apart falls through to the plain-name lookup it
+already got, so the read is empty and the write goes to the name check,
+which refuses it by name rather than answering something plausible.
+
 ### What the corpus pins
 
 The table above is measured, and the rows that hold the panel to it are
@@ -1305,8 +1364,10 @@ on the shells without the construct), `-split-and-join` (`(s)`, `(j)`),
 (`(f)`), `-at-keeps-array-fields` (`(@)`, against the IFS join a quoted
 array otherwise gets), `-name-indirection` (`(P)`),
 `-keys-and-values` (`(k)`, `(kv)`), `-run-after-the-operator` (the
-ordering rule and `(P)`'s exception to it), and
-`param/prompt-percent-names-the-script` (`(%)`).
+ordering rule and `(P)`'s exception to it),
+`param/expansion-flags-indirection-assigns-through-the-name`,
+`-assigns-to-an-element` and `-refuses-what-it-resolved-to` (the three
+above), and `param/prompt-percent-names-the-script` (`(%)`).
 
 The flags that order, count and unquote have rows of their own:
 `param/the-ordering-flags-sort-a-list`, `-and-case`,

@@ -677,6 +677,12 @@ var Corpus = []Case{
 		Why:     "ksh and zsh run the last pipeline element in the current shell; dash and bash use a subshell",
 	},
 	{
+		ID: "axis/pipeline-last-element-with-a-local", Category: "semantics axes",
+		Script:  true,
+		Snippet: "g() { local a=0; { local a=1; } | { local a=2; }; echo \"after=[$a]\"; }\ng\n",
+		Why:     "the axis above asked again where both elements declare the *same* name, which is what says the answer is about which shell the last element runs in and not about the pipe. Each side declares a different value on purpose: a name holding one value on both sides could not tell a shared scope from a copied one. zsh runs the last element on the shell itself and its `local` unwinds into the function, so `after=[2]`; bash 5.3, bash 3.2, bash-as-sh and dash give it a subshell and keep `[0]`; ksh93 has no `local` at all, so nothing was ever assigned and the row is `[]` — a third answer that is the missing builtin rather than a third reading of the axis",
+	},
+	{
 		ID: "axis/dollar-zero-in-function", Category: "semantics axes",
 		Snippet: `f() { echo "$0"; }; f`,
 		Why:     "zsh reports the function name where the others report the shell",
@@ -9272,6 +9278,18 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Script:  true,
 		Snippet: "f() { local a[1]=v; echo in=[${a[1]}] st=$?; }\nf\necho out=[${a[1]}]\n",
 		Why:     "which of the two name questions `local` reads, and the row that says it is the declaration's rather than `export`'s: bash takes the operand and makes a local array holding the element, zsh takes it and then refuses it for its own reason about elements, and dash refuses it as a bad name. Reading it through the `export` answer made this shell refuse a line bash has always accepted",
+	},
+	{
+		ID: "local/a-subshells-local-does-not-shadow-in-the-caller", Category: "declarations",
+		Script:  true,
+		Snippet: "g() { ( local q=sub ); q=setbyg; }\nq=global\ng\necho \"[$q]\"\n",
+		Why:     "whose scope a `local` inside `( … )` writes, asked so that only the *caller's* frame can answer. The name is declared nowhere but the subshell, so a save recorded in the caller's scope has one source — and the assignment after it is what makes the save visible, because the caller's return puts back whatever was saved. Every shell with `local` answers `[setbyg]`, and ksh93 answers it by having no `local` to shadow with, so the panel is unanimous and this is the core's rather than an axis. It is the visible half of #1783: the subshell shared the caller's scope stack, recorded the save there, and the return reverted an assignment made after the subshell had finished",
+	},
+	{
+		ID: "local/a-pipeline-elements-local-does-not-shadow-in-the-caller", Category: "declarations",
+		Script:  true,
+		Snippet: "g() { { local q=elem; } | cat; q=setbyg; }\nq=global\ng\necho \"[$q]\"\n",
+		Why:     "the same question where the subshell is a pipeline element, which is a clone running on a goroutine rather than one running in line — and the shape that ended this shell's process rather than only answering wrongly. The element is deliberately not the last one, so the answer does not depend on LastPipelineElementInCurrentShell: every element but the last is a subshell in all six columns, and all six say `[setbyg]`",
 	},
 	{
 		ID: "declare/an-attribute-does-not-outlive-the-declaration", Category: "declarations",

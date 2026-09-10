@@ -6,6 +6,7 @@ package interp_test
 import (
 	"context"
 	"strings"
+	"syscall"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -246,12 +247,16 @@ func TestFunctionLocalTrapsRestoreTheDisposition(t *testing.T) {
 // back": a shell that merely forgot the listing would still have the handler
 // arranged and would print `handled`.
 func TestFunctionLocalTrapsRestoreTheDefaultAction(t *testing.T) {
+	// 128 plus the signal's number, asked of the platform: only the first
+	// fifteen signals are fixed by the standard, and USR1 is 30 on Darwin
+	// and 10 on Linux — a literal 158 here is a fact about one machine.
+	want := 128 + int(syscall.SIGUSR1)
 	deadline(t, "a signal sent after a scoped return with nothing to go back to", func() {
 		out, st := localTrapsRun(t, TrapsGoBackAtTheReturn,
 			`f() { trap 'echo handled' USR1; }; f; echo before; kill -USR1 $$; echo unreached`)
 		if !strings.HasPrefix(out, "before\n") || strings.Contains(out, "handled") ||
-			strings.Contains(out, "unreached") || st != 158 {
-			t.Errorf("got %q/%d, want the shell killed by USR1 at 158 with no handler run", out, st)
+			strings.Contains(out, "unreached") || st != want {
+			t.Errorf("got %q/%d, want the shell killed by USR1 at %d with no handler run", out, st, want)
 		}
 	})
 }

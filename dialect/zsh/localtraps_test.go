@@ -4,7 +4,9 @@
 package zsh_test
 
 import (
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -180,10 +182,16 @@ func TestLocalTrapsRestoreAnInheritedIgnoreAsInherited(t *testing.T) {
 }
 
 // A signal named by number is the same condition as one named by name, and
-// the listing says so in the name — 30 is USR1 on this platform.
+// the listing says so in the name.
+//
+// The number is asked of the platform rather than written down. Only the
+// first fifteen are fixed by the standard, and USR1 is not one of them: it is
+// 30 on this machine and 10 on Linux, so a literal here is a test that passes
+// where it was written and fails in CI — which is what it did.
 func TestLocalTrapsRestoresASignalNamedByNumber(t *testing.T) {
+	n := strconv.Itoa(int(syscall.SIGUSR1))
 	out, st := runZsh(t, t.TempDir(),
-		`trap 'echo outer' 30; setopt localtraps; g() { trap 'echo inner' 30; }; g; trap`)
+		`trap 'echo outer' `+n+`; setopt localtraps; g() { trap 'echo inner' `+n+`; }; g; trap`)
 	if st != 0 || out != "trap -- 'echo outer' USR1\n" {
 		t.Errorf("out %q status %d, want the caller's trap back", out, st)
 	}
@@ -207,16 +215,21 @@ func TestLocalTrapsRestoreTheDispositionAndNotTheListing(t *testing.T) {
 }
 
 // And with nothing displaced, what comes back is the *default action*, which
-// for USR1 is death at 128+30. This is the row with no outer handler, and it
-// is the one that says "restored" is not "forgot the listing": a shell that
-// only dropped the listing would still have the handler arranged and would
-// print `handled`.
+// for USR1 is death. This is the row with no outer handler, and it is the one
+// that says "restored" is not "forgot the listing": a shell that only dropped
+// the listing would still have the handler arranged and would print
+// `handled`.
+//
+// The status is 128 plus the signal's number, and the number comes from the
+// platform for the reason the case above gives: USR1 is 30 here and 10 on
+// Linux, so 158 is a fact about this machine and not about the shell.
 func TestLocalTrapsRestoreTheDefaultAction(t *testing.T) {
+	want := 128 + int(syscall.SIGUSR1)
 	out, st := zshWithin(t, 20*time.Second,
 		`setopt localtraps; g() { trap 'echo handled' USR1; }; g; echo before; kill -USR1 $$; echo unreached`)
-	if st != 158 || !strings.HasPrefix(out, "before\n") ||
+	if st != want || !strings.HasPrefix(out, "before\n") ||
 		strings.Contains(out, "handled") || strings.Contains(out, "unreached") {
-		t.Errorf("out %q status %d, want the shell killed by USR1 at 158 with no handler run", out, st)
+		t.Errorf("out %q status %d, want the shell killed by USR1 at %d with no handler run", out, st, want)
 	}
 }
 

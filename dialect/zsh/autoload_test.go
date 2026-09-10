@@ -367,3 +367,109 @@ myfunc`)
 		t.Errorf("+X over a definition = %q (status %d), want %q", out, st, want)
 	}
 }
+
+// `-r` searches `$fpath` at the **declaration** and fixes the path, where a
+// plain declaration searches at the call. Rewriting `$fpath` in between is
+// what tells the two apart, and it is the whole reason the letter cannot be
+// accepted and ignored: a plugin manager that moves `$fpath` between
+// declaring a name and calling it means the earlier file.
+func TestDashRFixesThePathAtTheDeclaration(t *testing.T) {
+	first := fpathDir(t, map[string]string{"f": `print -r -- FIRST`})
+	second := fpathDir(t, map[string]string{"f": `print -r -- SECOND`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+first+`)
+autoload -r f
+print -r -- "decl st=$?"
+fpath=(`+second+`)
+f`)
+	want := "decl st=0\nFIRST\n"
+	if out != want || st != 0 {
+		t.Errorf("-r across an fpath swap = %q (status %d), want %q", out, st, want)
+	}
+	out, st = runZsh(t, t.TempDir(), `fpath=(`+first+`)
+autoload f
+fpath=(`+second+`)
+f`)
+	if out != "SECOND\n" || st != 0 {
+		t.Errorf("a plain declaration across the same swap = %q (status %d), want %q", out, st, "SECOND\n")
+	}
+}
+
+// What `-r` fixes is the *path*, not the contents: the file is still read at
+// the call, so an edit made after the declaration is the body that runs.
+func TestDashRFixesThePathAndNotTheContents(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"f": `print -r -- ORIGINAL`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+autoload -r f
+print -r -- 'print -r -- EDITED' > `+filepath.Join(fp, "f")+`
+f`)
+	if out != "EDITED\n" || st != 0 {
+		t.Errorf("an edit after -r = %q (status %d), want %q", out, st, "EDITED\n")
+	}
+}
+
+// And fixed with no search left behind it: emptying `$fpath` outright
+// between the declaration and the call changes nothing, because there is no
+// second search to come up empty.
+//
+// zsh goes one further than this can — a fixed path whose *file* has been
+// deleted is `function definition file not found` with a perfectly good
+// replacement earlier on `$fpath`, rather than a fallback to it — but
+// deleting a file mid-script wants an external command and this harness runs
+// no external commands. The measurement is recorded on autoloadFixPath; what
+// is asserted here is the half of it this harness can say.
+func TestAFixedPathNeedsNoFurtherSearch(t *testing.T) {
+	fp := fpathDir(t, map[string]string{"g": `print -r -- FIXED`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
+autoload -r g
+fpath=()
+g
+print -r -- "call st=$?"`)
+	want := "FIXED\ncall st=0\n"
+	if out != want || st != 0 {
+		t.Errorf("a fixed path with $fpath emptied = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A name `-r` cannot resolve is **not** fixed, and the letter says nothing
+// about it: what is left behind is an ordinary deferred autoload, which the
+// call then resolves against whatever `$fpath` says by then.
+func TestDashRIsSilentAboutANameItCannotResolve(t *testing.T) {
+	later := fpathDir(t, map[string]string{"f": `print -r -- LATER`})
+	out, st := runZsh(t, t.TempDir(), `fpath=()
+autoload -r f
+print -r -- "decl st=$?"
+fpath=(`+later+`)
+f`)
+	want := "decl st=0\nLATER\n"
+	if out != want || st != 0 {
+		t.Errorf("-r on an unresolvable name = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `-R` is the same declaration with that failure reported, at the
+// declaration and about the function rather than the builtin.
+func TestDashRCapitalReportsANameItCannotResolve(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `fpath=()
+autoload -R nosuchfn 2>&1
+print -r -- "decl st=$?"`)
+	want := "zsh:2: nosuchfn: function definition file not found\ndecl st=1\n"
+	if out != want || st != 0 {
+		t.Errorf("-R on an unresolvable name = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A plain declaration after a `-r` one says "search at the call" and is
+// taken at its word — the earlier fixed path does not go on answering.
+func TestAPlainDeclarationForgetsAFixedPath(t *testing.T) {
+	first := fpathDir(t, map[string]string{"f": `print -r -- FIRST`})
+	second := fpathDir(t, map[string]string{"f": `print -r -- SECOND`})
+	out, st := runZsh(t, t.TempDir(), `fpath=(`+first+`)
+autoload -r f
+unfunction f
+autoload f
+fpath=(`+second+`)
+f`)
+	if out != "SECOND\n" || st != 0 {
+		t.Errorf("a plain declaration after -r = %q (status %d), want %q", out, st, "SECOND\n")
+	}
+}

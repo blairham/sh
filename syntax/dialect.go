@@ -1725,6 +1725,32 @@ type Dialect struct {
 	// them.
 	BareSubscript bool
 
+	// BareParamFlags enables zsh's unbraced flag sigils: a flag character
+	// between the `$` and the name, without braces. `$+v` is `${+v}`, `$=v`
+	// is `${=v}`, `$~v` is `${~v}` and `$^a` is `${^a}` — the same four
+	// flags the braced group already takes, written the short way.
+	//
+	// One shell in the panel. Measured on zsh 5.9.2 against bash 5.3.15,
+	// bash 3.2.57, bash as `sh`, ksh93 and dash: `v=1; echo $+v` prints `1`
+	// there and the literal `$+v` everywhere else, and the same for the
+	// other three.
+	//
+	// It is the lexer's for the reason BareSubscript is: the word boundary
+	// moves. `$=v` is one expansion where the flag is on and a literal `$`
+	// followed by `=v` where it is off, and nothing downstream can tell them
+	// apart once the spans are cut. Separate from BareSubscript because it
+	// is a separate question — that one decides whether `[` after a name
+	// belongs to the expansion, and a shell could sensibly answer the two
+	// differently.
+	//
+	// The four do not all take the same target, which is why the lexer asks
+	// what follows. `$+` takes a name or a digit and nothing else: measured,
+	// `$+@`, `$+*`, `$+?` and `$+$` all print themselves, and so does `$++v`
+	// — the sigil does not repeat. The other three take every target a bare
+	// `$` does, specials included, and are flags even with no target at all,
+	// since a bare `$=` expands to nothing there rather than printing.
+	BareParamFlags bool
+
 	// ChainedSubscript lets a braced expansion carry more than one subscript,
 	// each reading what the one before it named: `${m[k][2]}` is the second
 	// *character* of the value under `k`, and `${a[2,4][1]}` the first

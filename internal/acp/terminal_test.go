@@ -4,7 +4,9 @@
 package acp_test
 
 import (
+	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -399,5 +401,171 @@ func TestATerminalRunsWhereTheAgentAsked(t *testing.T) {
 	}
 	if strings.TrimSpace(out.Output) != want {
 		t.Errorf("pwd = %q, want %q", strings.TrimSpace(out.Output), want)
+	}
+}
+
+// interpreting wires a client whose Interpret seam is the given func, which is
+// what a caller holding a shell supplies. The client also has a gate, so a test
+// can show which route an action took.
+func interpreting(t *testing.T, seen *recorder,
+	run func(context.Context, acp.TerminalCommand, io.Writer) int,
+) *jsonrpc.Conn {
+	t.Helper()
+	c := &acp.Client{
+		Info:      acp.Implementation{Name: "test-client", Version: "1"},
+		Terminals: true,
+		Interpret: run,
+	}
+	if seen != nil {
+		c.Boundary = boundary.Boundary{Gate: seen, Events: seen, Session: "run-1"}
+	}
+	return against(t, c, &agentSide{})
+}
+
+// An agent that sends a command line and no args gets it interpreted.
+//
+// This is #1782. Every agent measured that means a shell command sends the
+// whole line in `command` and no `args` at all — Claude Code 0.16.2 sends
+// `printf "%s" "$0"; ps -o args= -p $$` that way — and exec'ing that as a
+// filename failed every one of them with "executable file not found in $PATH",
+// including a bare `echo hello`.
+func TestACommandLineIsInterpretedRatherThanExeced(t *testing.T) {
+	t.Parallel()
+	var got acp.TerminalCommand
+	conn := interpreting(t, nil, func(_ context.Context, cmd acp.TerminalCommand, out io.Writer) int {
+		got = cmd
+		_, _ = io.WriteString(out, "interpreted\n")
+		return 3
+	})
+
+	id := create(t, conn, acp.CreateTerminalRequest{
+		SessionID: "s1",
+		Command:   `echo one; echo two`,
+		Cwd:       "/tmp",
+		Env:       []acp.EnvVariable{{Name: "FROM_AGENT", Value: "1"}},
+	})
+	var exit acp.WaitForTerminalExitResponse
+	if err := conn.Call(t.Context(), acp.MethodWaitForExit,
+		acp.TerminalRequest{SessionID: "s1", TerminalID: id}, &exit); err != nil {
+		t.Fatalf("terminal/wait_for_exit: %v", err)
+	}
+	if exit.ExitCode == nil || *exit.ExitCode != 3 {
+		t.Errorf("exit = %+v, want the status the interpreter returned", exit)
+	}
+	var out acp.TerminalOutputResponse
+	if err := conn.Call(t.Context(), acp.MethodTerminalOutput,
+		acp.TerminalRequest{SessionID: "s1", TerminalID: id}, &out); err != nil {
+		t.Fatalf("terminal/output: %v", err)
+	}
+	if out.Output != "interpreted\n" {
+		t.Errorf("output = %q, want what the interpreter wrote", out.Output)
+	}
+	if got.Line != `echo one; echo two` {
+		t.Errorf("line = %q, want the command whole, syntax included", got.Line)
+	}
+	if got.Dir != "/tmp" {
+		t.Errorf("dir = %q, want the directory the agent asked for", got.Dir)
+	}
+	// Inherited and then written over: a line started with only the agent's
+	// few variables has no PATH.
+	var carried, inherited bool
+	for _, e := range got.Env {
+		if e == "FROM_AGENT=1" {
+			carried = true
+		}
+		if strings.HasPrefix(e, "PATH=") {
+			inherited = true
+		}
+	}
+	if !carried || !inherited {
+		t.Errorf("env carried the agent's = %v, inherited a PATH = %v", carried, inherited)
+	}
+}
+
+// An argv is still an argv. An agent that says which word is the program is
+// taken at its word, and the gate sees that vector exactly as before.
+func TestAnArgvIsStillExecedWhenTheAgentSendsOne(t *testing.T) {
+	t.Parallel()
+	seen := &recorder{}
+	var interpreted bool
+	conn := interpreting(t, seen, func(context.Context, acp.TerminalCommand, io.Writer) int {
+		interpreted = true
+		return 0
+	})
+
+	id := create(t, conn, acp.CreateTerminalRequest{
+		SessionID: "s1", Command: "/bin/echo", Args: []string{"argv-route"},
+	})
+	var exit acp.WaitForTerminalExitResponse
+	if err := conn.Call(t.Context(), acp.MethodWaitForExit,
+		acp.TerminalRequest{SessionID: "s1", TerminalID: id}, &exit); err != nil {
+		t.Fatalf("terminal/wait_for_exit: %v", err)
+	}
+	if interpreted {
+		t.Error("a command sent with args was interpreted as a line")
+	}
+	var gated bool
+	for _, a := range seen.actions() {
+		if a.Kind == interp.ActionExec && a.Path == "/bin/echo" {
+			gated = true
+		}
+	}
+	if !gated {
+		t.Errorf("the gate never saw the argv: %v", seen.actions())
+	}
+}
+
+// terminal/kill on an interpreted line has no process to signal, so it cancels
+// the context the interpreter is running under — and that has to actually
+// reach it, or an agent's kill is a no-op that answers as though it worked.
+func TestKillingAnInterpretedLineCancelsIt(t *testing.T) {
+	t.Parallel()
+	started := make(chan struct{})
+	conn := interpreting(t, &recorder{}, func(ctx context.Context, _ acp.TerminalCommand, _ io.Writer) int {
+		close(started)
+		<-ctx.Done()
+		return 130
+	})
+
+	id := create(t, conn, acp.CreateTerminalRequest{SessionID: "s1", Command: "sleep forever"})
+	<-started
+	var killed acp.KillTerminalResponse
+	if err := conn.Call(t.Context(), acp.MethodKillTerminal,
+		acp.TerminalRequest{SessionID: "s1", TerminalID: id}, &killed); err != nil {
+		t.Fatalf("terminal/kill: %v", err)
+	}
+	var exit acp.WaitForTerminalExitResponse
+	if err := conn.Call(t.Context(), acp.MethodWaitForExit,
+		acp.TerminalRequest{SessionID: "s1", TerminalID: id}, &exit); err != nil {
+		t.Fatalf("terminal/wait_for_exit: %v", err)
+	}
+	if exit.ExitCode == nil || *exit.ExitCode != 130 {
+		t.Errorf("exit = %+v, want the status the canceled interpreter returned", exit)
+	}
+}
+
+// Releasing an interpreted line does not record a SIGKILL to pid 0. It ended a
+// context, not a process, and the commands inside the line recorded themselves
+// as they ran.
+func TestReleasingAnInterpretedLineRecordsNoSignal(t *testing.T) {
+	t.Parallel()
+	seen := &recorder{}
+	conn := interpreting(t, seen, func(context.Context, acp.TerminalCommand, io.Writer) int { return 0 })
+
+	id := create(t, conn, acp.CreateTerminalRequest{SessionID: "s1", Command: "true"})
+	var exit acp.WaitForTerminalExitResponse
+	if err := conn.Call(t.Context(), acp.MethodWaitForExit,
+		acp.TerminalRequest{SessionID: "s1", TerminalID: id}, &exit); err != nil {
+		t.Fatalf("terminal/wait_for_exit: %v", err)
+	}
+	var released acp.ReleaseTerminalResponse
+	if err := conn.Call(t.Context(), acp.MethodReleaseTerminal,
+		acp.TerminalRequest{SessionID: "s1", TerminalID: id}, &released); err != nil {
+		t.Fatalf("terminal/release: %v", err)
+	}
+	for _, e := range seen.events() {
+		if e.Action.Kind == interp.ActionSignal {
+			t.Errorf("released an interpreted line and recorded a signal: %+v", e.Action)
+		}
 	}
 }

@@ -90,6 +90,22 @@ type Client struct {
 	// nowhere.
 	Elicit func(ctx context.Context, req CreateElicitationRequest) (CreateElicitationResponse, error)
 
+	// Interpret runs a command *line* the way this shell runs one, writing
+	// everything it produces to out, and returning its exit status.
+	//
+	// It is what `terminal/create` uses when the agent sent no `args`, which
+	// is what every agent measured does when it means a shell command. Nil
+	// exec's the command as a filename instead, which is what this client did
+	// before #1782 and which no measured agent could get a command out of.
+	//
+	// A func rather than something this package does, for the reason Relaunch
+	// is: interpreting shell is the whole of the rest of this program, and an
+	// agent-protocol package that reached into it would be the dependency
+	// pointing the wrong way. The caller wires it from the same driver.Shell
+	// this client's boundary came from, so the policy and the audit trail on
+	// this route are the session's own.
+	Interpret func(ctx context.Context, cmd TerminalCommand, out io.Writer) int
+
 	// Terminals says whether to advertise terminal/*, and it is the sharper
 	// half of Files. An agent that cannot ask us to run something runs it
 	// itself, and no gate anywhere sees the argv; off is for a caller that

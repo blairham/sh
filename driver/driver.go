@@ -214,6 +214,32 @@ type Shell struct {
 	// precisely so that two of them in one process need not agree.
 	Dir string
 
+	// Env is the environment the shell starts with, and nil means the
+	// process's own.
+	//
+	// Dir's reasoning, one field over: a binary leaves it alone, because a
+	// shell invoked from a command line inherits the environment it was
+	// invoked with. A front end holding more than one shell at once is the
+	// case it exists for — an agent protocol hands a session variables of its
+	// own, and setenv-ing them into this process would be that same library
+	// rule broken, since the next shell would inherit them too.
+	//
+	// Read through env() rather than directly, so that nil reads os.Environ
+	// once, here, where the read is visible.
+	Env []string
+
+	// Context bounds the run. Nil is context.Background(), which is every
+	// binary: a shell started from a command line ends when its input does.
+	//
+	// A front end that starts a shell on somebody else's behalf needs a way
+	// to end it on their behalf too — an agent protocol has terminal/kill,
+	// and a request to kill a command that this shell is interpreting has
+	// nothing to signal, because the command is not a process of its own.
+	// Canceling is what stands in for the signal, and it reaches the same
+	// place: the Runner is already given a context and already stops when it
+	// is done.
+	Context context.Context
+
 	// AxisRemedy is what this binary would have a person do about an axis no
 	// dialect answered — "pass -dialect …", for a binary that has such a
 	// flag. It is handed to every Runner this front end builds, and it is
@@ -408,6 +434,26 @@ func (sh Shell) reportFinishedJobs(r *interp.Runner) {
 	for _, line := range r.FinishedJobNotices() {
 		sh.errf("%s\n", line)
 	}
+}
+
+// env is the environment a Runner is built with: the caller's, or the
+// process's when the caller did not say. os.Environ answers for the whole
+// process, and a library Runner must take the environment it is handed rather
+// than reach for shared state; this binary *is* the process, so the read is
+// made here, where it is visible.
+func (sh Shell) env() []string {
+	if sh.Env != nil {
+		return sh.Env
+	}
+	return os.Environ()
+}
+
+// context is what bounds the run, and nil means nothing does.
+func (sh Shell) context() context.Context {
+	if sh.Context != nil {
+		return sh.Context
+	}
+	return context.Background()
 }
 
 func (sh Shell) errf(format string, args ...any) {
@@ -1078,7 +1124,7 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// environment it is handed rather than reach for shared state. This
 		// binary *is* the process, so the read is made once, where it is
 		// visible — the same split as ReplaceProcess below.
-		Env: os.Environ(),
+		Env: sh.env(),
 		// Whether this shell has a terminal, which is the fact `set -m`
 		// turns on and which no route is exempt from: measured on a
 		// pseudo-terminal, every shell in the panel grants `set -m` inside a
@@ -1439,7 +1485,7 @@ func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 // library had it right all along: interp's own Run runs the EXIT trap on the
 // same error, and only this front end disagreed.
 func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
-	ctx := context.Background()
+	ctx := sh.context()
 	status, how := sh.executeLines(ctx, r, pr, in)
 	switch how {
 	case endingParseFailure, endingRefused:

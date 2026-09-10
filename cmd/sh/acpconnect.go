@@ -125,6 +125,10 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 		// the capability: an agent is told we can run a terminal login only
 		// where we can.
 		Relaunch: terminalAuth(argv, os.Stdin, os.Stdout),
+		// A command line the agent sends is run by this shell rather than
+		// exec'd as a filename, which is what makes the gate above reach the
+		// commands *inside* it. See interpreter.
+		Interpret: interpreter(sh),
 	}
 	client.Connect(fromAgent, toAgent)
 	go func() { _ = client.Serve(ctx) }()
@@ -133,6 +137,38 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 	_ = toAgent.Close()
 	_ = agent.Wait()
 	return status
+}
+
+// interpreter runs one command line on a shell built like this one.
+//
+// The Shell is copied and three fields are written over — where its output
+// goes, where it starts, and what it starts with — and everything else comes
+// across untouched, which is the part that matters: the dialect, the gate and
+// the event sink are the session's own, so a line an agent asks us to run is
+// gated and recorded exactly as a line a person typed would be. Building a
+// fresh Shell here instead would be a second shell with none of that, wearing
+// the same name.
+//
+// Output and diagnostics go to the same writer because a terminal has one
+// stream; the protocol has no second one to put them in.
+//
+// Stdin is emptied rather than inherited. This process's standard input is the
+// prompt loop's — it is where a person answers permission questions — and
+// handing it to a command an agent asked for would let that command eat the
+// answers. A terminal the protocol describes has no input anyway: there is no
+// method for writing to one.
+func interpreter(sh driver.Shell) func(context.Context, acp.TerminalCommand, io.Writer) int {
+	return func(ctx context.Context, cmd acp.TerminalCommand, out io.Writer) int {
+		run := sh
+		run.Context = ctx
+		run.Stdin = strings.NewReader("")
+		run.Stdout, run.Stderr = out, out
+		if cmd.Dir != "" {
+			run.Dir = cmd.Dir
+		}
+		run.Env = cmd.Env
+		return driver.RunCommand(run, cmd.Line, nil)
+	}
 }
 
 // runID is what this run of the shell is called in the record.

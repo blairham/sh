@@ -476,6 +476,16 @@ func Select(options []PermissionOption, kind string) PermissionOutcome {
 	return PermissionOutcome{Outcome: OutcomeCancelled}
 }
 
+// A TerminalCommand is one command line an agent asked this client to run,
+// as terminal/create described it: the line itself, the directory it asked for
+// (empty is the client's own), and the environment it is to run with, already
+// merged over the process's.
+type TerminalCommand struct {
+	Line string
+	Dir  string
+	Env  []string
+}
+
 // RequestPermissionResponse is what came back.
 type RequestPermissionResponse struct {
 	Outcome PermissionOutcome `json:"outcome"`

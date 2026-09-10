@@ -315,6 +315,68 @@ The environment is inherited and then written over rather than replaced. A
 command started with only the agent's few variables has no `PATH`, so every
 `terminal/create` would fail for a reason nothing on the wire explains.
 
+**No `args` means the agent sent a command *line*, and this shell interprets
+it.** The schema has `command` and an optional `args`, and it does not say which
+of the two readings a lone `command` is. Measured, every agent that means a
+shell command sends the whole line in `command` and no `args` at all — Claude
+Code 0.16.2 sends `printf "%s" "$0"; ps -o args= -p $$` that way. Exec'ing that
+as a filename is the reading that both fails and sees least: it failed *every*
+command those agents asked for, `echo hello` included, with "executable file not
+found in `$PATH`", and the agent concluded the shell was broken and stopped
+(#1782).
+
+Interpreting is also what makes the client-side thesis true rather than
+aspirational. The line runs on a `driver.Shell` copied from the session's own —
+same dialect, same `Gate`, same event sink — so **every `exec`, `open` and
+`stat` inside it crosses the boundary and lands in the audit trail**. A policy
+therefore reaches *further* on this route than on the argv one, not less far:
+`-deny exec:/bin/echo` refuses the `/bin/echo` an agent buried in a pipeline,
+where an argv-level gate would have been shown `/bin/sh` and nothing else. The
+gate is deliberately not consulted on the *line*, because a line is not an
+access and asking the boundary to rule on `echo hi > f` as a path would be
+inventing one nobody performs.
+
+**What that buys, and exactly where it stops.** Measured 2026-09-10 with the
+interpreting route in, Claude Code 0.16.2 asked to create a file *with a shell
+command* under `-deny write:/**`. It asked us to run three commands, in this
+order, and the trace tells the whole story:
+
+| the agent asked us to run | what the gate did |
+| --- | --- |
+| `echo 'hello' > ./made.txt` | `denied open … write=true` |
+| `printf 'hello' > ./made.txt` | `denied open … write=true` |
+| `echo hello \| tee ./made.txt` | allowed the `exec` of `tee` — **and the file appeared** |
+
+The first two are new: before this change the policy never saw them at all, and
+before #1777 the agent was never allowed to ask. A redirection the *shell*
+performs is an open the shell makes, so the gate rules on it, and it refused
+twice.
+
+The third is the boundary rule holding exactly as stated: `tee` is a process of
+its own, it opened the file itself, and an allowed `exec` is outside the
+boundary once it has started. `-deny write:/**` constrains what **this shell**
+writes; it does not constrain what a command it was allowed to start writes. The
+agent found that in two tries, unprompted, which is the strongest argument
+available that **a write policy is only as good as the exec policy beside it** —
+a default-deny on `exec` is what makes a `write` rule mean what a person reads
+it as meaning.
+
+Three consequences worth stating, because each is a place this could have been
+got wrong:
+
+- **`args` present is still an argv**, exec'd exactly as before. An agent that
+  says which word is the program is taken at its word.
+- **The ambiguous case is a filename containing a space, sent with no args**,
+  which a line reads as a command and its argument. The protocol gives no way
+  to say which was meant, no measured agent does it, and the reading chosen is
+  the one that fails safe — the gate sees more, not less.
+- **`terminal/kill` cancels rather than signals.** An interpreted line is not a
+  process of ours, so there is nothing to send `SIGKILL` to; the context the
+  interpreter runs under is cancelled instead, and it reaches the commands
+  inside the line because they are the processes. Releasing one records no
+  signal: writing a `SIGKILL` to pid 0 into the audit trail would be recording
+  an access nobody performed.
+
 #### One of the two measured agents declines the route, and what is done about it
 
 **The earlier measurement here was wrong, and it was our bug that made it
@@ -357,11 +419,15 @@ consulted was the *person* — this client answered the agent's
 `session/request_permission` with allow — and a person answering a question is
 not a policy covering an action.
 
-One honest caveat on the Claude command row: it called `terminal/create` four
-times in that turn, not once, because #1782 means every one of them failed and
-it retried with a differently-quoted command each time. The route is what is
-being measured and the route is real; the count is an artifact of a bug of ours
-and must not be read as anything about the agent.
+The Claude command row was first measured with #1782 still live, and it called
+`terminal/create` **four** times in that turn — every one failed and it retried
+with a differently-quoted command each time. With the interpreting route in, the
+same question measures cleanly: **one** `terminal/create`, then
+`terminal/wait_for_exit`, `terminal/output` and `terminal/release`, the whole
+lifecycle, and the agent answered with `hello-from-acp` because the command had
+actually run. The route was real either way; the count was an artifact of a bug
+of ours, and is recorded here because a number measured through a defect is
+exactly the thing that gets quoted later.
 
 So the earlier wording — that a policy covers the agent's file access and not
 its commands — is true about what an agent *asks for* and misleading about what

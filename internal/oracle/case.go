@@ -9488,6 +9488,26 @@ echo IN-AFTER'; echo "OUT-AFTER st=$?"`,
 		Why:     "where bash does *not* promote: a local declaration builds the array cell rather than converting one, so the value the same function put in the name a line earlier is gone and the count is 0. It is not the shadow being fresh -- `local b=1` has already taken it -- and not the letter in general, since `local b=1; local -i b` keeps the `1`; it is the array cell in particular, and `typeset -ga b` over the same value at the top level promotes. No dialect is asked for it: zsh discards a held scalar wherever it finds one and ksh93 has no `local` at all, so the one shell with an answer of its own is the one shell that changes it",
 	},
 	{
+		ID: "declare/a-valueless-local-over-a-callers-array", Category: "declarations",
+		Snippet: `a=(x y); f() { local -a a; echo "1 [${a[*]}] n=${#a[@]}"; }; f; g() { local a; echo "2 [${a[*]}]"; }; g; echo "3 [${a[*]}]"`,
+		Why:     "the cell a scope was just taken for holds nothing, and the elements are the half of it that lives in a table of its own. Both shells with `local` answer `1 [] n=0` and `2 []` and give the caller `x y` back, and they get there by two different readings -- bash hides the declared name outright, zsh sets it empty -- so the second spelling is where the reading shows: a `local` that emptied only the scalar table left `2 [x y]` there and `compaudit` began with the caller's entries in `_i_files` (#1660). The third row is the control the fix has to keep, since taking the elements away for good rather than out of the fresh cell's view would read the same inside the function. ksh93 has no `local` and dash has no array literal",
+	},
+	{
+		ID: "declare/a-valueless-local-over-a-callers-table", Category: "declarations",
+		Snippet: `typeset -A m; m[k]=v; f() { local -A m; echo "1 [${m[k]-NONE}] n=${#m[@]}"; }; f; echo "2 [${m[k]}]"`,
+		Why:     "the keyed table is the other compound and its own row rather than a corollary of the one above, because it is a third table again: a declaration that dropped only the elements would leave the caller's entries under their keys, and `${m[k]-NONE}` is what says so where a count alone would not name which entry survived. bash 3.2 has no `-A` at all and answers with two usage lines and the caller's `v`, which is the version fact rather than a fourth answer",
+	},
+	{
+		ID: "declare/a-local-with-a-value-over-a-callers-array", Category: "declarations",
+		Snippet: `a=(x y); f() { local a=q; echo "1 [${a[*]}]"; }; f; echo "2 [${a[*]}]"`,
+		Why:     "the same fresh cell reached by a declaration that assigns, and the row that says the drop is not the scalar-over-a-compound axis wearing another name: bash *merges* a scalar store into a standing array -- `a=(x y); declare a=q` at the top level is `[q y]` there -- and still answers `[q]` here, because in a cell the declaration just made there is no array to merge with. Both shells with `local` agree on both rows",
+	},
+	{
+		ID: "declare/a-subscripted-declaration-into-a-fresh-scope", Category: "declarations",
+		Snippet: `a=(x y z); typeset a[1]=q; echo "top [${a[*]}]"; b=(x y z); f() { typeset b[1]=q; echo "in [${b[*]}]"; }; f; echo "after [${b[*]}]"`,
+		Why:     "the subscripted operand is a third declaration path and reaches the same cell, so the element it writes is the only one in it -- `in [q]` in both bashes against `top [x q z]` from the identical line where no scope was taken. The two controls beside it are what make the row about the scope: ksh93 gives a POSIX-style function no scope at all and merges in all three rows, and zsh refuses to make an element local outright, so the shells that disagree here disagree about *whether there is a fresh cell* and not about what one holds. zsh's `top` counts from one, which is why it replaces the first element and bash replaces the second",
+	},
+	{
 		ID: "declare/an-element-written-through-the-names-attribute", Category: "declarations",
 		Snippet: "typeset -ia a=(1 2); a[1]=3+4; echo \"1 [${a[@]}]\"\ntypeset -ua q=(ab cd); q[1]=ef; echo \"2 [${q[@]}]\"\ntypeset -A m; typeset -i m; m[k]=7+7; echo \"3 [${m[k]}]\"",
 		Why:     "the other half of the same surface, and a *later write* rather than a reach-back: a scalar assignment through an attributed name needs no dialect anywhere, and an element is where the panel splits. bash and ksh93 fold every element write — `1 7`, `AB EF`, `14` — and zsh folds an array's elements not at all: its case letters reach a scalar's expansion and stop there, and its integer letter never meets an array, having replaced it above. So `[ef cd]` there, with the first element the write did not touch still lower-case",

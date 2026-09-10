@@ -3075,7 +3075,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// mark rather than an `if` of its own, because the copy that stood
 		// here had the table's half and not the array's — see
 		// markDeclaredCompound and #1535.
-		r.markDeclaredCompound(name, f)
+		r.markDeclaredCompound(name, fresh, f)
 		if f.readonly && f.readonlyOff {
 			// `local +r y` after this same call's `local -r y=1`, which is
 			// the one shape that reaches this with a freeze still standing:

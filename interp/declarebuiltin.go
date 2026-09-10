@@ -505,7 +505,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// After the shadow, which is what lets the scope put back the outer
 		// name's attribute rather than the one this line just gave it.
 		r.setHideInScope(name, f)
-		r.markDeclaredCompound(name, f)
+		r.markDeclaredCompound(name, fresh, f)
 		if f.readonly && f.readonlyOff {
 			if code := r.removeReadonly(name, hasValue); code != 0 {
 				return code
@@ -581,6 +581,13 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 // which is what leaves the table on the global cell where the function's
 // return cannot reach it.
 //
+// Being that step, it is also where a fresh cell gives up the compound the
+// outer name held — see freshcell.go. That has to happen before the letters
+// are read and not after: markIndexed leaves a name that is already an array
+// alone, so `local -a arr` over a caller's array marked nothing and kept the
+// caller's elements, and a drop afterwards would have taken away the very
+// array the letter had just declared.
+//
 // **`local` had the table's half of this and not the array's** (#1535), and
 // that is why it is a function now rather than two `if`s copied into each
 // loop. A valueless declaration that never marked the name went on to
@@ -593,7 +600,11 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 // it is not — `f() { local -a a; echo ${#a[@]}; }` is 0 in bash 5.3.15,
 // bash 3.2.57 and zsh 5.9.2, and the ksh93 spelling `typeset -a a` is 0 too,
 // where a one-element scalar answers 1.
-func (r *Runner) markDeclaredCompound(name string, f declareFlags) {
+func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags) {
+	// Ahead of the `remove` return, because a fresh cell holds nothing
+	// whatever the declaration's letters say: `local +a arr` is still a
+	// declaration into a cell this call made.
+	r.dropTheOuterCompound(name, fresh)
 	if f.remove {
 		return
 	}

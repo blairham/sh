@@ -4120,6 +4120,21 @@ echo "st=$?"`,
 		Why:     "the same refusal reached through a literal, which the shell that refuses it words differently from the plain form — naming the subscript and the kind of assignment rather than the array. Two spellings of one rule needing two sentences is why the wording is a field of its own rather than the plain one used twice",
 	},
 	{
+		ID: "arithmetic/an-empty-subscript-on-a-name-that-is-set", Category: "expansion",
+		Snippet: `a=(5 6 7); echo $(( a[] )); echo after`,
+		Why:     "brackets with nothing between them, which is what `$(( a[$w] ))` *is* by the time the expression exists — an arithmetic expansion substitutes its parameters before it parses, so an empty `$w` never reaches the subscript as text. Three answers and no common denominator: bash names the subscript and carries on with a flat zero, zsh refuses with the subscript machinery's own `invalid subscript` and produces no value, and ksh93 reads the brackets as the empty *expression*, which is element zero and not the number zero. The array is what carries that last distinction — against an unset name every column reads zero and no probe could tell bash's answer from ksh93's, which is how an earlier reading came to call ksh93's `zero`. It was one refusal here for all three (#1745)",
+	},
+	{
+		ID: "arithmetic/an-empty-subscript-on-a-name-that-is-not-set", Category: "expansion",
+		Snippet: `echo $(( nodecl[] )); echo after`,
+		Why:     "the same text on a name nothing declared, which is the row that makes this two questions rather than one: zsh is a silent zero here and `invalid subscript` above, because it looks the name up before it reads the brackets. bash reports either way and ksh93 is silent either way, so the shell that parts is the one whose answer depends on the name. The pair is the shape a completion plugin runs as `bind_count=$((_ZSH_AUTOSUGGEST_BIND_COUNTS[$widget]))` with an empty `$widget`, and a case holding only this row would pass under a rule that answered zero for every empty subscript",
+	},
+	{
+		ID: "arithmetic/a-subscript-of-an-unset-name-that-would-fail", Category: "expansion",
+		Snippet: `echo $(( nodecl[1/0] )); echo after`,
+		Why:     "whether the subscript is evaluated at all when the name in front of it is not there. zsh answers zero without reading it and the other three divide by zero, which is the only place the axis is visible: a subscript with no error and no side effect gives the same zero under both readings. It is also what makes the empty-subscript row above a consequence rather than a special case, and the reason a probe expecting zero cannot grade the empty subscript on its own",
+	},
+	{
 		ID: "array/a-subscript-that-will-not-evaluate", Category: "expansion",
 		Snippet: `a=(x y z); echo "[${a[b c]}]"; echo after`,
 		Why:     "a subscript is an expression, so one that does not read is the failure `$((b c))` is — the identical sentence in all four, the command abandoned, and a non-zero status. It expanded to nothing at status 0 and the script carried on, which is the worst shape available: an empty string is a plausible value for a real element, so nothing downstream could tell. `after` is printed so the case records that the input unit is given up on rather than only that a line went to standard error",

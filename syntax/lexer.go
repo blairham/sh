@@ -2922,7 +2922,7 @@ func (l *Lexer) scanBareParam(q Quoting) Span {
 		}
 	}
 	l.bareSubscript(l.src[begin:l.off], q)
-	return Span{Kind: ParamExp, Value: l.src[begin:l.off], Quoting: q, Pos: open}
+	return Span{Kind: ParamExp, Value: l.src[begin:l.off], Quoting: q, Pos: open, Bare: true}
 }
 
 // startsBareParam reports whether the `$` under the cursor begins a bare

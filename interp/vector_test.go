@@ -46,6 +46,10 @@ func testSemantics() Semantics {
 	// without it.
 	s.ArraysAreSparse = Yes
 	s.ArrayScalarIsTheWholeArray = No
+	// And which element the one-element answer means on a keyed table: the
+	// one keyed `0`, which is bash's and ksh93's answer and the floor here.
+	// The suite that is *about* it sets both — see assoc_test.go.
+	s.KeyedTableScalarIsTheFirstValue = No
 	s.ArrayLiteralSubscriptIsAKey = No
 	s.NegativeSubscriptPastTheStartInserts = No
 	// `a+=x` over a name holding an array, and the two array letters given to

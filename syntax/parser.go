@@ -1248,7 +1248,7 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 	for i := range out {
 		switch {
 		case out[i].Kind == ParamExp && out[i].Param == nil:
-			out[i].Param = p.parseParamExp(out[i].Value, out[i].Pos, out[i].Quoting)
+			out[i].Param = p.parseParamExp(out[i].Value, out[i].Pos, out[i].Quoting, out[i].Bare)
 		case out[i].Kind == ArithSubst && out[i].Arith == nil:
 			// Deferring, like the arithmetic command: a `$(( ))` whose
 			// expression will not read does not refuse the file. Both
@@ -3284,7 +3284,7 @@ func (p *Parser) emptyPattern() *Word {
 // output and the `$v` between them still substituted, exactly as inside a
 // pair of double quotes.
 func (p *Parser) ParseParamExpFor(src string, at Pos) *ParamExpr {
-	return p.parseParamExp(src, at, DoubleQuoted)
+	return p.parseParamExp(src, at, DoubleQuoted, false)
 }
 
 // ParseArithFor is ParseParamExpFor for `$(( ))`.

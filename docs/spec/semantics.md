@@ -2947,7 +2947,7 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 11 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e` |
-| axis- or matcher-backed | 7 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`) |
+| axis- or matcher-backed | 7 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `extendedglob`). `ksharrays` is one name over **five** axes — see below |
 | fixed | 18 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted |
 | store-backed, read by the front end | 2 | `histignorespace`, read by the line editor before it records a line, and `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for. Both are kept where a recorded name is kept, because the substrate has no `set -o` name for either |
 | switch-backed | 2 | `autocd` and `checkjobs`: each moves a capability the substrate holds under no option name of its own — a bare directory name really is read as a `cd`, and a job still running really does hold the exit |
@@ -3864,9 +3864,14 @@ What was built, all through the extension seam — registered builtins in each
   them is `no such option`, and one of the four kinds a name can be — the
   recorded kind — is remembered without being acted on.
 - **zsh `emulate`** (dialect/zsh/emulate.go): `sh`/`ksh`/`zsh` switch the
-  three measured axes above and reset the option table to the emulation's
+  measured axes above and reset the option table to the emulation's
   defaults, `-c` runs a string under the emulation and restores everything
-  after, and a bare `emulate` names the mode.
+  after, and a bare `emulate` names the mode. `ksharrays` is one of the
+  axes it switches and is a **group** of five, so an emulation moves the
+  array base, what a plain `$a` is worth, how many fields it is, what
+  `${#a}` counts and whether an unbraced name's brackets are a subscript,
+  all together — see `dialect/zsh/ksharrays.go` for the measurement and
+  #1726 for what moving only the first of them cost.
 - **ksh93 `whence`** (dialect/ksh/whence.go): bare, `-v`, `-p`, `-q`, `-a` —
   the bare mode delegating to the same lookup `command -v` uses, `-v` to the
   core `type`, whose ksh wording was already `whence`'s, and aliases spoken
@@ -8088,6 +8093,65 @@ where zsh is the other way round.
 Indexes arrays from 0. True in bash and ksh93, false in zsh, which
 counts from 1. dash has no arrays at all, which is why the axis is
 absent rather than false there.
+
+**`BareSubscriptIsASubscript`** — bash · dash · ksh93 unanswered · zsh yes
+
+Reads the `[…]` an *unbraced* `$name` carries as a subscript rather than
+as three ordinary characters behind the parameter:
+
+    a=(xx yy zz)
+    $a[1]      subscript  → the element    text → `xx[1]`
+    ${a[1]}    unaffected either way — the braces say where it ends
+
+Unanswered in the three shells whose grammar has no such construct at
+all: `BareSubscript` is off there, so nothing ever asks. A grammar that
+turns the flag on and leaves this unanswered is a gap and says so out
+loud rather than picking a side.
+
+The distinction from the grammar flag is the point of having both. The
+flag decides whether the brackets *belong to* the expansion — a word
+boundary, answered when the word is read. This decides what they mean,
+and it is answered when the word is **expanded**: zsh moves it at run
+time with `ksharrays`, and a function body written under one answer and
+called under the other takes the caller's. Measured 2026-09-10 on zsh
+5.9.2 and 5.9, from `-c`, from a script file and across a `source`:
+
+    a=(xx yy zz); f() { echo "$a[1]"; }
+    f                      xx
+    setopt ksharrays; f    xx[1]     the same body, the caller's answer
+
+Deciding it while reading gives a shell that is right in a script and
+wrong in `eval`, or the reverse.
+
+The two halves of the "text" answer are one answer, and both are needed:
+the parameter loses the subscript **and** the brackets come back as the
+word's own text — expanded, split and read as a pattern wherever the
+word around them would be. `b=2; $a[$b]` is `xx[2]`, and an unquoted
+`$a[1]` is the pattern `xx[1]`, which is what leaves a `$dir[0-9]*`
+written for another shell the glob its author meant.
+
+**`KeyedTableScalarIsTheFirstValue`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Says *which* element a plain `$m` gives when `m` is a keyed table and
+`ArrayScalarIsTheWholeArray` has answered "one element". The same
+disagreement about whether such a table has an order at all: bash and
+ksh93 look up the key `0` and hand back nothing where there is no such
+key, while zsh — whose tables keep their insertion order — hands back the
+first value in it. Measured 2026-09-10:
+
+    m=(a 1 b 2)   $m   zsh 1      bash, ksh93 empty
+    m=(z 9 a 1)   $m   zsh 9      so it is the order, not a sort
+    m=(a 1 0 x)   $m   zsh 1      and not the key `0` under another name
+
+A second axis rather than a widening of the first, because the two shells
+that share the first answer do not share this one — and it is reachable
+only after the first has been answered, so a dialect where a bare name is
+the whole table never asks it. zsh reaches it only under `ksharrays`.
+
+"First" is whatever order `${m[@]}` yields, which is a separate question:
+this shell sorts a table by key where zsh keeps insertion order, so the
+two agree on a table of one and on any table written in sorted order.
+That divergence is `${m[@]}`'s and predates the axis.
 
 **`SubscriptCommaIsARange`** — bash no · dash no · ksh93 no · zsh yes
 

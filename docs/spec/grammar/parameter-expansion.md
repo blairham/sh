@@ -3123,6 +3123,20 @@ produced — `$a[1]` and `${a[1]}` are one node — so the parser, the
 interpreter and the subscript's arithmetic are unchanged, and the
 printer writes the braced spelling back.
 
+**Whether the brackets are a subscript is not this flag's question.**
+The flag says they belong to the expansion; what they *mean* is the
+semantics axis `BareSubscriptIsASubscript`, because the shell with the
+construct moves it at run time — `setopt ksharrays` makes `$a[1]` the
+element at the base position followed by the three characters `[1]`,
+while `${a[1]}` is unaffected. Measured: the answer in force when the
+word **expands** is the one that decides, so a function body written
+under one answer and called under the other takes the caller's, and the
+same holds across `eval` and `source`. The parser therefore records both
+readings — `ParamExpr.BareIndexText` is the brackets lexed as the text
+they would be, in the expansion's own quoting — and the run picks. See
+`docs/spec/semantics.md` for the axis and `dialect/zsh/ksharrays.go` for
+the option that moves it (#1726).
+
 Where the subscript may reach is the quoting's question rather than a
 fixed set of characters. Inside double quotes a blank and a newline are
 ordinary text, so `"$a[1 ]"` and `"$a[1` + newline + `]"` are both the

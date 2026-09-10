@@ -37,6 +37,11 @@ func runSub(t *testing.T, src string) (string, int) {
 		// that globbed would quietly come back as itself and no test could
 		// tell.
 		sem.GlobNoMatchIsError = Yes
+		// The grammar has the brace-less spelling, so the vector has to say
+		// what it means: a subscript. The other answer — the brackets are
+		// text — is what a shell reaches by turning its ksh-arrays option
+		// on, and baresubscript_test.go is what asserts it.
+		sem.BareSubscriptIsASubscript = Yes
 		r.Semantics = &sem
 	})
 }

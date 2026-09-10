@@ -241,6 +241,17 @@ func (r *Runner) assocScalar(a AssocArray) (string, bool) {
 	if r.ask(r.sem().ArrayScalarIsTheWholeArray, "a plain `$a` giving the whole array") {
 		return strings.Join(a.values(), " "), true
 	}
+	if r.ask(r.sem().KeyedTableScalarIsTheFirstValue,
+		"a plain `$m` on a keyed table giving the first value rather than the one keyed `0`") {
+		// Where the table keeps an order, "one element" is the first of
+		// them. An empty table has no first value and is still set, which is
+		// the same answer the no-early-return above protects.
+		vs := a.values()
+		if len(vs) == 0 {
+			return "", true
+		}
+		return vs[0], true
+	}
 	v, ok := a["0"]
 	return v, ok
 }

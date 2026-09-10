@@ -287,6 +287,23 @@ type Span struct {
 	// asked.
 	PatternGroup bool
 
+	// Bare says a parameter expansion was written `$name` rather than
+	// `${name}`.
+	//
+	// The two are the same node to everything that expands one, which is why
+	// the flag is here and not a kind of its own — and they are not the same
+	// *text*, because the short form has no closing brace to stop it. So a
+	// `[` after the name belongs to the expansion only where a grammar flag
+	// puts it there, and whether it is then read as a subscript is a
+	// question the run answers: a shell can have the construct and still be
+	// told, at run time, that the brackets after an unbraced name are
+	// ordinary characters. Nothing can ask that once the two spellings are
+	// indistinguishable, which is what this records.
+	//
+	// Only the parser reads it, and only to hand ParamExpr.BareIndexText the
+	// subscript's text.
+	Bare bool
+
 	// Pos is where the span starts, including its opening delimiter.
 	Pos Pos
 }

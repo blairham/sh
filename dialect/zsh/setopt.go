@@ -304,9 +304,13 @@ var zshOptions = []zshOption{
 	fixedConstant("interactivecomments", true, true),
 	{
 		base: "ksharrays", def: false,
+		// Read off the base, which is the axis the name is about; the four
+		// that move with it are in ksharrays.go and every one of them
+		// answers the same way, so any of the five would report the same
+		// state.
 		get: func(r *interp.Runner) bool { return r.Semantics.ArrayBaseIsZero == interp.Yes },
 		set: func(r *interp.Runner, on bool) int {
-			swapAxes(r, func(s *interp.Semantics) { s.ArrayBaseIsZero = answer(on) })
+			swapAxes(r, func(s *interp.Semantics) { setKshArrays(s, on) })
 			return 0
 		},
 	},

@@ -200,6 +200,9 @@ func Semantics() interp.Semantics {
 	s.LoginShowsLInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.No
+	// And the one element a plain `$m` on a keyed table gives is the one
+	// keyed `0`, which is nothing at all where no such key was written.
+	s.KeyedTableScalarIsTheFirstValue = interp.No
 	s.ArrayNameWithoutSubscriptIsTheList = interp.No
 	// A subscript inside a literal is an expression: `a=([1+1]=c)` lands at 2.
 	s.ArrayLiteralSubscriptIsAKey = interp.No

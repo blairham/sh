@@ -203,6 +203,13 @@ func TestAnEmptyAnswerCannotSelectAnEmptyOptionId(t *testing.T) {
 }
 
 // An option the agent never offered cannot be chosen, however it is typed.
+//
+// The refusal it falls back to is subject to the same rule, and this agent
+// offered nothing to refuse with either: there is no id to send, so the answer
+// is a cancellation. Sending our own reject-once here would be the same defect
+// wearing a safer-looking outcome — an agent that never offered that id has no
+// reason to read it as anything, and one of them reads an unknown id as no
+// answer at all.
 func TestAnAnswerCannotInventAnOption(t *testing.T) {
 	answer := answerer(false, true, bufio.NewScanner(strings.NewReader("A\n")))
 	got, err := answer(t.Context(), acp.RequestPermissionRequest{
@@ -213,8 +220,63 @@ func TestAnAnswerCannotInventAnOption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("answering: %v", err)
 	}
-	if got.OptionID != acp.OptionRejectOnce {
-		t.Errorf("chose %q for a kind that was never offered, want a refusal", got.OptionID)
+	if got.Outcome != acp.OutcomeCancelled || got.OptionID != "" {
+		t.Errorf("answered %q/%q, want a bare cancellation", got.Outcome, got.OptionID)
+	}
+}
+
+// The fixed answers -acp-allow and its absence are subject to the same rule as
+// a typed one, and this is the test the old ones could not fail: every case in
+// TestWhoAnswersAPermissionRequest offers acp.PermissionOptions(), which is
+// *our* spelling, so an implementation that ignored the request entirely and
+// returned the constant looked right. It was not right. Measured against
+// @zed-industries/claude-code-acp 0.16.2, whose ids are the ones below, the
+// constant allow-once was an id that agent had never heard of and it ran the
+// turn as though the tool had been rejected — #1777. The ids here are that
+// agent's, copied off the wire.
+func TestAFixedAnswerUsesTheAgentsOwnOptionIds(t *testing.T) {
+	offered := []acp.PermissionOption{
+		{OptionID: "allow_always", Name: "Always Allow", Kind: acp.KindAllowAlways},
+		{OptionID: "allow", Name: "Allow", Kind: acp.KindAllowOnce},
+		{OptionID: "reject", Name: "Reject", Kind: acp.KindRejectOnce},
+	}
+	for _, tc := range []struct {
+		name  string
+		allow bool
+		want  string
+	}{
+		{"-acp-allow", true, "allow"},
+		{"no flag", false, "reject"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			answer := answerer(tc.allow, false, bufio.NewScanner(strings.NewReader("")))
+			got, err := answer(t.Context(), acp.RequestPermissionRequest{Options: offered})
+			if err != nil {
+				t.Fatalf("answering: %v", err)
+			}
+			if got.Outcome != acp.OutcomeSelected || got.OptionID != tc.want {
+				t.Errorf("answered %q/%q, want a selection of %q", got.Outcome, got.OptionID, tc.want)
+			}
+		})
+	}
+}
+
+// An agent that offers no option of the kind a fixed answer wants gets a
+// cancellation rather than an invention — and -acp-allow saying "allow" while
+// the agent was sent nothing of the sort is how a session goes quiet, so the
+// line on standard error says which happened.
+func TestAFixedAnswerCancelsWhatTheAgentDidNotOffer(t *testing.T) {
+	only := []acp.PermissionOption{{OptionID: "reject", Name: "Reject", Kind: acp.KindRejectOnce}}
+	answer := answerer(true, false, bufio.NewScanner(strings.NewReader("")))
+	got, err := answer(t.Context(), acp.RequestPermissionRequest{Options: only})
+	if err != nil {
+		t.Fatalf("answering: %v", err)
+	}
+	if got.Outcome != acp.OutcomeCancelled || got.OptionID != "" {
+		t.Errorf("answered %q/%q, want a bare cancellation", got.Outcome, got.OptionID)
+	}
+	if said := answered(got, acp.KindAllowOnce); !strings.Contains(said, "cancelled") {
+		t.Errorf("reported %q, which does not say the allow never reached the agent", said)
 	}
 }
 

@@ -395,14 +395,28 @@ func commandCoverage(asked, announced int) string {
 // the answer both go to standard error, so a session run this way still leaves
 // the record that a person would have been shown.
 func fixedAnswer(allow bool) func(context.Context, acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
-	option := acp.OptionRejectOnce
+	kind := acp.KindRejectOnce
 	if allow {
-		option = acp.OptionAllowOnce
+		kind = acp.KindAllowOnce
 	}
 	return func(_ context.Context, req acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
-		fmt.Fprintf(os.Stderr, "sh: agent asks: %s -> %s\n", callName(req.ToolCall), option)
-		return acp.PermissionOutcome{Outcome: acp.OutcomeSelected, OptionID: option}, nil
+		// By kind, out of the options this agent offered — never a constant.
+		// The id is the agent's to choose and it is not ours to guess.
+		out := acp.Select(req.Options, kind)
+		fmt.Fprintf(os.Stderr, "sh: agent asks: %s -> %s\n", callName(req.ToolCall), answered(out, kind))
+		return out, nil
 	}
+}
+
+// answered says what was sent, so the record on standard error is the answer
+// the agent got rather than the answer that was intended. They differ exactly
+// when the agent offered nothing of the kind asked for, and a session where
+// every allow came back cancelled should say so where a person can see it.
+func answered(out acp.PermissionOutcome, kind string) string {
+	if out.Outcome != acp.OutcomeSelected {
+		return out.Outcome + " (no " + kind + " option was offered)"
+	}
+	return out.OptionID
 }
 
 func callName(c acp.ToolCall) string {
@@ -490,12 +504,12 @@ func answerer(allow, tty bool, in *bufio.Scanner) func(context.Context, acp.Requ
 			// The input ended with the question outstanding, which is not an
 			// answer. Everything that is not an explicit allow is a denial.
 			fmt.Fprintln(os.Stderr, "\nsh: no answer — refused")
-			return refusal(), nil
+			return refusal(req.Options), nil
 		}
 		id, ok := chosen(strings.TrimSpace(in.Text()), req.Options)
 		if !ok {
 			fmt.Fprintln(os.Stderr, "sh: not one of the options — refused")
-			return refusal(), nil
+			return refusal(req.Options), nil
 		}
 		return acp.PermissionOutcome{Outcome: acp.OutcomeSelected, OptionID: id}, nil
 	}
@@ -550,8 +564,8 @@ func chosen(typed string, options []acp.PermissionOption) (string, bool) {
 //
 // reject-once rather than reject-always: a refusal that was not chosen must not
 // be remembered as though it had been.
-func refusal() acp.PermissionOutcome {
-	return acp.PermissionOutcome{Outcome: acp.OutcomeSelected, OptionID: acp.OptionRejectOnce}
+func refusal(options []acp.PermissionOption) acp.PermissionOutcome {
+	return acp.Select(options, acp.KindRejectOnce)
 }
 
 // form puts an elicitation to the person, one line per field.

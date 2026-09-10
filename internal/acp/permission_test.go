@@ -279,3 +279,48 @@ func TestAGateIsSafeUnderConcurrentQuestions(t *testing.T) {
 		t.Error("nothing was asked at all")
 	}
 }
+
+// Select answers with the id the *agent* offered for a kind, because that is
+// the only kind of answer the protocol has. The ids below are the ones
+// @zed-industries/claude-code-acp 0.16.2 puts on the wire; against them, a
+// client answering with this shell's own OptionAllowOnce is answering with an
+// id that agent has never heard of, and it read that as no grant at all
+// (#1777).
+func TestSelectAnswersWithTheOfferedId(t *testing.T) {
+	t.Parallel()
+	offered := []acp.PermissionOption{
+		{OptionID: "allow_always", Name: "Always Allow", Kind: acp.KindAllowAlways},
+		{OptionID: "allow", Name: "Allow", Kind: acp.KindAllowOnce},
+		{OptionID: "reject", Name: "Reject", Kind: acp.KindRejectOnce},
+	}
+	for _, tc := range []struct {
+		name        string
+		kind        string
+		wantOutcome string
+		wantID      string
+	}{
+		{"allow once", acp.KindAllowOnce, acp.OutcomeSelected, "allow"},
+		{"allow always", acp.KindAllowAlways, acp.OutcomeSelected, "allow_always"},
+		{"reject once", acp.KindRejectOnce, acp.OutcomeSelected, "reject"},
+		{"a kind nobody offered", acp.KindRejectAlway, acp.OutcomeCancelled, ""},
+		{"no kind at all", "", acp.OutcomeCancelled, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := acp.Select(offered, tc.kind)
+			if got.Outcome != tc.wantOutcome || got.OptionID != tc.wantID {
+				t.Errorf("Select(%q) = %q/%q, want %q/%q",
+					tc.kind, got.Outcome, got.OptionID, tc.wantOutcome, tc.wantID)
+			}
+		})
+	}
+}
+
+// Nothing offered is not an excuse to invent something.
+func TestSelectCancelsWhenNothingWasOffered(t *testing.T) {
+	t.Parallel()
+	got := acp.Select(nil, acp.KindAllowOnce)
+	if got.Outcome != acp.OutcomeCancelled || got.OptionID != "" {
+		t.Errorf("Select(nil) = %q/%q, want a bare cancellation", got.Outcome, got.OptionID)
+	}
+}

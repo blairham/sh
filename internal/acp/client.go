@@ -410,9 +410,9 @@ func (c *Client) permission(ctx context.Context, params json.RawMessage) (any, e
 		// Nobody to ask, so nothing was allowed. Reported as a chosen
 		// refusal rather than as an error, because the agent asked a
 		// question and is owed an answer to it.
-		return RequestPermissionResponse{Outcome: PermissionOutcome{
-			Outcome: OutcomeSelected, OptionID: OptionRejectOnce,
-		}}, nil
+		return RequestPermissionResponse{
+			Outcome: Select(req.Options, KindRejectOnce),
+		}, nil
 	}
 	out, err := c.Answer(ctx, req)
 	if err != nil {

@@ -773,6 +773,23 @@ from the specification alone:
    two adapters today, `-deny` and the audit trail cover what the agent
    asks *us* to read and write, and do not cover the commands it runs.
 
+6. **A permission option's id belongs to the agent that offered it, and
+   an id it did not offer is not an answer.** Measured 2026-09-10
+   against `@zed-industries/claude-code-acp` 0.16.2, which offers
+   `allow_always`, `allow` and `reject` where this shell's own agent
+   side offers `allow-once`, `allow-always`, `reject-once` and
+   `reject-always`. A client that answers with a constant of its own is
+   not merely non-conforming in the abstract: that adapter read the
+   unknown `allow-once` as no grant, reported the tool call to the model
+   as rejected, and ended the turn having run nothing — an
+   allow-everything flag that silently allowed nothing. Select by
+   **kind** out of the options the request carried, and answer
+   `cancelled` when the agent offered no option of that kind, because
+   there is then no id to send. That is #1777, and it is why the
+   keystroke mapping was already keyed on kind: the same reasoning had
+   been applied to the path a person types on and not to the two paths
+   that answer without one.
+
 The differences are recorded here rather than discovered per agent
 because they are the compatibility surface, and because "they all speak
 ACP" is exactly the assumption that makes a client work with one of

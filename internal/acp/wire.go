@@ -452,6 +452,29 @@ func PermissionOptions() []PermissionOption {
 	}
 }
 
+// Select answers a permission request with the option the *agent* offered for
+// a kind, which is the only kind of answer the protocol has.
+//
+// The ids in a request belong to whoever sent it. This shell's agent side
+// spells them allow-once and reject-always; Claude Code's adapter spells the
+// same two allow and reject_always; another agent may spell them anything at
+// all. An id that was not offered is not a selection, and an agent is within
+// its rights to read one as no answer — which is what one does, so an answering
+// client that reaches for a constant here is a client whose allow means reject.
+//
+// The kind is the protocol's own vocabulary and is the same four values for
+// everyone, so a caller says what it means and this resolves it against what
+// was offered. An agent that offered no option of that kind gets `cancelled`:
+// there is no id to send, and inventing one is the bug this exists to stop.
+func Select(options []PermissionOption, kind string) PermissionOutcome {
+	for _, o := range options {
+		if o.Kind == kind {
+			return PermissionOutcome{Outcome: OutcomeSelected, OptionID: o.OptionID}
+		}
+	}
+	return PermissionOutcome{Outcome: OutcomeCancelled}
+}
+
 // RequestPermissionResponse is what came back.
 type RequestPermissionResponse struct {
 	Outcome PermissionOutcome `json:"outcome"`

@@ -362,6 +362,11 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.No
+	// `set -t` is a letter this shell has and will not move — the same answer
+	// it gives the `onecmd` name it borrowed for `singlecommand` — so it is
+	// refused rather than acted on. See Diagnostics.UnimplementedOptionLetters,
+	// which is where the letter is refused.
+	s.SetHasTheTLetter = interp.No
 	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD
 	// name a` keeps the shell in `$0` and makes both operands parameters.
 	// bash and dash let the command string name them instead.

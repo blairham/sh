@@ -234,6 +234,16 @@ Four things to read out of it:
   this letter would mark and `off` at status 1 otherwise, so the shell
   answers the question somewhere else. Neither ksh93 nor zsh has `shopt`
   at all.
+- **`login_shell` is an indicator, and so is `restricted_shell`.** They are
+  the only two of the sixty names bash 5.3.15 lists that a `shopt -s` or
+  `shopt -u` does not move: measured a name at a time in bash 5.3.15 and
+  bash 3.2.57, both report status 0 with nothing on standard error and both
+  leave the name exactly where it was — `shopt -s login_shell` in a shell
+  that is not one leaves it off, and `shopt -u login_shell` in a login shell
+  leaves it on. Every other name really moves. That is a request taken and
+  ignored rather than a request refused, which matters because `shopt -p` in
+  a login shell dumps `shopt -s login_shell` and an agent harness sources
+  that dump back before every command (#1709).
 - **The spelling does not matter and the route does not matter.** Every
   column answers the same for a bundle, for unbundled letters, for the
   long word, for a dashed `argv[0]`, and on the command-string, script

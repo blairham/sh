@@ -296,6 +296,16 @@ func Semantics() interp.Semantics {
 	s.DirectoryOnPathIsACandidate = interp.No
 	// set -E and -T carry the traps set -Eeuo pipefail scripts rely on.
 	s.SetHasTraceLetters = interp.Yes
+	// `set -t`, which this shell also spells `set -o onecmd`: the line that
+	// set it finishes and nothing more is read. Measured on a script file, on
+	// standard input and at the invocation — `bash -t script.sh` runs the
+	// first line of it and stops.
+	s.SetHasTheTLetter = interp.Yes
+	// And the one route it does not reach. Measured: a `-c` string that turns
+	// the option on runs to its end anyway, with `$-` showing `t` throughout.
+	// The other shell with the letter stops there, which is what makes this
+	// an axis rather than a rule.
+	s.OneCommandStopsACommandString = interp.No
 	s.JobControlAbsenceIsReportedFirst = interp.Yes
 	// A stopped job holds the exit back: the shell says so and stays,
 	// and the next attempt leaves. Measured through a pseudo-terminal for
@@ -1074,13 +1084,18 @@ func Diagnostics() interp.Diagnostics {
 		WaitNotOurChild:    "wait: pid %[1]d is not a child of this shell",
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters bash has and this shell does not: -b job
-			// notices, -k assignment-anywhere, -p privileged, -t one
-			// command, -B brace expansion, -H history expansion, -P
-			// physical paths. Measured 2026-09-05 by asking bash 5.3 for
-			// every letter of the alphabet in both cases and both signs;
-			// the ones missing from here it refuses itself, and those get
-			// SetInvalidOptionLetter.
-			"set": "bkprtBHP",
+			// notices, -k assignment-anywhere, -p privileged, -B brace
+			// expansion, -H history expansion, -P physical paths. Measured
+			// 2026-09-05 by asking bash 5.3 for every letter of the alphabet
+			// in both cases and both signs; the ones missing from here it
+			// refuses itself, and those get SetInvalidOptionLetter.
+			//
+			// `-t` left this list when the option behind it was built. The
+			// two tables are one table: the letter and `set -o onecmd` are
+			// the same request, so a letter listed here while the name is
+			// wired would refuse what the name grants — see
+			// Semantics.SetHasTheTLetter.
+			"set": "bkprBHP",
 			// Options these builtins have here and this shell does not.
 			"wait": "fp",
 			// disown's sweepers: -a for every job, -h for HUP shielding

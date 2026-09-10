@@ -2846,11 +2846,12 @@ The rest are declared by each dialect that has them:
 
 dash declares none of them: it has the fourteen and nothing else.
 
-Of these, four are real here — `pipefail` (the pipeline code reads it),
+Of these, five are real here — `pipefail` (the pipeline code reads it),
 `hashall`/`trackall` (one state behind both names: permission to cache
-rather than a promise to), and `histignoredups` (kept truthfully over a
-history this shell does not keep). The rest are recorded with the state we
-are already in, so that turning them off succeeds honestly:
+rather than a promise to), `histignoredups` (kept truthfully over a
+history this shell does not keep), and `onecmd` (below). The rest are
+recorded with the state we are already in, so that turning them off
+succeeds honestly:
 `braceexpand` and `interactive-comments` are **on**, because we do expand
 braces and do honor comments wherever they are written; everything else is
 **off**. That is not a claim about what any other shell defaults to —
@@ -2865,6 +2866,49 @@ promise. zsh's `setopt` answers the same question differently and on
 purpose — see **zsh's option names** below — because the names a zsh rc
 file writes are overwhelmingly about features this shell does not have at
 all, where recording a request promises nothing.
+
+### `onecmd`, and the letter `set -t`
+
+**Exit after reading and executing one command**, which is a real behavior
+and not a name to record. Measured 2026-09-10 against bash 5.3.15, bash
+3.2.57 and ksh93; zsh has the name as a borrowed spelling for
+`singlecommand` and refuses to move it, and dash has neither the name nor
+the letter.
+
+Five facts, and each of them bounds the implementation:
+
+- **The unit is the line the shell read, not the next command.** `echo A`,
+  `set -t`, `echo B` in a script writes `A` and stops — `B` never runs — so
+  nothing further is read once the line that set the option finishes.
+  `set -t; echo B` on *one* line writes `B`: the line runs to its end first.
+- **It is checked after the line, so the line can take it back.**
+  `set -t; set +t` on one line reads on to the next.
+- **A compound command is one line.** `set -t` inside an `if` runs the rest
+  of the branch and stops at `fi`.
+- **A sourced file is not the shell that stops.** A file that turns the
+  option on runs to *its* end; the shell that was reading when `.` returned
+  is the one that reads no further.
+- **The status is the last command's**, unchanged by the stopping.
+
+The exit status and the state are visible before the shell goes: `$-`
+carries `t` in both shells that have the option — in bash even on the one
+route where it never stops — and `SHELLOPTS` carries `onecmd`.
+
+**The command-string route is the disagreement, so it is an axis**
+(`Semantics.OneCommandStopsACommandString`). A two-line `-c` string that
+turns the option on and then echoes writes the echo under bash and writes
+nothing under ksh93. Both stop a script file, both stop standard input, and
+both stop after the first line when the option came from the invocation —
+`bash -t script.sh` runs one line of it. That route is the reason this
+matters beyond the option itself: an agent harness snapshots a shell with
+`set -o | grep on | awk '{print "set -o " $1}'`, and `grep on` matches the
+*name* `onecmd` rather than the status column, so the snapshot sets the
+option on every command it sources ahead of — and bash reads on regardless
+(#1709).
+
+Which shells have the letter is a second axis (`Semantics.SetHasTheTLetter`),
+because ksh93 has *only* the letter — `set -o onecmd` there is
+`bad option(s)` — while zsh refuses the letter as it refuses the name.
 
 ## zsh's option names
 

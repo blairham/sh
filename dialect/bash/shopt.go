@@ -146,26 +146,6 @@ var shoptSwitches = map[string]struct {
 		get: (*interp.Runner).AliasExpansion,
 		set: (*interp.Runner).SetAliasExpansion,
 	},
-	// login_shell is not a preference at all: it is the fact that this shell
-	// was started as a login shell, which the front end already carries in
-	// interp.Runner.LoginShell for the `$-` question next door
-	// (Semantics.LoginShowsLInDollarDash — bash answers *no* there precisely
-	// because it keeps the fact here instead).
-	//
-	// So the setter moves nothing, and that is bash's own answer rather than a
-	// gap: measured on bash 5.3.15, `shopt -s login_shell` and `shopt -u
-	// login_shell` both report 0 and leave the state exactly as it was, in a
-	// login shell and outside one alike. It reads `on` under `-l` and `off`
-	// without it, which is the only thing about it a script can observe.
-	//
-	// It sat in shoptStates before, where a static `false` made it wrong twice
-	// over: it read `off` in a login shell, and asking for the state it was
-	// really in was refused as `not implemented` at 1 — one of the two lines a
-	// generated shell snapshot could not source (#1709).
-	"login_shell": {
-		get: func(r *interp.Runner) bool { return r.LoginShell },
-		set: func(*interp.Runner, bool) {},
-	},
 	"checkwinsize": {
 		get: (*interp.Runner).TracksWindowSize,
 		set: (*interp.Runner).SetTracksWindowSize,
@@ -199,6 +179,46 @@ var shoptSwitches = map[string]struct {
 		get: func(r *interp.Runner) bool { return !r.CompletesEmptyCommandWord() },
 		set: func(r *interp.Runner, on bool) { r.SetCompletesEmptyCommandWord(!on) },
 	},
+}
+
+// shoptReadOnly are the two names that are indicators rather than switches:
+// bash lists them, answers what the shell *is*, and takes a request to change
+// either one without doing anything about it.
+//
+// Measured 2026-09-10 across all sixty names bash 5.3.15 lists — `shopt -s`,
+// query, `shopt -u`, query, a name at a time — and again against bash 3.2.57.
+// Every other name moves. These two report 0 with nothing on standard error
+// and stay exactly where they were: `shopt -s login_shell` in a shell that is
+// not one leaves it off, and `shopt -u login_shell` in a login shell leaves it
+// on. The two bashes agree, so it is not an axis.
+//
+// A category of their own rather than an entry in either table beside them.
+// shoptStates refuses a write it cannot honor, out loud and at 1, which is
+// right for a behavior this shell has not built and wrong here — bash promises
+// nothing either. shoptSwitches is a name wired to a real switch, and a
+// "switch" whose setter is an empty function reads to the next person as an
+// oversight rather than as the measurement it is. What these two share is that
+// the *request* is taken and ignored, which is what this table says.
+//
+// It matters because both spellings come back out of `shopt -p` for an agent
+// harness to source: a login shell dumps `shopt -s login_shell`, and the shell
+// that wrote the line has to be able to read it back (#1709). `login_shell`
+// arrived here from shoptStates, where a static `false` made it wrong twice
+// over — it read `off` inside a login shell as well as refusing the write.
+// `restricted_shell` was still in that table, refused at 1 where bash says
+// nothing and answers 0.
+//
+// The state is read live rather than stored, because one of them is a fact
+// about this invocation that the front end carried in — the same
+// interp.Runner.LoginShell that answers the `$-` question next door, where
+// bash says *no* (Semantics.LoginShowsLInDollarDash) precisely because it
+// keeps the answer here instead.
+var shoptReadOnly = map[string]func(*interp.Runner) bool{
+	"login_shell": func(r *interp.Runner) bool { return r.LoginShell },
+	// Nothing here starts a restricted shell, so the indicator tells the truth
+	// by reading off — the same honesty shoptStates keeps, without the
+	// refusal, because bash refuses nothing here either.
+	"restricted_shell": func(*interp.Runner) bool { return false },
 }
 
 // shoptStates are the rest of the names bash 5.3 lists, with the state this
@@ -282,7 +302,6 @@ var shoptStates = map[string]bool{
 	"progcomp":             false,
 	"progcomp_alias":       false,
 	"promptvars":           true,
-	"restricted_shell":     false,
 	"shift_verbose":        false,
 	"sourcepath":           true,
 	"varredir_close":       false,
@@ -315,17 +334,23 @@ func shoptState(r *interp.Runner, name string) (on, known bool) {
 	if sw, ok := shoptSwitches[name]; ok {
 		return sw.get(r), true
 	}
+	if ro, ok := shoptReadOnly[name]; ok {
+		return ro(r), true
+	}
 	on, known = shoptStates[name]
 	return on, known
 }
 
 // shoptNames is every name, sorted, for the listings.
 func shoptNames() []string {
-	names := make([]string, 0, len(shoptModes)+len(shoptSwitches)+len(shoptStates))
+	names := make([]string, 0, len(shoptModes)+len(shoptSwitches)+len(shoptReadOnly)+len(shoptStates))
 	for n := range shoptModes {
 		names = append(names, n)
 	}
 	for n := range shoptSwitches {
+		names = append(names, n)
+	}
+	for n := range shoptReadOnly {
 		names = append(names, n)
 	}
 	for n := range shoptStates {
@@ -448,6 +473,12 @@ func shoptApply(r *interp.Runner, names []string, on bool) int {
 		}
 		if sw, ok := shoptSwitches[name]; ok {
 			sw.set(r, on)
+			continue
+		}
+		if _, ok := shoptReadOnly[name]; ok {
+			// An indicator: the request is taken, nothing moves, and nothing
+			// is said. Measured, and it is bash's answer whichever way the
+			// name already reads — see shoptReadOnly.
 			continue
 		}
 		if held, ok := shoptStates[name]; ok {

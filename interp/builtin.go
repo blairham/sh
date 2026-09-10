@@ -510,6 +510,29 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			} else {
 				r.functrace = on
 			}
+		case 't':
+			// `set -t`: read and run one more line, then stop. Two of the
+			// panel have the letter and mean this by it, one has it and
+			// refuses to move it, and one has never heard of it — so it is
+			// asked rather than assumed, and a dialect that answers no
+			// reaches its own refusal below.
+			//
+			// The letter and not the name, because the two shells that have
+			// the letter do not both have a long spelling for it: bash lists
+			// `onecmd` and ksh93 lists nothing, so a letter routed through
+			// the name table would be looking up a name one of them has not
+			// got. Both write the same state, which is what keeps `set -t`
+			// and `set -o onecmd` one question with one answer.
+			if !r.ask(r.sem().SetHasTheTLetter, "`set -t` stopping the shell after one command") {
+				if r.unspecified {
+					return false
+				}
+				if !r.badSetOptionLetter(opt, on) {
+					return false
+				}
+				continue
+			}
+			r.onecmd = on
 		case 'f':
 			// Not universal: one shell spells this option the long way only
 			// and uses `-f` for something else, which does not touch

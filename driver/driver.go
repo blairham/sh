@@ -449,8 +449,8 @@ func (sh Shell) withDefaults(argv []string) Shell {
 // input are named after the shell.
 // source is where a shell's script came from: the text, what to call it in a
 // diagnostic, and how the dialect words one about it.
-// commandStringLabel is source.input for a `-c` string, which is the one route
-// whose whole program is a single command — see `set -t` in executeLines.
+// commandStringLabel is source.input for a `-c` string, which is what a
+// dialect that names the route in a diagnostic writes.
 const commandStringLabel = "-c"
 
 type source struct {
@@ -1598,15 +1598,16 @@ func (sh Shell) executeLines(
 		// of a script writes B and then stops, and a `set +t` on that same
 		// line cancels the stop outright.
 		//
-		// A `-c` string is exempt, and it is a whole string rather than a
-		// first line: measured on bash 5.3.15, `-c $'echo A\nset -o
-		// onecmd\necho B\necho C'` writes all three, where the same four
-		// lines in a *file* stop after the second. So the option does not
-		// truncate a program the shell was handed complete — the one command
-		// it stops after is the whole of it — and reading that route a line
-		// at a time is this front end's business and not something a script
-		// can observe.
-		if r.OneCommand() && in.input != commandStringLabel {
+		// Whether a `-c` string is exempt is the *dialect's*, and it is the
+		// one route the two shells that have the option disagree about:
+		// measured, `-c $'echo A\nset -o onecmd\necho B\necho C'` writes
+		// all three under bash, where the same four lines in a *file* stop
+		// after the second — and ksh93 given that same string stops after the
+		// second line there too. So the question is asked of the runner
+		// rather than answered here, where it was one shell's answer standing
+		// for every dialect that reads this loop (#1716). See
+		// interp.Runner.OneCommand.
+		if r.OneCommand() {
 			break
 		}
 	}

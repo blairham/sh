@@ -1923,6 +1923,42 @@ type Dialect struct {
 	// docs/spec/shell-matrix.md.
 	ProcessSubstitution bool
 
+	// ReadFileSubstitution makes `$(<file)` the file's contents.
+	//
+	// A command substitution whose whole body is one input redirection and
+	// nothing else — no command word, no assignment, no second redirection —
+	// is a *special form* rather than a program: the file is opened and its
+	// bytes become the substitution's result, with no command run and no
+	// process started. `` `<file` `` is the same form in the older spelling,
+	// and an explicit `0` before the operator is still it.
+	//
+	// It is additive because the shell without it reads the same text as an
+	// ordinary command: a redirection with no command name opens the file,
+	// runs nothing, and writes nothing, so the substitution is empty.
+	// Measured 2026-09-10 with `printf x > f` and `printf "[%s]" "$(<f)"`:
+	// `[x]` in zsh 5.9.2, bash 5.3, bash 3.2, bash as `sh`, bash `--posix`
+	// and ksh93, and `[]` in dash — the sole holdout, which is what puts the
+	// form in [Core].
+	//
+	// It is not the shell's null-command hook, and that was the fork worth
+	// settling before any of this was written. zsh runs a bare redirection
+	// with no command through `READNULLCMD`, so `<f` at a prompt pages the
+	// file — but the special form is measurably not that route: with
+	// `READNULLCMD` pointing at a function that prints `CHANGED`, `<f` prints
+	// `CHANGED` and `$(<f)` still prints the file, while `$(:; <f)` and
+	// `$(<f; :)` — the same redirection with company, so no longer the whole
+	// body — print `CHANGED` again. A hook the form does not consult is a
+	// different mechanism, and implementing this as "a null command copies
+	// its input" would have made `<f` print the file in bash and ksh93, where
+	// measurably it prints nothing.
+	//
+	// The flag is read by the interpreter rather than the parser. The body of
+	// a command substitution is kept as source and parsed when it is
+	// expanded, so the tree is the same either way and only the meaning
+	// differs — which is why the question is asked where the substitution
+	// runs.
+	ReadFileSubstitution bool
+
 	// ProcessSubstitutionInParamOperand says a `${…}` operand may carry one.
 	//
 	// Separate from ProcessSubstitution because the panel separates them:
@@ -2163,6 +2199,11 @@ func Core() Dialect {
 		// the core — and docs/spec/core.md has named it as core since before
 		// there was code to refuse it.
 		ProcessSubstitution: true,
+		// dash is the only shell in the panel that leaves `$(<f)` empty,
+		// and it leaves it empty by not having the form rather than by
+		// meaning something else by it — the same head count that put
+		// process substitution here.
+		ReadFileSubstitution: true,
 		// The same head count: bash, ksh93 and zsh all pick a descriptor
 		// for `exec {fd}>f` and set the variable; dash reads a word.
 		FdVariableRedirections: true,

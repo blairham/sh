@@ -12140,6 +12140,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/a-readonly-subscripted-operand` | **2>** `<shell>: 1: readonly: a[1]: bad variable name` *(status 2)* | `st=1 []` **2>** `<shell>: line 1: readonly: `a[1]': not a valid identifier` | **2>** `<shell>: line 1: readonly: `a[1]': not a valid identifier` *(status 1)* | `st=1 []` **2>** `<shell>: line 0: readonly: `a[1]': not a valid identifier` | `st=0 [v]` | **2>** `<shell>:readonly:1: a[1]: can't create readonly array elements` *(status 1)* |
 | `declare/an-exported-subscripted-operand` | **2>** `<shell>: 1: export: a[1]: bad variable name` *(status 2)* | `st=1 []` **2>** `<shell>: line 1: export: `a[1]': not a valid identifier` | **2>** `<shell>: line 1: export: `a[1]': not a valid identifier` *(status 1)* | `st=1 []` **2>** `<shell>: line 0: export: `a[1]': not a valid identifier` | `st=0 [v]` | `st=0 [v]` |
 | `local/a-subscripted-operand-to-local` | **2>** `<script>: 1: Bad substitution` *(status 2)* | `in=[v] st=0~out=[]` | `in=[v] st=0~out=[]` | `in=[v] st=0~out=[]` | `in=[] st=127~out=[]` **2>** `<script>: line 1: local: not found` | **2>** `f:local: a[1]: can't create local array elements` *(status 1)* |
+| `declare/an-attribute-does-not-outlive-the-declaration` | `in=[1+1]~after=[3+4]` **2>** `<script>: 2: typeset: not found` | `in=[2]~after=[3+4]` | `in=[2]~after=[3+4]` | `in=[2]~after=[3+4]` | `in=[2]~after=[7]` | `in=[2]~after=[3+4]` |
+| `declare/a-fresh-local-inherits-no-attribute` | `in=[3+4]~after=[3+4]` **2>** `<script>: 1: typeset: not found~<script>: 2: typeset: not found` | `in=[3+4]~after=[5]` | `in=[3+4]~after=[5]` | `in=[3+4]~after=[5]` | `in=[7]~after=[7]` | `in=[3+4]~after=[5]` |
+| `declare/a-numeric-letter-does-not-reach-a-later-local-array` | **2>** `<script>: 1: typeset: not found~<script>: 3: Syntax error: "(" unexpected (expecting "}")` *(status 2)* | `in=[/some/dir/file.zsh]` | `in=[/some/dir/file.zsh]` | `in=[/some/dir/file.zsh]` | **2>** `<script>: line 3: /some/dir/file.zsh: arithmetic syntax error` *(status 1)* | `in=[/some/dir/file.zsh]` |
+| `declare/the-case-letters-do-not-outlive-the-declaration` | `in=[MIXED]~after=[MIXED]~later=[StillMixed]` **2>** `<script>: 2: typeset: not found` | `in=[mixed]~after=[ABC]~later=[StillMixed]` | `in=[mixed]~after=[ABC]~later=[StillMixed]` | `in=[MIXED]~after=[MIXED]~later=[StillMixed]` **2>** `<script>: line 2: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `in=[mixed]~after=[mixed]~later=[stillmixed]` | `in=[mixed]~after=[ABC]~later=[StillMixed]` |
 | `declare/an-integer-declaration-with-an-operand-that-is-not-a-name` | `st=127~A` **2>** `<shell>: 1: integer: not found` | `st=127~A` **2>** `<shell>: line 1: integer: command not found` | `st=127~A` **2>** `<shell>: line 1: integer: command not found` | `st=127~A` **2>** `<shell>: integer: command not found` | **2>** `<shell>: typeset: 1x: invalid variable name` *(status 1)* | **2>** `<shell>:integer:1: not an identifier: 1x` *(status 1)* |
 | `declare/declare-is-the-second-name` | `[]` **2>** `<shell>: 1: declare: not found` | `[1]` | `[1]` | `[1]` | `[]` **2>** `<shell>: declare: not found` | `[1]` |
 | `declare/integer-is-the-third-name` | `[]~[5+2]` **2>** `<shell>: 1: integer: not found` | `[]~[5+2]` **2>** `<shell>: line 1: integer: command not found` | `[]~[5+2]` **2>** `<shell>: line 1: integer: command not found` | `[]~[5+2]` **2>** `<shell>: integer: command not found` | `[3]~[7]` | `[3]~[7]` |
@@ -12405,6 +12409,37 @@ grades it and nothing drift-checks it either, for the same reason.
   f() { local a[1]=v; echo in=[${a[1]}] st=$?; }
   f
   echo out=[${a[1]}]
+  ```
+- `declare/an-attribute-does-not-outlive-the-declaration` — a local is a fresh binding, and that is as true of what the name *is* as of what it holds: the letter types the local — `in=[2]` — and the caller's name is plain again on return, so `3+4` stays four characters. Every shell that gives this function a scope agrees, which is what makes it the core's rather than an axis; ksh93's `after=[7]` is the scope axis and not a second answer about attributes, since a parenthesis-defined function has no scope there and the declaration was the *global's* all along. The row exists because the attribute leaked here: `add-zsh-hook` opens with `integer del list help`, a later `local -a list` inherited the letter, and storing a path in it read the path as an expression — `bad math expression: operand expected at …` from a line that wrote no arithmetic (#1673)
+  ```sh
+  v=plain
+  f() { typeset -i v; v=1+1; echo "in=[$v]"; }
+  f
+  v=3+4
+  echo "after=[$v]"
+  ```
+- `declare/a-fresh-local-inherits-no-attribute` — the same rule read from the other side, and the half a fix aimed only at the *return* would leave wrong: the declaration names an outer name that already carries the letter, and the local it makes carries none of it — `in=[3+4]`, stored as written — while the caller's `5` and its letter are both back afterwards. Both halves are needed or the rule reads as being about the unwind alone. ksh93 answers `[7]` twice for the reason the row above gives, which is the same axis rather than a disagreement here
+  ```sh
+  typeset -i n=5
+  f() { typeset n; n=3+4; echo "in=[$n]"; }
+  f
+  echo "after=[$n]"
+  ```
+- `declare/a-numeric-letter-does-not-reach-a-later-local-array` — the composition the two rows above cannot reach on their own, and the one a real startup ran into: one function's numeric letter, a *later* function's array of the same name, and a path stored in it. A leaked letter makes the second declaration an integer array and the store evaluates the path, so a script reads back either the path or a complaint about arithmetic and there is no plausible middle answer — which is what makes the row discriminating. ksh93's `arithmetic syntax error` is that fault happening for a legitimate reason, its parenthesis-defined function having no scope for the first declaration to be local to, and is the closest thing the panel offers to a picture of the bug. dash has neither the word nor the array literal
+  ```sh
+  first() { typeset -i list; }
+  first
+  second() { typeset -a list; list=( /some/dir/file.zsh ); echo "in=[${list[*]}]"; }
+  second
+  ```
+- `declare/the-case-letters-do-not-outlive-the-declaration` — the same rule through a fold rather than through arithmetic, and the third line is what the other two cannot say: a leaked `-l` folds what the caller assigns *afterwards*, so the damage is read a long way from the declaration that caused it, and ksh93 — which gives this function no scope — is the column that shows what that looks like, `later=[stillmixed]` from a line written in mixed case. bash 3.2 has no `-l` at all, which is why the letter is a dialect's to offer
+  ```sh
+  up=ABC
+  f() { typeset -l up; up=MIXED; echo "in=[$up]"; }
+  f
+  echo "after=[$up]"
+  up=StillMixed
+  echo "later=[$up]"
   ```
 - `declare/an-integer-declaration-with-an-operand-that-is-not-a-name` — the same check under the third name, and the row that says whose name the complaint uses: ksh93's `integer` calls itself `typeset` in its own diagnostic where zsh's calls itself `integer`, so one shell renames the builtin in the sentence and the other does not. bash and dash have no such word at all
   ```sh

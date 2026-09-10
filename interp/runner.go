@@ -3289,6 +3289,14 @@ type scope struct {
 	// not mean the same thing here either — absent means this scope never
 	// shadowed the name. See hideinscope.go.
 	savedHideInScope map[string]bool
+	// savedAttrs is every other attribute a shadowed name carried — integer
+	// and its base, float and its precision, the two case letters, unique
+	// and hidden. Saved and taken off at the shadow and put back on return,
+	// for the two reasons savedReadonly is: a local is a fresh binding that
+	// inherits none of them, and one this call added goes away with the
+	// call. Absent means this scope never shadowed the name; a zero value
+	// means it shadowed one that carried nothing. See localattributes.go.
+	savedAttrs map[string]nameAttributes
 	// savedExported and exportedSpoken are the export attribute a shadowed
 	// name had, for the dialects where a local does not inherit it. Taking
 	// the attribute off is a change to the runner's record and has to be put

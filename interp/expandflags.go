@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwWA~Zze-"
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwWA~Zze-lr0"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -249,7 +249,11 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// anything. In front of the nounset check on purpose: `set -u` is not
 	// tripped by asking.
 	if setTestAnswers(e) {
-		return []string{setTestResult(set)}, false, false, true
+		// Padded even here, which is measured: `${(l:5::-:)+v}` is `----1`,
+		// so the width is applied to the answer the `+` gave. An early
+		// return that skipped it answered a bare `1` at status 0.
+		padded, pok := r.padFlagged(e, []string{setTestResult(set)})
+		return padded, false, false, pok
 	}
 
 	if !set && e.Name != "" {
@@ -301,7 +305,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// The two splits are kept apart because rule 10 below treats them
 	// differently: `(@)` exempts a letter split from the join ahead of it and
 	// leaves the `=` one joining. Only rule 11 wants them together.
-	letterSplit := strings.ContainsAny(e.Flags, "fs")
+	letterSplit := strings.ContainsAny(e.Flags, splitFlagLetters)
 	hasSplit := letterSplit || ifsSplit
 	// Rule 10: forced joining, ahead of a split — `${(s.:.)a}` on an array
 	// joins its elements with IFS's first character and splits the result.
@@ -450,6 +454,14 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// both orders reverse if the sort runs first.
 	if orderApplies(e) {
 		words = orderWords(e, words)
+	}
+
+	// Rule 22: padding, which stands here rather than where the rule numbers
+	// put it — ahead of the re-reading below rather than behind it. See
+	// padflags.go, which carries the measurement that fixes the order.
+	words, ok = r.padFlagged(e, words)
+	if !ok {
+		return nil, false, false, false
 	}
 
 	// Rule 21: the re-reading, which is last of everything above — later than
@@ -660,12 +672,49 @@ func soleParameterReference(arg string) (string, bool) {
 	return name, true
 }
 
-// splitFlagged splits one word the way the group asked: `f` at newlines, `s`
-// at its separator, and an empty separator into characters.
+// splitFlagLetters are the letters that name a separator split inside the
+// group: `f` at newlines, `0` at a NUL, and `s` at the separator it carries.
+//
+// One constant rather than a literal at each reading. The set is asked about
+// in four places — whether the join ahead of a split runs, whether `@`
+// exempts it, which empty fields a quoted split keeps, and whether an `=`
+// beside the group still decides anything — and a letter added to three of
+// them splits correctly while keeping the empty field the shell drops.
+const splitFlagLetters = "fs0"
+
+// splitFlagged splits one word the way the group asked: `f` at newlines, `0`
+// at a NUL, `s` at its separator, and an empty `s` separator into characters.
+//
+// **The last of the three letters written is the one that decides**, which is
+// measured on zsh 5.9.2 and is not what a fixed precedence gives. With
+// `m=$'a\0b:c'` and `n=$'a\nb'`:
+//
+//	${(@fs.:.)m}   `a\0b` `c`   the `s` behind the `f` splits at the colon
+//	${(@s.:.f)m}   `a` `b:c`    and the `f` behind the `s` at the newline
+//	${(@f0)n}      one field    the `0` behind the `f` finds no NUL
+//	${(@0f)n}      `a` `b`      and the `f` behind the `0` finds the newline
+//
+// Reading `s` last whatever the order answered the first row for the second,
+// which is a plausible split of the wrong string.
 func (r *Runner) splitFlagged(w string, e *syntax.ParamExpr) []string {
 	sep := "\n"
-	if strings.ContainsRune(e.Flags, 's') {
+	i := strings.LastIndexAny(e.Flags, splitFlagLetters)
+	switch {
+	case i < 0:
+		// Unreachable from the pipeline, which asks the same set before it
+		// calls this. Written as a case rather than as an index that would
+		// panic, because the newline is the answer a group with no letter at
+		// all would want and not an invented one.
+	case e.Flags[i] == 's':
 		sep = r.flagArgument(e, 's', e.SplitSep)
+	case e.Flags[i] == '0':
+		// The NUL split, `(0)`, which the vendor manual gives as a shorthand
+		// for `ps:\0:` and which measures as exactly that: every rule the
+		// separator splits already follow — the join ahead of it, the `@`
+		// exemption, which empty fields survive — is the same answer here.
+		// It has no long form, because an `s` argument cannot hold a NUL:
+		// `${(@s.\0.)w}` splits on the two characters `\` and `0`.
+		sep = "\x00"
 	}
 	if sep == "" {
 		if w == "" {
@@ -688,7 +737,7 @@ func (r *Runner) splitFlagged(w string, e *syntax.ParamExpr) []string {
 }
 
 // splitFlagEdges reports whether this expansion keeps the empty field at each
-// edge of what `(f)` or `(s)` split.
+// edge of what `(f)`, `(s)` or `(0)` split.
 //
 // Measured against zsh 5.9.2 with `(s.:.)` and a colon separator, quoted and
 // without `@`, which is the reading that has an answer of its own — `(@)`
@@ -714,7 +763,7 @@ func (r *Runner) splitFlagged(w string, e *syntax.ParamExpr) []string {
 // a plausible count at status 0, which is the failure this codebase minds
 // most (#1097).
 func splitFlagEdges(e *syntax.ParamExpr, quoted bool) bool {
-	return quoted && (strings.ContainsAny(e.Flags, "fs") || shellSplitActive(e))
+	return quoted && (strings.ContainsAny(e.Flags, splitFlagLetters) || shellSplitActive(e))
 }
 
 // flagBase is the value the pipeline starts from: the words, whether the

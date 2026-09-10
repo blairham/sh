@@ -244,6 +244,12 @@ type ParamExpr struct {
 	// no `s` at all.
 	SplitSep string
 	JoinSep  string
+	// PadLeft and PadRight are the arguments of the `l` and `r` flags, which
+	// pad a word out to a width. Whether either flag was written at all is
+	// Flags' question, exactly as it is for `s`: a group may name a width of
+	// zero, and a zero width is not the same as no padding — see ParamPad.
+	PadLeft  ParamPad
+	PadRight ParamPad
 	// ShellSplitOpts is the option letters the shell-word split runs with:
 	// what the `Z` flag's delimited arguments came to, `${(Z+Cn+)v}`
 	// carrying "Cn".
@@ -405,6 +411,44 @@ type ParamExpr struct {
 
 func (p *ParamExpr) Pos() Pos { return p.Start }
 func (p *ParamExpr) End() Pos { return p.Stop }
+
+// ParamPad is one padding flag's arguments: the width and the two optional
+// fill strings of `${(l:expr::string1::string2:)x}` and of its `r` mirror.
+//
+// The two Set fields are the reason this is a struct rather than three
+// strings. Whether a fill was *written* is a distinction the shell keeps,
+// measured on zsh 5.9.2 with `v=ab` and `IFS=.`:
+//
+//	${(l:5:)v}         `   ab`   no string1: the padding is spaces
+//	${(l:5:::)v}       `...ab`   string1 written empty: IFS's first character
+//	${(l:5::x:::)v}    `xx.ab`   string2 written empty: the same character,
+//	                             inserted once against the value
+//	${(l:5::x:)v}      `xxxab`   no string2: nothing is inserted
+//
+// So an absent fill and an empty one are different answers, and only under a
+// default IFS do they agree.
+//
+// The slots survive a flag written twice, which is also measured: with
+// `v=ab`, `${(l:3::x::y:l:5:)v}` is `xxyab` and `${(l:3::x::y:l:5::z:)v}` is
+// `zzyab`. So a later `l` sets the width always and each fill only where it
+// wrote one — the fields are three slots the group fills in, rather than one
+// argument list the last flag replaces.
+type ParamPad struct {
+	// Width is the field width as written. It is an arithmetic expression
+	// rather than a number — `${(l:COLUMNS-1:)x}` and `${(l:$n:)x}` are both
+	// in reach on this machine — so the text is kept and evaluated when the
+	// expansion runs.
+	Width string
+	// Fill is `string1`, repeated as often as needed to fill the space.
+	Fill string
+	// Insert is `string2`, laid once directly against the word before Fill
+	// produces the rest.
+	Insert string
+	// FillSet and InsertSet report whether the group wrote that argument at
+	// all, empty or not.
+	FillSet   bool
+	InsertSet bool
+}
 
 // specialParams are the one-character parameters that are not names.
 const specialParams = "@*#?-$!0123456789"
@@ -695,9 +739,10 @@ func isParamName(name string) bool {
 }
 
 // paramFlagArgs says how many delimited arguments a flag letter may read:
-// the separators of `s` and `j`, and the argument groups of the padding and
-// grouping flags — scanned so the group's closing parenthesis is still
-// found, even though the interpreter refuses the flags themselves.
+// the separators of `s` and `j`, the width and two fills of the padding
+// pair, and the argument groups of the grouping flags — scanned so the
+// group's closing parenthesis is still found even for the letters the
+// interpreter refuses.
 var paramFlagArgs = map[byte]int{
 	's': 1, 'j': 1, 'g': 1, 'I': 1, 'Z': 1, '_': 1, 'l': 3, 'r': 3,
 }
@@ -830,6 +875,24 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 				e.SplitSep = arg
 			case 'j':
 				e.JoinSep = arg
+			case 'l', 'r':
+				// Three slots filled in by position, and only where the
+				// group wrote one. See ParamPad for why a fill written
+				// empty and a fill not written at all are kept apart, and
+				// for the measurement that says a second `l` replaces the
+				// width without clearing the fills.
+				pad := &e.PadLeft
+				if c == 'r' {
+					pad = &e.PadRight
+				}
+				switch n {
+				case 0:
+					pad.Width = arg
+				case 1:
+					pad.Fill, pad.FillSet = arg, true
+				default:
+					pad.Insert, pad.InsertSet = arg, true
+				}
 			case 'g':
 				if k := strings.IndexFunc(arg, notAnEscapeOpt); k >= 0 {
 					// The same shape the `Z` argument's letters have, and

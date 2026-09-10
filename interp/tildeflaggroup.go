@@ -102,6 +102,28 @@ func tildeMarksSplitSep(e *syntax.ParamExpr) bool {
 	return e != nil && e.HasFlags && tildeMarksFlagArg(e.Flags, 's')
 }
 
+// tildeMarksPadFill reports whether this group's `l` or `r` fill is marked,
+// and which letter it was.
+//
+// Refused rather than carried, for the reason the `s` separator is. A marked
+// fill is live where the rest of the result is escaped, and the padding is
+// measured in units of the text it is laid into — so a fill of `*` would have
+// to be counted as one unit and escaped as none, which is two answers about
+// one string. Measured on zsh 5.9.2 with `w=ab`: `${(~l:5::*:)w}` is the live
+// pattern `***ab`, where `${(l:5::*:)w}` is those five characters literally.
+// No script in reach writes it.
+func tildeMarksPadFill(e *syntax.ParamExpr) (rune, bool) {
+	if e == nil || !e.HasFlags {
+		return 0, false
+	}
+	for _, c := range []byte{'l', 'r'} {
+		if tildeMarksFlagArg(e.Flags, c) {
+			return rune(c), true
+		}
+	}
+	return 0, false
+}
+
 // joinLiveSep is the join a marked separator gets: each word escaped on its
 // own and the separator laid between them as it was written, so the
 // metacharacters that survive are exactly the ones the group inserted.
@@ -227,11 +249,26 @@ func tildeMarkRefusal(e *syntax.ParamExpr, markJoin, ifsSplit bool) (string, boo
 	if tildeMarksSplitSep(e) {
 		return "for the (s) separator", true
 	}
+	if c, marked := tildeMarksPadFill(e); marked {
+		return "for the (" + string(c) + ") fill", true
+	}
 	if !markJoin {
 		return "", false
 	}
-	if strings.ContainsAny(e.Flags, "fs") || ifsSplit {
+	if strings.ContainsAny(e.Flags, splitFlagLetters) || ifsSplit {
 		return "beside a split", true
+	}
+	if padApplies(e) {
+		// The padding runs after this join, and the join is the one place
+		// where the words have already been escaped and the separator has
+		// not. A fill laid into that string would be measured against
+		// escaped text and inserted unescaped, so the two are refused
+		// together rather than answered from a width nobody wrote. Measured
+		// beside it: `arr=(p q); ${(~j.|.l:9::x:)arr}` in the shell that has
+		// the flags pads the joined word and leaves the bar live. No script
+		// in reach writes the pair — the plugin manager with twenty-five
+		// `(~j…)` sites has no padding flag in any of them.
+		return "beside a padding flag", true
 	}
 	if e.Op != syntax.ParamNone {
 		return "beside an operator", true

@@ -456,6 +456,30 @@ type Semantics struct {
 	// comment, which is the shape of a guess rather than a measurement; it
 	// asks here now, and arithValueOf is where the ask is made.
 	ArithNameValueRecurses Answer
+	// ArithSubscriptSkippedWhenNameUnset looks the name up before it reads
+	// the brackets, and answers zero for a name that is not there without
+	// evaluating the subscript at all. Yes in zsh alone: measured 2026-09-10,
+	// `$(( nodecl[1/0] ))` is a quiet 0 there and a division by zero in bash
+	// 5.3, bash 3.2 and ksh93, and `i=0; $(( nodecl[i++] ))` leaves i at 0 in
+	// zsh and at 1 in the other three.
+	//
+	// Not a rule about *empty* subscripts, though it is what answers one:
+	// `$(( m[$w] ))` with `$w` empty reaches the expression as the literal
+	// `m[]`, and where the name has never been set the brackets are never
+	// looked at, so the operand is the plain unset 0 that `$(( nosuchvar ))`
+	// is. Modeling that as a special case for the empty subscript would have
+	// been a rule the probe for it could not tell from this one — the two
+	// agree on every empty-subscript row and part only on a subscript that
+	// errors or assigns.
+	//
+	// What "not there" means is set-ness and not emptiness: `e=` then
+	// `$(( e[1/0] ))` divides by zero in zsh too, and so does an array
+	// declared with nothing in it.
+	//
+	// No answer reads as No, which is the majority and the harmless side: a
+	// subscript that has no error and no side effect gives the same zero
+	// either way, so an unanswered preset is not refused over `$(( a[0] ))`.
+	ArithSubscriptSkippedWhenNameUnset Answer
 	// ArithInvalidOctalDigitIsError rejects `08` once a leading zero has
 	// been read as octal. True in dash and bash; ksh93 falls back to decimal
 	// and yields 8.
@@ -4934,6 +4958,11 @@ type Semantics struct {
 	// as one empty element. Measured across spans of one, two and all — see
 	// docs/spec/measurements.md.
 	UnsetArraySpan UnsetArraySpanPolicy
+	// EmptyArithSubscript is what `a[]` means where an expression wants a
+	// value — the shape `a[$w]` takes when `$w` is empty, because the
+	// parameters go in before the expression is read. See
+	// EmptyArithSubscriptPolicy.
+	EmptyArithSubscript EmptyArithSubscriptPolicy
 
 	// SubscriptedArrayLiteral is what `a[i]=(p q)` does — an array literal
 	// standing where one element's value goes. The panel disagrees about it
@@ -6401,6 +6430,75 @@ func (r *Runner) unsetArraySpan() UnsetArraySpanPolicy {
 // no answer at all means removal too.
 func (r *Runner) unsetBlanksInPlace() bool {
 	return r.sem().UnsetArraySpan == UnsetArraySpanLeavesOneEmptyElement
+}
+
+// EmptyArithSubscriptPolicy is what a subscript written with nothing between
+// the brackets means when an expression reads it: `$(( a[] ))`.
+//
+// It is reached far more often than it is written, which is why it earns an
+// axis. An arithmetic expansion substitutes its parameters before it parses,
+// so `$(( m[$w] ))` with `$w` unset or empty *is* `$(( m[] ))` by the time the
+// expression exists — the line a widget-binding helper in a widely installed
+// completion plugin runs, and the diagnostic a real startup stopped on.
+//
+// Measured 2026-09-10, `-c`, with the name already declared so that no other
+// axis answers first:
+//
+//	bash 5.3, bash 3.2   `m[]: bad array subscript`, value 0, script goes on
+//	ksh93u+              silent 0, script goes on
+//	zsh 5.9.2            `invalid subscript`, the expression fails
+//
+// Three answers that part on all three of the wording, the value and whether
+// the input survives, which is the definition of a conflict rather than of a
+// feature one shell adds.
+type EmptyArithSubscriptPolicy int
+
+const (
+	// EmptyArithSubscriptUnspecified is no answer, and it is refused by name
+	// rather than guessed at: one shell prints and continues, one prints and
+	// stops, one prints nothing, and no two of those can stand in for each
+	// other.
+	EmptyArithSubscriptUnspecified EmptyArithSubscriptPolicy = iota
+	// EmptyArithSubscriptIsTheEmptyExpression reads the brackets as holding
+	// an expression that happens to be empty, which is zero — so the operand
+	// is the *element that subscript names* and not the number zero. ksh93,
+	// where `a=(5 6 7); $(( a[] ))` is 5 rather than 0, `m[""]=4` then
+	// `$(( m[] ))` is 4, and `(( a[]++ ))` steps element zero. The stream
+	// stays clean and the status stays 0.
+	//
+	// The distinction is not pedantry: bash reports and then answers with a
+	// flat zero — `a=(5 6 7); $(( a[] ))` is 0 there — so a policy worded as
+	// "zero" would have given ksh93 bash's value and no probe written against
+	// an unset name could have told the two apart.
+	EmptyArithSubscriptIsTheEmptyExpression
+	// EmptyArithSubscriptIsReported names the subscript and carries on with
+	// zero: bash, in both builds measured, where `$(( m[] ))` writes
+	// `m[]: bad array subscript` and still expands to 0. The real shell
+	// writes that sentence twice for one subscript, which is an artifact of
+	// how it evaluates rather than a fact about the construct; once is what
+	// this produces.
+	EmptyArithSubscriptIsReported
+	// EmptyArithSubscriptIsInvalid fails the expression: zsh, where the
+	// complaint is `invalid subscript` — the subscript machinery's own
+	// sentence and not the expression parser's, with no `bad math
+	// expression` in front of it and no name after it — and the arithmetic
+	// produces no value at all.
+	//
+	// Only reached for a name that is already set there, because
+	// ArithSubscriptSkippedWhenNameUnset answers first for one that is not.
+	EmptyArithSubscriptIsInvalid
+)
+
+func (p EmptyArithSubscriptPolicy) String() string {
+	switch p {
+	case EmptyArithSubscriptIsTheEmptyExpression:
+		return "the empty expression"
+	case EmptyArithSubscriptIsReported:
+		return "reported, and zero"
+	case EmptyArithSubscriptIsInvalid:
+		return "an invalid subscript"
+	}
+	return "unspecified"
 }
 
 // SubscriptedArrayLiteralPolicy is what an array literal means when a

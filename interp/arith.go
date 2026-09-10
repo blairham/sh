@@ -213,6 +213,27 @@ func (r *Runner) evalNumNode(e syntax.ArithExpr) (arithNum, error) {
 // there is zero rather than an error, which is what every shell in the panel
 // does with a subscript past the end and with a name that was never an array.
 func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
+	// The name first, where the dialect looks at the name first: one shell
+	// answers zero for a name that is not there without reading the brackets
+	// at all, so `$(( nodecl[1/0] ))` divides nothing and `$(( nodecl[i++] ))`
+	// steps nothing. Ahead of the associative test because a name that is not
+	// there is not an associative array either, and ahead of the empty-
+	// subscript answer because that is the row this decides: an empty
+	// subscript on a name nothing declared is the plain unset operand
+	// `$(( nosuchvar ))` is (#1745).
+	if r.sem().ArithSubscriptSkippedWhenNameUnset == Yes && !r.arithNameIsSet(x.Name) {
+		return intNum(0), nil
+	}
+	if x.Empty {
+		if handled, v, err := r.emptyArithSubscript(x.Name); handled {
+			return v, err
+		}
+		// Not handled: the dialect reads the brackets as the empty
+		// *expression*, so the ordinary read below answers it — a subscript
+		// of zero on an indexed name and the empty key on an associative one,
+		// which is exactly what a nil Index and an empty Sub already mean to
+		// the two paths that follow.
+	}
 	// An associative name's subscript is a key and not an expression, which
 	// is the same reading `${m[k]}` takes and for the same reason: with
 	// `m[k]=7`, `m[0]=99` and `k=0`, all three shells with the attribute
@@ -250,6 +271,62 @@ func (r *Runner) arithElemValue(v string) (arithNum, error) {
 	return r.arithNumOfStored(v, 0)
 }
 
+// arithNameIsSet reports whether the name a subscript follows exists at all,
+// which is the question ArithSubscriptSkippedWhenNameUnset asks and not a
+// question about the name's value: a scalar holding the empty string is there,
+// and so is an array declared with nothing in it.
+//
+// Three stores rather than one, because a name reaches this from any of them
+// and the plain reader cannot see the other two: an associative array is
+// declared before it holds a key, and an indexed array declared empty has no
+// bare-name value to hand back.
+func (r *Runner) arithNameIsSet(name string) bool {
+	if r.assocDeclared(name) {
+		return true
+	}
+	if _, ok := r.Arrays[name]; ok && !r.removed[name] {
+		return true
+	}
+	_, ok := r.getVar(name)
+	return ok
+}
+
+// emptyArithSubscript is `a[]` where an expression reads or writes it — the
+// shape `a[$w]` takes once an empty `$w` has been substituted, since an
+// arithmetic expansion puts its parameters in before it parses.
+//
+// handled is false for the one answer that is not a fault at all: the brackets
+// are the empty *expression*, and the caller carries on with the ordinary
+// element it names. The rest are answered here, and an unanswered preset is
+// refused by name rather than given one of them — the value, the stream and
+// whether the expression survives all differ. See EmptyArithSubscriptPolicy.
+func (r *Runner) emptyArithSubscript(name string) (handled bool, v arithNum, err error) {
+	switch r.sem().EmptyArithSubscript {
+	case EmptyArithSubscriptIsTheEmptyExpression:
+		return false, intNum(0), nil
+	case EmptyArithSubscriptIsReported:
+		// Reported and then answered: the expression keeps going and the
+		// operand is zero, which is why this writes here rather than
+		// returning an error for a caller to word.
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			Wording(r.diag().ArithEmptySubscript, "%[1]s[]: bad array subscript", name)))
+		return true, intNum(0), nil
+	case EmptyArithSubscriptIsInvalid:
+		// complete, because the sentence is the subscript machinery's whole
+		// complaint: measured, `zsh:1: invalid subscript` with no `bad math
+		// expression` in front of it, where an expression that will not parse
+		// in the same place carries that prefix.
+		return true, intNum(0), arithError{
+			msg:      Wording(r.diag().ArithEmptySubscript, "invalid subscript", name),
+			complete: true,
+		}
+	}
+	return true, intNum(0), arithError{
+		msg:      r.unanswered("a subscript written with nothing in it"),
+		complete: true,
+	}
+}
+
 // arithPlace is what an expression reads from and writes back to: a name, and
 // the subscript it carries when it names an element.
 //
@@ -265,6 +342,10 @@ type arithPlace struct {
 	// sub is the subscript as written, which is the key on an associative
 	// name and the text a refusal quotes on an indexed one.
 	sub string
+	// empty says the brackets held nothing — `(( a[]++ ))` — which index
+	// alone cannot say, since a plain name has no index either. Carried so
+	// the read the operator makes reaches the same answer `$(( a[] ))` does.
+	empty bool
 }
 
 // arithPlaceOf is the target an operator can write through, and false for an
@@ -274,23 +355,42 @@ func arithPlaceOf(e syntax.ArithExpr) (arithPlace, bool) {
 	case *syntax.ArithVar:
 		return arithPlace{name: x.Name}, true
 	case *syntax.ArithIndex:
-		return arithPlace{name: x.Name, index: x.Index, sub: x.Sub}, true
+		return arithPlace{name: x.Name, index: x.Index, sub: x.Sub, empty: x.Empty}, true
 	}
 	return arithPlace{}, false
 }
 
 // readPlace is the value a target currently holds.
 func (r *Runner) readPlace(p arithPlace) (arithNum, error) {
-	if p.index == nil {
+	if p.index == nil && !p.empty {
 		return r.arithValueOf(p.name, 0)
 	}
-	return r.arithElement(&syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub})
+	return r.arithElement(&syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub, Empty: p.empty})
 }
 
 // writePlace stores a value back through a target, written the way the
 // dialect writes a number — so `i+=1.5` leaves 1.5 behind and not 1.
 func (r *Runner) writePlace(p arithPlace, v arithNum) error {
 	text := r.formatNum(v)
+	if p.empty {
+		// A write through brackets with nothing in them stores nothing unless
+		// the dialect reads them as the empty expression, where `(( a[]++ ))`
+		// steps the element the empty subscript names — measured, element
+		// zero in ksh93. The guard is load-bearing rather than defensive: the
+		// branch below writes through the *bare name*, so without it a
+		// refused `(( a[]++ ))` would silently overwrite `a` the moment the
+		// read stopped refusing.
+		if handled, _, err := r.emptyArithSubscript(p.name); handled {
+			if err == nil {
+				err = arithError{
+					msg: Wording(r.diag().ArithEmptySubscript,
+						"%[1]s[]: bad array subscript", p.name),
+					complete: true,
+				}
+			}
+			return err
+		}
+	}
 	if p.index == nil {
 		r.setVar(p.name, text)
 		return nil

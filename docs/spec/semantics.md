@@ -8435,6 +8435,70 @@ happened.
 Refuses `$(( ))`: dash wants a primary and stops the script; the other
 three answer zero.
 
+**`EmptyArithSubscript`** — bash reported, and zero · dash unspecified · ksh93 the empty expression · zsh an invalid subscript
+
+Is what `a[]` means where an expression reads it — brackets written with
+nothing between them. It is reached far more often than it is written:
+an arithmetic expansion substitutes its parameters *before* it parses,
+so `$(( a[$w] ))` with an empty `$w` **is** `$(( a[] ))` by the time the
+expression exists. That is the line a widely installed completion
+plugin's `bind_count=$((_ZSH_AUTOSUGGEST_BIND_COUNTS[$widget]))` runs
+with an empty `$widget`, and the diagnostic a real interactive startup
+stopped on.
+
+Measured 2026-09-10, `-c`, on a name already declared so that no other
+axis answers first:
+
+    a=(5 6 7); echo $(( a[] )); echo after
+
+    bash 5.3, bash 3.2   a[]: bad array subscript   0   after
+    ksh93                5   after
+    zsh 5.9.2            invalid subscript          (nothing after)
+
+Three answers that part on all three of the wording, the value and
+whether the input survives, so it is a policy type
+(`EmptyArithSubscriptPolicy`) and not a switch. dash has no arithmetic
+subscript at all and never reaches it.
+
+The array in that probe is load-bearing. bash's value is a flat **zero**
+and ksh93's is the *element the subscript names* — an empty expression
+is zero, so `a[]` is `a[0]` there, and `(( a[]++ ))` steps the first
+element. An earlier reading called ksh93's answer "zero"; against an
+unset name every column reads zero and no probe could have caught it.
+
+zsh's sentence is the subscript machinery's own rather than the
+expression parser's: `invalid subscript`, with no `bad math expression`
+in front of it and no name after it, where an expression that will not
+parse in the same position carries that prefix.
+
+**`ArithSubscriptSkippedWhenNameUnset`** — bash no · dash no · ksh93 no · zsh yes
+
+Looks the name up before it reads the brackets, and answers zero for a
+name that is not there without evaluating the subscript at all. zsh
+alone:
+
+    echo $(( nodecl[1/0] ))          zsh 0 · the other three divide by zero
+    i=0; echo $(( nodecl[i++] ))     zsh leaves i at 0 · the others step it
+
+It is not a rule about empty subscripts, and it is what answers one.
+`$(( m[$w] ))` with an empty `$w` on a name nothing declared never
+reaches the brackets, so the operand is the plain unset zero
+`$(( nosuchvar ))` is — which is why the same text is silent there and
+`invalid subscript` on a name that exists. Modeling that as a special
+case for the empty subscript would have been a rule no probe could tell
+from this one: the two agree on every empty-subscript row and part only
+on a subscript that errors or assigns.
+
+What "not there" means is set-ness and not emptiness. `e=` then
+`$(( e[1/0] ))` divides by zero in zsh too, and so does an array
+declared with nothing in it — and a scalar, an integer and `PATH` all
+take the `invalid subscript` refusal, which is what says the question is
+whether the name exists rather than whether it is an array.
+
+No answer reads as no, which is the majority and the harmless side: a
+subscript with no error and no side effect gives the same zero either
+way, so an unanswered preset is not refused over `$(( a[0] ))`.
+
 **`ShiftCountIsArithmetic`** — bash no · dash no · ksh93 yes · zsh yes
 
 Reads `shift`'s operand as an expression rather than as a plain number:

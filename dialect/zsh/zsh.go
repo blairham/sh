@@ -593,6 +593,12 @@ func Semantics() interp.Semantics {
 	// element of its own — `a=(1 2); a+=""` is three elements — and a value
 	// with a space in it is still one element.
 	s.ScalarAppendedToAnArrayBecomesANewElement = interp.Yes
+	// `a=(1 2 3); a=x` leaves `typeset a=x` and `${(t)a}` reads `scalar`:
+	// the value is the whole of the name and the array is gone, not hidden.
+	// A table goes the same way. This is what makes `for a in x y z` over a
+	// name holding an array read `x`, `y`, `z` rather than the array three
+	// times, and `read a` collapse it.
+	s.ScalarAssignedOverACompoundReplacesTheName = interp.Yes
 	s.ArrayLiteralAssignmentStartsTheNameOver = interp.No
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	// A local does not inherit the export attribute of the name it shadows.

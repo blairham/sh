@@ -54,6 +54,10 @@ func testSemantics() Semantics {
 	// themselves and assert every side — see arrayscalarappend_test.go and
 	// declaredcompound_test.go.
 	s.ScalarAppendedToAnArrayBecomesANewElement = No
+	// And what a plain `a=x` does to a name already holding one: bash
+	// writes the first element and keeps the array. The suite that is
+	// *about* it sets both answers — see scalarovercompound_test.go.
+	s.ScalarAssignedOverACompoundReplacesTheName = No
 	s.ScalarUnderAnArrayDeclaration = ScalarUnderACompoundBecomesTheFirstElement
 	s.ScalarUnderATableDeclaration = ScalarUnderACompoundBecomesTheFirstElement
 	s.IndirectionYieldsName = No

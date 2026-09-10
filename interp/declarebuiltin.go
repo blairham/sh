@@ -1242,7 +1242,13 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry bool)
 		}
 	}
 	if r.ask(r.sem().DeclaredNameWithoutValueIsEmpty, "a declaration without a value setting the name") {
-		r.setVar(name, "")
+		// assignedAsTheCompoundView, because this is not a value the script
+		// wrote: it is the empty a declared name holds, and where the letters
+		// just declared an array or a table it is that compound's view. A
+		// plain scalar store here would ask scalarOverCompound whether to
+		// replace the compound the same declaration had brought into being,
+		// and in the dialect that replaces, `local -a opts` left a string.
+		r.setVarAs(name, "", assignedAsTheCompoundView)
 		// Set by a declaration and not by an assignment, which the shell's
 		// own reads cannot tell apart and a child can: see
 		// Runner.declaredEmpty.

@@ -111,10 +111,15 @@ func (r *Runner) storeArray(name string, a Array) {
 	// here, and with one there is nothing to choose between. It is the
 	// lowest subscript because that is what it means, not because anything
 	// could tell.
+	//
+	// assignedAsTheCompoundView and not setVar, because a plain scalar store
+	// is what *replaces* an array now — see scalarOverCompound. Without the
+	// form this write would ask that question of the array it is the view of,
+	// and the answer that keeps the array would send it back through here.
 	if subs := a.subscripts(); len(subs) > 0 {
-		r.setVar(name, a[subs[0]])
+		r.setVarAs(name, a[subs[0]], assignedAsTheCompoundView)
 	} else {
-		r.setVar(name, "")
+		r.setVarAs(name, "", assignedAsTheCompoundView)
 	}
 	// And the tied scalar, if this array is half of a tie — the *other*
 	// name, which the line above is not: that one keeps `$a` answering for
@@ -343,6 +348,58 @@ func (r *Runner) appendScalarToArray(name string, a Array, value string) {
 	}
 	a[a.pastTheEnd()] = value
 	r.storeArray(name, a)
+}
+
+// scalarOverCompound is what a scalar store does to a name that is already
+// holding an array or a table, and reports whether it has taken the write.
+//
+// One of the two disagreements a compound has with a plain assignment, and the
+// other one is appendScalarToArray's: `a+=x` asks where the value *joins* and
+// `a=x` asks whether there is anything left to join. See
+// Semantics.ScalarAssignedOverACompoundReplacesTheName for the panel.
+//
+// It sits at the store rather than at the assignment statement, which is the
+// whole of #1645. The statement path deleted the array itself, so `a=(1 2);
+// a=x` was right and every other way of setting a name was wrong: `for a in
+// x y z` over an array name read the array back on every pass, and so did
+// `read a`, `select`, `getopts` and `${a::=x}`. Naming the callers that mean
+// to replace is a list that only grows; naming the one caller that does not —
+// assignedAsTheCompoundView, the write that keeps `$a` answering for an array
+// `a` — is a list that is finished.
+//
+// The element the value lands on is the compound's first, whether or not there
+// is one there: the array base for an array, and the key `0` for a table.
+// `a=([5]=q); a=x` grows a new first element in bash and leaves `q` at 5.
+//
+// Returning false is not "nothing happened" — it is "the scalar store carries
+// on", which is also what the replacing answer wants after it has taken the
+// compound away.
+func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
+	if form == assignedAsTheCompoundView {
+		return false
+	}
+	_, isArray := r.Arrays[name]
+	_, isTable := r.AssocArrays[name]
+	if !isArray && !isTable {
+		return false
+	}
+	if r.ask(r.sem().ScalarAssignedOverACompoundReplacesTheName,
+		"a scalar assigned over an array or a table replacing it") {
+		delete(r.Arrays, name)
+		delete(r.AssocArrays, name)
+		return false
+	}
+	if r.unspecified {
+		return true
+	}
+	if isTable {
+		r.setAssocElem(name, "0", value)
+		return true
+	}
+	// The subscript as written, for the complaint that names one — the base
+	// is never below the first element, so nothing can reach it.
+	r.setArrayElem(name, r.arrayBase(), strconv.Itoa(r.arrayBase()), value)
+	return true
 }
 
 // unsetArrayElem takes one subscript away, or blanks it where it stands.

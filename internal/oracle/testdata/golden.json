@@ -5482,6 +5482,50 @@
         "TimedOut": false
       }
     },
+    "array/a-prefix-assignment-over-an-array-is-given-back": {
+      "bash": {
+        "Stdout": "[p][q]~declare -a a=([0]=\"p\" [1]=\"q\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[p][q]~declare -a a=([0]=\"p\" [1]=\"q\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[p][q]~declare -a a='([0]=\"p\" [1]=\"q\")'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[p][q]~typeset -a a=(p q)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[p][q]~typeset -a a=( p q )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/a-quoted-at-on-a-name-that-holds-nothing": {
       "bash": {
         "Stdout": "n=0",
@@ -9574,6 +9618,138 @@
         "TimedOut": false
       }
     },
+    "array/assigning-a-scalar-over-a-sparse-array": {
+      "bash": {
+        "Stdout": "[x][q]~declare -a a=([0]=\"x\" [5]=\"q\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[x][q]~declare -a a=([0]=\"x\" [5]=\"q\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[x][q]~declare -a a='([0]=\"x\" [5]=\"q\")'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[x][q]~typeset -A a=([0]=x [5]=q)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[x]~typeset a=x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/assigning-a-scalar-over-a-table": {
+      "bash": {
+        "Stdout": "[v][x]~declare -A m=([0]=\"x\" [k]=\"v\" )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[v][x]~declare -A m=([0]=\"x\" [k]=\"v\" )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[x][x]~declare -a m='([0]=\"x\")'",
+        "Stderr": "\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: m[k]=v: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[v][x]~typeset -A m=([0]=x [k]=v)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[][]~typeset m=x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/assigning-a-scalar-over-an-array": {
+      "bash": {
+        "Stdout": "[x][2][3]~declare -a a=([0]=\"x\" [1]=\"2\" [2]=\"3\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[x][2][3]~declare -a a=([0]=\"x\" [1]=\"2\" [2]=\"3\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[x][2][3]~declare -a a='([0]=\"x\" [1]=\"2\" [2]=\"3\")'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[x][2][3]~typeset -a a=(x 2 3)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[x]~typeset a=x",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/assigning-through-a-subscript-that-will-not-evaluate": {
       "bash": {
         "Stdout": "",
@@ -9662,6 +9838,50 @@
         "TimedOut": false
       }
     },
+    "array/for-over-a-name-holding-an-array": {
+      "bash": {
+        "Stdout": "[x][y][z]~declare -a a=([0]=\"z\" [1]=\"2\" [2]=\"3\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[x][y][z]~declare -a a=([0]=\"z\" [1]=\"2\" [2]=\"3\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[x][y][z]~declare -a a='([0]=\"z\" [1]=\"2\" [2]=\"3\")'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[x][y][z]~typeset -a a=(z 2 3)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[x][y][z]~typeset a=z",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/one-unmatched-element-abandons-them-all": {
       "bash": {
         "Stdout": "st=0 [m1.sh zzznomatch* m1.sh] n=3~after",
@@ -9701,6 +9921,50 @@
       "zsh": {
         "Stdout": "st=1 [keep] n=1~after",
         "Stderr": "(eval):1: no matches found: zzznomatch*",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/read-into-a-name-holding-an-array": {
+      "bash": {
+        "Stdout": "[zz][2][3]~declare -a a=([0]=\"zz\" [1]=\"2\" [2]=\"3\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[zz][2][3]~declare -a a=([0]=\"zz\" [1]=\"2\" [2]=\"3\")",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[zz][2][3]~declare -a a='([0]=\"zz\" [1]=\"2\" [2]=\"3\")'",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[zz][2][3]~typeset -a a=(zz 2 3)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[zz]~typeset a=zz",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

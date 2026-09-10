@@ -24,8 +24,13 @@ func TestArrays(t *testing.T) {
 		// A plain reference is the first element, which is what keeps `$a`
 		// working on an array.
 		{"scalar view", `a=(p q); printf "%s" "$a"`, "p"},
-		// A scalar assignment replaces the array rather than leaving both.
-		{"scalar replaces", `a=(p q); a=z; printf "%s" "${#a[@]}"`, "1"},
+		// A scalar assignment over an array is not a scalar landing beside
+		// it: the value reaches the array. *Which* is the axis —
+		// ScalarAssignedOverACompoundReplacesTheName, set here to the answer
+		// that writes the first element and keeps the rest, so this reads
+		// two elements with the first one replaced. The other answer, and
+		// both listings, are in scalarovercompound_test.go.
+		{"scalar reaches the array", `a=(p q); a=z; printf "%s" "$a/${#a[@]}"`, "z/2"},
 		// Elements are words, so an array can be built from an expansion.
 		{"elements are words", `x="m n"; a=(l $x); printf "%s" "${#a[@]}"`, "3"},
 	}

@@ -390,6 +390,12 @@ func Semantics() interp.Semantics {
 	// whether or not an element is there: `a=([5]=q); a+=x` is
 	// `([0]="x" [5]="q")`.
 	s.ScalarAppendedToAnArrayBecomesANewElement = interp.No
+	// `a=(1 2 3); a=x` is `declare -a a=([0]="x" [1]="2" [2]="3")`: the
+	// first element written, the rest standing, still an array of three.
+	// The table spelling answers the same — `m=x` over `declare -A m` is
+	// `([0]="x" [k]="v" )`. Both hold in 5.3.15, in the same binary under
+	// argv[0] of `sh`, and in 3.2.57.
+	s.ScalarAssignedOverACompoundReplacesTheName = interp.No
 	s.ArrayLiteralAssignmentStartsTheNameOver = interp.No
 	// `local u` hides the caller's `u` — the local exists unset.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes

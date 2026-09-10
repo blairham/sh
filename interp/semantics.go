@@ -2036,6 +2036,50 @@ type Semantics struct {
 	// an element in every shell that has arrays, which is why that one has no
 	// field. See Runner.appendScalarToArray.
 	ScalarAppendedToAnArrayBecomesANewElement Answer
+	// ScalarAssignedOverACompoundReplacesTheName decides what a plain `a=x`
+	// does to a name that is already holding an array or a table: the value
+	// becomes the whole of the name, or it lands on the compound's first
+	// element and the rest stays where it is.
+	//
+	// Measured 2026-09-09, panel and machine as docs/spec/oracle.md, with
+	// `a=(1 2 3); a=x; typeset -p a`:
+	//
+	//	bash 5.3.15         declare -a a=([0]="x" [1]="2" [2]="3")   n=3
+	//	bash 5.3.15 as sh   declare -a a=([0]="x" [1]="2" [2]="3")   n=3
+	//	bash 3.2.57         declare -a a=([0]="x" [1]="2" [2]="3")   n=3
+	//	ksh93               typeset -a a=(x 2 3)                     n=3
+	//	zsh 5.9.2           typeset a=x                              n=1
+	//
+	// So No in bash, bash as `sh`, bash 3.2 and ksh93, and Yes in zsh, where
+	// `${(t)a}` reads `scalar` afterwards and the array is gone rather than
+	// merely hidden. dash has no arrays and refuses the parenthesis, which is
+	// the absence rather than a sixth answer.
+	//
+	// A **table** answers the same way in every column, so it is this one
+	// field and not two: `typeset -A m; m=([k]=v); m=x` is
+	// `declare -A m=([0]="x" [k]="v" )` in bash and `typeset -A m=([0]=x
+	// [k]=v)` in ksh93, and `typeset m=x` in zsh. Where the two kinds of
+	// compound part is a *declaration* adding an attribute, which is
+	// ScalarUnderAnArrayDeclaration against ScalarUnderATableDeclaration;
+	// nothing parts them here.
+	//
+	// The element written is the compound's *first* — the array base, and the
+	// key `0` — whether or not there is anything there already:
+	// `a=([5]=q); a=x` is `declare -a a=([0]="x" [5]="q")` in bash, so `q`
+	// does not move and the array grows. The same place `a+=x` joins, which
+	// is why the two axes read one arrayBase between them.
+	//
+	// Asked wherever a scalar is *stored* and not only at an assignment
+	// statement, which is the whole point of the field: `for a in x y z`,
+	// `read a`, `select`, `getopts`, `printf -v` and `${a::=x}` all set a
+	// name, and every one of them was leaving an array standing so the name
+	// read back as the array on every pass. zsh's own compinit reuses
+	// `_i_line` as an array and then as a loop variable, and all eight passes
+	// of its widget-rebinding loop saw the last file it had read (#1645).
+	//
+	// Not asked for the store that keeps `$a` answering for an array `a` —
+	// see assignedAsTheCompoundView, which is that write and no other.
+	ScalarAssignedOverACompoundReplacesTheName Answer
 	// CompoundAttribute is what an attribute a declaration has just added
 	// makes of a compound value the name is already holding — see
 	// CompoundAttributePolicy, where the three answers are.

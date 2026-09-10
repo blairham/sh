@@ -853,10 +853,13 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// the store is the substrate's rather than a dialect's: what a `trap`
 	// command writes lives here, so what puts it back lives here too.
 	//
-	// Before the EXIT-trap block below and after the locals, which is the
-	// order the measurements ask for: an EXIT trap is deliberately not one
-	// of these, and the action a function's EXIT trap runs sees the
-	// caller's variables back.
+	// The position is not load-bearing, and that is the point rather than
+	// an admission: EXIT is deliberately not one of these, so this and the
+	// block below touch different state and neither can overtake the
+	// other. Include EXIT and the order becomes load-bearing at once —
+	// this would put the caller's EXIT trap back before that block could
+	// tell whether the call had installed one of its own, and a function's
+	// EXIT trap would stop firing.
 	r.restoreLocalTraps(sc)
 	r.scopes = r.scopes[:len(r.scopes)-1]
 	// zsh runs an EXIT trap set *inside* a function when the function

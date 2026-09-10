@@ -157,6 +157,28 @@ func TestEmulateLLeavesTheOptionOnAtTheTopLevel(t *testing.T) {
 	}
 }
 
+// An ignore this shell *inherited* across a subshell boundary is working and
+// unlisted here, and one the child sets itself is listed — so putting the
+// disposition back is not the whole of the restore: the record of where it
+// came from goes back with it, or the caller's ignore reappears in the
+// listing as though the child had set it.
+//
+// Measured: with the option on the listing is empty, and without it the
+// function's own trap is listed, which is what says this row is the option
+// working rather than the ignore never having been visible.
+func TestLocalTrapsRestoreAnInheritedIgnoreAsInherited(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(),
+		`trap '' INT; ( setopt localtraps; g() { trap 'echo inner' INT; }; g; trap; echo '(end)' )`)
+	if st != 0 || out != "(end)\n" {
+		t.Errorf("out %q status %d, want nothing listed: the caller's ignore is inherited and hidden", out, st)
+	}
+	out, st = runZsh(t, t.TempDir(),
+		`trap '' INT; ( g() { trap 'echo inner' INT; }; g; trap; echo '(end)' )`)
+	if st != 0 || out != "trap -- 'echo inner' INT\n(end)\n" {
+		t.Errorf("out %q status %d, want the function's own trap listed", out, st)
+	}
+}
+
 // A signal named by number is the same condition as one named by name, and
 // the listing says so in the name — 30 is USR1 on this platform.
 func TestLocalTrapsRestoresASignalNamedByNumber(t *testing.T) {

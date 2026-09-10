@@ -347,6 +347,10 @@ func Semantics() interp.Semantics {
 	// `a=(1 2); a+=x` is `typeset -a a=(1x 2)`: the first element joined, the
 	// rest standing, two elements.
 	s.ScalarAppendedToAnArrayBecomesANewElement = interp.No
+	// `a=(1 2 3); a=x` is `typeset -a a=(x 2 3)`: the first element
+	// written and the array kept, and `m=x` over a table is
+	// `typeset -A m=([0]=x [k]=v)`.
+	s.ScalarAssignedOverACompoundReplacesTheName = interp.No
 	s.ArrayLiteralAssignmentStartsTheNameOver = interp.Yes
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
 	// \x does not.

@@ -162,19 +162,30 @@ func TestAppendingAScalarToAnUnsetNameStaysAScalar(t *testing.T) {
 	}
 }
 
-// A plain assignment is not the append and must not reach it: `a=(1 2); a=x`
-// leaves the name a scalar holding `x`.
+// A plain assignment is not the append and must not reach it.
 //
-// Measured in zsh 5.9.2, which is the column whose answer this is — `typeset
-// a=x`, one element. bash and ksh93 write the *first element* and leave the
-// rest standing there, which is a second disagreement (#1390) on the same
-// pair of stores and is deliberately not asserted here: what this pins is
-// that the rule above belongs to the operator, so a mutant that moved it out
-// of the `Append` branch would answer `[1x][2]` and be caught.
+// Where the value goes is a second disagreement on the same pair of stores —
+// ScalarAssignedOverACompoundReplacesTheName — so both of its answers are
+// here, and neither of them is what the append does. The append's own axis is
+// set to the *adding* answer throughout, so a mutant that let `a=x` fall into
+// the `Append` branch would grow a third element and be caught on both rows.
 func TestAssigningAScalarOverAnArrayIsNotTheAppend(t *testing.T) {
-	out, _ := runScalarAppend(t, appendSem(Yes), `a=(1 2); a=x; typeset -p a; echo "n=${#a[@]}"`)
-	if got := strings.TrimSpace(out); got != "declare -- a=\"x\"\nn=1" {
-		t.Errorf("got %q, want the array replaced by the scalar", got)
+	for _, c := range []struct {
+		replaces Answer
+		want     string
+	}{
+		// The value is the whole of the name: one element, and no array
+		// attribute left on the listing.
+		{Yes, "declare -- a=\"x\"\nn=1"},
+		// The first element written and the second left standing.
+		{No, "declare -a a=([0]=\"x\" [1]=\"2\")\nn=2"},
+	} {
+		sem := appendSem(Yes)
+		sem.ScalarAssignedOverACompoundReplacesTheName = c.replaces
+		out, _ := runScalarAppend(t, sem, `a=(1 2); a=x; typeset -p a; echo "n=${#a[@]}"`)
+		if got := strings.TrimSpace(out); got != c.want {
+			t.Errorf("replaces=%v: got %q, want %q", c.replaces, got, c.want)
+		}
 	}
 }
 

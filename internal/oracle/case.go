@@ -3969,6 +3969,36 @@ echo "st=$?"`,
 		Why:     "an element that was never assigned has nothing to append to, and all three place the value as it stands rather than refusing. Unanimous, and it is the half a fix is most likely to get wrong by reading an absent element as an error instead of as an empty one",
 	},
 	{
+		ID: "array/assigning-a-scalar-over-an-array", Category: "expansion",
+		Snippet: `a=(1 2 3); a=x; printf "[%s]" "${a[@]}"; echo; typeset -p a`,
+		Why:     "the other disagreement on the same pair of stores as the appends above, and the one every spelling that sets a name goes through: what a plain `a=x` does to a name that is already holding an array. bash 5.3.15, the same binary under argv[0] of `sh`, bash 3.2.57 and ksh93 write the *first element* and leave the rest, `[x][2][3]`; zsh replaces the name outright and answers `[x]`, and `${(t)a}` reads `scalar` there. So it is Semantics.ScalarAssignedOverACompoundReplacesTheName. The listing is the instrument and `${#a[@]}` is deliberately not: in zsh a scalar answers that with the *length of its string*, so a one-letter value reads `n=1` whether the name is a one-element array or a scalar, and the first draft of this row could not tell its own two hypotheses apart. A plain `$a` cannot either -- it is the first element in the keeping shells and the whole of the name in the replacing one, and both spell `x`",
+	},
+	{
+		ID: "array/assigning-a-scalar-over-a-sparse-array", Category: "expansion",
+		Snippet: `a=([5]=q); a=x; printf "[%s]" "${a[@]}"; echo; typeset -p a`,
+		Why:     "*which* element the keeping shells write, and the answer is the base rather than the lowest subscript standing -- bash lists `declare -a a=([0]=\"x\" [5]=\"q\")`, so an element grows at 0 where there was none and `q` does not move. The same place `array/appending-a-scalar-to-a-sparse-array` puts a join, which is the claim: one rule about where the front of an array is and not two that can drift. zsh has no sparse array to be asked and replaces the name here as it does anywhere. Listed rather than counted, for the reason `array/assigning-a-scalar-over-an-array` gives",
+	},
+	{
+		ID: "array/for-over-a-name-holding-an-array", Category: "expansion",
+		Snippet: `a=(1 2 3); for a in x y z; do printf "[%s]" "$a"; done; echo; typeset -p a`,
+		Why:     "the loop variable is set by the rule above and not by one of the loop's own, which is what this implementation had wrong: the array was left standing whole and every pass read it back, so the body printed `[1 2 3]` three times in the zsh dialect and `[1]` three times in the bash one at status 0 with nothing on stderr (#1645). zsh's own compinit reuses `_i_line` as an array and then as this loop's variable, and all eight passes of its widget-rebinding loop saw the last completion file it had read. The body's read is in the case and not only the listing afterwards, because a fix applied at the end of the loop would leave every pass wrong and the last line right",
+	},
+	{
+		ID: "array/read-into-a-name-holding-an-array", Category: "expansion",
+		Snippet: `a=(1 2 3); read a <<< "zz"; printf "[%s]" "${a[@]}"; echo; typeset -p a`,
+		Why:     "the third spelling that reaches the same store, and the one that shows the rule is not the assignment statement's: `read` writes a scalar through the same path a loop variable does. A here-string rather than a pipe on purpose -- the last stage of a pipeline is a subshell in bash and the parent in ksh93 and zsh, which would make this row about that axis instead of this one. `zz` is two characters, so zsh's `${#a[@]}` would have said `n=2` for a scalar and looked like an array of two; the listing says what the count could not",
+	},
+	{
+		ID: "array/assigning-a-scalar-over-a-table", Category: "expansion",
+		Snippet: `typeset -A m; m[k]=v; m=x; printf "[%s]" "${m[k]}" "${m[0]}"; echo; typeset -p m`,
+		Why:     "the keyed table answers the scalar-over-a-compound question exactly as the indexed array does, which is why it is one axis and not two: bash and ksh93 write the key `0` and keep `k`, `[v][x]`, and zsh replaces the table with the scalar and has neither key, `[][]`. bash 3.2 has no `-A` at all and reports so, which is the absence rather than a third answer. Recorded so that a fix reading the two stores separately cannot give them different answers -- where the two kinds of compound *do* part is a declaration adding an attribute, which is a different pair of axes and a different set of rows",
+	},
+	{
+		ID: "array/a-prefix-assignment-over-an-array-is-given-back", Category: "expansion",
+		Snippet: `a=(p q); a=x true; printf "[%s]" "${a[@]}"; echo; typeset -p a`,
+		Why:     "the boundary the rule stops at: a prefix to a builtin is transient, so whatever it did to the compound is undone and the name is the array it was, `[p][q]` in every column that has arrays. It is the row a fix that took the array away at the store gets wrong, because the undo held only the scalar table -- the array was gone for good in the replacing shell and carried the prefix's value in the keeping ones",
+	},
+	{
 		ID: "array/appending-to-an-associative-element", Category: "expansion",
 		Snippet: `typeset -A m; m[k]+=x; m[k]+=Q; echo "[${m[k]}]"`,
 		Why:     "the declared form appends by key just as the indexed form appends by subscript — unanimous in the three that have the attribute. Both assignments are written with `+=` so that the first one also stands as the unset-key case, and so that dash, which has neither, reports the two identically",

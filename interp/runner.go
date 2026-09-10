@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"strconv"
@@ -2717,10 +2718,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			}
 			v := strings.Join(r.expandWord(a.Value), " ")
 			if !specialBuiltins[argv[0]] || !r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting") {
-				old, present := r.Vars[a.Name]
-				undo = append(undo, savedVar{
-					name: a.Name, value: old, present: present, removed: r.removed[a.Name],
-				})
+				undo = append(undo, r.saveVar(a.Name))
 			}
 			r.setVar(a.Name, v)
 		}
@@ -3453,11 +3451,41 @@ func (r *Runner) setVar(name, value string) { r.setVarAs(name, value, assignedAn
 // savedVar is one variable's state before a transient assignment, held so the
 // assignment can be taken back: the value it had, whether it was set at all,
 // and whether `unset` had removed it from view.
+//
+// The compound stores are held too, because a scalar assignment is what
+// *takes an array away* now — see scalarOverCompound. Putting only the scalar
+// back left `a=(p q); a=x builtin` with the string `p` where every shell in
+// the panel leaves the two-element array it had, since the prefix is taken
+// back whole or not at all.
 type savedVar struct {
 	name    string
 	value   string
 	present bool
 	removed bool
+	array   Array
+	inArray bool
+	table   AssocArray
+	inTable bool
+}
+
+// saveVar takes the whole of a name's state, for a prefix that will give it
+// back.
+//
+// The two compounds are **copied** and not merely referred to. Both stores are
+// maps, so holding the one that is there holds a view of whatever the prefix
+// then does to it: an element write reaches through and the restore puts back
+// the array it had already changed. `a=(p q); a=x true` came back
+// `([0]="x" [1]="q")` in the dialects that write the first element, which is
+// the value the prefix was supposed to have taken with it.
+func (r *Runner) saveVar(name string) savedVar {
+	old, present := r.Vars[name]
+	a, inArray := r.Arrays[name]
+	m, inTable := r.AssocArrays[name]
+	return savedVar{
+		name: name, value: old, present: present, removed: r.removed[name],
+		array: maps.Clone(a), inArray: inArray,
+		table: maps.Clone(m), inTable: inTable,
+	}
 }
 
 // restoreVars takes back transient assignments, most recent first.
@@ -3468,6 +3496,22 @@ func (r *Runner) restoreVars(undo []savedVar) {
 			r.Vars[u.name] = u.value
 		} else {
 			delete(r.Vars, u.name)
+		}
+		if u.inArray {
+			if r.Arrays == nil {
+				r.Arrays = map[string]Array{}
+			}
+			r.Arrays[u.name] = u.array
+		} else {
+			delete(r.Arrays, u.name)
+		}
+		if u.inTable {
+			if r.AssocArrays == nil {
+				r.AssocArrays = map[string]AssocArray{}
+			}
+			r.AssocArrays[u.name] = u.table
+		} else {
+			delete(r.AssocArrays, u.name)
 		}
 		if u.removed {
 			r.removed[u.name] = true
@@ -3501,6 +3545,18 @@ const (
 	// the enclosing line. Only which builtins name themselves differs, and
 	// that is one table — see Diagnostics.ReadonlyRemovalNamesBuiltin.
 	removedAttribute
+	// assignedAsTheCompoundView is not a script's assignment at all: it is
+	// the store that keeps a plain `$a` answering for an array or a table
+	// `a`, written by storeArray and setAssocElem after every element write.
+	//
+	// It exists so that every *other* form can mean what a script means by a
+	// scalar store — that the name is a scalar now, whatever compound it was
+	// holding, per Semantics.ScalarAssignedOverACompoundReplacesTheName. The
+	// alternative was to name the callers that do mean it, which is a list
+	// that grows with every construct that sets a name and had already been
+	// missed by `for`, `read`, `select`, `getopts` and `${a::=x}` alike. One
+	// caller is exempt and it says so; everything else is right by default.
+	assignedAsTheCompoundView
 )
 
 // declaresRatherThanAssigns reports whether the form is one a *declaration*
@@ -3795,6 +3851,12 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 
 func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if r.refuseReadonly(name, form) {
+		return
+	}
+	// A name holding an array or a table is not a name a scalar simply lands
+	// on — see scalarOverCompound, which either takes the write or takes the
+	// compound away so that the store below is the whole of the name.
+	if r.scalarOverCompound(name, value, form) {
 		return
 	}
 	if r.Vars == nil {
@@ -4156,20 +4218,17 @@ func (r *Runner) assign(a *syntax.Assign) {
 		r.setArrayElem(a.Name, idx, text, r.expandAssignValue(a.Value))
 	default:
 		value := r.expandAssignValue(a.Value)
-		if r.assocDeclared(a.Name) {
-			// A scalar assignment to a declared name lands on the element
-			// whose key is `0`, keeping the rest — measured in the two
-			// shells that read a plain `$m` as that element; the whole-array
-			// shell replaces the table instead, which no script can watch
-			// for without also depending on the scalar axis itself.
-			if a.Append {
-				v, ok := r.appendedValue(a.Name, r.AssocArrays[a.Name]["0"], value)
-				if !ok {
-					return
-				}
-				value = v
+		if r.assocDeclared(a.Name) && a.Append {
+			// `m+=x` over a declared table joins the element whose key is
+			// `0`. The plain spelling is not here: what a scalar does to a
+			// name already holding a compound is one question for an array
+			// and a table alike, and it is asked at the store instead — see
+			// scalarOverCompound.
+			v, ok := r.appendedValue(a.Name, r.AssocArrays[a.Name]["0"], value)
+			if !ok {
+				return
 			}
-			r.setAssocElem(a.Name, "0", value)
+			r.setAssocElem(a.Name, "0", v)
 			return
 		}
 		if old, ok := r.Arrays[a.Name]; ok && a.Append {
@@ -4195,6 +4254,10 @@ func (r *Runner) assign(a *syntax.Assign) {
 			}
 			value = v
 		}
+		// What this does to an array or a table the name is already holding
+		// is setVarAs's, through scalarOverCompound — it used to be a
+		// `delete(r.Arrays, a.Name)` written here, which made the assignment
+		// *statement* the only spelling that got it right (#1645).
 		r.setVarAs(a.Name, value, assignedAlone)
 		if r.allexport {
 			// `set -a`: an assignment marks the name for the environment as
@@ -4204,8 +4267,6 @@ func (r *Runner) assign(a *syntax.Assign) {
 			}
 			r.exported[a.Name] = true
 		}
-		// A scalar assignment replaces any array of the same name.
-		delete(r.Arrays, a.Name)
 	}
 }
 

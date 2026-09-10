@@ -21,6 +21,15 @@ import "testing"
 // went. Reading `${(q)@[…]}` used to write its result back into the parameters
 // themselves, so the count doubled per trip (#1622).
 //
+// `seen` is the second read, and it is not spare. A `set --` from the trip's
+// own result overwrites the parameters whatever the read did to them, so a
+// loop that reads once per trip cannot see a write-back at all — it passes
+// with the bug in place. The manager reads more than once per item for a real
+// reason: it hands the rest of the list to every registered extension, and an
+// extension that declines hands nothing back for the `set --` to undo. That
+// is the read this stands for, and it is what makes these rows grade the
+// thing they are named after.
+//
 // Measured on zsh 5.9.2, 2026-09-09.
 func TestQuotingThePositionalParametersRoundTrips(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
@@ -28,6 +37,7 @@ func TestQuotingThePositionalParametersRoundTrips(t *testing.T) {
 			"three trips over the whole list change nothing",
 			`set -- 'a b' 'c d'
 			for i in 1 2 3; do
+			  seen="${(j: :)${(q)@[1,-1]}}"
 			  packed="${(j: :)${(q)@[1,-1]}}"
 			  set -- "${(@Q)${(@z)packed}}"
 			done
@@ -38,6 +48,7 @@ func TestQuotingThePositionalParametersRoundTrips(t *testing.T) {
 			"nor over the list past the first parameter",
 			`set -- x 'a b' 'c d'
 			for i in 1 2 3; do
+			  seen="${(j: :)${(q)@[2,-1]}}"
 			  packed="${(j: :)${(q)@[2,-1]}}"
 			  set -- head "${(@Q)${(@z)packed}}"
 			done

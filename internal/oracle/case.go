@@ -7086,8 +7086,8 @@ echo "st=$?"`,
 	},
 	{
 		ID: "param/quoting-the-positional-parameters-round-trips", Category: "parameter expansion",
-		Snippet: `set -- x 'a b' 'c d'; for i in 1 2 3; do p="${(j: :)${(q)@[2,-1]}}"; set -- head "${(@Q)${(@z)p}}"; done; printf "[%s]" "$@"; echo`,
-		Why:     "the shape a plugin manager writes once per item in a `for` list — quote the rest of the parameters into one string, hand it away, split it back with the shell-word split and the unquoting flag, and `set --` the result. Three trips rather than one, because the failure this pins is a level of quoting added per trip rather than removed, and a fixed point is only visible from the second trip on",
+		Snippet: `set -- x 'a b' 'c d'; for i in 1 2 3; do seen="${(j: :)${(q)@[2,-1]}}"; p="${(j: :)${(q)@[2,-1]}}"; set -- head "${(@Q)${(@z)p}}"; done; printf "[%s]" "$@"; echo`,
+		Why:     "the shape a plugin manager writes once per item in a `for` list — quote the rest of the parameters into one string, hand it away, split it back with the shell-word split and the unquoting flag, and `set --` the result. Three trips rather than one, because the failure this pins is a level of quoting added per trip rather than removed, and a fixed point is only visible from the second trip on. `seen` is the second read and is not spare: the `set --` overwrites the parameters whatever the read did to them, so a trip that reads once cannot show a read writing back at all — the manager reads once per registered extension, and one that declines hands nothing back to undo it",
 	},
 	{
 		ID: "param/minimal-quoting-quotes-only-what-needs-it", Category: "parameter expansion",

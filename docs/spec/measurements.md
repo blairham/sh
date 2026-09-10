@@ -8621,9 +8621,9 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   set -- 'a b'; printf "[%s]" "${(U)@[@]}" "${(U)@[@]}"; printf "[%s]" "$1"; echo
   ```
-- `param/quoting-the-positional-parameters-round-trips` — the shape a plugin manager writes once per item in a `for` list — quote the rest of the parameters into one string, hand it away, split it back with the shell-word split and the unquoting flag, and `set --` the result. Three trips rather than one, because the failure this pins is a level of quoting added per trip rather than removed, and a fixed point is only visible from the second trip on
+- `param/quoting-the-positional-parameters-round-trips` — the shape a plugin manager writes once per item in a `for` list — quote the rest of the parameters into one string, hand it away, split it back with the shell-word split and the unquoting flag, and `set --` the result. Three trips rather than one, because the failure this pins is a level of quoting added per trip rather than removed, and a fixed point is only visible from the second trip on. `seen` is the second read and is not spare: the `set --` overwrites the parameters whatever the read did to them, so a trip that reads once cannot show a read writing back at all — the manager reads once per registered extension, and one that declines hands nothing back to undo it
   ```sh
-  set -- x 'a b' 'c d'; for i in 1 2 3; do p="${(j: :)${(q)@[2,-1]}}"; set -- head "${(@Q)${(@z)p}}"; done; printf "[%s]" "$@"; echo
+  set -- x 'a b' 'c d'; for i in 1 2 3; do seen="${(j: :)${(q)@[2,-1]}}"; p="${(j: :)${(q)@[2,-1]}}"; set -- head "${(@Q)${(@z)p}}"; done; printf "[%s]" "$@"; echo
   ```
 - `param/minimal-quoting-quotes-only-what-needs-it` — `q-` is the `q` family's modifier rather than a fifth repetition, and the pair of values is what says so: the value that needs quoting comes back in single quotes where plain `q` writes a backslash, and the value that needs none comes back as itself where every other member of the family quotes it anyway. One value alone cannot separate the two readings — a flag that always quoted passes the first column and a flag that never did passes the second
   ```sh

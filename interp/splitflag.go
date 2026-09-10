@@ -70,13 +70,13 @@ func splitFlagParity(s syntax.Span) (Answer, bool) {
 // word; `v='a b'; ${(q)=v}` is two plain words, where a split after the
 // quoting would have left the backslash the quoting added.
 //
-// `(f)` and `(s)` are that same step with a separator of their own, so an `=`
-// beside either adds nothing: `v='a b'; ${(s.,.)=v}` is one field, and
-// `${(s.,.)==v}` still splits because the group decides and the parity is
+// `(f)`, `(s)` and `(0)` are that same step with a separator of their own, so
+// an `=` beside any of them adds nothing: `v='a b'; ${(s.,.)=v}` is one field,
+// and `${(s.,.)==v}` still splits because the group decides and the parity is
 // never consulted.
 func splitFlagInGroup(e *syntax.ParamExpr, sp splitPolicy) bool {
 	return sp != splitNever && e.SplitFlags%2 == 1 &&
-		!strings.ContainsAny(e.Flags, "fs")
+		!strings.ContainsAny(e.Flags, splitFlagLetters)
 }
 
 // splitFlagAnswer is the answer to "is the result of this expansion split

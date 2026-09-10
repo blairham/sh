@@ -145,21 +145,21 @@ func TestThePrintFlagIsRefusedWithoutAnEscapeSet(t *testing.T) {
 	}
 }
 
-// And a letter this slice still does not carry is refused even with an escape
-// set installed — the padding pair takes an argument the flag would reach, so
-// the refusal has to name the padding rather than answer it.
-func TestTheUnbuiltArgumentFlagsAreStillRefused(t *testing.T) {
+// And the padding pair reads its fills through that same escape set, which is
+// what the `p` in front of them is for. The letter has to stand *before* the
+// padding letter, exactly as it does for a join separator.
+func TestThePrintFlagReachesThePaddingFills(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
-		{"left padding", `v=ab; printf "[%s]" "${(pl:5::-:)v}"`, "the (l) expansion flag is not implemented"},
-		{"right padding", `v=ab; printf "[%s]" "${(pr:5::-:)v}"`, "the (r) expansion flag is not implemented"},
+		{"left padding", `v=ab; printf "[%s]" "${(pl:5::-:)v}"`, "[---ab]"},
+		{"right padding", `v=ab; printf "[%s]" "${(pr:5::-:)v}"`, "[ab---]"},
+		{"an escape in the fill", `v=ab; printf "[%s]" "${(pl:4::\t:)v}"`, "[\t\tab]"},
+		{"the same fill with no print flag", `v=ab; printf "[%s]" "${(l:4::\t:)v}"`, `[\tab]`},
+		{"a print flag behind the padding reaches nothing", `v=ab; printf "[%s]" "${(l:4::\t:p)v}"`, `[\tab]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runGrammar(t, tc.src, escapingFlags, withTestEscapes)
-			if !strings.Contains(out, tc.want) {
-				t.Errorf("output = %q, want %q in it", out, tc.want)
-			}
-			if st == 0 {
-				t.Errorf("status 0, want the refusal to be fatal")
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
 			}
 		})
 	}

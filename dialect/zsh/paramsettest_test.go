@@ -56,6 +56,10 @@ func TestTheSetTestFlagIsThisDialects(t *testing.T) {
 		{`v=abc; printf "[%s]" ${+v#a} ${+v:-x} ${+v+y}`, `[bc][abc][y]`},
 		{`printf "[%s]" ${+nope:-D} "${+nope#a}"`, `[D][]`},
 		{`printf "[%s]" ${+v=W} "$v"`, `[W][W]`},
+		// The padding flags *do* reach the count, where a value
+		// transformation has nothing to transform: the width is applied to
+		// the `1` or the `0` the `+` answered.
+		{`v=abc; printf "[%s]" "${(l:5::-:)+v}" "${(l:5::-:)+nope}"`, `[----1][----0]`},
 	} {
 		out, st := runZsh(t, dir, tc.src)
 		if out != tc.want || st != 0 {

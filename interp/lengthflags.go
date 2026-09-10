@@ -110,19 +110,27 @@ func (r *Runner) countWords(e *syntax.ParamExpr, words []string, keepEmpty bool)
 }
 
 // flagWordSep is the separator these two count against: the `s` argument
-// where one was written and a newline where `f` was, which is the same
-// choice splitFlagged makes — measured, `${(fw)#v}` on `a\nb\n` is 3, so `f`
-// reaches the count exactly as `s` does. Otherwise the separator is `$IFS`,
-// and that is a different rule rather than a different value, which is what
-// the second result says.
+// where one was written, a newline where `f` was and a NUL where `0` was,
+// which is the same choice splitFlagged makes — measured, `${(fw)#v}` on
+// `a\nb\n` is 3, so `f` reaches the count exactly as `s` does, and with
+// `z=$'a\0\0b'` the NUL flag does too: `${(0w)#z}` is 2 and `${(0W)#z}` is 3,
+// the pair that says it is counting fields against a separator rather than
+// against `$IFS`. Otherwise the separator is `$IFS`, and that is a different
+// rule rather than a different value, which is what the second result says.
+//
+// The letter written *last* decides, as it does for the split itself, and one
+// reading of that rule serves both.
 func flagWordSep(e *syntax.ParamExpr) (sep string, explicit bool) {
+	i := strings.LastIndexAny(e.Flags, splitFlagLetters)
 	switch {
-	case strings.ContainsRune(e.Flags, 's'):
+	case i < 0:
+		return "", false
+	case e.Flags[i] == 's':
 		return e.SplitSep, true
-	case strings.ContainsRune(e.Flags, 'f'):
-		return "\n", true
+	case e.Flags[i] == '0':
+		return "\x00", true
 	}
-	return "", false
+	return "\n", true
 }
 
 // literalWordCount counts against an explicit separator, which is a string

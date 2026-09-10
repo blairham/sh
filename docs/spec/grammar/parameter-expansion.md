@@ -932,6 +932,7 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(q+)` | the same, extended | `x=$'a\001b'; ${(q+)x}` | `$'a\C-Ab'` |
 | `(f)` | split at newlines | `x=$'a\nb'; ${(f)x}` | two words `a`, `b` |
 | `(s:sep:)` | split at sep | `x=a:b:c; ${(s.:.)x}` | `a`, `b`, `c` |
+| `(0)` | split at NUL | `v=$'a\0b'; ${(@0)v}` | two words `a`, `b` |
 | `(j:sep:)` | join with sep | `a=(x y z); ${(j.,.)a}` | `x,y,z` |
 | `(@)` | keep array fields in `"…"` | `a=(x "y z" ""); "${(@)a}"` | 3 fields, empty kept |
 | `(P)` | value is a further name | `y=hello; x=y; ${(P)x}` | `hello` |
@@ -952,6 +953,8 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(W)` | with `${#…}`: words, empties too | `v="a b  c"; ${(W)#v}` | `4` |
 | `(p)` | read the next flags' arguments with escapes | `a=(x y); ${(pj:\n:)a}` | `x`, newline, `y` |
 | `(Z:opts:)` | split a value as a command line | `v="a b  c"; ${(Z+n+)v}` | `a`, `b`, `c` |
+| `(l:n::f1::f2:)` | pad a word out to a width on the left | `v=ab; ${(l:5::-:)v}` | `---ab` |
+| `(r:n::f1::f2:)` | the same on the right | `v=ab; ${(r:5::-:)v}` | `ab---` |
 | `(g:opts:)` | read the value's backslash escapes | `v='a\tb'; ${(g::)v}` | a real tab |
 | `(e)` | read the result again as shell text | `w=zz; v='$w'; ${(e)v}` | `zz` |
 
@@ -1055,6 +1058,117 @@ Details, each measured:
   `(s::)` splits into characters. Separator delimiters may be any
   punctuation — `(s.:.)`, `(s:,:)` — or the matched pairs `()`, `[]`,
   `{}`, `<>`; the separator may be several characters.
+- **`(0)` is that split with a NUL for a separator**, and the vendor
+  manual gives it as a shorthand for `ps:\0:`. Every rule above holds
+  for it unchanged — the join ahead of the split, the `(@)` exemption
+  from that join, which empty fields survive — measured a row at a time
+  with `v=$'a\0b\0c'` and `w=$'x\0\0y'`:
+
+  | probe | zsh 5.9.2 |
+  | --- | --- |
+  | `${(@0)v}` | 3 fields, `a` `b` `c` |
+  | `${(0)v}` | 3 as well: the `@` is about quoting, not about the split |
+  | `${(@0)w}` | 2 — an empty field is dropped unquoted |
+  | `"${(@0)w}"` | 3 — and kept in quotes with the fields flag |
+  | `"${(0)w}"` | 2 — dropped again without it |
+  | `"${(0)$'p\0'}"` | 2 — but the field at an *edge* survives |
+  | `a=($'a\0b' $'c\0d'); ${(0)a}` | 3: `a`, `b c`, `d` — joined first |
+  | `${(@0)a}` | 4: each element split on its own |
+  | `${(0w)#w}` / `${(0W)#w}` | 2 / 3 — the word counts see it too |
+
+  **It has no long form.** An `s` argument cannot hold the byte:
+  `${(@s.\0.)w}` splits on the two characters `\` and `0` and leaves one
+  field, measured. So the letter is the only way to ask for the split,
+  which is why `${(pj:\0:)a}` — joining *on* a NUL — is common in the
+  wild beside it and is not its inverse.
+
+  **The letter written last decides which separator is used**, and that
+  is a rule about the set rather than about this member. With
+  `m=$'a\nb:c'`, `${(@fs.:.)m}` splits at the colon and `${(@s.:.f)m}`
+  at the newline; with `n=$'a\nb'`, `${(@f0)n}` is one field and
+  `${(@0f)n}` is two. A fixed precedence answers half of that table.
+- **`(l)` and `(r)` lay each word out in a field.** `(l:expr::string1::string2:)`
+  pads on the left and `(r:…)` on the right; the arguments after the
+  width are optional, and neither, the first, or both may be given.
+  Measured on zsh 5.9.2 with `v=ab`:
+
+  | probe | zsh 5.9.2 | what it pins |
+  | --- | --- | --- |
+  | `${(l:5:)v}` | `   ab` | no fill is spaces |
+  | `${(l:5::-:)v}` | `---ab` | `string1` repeats |
+  | `${(l:5::-::+:)v}` | `--+ab` | `string2` goes once against the word |
+  | `${(r:5::x::y:)v}` | `abyxx` | and on the other side for `r` |
+  | `${(l:1:)v}` | `b` | a narrow field truncates from the far end |
+  | `${(r:1:)v}` | `a` | which is the opposite end for `r` |
+  | `${(l:0:)v}` | `ab` | a zero width is the flag doing nothing |
+  | `${(l:7::ab:)v}` | `bababab` | the repetition keeps its *tail* |
+  | `${(r:7::ab:)v}` | `abababa` | and its head on the right |
+  | `${(l:3::x::yz:)v}` | `zab` | `string2` is truncated the same way |
+  | `${(r:3::x::yz:)v}` | `aby` | and from the other end |
+
+  **The width is an arithmetic expression, not a number.** `${(l:$n:)v}`,
+  `${(l:n:)v}` and `${(l:2+3:)v}` are all the same four- or five-wide
+  field, an unset name is zero — so the flag does nothing rather than
+  failing — an empty expression is zero, and a **negative width is its
+  own size**: `${(l:-3:)v}` is the three-wide ` ab`. An expression that
+  will not read is the ordinary arithmetic failure and is fatal to the
+  script: `${(l:x y:)v}` is `bad math expression: operator expected`.
+
+  **A fill written empty is not a fill left out**, and only a non-default
+  `$IFS` separates the two. With `IFS=.`: `${(l:5:)v}` is `   ab`, spaces,
+  while `${(l:5:::)v}` is `...ab` — an argument written as two delimiters
+  together takes `$IFS`'s first character. The same holds for `string2`,
+  `${(l:5::x:::)v}` being `xx.ab`, and an `$IFS` with no first character
+  leaves the slot contributing nothing: `IFS=; ${(l:5:::)v}` is `ab`.
+
+  **The three slots are filled in one at a time.** A group may write the
+  letter twice, and a later one sets the width always and each fill only
+  where it wrote one: `${(l:3::x::y:l:5:)v}` is `xxyab` and
+  `${(l:3::x::y:l:5::z:)v}` is `zzyab`.
+
+  **Both letters in one group is a third shape.** The word is cut in
+  half, the first half laid in the left field and the second in the
+  right, so the result is as wide as the two fields together. With
+  `(l:4::L:r:4::R:)` over the empty string, `a`, `ab`, `abc`, `abcd` and
+  `abcde`: `LLLLRRRR`, `LLLLaRRR`, `LLLabRRR`, `LLLabcRR`, `LLabcdRR`,
+  `LLabcdeR`. An odd word gives the extra unit to the *second* half,
+  which is the manual's "the extra padding is applied on the left" read
+  from the other side. A zero width takes that side out entirely rather
+  than halving the word for the other: `abcd` with `(l:0::L:r:6::R:)` is
+  `abcdRR`.
+
+  **Where the step sits is measured**, and one row of it disagrees with
+  the manual's rule numbers. Padding is after the length
+  (`${(l:5::x:)#v}` on `abc` is `xxxx3`), after the case conversion
+  (`${(Ul:4::x:)u}` is `xxAB`), after the prompt escapes, after the
+  quoting (`${(ql:6::x:)q}` on `a b` is `xxa\ b`), after the unquoting,
+  after the ordering (`b=(bb a); ${(@ol:3::x:)b}` is `xxa xbb`), after
+  the splitting — each field is padded on its own — and after the quoted
+  join, which is why `a=(one two three); "${(l:5::-:)a}"` is `three`
+  rather than three padded elements. It is also applied to the set
+  test's answer: `${(l:5::-:)+v}` is `----1`. But it runs **before** the
+  re-reading, where the manual lists it after: with
+  `e='ab$(echo XY)'`, twelve characters as written and four once read
+  again, `${(el:20::x:)e}` is `xxxxxxxxabXY` — padded to twenty first
+  and then re-read — where a re-reading that ran first would leave
+  sixteen `x`.
+
+  **A width past what a 32-bit count can hold is refused by that shell**
+  — `${(l:2147483648:)v}` is an error in the flags there and
+  `${(l:4294967296:)v}` is the value unchanged, the count having wrapped
+  to zero. That is an artifact of one implementation's internal width
+  rather than a behavior, so it is a **measured gap** here rather than
+  something reproduced.
+
+  **A `(~)` that marks a fill is refused by name here.** Marked, the fill
+  is live where the rest of the result is escaped — `w=ab;
+  ${(~l:5::*:)w}` is the pattern `***ab` in that shell where
+  `${(l:5::*:)w}` is those five characters literally — so a fill would
+  have to be counted as text and escaped as none. A marked *join*
+  separator beside a padding flag is refused for the same reason: the
+  join is the one step whose result is part escaped and part not, and
+  the padding is measured against the whole of it. No script in reach
+  writes either pairing.
 - **`(q)` in detail.** Backslash-escapes space and `` ` ``, `$`, `"`, `'`,
   `\`, `*`, `?`, `[`, `]`, `(`, `)`, `{`, `}`, `<`, `>`, `|`, `;`, `&`,
   `#`, `^` anywhere, and `~` and `=` **only as the value's first byte**,
@@ -1561,12 +1675,18 @@ With `set -- P Q`: `${(pj:$2:)a}` joins on `Q`, `${(pj:$9:)a}` joins on
 nothing at all, and `$0` answers with the script's name — where the unset
 *name* two rows above stays as the seven characters it was written with.
 
-### Where `(p)` cannot be carried yet
+### Where `(p)` reaches the padding pair
 
-`(l)` and `(r)`, the padding pair, take arguments `(p)` would reach and
-are not built, so `${(pl:5::\0:)v}` is refused for the `l` rather than
-answered. The refusal fires on the letter that is missing, which is the
-honest report: the padding is what is absent, not the escapes.
+`(l)` and `(r)` take arguments `(p)` reads, and both fills go through it:
+`${(pl.3..\n.)}` is three newlines where `${(l.3..\n.)}` is the two
+characters `\n` repeated. The rule about *position* is the join
+separator's unchanged — a `p` written behind the padding letter reaches
+nothing, so `${(l:4::\t:p)v}` pads with a backslash and a `t`.
+
+The width is not read this way and needs no flag: it is an arithmetic
+expression, and a `$name` in an expression is a name there already. So
+`${(pl:$n::0:)v}` and `${(l:$n::0:)v}` are the same field, and the `p`
+in the first is doing its work on the fill beside it.
 
 `(z)` is not one of them and never was, though the two were listed
 together while both were unbuilt: `(p)` reads *arguments* and `(z)` splits
@@ -1916,8 +2036,8 @@ signature it compares against.
 
 ### What this implementation refuses
 
-Flags zsh has and this slice does not — `(t)`, `(D)`, padding, and the rest
-of the
+Flags zsh has and this slice does not — `(t)`, `(D)`, the width flag `(m)`,
+and the rest of the
 alphabet, plus `(q+)` (#1530), the signed-numeric sort flag `(-)` — which
 is every `-` that a `q` did not eat, #1531 — and
 `(qqq…)` beyond four — are refused at run time naming the flag, with the
@@ -2031,6 +2151,15 @@ escape would have to read the joined text back:
   metacharacters nor the tokens — `<` splits where `>`, `-` and `~` do
   not. That is one implementation's internal marking rather than a
   behavior, and no script in reach writes it.
+* `${(~l:5::*:)v}`, `${(~r:5::*:)v}` — `… for the (l) fill`, and the same
+  for `(r)`. A marked fill is live where the rest of the result is
+  escaped, and the padding is *measured* in units of the text it is laid
+  into, so the fill would have to count as text and escape as none.
+  `${(l:9::x:~j.|.)a}` — a mark behind the padding letter, reaching only
+  the join — is `… beside a padding flag` for the mirror of that reason:
+  the join is the one step whose result is part escaped and part not, and
+  a width applied to it would count the escapes. The plugin manager with
+  twenty-five `(~j…)` sites writes no padding flag in any of them.
 
 `(~f)` is carried and does nothing, which is correct rather than a stub:
 `(f)`'s separator is a newline and a newline has no metacharacters to

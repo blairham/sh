@@ -147,3 +147,97 @@ func TestParamExpansionFlagsRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// The padding pair's three slots, filled in by position. The last two are
+// optional and an empty one is not the same as one left out, so the test
+// asserts on the Set fields rather than only on the text — see ParamPad.
+func TestPaddingFlagArgumentsParse(t *testing.T) {
+	for _, tc := range []struct {
+		src   string
+		flags string
+		left  ParamPad
+		right ParamPad
+	}{
+		{`echo ${(l:5:)x}`, "l", ParamPad{Width: "5"}, ParamPad{}},
+		{`echo ${(l:5::-:)x}`, "l", ParamPad{Width: "5", Fill: "-", FillSet: true}, ParamPad{}},
+		{
+			`echo ${(l:5::-::+:)x}`, "l",
+			ParamPad{Width: "5", Fill: "-", FillSet: true, Insert: "+", InsertSet: true},
+			ParamPad{},
+		},
+		// An argument written empty is written, and the interpreter reads
+		// `$IFS` for it — so the Set field is the whole of the difference
+		// between these two and the first row above.
+		{`echo ${(l:5:::)x}`, "l", ParamPad{Width: "5", FillSet: true}, ParamPad{}},
+		{
+			`echo ${(l:5::x:::)x}`, "l",
+			ParamPad{Width: "5", Fill: "x", FillSet: true, InsertSet: true},
+			ParamPad{},
+		},
+		// The width is text rather than a number: it is an arithmetic
+		// expression and is read when the expansion runs.
+		{`echo ${(l:COLUMNS-1:)x}`, "l", ParamPad{Width: "COLUMNS-1"}, ParamPad{}},
+		{`echo ${(l:$n:)x}`, "l", ParamPad{Width: "$n"}, ParamPad{}},
+		// The delimiter is whichever punctuation follows the letter, and the
+		// matched pairs count.
+		{`echo ${(l.3..0.)x}`, "l", ParamPad{Width: "3", Fill: "0", FillSet: true}, ParamPad{}},
+		{`echo ${(l#2##0#)x}`, "l", ParamPad{Width: "2", Fill: "0", FillSet: true}, ParamPad{}},
+		{`echo ${(l<3><0>)x}`, "l", ParamPad{Width: "3", Fill: "0", FillSet: true}, ParamPad{}},
+		// The right-hand mirror, and both in one group.
+		{`echo ${(r:5::-:)x}`, "r", ParamPad{}, ParamPad{Width: "5", Fill: "-", FillSet: true}},
+		{
+			`echo ${(l:5::x:r:7::y:)x}`, "lr",
+			ParamPad{Width: "5", Fill: "x", FillSet: true},
+			ParamPad{Width: "7", Fill: "y", FillSet: true},
+		},
+		// Written twice, the slots are filled in one at a time: the later
+		// width replaces the earlier one and the fills it did not write stay.
+		{
+			`echo ${(l:3::x::y:l:5:)x}`, "ll",
+			ParamPad{Width: "5", Fill: "x", FillSet: true, Insert: "y", InsertSet: true},
+			ParamPad{},
+		},
+		{
+			`echo ${(l:3::x::y:l:5::z:)x}`, "ll",
+			ParamPad{Width: "5", Fill: "z", FillSet: true, Insert: "y", InsertSet: true},
+			ParamPad{},
+		},
+	} {
+		e := flagged(t, tc.src)
+		if e == nil {
+			t.Fatalf("%q: no parameter expansion parsed", tc.src)
+		}
+		if e.FlagsErrPos != 0 {
+			t.Errorf("%q: FlagsErrPos = %d, want a clean read", tc.src, e.FlagsErrPos)
+		}
+		if e.Flags != tc.flags || e.PadLeft != tc.left || e.PadRight != tc.right {
+			t.Errorf("%q: flags %q pad %+v/%+v, want %q %+v/%+v",
+				tc.src, e.Flags, e.PadLeft, e.PadRight, tc.flags, tc.left, tc.right)
+		}
+	}
+}
+
+// A padding flag with no argument at all, and one whose delimiter never
+// closes, are both errors *in the flags* at the character that arrived
+// instead — the same shape every other unreadable group has, reported when
+// the expansion is reached rather than while it is read.
+func TestPaddingFlagWithoutItsArgument(t *testing.T) {
+	for _, tc := range []struct {
+		src string
+		pos int
+	}{
+		{`echo ${(l)x}`, 5},
+		{`echo ${(lU:4::x:)x}`, 5},
+		{`echo ${(r)x}`, 5},
+		{`echo ${(l:5::::)x}`, 10},
+		{`echo ${(l:5::-::)x}`, 11},
+	} {
+		e := flagged(t, tc.src)
+		if e == nil {
+			t.Fatalf("%q: no parameter expansion parsed", tc.src)
+		}
+		if e.FlagsErrPos != tc.pos {
+			t.Errorf("%q: FlagsErrPos = %d, want %d", tc.src, e.FlagsErrPos, tc.pos)
+		}
+	}
+}

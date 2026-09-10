@@ -4,7 +4,6 @@
 package zsh_test
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -110,14 +109,41 @@ func TestThePrintFlagIsThisDialects(t *testing.T) {
 	}
 }
 
-// The padding pair is still absent, and the refusal names the padding rather
-// than the flag that would have read its argument.
-func TestThePaddingPairIsStillRefusedInThisDialect(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `v=ab; printf "[%s]" "${(pl:5::-:)v}"`)
-	if !strings.Contains(out, "the (l) expansion flag is not implemented") {
-		t.Errorf("output = %q, want the padding refused by name", out)
-	}
-	if st == 0 {
-		t.Errorf("status 0, want the refusal to be fatal")
+// The padding pair reads its fill through the same escapes, which is the
+// composition the prompt in this dialect's own plugin ecosystem is built on:
+// `${(pl.$n..\n.)}` is n newlines, and a run of them is how a prompt puts
+// blank lines above itself.
+//
+// Written here rather than in interp because the escapes are this dialect's
+// measurement and a runner nobody handed them refuses the `p` by name.
+func TestThePaddingPairReadsItsFillWithPrintEscapes(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a fill read with escapes",
+			`v=ab; printf "[%s]" "${(pl:5::-:)v}"`,
+			"[---ab]",
+		},
+		{
+			"a newline fill, which is what a prompt asks for",
+			`n=3; printf "[%s]" "${(pl.$n..\n.)}"`,
+			"[\n\n\n]",
+		},
+		{
+			"the same fill without the escapes is two characters",
+			`v=ab; printf "[%s]" "${(l:6::\n:)v}"`,
+			`[\n\nab]`,
+		},
+		{
+			"a width that arrives from a parameter",
+			`n=4; v=ab; printf "[%s]" "${(pl:$n::0:)v}"`,
+			"[00ab]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
 	}
 }

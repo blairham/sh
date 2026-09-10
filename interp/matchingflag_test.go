@@ -102,6 +102,12 @@ func TestTheUnbuiltFlagsAreStillRefusedByName(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{"t", `v=x; printf "[%s]" "${(t)v}"`, "sh: ${(t)v}: the (t) expansion flag is not implemented\n"},
 		{"D", `v=x; printf "[%s]" "${(D)v}"`, "sh: ${(D)v}: the (D) expansion flag is not implemented\n"},
+		// `m` is the one whose absence is easiest to miss now that the
+		// padding pair is built: it changes what a *unit of width* is, so a
+		// group carrying it asks for a field measured in display columns
+		// rather than in characters, and answering the padding without it
+		// would be a plausible field of the wrong size.
+		{"m", `v=x; printf "[%s]" "${(ml:4::x:)v}"`, "sh: ${(ml:4::x:)v}: the (m) expansion flag is not implemented\n"},
 		// One built letter beside an unbuilt one still names the unbuilt
 		// one, which is the half that would rot as the set grows.
 		{"beside a built one", `a=(b a); printf "[%s]" "${(Ut)a}"`, "sh: ${(Ut)a}: the (t) expansion flag is not implemented\n"},

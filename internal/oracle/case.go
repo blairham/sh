@@ -7225,6 +7225,51 @@ echo "st=$?"`,
 		Why:     "an empty value split is one empty field in quotes and no field at all without them, and the two separators have to agree: splitting into characters answers the same 1 as splitting at newlines, where a character loop over an empty string naturally produces nothing. The quoted-versus-unquoted pair is on the same line because 1 and 0 are both defensible on their own and only the pair says which is which",
 	},
 	{
+		ID: "param/the-padding-flags-lay-a-word-out-in-a-field", Category: "parameter expansion",
+		Snippet: `v=ab; printf "[%s]" "${(l:5:)v}" "${(l:5::-:)v}" "${(l:5::-::+:)v}" "${(r:5::x::y:)v}" "${(l:1:)v}" "${(r:1:)v}" "${(l:0:)v}"; echo`,
+		Why:     "the padding pair in one line, with the three rows that are not derivable from the first. The second fill goes *once* directly against the word and the first fills whatever is left, so `(l:5::-::+:)` is `--+ab` and not `---+ab` or `----+`; a field narrower than the word truncates rather than growing, and it truncates from the far end, which is opposite for the two letters — `${(l:1:)v}` is `b` and `${(r:1:)v}` is `a`, so an implementation that keeps the same end for both passes one and fails the other. A zero width is the flag doing nothing at all, which is a different answer from truncating to nothing and is the row that says so. zsh alone has the flags",
+	},
+	{
+		ID: "param/a-padding-fill-repeats-from-the-end-nearest-the-word", Category: "parameter expansion",
+		Snippet: `v=ab; printf "[%s]" "${(l:7::ab:)v}" "${(r:7::ab:)v}" "${(l:3::x::yz:)v}" "${(r:3::x::yz:)v}"; echo`,
+		Why:     "which end of a multi-unit fill survives, which cannot be seen at all with a one-character fill and is where a symmetric implementation is wrong. Five units of `ab` are `babab` on the left and `ababa` on the right — the repetition truncated from the *front* for `l` and from the back for `r` — and the second fill follows the same rule when it does not fit, `yz` arriving as `z` on the left and `y` on the right. Truncating both from the front answers a plausible seven characters for the first row and the wrong ones for the rest",
+	},
+	{
+		ID: "param/padding-on-both-sides-halves-the-word", Category: "parameter expansion",
+		Snippet: `for v in "" a ab abc abcd abcde; do printf "[%s]" "${(l:4::L:r:4::R:)v}"; done; echo`,
+		Why:     "both flags in one group is a third shape rather than one applied after the other: the word is cut in half, the first half laid in the left field and the second in the right, so the result is as wide as the two fields together and never as wide as either. The run of six widths is one case because only the run says where the odd unit goes — an even-width word cannot tell the two halvings apart, and `a` versus `ab` is the pair that does",
+	},
+	{
+		ID: "param/a-padding-width-is-an-arithmetic-expression", Category: "parameter expansion",
+		Snippet: `n=4; v=ab; printf "[%s]" "${(l:$n:)v}" "${(l:n:)v}" "${(l:2+3:)v}" "${(l:nosuch:)v}" "${(l:-3:)v}"; echo`,
+		Why:     "the width is read the way `$(( ))` reads its inside and not as digits: a bare name is a name there, an unset one is zero — which makes the flag do nothing rather than fail — and an expression is evaluated. The negative row is the one that is not derivable: `-3` is the same three-wide field `3` gives, so the sign is dropped rather than making the flag pad on the other side or refuse",
+	},
+	{
+		ID: "param/an-empty-padding-fill-is-read-from-ifs", Category: "parameter expansion",
+		Snippet: `IFS=.; v=ab; printf "[%s]" "${(l:5:)v}" "${(l:5:::)v}" "${(l:5::x:)v}" "${(l:5::x:::)v}"; echo`,
+		Why:     "a fill written empty is not a fill left out, and only a non-default `$IFS` separates them: the argument that is not there pads with spaces whatever `$IFS` holds, and the one written as two delimiters together takes `$IFS`'s first character. The pair is written for both slots because the second fill's absent answer is *nothing at all* rather than a space, so the two slots differ in what absence means and agree in what emptiness means",
+	},
+	{
+		ID: "param/padding-runs-after-the-rest-of-the-group", Category: "parameter expansion",
+		Snippet: `v=abc; q="a b"; u=ab; b=(bb a); printf "[%s]" "${(l:5::x:)#v}" "${(ql:6::x:)q}" "${(Ul:4::x:)u}" ${(@ol:3::x:)b}; echo`,
+		Why:     "where the step sits, on four probes that each separate the two orders. The length is taken first and *then* padded, so the field holds `3` and not the width of `abc`; the quoting runs first, so the backslash it adds is counted as one of the six; the case conversion runs first; and the ordering runs first, which `(bb a)` shows because `xbb` sorts ahead of `xxa` while `a` sorts ahead of `bb` — reversing that pair is what a sort after the padding would give",
+	},
+	{
+		ID: "param/the-nul-split-flag", Category: "parameter expansion",
+		Snippet: `v="$(printf 'a\0b\0c')"; printf "[%s]" ${(@0)v}; a=("$(printf 'x\0y')" "$(printf 'p\0q')"); printf "<%s>" ${(0)a}; printf "{%s}" ${(@0)a}; echo`,
+		Why:     "the split at NUL, which has no long form — an `s` argument cannot hold the byte, `${(s.\\0.)v}` splitting on the two characters `\\` and `0` instead — so this letter is the only way to ask for it. The array rows are what say it is the *separator* split and not a rule of its own: the elements are joined on `$IFS` before the split unless the fields flag turns that join off, exactly as `(s)` and `(f)` behave, so the two spellings answer three fields and four",
+	},
+	{
+		ID: "param/the-nul-split-keeps-the-empty-field-the-quoting-asks-for", Category: "parameter expansion",
+		Snippet: `w="$(printf 'x\0\0y')"; set -- ${(@0)w}; echo "bare=$#"; set -- "${(@0)w}"; echo "fields=$#"; set -- "${(0)w}"; echo "quoted=$#"; t="$(printf 'p\0')"; set -- "${(0)t}"; echo "edge=$#"`,
+		Why:     "the empty-field rule, on the flag that reaches it last. An interior hole is dropped unquoted, kept when the fields flag and the quotes both ask, and dropped in quotes without the flag — while the hole at an *edge* survives that third reading, which is why the trailing-NUL row is here and answers 2 where the interior one answers 2 for a different reason. A split that dropped every empty field passes the first two counts and answers 1 for the last",
+	},
+	{
+		ID: "param/the-last-split-letter-written-decides", Category: "parameter expansion",
+		Snippet: `m=$'a\nb:c'; printf "[%s]" ${(@fs.:.)m}; printf "<%s>" ${(@s.:.f)m}; echo`,
+		Why:     "two separator flags in one group are not a fixed precedence: the one written *last* is the one that splits, so the same value comes back split at the colon or at the newline depending on the order of two letters. Reading `s` ahead of `f` wherever both appear answers the first row correctly and the second row with a plausible split of the wrong string",
+	},
+	{
 		ID: "param/expansion-flags-quote-four-ways", Category: "parameter expansion",
 		Snippet: `x="a b'c"; printf "[%s]" "${(q)x}" "${(qq)x}" "${(qqq)x}" "${(qqqq)x}"; echo`,
 		Why:     "the q family is one flag repeated, and each repetition is a different quoting: backslashes, single quotes, double quotes, then $'…'. Repetition is what selects it, which is exactly what bash's @ family refuses",

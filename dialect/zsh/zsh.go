@@ -1439,6 +1439,11 @@ func Diagnostics() interp.Diagnostics {
 		// what is reported is the name's kind rather than the number.
 		ArrayValueToNonArray:      "%[1]s: attempt to assign array value to non-array",
 		SliceOfAnAssociativeArray: "%[1]s: attempt to set slice of associative array",
+		// `+=` at a subscript of a numeric name. The name is not in the
+		// sentence at all here, where it is in both of the two above — the
+		// location carries it, as it does for the messages this shell raises
+		// from an expansion.
+		AppendToANumericSlice: "attempt to add to slice of a numeric variable",
 		// The identical sentence from `unset`, and the builtin is *not* in
 		// the location for it — the store is speaking rather than `unset` —
 		// which is why the two routes need two fields even where one shell

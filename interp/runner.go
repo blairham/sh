@@ -4300,6 +4300,21 @@ func (r *Runner) assign(a *syntax.Assign) {
 			r.spliceElementSpan(a.Name, text, elems, from, to,
 				[]string{r.expandAssignValue(a.Value)})
 			return
+		case outcome == spanResolved && r.subscriptSplicesCharacters(a.Name):
+			// The name is holding a string, so the pair names a span of its
+			// *characters* and the value replaces the whole span:
+			// `v=abc; v[2,3]=XY` is `aXY`. Under the single-subscript reading
+			// below the pair would be the arithmetic comma's right operand and
+			// only the last character would move, which is a plausible wrong
+			// answer at status 0 — see spliceCharacterSpan for the ends.
+			if r.spanIsBelowTheFirstElement(from, to) {
+				r.fatal("%s\n", Wording(r.diag().BadArraySubscript,
+					"%[1]s[%[2]s]: bad array subscript", a.Name, text))
+				return
+			}
+			r.spliceCharacterSpan(a.Name, from, to,
+				r.expandAssignValue(a.Value), false)
+			return
 		}
 		idx, err := r.subscriptValue(text)
 		if err != nil {

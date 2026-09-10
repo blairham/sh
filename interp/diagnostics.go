@@ -1113,6 +1113,17 @@ type Diagnostics struct {
 	// to replace. One verb: the name.
 	SliceOfAnAssociativeArray string
 
+	// AppendToANumericSlice is what the shell that splices characters says
+	// when `+=` is written at a subscript of a name carrying an arithmetic
+	// attribute. It takes the name, which that shell's own sentence does not
+	// use — the location carries it — so this is a field of its own rather
+	// than one of the two above worded again. A number has no characters for
+	// a span to name and so nothing for the value to join: where a plain `=`
+	// at the same subscript quietly lands whole, this one is refused and ends
+	// the script. Only a dialect answering ScalarSubscriptIsACharacter Yes has
+	// anything to put here.
+	AppendToANumericSlice string
+
 	// UnsetBadSubscript wraps the sentence about an `unset` operand whose
 	// subscript would not evaluate. One verb: that sentence, already worded by
 	// ArithError. Empty leaves it to stand alone, which is what bash and zsh

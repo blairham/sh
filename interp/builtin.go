@@ -29,7 +29,6 @@ var builtins = map[string]Builtin{
 	"echo":     biEcho,
 	"cd":       biCd,
 	"pwd":      biPwd,
-	"read":     biRead,
 	"wait":     biWait,
 	"trap":     biTrap,
 	"break":    biBreak,
@@ -52,10 +51,17 @@ var builtins = map[string]Builtin{
 // `return "$(f)"`, or any subscript inside the expression — reaches the same
 // dispatcher. They were in the literal above while the operand was read with
 // atoi and could reach nothing.
+//
+// `read` joined them when its operand became a subscripted one. A name like
+// `buf[$#buf+1]` is stored through the same element route an assignment takes,
+// and that route evaluates the subscript — so the builtin now reaches the
+// dispatcher for exactly the reason `unset` does, through the arithmetic and
+// not through anything of `read`'s own.
 func init() {
 	builtins["unset"] = biUnset
 	builtins["exit"] = biExit
 	builtins["return"] = biReturn
+	builtins["read"] = biRead
 }
 
 // biBreak and biContinue transfer control out of a loop. They are recorded on
@@ -2703,7 +2709,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			r.setArray(array, exactElems(text))
 			if clearRest {
 				for _, name := range args[:fill] {
-					r.setVar(name, "")
+					r.storeThroughOperand(name, "")
 				}
 			}
 			return r.readAfterABadName(status, badName, bad)
@@ -2713,7 +2719,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			if i == 0 {
 				v = text
 			}
-			r.setVar(name, v)
+			r.storeThroughOperand(name, v)
 		}
 		return r.readAfterABadName(status, badName, bad)
 	}
@@ -2746,7 +2752,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		r.setArray(array, fields)
 		if clearRest {
 			for _, name := range args[:fill] {
-				r.setVar(name, "")
+				r.storeThroughOperand(name, "")
 			}
 		}
 		return r.readAfterABadName(status, badName, bad)
@@ -2793,11 +2799,11 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	for i, name := range args[:fill] {
 		switch {
 		case i >= len(fields):
-			r.setVar(name, "")
+			r.storeThroughOperand(name, "")
 		case i == len(args)-1 && len(fields) > len(args):
-			r.setVar(name, readRemainder(text, at[i], lits, ifs))
+			r.storeThroughOperand(name, readRemainder(text, at[i], lits, ifs))
 		default:
-			r.setVar(name, fields[i])
+			r.storeThroughOperand(name, fields[i])
 		}
 	}
 	return r.readAfterABadName(status, badName, bad)

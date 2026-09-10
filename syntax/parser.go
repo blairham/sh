@@ -2048,6 +2048,38 @@ func (p *Parser) parseAnonFunc(keyword bool) Command {
 	return fn
 }
 
+// funcKeywordName reads one name after the `function` keyword and consumes it.
+//
+// The first name and every name after it go through this, so a definition
+// that gives several cannot read its second name by a different rule from its
+// first: whether a name may hold an expansion and whether any word at all is
+// a name are the dialect's answers, and they are the same answers for every
+// name in the list.
+//
+// ok is false where the word is not a name this dialect takes, and the caller
+// raises the diagnostic — the token has not been consumed, so the failure is
+// reported at the word that was refused.
+func (p *Parser) funcKeywordName() (FuncName, bool) {
+	if tokenHoldsAnExpansion(p.tok) {
+		// A name that is not text until the shell runs. Where the dialect
+		// expands one it is kept as a word; where it does not, it is refused
+		// — this used to fall through to Literal(), which turns `_p_${w}`
+		// into `_p_w` and defines a function nobody asked for, at status 0.
+		if !p.dialect.FunctionNameExpands {
+			return FuncName{}, false
+		}
+		n := FuncName{Name: p.tok.Literal()}
+		n.Word = p.word()
+		return n, true
+	}
+	if !p.keywordFuncName(p.tok) {
+		return FuncName{}, false
+	}
+	n := FuncName{Name: p.tok.Literal()}
+	p.next()
+	return n, true
+}
+
 func (p *Parser) parseFuncKeyword() Command {
 	fn := &FuncDecl{Keyword: true, Start: p.tok.Pos}
 	p.next()
@@ -2055,24 +2087,26 @@ func (p *Parser) parseFuncKeyword() Command {
 		p.fail("expected a name after `function`")
 		return fn
 	}
-	if expanded := tokenHoldsAnExpansion(p.tok); expanded {
-		// A name that is not text until the shell runs. Where the dialect
-		// expands one it is kept as a word; where it does not, it is refused
-		// — this used to fall through to Literal(), which turns `_p_${w}`
-		// into `_p_w` and defines a function nobody asked for, at status 0.
-		if !p.dialect.FunctionNameExpands {
+	first, ok := p.funcKeywordName()
+	if !ok {
+		p.fail("expected a name after `function`")
+		return fn
+	}
+	fn.Name, fn.NameWord = first.Name, first.Word
+	// Every word after the first is another name for the same body, where the
+	// dialect has the list. Greedily, the way a loop's name list is taken:
+	// the words stop at the body's `{`, at the `()` of the hybrid form, at a
+	// stop word and at anything that is not a word at all, and a word that
+	// opens a construct is a name like any other — see
+	// [Dialect.FunctionMultipleNames], where the readings are measured.
+	for p.dialect.FunctionMultipleNames &&
+		p.at(TokWord) && !p.atStopWord() && !p.atWord("{") {
+		also, ok := p.funcKeywordName()
+		if !ok {
 			p.fail("expected a name after `function`")
 			return fn
 		}
-		fn.Name = p.tok.Literal()
-		fn.NameWord = p.word()
-	} else {
-		if !p.keywordFuncName(p.tok) {
-			p.fail("expected a name after `function`")
-			return fn
-		}
-		fn.Name = p.tok.Literal()
-		p.next()
+		fn.AlsoNamed = append(fn.AlsoNamed, also)
 	}
 	if p.at(TokLeftParen) {
 		// The hybrid `function f() {}`: bash and zsh take it, ksh93 rejects

@@ -1845,10 +1845,12 @@ Like every compound command, `select … done` takes redirections.
 | `f() { …; }` | yes | yes | yes | yes |
 | `function f { …; }` | **no** | yes | yes | yes |
 | `function f() { …; }` | **no** | yes | **no** | yes |
+| `function a b { …; }` | **no** | **no** | first name only | yes |
 
 The POSIX form is universal. The `function` keyword is core but absent
 from dash. The hybrid — keyword *and* parentheses — is rejected by ksh93,
-which is where the keyword originated, so it is not core.
+which is where the keyword originated, so it is not core. The name list
+is zsh's alone and has a section of its own below.
 
 A function body may be **any compound command**, not only a brace group,
 and it carries its own redirections. Whether it *must* be one is where
@@ -1996,6 +1998,79 @@ zsh and ksh and wrong for bash and sh; that is #1566, measured as
 A quoted name in the POSIX form — `''() { … }`, `'q'() { … }` — is read
 as a definition by zsh *and ksh93* and is refused at the parenthesis
 here; that is a second site with its own panel, #1561.
+
+### One body, several names
+
+    function clipcopy clippaste { … }
+
+**One `function` keyword may give several names to one body**, and `$0`
+inside the body is the name that was *called* — which is what makes the
+construct more than two definitions written once, because the body reads
+which of its names ran. Measured 2026-09-10 with
+`function a b { echo "[$0]"; }; a; b; echo st=$?`
+(`cmd/function-keyword-with-several-names`):
+
+| shell | answer |
+| --- | --- |
+| zsh 5.9.2 | `[a]`, `[b]`, `st=0` |
+| bash 5.3 | `` syntax error near unexpected token `b` ``, status 2 |
+| bash 3.2 | the same sentence, status 2 |
+| bash-as-`sh` | the same sentence, status 2 |
+| dash | no keyword at all, so the brace is blamed, status 2 |
+| ksh93 | parses it and defines **only the first** — `[a]`, then `b: not found` at 127 |
+
+Grammar flag: `FunctionMultipleNames`, zsh alone. ksh93's reading is not
+modeled: it defines a function whose extra names went nowhere, which is a
+lenience rather than a construct, and it is the one column that fails
+without saying anything about the second name.
+
+**Names are taken greedily**, exactly as `ForMultipleNames` takes a
+loop's. Every word after the first is another name until the body begins
+at `{` or at the `()` of the hybrid form, and a **reserved word is a name
+like any other** — `function a while { … }` defines `while` in zsh, so
+calling it afterwards runs the body rather than opening a loop. A stop
+word is not taken: `function a } { … }` is a parse error on the `}`.
+
+Each name is read by the rule the first one is read by, so
+`FunctionKeywordNameIsAnyWord` and `FunctionNameExpands` apply to every
+name in the list — `function a "b c" d { … }` defines three, the middle
+one holding a space, and `w=x; function p_$w q_$w { … }` defines `p_x`
+and `q_x`. What the names share is **one body**, redirections included:
+`function a b { … } > out` sends both calls to the file
+(`cmd/function-keyword-with-several-names-shares-one-body`). The same
+name twice is one function and not a complaint
+(`cmd/function-keyword-with-a-repeated-name`).
+
+The names may be split over lines with backslash-newlines, which is how
+the construct is written in the wild
+(`cmd/function-keyword-with-several-names-over-lines`):
+
+    function man \
+      dman \
+      debman {
+      colored $0 "$@"
+    }
+
+Both live instances on the machine this was found on are Oh-My-Zsh
+libraries loaded by a plugin manager — that one, and a clipboard library
+ending `function clipcopy clippaste { … }`. Before the flag each file was
+refused whole, at its closing brace, because the second name was read as
+the *body* and the brace group after it had nothing to be part of.
+
+Two neighboring readings are measured and **not** implemented:
+
+- The **parenthesis spelling takes a name list too**. `a b () { … }`
+  defines both in zsh, and so does `echo hi () { … }`, which makes any
+  word list followed by `()` a definition — a wider change than this
+  flag, at a different site, and it appears in no script on this
+  machine (#1685).
+- A name list with **no body** is an *autoload declaration* there.
+  `function af1` puts a stub in the table and calling it reads the file
+  off `fpath`, at status 0. It is refused here as a definition whose body
+  never began (#1686), which is also why
+  `function a b if true; then …` is blamed on the `;` here and on the
+  `then` in zsh: `if` and `true` are two more names either way, and only
+  zsh lets the `;` end the declaration.
 
 ### When the definition is committed to
 

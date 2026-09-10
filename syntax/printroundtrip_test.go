@@ -57,7 +57,12 @@ import (
 // … }` is the *anonymous* function and `function a b { … }` is two names, so
 // each of those is a different program, printed silently, at status 0. The
 // count is what says they are walked.
-const keywordFunctionsInTheCorpus = 20
+//
+// Twenty-four since #1680, which added four definitions giving one body
+// several names. They are the sharpest cases this count has: printing only
+// the first name is a program that parses, reprints identically, runs and
+// exits 0 — with the rest of the script calling functions nobody defined.
+const keywordFunctionsInTheCorpus = 24
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 	// The arrangement a formatter asks for, alongside the zero value that a

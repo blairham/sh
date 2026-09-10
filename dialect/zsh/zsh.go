@@ -169,6 +169,11 @@ func Dialect() syntax.Dialect {
 	// and say so as a complaint about a name rather than about the grammar.
 	// It is how a plugin generates one function per widget.
 	d.FunctionNameExpands = true
+	// One body under several names: `function clipcopy clippaste { … }`,
+	// where `$0` in the body is the name that was called. zsh alone —
+	// syntax.Dialect.FunctionMultipleNames has the six answers, and the
+	// construct is what an Oh-My-Zsh clipboard library ends with (#1680).
+	d.FunctionMultipleNames = true
 	// After the keyword, the word is the name whatever is in it — the empty
 	// string, a space, a semicolon, a dollar, all of it — and this shell is
 	// the only one in the panel that reads it that way. The other four with

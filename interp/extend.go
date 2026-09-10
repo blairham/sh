@@ -736,6 +736,20 @@ func (r *Runner) PromptField(f PromptField, arg string, braced bool) (string, bo
 	return r.promptField(f, arg, braced)
 }
 
+// PromptQuantity is what this runner can count for one conditional escape,
+// for a prompt drawer that has a Runner and wants the interpreter's answer
+// rather than one of its own.
+//
+// The same split PromptField makes: the drawer counts what belongs to a
+// session — what the parser is still inside, how deep an eval is — and reaches
+// for this where the count belongs to the interpreter, so that `%(?.…)`
+// written in a prompt and the same test written in a script agree. The second
+// result is false where this runner has no answer, which is the by-name
+// refusal's condition.
+func (r *Runner) PromptQuantity(c PromptCondition, n int) (int, bool) {
+	return r.promptQuantity(c, n)
+}
+
 // PromptStyleValue is the table this runner was given, for a caller that has
 // to hand the same one to a prompt drawer.
 //

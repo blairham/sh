@@ -8,6 +8,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // The prompt-escape language: one table, and the two readers that read it.
@@ -122,6 +123,29 @@ type PromptStyle struct {
 	// in here whose braces are absent draws what its Codes entry says, which
 	// is measured — `%D` alone is the plain date.
 	Formats map[rune]bool
+
+	// Conditional and ConditionalEnd are the characters that open and close
+	// a `%(x.true.false)` — the one code that decides rather than draws, and
+	// so the one that is not a row of Codes. zsh spells them `(` and `)`;
+	// a dialect that names one names both, and a dialect that names neither
+	// has no such construct and never asks Conditions anything.
+	//
+	// The pair is here rather than assumed from the opening character
+	// because the closing one is read in three places — it ends the false
+	// arm, it ends a nested construct being skipped, and written after the
+	// escape it draws itself — and deriving it would be a rule about
+	// parentheses in a table that is otherwise entirely the dialect's.
+	Conditional, ConditionalEnd rune
+
+	// Conditions is what each test letter asks. See [PromptCondition] and
+	// interp/promptconditional.go, which is the whole of the construct.
+	//
+	// The table is paired with the refusal the way Codes is: a letter *in*
+	// here that this reader cannot answer is refused by name, and a letter
+	// not in here is one the dialect's prompt language does not have —
+	// measured, zsh draws nothing at all for `%(a.T.F)` and swallows both
+	// arms, at status 0 and with nothing on standard error.
+	Conditions map[rune]PromptCondition
 
 	// Octal says three octal digits after the escape are the byte they name,
 	// which is how bash spells a character it has no letter for.
@@ -421,6 +445,17 @@ const (
 	// nothing and gets nothing.
 	FieldNonPrintingStart
 	FieldNonPrintingEnd
+	// FieldCountedColumn draws nothing and occupies a column. zsh spells it
+	// `%G`, and it is what a prompt uses to tell the shell that bytes the
+	// markers above have hidden do reach the screen after all — measured,
+	// `%G` alone leaves the text empty and the line one column along, and
+	// `%{a%Gb%}`, where the markers say nothing is drawn, is one column
+	// rather than none.
+	//
+	// A field rather than a Sequences entry because a sequence is bytes the
+	// terminal reads and never a column, which is exactly the distinction
+	// this code exists to cross.
+	FieldCountedColumn
 )
 
 // PromptColor is which half of the screen a color code paints.
@@ -458,20 +493,71 @@ type PromptResolver func(f PromptField, arg string, braced bool) (string, bool)
 // `%` expansion flag alike — so `print -P '%F{196}red%f'` and a drawn prompt
 // agree by construction rather than by two implementations staying in step.
 //
-// The rune result is the code the resolver had no answer for, or that the
-// table listed as Unsupported, and is meaningful only when ok is false. The
-// text returned with it is what had been drawn up to that point, which no
-// caller uses and which is returned rather than dropped so that a caller
-// wanting to report *where* in the prompt it stopped can.
-func ExpandPromptStyle(st PromptStyle, text string, field PromptResolver) (string, rune, bool) {
+// The string result is the escape the resolver had no answer for, spelled the
+// way a script wrote it — `e` for a plain code and `(e` for a conditional's
+// test letter — and is meaningful only when ok is false. The text returned
+// with it is what had been drawn up to that point, which no caller uses and
+// which is returned rather than dropped so that a caller wanting to report
+// *where* in the prompt it stopped can.
+//
+// quantity answers the conditional's tests and may be nil for a reader with
+// no answers to them; a style with no [PromptStyle.Conditional] never asks it.
+func ExpandPromptStyle(st PromptStyle, text string, field PromptResolver, quantity PromptQuantityResolver) (string, string, bool) {
 	if st.Escape == 0 || text == "" {
-		return text, 0, true
+		return text, "", true
 	}
-	var b strings.Builder
-	runes := []rune(text)
+	w := promptWalk{st: st, field: field, quantity: quantity, width: unaskedWidth}
+	w.walk([]rune(text))
+	return w.b.String(), w.refused, w.refused == ""
+}
+
+// promptWalk is the walker's state: what has been drawn, and where on the
+// line it has reached.
+//
+// The column is here rather than counted afterwards because a prompt can ask
+// about it *while* it is being drawn — `%(l.…)` is "at least n columns have
+// been printed on this line", and powerlevel10k's own prompt-length routine
+// binary-searches on it — so the count has to be the one this walk has
+// produced so far and not one taken from the finished text. Measured, and it
+// is the whole reason this is a struct: `ab%2(l.T.F)cd%4(l.T.F)` draws `abTcdT`,
+// so the first conditional's own output is part of what the second one counts.
+type promptWalk struct {
+	st       PromptStyle
+	field    PromptResolver
+	quantity PromptQuantityResolver
+	b        strings.Builder
+
+	// col is how many columns have been drawn on the current line, and width
+	// is what the line wraps at — asked of the reader once, and lazily, so a
+	// prompt with no conditional in it never asks at all.
+	col   int
+	width int
+
+	// hidden is the depth of `%{ … %}`, where what is drawn occupies no
+	// column: measured, `%{XY%}ab` has drawn two columns and not four.
+	hidden int
+
+	// refused is the escape this reader had no answer for, empty until one is
+	// met. It stops the walk: there is no drawing on past an escape whose
+	// value is unknown, because whatever follows would be in the wrong place.
+	refused string
+}
+
+// unaskedWidth is a width no terminal has, so that nought — which is a width
+// a reader really does report, and which zsh treats as its own case — is not
+// mistaken for "not asked yet".
+const unaskedWidth = -1 << 30
+
+// walk draws one run of prompt text, which is the whole of it or one arm of a
+// conditional. Recursive for the arm, so that the column an arm draws is the
+// same column the next conditional counts.
+func (w *promptWalk) walk(runes []rune) {
 	for i := 0; i < len(runes); i++ {
-		if runes[i] != st.Escape {
-			b.WriteRune(runes[i])
+		if w.refused != "" {
+			return
+		}
+		if runes[i] != w.st.Escape {
+			w.draw(string(runes[i]))
 			continue
 		}
 		if i+1 >= len(runes) {
@@ -480,34 +566,36 @@ func ExpandPromptStyle(st PromptStyle, text string, field PromptResolver) (strin
 			// measured *differ* here, which is why the table decides: a
 			// prompt draws the character itself and the expansion flag drops
 			// it. See PromptStyle.TrailingEscapeIsDropped.
-			if !st.TrailingEscapeIsDropped {
-				b.WriteRune(runes[i])
+			if !w.st.TrailingEscapeIsDropped {
+				w.draw(string(runes[i]))
 			}
-			break
+			return
 		}
-		// The digits in front of the code, where the dialect takes them. A
-		// run that reaches the end of the text has no code to be an argument
-		// to, and draws nothing: measured, a bare `%2` is the empty string in
-		// zsh 5.9.2, which is neither the digits nor a refusal (#1592).
-		num := ""
-		if st.NumericArgument {
-			j := i + 1
-			for j < len(runes) && runes[j] >= '0' && runes[j] <= '9' {
-				j++
-			}
-			if j > i+1 {
-				num = string(runes[i+1 : j])
-				if j >= len(runes) {
-					break
-				}
-				i = j - 1
-			}
+		// The count in front of the code, where the dialect takes it. A run
+		// that reaches the end of the text has no code to be an argument to,
+		// and draws nothing: measured, a bare `%2` is the empty string in zsh
+		// 5.9.2, which is neither the digits nor a refusal (#1592).
+		num, j := w.countAt(runes, i+1)
+		if j >= len(runes) {
+			return
 		}
-		code := runes[i+1]
-		i++
-		if fld, ok := st.Codes[code]; ok {
+		i = j
+		code := runes[i]
+		if w.st.Conditional != 0 && code == w.st.Conditional {
+			i = w.conditional(runes, i, num)
+			continue
+		}
+		if w.st.Conditional != 0 && code == w.st.ConditionalEnd {
+			// The character that closes a conditional, written after an
+			// escape, is itself — which is how an arm holds one at all.
+			// Measured, and it is not only an arm's rule: `a%)b` draws `a)b`
+			// wherever it stands, and the column counts it.
+			w.draw(string(code))
+			continue
+		}
+		if fld, ok := w.st.Codes[code]; ok {
 			arg, braced := num, false
-			if st.Formats[code] {
+			if w.st.Formats[code] {
 				var next int
 				group, next, hasGroup := promptArgument(runes, i+1)
 				i = next
@@ -515,25 +603,48 @@ func ExpandPromptStyle(st PromptStyle, text string, field PromptResolver) (strin
 					arg, braced = group, true
 				}
 			}
-			v, answered := field(fld, arg, braced)
+			v, answered := w.field(fld, arg, braced)
 			if !answered {
-				return b.String(), code, false
+				w.refused = string(code)
+				return
 			}
-			b.WriteString(v)
+			switch fld {
+			case FieldNonPrintingStart:
+				w.hidden++
+			case FieldNonPrintingEnd:
+				if w.hidden > 0 {
+					w.hidden--
+				}
+			case FieldCountedColumn:
+				// Draws nothing and occupies a column, which is what it is
+				// for: measured, `%G` alone leaves the text empty and puts
+				// the line one column along, and `%{a%Gb%}` — where the
+				// markers say nothing is drawn — is one column and not none.
+				w.b.WriteString(v)
+				w.cell(' ')
+				continue
+			}
+			w.draw(v)
 			continue
 		}
-		if seq, ok := st.Sequences[code]; ok {
-			b.WriteString(seq)
+		if seq, ok := w.st.Sequences[code]; ok {
+			// Bytes the terminal reads rather than draws, so they are written
+			// and not counted: measured, `%F{red}abc` has drawn three
+			// columns.
+			w.b.WriteString(seq)
 			continue
 		}
-		if layer, ok := st.Colors[code]; ok {
+		if layer, ok := w.st.Colors[code]; ok {
 			arg, next, _ := promptArgument(runes, i+1)
 			i = next
-			b.WriteString(colorSequence(layer, arg))
+			w.b.WriteString(colorSequence(layer, arg))
 			continue
 		}
-		if v, ok := promptOctalByte(st.Octal, runes, i); ok {
-			b.WriteByte(v)
+		if v, ok := promptOctalByte(w.st.Octal, runes, i); ok {
+			// The byte itself and not the rune it names: `\\377` is one byte
+			// on the wire, where writing it as a rune would be the two bytes
+			// its UTF-8 spelling takes.
+			w.b.WriteByte(v)
 			i += 2
 			continue
 		}
@@ -557,13 +668,26 @@ func ExpandPromptStyle(st PromptStyle, text string, field PromptResolver) (strin
 		// So Unknown is read by the resolver that has to obey it rather than
 		// by this walker, and the refusal is read by the one that can afford
 		// it.
-		v, answered := field(FieldNone, string(code), false)
+		v, answered := w.field(FieldNone, string(code), false)
 		if !answered {
-			return b.String(), code, false
+			w.refused = string(code)
+			return
 		}
-		b.WriteString(v)
+		w.draw(v)
 	}
-	return b.String(), 0, true
+}
+
+// draw writes text the terminal shows, and counts what it costs.
+func (w *promptWalk) draw(v string) {
+	w.b.WriteString(v)
+	if w.st.Conditional == 0 || w.hidden > 0 {
+		// Nothing can ask about the column, or nothing drawn here reaches
+		// one. Either way the arithmetic below is work with no reader.
+		return
+	}
+	for _, r := range v {
+		w.cell(r)
+	}
 }
 
 // promptArgument reads the braces after a code, and says where the code
@@ -994,6 +1118,11 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		// Nothing, measured: `print -P '%{X%}'` is `X` and neither marker
 		// reaches the output. The drawer puts its width markers here instead.
 		return "", true
+	case FieldCountedColumn:
+		// Nothing either, and both readers agree: what this code is for is
+		// the *column* it occupies, which the walker counts rather than the
+		// resolver. Measured, `${(%):-a%Gb}` is `ab`.
+		return "", true
 	}
 	if v, ok := r.promptClockField(f, arg, braced); ok {
 		return v, true
@@ -1002,6 +1131,156 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 	// number, how many commands this session has run, and the terminal's
 	// name. Refused by name rather than answered with a plausible zero.
 	return "", false
+}
+
+// promptQuantity is this reader's half of the conditional's split: what a
+// Runner can count, and what it refuses by name.
+//
+// The same line the fields are split along, and drawn from the same state —
+// a Runner holds a status, a job table, a working directory, a clock and its
+// own variables, so it answers those. The one refusal is the eval depth:
+// `%(e.…)` counts the function calls and evals an expansion is inside, and
+// this shell's frames are not that count — an `eval` adds to zsh's depth and
+// nothing to the frames here, so an answer taken from them would be right
+// for a function and wrong for the construct the letter is mostly used with.
+// A drawer answers it as nought, which is not a guess: nothing is running
+// while a prompt is drawn.
+//
+// The number is what the condition counts and never the answer; the
+// comparison belongs to the condition and is made by the walker. See
+// [PromptQuantityResolver].
+func (r *Runner) promptQuantity(c PromptCondition, n int) (int, bool) {
+	switch c {
+	case ConditionExitStatus:
+		return r.ExitStatus(), true
+	case ConditionJobs:
+		live := 0
+		for _, j := range r.Jobs() {
+			if !j.Finished() {
+				live++
+			}
+		}
+		return live, true
+	case ConditionEffectiveUser:
+		// A read of the process's identity, which is the class .golangci.yml
+		// blesses beside `$$` and `$UID`: nothing a script does changes it,
+		// and two Runners in one program genuinely share it.
+		return os.Geteuid(), true
+	case ConditionEffectiveGroup:
+		return os.Getegid(), true
+	case ConditionPrivileged:
+		// Root, which is the reading every measurement taken as an ordinary
+		// user agrees with and none of them can tell from another: `%(!.…)`
+		// answered `F` with the shell's own privileged option both off and
+		// on, so it is not that option, and it ignores the count where
+		// `%(#.…)` compares against it. What is left is the identity, and
+		// this shell reads it the way FieldPrivilege does.
+		if os.Geteuid() == 0 {
+			return 1, true
+		}
+		return 0, true
+	case ConditionShellLevel:
+		return promptNumber(r.promptVar("SHLVL")), true
+	case ConditionSeconds:
+		return promptNumber(r.promptVar("SECONDS")), true
+	case ConditionLineWidth:
+		// The shell's own COLUMNS rather than the terminal's, which is what
+		// makes powerlevel10k's prompt-length routine work at all: it sets
+		// `local -i COLUMNS=1024` and measures inside that.
+		return promptNumber(r.promptVar("COLUMNS")), true
+	case ConditionOpenConstructs:
+		// Nothing is open: a script that reached an expansion has parsed.
+		// The same answer FieldOpenState gives, and measured the same way —
+		// every count above nought answers `F` in a script.
+		return 0, true
+	case ConditionPromptArrayCount:
+		elems, _ := r.GetArray(promptArray)
+		return len(elems), true
+	case ConditionPromptArrayElement:
+		elems, _ := r.GetArray(promptArray)
+		if n < 0 {
+			n = -n
+		}
+		if n == 0 {
+			// A count of nought names the first element, measured: with
+			// `psvar=(a b '')` a bare `%(V.…)` answers `T` and it answers
+			// `F` with the array empty.
+			n = 1
+		}
+		if n > len(elems) || elems[n-1] == "" {
+			return 0, true
+		}
+		return 1, true
+	case ConditionCwdComponents:
+		return pathComponents(r.promptVar("PWD")), true
+	case ConditionCwdComponentsHome:
+		return pathComponents(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME"))), true
+	}
+	if v, ok := promptClockQuantity(c, r.Now()); ok {
+		return v, true
+	}
+	return 0, false
+}
+
+// promptArray is the name of the array `%(v.…)` and `%(V.…)` ask about.
+//
+// A constant here rather than a field on the style because it is the one
+// thing about these two conditions that is not the shell's state: the array
+// is *named* in the dialect that has the letters, and a dialect without them
+// never reaches this. It is spelled the way the shell that has it spells it,
+// and the tie between that name and its scalar is the dialect's own.
+const promptArray = "psvar"
+
+// promptClockQuantity is the conditions drawn from the clock, through
+// Runner.Now so that an embedder who pinned the clock pinned these too.
+//
+// Measured on the tenth of September 2026 at 11:09 on a Thursday: the month
+// answered a count of 8 and not 9, which is the months already gone rather
+// than the month's number, and the day of the week answered 4 with Sunday as
+// nought.
+func promptClockQuantity(c PromptCondition, now time.Time) (int, bool) {
+	switch c {
+	case ConditionMonth:
+		return int(now.Month()) - 1, true
+	case ConditionDayOfMonth:
+		return now.Day(), true
+	case ConditionHour:
+		return now.Hour(), true
+	case ConditionMinute:
+		return now.Minute(), true
+	case ConditionDayOfWeek:
+		return int(now.Weekday()), true
+	}
+	return 0, false
+}
+
+// promptNumber reads one of the shell's variables as a count, and nothing at
+// all as nought.
+//
+// Lenient on purpose: `COLUMNS` and `SECONDS` are the shell's to assign and a
+// script may have put anything in them. Measured, zsh reads a `COLUMNS` that
+// is not a number as nought — `COLUMNS=abc` behaves exactly as `COLUMNS=0`
+// does.
+func promptNumber(v string) int {
+	n, _ := strconv.Atoi(strings.TrimSpace(v))
+	return n
+}
+
+// pathComponents counts the parts of a path, with the home directory's `~`
+// as one of them.
+//
+// Measured: `/` has none, `/tmp/a/b/c` has four, `/Users/bhamilton` has two
+// and `~` on its own has one — so the marker is a component where the
+// leading slash is not, which is the same asymmetry trailingComponents was
+// measured to have.
+func pathComponents(dir string) int {
+	n := 0
+	for _, part := range strings.Split(dir, "/") {
+		if part != "" {
+			n++
+		}
+	}
+	return n
 }
 
 // promptClockField is the codes drawn from the clock, through Runner.Now so

@@ -4,8 +4,9 @@
 package repl
 
 import (
-	"sort"
 	"unicode"
+
+	"github.com/blairham/sh/internal/eastasian"
 )
 
 // How many cells a terminal draws a character in.
@@ -52,14 +53,8 @@ func runeWidth(r rune) int {
 	if unicode.In(r, unicode.Mn, unicode.Me) {
 		return 0
 	}
-	if isWide(r) {
+	if eastasian.Wide(r) {
 		return 2
 	}
 	return 1
-}
-
-// isWide reports whether the code point is East Asian Width W or F.
-func isWide(r rune) bool {
-	i := sort.Search(len(wideRanges), func(i int) bool { return r <= wideRanges[i][1] })
-	return i < len(wideRanges) && r >= wideRanges[i][0]
 }

@@ -7170,6 +7170,26 @@ echo "st=$?"`,
 		Why:     "`%n` is the user the shell runs as, and the row is written as a comparison rather than a name so the record is a fact about the escape and not about the machine that made it. The first two lines of a real ~/.zshrc build the prompt theme's cache path out of it, twice",
 	},
 	{
+		ID: "param/prompt-conditional-picks-an-arm", Category: "parameter expansion",
+		Snippet: `(exit 5); printf "[%s]" "${(%):-%(?.zero.other)}"; (exit 5); printf "[%s]\n" "${(%):-%5(?.five.other)}"`,
+		Why:     "the ternary prompt escape, which is the one code in the language that decides rather than draws. The count is compared for *equality* here and not as a floor — a status of five answers the false arm for a bare `%(?` and the true one for `%5(?` — and nothing but measurement separates that from the floor `%(j` uses. It was the last thing a real interactive startup put on standard error (#1695), from powerlevel10k's own prompt-length routine",
+	},
+	{
+		ID: "param/prompt-conditional-delimiter-and-nesting", Category: "parameter expansion",
+		Snippet: `true; printf "[%s]" "${(%):-%(?:yes:no)}" "${(%):-%(?.a%(1?.x.y)b.c)}" "${(%):-%(1?.T.F.G)}"; echo`,
+		Why:     "the arms are separated by whatever character follows the test letter, they nest, and the two of them do not end alike — the true arm ends at the delimiter and the false arm at the closing parenthesis, so `%(1?.T.F.G)` is `F.G`. Each of the three is what a reading that scans for the next delimiter gets wrong, and the nested case is the one that rules out counting parentheses: the inner arm holds a `)` of its own",
+	},
+	{
+		ID: "param/prompt-conditional-counts-columns", Category: "parameter expansion",
+		Snippet: `COLUMNS=10; v='%{XY%}ab%3(l.T.F)'; printf "[%s]" "${(%):-ab%2(l.T.F)}" "${(%):-ab%3(l.T.F)}" "${(%)v}" "${(%):-a%Gb%3(l.T.F)}"; echo`,
+		Why:     "`%(l.…)` is the one test that asks about the prompt being drawn rather than about the shell drawing it: how many columns have already reached the screen. What reaches it is measured rather than counted from the text — the bytes between `%{ %}` are hidden and draw none, and `%G` draws nothing and occupies one — and it wraps at the shell's own COLUMNS, which is what lets powerlevel10k set `local -i COLUMNS=1024` and binary-search a prompt's width. The third is written through a parameter because a `%}` inside a `${…}` closes the expansion",
+	},
+	{
+		ID: "param/prompt-percent-result-is-not-a-pattern", Category: "parameter expansion",
+		Snippet: `printf "[%s]" ${(%):-ab(N)} ${(U):-ab(N)}; echo`,
+		Why:     "nothing inside a prompt-escape expansion is a pattern, and the row is written beside a flag that also rewrites its result so the difference cannot be read as \"substitution results are not globbed\": `(%)` keeps the parentheses and `(U)` has them read as a glob qualifier list and generated away. It is why a real startup carried *two* diagnostics rather than one — `%$y(l.1.0)` named a file attribute before the escape it belonged to was ever reached (#1695)",
+	},
+	{
 		ID: "param/prompt-percent-user-is-not-a-variable", Category: "parameter expansion",
 		Snippet: `USER=someone-else; LOGNAME=someone-else; case "${(%):-%n}" in someone-else) echo follows-the-variable;; *) echo ignores-it;; esac`,
 		Why:     "the half that decides how `%n` may be implemented: it is a fact about the *process*, not about the environment, so assigning `USER` or `LOGNAME` does not move it — and neither does injecting them before the shell starts, measured separately. Reading either name would make `env USER=someone-else zsh` draw the wrong person, and bash's `\\u` was measured to ignore them too",

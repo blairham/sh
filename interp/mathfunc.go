@@ -123,6 +123,10 @@ type mathFunc struct {
 	// impl is the shell function to run, which defaults to the registered
 	// name and is looked up at the call rather than here.
 	impl string
+	// native is set instead when the implementation is written in Go rather
+	// than in shell — see mathnative.go, which is the other way into this
+	// same table. A registration has one or the other and never both.
+	native MathFunction
 }
 
 // mathFuncUnbounded is the max that means "as many as are written". Spelled
@@ -237,6 +241,12 @@ func (r *Runner) evalMathFunc(x *syntax.ArithCall) (arithNum, error) {
 			msg:      Wording(r.diag().MathFunctionArgumentCount, "wrong number of arguments: %s", x.Text),
 			complete: true,
 		}
+	}
+	if fn.native != nil {
+		// Written in Go, and handed the operands unevaluated: see
+		// mathnative.go for the one function in the module this exists for
+		// whose operand is a name rather than a number.
+		return r.evalNativeMathFunc(fn, x)
 	}
 	// The arguments are evaluated before the call and passed as *strings*,
 	// which is what the implementation sees in `$1`, `$2` and `$*`. Written

@@ -356,10 +356,14 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // writes `epochtime`.
 //
 // zsh writes a kind letter with the readonly one — `-Fr`, `-ir`, `-ar` — and
-// this shell writes `-r` alone, because a produced parameter has no integer
-// or float attribute here to show. Recorded rather than pinned: it is a
-// letter in a listing of a hidden name, and the alternative is an attribute
-// seam nothing else wants.
+// this shell writes the *array* one and not the integer or float one, because
+// a produced parameter has no integer or float attribute here to show. The
+// array letter arrived with #1618, which needed it for `$errnos` and
+// `$keymaps` and gave it to the produced arrays already here at the same
+// time: `typeset -ar epochtime` where this listing used to say `typeset -r
+// epochtime`, which is zsh's own answer. The two scalars keep `-r` alone and
+// that is recorded rather than pinned — a kind letter for a float in a
+// listing of a hidden name is an attribute seam nothing else wants.
 //
 // Two more are `$terminfo` and `$termcap` (#1388), readonly in zsh —
 // measured, `terminfo[colors]=9` there is `read-only variable: terminfo` and
@@ -372,6 +376,13 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // listing carries all eleven where a fresh real zsh carries none of them and
 // a fully loaded one carries every one.
 //
+// Five more arrived with #1618 and are the four modules that issue brought:
+// `$langinfo`, `$widgets`, `$keymaps` and `$sysparams` — plus `$errnos`, the
+// only one of the five that is an array. Every one of them is readonly in zsh
+// as well, and each is readonly here for the reason all eleven before them
+// were: a produced table without the attribute would take an assignment into
+// a stored table that then stands in front of the view.
+//
 // The eleventh is `$parameters` (#1599), which joins for exactly the reasons
 // `builtins` did: zsh answers `parameters[x]=y` with `read-only variable:
 // parameters`, and a produced table without the attribute would take an
@@ -382,13 +393,16 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		`export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
 	want := "V='a b'\nEPOCHREALTIME\nEPOCHSECONDS\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
-		"parameters\ntermcap\nterminfo\nzsh_scheduled_events\n" +
+		"errnos\nkeymaps\nlanginfo\nparameters\nsysparams\ntermcap\nterminfo\n" +
+		"widgets\nzsh_scheduled_events\n" +
 		"export V='a b'\n" +
 		"typeset -r EPOCHREALTIME\ntypeset -r EPOCHSECONDS\ntypeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
-		"typeset -r dis_patchars\ntypeset -r dis_reswords\ntypeset -r epochtime\n" +
-		"typeset -Ar parameters\ntypeset -Ar termcap\ntypeset -Ar terminfo\n" +
-		"typeset -r zsh_scheduled_events\n"
+		"typeset -ar dis_patchars\ntypeset -ar dis_reswords\ntypeset -ar epochtime\n" +
+		"typeset -ar errnos\ntypeset -ar keymaps\ntypeset -Ar langinfo\n" +
+		"typeset -Ar parameters\ntypeset -Ar sysparams\ntypeset -Ar termcap\n" +
+		"typeset -Ar terminfo\ntypeset -Ar widgets\n" +
+		"typeset -ar zsh_scheduled_events\n"
 	if st != 0 || out != want {
 		t.Errorf("got %q status %d, want %q at 0", out, st, want)
 	}

@@ -80,6 +80,21 @@ func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
 	if len(words) > 0 {
 		head = strings.Join(words, " ") + " "
 	}
+	if d.hidden {
+		// The attributes speak and the value does not, which is the same
+		// thing `-H` does to the other listings and is measured here too:
+		// `typeset -H hhh=v; typeset -aH hha=(1 2); typeset` writes `hhh`
+		// and `array hha`, with no `=` on either.
+		//
+		// It is what every *produced* parameter in this listing needs, and
+		// that is why it was found: a table generated on each read is not
+		// state a listing could carry, and writing one out put a hundred
+		// error names and a fifty-five-key locale table into the middle of
+		// `typeset` — where the shell this models writes `array readonly
+		// errnos` and stops. One of them was a *clock*, so the same listing
+		// asked for twice differed from itself in its own output (#1618).
+		return head + d.name
+	}
 	return head + d.name + "=" + r.listedDeclarationValue(d)
 }
 

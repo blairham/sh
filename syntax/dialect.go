@@ -1824,8 +1824,14 @@ type Dialect struct {
 	ArithCharacterCode bool
 
 	// ArithFunctionCall enables `name(args)` inside an arithmetic expression:
-	// a call to a *math function*, which is a shell function registered under
-	// that name with `functions -M`. See [ArithCall].
+	// a call to a *math function*, which is a name the shell has been told
+	// arithmetic may call. See [ArithCall].
+	//
+	// Two things register one and the grammar cannot tell them apart, which is
+	// why this says "a name" rather than "a shell function": `functions -M`
+	// names a shell function to run, and a module may bring a table of them
+	// implemented in the interpreter itself. The measurement below is of the
+	// first, because it is the one a script writes.
 	//
 	// One shell in the panel has it. Measured 2026-09-08 on zsh 5.9.2 and on
 	// zsh 5.9, where `g(){ REPLY=$(($1+100)); }; functions -M mf 1 1 g;

@@ -77,10 +77,17 @@ import (
 // refuse — and the module loads. Applied to `zsh/zutil` it is the answer that
 // file already gave.
 //
-// The other three kinds — a condition, a function and a math function — have
-// no registry to ask and no call site to refuse at, so they still hold: a
-// module counted as loaded on the strength of a feature nobody can find is
-// the silent success this builtin exists to avoid.
+// **A math function has a registry too**, and now does — see
+// [interp.Runner.KnownMathFunction]. It holds, the way a parameter that cannot
+// refuse holds, and it is *asked* rather than assumed missing, which is the
+// difference #1618 made: `zsh/mathfunc` is forty-seven math functions and
+// nothing else, so a rule that counted every one of them as absent could never
+// have let the module load however much of it was implemented.
+//
+// The one kind left is a condition, which has neither a registry to ask nor a
+// call site to refuse at, so it still holds unconditionally: a module counted
+// as loaded on the strength of a feature nobody can find is the silent success
+// this builtin exists to avoid.
 //
 // It also means the gate opens by itself. The day a module's parameters
 // exist, `zmodload` starts succeeding for it with no change here — because
@@ -123,7 +130,10 @@ const zmodloadAlwaysLoaded = "zsh/main"
 // script can act on is the same either way: this shell will not provide it.
 //
 // The prefix is the kind zsh's own listing writes: `b` a builtin, `p` a
-// parameter, `c` a condition, `f` a function, `a` a math function.
+// parameter, `c` a condition, `f` a math function. Measured — `zmodload -lF
+// zsh/system` writes `+f:systell`, and `systell` is called from arithmetic
+// rather than as a command, so `f` is the math functions and there is no
+// separate letter for them.
 var zmodloadFeatures = map[string][]string{
 	zmodloadAlwaysLoaded: nil,
 	"zsh/zutil":          {"b:zformat", "b:zparseopts", "b:zregexparse", "b:zstyle"},
@@ -146,6 +156,27 @@ var zmodloadFeatures = map[string][]string{
 	"zsh/datetime": {"b:strftime", "p:EPOCHSECONDS", "p:EPOCHREALTIME", "p:epochtime"},
 	"zsh/terminfo": {"b:echoti", "p:terminfo"},
 	"zsh/termcap":  {"b:echotc", "p:termcap"},
+	// One parameter and nothing else, and the whole of the module. See
+	// langinfo.go, where the one key answered under every locale and the
+	// fifty-four answered only in the C locale are separated out.
+	"zsh/langinfo": {"p:langinfo"},
+	// Two parameters over the tables `zle` and `bindkey` already keep. See
+	// zleparameter.go, and #1618 for the plugin that would not load at all
+	// while this module refused.
+	"zsh/zleparameter": {"p:keymaps", "p:widgets"},
+	// Forty-seven math functions and not one builtin or parameter, which
+	// makes it the module the math-function kind of feature was measured
+	// for. All forty-seven are implemented; see mathmodule.go.
+	"zsh/mathfunc": {
+		"f:abs", "f:acos", "f:acosh", "f:asin", "f:asinh", "f:atan",
+		"f:atanh", "f:cbrt", "f:ceil", "f:copysign", "f:cos", "f:cosh",
+		"f:erf", "f:erfc", "f:exp", "f:expm1", "f:fabs", "f:float",
+		"f:floor", "f:fmod", "f:gamma", "f:hypot", "f:ilogb", "f:int",
+		"f:j0", "f:j1", "f:jn", "f:ldexp", "f:lgamma", "f:log", "f:log10",
+		"f:log1p", "f:log2", "f:logb", "f:nextafter", "f:rand48", "f:rint",
+		"f:scalb", "f:signgam", "f:sin", "f:sinh", "f:sqrt", "f:tan",
+		"f:tanh", "f:y0", "f:y1", "f:yn",
+	},
 	"zsh/system": {
 		"b:syserror", "b:sysopen", "b:sysread", "b:sysseek", "b:syswrite",
 		"b:zsystem", "f:systell", "p:errnos", "p:sysparams",
@@ -170,12 +201,11 @@ var zmodloadFeatures = map[string][]string{
 
 // zmodloadHasFeature reports whether this shell already provides one feature.
 //
-// A builtin and a parameter are asked of the runner, so the answer moves when
-// the shell does rather than when somebody remembers to edit a list. The other
-// three kinds — a condition, a function and a math function — have no registry
-// to ask, so they count as missing: a module counted as loaded on the strength
-// of a feature nobody can find is the silent success this builtin exists to
-// avoid.
+// A builtin, a parameter and a math function are asked of the runner, so the
+// answer moves when the shell does rather than when somebody remembers to edit
+// a list. A condition has no registry to ask, so it counts as missing: a
+// module counted as loaded on the strength of a feature nobody can find is the
+// silent success this builtin exists to avoid.
 func zmodloadHasFeature(r *interp.Runner, feature string) bool {
 	kind, name, ok := strings.Cut(feature, ":")
 	if !ok {
@@ -186,6 +216,8 @@ func zmodloadHasFeature(r *interp.Runner, feature string) bool {
 		return r.KnownBuiltin(name)
 	case "p":
 		return r.DynamicParameter(name)
+	case "f":
+		return r.KnownMathFunction(name)
 	}
 	return false
 }

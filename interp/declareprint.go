@@ -173,6 +173,29 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		d.arr, d.isArr = a, true
 		return d, true
 	}
+	// A produced array, asked after the stored one for the reason arrayElems
+	// gives: a script that has assigned to the name gets its own value back.
+	//
+	// Here so that the *letter* is right. Until this existed, the one dialect
+	// that marks a produced array readonly listed `typeset -r keymaps` where
+	// the shell it models writes `typeset -ar keymaps`. The produced
+	// association a line above had the same shape and was already right,
+	// which is why the array reading was the one that went missing.
+	//
+	// **Only when an attribute has already put the name in a listing**, which
+	// is what `attributed` says. A produced name is in none of the tables
+	// declarableNames walks, so a listing reaches one only through an
+	// attribute — and a produced array with no attributes must stay
+	// undeclared, which is the answer `$funcstack` gives and had before this.
+	if produce, ok := r.DynamicArrays[name]; ok && attributed {
+		elems := produce(r)
+		a := make(Array, len(elems))
+		for i, v := range elems {
+			a[i] = v
+		}
+		d.arr, d.isArr = a, true
+		return d, true
+	}
 	if v, ok := r.Vars[name]; ok {
 		d.value, d.hasValue = v, true
 		return d, true

@@ -63,17 +63,24 @@ func registerDatetimeModule(r *interp.Runner) {
 	// assign to is shadowed by the assignment from then on, so it would stop
 	// tracking the clock and never say so.
 	//
-	// **Not** also marked hidden, though zsh's are. Runner.MarkHidden keeps a
-	// *table* out of a listing, which is why the produced association
-	// `builtins` needs it; a produced scalar or array is in none of the
-	// tables a listing walks, so being readonly puts it there as a bare name
-	// with no value — which is exactly what zsh writes for these — and hiding
-	// it changes nothing that can be observed. Measured against a build with
-	// the call in: `readonly`, `readonly -p`, `typeset` and `typeset -p` are
-	// byte-identical either way. The one listing that would tell them apart
-	// is `typeset -H`, which this shell has not got.
+	// And hidden, which zsh's are — `${(t)EPOCHSECONDS}` says `hide` and
+	// `hideval` both — and which this file said for a while was
+	// unobservable here. It was, and it is not any more, so the claim is
+	// replaced rather than left standing.
+	//
+	// What made it observable is two listings learning to write a produced
+	// value they had been dropping by accident. `typeset -p epochtime` now
+	// says `typeset -ar epochtime`, the array letter included, where it used
+	// to say `typeset -r epochtime`; and the bare `typeset` listing now
+	// leaves a hidden name's value out instead of writing `=''` after it.
+	// Without this call the same two listings would have written the clock
+	// *into* their output — and one asked twice would differ from itself,
+	// since the two reads are nanoseconds apart. Both forms match zsh
+	// exactly with it: `array readonly epochtime` in the bare listing and
+	// `typeset -ar epochtime` from `-p`.
 	for _, name := range []string{"EPOCHSECONDS", "EPOCHREALTIME", "epochtime"} {
 		r.MarkReadonly(name)
+		r.MarkHidden(name)
 	}
 	r.Register("strftime", strftimeBuiltin)
 }

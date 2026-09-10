@@ -46,6 +46,51 @@ import (
 // they are consulted. The first one with a non-empty value decides.
 var localeVariables = [...]string{"LC_ALL", "LC_CTYPE", "LANG"}
 
+// LocaleFor is the locale name in force for one category — `LC_CTYPE`,
+// `LC_TIME`, `LC_NUMERIC`, `LC_MONETARY`, `LC_MESSAGES` — and the empty string
+// when nothing names one.
+//
+// The precedence is the one localeVariables already spells for LC_CTYPE, with
+// the category's own name in the middle: a non-empty `LC_ALL` beats a
+// non-empty variable of the category's name, which beats `LANG`, and an
+// *empty* one of the first two is skipped rather than being an answer of its
+// own. Exported because a category other than LC_CTYPE is asked about only
+// from outside this package, and asking it here is what keeps one reader of
+// these variables rather than two.
+//
+// Measured 2026-09-09 against zsh 5.9.2 through `$langinfo`, one category at a
+// time: `LC_TIME=en_US.UTF-8` alone moves `D_FMT` and leaves `CODESET`,
+// `RADIXCHAR`, `CRNCYSTR` and `YESEXPR` where they were, and each of the other
+// four moves its own keys and nothing else.
+func (r *Runner) LocaleFor(category string) string {
+	for _, name := range [...]string{"LC_ALL", category, "LANG"} {
+		if v, _ := r.getVar(name); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// LocaleCodeset is the character encoding a locale name carries, as written,
+// and the empty string when the name carries none.
+//
+// The name is `language[_TERRITORY][.codeset][@modifier]` and this is the part
+// after the point. **As written** rather than normalized, because the one
+// caller that wants it unchanged is a parameter whose whole content is what
+// the encoding is *called*: measured, `LC_ALL=en_US.utf-8` gives
+// `$langinfo[CODESET]` of `utf-8` and `LC_ALL=en_US.UTF-8` gives `UTF-8`, so
+// the spelling is the answer and not an accident of it.
+func LocaleCodeset(locale string) string {
+	if i := strings.IndexByte(locale, '@'); i >= 0 {
+		locale = locale[:i]
+	}
+	i := strings.IndexByte(locale, '.')
+	if i < 0 {
+		return ""
+	}
+	return locale[i+1:]
+}
+
 // multibyteLocale reports whether the runner's locale names an encoding this
 // implementation decodes.
 //
@@ -78,15 +123,12 @@ func (r *Runner) multibyteLocale() bool {
 // because `UTF-8`, `utf8` and `UTF8` are all spellings a person writes and a
 // system accepts.
 func codesetIsUTF8(locale string) bool {
-	if i := strings.IndexByte(locale, '@'); i >= 0 {
-		locale = locale[:i]
-	}
-	i := strings.IndexByte(locale, '.')
-	if i < 0 {
+	codeset := LocaleCodeset(locale)
+	if codeset == "" {
 		return false
 	}
 	var b strings.Builder
-	for _, c := range []byte(locale[i+1:]) {
+	for _, c := range []byte(codeset) {
 		if c == '-' || c == '_' {
 			continue
 		}

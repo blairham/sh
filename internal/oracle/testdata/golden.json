@@ -23127,6 +23127,50 @@
         "TimedOut": false
       }
     },
+    "cond/an-unreadable-comparison-operand": {
+      "bash": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 1: [[: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 1: [[: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two st=1",
+        "Stderr": "\u003cscript\u003e: line 1: [[: 1+: syntax error: operand expected (error token is \"+\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~two st=127",
+        "Stderr": "\u003cscript\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 1: 1+: more tokens expected",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cond/an-unterminated-condition": {
       "bash": {
         "Stdout": "",
@@ -23341,6 +23385,94 @@
       },
       "zsh": {
         "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/comparison-operand-expands-once": {
+      "bash": {
+        "Stdout": "once",
+        "Stderr": "\u003cshell\u003e: line 1: [[: $x: arithmetic syntax error: operand expected (error token is \"$x\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "once",
+        "Stderr": "\u003cshell\u003e: line 1: [[: $x: arithmetic syntax error: operand expected (error token is \"$x\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "once",
+        "Stderr": "\u003cshell\u003e: [[: $x: syntax error: operand expected (error token is \"$x\")",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "once",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: $x: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operator expected at `x'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/comparison-operands-are-expressions": {
+      "bash": {
+        "Stdout": "name-is-value not-zero expression",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "name-is-value not-zero expression",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "name-is-value not-zero expression",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": " not-zero",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "name-is-value not-zero expression",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "name-is-value not-zero expression",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

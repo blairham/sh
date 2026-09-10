@@ -348,6 +348,10 @@ func Semantics() interp.Semantics {
 	// path, which is false for anything a script would have written down.
 	// This shell alone — zsh refuses the word and ksh93 will not read it.
 	s.ProcessSubstitutionInCondition = interp.Yes
+	// bash diagnoses an unreadable condition operand and carries on: the
+	// condition is false at status 1 and the next command runs. zsh and
+	// ksh93 abandon the input there.
+	s.ConditionArithmeticErrorIsFatal = interp.No
 	s.ShiftPastEndFatal = interp.No
 	// A declaration will not shadow a frozen name here: `typeset -r x=1;
 	// f() { local x=2; echo $x; }` says `local: x: readonly variable`, then

@@ -413,6 +413,51 @@ func TestArithmeticFailuresQuoteNothing(t *testing.T) {
 	}
 }
 
+// A `[[ ]]` comparison whose operand is not an expression abandons the input
+// here, which `(( ))` does not.
+//
+// The contrast is the test. Both constructs complain in the same words, so a
+// run that asserted only the sentence would pass with either behavior; what
+// separates them is whether the line after runs. Measured from a script file
+// against zsh 5.9.2, where `echo two` never appears and the shell leaves at 1
+// (#1616).
+func TestAnUnreadableConditionOperandAbandonsTheInput(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		src   string
+		after bool
+	}{
+		{"a condition abandons it", "echo one; [[ 1+ -eq 0 ]]; echo two", false},
+		{"an arithmetic command does not", "echo one; (( 1+ )); echo two", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := syntax.Parse(tc.src, zsh.Dialect())
+			if err != nil {
+				t.Fatalf("parse %q: %v", tc.src, err)
+			}
+			var out, errs bytes.Buffer
+			sem, dg := zsh.Semantics(), zsh.Diagnostics()
+			r := &interp.Runner{
+				Stdout: &out, Stderr: &errs,
+				Semantics: &sem, Diagnostics: &dg,
+				Name: "zsh", Dialect: presetDialect(),
+			}
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatalf("run %q: %v", tc.src, err)
+			}
+			if !strings.Contains(out.String(), "one") {
+				t.Errorf("got %q, want the line before the failure to have run", out.String())
+			}
+			if got := strings.Contains(out.String(), "two"); got != tc.after {
+				t.Errorf("line after ran = %v, want %v (output %q)", got, tc.after, out.String())
+			}
+			if !strings.Contains(errs.String(), "bad math expression") {
+				t.Errorf("stderr %q, want the arithmetic complaint", errs.String())
+			}
+		})
+	}
+}
+
 // TestWhoIsSpeakingInAConditionSplitsByWhenItFailed pins a distinction that
 // looks like an inconsistency until the mechanism shows.
 //

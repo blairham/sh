@@ -738,6 +738,11 @@ func Semantics() interp.Semantics {
 	// 2026-09-05: `[[ x == <(x) ]]` is `process substitution <(x) cannot be
 	// used here` here and runs the command in bash.
 	s.ProcessSubstitutionInCondition = interp.No
+	// A condition operand that is not an expression abandons the input —
+	// `echo one; [[ 1+ -eq 0 ]]; echo two` writes `one`, complains, and
+	// never reaches `two`. Note it is `[[ ]]` alone: the same expression
+	// in `(( ))` complains and the shell goes on.
+	s.ConditionArithmeticErrorIsFatal = interp.Yes
 	s.ShiftPastEndFatal = interp.No
 	s.ArrayBaseIsZero = interp.No
 	// `${a[1,3]}` is elements one through three here, where the shells that

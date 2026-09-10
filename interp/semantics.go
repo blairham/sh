@@ -1265,6 +1265,29 @@ type Semantics struct {
 	// observable: the command has side effects.
 	ProcessSubstitutionInCondition Answer
 
+	// ConditionArithmeticErrorIsFatal abandons the input when an operand of a
+	// word-spelled comparison — `[[ 1+ -eq 0 ]]` — is not an expression the
+	// arithmetic parser can read.
+	//
+	// The operands themselves are core: every shell in the panel that has
+	// `[[ ]]` evaluates them as arithmetic, so `n=5; [[ n -eq 5 ]]` holds in
+	// all three and there is nothing to switch on. What they disagree about
+	// is the *failure*. Measured from a script file, `echo one; [[ 1+ -eq 0
+	// ]]; echo two`:
+	//
+	//	zsh   	complains, `two` never runs, exit 1
+	//	ksh93 	complains, `two` never runs, exit 1
+	//	bash  	complains, the condition is false, `two` runs at status 1
+	//
+	// So two abandon and one carries on, which is a conflict and not a
+	// wording difference — a script that guards with `[[ n -eq 0 ]]` over a
+	// name it did not set runs to the end under one group and stops at that
+	// line under the other.
+	//
+	// It is asked only on the error path. A condition whose operands read
+	// cleanly never reaches it.
+	ConditionArithmeticErrorIsFatal Answer
+
 	// RegexQuotingMakesLiteral treats a quoted right operand of `=~` as a
 	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
 	// quoting a regex is unportable in either direction.
@@ -5066,11 +5089,16 @@ func PosixSemantics() Semantics {
 		// and `-c` is one of them; `-s` is not, when it was not written.
 		// The preset takes the text rather than a vote, which is the rule
 		// everywhere here, and the panel splits two against two anyway.
-		CommandStringShowsCInDollarDash:   Yes,
-		CommandStringShowsSInDollarDash:   No,
-		ArithInvalidOctalDigitIsError:     Yes,
-		RegexQuotingMakesLiteral:          No,
-		ProcessSubstitutionInCondition:    No,
+		CommandStringShowsCInDollarDash: Yes,
+		CommandStringShowsSInDollarDash: No,
+		ArithInvalidOctalDigitIsError:   Yes,
+		RegexQuotingMakesLiteral:        No,
+		ProcessSubstitutionInCondition:  No,
+		// POSIX has no `[[ ]]` to fail in, so this is the substrate's floor
+		// rather than a reading of the text: an error is diagnosed and the
+		// shell goes on, which is what POSIX asks of every failure that is
+		// not a special builtin's.
+		ConditionArithmeticErrorIsFatal:   No,
 		LastPipelineElementInCurrentShell: No,
 		ShiftPastEndFatal:                 Yes,
 		// The standard describes one refusal and says nothing about a

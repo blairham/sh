@@ -178,13 +178,21 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 
 	switch x.Op {
 	case "-eq", "-ne", "-lt", "-le", "-gt", "-ge":
-		// The word-spelled operators compare numbers. `<` and `>` compare
-		// strings, which is why `[[ 10 > 9 ]]` is false and `[[ 10 -gt 9 ]]`
-		// is true — the sharpest trap in the construct.
-		l, lerr := strconv.Atoi(strings.TrimSpace(left))
-		rv, rerr := strconv.Atoi(strings.TrimSpace(r.condOperand(x.Y)))
-		if lerr != nil || rerr != nil {
-			return false, arithError{msg: "integer expression expected"}
+		// The word-spelled operators compare numbers, and their operands are
+		// *expressions* rather than literals: with `n=5`, `[[ n -eq 5 ]]`
+		// holds, because the bare name is read the way `$(( n ))` reads it.
+		// Every shell in the panel that has `[[ ]]` does this, so it is the
+		// core's answer and not an axis — see condArith.
+		//
+		// `<` and `>` compare strings, which is why `[[ 10 > 9 ]]` is false
+		// and `[[ 10 -gt 9 ]]` is true — the sharpest trap in the construct.
+		l, err := r.condArith(left)
+		if err != nil {
+			return false, err
+		}
+		rv, err := r.condArith(r.condOperand(x.Y))
+		if err != nil {
+			return false, err
 		}
 		switch x.Op {
 		case "-eq":
@@ -253,6 +261,53 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 // split or globbed, so joining is the whole of it.
 func (r *Runner) condOperand(w *syntax.Word) string {
 	return strings.Join(r.expandWordNoSplit(w), "")
+}
+
+// condArith reads a condition operand as an arithmetic expression, which is
+// what the word-spelled comparisons compare.
+//
+// The word has already been expanded by the time it arrives, and it is *not*
+// expanded again. That is measured rather than assumed: with `x=7; v='$x'`,
+// `[[ v -eq 7 ]]` does not come to 7 in any shell in the panel — the
+// arithmetic sees the two characters `$x` and blames them, bash naming them
+// as its error token. So the expansion happens once, on the word, and what
+// reaches here is text to be read as an expression.
+//
+// An empty operand is zero. `e=”; [[ e -eq 0 ]]` holds in bash and zsh, and
+// the expression parser has no primary to offer for nothing at all, so the
+// case is answered before it is asked.
+func (r *Runner) condArith(text string) (int, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return 0, nil
+	}
+	p := syntax.NewParser("", r.dialect())
+	tree := p.ParseArithFor(text, syntax.Pos{})
+	if perr := p.Err(); perr != nil {
+		return 0, r.condArithFailed(r.diag().ParseFailure(perr))
+	}
+	v, err := r.evalArith(tree)
+	if err != nil {
+		return 0, r.condArithFailed(r.arithFailure(text, err))
+	}
+	return v, nil
+}
+
+// condArithFailed reports an unreadable condition operand and says how the
+// construct ends.
+//
+// The complaint is written here rather than carried out in the error because
+// it is written either way, and only what happens next differs: two of the
+// three shells with `[[ ]]` abandon the input and one lets the condition be
+// false and goes on. Both leave the status at 1, so the status is the
+// substrate's and the abandoning is the dialect's — which is why
+// ConditionArithmeticErrorIsFatal is a single boolean and not a status.
+func (r *Runner) condArithFailed(msg string) error {
+	r.diagf("%s\n", msg)
+	if r.ask(r.sem().ConditionArithmeticErrorIsFatal, "an unreadable operand of a `[[ ]]` comparison") {
+		r.ctl = controlExit
+	}
+	return condStatus{code: 1}
 }
 
 // condProcSubAllowed refuses a process substitution standing as a condition's

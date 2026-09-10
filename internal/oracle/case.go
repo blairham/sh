@@ -7965,6 +7965,22 @@ echo unreachable`,
 		Why:     "the sharpest trap in the construct: -gt compares numbers and > compares strings, so 10 sorts before 9",
 	},
 	{
+		ID: "cond/comparison-operands-are-expressions", Category: "conditions",
+		Snippet: `n=5; [[ n -eq 5 ]] && printf name-is-value; [[ n -eq 0 ]] && printf " and-zero" || printf " not-zero"; k=3; [[ k*2 -eq 6 ]] && printf " expression"`,
+		Why:     "the operands of the word-spelled comparisons are arithmetic expressions and not literals, so a bare name is its value — every shell in the panel that has `[[ ]]` agrees, which is what makes it the core's answer rather than an axis. The second clause is the control: a shell that read every non-number as zero would pass the first alone (#1616)",
+	},
+	{
+		ID: "cond/comparison-operand-expands-once", Category: "conditions",
+		Snippet: `x=7; q='$x'; [[ $q -eq 7 ]] && printf twice || printf once`,
+		Why:     "the word is expanded once and what reaches the arithmetic is text: a second expansion would find x and answer 7. None of the panel does, so the two characters `$x` are an operand the arithmetic cannot use. Written `$q` rather than a bare name on purpose — a bare name puts no `$` in the operand text at all, so it cannot tell one expansion from two (#1616)",
+	},
+	{
+		ID: "cond/an-unreadable-comparison-operand", Category: "conditions",
+		Script:  true,
+		Snippet: `echo one; [[ 1+ -eq 0 ]]; echo two st=$?`,
+		Why:     "what an operand that is not an expression does to the rest of the input. zsh and ksh93 abandon it and bash lets the condition be false and carries on, all three at status 1 — a conflict rather than a wording difference, and the ConditionArithmeticErrorIsFatal axis. From a file, because the trailing text is the measurement and -c muddies where the shell stopped (#1616)",
+	},
+	{
 		ID: "cond/regex-match", Category: "conditions",
 		Snippet: `[[ abc =~ ^a.c$ ]] && echo regex || echo no-regex`,
 		Why:     "the one place in the shell where the pattern language is regular expressions rather than globs",

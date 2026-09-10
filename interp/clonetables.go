@@ -236,7 +236,7 @@ func (c *Runner) ownTables(r *Runner) {
 // localtraps.go, where the measured case is a subshell's `trap` not
 // surviving into the caller. Repointing it would make every inherited scope
 // look like the subshell's own and change what that check answers, which is
-// a behaviour question this file does not get to decide. Here only the
+// a behavior question this file does not get to decide. Here only the
 // memory changes hands: what the shell *does* with a scope is unchanged, and
 // the axis that decides whether the last pipeline element runs in the current
 // shell at all still decides it (see pipeline.go).

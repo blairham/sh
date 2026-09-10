@@ -7241,6 +7241,16 @@ echo "st=$?"`,
 		Why:     "(k) yields an associative array's keys and (v) beside it interleaves key and value. Probed with a single pair on purpose: zsh yields hash order for more, which it does not promise and a golden record must not pin",
 	},
 	{
+		ID: "param/expansion-flags-keys-through-the-indirection", Category: "parameter expansion",
+		Snippet: `typeset -A tab=(k1 v1); n=tab; printf "[%s]" "${(kP)n}" "${(kvP)n}" "${(vP)n}" "${(P)n}"; echo`,
+		Why:     "`k` and `v` are answered by the lookup that finally produces the value, and `(P)` moves that lookup one step along — so the letters have to travel with the name. Four brackets because only the first two can tell the readings apart: the indirection already answers an association with its values, so `(vP)` and `(P)` are right whether the group reached the second lookup or was thrown away, and a row carrying only those would pass for an implementation that read no letters at all. This is the shape a prompt theme's `local kv=(\"${(@kvP)name}\")` depends on, and dropping the `k` reproduced a `typeset` line with the values in the key positions — well-formed, half the table gone, status 0. One pair on purpose, for the reason the row above gives",
+	},
+	{
+		ID: "param/expansion-flags-keys-at-the-second-lookup", Category: "parameter expansion",
+		Snippet: `typeset -A tab=(k1 v1); typeset -A m=(a tab); a=WRONG; printf "[%s]" "${(kP)m}" "${(k)m}" "${(kP)m[a]}" "${(k)m[a]}"; echo`,
+		Why:     "*which* lookup the letters belong to, asked where the two answers are different words rather than a missing one. `m` is an association whose single value names another, and its single key names a live scalar — so reading `k` at the first lookup takes the key `a`, resolves it, and substitutes `WRONG`, while reading it at the second takes the keys of `tab`. Each bracket is paired with the same expansion without the `P`, which was already right, so a run that differs only on the odd brackets is a run about the route and not about the letters. The second pair says a subscripted base is a name like any other, which is the third of the three lookups that read these letters",
+	},
+	{
 		ID: "param/the-array-flag-without-an-assignment-changes-nothing", Category: "parameter expansion",
 		Snippet: `v="a|b"; printf "[%s]" "${(@Akons:|:u)v}" "${(@kons:|:u)v}"; w="a b"; printf "[%s]" "${(A)#w}" "${#w}" "${(AA)w}" "${w}"; echo`,
 		Why:     "`(A)` is the one flag whose whole job is a side effect, so where the expansion assigns nothing it does nothing at all — every pair here is the flag beside the same expansion without it, and the two halves of each pair have to agree. Written as pairs rather than as values because a recorded value would pass for an `(A)` that quietly did something, as long as somebody had written down what it did. The first pair is the cluster a plugin manager writes three times",

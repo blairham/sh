@@ -92,7 +92,7 @@ func newSessionWith(t *testing.T, configure func(*Shell)) *session {
 // once per byte only while each byte arrives on its own; input already in hand
 // is drawn once when it runs out (#1742). A harness that wrote the whole line
 // in one call therefore produced a single redraw, and every assertion about an
-// *intermediate* state — the highlighter colouring an unclosed quotation as it
+// *intermediate* state — the highlighter coloring an unclosed quotation as it
 // is typed, the move back up to the prompt row on the second draw — silently
 // stopped testing anything while still passing.
 //

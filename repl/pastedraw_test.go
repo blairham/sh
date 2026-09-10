@@ -42,7 +42,7 @@ func TestAPastedLineIsDrawnOnce(t *testing.T) {
 		t.Fatalf("line came back as %d characters, want %d", len(got), n)
 	}
 	// One drawing of the line, plus the prompt and the cursor arithmetic. The
-	// bound is generous — what it excludes is the old behaviour, which was two
+	// bound is generous — what it excludes is the old behavior, which was two
 	// orders of magnitude over it, not a few bytes of escape sequence either
 	// way.
 	if written := out.Len(); written > 3*n {
@@ -58,7 +58,7 @@ func TestAPastedLineIsDrawnOnce(t *testing.T) {
 
 // The same line typed a character at a time is still drawn a character at a
 // time, which is the half the coalescing must not take away: the highlighter
-// colours the line as it is written, and a person watching sees each keystroke.
+// colors the line as it is written, and a person watching sees each keystroke.
 //
 // So this asserts the opposite bound to the test above, on the same input. The
 // pair is what says the editor is choosing by *when the input arrived* rather

@@ -6949,6 +6949,31 @@ echo "st=$?"`,
 		Why:     "the parenthesized expansion flags are zsh's alone: it uppercases where bash and dash call the expansion a bad substitution at run time and ksh93 refuses it while reading — the same three-way split every unreadable expansion follows",
 	},
 	{
+		ID: "param/the-reeval-flag-is-one-dialects", Category: "parameter expansion",
+		Snippet: `inner=hello; v='$inner'; echo "[${(e)v}][${v}]"`,
+		Why:     "the `(e)` flag reads the value again as shell text, so a `$name` that was data becomes a substitution: zsh answers `[hello][$inner]` where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading — the same three-way split every unreadable expansion follows. Both readings in one row, because the second is the same value without the flag and is what says the difference is the flag rather than the value. powerlevel10k's `_p9k_must_init` builds a pattern of `$...` references and evaluates it with this flag to make the signature it compares against, so a refusal there re-initializes the prompt on every command",
+	},
+	{
+		ID: "param/the-reeval-flag-reads-once", Category: "parameter expansion",
+		Snippet: `inner='$deeper'; deeper=bottom; v='$inner'; echo "[${(e)v}]"`,
+		Why:     "the reading is a single pass and not a fixed point: `v` holds `$inner`, `inner` holds `$deeper`, and the answer is `$deeper` rather than `bottom`. The row exists because looping is the plausible reading — `re-examined for new parameter substitutions` does not say how often — and a reader that looped would agree with this one on every value that resolves in one step, which is nearly all of them",
+	},
+	{
+		ID: "param/the-reeval-flag-is-not-a-word-expansion", Category: "parameter expansion",
+		Snippet: `d=DD; t='~'; q="'\$d'"; b='a\tb'; printf "[%s][%s][%s]" "${(e)t}" "${(e)q}" "${(e)b}"; echo`,
+		Why:     "what the re-reading is *not*: a leading tilde stays a tilde where an ordinary word would make it a home directory, a quote is a character that does not protect what is inside it, and a backslash in front of anything but `$`, a backtick or another backslash is text, both of it. `[~]['DD'][a\\tb]`, and every one of the three would read the other way if the value were expanded as a word — which is the plausible implementation, and the one the vendor manual's \"re-examined for new parameter substitutions\" does not rule out",
+	},
+	{
+		ID: "param/the-escape-flag-is-one-dialects", Category: "parameter expansion",
+		Snippet: `v='a\tb'; printf "[%s][%s]" "${(g::)v}" "${v}"; echo`,
+		Why:     "the `(g::)` flag reads the value's backslash escapes the way this shell's output builtins do: zsh answers a real tab beside the two characters it was written as, where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading. The unflagged reading is in the same row because a `(g)` implemented as a no-op is *right* for every value with no backslash in it — the control is what makes the row discriminating at all. powerlevel10k reads POWERLEVEL9K_BATTERY_STAGES with it",
+	},
+	{
+		ID: "param/the-escape-flag-option-letters-move-the-octal", Category: "parameter expansion",
+		Snippet: `v='a\101b'; w='a\0101b'; printf "[%s][%s][%s][%s]" "${(g::)v}" "${(g:o:)v}" "${(g::)w}" "${(g:o:)w}"; echo`,
+		Why:     "the two rows that decide whether the `o` option letter was understood, and the reason the flag is not `process the escapes`. Without it only `\\0NNN` is octal and the zero introduces the escape rather than counting as a digit; with it the backslash takes up to three digits and needs no zero — so `\\101` is text then `A`, and `\\0101` is `A` then a backspace followed by a `1`. An implementation that read octal one way for both answers half of this row plausibly and at status 0",
+	},
+	{
 		ID: "param/the-tilde-flag-is-one-dialects", Category: "parameter expansion",
 		Snippet: `touch inn1 inn2; g='inn*'; printf "[%s]" ${~g}; echo`,
 		Why:     "a `~` between the `${` and the parameter makes the substituted value eligible for filename generation: zsh matches the pattern where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading with the `~` named — the same three-way split every unreadable expansion follows. ~/.zi/bin/zi.zsh uses it eighteen times in nineteen lines and a refusal leaves eighteen variables empty",

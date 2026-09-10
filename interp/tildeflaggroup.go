@@ -250,5 +250,17 @@ func tildeMarkRefusal(e *syntax.ParamExpr, markJoin, ifsSplit bool) (string, boo
 	if strings.ContainsRune(e.Flags, '%') {
 		return "beside the (%) flag", true
 	}
+	if escapeFlagApplies(e) {
+		// Rule 13's other half, refused for rule 13's reason: the escape
+		// reading rewrites the joined text and a separator held out of it
+		// would be read along with everything else.
+		return "beside the (g) flag", true
+	}
+	if reevalFlagApplies(e) {
+		// And the re-reading is the furthest of the lot from a
+		// character-at-a-time rewrite: it reads the joined text as shell
+		// source, where a separator is not a separator at all.
+		return "beside the (e) flag", true
+	}
 	return "", false
 }

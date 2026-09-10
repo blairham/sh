@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwWA~Zz-"
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwWA~Zze-"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -312,6 +312,12 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 			}
 		}
 	}
+	// Rule 13, in the manual's own order: "first any replacements from the
+	// `(g)` flag are performed, then any prompt-style formatting". See
+	// escapeflag.go for where the reading itself lives and why.
+	if escapeFlagApplies(e) {
+		words = r.escapeFlagged(e, words)
+	}
 	if strings.ContainsRune(e.Flags, '%') {
 		for i, w := range words {
 			v, pok := r.promptEscapes(w, e)
@@ -391,6 +397,23 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// both orders reverse if the sort runs first.
 	if orderApplies(e) {
 		words = orderWords(e, words)
+	}
+
+	// Rule 21: the re-reading, which is last of everything above — later than
+	// the ordering, which this file already puts later than the rule numbers
+	// say. See reevalflag.go.
+	if reevalFlagApplies(e) {
+		fields, joined, rok := r.reevalFlagged(e, words, quoted)
+		if !rok {
+			return nil, false, false, false
+		}
+		// Rule 23's rejoin, when it ran, leaves as many words as it was
+		// given, so what the result *is* has not changed; without it every
+		// field the re-reading made is a word of its own.
+		words = fields
+		if !joined {
+			isList = true
+		}
 	}
 	return words, isList, markJoin && escapeSep != nil, true
 }
@@ -476,14 +499,21 @@ func (r *Runner) SetFlagArgumentEscapes(decode func(string) string) {
 
 // paramFlagCarried reports whether this runner carries a flag letter.
 //
-// All but one are answered by the constant above. `p` is answered by whether
-// the dialect supplied the escape set its arguments are read with, because
-// that set is a measurement about one shell and this package holds nobody's —
-// so a runner nobody told refuses the letter by name instead of reading it as
-// a no-op that joins on a backslash and an `n` at status 0.
+// All but two are answered by the constant above. `p` and `g` are answered by
+// whether the dialect supplied the escape set they read with, because that set
+// is a measurement about one shell and this package holds nobody's — so a
+// runner nobody told refuses the letter by name instead of reading it as a
+// no-op that joins on a backslash and an `n` at status 0.
 func (r *Runner) paramFlagCarried(c rune) bool {
-	if c == 'p' {
+	switch c {
+	case 'p':
 		return r.flagArgEscapes != nil
+	case 'g':
+		// The same rule and a sharper case of it: `(g)` reads escapes in the
+		// *value*, which is again one shell's measurement, and a `(g)` read
+		// as a no-op is right for every value with no backslash in it. See
+		// SetExpansionEscapes.
+		return r.expansionEscapes != nil
 	}
 	return strings.ContainsRune(implementedParamFlags, c)
 }

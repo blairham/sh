@@ -463,7 +463,7 @@ func printFormatted(r *interp.Runner, ctx context.Context, opts printOptions, re
 // which of the two it is rather than a second copy of it: `\101` is `A` in
 // both, `\q` is `q` in both, and a trailing backslash is a backslash in both.
 func expandFlagArgumentEscapes(s string) string {
-	out, _ := expandEscapes(s, false)
+	out, _ := expandEscapes(s, escapeReading{bareOctal: true, printEscapes: true})
 	return out
 }
 
@@ -471,16 +471,96 @@ func expandFlagArgumentEscapes(s string) string {
 // second result reports a `\c`, which ends the whole command's output where it
 // stands.
 func expandPrintEscapes(s string) (string, bool) {
-	return expandEscapes(s, true)
+	return expandEscapes(s, escapeReading{
+		cTruncates: true, bareOctal: true, printEscapes: true,
+	})
 }
 
-// expandEscapes is that set with the one place it is read two ways made a
-// parameter: cTruncates says whether `\c` ends the output, which it does for
-// an operand of `print` and does not for the argument of an expansion flag.
-// See expandFlagArgumentEscapes for the measurement.
-func expandEscapes(s string, cTruncates bool) (string, bool) {
+// expandExpansionFlagEscapes is the third reading of the same set: the `(g)`
+// expansion flag, whose delimited argument names which parts of it are live.
+//
+// The vendor manual gives the option letters as three additions to a base —
+// `o` for octal escapes that need no leading zero, `e` for the `\M-t` family,
+// `c` for `^X` — and says that in none of the readings is `\c` interpreted.
+// Measured 2026-09-09 on zsh 5.9.2, which is where the base itself comes
+// from, since "like the echo builtin" is a claim about *that* shell's echo:
+//
+//	value      ${(g::)v}  ${(g:o:)v}  ${(g:e:)v}  ${(g:c:)v}
+//	X\tY       tab        tab         tab         tab
+//	X\eY       escape     escape      escape      escape
+//	X\EY       X\EY       X\EY        escape      X\EY
+//	X\x41Y     XAY        XAY         XAY         XAY
+//	X\101Y     X\101Y     XAY         X\101Y      X\101Y
+//	X\0101Y    XAY        backspace1  XAY         XAY
+//	X\u0041Y   XAY        XAY         XAY         XAY
+//	X\cY       X\cY       X\cY        XcY         X\cY
+//	X\M-AY     X\M-AY     X\M-AY      0xc1        X\M-AY
+//	X\C-AY     X\C-AY     X\C-AY      0x01        X\C-AY
+//	X\qY       X\qY       X\qY        XqY         X\qY
+//	X^XY       X^XY       X^XY        X^XY        0x18
+//
+// Two rows are the discriminating ones and both are `o`. `\0101` is `A` in
+// the base and a backspace followed by `1` under `o`, because `o` does not
+// mean "octal as well" — it means the leading zero is not part of the escape,
+// so the same three digits are read from a different place. And `\101` is
+// text in every reading but that one. A `g` implemented as "process the
+// escapes" answers both rows the way the base does and looks right on the
+// other ten.
+//
+// `\c` is the row the manual is explicit about and the row a reader would
+// otherwise get from `print`: it never truncates here, so under `e` it is an
+// escape this shell does not know and loses its backslash, exactly as `\q`
+// does, and in the other three readings it is two characters of text.
+func expandExpansionFlagEscapes(s, opts string) string {
+	out, _ := expandEscapes(s, escapeReading{
+		bareOctal:    strings.ContainsRune(opts, 'o'),
+		printEscapes: strings.ContainsRune(opts, 'e'),
+		caret:        strings.ContainsRune(opts, 'c'),
+	})
+	return out
+}
+
+// escapeReading is which of the set's parts one reader has live.
+//
+// Four booleans rather than four decoders, because the set is one
+// measurement: `\101` is `A` wherever octal is read bare, `\M-\C-a` is 0x81
+// wherever the family is read at all, and a second copy of either is a second
+// place for them to stop agreeing. The three callers above are the readings
+// this shell actually has.
+type escapeReading struct {
+	// cTruncates says whether `\c` ends the output, which it does for an
+	// operand of `print` and does not for the argument of an expansion flag
+	// or for any reading of the `(g)` flag.
+	cTruncates bool
+	// bareOctal says whether `\NNN` is octal without a leading zero. When it
+	// is not, only `\0NNN` is octal and the zero is not one of the digits.
+	bareOctal bool
+	// printEscapes says whether the `\M-x` and `\C-x` family is read, `\E` is
+	// the escape character, and an escape this shell does not know loses its
+	// backslash rather than keeping it. The four move together: they are what
+	// `print` reads and this shell's `echo` does not.
+	printEscapes bool
+	// caret says whether `^X` is a control character, which only the `(g)`
+	// flag's `c` option turns on.
+	caret bool
+}
+
+// expandEscapes is the escape set with the places it is read more than one way
+// made parameters. See escapeReading, and expandExpansionFlagEscapes for the
+// measurement behind each.
+func expandEscapes(s string, how escapeReading) (string, bool) {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
+		if s[i] == '^' && how.caret && i+1 < len(s) {
+			// `^X` is the control character, and it is read where the
+			// character is rather than behind a backslash. Measured:
+			// `X^^^AY` under `c` is 0x1e then 0x01, so a `^` is as good a
+			// target as a letter, and a trailing `^` with nothing after it
+			// is a `^`.
+			b.WriteByte(controlByte(s[i+1]))
+			i++
+			continue
+		}
 		if s[i] != '\\' {
 			b.WriteByte(s[i])
 			continue
@@ -497,13 +577,23 @@ func expandEscapes(s string, cTruncates bool) (string, bool) {
 		case 'b':
 			b.WriteByte('\b')
 		case 'c':
-			if cTruncates {
+			if how.cTruncates {
 				return b.String(), true
 			}
-			// Not an escape here, so the backslash goes and the letter
-			// stays — the same rule the default branch below follows.
-			b.WriteByte('c')
-		case 'e', 'E':
+			// Not an escape here, so it falls to whichever rule the reading
+			// has for one it does not know.
+			writeUnknownEscape(&b, c, how)
+		case 'e':
+			b.WriteByte(0x1b)
+		case 'E':
+			// The capitalized spelling is `print`'s and not `echo`'s, so it
+			// is text in a reading without the family. Measured: `X\EY`
+			// under `${(g::)v}` is `X\EY` and under `${(g:e:)v}` is the
+			// escape character.
+			if !how.printEscapes {
+				writeUnknownEscape(&b, c, how)
+				break
+			}
 			b.WriteByte(0x1b)
 		case 'f':
 			b.WriteByte('\f')
@@ -518,13 +608,19 @@ func expandEscapes(s string, cTruncates bool) (string, bool) {
 		case '\\':
 			b.WriteByte('\\')
 		case '0', '1', '2', '3', '4', '5', '6', '7':
-			n, j := 0, i
-			for j < len(s) && j <= i+2 && s[j] >= '0' && s[j] <= '7' {
-				n = n*8 + int(s[j]-'0')
-				j++
+			if !how.bareOctal {
+				if c != '0' {
+					// Without the zero it is not an escape at all.
+					writeUnknownEscape(&b, c, how)
+					break
+				}
+				// The zero introduces the escape and is not one of the three
+				// digits, which is what makes `\0101` an `A` here and a
+				// backspace followed by `1` under `o`.
+				i = writeOctal(&b, s, i+1)
+				break
 			}
-			b.WriteByte(byte(n))
-			i = j - 1
+			i = writeOctal(&b, s, i)
 		case 'x':
 			n, j := 0, i+1
 			for j < len(s) && j <= i+2 && isPrintHexDigit(s[j]) {
@@ -547,6 +643,10 @@ func expandEscapes(s string, cTruncates bool) (string, bool) {
 			b.WriteRune(rune(n))
 			i = j - 1
 		case 'M', 'C':
+			if !how.printEscapes {
+				writeUnknownEscape(&b, c, how)
+				break
+			}
 			// `\M-x` sets the high bit and `\C-x` takes the control
 			// character; the dash is optional, so `\MY` is `\M-Y`.
 			j := i + 1
@@ -558,7 +658,7 @@ func expandEscapes(s string, cTruncates bool) (string, bool) {
 				b.WriteByte(c)
 				break
 			}
-			base, width := metaControlTarget(s[j:])
+			base, width := metaControlTarget(s[j:], how, c == 'M')
 			if c == 'M' {
 				b.WriteByte(base | 0x80)
 			} else {
@@ -566,30 +666,63 @@ func expandEscapes(s string, cTruncates bool) (string, bool) {
 			}
 			i = j + width - 1
 		default:
-			// An escape this shell does not know loses its backslash, which
-			// is where `print` and this shell's `echo` part company.
-			b.WriteByte(c)
+			writeUnknownEscape(&b, c, how)
 		}
 	}
 	return b.String(), false
 }
 
+// writeUnknownEscape is what becomes of a backslash this reading cannot use:
+// the letter alone where the `\M-x` family is read, and both characters where
+// it is not. Measured on `X\qY`, which is `XqY` under `${(g:e:)v}` and `X\qY`
+// under the other three readings — the same split `print` and this shell's
+// `echo` have, which is why the two travel with the family rather than being
+// a fifth switch.
+func writeUnknownEscape(b *strings.Builder, c byte, how escapeReading) {
+	if !how.printEscapes {
+		b.WriteByte('\\')
+	}
+	b.WriteByte(c)
+}
+
+// writeOctal reads up to three octal digits from at and writes the byte they
+// come to, returning the index of the last one consumed. A value above 255 is
+// truncated to a byte, measured: `\400` under `o` is a NUL and `\777` is 0xff.
+func writeOctal(b *strings.Builder, s string, at int) int {
+	n, j := 0, at
+	for j < len(s) && j <= at+2 && s[j] >= '0' && s[j] <= '7' {
+		n = n*8 + int(s[j]-'0')
+		j++
+	}
+	b.WriteByte(byte(n))
+	return j - 1
+}
+
 // metaControlTarget reads the byte `\M-` or `\C-` applies to, which may itself
 // be one of the two — `\M-\C-a` is 0x81, the pair applied in turn — and
 // reports how much of the text it took.
-func metaControlTarget(s string) (byte, int) {
+//
+// A `^X` is a target too, but only where the reading has the caret and only
+// behind `\M-`: measured under `${(g:ec:)v}`, `X\M-^AY` is 0x81 while
+// `X\C-^AY` is 0x1e followed by an `A`, so `\C-` takes the `^` itself as its
+// character. Reading the caret on both sides would answer the second row 0x01
+// and look right on the first.
+func metaControlTarget(s string, how escapeReading, meta bool) (byte, int) {
 	if len(s) >= 2 && s[0] == '\\' && (s[1] == 'M' || s[1] == 'C') {
 		j := 2
 		if j < len(s) && s[j] == '-' {
 			j++
 		}
 		if j < len(s) {
-			base, width := metaControlTarget(s[j:])
+			base, width := metaControlTarget(s[j:], how, s[1] == 'M')
 			if s[1] == 'M' {
 				return base | 0x80, j + width
 			}
 			return controlByte(base), j + width
 		}
+	}
+	if meta && how.caret && len(s) >= 2 && s[0] == '^' {
+		return controlByte(s[1]), 2
 	}
 	return s[0], 1
 }

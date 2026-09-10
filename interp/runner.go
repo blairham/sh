@@ -1094,6 +1094,27 @@ type Runner struct {
 	// characters and answer at status 0. Installed through
 	// SetFlagArgumentEscapes; see interp/expandflags.go.
 	flagArgEscapes func(string) string
+	// expansionEscapes reads the escapes in a *value* the way the `(g)`
+	// expansion flag asks for, with the flag's option letters saying which
+	// parts of the set are live — `${(g::)v}` reading them one way and
+	// `${(g:oe:)v}` another.
+	//
+	// A function the dialect supplies for the reason flagArgEscapes is one,
+	// and the same one: the set is a measurement about a shell and this
+	// package holds nobody's. Nil in a runner nobody told, where `(g)` is
+	// refused by name rather than read as a no-op — the flag's commonest
+	// argument is the empty one, and a value with no escape in it comes back
+	// unchanged either way, so a no-op would pass the first thing anyone
+	// tried and answer the rest at status 0. Installed through
+	// SetExpansionEscapes; see interp/escapeflag.go.
+	expansionEscapes func(text, opts string) string
+	// reevalDepth bounds the `(e)` expansion flag's re-reading, because a
+	// value that names itself would otherwise recur forever: `v='${(e)v}'`
+	// re-reads text that asks for the same expansion again. It is the same
+	// bound arithValueOf keeps for `x=x`, and for the same reason — a stack
+	// overflow is not a diagnostic anyone can act on, and in a library it
+	// takes the embedder down with it. See interp/reevalflag.go.
+	reevalDepth int
 	// optionNamespace is the wider set of names `[[ -o name ]]` reads, for a
 	// dialect that has one. Nil in a shell whose option names are its
 	// `set -o` names and nothing more, which is where `[[ -o ]]` falls back

@@ -235,7 +235,15 @@ func runScript(t *testing.T, src string, enable func(*syntax.Dialect), setup fun
 	// core and the core refuses anything the shells disagree about — which
 	// is exactly what these tests are full of.
 	bash := testSemantics()
-	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &bash, Env: testPATH()})
+	// The runner is told the same grammar the source was parsed with, because
+	// several constructs re-parse text *at run time* — `eval`, a
+	// here-document body, the shell-word split, the `(e)` flag — and a runner
+	// left on the core grammar reads that text with a grammar the script was
+	// never written in. It reported `${(e)l1}` inside a re-read value as a
+	// bad substitution while the identical text in the source expanded.
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf, Semantics: &bash, Env: testPATH(), Dialect: &d,
+	})
 	if setup != nil {
 		setup(r)
 	}

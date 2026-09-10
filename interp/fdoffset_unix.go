@@ -25,3 +25,20 @@ func seekCurrent(fd int) (int64, bool) {
 	}
 	return off, true
 }
+
+// seekTo moves an open descriptor's file position, and reports whether the
+// kernel took the request.
+//
+// The writing half of seekCurrent and reached the same way and for the same
+// reason: through the number, never through an *os.File wrapper built around
+// it, because such a wrapper's finalizer would close a descriptor the shell's
+// table still owns.
+//
+// A position before the start of the file is refused by the kernel rather than
+// clamped here, and a descriptor with no position at all — a pipe, a terminal
+// — is refused as well. Both come back as the same false, which is what the
+// caller's question had as its answer either way.
+func seekTo(fd int, offset int64, whence int) bool {
+	_, err := syscall.Seek(fd, offset, whence)
+	return err == nil
+}

@@ -15,4 +15,15 @@ package zsh
 //
 // The two this project ships for are darwin and linux; the file exists so that
 // the module still builds everywhere the rest of the tree does.
+import "syscall"
+
 var errnoNames []string
+
+// errnoTextOverrides and errnoUnknownText on a platform whose error numbering
+// has not been measured. The roster above is empty, so every number reaches
+// this and gets the runtime's own wording — which is honest and is not the C
+// library's, and is the best a platform this project does not ship for can be
+// given without inventing sentences for it.
+var errnoTextOverrides = map[int]string{}
+
+func errnoUnknownText(n int) string { return syscall.Errno(n).Error() }

@@ -100,9 +100,13 @@ func registerSystemModule(r *interp.Runner) {
 	r.MarkReadonly("errnos")
 	r.MarkHidden("errnos")
 	r.RegisterMathFunction("systell", 1, 1, mathSystell)
-	// And the three of the module's six builtins that move bytes. See
-	// systemio.go, where the other three are argued rather than forgotten.
+	// And the module's six builtins: the three that move bytes, the file
+	// lock, and the two that close it. See systemio.go, systemlock.go and
+	// systemseek.go.
 	registerSystemIO(r)
+	r.Register("zsystem", zsystemBuiltin)
+	r.Register("sysseek", sysseekBuiltin)
+	r.Register("syserror", syserrorBuiltin)
 }
 
 // sysparamsView is `$sysparams`, produced at every read.

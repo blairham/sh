@@ -619,6 +619,27 @@ func (r *Runner) DescriptorOffset(fd int) (int64, bool) {
 	return seekCurrent(sys)
 }
 
+// SeekDescriptor moves where one of this shell's descriptors is reading or
+// writing, and reports whether the move happened.
+//
+// The writing half of [Runner.DescriptorOffset], and it is here rather than in
+// a dialect for the same reason that one is: a dialect reaching for a system
+// call would be a dialect that had to be written twice for the platforms
+// without it. whence is one of the [io] package's three seek origins.
+//
+// False is a number nothing is open at, a number holding something that is not
+// a descriptor, a stream with no position — a pipe, a terminal — and a
+// position the kernel refuses, such as one before the start of the file. A
+// caller says what its own vocabulary calls those; here they are one answer,
+// because in every one of them the seek did not happen.
+func (r *Runner) SeekDescriptor(fd int, offset int64, whence int) bool {
+	sys, ok := r.SystemDescriptor(fd)
+	if !ok {
+		return false
+	}
+	return seekTo(sys, offset, whence)
+}
+
 // OpenDescriptor puts a file this shell has *already opened* into its
 // descriptor table and reports the number a script may reach it by, and
 // SetDescriptor does the same at a number the script chose.
@@ -649,6 +670,42 @@ func (r *Runner) OpenDescriptor(f *os.File) int {
 // SetDescriptor puts a file at one of this shell's descriptor numbers. See
 // [Runner.OpenDescriptor], which chooses the number instead.
 func (r *Runner) SetDescriptor(fd int, f *os.File) { r.setFd(fd, f) }
+
+// CloseDescriptor is the way back out of [Runner.OpenDescriptor]: the number
+// stops being one of this shell's, and what was open at it is closed. The
+// result says whether the number held anything at all.
+//
+// A registered builtin that hands a script a descriptor sometimes has to take
+// it back — a lock the script says it is done with is the case this was
+// written for — and `exec {n}>&-` is not available to it, because the number
+// is one the builtin chose rather than one the script wrote down.
+//
+// It closes where the redirection route does not, and the difference is which
+// of the two is the last word about the file. `>&-` drops the entry and leaves
+// the open file to the runtime, because a script may be closing a number that
+// was duplicated from another one still in use. A builtin calling this is
+// saying the opposite: it opened this file, nothing else has it, and the thing
+// it wants is for the *system* to be done with it — a lock is not given up
+// until the descriptor holding it is gone.
+//
+// The three named descriptors are not the shell's to close and are not
+// numbers [Runner.OpenDescriptor] ever returns, so they are refused here
+// rather than routed to a close nothing could undo.
+func (r *Runner) CloseDescriptor(fd int) bool {
+	if fd < 3 {
+		return false
+	}
+	held, open := r.fds[fd]
+	if !open {
+		return false
+	}
+	delete(r.fds, fd)
+	delete(r.cloexecFds, fd)
+	if c, ok := held.(io.Closer); ok {
+		_ = c.Close()
+	}
+	return true
+}
 
 // KeepDescriptorFromChildren marks a descriptor already in the table as one
 // that must **not** reach what this shell runs, which is what close-on-exec

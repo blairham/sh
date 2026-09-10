@@ -10,3 +10,6 @@ package interp
 // same answer a number nothing is open at gets, and the honest one rather
 // than a position invented for it.
 func seekCurrent(int) (int64, bool) { return 0, false }
+
+// seekTo has no answer here either. See seekCurrent.
+func seekTo(int, int64, int) bool { return false }

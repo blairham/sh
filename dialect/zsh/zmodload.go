@@ -187,10 +187,17 @@ var zmodloadFeatures = map[string][]string{
 		"f:scalb", "f:signgam", "f:sin", "f:sinh", "f:sqrt", "f:tan",
 		"f:tanh", "f:y0", "f:y1", "f:yn",
 	},
+	// All nine implemented since #1749, which makes it the third module here
+	// that loads because everything it names is present rather than because
+	// a rule forgave a missing builtin. See systemio.go, systemlock.go and
+	// systemseek.go.
 	"zsh/system": {
 		"b:syserror", "b:sysopen", "b:sysread", "b:sysseek", "b:syswrite",
 		"b:zsystem", "f:systell", "p:errnos", "p:sysparams",
 	},
+	// One builtin and the whole of the module: a wait on descriptors, which
+	// is what a prompt theme's worker sleeps on. See zselect.go.
+	"zsh/zselect": {"b:zselect"},
 	// One builtin under two names, and the second name is the reason this
 	// module is written `-F` by everything that uses it. See statmodule.go:
 	// `zstat` is implemented and `stat` is deliberately not, because a shell

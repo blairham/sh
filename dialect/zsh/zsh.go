@@ -2039,10 +2039,14 @@ func Apply(r *interp.Runner) {
 	// read off the tables `zle` and `bindkey` already keep. See
 	// zleparameter.go.
 	registerZleParameterModule(r)
-	// And the three of `zsh/system` that are parameters and a math function
-	// rather than builtins: `$sysparams`, `$errnos` and `systell`. See
-	// system.go.
+	// And `zsh/system`, all nine features of it: two parameters, a math
+	// function and the six builtins — three that move bytes, a file lock and
+	// the two small ones that close the module. See system.go, systemio.go,
+	// systemlock.go and systemseek.go.
 	registerSystemModule(r)
+	// And `zsh/zselect`'s one: the wait on descriptors that the same prompt
+	// theme's worker uses as its only sleep. See zselect.go.
+	registerZselectModule(r)
 	// And `zsh/mathfunc`'s forty-seven, which are the C math library under
 	// names arithmetic can call. See mathmodule.go.
 	registerMathFuncModule(r)

@@ -5,7 +5,10 @@
 
 package zsh
 
-import "syscall"
+import (
+	"fmt"
+	"syscall"
+)
 
 // errnoNames is this platform's error names, indexed by errno number, with a
 // hole at 0 that `$errnos` drops on its way out.
@@ -83,3 +86,23 @@ var errnoNames = buildErrnoNames(map[syscall.Errno]string{
 	syscall.EKEYREJECTED: "EKEYREJECTED", syscall.EOWNERDEAD: "EOWNERDEAD",
 	syscall.ENOTRECOVERABLE: "ENOTRECOVERABLE", syscall.ERFKILL: "ERFKILL",
 })
+
+// errnoTextOverrides is empty here: every number this platform's roster names
+// has a sentence in Go's own table. See errnoText, and the darwin file, which
+// has one entry and says why.
+var errnoTextOverrides = map[int]string{}
+
+// errnoUnknownText is what this platform says about a number that names no
+// error — zero, the two holes at 41 and 58, and anything past the end.
+//
+// Measured against glibc's `strerror` in a container rather than against a
+// zsh, for the reason the roster above gives: the panel this project measures
+// runs on macOS. Zero is `Success` where darwin says `Undefined error: 0`, and
+// an unnamed number is `Unknown error 9999` **without a colon**, where darwin
+// writes one.
+func errnoUnknownText(n int) string {
+	if n == 0 {
+		return "Success"
+	}
+	return fmt.Sprintf("Unknown error %d", n)
+}

@@ -243,6 +243,7 @@ func Semantics() interp.Semantics {
 	// `shift -1` is a count out of range. The marker is honored all the same.
 	s.ShiftOptionWords = interp.ShiftOptionWordsNone
 	s.ShiftDoubleDashEndsOptions = interp.Yes
+	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.Yes
 	// Job specs by command text, with a second match refused as ambiguous;

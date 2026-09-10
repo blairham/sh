@@ -8586,6 +8586,47 @@ not an option, which is where ksh93's two answers to `-1` come from.
 Only the *first* `--` is the marker — `shift -- --` complains about the
 second in all three that take one.
 
+**`ShiftNamesAreArrays`** — bash no · dash no · ksh93 no · zsh yes
+
+Reads `shift`'s operands as the names of arrays to shift, instead of the
+positional parameters. zsh's synopsis is `shift [ n ] [ name ... ]`; the
+others have one operand and it is the count.
+
+    a=(1 2 3); shift a          zsh   a=(2 3), status 0
+                                bash  `a: numeric argument required`
+                                ksh93 `a: bad number`
+                                dash  no array syntax to write it with
+    a=(1 2 3 4); shift 2 a      zsh   a=(3 4)
+                                bash  `shift: too many arguments`
+                                ksh93 `2: bad number`
+
+The count stays optional in front of the names, so the first word is
+ambiguous — and zsh settles it by **type**, not by whether the word looks
+like a number:
+
+    q=5;   a=(1 2 3 4 5 6); shift q a   a=(6)           q was a count
+    q=(5); a=(1 2 3 4 5 6); shift q a   q=() a=(2 3 4 5 6)  q was a name
+
+An array is a name; anything else — a scalar, an association, a name that
+was never set — is a count, evaluated as arithmetic the way any other
+count word is. A scalar `s=1` shifts the positional parameters by one and
+a scalar `s=9` overruns them, which is what tells the two readings apart:
+
+    set -- x y z; s=1; shift s   [y z]
+    set -- x y z; s=9; shift s   `shift count must be <= $#`, status 1
+
+What protects the positional parameters is giving **any** operand, not the
+operand turning out to name an array. `set -- x y z; shift 1 nosuch`
+leaves `$@` alone at status 0, and so does `shift nosuch` — a name that
+is not an array is passed over in silence rather than complained about.
+
+One count applies to every name, and a count past the end of one of them
+is the same `ShiftTooMany` complaint the positional reading makes —
+naming `$#` even though the operand is an array — without stopping the
+names behind it. `a=(1 2 3); b=(x y); shift 3 a b` empties `a`, leaves
+`b`, prints one line and exits 1. `ShiftPastEndFatal` is no in zsh, which
+is what lets the loop carry on past a name that overran.
+
 **`ShiftNegativeIsOutOfRange`** — bash yes · dash no · ksh93 yes · zsh yes
 
 Reads a count below zero as a number that is out of range rather than as

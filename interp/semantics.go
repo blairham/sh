@@ -2735,6 +2735,36 @@ type Semantics struct {
 	//
 	// Asked only where the operand actually is `--`.
 	ShiftDoubleDashEndsOptions Answer
+	// ShiftNamesAreArrays reads `shift`'s operands as the names of arrays to
+	// shift, instead of the positional parameters. Only zsh, whose synopsis
+	// is `shift [ n ] [ name ... ]`; bash calls a name a `numeric argument
+	// required` and a second operand `too many arguments`, and ksh93
+	// evaluates the word arithmetically, reaching either the array's first
+	// element or a `bad number`.
+	//
+	// The count stays optional in front of them, so the first word is
+	// ambiguous — and zsh settles it by *type*, measured:
+	//
+	//	q=5;   a=(1 2 3 4 5 6); shift q a   # a=(6)          — q is a count
+	//	q=(5); a=(1 2 3 4 5 6); shift q a   # q=() a=(2 … 6) — q is a name
+	//
+	// So a word that names an array is a name and every other word is an
+	// arithmetic count, which is why `shift a a` shifts `a` twice rather
+	// than once by its first element: arithmetic on an array name is a `bad
+	// math expression` in zsh, so an array can only ever have been a name.
+	//
+	// A name that is not an array — unset, a scalar, an association — is
+	// left alone and not complained about, at status 0. What protects the
+	// positional parameters is giving *any* operand, not the operand turning
+	// out to name an array: `set -- x y z; shift 1 nosuch` leaves `$@` where
+	// it is. A first word that is a scalar is the count, though, and shifts
+	// them like a literal one — `s=9; shift s` overruns three positional
+	// parameters and says so. A count past the end
+	// of one array is reported (Diagnostics.ShiftTooMany) and the remaining
+	// names are still shifted, so `shift 2 a b` with a one-element `a` is
+	// status 1 with `b` shifted. That carrying-on is why this may only be
+	// answered where ShiftPastEndFatal is No, which is zsh.
+	ShiftNamesAreArrays Answer
 	// ShiftNegativeIsOutOfRange reads a negative count as a number that is
 	// out of range rather than as a word that is not a number. bash, ksh93
 	// and zsh do, at status 1 and in three different wordings

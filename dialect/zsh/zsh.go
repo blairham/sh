@@ -505,6 +505,7 @@ func Semantics() interp.Semantics {
 	// a count it refuses for being below zero.
 	s.ShiftOptionWords = interp.ShiftOptionWordsNonNumeric
 	s.ShiftDoubleDashEndsOptions = interp.Yes
+	s.ShiftNamesAreArrays = interp.Yes
 	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.No
 	// Job specs by command text, a second match taken rather than refused;

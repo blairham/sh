@@ -290,6 +290,40 @@ print -r -- "rest=[$b]"`)
 	})
 }
 
+// **A short read is a success and the call returns.** The half a regular file
+// cannot prove: a builtin written as "fill the buffer" reads a file to its end
+// and looks identical, and only a stream that *stays open* separates the two.
+//
+// The fifo is held open by the test in both directions, so nothing is coming
+// after the two bytes and nothing is closing. `sysread -s 100` must come back
+// with those two; a shell waiting for the other ninety-eight waits for ever,
+// which is what the deadline turns into a named failure in seconds rather than
+// a package timeout.
+func TestSysreadReturnsWhatIsThereRatherThanFillingTheBuffer(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "trickle")
+	if err := syscall.Mkfifo(path, 0o600); err != nil {
+		t.Fatalf("mkfifo: %v", err)
+	}
+	hold, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatalf("hold the fifo open: %v", err)
+	}
+	t.Cleanup(func() { _ = hold.Close() })
+	if _, err := hold.Write([]byte("hi")); err != nil {
+		t.Fatalf("write to the fifo: %v", err)
+	}
+	systemDeadline(t, "sysread on a stream that stays open", func() {
+		out, st := runZsh(t, dir, `sysopen -r -u fd trickle
+sysread -s 100 -c n -i $fd a
+print -r -- "st=$? n=$n a=[$a]"`)
+		want := "st=0 n=2 a=[hi]\n"
+		if out != want || st != 0 {
+			t.Errorf("short read = %q (status %d), want %q", out, st, want)
+		}
+	})
+}
+
 // **`-o` diverts rather than duplicates.** The one thing about this builtin
 // that a reading of its manual gets backwards, and a shell that assigned as
 // well leaves a caller's parameter holding data it has already passed on.
@@ -327,6 +361,114 @@ print -r -- "refused=$?"`)
 	if got := readBackForTest(t, filepath.Join(dir, "f")); got != "a\nb\n" {
 		t.Errorf("the written file holds %q, want %q", got, "a\nb\n")
 	}
+}
+
+// **Every byte goes, however many writes it takes.** A quarter of a megabyte
+// into a pipe whose buffer is a fraction of that, so the write *is* partial and
+// the loop is what finishes it — which a write to a file can never show, since
+// one call always takes the lot there.
+//
+// The reader is this test, draining on a goroutine, and it is what keeps the
+// case from being a deadlock: a shell that stopped after the first write leaves
+// the reader short and the count wrong, and a shell that never returns is
+// caught by the deadline rather than by the package timeout.
+func TestSyswriteKeepsWritingUntilEveryByteHasGone(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wide")
+	if err := syscall.Mkfifo(path, 0o600); err != nil {
+		t.Fatalf("mkfifo: %v", err)
+	}
+	// O_RDWR so this open cannot wait for the writer, and closed at the end
+	// whatever happens.
+	end, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatalf("open the fifo: %v", err)
+	}
+	t.Cleanup(func() { _ = end.Close() })
+	const size = 1 << 18
+	drained := make(chan int, 1)
+	go func() {
+		got, buf := 0, make([]byte, 4096)
+		for got < size {
+			n, err := end.Read(buf)
+			got += n
+			if err != nil {
+				break
+			}
+		}
+		drained <- got
+	}()
+	systemDeadline(t, "syswrite of a quarter of a megabyte", func() {
+		out, st := runZsh(t, dir, `s=x
+repeat 18 s=$s$s
+sysopen -w -u fd wide
+syswrite -c n -o $fd $s
+print -r -- "st=$? n=$n len=$#s"`)
+		want := "st=0 n=262144 len=262144\n"
+		if out != want || st != 0 {
+			t.Errorf("wide write = %q (status %d), want %q", out, st, want)
+		}
+	})
+	select {
+	case got := <-drained:
+		if got != size {
+			t.Errorf("the reader took %d bytes, want %d", got, size)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("the reader never saw the whole write")
+	}
+}
+
+// **What the three refuse, and in the words they refuse it in.** A letter that
+// is not one, a letter whose value is missing, and an `-o` name outside the
+// table are each a different sentence — and the last is not prefix-matched:
+// `cloex` is `unsupported option` where `CLOEXEC` and `O_CLOEXEC` are the same
+// flag, so the table is exact names compared case-insensitively rather than the
+// shortening `zstat`'s `+element` does.
+//
+// A refusal that quietly became an acceptance is the failure this module was
+// filed for wearing a smaller hat: `-o nofollw` typed once would open without
+// the flag and say nothing.
+func TestTheSystemBuiltinsRefuseWhatIsNotAnOptionAndTakeTheSpellingsThatAre(t *testing.T) {
+	dir := t.TempDir()
+	systemDeadline(t, "system option refusals", func() {
+		out, st, errs := runZshSplit(t, dir, `print -r -- abcdef > f
+sysopen -q -u v f
+print -r -- "letter=$?"
+sysopen -m
+print -r -- "novalue=$?"
+sysopen -r -o bogus -u v f
+print -r -- "unsupported=$?"
+sysopen -r -o cloex -u v f
+print -r -- "notaprefix=$?"
+sysopen -r -o O_CLOEXEC -u a f
+print -r -- "prefixed=$?"
+sysopen -r -o CLOEXEC -u b f
+print -r -- "shouted=$?"
+sysopen -r -o NoFollow,Creat -u c f
+print -r -- "mixed=$?"
+sysread -q
+print -r -- "readletter=$?"
+syswrite -q
+print -r -- "writeletter=$?"`)
+		want := "letter=1\nnovalue=1\nunsupported=1\nnotaprefix=1\n" +
+			"prefixed=0\nshouted=0\nmixed=0\nreadletter=1\nwriteletter=1\n"
+		if out != want || st != 0 {
+			t.Errorf("refusals = %q (status %d), want %q", out, st, want)
+		}
+		for _, line := range []string{
+			"zsh:sysopen:2: bad option: -q",
+			"zsh:sysopen:4: argument expected: -m",
+			"zsh:sysopen:6: unsupported option: bogus",
+			"zsh:sysopen:8: unsupported option: cloex",
+			"zsh:sysread:16: bad option: -q",
+			"zsh:syswrite:18: bad option: -q",
+		} {
+			if !strings.Contains(errs, line+"\n") {
+				t.Errorf("stderr = %q, want the whole line %q in it", errs, line)
+			}
+		}
+	})
 }
 
 // **The three names this module does not register refuse by their own names**,

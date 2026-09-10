@@ -7652,6 +7652,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/set-t-can-be-taken-back-on-the-same-line` | **2>** `<script>: 1: set: Illegal option -t` *(status 2)* | `C` | `C` | `C` | `C` | **2>** `<script>:set:1: can't change option: -t` *(status 1)* |
 | `opt/set-t-does-not-stop-a-file-it-sourced` | `S1` **2>** `<script>: 2: set: Illegal option -t` *(status 2)* | `S1~S2` | `S1~S2` | `S1~S2` | `S1~S2` | `S1~AFTER` **2>** `./inner.sh:set:2: can't change option: -t` |
 | `opt/set-t-on-the-command-string-route` | **2>** `<shell>: 1: set: Illegal option -t` *(status 2)* | `B` | `B` | `B` | *(no output, status 0)* | **2>** `<shell>:set:1: can't change option: -t` *(status 1)* |
+| `opt/set-plus-t-is-granted-where-set-t-is-refused` | **2>** `<shell>: 1: set: Illegal option -t` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `opt/set-t-at-the-invocation` | **2>** `<shell>: 0: Illegal option -t` *(status 2)* | `A` | `A` | `A` | `A` | `A` |
 | `opt/set-t-shows-in-dollar-dash` | **2>** `<shell>: 1: set: Illegal option -t` *(status 2)* | `has-t` | `has-t` | `has-t` | `has-t` | **2>** `<shell>:set:1: can't change option: -t` *(status 1)* |
 | `opt/a-set-o-listing-sources-back` | **2>** `<shell>: 1: set: Illegal option -o Current` *(status 2)* | `sourced=0` | `sourced=0` | `sourced=0` | **2>** `<shell>[2]: .[1]: set: Current: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `sourced=126` **2>** `./snap.sh:set:12: can't change option: monitor` |
@@ -7938,6 +7939,10 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   set -t
   echo B
+  ```
+- `opt/set-plus-t-is-granted-where-set-t-is-refused` — the letter a shell *has* and will not move still takes a request for the state it is already in, which is the rule its long names follow: zsh answers `set +t` with 0 and says nothing where `set -t` is `can't change option: -t` at 1, fatally — and answers them the other way round in a shell started with `-t`. dash refuses both signs alike, because it has not got the letter at all, which is what says the grant hangs on having the letter rather than on the state. The bash columns and ksh93 simply take it
+  ```sh
+  set +t; echo "st=$?"
   ```
 - `opt/set-t-at-the-invocation` — the option arriving before anything has been read, which is the shape a script cannot set up for itself: one line of the file runs and the rest is never read. The letter and the name are one question — `-o onecmd` in place of `-t` records the same answer in the shells that have the name
   ```sh

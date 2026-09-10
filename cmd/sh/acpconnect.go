@@ -411,7 +411,8 @@ func fixedAnswer(allow bool) func(context.Context, acp.RequestPermissionRequest)
 // answered says what was sent, so the record on standard error is the answer
 // the agent got rather than the answer that was intended. They differ exactly
 // when the agent offered nothing of the kind asked for, and a session where
-// every allow came back cancelled should say so where a person can see it.
+// every allow came back as a cancellation should say so where a person can
+// see it.
 func answered(out acp.PermissionOutcome, kind string) string {
 	if out.Outcome != acp.OutcomeSelected {
 		return out.Outcome + " (no " + kind + " option was offered)"

@@ -464,8 +464,9 @@ func PermissionOptions() []PermissionOption {
 //
 // The kind is the protocol's own vocabulary and is the same four values for
 // everyone, so a caller says what it means and this resolves it against what
-// was offered. An agent that offered no option of that kind gets `cancelled`:
-// there is no id to send, and inventing one is the bug this exists to stop.
+// was offered. An agent that offered no option of that kind gets
+// OutcomeCancelled: there is no id to send, and inventing one is the bug this
+// exists to stop.
 func Select(options []PermissionOption, kind string) PermissionOutcome {
 	for _, o := range options {
 		if o.Kind == kind {

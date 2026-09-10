@@ -275,7 +275,7 @@ func TestAFixedAnswerCancelsWhatTheAgentDidNotOffer(t *testing.T) {
 	if got.Outcome != acp.OutcomeCancelled || got.OptionID != "" {
 		t.Errorf("answered %q/%q, want a bare cancellation", got.Outcome, got.OptionID)
 	}
-	if said := answered(got, acp.KindAllowOnce); !strings.Contains(said, "cancelled") {
+	if said := answered(got, acp.KindAllowOnce); !strings.Contains(said, acp.OutcomeCancelled) {
 		t.Errorf("reported %q, which does not say the allow never reached the agent", said)
 	}
 }

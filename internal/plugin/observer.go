@@ -181,7 +181,7 @@ func (o *observer) Emit(_ context.Context, e interp.Event) {
 // feed is the goroutine that puts records on the wire.
 //
 // It exists so that Emit does not, and everything about it follows from that:
-// the marshalling, the write and any waiting for the plugin happen here, on a
+// the marshaling, the write and any waiting for the plugin happen here, on a
 // goroutine the interpreter is not running on.
 //
 // At shutdown it delivers what is already numbered and then goes — see

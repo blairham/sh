@@ -101,7 +101,12 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 	edges := !keepEmpty && splitFlagEdges(e, quoted)
 	out := make([]string, 0, len(words))
 	for i, w := range words {
-		if w == "" && !keepEmpty && !(edges && (i == 0 || i == len(words)-1)) {
+		// Named rather than negated inline: `!(edges && …)` reads as a
+		// double negative at the point it matters most, and the condition
+		// it stands for — "this empty field is one the flag keeps because
+		// it is at an end" — is the whole reason the branch exists.
+		atKeptEdge := edges && (i == 0 || i == len(words)-1)
+		if w == "" && !keepEmpty && !atKeptEdge {
 			continue
 		}
 		if quoted || !r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {

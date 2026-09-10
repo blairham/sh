@@ -228,7 +228,7 @@ func TestABareArrayNameAsksNothingWhereTheListPathDoesNotAnswer(t *testing.T) {
 
 // The four conditionals reach the array path since #984, so a bare name under
 // one of them asks the axis and *uses* the answer — which is the opposite of
-// the neighbouring test's subject and belongs beside it for that reason.
+// the neighboring test's subject and belongs beside it for that reason.
 //
 // Measured 2026-09-06: `a=(one two); printf "[%s]" ${a:=d}` is `[one][two]` in
 // zsh 5.9.2 and `[one]` in bash 5.3, bash 3.2 and ksh93, and `${a:?e}`,

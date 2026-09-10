@@ -144,7 +144,7 @@ var memoPatterns = []string{
 
 var memoSubjects = []string{
 	"", "a", "b", "ab", "abc", "abcd", "ABC", "aab", "aaa", "aaaa",
-	"a*b", "[a", `a`, "a5b", "5", "9", "x", "abcabc", "aabab",
+	"a*b", "[a", "a\b", "a5b", "5", "9", "x", "abcabc", "aabab",
 	"aaaaaaaaaaaaaaaaaaaax", "aaaaaaaaaaaaaaaaaaaaZ",
 	"{a}b", "%Fx", "a~b", "^a",
 }

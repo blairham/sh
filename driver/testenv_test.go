@@ -154,7 +154,7 @@ func assembleEnv(home string) error {
 		// what the two in this package that need one already do.
 		"HISTFILE": "",
 		// A prompt is drawn into a pipe here, never a terminal, and a
-		// developer's own TERM would decide whether it is drawn with colour
+		// developer's own TERM would decide whether it is drawn with color
 		// in it.
 		"TERM": "dumb",
 	}

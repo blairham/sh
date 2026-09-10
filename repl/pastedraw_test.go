@@ -100,3 +100,49 @@ func TestAPasteEndingInItsNewlineIsStillDrawn(t *testing.T) {
 		t.Errorf("the pasted line was never drawn: %q", got)
 	}
 }
+
+// A question the editor asks mid-line is answered from the buffer, not from the
+// descriptor underneath it.
+//
+// The listing query is the case that caught this: `confirmList` read `e.in`
+// directly, so with the whole line in one write it saw end-of-input while the
+// answer sat in the buffer — it declined, and the `n` was then typed into the
+// line, which came back as `an`.
+//
+// It has to be a paste. The same case typed a byte at a time never fills the
+// buffer, so a reader that goes straight to the descriptor works and the bug is
+// invisible — which is exactly what happened when the existing listing test was
+// moved onto typing(): it had been catching this, and stopped. The two shapes
+// test different things and both are wanted.
+func TestAPastedAnswerToTheListingQueryIsConsumed(t *testing.T) {
+	for _, c := range []struct {
+		name, answer string
+		listed       bool
+	}{
+		{"declined", "n", false},
+		{"accepted", "y", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var out strings.Builder
+			e := &editor{
+				// One Read answers all of it: the line, both Tabs, the answer
+				// and the newline.
+				in:              strings.NewReader("a\t\t" + c.answer + "\r"),
+				out:             &out,
+				comp:            fakeCompleter{cmds: shortNames(120)},
+				listQuery:       "ask %[1]d %[2]d",
+				listQueryStrict: true,
+			}
+			line, err := e.readLine(drawPrompt("P> "))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if line != "a" {
+				t.Fatalf("line = %q, want %q — the answer was typed into the line instead of being read as an answer", line, "a")
+			}
+			if listed := strings.Contains(out.String(), "a119"); listed != c.listed {
+				t.Errorf("listed = %v, want %v — the answer did not decide the listing", listed, c.listed)
+			}
+		})
+	}
+}

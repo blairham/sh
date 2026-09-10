@@ -64,9 +64,30 @@ type declareFlags struct {
 	unique    bool
 	tie       bool
 	function  bool
-	funcNames bool
-	remove    bool
-	print     bool
+	// functionOff is the sign of the `f` letter, which decides what the
+	// function form *writes* rather than whether it is the function form at
+	// all: `typeset -f +m 'p*'` writes bodies and `typeset +f -m 'p*'`
+	// writes names, so the sign of the word the `m` rode in on decides
+	// nothing here. See declareMatching.
+	functionOff bool
+	funcNames   bool
+	remove      bool
+	print       bool
+	// matching is the `m` letter — the operands are patterns rather than
+	// names — and matchNames is its sign, which chooses between the two
+	// listings it has: `-m` writes each match's value and `+m` writes each
+	// match's attributes and name. Recorded with its sign for the reason
+	// `hide` is: the two signs are different commands rather than one
+	// command and its undo. See declarematching.go.
+	matching   bool
+	matchNames bool
+	// added records that some letter was written in a *minus* word, which is
+	// what tells a declaration apart from a listing under `-m`. zsh's rule is
+	// per letter and not per word — `typeset +mx 'p*'` lists the exported
+	// names matching and `typeset -m +x 'p*'` takes the attribute off them —
+	// so the sign of the last option word cannot answer it and `remove`
+	// is not the field to ask.
+	added bool
 	// integerForced records that the *name* the command was called by is
 	// what asked for the integer attribute, so a plus form on the same line
 	// cannot take it off again. It is `integer` in ksh93, where the word
@@ -173,6 +194,7 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			if !strings.ContainsRune(known, c) {
 				return nil, f, r.refuseOption(name, a, known)
 			}
+			f.added = f.added || !f.remove
 			if strings.ContainsRune(r.sem().DeclareOptionsWithoutEffect, c) {
 				f.inert = true
 				// The dialect spells the letter and this engine models
@@ -239,6 +261,13 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				f.hidden = true
 			case 'f':
 				f.function = true
+				f.functionOff = f.remove
+			case 'm':
+				// The operands are patterns. Recorded rather than acted on
+				// here, because what it does depends on every other letter
+				// on the line — see declarematching.go.
+				f.matching = true
+				f.matchNames = f.remove
 			case 'F':
 				if r.declareOptionTakesANumber('F') {
 					// The letter is a float's precision in this dialect
@@ -364,6 +393,22 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 // name with the integer attribute already decided, and a second copy of this
 // is the thing that would drift. See integerbuiltin.go.
 func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
+	if f.matching {
+		if len(args) == 0 {
+			// `-m` with nothing to match is *ignored*, which is measured
+			// rather than assumed: `typeset -m` writes the whole parameter
+			// table exactly as the bare word does, and `typeset +m` writes
+			// it too. So the letter is dropped here and whatever else was
+			// written decides, which is how a bare `typeset +m` reaches the
+			// bare listing rather than a filtered one.
+			f.matching, f.matchNames = false, false
+			if withoutMatching(f) == (declareFlags{}) {
+				return r.bareDeclarationListing()
+			}
+		} else {
+			return r.declareMatching(name, args, f)
+		}
+	}
 	if f.function || f.funcNames {
 		// The function table rather than the variables: `-f` writes the
 		// functions themselves and `-F` only names them. `-p` alongside

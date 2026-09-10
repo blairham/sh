@@ -389,6 +389,19 @@ func (r *Runner) listedDeclarationValue(d declaration) string {
 		return "( " + strings.Join(r.quotedTablePairs(d, r.clusteredKey), " ") + " )"
 	case d.isArr:
 		return "( " + strings.Join(r.quotedArrayElems(d), " ") + " )"
+	case d.base != 0:
+		// A based integer lists here as the plain decimal number it stands
+		// for, and bare: measured on zsh 5.9.2, `typeset -i16 h=255` writes
+		// `integer 16 h=255` and `typeset -i8 o=8` writes `integer 8 o=8`,
+		// where the *value* the name holds is `16#FF` and `8#10` — which is
+		// what `echo $h` gives back. The base is already a word of the
+		// attributes; repeating it in the value quoted the `#` and wrote
+		// `h='16#FF'`. Negatives keep their sign, `n=-255`.
+		//
+		// The same decoding `typeset -p` makes, and deliberately the same
+		// function: the two forms differ in the quoting around the number
+		// and not in the number.
+		return r.listedInDecimal(d)
 	}
 	return r.declareQuoted(d.value)
 }

@@ -14952,4 +14952,84 @@ echo "read=[$l]"`,
 		Snippet: `set -- a b c; ARGC=9; printf "[%s][%s]" "$ARGC" "$#"`,
 		Why:     "readonly where the name exists — `read-only variable: ARGC` at status 1, and the printf is never reached — and an ordinary variable in the five where it does not, which answer `[9][3]`. The pair `$#` makes the failure visible either way: a shell that accepted the assignment would report a count of nine for three parameters",
 	},
+	{
+		ID: "declare/matching-with-a-minus-writes-each-match-value", Category: "declarations",
+		Snippet: `qa=1; qb=2; typeset -i qb; zz=3; typeset -m 'q*'`,
+		Why:     "the `m` letter takes the operands as *patterns* rather than as names, and under a minus it writes each match's value. One shell has the letter with this meaning; ksh93's `-m` is a rename and is recorded here as what it does with one operand and no `=`, which is the evidence that the two are not the same feature. The `zz` name is the control: a listing that ignored the pattern would write it too",
+	},
+	{
+		ID: "declare/matching-with-a-plus-writes-attributes-and-name", Category: "declarations",
+		Snippet: `qa=1; qb=2; typeset -i qb; zz=3; typeset +m 'q*'`,
+		Why:     "the same letter under the other sign is a *different listing* rather than an undo: the attributes as words and the bare name, with no value at all. The integer is what makes the pair discriminating — a `+m` that wrote the whole listing row would answer `integer qb=2` here and the row above would not tell it apart. This is the reading a completion dump collects names with (#1674)",
+	},
+	{
+		ID: "declare/matching-over-functions-is-named-by-the-f-sign", Category: "declarations",
+		Snippet: `_a() { echo one; }; _b() { echo two; }; c() { echo three; }; typeset +fm '_*'`,
+		Why:     "with `-f` the table is the functions and the sign of *that* letter picks the shape: `+f` names the matches. It is what a completion dump runs to collect the function names it is about to write, and refusing the letter left every interactive startup without a dump",
+	},
+	{
+		ID: "declare/matching-over-functions-under-a-minus-f-writes-the-body", Category: "declarations",
+		Snippet: `_a() { echo one; }; c() { echo three; }; typeset -fm '_a'`,
+		Why:     "the discriminating half of the row above: the same pattern with `f` written under a minus writes the function out. A reading that took the sign from the *word* the `m` rode in on would give these two rows the same answer",
+	},
+	{
+		ID: "declare/matching-takes-its-sign-from-the-letter-and-not-the-word", Category: "declarations",
+		Snippet: `_a() { echo one; }; typeset +f -m '_a'; typeset -f +m '_a'`,
+		Why:     "and the sign that decides is the letter's own, written here as two words so the `m` and the `f` disagree. Names first and body second, which is the opposite of what the last option word carries in each line",
+	},
+	{
+		ID: "declare/matching-with-a-minus-letter-declares-over-the-matches", Category: "declarations",
+		Snippet: `qa=1; qb=2; zz=3; typeset -mx 'q*'; typeset -p qa; typeset -p zz`,
+		Why:     "a letter written with a minus alongside makes the line a *declaration* over everything the pattern reached rather than a listing. The unmatched name is listed too, as the control that the attribute went only where the pattern went",
+	},
+	{
+		ID: "declare/matching-with-plus-letters-lists-the-matches-carrying-them", Category: "declarations",
+		Snippet: `qa=1; qb=2; typeset -x qb; typeset +mx 'q*'; typeset -p qb`,
+		Why:     "with every letter under a plus the line is a third listing: the matching names that *carry* the attribute, named and nothing else. It has to be recorded beside the row above because one reading of the sign gives both and the wrong reading swaps them -- the `typeset -p` line is there to show the attribute survived, which is what tells a filter apart from a removal",
+	},
+	{
+		ID: "declare/matching-with-an-assignment-sets-every-match", Category: "declarations",
+		Snippet: `qa=1; qb=2; zz=3; typeset -m 'q*'=9; typeset +m 'q*'=8; echo "[$qa][$qb][$zz]"`,
+		Why:     "an assignment takes the line out of the listing under either sign, and the value reaches every parameter the pattern picked out. The one place the plus decides nothing, which is why both spellings are in the one snippet",
+	},
+	{
+		ID: "declare/matching-nothing-is-a-silent-success", Category: "declarations",
+		Snippet: `qa=1; typeset -m 'zz*'; echo "st=$?"; typeset +m 'zz*'; echo "st=$?"; typeset -mx 'zz*'; echo "st=$?"`,
+		Why:     "a pattern that reaches no name creates none and complains about none: a listing that found nothing has answered the question. The status is the whole of the finding, so it is echoed after each",
+	},
+	{
+		ID: "declare/matching-under-the-print-letter-uses-the-print-form", Category: "declarations",
+		Snippet: `qa=1; zz=2; typeset -pm 'q*'; typeset +pm 'q*'`,
+		Why:     "`-p` outranks the letter wherever it is written and under either sign, so the matches come back in the listing form rather than in either of the letter's own two. The unmatched name is the control that `m` still chose *which* names",
+	},
+	{
+		ID: "declare/matching-under-the-print-letter-still-takes-an-assignment", Category: "declarations",
+		Snippet: `qa=1; qb=2; zz=3; typeset -pm 'q*'=9; typeset -p zz`,
+		Why:     "an assignment outranks `-p` in turn -- the value reaches every match and the listing is only the shape of the answer. The discriminating half is the same line *without* the matching letter, which assigns nothing at all in the shell that has both, so this is a row about the pair rather than about `-p`",
+	},
+	{
+		ID: "declare/matching-takes-an-attribute-off-under-a-minus-m", Category: "declarations",
+		Snippet: `qa=1; typeset -x qa; typeset -m +x 'q*'; typeset -p qa`,
+		Why:     "the parameter half of the sign question: the `m` under a minus and the attribute letter under a plus takes the attribute *off* every match, where the same two letters written as one plus word list them and change nothing. One reading of the sign gives both rows and the wrong reading swaps them, so neither is evidence on its own",
+	},
+	{
+		ID: "declare/matching-names-a-name-once-per-pattern-that-reaches-it", Category: "declarations",
+		Snippet: `qa=1; typeset +m 'q*' 'qa'`,
+		Why:     "patterns outside and names inside: a name two operands reach is written twice rather than deduplicated, which is the same rule the function table's own `-m` follows and is measured rather than assumed",
+	},
+	{
+		ID: "declare/local-has-no-matching-letter", Category: "declarations",
+		Snippet: `f() { local -m 'q*'; }; f; echo "st=$?"`,
+		Why:     "the letter belongs to `typeset` and `declare` and to no other declaration word in the shell that has it -- `local -m` is a bad option there, which is why the letter is answered under the one name and refused under the other. Naming it as unimplemented instead would tell a script the letter is on its way when nothing is coming",
+	},
+	{
+		ID: "declare/matching-writes-a-based-integer-in-decimal", Category: "declarations",
+		Snippet: `typeset -i16 qa=255; typeset -m qa; typeset +m qa; echo "$qa"`,
+		Why:     "the listing writes the plain number and the *value* the name holds is the based text, which the `echo` shows from the other side. The base is already one of the attribute words, and repeating it in the value quoted the `#` and wrote `qa='16#FF'`",
+	},
+	{
+		ID: "declare/matching-names-an-exported-array-and-not-an-exported-scalar", Category: "declarations",
+		Snippet: `typeset -x qa=1; typeset -xa qb=(x); typeset +m 'q*'`,
+		Why:     "an exported scalar at the top level is an entry in the environment and this listing says nothing about it, where an array cannot be one and keeps the word. Recorded as a pair because the rule is invisible in either row alone -- writing the word everywhere put an attribute on most of the environment, and writing it nowhere lost it from the kinds that earn it",
+	},
 }

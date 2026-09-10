@@ -140,3 +140,79 @@ print -r -- "CDPATH=[${CDPATH-UNSET}] n=${#cdpath[@]}"`)
 		t.Errorf("unsetting half a built-in tie = %q (status %d), want %q", out, st, want)
 	}
 }
+
+// A `local` of either half of one of the shell's own pairs displaces **both**,
+// and the caller gets both back. Saving the name written and not the pair let
+// a function-local search path outlive the function: `f() { local PATH=/x; }`
+// left `path` at `/x` for the rest of the script (#1630).
+//
+// Measured 2026-09-09 against zsh 5.9.2 under `-f` with a two-entry `PATH`.
+func TestALocalOfOneHalfOfABuiltInTieShadowsTheOther(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `PATH=/bin:/usr/bin
+f() { local PATH=/x; print -r -- "in=[$PATH][${(j:,:)path}]"; }
+f
+print -r -- "after=[$PATH][${(j:,:)path}]"
+g() { local -a path=(/p /q); print -r -- "gin=[$PATH][${(j:,:)path}]"; }
+g
+print -r -- "after=[$PATH][${(j:,:)path}]"`)
+	want := "in=[/x][/x]\nafter=[/bin:/usr/bin][/bin,/usr/bin]\n" +
+		"gin=[/p:/q][/p,/q]\nafter=[/bin:/usr/bin][/bin,/usr/bin]\n"
+	if out != want || st != 0 {
+		t.Errorf("a local of half a built-in tie = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `compaudit`'s own first line, and the answer that decides what it audits.
+// The local array is a fresh, empty one — zsh hands the function nothing —
+// where the caller's entries in view mean the code that decides whether the
+// completion directories are secure is walking the caller's `fpath` instead
+// of a copy of it. #1621 took the `+h` letter; this is what the line then has
+// to hold.
+func TestCompauditsFirstLineGetsAnEmptyLocalArray(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `FPATH=/usr/share/zsh/functions:/opt/extra
+comp() { local -a -U +h fpath; print -r -- "in n=$#fpath first=[${fpath[1]-NONE}] FPATH=[$FPATH]"; }
+comp
+print -r -- "after n=$#fpath FPATH=[$FPATH]"`)
+	want := "in n=0 first=[NONE] FPATH=[]\n" +
+		"after n=2 FPATH=[/usr/share/zsh/functions:/opt/extra]\n"
+	if out != want || st != 0 {
+		t.Errorf("compaudit's first line = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The two halves are emptied in their own kinds, which is why the counts
+// differ by one. A valueless `local` of the scalar sets an empty string and
+// the mirror splits it into the single field it has; a valueless `local` of
+// the array sets no elements at all and the mirror joins them into nothing.
+func TestAValuelessLocalOfEachHalfEmptiesItInItsOwnKind(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `PATH=/bin:/usr/bin
+f() { local PATH; print -r -- "scalar=[$PATH] n=$#path first=[${path[1]-NONE}]"; }
+f
+g() { local path; print -r -- "array=[$PATH] n=$#path"; }
+g`)
+	want := "scalar=[] n=1 first=[]\narray=[] n=0\n"
+	if out != want || st != 0 {
+		t.Errorf("a valueless local of a tie half = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A tie the *script* made is the other answer, and the row is here so the two
+// are read side by side: `local` makes a new parameter, which is not tied at
+// all, and the other half goes on naming the outer cell. A pair-shadow
+// applied to every tie would answer the first line `[zzz][zzz]`.
+func TestALocalOfHalfAScriptTieIsAnOrdinaryLocal(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `typeset -T SCA sca
+SCA=a:b:c
+f() { local SCA=zzz; print -r -- "in=[$SCA] n=$#sca"; }
+f
+g() { local -a sca=(p q); print -r -- "gin=[$SCA] n=$#sca"; }
+g
+print -r -- "after=[$SCA] n=$#sca"`)
+	// The `g` row is written with a value on purpose: a *valueless* local of
+	// an array name still shows the caller's elements here, which is a bug of
+	// its own (#1660) and would decide this row rather than the tie.
+	want := "in=[zzz] n=3\ngin=[a:b:c] n=2\nafter=[a:b:c] n=3\n"
+	if out != want || st != 0 {
+		t.Errorf("a local of half a script tie = %q (status %d), want %q", out, st, want)
+	}
+}

@@ -35,7 +35,7 @@ package interp
 //   - **It detaches only where a local stands.** Row four is the control that
 //     says so: the attribute is set and the global `PATH` goes on driving
 //     `path` regardless. What the letter suppresses is the *specialness of a
-//     shadow*, which is why hiddenLocal asks both questions and not one.
+//     shadow*, which is why tieDetached asks both questions and not one.
 //
 //   - **`+h` is not the absence of `-h`.** Rows two and six are the same
 //     command and only the second changes an answer, because only there was
@@ -44,7 +44,13 @@ package interp
 //
 // `unset` forgets it, measured: `typeset -h PATH; unset PATH; PATH=/y` leaves
 // a later `local PATH` tied again. That is where the other attributes of a
-// name are forgotten too, in unsetName.
+// name are forgotten too, in unsetName — and it has no test of its own,
+// because there is nothing left here to observe it through. The letter is
+// visible only over one of the shell's *own* ties (see tielocal.go), and this
+// engine's `unset` of such a name forgets the tie as well (#1631), so the
+// name that comes back is untied whether or not it kept the letter. The
+// delete stays because it is right, and the row that would pin it arrives
+// with #1631.
 //
 // No listing shows it. `typeset -h v=1; typeset -p v` is `typeset v=1` there,
 // and `typeset -p PATH` after `typeset -h PATH` still writes the tie — so
@@ -82,26 +88,10 @@ func (r *Runner) setHideInScope(name string, f declareFlags) {
 	r.hideInScope[name] = true
 }
 
-// hiddenLocal reports whether a name is, right now, a hidden shadow: it
-// carries the attribute *and* some scope on the stack has displaced the outer
-// cell. Both halves are required — see the second fact in the file comment.
-func (r *Runner) hiddenLocal(name string) bool {
-	if !r.hideInScope[name] {
-		return false
-	}
-	for _, sc := range r.scopes {
-		if _, saved := sc.saved[name]; saved {
-			return true
-		}
-	}
-	return false
-}
-
-// tieDetached reports whether a tie is out of effect because one of its two
-// names is a hidden shadow.
+// hidesItsTie reports whether either half of a tie carries the attribute.
 //
-// Either half suspends it, and that is a choice worth naming. The shell with
-// the letter keeps the *other* half tied to the outer cell — inside
+// Either half answers for both, and that is a choice worth naming. The shell
+// with the letter keeps the *other* half tied to the outer cell — inside
 // `local -h PATH=/x`, writing `path=(/q)` leaves the local `PATH` at `/x` and
 // moves the caller's. This engine has one variable table and a stack of saved
 // values, so "the outer cell" is not a thing an assignment can name; what it
@@ -110,6 +100,10 @@ func (r *Runner) hiddenLocal(name string) bool {
 // narrower rule — suspending only the hidden half — would have disagreed on
 // both, since `path=(/q)` would then have written the local `PATH` the
 // declaration had just gone out of its way to detach.
-func (r *Runner) tieDetached(t tie) bool {
-	return r.hiddenLocal(t.scalar) || r.hiddenLocal(t.array)
+//
+// The *shadow* is the other half of the question and is asked in tielocal.go,
+// where the scope a tie belongs to is worked out: the attribute alone
+// detaches nothing, which is the second fact in the comment above.
+func (r *Runner) hidesItsTie(t tie) bool {
+	return r.hideInScope[t.scalar] || r.hideInScope[t.array]
 }

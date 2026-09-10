@@ -47,6 +47,14 @@ type tie struct {
 	scalar string
 	array  string
 	sep    string
+	// special says the shell made this tie for itself rather than a script
+	// making it with the letter, and it decides what a *local* of one half
+	// means. See tielocal.go, which is where that measurement lives.
+	special bool
+	// depth is how many scopes were on the stack when the tie was made, so a
+	// scope *deeper* than that can be told from the one the declaration
+	// itself took — see tieShadowedInItsScope.
+	depth int
 }
 
 // tieOf is the tie a name is half of, and whether it is one at all.
@@ -212,7 +220,14 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	arrayFlags := f
 	arrayFlags.export = false
 	r.applyAttributes(array, arrayFlags)
-	r.tieNames(tie{scalar: scalar, array: array, sep: sep})
+	// The depth a *script* tie was made at, which is what tells a nested
+	// function's `local` of one half from the declaration's own shadow above.
+	// A `-g` tie is the global one whatever it was written inside.
+	depth := 0
+	if !f.global {
+		depth = len(r.scopes)
+	}
+	r.tieNames(tie{scalar: scalar, array: array, sep: sep, depth: depth})
 	// Readonly last, the same order biDeclare follows and for the same
 	// reason: it decides whether the assignment below is allowed at all, and
 	// applying it up front made a declaration refuse its own value.
@@ -300,7 +315,9 @@ func (r *Runner) Tie(scalar, array, sep string) {
 	if sep == "" {
 		sep = defaultTieSeparator
 	}
-	r.tieNames(tie{scalar: scalar, array: array, sep: sep})
+	// special, and that is the whole of what this seam adds over the letter:
+	// see tielocal.go for the two answers a `local` of one half gets.
+	r.tieNames(tie{scalar: scalar, array: array, sep: sep, special: true})
 	if v, ok := r.getVar(scalar); ok {
 		r.mirrorScalarToArray(scalar, v)
 		return

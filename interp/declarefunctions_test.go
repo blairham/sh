@@ -29,6 +29,26 @@ func declRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) (st
 // the one question that is about a name the script never assigned.
 func declRunEnv(t *testing.T, src string, set func(*Semantics), dg Diagnostics, env []string) (string, string, int) {
 	t.Helper()
+	return declRunWith(t, src, set, dg, env, nil)
+}
+
+// declRunTied is declRun with a tie the *shell* made rather than the script,
+// which is the only input the hide-in-scope letter is observable through: a
+// `local` of one half of a script's tie is an ordinary local either way. See
+// interp/tielocal.go.
+func declRunTied(t *testing.T, src string, set func(*Semantics), dg Diagnostics, pairs ...[2]string) (string, string, int) {
+	t.Helper()
+	return declRunWith(t, src, set, dg, nil, func(r *Runner) {
+		for _, pair := range pairs {
+			r.Tie(pair[0], pair[1], ":")
+		}
+	})
+}
+
+// declRunWith is what the three above are: a run whose Runner a caller may
+// arrange before the script sees it, the way a dialect arranges one.
+func declRunWith(t *testing.T, src string, set func(*Semantics), dg Diagnostics, env []string, before func(*Runner)) (string, string, int) {
+	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -52,6 +72,9 @@ func declRunEnv(t *testing.T, src string, set func(*Semantics), dg Diagnostics, 
 		Indent: "  ", Nested: true, Lines: true,
 		BraceOpenSuffix: " ", OutermostBraceOpensALine: true,
 	}, syntax.Layout{Indent: " ", Lines: true, BraceOpenSuffix: " "})
+	if before != nil {
+		before(r)
+	}
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

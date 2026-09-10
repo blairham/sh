@@ -15,25 +15,39 @@ import (
 // displaced that name. Tests name the letter and never a shell — see
 // interp/hideinscope.go for what it does and where it was measured.
 
+// The letter is observable through **one of the shell's own ties and nothing
+// else**. A `local` of one half of a tie a *script* made is an ordinary,
+// untied local whether the letter is there or not — see interp/tielocal.go —
+// so every row here arranges the tie the way a dialect does, with Runner.Tie,
+// and `typeset -T` appears below only where the script's own letter is the
+// subject.
+
 // withHidingAndTies is declRun's setter for a dialect that spells both
 // letters: the tie is what the hide letter is observable through, so a
 // dialect with one and not the other could not be asked the question.
+// It answers two more axes than the letters, because the shape the letter
+// lives in needs them: a valueless declaration sets the name rather than
+// hiding it — which is what makes an emptied half of a tie observable at all
+// — and `typeset` declares a local without a keyword-defined function, which
+// is the only spelling `typeset -T` has. Both are also used by
+// interp/tielocal_test.go.
 func withHidingAndTies(s *Semantics) {
 	s.DeclareOptions = "aAghilprTuUx"
 	s.LocalOptions = "aAhilprTuUx"
 	s.ArraysAreSparse = No
 	s.ArrayBaseIsZero = No
+	s.DeclaredNameWithoutValueIsEmpty = Yes
+	s.TypesetLocalNeedsKeywordFunction = No
 }
 
 // The whole of what `-h` does: the local is an ordinary parameter spelled
 // like the special one, so the array half keeps what the caller put there,
 // and the caller's scalar comes back untouched on return.
 func TestTheHideLetterDetachesALocalFromItsTie(t *testing.T) {
-	out, errs, st := declRun(t, `typeset -T S s
-S=one:two
+	out, errs, st := declRunTied(t, `S=one:two
 f() { local -h S=zzz; echo "in=[$S][${s[@]}]"; }
 f
-echo "after=[$S][${s[@]}]"`, withHidingAndTies, Diagnostics{})
+echo "after=[$S][${s[@]}]"`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 	want := "in=[zzz][one two]\nafter=[one:two][one two]\n"
 	if out != want || st != 0 || errs != "" {
 		t.Errorf("local -h over a tied name = %q (stderr %q, status %d), want %q",
@@ -46,10 +60,9 @@ echo "after=[$S][${s[@]}]"`, withHidingAndTies, Diagnostics{})
 // array with it. A `-h` that parsed and did nothing passes the first test by
 // answering this one's output.
 func TestALocalWithoutTheHideLetterKeepsItsTie(t *testing.T) {
-	out, errs, st := declRun(t, `typeset -T S s
-S=one:two
+	out, errs, st := declRunTied(t, `S=one:two
 f() { local S=zzz; echo "in=[$S][${s[@]}]"; }
-f`, withHidingAndTies, Diagnostics{})
+f`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 	want := "in=[zzz][zzz]\n"
 	if out != want || st != 0 || errs != "" {
 		t.Errorf("local over a tied name = %q (stderr %q, status %d), want %q",
@@ -61,11 +74,10 @@ f`, withHidingAndTies, Diagnostics{})
 // its own inherits whatever the name it shadows was given, however far away
 // that was written.
 func TestTheHideAttributeIsInheritedByALaterLocal(t *testing.T) {
-	out, errs, st := declRun(t, `typeset -T S s
-S=one:two
+	out, errs, st := declRunTied(t, `S=one:two
 typeset -h S
 f() { local S=zzz; echo "in=[${s[@]}]"; }
-f`, withHidingAndTies, Diagnostics{})
+f`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 	want := "in=[one two]\n"
 	if out != want || st != 0 || errs != "" {
 		t.Errorf("a plain local under an inherited hide = %q (stderr %q, status %d), want %q",
@@ -78,11 +90,10 @@ f`, withHidingAndTies, Diagnostics{})
 // have left out. This is the row that fails if `+h` is a no-op: the script is
 // the one above with three characters added, and the answer is the other one.
 func TestThePlusHideLetterTakesTheInheritedAttributeOff(t *testing.T) {
-	out, errs, st := declRun(t, `typeset -T S s
-S=one:two
+	out, errs, st := declRunTied(t, `S=one:two
 typeset -h S
 f() { local +h S=zzz; echo "in=[${s[@]}]"; }
-f`, withHidingAndTies, Diagnostics{})
+f`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 	want := "in=[zzz]\n"
 	if out != want || st != 0 || errs != "" {
 		t.Errorf("local +h under an inherited hide = %q (stderr %q, status %d), want %q",
@@ -95,10 +106,9 @@ f`, withHidingAndTies, Diagnostics{})
 // being the special one — so a declaration at the top level changes no answer
 // until a function shadows the name.
 func TestTheHideAttributeDetachesNothingWithoutALocal(t *testing.T) {
-	out, errs, st := declRun(t, `typeset -T S s
-typeset -h S
+	out, errs, st := declRunTied(t, `typeset -h S
 S=one:two
-echo "top=[${s[@]}]"`, withHidingAndTies, Diagnostics{})
+echo "top=[${s[@]}]"`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 	want := "top=[one two]\n"
 	if out != want || st != 0 || errs != "" {
 		t.Errorf("the hide letter at the top level = %q (stderr %q, status %d), want %q",
@@ -109,11 +119,10 @@ echo "top=[${s[@]}]"`, withHidingAndTies, Diagnostics{})
 // An attribute a call added goes away with the call, the way a freeze does:
 // the caller's name is the special one again the moment the function returns.
 func TestTheHideAttributeAddedByACallGoesAwayWithIt(t *testing.T) {
-	out, errs, st := declRun(t, `typeset -T S s
-f() { local -h S=zzz; }
+	out, errs, st := declRunTied(t, `f() { local -h S=zzz; }
 f
 S=three:four
-echo "after=[${s[@]}]"`, withHidingAndTies, Diagnostics{})
+echo "after=[${s[@]}]"`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 	want := "after=[three four]\n"
 	if out != want || st != 0 || errs != "" {
 		t.Errorf("the hide letter after the call returns = %q (stderr %q, status %d), want %q",
@@ -125,13 +134,12 @@ echo "after=[${s[@]}]"`, withHidingAndTies, Diagnostics{})
 // the other direction of the same save. A restore that only put back a `true`
 // would pass the test above and fail this one.
 func TestTheHideAttributeRemovedByACallComesBack(t *testing.T) {
-	out, errs, st := declRun(t, `typeset -T S s
-typeset -h S
+	out, errs, st := declRunTied(t, `typeset -h S
 f() { local +h S=zzz; }
 f
 S=one:two
 g() { local S=qqq; echo "in=[${s[@]}]"; }
-g`, withHidingAndTies, Diagnostics{})
+g`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 	want := "in=[one two]\n"
 	if out != want || st != 0 || errs != "" {
 		t.Errorf("a later local after `+h` in a returned call = %q (stderr %q, status %d), want %q",
@@ -142,34 +150,15 @@ g`, withHidingAndTies, Diagnostics{})
 // The last `h` written decides, whichever sign it carried, which is the rule
 // the other two-sign letters here keep.
 func TestTheLastHideLetterWrittenDecides(t *testing.T) {
-	out, errs, st := declRun(t, `typeset -T S s
-typeset -T T t
-S=one:two
+	out, errs, st := declRunTied(t, `S=one:two
 T=one:two
 f() { local -h +h S=zzz; echo "plusLast=[${s[@]}]"; }
 f
 g() { local +h -h T=qqq; echo "minusLast=[${t[@]}]"; }
-g`, withHidingAndTies, Diagnostics{})
+g`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"}, [2]string{"T", "t"})
 	want := "plusLast=[zzz]\nminusLast=[one two]\n"
 	if out != want || st != 0 || errs != "" {
 		t.Errorf("both signs of the hide letter = %q (stderr %q, status %d), want %q",
-			out, errs, st, want)
-	}
-}
-
-// `unset` forgets the attribute with everything else the name carried, so a
-// name written again is the special one again.
-func TestUnsetForgetsTheHideAttribute(t *testing.T) {
-	out, errs, st := declRun(t, `typeset -T S s
-typeset -h S
-unset S
-typeset -T S s
-S=one:two
-f() { local S=zzz; echo "in=[${s[@]}]"; }
-f`, withHidingAndTies, Diagnostics{})
-	want := "in=[zzz]\n"
-	if out != want || st != 0 || errs != "" {
-		t.Errorf("a local after unset forgot the hide = %q (stderr %q, status %d), want %q",
 			out, errs, st, want)
 	}
 }

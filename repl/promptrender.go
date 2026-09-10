@@ -75,7 +75,7 @@ func (s Shell) history(text string) string {
 // `\$` drawing a bare dollar in dash, which has no table at all, is what a
 // backslash does to a dollar during the expansion that follows.
 func (s Shell) table(text string) string {
-	out, _, _ := interp.ExpandPromptStyle(s.Style, text, s.promptField)
+	out, _, _ := interp.ExpandPromptStyle(s.Style, text, s.promptField, s.promptQuantity)
 	return out
 }
 
@@ -99,6 +99,48 @@ func (s Shell) promptField(f PromptField, arg string, braced bool) (string, bool
 		}
 	}
 	return s.field(f, arg, braced), true
+}
+
+// promptQuantity is the drawer's half of the conditional's split, and like
+// promptField it answers everything: a session knows its own terminal's
+// width and what the parser is still inside, so the walker's refusal path is
+// unreachable from this side too.
+//
+// Everything else is asked of the Runner, for the reason the fields are: a
+// conditional written *in* a prompt and the same one written in a script have
+// to agree about the shell they are both asking about.
+//
+// Two answers are this reader's own and each is measured against what a
+// prompt is:
+//
+//	%(e.…)  the eval depth, which is nought while a prompt is drawn — nothing
+//	        is running — where the interpreter refuses it rather than read a
+//	        frame count that is not the same question.
+//	%(_.…)  how many constructs are still open, which is what the
+//	        continuation prompt is *for* and which a script has none of.
+//
+// The width `%(l.…)` wraps at is *not* one of them, and is asked of the
+// Runner with the rest: this session assigns COLUMNS before every prompt (see
+// trackWindowSize), so the terminal's size and the shell's variable are one
+// answer, and a startup file that narrows COLUMNS narrows what the prompt
+// measures itself against — which is what powerlevel10k relies on.
+func (s Shell) promptQuantity(c PromptCondition, n int) (int, bool) {
+	switch c {
+	case ConditionEvalDepth:
+		return 0, true
+	case ConditionOpenConstructs:
+		return len(s.counted().open), true
+	}
+	if s.Runner == nil {
+		// No interpreter to ask, and a drawer still has to answer. Nought is
+		// the count of everything a Runner would have held.
+		return 0, true
+	}
+	v, ok := s.Runner.PromptQuantity(c, n)
+	if !ok {
+		return 0, true
+	}
+	return v, true
 }
 
 // field is what one code draws.
@@ -191,6 +233,11 @@ func (s Shell) field(f PromptField, arg string, braced bool) string {
 		return markStart
 	case FieldNonPrintingEnd:
 		return markEnd
+	case FieldCountedColumn:
+		// Nothing drawn, and a column counted — which the walker does, not
+		// this. A prompt writes it to say that bytes hidden between the two
+		// markers above do reach the screen after all.
+		return ""
 	case FieldSourceFile, FieldUnitName:
 		// The file being read, which only the interpreter knows — it is
 		// reading nothing at a prompt, so both come to what the shell calls

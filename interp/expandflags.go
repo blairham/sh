@@ -135,6 +135,28 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		r.expandErr = true
 		return nil, false, false, false
 	}
+	if strings.ContainsRune(e.Flags, '%') {
+		// **Nothing inside a prompt-escape expansion is a pattern.**
+		// Measured on zsh 5.9.2 in a directory with no match for it:
+		// `${(%):-ab(N)}` unquoted draws the seven characters, where
+		// `${(U):-ab(N)}` and a plain `${x:-ab(N)}` are both read as a
+		// pattern with a qualifier list and generated away. So it is this
+		// flag, and not substitution in general — and not the rewriting the
+		// flag does either, since `(U)` rewrites and still globs.
+		//
+		// Around the whole pipeline rather than around the result, because
+		// the word a `:-` substitutes is expanded *as a word* and globs on
+		// its own, before anything below could mark it. That is what put
+		// `unknown file attribute: l` beside the escape's own diagnostic in
+		// #1695: `%$y(l.1.0)` is a qualifier list to a reader that globs it,
+		// and the escape being unimplemented was only what left the text
+		// there to be read.
+		//
+		// Switched off through the same field `set -f` uses, because it is
+		// the same question asked from a different place — see
+		// Runner.withoutGlobbing.
+		defer r.withoutGlobbing()()
+	}
 	// Which of the two readings the group's `+` or `-` had was settled by
 	// the parser, which keeps the eaten one out of Flags — so this pass has
 	// one question to ask of each character and not two, and a `-` reaching
@@ -1114,7 +1136,7 @@ func (r *Runner) PromptExpand(text string) (string, bool) {
 // asked — see PromptExpand. It decides only how a refusal names the place it
 // happened.
 func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr) (string, bool) {
-	out, code, ok := ExpandPromptStyle(r.promptStyle, v, r.promptField)
+	out, code, ok := ExpandPromptStyle(r.promptStyle, v, r.promptField, r.promptQuantity)
 	if !ok {
 		return r.refusePromptEscape(e, code)
 	}
@@ -1125,7 +1147,9 @@ func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr) (string, bool) {
 //
 // One place rather than two, because the wording is the promise: it names the
 // escape the script asked for, so a reader can tell which of several in one
-// word was the one this shell could not answer.
+// word was the one this shell could not answer. A conditional names its test
+// letter with the character that opened it — `%(e` — because the letter alone
+// is not an escape and would send a reader looking for the wrong thing.
 //
 // The expansion route quotes the whole construct back, because `${(%)…}` can
 // hold several words and a reader needs to know which. A builtin has already
@@ -1138,12 +1162,12 @@ func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr) (string, bool) {
 // the next one, and the builtin's own operands were expanded before it ran.
 // It is left out because it would be false rather than because it would
 // break, and a mutation that puts it back survives for that reason.
-func (r *Runner) refusePromptEscape(e *syntax.ParamExpr, c rune) (string, bool) {
+func (r *Runner) refusePromptEscape(e *syntax.ParamExpr, c string) (string, bool) {
 	if e == nil {
-		r.diagf("the %%%c prompt escape is not implemented\n", c)
+		r.diagf("the %%%s prompt escape is not implemented\n", c)
 		return "", false
 	}
-	r.diagf("${%s}: the %%%c prompt escape is not implemented\n", e.Src, c)
+	r.diagf("${%s}: the %%%s prompt escape is not implemented\n", e.Src, c)
 	r.expandErr = true
 	return "", false
 }

@@ -15,12 +15,13 @@ import "github.com/blairham/sh/interp"
 // user name, `%~` for the directory, `%F{red}` for a color and `%{ %}` around
 // anything the terminal is meant to read rather than draw.
 //
-// One shape measured and deliberately absent, and it needs a mechanism rather
-// than a row in a table: the ternary `%(x.true.false)`, which asks a question
-// about the shell and picks one of two texts. It is dropped the way any code
-// this table does not know is when a prompt is drawn, and refused by name when
-// a script asks for the expansion — see interp/prompt.go for why those are two
-// answers to one question and both right.
+// The ternary `%(x.true.false)` is the one shape that needs a mechanism
+// rather than a row in a table — it asks a question about the shell and picks
+// one of two texts — so what this table names is which characters open and
+// close it and what each test letter asks. See interp/promptconditional.go
+// for the construct and #1695 for what it cost: it was the last thing a real
+// startup put on standard error, from powerlevel10k's own prompt-length
+// routine, which binary-searches on `%$y(l.1.0)`.
 //
 // `%D`'s braces used to be the second of them. They hold a strftime format,
 // which [interp.Strftime] already is, so the code is a Formats entry now:
@@ -81,6 +82,53 @@ func PromptStyle() interp.PromptStyle {
 			// where measured through a pty both come to the shell's own name.
 			'x': interp.FieldSourceFile,
 			'N': interp.FieldUnitName,
+			// Draws nothing and counts as a column, which is what a prompt
+			// uses to tell the shell that bytes it has hidden inside `%{ %}`
+			// do reach the screen. Measured, `%G` alone leaves the text empty
+			// and the column one along, and `%{a%Gb%}` is one column where
+			// `%{ab%}` is none.
+			'G': interp.FieldCountedColumn,
+		},
+		// The ternary. Measured letter by letter against zsh 5.9.2, one
+		// probe per letter, with the count swept across the range each of
+		// them compares against — see interp.PromptCondition, which records
+		// what each comparison turned out to be.
+		//
+		// **A letter absent from here is not a refusal.** Measured, zsh draws
+		// nothing at all for `%(a.T.F)` and swallows both arms, at status 0
+		// and silently, so a letter that is not below is this language saying
+		// it has no such question. The paired half is a letter that *is*
+		// below and that a reader cannot answer — `e`, the eval depth, in the
+		// interpreter — which is refused by name as `%(e`.
+		Conditional:    '(',
+		ConditionalEnd: ')',
+		Conditions: map[rune]interp.PromptCondition{
+			'?': interp.ConditionExitStatus,
+			'j': interp.ConditionJobs,
+			'#': interp.ConditionEffectiveUser,
+			'g': interp.ConditionEffectiveGroup,
+			'!': interp.ConditionPrivileged,
+			'L': interp.ConditionShellLevel,
+			'e': interp.ConditionEvalDepth,
+			'_': interp.ConditionOpenConstructs,
+			'l': interp.ConditionColumn,
+			'S': interp.ConditionSeconds,
+			'v': interp.ConditionPromptArrayCount,
+			'V': interp.ConditionPromptArrayElement,
+			// The working directory, counted whole and counted with the home
+			// directory written `~`. Measured in `/Users/bhamilton`, where
+			// the first pair answered counts up to two and the second only up
+			// to one, because the `~` stands for both of them.
+			'/': interp.ConditionCwdComponents,
+			'C': interp.ConditionCwdComponents,
+			'c': interp.ConditionCwdComponentsHome,
+			'.': interp.ConditionCwdComponentsHome,
+			'~': interp.ConditionCwdComponentsHome,
+			'D': interp.ConditionMonth,
+			'd': interp.ConditionDayOfMonth,
+			'T': interp.ConditionHour,
+			't': interp.ConditionMinute,
+			'w': interp.ConditionDayOfWeek,
 		},
 		// The visual codes, measured one at a time as the exact bytes each put
 		// on the wire. `%b` is not bold-off but everything-off — it drew

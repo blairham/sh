@@ -143,15 +143,13 @@ func TestTheRefusalsThatRemainAfterOneTable(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
 		{`print -P '%q'`, "zsh:print:1: the %q prompt escape is not implemented\n"},
 		{`echo "${(%):-%q}"`, "zsh:1: ${(%):-%q}: the %q prompt escape is not implemented\n"},
-		// The ternary, which needs a mechanism rather than a row in a table
-		// and is named by the character that opens it.
-		{`print -P '%(?.y.n)'`, "zsh:print:1: the %( prompt escape is not implemented\n"},
-		// The expansion spelling of the ternary is deliberately not here.
-		// It carries a second diagnostic of its own — `unknown file
-		// attribute: ?`, from the glob qualifiers reading the same `(?`
-		// characters — which is a different question and would make this
-		// case about that instead.
-		// And a code whose value is a fact about a *session*: the table has
+		// The ternary is answered now (#1695), and what remains of it is a
+		// *test letter* the table has and this reader cannot count: the
+		// eval depth. Named by the character that opens the construct and
+		// the letter together, because the letter alone is not an escape.
+		{`print -P '%(e.y.n)'`, "zsh:print:1: the %(e prompt escape is not implemented\n"},
+		{`echo "${(%):-%(e.y.n)}"`, "zsh:1: ${(%):-%(e.y.n)}: the %(e prompt escape is not implemented\n"},
+		// A code whose value is a fact about a *session*: the table has
 		// the row, and a runner reading a script has no history to number.
 		{`print -P '%h'`, "zsh:print:1: the %h prompt escape is not implemented\n"},
 		{`print -P '%y'`, "zsh:print:1: the %y prompt escape is not implemented\n"},

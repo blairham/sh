@@ -42,6 +42,11 @@ type (
 	PromptColor = interp.PromptColor
 	// PromptResolver is what one code draws, for the reader that has the facts.
 	PromptResolver = interp.PromptResolver
+	// PromptCondition is one question a `%(x.true.false)` escape asks.
+	PromptCondition = interp.PromptCondition
+	// PromptQuantityResolver is what one condition counts, for the reader
+	// that has the facts.
+	PromptQuantityResolver = interp.PromptQuantityResolver
 )
 
 // What becomes of a code the table does not know.
@@ -92,4 +97,30 @@ const (
 	FieldExitStatus       = interp.FieldExitStatus
 	FieldNonPrintingStart = interp.FieldNonPrintingStart
 	FieldNonPrintingEnd   = interp.FieldNonPrintingEnd
+	FieldCountedColumn    = interp.FieldCountedColumn
+)
+
+// Every question a conditional escape asks.
+const (
+	ConditionNone               = interp.ConditionNone
+	ConditionExitStatus         = interp.ConditionExitStatus
+	ConditionJobs               = interp.ConditionJobs
+	ConditionEffectiveUser      = interp.ConditionEffectiveUser
+	ConditionEffectiveGroup     = interp.ConditionEffectiveGroup
+	ConditionPrivileged         = interp.ConditionPrivileged
+	ConditionShellLevel         = interp.ConditionShellLevel
+	ConditionEvalDepth          = interp.ConditionEvalDepth
+	ConditionOpenConstructs     = interp.ConditionOpenConstructs
+	ConditionColumn             = interp.ConditionColumn
+	ConditionLineWidth          = interp.ConditionLineWidth
+	ConditionSeconds            = interp.ConditionSeconds
+	ConditionPromptArrayCount   = interp.ConditionPromptArrayCount
+	ConditionPromptArrayElement = interp.ConditionPromptArrayElement
+	ConditionCwdComponents      = interp.ConditionCwdComponents
+	ConditionCwdComponentsHome  = interp.ConditionCwdComponentsHome
+	ConditionMonth              = interp.ConditionMonth
+	ConditionDayOfMonth         = interp.ConditionDayOfMonth
+	ConditionHour               = interp.ConditionHour
+	ConditionMinute             = interp.ConditionMinute
+	ConditionDayOfWeek          = interp.ConditionDayOfWeek
 )

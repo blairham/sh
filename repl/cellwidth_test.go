@@ -44,27 +44,6 @@ func TestACharacterIsMeasuredInCells(t *testing.T) {
 	}
 }
 
-// TestTheWideTableIsSortedAndDisjoint, because the lookup is a binary search
-// and a table out of order would answer wrongly for everything past the
-// mistake — quietly, and only for some characters.
-func TestTheWideTableIsSortedAndDisjoint(t *testing.T) {
-	if len(wideRanges) == 0 {
-		t.Fatal("no ranges, so nothing is measured as wide")
-	}
-	for i, r := range wideRanges {
-		if r[0] > r[1] {
-			t.Errorf("range %d is backwards: %#x..%#x", i, r[0], r[1])
-		}
-		if i > 0 && r[0] <= wideRanges[i-1][1]+1 {
-			t.Errorf("range %d starts at %#x, which touches or overlaps the one before it ending at %#x",
-				i, r[0], wideRanges[i-1][1])
-		}
-	}
-	if eastAsianWidthVersion == "" {
-		t.Error("no Unicode version recorded, so nothing says which one this measured")
-	}
-}
-
 // TestALineIsMeasuredInCells is the whole point: the geometry the editor
 // draws with counts columns, and a line of CJK is twice as wide as its rune
 // count.

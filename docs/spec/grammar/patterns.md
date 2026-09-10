@@ -518,10 +518,18 @@ Measured: `pat/a-numeric-range-is-any-number`,
     *(E)     the ones their group may execute — with `A` read and `I` write
     *(X)     the ones the world may execute — with `R` read and `W` write
     *(s)     set-user-ID; `S` is set-group-ID and `t` is the sticky bit
+    *(f755)  the ones at that mode — `f` is access rights, and takes
+             an argument in either of two spellings
+    *(u0)    the ones owned by that user; `g` is the group, and `U`
+             and `G` are the same two questions about this process
+    *(-.)    `-` is not an attribute: it toggles whether what follows
+             asks about a link or about what the link points at
     *(^.)    `^` turns the sense of what follows
     *(.,/)   `,` is an or; two qualifiers side by side are an and
     *(N)     a miss is no error and the word is deleted
     *(D)     the hidden names are matched too
+    *(.:t)   a `:` ends the qualifiers and opens a list of modifiers,
+             applied to every name the pattern reported
 
 zsh alone has them. The list narrows what the pattern in front of it
 matched, so it is a **filter over the match set** rather than anything
@@ -778,21 +786,137 @@ told about; nothing measured needs it, so it is named here instead.
 thing still outstanding from this family, which that shell and ksh93
 accept.
 
+### Access rights, ownership, and following a link
+
+`f`, `u` and `g` take an **argument**, which is why the list is scanned
+by index rather than one character at a time — everything else in it is a
+single letter. Measured on zsh 5.9.2, 2026-09-10, against one regular
+file per mode: 0000, 0600, 0644, 0664, 0666, 0700, 0755, 1777 and 4755.
+
+    *(f0666)      the file at exactly that mode
+    *(f755)       0755 *and* 4755 — three digits compare three digits
+    *(f0755)      0755 alone — a fourth digit compares the fourth
+    *(f+022)      every bit of 022 set
+    *(f-022)      no bit of 022 set
+    *(f70?)       owner 7, group 0, and `?` asks nothing of the third
+    *(f:g+w:)     the chmod-style spelling, which is what the
+                  completion system writes
+    *(f:u=rw:)    the owner's bits are exactly rw
+    *(f:g+w,o+w:) both clauses hold — a comma inside is an *and*
+
+**`+` is every bit and `-` is no bit.** The alternative reading of `-`
+— "not all of them" — agrees with it on every number a file either has
+whole or lacks whole, so the probe that separates them is a partial
+overlap: `*(f-0700)` lists nothing where a 0666 file is present, and 0666
+has two of those three bits.
+
+**The mask is as wide as the number is long**, which is the finding
+`f755` listing a 4755 file forced; `?` is the same rule spelled per
+digit, and is the only way to leave a *middle* digit out.
+
+**A sub-spec that is a number ends the spec.** `f:u+w,+022:` is read and
+`f:+022,u+w:`, `f:755,644:` and `f:u+w,+022,g+w:` are all `invalid mode
+specification` — so a number may be the last sub-spec or the only one,
+never a middle one.
+
+**The operator may be left out, and leaving it out is `=`** — the same
+default the number form has. `f:u:` is the files whose owner bits are all
+clear, exactly as `f:u=:` is, and `f:g:` and `f:a:` say the same of their
+own classes. A clause with no *class* is a different thing and is
+refused: `f:x+w:` is `invalid mode specification`, and `f:+w:` never
+reaches the clause reader at all — an operator at the front is the number
+form, and `+w` is a number with a `w` left over.
+
+**`s` and `t` are the class's own bit rather than a fourth permission**:
+`u+s` is set-user-ID, `g+s` is set-group-ID, `o+t` is the sticky bit, and
+`u+t`, `g+t` and `o+s` ask for a bit that class does not have and hold of
+everything. **`=` compares the class's whole triple, that bit included** —
+`f:u=rwx:` leaves out a 4755 file and `f:u=rwxs:` is what finds it.
+
+**A delimited ownership argument is a *name*, always.** `u:foo:`,
+`u[foo]` and `u{foo}` are the same argument, and `u[501]` is
+`unknown username '501'` rather than the uid — so the numeric and named
+forms do not overlap.
+
+**Any character delimits, an operator included**, which is worth writing
+down because the evidence reads exactly like a rule that it does not:
+`u+500`, `u-502` and `u=501` are all
+`missing delimiter for 'u' glob qualifier`, and `u+bhamilton+` is a list
+of files. The complaint is about the missing *partner* and not about the
+character — `u+5+` is `unknown username '5'`. The lookup happens while the *list* is read:
+`zz*(Nu:nobody-here:)` names the user in a directory where the pattern
+matches nothing at all. The two failures are two different sentences, and
+that is the shell's doing rather than ours: `unknown username 'x'` names
+the name and `unknown group` does not.
+
+**`-` is a toggle and not a flag**, measured with a fixture holding a
+regular file, a link to it, a link to a directory and a link to nothing:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `*(N.)` | `f1` |
+| `*(N-.)` | `f1 la` — the link to a regular file, followed |
+| `*(N--.)` | `f1` again — a second `-` turns it back off |
+| `*(N.-@)` | nothing — it applies to what follows it, not to `.` |
+| `*(N-@)` | `dangle` alone — see below |
+| `*(N-@,@)` | `dangle la ld` — a `,` reads it again from nothing |
+
+**A link whose target cannot be stat'd is treated as a file in its own
+right**, which is what `*(N-@)` says: following the two that resolve
+reaches a regular file and a directory, and following the dangling one
+reaches nothing, so it answers as the link it is.
+
+### A list may end in modifiers
+
+A `:` in the list ends the qualifiers and opens the same history-style
+modifiers `${x:t}` takes, applied to every name the pattern reported.
+Measured against `sub/x.txt` and `sub/y.md`:
+
+    */*(N:t)     x.txt y.md      the tail of each name
+    */*(N:t:r)   x y             a chain, applied left to right
+    */*(N:e)     md txt          and the answer is *re-sorted*
+    */*(N:h1)    sub sub         a count reaches the letter here too
+    */*(N:s/x/Q/)                and so does a substitution
+
+**Everything after the first `:` is modifier text**: `*(N:t.)` is the
+tails of every name and the `.` asks nothing, where `*(N.:t)` is the
+tails of the regular files. **Re-sorting is the measurement's own
+finding** — `:e` answers `md txt` for names that arrived in the order
+`x.txt y.md`.
+
+**An unrecognized modifier stops the chain and says nothing**, which is
+not what the parameter surface does with the same text: `*(N:z)` lists
+the names unchanged, `*(N:zt)` does not apply the `t` behind the `z`, and
+`*(N:t:X:u)` applies the `t` and not the `u`. Text after a letter *inside*
+one segment is ignored rather than being the failure it is in `${x:ha}`:
+`*(N:tr)` is the tail alone. A substitution is the exception to the
+silence and it is the shell's own — `*(N:s)` is `bad substitution` and
+`*(N:s//Q/)` is `no previous substitution`, both fatal.
+
+This is the spelling zi autoloads a plugin's functions with —
+`functions/^([_.]*|prompt_*_setup|README*)(D-.N:t)`.
+
+**None of this is a `Semantics` axis.** Every other shell in the panel
+refuses `*(` while parsing, so there is no disagreement to answer: the
+whole language lives behind the `GlobQualifiers` grammar flag, and adding
+to it adds no conditional anywhere.
+
 ### What is read and not implemented
 
 The type tests `.`, `/`, `@`, `p` and `%`, the nine permission letters,
-`s`, `S` and `t` for the bits outside the permission triples, the `^`
-that turns any of them, the `,` that unions them, and `N` and `D`.
+`s`, `S` and `t` for the bits outside the permission triples, `f` and its
+mode argument, `u`, `g`, `U` and `G` for ownership, the `-` that follows
+a link before testing, the `^` that turns any of them, the `,` that
+unions them, `N` and `D`, and the `:` that opens a modifier list.
 
 Everything else in that language — `=` for a socket, the `%b` and `%c`
-spellings that separate the two kinds of device, `f` and its mode
-argument, the `-` prefix that follows a link before testing, `e` and `+`
-for a command's verdict, `U`, `G`, `u` and `g` for ownership, `o`, `O`,
-`Y` and `[n,m]` for ordering and counting, `a`, `m` and `c` for times,
-and the `(#q…)` form that needs `extended_glob` — is refused by name with
-the shell's own wording rather than answered wrong. `*(f755)` here is
-`unknown file attribute: f`, where the shell would list the names at that
-mode.
+spellings that separate the two kinds of device, `e` and `+` for a
+command's verdict, `d` for a device, `l` for a link count, `o`, `O`, `Y`
+and `[n,m]` for ordering and counting, `a`, `m` and `c` for times, `L`
+for a size, and the `(#q…)` form that needs `extended_glob` — is refused
+by name with the shell's own wording rather than answered wrong. `*(L+1)`
+here is `unknown file attribute: L`, where the shell would list the names
+above that size.
 
 `S` and `%` are read and unproven in the positive direction, which is a
 fact about what a test process may create rather than about the shell:
@@ -803,8 +927,15 @@ half that separates a read letter from an unknown one.
 That refusal is what let this set be enumerated exactly, and it is
 asserted rather than assumed: see
 `TestAnUnknownQualifierIsRefusedByName`,
-`TestThePermissionQualifiersReadTheMode` and
-`TestTheModeBitQualifiers`.
+`TestThePermissionQualifiersReadTheMode`,
+`TestTheModeBitQualifiers`, `TestTheAccessRightsQualifier`,
+`TestAnUnreadableModeSpecIsRefused`, `TestTheOwnershipQualifiers`,
+`TestAnOwnerMayBeNamed`, `TestTheFollowToggleAsksAboutTheTarget` and
+`TestAQualifierListMayEndInModifiers`. Measured:
+`pat/a-qualifier-list-reads-the-access-rights`,
+`pat/a-qualifier-list-reads-the-owner`,
+`pat/a-qualifier-list-may-follow-a-link`,
+`pat/a-qualifier-list-may-end-in-modifiers`.
 
 ## Run-time switches over the language
 

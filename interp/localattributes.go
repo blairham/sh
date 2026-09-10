@@ -35,6 +35,15 @@ package interp
 // hide-in-scope. These are the rest of them, saved through the same door and
 // in one place, because an attribute added to the runner without a line here
 // is the same bug again under a new letter.
+//
+// **There are three declaration loops and the rule has to reach all three.**
+// `typeset`/`declare`, `local`, and the one an operand naming an *element*
+// takes each build their own sequence, and in each of them applyAttributes has
+// to stand *after* the shadow — before it, the letters are saved as the outer
+// name's and come back on return as its own. Two of the three were found by
+// mutation rather than by reasoning: rows written with `typeset` alone left a
+// live mutant in each of the other two, both of which passed the whole suite.
+// A fourth route added later needs a row of its own for the same reason.
 
 // nameAttributes is everything the attribute tables say about one name.
 //

@@ -1823,6 +1823,17 @@ func Apply(r *interp.Runner) {
 	// three clock reads through Runner.Now and a formatter over the same
 	// format language `printf '%(fmt)T'` writes. See datetime.go.
 	registerDatetimeModule(r)
+	// And `zsh/stat`'s one builtin under the one of its two names a shell
+	// may safely hold always: `zstat`. See statmodule.go for why `stat` is
+	// not registered beside it.
+	registerStatModule(r)
+	// And `zsh/files`' nine file operations, under the nine `zf_`-prefixed
+	// names — the same argument again, and the same split. See
+	// filesmodule.go.
+	registerFilesModule(r)
+	// And `zsh/net/socket`'s one: a Unix-domain socket opened into this
+	// shell's own descriptor table. See socketmodule.go.
+	registerSocketModule(r)
 	// And `zsh/terminfo`'s and `zsh/termcap`'s one parameter each: the
 	// terminal's capabilities under two name systems, over the values in
 	// repl.TerminalCapabilities. See terminfo.go.

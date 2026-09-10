@@ -56,6 +56,11 @@ import (
 // on this machine: `zi.zsh` names `zparseopts` and `zformat` five times
 // between them and `zregexparse` not once.
 //
+// **Unless the caller named it** (#1634). That sentence is about a module
+// whose feature list is the shell's *inference* of what a script wants; a
+// `-F` operand is the script saying which feature it wants, and the only
+// honest answer to that is whether it can have it. See zmodloadNamed.
+//
 // A missing *parameter* had no such call site, and that was the whole of the
 // difference: `${#functions}` on a shell without `$functions` is `0` at status
 // 0, a plausible answer to a different question, reaching the caller as data
@@ -105,6 +110,11 @@ import (
 // rather than an unimplementable one. Which features a module is left showing
 // is state, kept beside the loaded set and reported by `-lF`; zmodloadSelect
 // is the whole of the rule and zmodloadFeatureStore the whole of the state.
+//
+// **And it moves in both directions** (#1634): a feature the caller named is
+// judged even when it is a builtin, so `zmodload zsh/zutil` is 0 and
+// `zmodload -F zsh/zutil b:zregexparse` is not. zmodloadNamed carries the
+// argument.
 
 // zmodloadStore is the set of modules a script has loaded, kept as an
 // indexed array under a name no script can reach — the way `zstyle` and
@@ -181,6 +191,25 @@ var zmodloadFeatures = map[string][]string{
 		"b:syserror", "b:sysopen", "b:sysread", "b:sysseek", "b:syswrite",
 		"b:zsystem", "f:systell", "p:errnos", "p:sysparams",
 	},
+	// One builtin under two names, and the second name is the reason this
+	// module is written `-F` by everything that uses it. See statmodule.go:
+	// `zstat` is implemented and `stat` is deliberately not, because a shell
+	// that registered `stat` would shadow /usr/bin/stat for every script it
+	// ran.
+	"zsh/stat": {"b:stat", "b:zstat"},
+	// One builtin, and a Unix-domain socket is the whole of it. See
+	// socketmodule.go.
+	"zsh/net/socket": {"b:zsocket"},
+	// Nine file operations under eighteen names: the plain spellings and the
+	// `zf_` ones, which are the same commands. The `zf_` half is implemented
+	// and the plain half is not, for the reason `zsh/stat` gives — see
+	// filesmodule.go, where the split is argued rather than assumed.
+	"zsh/files": {
+		"b:chgrp", "b:chmod", "b:chown", "b:ln", "b:mkdir", "b:mv", "b:rm",
+		"b:rmdir", "b:sync",
+		"b:zf_chgrp", "b:zf_chmod", "b:zf_chown", "b:zf_ln", "b:zf_mkdir",
+		"b:zf_mv", "b:zf_rm", "b:zf_rmdir", "b:zf_sync",
+	},
 	// The largest of them, and the one a plugin manager leans on hardest:
 	// 33 parameters and not one builtin. Measured 2026-09-07 as
 	// `zmodload -lF zsh/parameter` against zsh 5.9.2, and held name for name
@@ -250,6 +279,55 @@ func zmodloadHolds(r *interp.Runner, feature string) bool {
 	return true
 }
 
+// zmodloadNamed is the features one `-F` command switched on **by name**, and
+// it is the other half of the rule zmodloadHolds states (#1634).
+//
+// A builtin never holds a module shut because a script is told about a
+// missing one at the word that runs it. That reasoning was arrived at for
+// `zmodload <module>`, where the module's feature list is the *shell's*
+// inference of what the script might want — `zi.zsh` writes `zmodload
+// zsh/zutil || return 1` and calls three of the four, so refusing over
+// `zregexparse` stops a file for something it never touches.
+//
+// **`-F` is not that question.** The caller has written the feature down:
+//
+//	zmodload -F zsh/stat b:zstat || return
+//	zmodload -F zsh/files b:zf_rm || return
+//
+// Those are two real lines, from a prompt theme and a plugin manager, and both
+// are guards. Measured against zsh 5.9.2, what they are guarding on is exact:
+// `zmodload -F zsh/files b:zf_rm` at status 0 is followed by a `zf_rm` that
+// runs, and `zmodload -F zsh/files -b:zf_rm` — the same feature switched off —
+// leaves `zf_rm` not a builtin at all. So in zsh the status of that line *is*
+// the answer to "have I got this command", which is why the line is written as
+// a guard and not as a hint.
+//
+// A shell that answered 0 there without the builtin would be telling the
+// script the one thing the script asked, wrongly, and the `|| return` it wrote
+// would not fire. That is the silent success this builtin exists to avoid, and
+// it outweighs the argument for the plain form: nothing here is being inferred
+// on the script's behalf, so there is no feature it did not ask for to be held
+// hostage over.
+//
+// The refusal that results names the builtin rather than the module —
+// “failed to load module `zsh/stat': stat is not implemented yet“ — which is
+// also the whole of what changes for a caller who was going to be refused
+// anyway. It names the thing somebody would have to write.
+//
+// Only the features switched **on** by this command are in the set. A module
+// loaded whole and then narrowed with `-F zsh/zutil -b:zparseopts` keeps three
+// features the caller never named this time, and those follow the plain rule,
+// which is the rule they were loaded under.
+func zmodloadNamed(specs []string) map[string]bool {
+	named := make(map[string]bool, len(specs))
+	for _, word := range specs {
+		if feature, on := zmodloadSpec(word); on {
+			named[feature] = true
+		}
+	}
+	return named
+}
+
 // zmodloadMissing is which of the features handed to it this shell does not
 // have *and will not load without*, in the order they were given — which is
 // the order the table names them and therefore the order zsh's own `-lF`
@@ -267,10 +345,14 @@ func zmodloadHolds(r *interp.Runner, feature string) bool {
 // zmodloadHolds. A parameter registered as absent is out of this list for the
 // same reason and by the same test, and `$jobstates` refuses at the expansion
 // that reads it.
-func zmodloadMissing(r *interp.Runner, features []string) []string {
+//
+// **named is the features this command switched on by name**, which are
+// judged whatever kind they are — see zmodloadNamed. Empty for a plain load,
+// where nothing was named.
+func zmodloadMissing(r *interp.Runner, features []string, named map[string]bool) []string {
 	var missing []string
 	for _, f := range features {
-		if zmodloadHolds(r, f) && !zmodloadHasFeature(r, f) {
+		if (named[f] || zmodloadHolds(r, f)) && !zmodloadHasFeature(r, f) {
 			_, name, _ := strings.Cut(f, ":")
 			missing = append(missing, name)
 		}
@@ -572,7 +654,7 @@ func zmodloadLoad(r *interp.Runner, opts zmodloadOpts, module string) bool {
 		}
 		return false
 	}
-	if missing := zmodloadMissing(r, features); len(missing) > 0 {
+	if missing := zmodloadMissing(r, features, nil); len(missing) > 0 {
 		if !opts.silent {
 			r.DiagnoseAsTheShellf("failed to load module `%s': %s\n",
 				module, zmodloadShortfall(missing, len(features)))
@@ -758,7 +840,7 @@ func zmodloadSelect(r *interp.Runner, opts zmodloadOpts, module string, specs []
 			selected = append(selected, f)
 		}
 	}
-	if missing := zmodloadMissing(r, selected); len(missing) > 0 {
+	if missing := zmodloadMissing(r, selected, zmodloadNamed(specs)); len(missing) > 0 {
 		if !opts.silent {
 			r.DiagnoseAsTheShellf("failed to load module `%s': %s\n",
 				module, zmodloadShortfall(missing, len(selected)))

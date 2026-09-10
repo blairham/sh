@@ -13092,6 +13092,66 @@ echo "read=[$l]"`,
 		Snippet: `zmodload -uF zsh/zutil +b:zstyle; echo "st=$?"`,
 		Why:     "a sentence about the combination rather than about either letter — `-b, -c, -f, -p and -u cannot be combined with -F` and 1 — and worth pinning because `-F` reaches for the same operands `-u` does, so a shell that dispatched on the wrong letter first would quietly load the module it was asked to unload",
 	},
+	{
+		ID: "zmodload/the-startup-modules-a-prompt-narrows", Category: "builtins",
+		Snippet: `zmodload -F zsh/stat b:zstat; echo "stat=$?"; zmodload -F zsh/net/socket b:zsocket; echo "socket=$?"; zmodload -F zsh/files b:zf_mv b:zf_rm; echo "files=$?"`,
+		Why:     "the three lines a prompt theme writes at the top of itself, one after another and with no `||` guard on any of them, so each was a `failed to load module` on every start of this shell until #1634. They are `-F` rather than plain loads on purpose — the module's other names are `stat`, `mv` and `rm`, which nobody wants a shell to take over — and that is what makes the status of these lines the answer to \"have I got this command\"",
+	},
+	{
+		ID: "zmodload/the-features-of-the-file-module", Category: "builtins",
+		Snippet: `zmodload zsh/files; zmodload -lF zsh/files; echo "st=$?"`,
+		Why:     "eighteen features and nine commands: every operation under a plain name and again under a `zf_` one. The listing is the measured contents of the module and the order the refusals name them in, and it is the reason the plain half can be absent here without the module becoming a name in a table — nine of the eighteen are implemented",
+	},
+	{
+		ID: "stat/the-size-and-the-count-of-the-elements", Category: "builtins",
+		Snippet: `zmodload zsh/stat; printf hello > f; zstat +size -- f; zstat -A a -- f; echo "n=$#a"`,
+		Why:     "the system call reported two ways, and the number of bytes is the half a stub cannot fake. Fourteen elements is the whole struct plus `link`, which is not a field of it — so a shell short of the extra one answers thirteen and a shell that never made the call answers nothing",
+	},
+	{
+		ID: "stat/the-mode-in-words-and-in-octal", Category: "builtins",
+		Snippet: `zmodload zsh/stat; umask 022; printf x > f; zstat -s +mode -- f; zstat -o +mode -- f; zstat -r +mode -- f`,
+		Why:     "one element in the three forms the letters ask for: the `ls -l` string, the raw number in octal with its leading zero, and `-r`'s number *with* the string after it in brackets. The umask is set so the mode is the same on every machine the corpus runs on",
+	},
+	{
+		ID: "stat/one-element-selected-and-the-names-beside-it", Category: "builtins",
+		Snippet: `zmodload zsh/stat; printf hi > f; printf abc > g; zstat +size -- f g; zstat -N +size -- f g; zstat -n -t +size -- f`,
+		Why:     "a name appears beside a value when there is more than one file and the answer is going to standard output, and the two letters override that either way — which is three different lines for the same element and the reason a shell that always named, or never did, passes a single-file test",
+	},
+	{
+		ID: "stat/an-element-shortened-and-one-that-is-not-unique", Category: "builtins",
+		Snippet: `zmodload zsh/stat; printf x > f; zstat +si -- f; echo "st=$?"; zstat +m -- f; echo "st=$?"; zstat +nosuch -- f; echo "st=$?"`,
+		Why:     "`+si` is `size` because nothing else begins with it and `+m` is neither `mode` nor `mtime` because both do — `ambiguous stat element`, which is a different refusal from the one an unknown name gets. A shell that took the first match would answer `mode` and be wrong silently",
+	},
+	{
+		ID: "files/moving-and-removing-with-the-zf-names", Category: "builtins",
+		Snippet: `zmodload zsh/files; printf x > a; zf_mv -f -- a b; echo "mv=$?"; [ -e a ] || echo gone; [ -e b ] && echo moved; zf_rm -f -- b; echo "rm=$?"; [ -e b ] || echo removed`,
+		Why:     "the two builtins a prompt theme loads the module for, doing the work rather than existing: the file is at its new name and then it is not. Written `-f --` because that is how every real caller writes them, and the `[ -e ]` either side is what a module registered hollow cannot satisfy",
+	},
+	{
+		ID: "files/removing-what-was-never-there", Category: "builtins",
+		Snippet: `zmodload zsh/files; zf_rm nosuch; echo "plain=$?"; zf_rm -f nosuch; echo "forced=$?"; zf_rm; echo "none=$?"; zf_rm -f; echo "forced-none=$?"`,
+		Why:     "`-f` suppresses the complaint about a name that is not there, which is why a theme cleaning up after itself writes `zf_rm -f -- $tmp` whether or not it got as far as creating the file — and it does *not* suppress the one about no arguments at all, which is the pair a shell that treated the letter as \"never fail\" gets wrong",
+	},
+	{
+		ID: "files/a-directory-needs-the-recursive-letter", Category: "builtins",
+		Snippet: `zmodload zsh/files; zf_mkdir -p t/u; printf x > t/u/deep; zf_rm t; echo "plain=$?"; zf_rm -r t; echo "recursive=$?"; [ -e t ] || echo gone`,
+		Why:     "a directory is `is a directory` and 1 until `-r` asks for it, and then everything below goes before the directory does. The `-p` on the way in is the other half of the same module and is what makes the tree deeper than one level",
+	},
+	{
+		ID: "files/the-mode-a-directory-is-made-with", Category: "builtins",
+		Snippet: `zmodload zsh/files zsh/stat; umask 077; zf_mkdir -m 755 d; zstat -s +mode -- d; zf_mkdir -m zzz bad; echo "st=$?"`,
+		Why:     "`-m` is a statement about the result rather than an argument to the system call, so the umask does not take bits off it — set to 077 here, which would show as `drwx------` in a shell that passed the mode straight through. The second half is the only spelling of a mode either of these commands accepts",
+	},
+	{
+		ID: "socket/a-message-across-a-unix-socket", Category: "builtins",
+		Snippet: `zmodload zsh/net/socket; zsocket -l s; l=$REPLY; zsocket s; c=$REPLY; zsocket -a -t $l; a=$REPLY; print -u $c -- ping; read -u $a line; echo "got=[$line]"`,
+		Why:     "listen, connect and accept in one shell, with a byte going across at the end — each of the three on its own is something a stub can report success for and the byte is not. `-a -t` rather than a bare accept because a corpus case that waited for a connection that never came would hang the run rather than fail it",
+	},
+	{
+		ID: "socket/connecting-to-a-socket-nobody-is-listening-on", Category: "builtins",
+		Snippet: `zmodload zsh/net/socket; zsocket nope; echo "st=$?"; zsocket; echo "none=$?"`,
+		Why:     "the kernel's own sentence for a path with no listener and the builtin's for no argument at all — the two refusals a caller can act on, and the first is the one a prompt segment asking a daemon over its socket gets on every machine the daemon is not installed on. The backlog is deliberately not probed here: a connection to a full one is refused on this operating system and *blocks* on Linux, so a case counting how many a listener holds would hang half the machines the corpus runs on",
+	},
 	// `zparseopts` and `zformat`, the two of `zsh/zutil`'s other three
 	// builtins that can be learned by running the real one (#1058). What is
 	// recorded is the part a caller reads by index and the part that decides

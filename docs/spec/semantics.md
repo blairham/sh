@@ -4068,8 +4068,23 @@ What was built, all through the extension seam — registered builtins in each
   Narrowing moves the verdict, which is what makes the letter implementable in
   a shell that cannot load a compiled module: the features a caller names are
   the ones the module is judged on, so `zmodload zsh/complete` is refused for
-  four conditions nobody can find and `zmodload -F zsh/complete b:compadd` is
-  not.
+  four conditions nobody can find and a caller naming something else is asking
+  a question this shell can answer.
+
+  **And a feature named under `-F` holds its module shut even when it is a
+  builtin** (#1634), which is the one place the legibility rule above does not
+  reach. `zmodload <module>` is the *shell* inferring what a script wants, so a
+  missing builtin never holds: it is loud at its own call site and refusing
+  would stop a file for a command it never calls. `-F` is the script saying
+  which feature it wants, and measured against zsh 5.9.2 the status of that
+  line is the answer to "have I got this command" — `zmodload -F zsh/files
+  b:zf_rm` at 0 is followed by a `zf_rm` that runs, and the same feature
+  switched off leaves `zf_rm` not a builtin at all. So `zmodload zsh/zutil` is
+  0 and `zmodload -F zsh/zutil b:zregexparse` is 1, naming `zregexparse`; a
+  script's `zmodload -F zsh/stat b:zstat || return` is a guard and gets a
+  truthful answer. Only the features switched **on** by that command are
+  judged; a module already loaded whole keeps the rest under the plain rule.
+
   What it does not do is take a feature *away* — zsh removes a deselected
   builtin from its table outright, and here those builtins are the dialect's,
   registered before any script runs, so a selection is recorded and reported
@@ -4081,6 +4096,55 @@ What was built, all through the extension seam — registered builtins in each
   twenty-two letters zsh's `zmodload` does not have at all are `bad option: -q`
   and 1, which is this builtin's wording and `bindkey`'s, not `zstyle`'s
   `invalid option`. Corpus: `zmodload/*`.
+- **zsh `zsh/stat`, `zsh/files` and `zsh/net/socket`** (dialect/zsh/statmodule.go,
+  filesmodule.go, socketmodule_unix.go): the three modules a prompt theme
+  narrows to at startup, measured 2026-09-09 against zsh 5.9.2 with `zsh -f`.
+
+  **Only the names that cannot shadow a command are registered.** Each module
+  provides its commands under two spellings — `stat` and `zstat`, `rm` and
+  `zf_rm` — and this shell's builtins are the dialect's, registered before any
+  script runs, so a `stat` registered at all is a `stat` registered always and
+  every `stat -f %z` in every script would stop reaching /usr/bin/stat. zsh
+  does not have that problem because the module really is loaded on demand, and
+  the manual makes the same recommendation for the same reason. So `zstat`, the
+  nine `zf_` names and `zsocket` are implemented, the ten plain names are in
+  the feature table as features this shell has not got, and `zmodload -F
+  zsh/files b:rm` refuses by that name.
+
+  `zstat` is the whole system call: fourteen elements in a fixed order, one
+  selectable with `+element` shortened to any unique prefix, `-A` into an
+  array, `-H` into an association (one file only), `-f` for a descriptor, `-l`
+  for the element names, `-L` for the link rather than its target — which
+  `+link` turns on by itself — `-s` for the written forms of the mode, the two
+  owners and the three times, `-F` and `-g` for the format and the zone of
+  those times, `-r` for the number *and* the written form, `-o` for an octal
+  mode, and `-n`/`-N`/`-t`/`-T` for whether a name and a type appear beside
+  each value. A whole listing writes the element name in a seven-wide column;
+  a selected one does not. A file that cannot be statted leaves an `-A` array
+  untouched, so a script reading it never sees half an answer.
+
+  `zsh/files` is the nine operations with the letters each of them takes, and
+  the default query — before replacing or removing a file the shell cannot
+  write to — as well as the `-i` that asks about every file. **`-s` is refused
+  by name**: it asks that no link be followed *during the descent*, which is a
+  promise about how each component is opened, and a version that only checked
+  the operand would claim the guarantee while leaving the hole it closes.
+
+  `zsocket` is a Unix stream socket in three forms — connect, listen, and
+  accept with `-a` — each ending with a descriptor in the shell's own table and
+  `$REPLY` holding the number, `-d` choosing the number and `-v` saying where
+  it went. `-t` asks rather than waits and is *silent* about finding nothing.
+  A listener asks the kernel to queue **one** unaccepted connection rather than
+  the hundred and twenty-eight a runtime's own listener asks for, which is what
+  a `while zsocket $sock; do` loop written to stop on the refusal needs. What a
+  full queue then does is the kernel's and differs: measured 2026-09-10 against
+  real zsh, macOS queues one and refuses the next while Linux queues two and
+  **blocks** on the next. This shell answers as zsh does on each.
+
+  All three resolve a relative name against `Runner.Dir` and never the
+  process's directory, which are two different directories the moment a script
+  writes `cd`. Corpus: `zmodload/the-startup-modules-a-prompt-narrows`,
+  `stat/*`, `files/*`.
 - **zsh `zsh/datetime`** (dialect/zsh/datetime.go): the clock, as a script
   reads it — `$EPOCHSECONDS`, `$EPOCHREALTIME`, `$epochtime` and the
   `strftime` builtin. Measured 2026-09-06 against zsh 5.9.2 with a scratch

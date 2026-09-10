@@ -111,6 +111,26 @@ type editor struct {
 	pushed    byte
 	hasPushed bool
 
+	// held is input the terminal has already delivered and this editor has
+	// not read yet, and the two indices into it.
+	//
+	// A reader that took one byte per Read would be correct and would make a
+	// *paste* quadratic: a paste arrives as one write, every byte of it
+	// redraws the whole line, and redrawing an n-byte line n times is n²
+	// bytes back to the terminal — 88KB for a 405-byte line against bash's
+	// 410, measured (#1742). Buffering is what lets inputPending answer,
+	// which is what lets the drawing wait until the input runs out.
+	held    [4096]byte
+	heldLen int
+	heldPos int
+
+	// pendingDraw records that the line has changed since it was last drawn,
+	// because a redraw was skipped while more input was already waiting. Any
+	// path that needs the screen to match the line flushes it — see endLine,
+	// which is where a line's last draw has to happen whether the input ran
+	// out or not.
+	pendingDraw bool
+
 	// What to ask before printing a large listing, and how to read the
 	// answer. See EditorStyle.
 	listQuery       string
@@ -317,6 +337,16 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			}
 			e.change(e.typedBefore, func() { e.insert(r) })
 			e.typing = true
+			if e.inputPending() {
+				// More input is already in hand, so this draw would be
+				// overwritten before anybody saw it. Drawing once when the
+				// input runs out is what makes a paste cost the line rather
+				// than the line squared, and the screen ends up identical:
+				// the whole line is drawn either way, which is redraw's own
+				// documented choice and is not changed here.
+				e.pendingDraw = true
+				continue
+			}
 			e.redraw(prompt)
 		}
 	}
@@ -333,8 +363,35 @@ func (e *editor) nextByte(buf []byte) (int, error) {
 		buf[0], e.hasPushed = e.pushed, false
 		return 1, nil
 	}
-	return e.in.Read(buf)
+	if e.heldPos == e.heldLen {
+		n, err := e.in.Read(e.held[:])
+		if n <= 0 {
+			return n, err
+		}
+		e.heldPos, e.heldLen = 0, n
+		// The error is dropped when bytes came with it, and the next call
+		// reports it: a reader is allowed to return data *and* io.EOF
+		// together, and handing both back here would throw away input this
+		// editor has already been given.
+	}
+	buf[0] = e.held[e.heldPos]
+	e.heldPos++
+	return 1, nil
 }
+
+// inputPending reports that the terminal has already delivered more input.
+//
+// Only what is in hand — this never asks the descriptor, so it cannot block
+// and cannot be wrong about a byte still in flight. That is the right question
+// for the drawing: input already buffered will be read before anybody could
+// look at the screen, so drawing for it is work nobody sees. A byte that has
+// not arrived yet is one a person may be about to look at, and answering
+// false is what puts the line on the screen.
+//
+// Two other places have to ask it, and both are the same mistake in different
+// clothing — reading past this buffer to the descriptor underneath. See
+// serveDescriptors in watchfd.go, and the reads in search.go and complete.go.
+func (e *editor) inputPending() bool { return e.hasPushed || e.heldPos < e.heldLen }
 
 // abandon ends a line the person gave up on with ^C.
 //
@@ -355,7 +412,12 @@ func (e *editor) readRune(first byte) (rune, error) {
 	buf := []byte{first}
 	for !utf8.FullRune(buf) && len(buf) < utf8.UTFMax {
 		var next [1]byte
-		n, err := e.in.Read(next[:])
+		// Through nextByte and not the reader, for the reason readByte gives:
+		// the rest of a rune arrives the same way the rest of a key sequence
+		// does, and a read that went straight to the descriptor would step
+		// over whatever is already buffered — putting the second half of a
+		// pasted `日` after the bytes that followed it.
+		n, err := e.nextByte(next[:])
 		if err != nil {
 			return 0, err
 		}
@@ -471,6 +533,7 @@ func (e *editor) moveTo(pos int, prompt drawnPrompt) {
 // is wider than one cell or the line wraps; and at typing speed there is
 // nothing to gain.
 func (e *editor) redraw(prompt drawnPrompt) {
+	e.pendingDraw = false
 	cols := e.cols()
 	if cols <= 0 {
 		// Nothing known about the terminal, so the line is assumed to fit on
@@ -574,6 +637,14 @@ func (e *editor) toLastRow(prompt drawnPrompt) {
 // endLine finishes the line on the screen: down past the last row of it, then
 // a newline, and the next draw starts from the top again.
 func (e *editor) endLine(prompt drawnPrompt, before string) {
+	if e.pendingDraw {
+		// A line accepted straight out of a paste was never drawn — the
+		// newline was in the same write as the text, so the input never ran
+		// out. It goes on the screen before the shell moves past it, which is
+		// what every shell shows and what toLastRow below needs anyway: the
+		// row it counts from is only accurate once the line has been drawn.
+		e.redraw(prompt)
+	}
 	e.toLastRow(prompt)
 	e.write(before + "\r\n")
 	e.row = 0

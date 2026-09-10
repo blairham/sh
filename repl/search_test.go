@@ -22,7 +22,7 @@ func searching(t *testing.T, style HistoryStyle, history []string, keys string) 
 	t.Helper()
 	var out strings.Builder
 	e := &editor{
-		in: strings.NewReader(keys), out: &out,
+		in: typing(keys), out: &out,
 		history:      history,
 		searchPrompt: style.SearchPrompt,
 		searchFailed: style.SearchFailedPrompt,
@@ -215,7 +215,7 @@ func TestTheTwoShapesOfTheSearchOnScreen(t *testing.T) {
 func TestWithoutAWidthTheSearchIsDrawnInPlace(t *testing.T) {
 	var out strings.Builder
 	e := &editor{
-		in: strings.NewReader("\x12echo\x07\r"), out: &out,
+		in: typing("\x12echo\x07\r"), out: &out,
 		history:      fourLines,
 		searchPrompt: "bck-i-search: %s_",
 		searchFailed: "failing bck-i-search: %s_",
@@ -280,7 +280,7 @@ func TestTheSearchRowGoesUnderTheWholeLine(t *testing.T) {
 	long := "echo " + strings.Repeat("a", 22)
 	var out strings.Builder
 	e := &editor{
-		in: strings.NewReader("\x12echo\x07\r"), out: &out,
+		in: typing("\x12echo\x07\r"), out: &out,
 		history:      []string{long},
 		searchPrompt: "bck-i-search: %s_",
 		searchFailed: "failing bck-i-search: %s_",

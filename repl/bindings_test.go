@@ -23,7 +23,7 @@ func typedBound(t *testing.T, table map[string]Binding, keys string) string {
 	t.Helper()
 	var out strings.Builder
 	e := Shell{KeyBindings: func() map[string]Binding { return table }}.newEditor(t.Context(), nil)
-	e.in, e.out = strings.NewReader(keys), &out
+	e.in, e.out = typing(keys), &out
 	line, err := e.readLine(drawPrompt("$ "))
 	if err != nil {
 		t.Fatalf("%q: %v", keys, err)
@@ -151,7 +151,7 @@ func TestInterruptPartWayThroughABindingAbandonsTheLine(t *testing.T) {
 	var out strings.Builder
 	table := map[string]Binding{"\x18\x01": {Widget: WidgetBeginningOfLine}}
 	e := Shell{KeyBindings: func() map[string]Binding { return table }}.newEditor(t.Context(), nil)
-	e.in, e.out = strings.NewReader("ab\x18\x03"), &out
+	e.in, e.out = typing("ab\x18\x03"), &out
 	if _, err := e.readLine(drawPrompt("$ ")); !errors.Is(err, ErrInterrupted) {
 		t.Errorf("err = %v, want the line abandoned", err)
 	}
@@ -166,7 +166,7 @@ func TestTheLastWordWidgetNeedsAHistoryToShowItsWork(t *testing.T) {
 	table := map[string]Binding{"\a": {Widget: WidgetInsertLastWord}}
 	e := Shell{KeyBindings: func() map[string]Binding { return table }}.newEditor(t.Context(), nil)
 	e.history = []string{"echo one two"}
-	e.in, e.out = strings.NewReader("ls \a\n"), &out
+	e.in, e.out = typing("ls \a\n"), &out
 	line, err := e.readLine(drawPrompt("$ "))
 	if err != nil {
 		t.Fatalf("readLine: %v", err)

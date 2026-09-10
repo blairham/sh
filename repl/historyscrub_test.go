@@ -248,6 +248,15 @@ func (s *syncBuffer) String() string {
 	return s.b.String()
 }
 
+// Len is how much has been written, for a caller that wants to know the screen
+// changed without caring what it says — see session.typeLine, which uses it to
+// wait for the draw its last keystroke caused.
+func (s *syncBuffer) Len() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Len()
+}
+
 // seek reports whether the text has arrived since the last thing waited for
 // did, and moves the cursor past it if so.
 //

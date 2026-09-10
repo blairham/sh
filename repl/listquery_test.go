@@ -121,7 +121,7 @@ func TestAQuestionNobodyAnswers(t *testing.T) {
 func queryEditor(keys, query string, echo, strict bool) (*editor, *strings.Builder) {
 	out := &strings.Builder{}
 	return &editor{
-		in: strings.NewReader(keys), out: out,
+		in: typing(keys), out: out,
 		listQuery: query, listQueryEchoes: echo, listQueryStrict: strict,
 	}, out
 }
@@ -152,7 +152,7 @@ func TestDecliningStopsTheListingAndAcceptingDoesNot(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			out := &strings.Builder{}
 			e := &editor{
-				in:  strings.NewReader("a\t\t" + c.answer + "\r"),
+				in:  typing("a\t\t" + c.answer + "\r"),
 				out: out,
 				// Matches sharing only `a`, so the first Tab has no common
 				// prefix to insert and the second asks about the listing.

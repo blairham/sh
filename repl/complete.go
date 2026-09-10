@@ -388,7 +388,12 @@ func (e *editor) confirmList(matches []string, prompt drawnPrompt) bool {
 	e.write(fmt.Sprintf(e.listQuery, len(matches), len(columns(matches, e.cols()))))
 	for {
 		var buf [1]byte
-		n, err := e.in.Read(buf[:])
+		// Through nextByte and not the reader: this editor buffers what the
+		// terminal delivered, so a read that went straight to the descriptor
+		// steps over input already in hand. It reported end-of-input while
+		// the answer sat in the buffer, and the `n` was then typed into the
+		// line — which is what `line = "an"` in the listing test was.
+		n, err := e.nextByte(buf[:])
 		if err != nil {
 			// Nothing more is coming, so there is nobody to print for.
 			return false

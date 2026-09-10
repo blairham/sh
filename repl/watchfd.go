@@ -412,6 +412,16 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) {
 	if e.watch == nil || e.descriptorReady == nil {
 		return
 	}
+	if e.inputPending() {
+		// Input this editor has already taken off the terminal is input
+		// waiting, and the wait below cannot see it: fdset.Wait asks the
+		// *kernel* whether the terminal has a byte, and the bytes of a paste
+		// are in e.held by then. Without this a descriptor that is always
+		// readable — the case this file exists for — is served for ever while
+		// a whole line sits unread in hand, which is the very "never sees a
+		// key" failure the descriptor is meant to be gotten past.
+		return
+	}
 	for {
 		fds := e.watch()
 		if len(fds) == 0 {

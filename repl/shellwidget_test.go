@@ -34,7 +34,7 @@ func typedThroughShell(t *testing.T, run func(Line) (Line, bool), keys string) s
 		}
 	}
 	e := s.newEditor(t.Context(), nil)
-	e.in, e.out = strings.NewReader(keys), &out
+	e.in, e.out = typing(keys), &out
 	line, err := e.readLine(drawPrompt("$ "))
 	if err != nil {
 		t.Fatalf("%q: %v", keys, err)
@@ -123,7 +123,7 @@ func TestAPanickingActionDoesNotEndTheLine(t *testing.T) {
 		},
 	}
 	e := s.newEditor(t.Context(), nil)
-	e.in, e.out = strings.NewReader("abc\aZ\n"), &out
+	e.in, e.out = typing("abc\aZ\n"), &out
 	line, err := e.readLine(drawPrompt("$ "))
 	if err != nil {
 		t.Fatalf("readLine: %v", err)

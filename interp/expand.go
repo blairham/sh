@@ -805,6 +805,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			elems = r.subscriptsOf(e.Name, len(elems))
 		}
 		if e.Op == syntax.ParamSubstring {
+			elems = r.positionalSliceElems(e, elems)
 			elems = sliceElems(elems, r.numOf(e.Arg, e, e.Arg2), e, r)
 		}
 		if reshapesElements(e.Op) {
@@ -2076,13 +2077,20 @@ func (r *Runner) listBase(e *syntax.ParamExpr) ([]string, bool) {
 //     answer, quoting, escaping and all.
 //   - ParamTransform, which has its own measured branch below for exactly
 //     these two names.
-//   - ParamSubstring, because the offset does not mean the same thing.
-//     `${@:1}` counts from `$1` — measured, it is all three parameters in
-//     bash, ksh93 and zsh on a list of three — where an array subscript
-//     counts from the first element and `${a[@]:1}` drops one. Routing the
-//     slice here would answer it with the array's reading, which is wrong in
-//     a new way rather than right; `${@[@]:1}` has the same gap today and
-//     the pair belongs in an issue of its own (#1576).
+//
+// ParamSubstring is on this path too, and getting it here took one extra
+// step. The offset does not count the same thing it counts for a named array:
+// `${@:1}` is all three parameters on a list of three — measured in bash 5.3,
+// ksh93 and zsh 5.9.2 — where `${a[@]:1}` drops the first element. The reason
+// is not that the positional slice is 1-based; it is that the positional list
+// has one more element at the front. `$0` is element 0, so `${@:0}` is the
+// shell's own name followed by every parameter and `${@:1}` is `$1` onward,
+// both of which fall straight out of counting from 0 over `$0 $1 … $n`. See
+// positionalSliceElems, which is where that element is put on.
+//
+// So the subscripted spelling agrees rather than differing: `${@[@]:1:2}` is
+// `$1 $2` in zsh, not the array reading that drops one, and it is the same
+// list being counted (#1589).
 func (r *Runner) positionalsAsList(e *syntax.ParamExpr) (*syntax.ParamExpr, bool) {
 	if e.Name != "@" && e.Name != "*" {
 		return nil, false
@@ -2095,7 +2103,7 @@ func (r *Runner) positionalsAsList(e *syntax.ParamExpr) (*syntax.ParamExpr, bool
 		return nil, false
 	}
 	switch e.Op {
-	case syntax.ParamNone, syntax.ParamTransform, syntax.ParamSubstring:
+	case syntax.ParamNone, syntax.ParamTransform:
 		return nil, false
 	}
 	if !r.listShapedOp(e) {
@@ -2389,6 +2397,37 @@ func arrayIndices(n int) []string {
 // a string, ksh93 yields nothing, and zsh reads it as an offset from the end.
 // This follows the rule the string form here already uses, so the two spellings
 // agree with each other, and lands on zsh's answer.
+// positionalSliceElems puts `$0` on the front of the positional parameters, so
+// that a slice counts over `$0 $1 … $n` and lands where every shell with the
+// construct lands.
+//
+// Only for a slice, and only for the positional list. It is what makes
+// `${@:1}` all of the parameters where `${a[@]:1}` drops the first element —
+// one list is longer at the front, rather than one offset being 1-based. And
+// it is why `${@:0}` names the shell: measured on `set -- ax bx cx`,
+// `"${@:0}"` is four fields beginning with the shell's own path in bash 5.3
+// and zsh 5.9.2 both, where `"${@:1}"` is three.
+//
+// No other operator wants it. `${@#a}` distributes over the parameters and
+// `$0` is not one of them — measured, it is three fields on a list of three —
+// so this stands at the slice and not where the elements are fetched.
+//
+// A negative offset needs no special case: `${@: -1}` is the last parameter
+// either way, because the extra element is at the front and counting back from
+// the end never reaches it.
+func (r *Runner) positionalSliceElems(e *syntax.ParamExpr, elems []string) []string {
+	if e.Name != "@" && e.Name != "*" {
+		return elems
+	}
+	// Through specialParam rather than r.Name, because `$0` is not always the
+	// shell: one dialect answers with the function or sourced file it is
+	// inside (Semantics.DollarZeroNamesTheInnermostCall), and a slice that
+	// reached past its own `$0` for a different answer than `$0` gives would
+	// be two readings of one parameter.
+	zero, _ := r.specialParam(&syntax.ParamExpr{Name: "0"})
+	return append([]string{zero}, elems...)
+}
+
 func sliceElems(elems []string, off int, e *syntax.ParamExpr, r *Runner) []string {
 	lenWord := e.Arg2
 	if off < 0 {

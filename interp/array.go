@@ -860,6 +860,15 @@ func (r *Runner) storeThroughOperand(name, value string) {
 		r.setVar(name, value)
 		return
 	}
+	// The *store* is speaking from here on, not the builtin that reached it,
+	// and the location says so: measured, `read 'a[1/0]'` is `zsh:1: division
+	// by zero` and `read 'v[0]'` is `zsh:1: v: assignment to invalid subscript
+	// range` — the same two sentences, in the same place, as the bare
+	// assignments `a[1/0]=x` and `v[0]=x`. Naming `read` in front of them
+	// would report a builtin for a complaint the language makes.
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
 	if r.assocDeclared(base) {
 		r.setAssocElem(base, sub, value)
 		return

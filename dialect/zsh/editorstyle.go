@@ -28,7 +28,7 @@ func EditorStyle() repl.EditorStyle {
 		// The characters are zsh's own `WORDCHARS` default, confirmed a
 		// character at a time by pressing the key rather than by reading the
 		// variable.
-		WordCharacters:                         "*?_-.[]~=/&;!#$%^(){}<>",
+		WordCharacters:                         wordCharacters,
 		KillToStartOfLineTakesTheWholeLine:     true,
 		KillWordBeforeCursorUsesWordCharacters: true,
 		ForwardWordStopsBeforeTheNextWord:      true,
@@ -48,3 +48,10 @@ func EditorStyle() repl.EditorStyle {
 		// what a dialect *says* is what it differs about.
 	}
 }
+
+// wordCharacters is this shell's `WORDCHARS` default: what joins letters and
+// digits into one word, for the line editor and for the `[[:WORD:]]` pattern
+// class alike. One constant because they are one measurement — the prelude
+// gives the variable this value, and a script that reassigns it moves the
+// class with it.
+const wordCharacters = "*?_-.[]~=/&;!#$%^(){}<>"

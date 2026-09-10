@@ -642,6 +642,27 @@ func Semantics() interp.Semantics {
 	// The backslash itself is in the set — `x\\y` matches one backslash there
 	// and not two — which is what keeps a glob-escaped value literal.
 	s.PatternEscapeReaches = `-=!*?[]()|^~#<>\`
+	// Seven character-class names beyond the twelve POSIX ones, and this is
+	// the only column that has more than one of them. Measured 2026-09-10, a
+	// character at a time, against zsh 5.9.2:
+	//
+	//	ascii       one byte below 0x80 — `é` is not in it
+	//	IDENT       what a parameter name may hold: alnum and `_`
+	//	IFS         the field separators as `$IFS` stands
+	//	IFSSPACE    the whitespace among them
+	//	WORD        alnum together with `$WORDCHARS`
+	//	INCOMPLETE  a byte that could begin a character and does not
+	//	INVALID     a byte that could not begin one
+	//
+	// `IDENT` is the one that was reachable and wrong. `gitstatus` guards its
+	// argument with `[[ $name != [[:IDENT:]]## ]]`, and with the name missing
+	// the guard fired on every well-formed name it was given — silently, at
+	// status 0, so the plugin reported a bad argument and no diagnostic of
+	// this shell's said why (#1721).
+	//
+	// `ascii` is the one that is not this shell's own: bash 5.3 and bash 3.2
+	// answer it too, and ksh93 and dash do not.
+	s.PatternClasses = "ascii IDENT IFS IFSSPACE INCOMPLETE INVALID WORD"
 	// And inside a bracket expression the backslash is a member of the set as
 	// well as the protection for the character behind it, which no other
 	// column does: `p='[\)]'; [[ $s == ${~p} ]]` matches `)` here and matches

@@ -235,14 +235,6 @@ func TestTheUnimplementedFlagsAreRefusedByName(t *testing.T) {
 				tc.src, out)
 		}
 	}
-	// An exclusion that would have to span a path component is refused for
-	// the same reason: this walk reads one component at a time, and running
-	// the right side against a file's name alone would answer the wrong
-	// question quietly.
-	out, st := runZsh(t, t.TempDir(), "setopt extendedglob\necho **/x~*bar*")
-	if !strings.Contains(out, "exclusion spanning a path component") || st == 0 {
-		t.Errorf("a cross-component exclusion = %q (status %d), want a refusal", out, st)
-	}
 }
 
 // A letter no shell has is this shell's own `bad pattern`, and the status it

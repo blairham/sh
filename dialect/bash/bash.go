@@ -358,6 +358,12 @@ func Semantics() interp.Semantics {
 	// from one: `n=3; echo {1..$n}` is the literal `{1..3}`.
 	s.BraceRangeEndpointsExpanded = interp.No
 	s.BracketCaretNegates = interp.Yes
+	// One character-class name beyond the twelve POSIX ones. Measured
+	// 2026-09-10, `[[ $c = [[:ascii:]] ]]` a character at a time: `a` is in
+	// it, `é` and `日` are not, and bash 3.2 answers the same. ksh93 and dash
+	// have no such name and match nothing with it, silently, which is what
+	// this shell does with any other name outside the roster.
+	s.PatternClasses = "ascii"
 	s.RegexQuotingMakesLiteral = interp.Yes
 	// A process substitution may stand as a condition's operand here, and is
 	// performed there: `[[ $v == <(cmd) ]]` runs cmd and matches against the

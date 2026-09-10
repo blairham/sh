@@ -158,6 +158,43 @@ intended — its column dates the behavior rather than vetoing it, per
 class can never match, and nothing says so, which is one more of the
 silent divergences this document keeps a list of.
 
+**"Unknown" is a per-dialect question, and the roster is what differs.**
+Measured 2026-09-10, `[[ $c = [[:NAME:]] ]]` a character at a time:
+
+| name | zsh | bash 5.3 | bash 3.2 | ksh93 | dash | what it holds |
+|---|---|---|---|---|---|---|
+| `ascii` | yes | yes | yes | no | no | one byte below 0x80 |
+| `IDENT` | yes | no | no | no | no | `alnum` and `_` |
+| `IFS` | yes | no | no | no | no | the separators `$IFS` names |
+| `IFSSPACE` | yes | no | no | no | no | the whitespace among them |
+| `WORD` | yes | no | no | no | no | `alnum` and `$WORDCHARS` |
+| `INCOMPLETE` | yes | no | no | no | no | a byte that could begin a character |
+| `INVALID` | yes | no | no | no | no | a byte that could not |
+
+`ascii` holds `a` and holds neither `é` nor `日` in all three columns that
+have it. `IDENT` is the union of `alnum` and the underscore, and it follows
+`alnum` outside ASCII — `é`, `日` and `٣` are all in it. `IFS` and `WORD`
+read shell state as it stands: `IFS=':x'` puts those two characters in the
+first and takes the space out, and `WORDCHARS='@%'` puts `@` and `%` in the
+second and takes `-` and `.` out. `INCOMPLETE` is a byte from 0xC2 to 0xF4,
+which is where a character could have started; `INVALID` is 0x80 to 0xC1 and
+0xF5 upward, which is where none could.
+
+**The names are case-sensitive**: `[[:ident:]]` and `[[:ASCII:]]` match
+nothing where `[[:IDENT:]]` and `[[:ascii:]]` match.
+
+That is `Semantics.PatternClasses`, a space-separated roster and not a flag
+per name, because nothing here is in dispute — no shell disagrees with
+another about what `ascii` means, they differ only over whether the name
+exists. Empty is the twelve and nothing else, which is ksh93's answer and
+dash's.
+
+`[[:IDENT:]]` is the row that was reachable and wrong. `gitstatus` guards
+its argument with `[[ $name != [[:IDENT:]]## ]]`, so a missing name made the
+guard fire on every well-formed argument, silently and at status 0 — the
+plugin then reported a bad argument and nothing of this shell's said why
+(#1721).
+
 ## What a "single character" is
 
 `?` matches one character and a bracket matches one character, and
@@ -1076,11 +1113,17 @@ written down.
 
 Precedence, each measured rather than read off a manual:
 
-- **The exclusion is looser than `|`.** `[[ zz == (a*~*b*|zz) ]]` matches,
-  which it could not if the `|` bound tighter and `zz` were being excluded.
+- **The exclusion is tighter than `|`**, so a `|` separates whole
+  exclusions. `[[ zz == (a*~*b*|zz) ]]` matches, which it could not if the
+  `~` took the whole `*b*|zz` as its right side, and `case` reads
+  `a~a|b` as `(a~a)|b`: `a` misses, `b` hits, `c` misses.
+- **Exclusions chain to the left.** `a*~*b~*c` is `a*` with two things taken
+  out of it, each compared with the whole subject: `ad` hits, `adb` and
+  `adc` miss.
 - **The exclusion is looser than `/`.** `**/x~*bar*` in a directory holding
   `foo/x`, `bar/x` and `baz/sub/x` lists `baz/sub/x` and `foo/x`: the right
-  side was compared against the whole path, not against one component.
+  side was compared against the whole path, not against one component. The
+  filesystem half of this has a section of its own, below.
 - **The negation is tighter than `/`.** `^foo/x` lists `bar/x`, so `^` is
   read inside one component.
 - **The negation starts where it stands** and runs to the end of its
@@ -1390,11 +1433,55 @@ it — a dropped one left `$match[1]` **empty**, which is also what a group
 that genuinely matched nothing leaves — and it is why the flag kept
 refusing until it could fill all three arrays (#1304).
 
-One further refusal is about the walk rather than the flag: an exclusion
-that spans a path component — `**/x~*bar*` — is refused by name in
-pathname expansion, because that walk reads a pattern one component at a
-time and comparing the right side against a file's name alone would be
-the same silent wrong answer in a new place.
+
+### The exclusion against the filesystem
+
+An exclusion is the one pattern operator that is **looser than `/`**, so
+pathname expansion has to take it off the field before it cuts the field
+into components. Measured 2026-09-10 against zsh 5.9.2, over a tree holding
+`/tmp/gx/keep_a`, `/tmp/gx/keep_c~`, `/tmp/gx/keep_b.zwc`, `/tmp/gx/gxdir/`
+and `/tmp/gx/sub/`:
+
+    /tmp/gx/*~*(~|.zwc)     → /tmp/gx/gxdir /tmp/gx/keep_a /tmp/gx/sub
+    /tmp/gx/*~*gx*          → nothing: every word holds `gx` in its directory
+    cd /tmp/gx; *~*gx*      → keep_a keep_b.zwc keep_c~ sub
+    /tmp/gx/*~*x*/deep      → all seven: no word ends `/deep`
+
+The reading those three rows force:
+
+- **The left side is globbed the ordinary way**, one component at a time,
+  with no metacharacter crossing a `/`.
+- **The right side is matched against the whole word the left side
+  produced**, as a plain pattern: `/` is an ordinary character in it, a `*`
+  crosses directories, and the leading-period rule does not apply —
+  `*(D)`'s `.hidden` is taken out by `~*hidden*`.
+- **The word is the one the pattern wrote**, not a cleaned or absolute path.
+  `cd /tmp; ./gx/*~./gx/keep_a` takes `keep_a` out and `./gx/*~gx/keep_a`
+  does not, and `/tmp/gx/sub/../*` is excluded as `/tmp/gx/sub/../keep_a`.
+- **The exclusion comes before the qualifiers.** `/tmp/gx/*~*gxdir*([1])` is
+  `/tmp/gx/keep_a`: the list `[1]` counts into has already had the exclusion
+  taken out of it. Glob modifiers come after it too — `*~*zwc*(N:e)` runs
+  `:e` over what survived.
+- **A `~` straight after a `/` leaves the left side's last component
+  empty**, and no file is named nothing: `/tmp/gx/sub/` lists `/tmp/gx/sub/`
+  and `/tmp/gx/sub/~*zzzz*` lists nothing. The trailing slash that means
+  "directories only" is the one at the end of the *word*.
+- **An exclusion inside a group is not a top-level one** and stays the
+  single component's question: `/tmp/gx/(*~sub)/*` is `/tmp/gx/gxdir/deep`.
+- **Everything excluded is a miss**, complained about as `no matches found`
+  naming the whole field, `~` and all.
+
+**A `~` on its own does not make a word a pattern.** `keep_a~zzz` prints
+those eleven characters where `keep#_a~zzz` globs and `^zzz` lists the
+directory, so the exclusion says what to take out of a search rather than
+that there is one — it is not in the set that sends a field to the
+filesystem, though it is still escaped when an expansion is pasted into
+one.
+
+This is the shape every real call site writes, because a script that
+searches `$fpath` has a directory to search in: `vcs_info` sweeps it with
+`$dir/VCS_INFO_get_data_*~*(~|.zwc)(N)`, and refusing that by name put
+eighteen lines on the standard error of one interactive startup (#1719).
 
 ## What this does not cover
 

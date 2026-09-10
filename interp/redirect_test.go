@@ -14,7 +14,7 @@ import (
 
 // A command that redirects one stream twice either fills both files or only
 // the last, and the axis is asked only where there *is* a second one.
-func TestRedirectsWriteToEveryTargetIsAnAxis(t *testing.T) {
+func TestRedirectsUseEveryTargetIsAnAxis(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -26,7 +26,7 @@ func TestRedirectsWriteToEveryTargetIsAnAxis(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			sem := CoreSemantics()
-			sem.RedirectsWriteToEveryTarget = tc.answer
+			sem.RedirectsUseEveryTarget = tc.answer
 			if _, st := run(t, "echo x >a >b", func(r *Runner) {
 				r.Semantics, r.Dir = &sem, dir
 			}); st != 0 {

@@ -234,7 +234,7 @@ var zshOptions = []zshOption{
 	recorded("cshjunkiehistory", false),
 	recorded("cshjunkieloops", false),
 	recorded("cshjunkiequotes", false),
-	recorded("cshnullcmd", false),
+	nullCommandOption("cshnullcmd"),
 	recorded("cshnullglob", false),
 	recorded("debugbeforecmd", true),
 	recorded("dvorak", false),
@@ -354,7 +354,21 @@ var zshOptions = []zshOption{
 	setOptBacked("monitor", false, "monitor", false),
 	recorded("multibyte", true),
 	recorded("multifuncdef", true),
-	recorded("multios", true),
+	{
+		// zsh's MULTIOS, and one switch over both directions: a stream
+		// redirected twice writes to both files and reads from both, and
+		// turning this off leaves the last target alone in either. Read off
+		// the axis rather than off a stored bit, which is what makes
+		// `(unsetopt multios)` stay in the subshell.
+		base: "multios", def: true,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.RedirectsUseEveryTarget == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			swapAxes(r, func(s *interp.Semantics) { s.RedirectsUseEveryTarget = answer(on) })
+			return 0
+		},
+	},
 	{
 		base: "nomatch", def: true,
 		get: func(r *interp.Runner) bool { return r.Semantics.GlobNoMatchIsError == interp.Yes },
@@ -412,7 +426,7 @@ var zshOptions = []zshOption{
 	// and off in such a zsh, so turning it off is granted and turning it on
 	// is the measured `can't change option`, 1.
 	fixedConstant("shinstdin", false, false),
-	recorded("shnullcmd", false),
+	nullCommandOption("shnullcmd"),
 	recorded("shoptionletters", false),
 	recorded("shortloops", true),
 	recorded("shortrepeat", false),

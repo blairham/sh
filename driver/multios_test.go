@@ -26,7 +26,7 @@ const multiosScript = "SH_TEST_MULTIOS_SCRIPT"
 func beTheMultiosShell() {
 	if path := os.Getenv(multiosScript); path != "" {
 		sh := shell()
-		sh.Semantics.RedirectsWriteToEveryTarget = interp.Yes
+		sh.Semantics.RedirectsUseEveryTarget = interp.Yes
 		os.Exit(driver.MainArgs(sh, []string{"testsh", path}))
 	}
 }

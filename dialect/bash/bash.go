@@ -478,7 +478,7 @@ func Semantics() interp.Semantics {
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
-	s.RedirectsWriteToEveryTarget = interp.No
+	s.RedirectsUseEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnySuccess
 	s.SubshellJobTable = interp.SubshellJobsKeptOutsideACompound
 	s.PrintfEmptyIsNotANumber = interp.Yes

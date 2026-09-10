@@ -8,7 +8,9 @@ package zsh
 // With the dialect rather than in the binary, so that `sh -dialect zsh` and
 // `./zsh` are the same shell reached by two roads — see the same file under
 // dialect/bash for what went wrong when they were not.
-func Prelude() string { return identity + "WORDCHARS='" + wordCharacters + "'\n" + functions }
+func Prelude() string {
+	return identity + nullCommands + "WORDCHARS='" + wordCharacters + "'\n" + functions
+}
 
 // The directory stack, as shell. The same machinery the bash dialect's
 // prelude carries, with the measured differences kept: this engine's `pushd`
@@ -234,4 +236,23 @@ const identity = `
 ZSH_VERSION='5.9.2-blairham'
 ZSH_NAME=zsh
 ZSH_ARGZERO=$0
+`
+
+// nullCommands is what a command that is only redirections runs, as the two
+// ordinary parameters this shell keeps them in.
+//
+// Here rather than in Go because a script owns them: it reads them, reassigns
+// them and unsets them, and `typeset -p` reports both as plain unexported
+// scalars in real zsh. The core is told the two *names* — see
+// Semantics.NullCommandVariable — and finds whatever the script has left in
+// them, which is the whole reason the hook is observable at all: pointing
+// `READNULLCMD` at a function that prints a marker is the only probe that
+// separates this route from the `$(<file)` form.
+//
+// `more` on the reading side is why `<f` at a prompt pages the file and `cat`
+// on the writing side is why `>g` truncates it with a `cat` that reads
+// nothing. Measured 2026-09-10 on zsh 5.9.2.
+const nullCommands = `
+NULLCMD=cat
+READNULLCMD=more
 `

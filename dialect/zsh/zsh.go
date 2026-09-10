@@ -904,7 +904,15 @@ func Semantics() interp.Semantics {
 	s.ExitInTrapReportsEarlierStatus = interp.No
 	s.KillListAcceptsName = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
-	s.RedirectsWriteToEveryTarget = interp.Yes
+	s.RedirectsUseEveryTarget = interp.Yes
+	// The null-command hook: a command that is only redirections runs
+	// `$NULLCMD`, or `$READNULLCMD` where its one redirection is a plain
+	// `<file`. The names, not the values — a script reassigns them at will,
+	// and the defaults live in the prelude where a script can see and change
+	// them. `setopt cshnullcmd` and `setopt shnullcmd` move these two fields
+	// rather than adding a branch; see nullcommand.go in this package.
+	s.NullCommandVariable = nullCommandParameter
+	s.ReadNullCommandVariable = readNullCommandParameter
 	s.KillStatus = interp.KillStatusFailureCount
 	s.SubshellJobTable = interp.SubshellJobsCleared
 	s.PrintfEmptyIsNotANumber = interp.No
@@ -1534,6 +1542,10 @@ func Diagnostics() interp.Diagnostics {
 		// GreatAmpTarget sends it to the file.
 		DuplicationTargetIsNotADescriptor: "file number expected",
 		CannotCreate:                      "%[2]s: %[1]s",
+		// The null-command hook's own refusal, for a command that is only
+		// redirections and a `NULLCMD` with nothing in it. No verbs, and the
+		// same sentence whether the parameter was unset or emptied.
+		RedirectionWithNoCommand: "redirection with no command",
 		NotABuiltin:                       "no such builtin: %[1]s",
 		CommandStringParsedWhole:          true,
 		// Reading a program from standard input, a line that does not parse
@@ -2138,6 +2150,9 @@ func Apply(r *interp.Runner) {
 	})
 	// A NUL as well as the three whitespace characters, which is zsh's alone.
 	r.SetSpecial("IFS", " \t\n\x00")
+	// The two names the null-command options point at, which no script can
+	// reach and which never move — see nullcommand.go in this package.
+	registerNullCommandParameters(r)
 	tieTheBuiltInPairs(r)
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)

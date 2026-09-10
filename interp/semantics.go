@@ -1105,15 +1105,69 @@ type Semantics struct {
 	// rather than a switch — see PrintfQuoteStyle.
 	PrintfQuote PrintfQuoteStyle
 
-	// RedirectsWriteToEveryTarget sends a command's output to *all* of the
-	// files it redirects to rather than only the last: `echo x >a >b` fills
-	// both in zsh and leaves `a` empty in the other three.
+	// RedirectsUseEveryTarget makes a stream redirected more than once use
+	// *every* file it names rather than only the last, in both directions:
+	// output goes to all of them and input arrives as all of them in the
+	// order written. `echo x >a >b` fills both in zsh and leaves `a` empty in
+	// the other five; `cat <a <b` is both files there and only `b` elsewhere.
 	//
-	// Silent either way — the shells that write once report no error, and the
-	// script looks like it worked — which is the `&>` failure mode in a
-	// redirection. Asked only where a command redirects one stream twice,
-	// because that is the only place it decides anything.
-	RedirectsWriteToEveryTarget Answer
+	// One axis and not two, because it is one switch in the one shell that
+	// has it: turning that shell's option off takes the fan-out and the
+	// concatenation together, and two fields would be two places to forget
+	// one of them. Named for a target rather than for a direction for the
+	// same reason.
+	//
+	// Silent either way — the shells that use the last target alone report no
+	// error, and the script looks like it worked — which is the `&>` failure
+	// mode in a redirection. Asked only where a command redirects one stream
+	// twice, because that is the only place it decides anything.
+	RedirectsUseEveryTarget Answer
+
+	// NullCommandVariable names the parameter holding the command that a
+	// command consisting only of redirections runs.
+	//
+	// Empty is the core's answer and five of the six panel columns': `<f`
+	// opens the file, runs nothing and writes nothing, and `>g` truncates
+	// `g` the same way. One shell instead treats the redirections as
+	// arguments to a command named by this parameter, so `<f` at a prompt
+	// pages the file — measured by pointing the parameter at a function that
+	// prints a marker and watching the marker come out. Its own name for
+	// this is `NULLCMD` and it defaults to `cat`.
+	//
+	// A name rather than a value, because the parameter is a script's to
+	// reassign at any moment and the answer has to be read when the command
+	// runs, not when the dialect is built.
+	//
+	// The hook is off entirely while this is empty, which is what keeps the
+	// two readings apart: a shell without it runs nothing and *succeeds*,
+	// where a shell with it and an empty parameter refuses the command by
+	// name — see Diagnostics.RedirectionWithNoCommand. So "no hook" and "a
+	// hook with nothing in it" are different observable shells, and this
+	// field is the first of them.
+	//
+	// What it is not: the `$(<file)` form, whose whole body is one input
+	// redirection. That form does not consult this parameter — measured, and
+	// see readfilesubst.go — so a substitution reads the file even where the
+	// hook is pointed somewhere else. Two operands, two paths.
+	NullCommandVariable string
+
+	// ReadNullCommandVariable names the parameter consulted in place of
+	// NullCommandVariable when the command's *only* redirection is a plain
+	// input file redirection.
+	//
+	// One redirection and one operator: `<f` and `3<f` both take this route
+	// — the descriptor number does not matter — where `<f <g`, `<>f`, `<<<x`,
+	// `<&0`, `2>e` and `<f 2>e` all take the other. Measured a spelling at a
+	// time with the two parameters pointed at two different marker functions,
+	// which is the only probe that can tell them apart: with both left at
+	// their defaults the two routes print the same file and the reading is
+	// unfalsifiable.
+	//
+	// Empty — the parameter unset, or set to nothing — falls back to
+	// NullCommandVariable rather than refusing, so a script that clears the
+	// reader still pages nothing and cats instead. The shell that has it
+	// calls it `READNULLCMD` and defaults it to `more`.
+	ReadNullCommandVariable string
 
 	// NoclobberBlocksAppendCreate makes `set -C` stop `>>` from *creating* a
 	// file, so appending to a name that is not there is a refusal rather

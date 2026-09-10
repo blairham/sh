@@ -1015,7 +1015,7 @@ last:
 
 Nothing is reported either way, so it is the `&>` shape again. It is
 recorded as `redir/multios-is-zsh-only` and implemented as the
-`RedirectsWriteToEveryTarget` axis, asked only when one stream is given
+`RedirectsUseEveryTarget` axis, asked only when one stream is given
 several targets — so no script that redirects the ordinary way pays for
 zsh's feature. An earlier revision of this paragraph called it deliberately
 unbuilt, and the paragraph outlived the decision: the failure mode this

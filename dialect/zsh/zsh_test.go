@@ -500,7 +500,7 @@ func TestAPatternThatIsNotOneNamesTheToken(t *testing.T) {
 
 // TestEveryTargetIsWritten is zsh's multios, and the axis nobody else sets.
 func TestEveryTargetIsWritten(t *testing.T) {
-	if got, want := zsh.Semantics().RedirectsWriteToEveryTarget, interp.Yes; got != want {
+	if got, want := zsh.Semantics().RedirectsUseEveryTarget, interp.Yes; got != want {
 		t.Errorf("got %v, want a command's output in every file it names", got)
 	}
 }

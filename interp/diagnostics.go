@@ -2537,6 +2537,17 @@ type Diagnostics struct {
 	// same thing either way.
 	CannotCreate string
 
+	// RedirectionWithNoCommand is a command that is only redirections, in a
+	// dialect that has the null-command hook and whose null-command
+	// parameter is empty. No verbs.
+	//
+	// Reached only through Semantics.NullCommandVariable, so a dialect
+	// without the hook never needs a wording: there a command that is only
+	// redirections opens its files, runs nothing and succeeds. The one shell
+	// that has it says `redirection with no command` and reports 1, and says
+	// it for an unset parameter and an emptied one alike.
+	RedirectionWithNoCommand string
+
 	// RedirectFailureLine is which line a redirect that could not be opened
 	// is reported at, when the redirect and the command it belongs to are on
 	// different lines.

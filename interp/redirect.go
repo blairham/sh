@@ -63,6 +63,10 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	// the fan-out (#1261). Reading the earlier note as "the shell's own
 	// stream is never a target" is what left the duplication out.
 	opened := map[int]io.Writer{}
+	// The same set for the other direction, which the same axis governs: a
+	// descriptor read from twice arrives as both sources in the order they
+	// were written, rather than as the last one alone.
+	sources := map[int]io.Reader{}
 	// Saved streams are restored when the command finishes, which is why the
 	// caller closes what comes back rather than this doing it.
 	savedOut, savedIn, savedErr := r.Stdout, r.Stdin, r.Stderr
@@ -143,7 +147,10 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// input in all four, never an ambiguous redirect.
 		if rd.Op.IsHeredoc() || rd.Op == syntax.TokTLess {
 			body := r.heredocBody(rd)
-			r.Stdin = strings.NewReader(body)
+			// A body joins the set as an opened file does: `cat <f <<<hi` is the
+			// file and then the line, measured, so the source need not be a file
+			// to be one of several.
+			r.Stdin = r.eachSource(0, strings.NewReader(body), sources)
 			if r.redirErr {
 				// The body could not be expanded, and the process the
 				// redirection was for is where that happened — so the
@@ -472,7 +479,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			w := r.eachTarget(-1, f, opened)
 			r.Stdout, r.Stderr = w, w
 		case 0:
-			r.Stdin = f
+			r.Stdin = r.eachSource(0, f, sources)
 		case 1:
 			r.Stdout = r.eachTarget(1, f, opened)
 		case 2:
@@ -499,7 +506,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 // them, and returns the newest otherwise.
 func (r *Runner) eachTarget(fd int, f io.Writer, opened map[int]io.Writer) io.Writer {
 	if prev, ok := opened[fd]; ok &&
-		r.ask(r.sem().RedirectsWriteToEveryTarget, "a command redirecting one stream to several targets") {
+		r.ask(r.sem().RedirectsUseEveryTarget, "a command redirecting one stream to several targets") {
 		// Marked as what it is rather than left to be recognized by type. A
 		// stream over several files is the one shape that cannot be handed to
 		// a process replacement as a descriptor number, and the shell that
@@ -510,6 +517,24 @@ func (r *Runner) eachTarget(fd int, f io.Writer, opened map[int]io.Writer) io.Wr
 	}
 	opened[fd] = f
 	return f
+}
+
+// eachSource concatenates a stream's sources where the dialect reads from all
+// of them, and returns the newest otherwise.
+//
+// The mirror of eachTarget across the one axis both of them ask, and it needs
+// no marker type of its own: a fan-out cannot be handed to a process
+// replacement as a descriptor number, where a concatenation can — os/exec
+// gives a child a pipe for any reader that is not a file, which is what the
+// shell that has this does too. Measured on zsh 5.9.2: `cat <f` sees a
+// regular file on its input and `cat <f <g` sees a pipe.
+func (r *Runner) eachSource(fd int, in io.Reader, sources map[int]io.Reader) io.Reader {
+	if prev, ok := sources[fd]; ok &&
+		r.ask(r.sem().RedirectsUseEveryTarget, "a command reading one stream from several sources") {
+		in = io.MultiReader(prev, in)
+	}
+	sources[fd] = in
+	return in
 }
 
 // multiTarget is a stream the shell built out of more than one target, under

@@ -786,6 +786,16 @@ type Runner struct {
 	// noexec is `set -n`: read, never run, never unset — even the `set +n`
 	// that would clear it is a command.
 	noexec bool
+	// onecmd is `set -t`, and unlike noexec it is *not* one-way: the front
+	// end reads it once the line it was set on has finished, so a `set +t`
+	// later on that same line is seen and cancels the stop — measured, `set
+	// -o onecmd; set +o onecmd; echo B` on one line of a script runs the
+	// line after it too.
+	//
+	// The shell it stops is the one *reading*, which is why the state lives
+	// here and the stopping lives in the front end: this package runs what
+	// it is handed and has no say in whether there is more.
+	onecmd bool
 	// monitor is `set -m`. Background jobs already run in process groups of
 	// their own here (see setProcessGroup), so in a non-interactive shell
 	// what the option adds is the state itself: the listings and `$-`
@@ -1899,6 +1909,14 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 // Exited reports whether the shell has been asked to stop, so a front end
 // feeding it chunks knows not to read another.
 func (r *Runner) Exited() bool { return r.ctl == controlExit }
+
+// OneCommand reports `set -t` — that the shell should stop once the line it
+// is running has finished.
+//
+// For a front end, because the option's whole effect is on reading: a line is
+// run and then nothing more is read. Asked after each line rather than once,
+// since the option can be set — and unset again — by the line itself.
+func (r *Runner) OneCommand() bool { return r.onecmd }
 
 // Finish ends the session and reports the status to exit with.
 //

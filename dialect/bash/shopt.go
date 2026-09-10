@@ -146,6 +146,26 @@ var shoptSwitches = map[string]struct {
 		get: (*interp.Runner).AliasExpansion,
 		set: (*interp.Runner).SetAliasExpansion,
 	},
+	// login_shell is not a preference at all: it is the fact that this shell
+	// was started as a login shell, which the front end already carries in
+	// interp.Runner.LoginShell for the `$-` question next door
+	// (Semantics.LoginShowsLInDollarDash — bash answers *no* there precisely
+	// because it keeps the fact here instead).
+	//
+	// So the setter moves nothing, and that is bash's own answer rather than a
+	// gap: measured on bash 5.3.15, `shopt -s login_shell` and `shopt -u
+	// login_shell` both report 0 and leave the state exactly as it was, in a
+	// login shell and outside one alike. It reads `on` under `-l` and `off`
+	// without it, which is the only thing about it a script can observe.
+	//
+	// It sat in shoptStates before, where a static `false` made it wrong twice
+	// over: it read `off` in a login shell, and asking for the state it was
+	// really in was refused as `not implemented` at 1 — one of the two lines a
+	// generated shell snapshot could not source (#1709).
+	"login_shell": {
+		get: func(r *interp.Runner) bool { return r.LoginShell },
+		set: func(*interp.Runner, bool) {},
+	},
 	"checkwinsize": {
 		get: (*interp.Runner).TracksWindowSize,
 		set: (*interp.Runner).SetTracksWindowSize,
@@ -256,7 +276,6 @@ var shoptStates = map[string]bool{
 	"lithist":              true,
 	"localvar_inherit":     false,
 	"localvar_unset":       false,
-	"login_shell":          false,
 	"mailwarn":             false,
 	"noexpand_translation": false,
 	"patsub_replacement":   false,

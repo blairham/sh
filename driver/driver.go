@@ -449,6 +449,10 @@ func (sh Shell) withDefaults(argv []string) Shell {
 // input are named after the shell.
 // source is where a shell's script came from: the text, what to call it in a
 // diagnostic, and how the dialect words one about it.
+// commandStringLabel is source.input for a `-c` string, which is the one route
+// whose whole program is a single command — see `set -t` in executeLines.
+const commandStringLabel = "-c"
+
 type source struct {
 	src  string
 	name string
@@ -1026,7 +1030,7 @@ func (sh Shell) unanswered(what string) string {
 // keeps its own name and there are no parameters.
 func commandSource(sh Shell, src string, operands []string) source {
 	in := source{
-		src: src, name: sh.Name, input: "-c",
+		src: src, name: sh.Name, input: commandStringLabel,
 		wholeFirst: sh.Diagnostics.CommandStringParsedWhole,
 		dg:         sh.Diagnostics,
 	}
@@ -1585,6 +1589,24 @@ func (sh Shell) executeLines(
 		// interactive one, in every dialect but the three that announce.
 		sh.reportFinishedJobs(r)
 		if r.Exited() {
+			break
+		}
+		// `set -t`: the line that asked has finished, so nothing more is
+		// read. Here rather than in the runner because the option stops the
+		// *reading*, and here rather than before the line because the line
+		// that sets it still runs — measured, `set -t; echo B` on one line
+		// of a script writes B and then stops, and a `set +t` on that same
+		// line cancels the stop outright.
+		//
+		// A `-c` string is exempt, and it is a whole string rather than a
+		// first line: measured on bash 5.3.15, `-c $'echo A\nset -o
+		// onecmd\necho B\necho C'` writes all three, where the same four
+		// lines in a *file* stop after the second. So the option does not
+		// truncate a program the shell was handed complete — the one command
+		// it stops after is the whole of it — and reading that route a line
+		// at a time is this front end's business and not something a script
+		// can observe.
+		if r.OneCommand() && in.input != commandStringLabel {
 			break
 		}
 	}

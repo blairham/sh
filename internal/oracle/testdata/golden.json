@@ -102687,6 +102687,50 @@
         "TimedOut": false
       }
     },
+    "setopt/localtraps-undoes-a-one-word-reset": {
+      "bash": {
+        "Stdout": "in=0",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~trap: usage: trap [-Plp] [[action] signal_spec ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=0",
+        "Stderr": "\u003cshell\u003e: setopt: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=0",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: trap: condition(s) required",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=0~trap -- 'echo outer' USR1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "setopt/no-aliases-stops-the-expansion": {
       "bash": {
         "Stdout": "",

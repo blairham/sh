@@ -102,6 +102,10 @@ func TestSemantics(t *testing.T) {
 		{"BraceRangePadsToEndpointWidth", s.BraceRangePadsToEndpointWidth, interp.No},
 		{"BraceRangeStepSignHonored", s.BraceRangeStepSignHonored, interp.Yes},
 		{"BraceRangeNegativeStepReverses", s.BraceRangeNegativeStepReverses, interp.No},
+		// And the one thing it does that bash does not do at all: a range
+		// reads its endpoints after the expansions in them, so `n=3;
+		// echo {1..$n}` is `1 2 3` rather than the literal.
+		{"BraceRangeEndpointsExpanded", s.BraceRangeEndpointsExpanded, interp.Yes},
 		{"ArithInvalidOctalDigitIsError", s.ArithInvalidOctalDigitIsError, interp.No},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.Yes},
 		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.Yes},

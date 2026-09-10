@@ -16,17 +16,44 @@ import (
 // It runs *before* parameter expansion, which is measured and is why
 // `a=1; echo {$a,2}` yields two words rather than one: the braces are
 // resolved against the literal text `$a,2`, and only then does `$a` become 1.
-// A brace range whose endpoints are variables therefore cannot work, in any
-// shell.
 //
-// It is purely textual: it never consults the filesystem and never fails. An
-// unmatched or malformed brace is left alone, which is why `echo {a}` prints
-// `{a}`.
+// A *range* is where that ordering is a disagreement rather than a fact.
+// bash keeps it — `n=3; echo {1..$n}` is the literal `{1..3}`, the range
+// already gone by the time the variable exists — and zsh and ksh93 expand a
+// range's endpoints first and read the range afterwards, so the same line is
+// `1 2 3`. `BraceRangeEndpointsExpanded` is that axis, asked only where a
+// range is actually written with an expansion in it.
 //
-// Only unquoted literal spans take part. `"{a,b}"` is one word, because
-// quoting is what decides whether text is syntax — the same rule that decides
-// whether a `*` is a pattern.
+// Apart from that it is purely textual: it never consults the filesystem and
+// never fails. An unmatched or malformed brace is left alone, which is why
+// `echo {a}` prints `{a}`.
+//
+// Only unquoted literal spans take part in the brace *syntax*. `"{a,b}"` is
+// one word, because quoting is what decides whether text is syntax — the same
+// rule that decides whether a `*` is a pattern. A quoted endpoint inside a
+// range is not that, and is measured: `{1..'3'}` is `1 2 3` in both shells
+// that expand endpoints at all, so the quotes hide the text from the brace
+// scanner and not from the range.
 func (r *Runner) braceExpand(w *syntax.Word) []*syntax.Word {
+	return r.braceWords(w, true)
+}
+
+// braceCount is braceExpand asked only how many words the braces make, with
+// a range's endpoints left unexpanded.
+//
+// A redirection needs the count, and it needs it about a word whose
+// expansions have already been run once — avoiding a second run is the whole
+// reason `expandRedirectTargetViews` exists — so a `> {1..$(f)}` counted with
+// the endpoints live would run `f` twice. The suppressed count is also the
+// measured answer: ksh93 expands endpoints in a word and *not* in a
+// redirection target, writing to a file named `{1..2}`.
+func (r *Runner) braceCount(w *syntax.Word) int {
+	return len(r.braceWords(w, false))
+}
+
+// braceWords is the whole of brace expansion, with a switch for whether a
+// range's endpoints may be expanded on the way.
+func (r *Runner) braceWords(w *syntax.Word, endpoints bool) []*syntax.Word {
 	if w == nil {
 		return nil
 	}
@@ -38,7 +65,7 @@ func (r *Runner) braceExpand(w *syntax.Word) []*syntax.Word {
 	if !ok {
 		return []*syntax.Word{w}
 	}
-	alts, ok := r.alternativesAcross(w.Spans, open, close)
+	alts, ok := r.alternativesAcross(w, open, close, endpoints)
 	if !ok {
 		return []*syntax.Word{w}
 	}
@@ -52,7 +79,7 @@ func (r *Runner) braceExpand(w *syntax.Word) []*syntax.Word {
 		spans = append(spans, alt...)
 		spans = append(spans, after...)
 		// Recur, so `{a,b}{c,d}` and nested braces both work.
-		out = append(out, r.braceExpand(&syntax.Word{Spans: spans, Start: w.Start, Stop: w.Stop})...)
+		out = append(out, r.braceWords(&syntax.Word{Spans: spans, Start: w.Start, Stop: w.Stop}, endpoints)...)
 	}
 	return out
 }
@@ -119,8 +146,9 @@ func matchBraceAcross(spans []syntax.Span, open cursor) (cursor, bool) {
 
 // alternativesAcross splits the body between open and close on top-level
 // commas, returning each alternative as its own span list.
-func (r *Runner) alternativesAcross(spans []syntax.Span, open, close cursor) ([][]syntax.Span, bool) {
-	if alts, ok := r.rangeAcross(spans, open, close); ok {
+func (r *Runner) alternativesAcross(w *syntax.Word, open, close cursor, endpoints bool) ([][]syntax.Span, bool) {
+	spans := w.Spans
+	if alts, ok := r.rangeAcross(w, open, close, endpoints); ok {
 		return alts, true
 	}
 	var out [][]syntax.Span
@@ -161,23 +189,102 @@ func (r *Runner) alternativesAcross(spans []syntax.Span, open, close cursor) ([]
 	return append(out, sliceSpans(spans, from, close)), true
 }
 
-// rangeAcross expands `{n..m}`, which only makes sense when the whole body is
-// literal — a range with a variable endpoint cannot work in any shell,
-// because braces resolve before the variable exists.
-func (r *Runner) rangeAcross(spans []syntax.Span, open, close cursor) ([][]syntax.Span, bool) {
-	if open.span != close.span {
+// rangeAcross expands `{n..m}`, either from the literal text between the
+// braces or — where the endpoints are written as expansions and the dialect
+// says so — from what those expansions come to.
+func (r *Runner) rangeAcross(w *syntax.Word, open, close cursor, endpoints bool) ([][]syntax.Span, bool) {
+	body := sliceSpans(w.Spans, next(open), close)
+	pos := w.Spans[open.span].Pos
+	if text, ok := literalBody(body); ok {
+		alts, ok := r.braceRange(text)
+		if !ok {
+			return nil, false
+		}
+		return rangeSpans(alts, pos), true
+	}
+	if !endpoints || !rangeShaped(body) {
 		return nil, false
 	}
-	body := spans[open.span].Value[open.off+1 : close.off]
-	alts, ok := r.braceRange(body)
+	if !r.askRange(r.sem().BraceRangeEndpointsExpanded,
+		"a brace range's endpoints expanding before the range is read") {
+		return nil, false
+	}
+	// Once, whatever comes of it. A range that fails to form is put back as
+	// the text the endpoints came to rather than as the word that produced
+	// it, which is measured twice over: `{1..$(f)}` with a non-numeric `f`
+	// runs `f` a single time, and the text it leaves is neither split nor
+	// matched — ksh93 splits `$sp` on its own and leaves `{1..$sp}` whole.
+	text := strings.Join(r.expandWordNoSplit(&syntax.Word{
+		Spans: body, Start: w.Start, Stop: w.Stop,
+	}), "")
+	alts, ok := r.braceRange(text)
 	if !ok {
-		return nil, false
+		return [][]syntax.Span{{{
+			Kind: syntax.Literal, Quoting: syntax.SingleQuoted,
+			Value: "{" + text + "}", Pos: pos,
+		}}}, true
 	}
+	return rangeSpans(alts, pos), true
+}
+
+// literalBody gives the text of a brace body written entirely as unquoted
+// literals, which is the only body a range can be read from without expanding
+// anything. A quoted or substituted span makes it the other case.
+func literalBody(body []syntax.Span) (string, bool) {
+	var b strings.Builder
+	for _, s := range body {
+		if !braceable(s) {
+			return "", false
+		}
+		b.WriteString(s.Value)
+	}
+	return b.String(), true
+}
+
+// rangeShaped reports whether a brace body is *written* as a range: a `..`
+// outside any nested brace, and no comma out there.
+//
+// The comma decides, because a list beats a range wherever both readings fit:
+// `{1..3,5}` is the two words `1..3` and `5` in bash, ksh93 and zsh alike.
+// Asking first is also what keeps a list's expansions from being run twice —
+// nothing here may expand a body that a range will not read.
+func rangeShaped(body []syntax.Span) bool {
+	depth, dots := 0, false
+	for _, s := range body {
+		if !braceable(s) {
+			continue
+		}
+		v := s.Value
+		for j := 0; j < len(v); j++ {
+			switch v[j] {
+			case '\\':
+				j++
+			case '{':
+				depth++
+			case '}':
+				depth--
+			case ',':
+				if depth == 0 {
+					return false
+				}
+			case '.':
+				if depth == 0 && j+1 < len(v) && v[j+1] == '.' {
+					dots = true
+					j++
+				}
+			}
+		}
+	}
+	return dots
+}
+
+// rangeSpans turns a range's elements into one-span alternatives.
+func rangeSpans(alts []string, pos syntax.Pos) [][]syntax.Span {
 	out := make([][]syntax.Span, 0, len(alts))
 	for _, a := range alts {
-		out = append(out, []syntax.Span{{Kind: syntax.Literal, Value: a, Pos: spans[open.span].Pos}})
+		out = append(out, []syntax.Span{{Kind: syntax.Literal, Value: a, Pos: pos}})
 	}
-	return out, true
+	return out
 }
 
 // sliceSpans copies the spans between two cursors, splitting the ones at the

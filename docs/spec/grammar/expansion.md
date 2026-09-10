@@ -64,15 +64,38 @@ Not POSIX, and **absent from dash**:
 | --- | --- | --- | --- | --- |
 | `echo {1..3}` | `{1..3}` | `1 2 3` | `1 2 3` | `1 2 3` |
 | `a=1; echo {$a,2}` | `{1,2}` | `1 2` | `1 2` | `1 2` |
+| `n=3; echo {1..$n}` | `{1..3}` | `{1..3}` | `1 2 3` | `1 2 3` |
 
 It runs **before** parameter expansion, which is why the second row
 produces two fields rather than one: the braces are resolved against the
-literal text `$a,2`, and only then does `$a` become `1`. A brace range
-whose endpoints are variables therefore does not work — the range is
-already gone by the time the variable exists.
+literal text `$a,2`, and only then does `$a` become `1`.
 
-Brace expansion is purely textual: it does not consult the filesystem and
-never fails. An unmatched or malformed brace is left alone.
+The third row is where that ordering stops being a fact and becomes a
+**disagreement**. bash keeps it for a *range* too, so the range is gone by
+the time `$n` exists and the word stays literal; zsh and ksh93 expand a
+range's endpoints first and read the range afterwards.
+`BraceRangeEndpointsExpanded` is that axis, asked only where a range is
+written with something to expand in it — a literal `{1..3}` is unanimous
+and is never a question. Corpus:
+`expand/brace-range-expanded-endpoint`.
+
+Three things follow, all measured (`-quoting` and `-refused`):
+
+- **Quoting hides an endpoint from the brace scanner, not from the
+  range.** `{1..'3'}`, `{1.."$n"}` and `{"1"..3}` all count `1 2 3` in
+  the two shells that expand endpoints, while `"{1..3}"` — the whole
+  word quoted — is a literal everywhere.
+- **A comma is a list before it is ever a range.** `{1..3,5}` is the two
+  words `1..3` and `5` in bash, ksh93 and zsh alike, so nothing may
+  expand a body a range will not read.
+- **A range that does not form gives back what it expanded, once.**
+  `{1..$(f)}` with a non-numeric `f` runs `f` a single time, and the text
+  left behind is neither field-split nor matched: ksh93 splits `$sp` in a
+  word of its own and still leaves `{1..$sp}` a single field.
+
+Apart from a range's endpoints it is purely textual: it does not consult
+the filesystem and never fails. An unmatched or malformed brace is left
+alone.
 
 ### Ranges beyond `{1..3}`
 
@@ -107,7 +130,8 @@ core answer:
   a walk from 10. `BraceRangeNegativeStepReverses`.
 
 The core expands what is unanimous and asks the vector where the answers
-part; `interp/brace.go` names the same three fields.
+part; `interp/brace.go` names the same three fields, plus the ordering
+one above.
 
 **Core**: present. Dialect `posix` disables it (matching dash).
 

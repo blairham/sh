@@ -542,7 +542,7 @@ func (r *Runner) redirectTarget(rd *syntax.Redirect) (string, bool) {
 	//
 	// Braces count as differing: a target that expands to several words is
 	// several words to the dialect that expands one.
-	same := len(fields) == 1 && fields[0] == plain && len(r.braceExpand(rd.Word)) == 1
+	same := len(fields) == 1 && fields[0] == plain && r.braceCount(rd.Word) == 1
 	if same {
 		return plain, false
 	}
@@ -561,7 +561,7 @@ func (r *Runner) redirectTarget(rd *syntax.Redirect) (string, bool) {
 	}
 	// bash's reading, and braces make words as surely as splitting does:
 	// `> {a,b}` names two files and so names none.
-	braced := len(r.braceExpand(rd.Word)) > 1 && r.ask(r.sem().BraceExpansion, "brace expansion")
+	braced := r.braceCount(rd.Word) > 1 && r.ask(r.sem().BraceExpansion, "brace expansion")
 	if !braced && len(fields) == 1 {
 		return fields[0], false
 	}

@@ -32,8 +32,9 @@ import "context"
 // session carried on — so this reports and returns, and refuses nothing.
 //
 // The status is the text's, exactly as `eval`'s is, and every caller of this
-// is at a site that must not let it reach the next command — see repl's
-// fireChain, which saves `$?` and puts it back around each item of a chain.
+// is at a site that must not let it reach the next command — see
+// [Runner.FireChain], which saves `$?` and puts it back around each item of a
+// chain.
 func (r *Runner) EvalVariable(ctx context.Context, name, text string) int {
 	// The context the text runs under, for the length of the run, for the
 	// reason CallFunction sets one: a hook fires between two chunks rather

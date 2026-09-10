@@ -103,7 +103,14 @@ func (r *Runner) HookChain(name string) []string {
 // Written this way rather than as a second loop beside the first because a
 // second loop is how a rule comes to be carried by one caller and not the
 // other.
-func (r *Runner) FireChain(ctx context.Context, items []string, run func(item string)) {
+//
+// No context, which is the honest signature rather than a missing one: this
+// runs no shell itself. It walks a list and keeps `$?` straight around each
+// step, and the closure that does run something already holds the context it
+// needs. Taking one here and never reading it would promise a cancellation
+// this loop does not perform — nothing in the panel stops a hook chain part
+// way through except a hook that exited, which is the check below.
+func (r *Runner) FireChain(items []string, run func(item string)) {
 	status := r.ExitStatus()
 	for _, item := range items {
 		r.SetExitStatus(status)
@@ -133,7 +140,7 @@ func (r *Runner) FireHook(ctx context.Context, around func(call func()), name st
 	if around == nil {
 		around = func(call func()) { call() }
 	}
-	r.FireChain(ctx, r.HookChain(name), func(fn string) {
+	r.FireChain(r.HookChain(name), func(fn string) {
 		around(func() { _, _ = r.CallFunction(ctx, fn, args...) })
 	})
 }

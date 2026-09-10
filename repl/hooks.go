@@ -229,7 +229,7 @@ func (s Shell) fireEvaluated(ctx context.Context, name string) {
 	// a condition no test could reach and no behavior could distinguish.
 	text, _ := s.Runner.GetArray(name)
 	guard := s.guard()
-	s.Runner.FireChain(ctx, text, func(cmd string) {
+	s.Runner.FireChain(text, func(cmd string) {
 		guard.Do(func() { _ = s.Runner.EvalVariable(ctx, name, cmd) })
 	})
 }

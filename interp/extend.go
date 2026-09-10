@@ -522,6 +522,30 @@ func (r *Runner) SystemDescriptor(fd int) (int, bool) {
 	return n, true
 }
 
+// DescriptorOffset is where the file open at one of this shell's descriptors
+// is positioned, counted in bytes from its start, and whether the question had
+// an answer at all.
+//
+// The seam under a math function one shell's `zsh/system` module spells
+// `systell`. It is [Runner.SystemDescriptor] plus the one system call that
+// reports a position without moving it, kept here rather than in the dialect
+// for the reason every platform-shaped fact in this tree sits below the
+// dialects: a dialect that reached for a system call would be a dialect that
+// had to be written twice for the platforms that lack it.
+//
+// False is a number nothing is open at, a number holding something that is not
+// a descriptor — a here-document's text, an embedder's in-memory buffer — and
+// a stream that has no position, which is what a pipe and a terminal are. The
+// caller says what its own vocabulary calls that; here they are one answer,
+// because in every one of them there is no offset to report.
+func (r *Runner) DescriptorOffset(fd int) (int64, bool) {
+	sys, ok := r.SystemDescriptor(fd)
+	if !ok {
+		return 0, false
+	}
+	return seekCurrent(sys)
+}
+
 // NamedOption reads one `set -o` name's current state, for a registered
 // builtin that presents the same state under its own names — a listing has to
 // read the live answer, and the fields it lives in are the runner's own.

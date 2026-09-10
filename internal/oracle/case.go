@@ -12917,6 +12917,61 @@ echo "read=[$l]"`,
 		Snippet: `zmodload -F; echo "st=$?"`,
 		Why:     "and `-F` with nothing to act on is `-F requires a module name` and 1, where the bare builtin with no letters at all is a listing and 0 — so the operand is required by the letter rather than by the builtin",
 	},
+	// `zsh/langinfo`, `zsh/mathfunc`, `zsh/zleparameter` and the last three
+	// of `zsh/system` — the four modules a real startup loads that were
+	// `failed to load module` until #1618, two of which took a plugin down
+	// with them.
+	{
+		ID: "langinfo/the-encoding-the-locale-names", Category: "builtins",
+		Snippet: `zmodload zsh/langinfo; echo "st=$? [$langinfo[CODESET]]"`,
+		Why:     "the line #1618 opens with, and the one key a real plugin tree reads — every use of this parameter on the maintainer's machine is `$langinfo[CODESET]` matched against `(utf|UTF)(-|)8`, so a prompt deciding whether it may draw box-drawing characters turns on it. `US-ASCII` here because the harness runs under `LC_ALL=C`, which is what makes the row stable; the next one moves the locale and the answer moves with it",
+	},
+	{
+		ID: "langinfo/the-encoding-moves-with-the-locale", Category: "builtins",
+		Snippet: `zmodload zsh/langinfo; echo "[$langinfo[CODESET]]"`,
+		Env:     []string{"LC_ALL=C.UTF-8"},
+		Why:     "the same read under a UTF-8 locale, which is the half that says the value is derived rather than fixed: `UTF-8`, against the `US-ASCII` the row above records, from a shell differing only in that variable. `C.UTF-8` rather than `en_US.UTF-8` because the encoding rides on the C locale — the date formats and the yes-and-no patterns stay the C locale's — so the row pins the encoding alone and needs no locale a machine might not have",
+	},
+	{
+		ID: "langinfo/the-c-locale-vocabulary", Category: "builtins",
+		Snippet: `zmodload zsh/langinfo; echo "[$langinfo[DAY_1]] [$langinfo[D_FMT]] [$langinfo[RADIXCHAR]] [$langinfo[YESEXPR]] [$langinfo[THOUSEP]]"`,
+		Why:     "one key from each of the four categories that are not the encoding, under the C locale the harness runs in. The last is the one that makes it a table rather than a lookup: `THOUSEP` is *empty* in this locale, so an implementation that treated a missing value as a missing key would answer the same as one that had never heard of it",
+	},
+	{
+		ID: "mathfunc/a-whole-float-keeps-its-point", Category: "builtins",
+		Snippet: `zmodload zsh/mathfunc; echo "st=$? $(( sqrt(4) )) $(( sqrt(2) )) $(( floor(3.7) )) $(( int(3.7) ))"`,
+		Why:     "the second line #1618 quotes, and the trap in it: `sqrt(4)` is `2.` and not `2` — a whole float keeps its point here — while `int(3.7)` is `3` with none, so the row separates a function that returns a float from one that returns an integer. `sqrt(2)` pins the precision at seventeen significant digits beside them",
+	},
+	{
+		ID: "mathfunc/the-four-that-give-an-integer-back", Category: "builtins",
+		Snippet: `zmodload zsh/mathfunc; echo "$(( abs(-3) )) $(( abs(-3.5) )) $(( atan(1,2) )) $(( ilogb(8) )) $(( signgam ))"`,
+		Why:     "`abs` is the one function whose *kind* of result is its argument's — `3` for an integer and `3.5` for a float — which no other row in the module can say. Beside it, the two-operand `atan`, which is a different function from the one-operand one; `ilogb`, an integer where `logb` is a float; and `signgam`, which takes no operands at all and is 0",
+	},
+	{
+		ID: "mathfunc/an-edge-is-named-rather-than-refused", Category: "builtins",
+		Snippet: `zmodload zsh/mathfunc; echo "$(( sqrt(-1) )) $(( log(0) )) $(( rint(2.5) )) $(( rint(3.5) ))"`,
+		Why:     "an operation with no finite answer evaluates and the value is *named*, which is worth pinning because this shell's arithmetic does refuse a division by zero — so `NaN` and `-Inf` here rather than a complaint. The two `rint` calls settle the rounding: half goes to even, so 2.5 and 3.5 land on 2 and 4 and not on 3 and 4",
+	},
+	{
+		ID: "mathfunc/the-generator-is-the-callers-state", Category: "builtins",
+		Snippet: `zmodload zsh/mathfunc; seed=000000000001; echo "$(( rand48(seed) )) $seed"`,
+		Why:     "a random generator pinned exactly, because the state is the caller's: from `000000000001` the value is 0.90010070800785158 and the state left behind is `000b0000e66d`. That says the twelve digits are three sixteen-bit words read *lowest first* — reading them as one number gives 8.96e-05 — and it is the one function in the module whose operand is a variable's name rather than a number, so it is also the row that says the operand is not evaluated",
+	},
+	{
+		ID: "zleparameter/a-widget-says-which-kind-it-is", Category: "builtins",
+		Snippet: `zmodload zsh/zleparameter; echo "st=$?"; f(){ :; }; zle -N w f; echo "[$widgets[w]] [$widgets[nosuch]] ${+widgets[nosuch]}"`,
+		Why:     "the module whose absence took a plugin down — two syntax highlighters open with `zmodload zsh/zleparameter || { print failed loading …; return 1 }`, so the refusal was followed by `failed binding ZLE widgets, exiting`. `user:f` carries the *function's* name and not the widget's, which is what a shell recording only the widget would fail, and the name that is not a widget reads empty at a set test of 0 rather than refusing",
+	},
+	{
+		ID: "system/an-error-number-becomes-a-name", Category: "builtins",
+		Snippet: `zmodload zsh/system; echo "st=$? [$errnos[1]] [$errnos[2]] [$errnos[9]]"`,
+		Why:     "`$errnos` is an array indexed by errno number, which is what turns a number a system call gave back into a name. Three POSIX errnos, which hold the same numbers on every platform this ships for — the ones that do not are exactly what the per-platform tables keep apart. The module loads while six of its nine features are missing, because those six are builtins and a builtin refuses at its own call site",
+	},
+	{
+		ID: "system/where-a-descriptor-is-positioned", Category: "builtins",
+		Snippet: `zmodload zsh/system; printf "one\ntwo\n" > f; exec 3< f; echo "a=$(( systell(3) ))"; read x <&3; echo "b=$(( systell(3) )) [$x] c=$(( systell(99) ))"`,
+		Why:     "`systell` is a *math function* and not a builtin — the module's listing writes `+f:systell` — so it is called from arithmetic. The three readings are the whole of it: nought before anything is read, four after one line and its newline, which says the shell takes off the descriptor exactly what it consumed, and -1 for a descriptor nothing is open at, which reports rather than refusing",
+	},
 	// `zsh/datetime` — the clock, and the one module in the table with every
 	// feature it names present rather than refused (#1154).
 	{

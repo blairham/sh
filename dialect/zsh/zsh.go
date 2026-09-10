@@ -1827,6 +1827,21 @@ func Apply(r *interp.Runner) {
 	// terminal's capabilities under two name systems, over the values in
 	// repl.TerminalCapabilities. See terminfo.go.
 	registerTerminfoModules(r)
+	// And `zsh/langinfo`'s one: the locale's own vocabulary, answered from
+	// the variables that name the locale rather than from a fixed table. See
+	// langinfo.go.
+	registerLangInfoModule(r)
+	// And `zsh/zleparameter`'s two: the line editor's widgets and keymaps,
+	// read off the tables `zle` and `bindkey` already keep. See
+	// zleparameter.go.
+	registerZleParameterModule(r)
+	// And the three of `zsh/system` that are parameters and a math function
+	// rather than builtins: `$sysparams`, `$errnos` and `systell`. See
+	// system.go.
+	registerSystemModule(r)
+	// And `zsh/mathfunc`'s forty-seven, which are the C math library under
+	// names arithmetic can call. See mathmodule.go.
+	registerMathFuncModule(r)
 	// This shell's richer `echo`, and not ksh93's builtin of the same
 	// spelling: different letters, a different escape set and different
 	// wordings, all measured side by side. See print.go.

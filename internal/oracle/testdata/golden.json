@@ -59478,6 +59478,138 @@
         "TimedOut": false
       }
     },
+    "langinfo/the-c-locale-vocabulary": {
+      "bash": {
+        "Stdout": "[[DAY_1]] [[D_FMT]] [[RADIXCHAR]] [[YESEXPR]] [[THOUSEP]]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[[DAY_1]] [[D_FMT]] [[RADIXCHAR]] [[YESEXPR]] [[THOUSEP]]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[[DAY_1]] [[D_FMT]] [[RADIXCHAR]] [[YESEXPR]] [[THOUSEP]]",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[[DAY_1]] [[D_FMT]] [[RADIXCHAR]] [[YESEXPR]] [[THOUSEP]]",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[[DAY_1]] [[D_FMT]] [[RADIXCHAR]] [[YESEXPR]] [[THOUSEP]]",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[Sunday] [%m/%d/%y] [.] [^[yY]] []",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "langinfo/the-encoding-moves-with-the-locale": {
+      "bash": {
+        "Stdout": "[[CODESET]]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[[CODESET]]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[[CODESET]]",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[[CODESET]]",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[[CODESET]]",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[UTF-8]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "langinfo/the-encoding-the-locale-names": {
+      "bash": {
+        "Stdout": "st=127 [[CODESET]]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127 [[CODESET]]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127 [[CODESET]]",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127 [[CODESET]]",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127 [[CODESET]]",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [US-ASCII]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "length/a-hash-in-the-name-position-of-an-operator": {
       "bash": {
         "Stdout": "[2][2][w][w][2]",
@@ -60397,6 +60529,182 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: command not found: mapfile",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "mathfunc/a-whole-float-keeps-its-point": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sqrt(4) : arithmetic syntax error in expression (error token is \"(4) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sqrt(4) : arithmetic syntax error in expression (error token is \"(4) \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sqrt(4) : syntax error in expression (error token is \"(4) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" sqrt(4) \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127 2 1.4142135623731 3 3",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 2. 1.4142135623730951 3. 3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "mathfunc/an-edge-is-named-rather-than-refused": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sqrt(-1) : arithmetic syntax error in expression (error token is \"(-1) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: sqrt(-1) : arithmetic syntax error in expression (error token is \"(-1) \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: sqrt(-1) : syntax error in expression (error token is \"(-1) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" sqrt(-1) \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "nan -inf 2 4",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "NaN -Inf 2. 4.",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "mathfunc/the-four-that-give-an-integer-back": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: abs(-3) : arithmetic syntax error in expression (error token is \"(-3) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: abs(-3) : arithmetic syntax error in expression (error token is \"(-3) \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: abs(-3) : syntax error in expression (error token is \"(-3) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" abs(-3) \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e:  atan(1,2) : function has wrong number of arguments",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "3 3.5 0.46364760900080609 3 0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "mathfunc/the-generator-is-the-callers-state": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: rand48(seed) : arithmetic syntax error in expression (error token is \"(seed) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: rand48(seed) : arithmetic syntax error in expression (error token is \"(seed) \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: rand48(seed) : syntax error in expression (error token is \"(seed) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" rand48(seed) \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: rand48(seed) : unknown function",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "0.90010070800785158 000b0000e66d",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -104206,6 +104514,94 @@
         "TimedOut": false
       }
     },
+    "system/an-error-number-becomes-a-name": {
+      "bash": {
+        "Stdout": "st=127 [[1]] [[2]] [[9]]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127 [[1]] [[2]] [[9]]",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127 [[1]] [[2]] [[9]]",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127 [[1]] [[2]] [[9]]",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127 [[1]] [[2]] [[9]]",
+        "Stderr": "\u003cshell\u003e: zmodload: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 [EPERM] [ENOENT] [EBADF]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "system/where-a-descriptor-is-positioned": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: systell(3) : arithmetic syntax error in expression (error token is \"(3) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: systell(3) : arithmetic syntax error in expression (error token is \"(3) \")",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: systell(3) : syntax error in expression (error token is \"(3) \")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" systell(3) \"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zmodload: not found~\u003cshell\u003e: systell(3) : unknown function",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=0~b=4 [one] c=-1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "terminfo/a-capability-this-shell-does-not-answer": {
       "bash": {
         "Stdout": "one=[]~after=0",
@@ -114068,6 +114464,50 @@
       },
       "zsh": {
         "Stdout": "zle -F 5 h~zle -F 2 g~zle -F 9 h~--~zle -F 5 g~zle -F 2 g~zle -F 9 h",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zleparameter/a-widget-says-which-kind-it-is": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: [$widgets[w]] [$widgets[nosuch]] ${+widgets[nosuch]}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zmodload: command not found~\u003cshell\u003e: line 1: zle: command not found~\u003cshell\u003e: line 1: [$widgets[w]] [$widgets[nosuch]] ${+widgets[nosuch]}: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zmodload: command not found~\u003cshell\u003e: zle: command not found~\u003cshell\u003e: [$widgets[w]] [$widgets[nosuch]] ${+widgets[nosuch]}: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zmodload: not found~\u003cshell\u003e: 1: zle: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `+' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~[user:f] [] 0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

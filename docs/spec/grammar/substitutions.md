@@ -227,6 +227,95 @@ error at the `(`, and bash 5.3 as `sh` keeps the construct — so the
 version and the invocation are two variables and a claim naming only one
 of them is incomplete.
 
+## `$(<file)` — the substitution that reads a file
+
+A command substitution whose **whole body is one input redirection and
+nothing else** is a special form: the file is opened, its bytes become
+the substitution's result, and no command runs.
+
+    printf 'hello\n' > f
+    printf "[%s]" "$(<f)"    →  [hello]  in zsh 5.9.2, bash 5.3,
+                                         bash 3.2, bash as `sh`,
+                                         bash --posix and ksh93
+                             →  []       in dash
+
+Measured 2026-09-10 across the whole panel. Grammar flag:
+`ReadFileSubstitution`, on in `Core()` and therefore in bash, ksh and zsh;
+off for POSIX and dash.
+
+**It is additive rather than a disagreement**, and that is the reason it
+is a grammar flag rather than a semantics axis. dash reads the same text
+as an ordinary redirection with no command name: the file is opened, so a
+name that will not open is still reported, and nothing runs, so nothing is
+written and the substitution is empty. The shell without the form does not
+mean something *else* by the text — it has no form to mean anything by.
+
+### It is not the null-command hook
+
+zsh runs a command consisting only of redirections through `NULLCMD` and
+`READNULLCMD`, so `<f` at a prompt pages the file. It would be easy to
+conclude that `$(<f)` is that mechanism seen through a substitution, and
+it is not. Measured 2026-09-10 on zsh 5.9.2, with `READNULLCMD` set to a
+function that prints `CHANGED`:
+
+    <f                  →  CHANGED     the hook
+    $(<f)               →  hello       the form
+    $(:; <f)            →  CHANGED     the hook again
+    $(<f; :)            →  CHANGED
+    cat < a*b           →  the file    a target is matched as a pattern
+    $(<a*b)             →  no such file or directory: a*b
+
+The last pair is the same conclusion from the other side: zsh matches an
+ordinary redirection target as a pattern and does not match this one, so
+the two operands travel different paths. A hook the form does not consult,
+and an expansion the form does not do, is a different mechanism.
+
+The distinction is load-bearing rather than trivia. Implementing the form
+as "a command with no name copies its input to its output" would make `<f`
+print the file in bash and ksh93, where measurably it prints nothing, and
+would make `$(<f; :)` print it everywhere, where measurably only zsh does.
+
+### What is the form and what is not
+
+Unanimous among the five columns that have it, measured 2026-09-10:
+
+| body | result | why |
+| --- | --- | --- |
+| `$(<f)` | the file | the form |
+| `$(< f)` | the file | a space before the operand changes nothing |
+| `` `<f` `` | the file | the older spelling of the same substitution |
+| `$(0<f)` | the file | standard input written out is still standard input |
+| `$(<$name)`, `$(<~/x)` | the file | the operand expands as a redirection target does |
+| `$(<f echo hi)` | `hi` | a command word takes the file as its input |
+| `$(x=1 <f)` | empty | an assignment prefix leaves an ordinary redirection |
+| `$(<f <g)` | empty | one redirection, not the first of several |
+| `$(3<f)` | empty | a descriptor other than standard input (bash 3.2 dissents) |
+| `$(<<<hi)` | empty | a here-string body is not a filename |
+| `$(<f; :)`, `$(:; <f)` | empty | not the whole body — zsh's hook answers these |
+
+The result is trimmed of trailing newlines exactly as any other command
+substitution's is, and unquoted it is field-split the same way. A name
+that will not open is reported in the dialect's own words, the
+substitution expands to nothing, and its status is the one that dialect
+gives any redirection that would not open — 1 in zsh, bash and ksh93, 2 in
+dash. Under `set -e` that status ends the script.
+
+### What this entry does not settle
+
+Three corners where the panel does not agree, each left for a measurement
+of its own rather than folded into this form:
+
+- **A directory operand.** zsh 5.9.2 says `error when reading …: is a
+  directory` and leaves status 1; bash 5.3, ksh93 and dash say nothing at
+  status 0, and bash 3.2 says nothing at status 1. Three answers, so an
+  axis rather than a rule.
+- **A pattern in the operand.** bash matches it — `$(<a*b)` reads `aXXb` —
+  where zsh, ksh93 and dash report the pattern as the name. That is the
+  ordinary redirection-target question asked in this position.
+- **zsh's `NULLCMD` / `READNULLCMD`.** The hook itself, which this
+  implementation does not have: `<f` writes nothing here where zsh writes
+  the file.
+
 ## What this does not cover
 
 The internal grammar of each form: arithmetic operators and their

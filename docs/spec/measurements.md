@@ -9474,6 +9474,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/a-target-holding-a-pattern` | `nomatch-*` | `nomatch-*` | `nomatch-*` | `nomatch-*` | `nomatch-*` | `nomatch-*` |
 | `redir/a-quoted-target-with-a-space` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `redir/a-here-string-is-one-line` | **2>** `<shell>: 1: Syntax error: redirection unexpected` *(status 2)* | `a b` | `a b` | `a b` | `a b` | `a b` |
+| `redir/a-substitution-of-a-lone-input-redirection-is-the-file` | `[]` | `[hello]` | `[hello]` | `[hello]` | `[hello]` | `[hello]` |
+| `redir/a-file-read-substitution-drops-trailing-newlines` | `[]` | `[A]` | `[A]` | `[A]` | `[A]` | `[A]` |
+| `redir/a-file-read-substitution-keeps-a-file-with-no-final-newline` | `[]` | `[noeol]` | `[noeol]` | `[noeol]` | `[noeol]` | `[noeol]` |
+| `redir/a-file-read-substitution-reports-a-name-it-cannot-open` | `st=2 v=[]` **2>** `<shell>: 1: cannot open nosuch: No such file` | `st=1 v=[]` **2>** `<shell>: line 1: nosuch: No such file or directory` | `st=1 v=[]` **2>** `<shell>: line 1: nosuch: No such file or directory` | `st=1 v=[]` **2>** `<shell>: nosuch: No such file or directory` | `st=1 v=[]` **2>** `<shell>: nosuch: cannot open [No such file or directory]` | `st=1 v=[]` **2>** `<shell>:1: no such file or directory: nosuch` |
+| `redir/a-file-read-substitution-needs-the-redirection-alone` | `[hi][][]` | `[hi][][]` | `[hi][][]` | `[hi][][hello]` | `[hi][][]` | `[hi][][]` |
+| `redir/a-file-read-substitution-is-not-the-null-command-hook` | `[]` | `[hello]` | `[hello]` | `[hello]` | `[hello]` | `[hello]` |
 | `heredoc/no-delimiter-and-a-warning` | `body` | `body` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` | `body` | `body` |
 | `heredoc/no-delimiter-and-no-body` | *(no output, status 0)* | **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `heredoc/a-body-that-runs-to-the-end` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` |
@@ -9657,6 +9663,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/a-here-string-is-one-line` — a here-string's word expands but is never split — one line of input with its space kept, in every shell that has the construct. dash's row is its parser refusing `<<<`, not an opinion about splitting; the word is a body rather than a filename, so the ordinary-word question a target gets never arises here
   ```sh
   two="a b"; cat <<< $two
+  ```
+- `redir/a-substitution-of-a-lone-input-redirection-is-the-file` — `$(<file)` is the file's contents with no command run — the idiom for reading a small file without a process. Five of the six columns have it; dash reads the same text as a redirection with no command name, which opens the file, runs nothing and writes nothing, so its `[]` is the form's absence rather than a different meaning for it
+  ```sh
+  printf 'hello\n' > f; printf "[%s]" "$(<f)"
+  ```
+- `redir/a-file-read-substitution-drops-trailing-newlines` — the form is a command substitution, so the same trailing-newline rule applies to it — three newlines at the end of the file and none in the result, which is what makes `x=$(<version)` usable
+  ```sh
+  printf 'A\n\n\n' > f; printf "[%s]" "$(<f)"
+  ```
+- `redir/a-file-read-substitution-keeps-a-file-with-no-final-newline` — the other side of the trimming rule: nothing is added either, so a file with no final newline substitutes as exactly its bytes
+  ```sh
+  printf 'noeol' > f; printf "[%s]" "$(<f)"
+  ```
+- `redir/a-file-read-substitution-reports-a-name-it-cannot-open` — the failure a script can actually see: the name is reported in each shell's own words, the substitution expands to nothing, and its status is the one that shell gives any redirection that would not open. The result is empty either way, so without the diagnostic and the status a missing file is indistinguishable from an empty one
+  ```sh
+  v=$(<nosuch); printf "st=%s v=[%s]" "$?" "$v"
+  ```
+- `redir/a-file-read-substitution-needs-the-redirection-alone` — what disqualifies the form, unanimous among the shells that have it: a command word takes the file as its input instead, an assignment prefix leaves an ordinary redirection, and a descriptor other than standard input is not the form. bash 3.2 is the one column that reads the file for `3<f`
+  ```sh
+  printf 'hello\n' > f; printf "[%s][%s][%s]" "$(<f echo hi)" "$(x=1 <f)" "$(3<f)"
+  ```
+- `redir/a-file-read-substitution-is-not-the-null-command-hook` — the fork this form is most easily mistaken for. zsh runs a redirection with no command through READNULLCMD, so `<f` at a prompt pages the file — but the substitution does not consult it: with the hook pointed somewhere else the file still reads. The five columns with no such hook show the same value for the same reason, which is that the hook was never on the path
+  ```sh
+  printf 'hello\n' > f; READNULLCMD=printf; printf "[%s]" "$(<f)"
   ```
 - `heredoc/no-delimiter-and-a-warning` — one shell remarks on a here-document whose delimiter never arrived and three say nothing. The remark is located where the input ran out and names the line the here-document began on, which is two different lines and the reason a parse-time remark carries two positions
   ```sh

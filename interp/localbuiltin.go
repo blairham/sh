@@ -182,6 +182,29 @@ func (r *Runner) AtFunctionReturn(f func()) bool {
 	return true
 }
 
+// AtEveryFunctionCall installs a save-and-restore pair the runner runs around
+// every function call from here on: save is handed the running runner as the
+// body is entered, and whatever it returns is run when that call unwinds,
+// alongside the hooks AtFunctionReturn takes.
+//
+// The difference from AtFunctionReturn is which moment it offers. That one
+// gives a builtin the *end* of the call it is standing in, which is enough
+// for state the builtin itself created. This gives the beginning of every
+// call, which is the only place a dialect whose options are function-scoped
+// can take the snapshot it will put back: the shell that has LOCAL_OPTIONS
+// saves its option table when the body starts, so an option moved *before*
+// the `setopt` line that asks for the scoping is restored too — measured, and
+// a save that waited for that line would hold the wrong table. Whether to put
+// it back is then a question asked at the return, not at the save.
+//
+// Registered once, per dialect, and run per call. The runner is a parameter
+// rather than something the closure caught for the reason the field says: a
+// subshell is a clone, and a save writing through a captured pointer would
+// snapshot the shell it was registered in rather than the one running.
+func (r *Runner) AtEveryFunctionCall(save func(*Runner) func()) {
+	r.aroundFunctionCalls = append(r.aroundFunctionCalls, save)
+}
+
 func (r *Runner) innermostLocalNames() map[string]bool {
 	names := map[string]bool{}
 	if len(r.scopes) == 0 {

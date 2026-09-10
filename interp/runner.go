@@ -1147,6 +1147,23 @@ type Runner struct {
 	// see extend.go.
 	optionListing func() []ListedOption
 	optionMover   func(name string, on bool) (moved, known bool)
+	// aroundFunctionCalls is what a dialect saves and restores around every
+	// function call, whatever that call turns out to do. Each entry is
+	// handed the running runner as the body is entered and hands back the
+	// restore, which the call's scope runs as it unwinds; a nil restore asks
+	// for nothing.
+	//
+	// The moment is the point, and it is one AtFunctionReturn cannot give:
+	// the shell whose options are function-scoped saves its whole option
+	// table when the body *starts*, so an option moved before the line that
+	// asks for the scoping is restored too — measured. A save that waited
+	// for that line would put back the wrong table.
+	//
+	// The runner is a parameter rather than something the closure caught,
+	// because a subshell is a clone: a save that wrote through a captured
+	// pointer would snapshot and restore the shell it was registered in
+	// rather than the one running the call.
+	aroundFunctionCalls []func(*Runner) func()
 	// lineBase is how far into the script the input being run starts.
 	//
 	// A command substitution's body is parsed on its own, so its positions

@@ -85,10 +85,13 @@ func TestEmulateDashCRestores(t *testing.T) {
 }
 
 // The refusals, each measured: a bad option letter, a `-c` whose string never
-// arrives, a second operand, flags with no mode — and `-L`, which is not
-// zsh's refusal but this shell's own: the function-local form needs a restore
-// on return that no seam provides, so it is refused rather than silently made
-// global.
+// arrives, a second operand, flags with no mode, and a name the option table
+// does not have.
+//
+// `-L` is not among them and has not been for a while — the letter is taken
+// and honored. The comment here said it was refused for want of a seam to
+// restore on return; localoptions.go is that seam now, and the letter is one
+// `setopt` on top of the emulation. See localoptions_test.go for its rows.
 func TestEmulateRefusals(t *testing.T) {
 	for _, tc := range []struct {
 		src, want string

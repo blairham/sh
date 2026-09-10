@@ -1041,7 +1041,17 @@ Details, each measured:
   unquoted result always drops empty words. `(f)` on an empty value is no
   field unquoted and one empty field as `"${(@f)x}"`. `(s)` on an array
   joins with `$IFS`'s first character before splitting (rule 10):
-  `a=(a:b c:d); ${(s.:.)a}` is `a`, `b c`, `d`. An empty separator
+  `a=(a:b c:d); ${(s.:.)a}` is `a`, `b c`, `d` — **unless the group
+  carries `(@)`**, which turns that join off so each element is split on
+  its own: `a=(a b); ${(@s.:.)a}` is the two fields `a` and `b` where
+  `${(s.:.)a}` is the one field `a b`, and `"${(@s.:.)a}"` is two as well.
+  `(f)` is exempted with it. Three neighbours say how narrow this is: a
+  `j` separator asked for by name puts the join back
+  (`${(@j:-:s.:.)a}` is `a-b`), the `@` *letter* is what exempts and not
+  everything else that keeps fields (`${(s.:.)a[@]}` and `${(s.:.)@}` both
+  join, where the same with the letter do not), and the `=` split is not
+  exempted at all — `a=(x '' '' y); "${(@)=a}"` is two fields where
+  `"${(@s.:.)a}"` on the same array is four. An empty separator
   `(s::)` splits into characters. Separator delimiters may be any
   punctuation — `(s.:.)`, `(s:,:)` — or the matched pairs `()`, `[]`,
   `{}`, `<>`; the separator may be several characters.
@@ -1378,6 +1388,16 @@ The flags that order, count and unquote have rows of their own:
 rows for where the steps sit —
 `param/a-length-is-taken-before-the-joining-and-the-split` and
 `param/where-the-unquoting-and-ordering-steps-sit`.
+
+The join at the head of a split has three of its own, because the rule
+and its two exceptions are each defensible alone:
+`param/the-fields-flag-skips-the-join-ahead-of-a-split` (`(@s)` and
+`(@f)`, quoted and not, against the flagless spelling),
+`param/the-fields-flag-skips-that-join-for-the-letter-splits-only` (a
+named `j` separator, an `[@]` subscript and the name `@`, none of which
+exempts anything) and
+`param/the-fields-flag-does-not-skip-that-join-for-an-ifs-split` (`${(@)=a}`,
+on an array whose holes only survive one of the two readings).
 
 Minimal quoting has four of its own, and each is a pair of values rather
 than one, because a single value cannot tell "quote only what needs it"

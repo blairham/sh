@@ -174,6 +174,58 @@ func TestExpansionFlagFields(t *testing.T) {
 			"[a][b c][d]",
 		},
 		{
+			// The rule the join has an exception to, and the exception:
+			// `at` in the group keeps the elements apart across it, so each
+			// is split on its own and two elements that hold no separator
+			// stay two fields. Measured against the shell with the grammar,
+			// #1683 — a plugin manager reads a list of names out of an ice
+			// this way and got one name back.
+			"at skips the join before a split",
+			`a=(a b); for w in ${(@s.:.)a}; do printf "[%s]" "$w"; done`,
+			"[a][b]",
+		},
+		{
+			// In quotes as well, which is a separate statement: `at`
+			// already skips the join *quoting* asks for, and without this
+			// rule the value would be rejoined a step later and answer the
+			// one field `a b` here.
+			"at skips the join before a split in quotes",
+			`a=(a b); for w in "${(@s.:.)a}"; do printf "[%s]" "$w"; done`,
+			"[a][b]",
+		},
+		{
+			"at skips the join before a newline split",
+			`a=(a b); for w in ${(@f)a}; do printf "[%s]" "$w"; done`,
+			"[a][b]",
+		},
+		{
+			// A separator asked for by name puts the join back: the group
+			// says what to join with, so there is nothing for the fields
+			// flag to keep apart.
+			"a join separator puts that join back",
+			`a=(a b); for w in ${(@j:-:s.:.)a}; do printf "[%s]" "$w"; done`,
+			"[a-b]",
+		},
+		{
+			// The exemption is the flag *letter* and not everything that
+			// keeps fields elsewhere. A subscript selecting the whole array
+			// and the name that stands for the positional parameters both
+			// join, and only the letter beside them does not.
+			"an at subscript is not the at flag",
+			`a=(a b); for w in ${(s.:.)a[@]}; do printf "[%s]" "$w"; done`,
+			"[a b]",
+		},
+		{
+			"the at name is not the at flag",
+			`set -- a b; for w in ${(s.:.)@}; do printf "[%s]" "$w"; done`,
+			"[a b]",
+		},
+		{
+			"and the letter beside that name is",
+			`set -- a b; for w in ${(@s.:.)@}; do printf "[%s]" "$w"; done`,
+			"[a][b]",
+		},
+		{
 			"case then split compose",
 			`x="$(printf 'a\nB')"; for w in ${(Lf)x}; do printf "[%s]" "$w"; done`,
 			"[a][b]",
